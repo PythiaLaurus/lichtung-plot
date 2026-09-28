@@ -972,7 +972,9 @@ caller styles while centralizing their ownership.
 | T5c1b2b2b2b2b2b2b2b2b2b2b2b2b | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b2b2b2a | `feat(theme): close private mark and annotation roles` |
 | T5c2a | IN PROGRESS | T5c1 | Umbrella; completes after standard-mark input and intrinsic substages |
 | T5c2a0 | COMPLETE | T5c1 | `docs(marks): map standard prepared mark inputs` |
-| T5c2a1 | PENDING | T5c2a0 | `refactor(marks): measure point path and reference requirements` |
+| T5c2a1 | IN PROGRESS | T5c2a0 | Umbrella for standard mark hard/preferred/ink requirements |
+| T5c2a1a | COMPLETE | T5c2a0 | `feat(marks): measure Scatter primary-point hard ink` |
+| T5c2a1b | PENDING | T5c2a1a | `refactor(marks): measure remaining point path and reference requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
 | T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
@@ -1321,6 +1323,20 @@ parent's hard assignment. Preserve the single root feedback driver and the
 consequences can replace it atomically in T5c4. Automatic-axis painted edge
 clearance may request bounded owner feedback; exact data windows may clip marks
 but must not drop a required annotation or mask malformed/collapsed geometry.
+
+T5c2a1a closure: the retained finite Scatter groups supply semantic primary
+cardinality before visibility/window filtering, with admitted group-count work.
+One origin-relative point, resolved through the actual private mark style,
+supplies canonical complete-painted bounds to both parent hard allocation and
+selected native-coordinate fit. The same `GeometrySnapshot` code that records
+final painted marks computes circle/triangle and independent outline alpha;
+its scratch and one record are admitted. Style changes do not enter the
+typography-only axis cache and are recomputed on each mark-intrinsic call.
+Explicit x/y data windows independently waive only the corresponding point
+hard extent. Focused custom-theme, transparent, triangle, exact-window,
+resource-cap, child-reuse, Scatter snapshot and strict Clippy checks pass.
+Automatic-edge domain clearance, soft density preference and all other
+standard-mark families remain in T5c2a1b; the `80x60` floor is not retired.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect

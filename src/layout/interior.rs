@@ -188,7 +188,13 @@ impl Plot {
         theme: &crate::theme::ResolvedTheme,
     ) -> Result<(f64, f64), Error> {
         if InteriorRoute::classify(self.kind()).is_native() {
-            return Ok(coordinate::Intrinsics::prepared(self, theme)?.minimum(self));
+            let mut minimum = coordinate::Intrinsics::prepared(self, theme)?.minimum(self);
+            if self.kind() == PlotKind::Scatter {
+                let mark = crate::plots::scatter::intrinsic_body_minimum(self, theme)?;
+                minimum.0 = minimum.0.max(mark.0);
+                minimum.1 = minimum.1.max(mark.1);
+            }
+            return Ok(minimum);
         }
         let mut minimum = DeferredLegacyPanelMinimum::SIZE;
         if self.kind() == PlotKind::Heatmap {

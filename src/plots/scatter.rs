@@ -46,6 +46,66 @@ pub(crate) struct ScatterPayload {
     legends: Vec<LegendEntry>,
 }
 
+/// Pre-selection hard size for a complete primary point. Exact data windows
+/// may clip a point at their boundary; only automatic axes require full ink.
+pub(crate) fn intrinsic_body_minimum(
+    chart: &Plot,
+    theme: &crate::theme::ResolvedTheme,
+) -> Result<(f64, f64), Error> {
+    let prepared = chart
+        .prepared_scatter
+        .as_ref()
+        .and_then(|panels| {
+            panels
+                .panels
+                .iter()
+                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        })
+        .map(|(_, prepared)| prepared)
+        .ok_or_else(|| Error::Render("Scatter intrinsic requires root-prepared marks".into()))?;
+    // This identity is independent of visibility, coincidence, and clipping.
+    // Group cardinality is charged before checking each group's source length.
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    resources
+        .claim_visits(prepared.groups.len() as u128)
+        .map_err(|error| {
+            Error::Render(format!(
+                "Scatter intrinsic group-count admission: {error:?}"
+            ))
+        })?;
+    let count = prepared.groups.iter().try_fold(0_u128, |total, group| {
+        total
+            .checked_add(group.points.len() as u128)
+            .ok_or_else(|| Error::Render("Scatter primary mark cardinality overflowed".into()))
+    })?;
+    if count == 0 {
+        return Err(Error::Render(
+            "Scatter has no retained primary marks".into(),
+        ));
+    }
+    let style = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.scatter);
+    crate::render::backend::validate_point_style(&style)?;
+    // Reuse the canonical painted-ink owner on one origin-relative point; no
+    // source point is projected or clipped and scratch/record growth is admitted.
+    let mut ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    ink.scatter_with_clip(&[Point2D::new(0.0, 0.0)], &style, None)?;
+    let (width, height) = ink.bounds().first().map_or((0.0, 0.0), |bounds| {
+        (bounds.right - bounds.left, bounds.top - bounds.bottom)
+    });
+    Ok((
+        if chart.x_axis_spec().limits.is_none() {
+            width
+        } else {
+            0.0
+        },
+        if chart.y_axis_spec().limits.is_none() {
+            height
+        } else {
+            0.0
+        },
+    ))
+}
+
 impl PreparedScatter {
     pub(crate) fn hue_levels(&self) -> impl Iterator<Item = &str> {
         self.groups
@@ -276,6 +336,55 @@ mod tests {
         )
         .hue(CategoryValues::new("hue", ["b", "omitted", "a", "b"]).unwrap())
         .erase()
+    }
+
+    #[test]
+    fn complete_scatter_point_ink_sets_only_automatic_axis_hard_size() {
+        let source = source();
+        let resources = OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let mut theme = crate::Theme::Publication.resolve();
+        let original = chart.intrinsic_body_minimum(&theme).unwrap();
+        theme.marks.point_sizes.scatter = 54;
+        let styled = chart.intrinsic_body_minimum(&theme).unwrap();
+        // 54px radius with a 5.4px outline rounds that outline to 5530
+        // quanta before the canonical bounds are formed.
+        let diameter = 108.0 + 5530.0 / 1024.0;
+        assert_eq!(styled.0.to_bits(), original.0.max(diameter).to_bits());
+        assert_eq!(styled.1.to_bits(), original.1.max(diameter).to_bits());
+        theme.marks.primary_point.shape = crate::PointShape::TriangleUp;
+        let triangle = chart.intrinsic_body_minimum(&theme).unwrap();
+        assert!(triangle.0 < styled.0);
+        theme.marks.primary_point.shape = crate::PointShape::Circle;
+        assert!(matches!(
+            chart.measure_selected_interior(PlotRenderContext::new(
+                chart.data(),
+                crate::layout::PanelBox::new(0.0, 100.0, 0.0, 100.0),
+                &theme,
+            )),
+            Err(crate::layout::fit::PlanError::Fit(_))
+        ));
+
+        theme.marks.primary_point.fill_alpha = 0;
+        theme.marks.primary_point.outline.color =
+            crate::render::backend::Rgba::new(255, 255, 255, 0);
+        assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), original);
+
+        let source = Plot::scatter(
+            NumericValues::new("x", [1.0, 2.0]),
+            NumericValues::new("y", [3.0, 4.0]),
+        )
+        .x_limits(0.0, 3.0)
+        .erase();
+        let resources = OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let chart = inputs.attach(source).unwrap();
+        theme.marks.primary_point.fill_alpha = 255;
+        theme.marks.primary_point.outline.color = crate::render::backend::Rgba::rgb(255, 255, 255);
+        let exact = chart.intrinsic_body_minimum(&theme).unwrap();
+        assert_eq!(exact.0.to_bits(), original.0.to_bits());
+        assert!(exact.1 >= diameter);
     }
 
     #[test]

@@ -202,8 +202,7 @@ impl InteriorRoute {
         if !valid {
             return Err(Error::Render("invalid native coordinate axis orientation".into()).into());
         }
-        let intrinsics = Intrinsics::prepared(plot, context.theme)?;
-        let minimum = intrinsics.minimum(plot);
+        let minimum = plot.intrinsic_body_minimum(context.theme)?;
         let panel = context.panel;
         if ![panel.x0, panel.x1, panel.y0, panel.y1]
             .into_iter()
@@ -391,7 +390,7 @@ pub(crate) fn canvas_layout(
 ) -> Result<crate::layout::RootFramePlan, PlanError> {
     use crate::decorations::title_block::plan::{RootAlignments, RootTitleBlockPlan};
     use crate::layout::canvas::CanvasInsets;
-    let minimum = Intrinsics::prepared(plot, theme)?.minimum(plot);
+    let minimum = plot.intrinsic_body_minimum(theme)?;
     // Only root-owned padding and text are hard reservations. Axis gutters are
     // measured from selected sources at the assigned span by the root round;
     // endpoint estimates must not reject a body before tick selection.
