@@ -1793,6 +1793,99 @@ fn grouped_dumbbell_endpoints_clear_only_the_automatic_numeric_axis() {
 }
 
 #[test]
+fn bar_orientations_clear_the_painted_zero_edge_through_one_numeric_feedback_owner() {
+    let source = |horizontal| {
+        let category = CategoryValues::new("category", ["a", "b"]).unwrap();
+        let values = crate::BarInput::estimates(NumericValues::new("value", [1.0, 2.0]));
+        if horizontal {
+            Plot::horizontal_bar(category, values)
+                .size(800, 600)
+                .erase()
+        } else {
+            Plot::bar(category, values).size(800, 600).erase()
+        }
+    };
+    let mut theme = theme();
+    theme.marks.bar_body.outline_width = 24.0;
+    for horizontal in [false, true] {
+        let source = source(horizontal);
+        let resources = theme
+            .prepared_font_environment()
+            .unwrap()
+            .generation_resources();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let cell = PanelBox::new(80.0, 700.0, 80.0, 520.0);
+        let selected = plan_panel(&chart, chart.kind(), cell, LegendRole::Panel, &theme).unwrap();
+        if horizontal {
+            assert!(selected.planned_x_limits().is_some());
+            assert!(selected.planned_y_limits().is_none());
+        } else {
+            assert!(selected.planned_x_limits().is_none());
+            assert!(selected.planned_y_limits().is_some());
+        }
+        let crate::layout::interior::MarkPayload::Bars(payload) =
+            &selected.result.marks.as_ref().unwrap().payload
+        else {
+            panic!("selected Bars")
+        };
+        assert!(payload.domain_expansion.is_none());
+        let panel = selected.result.layout.projection.panel_box();
+        let mut ink = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+        for bar in &payload.bars {
+            ink.polygon(&bar.polygon, &bar.fill, None).unwrap();
+        }
+        for bounds in ink.bounds() {
+            assert!(bounds.left >= panel.x0 && bounds.right <= panel.x1);
+            assert!(bounds.bottom >= panel.y0 && bounds.top <= panel.y1);
+        }
+    }
+}
+
+#[test]
+fn supplemental_bar_point_outside_bar_values_extends_numeric_ink_domain() {
+    let source = Plot::bar(
+        CategoryValues::new("category", ["a", "b"]).unwrap(),
+        crate::BarInput::estimates(NumericValues::new("value", [1.0, 2.0])),
+    )
+    .point_layer(
+        crate::BarPointLayer::new(
+            CategoryValues::new("category", ["a"]).unwrap(),
+            None,
+            NumericValues::new("point", [100.0]),
+            (1, 2, 3),
+            80,
+            0.5,
+        )
+        .unwrap(),
+    )
+    .size(800, 600)
+    .erase();
+    let theme = theme();
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let cell = PanelBox::new(80.0, 700.0, 80.0, 520.0);
+    let selected = plan_panel(&chart, PlotKind::Bar, cell, LegendRole::Panel, &theme).unwrap();
+    let crate::layout::interior::MarkPayload::Bars(payload) =
+        &selected.result.marks.as_ref().unwrap().payload
+    else {
+        panic!("selected Bars")
+    };
+    assert!(payload.domain_expansion.is_none());
+    assert_eq!(payload.points.len(), 1);
+    let panel = selected.result.layout.projection.panel_box();
+    let (point, style) = &payload.points[0];
+    let bounds = crate::render::geometry::point_ink_bounds(&theme, style)
+        .unwrap()
+        .unwrap();
+    assert!(point.y + bounds.bottom >= panel.y0 && point.y + bounds.top <= panel.y1);
+}
+
+#[test]
 fn density_curve_support_clears_automatic_edges_without_repreparing_kde() {
     let source = Plot::density(NumericValues::new("sample", [1.0, 2.0, 3.0, 4.0]))
         .size(640, 480)

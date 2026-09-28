@@ -239,6 +239,17 @@ impl Plot {
                 minimum.0 = minimum.0.max(mark.0);
                 minimum.1 = minimum.1.max(mark.1);
             }
+            if matches!(
+                self.kind(),
+                PlotKind::Bar
+                    | PlotKind::StackedBar
+                    | PlotKind::HorizontalBar
+                    | PlotKind::StackedHorizontalBar
+            ) {
+                let mark = crate::plots::bar_data::intrinsic_body_minimum(self, theme)?;
+                minimum.0 = minimum.0.max(mark.0);
+                minimum.1 = minimum.1.max(mark.1);
+            }
             return Ok(minimum);
         }
         let mut minimum = DeferredLegacyPanelMinimum::SIZE;

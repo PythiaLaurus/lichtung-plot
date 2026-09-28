@@ -1007,7 +1007,8 @@ caller styles while centralizing their ownership.
 | T5c2b1a | COMPLETE | T5c2b0 | `feat(marks): measure categorical estimate hard pitch` |
 | T5c2b1b | IN PROGRESS | T5c2b1a | Umbrella for remaining categorical requirements |
 | T5c2b1b1 | COMPLETE | T5c2b1a | `feat(marks): measure grouped Dumbbell slot ink` |
-| T5c2b1b2 | PENDING | T5c2b1b1 | `refactor(marks): measure Bar category and interval requirements` |
+| T5c2b1b2 | COMPLETE | T5c2b1b1 | `feat(marks): measure Bar category and interval requirements` |
+| T5c2b1b3 | PENDING | T5c2b1b2 | `feat(marks): retain categorical natural preferences` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
 | T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
 | T5c3 | PENDING | T5c2d | `refactor(annotations): measure native overlay consequences` |
@@ -1599,6 +1600,22 @@ exact X windows clip that paint but do not compact category tracks. Grouped
 custom 54px endpoints, facet/Canvas preparation, immutable replay, exact
 resource caps, default estimate snapshots and strict Clippy pass. The four
 Bar orientations and attached label consequences remain in T5c2b1b2/T5c3.
+
+T5c2b1b2 closure: vertical/horizontal and ordinary/stacked bars now share
+one categorical center/thickness source for selected marks, exact attached
+points and intrinsic occupancy. Each populated grouped/stack segment,
+including a scientific zero, contributes its actual slot fraction and
+canonically measured independent outline; unused combinations do not create
+painted segments. Pre-selection hard pitch also admits nonzero polygon width,
+interval cap thickness and exact supplemental point radii. The numeric-axis
+painted bodies/caps/points join existing significance requests at their one
+root feedback owner, using source extents that include points beyond bar
+values; a caller-exact window alone clips that dimension. Focused 100px
+grouped/single/stacked/orientation ink, 120px caps, 200px supplemental points,
+root zero-edge and large-point clearance, 6 native Bar resource/feedback
+tests, populated guides, current bar SVG snapshots and strict Clippy pass.
+Natural categorical pitch and cross-axis aspect follow in T5c2b1b3; attached
+significance text and collision shelves remain T5c3-owned.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect

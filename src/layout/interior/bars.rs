@@ -190,7 +190,17 @@ fn native_bars_preserve_signed_stacks_midpoints_raw_labels_and_assigned_projecti
                     panic!("bars")
                 };
                 assert_eq!(payload.clip, panel);
-                assert!(payload.domain_expansion.is_none());
+                if let Some(expansion) = payload.domain_expansion {
+                    assert_eq!(
+                        expansion.axis,
+                        if horizontal {
+                            super::ClearanceAxis::X
+                        } else {
+                            super::ClearanceAxis::Y
+                        }
+                    );
+                    assert!(expansion.limits.0 <= range.0 && expansion.limits.1 >= range.1);
+                }
                 assert_eq!(payload.zero.is_some(), family == 1);
                 for (shape, bar) in payload.bars.iter().zip(&prepared.bars) {
                     let project = |value| {

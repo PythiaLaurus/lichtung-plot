@@ -14,7 +14,7 @@ use crate::Error;
 use crate::decorations::legend::LegendEntry;
 use crate::render::backend::{FillStyle, PointStyle};
 use crate::spec::{
-    BarInput, BarSource, ConfidenceIntervalAlgorithm, ErrorBarKind, PercentileInterval,
+    BarInput, BarSource, BarSpacing, ConfidenceIntervalAlgorithm, ErrorBarKind, PercentileInterval,
     StandardDeviation, StandardError,
 };
 use crate::theme::ResolvedTheme;
@@ -35,6 +35,199 @@ pub(crate) enum BarMode {
     Grouped,
     /// One additive segment per x category and series.
     Stacked,
+}
+
+/// The same categorical occupancy grammar drives selected polygons, attached
+/// points/significance anchors and pre-selection mark pitch in both directions.
+pub(crate) fn category_center(
+    category_index: usize,
+    series_index: Option<usize>,
+    prepared: &PreparedBars,
+    mode: BarMode,
+    horizontal: bool,
+) -> f64 {
+    let center = category_index as f64 + 0.5;
+    if mode != BarMode::Grouped {
+        return center;
+    }
+    let slot_width = if horizontal { 0.74 } else { 0.76 };
+    let slot = slot_width / prepared.series.len().max(1) as f64;
+    center - slot_width / 2.0 + slot * (series_index.unwrap_or(0) as f64 + 0.5)
+}
+
+pub(crate) fn category_bar_geometry(
+    bar: &PreparedBar,
+    prepared: &PreparedBars,
+    mode: BarMode,
+    spacing: BarSpacing,
+    horizontal: bool,
+) -> (f64, f64) {
+    let center = category_center(
+        bar.category_index,
+        bar.series_index,
+        prepared,
+        mode,
+        horizontal,
+    );
+    let thickness = match mode {
+        BarMode::Single | BarMode::Stacked => {
+            if horizontal {
+                0.55
+            } else {
+                0.6
+            }
+        }
+        BarMode::Grouped => {
+            let slot_width = if horizontal { 0.74 } else { 0.76 };
+            let slot = slot_width / prepared.series.len().max(1) as f64;
+            match spacing {
+                BarSpacing::Comfort => slot * 0.82,
+                BarSpacing::Compact => slot,
+            }
+        }
+    };
+    (center, thickness)
+}
+
+/// Preserve actual occupied slots on the categorical axis; absent series
+/// combinations never become bars, while scientific zero segments still do.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one categorical scan accounts for bar bodies, uncertainty caps, and supplemental points in either orientation"
+)]
+pub(crate) fn intrinsic_body_minimum(
+    chart: &Plot,
+    theme: &ResolvedTheme,
+) -> Result<(f64, f64), Error> {
+    let prepared = retained(chart)?;
+    if prepared.categories.is_empty() || prepared.bars.is_empty() {
+        return Err(Error::Render(
+            "bar intrinsic has no prepared category or segment".into(),
+        ));
+    }
+    let horizontal = matches!(
+        chart.kind(),
+        crate::PlotKind::HorizontalBar | crate::PlotKind::StackedHorizontalBar
+    );
+    let mode = mode(chart);
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = chart.data().with_axis_resources(&resources);
+    let body = theme.marks.bar_body.backend_style((0, 0, 0));
+    let body_ink = crate::render::geometry::rectangular_fill_ink_bounds(theme, &body)?;
+    let outline = crate::render::geometry::rectangular_fill_ink_outset(theme, &body)?;
+    let interval = crate::render::geometry::line_ink_width(
+        theme,
+        &theme.marks.uncertainty_stroke.backend_style(),
+    )?;
+    let mut pitch = 1.0_f64 / 1024.0;
+    let mut numeric = if horizontal { outline.0 } else { outline.1 };
+    data.claim_source_visits(prepared.bars.len())?;
+    for bar in &prepared.bars {
+        if bar.category_index >= prepared.categories.len()
+            || bar
+                .series_index
+                .is_some_and(|index| index >= prepared.series.len())
+        {
+            return Err(Error::Render(
+                "bar occupied slot exceeds prepared category/series".into(),
+            ));
+        }
+        let (center, thickness) =
+            category_bar_geometry(bar, prepared, mode, chart.bar_spacing_spec(), horizontal);
+        // Distinct source slot edges must survive the canonical pixel quantum
+        // even when their paint is transparent or the scientific height is zero.
+        pitch = pitch.max((1.0 / 1024.0) / thickness);
+        let relative = center - (bar.category_index as f64 + 0.5);
+        let half = thickness / 2.0;
+        if let Some(ink) = body_ink {
+            let (low, high) = if horizontal {
+                (ink.bottom, ink.top)
+            } else {
+                (ink.left, ink.right)
+            };
+            let left_room = 0.5 + relative - half;
+            let right_room = 0.5 - relative - half;
+            if left_room <= 0.0 || right_room <= 0.0 {
+                return Err(Error::Render(
+                    "bar category body exceeds its declared slot".into(),
+                ));
+            }
+            pitch = pitch.max((-low).max(0.0) / left_room);
+            pitch = pitch.max(high.max(0.0) / right_room);
+        }
+        if bar.interval.is_some() && interval > 0.0 {
+            let cap = thickness * 0.2;
+            pitch = pitch.max((1.0 / 1024.0) / (2.0 * cap));
+            let left_room = 0.5 + relative - cap;
+            let right_room = 0.5 - relative - cap;
+            if left_room <= 0.0 || right_room <= 0.0 {
+                return Err(Error::Render(
+                    "bar interval cap exceeds its declared slot".into(),
+                ));
+            }
+            pitch = pitch.max((interval / 2.0) / left_room);
+            pitch = pitch.max((interval / 2.0) / right_room);
+            numeric = numeric.max(interval);
+        }
+    }
+    data.claim_source_visits(prepared.points.len())?;
+    for point in &prepared.points {
+        if point.category_index >= prepared.categories.len()
+            || point
+                .series_index
+                .is_some_and(|index| index >= prepared.series.len())
+        {
+            return Err(Error::Render(
+                "bar supplemental point exceeds prepared category/series".into(),
+            ));
+        }
+        let center = category_center(
+            point.category_index,
+            point.series_index,
+            prepared,
+            mode,
+            horizontal,
+        );
+        let relative = center - (point.category_index as f64 + 0.5);
+        if let Some(ink) = crate::render::geometry::point_ink_bounds(theme, &point.style)? {
+            let (low, high) = if horizontal {
+                (ink.bottom, ink.top)
+            } else {
+                (ink.left, ink.right)
+            };
+            pitch = pitch.max((-low).max(0.0) / (0.5 + relative));
+            pitch = pitch.max(high.max(0.0) / (0.5 - relative));
+            numeric = numeric.max(if horizontal {
+                ink.right - ink.left
+            } else {
+                ink.top - ink.bottom
+            });
+        }
+    }
+    let categories = f64::from(
+        u32::try_from(prepared.categories.len())
+            .map_err(|_| Error::Render("bar category count exceeds coordinate range".into()))?,
+    );
+    let categorical = pitch * categories;
+    if !categorical.is_finite() {
+        return Err(Error::Render("bar category hard span overflowed".into()));
+    }
+    let numeric = if (if horizontal {
+        chart.user_x_limits()
+    } else {
+        chart.user_y_limits()
+    })
+    .is_none()
+    {
+        numeric
+    } else {
+        0.0
+    };
+    Ok(if horizontal {
+        (numeric, categorical)
+    } else {
+        (categorical, numeric)
+    })
 }
 
 /// A prepared bar or stacked-bar segment in data coordinates.
@@ -118,6 +311,84 @@ pub(crate) struct BarPayload {
     pub(crate) points: Vec<(crate::render::backend::Point2D, PointStyle)>,
     #[cfg(test)]
     pub(crate) kind: crate::PlotKind,
+}
+
+/// One numeric-axis request from the selected complete bar, interval and
+/// supplemental-point paints, merged with its existing significance domain.
+pub(crate) fn automatic_numeric_ink_expansion(
+    chart: &Plot,
+    prepared: &PreparedBars,
+    payload: &BarPayload,
+    projection: &crate::layout::Projection,
+    theme: &ResolvedTheme,
+    data: PlotData<'_>,
+    scope: &crate::layout::fit::FitScope,
+) -> Result<Option<crate::layout::interior::DomainExpansion>, crate::layout::fit::PlanError> {
+    let horizontal = matches!(
+        chart.kind(),
+        crate::PlotKind::HorizontalBar | crate::PlotKind::StackedHorizontalBar
+    );
+    let automatic = if horizontal {
+        chart.user_x_limits().is_none()
+    } else {
+        chart.user_y_limits().is_none()
+    };
+    if !automatic {
+        return Ok(payload.domain_expansion);
+    }
+    let mut ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    data.claim_source_visits(payload.bars.len())?;
+    for bar in &payload.bars {
+        ink.polygon(&bar.polygon, &bar.fill, None)?;
+        if let Some(interval) = &bar.interval {
+            data.claim_source_visits(interval.len())?;
+            for segment in interval {
+                ink.line(segment, &payload.interval_style, None)?;
+            }
+        }
+    }
+    data.claim_source_visits(payload.points.len())?;
+    for (point, style) in &payload.points {
+        ink.scatter_with_clip(std::slice::from_ref(point), style, None)?;
+    }
+    let Some(bounds) = ink
+        .bounds()
+        .iter()
+        .copied()
+        .reduce(crate::render::geometry::GeometryBox::union)
+    else {
+        return Ok(payload.domain_expansion);
+    };
+    let count = u32::try_from(prepared.categories.len())
+        .map_err(|_| Error::Render("bar category count exceeds coordinate range".into()))?;
+    let mut numeric = prepared.value_range;
+    data.claim_source_visits(prepared.points.len())?;
+    for point in &prepared.points {
+        numeric.0 = numeric.0.min(point.value);
+        numeric.1 = numeric.1.max(point.value);
+    }
+    let source = if horizontal {
+        [numeric, (0.0, f64::from(count))]
+    } else {
+        [(0.0, f64::from(count)), numeric]
+    };
+    let proposals = crate::layout::interior::automatic_absolute_ink_expansions(
+        source,
+        projection,
+        bounds,
+        if horizontal {
+            [true, false]
+        } else {
+            [false, true]
+        },
+        data,
+        scope,
+    )?;
+    let merged = crate::layout::interior::merge_mark_domain_expansions(
+        [payload.domain_expansion, None],
+        proposals,
+    );
+    Ok(merged.into_iter().flatten().next())
 }
 
 impl BarPayload {
@@ -1752,6 +2023,118 @@ mod tests {
         PercentileInterval, StandardDeviation, StandardError,
     };
     use crate::{BarInput, Bounds, CategoryValues, ErrorBar, NumericValues, Plot};
+
+    #[test]
+    fn occupied_grouped_bar_slots_resolve_orientation_and_exact_numeric_windows() {
+        let source = |horizontal: bool, grouped: bool, exact: bool| {
+            let category = CategoryValues::new("category", ["a", "b", "a", "b"]).unwrap();
+            let values = BarInput::samples(NumericValues::new("value", [0.0, -2.0, 3.0, 4.0]));
+            let series = || CategoryValues::new("series", ["one", "one", "two", "two"]).unwrap();
+            if horizontal {
+                let plot = Plot::horizontal_bar(category, values);
+                if grouped {
+                    let plot = plot.series(series()).spacing(crate::BarSpacing::Compact);
+                    if exact {
+                        plot.x_limits(-4.0, 6.0).erase()
+                    } else {
+                        plot.erase()
+                    }
+                } else {
+                    plot.erase()
+                }
+            } else {
+                let plot = Plot::bar(category, values);
+                if grouped {
+                    let plot = plot.series(series()).spacing(crate::BarSpacing::Compact);
+                    if exact {
+                        plot.y_limits(-4.0, 6.0).erase()
+                    } else {
+                        plot.erase()
+                    }
+                } else {
+                    plot.erase()
+                }
+            }
+        };
+        let intrinsic = |source: Plot, theme: &crate::theme::ResolvedTheme| {
+            let resources = crate::font::canonical::OperationGenerationResources::new();
+            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+            inputs
+                .attach(source)
+                .unwrap()
+                .intrinsic_body_minimum(theme)
+                .unwrap()
+        };
+        let plain = crate::Theme::Publication.resolve();
+        let mut styled = plain.clone();
+        styled.marks.bar_body.outline_width = 100.0;
+        for horizontal in [false, true] {
+            let default = intrinsic(source(horizontal, true, false), &plain);
+            let single = intrinsic(source(horizontal, false, false), &styled);
+            let grouped = intrinsic(source(horizontal, true, false), &styled);
+            let exact = intrinsic(source(horizontal, true, true), &styled);
+            let category = |size: (f64, f64)| if horizontal { size.1 } else { size.0 };
+            let numeric = |size: (f64, f64)| if horizontal { size.0 } else { size.1 };
+            assert!(category(grouped) > category(single));
+            assert!(category(single) > category(default));
+            assert_eq!(category(exact).to_bits(), category(grouped).to_bits());
+            assert!(numeric(grouped) >= 100.0);
+            assert_eq!(numeric(exact).to_bits(), numeric(default).to_bits());
+        }
+    }
+
+    #[test]
+    fn bar_interval_caps_and_exact_supplemental_points_extend_category_pitch() {
+        let intrinsic = |source: Plot, theme: &crate::theme::ResolvedTheme| {
+            let resources = crate::font::canonical::OperationGenerationResources::new();
+            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+            inputs
+                .attach(source)
+                .unwrap()
+                .intrinsic_body_minimum(theme)
+                .unwrap()
+        };
+        let baseline = Plot::bar(
+            CategoryValues::new("category", ["a", "b"]).unwrap(),
+            BarInput::estimates(NumericValues::new("value", [2.0, 5.0])),
+        )
+        .erase();
+        let intervals = Plot::bar(
+            CategoryValues::new("category", ["a", "b"]).unwrap(),
+            BarInput::estimates_with_error_bars(
+                NumericValues::new("value", [2.0, 5.0]),
+                Bounds::new(
+                    NumericValues::new("lower", [1.0, 4.0]),
+                    NumericValues::new("upper", [3.0, 6.0]),
+                ),
+            ),
+        )
+        .erase();
+        let mut theme = crate::Theme::Publication.resolve();
+        theme.marks.uncertainty_stroke.width = 120.0;
+        let ordinary = intrinsic(baseline, &theme);
+        let with_caps = intrinsic(intervals, &theme);
+        assert!(with_caps.0 > ordinary.0);
+        assert!(with_caps.1 >= 120.0);
+
+        let point_layer = crate::BarPointLayer::new(
+            CategoryValues::new("category", ["a"]).unwrap(),
+            None,
+            NumericValues::new("value", [2.0]),
+            (1, 2, 3),
+            200,
+            0.5,
+        )
+        .unwrap();
+        let points = Plot::bar(
+            CategoryValues::new("category", ["a", "b"]).unwrap(),
+            BarInput::estimates(NumericValues::new("value", [2.0, 5.0])),
+        )
+        .point_layer(point_layer)
+        .erase();
+        let with_points = intrinsic(points, &theme);
+        assert!(with_points.0 > with_caps.0);
+    }
 
     #[test]
     fn custom_bar_fill_and_outline_match_selected_marks_and_originating_guide() {

@@ -13,7 +13,7 @@ use crate::Error;
 use crate::layout::{Layout, PanelBox, PhysicalTextAlignment, Projection, ResolvedTextPlan};
 use crate::plots::bar_data::{self, BarMode, PreparedBar, PreparedBarSignificance, PreparedBars};
 use crate::render::backend::{PlacedText, Point2D, TextAnchor};
-use crate::spec::{BarSpacing, PlotRenderContext, PlotRenderResult};
+use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::Plot;
 
 pub(crate) fn measure_marks(
@@ -157,7 +157,8 @@ pub(crate) fn measure_marks(
         payload.zero = Some([Point2D::new(x, y0), Point2D::new(x, y1)]);
     }
     for bar in &prepared.bars {
-        let (y_center, height) = bar_geometry(bar, prepared, mode, chart.bar_spacing_spec());
+        let (y_center, height) =
+            bar_data::category_bar_geometry(bar, prepared, mode, chart.bar_spacing_spec(), true);
         let color_index = bar.hue_index.unwrap_or_else(|| {
             if chart.group_col().is_some() {
                 0
@@ -198,12 +199,27 @@ pub(crate) fn measure_marks(
         )?);
     }
     for point in &prepared.points {
-        let y_center = point_center(point.category_index, point.series_index, prepared, mode);
+        let y_center = bar_data::category_center(
+            point.category_index,
+            point.series_index,
+            prepared,
+            mode,
+            true,
+        );
         let projected = layout.projection.project(point.value, y_center);
         payload
             .points
             .push((Point2D::new(projected.0, projected.1), point.style.clone()));
     }
+    payload.domain_expansion = bar_data::automatic_numeric_ink_expansion(
+        chart,
+        prepared,
+        &payload,
+        &layout.projection,
+        theme,
+        data,
+        context.fit_scope(),
+    )?;
     let mut result = PlotRenderResult::new(layout, legend_entries)
         .with_significance_plan(significance)
         .with_deferred_annotation_text(data.collect_source(
@@ -333,47 +349,8 @@ fn significance_center(
     mode: BarMode,
 ) -> f64 {
     series_index.map_or(category_index as f64 + 0.5, |series_index| {
-        point_center(category_index, Some(series_index), prepared, mode)
+        bar_data::category_center(category_index, Some(series_index), prepared, mode, true)
     })
-}
-
-fn point_center(
-    category_index: usize,
-    series_index: Option<usize>,
-    prepared: &PreparedBars,
-    mode: BarMode,
-) -> f64 {
-    let category_center = category_index as f64 + 0.5;
-    if mode != BarMode::Grouped {
-        return category_center;
-    }
-    let series_count = prepared.series.len().max(1) as f64;
-    let slot = 0.74 / series_count;
-    category_center - 0.74 / 2.0 + slot * (series_index.unwrap_or(0) as f64 + 0.5)
-}
-
-fn bar_geometry(
-    bar: &PreparedBar,
-    prepared: &PreparedBars,
-    mode: BarMode,
-    spacing: BarSpacing,
-) -> (f64, f64) {
-    let category_center = bar.category_index as f64 + 0.5;
-    match mode {
-        BarMode::Single | BarMode::Stacked => (category_center, 0.55),
-        BarMode::Grouped => {
-            let series_count = prepared.series.len().max(1) as f64;
-            let slot_width = 0.74;
-            let slot = slot_width / series_count;
-            let series_index = bar.series_index.unwrap_or(0) as f64;
-            let center = category_center - slot_width / 2.0 + slot * (series_index + 0.5);
-            let height = match spacing {
-                BarSpacing::Comfort => slot * 0.82,
-                BarSpacing::Compact => slot,
-            };
-            (center, height)
-        }
-    }
 }
 
 fn project_bar(
