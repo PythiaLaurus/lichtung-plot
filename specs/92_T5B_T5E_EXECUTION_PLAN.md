@@ -1023,7 +1023,9 @@ caller styles while centralizing their ownership.
 | T5c2d0 | COMPLETE | T5c2c | `docs(marks): map specialized mark requirement owners` |
 | T5c2d1 | IN PROGRESS | T5c2d0 | Umbrella for specialized mark requirements |
 | T5c2d1a | COMPLETE | T5c2d0 | `feat(heatmap): measure styled cell and missing-cross hard ink` |
-| T5c2d1b | PENDING | T5c2d1a | `refactor(marks): measure remaining specialized mark requirements` |
+| T5c2d1b | IN PROGRESS | T5c2d1a | Umbrella for remaining specialized mark requirements |
+| T5c2d1b1 | COMPLETE | T5c2d1a | `feat(beeswarm): measure occupied marker category ink` |
+| T5c2d1b2 | PENDING | T5c2d1b1 | `refactor(marks): measure remaining specialized mark requirements` |
 | T5c3 | PENDING | T5c2d | `refactor(annotations): measure native overlay consequences` |
 | T5c4 | PENDING | T5c3 | `refactor(layout): replace deferred mark and annotation minima` |
 | T5c5 | PENDING | T5c4 | `test(theme): close native mark and annotation ownership` |
@@ -1777,6 +1779,20 @@ without stale style reuse. Focused cache/domain/custom 100px cell/24px cross,
 preparation/admission, 38 Heatmap integration and font-census tests, plus
 strict Clippy pass. T5e1 owns column-first native cell track assignment;
 Beeswarm/Waterfall/Marginal/Matrix mark inputs follow in T5c2d1b.
+
+T5c2d1b1 closure: Beeswarm retains all source-backed `rows` and category
+levels independently of the current signed-bin visual offsets. Its actual
+prepared per-row offset and fully stroked point geometry supply pre-selection
+category hard pitch, without running a second swarm pack; X point/reference
+width is hard only on an automatic numeric axis. After selected source and
+canonical geometry validation, one unclipped mark observation requests
+numeric X clearance from the existing root feedback driver. Structural zero
+reference endpoints may meet the category frame, while actual swarm points
+must fit its assigned category panel. Custom clustered 54/300px source-row
+fixtures, exact-X windows and Y occupancy, colorbar routing, candidate resource
+refusal, frozen SVG/PNG replay and unchanged Beeswarm snapshot pass with
+strict Clippy. T5e4 replaces the bin offsets with the approved deterministic
+tangent pass; T5c2d1b2 proceeds to Waterfall/Marginal/Matrix mark inputs.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect

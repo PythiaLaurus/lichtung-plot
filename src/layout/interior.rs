@@ -280,6 +280,11 @@ impl Plot {
             minimum.0 = minimum.0.max(heatmap.0);
             minimum.1 = minimum.1.max(heatmap.1);
         }
+        if self.kind() == PlotKind::Beeswarm {
+            let mark = crate::plots::beeswarm::intrinsic_body_minimum(self, theme)?;
+            minimum.0 = minimum.0.max(mark.0);
+            minimum.1 = minimum.1.max(mark.1);
+        }
         Ok(minimum)
     }
 }

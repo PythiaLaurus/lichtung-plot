@@ -32,6 +32,81 @@ pub(crate) struct PreparedBeeswarm {
     pub(crate) color_label: String,
 }
 
+pub(crate) fn intrinsic_body_minimum(
+    chart: &Plot,
+    theme: &crate::theme::ResolvedTheme,
+) -> Result<(f64, f64), Error> {
+    let prepared = chart
+        .prepared_beeswarm
+        .as_ref()
+        .and_then(|inputs| {
+            inputs
+                .panels
+                .iter()
+                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        })
+        .map(|(_, marks)| marks)
+        .ok_or_else(|| {
+            Error::Render("Beeswarm intrinsic requires root-prepared source rows".into())
+        })?;
+    if prepared.levels.is_empty()
+        || prepared.rows.is_empty()
+        || prepared.rows.len() != prepared.points.len()
+    {
+        return Err(Error::Render(
+            "Beeswarm source rows and prepared points differ".into(),
+        ));
+    }
+    let point = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.beeswarm);
+    let ink = crate::render::geometry::point_ink_bounds(theme, &point)?;
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    resources
+        .claim_visits(prepared.rows.len() as u128)
+        .map_err(|error| {
+            Error::Render(format!("Beeswarm occupied category admission: {error:?}"))
+        })?;
+    let mut pitch = 1.0_f64 / 1024.0;
+    for (&(category, _, _, _), &(_, y, _)) in prepared.rows.iter().zip(&prepared.points) {
+        if category >= prepared.levels.len() {
+            return Err(Error::Render(
+                "Beeswarm point category exceeds prepared levels".into(),
+            ));
+        }
+        let offset = (y - (category as f64 + 0.5)).abs();
+        if offset >= 0.5 {
+            return Err(Error::Render(
+                "Beeswarm point exceeds its prepared category slot".into(),
+            ));
+        }
+        if let Some(ink) = ink {
+            pitch = pitch.max(ink.top.max(-ink.bottom) / (0.5 - offset));
+        }
+    }
+    let count = u32::try_from(prepared.levels.len())
+        .map_err(|_| Error::Render("Beeswarm category count exceeds spatial range".into()))?;
+    let height = pitch * f64::from(count);
+    if !height.is_finite() {
+        return Err(Error::Render(
+            "Beeswarm category hard span overflowed".into(),
+        ));
+    }
+    let mut numeric = ink.map_or(0.0, |ink| ink.right - ink.left);
+    if chart.zero_line_visible() && prepared.x_data.0 <= 0.0 && prepared.x_data.1 >= 0.0 {
+        numeric = numeric.max(crate::render::geometry::line_ink_width(
+            theme,
+            &theme.marks.beeswarm_reference.backend_style(),
+        )?);
+    }
+    Ok((
+        if chart.user_x_limits().is_none() {
+            numeric
+        } else {
+            0.0
+        },
+        height,
+    ))
+}
+
 #[cfg(test)]
 thread_local! {
     pub(crate) static STAGES: std::cell::Cell<[usize; 3]> = const { std::cell::Cell::new([0; 3]) };
@@ -334,16 +409,64 @@ pub(crate) fn measure(
             chart.point_style(theme, color, theme.marks.point_sizes.beeswarm),
         ))
     }))?;
-    let payload = BeeswarmPayload {
+    let mut payload = BeeswarmPayload {
         clip: layout.projection.panel_box(),
         zero,
         points,
+        domain_expansions: [None; 2],
         colorbar: colorbar
             .as_ref()
             .map(|(title, values, _)| select_colorbar(&layout, title, values, prepared.stops, data))
             .transpose()?,
     };
     let geometry = payload.geometry(theme)?;
+    let mut full = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    data.claim_source_visits(payload.points.len())?;
+    for (point, style) in &payload.points {
+        full.scatter_with_clip(std::slice::from_ref(point), style, None)?;
+    }
+    let panel = layout.projection.panel_box();
+    if let Some(bounds) = full
+        .bounds()
+        .iter()
+        .copied()
+        .reduce(crate::render::geometry::GeometryBox::union)
+    {
+        if bounds.bottom < panel.y0 || bounds.top > panel.y1 {
+            return Err(context
+                .fit_scope()
+                .failure(
+                    crate::layout::fit::FitKind::SpecializedGeometry,
+                    "Beeswarm painted ink exceeds its assigned category panel",
+                )
+                .into());
+        }
+    }
+    // A structural zero reference intentionally terminates at the frame;
+    // its caps do not impose category-track overflow on data points.
+    if let Some((line, style)) = &payload.zero {
+        full.line(line, style, None)?;
+    }
+    if let Some(bounds) = full
+        .bounds()
+        .iter()
+        .copied()
+        .reduce(crate::render::geometry::GeometryBox::union)
+    {
+        if chart.user_x_limits().is_none() {
+            let levels = u32::try_from(prepared.levels.len()).map_err(|_| {
+                Error::Render("Beeswarm category count exceeds spatial range".into())
+            })?;
+            payload.domain_expansions = crate::layout::interior::automatic_absolute_ink_expansions(
+                [prepared.x_data, (0.0, f64::from(levels))],
+                &layout.projection,
+                bounds,
+                [true, false],
+                data,
+                context.fit_scope(),
+            )?;
+        }
+    }
     let mut result = PlotRenderResult::new(layout, Vec::new());
     result.y_domain = crate::spec::AxisDomain::Categorical;
     if let Some(bar) = &payload.colorbar {
@@ -362,6 +485,7 @@ pub(crate) struct BeeswarmPayload {
     zero: Option<([Point2D; 2], LineStyle)>,
     points: Vec<(Point2D, crate::render::backend::PointStyle)>,
     colorbar: Option<ColorbarPayload>,
+    pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
 }
 
 #[derive(Debug)]
@@ -493,6 +617,92 @@ mod fit_tests {
     use super::*;
     use crate::layout::fit::{FitKind, FitOutcome, FitScope};
     use crate::layout::{AddressRole, ComponentAddress};
+    use crate::theme::ResolvedTheme;
+
+    #[test]
+    fn prepared_bin_offsets_and_complete_marker_ink_raise_category_hard_pitch() {
+        let source = |exact: bool| {
+            let plot = Plot::beeswarm(
+                crate::CategoryValues::new(
+                    "category",
+                    ["a", "a", "a", "a", "a", "a", "a", "a", "b"],
+                )
+                .unwrap(),
+                crate::NumericValues::new("x", [0.0; 9]),
+                crate::NumericValues::new("color", [0.5; 9]),
+            );
+            if exact {
+                plot.x_limits(-1.0, 1.0).erase()
+            } else {
+                plot.erase()
+            }
+        };
+        let intrinsic = |source: Plot, theme: &ResolvedTheme| {
+            let resources = crate::font::canonical::OperationGenerationResources::new();
+            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+            inputs
+                .attach(source)
+                .unwrap()
+                .intrinsic_body_minimum(theme)
+                .unwrap()
+        };
+        let theme = crate::Theme::Publication.resolve();
+        let baseline = intrinsic(source(false), &theme);
+        let mut styled = theme.clone();
+        styled.marks.point_sizes.beeswarm = 54;
+        let raised = intrinsic(source(false), &styled);
+        assert!(raised.0 > baseline.0);
+        assert!(raised.1 > 700.0);
+        let exact = intrinsic(source(true), &styled);
+        assert_eq!(exact.0.to_bits(), baseline.0.to_bits());
+        assert_eq!(exact.1.to_bits(), raised.1.to_bits());
+    }
+
+    #[test]
+    fn selected_swarm_ink_clears_numeric_edges_without_repacking_points() {
+        let source = Plot::beeswarm(
+            crate::CategoryValues::new("category", ["a", "a", "a", "a", "a", "a", "a", "a", "b"])
+                .unwrap(),
+            crate::NumericValues::new("x", [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 100.0]),
+            crate::NumericValues::new("color", [0.5; 9]),
+        )
+        .color_limits(0.0, 1.0)
+        .size(1800, 6000)
+        .erase();
+        let mut theme = crate::Theme::Publication.resolve();
+        theme.marks.point_sizes.beeswarm = 300;
+        let resources = theme
+            .prepared_font_environment()
+            .unwrap()
+            .generation_resources();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let cell = PanelBox::new(80.0, 1750.0, 80.0, 5900.0);
+        let selected = crate::decorations::plan::plan_panel_for_test(
+            &chart,
+            crate::PlotKind::Beeswarm,
+            cell,
+            crate::decorations::plan::LegendRole::Suppressed,
+            &theme,
+        )
+        .unwrap();
+        assert!(selected.planned_x_limits().is_some());
+        let crate::layout::interior::MarkPayload::Beeswarm(payload) =
+            &selected.result.marks.as_ref().unwrap().payload
+        else {
+            panic!("selected Beeswarm")
+        };
+        assert!(payload.domain_expansions.iter().all(Option::is_none));
+        assert_eq!(payload.points.len(), 9);
+        let panel = selected.result.layout.projection.panel_box();
+        for (point, style) in &payload.points {
+            let ink = crate::render::geometry::point_ink_bounds(&theme, style)
+                .unwrap()
+                .unwrap();
+            assert!(point.x + ink.left >= panel.x0 && point.x + ink.right <= panel.x1);
+            assert!(point.y + ink.bottom >= panel.y0 && point.y + ink.top <= panel.y1);
+        }
+    }
 
     #[test]
     fn colorbar_title_fit_preserves_its_child_address_and_zero_local_attempt() {
