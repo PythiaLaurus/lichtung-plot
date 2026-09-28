@@ -919,57 +919,57 @@ caller styles while centralizing their ownership.
 | Step | Status | Depends on | Logical commit |
 | --- | --- | --- | --- |
 | T5c0 | COMPLETE | T5b | `docs(marks): classify appearance and content policies` |
-| T5c1 | IN PROGRESS | T5c0 | Umbrella; completes after T5c1a-b |
+| T5c1 | COMPLETE | T5c0 | Umbrella; complete after T5c1a-b |
 | T5c1a | COMPLETE | T5c0 | `feat(theme): separate interval and summary strokes` |
-| T5c1b | IN PROGRESS | T5c1a | Umbrella; completes after remaining roles and contrast |
+| T5c1b | COMPLETE | T5c1a | Umbrella; complete after private roles and contrast |
 | T5c1b1 | COMPLETE | T5c1a | `refactor(theme): retire unused line width` |
-| T5c1b2 | IN PROGRESS | T5c1b1 | Umbrella; completes after bracket and remaining roles |
+| T5c1b2 | COMPLETE | T5c1b1 | Umbrella; complete after bracket and remaining roles |
 | T5c1b2a | COMPLETE | T5c1b1 | `feat(theme): resolve significance bracket stroke` |
-| T5c1b2b | IN PROGRESS | T5c1b2a | Umbrella; completes after point-label spacing and remaining roles |
+| T5c1b2b | COMPLETE | T5c1b2a | Umbrella; complete after point-label spacing and remaining roles |
 | T5c1b2b1 | COMPLETE | T5c1b2a | `feat(theme): measure point-label gap from annotation role` |
-| T5c1b2b2 | IN PROGRESS | T5c1b2b1 | Umbrella; completes after path and remaining style roles |
+| T5c1b2b2 | COMPLETE | T5c1b2b1 | Umbrella; complete after path and remaining style roles |
 | T5c1b2b2a | COMPLETE | T5c1b2b1 | `feat(theme): resolve data-colored path strokes` |
-| T5c1b2b2b | IN PROGRESS | T5c1b2b2a | Umbrella; completes after Histogram strokes and remaining roles |
+| T5c1b2b2b | COMPLETE | T5c1b2b2a | Umbrella; complete after Histogram strokes and remaining roles |
 | T5c1b2b2b1 | COMPLETE | T5c1b2b2a | `feat(theme): resolve Histogram overlay strokes` |
-| T5c1b2b2b2 | IN PROGRESS | T5c1b2b2b1 | Umbrella; completes after Density and remaining roles |
+| T5c1b2b2b2 | COMPLETE | T5c1b2b2b1 | Umbrella; complete after Density and remaining roles |
 | T5c1b2b2b2a | COMPLETE | T5c1b2b2b1 | `feat(theme): resolve Density curve strokes` |
-| T5c1b2b2b2b | IN PROGRESS | T5c1b2b2b2a | Umbrella; completes after Regression and remaining roles |
+| T5c1b2b2b2b | COMPLETE | T5c1b2b2b2a | Umbrella; complete after Regression and remaining roles |
 | T5c1b2b2b2b1 | COMPLETE | T5c1b2b2b2a | `feat(theme): resolve regression fit strokes` |
-| T5c1b2b2b2b2 | IN PROGRESS | T5c1b2b2b2b1 | Umbrella; completes after reference strokes and remaining roles |
+| T5c1b2b2b2b2 | COMPLETE | T5c1b2b2b2b1 | Umbrella; complete after reference strokes and remaining roles |
 | T5c1b2b2b2b2a | COMPLETE | T5c1b2b2b2b1 | `feat(theme): resolve estimate and reference strokes` |
-| T5c1b2b2b2b2b | IN PROGRESS | T5c1b2b2b2b2a | Umbrella; completes after RGBA conversion and remaining roles |
+| T5c1b2b2b2b2b | COMPLETE | T5c1b2b2b2b2a | Umbrella; complete after RGBA conversion and remaining roles |
 | T5c1b2b2b2b2b1 | COMPLETE | T5c1b2b2b2b2a | `docs(theme): pin legacy alpha resolution` |
-| T5c1b2b2b2b2b2 | IN PROGRESS | T5c1b2b2b2b2b1 | Umbrella; completes after complete-fill transport and remaining roles |
+| T5c1b2b2b2b2b2 | COMPLETE | T5c1b2b2b2b2b1 | Umbrella; complete after complete-fill transport and remaining roles |
 | T5c1b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b1 | `feat(render): resolve independent fill and stroke paints` |
-| T5c1b2b2b2b2b2b | IN PROGRESS | T5c1b2b2b2b2b2a | Umbrella; completes after point paint and remaining roles |
+| T5c1b2b2b2b2b2b | COMPLETE | T5c1b2b2b2b2b2a | Umbrella; complete after point paint and remaining roles |
 | T5c1b2b2b2b2b2b1 | COMPLETE | T5c1b2b2b2b2b2a | `feat(render): resolve independent point and outline paints` |
-| T5c1b2b2b2b2b2b2 | IN PROGRESS | T5c1b2b2b2b2b2b1 | Umbrella; completes after primary-point appearance and remaining roles |
+| T5c1b2b2b2b2b2b2 | COMPLETE | T5c1b2b2b2b2b2b1 | Umbrella; complete after primary-point appearance and remaining roles |
 | T5c1b2b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b2b1 | `feat(theme): resolve primary point appearance` |
-| T5c1b2b2b2b2b2b2b | IN PROGRESS | T5c1b2b2b2b2b2b2a | Umbrella; completes after composited contrast and remaining roles |
+| T5c1b2b2b2b2b2b2b | COMPLETE | T5c1b2b2b2b2b2b2a | Umbrella; complete after composited contrast and remaining roles |
 | T5c1b2b2b2b2b2b2b1 | COMPLETE | T5c1b2b2b2b2b2b2a | `feat(theme): select complete Heatmap contrast roles` |
-| T5c1b2b2b2b2b2b2b2 | IN PROGRESS | T5c1b2b2b2b2b2b2b1 | Umbrella; completes after bar fill and remaining roles |
+| T5c1b2b2b2b2b2b2b2 | COMPLETE | T5c1b2b2b2b2b2b2b1 | Umbrella; complete after bar fill and remaining roles |
 | T5c1b2b2b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b2b2b1 | `feat(theme): resolve ordinary bar fill appearance` |
-| T5c1b2b2b2b2b2b2b2b | IN PROGRESS | T5c1b2b2b2b2b2b2b2a | Umbrella for remaining private mark and annotation roles |
+| T5c1b2b2b2b2b2b2b2b | COMPLETE | T5c1b2b2b2b2b2b2b2a | Umbrella for remaining private mark and annotation roles |
 | T5c1b2b2b2b2b2b2b2b1 | COMPLETE | T5c1b2b2b2b2b2b2b2a | `feat(theme): resolve area and uncertainty-band fill appearance` |
-| T5c1b2b2b2b2b2b2b2b2 | IN PROGRESS | T5c1b2b2b2b2b2b2b2b1 | Umbrella for remaining mark and annotation owners |
+| T5c1b2b2b2b2b2b2b2b2 | COMPLETE | T5c1b2b2b2b2b2b2b2b1 | Umbrella for remaining mark and annotation owners |
 | T5c1b2b2b2b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b2b2b2b1 | `feat(theme): resolve distribution and histogram body fills` |
-| T5c1b2b2b2b2b2b2b2b2b | IN PROGRESS | T5c1b2b2b2b2b2b2b2b2a | Umbrella for remaining point, Heatmap and annotation roles |
+| T5c1b2b2b2b2b2b2b2b2b | COMPLETE | T5c1b2b2b2b2b2b2b2b2a | Umbrella for remaining point, Heatmap and annotation roles |
 | T5c1b2b2b2b2b2b2b2b2b1 | COMPLETE | T5c1b2b2b2b2b2b2b2b2a | `feat(theme): resolve raw distribution overlay points` |
-| T5c1b2b2b2b2b2b2b2b2b2 | IN PROGRESS | T5c1b2b2b2b2b2b2b2b2b1 | Umbrella for remaining mark and annotation roles |
+| T5c1b2b2b2b2b2b2b2b2b2 | COMPLETE | T5c1b2b2b2b2b2b2b2b2b1 | Umbrella for remaining mark and annotation roles |
 | T5c1b2b2b2b2b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b2b2b2b2b1 | `feat(theme): resolve Heatmap cell and missing-key outlines` |
-| T5c1b2b2b2b2b2b2b2b2b2b | IN PROGRESS | T5c1b2b2b2b2b2b2b2b2b2a | Umbrella for remaining mark/annotation appearance |
+| T5c1b2b2b2b2b2b2b2b2b2b | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2a | Umbrella for remaining mark/annotation appearance |
 | T5c1b2b2b2b2b2b2b2b2b2b1 | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2a | `feat(theme): resolve remaining structural mark strokes` |
-| T5c1b2b2b2b2b2b2b2b2b2b2 | IN PROGRESS | T5c1b2b2b2b2b2b2b2b2b2b1 | Umbrella for remaining style roles |
+| T5c1b2b2b2b2b2b2b2b2b2b2 | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b1 | Umbrella for remaining style roles |
 | T5c1b2b2b2b2b2b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b1 | `feat(theme): resolve primary point sizes by mark family` |
-| T5c1b2b2b2b2b2b2b2b2b2b2b | IN PROGRESS | T5c1b2b2b2b2b2b2b2b2b2b2a | Umbrella for remaining private style roles |
+| T5c1b2b2b2b2b2b2b2b2b2b2b | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b2a | Umbrella for remaining private style roles |
 | T5c1b2b2b2b2b2b2b2b2b2b2b1 | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b2a | `feat(theme): resolve Interaction connector appearance` |
-| T5c1b2b2b2b2b2b2b2b2b2b2b2 | IN PROGRESS | T5c1b2b2b2b2b2b2b2b2b2b2b1 | Umbrella for remaining annotation roles |
+| T5c1b2b2b2b2b2b2b2b2b2b2b2 | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b2b1 | Umbrella for remaining annotation roles |
 | T5c1b2b2b2b2b2b2b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b2b1 | `feat(theme): resolve required estimate detail text` |
-| T5c1b2b2b2b2b2b2b2b2b2b2b2b | IN PROGRESS | T5c1b2b2b2b2b2b2b2b2b2b2b2a | Umbrella for remaining annotation styles |
+| T5c1b2b2b2b2b2b2b2b2b2b2b2b | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b2b2a | Umbrella for remaining annotation styles |
 | T5c1b2b2b2b2b2b2b2b2b2b2b2b1 | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b2b2a | `feat(theme): resolve Waterfall total annotation text` |
-| T5c1b2b2b2b2b2b2b2b2b2b2b2b2 | IN PROGRESS | T5c1b2b2b2b2b2b2b2b2b2b2b1 | Umbrella for remaining annotation style ownership |
+| T5c1b2b2b2b2b2b2b2b2b2b2b2b2 | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b2b1 | Umbrella for remaining annotation style ownership |
 | T5c1b2b2b2b2b2b2b2b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b2b2b1 | `feat(theme): resolve supplemental point-label typography` |
-| T5c1b2b2b2b2b2b2b2b2b2b2b2b2b | PENDING | T5c1b2b2b2b2b2b2b2b2b2b2b2b2a | `feat(theme): complete private mark and annotation roles` |
+| T5c1b2b2b2b2b2b2b2b2b2b2b2b2b | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b2b2b2a | `feat(theme): close private mark and annotation roles` |
 | T5c2a | PENDING | T5c1 | `refactor(marks): measure point path and reference requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
@@ -1250,6 +1250,18 @@ only the color after role selection, preserving caller precedence. A custom
 role changes the label font without moving the underlying point or replacing
 its exact color; focused gap/label tests, current path SVG snapshots and strict
 Clippy pass.
+
+T5c1 closure: private mark and annotation appearance is resolved before final
+paint/ink recording, including independent fill/stroke RGBA, per-family point
+size, exact caller precedence, selected-only contrast typography and text
+roles for required estimate/Waterfall/point annotations. Mark and originating
+guide glyphs consume the same styles; intentional point alpha byte changes
+were recorded with their historical fingerprints. Thirty focused theme tests,
+all thirteen affected SVG regression snapshots, representative custom-role
+mark/guide, sampled/supplied, facet/Canvas and annotation tests, and strict
+locked/offline all-target Clippy pass. Native mark/annotation constraints and
+deferred-minimum deletion follow in T5c2–4; categorical/continuous value
+selection and Heatmap variable fills remain the single T5d scale owner.
 
 Implement complete private mark/annotation roles and exact local-style precedence.
 Keep data identity/domain in the scale owner: styles receive one opaque data color
