@@ -59,12 +59,12 @@ pub(crate) fn intrinsic_body_minimum(
     let line = theme.marks.density_line.backend_style((0, 0, 0));
     let ink = crate::render::geometry::line_ink_width(theme, &line)?;
     Ok((
-        if chart.x_axis_spec().limits.is_none() {
+        if chart.user_x_limits().is_none() {
             ink
         } else {
             0.0
         },
-        if chart.y_axis_spec().limits.is_none() {
+        if chart.user_y_limits().is_none() {
             ink
         } else {
             0.0

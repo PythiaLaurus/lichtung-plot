@@ -42,8 +42,9 @@ struct ScatterGroup {
 #[derive(Debug)]
 pub(crate) struct ScatterPayload {
     clip: crate::layout::PanelBox,
-    groups: Vec<(Vec<Point2D>, PointStyle)>,
+    pub(crate) groups: Vec<(Vec<Point2D>, PointStyle)>,
     legends: Vec<LegendEntry>,
+    pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
 }
 
 /// Pre-selection hard size for a complete primary point. Exact data windows
@@ -89,12 +90,12 @@ pub(crate) fn intrinsic_body_minimum(
     // source point is projected or clipped and scratch/record growth is admitted.
     let (width, height) = crate::render::geometry::point_ink_dimensions(theme, &style)?;
     Ok((
-        if chart.x_axis_spec().limits.is_none() {
+        if chart.user_x_limits().is_none() {
             width
         } else {
             0.0
         },
-        if chart.y_axis_spec().limits.is_none() {
+        if chart.user_y_limits().is_none() {
             height
         } else {
             0.0
@@ -253,6 +254,7 @@ impl PreparedScatter {
             clip: projection.panel_box(),
             groups,
             legends,
+            domain_expansions: [None; 2],
         })
     }
 }
@@ -306,6 +308,53 @@ pub(crate) fn measure_marks(
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);
     let mut payload = prepared.project(chart, &layout.projection, theme, data)?;
+    let point_style = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.scatter);
+    if let Some(ink) = crate::render::geometry::point_ink_bounds(theme, &point_style)? {
+        if chart.user_x_limits().is_none() || chart.user_y_limits().is_none() {
+            data.claim_source_visits(2)?;
+            let low = layout
+                .projection
+                .project(prepared.ranges[0].0, prepared.ranges[1].0);
+            let high = layout
+                .projection
+                .project(prepared.ranges[0].1, prepared.ranges[1].1);
+            let panel = layout.projection.panel_box();
+            for (index, (axis, source, current, pixels, projected, painted)) in [
+                (
+                    crate::layout::interior::ClearanceAxis::X,
+                    prepared.ranges[0],
+                    layout.projection.x_range(),
+                    (panel.x0, panel.x1),
+                    (low.0, high.0),
+                    (ink.left, ink.right),
+                ),
+                (
+                    crate::layout::interior::ClearanceAxis::Y,
+                    prepared.ranges[1],
+                    layout.projection.y_range(),
+                    (panel.y0, panel.y1),
+                    (low.1, high.1),
+                    (ink.bottom, ink.top),
+                ),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                if [chart.user_x_limits(), chart.user_y_limits()][index].is_none() {
+                    payload.domain_expansions[index] =
+                        crate::layout::interior::automatic_mark_ink_domain(
+                            axis,
+                            source,
+                            current,
+                            pixels,
+                            projected,
+                            painted,
+                            context.fit_scope(),
+                        )?;
+                }
+            }
+        }
+    }
     let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
     let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
     for (points, style) in &payload.groups {
@@ -381,6 +430,65 @@ mod tests {
         let exact = chart.intrinsic_body_minimum(&theme).unwrap();
         assert_eq!(exact.0.to_bits(), original.0.to_bits());
         assert!(exact.1 >= diameter);
+    }
+
+    #[test]
+    fn automatic_scatter_edges_request_both_domains_from_complete_painted_ink() {
+        let source = Plot::scatter(
+            NumericValues::new("x", [0.0, 10.0]),
+            NumericValues::new("y", [0.0, 10.0]),
+        )
+        .erase();
+        let resources = OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let mut theme = crate::Theme::Publication.resolve();
+        theme.marks.point_sizes.scatter = 18;
+        let panel = crate::layout::PanelBox::new(30.0, 190.0, 40.0, 180.0);
+        let result = chart
+            .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
+            .unwrap();
+        let crate::layout::interior::MarkPayload::Scatter(selected) =
+            &result.marks.as_ref().unwrap().payload
+        else {
+            panic!("selected Scatter")
+        };
+        let [x, y] = selected
+            .domain_expansions
+            .map(|expansion| expansion.unwrap().limits);
+        assert!(x.0 < result.layout.projection.x_range().0);
+        assert!(x.1 > result.layout.projection.x_range().1);
+        assert!(y.0 < result.layout.projection.y_range().0);
+        assert!(y.1 > result.layout.projection.y_range().1);
+        let projection = crate::layout::Projection::new(x, y, panel.as_tuple());
+        let point = chart.point_style(&theme, (0, 0, 0), 18);
+        let ink = crate::render::geometry::point_ink_bounds(&theme, &point)
+            .unwrap()
+            .unwrap();
+        let low = projection.project(0.0, 0.0);
+        let high = projection.project(10.0, 10.0);
+        assert!(low.0 + ink.left >= panel.x0 && low.1 + ink.bottom >= panel.y0);
+        assert!(high.0 + ink.right <= panel.x1 && high.1 + ink.top <= panel.y1);
+
+        let source = Plot::scatter(
+            NumericValues::new("x", [0.0, 10.0]),
+            NumericValues::new("y", [0.0, 10.0]),
+        )
+        .x_limits(0.0, 10.0)
+        .erase();
+        let resources = OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let exact = chart
+            .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
+            .unwrap();
+        let crate::layout::interior::MarkPayload::Scatter(selected) =
+            &exact.marks.as_ref().unwrap().payload
+        else {
+            panic!("selected Scatter")
+        };
+        assert!(selected.domain_expansions[0].is_none());
+        assert!(selected.domain_expansions[1].is_some());
     }
 
     #[test]

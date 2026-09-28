@@ -159,12 +159,12 @@ pub(crate) fn intrinsic_body_minimum(
         &theme.marks.regression_fit.backend_style(),
     )?;
     Ok((
-        if chart.x_axis_spec().limits.is_none() {
+        if chart.user_x_limits().is_none() {
             width.max(fit)
         } else {
             0.0
         },
-        if chart.y_axis_spec().limits.is_none() {
+        if chart.user_y_limits().is_none() {
             height.max(fit)
         } else {
             0.0

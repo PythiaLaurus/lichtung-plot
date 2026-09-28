@@ -984,7 +984,9 @@ caller styles while centralizing their ownership.
 | T5c2a1b2b2a | COMPLETE | T5c2a1b2b1 | `feat(marks): measure Density group-curve hard ink` |
 | T5c2a1b2b2b | IN PROGRESS | T5c2a1b2b2a | Umbrella for remaining standard mark requirements |
 | T5c2a1b2b2b1 | COMPLETE | T5c2a1b2b2a | `feat(marks): measure Histogram bin and overlay hard ink` |
-| T5c2a1b2b2b2 | PENDING | T5c2a1b2b2b1 | `refactor(marks): measure remaining standard mark requirements` |
+| T5c2a1b2b2b2 | IN PROGRESS | T5c2a1b2b2b1 | Umbrella for remaining standard mark requirements |
+| T5c2a1b2b2b2a | COMPLETE | T5c2a1b2b2b1 | `feat(marks): clear automatic Scatter point ink through root feedback` |
+| T5c2a1b2b2b2b | PENDING | T5c2a1b2b2b2a | `refactor(marks): measure remaining standard mark requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
 | T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
@@ -1399,6 +1401,21 @@ outline and optional-overlay tests, sampled/supplied parity, all focused
 Histogram units, current distribution snapshots, exact root resource-cap
 checks and strict Clippy pass. Painted-edge domain clearance and natural
 density preference remain separately pending in this T5c2a umbrella.
+
+T5c2a1b2b2b2a closure: Scatter measures its actual canonical origin-relative
+point bounds, compares projected scientific extrema to the assigned panel and
+requests at most one monotonic numeric-domain enlargement per automatic axis.
+One root-owned feedback round can carry both X and Y; a subsequent round
+remeasures the mark at its new panel rather than accepting a stale painted
+extent. The shared axis-span calculation handles facet-local extrema against
+an inherited wider numeric range. Only user-declared exact data windows waive
+ink clearance: a root feedback limit is a temporary planned range, not a
+clipping policy. Non-finite/unrepresentable expansions give a typed fit miss;
+resource refusal remains fatal. Source preparation, select, and replay remain
+separate. Custom 18px Scatter points, two-axis root convergence, fixed facets,
+exact windows, default guide/snapshot bytes, exact resource-cap tests and
+strict Clippy pass. Extend this owner to the other standard families in
+T5c2a1b2b2b.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect

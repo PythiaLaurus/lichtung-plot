@@ -259,6 +259,85 @@ impl DomainExpansion {
     }
 }
 
+/// One automatic data-axis request for the canonical painted extent of an
+/// extreme source mark. Exact data windows do not call this producer.
+pub(crate) fn automatic_mark_ink_domain(
+    axis: ClearanceAxis,
+    source: (f64, f64),
+    current: (f64, f64),
+    pixels: (f64, f64),
+    projected: (f64, f64),
+    ink: (f64, f64),
+    scope: &crate::layout::fit::FitScope,
+) -> Result<Option<DomainExpansion>, crate::layout::fit::PlanError> {
+    use crate::layout::fit::FitKind;
+    if !source.0.is_finite()
+        || !source.1.is_finite()
+        || !projected.0.is_finite()
+        || !projected.1.is_finite()
+    {
+        return Err(
+            Error::Render("automatic mark ink source/projection must be finite".into()).into(),
+        );
+    }
+    let quantum = 1.0 / 1024.0;
+    let left = (-ink.0).max(0.0) + 2.0 * quantum;
+    let right = ink.1.max(0.0) + 2.0 * quantum;
+    if projected.0 + ink.0 >= pixels.0 + quantum && projected.1 + ink.1 <= pixels.1 - quantum {
+        return Ok(None);
+    }
+    let available = pixels.1 - pixels.0 - left - right;
+    if !available.is_finite() || available <= 0.0 {
+        return Err(scope
+            .failure(
+                FitKind::TrackOrResidual,
+                "automatic mark ink leaves no representable data span in its assigned panel",
+            )
+            .into());
+    }
+    let scale = source
+        .0
+        .abs()
+        .max(source.1.abs())
+        .max(current.0.abs())
+        .max(current.1.abs())
+        .max(1.0);
+    // A facet can own only a narrow subset of a shared numeric domain. Use
+    // the whole assigned domain span when it is wider than local source data;
+    // padding against the local span alone could never move an edge already
+    // extended by a sibling.
+    let span =
+        ((source.1 / scale) - (source.0 / scale)).max((current.1 / scale) - (current.0 / scale));
+    if !span.is_finite() || span <= 0.0 {
+        return Err(scope
+            .failure(
+                FitKind::SpecializedGeometry,
+                "automatic mark ink source span is unrepresentable",
+            )
+            .into());
+    }
+    let lower = ((source.0 / scale) - span * left / available) * scale;
+    let upper = ((source.1 / scale) + span * right / available) * scale;
+    if !lower.is_finite() || !upper.is_finite() {
+        return Err(scope
+            .failure(
+                FitKind::SpecializedGeometry,
+                "automatic mark ink cannot obtain a finite data domain",
+            )
+            .into());
+    }
+    let limits = (current.0.min(lower), current.1.max(upper));
+    if limits == current {
+        return Err(scope
+            .failure(
+                FitKind::SpecializedGeometry,
+                "automatic mark ink cannot extend this representable data domain",
+            )
+            .into());
+    }
+    Ok(Some(DomainExpansion { axis, limits }))
+}
+
 /// Insets use the existing spatial quantization and operation-owned feedback.
 /// No adapter owns a budget, retry loop, or root alternative. Requests replace
 /// stale effects through FeedbackRound; rejected work remains charged there.
@@ -368,6 +447,75 @@ impl DeferredAnnotationPlan {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod automatic_ink_tests {
+    use super::{automatic_mark_ink_domain, ClearanceAxis};
+    use crate::layout::fit::{FitKind, PlanError, ROOT_SCOPE};
+
+    #[test]
+    fn painted_extremes_request_one_finite_monotonic_domain_per_automatic_axis() {
+        let request = automatic_mark_ink_domain(
+            ClearanceAxis::X,
+            (0.0, 10.0),
+            (-0.5, 10.5),
+            (0.0, 100.0),
+            (100.0 / 22.0, 100.0 * 21.0 / 22.0),
+            (-20.0, 20.0),
+            &ROOT_SCOPE,
+        )
+        .unwrap()
+        .unwrap();
+        assert!(request.limits.0 < -0.5 && request.limits.1 > 10.5);
+        let project =
+            |value: f64| (value - request.limits.0) / (request.limits.1 - request.limits.0) * 100.0;
+        assert!(project(0.0) - 20.0 > 0.0);
+        assert!(project(10.0) + 20.0 < 100.0);
+        assert!(
+            automatic_mark_ink_domain(
+                ClearanceAxis::X,
+                (0.0, 10.0),
+                request.limits,
+                (0.0, 100.0),
+                (project(0.0), project(10.0)),
+                (-20.0, 20.0),
+                &ROOT_SCOPE,
+            )
+            .unwrap()
+            .is_none(),
+            "requested={:?} painted=[{}, {}]",
+            request.limits,
+            project(0.0) - 20.0,
+            project(10.0) + 20.0
+        );
+        let miss = automatic_mark_ink_domain(
+            ClearanceAxis::Y,
+            (0.0, 10.0),
+            (-0.5, 10.5),
+            (0.0, 30.0),
+            (0.0, 30.0),
+            (-20.0, 20.0),
+            &ROOT_SCOPE,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(miss, PlanError::Fit(failure) if failure.reason.kind == FitKind::TrackOrResidual)
+        );
+        let extreme = automatic_mark_ink_domain(
+            ClearanceAxis::X,
+            (-f64::MAX, f64::MAX),
+            (-f64::MAX, f64::MAX),
+            (0.0, 100.0),
+            (0.0, 100.0),
+            (-4.0, 4.0),
+            &ROOT_SCOPE,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(extreme, PlanError::Fit(failure) if failure.reason.kind == FitKind::SpecializedGeometry)
+        );
+    }
+}
 
 #[cfg(test)]
 pub(crate) mod distributions;

@@ -74,12 +74,12 @@ pub(crate) fn intrinsic_body_minimum(
     };
     let span = (fill.0.max(fill.1) + 1.0 / 1024.0).max(curve).max(rug);
     Ok((
-        if chart.x_axis_spec().limits.is_none() {
+        if chart.user_x_limits().is_none() {
             span
         } else {
             0.0
         },
-        if chart.y_axis_spec().limits.is_none() {
+        if chart.user_y_limits().is_none() {
             span
         } else {
             0.0

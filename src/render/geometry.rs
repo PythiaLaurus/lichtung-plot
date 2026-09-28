@@ -735,11 +735,20 @@ pub(crate) fn point_ink_dimensions(
     theme: &crate::theme::ResolvedTheme,
     style: &PointStyle,
 ) -> Result<(f64, f64), Error> {
+    Ok(
+        point_ink_bounds(theme, style)?.map_or((0.0, 0.0), |bounds| {
+            (bounds.right - bounds.left, bounds.top - bounds.bottom)
+        }),
+    )
+}
+
+pub(crate) fn point_ink_bounds(
+    theme: &crate::theme::ResolvedTheme,
+    style: &PointStyle,
+) -> Result<Option<GeometryBox>, Error> {
     let mut ink = GeometrySnapshot::new(theme)?;
     ink.scatter_with_clip(&[Point2D::new(0.0, 0.0)], style, None)?;
-    Ok(ink.bounds().first().map_or((0.0, 0.0), |bounds| {
-        (bounds.right - bounds.left, bounds.top - bounds.bottom)
-    }))
+    Ok(ink.bounds().first().copied())
 }
 
 /// Painted thickness of an origin-relative one-pixel path, independent of the

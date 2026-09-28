@@ -1460,6 +1460,51 @@ fn scatter_automatic_guide_is_outside_without_domain_expansion() {
 }
 
 #[test]
+fn scatter_painted_edges_expand_both_automatic_axes_in_one_root_feedback_driver() {
+    let source = Plot::scatter(
+        NumericValues::new("x", [0.0, 10.0]),
+        NumericValues::new("y", [0.0, 10.0]),
+    )
+    .size(640, 480)
+    .legend(LegendPolicy::Hidden)
+    .erase();
+    let mut theme = theme();
+    theme.marks.point_sizes.scatter = 18;
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let cell = PanelBox::new(70.0, 270.0, 70.0, 270.0);
+    let result = plan_panel(&chart, PlotKind::Scatter, cell, LegendRole::Panel, &theme).unwrap();
+    assert!(result.planned_x_limits().is_some());
+    assert!(result.planned_y_limits().is_some());
+    let crate::layout::interior::MarkPayload::Scatter(payload) =
+        &result.result.marks.as_ref().unwrap().payload
+    else {
+        panic!("selected Scatter")
+    };
+    assert!(payload.domain_expansions.iter().all(Option::is_none));
+    let ink = crate::render::geometry::point_ink_bounds(
+        &theme,
+        &chart.point_style(&theme, (0, 0, 0), 18),
+    )
+    .unwrap()
+    .unwrap();
+    let panel = result.result.layout.projection.panel_box();
+    for point in &payload.groups[0].0 {
+        assert!(
+            point.x + ink.left >= panel.x0 && point.x + ink.right <= panel.x1,
+            "point={point:?} ink={ink:?} panel={panel:?} domains={:?}/{:?}",
+            result.planned_x_limits(),
+            result.planned_y_limits()
+        );
+        assert!(point.y + ink.bottom >= panel.y0 && point.y + ink.top <= panel.y1);
+    }
+}
+
+#[test]
 fn right_edge_legend_expands_generic_continuous_x_axis() {
     let hue = CategoryValues::new("hue", ["a", "a", "b", "b"]).unwrap();
     let plot = Plot::line(

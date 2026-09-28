@@ -126,12 +126,12 @@ pub(crate) fn intrinsic_body_minimum(
         (0.0, 0.0)
     };
     Ok((
-        if chart.x_axis_spec().limits.is_none() {
+        if chart.user_x_limits().is_none() {
             mark.0.max(path)
         } else {
             0.0
         },
-        if chart.y_axis_spec().limits.is_none() {
+        if chart.user_y_limits().is_none() {
             mark.1.max(path)
         } else {
             0.0

@@ -986,33 +986,52 @@ fn plan_panel_attempt(
     let mut domain_request = None;
     let mut next_x = result.layout.projection.x_range();
     let mut next_y = result.layout.projection.y_range();
-    let mark_expansion = result
+    let mark_expansions = result
         .marks
         .as_deref()
-        .and_then(|marks| match &marks.payload {
-            crate::layout::interior::MarkPayload::Bars(payload) => payload.domain_expansion,
-            crate::layout::interior::MarkPayload::Distribution(_) => result
-                .significance
-                .as_ref()
-                .filter(|plan| plan.y_range != next_y)
-                .map(|plan| DomainExpansion {
-                    axis: ClearanceAxis::Y,
-                    limits: plan.y_range,
-                }),
-            _ => None,
+        .map_or([None; 2], |marks| match &marks.payload {
+            crate::layout::interior::MarkPayload::Scatter(payload) => payload.domain_expansions,
+            crate::layout::interior::MarkPayload::Bars(payload) => [payload.domain_expansion, None],
+            crate::layout::interior::MarkPayload::Distribution(_) => [
+                result
+                    .significance
+                    .as_ref()
+                    .filter(|plan| plan.y_range != next_y)
+                    .map(|plan| DomainExpansion {
+                        axis: ClearanceAxis::Y,
+                        limits: plan.y_range,
+                    }),
+                None,
+            ],
+            _ => [None; 2],
         });
-    if let Some(expansion) = mark_expansion {
-        let request = expansion.submit(round, address, address)?;
+    let mut requests = [None; 2];
+    let mut count = 0;
+    for expansion in mark_expansions.into_iter().flatten() {
+        requests[count] = expansion.submit(round, address, address)?;
+        count += 1;
+        match expansion.axis {
+            ClearanceAxis::X => {
+                next_x = (
+                    next_x.0.min(expansion.limits.0),
+                    next_x.1.max(expansion.limits.1),
+                );
+            }
+            ClearanceAxis::Y => {
+                next_y = (
+                    next_y.0.min(expansion.limits.0),
+                    next_y.1.max(expansion.limits.1),
+                );
+            }
+        }
+    }
+    if count != 0 {
         round.miss(
             address,
             FitKind::OverlayCollision,
-            &[request],
-            "mark significance requires automatic domain clearance",
+            &requests[..count],
+            "mark ink or significance requires automatic domain clearance",
         )?;
-        match expansion.axis {
-            ClearanceAxis::X => next_x = expansion.limits,
-            ClearanceAxis::Y => next_y = expansion.limits,
-        }
     }
     if let Some(legend) = &resolved {
         let collision = overlap_score_within_panel(
