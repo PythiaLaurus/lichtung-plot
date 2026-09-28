@@ -1001,7 +1001,9 @@ caller styles while centralizing their ownership.
 | T5c2a1b2b2b2b2b2b2b | COMPLETE | T5c2a1b2b2b2b2b2b2a | Umbrella for remaining standard mark requirements |
 | T5c2a1b2b2b2b2b2b2b1 | COMPLETE | T5c2a1b2b2b2b2b2b2a | `feat(marks): constrain pre-selection area and band hard ink` |
 | T5c2a1b2b2b2b2b2b2b2 | COMPLETE | T5c2a1b2b2b2b2b2b2b1 | `feat(marks): retain standard-panel density preferences` |
-| T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
+| T5c2b | IN PROGRESS | T5c2a | Umbrella for categorical estimate and bar requirements |
+| T5c2b0 | COMPLETE | T5c2a | `docs(marks): map categorical geometry and slot owners` |
+| T5c2b1 | PENDING | T5c2b0 | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
 | T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
 | T5c3 | PENDING | T5c2d | `refactor(annotations): measure native overlay consequences` |
@@ -1552,6 +1554,25 @@ constants still render, and an exact caller data window still clips. Focused
 Qq numeric/default tests, mark/facet/Canvas/capture and feedback tests, 41
 Line integration tests, 13 SVG snapshots, exact root resource caps and strict
 Clippy pass. T5c2b proceeds to categorical estimate and bar requirements.
+
+T5c2b0 input handoff: categorical slot pitch is measured on the category axis
+only, before assigning the selected numeric projection. Do not infer semantic
+marks from visible clipped primitives, or treat the source row count as the
+occupied-series count:
+
+| Family/axis | Prepared semantic owner | Hard/pref and status input |
+| --- | --- | --- |
+| PointInterval/Coefficient/Forest, Y | `PreparedEstimate.labels` holds every row; `estimates[*]` distinguishes available tuples from `Not estimable` slots | Point paint/radius, interval/cap stroke, reference, required unavailable and adjacent label ink. Forest retains raw-vs-Log10 source identity |
+| Dumbbell, Y | `DumbbellData.categories`, `group_count` and populated `rows` with category/group indices | Two endpoint paints and connector are one primary pair; `replicate_y` distributes populated series slots within each category; empty combinations do not become marks |
+| Four Bar kinds, X or Y | `PreparedBars.categories`, `series`, `bars`, `points` and `significance` | Single/grouped/stacked occupancy includes scientific zero segments and signed stacks. Outline, interval/cap, supplemental point and attached label/annotation ink are separate constraints; missing series positions are not invented |
+
+One category quantum is the minimum pitch. Actual occupied ink produces the
+hard slot width/height; `2em` contributes only a preferred pitch. Category
+identity and the source-value domain are already root-prepared; full painted
+slot ink must join the existing native axis intrinsic and bounded parent
+feedback without a local search, another mark projection, or an alternate
+`80x60` floor. Retain `DeferredLegacyPanelMinimum` until T5c4 removes it with
+the deferred mark and annotation consequences together.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect
