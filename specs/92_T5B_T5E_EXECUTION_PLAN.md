@@ -1025,9 +1025,9 @@ caller styles while centralizing their ownership.
 | T5c2d1a | COMPLETE | T5c2d0 | `feat(heatmap): measure styled cell and missing-cross hard ink` |
 | T5c2d1b | IN PROGRESS | T5c2d1a | Umbrella for remaining specialized mark requirements |
 | T5c2d1b1 | COMPLETE | T5c2d1a | `feat(beeswarm): measure occupied marker category ink` |
-| T5c2d1b2 | IN PROGRESS | T5c2d1b1 | Umbrella for remaining specialized mark requirements |
+| T5c2d1b2 | COMPLETE | T5c2d1b1 | Umbrella for remaining specialized mark requirements |
 | T5c2d1b2a | COMPLETE | T5c2d1b1 | `feat(waterfall): measure signed step category ink` |
-| T5c2d1b2b | PENDING | T5c2d1b2a | `refactor(marks): measure Marginal and Matrix mark requirements` |
+| T5c2d1b2b | COMPLETE | T5c2d1b2a | `refactor(marks): measure Marginal and Matrix mark requirements` |
 | T5c3 | PENDING | T5c2d | `refactor(annotations): measure native overlay consequences` |
 | T5c4 | PENDING | T5c3 | `refactor(layout): replace deferred mark and annotation minima` |
 | T5c5 | PENDING | T5c4 | `test(theme): close native mark and annotation ownership` |
@@ -1808,6 +1808,22 @@ Custom 80px outlined signed bars and 16px connectors, deterministic replay,
 typed annotation failure, eleven focused Waterfall units, current full SVG
 fingerprints and strict Clippy pass. T5e5 will replace the shelf algorithm;
 Marginal/Matrix mark inputs follow in T5c2d1b2b.
+
+T5c2d1b2b closure: Marginal's root-prepared groups and linked KDE support
+retain every central observation; complete primary-point ink supplies central
+X/Y hard span, and selected density-area outlines supply independent top/right
+strip inputs. The currently fixed 12px gaps and 82px/96px strips remain the
+T5e3 packing owner's inputs, not recomputed curves. Selected central point
+ink proposes X/Y feedback only for automatic domains, while exact windows
+clip that data paint; the root driver reaches a frozen result. Matrix derives
+its square variable topology from prepared labels, every off-diagonal group's
+point style and diagonal density outline from prepared groups, and actual
+unbreakable column/rotated-row glyph widths. Its existing 8px gaps remain
+the T5e2 grid owner's inputs; a locally insufficient 40px cell now yields a
+scoped geometry fit miss rather than a fatal render error. Focused Marginal
+and Matrix units, custom linked-point/density/cell-label ink, exact-window
+feedback, Matrix contracts, Marginal SVG fingerprints, and strict Clippy pass.
+T5c3 now owns annotation and overlay consequences.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect

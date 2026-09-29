@@ -55,6 +55,113 @@ pub(crate) struct PreparedMatrixAxes {
     diagonals: Vec<MatrixDensity>,
 }
 
+/// Prepared variable count determines the number of cells, including empty
+/// off-diagonal cells. Painted primary points and diagonal density outlines
+/// determine the minimum mark area of every cell before T5e2 grid packing.
+pub(crate) fn intrinsic_body_minimum(
+    chart: &Plot,
+    theme: &ResolvedTheme,
+) -> Result<(f64, f64), Error> {
+    let prepared = chart.prepared_matrix_axes.as_ref().ok_or_else(|| {
+        Error::Render("matrix intrinsic requires prepared variable domains".into())
+    })?;
+    let n = prepared.labels.len();
+    let density = theme.marks.matrix_density.backend_style(theme.colors[0]);
+    let (out_x, out_y) = crate::render::geometry::rectangular_fill_ink_outset(theme, &density)?;
+    let mut cell = (
+        (2.0 * out_x).max(1.0 / 1024.0),
+        (2.0 * out_y).max(1.0 / 1024.0),
+    );
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = chart.data().with_axis_resources(&resources);
+    // Column titles occupy the cell width; row titles are rotated into its
+    // height. Measure the longest unbreakable glyph run, not character count.
+    for label in &prepared.labels {
+        data.claim_source_visits(1)?;
+        let (hard, _) = crate::layout::fit::intrinsic_widths(
+            theme,
+            label,
+            &theme.typography.axis_title,
+            "matrix variable label",
+        )?;
+        cell.0 = cell.0.max(hard);
+        cell.1 = cell.1.max(hard);
+    }
+    for group in &prepared.groups {
+        for column in &group.columns {
+            data.claim_source_visits(column.len())?;
+        }
+        let style = chart.point_style(
+            theme,
+            theme.colors[group.color_index % theme.colors.len()],
+            theme.marks.point_sizes.matrix,
+        );
+        let (x, y) = crate::render::geometry::point_ink_dimensions(theme, &style)?;
+        cell.0 = cell.0.max(x);
+        cell.1 = cell.1.max(y);
+    }
+    let gaps = 8.0 * n.saturating_sub(1) as f64;
+    Ok((cell.0 * n as f64 + gaps, cell.1 * n as f64 + gaps))
+}
+
+#[test]
+fn prepared_matrix_uses_variable_count_cell_labels_and_complete_mark_ink() {
+    let plot = |n| {
+        Plot::matrix(
+            (0..n)
+                .map(|i| {
+                    crate::NumericValues::new(
+                        format!("column-{i}"),
+                        [
+                            1.0 + i as f64,
+                            1.3 + i as f64,
+                            1.7 + i as f64,
+                            2.4 + i as f64,
+                        ],
+                    )
+                })
+                .collect(),
+        )
+        .erase()
+    };
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let first = plot(2);
+    let second = plot(3);
+    let first = crate::plots::shared_x::prepare_plot(&first, &resources)
+        .unwrap()
+        .attach(first)
+        .unwrap();
+    let second = crate::plots::shared_x::prepare_plot(&second, &resources)
+        .unwrap()
+        .attach(second)
+        .unwrap();
+    let theme = crate::Theme::Publication.resolve();
+    let baseline = intrinsic_body_minimum(&first, &theme).unwrap();
+    let more_cells = intrinsic_body_minimum(&second, &theme).unwrap();
+    assert!(more_cells.0 > baseline.0 && more_cells.1 > baseline.1);
+    let long = Plot::matrix(vec![
+        crate::NumericValues::new(
+            "verylongunbreakablematrixvariableidentifier",
+            [1.0, 1.3, 1.7, 2.4],
+        ),
+        crate::NumericValues::new("short", [3.0, 3.3, 3.7, 4.4]),
+    ])
+    .erase();
+    let long = crate::plots::shared_x::prepare_plot(&long, &resources)
+        .unwrap()
+        .attach(long)
+        .unwrap();
+    let label = intrinsic_body_minimum(&long, &theme).unwrap();
+    assert!(label.0 > baseline.0 && label.1 > baseline.1);
+    let mut styled = theme;
+    styled.marks.primary_point.outline.width_ratio = 80.0;
+    let thick_points = intrinsic_body_minimum(&first, &styled).unwrap();
+    assert!(thick_points.0 > baseline.0 && thick_points.1 > baseline.1);
+    styled.marks.matrix_density.outline_width = 220.0;
+    let density = intrinsic_body_minimum(&first, &styled).unwrap();
+    assert!(density.0 > thick_points.0 && density.1 > thick_points.1);
+}
+
 #[derive(Debug)]
 struct MatrixDensity {
     positions: Vec<f64>,
@@ -400,9 +507,10 @@ pub(crate) fn measure(
         let cell_w = grid_w / n as f64;
         let cell_h = grid_h / n as f64;
         if cell_w < 40.0 || cell_h < 40.0 {
-            return Err(Error::Render(format!(
-                "matrix labels and guides leave {cell_w:.1}x{cell_h:.1}px cells; increase chart size to preserve minimum 40x40 matrix panels"
-            )).into());
+            return Err(context.fit_scope().failure(
+                crate::layout::fit::FitKind::SpecializedGeometry,
+                format!("matrix labels and guides leave {cell_w:.1}x{cell_h:.1}px cells; minimum 40x40 matrix panels required until native grid packing"),
+            ).into());
         }
         if (cell_w - candidate_cell_width).abs() <= f64::EPSILON
             && (cell_h - candidate_cell_height).abs() <= f64::EPSILON

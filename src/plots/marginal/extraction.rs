@@ -252,8 +252,16 @@ fn marginal_parent_hue_order_controls_selected_colors_without_repreparation() {
     else {
         panic!("wrong payload")
     };
-    assert_eq!(payload.groups[0].point_style.color, theme.colors[1]);
-    assert_eq!(payload.groups[1].point_style.color, theme.colors[0]);
+    assert_eq!(
+        payload.groups[0].point_style.color,
+        crate::render::backend::Rgba::from(theme.colors[1])
+            .with_alpha(theme.marks.primary_point.fill_alpha)
+    );
+    assert_eq!(
+        payload.groups[1].point_style.color,
+        crate::render::backend::Rgba::from(theme.colors[0])
+            .with_alpha(theme.marks.primary_point.fill_alpha)
+    );
     assert_eq!(
         payload.groups[0].fill.color,
         crate::render::backend::Rgba::from(theme.colors[1]).with_alpha(115)

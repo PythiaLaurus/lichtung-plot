@@ -105,6 +105,120 @@ impl PreparedMarginal {
     }
 }
 
+/// Retained central point and marginal-density ink supply the linked-panel
+/// parent's hard input; the fixed strip/gap packing remains local until T5e3.
+pub(crate) fn intrinsic_body_minimum(
+    chart: &Plot,
+    theme: &crate::theme::ResolvedTheme,
+) -> Result<(f64, f64), Error> {
+    let prepared = chart
+        .prepared_marginal
+        .as_ref()
+        .ok_or_else(|| Error::Render("marginal intrinsic requires prepared groups".into()))?;
+    let mut central = (1.0 / 1024.0_f64, 1.0 / 1024.0_f64);
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = chart.data().with_axis_resources(&resources);
+    for group in &prepared.groups {
+        data.claim_source_visits(group.x.len())?;
+        let color = theme.colors[group.color_index % theme.colors.len()];
+        let style = chart.point_style(theme, color, theme.marks.point_sizes.marginal);
+        let (x, y) = crate::render::geometry::point_ink_dimensions(theme, &style)?;
+        central.0 = central.0.max(x);
+        central.1 = central.1.max(y);
+    }
+    let density = theme.marks.marginal_density.backend_style(theme.colors[0]);
+    let (out_x, out_y) = crate::render::geometry::rectangular_fill_ink_outset(theme, &density)?;
+    // Each filled KDE strip has a positive extent even when its paint is
+    // transparent. Its stroke is measured by the same canonical geometry as
+    // selection, not inferred from the nominal line width.
+    Ok((
+        central.0 + 12.0 + 96.0_f64.max(2.0 * out_x),
+        central.1 + 12.0 + 82.0_f64.max(2.0 * out_y),
+    ))
+}
+
+#[test]
+fn prepared_marginal_points_and_density_strokes_enlarge_linked_tracks() {
+    let source = Plot::marginal(
+        crate::NumericValues::new("x", [1.0, 1.2, 1.4, 3.0, 3.2, 3.4]),
+        crate::NumericValues::new("y", [2.0, 2.1, 2.3, 4.0, 4.2, 4.3]),
+    )
+    .erase();
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let theme = crate::Theme::Publication.resolve();
+    let baseline = intrinsic_body_minimum(&chart, &theme).unwrap();
+    let mut styled = theme.clone();
+    styled.marks.point_sizes.marginal = 24;
+    styled.marks.marginal_density.outline_width = 120.0;
+    let expanded = intrinsic_body_minimum(&chart, &styled).unwrap();
+    assert!(expanded.0 > baseline.0);
+    assert!(expanded.1 > baseline.1);
+    let mut point_only = theme;
+    point_only.marks.primary_point.outline.width_ratio = 15.0;
+    let shown = intrinsic_body_minimum(&chart, &point_only).unwrap().0;
+    point_only.marks.primary_point.outline.color = crate::render::backend::Rgba::new(0, 0, 0, 0);
+    assert!(shown > intrinsic_body_minimum(&chart, &point_only).unwrap().0);
+}
+
+#[test]
+fn marginal_central_points_request_only_automatic_numeric_edges() {
+    let source = |exact| {
+        let plot = Plot::marginal(
+            crate::NumericValues::new("x", [1.0, 1.2, 1.4, 3.0, 3.2, 3.4]),
+            crate::NumericValues::new("y", [2.0, 2.1, 2.3, 4.0, 4.2, 4.3]),
+        )
+        .size(1400, 1400);
+        if exact {
+            plot.x_limits(1.0, 3.4).erase()
+        } else {
+            plot.erase()
+        }
+    };
+    let mut theme = crate::Theme::Publication.resolve();
+    theme.marks.point_sizes.marginal = 350;
+    for exact in [false, true] {
+        let plot = source(exact);
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &plot,
+            &crate::font::canonical::OperationGenerationResources::new(),
+        )
+        .unwrap();
+        let chart = inputs.attach(plot).unwrap();
+        let selected = chart
+            .measure_selected_interior(PlotRenderContext::new(
+                chart.data(),
+                PanelBox::new(70.0, 1000.0, 60.0, 1000.0),
+                &theme,
+            ))
+            .unwrap();
+        let crate::layout::interior::MarkPayload::Marginal(payload) =
+            &selected.marks.as_ref().unwrap().payload
+        else {
+            panic!("selected Marginal")
+        };
+        assert_eq!(payload.domain_expansions[0].is_none(), exact);
+        assert!(payload.domain_expansions[1].is_some());
+        if !exact {
+            let final_plan = crate::decorations::plan::plan_panel_for_test(
+                &chart,
+                crate::PlotKind::Marginal,
+                PanelBox::new(70.0, 1300.0, 60.0, 1250.0),
+                crate::decorations::plan::LegendRole::Panel,
+                &theme,
+            )
+            .unwrap();
+            let crate::layout::interior::MarkPayload::Marginal(final_payload) =
+                &final_plan.result.marks.as_ref().unwrap().payload
+            else {
+                panic!("selected Marginal after feedback")
+            };
+            assert!(final_payload.domain_expansions.iter().all(Option::is_none));
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 struct MarginalCurves {
     x_grid: Vec<f64>,
@@ -128,6 +242,7 @@ pub(crate) struct MarginalPayload {
     ticks: Vec<[Point2D; 2]>,
     tick_style: Option<crate::render::backend::LineStyle>,
     groups: Vec<MarginalGroupPayload>,
+    pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
 }
 
 impl MarginalPayload {
@@ -280,6 +395,8 @@ pub(crate) fn measure(
     let mut selected = Vec::new();
     data.reserve_source(&mut selected, groups.len())?;
     let legend_entries = prepared.guide_entries(chart, theme, data)?;
+    let mut source = [(f64::INFINITY, f64::NEG_INFINITY); 2];
+    let mut point_ink: Option<crate::render::geometry::GeometryBox> = None;
     for (gi, group) in groups.iter().enumerate() {
         let color_index = if let Some(levels) = chart.global_hue_levels() {
             data.claim_source_visits(levels.len())?;
@@ -294,8 +411,15 @@ pub(crate) fn measure(
         };
         let color = theme.colors[color_index % theme.colors.len()];
         let point_style = chart.point_style(theme, color, theme.marks.point_sizes.marginal);
+        if let Some(ink) = crate::render::geometry::point_ink_bounds(theme, &point_style)? {
+            point_ink = Some(point_ink.map_or(ink, |previous| previous.union(ink)));
+        }
         let pts = data.collect_source(group.x.iter().zip(&group.y).map(|(&x, &y)| {
             data.claim_source_visits(1)?;
+            source[0].0 = source[0].0.min(x);
+            source[0].1 = source[0].1.max(x);
+            source[1].0 = source[1].0.min(y);
+            source[1].1 = source[1].1.max(y);
             let (x, y) = proj.project(x, y);
             Ok(Point2D::new(x, y))
         }))?;
@@ -341,11 +465,27 @@ pub(crate) fn measure(
             fill,
         });
     }
+    let domain_expansions = if let Some(ink) = point_ink {
+        crate::layout::interior::automatic_mark_ink_expansions(
+            source,
+            proj,
+            ink,
+            [
+                chart.user_x_limits().is_none(),
+                chart.user_y_limits().is_none(),
+            ],
+            data,
+            context.fit_scope(),
+        )?
+    } else {
+        [None; 2]
+    };
     let payload = MarginalPayload {
         clips: [central_panel, top_panel, right_panel],
         ticks,
         tick_style,
         groups: selected,
+        domain_expansions,
     };
     let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
     if let Some(style) = &payload.tick_style {

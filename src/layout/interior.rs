@@ -248,7 +248,10 @@ impl Plot {
             PlotKind::Waterfall => Some(crate::plots::waterfall::intrinsic_body_minimum(
                 self, theme,
             )?),
-            PlotKind::Marginal | PlotKind::Matrix => None,
+            PlotKind::Marginal => {
+                Some(crate::plots::marginal::intrinsic_body_minimum(self, theme)?)
+            }
+            PlotKind::Matrix => Some(crate::plots::matrix::intrinsic_body_minimum(self, theme)?),
         };
         if let Some(mark) = mark {
             minimum.0 = minimum.0.max(mark.0);
