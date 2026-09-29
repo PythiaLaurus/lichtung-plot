@@ -2055,9 +2055,9 @@ ownership, statistical estimates, public extension points, or layout strategy.
 | Step | Status | Depends on | Logical commit |
 | --- | --- | --- | --- |
 | T5d0 | COMPLETE | T5c | `docs(scales): map semantic domains and migration consumers` |
-| T5d1 | IN PROGRESS | T5d0 | Umbrella for deterministic scale arithmetic |
+| T5d1 | COMPLETE | T5d0 | Deterministic scale arithmetic |
 | T5d1a | COMPLETE | T5d0 | `feat(color): pin first-party OKLab conversion and channel quantization` |
-| T5d1b | PENDING | T5d1a | `feat(color): pin gamut interpolation and palette candidates` |
+| T5d1b | COMPLETE | T5d1a | `feat(color): pin gamut interpolation and palette candidates` |
 | T5d2 | PENDING | T5d1 | `feat(scales): resolve categorical maps palettes and accents` |
 | T5d3 | PENDING | T5d2 | `feat(scales): resolve sequential and diverging mappings` |
 | T5d4 | PENDING | T5d3 | `refactor(scales): coordinate final domains guides and contrast` |
@@ -2100,6 +2100,22 @@ OKLab vectors and independent cube-root hard cases agree, byte-boundary ties
 choose nearest-even, exact resource refusal remains fatal, and strict Clippy
 passes. T5d1b fixes gamut, interpolation, candidate order and termination
 before active consumers migrate.
+
+T5d1b closure: OKLab interpolation preserves exact caller endpoint bytes,
+uses one left-associative binary64 Cartesian interpolation for interior
+fractions and one fixed 24-step chroma bisection only when inverse linear RGB
+lies outside its pinned coefficient slack. A rational square-ring hue sequence,
+fixed ordered lightness/chroma bands, finite 8,192-candidate cap, and exact
+maximin distance/tie by candidate ordinal yield deterministic opaque palette
+extension without a host trig/power route or silent index cycling. Generated
+bytes are checked against previously selected colors; exhausted candidates
+reject instead of silently repeating a seed. Per-candidate/neighbor visits,
+BigUint scratch and retained palette records are admitted to one root ledger.
+Independently high-precision OKLab midpoint examples pin red/blue, red/green
+and black/white results; custom out-of-gamut reduction, exact tie order,
+prefix stability under increasing requests, finite-fraction refusal, all
+256 sRGB channel roundtrips and strict Clippy pass. T5d2 now wires keyed
+categorical and unkeyed accent consumers to this single arithmetic engine.
 
 Implement the approved first-party OKLab/OKLCH conversion, gamut reduction,
 interpolation, and deterministic candidate/tie order for prefix-stable extension.

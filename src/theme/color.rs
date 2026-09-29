@@ -11,6 +11,8 @@ use crate::Error;
 use num_bigint::BigUint;
 use std::cmp::Ordering;
 
+const MATRIX_EDGE_SLACK: f64 = 1.0 / 4_194_304.0;
+
 // The nearest encoded-sRGB byte transitions, in *linear* RGB. For boundary
 // k, the encoded source is exactly (k+1/2)/255; the corresponding piecewise
 // sRGB transfer is evaluated with 120, 300 and 480 decimal digits, then rounded
@@ -350,13 +352,258 @@ impl Oklab {
             encoded_channel(blue, resources)?,
         ))
     }
+
+    fn in_gamut(self) -> Result<bool, Error> {
+        Ok(self
+            .linear_rgb()?
+            .into_iter()
+            .all(|channel| (-MATRIX_EDGE_SLACK..=1.0 + MATRIX_EDGE_SLACK).contains(&channel)))
+    }
+
+    /// Fixed 24-step chroma bisection at this source-derived lightness/hue.
+    /// The first attempted color is used verbatim when already in gamut;
+    /// otherwise every trial is admitted before inverse matrix evaluation.
+    pub(super) fn reduced_rgb(
+        self,
+        resources: &OperationGenerationResources,
+    ) -> Result<((u8, u8, u8), Self), Error> {
+        if self.in_gamut()? {
+            return Ok((self.opaque_rgb(resources)?, self));
+        }
+        let neutral = Self {
+            a: 0.0,
+            b: 0.0,
+            ..self
+        };
+        if !neutral.in_gamut()? {
+            return Err(Error::Render(
+                "OKLab neutral lightness is outside the finite sRGB gamut".into(),
+            ));
+        }
+        let (mut lower, mut upper) = (0.0_f64, 1.0_f64);
+        for _ in 0..24 {
+            resources.claim_visits(1).map_err(work_error)?;
+            let midpoint = f64::midpoint(lower, upper);
+            let candidate = Self {
+                a: self.a * midpoint,
+                b: self.b * midpoint,
+                ..self
+            };
+            if candidate.in_gamut()? {
+                lower = midpoint;
+            } else {
+                upper = midpoint;
+            }
+        }
+        let selected = Self {
+            a: self.a * lower,
+            b: self.b * lower,
+            ..self
+        };
+        Ok((selected.opaque_rgb(resources)?, selected))
+    }
+}
+
+/// Interpolate final opaque data colors in Cartesian OKLab. Exact endpoints
+/// retain the caller's RGB bytes and avoid an unnecessary matrix roundtrip.
+pub(super) fn interpolate(
+    first: (u8, u8, u8),
+    second: (u8, u8, u8),
+    fraction: f64,
+    resources: &OperationGenerationResources,
+) -> Result<(u8, u8, u8), Error> {
+    resources.claim_visits(1).map_err(work_error)?;
+    if !fraction.is_finite() || !(0.0..=1.0).contains(&fraction) {
+        return Err(Error::Data(
+            "OKLab interpolation fraction must be finite in [0,1]".into(),
+        ));
+    }
+    if fraction.to_bits() == 0.0_f64.to_bits() {
+        return Ok(first);
+    }
+    if fraction.to_bits() == 1.0_f64.to_bits() {
+        return Ok(second);
+    }
+    let first = Oklab::from_rgb(first, resources)?;
+    let second = Oklab::from_rgb(second, resources)?;
+    let interpolate = |low: f64, high: f64| low + (high - low) * fraction;
+    Oklab {
+        l: interpolate(first.l, second.l),
+        a: interpolate(first.a, second.a),
+        b: interpolate(first.b, second.b),
+    }
+    .reduced_rgb(resources)
+    .map(|(rgb, _)| rgb)
+}
+
+/// Finite, prefix-stable maximin candidates for private qualitative and accent
+/// palettes. Hues traverse a normalized rational square ring (no host trig);
+/// lightness bands and chroma bands have a fixed order independent of the
+/// eventual requested domain size. Each next color compares its final
+/// quantized RGB identity and its actual reduced OKLab against prior colors.
+const HUE_DIRECTIONS: usize = 64;
+const LIGHTNESS_BANDS: [f64; 16] = [
+    0.0, -0.05, 0.05, -0.10, 0.10, -0.15, 0.15, -0.20, 0.20, -0.25, 0.25, -0.30, 0.30, -0.35, 0.35,
+    0.40,
+];
+const CHROMA_BANDS: [f64; 8] = [1.0, 0.75, 1.25, 0.5, 1.5, 0.25, 1.75, 0.0];
+
+#[derive(Clone, Copy)]
+struct PaletteCharacter {
+    lightness: f64,
+    chroma: f64,
+}
+
+struct CandidateChoice {
+    distance: f64,
+    index: usize,
+    color: (u8, u8, u8),
+    lab: Oklab,
+}
+
+fn candidate_better(distance: f64, index: usize, best: Option<&CandidateChoice>) -> bool {
+    best.is_none_or(|choice| {
+        distance.total_cmp(&choice.distance).is_gt()
+            || distance.to_bits() == choice.distance.to_bits() && index < choice.index
+    })
+}
+
+fn candidate_lab(character: PaletteCharacter, ordinal: usize) -> Oklab {
+    let hue = ordinal % HUE_DIRECTIONS;
+    let side = hue / 16;
+    let step = f64::from(u32::try_from(hue % 16).expect("ring step is below 16")) / 16.0;
+    let (dx, dy) = match side {
+        0 => (1.0, -1.0 + 2.0 * step),
+        1 => (1.0 - 2.0 * step, 1.0),
+        2 => (-1.0, 1.0 - 2.0 * step),
+        _ => (-1.0 + 2.0 * step, -1.0),
+    };
+    let length = (dx * dx + dy * dy).sqrt();
+    let band = LIGHTNESS_BANDS[(ordinal / HUE_DIRECTIONS) % LIGHTNESS_BANDS.len()];
+    let chroma_band = CHROMA_BANDS[ordinal / (HUE_DIRECTIONS * LIGHTNESS_BANDS.len())];
+    let radius = character.chroma * chroma_band;
+    Oklab {
+        l: (character.lightness + band).clamp(0.05, 0.95),
+        a: radius * dx / length,
+        b: radius * dy / length,
+    }
+}
+
+fn select_candidate(
+    character: PaletteCharacter,
+    colors: &[(u8, u8, u8)],
+    labs: &[Oklab],
+    candidates: usize,
+    resources: &OperationGenerationResources,
+) -> Result<((u8, u8, u8), Oklab), Error> {
+    let mut best: Option<CandidateChoice> = None;
+    for ordinal in 0..candidates {
+        resources.claim_visits(1).map_err(work_error)?;
+        let (rgb, _) = candidate_lab(character, ordinal).reduced_rgb(resources)?;
+        let mut duplicate = false;
+        for prior in colors {
+            resources.claim_visits(1).map_err(work_error)?;
+            if *prior == rgb {
+                duplicate = true;
+                break;
+            }
+        }
+        if duplicate {
+            continue;
+        }
+        let actual = Oklab::from_rgb(rgb, resources)?;
+        let mut minimum = f64::INFINITY;
+        for prior in labs {
+            resources.claim_visits(1).map_err(work_error)?;
+            let difference = (actual.l - prior.l) * (actual.l - prior.l)
+                + (actual.a - prior.a) * (actual.a - prior.a)
+                + (actual.b - prior.b) * (actual.b - prior.b);
+            minimum = minimum.min(difference);
+        }
+        if candidate_better(minimum, ordinal, best.as_ref()) {
+            best = Some(CandidateChoice {
+                distance: minimum,
+                index: ordinal,
+                color: rgb,
+                lab: actual,
+            });
+        }
+    }
+    let selected = best.ok_or_else(|| {
+        Error::Data("extendable color palette exhausted its finite distinct candidate set".into())
+    })?;
+    Ok((selected.color, selected.lab))
+}
+
+pub(super) fn extend_palette(
+    seeds: &[(u8, u8, u8)],
+    requested: usize,
+    resources: &OperationGenerationResources,
+) -> Result<Vec<(u8, u8, u8)>, Error> {
+    if seeds.is_empty() {
+        return Err(Error::Data(
+            "extendable color palette requires a nonempty prefix".into(),
+        ));
+    }
+    if requested == 0 {
+        return Ok(Vec::new());
+    }
+    let records = requested
+        .checked_add(seeds.len())
+        .ok_or_else(|| Error::Render("color palette capacity arithmetic overflowed".into()))?;
+    resources.claim_slots(records as u128).map_err(work_error)?;
+    let bytes = records
+        .checked_mul(std::mem::size_of::<Oklab>() + 3)
+        .and_then(|bytes| u64::try_from(bytes).ok())
+        .ok_or_else(|| Error::Render("color palette storage arithmetic overflowed".into()))?;
+    resources
+        .claim_bytes(bytes)
+        .map_err(|error| Error::Render(format!("color palette storage admission: {error}")))?;
+    let mut result = Vec::new();
+    let mut lab = Vec::new();
+    result
+        .try_reserve_exact(requested)
+        .map_err(|_| Error::Render("cannot reserve resolved color palette".into()))?;
+    lab.try_reserve_exact(records)
+        .map_err(|_| Error::Render("cannot reserve resolved OKLab colors".into()))?;
+    for &color in seeds {
+        lab.push(Oklab::from_rgb(color, resources)?);
+        if result.len() < requested {
+            result.push(color);
+        }
+    }
+    if result.len() == requested {
+        return Ok(result);
+    }
+    let denominator = u32::try_from(seeds.len())
+        .map_err(|_| Error::Render("palette seed count exceeds exact color arithmetic".into()))?;
+    let (mut lightness, mut chroma) = (0.0_f64, 0.0_f64);
+    for seed in &lab {
+        resources.claim_visits(1).map_err(work_error)?;
+        lightness += seed.l;
+        chroma += (seed.a * seed.a + seed.b * seed.b).sqrt();
+    }
+    let character = PaletteCharacter {
+        lightness: lightness / f64::from(denominator),
+        chroma: (chroma / f64::from(denominator)).max(0.08),
+    };
+    let cap = HUE_DIRECTIONS * LIGHTNESS_BANDS.len() * CHROMA_BANDS.len();
+    while result.len() < requested {
+        let new_ordinal = result.len() - seeds.len();
+        let candidates = 128_usize
+            .saturating_add(new_ordinal.saturating_mul(32))
+            .min(cap);
+        let (rgb, actual) = select_candidate(character, &result, &lab, candidates, resources)?;
+        result.push(rgb);
+        lab.push(actual);
+    }
+    Ok(result)
 }
 
 fn encoded_channel(value: f64, resources: &OperationGenerationResources) -> Result<u8, Error> {
     // The inverse coefficients use 10 decimal digits. A 2^-22 slack bounds
     // their finite binary64 roundtrip error at the two exact gamut edges;
     // genuinely out-of-gamut colors go to the explicit T5d1b chroma reducer.
-    const MATRIX_EDGE_SLACK: f64 = 1.0 / 4_194_304.0;
     if !value.is_finite() || !(-MATRIX_EDGE_SLACK..=1.0 + MATRIX_EDGE_SLACK).contains(&value) {
         return Err(Error::Render(
             "OKLab inverse color lies outside the sRGB gamut".into(),
@@ -630,5 +877,66 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("outside the sRGB gamut"));
+    }
+
+    #[test]
+    fn independent_oklab_midpoints_preserve_endpoints_and_reduce_chroma_only_when_needed() {
+        let resources = OperationGenerationResources::new();
+        for (first, second, expected) in [
+            ((255, 0, 0), (0, 0, 255), (140, 83, 162)),
+            ((255, 0, 0), (0, 255, 0), (208, 168, 0)),
+            ((0, 0, 0), (255, 255, 255), (99, 99, 99)),
+        ] {
+            assert_eq!(interpolate(first, second, 0.0, &resources).unwrap(), first);
+            assert_eq!(interpolate(first, second, 1.0, &resources).unwrap(), second);
+            assert_eq!(
+                interpolate(first, second, 0.5, &resources).unwrap(),
+                expected
+            );
+        }
+        let lab = Oklab::from_rgb((255, 0, 0), &resources).unwrap();
+        let outside = Oklab {
+            a: lab.a * 2.0,
+            b: lab.b * 2.0,
+            ..lab
+        };
+        assert!(outside.opaque_rgb(&resources).is_err());
+        let (rgb, reduced) = outside.reduced_rgb(&resources).unwrap();
+        assert!(reduced.in_gamut().unwrap());
+        assert!(reduced.a.abs() < outside.a.abs() && reduced.b.abs() < outside.b.abs());
+        assert_eq!(reduced.opaque_rgb(&resources).unwrap(), rgb);
+        assert!(interpolate((0, 0, 0), (255, 255, 255), f64::NAN, &resources).is_err());
+    }
+
+    #[test]
+    fn candidate_order_is_prefix_stable_and_never_cycles_a_seed() {
+        let seeds = [(0, 114, 178), (230, 159, 0)];
+        let short = extend_palette(&seeds, 3, &OperationGenerationResources::new()).unwrap();
+        let extended = extend_palette(&seeds, 5, &OperationGenerationResources::new()).unwrap();
+        assert_eq!(short.as_slice(), &extended[..3]);
+        assert_eq!(&extended[..2], &seeds);
+        assert_eq!(
+            &extended[2..],
+            &[(192, 83, 122), (76, 145, 54), (157, 138, 238)]
+        );
+        assert!(extended
+            .iter()
+            .enumerate()
+            .all(|(index, color)| !extended[..index].contains(color)));
+        assert!(extend_palette(&[], 1, &OperationGenerationResources::new()).is_err());
+        let first = CandidateChoice {
+            distance: 0.25,
+            index: 5,
+            color: (0, 0, 0),
+            lab: Oklab {
+                l: 0.0,
+                a: 0.0,
+                b: 0.0,
+            },
+        };
+        assert!(candidate_better(0.25, 4, Some(&first)));
+        assert!(!candidate_better(0.25, 6, Some(&first)));
+        assert!(candidate_better(0.5, 6, Some(&first)));
+        assert!(!candidate_better(0.125, 4, Some(&first)));
     }
 }
