@@ -699,11 +699,16 @@ impl<K: crate::kind::Marker> Plot<K> {
         theme: &crate::theme::ResolvedTheme,
     ) -> Result<(u8, u8, u8), Error> {
         if let Some(colors) = self.categorical_colors_spec() {
-            colors.color(label).ok_or_else(|| {
-                Error::Data(format!(
-                    "{family}: category {label:?} has no caller-owned color"
-                ))
-            })
+            colors
+                .color(
+                    label,
+                    &theme.prepared_font_environment()?.generation_resources(),
+                )?
+                .ok_or_else(|| {
+                    Error::Data(format!(
+                        "{family}: category {label:?} has no caller-owned color"
+                    ))
+                })
         } else {
             Ok(theme.colors[default_index % theme.colors.len()])
         }

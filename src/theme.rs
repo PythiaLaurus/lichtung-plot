@@ -3,6 +3,7 @@
 mod color;
 mod contrast;
 mod resolved;
+mod scale;
 
 #[cfg(test)]
 pub(crate) use resolved::FillOutlinePaint;

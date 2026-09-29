@@ -2058,7 +2058,11 @@ ownership, statistical estimates, public extension points, or layout strategy.
 | T5d1 | COMPLETE | T5d0 | Deterministic scale arithmetic |
 | T5d1a | COMPLETE | T5d0 | `feat(color): pin first-party OKLab conversion and channel quantization` |
 | T5d1b | COMPLETE | T5d1a | `feat(color): pin gamut interpolation and palette candidates` |
-| T5d2 | PENDING | T5d1 | `feat(scales): resolve categorical maps palettes and accents` |
+| T5d2 | IN PROGRESS | T5d1 | Umbrella for categorical maps, palettes and accents |
+| T5d2a | COMPLETE | T5d1 | `feat(scales): prepare raw-key maps and bounded accents` |
+| T5d2b | PENDING | T5d2a | `refactor(scales): migrate ordinary qualitative consumers` |
+| T5d2c | PENDING | T5d2b | `refactor(scales): migrate collective and specialized color owners` |
+| T5d2d | PENDING | T5d2c | `refactor(scales): close palettes, accents and guide equality` |
 | T5d3 | PENDING | T5d2 | `feat(scales): resolve sequential and diverging mappings` |
 | T5d4 | PENDING | T5d3 | `refactor(scales): coordinate final domains guides and contrast` |
 | T5d5 | PENDING | T5d4 | `test(scales): close mapping and guide consistency` |
@@ -2131,6 +2135,21 @@ and obtain approval for a specification change before using one. Do not ship a
 dead optional numerical route or claim correctness from a few visual snapshots.
 
 ### T5d2 — Categorical And Accent Mapping
+
+T5d2a closure: `src/theme/scale.rs` prepares one immutable ordered raw-key
+map or accent-slot sequence from the T5d1 engine. An exact caller map checks
+each *used* normalized identity, admits unused and same-color keys, never
+falls back for a missing key, and does not demand capacity from an overridden
+fixed palette. Fixed capacity rejects before drawing; extendable seeds retain
+their prefix, yield deterministic noncycling additional bytes, and a layer's
+exact paint does not eliminate its declared accent slot. All source-key
+comparisons, palette records and storage are admitted to the operation
+ledger. The existing private `CategoricalColors::color` lookup also charges
+its actual preceding comparisons while its remaining callers migrate.
+Focused mapping/fixed/extended/exact tests, Interaction and sampled Raincloud
+caller-color contracts, and strict Clippy pass. T5d2b–d install this one
+representation into all prepared family/guide owners and remove the old
+modulo and one-off helper routes together.
 
 Implement fixed/extendable palettes, exact raw-key maps, capacity/coverage checks,
 and nonempty extendable accent sequences under one deterministic color engine.

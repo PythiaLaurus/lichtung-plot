@@ -88,9 +88,19 @@ impl CategoricalColors {
         Ok(Self { entries })
     }
 
-    pub(crate) fn color(&self, label: &str) -> Option<(u8, u8, u8)> {
-        self.entries
-            .iter()
-            .find_map(|(candidate, color)| (candidate == label).then_some(*color))
+    pub(crate) fn color(
+        &self,
+        label: &str,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<Option<(u8, u8, u8)>, Error> {
+        for (candidate, color) in &self.entries {
+            resources.claim_visits(1).map_err(|error| {
+                Error::Render(format!("exact categorical color key lookup: {error:?}"))
+            })?;
+            if candidate == label {
+                return Ok(Some(*color));
+            }
+        }
+        Ok(None)
     }
 }
