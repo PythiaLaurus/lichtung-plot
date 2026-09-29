@@ -2077,7 +2077,7 @@ fn right_edge_legend_expands_generic_continuous_x_axis() {
 }
 
 #[test]
-fn auto_legend_leaves_dense_categorical_domains_unchanged_in_normal_flow() {
+fn auto_legend_keeps_categorical_tracks_while_clearing_painted_zero_ink() {
     let data = dense_horizontal_data();
     let plot = dense_bar_plot(&data, true);
     let resources = crate::font::canonical::OperationGenerationResources::new();
@@ -2137,12 +2137,9 @@ fn auto_legend_leaves_dense_categorical_domains_unchanged_in_normal_flow() {
     )
     .unwrap();
 
-    assert!(plan.planned_x_limits().is_none());
+    assert!(plan.planned_x_limits().is_some());
     assert!(plan.planned_y_limits().is_none());
-    assert_eq!(
-        final_result.layout.projection.x_range().0.to_bits(),
-        0.0_f64.to_bits()
-    );
+    assert!(final_result.layout.projection.x_range().0 < 0.0);
     assert!(legend.bounds.left > plan.panel_box.x1);
     assert!(!legend_fits_panel(
         legend.bounds,
@@ -2159,7 +2156,7 @@ fn auto_legend_leaves_dense_categorical_domains_unchanged_in_normal_flow() {
 }
 
 #[test]
-fn negative_horizontal_bars_keep_zero_maximum_with_deterministic_outside_guide() {
+fn negative_horizontal_bars_keep_zero_start_and_clear_outline_with_outside_guide() {
     let data = signed_dense_bar_data(-1.0);
     let plot = dense_bar_plot(&data, true);
     let cell = PanelBox::new(90.0, 500.0, 50.0, 310.0);
@@ -2182,17 +2179,24 @@ fn negative_horizontal_bars_keep_zero_maximum_with_deterministic_outside_guide()
     .unwrap();
     let legend = first.legend.as_ref().unwrap();
 
-    assert_eq!(
-        first.result.layout.projection.x_range().1.to_bits(),
-        0.0_f64.to_bits()
-    );
+    assert!(first.result.layout.projection.x_range().1 > 0.0);
+    let crate::layout::interior::MarkPayload::Bars(payload) =
+        &first.result.marks.as_ref().unwrap().payload
+    else {
+        panic!("selected Bar")
+    };
+    let zero = first.result.layout.projection.project(0.0, 0.5).0;
+    assert!(payload
+        .bars
+        .iter()
+        .all(|bar| bar.polygon[0].x.to_bits() == zero.to_bits()));
     assert!(legend.bounds.left > first.panel_box.x1);
     assert_eq!(first.planned_x_limits(), second.planned_x_limits());
     assert_eq!(legend.bounds, second.legend.unwrap().bounds);
 }
 
 #[test]
-fn positive_vertical_bars_keep_zero_minimum_with_outside_guide() {
+fn positive_vertical_bars_keep_zero_start_and_clear_outline_with_outside_guide() {
     let data = signed_dense_bar_data(1.0);
     let plot = dense_bar_plot(&data, false);
     let cell = PanelBox::new(90.0, 500.0, 50.0, 310.0);
@@ -2200,16 +2204,23 @@ fn positive_vertical_bars_keep_zero_minimum_with_outside_guide() {
     let plan = plan_panel(&plot, PlotKind::Bar, cell, LegendRole::Panel, &theme()).unwrap();
     let legend = plan.legend.as_ref().unwrap();
 
-    assert_eq!(
-        plan.result.layout.projection.y_range().0.to_bits(),
-        0.0_f64.to_bits()
-    );
+    assert!(plan.result.layout.projection.y_range().0 < 0.0);
+    let crate::layout::interior::MarkPayload::Bars(payload) =
+        &plan.result.marks.as_ref().unwrap().payload
+    else {
+        panic!("selected Bar")
+    };
+    let zero = plan.result.layout.projection.project(0.5, 0.0).1;
+    assert!(payload
+        .bars
+        .iter()
+        .all(|bar| bar.polygon[0].y.to_bits() == zero.to_bits()));
     assert!(legend.bounds.left > plan.panel_box.x1);
-    assert!(plan.planned_y_limits().is_none());
+    assert!(plan.planned_y_limits().is_some());
 }
 
 #[test]
-fn negative_vertical_bars_keep_zero_maximum_with_outside_guide() {
+fn negative_vertical_bars_keep_zero_start_and_clear_outline_with_outside_guide() {
     let data = signed_dense_bar_data(-1.0);
     let plot = dense_bar_plot(&data, false);
     let cell = PanelBox::new(90.0, 500.0, 50.0, 310.0);
@@ -2217,12 +2228,19 @@ fn negative_vertical_bars_keep_zero_maximum_with_outside_guide() {
     let plan = plan_panel(&plot, PlotKind::Bar, cell, LegendRole::Panel, &theme()).unwrap();
     let legend = plan.legend.as_ref().unwrap();
 
-    assert_eq!(
-        plan.result.layout.projection.y_range().1.to_bits(),
-        0.0_f64.to_bits()
-    );
+    assert!(plan.result.layout.projection.y_range().1 > 0.0);
+    let crate::layout::interior::MarkPayload::Bars(payload) =
+        &plan.result.marks.as_ref().unwrap().payload
+    else {
+        panic!("selected Bar")
+    };
+    let zero = plan.result.layout.projection.project(0.5, 0.0).1;
+    assert!(payload
+        .bars
+        .iter()
+        .all(|bar| bar.polygon[0].y.to_bits() == zero.to_bits()));
     assert!(legend.bounds.left > plan.panel_box.x1);
-    assert!(plan.planned_y_limits().is_none());
+    assert!(plan.planned_y_limits().is_some());
 }
 
 #[test]
