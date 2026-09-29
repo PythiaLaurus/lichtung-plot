@@ -468,7 +468,10 @@ fn heatmap_rejects_canvas_too_short_for_missing_colorbar() {
     );
     let error = render(&data, |chart| chart.size(320, 150)).unwrap_err();
 
-    assert!(error.contains("minimum 80x60 plot panel"), "{error}");
+    assert!(
+        error.contains("root title block exceeds its exact allocated height"),
+        "{error}"
+    );
 }
 
 #[test]

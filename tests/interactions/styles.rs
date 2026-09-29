@@ -75,20 +75,22 @@ fn svg<K: lichtung_plot::kind::Marker>(plot: Plot<K>) -> String {
 #[test]
 fn native_interaction_preserves_exact_root_svg_bytes() {
     // T5b2a: theme-owned title, entry, and chrome roles replace root-scaled
-    // guide typography. T5a fingerprints remain attributed in the benchmarks.
+    // guide typography. T5c closes complete point/outline alpha and native
+    // mark pitch, so the exact SVG bytes are intentionally repinned. T5a
+    // fingerprints remain attributed in the benchmarks.
     for (theme, expected) in [
         (
             lichtung_plot::Theme::Publication,
             [
-                (10926, 0x1fcd_5bb2_d9d9_7f64_u64),
-                (11270, 0x4a8e_0d36_bd2c_eaf0),
+                (11009, 0x12aa_f180_97b9_c5cc_u64),
+                (11353, 0x89b9_c58e_98ee_340a),
             ],
         ),
         (
             lichtung_plot::Theme::Science,
             [
-                (10533, 0x4667_21ab_5c05_26b2),
-                (10877, 0x4235_a732_5bfa_9f36),
+                (10616, 0x05b4_da36_4c19_7d7e),
+                (10960, 0xea68_c6db_aa4d_c974),
             ],
         ),
     ] {
@@ -128,14 +130,28 @@ fn interaction_styles_render_dashed_circle_and_solid_triangle_geometry() {
     let output = svg(chart(&interaction_data(), true));
     let triangles = output
         .lines()
-        .filter(|line| {
-            line.starts_with("<polygon points=") && line.contains("fill-opacity=\"0.82\"")
-        })
+        .filter(|line| line.starts_with("<polygon points=") && line.contains("fill-opacity="))
         .map(triangle_vertices)
         .collect::<Vec<_>>();
 
     assert_eq!(output.matches("stroke-dasharray=\"5 3\"").count(), 2);
     assert_eq!(triangles.len(), 3);
+    let alphas = output
+        .lines()
+        .filter(|line| line.starts_with("<polygon points="))
+        .filter_map(|line| {
+            line.split_once("fill-opacity=\"").map(|(_, value)| {
+                value
+                    .split_once('"')
+                    .unwrap()
+                    .0
+                    .parse::<f64>()
+                    .unwrap()
+                    .to_bits()
+            })
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(alphas, [(209.0_f64 / 255.0).to_bits(); 3]);
     assert!(triangles.iter().all(|vertices| {
         vertices.len() == 3
             && vertices[0].1 < vertices[1].1

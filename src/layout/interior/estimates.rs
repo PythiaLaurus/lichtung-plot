@@ -271,9 +271,17 @@ fn native_vertical_category_intrinsics_use_mandatory_lines_and_keep_fit_scope() 
                 false,
             )
             .unwrap();
+        let tick = crate::layout::fit::intrinsic_widths(
+            &theme,
+            "0.5",
+            &theme.typography.tick_label,
+            "numeric midpoint intrinsic test",
+        )
+        .unwrap()
+        .0;
         assert_eq!(
             minimum.0.to_bits(),
-            crate::layout::canvas::MINIMUM_PANEL_SPAN.to_bits()
+            (tick + 2.0 * crate::layout::panel::LABEL_CLEARANCE).to_bits()
         );
         assert_eq!(
             minimum.1.to_bits(),

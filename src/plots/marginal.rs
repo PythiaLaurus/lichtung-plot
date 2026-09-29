@@ -149,6 +149,13 @@ fn prepared_marginal_points_and_density_strokes_enlarge_linked_tracks() {
     let chart = inputs.attach(source).unwrap();
     let theme = crate::Theme::Publication.resolve();
     let baseline = intrinsic_body_minimum(&chart, &theme).unwrap();
+    assert!(
+        matches!(chart.measure_selected_interior(PlotRenderContext::new(
+        chart.data(), PanelBox::new(0.0, baseline.0 - 1.0 / 1024.0,
+            0.0, baseline.1), &theme,
+    )), Err(crate::layout::fit::PlanError::Fit(failure))
+        if failure.reason.kind == crate::layout::fit::FitKind::SpecializedGeometry)
+    );
     let mut styled = theme.clone();
     styled.marks.point_sizes.marginal = 24;
     styled.marks.marginal_density.outline_width = 120.0;
@@ -160,6 +167,66 @@ fn prepared_marginal_points_and_density_strokes_enlarge_linked_tracks() {
     let shown = intrinsic_body_minimum(&chart, &point_only).unwrap().0;
     point_only.marks.primary_point.outline.color = crate::render::backend::Rgba::new(0, 0, 0, 0);
     assert!(shown > intrinsic_body_minimum(&chart, &point_only).unwrap().0);
+}
+
+#[test]
+fn wide_finite_scales_normalize_each_linked_kde_to_its_actual_peak() {
+    let chart = Plot::marginal(
+        crate::NumericValues::new("x", [1e14, 1.2e14, 1.4e14, 3e14, 3.2e14, 3.4e14]),
+        crate::NumericValues::new("y", [2.0, 2.1, 2.3, 4.0, 4.2, 4.3]),
+    )
+    .erase();
+    let inputs = crate::plots::shared_x::prepare_plot(
+        &chart,
+        &crate::font::canonical::OperationGenerationResources::new(),
+    )
+    .unwrap();
+    let chart = inputs.attach(chart).unwrap();
+    let theme = crate::Theme::Publication.resolve();
+    let selected = chart
+        .measure_selected_interior(PlotRenderContext::new(
+            chart.data(),
+            PanelBox::new(70.0, 670.0, 60.0, 450.0),
+            &theme,
+        ))
+        .unwrap();
+    let crate::layout::interior::MarkPayload::Marginal(payload) =
+        &selected.marks.as_ref().unwrap().payload
+    else {
+        panic!("selected Marginal")
+    };
+    let strip = payload.clips[1];
+    let peak = payload
+        .groups
+        .iter()
+        .flat_map(|group| group.top.iter())
+        .map(|point| point.y)
+        .fold(f64::NEG_INFINITY, f64::max);
+    let expected = strip.y0 + 0.90 * strip.height();
+    assert!((peak - expected).abs() < 1.0 / 1024.0);
+}
+
+#[test]
+fn unrepresentable_linked_kde_rejects_instead_of_substituting_a_density_floor() {
+    let chart = Plot::marginal(
+        crate::NumericValues::new("x", [1.0, 1.2, 1.4, 3.0, 3.2, 3.4]),
+        crate::NumericValues::new("y", [2.0, 2.1, 2.3, 4.0, 4.2, 4.3]),
+    )
+    .x_limits(1e9, 1e9 + 1.0)
+    .erase();
+    let inputs = crate::plots::shared_x::prepare_plot(
+        &chart,
+        &crate::font::canonical::OperationGenerationResources::new(),
+    )
+    .unwrap();
+    let chart = inputs.attach(chart).unwrap();
+    let theme = crate::Theme::Publication.resolve();
+    assert!(
+        matches!(chart.measure_selected_interior(PlotRenderContext::new(
+        chart.data(), PanelBox::new(70.0, 670.0, 60.0, 450.0), &theme,
+    )), Err(crate::layout::fit::PlanError::Fit(failure))
+        if failure.reason.kind == crate::layout::fit::FitKind::SpecializedGeometry)
+    );
 }
 
 #[test]
@@ -287,14 +354,21 @@ pub(crate) fn measure(
     let gap = 12.0;
     let top_h = 82.0;
     let right_w = 96.0;
+    let hard = intrinsic_body_minimum(chart, theme)?;
+    if outer.width() < hard.0 || outer.height() < hard.1 {
+        return Err(context.fit_scope().failure(
+            crate::layout::fit::FitKind::SpecializedGeometry,
+            "marginal linked strips leave less than the prepared central mark and density ink minimum",
+        ).into());
+    }
     let central_x0 = outer.x0;
     let central_y0 = outer.y0;
-    let central_x1 = (outer.x1 - right_w - gap).max(central_x0 + 1.0);
-    let central_y1 = (outer.y1 - top_h - gap).max(central_y0 + 1.0);
+    let central_x1 = outer.x1 - right_w - gap;
+    let central_y1 = outer.y1 - top_h - gap;
     let top_y0 = central_y1 + gap;
-    let top_y1 = (top_y0 + top_h).min(outer.y1);
+    let top_y1 = top_y0 + top_h;
     let right_x0 = central_x1 + gap;
-    let right_x1 = (right_x0 + right_w).min(outer.x1);
+    let right_x1 = right_x0 + right_w;
 
     // --- Data ranges ---
     let (x_low, x_high) =
@@ -378,14 +452,22 @@ pub(crate) fn measure(
         .iter()
         .flatten()
         .copied()
-        .fold(0.0_f64, f64::max)
-        .max(1e-12);
+        .fold(0.0_f64, f64::max);
     let y_dens_max = y_densities
         .iter()
         .flatten()
         .copied()
-        .fold(0.0_f64, f64::max)
-        .max(1e-12);
+        .fold(0.0_f64, f64::max);
+    if !x_dens_max.is_finite() || !y_dens_max.is_finite() || x_dens_max <= 0.0 || y_dens_max <= 0.0
+    {
+        return Err(context
+            .fit_scope()
+            .failure(
+                crate::layout::fit::FitKind::SpecializedGeometry,
+                "marginal KDE has no positive representable density in a required linked strip",
+            )
+            .into());
+    }
 
     let usable_h = (top_y1 - top_y0) * 0.90;
     let usable_w = (right_x1 - right_x0) * 0.90;

@@ -4,9 +4,9 @@ This is the T5c0 source-to-owner decision for T5c1–T5c4. The reconciled keyed
 rows in `specs/04_VISUAL_PROPERTY_OWNERSHIP.md` (T2e E-M1–E-M14, T2f
 F-M1–F-M22 and their T2h relationships) remain the exhaustive inventory; the
 tables here group those keys by implementation owner. T5b already retains mark
-geometry and selected payloads. It does not yet supply every painted-ink hard
-requirement or native annotation consequence. No public style or omission policy
-is introduced by this document.
+geometry and selected payloads. T5c1–T5c4 subsequently supplied the complete
+painted-ink hard requirements and native annotation consequences listed here.
+No public style or omission policy is introduced by this document.
 
 ## Style, Content And Geometry Ownership
 
@@ -89,3 +89,22 @@ T5c1 resolves complete private styles before any candidate is measured;
 T5c2a–d and T5c3 consume these semantic instances, exact data windows and
 full painted extents on the existing bounded feedback driver. No alternate
 draw route or new public API is admitted here.
+
+## T5c5 Closure Handoff
+
+Every family in the primary-mark table above now has a source-backed native
+hard input (the five specialized interiors retain only their T5e packing
+adapters). Root, facet, Canvas and frozen scene owners use the same selected
+paint; `SelectedMarkPlan` and `SelectedAnnotationPlan` retain their final
+styles, text and canonical ink. Automatic numeric domains may grow for mark or
+required label ink; caller-exact data windows clip marks only and never make a
+required visible label optional. Unrepresentable `f64` extrema and zero KDE
+peaks reject with scoped fit reasons rather than substituted density floors.
+
+T5d receives these unchanged scientific identities: positioned-series and
+hue/group/category keys from prepared sources; unkeyed primary and supplemental
+color roles from private `MarkTheme`; Heatmap and Beeswarm final continuous
+color domains, missing-neutral paint and guide contributors; and original
+typed significance targets. Data color is the remaining mapping input. Fill
+and outline alpha, glyph shape, typography, clip policy, guide placement and
+prepared semantic counts are already resolved independently of that mapping.

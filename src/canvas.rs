@@ -187,11 +187,13 @@ mod d1_tests {
         let second = crate::layout::ComponentAddress::root()
             .child(crate::layout::AddressRole::CanvasCell, 1)
             .unwrap();
-        assert_eq!(work.roots.len(), 2);
+        assert_eq!(work.roots.len(), 3);
         assert_eq!(work.roots[0].guides, 0..2);
         assert!(!work.roots[0].successful);
-        assert_eq!(work.roots[1].guides, 2..6);
-        assert!(work.roots[1].successful);
+        assert_eq!(work.roots[1].guides, 2..4);
+        assert!(!work.roots[1].successful);
+        assert_eq!(work.roots[2].guides, 4..6);
+        assert!(work.roots[2].successful);
         assert_eq!(work.gutters.len(), 2);
         assert!(work.gutters.iter().all(|gutter| {
             gutter.consumed.iter().all(|value| value.to_bits() == 0)
@@ -217,27 +219,27 @@ mod d1_tests {
                 &first,
                 1,
                 crate::LegendPosition::OutsideRight,
-                GuideOutcome::Rejected,
-                GuidePhase::GuideOnly,
-            ),
-            (
-                &first,
-                1,
-                crate::LegendPosition::OutsideTop,
-                GuideOutcome::Accepted,
+                GuideOutcome::Provisional,
                 GuidePhase::Body,
             ),
             (
                 &second,
                 1,
                 crate::LegendPosition::OutsideRight,
-                GuideOutcome::Rejected,
-                GuidePhase::GuideOnly,
+                GuideOutcome::Provisional,
+                GuidePhase::Body,
+            ),
+            (
+                &first,
+                2,
+                crate::LegendPosition::OutsideRight,
+                GuideOutcome::Accepted,
+                GuidePhase::Body,
             ),
             (
                 &second,
-                1,
-                crate::LegendPosition::OutsideTop,
+                2,
+                crate::LegendPosition::OutsideRight,
                 GuideOutcome::Accepted,
                 GuidePhase::Body,
             ),

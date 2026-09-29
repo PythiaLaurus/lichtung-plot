@@ -241,7 +241,14 @@ fn assert_outside_trace(sample: &CaseMeasurement, fixture: &str, edge: LegendPos
     } else if fixture == "native_compact_right" && right_flow {
         expected.extend([
             (1, OutsideRight, false, GuideOnly, Rejected),
-            (1, OutsideRight, true, Body, Accepted),
+            (1, OutsideRight, true, Body, Provisional),
+            (2, OutsideRight, false, GuideOnly, Rejected),
+            (2, OutsideRight, true, Body, Accepted),
+        ]);
+    } else if fixture == "native_compact_right" {
+        expected.extend([
+            (1, first_edge, false, Body, Provisional),
+            (2, first_edge, false, Body, Accepted),
         ]);
     } else {
         expected.push((1, first_edge, false, Body, Accepted));
@@ -254,10 +261,10 @@ fn assert_outside_trace(sample: &CaseMeasurement, fixture: &str, edge: LegendPos
         ("starvation", OutsideRight) => (2, 3, 1, 10, 30),
         ("starvation" | "preferred_right_control", _) if !right_flow => (2, 2, 2, 0, 24),
         ("preferred_right_control", Auto | OutsideRight) => (2, 2, 2, 10, 30),
-        ("historical_reflow_640x400", Auto | OutsideRight) => (3, 3, 3, 0, 110),
-        ("historical_reflow_640x400", _) => (2, 2, 2, 0, 107),
-        ("native_compact_right", Auto | OutsideRight) => (2, 3, 2, 6, 44),
-        ("native_compact_right", LegendPosition::OutsideBottom) => (2, 2, 2, 0, 42),
+        ("historical_reflow_640x400", Auto | OutsideRight) => (3, 3, 3, 0, 111),
+        ("historical_reflow_640x400", _) => (2, 2, 2, 0, 108),
+        ("native_compact_right", Auto | OutsideRight) => (3, 5, 3, 9, 46),
+        ("native_compact_right", LegendPosition::OutsideBottom) => (3, 3, 3, 0, 43),
         _ => unreachable!(),
     };
     let observed = &sample.observations;
@@ -347,7 +354,7 @@ fn outside_legend_measurements() {
 )]
 fn shared_case(facet: bool, pressure: bool, edge: LegendPosition) -> CaseMeasurement {
     use GuideOutcome::{Accepted, Provisional, Rejected};
-    use GuidePhase::{Body, GuideOnly};
+    use GuidePhase::Body;
     use LegendPosition::{OutsideRight, OutsideTop};
 
     let (width, height) = if pressure {
@@ -411,9 +418,9 @@ fn shared_case(facet: bool, pressure: bool, edge: LegendPosition) -> CaseMeasure
     assert_child_reuse(&sample, facet, pressure);
     let (rounds, trials, checks, proposals, exact) = if pressure {
         if facet {
-            (3, 4, 6, 148, 177)
+            (3, 3, 6, 16, 84)
         } else {
-            (3, 7, 6, 72, 132)
+            (3, 7, 6, 60, 109)
         }
     } else {
         (
@@ -444,8 +451,7 @@ fn shared_case(facet: bool, pressure: bool, edge: LegendPosition) -> CaseMeasure
     } else if facet {
         &[
             (0, OutsideRight, false, Body, Provisional),
-            (1, OutsideRight, false, GuideOnly, Rejected),
-            (1, OutsideRight, true, Body, Provisional),
+            (1, OutsideRight, false, Body, Provisional),
             (2, OutsideRight, false, Body, Accepted),
         ]
     } else {

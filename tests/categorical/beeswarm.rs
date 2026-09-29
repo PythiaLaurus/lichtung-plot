@@ -8,6 +8,8 @@ use super::*;
 fn beeswarm_parent_svg_fingerprints() {
     // T5b2a: theme-owned guide typography changes colorbar text and panel reserve.
     // Historical T5a fingerprints remain attributed in docs/local-search-benchmarks.md.
+    // T5c4's mixed Beeswarm/Heatmap Canvas uses actual child grid minima, so
+    // that one assigned panel's SVG coordinates differ from the 80x60 floor.
     for (theme, expected) in [
         (
             lichtung_plot::Theme::Publication,
@@ -21,7 +23,7 @@ fn beeswarm_parent_svg_fingerprints() {
                 (21233, 0x613f_83b9_7b13_1575),
                 (21241, 0xcd48_fc12_9662_7449),
                 (23862, 0x3d61_a76a_7a25_b066),
-                (16503, 0xbe63_0ea1_1ded_d922),
+                (16488, 0x0ac5_3bb8_1b0f_febb),
             ],
         ),
         (
@@ -36,7 +38,7 @@ fn beeswarm_parent_svg_fingerprints() {
                 (20440, 0x35d8_33e9_c136_51e4),
                 (20448, 0x1f05_0879_c892_c62c),
                 (21902, 0x32ae_dbe6_a64e_54f7),
-                (15236, 0xdc0c_fdc9_ebc1_aa70),
+                (15148, 0xd534_82ca_b74f_83d9),
             ],
         ),
     ] {

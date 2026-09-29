@@ -272,12 +272,17 @@ fn waterfall_rejects_terminal_geometry_below_coordinate_precision() {
 
 #[test]
 fn waterfall_accepts_finite_ordered_geometry_when_detached_delta_sum_overflows() {
+    // Two successive deltas overflow as a detached sum; ordered endpoints
+    // remain finite. The broad exact window also gives the required
+    // 300-digit total label a containing shelf without numeric-edge clipping.
+    let span = f64::MAX * 0.6;
     let plot = Plot::waterfall(
         CategoryValues::new("label", ["a", "b", "c"]).unwrap(),
-        NumericValues::new("delta", [f64::MAX, f64::MAX, -f64::MAX]),
-        -f64::MAX,
+        NumericValues::new("delta", [span, span, -span]),
+        -span,
     )
-    .size(4_000, 240);
+    .size(16_000, 300)
+    .x_limits(-f64::MAX * 0.9, f64::MAX * 0.9);
 
     plot.preflight().unwrap();
 }

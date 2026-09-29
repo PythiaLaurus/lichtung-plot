@@ -641,7 +641,14 @@ mod root_title_tests {
                 assert_eq!(theme.composition.root_title_alignment, Center);
                 assert_eq!(theme.composition.root_subtitle_alignment, None);
                 assert_eq!(theme.composition.root_caption_alignment, Start);
-                let canvas = plot.measured_canvas_layout(&theme).unwrap();
+                let prepared = crate::plots::shared_x::prepare_plot(
+                    &plot,
+                    &crate::font::canonical::OperationGenerationResources::new(),
+                )
+                .unwrap()
+                .attach(plot.clone())
+                .unwrap();
+                let canvas = prepared.measured_canvas_layout(&theme).unwrap();
                 assert!(canvas.root_text.top_reserve > 0.0);
                 assert!(canvas.root_text.bottom_reserve > 0.0);
                 let plan =

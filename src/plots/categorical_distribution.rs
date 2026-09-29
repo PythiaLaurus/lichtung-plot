@@ -352,7 +352,15 @@ mod appearance_tests {
         };
         let (old_points, old_style) = extract(&old);
         let (new_points, new_style) = extract(&changed);
-        assert_eq!(old_points, new_points);
+        assert_eq!(old_points.len(), new_points.len());
+        assert!(old_points
+            .iter()
+            .zip(&new_points)
+            .all(|(old, new)| old.y.to_bits() == new.y.to_bits()));
+        assert!(old_points
+            .iter()
+            .zip(&new_points)
+            .any(|(old, new)| old.x.to_bits() != new.x.to_bits()));
         assert_eq!(old_style.color.alpha(), 209);
         assert_eq!(new_style.color.alpha(), 123);
         assert_eq!(new_style.radius, 4);

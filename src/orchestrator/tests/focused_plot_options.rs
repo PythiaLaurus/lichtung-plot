@@ -115,11 +115,17 @@ fn hue_path_style_uses_caller_colors_for_paths_markers_and_legend_lines() {
         .collect::<Vec<_>>();
 
     assert_eq!(path_colors, [(51, 51, 51), (0, 114, 178)]);
+    let alpha = crate::Theme::Publication
+        .resolve()
+        .marks
+        .primary_point
+        .fill_alpha;
     assert_eq!(
         marker_colors,
         [(51, 51, 51); 3]
             .into_iter()
             .chain([(0, 114, 178); 3])
+            .map(|color| crate::render::backend::Rgba::from(color).with_alpha(alpha))
             .collect::<Vec<_>>()
     );
     assert_eq!(legend_colors, [(51, 51, 51), (0, 114, 178)]);

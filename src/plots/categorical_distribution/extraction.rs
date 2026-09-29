@@ -206,14 +206,14 @@ fn annotated() -> Plot {
 #[test]
 fn assigned_panel_marks_match_canonical_projection_fingerprints() {
     use sha2::{Digest, Sha256};
-    // 2026-09-14 T5a6d correction, not pre-native byte parity. The 8e3395a
-    // fingerprints and inspected coordinate deltas are preserved in
+    // T5c closes styled distribution ink and native slot coordinates.
+    // Historical T5a6d and 8e3395a fingerprints and coordinate deltas are in
     // docs/local-search-benchmarks.md, "T5a6d Closing Audit".
     let expected = [
-        "d7a7ac878e714b16ae1b225498177c2375d963c336ae9a1f44c70b1746ccb4a7",
-        "ccb910d69f5cf9cb8188cedbc0a20df3a38dbc43503a5102c7e2a4b003d18d8f",
-        "9adc9496e02d1fe3123420af951ab3fd1f1523fbd27dd53fc291577ea185edad",
-        "f8051c52be3754137e03e68cc0699b40705a3815bb4a60dff84e8a1a483dc21b",
+        "4b16fd7df8af5552f88c24d1cf32b486eef31e923aa3b178e79aa1c3f2cb660b",
+        "2384114e60a3e17af3ad8edda471780eb580e1c4f20ebfed633959a16988871d",
+        "598c5d93fa6c2c50afcf582838d02595f49f8e9e493b7b2078ed8d46e61f0b16",
+        "488c40b9283428d4221314a9fdb8667e5050f66ccdf58a4a42b54679545bf81d",
     ];
     for (source, expected) in sources(None).into_iter().chain([supplied()]).zip(expected) {
         let mut fingerprint = Sha256::new();
@@ -595,7 +595,16 @@ fn parent_palette_and_absent_series_slots_are_retained_before_native_projection(
                     _ => None,
                 })
                 .collect::<Vec<_>>();
-            assert_eq!(colors, [theme.colors[2], theme.colors[1]]);
+            let alpha = if plot.kind() == crate::PlotKind::Boxplot {
+                theme.marks.box_body.fill_alpha
+            } else {
+                theme.marks.violin_body.fill_alpha
+            };
+            assert_eq!(
+                colors,
+                [theme.colors[2], theme.colors[1]]
+                    .map(|color| crate::render::backend::Rgba::from(color).with_alpha(alpha))
+            );
         }
     }
 }

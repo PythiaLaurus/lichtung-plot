@@ -654,7 +654,11 @@ mod fit_tests {
         assert!(raised.0 > baseline.0);
         assert!(raised.1 > 700.0);
         let exact = intrinsic(source(true), &styled);
-        assert_eq!(exact.0.to_bits(), baseline.0.to_bits());
+        assert_eq!(
+            exact.0.to_bits(),
+            crate::layout::canvas::MINIMUM_PANEL_SPAN.to_bits()
+        );
+        assert!(exact.0 < baseline.0);
         assert_eq!(exact.1.to_bits(), raised.1.to_bits());
     }
 

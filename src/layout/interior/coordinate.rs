@@ -141,6 +141,26 @@ impl Intrinsics {
                 } else {
                     minimum_body.1 = minimum_body.1.max(span);
                 }
+            } else if axes.specs[side].exact_ticks.is_none() {
+                // An automatic numeric axis always retains a terminal
+                // midpoint candidate. Even an otherwise empty mark panel
+                // needs enough physical span for that candidate's glyph.
+                if side == 0 {
+                    let (hard, _) = fit::intrinsic_widths(
+                        theme,
+                        "0.5",
+                        &standard.tick_label,
+                        "numeric midpoint tick minimum",
+                    )?;
+                    minimum_body.0 = minimum_body
+                        .0
+                        .max(hard + 2.0 * crate::layout::panel::LABEL_CLEARANCE);
+                } else {
+                    minimum_body.1 = minimum_body.1.max(
+                        standard.tick_label.line_height()
+                            + 2.0 * crate::layout::panel::LABEL_CLEARANCE,
+                    );
+                }
             }
         }
         Ok(Self {

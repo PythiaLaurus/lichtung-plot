@@ -389,7 +389,7 @@ fn matrix_rejects_unrepresentable_extreme_kde_support_before_begin() {
 }
 
 #[test]
-fn bar_mean_of_repeated_maximum_values_remains_renderable() {
+fn bar_mean_of_repeated_maximum_values_requires_representable_painted_clearance() {
     let data = BarValues {
         category: CategoryValues::new("group", ["a", "a"]).unwrap(),
         value: NumericValues::new("value", [f64::MAX, f64::MAX]),
@@ -399,9 +399,14 @@ fn bar_mean_of_repeated_maximum_values_remains_renderable() {
         let plot = configured_bar_plot(&data, kind);
         let mut backend = RecordingBackend::default();
 
-        plot.render_kind(kind, &mut backend).unwrap();
-
-        assert_eq!((backend.begins, backend.ends), (1, 1), "{kind:?}");
+        let error = plot.render_kind(kind, &mut backend).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("automatic mark ink cannot obtain a finite data domain"),
+            "{kind:?}: {error}"
+        );
+        assert_eq!((backend.begins, backend.ends), (0, 0), "{kind:?}");
     }
 }
 

@@ -952,6 +952,43 @@ impl PreparedTextRequirement {
                 &theme.typography.tick_label,
                 prepared_stage.as_deref_mut(),
             )?;
+            if matches!(
+                crate::layout::interior::InteriorRoute::classify(kind),
+                crate::layout::interior::InteriorRoute::StandardCoordinate(_)
+            ) {
+                let address = prepared_address_child(
+                    base,
+                    AddressRole::PanelInterior,
+                    0,
+                    prepared_stage.as_deref_mut(),
+                )?;
+                push_owned(
+                    requirements,
+                    address,
+                    PreparedTextRole::TickLabel,
+                    0,
+                    "0",
+                    &[],
+                    &theme.typography.tick_label,
+                    prepared_stage.as_deref_mut(),
+                )?;
+                let address = prepared_address_child(
+                    base,
+                    AddressRole::PanelInterior,
+                    1,
+                    prepared_stage.as_deref_mut(),
+                )?;
+                push_owned(
+                    requirements,
+                    address,
+                    PreparedTextRole::TickLabel,
+                    0,
+                    "0.5",
+                    &[],
+                    &theme.typography.tick_label,
+                    prepared_stage.as_deref_mut(),
+                )?;
+            }
         }
 
         let significance_appearance = theme

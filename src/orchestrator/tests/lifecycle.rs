@@ -830,7 +830,17 @@ fn canvas_preflight_and_render_reuse_one_chrome_and_one_theme_per_child() {
         } else {
             vec![nature_color, science_color]
         };
-        assert_eq!(colors, expected);
+        assert_eq!(
+            colors,
+            expected
+                .into_iter()
+                .enumerate()
+                .map(|(index, color)| {
+                    crate::render::backend::Rgba::from(color)
+                        .with_alpha(themes[index].resolve().marks.primary_point.fill_alpha)
+                })
+                .collect::<Vec<_>>()
+        );
     }
 }
 

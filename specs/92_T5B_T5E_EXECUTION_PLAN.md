@@ -1048,7 +1048,7 @@ caller styles while centralizing their ownership.
 | T5c3b3b2b | COMPLETE | T5c3b3b2a | `refactor(annotations): fit Estimate value text` |
 | T5c4 | COMPLETE | T5c3 | Atomic deferred-consequence retirement |
 | T5c4a | COMPLETE | T5c3 | `refactor(layout): remove deferred panel floors and consequences` |
-| T5c5 | PENDING | T5c4 | `test(theme): close native mark and annotation ownership` |
+| T5c5 | COMPLETE | T5c4 | `test(theme): close native mark and annotation ownership` |
 
 ### T5c0 — Property And Content Disposition Table
 
@@ -2015,6 +2015,30 @@ all public exact defaults, cache identity changes, and refusal before geometry
 construction. T5e may replace packing, not repair an omitted native mark input.
 
 ### T5c5 — Mark/Annotation Closure
+
+T5c5 closure: `docs/t5c0-property-disposition.md` now records the final
+twenty-five-family count/style/annotation handoff and T5d's unchanged source
+identities. Private shape, paint and stroke roles are shared with originating
+guides, independent fill/outline byte alpha is asserted in the affected
+family contracts, all source-backed hard inputs and attached labels have
+automatic/exact-axis outcomes, and the sole root driver owns domain feedback.
+The Marginal linked KDE scales by its actual finite positive peak rather than
+a `1e-12` density substitute; unrepresentable strips refuse before capture.
+Numeric midpoint glyphs used by automatic ordinary axes and the 66ch
+preference are admitted in the same pre-font census as exact mark/label text,
+so retiring the floor cannot allocate an unrenderably narrow Canvas cell.
+Historically floor-dependent trace counts, RGBA expectations and intentional
+Raincloud/Interaction/Beeswarm/collective fingerprints were inspected and
+repinned with their source; no additional geometry owner was added.
+
+Closure verification: the strict all-target Clippy, rustdoc and distributable
+package checks pass. The broad `just verify` gate's library run passed 1,163
+units; its one remaining Beeswarm mixed-Canvas fingerprint was repinned and
+rechecked. The annotations, categorical, composition, distributions,
+estimates, Heatmap, interactions, layout, lines, Marginal/Matrix, output,
+rendering, statistics and visual-regression integration targets were then run
+individually and passed without repeating the already-passing library suite.
+T5d0's mapping/consumer census is next.
 
 Reconcile every appearance constant and local override in the T5c ledger portion.
 Check all 25 families and every annotation/layer route, private custom styles,

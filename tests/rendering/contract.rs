@@ -296,7 +296,13 @@ fn canvas_text_cells_enforce_occupancy_and_fitting() {
         .unwrap_err();
 
     assert!(occupied.to_string().contains("already occupied"));
-    assert!(fitting.to_string().contains("text panel"));
+    assert!(
+        fitting.to_string().contains("CanvasGrid")
+            && fitting
+                .to_string()
+                .contains("assigned tracks cannot preserve their hard requirements"),
+        "{fitting}"
+    );
 }
 
 #[test]

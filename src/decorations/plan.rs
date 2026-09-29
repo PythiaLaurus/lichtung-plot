@@ -1404,6 +1404,13 @@ fn plan_panel_attempt(
                 .map(|text| &text.plan)
                 .chain(
                     result
+                        .producer_text
+                        .iter()
+                        .filter(|_| kind == PlotKind::Waterfall)
+                        .map(|text| &text.plan),
+                )
+                .chain(
+                    result
                         .significance
                         .iter()
                         .flat_map(|plan| plan.brackets.iter().map(|bracket| &bracket.label.plan)),
