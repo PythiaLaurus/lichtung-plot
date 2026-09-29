@@ -8,37 +8,38 @@ use super::*;
 fn beeswarm_parent_svg_fingerprints() {
     // T5b2a: theme-owned guide typography changes colorbar text and panel reserve.
     // Historical T5a fingerprints remain attributed in docs/local-search-benchmarks.md.
+    // T5d3a replaces RGB-interpolated Beeswarm interiors with OKLab paint.
     // T5c4's mixed Beeswarm/Heatmap Canvas uses actual child grid minima, so
     // that one assigned panel's SVG coordinates differ from the 80x60 floor.
     for (theme, expected) in [
         (
             lichtung_plot::Theme::Publication,
             [
-                (11063, 0xbd34_8463_eec1_53ba),
+                (11063, 0x493c_6a5d_fa6e_8635),
                 (11629, 0xf5a8_15ac_1814_f884),
-                (11061, 0xc828_4045_d9d9_ab3f),
-                (11085, 0x50be_b512_009e_4a1e),
-                (21233, 0x613f_83b9_7b13_1575),
-                (21241, 0xcd48_fc12_9662_7449),
-                (21233, 0x613f_83b9_7b13_1575),
-                (21241, 0xcd48_fc12_9662_7449),
-                (23862, 0x3d61_a76a_7a25_b066),
-                (16488, 0x0ac5_3bb8_1b0f_febb),
+                (11061, 0x8d04_a0f3_3136_f07d),
+                (11085, 0x7472_5c73_bca7_d746),
+                (21233, 0xad2c_97f3_ae2a_5c1f),
+                (21241, 0xa4cd_4dda_d918_dfeb),
+                (21233, 0xad2c_97f3_ae2a_5c1f),
+                (21241, 0xa4cd_4dda_d918_dfeb),
+                (23862, 0xcb4e_caed_5eb3_e187),
+                (16488, 0xd40b_f7d9_ef52_9f16),
             ],
         ),
         (
             lichtung_plot::Theme::Science,
             [
-                (10894, 0xcbcb_5c06_aff5_7ba9),
+                (10894, 0xb83e_5cd5_433e_8eb0),
                 (10317, 0x1b4e_5c52_36d4_1b27),
-                (10892, 0xd0b3_c20f_ef32_5484),
-                (10945, 0x3887_8655_2083_801f),
-                (20440, 0x35d8_33e9_c136_51e4),
-                (20448, 0x1f05_0879_c892_c62c),
-                (20440, 0x35d8_33e9_c136_51e4),
-                (20448, 0x1f05_0879_c892_c62c),
-                (21902, 0x32ae_dbe6_a64e_54f7),
-                (15148, 0xd534_82ca_b74f_83d9),
+                (10892, 0xad7f_1fad_367b_e77c),
+                (10945, 0x0db9_5241_6176_76f1),
+                (20440, 0x0d74_7848_fa27_24d6),
+                (20448, 0x346c_7f95_fd20_ecb6),
+                (20440, 0x0d74_7848_fa27_24d6),
+                (20448, 0x346c_7f95_fd20_ecb6),
+                (21902, 0x70b9_f266_0348_c7f0),
+                (15148, 0xc2d8_1b5b_b230_80b0),
             ],
         ),
     ] {

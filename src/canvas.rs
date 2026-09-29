@@ -471,6 +471,44 @@ mod d1_tests {
     }
 
     #[test]
+    fn constant_shared_beeswarm_uses_one_midpoint_for_marks_and_gradient() {
+        let bee = || {
+            Plot::beeswarm(
+                crate::CategoryValues::new("row", ["one", "one"]).unwrap(),
+                crate::NumericValues::new("x", [0.0, 1.0]),
+                crate::NumericValues::new("fill", [3.0, 3.0]),
+            )
+        };
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, bee())
+            .unwrap()
+            .panel(0, 1, bee())
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared)
+            .size(1200, 640);
+        let root = canvas.preflight_plan().unwrap();
+        let Some(PreparedGuideDescriptor::Continuous(guide)) =
+            root.prepared().shared_guide.as_ref()
+        else {
+            panic!("constant shared Beeswarm guide")
+        };
+        let color = root.prepared().interiors[0]
+            .as_ref()
+            .unwrap()
+            .beeswarm
+            .as_ref()
+            .unwrap()
+            .panels[0]
+            .1
+            .color_for_source_value(3.0)
+            .unwrap();
+        assert_eq!(guide.domain, (3.0, 3.0));
+        assert_eq!(guide.palette.low, color);
+        assert_eq!(guide.palette.high, color);
+    }
+
+    #[test]
     fn scatter_shared_hue_order_is_retained_before_fonts_and_includes_hidden_marks() {
         let scatter = |hue: &str| {
             Plot::scatter(

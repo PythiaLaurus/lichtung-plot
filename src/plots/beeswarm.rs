@@ -26,8 +26,7 @@ pub(crate) struct PreparedBeeswarm {
     pub(crate) x_data: (f64, f64),
     rows: Vec<(usize, f64, f64, usize)>,
     points: Vec<(f64, f64, (u8, u8, u8))>,
-    stops: [GradientStop; 2],
-    color_range: (f64, f64),
+    scale: crate::theme::SequentialColors,
     values: [String; 2],
     pub(crate) color_label: String,
 }
@@ -177,22 +176,42 @@ pub(crate) fn prepare(
             .then_with(|| a.3.cmp(&b.3))
     })?;
     let values = colorbar_values(color_range, data)?;
+    let scale = crate::theme::SequentialColors::resolve(
+        color_range,
+        &[
+            GradientStop::new(0.0, (49, 130, 189)),
+            GradientStop::new(1.0, (222, 45, 38)),
+        ],
+        data.source_resources()?,
+    )?;
     Ok(PreparedBeeswarm {
         levels,
         x_data,
         rows,
         points: Vec::new(),
         values,
-        color_range,
-        stops: [
-            GradientStop::new(0.0, continuous_color(color_range.0, color_range)),
-            GradientStop::new(1.0, continuous_color(color_range.1, color_range)),
-        ],
+        scale,
         color_label: chart.prepare_color_label(data, None)?,
     })
 }
 
 impl PreparedBeeswarm {
+    fn guide_stops(&self, data: crate::data::PlotData<'_>) -> Result<[GradientStop; 2], Error> {
+        let stops = self.scale.stops();
+        let domain = self.scale.domain();
+        if domain.0.total_cmp(&domain.1).is_eq()
+            || (domain.0.abs().to_bits() == 0 && domain.1.abs().to_bits() == 0)
+        {
+            let midpoint = self.scale.color(domain.0, data.source_resources()?)?;
+            Ok([
+                GradientStop::new(0.0, midpoint),
+                GradientStop::new(1.0, midpoint),
+            ])
+        } else {
+            Ok([stops[0], stops[1]])
+        }
+    }
+
     #[cfg(test)]
     pub(crate) fn color_for_source_value(&self, value: f64) -> Option<(u8, u8, u8)> {
         self.rows
@@ -208,14 +227,11 @@ impl PreparedBeeswarm {
         data: crate::data::PlotData<'_>,
     ) -> Result<(), Error> {
         self.values = colorbar_values(descriptor.domain, data)?;
-        self.color_range = descriptor.domain;
-        self.stops = [
-            GradientStop::new(0.0, descriptor.palette.low),
-            GradientStop::new(1.0, descriptor.palette.high),
-        ];
-        data.claim_source_visits(self.rows.len())?;
+        self.scale = self
+            .scale
+            .with_domain(descriptor.domain, data.source_resources()?)?;
         for ((_, _, color), &(_, _, value, _)) in self.points.iter_mut().zip(&self.rows) {
-            *color = continuous_color(value, self.color_range);
+            *color = self.scale.color(value, data.source_resources()?)?;
         }
         Ok(())
     }
@@ -223,13 +239,14 @@ impl PreparedBeeswarm {
     pub(crate) fn guide_semantics(
         &self,
     ) -> crate::decorations::legend::descriptor::ContinuousSemantics {
+        let stops = self.scale.stops();
         crate::decorations::legend::descriptor::ContinuousSemantics {
-            domain: self.color_range,
+            domain: self.scale.domain(),
             center: None,
             palette: crate::decorations::legend::descriptor::Palette {
-                low: self.stops[0].color,
+                low: stops[0].color,
                 center: None,
-                high: self.stops[1].color,
+                high: stops[1].color,
             },
             missing: None,
         }
@@ -274,7 +291,7 @@ impl PreparedBeeswarm {
             self.points.push((
                 x,
                 category as f64 + 0.5 + jitter,
-                continuous_color(color, self.color_range),
+                self.scale.color(color, data.source_resources()?)?,
             ));
         }
         Ok(())
@@ -416,7 +433,9 @@ pub(crate) fn measure(
         domain_expansions: [None; 2],
         colorbar: colorbar
             .as_ref()
-            .map(|(title, values, _)| select_colorbar(&layout, title, values, prepared.stops, data))
+            .map(|(title, values, _)| {
+                select_colorbar(&layout, title, values, prepared.guide_stops(data)?, data)
+            })
             .transpose()?,
     };
     let geometry = payload.geometry(theme)?;
@@ -581,32 +600,6 @@ fn select_colorbar(
             ),
         ],
     })
-}
-
-fn continuous_color(value: f64, range: (f64, f64)) -> (u8, u8, u8) {
-    let span = range.1 - range.0;
-    let t = if span.to_bits() == 0 {
-        0.5
-    } else if value <= range.0 {
-        0.0
-    } else if value >= range.1 {
-        1.0
-    } else if span.is_finite() {
-        (value - range.0) / span
-    } else {
-        let scale = range.0.abs().max(range.1.abs());
-        let minimum = range.0 / scale;
-        let maximum = range.1 / scale;
-        (value / scale - minimum) / (maximum - minimum)
-    };
-    let t = t.clamp(0.0, 1.0);
-    let low = (49.0, 130.0, 189.0);
-    let high = (222.0, 45.0, 38.0);
-    (
-        (low.0 + (high.0 - low.0) * t).round() as u8,
-        (low.1 + (high.1 - low.1) * t).round() as u8,
-        (low.2 + (high.2 - low.2) * t).round() as u8,
-    )
 }
 
 #[cfg(test)]

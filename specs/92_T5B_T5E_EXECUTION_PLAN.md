@@ -2068,7 +2068,9 @@ ownership, statistical estimates, public extension points, or layout strategy.
 | T5d2c3a | COMPLETE | T5d2c2 | `refactor(scales): resolve Marginal group colors` |
 | T5d2c3b | COMPLETE | T5d2c3a | `refactor(scales): resolve Matrix cell colors` |
 | T5d2d | COMPLETE | T5d2c | `refactor(scales): close palettes, accents and guide equality` |
-| T5d3 | PENDING | T5d2 | `feat(scales): resolve sequential and diverging mappings` |
+| T5d3 | IN PROGRESS | T5d2 | Umbrella for active sequential and diverging owners |
+| T5d3a | COMPLETE | T5d2 | `feat(scales): resolve Beeswarm sequential colors and guide` |
+| T5d3b | PENDING | T5d3a | `feat(scales): resolve Heatmap sequential and diverging colors` |
 | T5d4 | PENDING | T5d3 | `refactor(scales): coordinate final domains guides and contrast` |
 | T5d5 | PENDING | T5d4 | `test(scales): close mapping and guide consistency` |
 
@@ -2254,6 +2256,35 @@ contributors, independent group/hue identities, and all family-specific exceptio
 justified by a named semantic owner rather than implementation history.
 
 ### T5d3 — Continuous Mapping
+
+T5d3 has two dependency-ordered commits. T5d3a installs a validated private
+ordered-stop OKLab sequential scale directly in prepared Beeswarm marks and
+its local/shared guide inputs; its existing RGB interpolation and separate
+endpoint selection are deleted in that commit. T5d3b extends that same
+resolved scale to Heatmap's sequential and diverging branches, including the
+exact center, symmetric/constant/explicit domains, value-label contrast,
+missing role and local/shared guide stops. Remove Heatmap's RGB helper and
+duplicate domain/stop derivation in place. Both commits keep the current
+public scale controls, native guide descriptor, and T5e packing boundary;
+T5d3 closes only after the final shared-domain mark/guide agreement passes.
+
+T5d3a closure: `SequentialColors` retains admitted ordered opaque stops and a
+finite numeric domain; exact endpoints, saturation, constant midpoint,
+opposite-extreme normalization, and the checked multi-stop position all use
+the pinned T5d1 OKLab conversion. Beeswarm prepares one scale before fonts,
+uses it for every prepared mark, local gradient and shared-domain recoloring,
+and no longer has a separate RGB `continuous_color` route. A constant local
+or all-constant Shared Canvas guide resolves both endpoint swatches to the
+same exact mark midpoint; contributor compatibility continues to compare
+its original semantic gradient before final-domain guide selection. Invalid
+stops/domains and exhausted resource work/storage refuse; exact source-work
+limits and zero work in selected capture still pass. Ten Beeswarm extraction/
+fit units, scale boundary/resource tests, shared-domain mark-color and
+constant-guide tests, all ten Publication/Science parent fingerprints, the
+unchanged clip snapshot and strict all-target Clippy pass. Fingerprint
+lengths remain unchanged; interiors and constant gradient paint account for
+the inspected byte changes. T5d3b now migrates Heatmap and closes the shared
+continuous mapping handoff.
 
 Implement ordered opaque stops, deterministic sequential/diverging interpolation,
 exact semantic centers, symmetric automatic diverging domains where representable,

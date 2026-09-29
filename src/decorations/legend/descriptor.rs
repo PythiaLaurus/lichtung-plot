@@ -202,6 +202,19 @@ impl ContinuousContributor {
             }
         }
         if let Some(existing) = &mut combined {
+            if existing.center.is_none()
+                && existing.domain.0.total_cmp(&existing.domain.1).is_eq()
+                && existing.palette.low != existing.palette.high
+            {
+                let midpoint = crate::theme::interpolate_data_color(
+                    existing.palette.low,
+                    existing.palette.high,
+                    0.5,
+                    data.source_resources()?,
+                )?;
+                existing.palette.low = midpoint;
+                existing.palette.high = midpoint;
+            }
             existing.labels = generated_labels(existing, data)?;
         }
         Ok(combined)

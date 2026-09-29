@@ -39,7 +39,7 @@ fn root_semantics_admit_sort_bins_offsets_and_exact_colors_before_fonts() {
         assert!((point.1 - expected).abs() < 1e-12);
     }
     assert_eq!(marks.points[0].2, (49, 130, 189));
-    assert_eq!(marks.points[1].2, (136, 88, 114));
+    assert_eq!(marks.points[1].2, (157, 107, 124));
     assert_eq!(marks.points[10].2, (49, 130, 189));
     assert_eq!(marks.points[11].2, (222, 45, 38));
     assert_eq!(marks.values, ["1.000", "0.000"]);
@@ -66,6 +66,27 @@ fn root_semantics_admit_sort_bins_offsets_and_exact_colors_before_fonts() {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
         0
     );
+}
+
+#[test]
+fn constant_beeswarm_guide_and_marks_use_the_same_oklab_midpoint() {
+    let source = Plot::beeswarm(
+        CategoryValues::new("category", ["one", "one"]).unwrap(),
+        NumericValues::new("x", [0.0, 1.0]),
+        NumericValues::new("fill", [3.0, 3.0]),
+    )
+    .erase();
+    let resources = OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let marks = &inputs.beeswarm.as_ref().unwrap().panels[0].1;
+    let color = marks.points[0].2;
+    assert_eq!(color, (157, 107, 124));
+    assert_eq!(marks.points[1].2, color);
+    let stops = marks
+        .guide_stops(source.data().with_axis_resources(&resources))
+        .unwrap();
+    assert_eq!(stops[0].color, color);
+    assert_eq!(stops[1].color, color);
 }
 
 #[test]

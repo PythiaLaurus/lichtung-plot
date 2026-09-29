@@ -7,6 +7,7 @@
 )]
 
 use crate::font::canonical::OperationGenerationResources;
+use crate::render::backend::GradientStop;
 use crate::spec::CategoricalColors;
 use crate::Error;
 
@@ -140,6 +141,116 @@ impl AccentColors {
     }
 }
 
+/// One prepared numeric domain and ordered opaque stops, shared by marks and
+/// their guide. Normalization happens before first-party OKLab interpolation.
+#[derive(Debug, Clone)]
+pub(crate) struct SequentialColors {
+    domain: (f64, f64),
+    stops: Vec<GradientStop>,
+}
+
+impl SequentialColors {
+    pub(crate) fn resolve(
+        domain: (f64, f64),
+        stops: &[GradientStop],
+        resources: &OperationGenerationResources,
+    ) -> Result<Self, Error> {
+        if !domain.0.is_finite() || !domain.1.is_finite() || domain.0 > domain.1 {
+            return Err(Error::Data(
+                "continuous color domain must be finite and ordered".into(),
+            ));
+        }
+        if stops.len() < 2
+            || stops
+                .first()
+                .is_none_or(|stop| stop.offset.to_bits() != 0.0_f64.to_bits())
+            || stops
+                .last()
+                .is_none_or(|stop| stop.offset.to_bits() != 1.0_f64.to_bits())
+        {
+            return Err(Error::Data(
+                "continuous color stops must span exactly 0..1".into(),
+            ));
+        }
+        let mut previous = -1.0;
+        for stop in stops {
+            resources.claim_visits(1).map_err(work_error)?;
+            if !stop.offset.is_finite() || stop.offset <= previous || stop.offset > 1.0 {
+                return Err(Error::Data(
+                    "continuous color stops must increase strictly".into(),
+                ));
+            }
+            previous = stop.offset;
+        }
+        let mut retained = Vec::new();
+        reserve(resources, &mut retained, stops.len())?;
+        retained.extend_from_slice(stops);
+        Ok(Self {
+            domain,
+            stops: retained,
+        })
+    }
+
+    pub(crate) fn with_domain(
+        &self,
+        domain: (f64, f64),
+        resources: &OperationGenerationResources,
+    ) -> Result<Self, Error> {
+        Self::resolve(domain, &self.stops, resources)
+    }
+
+    pub(crate) fn stops(&self) -> &[GradientStop] {
+        &self.stops
+    }
+
+    pub(crate) fn domain(&self) -> (f64, f64) {
+        self.domain
+    }
+
+    pub(crate) fn color(
+        &self,
+        value: f64,
+        resources: &OperationGenerationResources,
+    ) -> Result<Rgb, Error> {
+        if !value.is_finite() {
+            return Err(Error::Data("continuous color value must be finite".into()));
+        }
+        let (low, high) = self.domain;
+        let fraction = if low.total_cmp(&high).is_eq()
+            || (low.abs().to_bits() == 0 && high.abs().to_bits() == 0)
+        {
+            0.5
+        } else if value <= low {
+            0.0
+        } else if value >= high {
+            1.0
+        } else {
+            let span = high - low;
+            if span.is_finite() {
+                (value - low) / span
+            } else {
+                let scale = low.abs().max(high.abs());
+                (value / scale - low / scale) / (high / scale - low / scale)
+            }
+        };
+        for pair in self.stops.windows(2) {
+            resources.claim_visits(1).map_err(work_error)?;
+            if fraction <= pair[1].offset {
+                let local = (fraction - pair[0].offset) / (pair[1].offset - pair[0].offset);
+                return super::color::interpolate(
+                    pair[0].color,
+                    pair[1].color,
+                    local.clamp(0.0, 1.0),
+                    resources,
+                );
+            }
+        }
+        Err(Error::Render(
+            "resolved continuous stops omit the color value".into(),
+        ))
+    }
+}
+
 fn reserve<T>(
     resources: &OperationGenerationResources,
     values: &mut Vec<T>,
@@ -169,6 +280,54 @@ fn storage_error(error: &crate::font::canonical::FontError) -> Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sequential_scale_preserves_endpoints_and_saturates_exact_domains() {
+        let stops = [
+            GradientStop::new(0.0, (49, 130, 189)),
+            GradientStop::new(1.0, (222, 45, 38)),
+        ];
+        let resources = OperationGenerationResources::new();
+        let scale = SequentialColors::resolve((0.0, 1.0), &stops, &resources).unwrap();
+        assert_eq!(scale.stops(), stops);
+        assert_eq!(scale.color(-1.0, &resources).unwrap(), stops[0].color);
+        assert_eq!(scale.color(2.0, &resources).unwrap(), stops[1].color);
+        assert_eq!(scale.color(0.5, &resources).unwrap(), (157, 107, 124));
+        let constant = scale.with_domain((3.0, 3.0), &resources).unwrap();
+        assert_eq!(constant.color(3.0, &resources).unwrap(), (157, 107, 124));
+        let extreme = scale
+            .with_domain((-f64::MAX, f64::MAX), &resources)
+            .unwrap();
+        assert_eq!(extreme.color(0.0, &resources).unwrap(), (157, 107, 124));
+        let three = SequentialColors::resolve(
+            (0.0, 4.0),
+            &[stops[0], GradientStop::new(0.25, (10, 20, 30)), stops[1]],
+            &resources,
+        )
+        .unwrap();
+        assert_eq!(three.color(1.0, &resources).unwrap(), (10, 20, 30));
+    }
+
+    #[test]
+    fn sequential_scale_rejects_invalid_stops_values_and_storage_before_use() {
+        let resources = OperationGenerationResources::new();
+        let stops = [
+            GradientStop::new(0.0, (0, 0, 0)),
+            GradientStop::new(1.0, (255, 255, 255)),
+        ];
+        for invalid in [
+            [stops[1], stops[0]],
+            [stops[0], stops[0]],
+            [stops[0], GradientStop::new(f64::NAN, (0, 0, 0))],
+        ] {
+            assert!(SequentialColors::resolve((0.0, 1.0), &invalid, &resources).is_err());
+        }
+        assert!(SequentialColors::resolve((2.0, 1.0), &stops, &resources).is_err());
+        let scale = SequentialColors::resolve((0.0, 1.0), &stops, &resources).unwrap();
+        assert!(scale.color(f64::NAN, &resources).is_err());
+        let limited = OperationGenerationResources::with_test_limits(0, 0);
+        assert!(SequentialColors::resolve((0.0, 1.0), &stops, &limited).is_err());
+    }
 
     #[test]
     fn exact_raw_keys_allow_unused_and_repeated_colors_but_require_used_coverage() {
