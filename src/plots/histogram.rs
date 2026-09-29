@@ -348,7 +348,10 @@ pub(crate) fn project(
             )?;
             Ok(points)
         }))?,
-        fill: theme.marks.histogram_bin.backend_style(theme.colors[0]),
+        fill: theme.marks.histogram_bin.backend_style(
+            crate::theme::AccentColors::resolve(&theme.colors, 1, data.source_resources()?)?
+                .color(0)?,
+        ),
         curve_style: theme.marks.histogram_curve.backend_style(),
         rug_style: theme.marks.histogram_rug.backend_style(),
         domain_expansions: [None; 2],

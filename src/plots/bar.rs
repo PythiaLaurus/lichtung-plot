@@ -31,7 +31,7 @@ pub(crate) fn measure_marks(
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);
     let (colors, accents) = prepared.resolved_colors(chart, theme, data)?;
-    let legend_entries = bar_data::legend_entries(prepared, chart, theme, data, &colors)?;
+    let legend_entries = bar_data::legend_entries(prepared, chart, theme, data, &colors, &accents)?;
     let mut rendered_maxima =
         data.collect_source((0..prepared.categories.len()).map(|_| Ok(0.0_f64)))?;
     let anchor_count = prepared.series.len().max(1);

@@ -915,7 +915,8 @@ fn project(
         interval_style: theme.marks.estimate_interval.backend_style(),
         point_style: chart.point_style(
             theme,
-            theme.colors[0],
+            crate::theme::AccentColors::resolve(&theme.colors, 1, data.source_resources()?)?
+                .color(0)?,
             theme.marks.point_sizes.interval_estimate,
         ),
         rows: Vec::new(),

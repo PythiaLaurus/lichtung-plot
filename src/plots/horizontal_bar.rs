@@ -30,7 +30,7 @@ pub(crate) fn measure_marks(
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);
     let (colors, accents) = prepared.resolved_colors(chart, theme, data)?;
-    let legend_entries = bar_data::legend_entries(prepared, chart, theme, data, &colors)?;
+    let legend_entries = bar_data::legend_entries(prepared, chart, theme, data, &colors, &accents)?;
     let y_count = prepared.categories.len() as f64;
     let panel_box = context.panel;
     let mark_style = chart.significance_mark_style_spec();

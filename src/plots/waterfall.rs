@@ -67,11 +67,8 @@ pub(crate) fn intrinsic_body_minimum(
     resources
         .claim_visits(prepared.spans.len() as u128)
         .map_err(|error| Error::Render(format!("Waterfall span intrinsic admission: {error:?}")))?;
-    let positive = theme.marks.waterfall_bar.backend_style(theme.colors[0]);
-    let negative = theme
-        .marks
-        .waterfall_bar
-        .backend_style(theme.colors[1 % theme.colors.len()]);
+    let positive = theme.marks.waterfall_bar.backend_style((0, 0, 0));
+    let negative = positive.clone();
     let positive_ink = crate::render::geometry::rectangular_fill_ink_bounds(theme, &positive)?;
     let negative_ink = crate::render::geometry::rectangular_fill_ink_bounds(theme, &negative)?;
     let mut pitch = 1.0_f64 / 1024.0;
@@ -298,6 +295,7 @@ pub(crate) fn measure(
     })?;
     let mut bars = Vec::new();
     let mut connectors = Vec::new();
+    let accents = crate::theme::AccentColors::resolve(&theme.colors, 2, &resources)?;
     data.reserve_source(&mut bars, spans.len())?;
     data.reserve_source(&mut connectors, spans.len().saturating_sub(1))?;
     for (index, (start, end, delta)) in spans.iter().enumerate() {
@@ -319,11 +317,7 @@ pub(crate) fn measure(
             true,
             "waterfall polygon height",
         )?;
-        let color = if *delta >= 0.0 {
-            theme.colors[0]
-        } else {
-            theme.colors[1 % theme.colors.len()]
-        };
+        let color = accents.color(usize::from(*delta < 0.0))?;
         bars.push((
             [
                 Point2D::new(left, bottom),
@@ -687,6 +681,43 @@ mod tests {
     use crate::layout::fit::PlanError;
     use crate::layout::kernel::nearest_spatial_quanta;
     use crate::{CategoryValues, NumericValues};
+
+    #[test]
+    fn signed_waterfall_accents_extend_a_single_seed_without_color_cycling() {
+        let source = Plot::waterfall(
+            CategoryValues::new("step", ["rise", "fall"]).unwrap(),
+            NumericValues::new("delta", [2.0, -1.0]),
+            0.0,
+        )
+        .erase();
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+                .unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let mut theme = crate::Theme::Publication.resolve();
+        theme.colors.truncate(1);
+        let selected = chart
+            .measure_selected_interior(PlotRenderContext::new(
+                chart.data(),
+                PanelBox::new(80.0, 700.0, 80.0, 700.0),
+                &theme,
+            ))
+            .unwrap();
+        let crate::layout::interior::MarkPayload::Waterfall(payload) =
+            &selected.marks.as_ref().unwrap().payload
+        else {
+            panic!("selected Waterfall")
+        };
+        assert_eq!(payload.bars.len(), 2);
+        let first = payload.bars[0].1.color;
+        let second = payload.bars[1].1.color;
+        assert_eq!(
+            first,
+            crate::render::backend::Rgba::from(theme.colors[0])
+                .with_alpha(theme.marks.waterfall_bar.fill_alpha)
+        );
+        assert_ne!(first, second);
+    }
 
     #[test]
     fn total_ink_keeps_exact_numeric_targets_and_only_expands_automatic_x() {

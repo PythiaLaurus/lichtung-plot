@@ -52,8 +52,8 @@ impl PreparedInteriorInputs {
             | PlotKind::StackedBar
             | PlotKind::StackedHorizontalBar => {
                 let marks = panel(self.bars.as_ref().map(|p| p.panels.as_slice()), scope, kind)?;
-                let (colors, _) = marks.resolved_colors(chart, theme, data)?;
-                crate::plots::bar_data::legend_entries(marks, chart, theme, data, &colors)
+                let (colors, accents) = marks.resolved_colors(chart, theme, data)?;
+                crate::plots::bar_data::legend_entries(marks, chart, theme, data, &colors, &accents)
             }
             PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
                 let marks = panel(
@@ -93,7 +93,15 @@ impl PreparedInteriorInputs {
                     scope,
                     kind,
                 )?;
-                crate::plots::regression::PreparedRegression::guide_entries(chart, theme, data)
+                let color = crate::theme::AccentColors::resolve(
+                    &theme.colors,
+                    1,
+                    data.source_resources()?,
+                )?
+                .color(0)?;
+                crate::plots::regression::PreparedRegression::guide_entries(
+                    chart, theme, data, color,
+                )
             }
             PlotKind::Dumbbell => {
                 panel(

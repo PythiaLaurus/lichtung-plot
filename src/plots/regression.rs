@@ -193,13 +193,13 @@ impl PreparedRegression {
         chart: &Plot,
         theme: &crate::theme::ResolvedTheme,
         data: PlotData<'_>,
+        color: (u8, u8, u8),
     ) -> Result<Vec<LegendEntry>, Error> {
         if !matches!(chart.legend_policy_spec(), crate::LegendPolicy::Visible(_)) {
             return Ok(Vec::new());
         }
         let mut entries = Vec::new();
         data.reserve_source(&mut entries, 2)?;
-        let color = theme.colors[0];
         let band = chart.regression_band_spec();
         let fit_identity = chart.point_legend_identity(band.legend_label(), data)?;
         let line = theme.marks.regression_fit.backend_style();
@@ -422,7 +422,9 @@ pub(crate) fn project(
     data: PlotData<'_>,
 ) -> Result<PlotRenderResult, Error> {
     let projection = &layout.projection;
-    let point_style = chart.point_style(theme, theme.colors[0], theme.marks.point_sizes.regression);
+    let color = crate::theme::AccentColors::resolve(&theme.colors, 1, data.source_resources()?)?
+        .color(0)?;
+    let point_style = chart.point_style(theme, color, theme.marks.point_sizes.regression);
     let scatter_points =
         data.collect_source(prepared.points.iter().map(|(x_value, y_value)| {
             data.claim_source_visits(1)?;
@@ -474,9 +476,9 @@ pub(crate) fn project(
             Ok(upper)
         })
         .transpose()?;
-    let band_fill = theme.marks.regression_band.backend_style(theme.colors[0]);
+    let band_fill = theme.marks.regression_band.backend_style(color);
 
-    let legend_entries = PreparedRegression::guide_entries(chart, theme, data)?;
+    let legend_entries = PreparedRegression::guide_entries(chart, theme, data, color)?;
     let payload = RegressionPayload {
         clip: projection.panel_box(),
         points: scatter_points,

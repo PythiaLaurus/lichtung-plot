@@ -216,7 +216,7 @@ fn repeated_measurement_uses_retained_raw_keys_and_charges_candidate_work() {
                         &resources
                     )
                     .unwrap(),
-                theme.colors[expected % theme.colors.len()]
+                theme.colors[expected]
             );
         }
         inputs.prepare_intrinsics(&source, &theme).unwrap();

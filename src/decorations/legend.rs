@@ -237,6 +237,10 @@ pub(crate) enum LegendIdentity {
         title: String,
         value: String,
     },
+    /// Renderer-owned sign domain, distinct from caller category/series keys.
+    BarSign {
+        decreasing: bool,
+    },
 }
 
 impl LegendIdentity {
@@ -268,6 +272,10 @@ impl LegendIdentity {
         }
     }
 
+    pub(crate) const fn bar_sign(decreasing: bool) -> Self {
+        Self::BarSign { decreasing }
+    }
+
     fn same_title(
         &self,
         other: &Self,
@@ -278,6 +286,7 @@ impl LegendIdentity {
             | (Self::Literal { title: left, .. }, Self::Literal { title: right, .. }) => {
                 legend_text_eq(left, right, resources)
             }
+            (Self::BarSign { .. }, Self::BarSign { .. }) => Ok(true),
             (
                 Self::Pair {
                     group_field: left_group,
@@ -307,6 +316,9 @@ impl LegendIdentity {
             (Self::Single { value: left, .. }, Self::Single { value: right, .. })
             | (Self::Literal { value: left, .. }, Self::Literal { value: right, .. }) => {
                 legend_text_eq(left, right, resources)
+            }
+            (Self::BarSign { decreasing: left }, Self::BarSign { decreasing: right }) => {
+                Ok(left == right)
             }
             (
                 Self::Pair {
@@ -366,6 +378,14 @@ impl LegendIdentity {
                 data.copy_source_string(title)?,
                 data.copy_source_string(value)?,
             )),
+            Self::BarSign { decreasing } => Ok((
+                data.copy_source_string("Change")?,
+                data.copy_source_string(if *decreasing {
+                    "Decreasing"
+                } else {
+                    "Nondecreasing"
+                })?,
+            )),
         }
     }
 
@@ -420,6 +440,7 @@ impl LegendEntry {
         let identity = match &self.identity {
             LegendIdentity::Single { field, value } => [Some(field), Some(value), None, None],
             LegendIdentity::Literal { title, value } => [Some(title), Some(value), None, None],
+            LegendIdentity::BarSign { .. } => [None, None, None, None],
             LegendIdentity::Pair {
                 group_field,
                 group_value,
@@ -1944,6 +1965,50 @@ mod tests {
         assert!(matches!(
             merge_exact_entries([prepared("first"), conflicting], "shared guide", &resources),
             Err(Error::Render(message)) if message.contains("glyphs must match")
+        ));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+
+    #[test]
+    fn signed_bar_identity_merges_across_panels_but_not_with_matching_literal_text() {
+        let plot = crate::Plot::scatter(
+            crate::NumericValues::new("x", [1.0, 2.0]),
+            crate::NumericValues::new("y", [2.0, 3.0]),
+        )
+        .erase();
+        let resources = OperationGenerationResources::new();
+        let make = |identity| {
+            LegendEntry::fill(
+                identity,
+                crate::render::backend::FillStyle::new(
+                    crate::render::backend::Rgba::from((10, 20, 30)),
+                    crate::render::backend::Rgba::from((0, 0, 0)),
+                    1.0,
+                ),
+            )
+        };
+        let mut signs = vec![
+            make(LegendIdentity::bar_sign(true)),
+            make(LegendIdentity::bar_sign(true)),
+            make(LegendIdentity::bar_sign(false)),
+        ];
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        resolve_entries(&plot, &mut signs, &resources).unwrap();
+        assert_eq!(signs.len(), 2);
+        assert_eq!(signs[0].label, "Decreasing");
+        assert_eq!(signs[1].label, "Nondecreasing");
+        let mut literal = vec![make(LegendIdentity::literal("Change", "Decreasing"))];
+        resolve_entries(&plot, &mut literal, &resources).unwrap();
+        assert!(matches!(
+            merge_exact_entries(
+                [signs[0].clone(), literal.remove(0)],
+                "shared guide",
+                &resources,
+            ),
+            Err(Error::Render(message)) if message.contains("compatible semantic titles")
         ));
         assert_eq!(
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),

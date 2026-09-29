@@ -308,13 +308,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.global_line_condition_levels.as_deref()
     }
 
-    pub(crate) fn hue_color_index(&self, label: &str, default: usize) -> usize {
-        self.global_hue_levels
-            .as_ref()
-            .and_then(|levels| levels.iter().position(|level| level == label))
-            .unwrap_or(default)
-    }
-
     pub(crate) fn with_render_scope(mut self, scope: impl Into<String>) -> Self {
         self.render_scope = Some(scope.into());
         self

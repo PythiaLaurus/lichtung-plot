@@ -31,6 +31,64 @@ fn positioned_bar_colors_require_every_used_raw_series_before_fonts() {
 }
 
 #[test]
+fn signed_bar_entries_use_only_sign_identities_and_match_body_colors() {
+    let source = Plot::horizontal_bar(
+        CategoryValues::new("category", ["zero", "fall", "rise"]).unwrap(),
+        BarInput::estimates(NumericValues::new("value", [0.0, -2.0, 3.0])),
+    )
+    .series(CategoryValues::new("series", ["one", "two", "three"]).unwrap())
+    .categorical_colors(crate::CategoricalColors::new([("unused".into(), (1, 2, 3))]).unwrap())
+    .color_by_sign()
+    .erase();
+    let resources = OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let prepared = &inputs.bars.as_ref().unwrap().panels[0].1;
+    let mut theme = crate::Theme::Publication.resolve();
+    theme.colors.truncate(1);
+    let data = source.data().with_axis_resources(&resources);
+    let (colors, accents) = prepared.resolved_colors(&source, &theme, data).unwrap();
+    assert!(colors.colors().is_empty());
+    let positive = accents.color(0).unwrap();
+    let negative = accents.color(1).unwrap();
+    assert_eq!(positive, theme.colors[0]);
+    assert_ne!(positive, negative);
+    for bar in &prepared.bars {
+        assert_eq!(
+            prepared
+                .bar_color(&source, bar, &colors, &accents, &resources)
+                .unwrap(),
+            if bar.end < bar.start {
+                negative
+            } else {
+                positive
+            }
+        );
+    }
+    let mut entries = legend_entries(prepared, &source, &theme, data, &colors, &accents).unwrap();
+    assert_eq!(entries.len(), 2);
+    for (entry, decreasing) in entries.iter().zip([false, true]) {
+        assert_eq!(entry.identity(), &LegendIdentity::bar_sign(decreasing));
+        assert!(entry.coordinated_hue_value_for("series").is_none());
+        let expected = LegendEntry::fill(
+            LegendIdentity::bar_sign(decreasing),
+            theme
+                .marks
+                .bar_body
+                .backend_style(accents.color(usize::from(decreasing)).unwrap()),
+        )
+        .without_hue_level();
+        assert!(entry.same_child_input(&expected));
+    }
+    crate::decorations::legend::resolve_entries(&source, &mut entries, &resources).unwrap();
+    assert_eq!(entries[0].display_label(), "Nondecreasing");
+    assert_eq!(entries[1].display_label(), "Decreasing");
+    assert_eq!(
+        crate::decorations::legend::resolved_title(&entries, &resources).unwrap(),
+        "Change"
+    );
+}
+
+#[test]
 fn attached_bar_glyphs_cannot_escape_categorical_frame_under_numeric_feedback() {
     let categories = CategoryValues::new("category", ["a", "b", "c", "d"]).unwrap();
     let input = BarInput::estimates(NumericValues::new("value", [4.0, 5.0, 6.0, 7.0]));
@@ -250,8 +308,8 @@ fn bar_legend_identity_admits_long_dimensions_once_per_candidate() {
     let theme = crate::Theme::Publication.resolve();
     let candidate = |resources: &OperationGenerationResources| {
         let data = source.data().with_axis_resources(resources);
-        let (colors, _) = prepared.resolved_colors(&source, &theme, data)?;
-        legend_entries(&prepared, &source, &theme, data, &colors)
+        let (colors, accents) = prepared.resolved_colors(&source, &theme, data)?;
+        legend_entries(&prepared, &source, &theme, data, &colors, &accents)
     };
     let probe = OperationGenerationResources::new();
     candidate(&probe).unwrap();
@@ -568,7 +626,7 @@ fn bar_poisoned_capture_repeats_no_preparation_projection_axis_or_shaping() {
                 let inputs =
                     crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
                 let requirements = crate::layout::foundational_plot_requirements(
-                    None,
+                    Some(&inputs),
                     &source,
                     source.kind(),
                     &theme,

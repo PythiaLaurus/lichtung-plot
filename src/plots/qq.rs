@@ -225,7 +225,12 @@ pub(crate) fn project(
         line: None,
         points: Vec::new(),
         line_style: theme.marks.qq_reference.backend_style(),
-        point_style: chart.point_style(theme, theme.colors[0], theme.marks.point_sizes.qq),
+        point_style: chart.point_style(
+            theme,
+            crate::theme::AccentColors::resolve(&theme.colors, 1, data.source_resources()?)?
+                .color(0)?,
+            theme.marks.point_sizes.qq,
+        ),
         domain_expansions: [None; 2],
     };
     data.claim_source_visits(1)?;

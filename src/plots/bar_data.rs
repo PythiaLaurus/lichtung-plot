@@ -11,7 +11,7 @@ use crate::data::{
 };
 use crate::Error;
 
-use crate::decorations::legend::LegendEntry;
+use crate::decorations::legend::{LegendEntry, LegendIdentity};
 use crate::render::backend::{FillStyle, PointStyle};
 use crate::spec::{
     BarInput, BarSource, BarSpacing, ConfidenceIntervalAlgorithm, ErrorBarKind, PercentileInterval,
@@ -309,9 +309,13 @@ impl PreparedBars {
             chart.global_hue_levels().unwrap_or(&self.hues)
         };
         let colors = CategoryColors::resolve(
-            keys,
+            if chart.colors_by_sign() { &[] } else { keys },
             PaletteSource::Extendable(&theme.colors),
-            chart.categorical_colors_spec(),
+            if chart.colors_by_sign() {
+                None
+            } else {
+                chart.categorical_colors_spec()
+            },
             resources,
         )?;
         let accents = AccentColors::resolve(
@@ -797,7 +801,10 @@ pub(crate) fn prepare_scoped<'a>(
         prepared.value_range.0 = prepared.value_range.0.min(point.value);
         prepared.value_range.1 = prepared.value_range.1.max(point.value);
     }
-    if let Some(exact) = chart.categorical_colors_spec() {
+    if let Some(exact) = chart
+        .categorical_colors_spec()
+        .filter(|_| !chart.colors_by_sign())
+    {
         for key in prepared.color_keys() {
             if exact.color(key, data.source_resources()?)?.is_none() {
                 return Err(Error::Data(format!(
@@ -1395,7 +1402,32 @@ pub(crate) fn legend_entries(
     theme: &ResolvedTheme,
     data: PlotData<'_>,
     colors: &CategoryColors,
+    accents: &AccentColors,
 ) -> Result<Vec<LegendEntry>, Error> {
+    if chart.colors_by_sign() {
+        let mut present = [false; 2];
+        for bar in &prepared.bars {
+            data.claim_source_visits(1)?;
+            present[usize::from(bar.end < bar.start)] = true;
+        }
+        let mut entries = Vec::new();
+        data.reserve_source(&mut entries, 2)?;
+        for decreasing in [false, true] {
+            if present[usize::from(decreasing)] {
+                entries.push(
+                    LegendEntry::fill(
+                        LegendIdentity::bar_sign(decreasing),
+                        theme
+                            .marks
+                            .bar_body
+                            .backend_style(accents.color(usize::from(decreasing))?),
+                    )
+                    .without_hue_level(),
+                );
+            }
+        }
+        return Ok(entries);
+    }
     let resources = data.source_resources()?;
     data.collect_source(prepared.hues.iter().map(|label| {
         Ok(LegendEntry::fill(

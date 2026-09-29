@@ -21,7 +21,6 @@ const SUPPORT_BANDWIDTHS: f64 = 3.0;
 #[derive(Debug)]
 struct DensityCurve {
     identity: crate::data::CollectivePair,
-    hue_index: Option<usize>,
     grid: Vec<f64>,
     densities: Vec<f64>,
 }
@@ -139,7 +138,7 @@ impl PreparedDensity {
         &self,
         chart: &Plot,
         data: PlotData<'_>,
-    ) -> Result<Vec<(usize, usize, usize)>, Error> {
+    ) -> Result<Vec<(usize, usize)>, Error> {
         let mut order =
             data.collect_source(self.curves.iter().enumerate().map(|(index, curve)| {
                 let pairs = chart.global_collective_pairs().unwrap_or(&[]);
@@ -148,11 +147,7 @@ impl PreparedDensity {
                     .iter()
                     .position(|pair| pair == &curve.identity)
                     .unwrap_or(index);
-                data.claim_source_visits(chart.global_hue_levels().map_or(0, <[String]>::len))?;
-                let color_index = curve.identity.hue.as_ref().map_or(0, |hue| {
-                    chart.hue_color_index(hue, curve.hue_index.unwrap_or(0))
-                });
-                Ok((key, index, color_index))
+                Ok((key, index))
             }))?;
         crate::data::source::sort_source_by(&mut order, Some(data), |a, b| {
             (a.0, a.1).cmp(&(b.0, b.1))
@@ -165,7 +160,7 @@ impl PreparedDensity {
         chart: &Plot,
         theme: &crate::theme::ResolvedTheme,
         data: PlotData<'_>,
-        order: &[(usize, usize, usize)],
+        order: &[(usize, usize)],
     ) -> Result<Vec<LegendEntry>, Error> {
         let (colors, accent) = self.resolved_colors(chart, theme, data)?;
         self.guide_entries_with_colors(chart, theme, data, order, &colors, &accent)
@@ -176,14 +171,14 @@ impl PreparedDensity {
         chart: &Plot,
         theme: &crate::theme::ResolvedTheme,
         data: PlotData<'_>,
-        order: &[(usize, usize, usize)],
+        order: &[(usize, usize)],
         colors: &CategoryColors,
         accent: &AccentColors,
     ) -> Result<Vec<LegendEntry>, Error> {
         let resources = data.source_resources()?;
         let mut entries = Vec::new();
         data.reserve_source(&mut entries, order.len())?;
-        for &(_, index, _) in order {
+        for &(_, index) in order {
             let curve = &self.curves[index];
             if curve.identity.hue.is_none() {
                 continue;
@@ -390,7 +385,7 @@ pub(crate) fn project(
     let legend_entries =
         prepared.guide_entries_with_colors(chart, theme, data, &order, &colors, &accent)?;
     let resources = data.source_resources()?;
-    for &(_, index, _) in &order {
+    for &(_, index) in &order {
         let curve = &prepared.curves[index];
         let visible = visible_curve(curve, layout.projection.x_range(), data)?;
         if visible.len() < 2 {
@@ -452,7 +447,7 @@ fn prepare_density<'a>(
     hue_name: Option<&str>,
 ) -> Result<PreparedDensity, Error> {
     prepare_density_ordered(
-        data, value_col, group_col, group_name, hue_col, hue_name, None, None,
+        data, value_col, group_col, group_name, hue_col, hue_name, None,
     )
 }
 
@@ -542,12 +537,10 @@ fn prepare_density_for_chart<'a>(
         chart.hue_col(),
         chart.hue_name(),
         chart.global_collective_pairs(),
-        chart.global_hue_levels(),
     )
 }
 
 #[expect(
-    clippy::too_many_arguments,
     clippy::too_many_lines,
     reason = "channel columns, semantic names, and global orders form one density preparation boundary"
 )]
@@ -559,7 +552,6 @@ fn prepare_density_ordered<'a>(
     hue_col: Option<&str>,
     hue_name: Option<&str>,
     identity_order: Option<&[crate::data::CollectivePair]>,
-    hue_order: Option<&[String]>,
 ) -> Result<PreparedDensity, Error> {
     let data = data.into();
     let values = crate::data::strict_finite_f64(data, value_col, "density")?;
@@ -647,15 +639,8 @@ fn prepare_density_ordered<'a>(
         })?;
         data.claim_source_visits(densities.len())?;
         maximum = densities.iter().copied().fold(maximum, f64::max);
-        data.claim_source_visits(hue_order.unwrap_or(&channels.hue_levels).len())?;
         curves.push(DensityCurve {
             identity: data.copy_source_pair(identity)?,
-            hue_index: identity.hue.as_ref().and_then(|hue| {
-                hue_order
-                    .unwrap_or(&channels.hue_levels)
-                    .iter()
-                    .position(|level| level == hue)
-            }),
             grid,
             densities,
         });

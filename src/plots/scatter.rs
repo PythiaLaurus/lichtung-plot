@@ -276,14 +276,22 @@ impl PreparedScatter {
         data: crate::data::PlotData<'_>,
     ) -> Result<Vec<usize>, Error> {
         let mut order = data.collect_source((0..self.groups.len()).map(Ok))?;
+        let ranks = data.collect_source(self.groups.iter().enumerate().map(|(index, group)| {
+            if let Some(label) = &group.label {
+                if let Some(parent) = chart.global_hue_levels() {
+                    return data
+                        .source_position(parent, |key| key == label)?
+                        .ok_or_else(|| {
+                            Error::Data(format!(
+                                "scatter hue {label:?} is missing from the prepared parent domain"
+                            ))
+                        });
+                }
+            }
+            Ok(index)
+        }))?;
         crate::data::source::sort_source_by(&mut order, Some(data), |a, b| {
-            let key = |index: usize| {
-                self.groups[index]
-                    .label
-                    .as_ref()
-                    .map_or(0, |label| chart.hue_color_index(label, usize::MAX))
-            };
-            (key(*a), *a).cmp(&(key(*b), *b))
+            (ranks[*a], *a).cmp(&(ranks[*b], *b))
         })?;
         Ok(order)
     }

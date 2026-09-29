@@ -1152,7 +1152,39 @@ fn push_deferred_plot_requirements(
                 prepared_stage.as_deref_mut(),
             )?;
         }
+        if kind == PlotKind::HorizontalBar && plot.colors_by_sign() {
+            let bars = interiors
+                .and_then(|inputs| inputs.bars.as_deref())
+                .ok_or_else(|| {
+                    Error::Render("signed Bar guide census requires prepared bars".into())
+                })?;
+            for decreasing in [false, true] {
+                if bars.panels.iter().any(|(_, marks)| {
+                    marks
+                        .bars
+                        .iter()
+                        .any(|bar| (bar.end < bar.start) == decreasing)
+                }) {
+                    push_deferred_body(
+                        requirements,
+                        &body_address,
+                        &mut body_index,
+                        if decreasing {
+                            "Decreasing"
+                        } else {
+                            "Nondecreasing"
+                        },
+                        &[],
+                        &theme.typography.legend_label,
+                        prepared_stage.as_deref_mut(),
+                    )?;
+                }
+            }
+        }
         for column in plot.aligned_columns() {
+            if kind == PlotKind::HorizontalBar && plot.colors_by_sign() {
+                continue;
+            }
             if let DataColumn::Category(values) = column {
                 if !legend_dimension_is_visible(plot, kind, values.name()) {
                     continue;
@@ -1584,6 +1616,9 @@ fn plot_data_legend_is_visible(plot: &Plot, kind: PlotKind) -> bool {
     if plot.legend_policy_spec() == crate::LegendPolicy::Hidden {
         return false;
     }
+    if kind == PlotKind::HorizontalBar && plot.colors_by_sign() {
+        return true;
+    }
     match kind {
         PlotKind::Scatter
         | PlotKind::Density
@@ -1655,7 +1690,9 @@ fn legend_uses_pair_identity(plot: &Plot, kind: PlotKind) -> bool {
 }
 
 fn legend_title_census(plot: &Plot, kind: PlotKind) -> impl Iterator<Item = Cow<'_, str>> {
-    if legend_uses_pair_identity(plot, kind) {
+    if kind == PlotKind::HorizontalBar && plot.colors_by_sign() {
+        [Some(Cow::Borrowed("Change")), None, None]
+    } else if legend_uses_pair_identity(plot, kind) {
         [
             Some(Cow::Owned(plot.resolve_label(
                 plot.group_name().expect("pair identity has a group"),

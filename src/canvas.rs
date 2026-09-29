@@ -620,6 +620,48 @@ mod d1_tests {
     }
 
     #[test]
+    fn shared_signed_bars_merge_sign_entries_instead_of_series_colors() {
+        let bar = |value, series| {
+            Plot::horizontal_bar(
+                crate::CategoryValues::new("category", ["one"]).unwrap(),
+                crate::BarInput::estimates(crate::NumericValues::new("value", [value])),
+            )
+            .series(crate::CategoryValues::new("series", [series]).unwrap())
+            .color_by_sign()
+        };
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, bar(-2.0, "first"))
+            .unwrap()
+            .panel(0, 1, bar(3.0, "second"))
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared)
+            .size(1200, 640);
+        let root = canvas.preflight_plan().unwrap();
+        let Some(PreparedGuideDescriptor::Discrete((title, entries))) =
+            root.prepared().shared_guide.as_ref()
+        else {
+            panic!("signed bars need one prepared shared guide")
+        };
+        assert_eq!(title, "Change");
+        assert_eq!(entries.len(), 2);
+        assert_eq!(
+            entries[0].identity(),
+            &crate::decorations::legend::LegendIdentity::bar_sign(true)
+        );
+        assert_eq!(
+            entries[1].identity(),
+            &crate::decorations::legend::LegendIdentity::bar_sign(false)
+        );
+        let svg = String::from_utf8(canvas.render_scene().unwrap().svg_bytes().to_vec()).unwrap();
+        let guide = svg.split_once("<g id=\"canvas-shared-legend\">").unwrap().1;
+        assert!(guide.contains(">Decreasing</text>"));
+        assert!(guide.contains(">Nondecreasing</text>"));
+        assert!(!guide.contains(">first</text>"));
+        assert!(!guide.contains(">second</text>"));
+    }
+
+    #[test]
     fn conflicting_distribution_shared_glyphs_reject_before_fonts() {
         let boxplot = || {
             Plot::boxplot(

@@ -1,9 +1,9 @@
 //! One immutable opaque mapping over prepared raw semantic identities.
-//! T5d2 installs this before wiring the final family/Canvas consumers.
+//! Prepared family and guide consumers share this opaque mapping.
 
 #![allow(
     dead_code,
-    reason = "T5d2 mapping is wired across all family consumers before the old modulo paths are removed"
+    reason = "fixed private palette mode is exercised before the T6 configuration surface exists"
 )]
 
 use crate::font::canonical::OperationGenerationResources;

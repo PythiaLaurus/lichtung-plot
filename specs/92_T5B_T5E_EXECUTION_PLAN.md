@@ -1,6 +1,6 @@
 # T5b-T5e Execution Plan
 
-**Status: IN PROGRESS — T5b complete; T5c in progress; T5d–T5e pending.**
+**Status: IN PROGRESS — T5b–T5c complete; T5d in progress; T5e pending.**
 
 This is the execution partition of the four T5b–T5e umbrellas in
 `91_IMPLEMENTATION_PLAN.md`, based on the verified T5a closure at `1e8e3ee`.
@@ -2058,7 +2058,7 @@ ownership, statistical estimates, public extension points, or layout strategy.
 | T5d1 | COMPLETE | T5d0 | Deterministic scale arithmetic |
 | T5d1a | COMPLETE | T5d0 | `feat(color): pin first-party OKLab conversion and channel quantization` |
 | T5d1b | COMPLETE | T5d1a | `feat(color): pin gamut interpolation and palette candidates` |
-| T5d2 | IN PROGRESS | T5d1 | Umbrella for categorical maps, palettes and accents |
+| T5d2 | COMPLETE | T5d1 | Umbrella for categorical maps, palettes and accents |
 | T5d2a | COMPLETE | T5d1 | `feat(scales): prepare raw-key maps and bounded accents` |
 | T5d2b | COMPLETE | T5d2a | `refactor(scales): migrate ordinary qualitative consumers` |
 | T5d2c | COMPLETE | T5d2b | Umbrella for collective and specialized color owners |
@@ -2067,7 +2067,7 @@ ownership, statistical estimates, public extension points, or layout strategy.
 | T5d2c3 | COMPLETE | T5d2c2 | Umbrella for Marginal and Matrix group colors |
 | T5d2c3a | COMPLETE | T5d2c2 | `refactor(scales): resolve Marginal group colors` |
 | T5d2c3b | COMPLETE | T5d2c3a | `refactor(scales): resolve Matrix cell colors` |
-| T5d2d | PENDING | T5d2c | `refactor(scales): close palettes, accents and guide equality` |
+| T5d2d | COMPLETE | T5d2c | `refactor(scales): close palettes, accents and guide equality` |
 | T5d3 | PENDING | T5d2 | `feat(scales): resolve sequential and diverging mappings` |
 | T5d4 | PENDING | T5d3 | `refactor(scales): coordinate final domains guides and contrast` |
 | T5d5 | PENDING | T5d4 | `test(scales): close mapping and guide consistency` |
@@ -2218,6 +2218,27 @@ preparation before fonts. Nineteen focused Matrix units, eight Matrix
 integration contracts, self-managed clip snapshots, exact resource refusal
 and strict Clippy pass. T5d2d reconciles the remaining unkeyed accent
 consumers and verifies guide/map equality before continuous mapping.
+
+T5d2d closure: Histogram, Qq, Regression observations/band and guide,
+Estimate markers, and Waterfall sign roles now use admitted unkeyed accent
+slots; Waterfall extends a one-color seed without cycling. Its unpainted
+intrinsic uses a color-independent fill/outline ink role. Density's unused
+per-curve hue index and the last `Plot::hue_color_index` fallback are gone;
+Scatter guide order uses admitted prepared-parent raw-key positions. A signed
+HorizontalBar replaces its misleading series-color guide with typed
+nondecreasing/decreasing entries drawn from the very same resolved accent
+slots and body style, suppressing hue-color entries and treating zero as
+nondecreasing. The exact unused series-color map does not override sign
+paint. The sign-title and present-label census runs before fonts, and the
+shared Canvas merges sign identities rather than series/display aliases.
+The inspected `native_horizontal_bar` snapshot records the two sign swatches
+and the narrower panel/fewer automatic numeric ticks required by its wider
+guide; the other selected Bar snapshots retain their outputs. Focused
+Scatter, Density, Bar, Regression, Histogram, Qq, Estimate and Waterfall
+units; categorical grouping and Waterfall fingerprints; representative
+path, estimate, signed-Bar, Scatter and clipping snapshots; and strict
+locked/offline all-target Clippy pass. T5d2 now has one prepared
+categorical/accent representation; T5d3 is the continuous mapping owner.
 
 Implement fixed/extendable palettes, exact raw-key maps, capacity/coverage checks,
 and nonempty extendable accent sequences under one deterministic color engine.
