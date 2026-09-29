@@ -361,7 +361,7 @@ pub(crate) fn measure(
         text.push(PlacedText {
             placement: PlannedTextPlacement::middle(
                 Point2D::new(
-                    annotation.x.trunc(),
+                    annotation.x,
                     (layout.projection.panel_box().y1
                         + ANNOTATION_PADDING
                         + row_height / 2.0
@@ -396,6 +396,29 @@ pub(crate) fn measure(
     for text in &payload.text {
         geometry.text(text.placement, &text.plan, None)?;
     }
+    let mut label_ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    data.claim_source_visits(payload.text.len())?;
+    for (index, text) in payload.text.iter().enumerate() {
+        let mut one = crate::render::geometry::GeometrySnapshot::new(theme)?;
+        one.text(text.placement, &text.plan, None)?;
+        for ink in one.bounds() {
+            if ink.bottom < mark_panel.y1
+                || ink.top > panel.y1
+                || (chart.user_x_limits().is_some()
+                    && (ink.left < panel.x0 || ink.right > panel.x1))
+            {
+                return Err(context
+                    .fit_scope()
+                    .child(crate::layout::AddressRole::Annotation, index)?
+                    .failure(
+                        crate::layout::fit::FitKind::Text,
+                        "required Waterfall total ink exceeds its assigned annotation shelf",
+                    )
+                    .into());
+            }
+        }
+        label_ink.append(&one)?;
+    }
     let mut full = crate::render::geometry::GeometrySnapshot::new(theme)?;
     data.claim_source_visits(payload.bars.len() + payload.connectors.len())?;
     for (points, style) in &payload.bars {
@@ -427,6 +450,29 @@ pub(crate) fn measure(
         full.line(points, style, None)?;
     }
     if chart.user_x_limits().is_none() {
+        if let Some(bounds) = label_ink
+            .bounds()
+            .iter()
+            .copied()
+            .reduce(crate::render::geometry::GeometryBox::union)
+        {
+            let totals = (
+                prepared.totals[0].0.min(prepared.totals[1].0),
+                prepared.totals[0].0.max(prepared.totals[1].0),
+            );
+            let requests = crate::layout::interior::automatic_absolute_ink_expansions(
+                [totals, (0.0, labels.len() as f64)],
+                &layout.projection,
+                bounds,
+                [true, false],
+                data,
+                context.fit_scope(),
+            )?;
+            payload.domain_expansions = crate::layout::interior::merge_mark_domain_expansions(
+                payload.domain_expansions,
+                requests,
+            );
+        }
         if let Some(bounds) = full
             .bounds()
             .iter()
@@ -436,7 +482,7 @@ pub(crate) fn measure(
             let count = u32::try_from(prepared.labels.len()).map_err(|_| {
                 Error::Render("Waterfall category count exceeds spatial range".into())
             })?;
-            payload.domain_expansions = crate::layout::interior::automatic_absolute_ink_expansions(
+            let requests = crate::layout::interior::automatic_absolute_ink_expansions(
                 [prepared.range, (0.0, f64::from(count))],
                 &layout.projection,
                 bounds,
@@ -444,6 +490,10 @@ pub(crate) fn measure(
                 data,
                 context.fit_scope(),
             )?;
+            payload.domain_expansions = crate::layout::interior::merge_mark_domain_expansions(
+                payload.domain_expansions,
+                requests,
+            );
         }
     }
     let mut result = PlotRenderResult::new(layout, Vec::new());
@@ -592,16 +642,7 @@ fn plan_annotations(
         }
         let (projected_x, _) = projection.project(*value, source_y);
         let half_width = width / 2.0;
-        let x = projected_x
-            .clamp(
-                panel.x0 + ANNOTATION_PADDING + half_width,
-                panel.x1 - ANNOTATION_PADDING - half_width,
-            )
-            .round()
-            .clamp(
-                panel.x0 + ANNOTATION_PADDING + half_width,
-                panel.x1 - ANNOTATION_PADDING - half_width,
-            );
+        let x = projected_x.round();
         let bounds = (x - half_width, x + half_width);
         let row = rows
             .iter()
@@ -646,6 +687,78 @@ mod tests {
     use crate::layout::fit::PlanError;
     use crate::layout::kernel::nearest_spatial_quanta;
     use crate::{CategoryValues, NumericValues};
+
+    #[test]
+    fn total_ink_keeps_exact_numeric_targets_and_only_expands_automatic_x() {
+        let source = |exact| {
+            let chart = Plot::waterfall(
+                CategoryValues::new("step", ["gain", "loss"]).unwrap(),
+                NumericValues::new("delta", [1.0, -0.5]),
+                0.0,
+            )
+            .total_labels(crate::WaterfallLabels::new("Initial total", "Final total").unwrap())
+            .size(900, 900);
+            if exact {
+                chart.x_limits(0.0, 1.0).erase()
+            } else {
+                chart.erase()
+            }
+        };
+        let panel = PanelBox::new(180.0, 780.0, 80.0, 800.0);
+        let mut theme = crate::Theme::Publication.resolve();
+        theme.typography.waterfall_total.font_size = 48;
+        for exact in [false, true] {
+            let chart = source(exact);
+            let inputs =
+                crate::plots::shared_x::prepare_plot(&chart, &OperationGenerationResources::new())
+                    .unwrap();
+            let chart = inputs.attach(chart).unwrap();
+            let selected = chart.measure_selected_interior(PlotRenderContext::new(
+                chart.data(),
+                panel,
+                &theme,
+            ));
+            if exact {
+                assert!(
+                    matches!(selected, Err(crate::layout::fit::PlanError::Fit(failure))
+                    if failure.reason.kind == crate::layout::fit::FitKind::Text)
+                );
+            } else {
+                let selected = selected.unwrap();
+                let crate::layout::interior::MarkPayload::Waterfall(payload) =
+                    &selected.marks.as_ref().unwrap().payload
+                else {
+                    panic!("selected Waterfall")
+                };
+                assert!(payload.domain_expansions[0].is_some());
+                let final_plan = crate::decorations::plan::plan_panel_for_test(
+                    &chart,
+                    crate::PlotKind::Waterfall,
+                    panel,
+                    crate::decorations::plan::LegendRole::Panel,
+                    &theme,
+                )
+                .unwrap();
+                let crate::layout::interior::MarkPayload::Waterfall(final_payload) =
+                    &final_plan.result.marks.as_ref().unwrap().payload
+                else {
+                    panic!("final Waterfall")
+                };
+                assert!(final_payload.domain_expansions.iter().all(Option::is_none));
+                let base_x = final_plan
+                    .result
+                    .layout
+                    .projection
+                    .project(0.0, 0.0)
+                    .0
+                    .round();
+                assert_eq!(
+                    final_payload.text[0].placement.position.x.to_bits(),
+                    base_x.to_bits()
+                );
+            }
+        }
+    }
 
     #[test]
     fn styled_waterfall_bars_clear_automatic_numeric_ink() {

@@ -1041,7 +1041,9 @@ caller styles while centralizing their ownership.
 | T5c3b2b | COMPLETE | T5c3b2a | `refactor(annotations): reuse frozen text for inside overlay obstacles` |
 | T5c3b3 | IN PROGRESS | T5c3b2 | Umbrella for required value and cell text |
 | T5c3b3a | COMPLETE | T5c3b2 | `feat(annotations): contain Heatmap cell text ink` |
-| T5c3b3b | PENDING | T5c3b3a | `refactor(annotations): fit attached and specialized value text` |
+| T5c3b3b | IN PROGRESS | T5c3b3a | Umbrella for attached and specialized value text |
+| T5c3b3b1 | COMPLETE | T5c3b3a | `feat(annotations): keep Waterfall totals at exact source anchors` |
+| T5c3b3b2 | PENDING | T5c3b3b1 | `refactor(annotations): fit attached Bar and Estimate value text` |
 | T5c4 | PENDING | T5c3 | `refactor(layout): replace deferred mark and annotation minima` |
 | T5c5 | PENDING | T5c4 | `test(theme): close native mark and annotation ownership` |
 
@@ -1927,6 +1929,19 @@ their current paint order. A controlled too-narrow cell and the identical
 glyph in a larger cell, 35 focused Heatmap units, 38 integration contracts
 and strict Clippy pass. T5c3b3b proceeds to attached Bar/Estimate and
 Waterfall value text.
+
+T5c3b3b1 closure: visible Waterfall base/terminal totals remain at the
+projected scientific source anchor instead of being horizontally clamped into
+the data frame. The still-local shelf producer preserves its selected rows,
+and each glyph's uncut ink must fit vertically within its annotation band.
+An exact numeric window rejects required text extending past the assigned
+panel; an automatic X window proposes combined total-label ink via the
+existing root domain driver, merged with complete bar/connector ink. Custom
+exact/automatic label and final-source-position tests, twelve Waterfall units,
+and updated Publication/Science full SVG fingerprints pass with strict Clippy.
+The changed hashes are intentional: label positions and facet/shared-domain
+projections respond to the removed clamp. T5e5 later replaces shelf packing,
+not the exact-anchor rule.
 
 Separate normal-flow requirements from inside guides, significance, value labels,
 panel text, and supplemental layers. Implement the closed anchor order, source-

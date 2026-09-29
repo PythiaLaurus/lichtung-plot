@@ -7,35 +7,37 @@ use super::*;
 )]
 fn waterfall_full_svg_fingerprints() {
     // 2026-09-14 T5a6d: exact category bands, canonical title midpoints and
-    // ink-aware endpoint anchors. Historical 0e8c344 fingerprints are preserved
-    // in docs/local-search-benchmarks.md, "Final Numerical Follow-Up"; not byte parity.
+    // ink-aware endpoint anchors. T5c3b3 retains exact projected total targets
+    // instead of clamping their text; the former hashes below were measured
+    // with shifted base/terminal labels. Earlier 0e8c344 fingerprints are in
+    // docs/local-search-benchmarks.md, "Final Numerical Follow-Up".
     for (theme, expected) in [
         (
             lichtung_plot::Theme::Publication,
             [
-                (11551, 0x03c5_6745_6919_5895),
+                (11525, 0xef4d_a9c5_54b7_1f07),
                 (13511, 0x8c52_1a56_5593_25be),
-                (9228, 0x9f67_23dd_a047_eb4d),
-                (19089, 0xf3a0_7b27_ce2b_290c),
-                (20239, 0xc304_afbc_8257_b288),
-                (19089, 0xf3a0_7b27_ce2b_290c),
-                (20239, 0xc304_afbc_8257_b288),
+                (9231, 0x3f6e_d3d6_1d3f_507b),
+                (18953, 0x32b7_29a3_7300_ff5f),
+                (20141, 0x58ba_3a96_c5c5_fa72),
+                (18953, 0x32b7_29a3_7300_ff5f),
+                (20141, 0x58ba_3a96_c5c5_fa72),
                 (21446, 0x55d8_9ed9_f883_597a),
-                (11798, 0xc759_4392_037a_ceb4),
+                (11772, 0x7e1c_8b4d_1d6b_414a),
             ],
         ),
         (
             lichtung_plot::Theme::Science,
             [
-                (11375, 0xcf25_95f0_e76f_69a4),
+                (11349, 0xbc22_4d52_fb08_b5f2),
                 (13295, 0x23e6_7f91_c3c8_05d9),
-                (9092, 0x0333_b4a3_ca40_0784),
-                (18487, 0xfad4_f91b_4e9b_3136),
-                (19659, 0xe49d_3bac_4385_602a),
-                (18487, 0xfad4_f91b_4e9b_3136),
-                (19659, 0xe49d_3bac_4385_602a),
-                (19689, 0x7e83_740e_794f_b006),
-                (11628, 0x13c5_5f8d_1b5a_f071),
+                (9095, 0xd141_38b2_83cb_528e),
+                (18525, 0x3616_cd0e_ab21_bae8),
+                (19660, 0xdba7_005e_6830_1dd5),
+                (18525, 0x3616_cd0e_ab21_bae8),
+                (19660, 0xdba7_005e_6830_1dd5),
+                (19689, 0x1e96_01a6_7e20_a1ef),
+                (11602, 0x17d8_1f43_ae05_5499),
             ],
         ),
     ] {
