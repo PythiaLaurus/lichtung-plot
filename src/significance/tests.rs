@@ -50,6 +50,46 @@ fn grouped_targets_resolve_typed_series_and_category_anchors() {
     assert!(bracket.x_right < f64::midpoint(panel().x0, panel().x1));
 }
 
+#[test]
+fn centered_label_ink_prevents_disjoint_spans_from_sharing_a_shelf() {
+    let comparisons = [
+        Significance::between("b", "c", SignificanceMark::FourStars).into_annotation(),
+        Significance::between("d", "e", SignificanceMark::FourStars).into_annotation(),
+    ];
+    let categories = ["a", "b", "c", "d", "e", "f"].map(str::to_owned);
+    let maxima = [1.0, 2.0, 1.0, 2.0, 1.0, 2.0];
+    let panel = PanelBox::new(50.0, 650.0, 40.0, 640.0);
+    let theme = crate::Theme::Publication.resolve();
+    for (size, shared) in [(16, true), (140, false)] {
+        let mut appearance = theme.typography.significance_label.clone();
+        appearance.font_size = size;
+        let selected = plan_comparisons_at_with_label(
+            &comparisons,
+            &categories,
+            &maxima,
+            None,
+            None,
+            (0.0, 8.0),
+            None,
+            None,
+            panel,
+            LegendAnnotationConstraint::NoObstacle,
+            false,
+            SignificanceMarkStyle::default(),
+            &appearance,
+            &theme,
+            false,
+            &crate::layout::fit::ROOT_SCOPE,
+        )
+        .unwrap();
+        assert_eq!(selected.brackets.len(), 2);
+        assert_eq!(
+            selected.brackets[0].geometry.y.to_bits() == selected.brackets[1].geometry.y.to_bits(),
+            shared,
+        );
+    }
+}
+
 fn default_metrics() -> BracketMetrics {
     let style = SignificanceMarkStyle::default();
     bracket_metrics(style)

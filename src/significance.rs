@@ -391,23 +391,61 @@ fn plan_comparisons_at_with_label(
             .then_with(|| left.right.cmp(&right.right))
             .then_with(|| left.label.plan.source.cmp(&right.label.plan.source))
     });
-    let mut level_ends = Vec::<usize>::new();
+    // A label can overhang its bracket span. Occupancy therefore follows the
+    // complete centered label and bracket ink, not just category indices.
+    let mut occupied_levels = Vec::<Vec<(f64, f64)>>::new();
+    let resources = theme.prepared_font_environment()?.generation_resources();
     for comparison in &mut resolved {
-        if let Some((level, end)) = level_ends
-            .iter_mut()
-            .enumerate()
-            .find(|(_, end)| comparison.left > **end)
-        {
-            comparison.level = level;
-            *end = comparison.right;
+        let anchor = |index: usize| {
+            panel.x0
+                + anchor_positions.map_or_else(
+                    || (index as f64 + 0.5) / categories.len() as f64,
+                    |positions| positions[index],
+                ) * panel.width()
+        };
+        let start = anchor(comparison.left).min(anchor(comparison.right));
+        let end = anchor(comparison.left).max(anchor(comparison.right));
+        let center = f64::midpoint(start, end);
+        let label_span = if horizontal {
+            comparison.label.plan.height()
         } else {
-            comparison.level = level_ends.len();
-            level_ends.push(comparison.right);
+            comparison.label.plan.width()
+        };
+        let clearance = f64::from(theme.annotations.bracket_stroke.width) / 2.0 + 1.0 / 1024.0;
+        let interval = (
+            start.min(center - label_span / 2.0) - clearance,
+            end.max(center + label_span / 2.0) + clearance,
+        );
+        let mut first_free = None;
+        for (level, occupied) in occupied_levels.iter().enumerate() {
+            resources.claim_visits(1).map_err(|error| {
+                Error::Render(format!("significance shelf level admission: {error:?}"))
+            })?;
+            let mut free = true;
+            for previous in occupied {
+                resources.claim_visits(1).map_err(|error| {
+                    Error::Render(format!("significance shelf collision admission: {error:?}"))
+                })?;
+                if interval.0 < previous.1 && previous.0 < interval.1 {
+                    free = false;
+                    break;
+                }
+            }
+            if free {
+                first_free = Some(level);
+                break;
+            }
         }
+        let level = first_free.unwrap_or(occupied_levels.len());
+        if level == occupied_levels.len() {
+            occupied_levels.push(Vec::new());
+        }
+        occupied_levels[level].push(interval);
+        comparison.level = level;
     }
 
-    let mut level_maxima = vec![f64::NEG_INFINITY; level_ends.len()];
-    let mut level_label_extents = vec![0.0_f64; level_ends.len()];
+    let mut level_maxima = vec![f64::NEG_INFINITY; occupied_levels.len()];
+    let mut level_label_extents = vec![0.0_f64; occupied_levels.len()];
     for comparison in &resolved {
         let span_maximum = rendered_maxima[comparison.left..=comparison.right]
             .iter()
@@ -914,7 +952,7 @@ fn place_lines(
 fn significance_level_spacing(label_extent: f64, metrics: BracketMetrics) -> f64 {
     metrics
         .level_step
-        .max(metrics.label_gap + label_extent + metrics.panel_padding)
+        .max(metrics.label_gap + label_extent + metrics.tick_height)
 }
 
 fn expand_upper_limit(

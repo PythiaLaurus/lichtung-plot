@@ -1031,7 +1031,9 @@ caller styles while centralizing their ownership.
 | T5c3 | IN PROGRESS | T5c2d | Umbrella for native annotation and overlay consequences |
 | T5c3a | IN PROGRESS | T5c2d | Umbrella for typed significance targets and native shelves |
 | T5c3a1 | COMPLETE | T5c2d | `refactor(annotations): resolve grouped significance by typed targets` |
-| T5c3a2 | PENDING | T5c3a1 | `refactor(annotations): pack complete significance shelves` |
+| T5c3a2 | IN PROGRESS | T5c3a1 | Umbrella for significance shelves and painted containment |
+| T5c3a2a | COMPLETE | T5c3a1 | `feat(annotations): pack significance labels by occupied ink` |
+| T5c3a2b | PENDING | T5c3a2a | `refactor(annotations): fit complete significance ink and exact windows` |
 | T5c3b | PENDING | T5c3a | `refactor(annotations): place remaining native overlays and text` |
 | T5c4 | PENDING | T5c3 | `refactor(layout): replace deferred mark and annotation minima` |
 | T5c5 | PENDING | T5c4 | `test(theme): close native mark and annotation ownership` |
@@ -1848,6 +1850,18 @@ semantics use the same typed resolution. Focused significance units, Bar and
 distribution feedback/facet neighbors, 19 significance integration contracts,
 custom within-category series anchors, and strict Clippy pass. T5c3a2 owns the
 complete painted-ink shelf update; T5c3b owns remaining overlays.
+
+T5c3a2a closure: bracket shelves now test each prior occupied interval against
+the union of the span, centered complete label width (rotated height for
+horizontal brackets) and configured bracket-stroke clearance. The first
+collision-free level is retained, with each level/interval comparison admitted
+under the root work ledger. Step height clears the label, gap and bracket
+tick, not an unrelated panel inset. A large-label example whose disjoint
+category spans nevertheless overlap receives separate shelves; smaller labels
+share one. Sixteen focused significance units, 19 integration significance
+contracts, final-domain distribution feedback, unchanged native Bar snapshots,
+and strict Clippy pass. T5c3a2b completes absolute selected-ink containment
+and exact-domain refusal before T5c3a closes.
 
 Separate normal-flow requirements from inside guides, significance, value labels,
 panel text, and supplemental layers. Implement the closed anchor order, source-
