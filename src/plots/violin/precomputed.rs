@@ -6,7 +6,7 @@ use crate::layout::Layout;
 use crate::plots::categorical_distribution::DistributionPayload;
 use crate::render::backend::Point2D;
 use crate::spec::{PlotRenderContext, PlotRenderResult};
-use crate::theme::ResolvedTheme;
+use crate::theme::{CategoryColors, ResolvedTheme};
 use crate::{Plot, RaincloudGroup};
 
 #[cfg(test)]
@@ -111,14 +111,11 @@ impl PreparedRaincloud {
         chart: &Plot,
         theme: &ResolvedTheme,
         data: PlotData<'_>,
+        colors: &CategoryColors,
     ) -> Result<Vec<LegendEntry>, Error> {
-        data.collect_source(self.hues.iter().enumerate().map(|(index, hue)| {
-            let color = chart.categorical_color(
-                "raincloud",
-                hue,
-                chart.hue_color_index(hue, index),
-                theme,
-            )?;
+        let resources = data.source_resources()?;
+        data.collect_source(self.hues.iter().map(|hue| {
+            let color = colors.color(hue, resources)?;
             Ok(LegendEntry::point_fill(
                 chart.point_legend_identity(hue, data)?,
                 crate::plots::distribution_sample::overlay_style(color, theme),
@@ -131,7 +128,6 @@ impl PreparedRaincloud {
 #[derive(Debug)]
 struct PreparedRaincloudGroup {
     geometry: RaincloudGroup,
-    local_color_index: usize,
 }
 
 #[cfg(test)]
@@ -151,24 +147,17 @@ pub(crate) fn prepare(chart: &Plot, data: PlotData<'_>) -> Result<PreparedRaincl
             .map(|group| data.copy_source_string(&group.category)),
     )?;
     let mut hues = Vec::new();
-    let groups = data.collect_source(input.groups.iter().enumerate().map(|(index, group)| {
-        let local_color_index = if let Some(hue) = &group.hue {
+    let groups = data.collect_source(input.groups.iter().map(|group| {
+        if let Some(hue) = &group.hue {
             data.claim_source_visits(hues.len())?;
             #[cfg(test)]
             HUE_LOOKUP_VISITS.with(|count| count.set(count.get() + hues.len()));
-            if let Some(index) = hues.iter().position(|level| level == hue) {
-                index
-            } else {
-                let index = hues.len();
+            if !hues.iter().any(|level| level == hue) {
                 data.reserve_source(&mut hues, 1)?;
                 hues.push(data.copy_source_string(hue)?);
-                index
             }
-        } else {
-            index
-        };
+        }
         Ok(PreparedRaincloudGroup {
-            local_color_index,
             geometry: RaincloudGroup {
                 category: data.copy_source_string(&group.category)?,
                 hue: group
@@ -201,15 +190,24 @@ pub(super) fn measure_marks(
     let theme = context.theme;
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);
-    let legend_entries = input.guide_entries(chart, theme, data)?;
+    let colors = crate::plots::categorical_distribution::retained(chart)?
+        .resolved_colors(chart, theme, data)?;
+    let legend_entries = input.guide_entries(chart, theme, data, &colors)?;
 
     let mut payload = DistributionPayload::new(layout.projection.panel_box(), chart.kind());
     for (index, group) in input.groups.iter().enumerate() {
+        let color = colors.color(
+            group
+                .geometry
+                .hue
+                .as_deref()
+                .unwrap_or(&group.geometry.category),
+            &resources,
+        )?;
         project_cloud_and_summary(
-            chart,
             &layout,
             &group.geometry,
-            group.local_color_index,
+            color,
             index,
             theme,
             &mut payload,
@@ -217,11 +215,18 @@ pub(super) fn measure_marks(
         )?;
     }
     for (index, group) in input.groups.iter().enumerate() {
+        let color = colors.color(
+            group
+                .geometry
+                .hue
+                .as_deref()
+                .unwrap_or(&group.geometry.category),
+            &resources,
+        )?;
         project_strip(
-            chart,
             &layout,
             &group.geometry,
-            group.local_color_index,
+            color,
             index,
             theme,
             &mut payload,
@@ -236,15 +241,10 @@ pub(super) fn measure_marks(
     )
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "borrowed selected projection and styles"
-)]
 fn project_cloud_and_summary(
-    chart: &Plot,
     layout: &Layout,
     group: &RaincloudGroup,
-    local_color_index: usize,
+    color: (u8, u8, u8),
     index: usize,
     theme: &ResolvedTheme,
     payload: &mut DistributionPayload,
@@ -284,14 +284,7 @@ fn project_cloud_and_summary(
     )?;
     cloud.push(Point2D::new(baseline_high_x, baseline_high_y));
     cloud.push(Point2D::new(baseline_low_x, baseline_low_y));
-    payload.polygon(
-        cloud,
-        theme
-            .marks
-            .violin_body
-            .backend_style(group_color(chart, group, local_color_index, theme)?),
-        data,
-    )?;
+    payload.polygon(cloud, theme.marks.violin_body.backend_style(color), data)?;
 
     let box_center = center + width * 0.02;
     let box_half_width = width * 0.08;
@@ -336,10 +329,9 @@ fn project_cloud_and_summary(
     reason = "borrowed selected projection and styles"
 )]
 fn project_strip(
-    chart: &Plot,
     layout: &Layout,
     group: &RaincloudGroup,
-    local_color_index: usize,
+    color: (u8, u8, u8),
     index: usize,
     theme: &ResolvedTheme,
     payload: &mut DistributionPayload,
@@ -351,10 +343,7 @@ fn project_strip(
     let (box_right, _) = layout.projection.project(center + width * 0.10, 0.0);
     let (strip_left, _) = layout.projection.project(center + width * 0.24, 0.0);
     let (strip_right, _) = layout.projection.project(center + width * 0.46, 0.0);
-    let style = crate::plots::distribution_sample::overlay_style(
-        group_color(chart, group, local_color_index, theme)?,
-        theme,
-    );
+    let style = crate::plots::distribution_sample::overlay_style(color, theme);
     let point_ink = crate::render::geometry::point_ink_bounds(theme, &style)?;
     let point_left = point_ink.map_or(0.0, |ink| (-ink.left).max(0.0));
     let point_right = point_ink.map_or(0.0, |ink| ink.right.max(0.0));
@@ -378,18 +367,4 @@ fn project_strip(
         Ok(Point2D::new(x, y))
     }))?;
     Ok(payload.scatter(points, style, data)?)
-}
-
-fn group_color(
-    chart: &Plot,
-    group: &RaincloudGroup,
-    local_color_index: usize,
-    theme: &ResolvedTheme,
-) -> Result<(u8, u8, u8), Error> {
-    if let Some(hue) = &group.hue {
-        let color_index = chart.hue_color_index(hue, local_color_index);
-        chart.categorical_color("raincloud", hue, color_index, theme)
-    } else {
-        Ok(theme.colors[local_color_index % theme.colors.len()])
-    }
 }

@@ -136,7 +136,7 @@ fn supplied_raincloud_cloud_and_strip_ink_fit_automatic_y_at_root() {
 }
 
 #[test]
-fn prepared_hue_indices_preserve_order_and_obey_exact_work_and_storage_caps() {
+fn prepared_hue_domain_preserves_order_and_obeys_exact_work_and_storage_caps() {
     let source = source(true);
     HUE_LOOKUP_VISITS.with(|count| count.set(0));
     let resources = OperationGenerationResources::new();
@@ -146,9 +146,9 @@ fn prepared_hue_indices_preserve_order_and_obey_exact_work_and_storage_caps() {
         prepared
             .groups
             .iter()
-            .map(|group| group.local_color_index)
+            .map(|group| group.geometry.hue.as_deref())
             .collect::<Vec<_>>(),
-        [0, 1, 0, 2]
+        [Some("z"), Some("a"), Some("z"), Some("m")]
     );
     // Nonzero evidence distinguishes retained semantic work from an unused probe.
     assert_eq!(HUE_LOOKUP_VISITS.with(std::cell::Cell::get), 5);
@@ -171,7 +171,7 @@ fn prepared_hue_indices_preserve_order_and_obey_exact_work_and_storage_caps() {
 }
 
 #[test]
-fn repeated_measurement_uses_retained_indices_and_charges_candidate_work() {
+fn repeated_measurement_uses_retained_raw_keys_and_charges_candidate_work() {
     for with_hues in [true, false] {
         let source = source(with_hues);
         HUE_LOOKUP_VISITS.with(|count| count.set(0));
@@ -187,22 +187,38 @@ fn repeated_measurement_uses_retained_indices_and_charges_candidate_work() {
             unreachable!()
         };
         let theme = crate::Theme::Publication.resolve();
+        let resources = theme
+            .prepared_font_environment()
+            .unwrap()
+            .generation_resources();
+        let colors = crate::plots::categorical_distribution::retained(&source)
+            .unwrap()
+            .resolved_colors(
+                &source,
+                &theme,
+                source.data().with_axis_resources(&resources),
+            )
+            .unwrap();
         for (index, group) in prepared.groups.iter().enumerate() {
             let expected = if with_hues {
                 [0, 1, 0, 2][index]
             } else {
                 index
             };
-            assert_eq!(group.local_color_index, expected);
             assert_eq!(
-                group_color(&source, &group.geometry, group.local_color_index, &theme).unwrap(),
+                colors
+                    .color(
+                        group
+                            .geometry
+                            .hue
+                            .as_deref()
+                            .unwrap_or(&group.geometry.category),
+                        &resources
+                    )
+                    .unwrap(),
                 theme.colors[expected % theme.colors.len()]
             );
         }
-        let resources = theme
-            .prepared_font_environment()
-            .unwrap()
-            .generation_resources();
         inputs.prepare_intrinsics(&source, &theme).unwrap();
         let measure = || {
             source.measure_selected_interior(PlotRenderContext::new(

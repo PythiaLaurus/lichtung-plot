@@ -39,7 +39,6 @@ struct BoxSummary {
 struct BoxStats {
     x_index: usize,
     group_index: usize,
-    hue_index: Option<usize>,
     lo_whisker: f64,
     q1: f64,
     median: f64,
@@ -183,7 +182,6 @@ pub(crate) fn prepare(
             Ok(BoxStats {
                 x_index: group.x_index,
                 group_index: group.group_index,
-                hue_index: group.hue_index,
                 lo_whisker: summary.lo_whisker,
                 q1: summary.q1,
                 median: summary.median,
@@ -248,8 +246,12 @@ pub(crate) fn measure_marks(
     }
     let overlay = chart.raw_overlay_spec();
     let panel = context.panel;
-    let legend_entries =
-        categorical_distribution::retained(chart)?.guide_entries(chart, theme, data)?;
+    let (colors, legend_entries) = {
+        let retained = categorical_distribution::retained(chart)?;
+        let colors = retained.resolved_colors(chart, theme, data)?;
+        let entries = retained.guide_entries_with_colors(chart, theme, data, &colors)?;
+        (colors, entries)
+    };
     let significance = if group_levels.is_empty() {
         crate::significance::plan(
             chart,
@@ -283,8 +285,11 @@ pub(crate) fn measure_marks(
 
     let mut payload = DistributionPayload::new(layout.projection.panel_box(), chart.kind());
     for (i, stat) in stats.iter().enumerate() {
-        let color_index = stat.hue_index.unwrap_or(if group_active { 0 } else { i });
-        let color = theme.colors[color_index % theme.colors.len()];
+        let group = &sample.groups[i];
+        let color = colors.color(
+            group.hue_label.as_deref().unwrap_or(&group.label),
+            &resources,
+        )?;
         let fill = theme.marks.box_body.backend_style(color);
         let style = theme.marks.summary_stroke.backend_style();
 
@@ -379,11 +384,8 @@ pub(crate) fn measure_marks(
         }
     }
     if overlay.is_visible() {
-        for (index, group) in sample.groups.iter().enumerate() {
+        for group in &sample.groups {
             let center = crate::plots::distribution_sample::center(group, group_levels.len());
-            let color_index = group
-                .hue_index
-                .unwrap_or(if group_active { 0 } else { index });
             let points = data.collect_source(group.observations.iter().map(|observation| {
                 data.claim_source_visits(1)?;
                 let x = crate::plots::distribution_sample::overlay_x(
@@ -398,7 +400,10 @@ pub(crate) fn measure_marks(
             payload.scatter(
                 points,
                 crate::plots::distribution_sample::overlay_style(
-                    theme.colors[color_index % theme.colors.len()],
+                    colors.color(
+                        group.hue_label.as_deref().unwrap_or(&group.label),
+                        &resources,
+                    )?,
                     theme,
                 ),
                 data,

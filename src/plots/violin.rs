@@ -356,11 +356,6 @@ pub(crate) fn measure_marks(
     } else {
         DistributionLayout::Raincloud
     };
-    let family = if distribution_layout == DistributionLayout::Mirrored {
-        "violin"
-    } else {
-        "raincloud"
-    };
     let theme = context.theme;
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);
@@ -372,7 +367,8 @@ pub(crate) fn measure_marks(
     let rendered_maxima = data.collect_source((0..x_levels.len()).map(|_| Ok(support_range.1)))?;
     let overlay = chart.raw_overlay_spec();
     let panel = context.panel;
-    let legend_entries = retained.guide_entries(chart, theme, data)?;
+    let colors = retained.resolved_colors(chart, theme, data)?;
+    let legend_entries = retained.guide_entries_with_colors(chart, theme, data, &colors)?;
     let significance = if group_levels.is_empty() {
         crate::significance::plan(
             chart,
@@ -424,14 +420,10 @@ pub(crate) fn measure_marks(
             0.8
         };
 
-        let fill = theme.marks.violin_body.backend_style(group_color(
-            chart,
-            group,
-            i,
-            group_active,
-            family,
-            theme,
-        )?);
+        let fill = theme
+            .marks
+            .violin_body
+            .backend_style(group_color(group, &colors, &resources)?);
         match distribution_layout {
             DistributionLayout::Mirrored => {
                 // Violin shape
@@ -606,7 +598,7 @@ pub(crate) fn measure_marks(
             let (box_right, _) = proj.project(center + violin_w_data * 0.10, 0.0);
             let (strip_left, _) = proj.project(center + violin_w_data * 0.24, 0.0);
             let (strip_right, _) = proj.project(center + violin_w_data * 0.46, 0.0);
-            let color = group_color(chart, group, index, group_active, family, theme)?;
+            let color = group_color(group, &colors, &resources)?;
             let style = crate::plots::distribution_sample::overlay_style(color, theme);
             let point_ink = crate::render::geometry::point_ink_bounds(theme, &style)?;
             let point_left = point_ink.map_or(0.0, |ink| (-ink.left).max(0.0));
@@ -640,9 +632,9 @@ pub(crate) fn measure_marks(
         } else {
             0.8
         };
-        for (index, group) in sample.groups.iter().enumerate() {
+        for group in &sample.groups {
             let center = crate::plots::distribution_sample::center(group, group_levels.len());
-            let color = group_color(chart, group, index, group_active, family, theme)?;
+            let color = group_color(group, &colors, &resources)?;
             let points = data.collect_source(group.observations.iter().map(|observation| {
                 data.claim_source_visits(1)?;
                 let x = crate::plots::distribution_sample::overlay_x(
@@ -669,21 +661,14 @@ pub(crate) fn measure_marks(
 }
 
 fn group_color(
-    chart: &Plot,
     group: &crate::plots::distribution_sample::DistributionGroup,
-    default_index: usize,
-    group_active: bool,
-    family: &'static str,
-    theme: &ResolvedTheme,
+    colors: &crate::theme::CategoryColors,
+    resources: &crate::font::canonical::OperationGenerationResources,
 ) -> Result<(u8, u8, u8), Error> {
-    let color_index = group
-        .hue_index
-        .unwrap_or(if group_active { 0 } else { default_index });
-    if let Some(label) = group.hue_label.as_deref() {
-        chart.categorical_color(family, label, color_index, theme)
-    } else {
-        Ok(theme.colors[color_index % theme.colors.len()])
-    }
+    colors.color(
+        group.hue_label.as_deref().unwrap_or(&group.label),
+        resources,
+    )
 }
 
 #[cfg(test)]

@@ -19,7 +19,6 @@ pub(crate) struct DistributionGroup {
     pub(crate) hue_label: Option<String>,
     pub(crate) x_index: usize,
     pub(crate) group_index: usize,
-    pub(crate) hue_index: Option<usize>,
     pub(crate) observations: Vec<DistributionObservation>,
 }
 
@@ -116,9 +115,13 @@ pub(crate) fn prepare_scoped(
             .as_ref()
             .and_then(|group| group_levels.iter().position(|level| level == group))
             .unwrap_or(0);
-        let hue_index = hue_label
-            .as_ref()
-            .and_then(|hue| hue_levels.iter().position(|level| level == hue));
+        if let Some(hue) = &hue_label {
+            if !hue_levels.iter().any(|level| level == hue) {
+                return Err(Error::Data(format!(
+                    "{family}: hue {hue:?} is absent from the resolved domain"
+                )));
+            }
+        }
         let mut observations = Vec::new();
         data.reserve_source(&mut observations, 1)?;
         observations.push(DistributionObservation {
@@ -132,7 +135,6 @@ pub(crate) fn prepare_scoped(
             hue_label,
             x_index,
             group_index,
-            hue_index,
             observations,
         });
     }

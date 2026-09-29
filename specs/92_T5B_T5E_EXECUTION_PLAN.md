@@ -2063,7 +2063,7 @@ ownership, statistical estimates, public extension points, or layout strategy.
 | T5d2b | COMPLETE | T5d2a | `refactor(scales): migrate ordinary qualitative consumers` |
 | T5d2c | IN PROGRESS | T5d2b | Umbrella for collective and specialized color owners |
 | T5d2c1 | COMPLETE | T5d2b | `refactor(scales): resolve Interaction trace colors by raw identity` |
-| T5d2c2 | PENDING | T5d2c1 | `refactor(scales): resolve distribution group colors` |
+| T5d2c2 | COMPLETE | T5d2c1 | `refactor(scales): resolve distribution group colors` |
 | T5d2c3 | PENDING | T5d2c2 | `refactor(scales): resolve Marginal and Matrix group colors` |
 | T5d2d | PENDING | T5d2c | `refactor(scales): close palettes, accents and guide equality` |
 | T5d3 | PENDING | T5d2 | `feat(scales): resolve sequential and diverging mappings` |
@@ -2180,6 +2180,20 @@ remain independent. Fourteen focused Interaction units, twenty-three
 integration contracts including crossed group/hue, exact caller colors,
 mixed-theme Canvas compatibility, unchanged ordinary SVG fingerprints and
 strict Clippy pass. T5d2c2 migrates collective distributions.
+
+T5d2c2 closure: Boxplot, sampled Violin/Raincloud and supplied Raincloud
+now resolve hue/positioned-series color by one raw prepared key for body,
+raw observation/mandatory strip and originating guide. Without series, the
+category is the color identity; faceted categories are resolved from their
+complete unsliced source order before applying a local panel's marks.
+An exact caller map with an unused/repeated-color key is admitted, and a
+missing *used* series fails before font discovery, including for Boxplot.
+The old render-time categorical fallback and two obsolete precomputed
+color-index fields are gone; scientific KDE/box/strip geometry and source-row
+identity are retained. Focused eleven distribution extraction and three
+supplied-cloud units, sampled/supplied Raincloud contracts, faceted sparse
+series, unchanged native distribution snapshots, and strict Clippy pass.
+Marginal/Matrix complete this umbrella in T5d2c3.
 
 Implement fixed/extendable palettes, exact raw-key maps, capacity/coverage checks,
 and nonempty extendable accent sequences under one deterministic color engine.

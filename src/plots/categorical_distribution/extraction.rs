@@ -1,6 +1,32 @@
 use super::*;
 
 #[test]
+fn distribution_series_color_keys_refuse_missing_raw_identity_before_fonts() {
+    let plot = Plot::boxplot(
+        CategoryValues::new("category", ["a", "a", "b", "b"]).unwrap(),
+        NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]),
+    )
+    .series(CategoryValues::new("series", ["first", "first", "second", "second"]).unwrap())
+    .categorical_colors(
+        crate::CategoricalColors::new([
+            ("first".into(), (15, 25, 35)),
+            ("unused".into(), (15, 25, 35)),
+        ])
+        .unwrap(),
+    )
+    .erase();
+    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+    let error = crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new())
+        .err()
+        .expect("used missing series must refuse");
+    assert!(matches!(error, Error::Data(message) if message.contains("second")));
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        0
+    );
+}
+
+#[test]
 fn p2_retained_line_copy_admits_records_and_bytes_without_processing() {
     let source = crate::Plot::scatter(
         crate::NumericValues::new("x", [1.0]),
@@ -560,9 +586,9 @@ fn parent_palette_and_absent_series_slots_are_retained_before_native_projection(
             sample
                 .groups
                 .iter()
-                .map(|group| (group.group_index, group.hue_index))
+                .map(|group| (group.group_index, group.hue_label.as_deref()))
                 .collect::<Vec<_>>(),
-            [(2, Some(2)), (1, Some(1))]
+            [(2, Some("one")), (1, Some("two"))]
         );
         for preset in [
             crate::Theme::Publication,

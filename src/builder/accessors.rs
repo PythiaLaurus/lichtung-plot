@@ -691,29 +691,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         &self.panel_text_annotations
     }
 
-    pub(crate) fn categorical_color(
-        &self,
-        family: &str,
-        label: &str,
-        default_index: usize,
-        theme: &crate::theme::ResolvedTheme,
-    ) -> Result<(u8, u8, u8), Error> {
-        if let Some(colors) = self.categorical_colors_spec() {
-            colors
-                .color(
-                    label,
-                    &theme.prepared_font_environment()?.generation_resources(),
-                )?
-                .ok_or_else(|| {
-                    Error::Data(format!(
-                        "{family}: category {label:?} has no caller-owned color"
-                    ))
-                })
-        } else {
-            Ok(theme.colors[default_index % theme.colors.len()])
-        }
-    }
-
     pub(crate) fn waterfall_base(&self) -> Option<f64> {
         match self.input.as_ref() {
             PlotInput::Waterfall { base, .. } => Some(*base),

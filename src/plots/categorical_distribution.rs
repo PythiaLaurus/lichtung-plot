@@ -3,6 +3,7 @@
 use crate::data::PlotData;
 use crate::decorations::legend::LegendEntry;
 use crate::render::backend::{Backend, FillStyle, LineStyle, Point2D, PointStyle};
+use crate::theme::{CategoryColors, PaletteSource};
 use crate::{Error, Plot, PlotKind};
 
 #[cfg(test)]
@@ -16,6 +17,41 @@ pub(crate) enum PreparedDistribution {
 }
 
 impl PreparedDistribution {
+    pub(crate) fn resolved_colors(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        data: PlotData<'_>,
+    ) -> Result<CategoryColors, Error> {
+        let resources = data.source_resources()?;
+        let keys = if !self.hue_levels().is_empty() {
+            chart.global_hue_levels().unwrap_or(self.hue_levels())
+        } else if !chart.has_facets() || matches!(self, Self::Supplied(_)) {
+            self.categories()
+        } else {
+            // A category keyed by its position must not be recolored when an
+            // earlier observed category is absent from a particular facet.
+            let source = chart.data().with_axis_resources(resources);
+            let column = chart.x_col().ok_or_else(|| {
+                Error::Render("distribution category color source is missing".into())
+            })?;
+            let raw = crate::data::strict_strings(source, column, "distribution color domain")?;
+            let parent = source.source_levels(&raw)?;
+            return CategoryColors::resolve(
+                &parent,
+                PaletteSource::Extendable(&theme.colors),
+                chart.categorical_colors_spec(),
+                resources,
+            );
+        };
+        CategoryColors::resolve(
+            keys,
+            PaletteSource::Extendable(&theme.colors),
+            chart.categorical_colors_spec(),
+            resources,
+        )
+    }
+
     pub(crate) fn primary_mark_count(&self) -> u128 {
         match self {
             Self::Boxplot(prepared) => prepared.sample.groups.len() as u128,
@@ -30,43 +66,46 @@ impl PreparedDistribution {
         theme: &crate::theme::ResolvedTheme,
         data: PlotData<'_>,
     ) -> Result<Vec<LegendEntry>, Error> {
+        let colors = self.resolved_colors(chart, theme, data)?;
+        self.guide_entries_with_colors(chart, theme, data, &colors)
+    }
+
+    pub(crate) fn guide_entries_with_colors(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        data: PlotData<'_>,
+        colors: &CategoryColors,
+    ) -> Result<Vec<LegendEntry>, Error> {
+        let resources = data.source_resources()?;
         match self {
             Self::Boxplot(prepared) => {
-                data.collect_source(prepared.sample.hue_levels.iter().enumerate().map(
-                    |(index, label)| {
-                        let color = theme.colors[index % theme.colors.len()];
-                        Ok(LegendEntry::line_fill(
-                            chart.point_legend_identity(label, data)?,
-                            theme.marks.summary_stroke.backend_style(),
-                            theme.marks.box_body.backend_style(color),
-                        ))
-                    },
-                ))
+                data.collect_source(prepared.sample.hue_levels.iter().map(|label| {
+                    let color = colors.color(label, resources)?;
+                    Ok(LegendEntry::line_fill(
+                        chart.point_legend_identity(label, data)?,
+                        theme.marks.summary_stroke.backend_style(),
+                        theme.marks.box_body.backend_style(color),
+                    ))
+                }))
             }
             Self::Violin(prepared) => {
-                let family = if chart.kind() == PlotKind::Violin {
-                    "violin"
-                } else {
-                    "raincloud"
-                };
-                data.collect_source(prepared.sample.hue_levels.iter().enumerate().map(
-                    |(index, label)| {
-                        let color = chart.categorical_color(family, label, index, theme)?;
-                        let identity = chart.point_legend_identity(label, data)?;
-                        let fill = theme.marks.violin_body.backend_style(color);
-                        Ok(if chart.kind() == PlotKind::Violin {
-                            LegendEntry::fill(identity, fill)
-                        } else {
-                            LegendEntry::point_fill(
-                                identity,
-                                crate::plots::distribution_sample::overlay_style(color, theme),
-                                fill,
-                            )
-                        })
-                    },
-                ))
+                data.collect_source(prepared.sample.hue_levels.iter().map(|label| {
+                    let color = colors.color(label, resources)?;
+                    let identity = chart.point_legend_identity(label, data)?;
+                    let fill = theme.marks.violin_body.backend_style(color);
+                    Ok(if chart.kind() == PlotKind::Violin {
+                        LegendEntry::fill(identity, fill)
+                    } else {
+                        LegendEntry::point_fill(
+                            identity,
+                            crate::plots::distribution_sample::overlay_style(color, theme),
+                            fill,
+                        )
+                    })
+                }))
             }
-            Self::Supplied(prepared) => prepared.guide_entries(chart, theme, data),
+            Self::Supplied(prepared) => prepared.guide_entries(chart, theme, data, colors),
         }
     }
 
@@ -85,7 +124,7 @@ impl PreparedDistribution {
         data.claim_mark_rows()?;
         #[cfg(test)]
         count(chart.kind(), 0);
-        match chart.kind() {
+        let prepared = match chart.kind() {
             PlotKind::Boxplot => Ok(Self::Boxplot(crate::plots::boxplot::prepare(
                 chart, data, facet,
             )?)),
@@ -98,7 +137,22 @@ impl PreparedDistribution {
             _ => Err(Error::Render(
                 "categorical distribution preparation requires its family".into(),
             )),
+        }?;
+        if let Some(exact) = chart.categorical_colors_spec() {
+            let keys = if prepared.hue_levels().is_empty() {
+                prepared.categories()
+            } else {
+                prepared.hue_levels()
+            };
+            for key in keys {
+                if exact.color(key, data.source_resources()?)?.is_none() {
+                    return Err(Error::Data(format!(
+                        "distribution: category {key:?} has no caller-owned color"
+                    )));
+                }
+            }
         }
+        Ok(prepared)
     }
 
     pub(crate) fn categories(&self) -> &[String] {
