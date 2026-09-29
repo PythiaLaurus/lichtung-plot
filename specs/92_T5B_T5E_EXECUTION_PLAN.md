@@ -2070,7 +2070,9 @@ ownership, statistical estimates, public extension points, or layout strategy.
 | T5d2d | COMPLETE | T5d2c | `refactor(scales): close palettes, accents and guide equality` |
 | T5d3 | IN PROGRESS | T5d2 | Umbrella for active sequential and diverging owners |
 | T5d3a | COMPLETE | T5d2 | `feat(scales): resolve Beeswarm sequential colors and guide` |
-| T5d3b | PENDING | T5d3a | `feat(scales): resolve Heatmap sequential and diverging colors` |
+| T5d3b | PENDING | T5d3a | Umbrella for Heatmap scales and shared guide stops |
+| T5d3b1 | PENDING | T5d3a | `feat(scales): resolve Heatmap cell and local-guide colors` |
+| T5d3b2 | PENDING | T5d3b1 | `refactor(scales): share resolved continuous stops across compositions` |
 | T5d4 | PENDING | T5d3 | `refactor(scales): coordinate final domains guides and contrast` |
 | T5d5 | PENDING | T5d4 | `test(scales): close mapping and guide consistency` |
 
@@ -2257,15 +2259,17 @@ justified by a named semantic owner rather than implementation history.
 
 ### T5d3 — Continuous Mapping
 
-T5d3 has two dependency-ordered commits. T5d3a installs a validated private
+T5d3 has two dependency-ordered substages. T5d3a installs a validated private
 ordered-stop OKLab sequential scale directly in prepared Beeswarm marks and
 its local/shared guide inputs; its existing RGB interpolation and separate
-endpoint selection are deleted in that commit. T5d3b extends that same
+endpoint selection are deleted in that commit. T5d3b1 extends that same
 resolved scale to Heatmap's sequential and diverging branches, including the
-exact center, symmetric/constant/explicit domains, value-label contrast,
-missing role and local/shared guide stops. Remove Heatmap's RGB helper and
-duplicate domain/stop derivation in place. Both commits keep the current
-public scale controls, native guide descriptor, and T5e packing boundary;
+exact center, symmetric/constant/explicit domains, value-label contrast and
+local guide stops; remove its RGB helper and duplicate domain/stop derivation
+in place. T5d3b2 passes complete resolved stops through the existing shared
+descriptor and selected guide, preserving missing style ownership and
+mark/guide equality at the final merged domain. These commits keep the
+current public scale controls, native guide descriptor, and T5e packing boundary;
 T5d3 closes only after the final shared-domain mark/guide agreement passes.
 
 T5d3a closure: `SequentialColors` retains admitted ordered opaque stops and a
