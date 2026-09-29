@@ -993,6 +993,7 @@ fn plan_panel_attempt(
             crate::layout::interior::MarkPayload::Beeswarm(payload) => payload.domain_expansions,
             crate::layout::interior::MarkPayload::Waterfall(payload) => payload.domain_expansions,
             crate::layout::interior::MarkPayload::Marginal(payload) => payload.domain_expansions,
+            crate::layout::interior::MarkPayload::Estimate(payload) => payload.domain_expansions,
             crate::layout::interior::MarkPayload::Dumbbell(payload) => payload.domain_expansions,
             crate::layout::interior::MarkPayload::Bars(payload) => [payload.domain_expansion, None],
             crate::layout::interior::MarkPayload::Distribution(payload) => {

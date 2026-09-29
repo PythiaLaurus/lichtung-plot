@@ -102,6 +102,66 @@ fn labels(significance: bool) -> Plot {
 }
 
 #[test]
+fn wide_estimate_labels_request_automatic_headroom_but_not_exact_x() {
+    let source = |exact| {
+        let plot = Plot::coefficient(
+            CategoryValues::new("term", ["low", "middle", "high"]).unwrap(),
+            CoefficientInput::estimates(NumericValues::new("estimate", [0.0, 5.0, 10.0])),
+        )
+        .estimate_labels(
+            crate::NumericLabelFormat::default()
+                .suffix("W".repeat(42))
+                .unwrap(),
+        )
+        .size(1000, 650);
+        if exact {
+            plot.x_limits(0.0, 10.0).erase()
+        } else {
+            plot.erase()
+        }
+    };
+    let theme = crate::Theme::Publication.resolve();
+    let panel = crate::layout::PanelBox::new(80.0, 920.0, 80.0, 580.0);
+    for exact in [false, true] {
+        let source = source(exact);
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+                .unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let selected =
+            chart.measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme));
+        if exact {
+            assert!(
+                matches!(selected, Err(crate::layout::fit::PlanError::Fit(failure))
+                if failure.reason.kind == crate::layout::fit::FitKind::OverlayCollision)
+            );
+        } else {
+            let selected = selected.unwrap();
+            let crate::layout::interior::MarkPayload::Estimate(payload) =
+                &selected.marks.as_ref().unwrap().payload
+            else {
+                panic!("selected Estimate")
+            };
+            assert!(payload.domain_expansions[0].is_some());
+            let final_plan = crate::decorations::plan::plan_panel_for_test(
+                &chart,
+                crate::PlotKind::Coefficient,
+                panel,
+                crate::decorations::plan::LegendRole::Panel,
+                &theme,
+            )
+            .unwrap();
+            let crate::layout::interior::MarkPayload::Estimate(final_payload) =
+                &final_plan.result.marks.as_ref().unwrap().payload
+            else {
+                panic!("final Estimate")
+            };
+            assert!(final_payload.domain_expansions.iter().all(Option::is_none));
+        }
+    }
+}
+
+#[test]
 fn semantics_and_label_strings_obey_exact_limits_before_fonts() {
     for source in sources(None, None)
         .into_iter()

@@ -230,6 +230,7 @@ struct EstimateRowPayload {
 #[derive(Debug)]
 pub(crate) struct EstimatePayload {
     clip: crate::layout::PanelBox,
+    pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
     reference: Option<[Point2D; 2]>,
     reference_style: LineStyle,
     interval_style: LineStyle,
@@ -864,6 +865,15 @@ fn project(
                         TextAnchor::End,
                         end_plan,
                     )
+                } else if chart.user_x_limits().is_none() {
+                    // Keep the first legal anchor order. The selected required
+                    // glyph requests numeric headroom from the root instead of
+                    // failing a feasible automatic domain at this initial fit.
+                    (
+                        Point2D::new((x + gap).round(), y.round()),
+                        TextAnchor::Start,
+                        start_plan,
+                    )
                 } else {
                     let message = if is_significance {
                         format!(
@@ -895,6 +905,7 @@ fn project(
         });
     let mut payload = EstimatePayload {
         clip: layout.projection.panel_box(),
+        domain_expansions: [None; 2],
         reference,
         reference_style: if prepared.point_interval {
             theme.marks.point_interval_reference.backend_style()
@@ -991,8 +1002,65 @@ fn project(
         }
         payload.rows.push(row);
     }
-    let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
     let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
+    let mut label_ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    let mut label_source: Option<(f64, f64)> = None;
+    data.claim_source_visits(payload.rows.len())?;
+    for (index, row) in payload.rows.iter().enumerate() {
+        let Some(text) = &row.text else { continue };
+        let mut ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
+        ink.text(text.placement, &text.plan, None)?;
+        for bounds in ink.bounds() {
+            if bounds.bottom < clip.y0 || bounds.top > clip.y1 {
+                return Err(context
+                    .fit_scope()
+                    .child(crate::layout::AddressRole::CategoricalValueLabel, index)?
+                    .failure(
+                        crate::layout::fit::FitKind::Text,
+                        "required Estimate text exceeds its categorical row",
+                    )
+                    .into());
+            }
+            if (bounds.left < clip.x0 || bounds.right > clip.x1)
+                && (chart.user_x_limits().is_some() || estimates[index].is_none())
+            {
+                return Err(context
+                    .fit_scope()
+                    .child(crate::layout::AddressRole::CategoricalValueLabel, index)?
+                    .failure(
+                        crate::layout::fit::FitKind::OverlayCollision,
+                        "required Estimate text exceeds its numeric panel",
+                    )
+                    .into());
+            }
+        }
+        if let Some(tuple) = estimates[index] {
+            let source = label_source.get_or_insert((tuple.estimate, tuple.estimate));
+            source.0 = source.0.min(tuple.estimate);
+            source.1 = source.1.max(tuple.estimate);
+            label_ink.append(&ink)?;
+        }
+    }
+    if chart.user_x_limits().is_none() {
+        if let (Some(numeric), Some(bounds)) = (
+            label_source,
+            label_ink
+                .bounds()
+                .iter()
+                .copied()
+                .reduce(crate::render::geometry::GeometryBox::union),
+        ) {
+            payload.domain_expansions = crate::layout::interior::automatic_absolute_ink_expansions(
+                [numeric, (0.0, row_count)],
+                &layout.projection,
+                bounds,
+                [true, false],
+                data,
+                context.fit_scope(),
+            )?;
+        }
+    }
+    let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
     if let Some(line) = &payload.reference {
         geometry.line(line, &payload.reference_style, Some(clip))?;
     }

@@ -1028,24 +1028,24 @@ caller styles while centralizing their ownership.
 | T5c2d1b2 | COMPLETE | T5c2d1b1 | Umbrella for remaining specialized mark requirements |
 | T5c2d1b2a | COMPLETE | T5c2d1b1 | `feat(waterfall): measure signed step category ink` |
 | T5c2d1b2b | COMPLETE | T5c2d1b2a | `refactor(marks): measure Marginal and Matrix mark requirements` |
-| T5c3 | IN PROGRESS | T5c2d | Umbrella for native annotation and overlay consequences |
+| T5c3 | COMPLETE | T5c2d | Native annotation and overlay consequences |
 | T5c3a | COMPLETE | T5c2d | Umbrella for typed significance targets and native shelves |
 | T5c3a1 | COMPLETE | T5c2d | `refactor(annotations): resolve grouped significance by typed targets` |
 | T5c3a2 | COMPLETE | T5c3a1 | Umbrella for significance shelves and painted containment |
 | T5c3a2a | COMPLETE | T5c3a1 | `feat(annotations): pack significance labels by occupied ink` |
 | T5c3a2b | COMPLETE | T5c3a2a | `refactor(annotations): fit complete significance ink and exact windows` |
-| T5c3b | IN PROGRESS | T5c3a | Umbrella for remaining native overlays and text |
+| T5c3b | COMPLETE | T5c3a | Umbrella for remaining native overlays and text |
 | T5c3b1 | COMPLETE | T5c3a | `fix(annotations): fit visible supplemental point labels` |
 | T5c3b2 | COMPLETE | T5c3b1 | Umbrella for panel text and inside overlays |
 | T5c3b2a | COMPLETE | T5c3b1 | `refactor(annotations): retain canonical panel text ink` |
 | T5c3b2b | COMPLETE | T5c3b2a | `refactor(annotations): reuse frozen text for inside overlay obstacles` |
-| T5c3b3 | IN PROGRESS | T5c3b2 | Umbrella for required value and cell text |
+| T5c3b3 | COMPLETE | T5c3b2 | Umbrella for required value and cell text |
 | T5c3b3a | COMPLETE | T5c3b2 | `feat(annotations): contain Heatmap cell text ink` |
-| T5c3b3b | IN PROGRESS | T5c3b3a | Umbrella for attached and specialized value text |
+| T5c3b3b | COMPLETE | T5c3b3a | Umbrella for attached and specialized value text |
 | T5c3b3b1 | COMPLETE | T5c3b3a | `feat(annotations): keep Waterfall totals at exact source anchors` |
-| T5c3b3b2 | IN PROGRESS | T5c3b3b1 | Umbrella for attached Bar and Estimate value text |
+| T5c3b3b2 | COMPLETE | T5c3b3b1 | Umbrella for attached Bar and Estimate value text |
 | T5c3b3b2a | COMPLETE | T5c3b3b1 | `feat(annotations): fit attached Bar glyph ink` |
-| T5c3b3b2b | PENDING | T5c3b3b2a | `refactor(annotations): fit Estimate value text` |
+| T5c3b3b2b | COMPLETE | T5c3b3b2a | `refactor(annotations): fit Estimate value text` |
 | T5c4 | PENDING | T5c3 | `refactor(layout): replace deferred mark and annotation minima` |
 | T5c5 | PENDING | T5c4 | `test(theme): close native mark and annotation ownership` |
 
@@ -1955,6 +1955,19 @@ Deliberately oversized attached glyphs in both orientations, 31 Bar units,
 native Bar facet/Canvas and exact-window neighbors, 19 annotation contracts,
 unchanged Bar family snapshots and strict Clippy pass. T5c3b3b2b follows for
 Estimate attached and value text.
+
+T5c3b3b2b closure: PointInterval/Coefficient/Forest retained available and
+not-estimable labels now contribute their own uncut canonical glyph ink to
+the assigned categorical row and numeric panel before the mark clip. A
+caller-exact X window or an unavailable label outside the numeric frame is
+a typed value-label/overlay fit miss. If neither attached start nor end fits
+an initial automatic window, keep the first declared anchor and propose the
+painted X extent through the existing root feedback driver, then reselect
+under the final domain. A 42-character estimate suffix demonstrates automatic
+recovery and exact-X refusal; 18 focused Estimate units, four native
+facet/Canvas/axis neighbors, unchanged estimate SVG snapshots and strict
+Clippy pass. T5c3's selected native annotation requirements now precede
+T5c4's atomic deferred-boundary retirement.
 
 Separate normal-flow requirements from inside guides, significance, value labels,
 panel text, and supplemental layers. Implement the closed anchor order, source-
