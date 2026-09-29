@@ -1019,16 +1019,20 @@ caller styles while centralizing their ownership.
 | T5c2c1b2 | COMPLETE | T5c2c1b1 | Umbrella for remaining distribution slots and sparse Interaction |
 | T5c2c1b2a | COMPLETE | T5c2c1b1 | `feat(marks): measure sampled and supplied cloud category pitch` |
 | T5c2c1b2b | COMPLETE | T5c2c1b2a | `feat(marks): measure sparse Interaction and collective preference` |
-| T5c2d | IN PROGRESS | T5c2c | Umbrella for still-deferred specialized mark requirements |
+| T5c2d | COMPLETE | T5c2c | Umbrella for specialized mark requirements |
 | T5c2d0 | COMPLETE | T5c2c | `docs(marks): map specialized mark requirement owners` |
-| T5c2d1 | IN PROGRESS | T5c2d0 | Umbrella for specialized mark requirements |
+| T5c2d1 | COMPLETE | T5c2d0 | Umbrella for specialized mark requirements |
 | T5c2d1a | COMPLETE | T5c2d0 | `feat(heatmap): measure styled cell and missing-cross hard ink` |
-| T5c2d1b | IN PROGRESS | T5c2d1a | Umbrella for remaining specialized mark requirements |
+| T5c2d1b | COMPLETE | T5c2d1a | Umbrella for remaining specialized mark requirements |
 | T5c2d1b1 | COMPLETE | T5c2d1a | `feat(beeswarm): measure occupied marker category ink` |
 | T5c2d1b2 | COMPLETE | T5c2d1b1 | Umbrella for remaining specialized mark requirements |
 | T5c2d1b2a | COMPLETE | T5c2d1b1 | `feat(waterfall): measure signed step category ink` |
 | T5c2d1b2b | COMPLETE | T5c2d1b2a | `refactor(marks): measure Marginal and Matrix mark requirements` |
-| T5c3 | PENDING | T5c2d | `refactor(annotations): measure native overlay consequences` |
+| T5c3 | IN PROGRESS | T5c2d | Umbrella for native annotation and overlay consequences |
+| T5c3a | IN PROGRESS | T5c2d | Umbrella for typed significance targets and native shelves |
+| T5c3a1 | COMPLETE | T5c2d | `refactor(annotations): resolve grouped significance by typed targets` |
+| T5c3a2 | PENDING | T5c3a1 | `refactor(annotations): pack complete significance shelves` |
+| T5c3b | PENDING | T5c3a | `refactor(annotations): place remaining native overlays and text` |
 | T5c4 | PENDING | T5c3 | `refactor(layout): replace deferred mark and annotation minima` |
 | T5c5 | PENDING | T5c4 | `test(theme): close native mark and annotation ownership` |
 
@@ -1832,6 +1836,18 @@ Data-window tests include off-domain marks, crossing lines/intervals, exact-edge
 strokes, mixed exact/automatic axes, genuine zeros, and malformed/collapsed data.
 
 ### T5c3 — Native Annotation And Overlay Consequences
+
+T5c3 ownership census: `docs/t5c3-annotation-owners.md` maps pairwise/attached
+significance, Waterfall and cell/value labels, inside guides, panel text and
+supplemental layers to their retained source and selected consumer. T5c3a1
+removes grouped significance's synthetic category/series strings and transformed
+annotation copies: sorted category-cluster/series anchors are selected by the
+original `SignificanceTarget` identity, with explicit rendered-series validation
+and no fallback to a string key. Both orientations and existing explicit-domain
+semantics use the same typed resolution. Focused significance units, Bar and
+distribution feedback/facet neighbors, 19 significance integration contracts,
+custom within-category series anchors, and strict Clippy pass. T5c3a2 owns the
+complete painted-ink shelf update; T5c3b owns remaining overlays.
 
 Separate normal-flow requirements from inside guides, significance, value labels,
 panel text, and supplemental layers. Implement the closed anchor order, source-

@@ -251,19 +251,6 @@ impl<P> Significance<P> {
 }
 
 impl SignificanceAnnotation {
-    pub(crate) fn pairwise(
-        endpoint_a: impl Into<SignificanceTarget>,
-        endpoint_b: impl Into<SignificanceTarget>,
-        mark: SignificanceMark,
-    ) -> Self {
-        Self::Pairwise {
-            endpoint_a: endpoint_a.into(),
-            endpoint_b: endpoint_b.into(),
-            mark,
-            facet: None,
-        }
-    }
-
     pub(crate) const fn mark(&self) -> SignificanceMark {
         match self {
             Self::Attached { mark, .. } | Self::Pairwise { mark, .. } => *mark,

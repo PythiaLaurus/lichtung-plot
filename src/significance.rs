@@ -150,6 +150,7 @@ fn plan_comparisons_with_label(
         categories,
         rendered_maxima,
         None,
+        None,
         y_range,
         categorical_x_override,
         y_limits,
@@ -191,6 +192,7 @@ fn plan_comparisons_at(
         categories,
         rendered_maxima,
         anchor_positions,
+        None,
         y_range,
         categorical_x_override,
         y_limits,
@@ -217,6 +219,7 @@ fn plan_comparisons_at_with_label(
     categories: &[String],
     rendered_maxima: &[f64],
     anchor_positions: Option<&[f64]>,
+    anchor_targets: Option<&[SignificanceTarget]>,
     y_range: (f64, f64),
     categorical_x_override: Option<(f64, f64)>,
     y_limits: Option<(f64, f64)>,
@@ -233,6 +236,7 @@ fn plan_comparisons_at_with_label(
     validate_range(y_range, y_limits.is_some())?;
     if categories.len() != rendered_maxima.len()
         || anchor_positions.is_some_and(|positions| positions.len() != categories.len())
+        || anchor_targets.is_some_and(|targets| targets.len() != categories.len())
         || categories.is_empty()
     {
         return Err(render_error(format!(
@@ -282,19 +286,37 @@ fn plan_comparisons_at_with_label(
         let Some((endpoint_a, endpoint_b)) = annotation.endpoints() else {
             continue;
         };
-        validate_bracket(annotation, categories)?;
-        let a = categories
-            .iter()
-            .position(|category| category == endpoint_a.category_name())
-            .ok_or_else(|| {
-                render_error("validated significance category unexpectedly disappeared")
-            })?;
-        let b = categories
-            .iter()
-            .position(|category| category == endpoint_b.category_name())
-            .ok_or_else(|| {
-                render_error("validated significance category unexpectedly disappeared")
-            })?;
+        let (a, b) = if let Some(targets) = anchor_targets {
+            let index = |endpoint: &SignificanceTarget| {
+                targets
+                    .iter()
+                    .position(|target| target == endpoint)
+                    .ok_or_else(|| {
+                        Error::Data(format!(
+                            "significance target {endpoint:?} has no rendered anchor"
+                        ))
+                    })
+            };
+            if endpoint_a == endpoint_b {
+                return Err(Error::Data(format!(
+                    "significance comparison endpoints must be different; both were {:?}",
+                    endpoint_a.category_name()
+                ))
+                .into());
+            }
+            (index(endpoint_a)?, index(endpoint_b)?)
+        } else {
+            validate_bracket(annotation, categories)?;
+            let index = |endpoint: &SignificanceTarget| {
+                categories
+                    .iter()
+                    .position(|category| category == endpoint.category_name())
+                    .ok_or_else(|| {
+                        render_error("validated significance category unexpectedly disappeared")
+                    })
+            };
+            (index(endpoint_a)?, index(endpoint_b)?)
+        };
         if anchor_positions
             .is_some_and(|positions| positions[a].to_bits() == positions[b].to_bits())
         {
@@ -648,10 +670,12 @@ fn plan_grouped_oriented(
     }
     let group_count = groups.len().max(1);
     let mut labels = Vec::new();
+    let mut targets = Vec::new();
     let mut maxima = Vec::new();
     let mut positions = Vec::new();
     for (category_index, category) in categories.iter().enumerate() {
-        labels.push(format!("{category}\u{1f}"));
+        labels.push(format!("{category_index}-cluster"));
+        targets.push(SignificanceTarget::category(category));
         maxima.push(
             rendered_maxima[category_index]
                 .iter()
@@ -663,7 +687,8 @@ fn plan_grouped_oriented(
             if !rendered_maxima[category_index][group_index].is_finite() {
                 continue;
             }
-            labels.push(format!("{category}\u{1f}{group}"));
+            labels.push(format!("{category_index}-series-{group_index}"));
+            targets.push(SignificanceTarget::category_series(category, group));
             maxima.push(rendered_maxima[category_index][group_index]);
             let center = category_index as f64
                 + 0.5
@@ -677,45 +702,37 @@ fn plan_grouped_oriented(
         .iter()
         .map(|index| labels[*index].clone())
         .collect::<Vec<_>>();
+    let targets = order
+        .iter()
+        .map(|index| targets[*index].clone())
+        .collect::<Vec<_>>();
     let maxima = order.iter().map(|index| maxima[*index]).collect::<Vec<_>>();
     let positions = order
         .iter()
         .map(|index| positions[*index])
         .collect::<Vec<_>>();
-    let transformed = chart
-        .significance_annotations()
-        .iter()
-        .filter_map(|annotation| {
-            annotation
-                .endpoints()
-                .map(|endpoints| (annotation, endpoints))
-        })
-        .map(|(annotation, (endpoint_a, endpoint_b))| {
+    for annotation in chart.significance_annotations() {
+        if let Some((endpoint_a, endpoint_b)) = annotation.endpoints() {
             if stacked && (endpoint_a.series_name().is_some() || endpoint_b.series_name().is_some())
             {
                 return Err(Error::Data(
                     "series-qualified significance targets are ambiguous for stacked bars".into(),
-                ));
+                )
+                .into());
             }
-            let endpoint_a =
-                resolve_grouped_endpoint(endpoint_a, categories, groups, rendered_maxima)?;
-            let endpoint_b =
-                resolve_grouped_endpoint(endpoint_b, categories, groups, rendered_maxima)?;
-            Ok(SignificanceAnnotation::pairwise(
-                endpoint_a,
-                endpoint_b,
-                annotation.mark(),
-            ))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+            resolve_grouped_endpoint(endpoint_a, categories, groups, rendered_maxima)?;
+            resolve_grouped_endpoint(endpoint_b, categories, groups, rendered_maxima)?;
+        }
+    }
     let label = theme
         .typography
         .effective_significance_label(chart.significance_mark_style_override());
     let mut result = plan_comparisons_at_with_label(
-        &transformed,
+        chart.significance_annotations(),
         &labels,
         &maxima,
         Some(&positions),
+        Some(&targets),
         numeric_range,
         if horizontal {
             chart.user_y_limits()
@@ -749,7 +766,7 @@ fn resolve_grouped_endpoint(
     categories: &[String],
     groups: &[String],
     rendered_maxima: &[Vec<f64>],
-) -> Result<String, Error> {
+) -> Result<(), Error> {
     let category_index = categories
         .iter()
         .position(|category| category == endpoint.category_name())
@@ -782,13 +799,9 @@ fn resolve_grouped_endpoint(
                 groups[index]
             )));
         }
-        Ok(format!(
-            "{}\u{1f}{}",
-            endpoint.category_name(),
-            groups[index]
-        ))
+        Ok(())
     } else {
-        Ok(format!("{}\u{1f}", endpoint.category_name()))
+        Ok(())
     }
 }
 

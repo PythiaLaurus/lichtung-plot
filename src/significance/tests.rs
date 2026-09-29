@@ -9,7 +9,45 @@ fn panel() -> PanelBox {
 }
 
 fn comparison(endpoint_a: &str, endpoint_b: &str, p_value: f64) -> SignificanceAnnotation {
-    SignificanceAnnotation::pairwise(endpoint_a, endpoint_b, SignificanceMark::PValue(p_value))
+    Significance::between(endpoint_a, endpoint_b, SignificanceMark::PValue(p_value))
+        .into_annotation()
+}
+
+#[test]
+fn grouped_targets_resolve_typed_series_and_category_anchors() {
+    let plot = crate::Plot::bar(
+        crate::CategoryValues::new("category", ["a", "a", "b", "b"]).unwrap(),
+        crate::BarInput::estimates(crate::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0])),
+    )
+    .series(crate::CategoryValues::new("series", ["g1", "g2", "g1", "g2"]).unwrap())
+    .significance([Significance::between(
+        SignificanceTarget::category_series("a", "g1"),
+        SignificanceTarget::category_series("a", "g2"),
+        SignificanceMark::TwoStars,
+    )])
+    .erase();
+    let theme = crate::Theme::Publication.resolve();
+    let categories = ["a".to_owned(), "b".to_owned()];
+    let groups = ["g1".to_owned(), "g2".to_owned()];
+    let maxima = [vec![1.0, 2.0], vec![3.0, 4.0]];
+    let plan = plan_grouped(
+        &plot,
+        &categories,
+        &groups,
+        &maxima,
+        0.76,
+        (0.0, 5.0),
+        panel(),
+        false,
+        &theme,
+        &crate::layout::fit::ROOT_SCOPE,
+    )
+    .unwrap();
+    assert_eq!(plan.brackets.len(), 1);
+    let bracket = &plan.brackets[0].geometry;
+    assert_eq!(bracket.label, "**");
+    assert!(bracket.x_left < bracket.x_right);
+    assert!(bracket.x_right < f64::midpoint(panel().x0, panel().x1));
 }
 
 fn default_metrics() -> BracketMetrics {
