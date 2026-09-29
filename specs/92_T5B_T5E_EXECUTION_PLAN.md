@@ -2054,7 +2054,7 @@ ownership, statistical estimates, public extension points, or layout strategy.
 
 | Step | Status | Depends on | Logical commit |
 | --- | --- | --- | --- |
-| T5d0 | PENDING | T5c | `docs(scales): map semantic domains and migration consumers` |
+| T5d0 | COMPLETE | T5c | `docs(scales): map semantic domains and migration consumers` |
 | T5d1 | PENDING | T5d0 | `feat(color): implement deterministic scale arithmetic` |
 | T5d2 | PENDING | T5d1 | `feat(scales): resolve categorical maps palettes and accents` |
 | T5d3 | PENDING | T5d2 | `feat(scales): resolve sequential and diverging mappings` |
@@ -2062,6 +2062,14 @@ ownership, statistical estimates, public extension points, or layout strategy.
 | T5d5 | PENDING | T5d4 | `test(scales): close mapping and guide consistency` |
 
 ### T5d0 — Domain And Consumer Census
+
+T5d0 closure: `docs/t5d0-scale-consumer-census.md` enumerates the prepared
+raw keys, family marks/guides, unkeyed accents, continuous domains, missing
+sections, exact caller controls, current modulo/encoded-RGB helpers, their
+single deletion owners and the T5b shared descriptor/typed target handoff.
+Fixtures pin domain growth, sparse facets, hidden local guides, mixed themes,
+same-color exact mappings and unequal exact/automatic color domains. T5d1
+pins the first-party arithmetic before any consumer migrates.
 
 Map every categorical field, positioned series, unkeyed primary/accent consumer,
 continuous field, missing-value section, guide contributor, and significance
