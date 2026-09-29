@@ -185,6 +185,104 @@ fn decorated_line() -> Plot {
 }
 
 #[test]
+fn visible_point_layer_labels_expand_automatic_edges_but_refuse_exact_overflow() {
+    let source = |exact| {
+        let plot = Plot::line(
+            NumericValues::new("x", [0.0, 10.0]),
+            NumericValues::new("y", [0.0, 10.0]),
+        )
+        .point_layer(
+            crate::PointLayer::new(
+                NumericValues::new("px", [10.0]),
+                NumericValues::new("py", [5.0]),
+            )
+            .labels(CategoryValues::new("label", ["required edge label"]).unwrap()),
+        )
+        .size(800, 600);
+        if exact {
+            plot.x_limits(0.0, 10.0).erase()
+        } else {
+            plot.erase()
+        }
+    };
+    let theme = crate::Theme::Publication.resolve();
+    let panel = crate::layout::PanelBox::new(60.0, 760.0, 70.0, 570.0);
+    for exact in [false, true] {
+        let plot = source(exact);
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new())
+                .unwrap();
+        let chart = inputs.attach(plot).unwrap();
+        let selected =
+            chart.measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme));
+        if exact {
+            assert!(
+                matches!(selected, Err(crate::layout::fit::PlanError::Fit(failure))
+                if failure.reason.kind == crate::layout::fit::FitKind::OverlayCollision)
+            );
+        } else {
+            let selected = selected.unwrap();
+            let crate::layout::interior::MarkPayload::Line(payload) =
+                &selected.marks.as_ref().unwrap().payload
+            else {
+                panic!("selected Line")
+            };
+            assert!(payload.domain_expansions[0].is_some());
+            let final_plan = crate::decorations::plan::plan_panel_for_test(
+                &chart,
+                crate::PlotKind::Line,
+                panel,
+                crate::decorations::plan::LegendRole::Panel,
+                &theme,
+            )
+            .unwrap();
+            let crate::layout::interior::MarkPayload::Line(final_payload) =
+                &final_plan.result.marks.as_ref().unwrap().payload
+            else {
+                panic!("final Line")
+            };
+            assert!(final_payload.domain_expansions.iter().all(Option::is_none));
+        }
+    }
+}
+
+#[test]
+fn exact_window_keeps_the_declared_off_domain_point_label_gate() {
+    let source = Plot::line(
+        NumericValues::new("x", [0.0, 10.0]),
+        NumericValues::new("y", [0.0, 10.0]),
+    )
+    .point_layer(
+        crate::PointLayer::new(
+            NumericValues::new("px", [20.0]),
+            NumericValues::new("py", [5.0]),
+        )
+        .labels(CategoryValues::new("label", ["off domain"]).unwrap()),
+    )
+    .x_limits(0.0, 10.0)
+    .erase();
+    let inputs =
+        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+            .unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let theme = crate::Theme::Publication.resolve();
+    let selected = chart
+        .measure_selected_interior(PlotRenderContext::new(
+            chart.data(),
+            crate::layout::PanelBox::new(60.0, 760.0, 70.0, 570.0),
+            &theme,
+        ))
+        .unwrap();
+    let crate::layout::interior::MarkPayload::Line(payload) =
+        &selected.marks.as_ref().unwrap().payload
+    else {
+        panic!("selected Line")
+    };
+    assert!(payload.layers[0].2.is_empty());
+    assert!(payload.domain_expansions[0].is_none());
+}
+
+#[test]
 fn point_layer_label_gap_moves_the_selected_text_without_moving_its_mark() {
     let source = decorated_line();
     let resources = OperationGenerationResources::new();

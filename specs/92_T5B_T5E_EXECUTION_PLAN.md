@@ -1034,7 +1034,10 @@ caller styles while centralizing their ownership.
 | T5c3a2 | COMPLETE | T5c3a1 | Umbrella for significance shelves and painted containment |
 | T5c3a2a | COMPLETE | T5c3a1 | `feat(annotations): pack significance labels by occupied ink` |
 | T5c3a2b | COMPLETE | T5c3a2a | `refactor(annotations): fit complete significance ink and exact windows` |
-| T5c3b | IN PROGRESS | T5c3a | `refactor(annotations): place remaining native overlays and text` |
+| T5c3b | IN PROGRESS | T5c3a | Umbrella for remaining native overlays and text |
+| T5c3b1 | COMPLETE | T5c3a | `fix(annotations): fit visible supplemental point labels` |
+| T5c3b2 | PENDING | T5c3b1 | `refactor(annotations): contain panel text and inside overlays` |
+| T5c3b3 | PENDING | T5c3b2 | `refactor(annotations): close required value and cell text` |
 | T5c4 | PENDING | T5c3 | `refactor(layout): replace deferred mark and annotation minima` |
 | T5c5 | PENDING | T5c4 | `test(theme): close native mark and annotation ownership` |
 
@@ -1874,6 +1877,17 @@ layout search repairs the bracket. Focused custom 24px automatic/exact domain
 and 200px categorical-stroke refusals, eighteen significance units, nineteen
 annotation contracts, unchanged Bar snapshots and strict Clippy pass.
 T5c3b follows for remaining overlays and required text.
+
+T5c3b1 closure: the prepared supplemental Line point layer retains its exact
+point-visibility gate. For each visible required label, the final resolved text
+keeps its projected anchor without clamping it to the canvas origin; its
+unclipped canonical glyph ink is measured before the selected data clip.
+One source-backed combined label-ink proposal extends only automatic numeric
+axes through the root feedback driver. Any unresolved exact-axis overflow is
+a typed overlay-collision miss, not a clipped label. Custom automatic-root
+and exact-edge cases, off-domain omission, 16 focused Line units, significance
+neighbors and strict Clippy pass. T5c3b2 continues inside overlays and panel
+text; T5c3b3 closes other required labels.
 
 Separate normal-flow requirements from inside guides, significance, value labels,
 panel text, and supplemental layers. Implement the closed anchor order, source-

@@ -916,6 +916,7 @@ fn project(
         }
     }
     data.reserve_source(&mut payload.layers, prepared.layers.len())?;
+    let mut label_source: Option<[(f64, f64); 2]> = None;
     for (index, layer) in prepared.layers.iter().enumerate() {
         let slots = if chart.hue_col().is_some() {
             chart
@@ -940,6 +941,10 @@ fn project(
                 if x < x_range.0 || x > x_range.1 || y < y_range.0 || y > y_range.1 {
                     continue;
                 }
+                data.claim_source_visits(1)?;
+                let source = label_source.get_or_insert([(x, x), (y, y)]);
+                source[0] = (source[0].0.min(x), source[0].1.max(x));
+                source[1] = (source[1].0.min(y), source[1].1.max(y));
                 let mut buffer = [0_u8; 80];
                 let mut cursor = std::io::Cursor::new(buffer.as_mut_slice());
                 std::io::Write::write_fmt(
@@ -966,10 +971,7 @@ fn project(
                 )?;
                 text.push(PlacedText::middle(
                     plan,
-                    Point2D::new(
-                        (point.x + offset).max(0.0).round(),
-                        (point.y + offset).max(0.0).round(),
-                    ),
+                    Point2D::new((point.x + offset).round(), (point.y + offset).round()),
                     TextAnchor::Start,
                     0.0,
                 ));
@@ -979,6 +981,7 @@ fn project(
     }
     let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
     let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    let mut label_ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
     for mark in &payload.marks {
         match mark {
             LineMark::Ribbon(points, style) => geometry.polygon(points, style, Some(clip))?,
@@ -989,8 +992,52 @@ fn project(
     for (points, style, labels) in &payload.layers {
         geometry.scatter(points, style, clip)?;
         for text in labels {
+            label_ink.text(text.placement, &text.plan, None)?;
             geometry.text(text.placement, &text.plan, Some(clip))?;
         }
+    }
+    if let (Some(source), Some(bounds)) = (
+        label_source,
+        label_ink
+            .bounds()
+            .iter()
+            .copied()
+            .reduce(crate::render::geometry::GeometryBox::union),
+    ) {
+        let automatic = [
+            chart.user_x_limits().is_none() && prepared.conditions.is_none(),
+            chart.user_y_limits().is_none(),
+        ];
+        let additional = crate::layout::interior::automatic_absolute_ink_expansions(
+            source,
+            &layout.projection,
+            bounds,
+            automatic,
+            data,
+            scope,
+        )?;
+        for (axis, (painted, containing)) in [
+            ((bounds.left, bounds.right), (clip.x0, clip.x1)),
+            ((bounds.bottom, bounds.top), (clip.y0, clip.y1)),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            if (painted.0 < containing.0 || painted.1 > containing.1)
+                && (!automatic[axis] || additional[axis].is_none())
+            {
+                return Err(scope
+                    .failure(
+                        crate::layout::fit::FitKind::OverlayCollision,
+                        "required point-layer label ink exceeds its assigned plot panel",
+                    )
+                    .into());
+            }
+        }
+        payload.domain_expansions = crate::layout::interior::merge_mark_domain_expansions(
+            payload.domain_expansions,
+            additional,
+        );
     }
     let mut band_ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
     data.claim_source_visits(payload.marks.len())?;
