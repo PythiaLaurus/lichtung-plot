@@ -273,7 +273,7 @@ const SRGB_LINEAR_BITS: [u64; 256] = [
     0x3ff0000000000000,
 ];
 
-fn linear_channel(channel: u8) -> f64 {
+pub(super) fn linear_channel(channel: u8) -> f64 {
     f64::from_bits(SRGB_LINEAR_BITS[usize::from(channel)])
 }
 

@@ -1,5 +1,6 @@
 //! Built-in publication themes and private appearance resolution.
 
+mod color;
 mod contrast;
 mod resolved;
 

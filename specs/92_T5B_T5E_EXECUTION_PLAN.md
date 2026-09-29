@@ -2055,7 +2055,9 @@ ownership, statistical estimates, public extension points, or layout strategy.
 | Step | Status | Depends on | Logical commit |
 | --- | --- | --- | --- |
 | T5d0 | COMPLETE | T5c | `docs(scales): map semantic domains and migration consumers` |
-| T5d1 | PENDING | T5d0 | `feat(color): implement deterministic scale arithmetic` |
+| T5d1 | IN PROGRESS | T5d0 | Umbrella for deterministic scale arithmetic |
+| T5d1a | COMPLETE | T5d0 | `feat(color): pin first-party OKLab conversion and channel quantization` |
+| T5d1b | PENDING | T5d1a | `feat(color): pin gamut interpolation and palette candidates` |
 | T5d2 | PENDING | T5d1 | `feat(scales): resolve categorical maps palettes and accents` |
 | T5d3 | PENDING | T5d2 | `feat(scales): resolve sequential and diverging mappings` |
 | T5d4 | PENDING | T5d3 | `refactor(scales): coordinate final domains guides and contrast` |
@@ -2079,6 +2081,25 @@ Pin fixtures for domain growth, sparse facets, hidden legends with visible marks
 same-color exact mappings, mixed themes, and unequal exact/automatic domains.
 
 ### T5d1 — Pinned Color Arithmetic
+
+T5d1a closure: `src/theme/color.rs` converts opaque byte channels using the
+already-audited 256-channel T5c1 sRGB-linear table and canonical OKLab
+coefficients with explicit left-to-right binary64 order. Its cube root
+binary-searches the ordered positive binary64 domain and resolves the final
+neighbor/tie by exact `BigUint` rational cubes, with visits and bounded scratch
+admitted to the operation ledger before work; neither platform libm nor an
+approximate fallback is used. The inverse matrix emits linear channels only
+after finite/gamut validation. Encoded-sRGB byte rounding uses 255 checked-in
+half-channel linear thresholds, independently calculated with 120/300/480
+decimal digits and SHA-256
+`ace388c2947682af22573df8b12dde52e54c10fa706965d3011b159a5a7e340f`.
+The finite coefficient-roundtrip boundary slack is a fixed `2^-22`, and
+genuinely out-of-gamut results refuse until T5d1b chroma reduction is ready.
+All 256 greys and three 256-channel primaries round-trip, published primary
+OKLab vectors and independent cube-root hard cases agree, byte-boundary ties
+choose nearest-even, exact resource refusal remains fatal, and strict Clippy
+passes. T5d1b fixes gamut, interpolation, candidate order and termination
+before active consumers migrate.
 
 Implement the approved first-party OKLab/OKLCH conversion, gamut reduction,
 interpolation, and deterministic candidate/tie order for prefix-stable extension.
