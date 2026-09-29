@@ -1043,7 +1043,7 @@ fn push_deferred_plot_requirements(
             &mut body_index,
             annotation.text(),
             &[],
-            &body,
+            &theme.typography.panel_text,
             prepared_stage.as_deref_mut(),
         )?;
     }

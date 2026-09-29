@@ -1036,7 +1036,9 @@ caller styles while centralizing their ownership.
 | T5c3a2b | COMPLETE | T5c3a2a | `refactor(annotations): fit complete significance ink and exact windows` |
 | T5c3b | IN PROGRESS | T5c3a | Umbrella for remaining native overlays and text |
 | T5c3b1 | COMPLETE | T5c3a | `fix(annotations): fit visible supplemental point labels` |
-| T5c3b2 | PENDING | T5c3b1 | `refactor(annotations): contain panel text and inside overlays` |
+| T5c3b2 | IN PROGRESS | T5c3b1 | Umbrella for panel text and inside overlays |
+| T5c3b2a | COMPLETE | T5c3b1 | `refactor(annotations): retain canonical panel text ink` |
+| T5c3b2b | PENDING | T5c3b2a | `refactor(annotations): validate inside overlay obstacles` |
 | T5c3b3 | PENDING | T5c3b2 | `refactor(annotations): close required value and cell text` |
 | T5c4 | PENDING | T5c3 | `refactor(layout): replace deferred mark and annotation minima` |
 | T5c5 | PENDING | T5c4 | `test(theme): close native mark and annotation ownership` |
@@ -1888,6 +1890,19 @@ a typed overlay-collision miss, not a clipped label. Custom automatic-root
 and exact-edge cases, off-domain omission, 16 focused Line units, significance
 neighbors and strict Clippy pass. T5c3b2 continues inside overlays and panel
 text; T5c3b3 closes other required labels.
+
+T5c3b2a closure: panel text now has one complete private font/paint/line role
+consumed by both the pre-font text census and the selected producer. The old
+size-only measurement helper is removed; the default 14px appearance and
+SVG output are unchanged. Its unclipped canonical glyph bounds determine
+containing-panel fit and sibling/inside-guide collisions, including when the
+same retained text is translated under a parent assignment. Normal-flow
+width/height checks remain prior to recording; an oversized required glyph
+misses as annotation-scoped text instead of becoming successful by clipping.
+Custom resolved-role/glyph and translation tests, eight panel-text integration
+contracts, 37 root-parent feedback tests, seven Heatmap text-admission units,
+and strict Clippy pass. T5c3b2b audits the remaining inside-overlay obstacle
+order; T5c3b3 completes value/cell annotations.
 
 Separate normal-flow requirements from inside guides, significance, value labels,
 panel text, and supplemental layers. Implement the closed anchor order, source-

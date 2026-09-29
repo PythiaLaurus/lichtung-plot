@@ -821,11 +821,12 @@ fn annotation_conflict_links_only_to_a_resolving_assignment() {
     )
     .unwrap();
     let note_width = theme
-        .measure_legacy_text(
+        .measure_legacy_appearance_text(
             note,
-            theme.detail_font_size,
+            &theme.typography.panel_text,
             crate::layout::PhysicalTextAlignment::Start,
             "panel text annotation",
+            false,
         )
         .unwrap()
         .width();
@@ -961,11 +962,12 @@ fn automatic_outside_guides_avoid_annotations_at_all_inside_corners() {
                     &theme,
                 )?;
                 let note_width = theme
-                    .measure_legacy_text(
+                    .measure_legacy_appearance_text(
                         note,
-                        theme.detail_font_size,
+                        &theme.typography.panel_text,
                         crate::layout::PhysicalTextAlignment::Start,
                         "panel text annotation",
+                        false,
                     )?
                     .width();
                 let required = initial.axes.as_ref().unwrap().requirements();
@@ -1025,7 +1027,7 @@ fn automatic_outside_guides_avoid_annotations_at_all_inside_corners() {
             assert!(root.prepared().1.iter().all(|annotation| annotation
                 .avoids_legend_in(plan.result.layout.projection.panel_box(), legend.bounds)));
             let mut invalid_theme = crate::Theme::Publication.resolve();
-            invalid_theme.detail_font_size = 0;
+            invalid_theme.typography.panel_text.font_size = 0;
             assert!(auto_candidate_avoiding_panel_text(
                 &source,
                 &plan.result,

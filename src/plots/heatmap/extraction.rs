@@ -408,11 +408,13 @@ fn selected_cell_guide_storage_and_elision_refuse_at_exact_limits() {
         .iter()
         .map(|label| {
             theme
-                .measure_legacy_text(
+                .measure_legacy_appearance_text(
                     label,
-                    theme.detail_font_size,
+                    &theme
+                        .legacy_text_appearance(theme.detail_font_size, crate::TextWeight::Normal),
                     PhysicalTextAlignment::Start,
                     "heatmap colorbar value",
+                    false,
                 )
                 .unwrap()
         })

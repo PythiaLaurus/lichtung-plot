@@ -27,7 +27,15 @@ impl PanelTextPlan {
         }
     }
     pub(crate) fn bounds_in(&self, panel: PanelBox) -> PanelBox {
-        placement(panel, self.corner, &self.text_plan).2
+        let (position, _, _) = placement(panel, self.corner, &self.text_plan);
+        let dx = position.x - self.position.x;
+        let dy = position.y - self.position.y;
+        PanelBox::new(
+            self.bounds.x0 + dx,
+            self.bounds.x1 + dx,
+            self.bounds.y0 + dy,
+            self.bounds.y1 + dy,
+        )
     }
     pub(crate) fn avoids_legend_in(
         &self,
@@ -37,7 +45,7 @@ impl PanelTextPlan {
         self.text_plan.width() + 2.0 * PANEL_TEXT_PADDING <= panel.width()
             && self.text_plan.height() + 2.0 * PANEL_TEXT_PADDING <= panel.height()
             && !rectangles_overlap(
-                placement(panel, self.corner, &self.text_plan).2,
+                self.bounds_in(panel),
                 PanelBox::new(legend.left, legend.right, legend.bottom, legend.top),
             )
     }
@@ -153,11 +161,12 @@ pub(crate) fn measure_plans(
                 PanelCorner::TopLeft | PanelCorner::BottomLeft => PhysicalTextAlignment::Start,
                 PanelCorner::TopRight | PanelCorner::BottomRight => PhysicalTextAlignment::End,
             };
-            let text_plan = theme.measure_legacy_text(
+            let text_plan = theme.measure_legacy_appearance_text(
                 annotation.text(),
-                theme.detail_font_size,
+                &theme.typography.panel_text,
                 alignment,
                 "panel text annotation",
+                false,
             )?;
             let width = text_plan.width();
             let text_height = text_plan.height();
@@ -170,7 +179,21 @@ pub(crate) fn measure_plans(
             if text_height + PANEL_TEXT_PADDING * 2.0 > panel.height() {
                 return Err(crate::layout::fit::PlanError::Fit(scope.failure(FitKind::Text, "panel text has no usable space inside the resolved chart panel; increase the canvas")));
             }
-            let (position, anchor, bounds) = placement(panel, annotation.corner(), &text_plan);
+            let (position, anchor, nominal) = placement(panel, annotation.corner(), &text_plan);
+            let mut ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
+            ink.text(
+                PlannedTextPlacement::middle(position, anchor, 0.0),
+                &text_plan,
+                None,
+            )?;
+            let bounds = ink.bounds().iter().copied()
+                .reduce(crate::render::geometry::GeometryBox::union)
+                .map_or(nominal, |box_| PanelBox::new(box_.left, box_.right, box_.bottom, box_.top));
+            if bounds.x0 < panel.x0 || bounds.x1 > panel.x1
+                || bounds.y0 < panel.y0 || bounds.y1 > panel.y1 {
+                return Err(scope.failure(FitKind::Text,
+                    "required panel text ink exceeds its assigned chart panel").into());
+            }
             Ok(PanelTextPlan {
                 text_plan,
                 position,
@@ -206,4 +229,74 @@ fn rectangles_overlap(left: PanelBox, right: PanelBox) -> bool {
         crate::orchestrator::measurements::Counter::AnnotationOverlapComparison,
     );
     left.x0 < right.x1 && left.x1 > right.x0 && left.y0 < right.y1 && left.y1 > right.y0
+}
+
+#[test]
+fn panel_text_uses_complete_private_role_and_unclipped_canonical_bounds() {
+    let plot = Plot::scatter(
+        crate::NumericValues::new("x", [0.0, 1.0]),
+        crate::NumericValues::new("y", [0.0, 1.0]),
+    )
+    .panel_text_annotation(
+        crate::PanelTextAnnotation::new(PanelCorner::TopRight, "Required note").unwrap(),
+    )
+    .erase();
+    let layout = Layout::self_managed(800, 600);
+    let mut theme = crate::Theme::Publication.resolve();
+    let original = plans(&plot, &layout, &theme).unwrap();
+    theme.detail_font_size = 0;
+    theme.typography.panel_text.font_size = 32;
+    theme.typography.panel_text.paint = crate::render::backend::Rgba::rgb(18, 34, 56);
+    let selected = plans(&plot, &layout, &theme).unwrap();
+    assert!(selected[0].bounds.width() > original[0].bounds.width());
+    assert_eq!(selected[0].text_plan.style.font_size, 32);
+    assert_eq!(
+        selected[0].text_plan.style.paint,
+        theme.typography.panel_text.paint
+    );
+    let mut ink = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+    let text = selected[0].retained_placement();
+    ink.text(text.placement, &text.plan, None).unwrap();
+    let box_ = ink
+        .bounds()
+        .iter()
+        .copied()
+        .reduce(crate::render::geometry::GeometryBox::union)
+        .unwrap();
+    assert_eq!(
+        selected[0].bounds.as_tuple(),
+        (box_.left, box_.right, box_.bottom, box_.top)
+    );
+    let panel = layout.projection.panel_box();
+    assert!(box_.left >= panel.x0 && box_.right <= panel.x1);
+    assert!(box_.bottom >= panel.y0 && box_.top <= panel.y1);
+    let shifted = PanelBox::new(
+        panel.x0 + 2.25,
+        panel.x1 + 2.25,
+        panel.y0 + 5.5,
+        panel.y1 + 5.5,
+    );
+    let mut shifted_ink = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+    shifted_ink
+        .text(
+            selected[0].placement_in(shifted),
+            &selected[0].text_plan,
+            None,
+        )
+        .unwrap();
+    let shifted_box = shifted_ink
+        .bounds()
+        .iter()
+        .copied()
+        .reduce(crate::render::geometry::GeometryBox::union)
+        .unwrap();
+    assert_eq!(
+        selected[0].bounds_in(shifted).as_tuple(),
+        (
+            shifted_box.left,
+            shifted_box.right,
+            shifted_box.bottom,
+            shifted_box.top
+        )
+    );
 }
