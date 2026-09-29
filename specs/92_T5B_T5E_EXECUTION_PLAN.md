@@ -1039,7 +1039,9 @@ caller styles while centralizing their ownership.
 | T5c3b2 | COMPLETE | T5c3b1 | Umbrella for panel text and inside overlays |
 | T5c3b2a | COMPLETE | T5c3b1 | `refactor(annotations): retain canonical panel text ink` |
 | T5c3b2b | COMPLETE | T5c3b2a | `refactor(annotations): reuse frozen text for inside overlay obstacles` |
-| T5c3b3 | PENDING | T5c3b2 | `refactor(annotations): close required value and cell text` |
+| T5c3b3 | IN PROGRESS | T5c3b2 | Umbrella for required value and cell text |
+| T5c3b3a | COMPLETE | T5c3b2 | `feat(annotations): contain Heatmap cell text ink` |
+| T5c3b3b | PENDING | T5c3b3a | `refactor(annotations): fit attached and specialized value text` |
 | T5c4 | PENDING | T5c3 | `refactor(layout): replace deferred mark and annotation minima` |
 | T5c5 | PENDING | T5c4 | `test(theme): close native mark and annotation ownership` |
 
@@ -1914,6 +1916,17 @@ context, and only its root feedback driver can move a resolvable inside guide.
 All 37 root-plan units and eight panel-text integration contracts, including
 four occupied corners and the outside recovery, pass with strict Clippy.
 T5c3b3 completes other value and cell annotation owners.
+
+T5c3b3a closure: Heatmap's selected per-cell value and fully-null merged-row
+plans now measure their canonical glyph ink without the data-panel clip before
+freezing the same cell payload. Every required glyph must fit its own prepared
+cell/merged-row rectangle; otherwise it returns a cell-addressed text fit
+miss. The existing explicit Heatmap category elision policy still shapes the
+selected text once, and its data cells, missing crosses and colorbar keep
+their current paint order. A controlled too-narrow cell and the identical
+glyph in a larger cell, 35 focused Heatmap units, 38 integration contracts
+and strict Clippy pass. T5c3b3b proceeds to attached Bar/Estimate and
+Waterfall value text.
 
 Separate normal-flow requirements from inside guides, significance, value labels,
 panel text, and supplemental layers. Implement the closed anchor order, source-

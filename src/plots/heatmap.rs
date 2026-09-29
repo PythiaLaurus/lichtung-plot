@@ -648,6 +648,7 @@ pub(crate) fn measure(
             })
             .transpose()?,
     };
+    payload.validate_annotation_ink(theme, context.fit_scope(), data)?;
     let geometry = payload.geometry(theme)?;
 
     let mut result = PlotRenderResult::new(layout, Vec::new()).with_resolved_axis_keys(
@@ -1272,6 +1273,41 @@ impl CellPayload {
 }
 
 impl HeatmapPayload {
+    fn validate_annotation_ink(
+        &self,
+        theme: &ResolvedTheme,
+        scope: &crate::layout::fit::FitScope,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<(), crate::layout::fit::PlanError> {
+        data.claim_source_visits(self.cells.len())?;
+        for (index, cell) in self.cells.iter().enumerate() {
+            let Some(text) = &cell.text else { continue };
+            let mut ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
+            ink.text(text.placement, &text.plan, None)?;
+            let containing = PanelBox::new(
+                cell.corners[0].x,
+                cell.corners[2].x,
+                cell.corners[0].y,
+                cell.corners[2].y,
+            );
+            if ink.bounds().iter().any(|bounds| {
+                bounds.left < containing.x0
+                    || bounds.right > containing.x1
+                    || bounds.bottom < containing.y0
+                    || bounds.top > containing.y1
+            }) {
+                return Err(scope
+                    .child(crate::layout::AddressRole::HeatmapCell, index)?
+                    .failure(
+                        crate::layout::fit::FitKind::Text,
+                        "required Heatmap annotation ink exceeds its assigned cell",
+                    )
+                    .into());
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
         #[cfg(test)]
         count(2);
@@ -1313,6 +1349,69 @@ impl HeatmapPayload {
         }
         Ok(geometry)
     }
+}
+
+#[test]
+fn required_heatmap_cell_text_must_fit_its_unclipped_cell() {
+    let theme = crate::Theme::Publication.resolve();
+    let text = theme
+        .measure_legacy_appearance_text(
+            "Required",
+            &theme.typography.contrast_dark,
+            crate::layout::PhysicalTextAlignment::Center,
+            "heatmap cell annotation",
+            false,
+        )
+        .unwrap();
+    let mut payload = HeatmapPayload {
+        clip: PanelBox::new(0.0, 20.0, 0.0, 30.0),
+        cross_style: theme.marks.heatmap_missing_cross.backend_style(),
+        cells: vec![CellPayload {
+            corners: [
+                Point2D::new(0.0, 0.0),
+                Point2D::new(20.0, 0.0),
+                Point2D::new(20.0, 30.0),
+                Point2D::new(0.0, 30.0),
+            ],
+            fill: theme
+                .marks
+                .heatmap_cell_outline
+                .backend_style((0, 0, 0).into()),
+            text: Some(PlacedText::middle(
+                text,
+                Point2D::new(10.0, 15.0),
+                TextAnchor::Middle,
+                0.0,
+            )),
+            cross: None,
+        }],
+        colorbar: None,
+    };
+    let chart = Plot::heatmap(
+        crate::CategoryValues::new("x", ["a"]).unwrap(),
+        crate::CategoryValues::new("y", ["b"]).unwrap(),
+        crate::NumericValues::new("value", [1.0]),
+    )
+    .erase();
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let data = chart.data().with_axis_resources(&resources);
+    let error = payload
+        .validate_annotation_ink(&theme, &crate::layout::fit::ROOT_SCOPE, data)
+        .unwrap_err();
+    assert!(matches!(error, crate::layout::fit::PlanError::Fit(failure)
+        if failure.reason.kind == crate::layout::fit::FitKind::Text
+            && failure.reason.address == crate::layout::ComponentAddress::root()
+                .child(crate::layout::AddressRole::HeatmapCell, 0).unwrap()));
+    let cell = &mut payload.cells[0];
+    cell.corners[1].x = 200.0;
+    cell.corners[2].x = 200.0;
+    cell.text.as_mut().unwrap().placement.position.x = 100.0;
+    assert!(payload
+        .validate_annotation_ink(&theme, &crate::layout::fit::ROOT_SCOPE, data)
+        .is_ok());
 }
 
 fn select_cells(
