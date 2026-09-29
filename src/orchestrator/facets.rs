@@ -263,12 +263,21 @@ impl FacetPlan {
         };
         let owner = crate::layout::ComponentAddress::root()
             .child(crate::decorations::legend::address_role(position), 0)?;
+        let positive_span = crate::layout::canvas::MINIMUM_PANEL_SPAN;
+        let mut columns = data.collect_source((0..selectors.columns).map(|_| Ok(positive_span)))?;
+        let mut rows = data.collect_source((0..selectors.rows).map(|_| Ok(positive_span)))?;
+        data.claim_source_visits(panels.len())?;
+        for (facet, hard) in panels.iter().zip(&minima) {
+            columns[facet.column] = columns[facet.column].max(hard.0);
+            rows[facet.row] = rows[facet.row].max(hard.1);
+        }
         let mut minimum = (
-            selectors.columns as f64 * crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.0
-                + selectors.columns.saturating_sub(1) as f64 * 12.0,
-            selectors.rows as f64 * crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.1
-                + selectors.rows.saturating_sub(1) as f64 * 12.0,
+            columns.iter().sum::<f64>() + selectors.columns.saturating_sub(1) as f64 * 12.0,
+            rows.iter().sum::<f64>() + selectors.rows.saturating_sub(1) as f64 * 12.0,
         );
+        if !minimum.0.is_finite() || !minimum.1.is_finite() {
+            return Err(Error::Render("facet intrinsic grid span overflowed".into()).into());
+        }
         // The guide and grid share one containing frame. Reserve the consumed
         // column/row gutters before measuring flow, not after fixing its width.
         let grid = crate::layout::ComponentAddress::root()

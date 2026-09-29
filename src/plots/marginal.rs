@@ -499,7 +499,7 @@ pub(crate) fn measure(
         geometry.polygon(&group.right, &group.fill, Some(right_panel))?;
     }
     let mut result = PlotRenderResult::new(layout, legend_entries);
-    result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+    result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
         payload: crate::layout::interior::MarkPayload::Marginal(payload),
         geometry,
     })?);

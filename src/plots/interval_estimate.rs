@@ -1083,7 +1083,7 @@ fn project(
     let mut result = PlotRenderResult::new(layout, Vec::new())
         .with_deferred_annotation_text(deferred_annotation_text);
     result.y_domain = crate::spec::AxisDomain::Categorical;
-    result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+    result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
         payload: crate::layout::interior::MarkPayload::Estimate(payload),
         geometry,
     })?);

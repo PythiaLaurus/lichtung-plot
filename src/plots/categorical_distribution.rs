@@ -278,7 +278,7 @@ impl DistributionPayload {
         #[cfg(test)]
         count(self.kind, 2);
         result.x_domain = crate::spec::AxisDomain::Categorical;
-        result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+        result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
             payload: crate::layout::interior::MarkPayload::Distribution(self),
             geometry,
         })?);

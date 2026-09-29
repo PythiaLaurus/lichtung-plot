@@ -273,13 +273,13 @@ fn native_vertical_category_intrinsics_use_mandatory_lines_and_keep_fit_scope() 
             .unwrap();
         assert_eq!(
             minimum.0.to_bits(),
-            super::DeferredLegacyPanelMinimum::SIZE.0.to_bits()
+            crate::layout::canvas::MINIMUM_PANEL_SPAN.to_bits()
         );
         assert_eq!(
             minimum.1.to_bits(),
             (3.0 * (label.height() + 2.0 * crate::layout::panel::LABEL_CLEARANCE)).to_bits()
         );
-        assert!(minimum.1 > super::DeferredLegacyPanelMinimum::SIZE.1);
+        assert!(minimum.1 > crate::layout::canvas::MINIMUM_PANEL_SPAN);
         let scope = FitScope::new(
             &crate::layout::ComponentAddress::root()
                 .child(crate::layout::AddressRole::PlotBody, 3)

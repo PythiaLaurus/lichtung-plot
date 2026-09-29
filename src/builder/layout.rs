@@ -72,8 +72,7 @@ impl Plot {
                 .map_err(crate::layout::fit::PlanError::into_error);
         }
         RootFramePlan::measured_plot_root(
-            self.width,
-            self.height,
+            (self.width, self.height),
             theme,
             self.legacy_root_axes(),
             (
@@ -87,6 +86,14 @@ impl Plot {
                 [None, None],
             ),
             !self.has_facets(),
+            if self.has_facets() {
+                (
+                    crate::layout::canvas::MINIMUM_PANEL_SPAN,
+                    crate::layout::canvas::MINIMUM_PANEL_SPAN,
+                )
+            } else {
+                self.intrinsic_body_minimum(theme)?
+            },
         )
         .map_err(crate::layout::fit::PlanError::into_error)
     }

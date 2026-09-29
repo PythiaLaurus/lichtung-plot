@@ -13,8 +13,9 @@ use crate::theme::TextAppearance;
 #[cfg(test)]
 use crate::Error;
 
-const MIN_PANEL_WIDTH: f64 = super::interior::DeferredLegacyPanelMinimum::SIZE.0;
-const MIN_PANEL_HEIGHT: f64 = super::interior::DeferredLegacyPanelMinimum::SIZE.1;
+/// The smallest positive canonical span when a real child supplies no larger
+/// intrinsic. It represents one spatial quantum, never a compatibility floor.
+pub(crate) const MINIMUM_PANEL_SPAN: f64 = 1.0 / 1024.0;
 pub(crate) const PANEL_HEADER_GAP: f64 = 4.0;
 
 /// A plot panel rectangle in math-style pixel coordinates.
@@ -204,14 +205,15 @@ pub(crate) struct RootFramePlan {
 
 impl RootFramePlan {
     pub(crate) fn measured_plot_root(
-        canvas_width: u32,
-        canvas_height: u32,
+        canvas_size: (u32, u32),
         theme: &ResolvedTheme,
         spec: LegacyRootAxes,
         text: (Option<&str>, Option<&str>, Option<&str>),
         alignments: crate::decorations::title_block::plan::RootAlignments,
         reserve_axes: bool,
+        minimum_body: (f64, f64),
     ) -> Result<Self, crate::layout::fit::PlanError> {
+        let (canvas_width, canvas_height) = canvas_size;
         let mut insets = spec.insets(theme, reserve_axes);
         let span = PanelBox::new(
             16.0,
@@ -224,7 +226,7 @@ impl RootFramePlan {
             [text.0, text.1, text.2],
             span,
             alignments,
-            MIN_PANEL_HEIGHT + insets.bottom - 8.0,
+            minimum_body.1 + insets.bottom - 8.0,
             &crate::layout::fit::FitScope::root(),
         )?;
         insets.top = (12.0 + plan.top_reserve).max(30.0);
@@ -235,11 +237,11 @@ impl RootFramePlan {
             insets.bottom,
             f64::from(canvas_height) - insets.top,
         );
-        if panel_box.width() < MIN_PANEL_WIDTH || panel_box.height() < MIN_PANEL_HEIGHT {
+        if panel_box.width() < minimum_body.0 || panel_box.height() < minimum_body.1 {
             return Err(crate::layout::fit::FitScope::root()
                 .failure(
                     crate::layout::fit::FitKind::TrackOrResidual,
-                    "root title block leaves less than the minimum 80x60 plot panel",
+                    "root title block leaves less than the measured child body minimum",
                 )
                 .into());
         }
@@ -260,8 +262,7 @@ impl RootFramePlan {
         text: (Option<&str>, Option<&str>, Option<&str>),
     ) -> Result<Self, Error> {
         Self::measured_plot_root(
-            canvas_width,
-            canvas_height,
+            (canvas_width, canvas_height),
             theme,
             spec,
             text,
@@ -269,6 +270,7 @@ impl RootFramePlan {
                 theme, [None; 2], [None; 2],
             ),
             false,
+            (MINIMUM_PANEL_SPAN, MINIMUM_PANEL_SPAN),
         )
         .map_err(crate::layout::fit::PlanError::into_error)
     }
@@ -371,21 +373,21 @@ mod tests {
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
-        reason = "positive built-in insets plus the named floor fit u32 exactly after ceiling"
+        reason = "positive built-in insets plus the measured child minimum fit u32 after ceiling"
     )]
-    fn deferred_root_frame_rejects_residual_fit_without_clamping_or_text_fallback() {
+    fn measured_child_root_frame_rejects_residual_fit_without_clamping_or_text_fallback() {
         let theme = Theme::Publication.resolve();
         let spec = LegacyRootAxes {
             has_x_label: true,
             has_y_label: true,
         };
         let insets = spec.insets(&theme, true);
-        let width = (insets.left + insets.right + MIN_PANEL_WIDTH).ceil() as u32;
-        let height = (insets.bottom + insets.top + MIN_PANEL_HEIGHT).ceil() as u32;
+        let child_minimum = (13.0, 9.0);
+        let width = (insets.left + insets.right + child_minimum.0).ceil() as u32;
+        let height = (insets.bottom + insets.top + child_minimum.1).ceil() as u32;
         let measure = |width, height| {
             RootFramePlan::measured_plot_root(
-                width,
-                height,
+                (width, height),
                 &theme,
                 spec,
                 (None, None, None),
@@ -393,6 +395,7 @@ mod tests {
                     &theme, [None; 2], [None; 2],
                 ),
                 true,
+                child_minimum,
             )
         };
         let frame = measure(width, height).unwrap();

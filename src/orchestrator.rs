@@ -392,7 +392,7 @@ impl Plot {
             Some(name)
         };
         result.annotations = Some(data.source_arc(
-            crate::layout::interior::DeferredAnnotationPlan {
+            crate::layout::interior::SelectedAnnotationPlan {
                 significance_styles,
                 guides,
                 panel_layer,

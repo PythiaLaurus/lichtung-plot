@@ -673,7 +673,7 @@ pub(crate) fn measure(
         data.reserve_source(&mut result.producer_text, 1)?;
         result.producer_text.push(text.clone());
     }
-    result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+    result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
         payload: crate::layout::interior::MarkPayload::Heatmap(payload),
         geometry,
     })?);

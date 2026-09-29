@@ -499,7 +499,7 @@ pub(crate) fn measure(
     let mut result = PlotRenderResult::new(layout, Vec::new());
     result.y_domain = crate::spec::AxisDomain::Categorical;
     result.producer_text = data.collect_source(payload.text.iter().map(|text| Ok(text.clone())))?;
-    result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+    result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
         payload: crate::layout::interior::MarkPayload::Waterfall(payload),
         geometry,
     })?);

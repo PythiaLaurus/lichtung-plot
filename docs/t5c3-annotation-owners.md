@@ -12,10 +12,9 @@ defines which explicit visibility policies continue to apply.
 | Panel text and inside guides | `src/decorations/panel_text.rs`, `src/decorations/legend.rs` | Fit exact selected text and guide geometry to their assigned panel; use the closed configured anchor, the parent-supplied obstacle order and an overlay-collision fit miss. |
 | Supplemental point labels and guides | Prepared point/Bar layers and `src/orchestrator/layers.rs` | Preserve the recorded point-visibility gate; no coordinate clamp for a visible required label. Numeric guides are data-clipped marks; their labels are required text. |
 
-The selected `DeferredAnnotationPlan` currently retains panel text and clipped
-numeric guide geometry; significance is retained separately in
-`PlotRenderResult.significance`. T5c3 transfers hard/soft and feedback ownership
-to these actual producers without another draw-time measurement. T5c4 removes
-the deferred annotation boundary and the generic minimum only after all owners
-provide native requirements. The root driver in `src/decorations/plan.rs`
-remains the only feedback search.
+The selected `SelectedAnnotationPlan` retains panel text and clipped numeric
+guide geometry; significance remains in `PlotRenderResult.significance`.
+The matching `SelectedMarkPlan` stores each family's immutable painter and
+canonical ink. With all T5c3 inputs supplied, T5c4 removed the old deferred
+boundaries and generic panel floor. The root driver in
+`src/decorations/plan.rs` remains the only feedback search.

@@ -814,14 +814,15 @@ fn heatmap_annotations_error_when_cells_cannot_fit_values() {
     let lichtung_plot::Error::Render(message) = error else {
         panic!("expected a layout fit error, got {error:?}");
     };
-    // The complete formatted labels impose a hard width before cells are allocated.
+    // Complete formatted labels now reject at the root child-hard boundary,
+    // before the former generic panel reservation or any cell allocation.
     assert_eq!(
         message,
         concat!(
             "layout fit FitReason { kind: TrackOrResidual, ",
             "address: ComponentAddress { root: AddressSegment { role: Root, slot_index: 0 }, ",
-            "descendants: [AddressSegment { role: PlotBody, slot_index: 0 }] }, ordinal: 0 }: ",
-            "assigned frame leaves insufficient body after measured gutters"
+            "descendants: [] }, ordinal: 0 }: ",
+            "root title block leaves less than the measured child body minimum"
         )
     );
 

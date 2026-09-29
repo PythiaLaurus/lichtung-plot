@@ -296,7 +296,7 @@ fn project(
     count(2);
     let mut result = PlotRenderResult::new(layout, legend);
     result.y_domain = crate::spec::AxisDomain::Categorical;
-    result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+    result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
         payload: crate::layout::interior::MarkPayload::Dumbbell(payload),
         geometry,
     })?);

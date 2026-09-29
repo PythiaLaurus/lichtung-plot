@@ -1,14 +1,14 @@
 //! Native coordinate panels. Parents allocate the frame; this common producer
 //! selects its axes once and hands the resulting projection to retained marks.
 
-use super::{DeferredLegacyPanelMinimum, InteriorRoute, OneCategoricalAxis, StandardCoordinate};
+use super::{InteriorRoute, OneCategoricalAxis, StandardCoordinate};
 use crate::layout::fit::{self, FitKind, PlanError};
 use crate::layout::{Axis, AxisSide, Layout, PanelBox, Projection, StandardPanelInputs};
 use crate::spec::{AxisDomain, PlotRenderContext, PlotRenderResult};
 use crate::{Error, Plot};
 
-/// Only foundational text contributes new hard requirements here. Mark density
-/// and exact mark/annotation intrinsics remain T5c, including the named floor.
+/// Foundational axis text contributes hard requirements independently from
+/// the prepared mark and annotation intrinsics of each family.
 #[derive(Debug)]
 pub(crate) struct Intrinsics {
     standard: StandardPanelInputs,
@@ -76,7 +76,10 @@ impl Intrinsics {
             scope,
         );
         let standard = StandardPanelInputs::new(theme)?;
-        let mut minimum_body = DeferredLegacyPanelMinimum::SIZE;
+        let mut minimum_body = (
+            crate::layout::canvas::MINIMUM_PANEL_SPAN,
+            crate::layout::canvas::MINIMUM_PANEL_SPAN,
+        );
         let mut without_y_categories = minimum_body.1;
         for side in 0..2 {
             if !axes.labels[side].is_empty() {

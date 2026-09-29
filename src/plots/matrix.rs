@@ -325,7 +325,7 @@ fn prefont_variable_domains_and_labels_are_consumed_by_matrix_measurement() {
     let inputs = prepared.prepared_matrix_axes.as_ref().unwrap();
     let preparations = crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get);
     let theme = crate::Theme::Publication.resolve();
-    let panel = panel_box(&plot, &theme).unwrap();
+    let panel = panel_box(&prepared, &theme).unwrap();
     let measured = prepared
         .preflight_panel(crate::PlotKind::Matrix, panel, &theme)
         .unwrap();
@@ -730,7 +730,7 @@ pub(crate) fn measure(
         legend: legend_payload,
     };
     let geometry = payload.geometry(theme)?;
-    result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+    result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
         payload: crate::layout::interior::MarkPayload::Matrix(payload),
         geometry,
     })?);

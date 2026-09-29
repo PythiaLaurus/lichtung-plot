@@ -553,7 +553,7 @@ pub(crate) fn measure_marks(
     payload.measure_ink(chart, marks, &layout.projection, context, data)?;
     let mut result = PlotRenderResult::new(layout, legends);
     result.x_domain = crate::spec::AxisDomain::Categorical;
-    result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+    result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
         payload: crate::layout::interior::MarkPayload::Interaction(payload),
         geometry,
     })?);

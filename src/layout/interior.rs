@@ -191,7 +191,10 @@ impl Plot {
         let mut minimum = if InteriorRoute::classify(self.kind()).is_native() {
             coordinate::Intrinsics::prepared(self, theme)?.minimum(self)
         } else {
-            DeferredLegacyPanelMinimum::SIZE
+            (
+                crate::layout::canvas::MINIMUM_PANEL_SPAN,
+                crate::layout::canvas::MINIMUM_PANEL_SPAN,
+            )
         };
         let mark = match self.kind() {
             PlotKind::Scatter => Some(crate::plots::scatter::intrinsic_body_minimum(self, theme)?),
@@ -259,13 +262,6 @@ impl Plot {
         }
         Ok(minimum)
     }
-}
-
-/// The sole named parity floor, pending T5c's exact mark/annotation intrinsics.
-pub(crate) struct DeferredLegacyPanelMinimum;
-
-impl DeferredLegacyPanelMinimum {
-    pub(crate) const SIZE: (f64, f64) = (80.0, 60.0);
 }
 
 /// Shared domain consequence, submitted by its actual producer to the parent.
@@ -521,9 +517,9 @@ impl InteriorReserveRequest {
     }
 }
 
-/// Selected mark consequences remain deferred to T5c, independently of axes.
+/// One selected immutable mark scene and its canonical painted geometry.
 #[derive(Debug)]
-pub(crate) struct DeferredMarkPlan {
+pub(crate) struct SelectedMarkPlan {
     pub(crate) payload: MarkPayload,
     pub(crate) geometry: crate::render::geometry::GeometrySnapshot,
 }
@@ -548,7 +544,7 @@ pub(crate) enum MarkPayload {
     Regression(crate::plots::regression::RegressionPayload),
 }
 
-impl DeferredMarkPlan {
+impl SelectedMarkPlan {
     pub(crate) fn draw(
         &self,
         backend: &mut dyn crate::render::backend::Backend,
@@ -574,9 +570,9 @@ impl DeferredMarkPlan {
     }
 }
 
-/// Current ordinary guide and panel-text placements, not future T5c semantics.
+/// Selected guide, panel-text, and significance styles with frozen geometry.
 #[derive(Debug)]
-pub(crate) struct DeferredAnnotationPlan {
+pub(crate) struct SelectedAnnotationPlan {
     pub(crate) significance_styles: Option<Vec<crate::render::backend::BracketStyle>>,
     pub(crate) guides: crate::orchestrator::layers::GuideSnapshot,
     pub(crate) panel_layer: Option<String>,
@@ -585,7 +581,7 @@ pub(crate) struct DeferredAnnotationPlan {
     pub(crate) geometry: crate::render::geometry::GeometrySnapshot,
 }
 
-impl DeferredAnnotationPlan {
+impl SelectedAnnotationPlan {
     pub(crate) fn draw(
         &self,
         backend: &mut dyn crate::render::backend::Backend,

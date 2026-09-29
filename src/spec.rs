@@ -742,9 +742,7 @@ impl<'a> PlotRenderContext<'a> {
         Self {
             data,
             panel,
-            axis_label_width: (panel.width()
-                - crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.0)
-                .max(0.0),
+            axis_label_width: panel.width().max(0.0),
             retained_axes: None,
             retained_layout: None,
             selected_interior: None,
@@ -769,9 +767,7 @@ impl<'a> PlotRenderContext<'a> {
         Self {
             data: data.map_source_rows(source_rows),
             panel,
-            axis_label_width: (panel.width()
-                - crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.0)
-                .max(0.0),
+            axis_label_width: panel.width().max(0.0),
             retained_axes: None,
             retained_layout: None,
             selected_interior: None,
@@ -1187,8 +1183,8 @@ pub(crate) struct PlotRenderResult {
     pub(crate) panel_text: Vec<crate::decorations::panel_text::PanelTextPlan>,
     pub(crate) self_managed_legend: Option<std::sync::Arc<crate::decorations::legend::Legend>>,
     pub(crate) matrix_axes: Option<std::sync::Arc<crate::plots::matrix::MatrixAxisPlan>>,
-    pub(crate) marks: Option<std::sync::Arc<crate::layout::interior::DeferredMarkPlan>>,
-    pub(crate) annotations: Option<std::sync::Arc<crate::layout::interior::DeferredAnnotationPlan>>,
+    pub(crate) marks: Option<std::sync::Arc<crate::layout::interior::SelectedMarkPlan>>,
+    pub(crate) annotations: Option<std::sync::Arc<crate::layout::interior::SelectedAnnotationPlan>>,
 }
 
 /// Semantic kind of one renderer-resolved axis domain.

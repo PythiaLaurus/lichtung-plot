@@ -472,7 +472,7 @@ pub(crate) fn measure(
     if let Some(bar) = &payload.colorbar {
         result.producer_text = data.collect_source(bar.text.iter().map(|text| Ok(text.clone())))?;
     }
-    result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+    result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
         payload: crate::layout::interior::MarkPayload::Beeswarm(payload),
         geometry,
     })?);

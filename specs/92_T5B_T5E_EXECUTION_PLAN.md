@@ -1046,7 +1046,8 @@ caller styles while centralizing their ownership.
 | T5c3b3b2 | COMPLETE | T5c3b3b1 | Umbrella for attached Bar and Estimate value text |
 | T5c3b3b2a | COMPLETE | T5c3b3b1 | `feat(annotations): fit attached Bar glyph ink` |
 | T5c3b3b2b | COMPLETE | T5c3b3b2a | `refactor(annotations): fit Estimate value text` |
-| T5c4 | PENDING | T5c3 | `refactor(layout): replace deferred mark and annotation minima` |
+| T5c4 | COMPLETE | T5c3 | Atomic deferred-consequence retirement |
+| T5c4a | COMPLETE | T5c3 | `refactor(layout): remove deferred panel floors and consequences` |
 | T5c5 | PENDING | T5c4 | `test(theme): close native mark and annotation ownership` |
 
 ### T5c0 — Property And Content Disposition Table
@@ -1983,6 +1984,23 @@ brackets, unavailable targets, all accepted anchors, collision clearance/tangenc
 required annotation fit failures, and no retry after resource refusal.
 
 ### T5c4 — Atomic Deferred-Consequence Retirement
+
+T5c4 closure: `SelectedMarkPlan`/`SelectedAnnotationPlan` replace the two
+deferred ownership boundaries in all twenty-five families and their one
+immutable selected scene. The `80x60` parity floor is gone from standalone,
+facet, Canvas and specialized child paths: coordinate/text/mark intrinsics
+and declared occupied grid tracks now determine hard minima, with one spatial
+quantum only when a positive empty track needs representation. Shared guides
+reserve derived column/row minima; an under-width facet strip returns a
+scoped text fit miss instead of attempting an impossible zero-width font
+calculation. A valid `70x58` exact Scatter mark panel now renders, while
+oversized point, Heatmap cell and Matrix glyph intrinsics still reject before
+paint. Focused nineteen-route coordinate/resource/capture units, five Canvas
+track, five root-frame, twelve facet, 37 root-panel, and eighteen Matrix
+units, native Plot family snapshots, selected composition contracts, exact
+Heatmap refusal, specialized fingerprints and strict Clippy pass. Historical
+T5a documents retain their original deferred-state descriptions; T5c5 now
+audits all mark/annotation consequences before scale work.
 
 Before this step, verify every row in T5c2a-d and T5c3 provides native requirements.
 Then remove `DeferredMarkPlan`/`DeferredAnnotationPlan` as deferred ownership

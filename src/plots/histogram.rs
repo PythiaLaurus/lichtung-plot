@@ -367,7 +367,7 @@ pub(crate) fn project(
         geometry.line(rug, &payload.rug_style, Some(clip))?;
     }
     let mut result = PlotRenderResult::new(layout, Vec::new());
-    result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+    result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
         payload: crate::layout::interior::MarkPayload::Histogram(payload),
         geometry,
     })?);

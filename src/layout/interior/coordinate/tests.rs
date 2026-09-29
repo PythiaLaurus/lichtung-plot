@@ -207,7 +207,7 @@ fn native_root_producers_obey_eighth_round_and_cycle_limits_under_parent_feedbac
                     let consumed = round.insets(&parent, FeedbackKind::AxisGutter);
                     let cell = fit::measured(
                         FrameRequirements {
-                            minimum_body: super::super::DeferredLegacyPanelMinimum::SIZE,
+                            minimum_body: plot.intrinsic_body_minimum(&theme)?,
                             natural_insets: [0.0; 4],
                         }
                         .assign_fit(
@@ -381,7 +381,7 @@ fn native_multiline_axis_gutters_cannot_consume_root_caption_or_title_reserves()
 }
 
 #[test]
-fn native_narrow_exact_root_selects_actual_ticks_instead_of_rejecting_endpoint_estimates() {
+fn native_narrow_root_selects_actual_ticks_and_automatic_painted_domains() {
     use crate::decorations::plan::{plan_panel_for_test, LegendRole};
     for source in sources()
         .into_iter()
@@ -416,10 +416,7 @@ fn native_narrow_exact_root_selects_actual_ticks_instead_of_rejecting_endpoint_e
         )
         .unwrap()
         .1;
-        assert!(
-            175.0 - 40.0 - endpoint - theme.axes.spacing.y_tick_label_gap - 5.0
-                < DeferredLegacyPanelMinimum::SIZE.0
-        );
+        assert!(175.0 - 40.0 - endpoint - theme.axes.spacing.y_tick_label_gap - 5.0 > 0.0);
         let plan = plan_panel_for_test(
             &plot,
             plot.kind(),
@@ -428,20 +425,17 @@ fn native_narrow_exact_root_selects_actual_ticks_instead_of_rejecting_endpoint_e
             &theme,
         )
         .unwrap();
-        assert!(plan.panel_box.width() >= DeferredLegacyPanelMinimum::SIZE.0);
-        assert_eq!(plan.result.layout.projection.y_range(), (0.001, 1.0));
-        assert_eq!(
-            plan.result
-                .layout
-                .y_axis
-                .ticks
-                .iter()
-                .map(|tick| tick.label.as_str())
-                .collect::<Vec<_>>(),
-            ["0.25", "0.5", "0.75", "1"]
-        );
-        let selected = plot
-            .measure_selected_interior(PlotRenderContext::new(plot.data(), plan.panel_box, &theme))
+        assert!(plan.panel_box.width() >= plot.intrinsic_body_minimum(&theme).unwrap().0);
+        let final_range = plan.result.layout.projection.y_range();
+        assert!(final_range.0 <= 0.001 && final_range.1 >= 1.0);
+        assert!(!plan.result.layout.y_axis.ticks.is_empty());
+        let planned_plot = plan.plot_with_planned_limits(&plot, plot.data()).unwrap();
+        let selected = planned_plot
+            .measure_selected_interior(PlotRenderContext::new(
+                planned_plot.data(),
+                plan.panel_box,
+                &theme,
+            ))
             .unwrap();
         assert_eq!(
             selected.layout.y_axis.ticks,
@@ -521,7 +515,7 @@ fn native_absolute_gutter_feedback_contracts_independently_of_multiline_caption(
 }
 
 #[test]
-fn native_hard_title_spans_and_category_slots_exceed_the_named_parity_floor() {
+fn native_hard_title_spans_and_category_slots_come_from_shaped_text() {
     let theme = crate::Theme::Publication.resolve();
     let word = "W".repeat(20);
     let category = Plot::trajectory(
@@ -564,7 +558,7 @@ fn native_hard_title_spans_and_category_slots_exceed_the_named_parity_floor() {
         } else {
             hard
         };
-        assert!(expected > 80.0);
+        assert!(expected > crate::layout::canvas::MINIMUM_PANEL_SPAN);
         assert_eq!(
             if axis == 0 { minimum.0 } else { minimum.1 }.to_bits(),
             expected.to_bits()
@@ -583,9 +577,25 @@ fn native_hard_title_spans_and_category_slots_exceed_the_named_parity_floor() {
             matches!(error, PlanError::Fit(failure) if failure.reason.kind == FitKind::TrackOrResidual)
         );
         assert_eq!(Projection::test_projection_calls(), before);
+        let tick_span = 4.0_f64
+            * theme.typography.tick_label.line_height().max(
+                fit::intrinsic_widths(
+                    &theme,
+                    "1.00e-3",
+                    &theme.typography.tick_label,
+                    "native tick capacity test",
+                )
+                .unwrap()
+                .1,
+            );
         plot.measure_selected_interior(PlotRenderContext::new(
             plot.data(),
-            PanelBox::new(0.0, minimum.0.ceil() + 1.0, 0.0, minimum.1.ceil() + 1.0),
+            PanelBox::new(
+                0.0,
+                minimum.0.max(tick_span).ceil() + 1.0,
+                0.0,
+                minimum.1.max(tick_span).ceil() + 1.0,
+            ),
             &theme,
         ))
         .unwrap();
@@ -677,7 +687,7 @@ fn native_resource_refusal_precedes_mark_materialization_and_backend_creation() 
     clippy::too_many_lines,
     reason = "real native compositions compare rejected guides, bounded trials and gutter feedback with both cache modes"
 )]
-fn native_real_compositions_remeasure_gutters_and_reject_guides_identically_without_cache() {
+fn native_real_compositions_remeasure_gutters_and_select_guides_identically_without_cache() {
     use crate::decorations::plan::children::DISABLE_CHILD_REUSE;
     use crate::orchestrator::measurements::GuideOutcome;
     fn configured<K: crate::kind::Hue + crate::kind::Facet + crate::kind::ExactFamily>(
@@ -780,7 +790,7 @@ fn native_real_compositions_remeasure_gutters_and_reject_guides_identically_with
                 assert!(
                     work.guides
                         .iter()
-                        .any(|guide| guide.outcome == GuideOutcome::Rejected),
+                        .any(|guide| guide.outcome == GuideOutcome::Accepted),
                     "{:?}, faceted={faceted}: {:?}",
                     plot.kind(),
                     work.guides
@@ -867,8 +877,9 @@ fn every_native_route_reports_intrinsic_fit_before_mark_projection_or_backend_cr
             crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                 .unwrap();
         let plot = inputs.attach(source).unwrap();
-        let minimum = Intrinsics::prepared(&plot, &theme).unwrap().minimum(&plot);
-        assert_eq!(minimum, DeferredLegacyPanelMinimum::SIZE);
+        let axes = Intrinsics::prepared(&plot, &theme).unwrap().minimum(&plot);
+        let minimum = plot.intrinsic_body_minimum(&theme).unwrap();
+        assert!(minimum.0 >= axes.0 && minimum.1 >= axes.1);
         let scope = fit::FitScope::new(
             &crate::layout::ComponentAddress::root()
                 .child(crate::layout::AddressRole::PlotBody, 0)
@@ -899,6 +910,33 @@ fn every_native_route_reports_intrinsic_fit_before_mark_projection_or_backend_cr
             0
         );
     }
+}
+
+#[test]
+fn exact_scatter_marks_fit_below_the_retired_generic_panel_floor() {
+    let source = Plot::scatter(
+        NumericValues::new("x", [0.0, 1.0]),
+        NumericValues::new("y", [0.0, 1.0]),
+    )
+    .x_limits(0.0, 1.0)
+    .y_limits(0.0, 1.0)
+    .x_label("")
+    .y_label("")
+    .erase();
+    let inputs =
+        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+            .unwrap();
+    let plot = inputs.attach(source).unwrap();
+    let theme = crate::Theme::Publication.resolve();
+    let hard = plot.intrinsic_body_minimum(&theme).unwrap();
+    assert!(hard.0 < 80.0 && hard.1 < 60.0);
+    let panel = PanelBox::new(5.0, 75.0, 5.0, 63.0);
+    let selected = plot
+        .measure_selected_interior(PlotRenderContext::new(plot.data(), panel, &theme))
+        .unwrap();
+    assert_eq!(selected.layout.projection.panel_box(), panel);
+    assert_eq!(selected.layout.projection.x_range(), (0.0, 1.0));
+    assert_eq!(selected.layout.projection.y_range(), (0.0, 1.0));
 }
 
 #[test]

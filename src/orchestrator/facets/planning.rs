@@ -21,8 +21,7 @@ pub(super) fn canvas_layout(
     round: &mut FeedbackRound,
 ) -> Result<RootFramePlan, crate::layout::fit::PlanError> {
     let mut canvas = RootFramePlan::measured_plot_root(
-        plot.width(),
-        plot.height(),
+        (plot.width(), plot.height()),
         theme,
         LegacyRootAxes {
             has_x_label: horizontal_axis_label.is_some(),
@@ -35,6 +34,10 @@ pub(super) fn canvas_layout(
             [None; 2],
         ),
         false,
+        (
+            crate::layout::canvas::MINIMUM_PANEL_SPAN,
+            crate::layout::canvas::MINIMUM_PANEL_SPAN,
+        ),
     )?;
     let baseline = (
         usize::from(horizontal_axis_label.is_some()),
@@ -131,9 +134,10 @@ fn adjusted_shared_axis_panel(
 ) -> Result<(PanelBox, f64, f64), crate::layout::fit::PlanError> {
     let line_height = theme.typography.axis_title.line_height();
     let consumed = round.insets(address, FeedbackKind::AxisGutter);
+    let positive_span = crate::layout::canvas::MINIMUM_PANEL_SPAN;
     let panel = crate::layout::fit::measured(
         FrameRequirements {
-            minimum_body: crate::layout::interior::DeferredLegacyPanelMinimum::SIZE,
+            minimum_body: (positive_span, positive_span),
             natural_insets: [0.0; 4],
         }
         .assign_fit(
@@ -145,12 +149,11 @@ fn adjusted_shared_axis_panel(
     let lines = shared_axis_line_counts(horizontal_axis_label, vertical_axis_label, theme, panel)?;
     let extra_bottom = lines.0.saturating_sub(baseline.0) as f64 * line_height;
     let extra_left = lines.1.saturating_sub(baseline.1) as f64 * line_height;
-    if candidate.width() - extra_left < crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.0
-        || candidate.height() - extra_bottom
-            < crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.1
+    if candidate.width() - extra_left < positive_span
+        || candidate.height() - extra_bottom < positive_span
     {
         return Err(crate::layout::fit::FitScope::new(address, 0).failure(FitKind::TrackOrResidual,
-                "multiline shared facet axis titles do not fit while preserving the minimum 80x60 plot region; increase chart size"
+                "multiline shared facet axis titles leave no positive child region; increase chart size"
             ).into());
     }
     round.begin_owner(address)?;
@@ -269,16 +272,22 @@ pub(super) fn native_parent(
             let label = facet_label(&panel_plot, &facet.cell)?;
             let appearance = theme
                 .legacy_text_appearance(theme.facet_header_font_size, crate::TextWeight::Normal);
-            if let FitOutcome::Miss(reason) = fit::text(
+            let strip_scope = scope
+                .child(AddressRole::FacetCell, index)?
+                .child(AddressRole::FacetHeader, 0)?;
+            if cell.width() <= 16.0 {
+                fit::FitFailure::retain_least(
+                    &mut child_miss,
+                    strip_scope.failure(FitKind::Text, "facet strip has no assigned text width"),
+                );
+            } else if let FitOutcome::Miss(reason) = fit::text(
                 theme,
                 &label,
                 &appearance,
-                (cell.width() - 16.0).max(0.0),
+                cell.width() - 16.0,
                 PhysicalTextAlignment::Center,
                 "facet strip",
-                &scope
-                    .child(AddressRole::FacetCell, index)?
-                    .child(AddressRole::FacetHeader, 0)?,
+                &strip_scope,
             )? {
                 fit::FitFailure::retain_least(&mut child_miss, reason);
             }

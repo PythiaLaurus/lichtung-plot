@@ -3722,8 +3722,7 @@ impl Canvas {
                 .generation_resources(),
         )?;
         let canvas_layout = RootFramePlan::measured_plot_root(
-            width,
-            height,
+            (width, height),
             themes.root(),
             LegacyRootAxes {
                 has_x_label: false,
@@ -3740,6 +3739,10 @@ impl Canvas {
                 [None; 2],
             ),
             false,
+            (
+                crate::layout::canvas::MINIMUM_PANEL_SPAN,
+                crate::layout::canvas::MINIMUM_PANEL_SPAN,
+            ),
         )
         .map_err(crate::layout::fit::PlanError::into_error)?;
         let full_outer = canvas_layout.panel_box;
@@ -3921,12 +3924,50 @@ impl Canvas {
             let metrics = crate::decorations::legend::LegendMetrics::from_theme(themes.root());
             let gap = self.shared_legend_gap.unwrap_or(metrics.shared_gap);
             let grid_gap = themes.root().composition.canvas_grid_gap;
-            let minimum_width = self.columns as f64
-                * crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.0
-                + self.columns.saturating_sub(1) as f64 * grid_gap;
-            let minimum_height = self.rows as f64
-                * crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.1
-                + self.rows.saturating_sub(1) as f64 * grid_gap;
+            let positive_span = crate::layout::canvas::MINIMUM_PANEL_SPAN;
+            let mut columns = Vec::new();
+            let mut rows = Vec::new();
+            fit::reserve(
+                themes.root(),
+                &mut columns,
+                self.columns,
+                "Canvas guide column minima",
+            )?;
+            fit::reserve(
+                themes.root(),
+                &mut rows,
+                self.rows,
+                "Canvas guide row minima",
+            )?;
+            columns.resize(self.columns, positive_span);
+            rows.resize(self.rows, positive_span);
+            resources
+                .claim_visits(plots.len() as u128)
+                .map_err(|error| {
+                    Error::Render(format!("Canvas guide child intrinsic visits: {error:?}"))
+                })?;
+            for (index, plot) in plots.iter().enumerate() {
+                let hard = if let Some(plot) = plot {
+                    plot.intrinsic_body_minimum(
+                        themes.plot(index).expect("Plot retains its theme"),
+                    )?
+                } else if let Some(text) = prepared.text_panel_intrinsics[index] {
+                    text.minimum
+                } else {
+                    continue;
+                };
+                columns[index % self.columns] = columns[index % self.columns].max(hard.0);
+                rows[index / self.columns] = rows[index / self.columns].max(hard.1);
+            }
+            let minimum_width =
+                columns.iter().sum::<f64>() + self.columns.saturating_sub(1) as f64 * grid_gap;
+            let minimum_height =
+                rows.iter().sum::<f64>() + self.rows.saturating_sub(1) as f64 * grid_gap;
+            if !minimum_width.is_finite() || !minimum_height.is_finite() {
+                return Err(Error::Render(
+                    "Canvas shared-guide child tracks overflowed".into(),
+                ));
+            }
             let frame = crate::decorations::plan::AssignedGuideFrame::new(
                 edge,
                 (minimum_width, minimum_height),

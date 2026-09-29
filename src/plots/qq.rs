@@ -276,7 +276,7 @@ pub(crate) fn project(
     }
     geometry.scatter(&payload.points, &payload.point_style, clip)?;
     let mut result = PlotRenderResult::new(layout, Vec::new());
-    result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+    result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
         payload: crate::layout::interior::MarkPayload::Qq(payload),
         geometry,
     })?);

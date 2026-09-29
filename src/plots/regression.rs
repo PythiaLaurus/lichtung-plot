@@ -497,7 +497,7 @@ pub(crate) fn project(
     geometry.scatter(&payload.points, &payload.point_style, clip)?;
     geometry.line(&payload.fit_line, &payload.line_style, Some(clip))?;
     let mut result = PlotRenderResult::new(layout, legend_entries);
-    result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+    result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
         payload: crate::layout::interior::MarkPayload::Regression(payload),
         geometry,
     })?);

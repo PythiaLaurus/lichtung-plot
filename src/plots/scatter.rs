@@ -344,7 +344,7 @@ pub(crate) fn measure_marks(
         geometry.scatter(points, style, clip)?;
     }
     let mut result = PlotRenderResult::new(layout, std::mem::take(&mut payload.legends));
-    result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+    result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
         payload: crate::layout::interior::MarkPayload::Scatter(payload),
         geometry,
     })?);
