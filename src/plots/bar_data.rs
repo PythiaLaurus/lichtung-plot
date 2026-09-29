@@ -424,12 +424,114 @@ impl BarPayload {
         })
     }
 
+    fn measure_attached_text_ink(
+        &mut self,
+        projection: &crate::layout::Projection,
+        theme: &ResolvedTheme,
+        chart: &Plot,
+        prepared: &PreparedBars,
+        data: PlotData<'_>,
+        scope: &crate::layout::fit::FitScope,
+    ) -> Result<(), crate::layout::fit::PlanError> {
+        let clip = crate::render::backend::validate_clip_region(self.clip)?.panel();
+        let horizontal = matches!(
+            chart.kind(),
+            crate::PlotKind::HorizontalBar | crate::PlotKind::StackedHorizontalBar
+        );
+        let numeric_axis = usize::from(!horizontal);
+        let automatic = if horizontal {
+            chart.user_x_limits().is_none()
+        } else {
+            chart.user_y_limits().is_none()
+        };
+        if self.text.len() != prepared.significance.len() {
+            return Err(Error::Render(
+                "selected Bar annotation count differs from prepared targets".into(),
+            )
+            .into());
+        }
+        let mut full_text = crate::render::geometry::GeometrySnapshot::new(theme)?;
+        data.claim_source_visits(self.text.len())?;
+        for (index, text) in self.text.iter().enumerate() {
+            let mut ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
+            ink.text(text.placement, &text.plan, None)?;
+            for bounds in ink.bounds() {
+                let categorical_overflow = if horizontal {
+                    bounds.bottom < clip.y0 || bounds.top > clip.y1
+                } else {
+                    bounds.left < clip.x0 || bounds.right > clip.x1
+                };
+                let numeric_overflow = if horizontal {
+                    bounds.left < clip.x0 || bounds.right > clip.x1
+                } else {
+                    bounds.bottom < clip.y0 || bounds.top > clip.y1
+                };
+                if categorical_overflow || (numeric_overflow && !automatic) {
+                    return Err(scope
+                        .child(crate::layout::AddressRole::Annotation, index)?
+                        .failure(
+                            crate::layout::fit::FitKind::OverlayCollision,
+                            "required Bar annotation ink exceeds its assigned plot panel",
+                        )
+                        .into());
+                }
+            }
+            full_text.append(&ink)?;
+        }
+        if automatic {
+            if let Some(bounds) = full_text
+                .bounds()
+                .iter()
+                .copied()
+                .reduce(crate::render::geometry::GeometryBox::union)
+            {
+                let first = prepared.significance.first().ok_or_else(|| {
+                    Error::Render("Bar annotation ink has no prepared target".into())
+                })?;
+                let mut extrema = (first.edge, first.edge);
+                for target in &prepared.significance {
+                    data.claim_source_visits(1)?;
+                    extrema.0 = extrema.0.min(target.edge);
+                    extrema.1 = extrema.1.max(target.edge);
+                }
+                let category_range = (0.0, prepared.categories.len() as f64);
+                let source = if horizontal {
+                    [extrema, category_range]
+                } else {
+                    [category_range, extrema]
+                };
+                let requests = crate::layout::interior::automatic_absolute_ink_expansions(
+                    source,
+                    projection,
+                    bounds,
+                    if horizontal {
+                        [true, false]
+                    } else {
+                        [false, true]
+                    },
+                    data,
+                    scope,
+                )?;
+                self.domain_expansion = crate::layout::interior::merge_mark_domain_expansions(
+                    if horizontal {
+                        [self.domain_expansion, None]
+                    } else {
+                        [None, self.domain_expansion]
+                    },
+                    requests,
+                )[numeric_axis];
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn retain(
-        self,
+        mut self,
         mut result: crate::spec::PlotRenderResult,
         context: crate::spec::PlotRenderContext<'_>,
         chart: &Plot,
-    ) -> Result<crate::spec::PlotRenderResult, Error> {
+        prepared: &PreparedBars,
+    ) -> Result<crate::spec::PlotRenderResult, crate::layout::fit::PlanError> {
         let resources = context
             .theme
             .prepared_font_environment()?
@@ -437,6 +539,14 @@ impl BarPayload {
         let data = context.data.with_axis_resources(&resources);
         let mut geometry = crate::render::geometry::GeometrySnapshot::new(context.theme)?;
         let clip = crate::render::backend::validate_clip_region(self.clip)?.panel();
+        self.measure_attached_text_ink(
+            &result.layout.projection,
+            context.theme,
+            chart,
+            prepared,
+            data,
+            context.fit_scope(),
+        )?;
         if let Some(line) = &self.zero {
             geometry.line(line, &self.zero_style, Some(clip))?;
         }

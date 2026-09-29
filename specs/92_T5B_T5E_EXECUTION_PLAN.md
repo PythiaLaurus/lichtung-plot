@@ -1043,7 +1043,9 @@ caller styles while centralizing their ownership.
 | T5c3b3a | COMPLETE | T5c3b2 | `feat(annotations): contain Heatmap cell text ink` |
 | T5c3b3b | IN PROGRESS | T5c3b3a | Umbrella for attached and specialized value text |
 | T5c3b3b1 | COMPLETE | T5c3b3a | `feat(annotations): keep Waterfall totals at exact source anchors` |
-| T5c3b3b2 | PENDING | T5c3b3b1 | `refactor(annotations): fit attached Bar and Estimate value text` |
+| T5c3b3b2 | IN PROGRESS | T5c3b3b1 | Umbrella for attached Bar and Estimate value text |
+| T5c3b3b2a | COMPLETE | T5c3b3b1 | `feat(annotations): fit attached Bar glyph ink` |
+| T5c3b3b2b | PENDING | T5c3b3b2a | `refactor(annotations): fit Estimate value text` |
 | T5c4 | PENDING | T5c3 | `refactor(layout): replace deferred mark and annotation minima` |
 | T5c5 | PENDING | T5c4 | `test(theme): close native mark and annotation ownership` |
 
@@ -1942,6 +1944,17 @@ and updated Publication/Science full SVG fingerprints pass with strict Clippy.
 The changed hashes are intentional: label positions and facet/shared-domain
 projections respond to the removed clamp. T5e5 later replaces shelf packing,
 not the exact-anchor rule.
+
+T5c3b3b2a closure: attached Bar/HorizontalBar/stacked glyphs now use their
+retained shaped, placed text to check canonical uncut ink against the
+categorical frame before the mark clip. An incompatible numeric exact window
+is an annotation-addressed overlay fit miss; on an automatic numeric axis the
+same selected glyphs submit an admitted painted-ink domain proposal, merged
+with bar/interval/supplemental-point clearance under the sole root driver.
+Deliberately oversized attached glyphs in both orientations, 31 Bar units,
+native Bar facet/Canvas and exact-window neighbors, 19 annotation contracts,
+unchanged Bar family snapshots and strict Clippy pass. T5c3b3b2b follows for
+Estimate attached and value text.
 
 Separate normal-flow requirements from inside guides, significance, value labels,
 panel text, and supplemental layers. Implement the closed anchor order, source-

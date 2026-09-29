@@ -4,6 +4,53 @@ use crate::render::backend::Backend;
 use crate::spec::PlotRenderContext;
 use crate::{BarInput, Bounds, CategoryValues, FacetScales, FacetSpec, NumericValues, PlotKind};
 
+#[test]
+fn attached_bar_glyphs_cannot_escape_categorical_frame_under_numeric_feedback() {
+    let categories = CategoryValues::new("category", ["a", "b", "c", "d"]).unwrap();
+    let input = BarInput::estimates(NumericValues::new("value", [4.0, 5.0, 6.0, 7.0]));
+    let plots = [
+        Plot::bar(categories.clone(), input.clone())
+            .significance([crate::Significance::at(
+                "a",
+                crate::SignificanceMark::OneStar,
+            )])
+            .erase(),
+        Plot::horizontal_bar(categories, input)
+            .significance([crate::Significance::at(
+                "a",
+                crate::SignificanceMark::OneStar,
+            )])
+            .erase(),
+    ];
+    let mut theme = crate::Theme::Publication.resolve();
+    theme.typography.significance_label.font_size = 1000;
+    for plot in plots {
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new())
+                .unwrap();
+        let chart = inputs.attach(plot).unwrap();
+        let selected = chart.measure_selected_interior(PlotRenderContext::new(
+            chart.data(),
+            crate::layout::PanelBox::new(50.0, 350.0, 50.0, 350.0),
+            &theme,
+        ));
+        match selected {
+            Err(crate::layout::fit::PlanError::Fit(failure)) => {
+                assert_eq!(
+                    failure.reason.kind,
+                    crate::layout::fit::FitKind::OverlayCollision
+                );
+                assert!(
+                    failure.message.contains("required Bar annotation ink"),
+                    "{failure:?}"
+                );
+            }
+            Err(error) => panic!("expected Bar annotation collision; got {error:?}"),
+            Ok(_) => panic!("expected Bar annotation collision; selected a result"),
+        }
+    }
+}
+
 fn sources(facets: bool) -> [Plot; 4] {
     fn finish<K: crate::kind::ExactFamily + crate::kind::Facet>(
         plot: Plot<K>,

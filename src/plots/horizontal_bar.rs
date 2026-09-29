@@ -230,7 +230,7 @@ pub(crate) fn measure_marks(
             }),
         )?);
     result.y_domain = crate::spec::AxisDomain::Categorical;
-    payload.retain(result, context, chart).map_err(Into::into)
+    payload.retain(result, context, chart, prepared)
 }
 
 fn range_for_bar_marks(
