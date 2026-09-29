@@ -548,6 +548,24 @@ pub(super) fn extend_palette(
     if requested == 0 {
         return Ok(Vec::new());
     }
+    if requested <= seeds.len() {
+        resources
+            .claim_slots(requested as u128)
+            .map_err(work_error)?;
+        let bytes = requested
+            .checked_mul(std::mem::size_of::<(u8, u8, u8)>())
+            .and_then(|bytes| u64::try_from(bytes).ok())
+            .ok_or_else(|| Error::Render("palette prefix storage overflowed".into()))?;
+        resources
+            .claim_bytes(bytes)
+            .map_err(|error| Error::Render(format!("palette prefix storage admission: {error}")))?;
+        let mut prefix = Vec::new();
+        prefix
+            .try_reserve_exact(requested)
+            .map_err(|_| Error::Render("cannot reserve palette prefix".into()))?;
+        prefix.extend_from_slice(&seeds[..requested]);
+        return Ok(prefix);
+    }
     let records = requested
         .checked_add(seeds.len())
         .ok_or_else(|| Error::Render("color palette capacity arithmetic overflowed".into()))?;

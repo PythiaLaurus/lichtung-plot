@@ -6,6 +6,7 @@ use crate::render::backend::{
     with_clip, Backend, FillStyle, LineStyle, PlacedText, Point2D, PointStyle, TextAnchor,
 };
 use crate::spec::{AxisDomain, LinePathStyle, PlotRenderContext, PlotRenderResult};
+use crate::theme::{AccentColors, CategoryColors, PaletteSource};
 use crate::{Error, Plot, PlotKind};
 
 #[cfg(test)]
@@ -41,7 +42,7 @@ pub(crate) struct PreparedLine {
     groups: Vec<LineGroup>,
     hues: Vec<String>,
     layers: Vec<PointLayer>,
-    primary_color_slots: usize,
+    primary_accent_slots: usize,
 }
 
 #[derive(Debug)]
@@ -157,6 +158,57 @@ pub(crate) enum LineMark {
 }
 
 impl PreparedLine {
+    fn resolved_colors(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        data: PlotData<'_>,
+    ) -> Result<(CategoryColors, AccentColors), Error> {
+        let resources = data.source_resources()?;
+        let map = CategoryColors::resolve(
+            chart.global_hue_levels().unwrap_or(&self.hues),
+            PaletteSource::Extendable(&theme.colors),
+            chart.categorical_colors_spec(),
+            resources,
+        )?;
+        let slots = self
+            .primary_accent_slots
+            .checked_add(self.layers.len())
+            .ok_or_else(|| Error::Render("Line accent slot count overflowed".into()))?;
+        let accent = AccentColors::resolve(&theme.colors, slots, resources)?;
+        Ok((map, accent))
+    }
+
+    fn group_color(
+        &self,
+        chart: &Plot,
+        group: &LineGroup,
+        theme: &crate::theme::ResolvedTheme,
+        map: &CategoryColors,
+        accent: &AccentColors,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<(u8, u8, u8), Error> {
+        let hue_paths = chart.kind() == PlotKind::LinePath
+            && chart.line_path_style_spec() == LinePathStyle::Hue;
+        if chart.kind() == PlotKind::Line {
+            if let Some(hue) = group
+                .identity
+                .as_ref()
+                .and_then(|identity| identity.hue.as_deref())
+            {
+                map.color(hue, resources)
+            } else {
+                accent.color(0)
+            }
+        } else if hue_paths {
+            let hue = group.hue_index.ok_or_else(|| {
+                Error::Render("line path: hue-styled path has no resolved hue index".into())
+            })?;
+            map.color(&self.hues[hue], resources)
+        } else {
+            Ok(theme.foreground)
+        }
+    }
     pub(crate) fn primary_mark_count(
         &self,
         resources: &crate::font::canonical::OperationGenerationResources,
@@ -231,33 +283,26 @@ impl PreparedLine {
         data: PlotData<'_>,
         order: &[usize],
     ) -> Result<Vec<LegendEntry>, Error> {
+        let (map, accent) = self.resolved_colors(chart, theme, data)?;
+        self.guide_entries_with_colors(chart, theme, data, order, &map, &accent)
+    }
+
+    fn guide_entries_with_colors(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        data: PlotData<'_>,
+        order: &[usize],
+        map: &CategoryColors,
+        accent: &AccentColors,
+    ) -> Result<Vec<LegendEntry>, Error> {
+        let resources = data.source_resources()?;
         let mut entries = Vec::new();
         let hue_paths = chart.kind() == PlotKind::LinePath
             && chart.line_path_style_spec() == LinePathStyle::Hue;
         for &index in order {
             let group = &self.groups[index];
-            let color = if chart.kind() == PlotKind::Line {
-                let slot = group
-                    .identity
-                    .as_ref()
-                    .and_then(|identity| identity.hue.as_ref())
-                    .map_or(0, |hue| {
-                        chart.hue_color_index(hue, group.hue_index.unwrap_or(0))
-                    });
-                theme.colors[slot % theme.colors.len()]
-            } else if hue_paths {
-                let hue = group.hue_index.ok_or_else(|| {
-                    Error::Render("line path: hue-styled path has no resolved hue index".into())
-                })?;
-                chart.categorical_color(
-                    "line path",
-                    &self.hues[hue],
-                    chart.hue_color_index(&self.hues[hue], hue),
-                    theme,
-                )?
-            } else {
-                theme.foreground
-            };
+            let color = self.group_color(chart, group, theme, map, accent, resources)?;
             let Some(identity) = group
                 .identity
                 .as_ref()
@@ -299,29 +344,22 @@ impl PreparedLine {
         {
             let levels = chart.global_hue_levels().unwrap_or(&self.hues);
             data.reserve_source(&mut entries, levels.len())?;
-            for (index, label) in levels.iter().enumerate() {
+            for label in levels {
                 entries.push(LegendEntry::point(
                     chart.point_legend_identity(label, data)?,
                     chart.point_style(
                         theme,
-                        theme.colors[index % theme.colors.len()],
+                        map.color(label, resources)?,
                         theme.marks.point_sizes.trajectory,
                     ),
                 ));
             }
         }
-        let slots = if chart.hue_col().is_some() {
-            chart
-                .global_hue_levels()
-                .map_or(self.primary_color_slots, <[String]>::len)
-        } else {
-            self.primary_color_slots
-        };
         for (index, layer) in self.layers.iter().enumerate() {
             if let Some(label) = &layer.legend {
                 data.reserve_source(&mut entries, 1)?;
                 let style = chart.point_layers()[index]
-                    .point_style(theme.colors[(slots + index) % theme.colors.len()])?;
+                    .point_style(accent.color(self.primary_accent_slots + index)?)?;
                 entries.push(
                     LegendEntry::point(chart.point_legend_identity(label, data)?, style)
                         .without_hue_level(),
@@ -382,6 +420,15 @@ impl PreparedLine {
                 .iter()
                 .map(|label| data.copy_source_string(label)),
         )?;
+        if let Some(exact) = chart.categorical_colors_spec() {
+            for hue in &hues {
+                if exact.color(hue, data.source_resources()?)?.is_none() {
+                    return Err(Error::Data(format!(
+                        "line: category {hue:?} has no caller-owned color"
+                    )));
+                }
+            }
+        }
         let y = crate::data::strict_finite_f64(data, y_col, family)?;
         let (x, conditions) = if data.column(x_col)?.is_numeric() {
             (crate::data::strict_finite_f64(data, x_col, family)?, None)
@@ -652,11 +699,7 @@ impl PreparedLine {
             chart.y_axis_spec(),
             data.source_resources()?,
         )?;
-        let primary_color_slots = if chart.hue_col().is_some() {
-            hues.len()
-        } else {
-            1
-        };
+        let primary_accent_slots = usize::from(chart.hue_col().is_none());
         Ok(Self {
             ranges,
             mark_ranges,
@@ -664,7 +707,7 @@ impl PreparedLine {
             groups,
             hues,
             layers,
-            primary_color_slots,
+            primary_accent_slots,
         })
     }
 }
@@ -744,31 +787,12 @@ fn project(
     let hue_paths =
         chart.kind() == PlotKind::LinePath && chart.line_path_style_spec() == LinePathStyle::Hue;
     let order = prepared.group_order(chart, data)?;
-    let legends = prepared.guide_entries_in_order(chart, theme, data, &order)?;
+    let (map, accent) = prepared.resolved_colors(chart, theme, data)?;
+    let legends = prepared.guide_entries_with_colors(chart, theme, data, &order, &map, &accent)?;
+    let resources = data.source_resources()?;
     for &index in &order {
         let group = &prepared.groups[index];
-        let color = if chart.kind() == PlotKind::Line {
-            let slot = group
-                .identity
-                .as_ref()
-                .and_then(|identity| identity.hue.as_ref())
-                .map_or(0, |hue| {
-                    chart.hue_color_index(hue, group.hue_index.unwrap_or(0))
-                });
-            theme.colors[slot % theme.colors.len()]
-        } else if hue_paths {
-            let index = group.hue_index.ok_or_else(|| {
-                Error::Render("line path: hue-styled path has no resolved hue index".into())
-            })?;
-            chart.categorical_color(
-                "line path",
-                &prepared.hues[index],
-                chart.hue_color_index(&prepared.hues[index], index),
-                theme,
-            )?
-        } else {
-            theme.foreground
-        };
+        let color = prepared.group_color(chart, group, theme, &map, &accent, resources)?;
         let fill = theme.marks.line_band.backend_style(color);
         data.claim_source_visits(group.points.len())?;
         let has_fill = chart.kind() == PlotKind::Line
@@ -895,17 +919,11 @@ fn project(
                     let index = group
                         .hue_index
                         .ok_or_else(|| Error::Render("line path: missing hue index".into()))?;
-                    chart.categorical_color(
-                        "line path",
-                        &prepared.hues[index],
-                        chart.hue_color_index(&prepared.hues[index], index),
-                        theme,
-                    )?
+                    map.color(&prepared.hues[index], resources)?
+                } else if let Some(index) = point.hue_index {
+                    map.color(&prepared.hues[index], resources)?
                 } else {
-                    let slot = point.hue_index.map_or(0, |index| {
-                        chart.hue_color_index(&prepared.hues[index], index)
-                    });
-                    theme.colors[slot % theme.colors.len()]
+                    accent.color(0)?
                 };
                 data.reserve_source(&mut payload.marks, 1)?;
                 payload.marks.push(LineMark::Points(
@@ -918,15 +936,8 @@ fn project(
     data.reserve_source(&mut payload.layers, prepared.layers.len())?;
     let mut label_source: Option<[(f64, f64); 2]> = None;
     for (index, layer) in prepared.layers.iter().enumerate() {
-        let slots = if chart.hue_col().is_some() {
-            chart
-                .global_hue_levels()
-                .map_or(prepared.primary_color_slots, <[String]>::len)
-        } else {
-            prepared.primary_color_slots
-        };
         let style = chart.point_layers()[index]
-            .point_style(theme.colors[(slots + index) % theme.colors.len()])?;
+            .point_style(accent.color(prepared.primary_accent_slots + index)?)?;
         let points = data.collect_source(layer.points.iter().map(|&(x, y)| {
             data.claim_source_visits(1)?;
             Ok(project(x, y))

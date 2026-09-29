@@ -30,7 +30,8 @@ pub(crate) fn measure_marks(
     let prepared = bar_data::retained(chart)?;
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);
-    let legend_entries = bar_data::legend_entries(prepared, chart, theme, data)?;
+    let (colors, accents) = prepared.resolved_colors(chart, theme, data)?;
+    let legend_entries = bar_data::legend_entries(prepared, chart, theme, data, &colors)?;
     let mut rendered_maxima =
         data.collect_source((0..prepared.categories.len()).map(|_| Ok(0.0_f64)))?;
     let anchor_count = prepared.series.len().max(1);
@@ -162,20 +163,13 @@ pub(crate) fn measure_marks(
     for bar in &prepared.bars {
         let (x_center, width) =
             bar_data::category_bar_geometry(bar, prepared, mode, chart.bar_spacing_spec(), false);
-        let color_index = bar.hue_index.unwrap_or_else(|| {
-            if chart.group_col().is_some() {
-                0
-            } else {
-                bar.category_index
-            }
-        });
         let polygon = project_bar(&layout.projection, x_center, width, bar)?;
         payload.bars.push(bar_data::BarShape {
             polygon,
             fill: theme
                 .marks
                 .bar_body
-                .backend_style(theme.colors[color_index % theme.colors.len()]),
+                .backend_style(prepared.bar_color(chart, bar, &colors, &accents, &resources)?),
             interval: bar
                 .interval
                 .map(|(lower, upper)| {

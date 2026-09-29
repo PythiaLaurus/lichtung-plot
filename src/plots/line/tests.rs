@@ -3,6 +3,27 @@ use crate::font::canonical::OperationGenerationResources;
 use crate::{CategoryValues, NumericValues};
 
 #[test]
+fn keyed_line_colors_validate_all_prepared_hues_before_font_discovery() {
+    let colors = crate::CategoricalColors::new([("first".into(), (3, 5, 7))]).unwrap();
+    let source = Plot::line(
+        NumericValues::new("x", [0.0, 1.0, 0.0, 1.0]),
+        NumericValues::new("y", [1.0, 2.0, 3.0, 4.0]),
+    )
+    .hue(CategoryValues::new("hue", ["first", "first", "second", "second"]).unwrap())
+    .categorical_colors(colors)
+    .erase();
+    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+    let error = crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+        .err()
+        .expect("used missing hue must refuse");
+    assert!(matches!(error, Error::Data(message) if message.contains("second")));
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        0
+    );
+}
+
+#[test]
 fn source_point_collapse_matches_canonical_line_distinctions() {
     for (x, y) in [
         (vec![0.0, 0.000_001], vec![0.0, 0.0]),
@@ -302,7 +323,7 @@ fn point_layer_label_gap_moves_the_selected_text_without_moving_its_mark() {
         prepared,
         selected.layout.clone(),
         &theme,
-        plot.data(),
+        plot.data().with_axis_resources(&resources),
         &crate::layout::fit::ROOT_SCOPE,
     )
     .unwrap();
@@ -312,7 +333,7 @@ fn point_layer_label_gap_moves_the_selected_text_without_moving_its_mark() {
         prepared,
         selected.layout,
         &theme,
-        plot.data(),
+        plot.data().with_axis_resources(&resources),
         &crate::layout::fit::ROOT_SCOPE,
     )
     .unwrap();
@@ -357,7 +378,7 @@ fn point_layer_label_uses_theme_font_and_exact_layer_paint() {
         prepared,
         selected.layout.clone(),
         &theme,
-        plot.data(),
+        plot.data().with_axis_resources(&resources),
         &crate::layout::fit::ROOT_SCOPE,
     )
     .unwrap();
@@ -368,7 +389,7 @@ fn point_layer_label_uses_theme_font_and_exact_layer_paint() {
         prepared,
         selected.layout,
         &theme,
-        plot.data(),
+        plot.data().with_axis_resources(&resources),
         &crate::layout::fit::ROOT_SCOPE,
     )
     .unwrap();
@@ -502,7 +523,7 @@ fn custom_series_line_style_is_shared_by_selected_marks_and_guide_identity() {
         prepared,
         selected.layout.clone(),
         &theme,
-        plot.data(),
+        plot.data().with_axis_resources(&resources),
         &crate::layout::fit::ROOT_SCOPE,
     )
     .unwrap();
@@ -513,7 +534,7 @@ fn custom_series_line_style_is_shared_by_selected_marks_and_guide_identity() {
         prepared,
         selected.layout,
         &theme,
-        plot.data(),
+        plot.data().with_axis_resources(&resources),
         &crate::layout::fit::ROOT_SCOPE,
     )
     .unwrap();

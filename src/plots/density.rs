@@ -10,6 +10,7 @@ use crate::layout::Layout;
 use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::strict_scott_bandwidth;
+use crate::theme::{AccentColors, CategoryColors, PaletteSource};
 use crate::Plot;
 
 const MIN_GRID_POINTS: usize = 128;
@@ -78,6 +79,52 @@ pub(crate) fn intrinsic_body_minimum(
 }
 
 impl PreparedDensity {
+    fn resolved_colors(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        data: PlotData<'_>,
+    ) -> Result<(CategoryColors, AccentColors), Error> {
+        let resources = data.source_resources()?;
+        let keys = if let Some(global) = chart.global_hue_levels() {
+            data.collect_source(global.iter().map(|key| data.copy_source_string(key)))?
+        } else {
+            let mut observed = Vec::new();
+            data.reserve_source(&mut observed, self.curves.len())?;
+            data.claim_source_visits(self.curves.len())?;
+            for curve in &self.curves {
+                if let Some(hue) = &curve.identity.hue {
+                    observed.push(data.copy_source_string(hue)?);
+                }
+            }
+            data.source_levels(&observed)?
+        };
+        let map = CategoryColors::resolve(
+            &keys,
+            PaletteSource::Extendable(&theme.colors),
+            chart.categorical_colors_spec(),
+            resources,
+        )?;
+        let accent = AccentColors::resolve(
+            &theme.colors,
+            usize::from(self.curves.iter().any(|curve| curve.identity.hue.is_none())),
+            resources,
+        )?;
+        Ok((map, accent))
+    }
+
+    fn curve_color(
+        curve: &DensityCurve,
+        colors: &CategoryColors,
+        accent: &AccentColors,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<(u8, u8, u8), Error> {
+        if let Some(hue) = &curve.identity.hue {
+            colors.color(hue, resources)
+        } else {
+            accent.color(0)
+        }
+    }
     pub(crate) fn primary_mark_count(&self) -> u128 {
         self.curves.len() as u128
     }
@@ -120,14 +167,28 @@ impl PreparedDensity {
         data: PlotData<'_>,
         order: &[(usize, usize, usize)],
     ) -> Result<Vec<LegendEntry>, Error> {
+        let (colors, accent) = self.resolved_colors(chart, theme, data)?;
+        self.guide_entries_with_colors(chart, theme, data, order, &colors, &accent)
+    }
+
+    fn guide_entries_with_colors(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        data: PlotData<'_>,
+        order: &[(usize, usize, usize)],
+        colors: &CategoryColors,
+        accent: &AccentColors,
+    ) -> Result<Vec<LegendEntry>, Error> {
+        let resources = data.source_resources()?;
         let mut entries = Vec::new();
         data.reserve_source(&mut entries, order.len())?;
-        for &(_, index, color_index) in order {
+        for &(_, index, _) in order {
             let curve = &self.curves[index];
             if curve.identity.hue.is_none() {
                 continue;
             }
-            let color = theme.colors[color_index % theme.colors.len()];
+            let color = Self::curve_color(curve, colors, accent, resources)?;
             entries.push(LegendEntry::line_fill(
                 chart.collective_legend_identity(&curve.identity, data)?,
                 theme.marks.density_line.backend_style(color),
@@ -144,7 +205,17 @@ impl PreparedDensity {
         let column = chart
             .x_col()
             .ok_or_else(|| Error::Data("density: value column not set".into()))?;
-        prepare_density_for_chart(chart, data, column)
+        let prepared = prepare_density_for_chart(chart, data, column)?;
+        if let Some(exact) = chart.categorical_colors_spec() {
+            for hue in prepared.hue_levels() {
+                if exact.color(hue, data.source_resources()?)?.is_none() {
+                    return Err(Error::Data(format!(
+                        "density: category {hue:?} has no caller-owned color"
+                    )));
+                }
+            }
+        }
+        Ok(prepared)
     }
 
     pub(crate) fn ranges(
@@ -315,14 +386,17 @@ pub(crate) fn project(
     };
     data.reserve_source(&mut payload.curves, prepared.curves.len())?;
     let order = prepared.group_order(chart, data)?;
-    let legend_entries = prepared.guide_entries_in_order(chart, theme, data, &order)?;
-    for &(_, index, color_index) in &order {
+    let (colors, accent) = prepared.resolved_colors(chart, theme, data)?;
+    let legend_entries =
+        prepared.guide_entries_with_colors(chart, theme, data, &order, &colors, &accent)?;
+    let resources = data.source_resources()?;
+    for &(_, index, _) in &order {
         let curve = &prepared.curves[index];
         let visible = visible_curve(curve, layout.projection.x_range(), data)?;
         if visible.len() < 2 {
             continue;
         }
-        let color = theme.colors[color_index % theme.colors.len()];
+        let color = PreparedDensity::curve_color(curve, &colors, &accent, resources)?;
         let mut fill = Vec::new();
         data.reserve_source(&mut fill, visible.len() + 2)?;
         fill.push((visible[0].0, 0.0));
@@ -788,6 +862,23 @@ fn scaled_difference_ratio(high: f64, low: f64, denominator: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exact_density_color_map_uses_raw_hues_and_refuses_missing_keys_before_fonts() {
+        let source = Plot::density(crate::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]))
+            .hue(crate::CategoryValues::new("hue", ["a", "a", "b", "b"]).unwrap())
+            .categorical_colors(crate::CategoricalColors::new([("a".into(), (5, 7, 11))]).unwrap())
+            .erase();
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        let error = PreparedDensity::new(&source, source.data().with_axis_resources(&resources))
+            .unwrap_err();
+        assert!(matches!(error, Error::Data(message) if message.contains("category \"b\"")));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
     use crate::{CategoryValues, NumericValues};
 
     #[test]

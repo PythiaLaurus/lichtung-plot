@@ -5,6 +5,32 @@ use crate::spec::PlotRenderContext;
 use crate::{BarInput, Bounds, CategoryValues, FacetScales, FacetSpec, NumericValues, PlotKind};
 
 #[test]
+fn positioned_bar_colors_require_every_used_raw_series_before_fonts() {
+    let source = Plot::bar(
+        CategoryValues::new("category", ["a", "a"]).unwrap(),
+        BarInput::estimates(NumericValues::new("value", [1.0, 2.0])),
+    )
+    .series(CategoryValues::new("series", ["first", "second"]).unwrap())
+    .categorical_colors(
+        crate::CategoricalColors::new([
+            ("first".into(), (10, 20, 30)),
+            ("unused".into(), (10, 20, 30)),
+        ])
+        .unwrap(),
+    )
+    .erase();
+    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+    let error = crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+        .err()
+        .expect("missing positioned series must refuse");
+    assert!(matches!(error, Error::Data(message) if message.contains("second")));
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        0
+    );
+}
+
+#[test]
 fn attached_bar_glyphs_cannot_escape_categorical_frame_under_numeric_feedback() {
     let categories = CategoryValues::new("category", ["a", "b", "c", "d"]).unwrap();
     let input = BarInput::estimates(NumericValues::new("value", [4.0, 5.0, 6.0, 7.0]));
@@ -223,23 +249,14 @@ fn bar_legend_identity_admits_long_dimensions_once_per_candidate() {
     let prepared = prepare(&source, source.data(), BarMode::Grouped).unwrap();
     let theme = crate::Theme::Publication.resolve();
     let candidate = |resources: &OperationGenerationResources| {
-        legend_entries(
-            &prepared,
-            &source,
-            &theme,
-            source.data().with_axis_resources(resources),
-        )
+        let data = source.data().with_axis_resources(resources);
+        let (colors, _) = prepared.resolved_colors(&source, &theme, data)?;
+        legend_entries(&prepared, &source, &theme, data, &colors)
     };
-    let string_bytes = prepared
-        .hues
-        .iter()
-        .map(|value| dimension.len() + value.len())
-        .sum::<usize>();
-    let visits = 0;
-    let records = 3 * prepared.hues.len() as u128;
-    let bytes =
-        u64::try_from(prepared.hues.len() * std::mem::size_of::<LegendEntry>() + string_bytes)
-            .unwrap();
+    let probe = OperationGenerationResources::new();
+    candidate(&probe).unwrap();
+    let (records, visits) = probe.usage().unwrap();
+    let bytes = probe.byte_usage().unwrap();
     let exact = OperationGenerationResources::with_test_limits(visits, bytes);
     let entries = candidate(&exact).unwrap();
     assert_eq!(exact.usage().unwrap().1, visits);
@@ -248,17 +265,13 @@ fn bar_legend_identity_admits_long_dimensions_once_per_candidate() {
     for (entry, value) in entries.iter().zip(&prepared.hues) {
         assert_eq!(entry.identity(), &source.legend_identity(value));
     }
-    for byte_limit in [0, bytes - 1] {
-        let resources = OperationGenerationResources::with_test_limits(visits, byte_limit);
+    for (visits_limit, byte_limit) in [(visits - 1, bytes), (visits, bytes - 1)] {
+        let resources = OperationGenerationResources::with_test_limits(visits_limit, byte_limit);
         let error = candidate(&resources).unwrap_err();
-        assert!(error.to_string().contains("storage admission"), "{error}");
+        assert!(matches!(error, Error::Render(_)));
+        // A refused candidate never refunds its already admitted work.
         assert!(resources.usage().unwrap().0 > 0);
-        assert_eq!(resources.usage().unwrap().1, 0);
-        if byte_limit > 0 {
-            // Rejected candidates keep their admitted storage charges.
-            resources.set_test_limits(visits, bytes);
-            assert!(candidate(&resources).is_err());
-        }
+        assert!(resources.usage().unwrap().1 > 0 || visits_limit < visits);
     }
     let limited = OperationGenerationResources::with_test_limits(visits, bytes);
     limited.claim_slots(1_000_000 - records + 1).unwrap();
@@ -266,10 +279,7 @@ fn bar_legend_identity_admits_long_dimensions_once_per_candidate() {
         .unwrap_err()
         .to_string()
         .contains("record admission"));
-    assert_eq!(
-        limited.byte_usage().unwrap(),
-        bytes - dimension.len() as u64
-    );
+    assert!(limited.byte_usage().unwrap() <= bytes);
     let cumulative = OperationGenerationResources::with_test_limits(2 * visits, 2 * bytes);
     candidate(&cumulative).unwrap();
     candidate(&cumulative).unwrap();

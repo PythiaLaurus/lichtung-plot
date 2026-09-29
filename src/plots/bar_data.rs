@@ -17,7 +17,7 @@ use crate::spec::{
     BarInput, BarSource, BarSpacing, ConfidenceIntervalAlgorithm, ErrorBarKind, PercentileInterval,
     StandardDeviation, StandardError,
 };
-use crate::theme::ResolvedTheme;
+use crate::theme::{AccentColors, CategoryColors, PaletteSource, ResolvedTheme};
 use crate::{CategoryOrder, Plot, ValueSort};
 
 #[cfg(test)]
@@ -288,6 +288,57 @@ pub(crate) struct PreparedBars {
 }
 
 impl PreparedBars {
+    fn color_keys(&self) -> &[String] {
+        if self.hues.is_empty() {
+            &self.categories
+        } else {
+            &self.hues
+        }
+    }
+
+    pub(crate) fn resolved_colors(
+        &self,
+        chart: &Plot,
+        theme: &ResolvedTheme,
+        data: PlotData<'_>,
+    ) -> Result<(CategoryColors, AccentColors), Error> {
+        let resources = data.source_resources()?;
+        let keys = if self.hues.is_empty() {
+            &self.categories[..]
+        } else {
+            chart.global_hue_levels().unwrap_or(&self.hues)
+        };
+        let colors = CategoryColors::resolve(
+            keys,
+            PaletteSource::Extendable(&theme.colors),
+            chart.categorical_colors_spec(),
+            resources,
+        )?;
+        let accents = AccentColors::resolve(
+            &theme.colors,
+            if chart.colors_by_sign() { 2 } else { 0 },
+            resources,
+        )?;
+        Ok((colors, accents))
+    }
+
+    pub(crate) fn bar_color(
+        &self,
+        chart: &Plot,
+        bar: &PreparedBar,
+        colors: &CategoryColors,
+        accents: &AccentColors,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<(u8, u8, u8), Error> {
+        if chart.colors_by_sign() {
+            accents.color(usize::from(bar.end < bar.start))
+        } else if let Some(hue) = bar.hue_index {
+            colors.color(&self.hues[hue], resources)
+        } else {
+            colors.color(&self.categories[bar.category_index], resources)
+        }
+    }
+
     pub(crate) fn primary_mark_count(&self) -> u128 {
         self.bars.len() as u128
     }
@@ -745,6 +796,15 @@ pub(crate) fn prepare_scoped<'a>(
     for point in &prepared.points {
         prepared.value_range.0 = prepared.value_range.0.min(point.value);
         prepared.value_range.1 = prepared.value_range.1.max(point.value);
+    }
+    if let Some(exact) = chart.categorical_colors_spec() {
+        for key in prepared.color_keys() {
+            if exact.color(key, data.source_resources()?)?.is_none() {
+                return Err(Error::Data(format!(
+                    "bar: category {key:?} has no caller-owned color"
+                )));
+            }
+        }
     }
     Ok(prepared)
 }
@@ -1334,14 +1394,16 @@ pub(crate) fn legend_entries(
     chart: &Plot,
     theme: &ResolvedTheme,
     data: PlotData<'_>,
+    colors: &CategoryColors,
 ) -> Result<Vec<LegendEntry>, Error> {
-    data.collect_source(prepared.hues.iter().enumerate().map(|(index, label)| {
+    let resources = data.source_resources()?;
+    data.collect_source(prepared.hues.iter().map(|label| {
         Ok(LegendEntry::fill(
             chart.point_legend_identity(label, data)?,
             theme
                 .marks
                 .bar_body
-                .backend_style(theme.colors[index % theme.colors.len()]),
+                .backend_style(colors.color(label, resources)?),
         ))
     }))
 }

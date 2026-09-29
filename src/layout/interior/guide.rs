@@ -52,7 +52,8 @@ impl PreparedInteriorInputs {
             | PlotKind::StackedBar
             | PlotKind::StackedHorizontalBar => {
                 let marks = panel(self.bars.as_ref().map(|p| p.panels.as_slice()), scope, kind)?;
-                crate::plots::bar_data::legend_entries(marks, chart, theme, data)
+                let (colors, _) = marks.resolved_colors(chart, theme, data)?;
+                crate::plots::bar_data::legend_entries(marks, chart, theme, data, &colors)
             }
             PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
                 let marks = panel(

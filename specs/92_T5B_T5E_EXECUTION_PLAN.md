@@ -2060,7 +2060,7 @@ ownership, statistical estimates, public extension points, or layout strategy.
 | T5d1b | COMPLETE | T5d1a | `feat(color): pin gamut interpolation and palette candidates` |
 | T5d2 | IN PROGRESS | T5d1 | Umbrella for categorical maps, palettes and accents |
 | T5d2a | COMPLETE | T5d1 | `feat(scales): prepare raw-key maps and bounded accents` |
-| T5d2b | PENDING | T5d2a | `refactor(scales): migrate ordinary qualitative consumers` |
+| T5d2b | COMPLETE | T5d2a | `refactor(scales): migrate ordinary qualitative consumers` |
 | T5d2c | PENDING | T5d2b | `refactor(scales): migrate collective and specialized color owners` |
 | T5d2d | PENDING | T5d2c | `refactor(scales): close palettes, accents and guide equality` |
 | T5d3 | PENDING | T5d2 | `feat(scales): resolve sequential and diverging mappings` |
@@ -2150,6 +2150,22 @@ Focused mapping/fixed/extended/exact tests, Interaction and sampled Raincloud
 caller-color contracts, and strict Clippy pass. T5d2b–d install this one
 representation into all prepared family/guide owners and remove the old
 modulo and one-off helper routes together.
+
+T5d2b closure: Scatter, Line/Trajectory/LinePath, Density and all four Bar
+orientations now select exact raw hue/series/category keys from one resolved
+private `CategoryColors` per selected producer, reusing it for complete mark
+and originating guide styles. Prepared parent hue order is used for facets
+and Canvas even when a local panel lacks an identity; unkeyed primary marks
+use accent slot zero. A keyed path consumes no accent, so its first
+supplemental `PointLayer` now consumes accent slot zero independent of hue
+cardinality. Exact local layer colors retain their occupied slots, while an
+exact missing used-key map fails before fonts for Scatter, Line, Density and
+positioned Bars. The first built-in seed colors preserve existing output;
+above-seed domains extend without `% theme.colors.len()` cycling. Fourteen
+Scatter, seventeen Line, thirteen Density, eleven Bar extraction and six
+native Bar feedback units, visible/hidden Canvas hue coordination, the
+intentional point-layer accent change, native path/Bar snapshots and strict
+Clippy pass. Collective and specialized owners follow in T5d2c.
 
 Implement fixed/extendable palettes, exact raw-key maps, capacity/coverage checks,
 and nonempty extendable accent sequences under one deterministic color engine.

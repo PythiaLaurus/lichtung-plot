@@ -5,6 +5,8 @@ mod contrast;
 mod resolved;
 mod scale;
 
+pub(crate) use scale::{AccentColors, CategoryColors, PaletteSource};
+
 #[cfg(test)]
 pub(crate) use resolved::FillOutlinePaint;
 pub use resolved::Theme;

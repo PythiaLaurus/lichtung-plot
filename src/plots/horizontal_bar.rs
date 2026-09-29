@@ -29,7 +29,8 @@ pub(crate) fn measure_marks(
     let prepared = bar_data::retained(chart)?;
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);
-    let legend_entries = bar_data::legend_entries(prepared, chart, theme, data)?;
+    let (colors, accents) = prepared.resolved_colors(chart, theme, data)?;
+    let legend_entries = bar_data::legend_entries(prepared, chart, theme, data, &colors)?;
     let y_count = prepared.categories.len() as f64;
     let panel_box = context.panel;
     let mark_style = chart.significance_mark_style_spec();
@@ -159,22 +160,7 @@ pub(crate) fn measure_marks(
     for bar in &prepared.bars {
         let (y_center, height) =
             bar_data::category_bar_geometry(bar, prepared, mode, chart.bar_spacing_spec(), true);
-        let color_index = bar.hue_index.unwrap_or_else(|| {
-            if chart.group_col().is_some() {
-                0
-            } else {
-                bar.category_index
-            }
-        });
-        let color = if chart.colors_by_sign() {
-            if bar.end >= bar.start {
-                theme.colors[0]
-            } else {
-                theme.colors[1 % theme.colors.len()]
-            }
-        } else {
-            theme.colors[color_index % theme.colors.len()]
-        };
+        let color = prepared.bar_color(chart, bar, &colors, &accents, &resources)?;
         let polygon = project_bar(&layout.projection, bar, y_center, height)?;
         payload.bars.push(bar_data::BarShape {
             polygon,

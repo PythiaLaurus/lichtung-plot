@@ -15,6 +15,7 @@ use crate::Error;
 use crate::decorations::legend::LegendEntry;
 use crate::render::backend::{with_clip, Backend, Point2D, PointStyle};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
+use crate::theme::{AccentColors, CategoryColors, PaletteSource};
 use crate::Plot;
 
 #[cfg(test)]
@@ -185,7 +186,46 @@ impl PreparedScatter {
                 points: data.collect_source(rows.iter().map(|(_, x, y)| Ok((*x, *y))))?,
             });
         }
+        if let Some(exact) = chart.categorical_colors_spec() {
+            for group in &groups {
+                if let Some(label) = &group.label {
+                    if exact.color(label, data.source_resources()?)?.is_none() {
+                        return Err(Error::Data(format!(
+                            "scatter: category {label:?} has no caller-owned color"
+                        )));
+                    }
+                }
+            }
+        }
         Ok(Self { ranges, groups })
+    }
+
+    fn resolved_colors(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<CategoryColors, Error> {
+        let resources = data.source_resources()?;
+        let keys = if let Some(global) = chart.global_hue_levels() {
+            data.collect_source(global.iter().map(|key| data.copy_source_string(key)))?
+        } else {
+            let mut keys = Vec::new();
+            data.reserve_source(&mut keys, self.groups.len())?;
+            data.claim_source_visits(self.groups.len())?;
+            for group in &self.groups {
+                if let Some(label) = &group.label {
+                    keys.push(data.copy_source_string(label)?);
+                }
+            }
+            keys
+        };
+        CategoryColors::resolve(
+            &keys,
+            PaletteSource::Extendable(&theme.colors),
+            chart.categorical_colors_spec(),
+            resources,
+        )
     }
 
     pub(crate) fn guide_entries_in_order(
@@ -195,6 +235,19 @@ impl PreparedScatter {
         data: crate::data::PlotData<'_>,
         order: &[usize],
     ) -> Result<Vec<LegendEntry>, Error> {
+        let map = self.resolved_colors(chart, theme, data)?;
+        self.guide_entries_with_colors(chart, theme, data, order, &map)
+    }
+
+    fn guide_entries_with_colors(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        data: crate::data::PlotData<'_>,
+        order: &[usize],
+        map: &CategoryColors,
+    ) -> Result<Vec<LegendEntry>, Error> {
+        let resources = data.source_resources()?;
         let mut entries = Vec::new();
         data.reserve_source(
             &mut entries,
@@ -203,11 +256,11 @@ impl PreparedScatter {
                 .filter(|group| group.label.is_some())
                 .count(),
         )?;
-        for (slot, &group_index) in order.iter().enumerate() {
+        for &group_index in order {
             let Some(label) = &self.groups[group_index].label else {
                 continue;
             };
-            let color = theme.colors[chart.hue_color_index(label, slot) % theme.colors.len()];
+            let color = map.color(label, resources)?;
             entries.push(LegendEntry::point(
                 chart.point_legend_identity(label, data)?,
                 chart.point_style(theme, color, theme.marks.point_sizes.scatter),
@@ -251,13 +304,25 @@ impl PreparedScatter {
         let mut groups = Vec::new();
         data.reserve_source(&mut groups, self.groups.len())?;
         let order = self.group_order(chart, data)?;
-        let legends = self.guide_entries_in_order(chart, theme, data, &order)?;
-        for (index, group_index) in order.into_iter().enumerate() {
+        let map = self.resolved_colors(chart, theme, data)?;
+        let legends = self.guide_entries_with_colors(chart, theme, data, &order, &map)?;
+        let resources = data.source_resources()?;
+        let accent = self
+            .groups
+            .iter()
+            .any(|group| group.label.is_none())
+            .then(|| AccentColors::resolve(&theme.colors, 1, resources))
+            .transpose()?;
+        for group_index in order {
             let group = &self.groups[group_index];
-            let color = group.label.as_ref().map_or_else(
-                || theme.colors.first().copied().unwrap_or((0, 0, 0)),
-                |label| theme.colors[chart.hue_color_index(label, index) % theme.colors.len()],
-            );
+            let color = if let Some(label) = &group.label {
+                map.color(label, resources)?
+            } else {
+                accent
+                    .as_ref()
+                    .ok_or_else(|| Error::Render("Scatter accent owner is missing".into()))?
+                    .color(0)?
+            };
             let style = chart.point_style(theme, color, theme.marks.point_sizes.scatter);
             let points = data.collect_source(group.points.iter().map(|(x, y)| {
                 data.claim_source_visits(1)?;
@@ -356,6 +421,61 @@ mod tests {
     use super::*;
     use crate::font::canonical::OperationGenerationResources;
     use crate::{CategoryValues, NumericValues};
+
+    #[test]
+    fn prepared_hues_extend_without_palette_cycling_and_exact_missing_keys_precede_fonts() {
+        let theme = crate::Theme::Publication.resolve();
+        let count = theme.colors.len() + 2;
+        let hues = (0..count)
+            .map(|index| format!("hue-{index}"))
+            .collect::<Vec<_>>();
+        let make = || {
+            Plot::scatter(
+                NumericValues::new("x", (0..count).map(|index| index as f64)),
+                NumericValues::new("y", (0..count).map(|index| index as f64)),
+            )
+            .hue(CategoryValues::new("hue", hues.iter().map(String::as_str)).unwrap())
+            .erase()
+        };
+        let source = make();
+        let resources = OperationGenerationResources::new();
+        let prepared =
+            PreparedScatter::new(&source, source.data().with_axis_resources(&resources)).unwrap();
+        let mapping = prepared
+            .resolved_colors(
+                &source,
+                &theme,
+                source.data().with_axis_resources(&resources),
+            )
+            .unwrap();
+        assert_eq!(&mapping.colors()[..theme.colors.len()], &theme.colors);
+        assert!(mapping.colors()[theme.colors.len()..]
+            .iter()
+            .all(|color| !theme.colors.contains(color)));
+        assert_eq!(mapping.color("hue-0", &resources).unwrap(), theme.colors[0]);
+
+        let exact = crate::CategoricalColors::new([("hue-0".into(), (1, 2, 3))]).unwrap();
+        let source = Plot::scatter(
+            NumericValues::new("x", (0..count).map(|index| index as f64)),
+            NumericValues::new("y", (0..count).map(|index| index as f64)),
+        )
+        .hue(CategoryValues::new("hue", hues.iter().map(String::as_str)).unwrap())
+        .categorical_colors(exact)
+        .erase();
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        let error = PreparedScatter::new(
+            &source,
+            source
+                .data()
+                .with_axis_resources(&OperationGenerationResources::new()),
+        )
+        .unwrap_err();
+        assert!(matches!(error, Error::Data(message) if message.contains("hue-1")));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
 
     fn source() -> Plot {
         Plot::scatter(

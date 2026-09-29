@@ -109,7 +109,7 @@ fn point_layer_builders_validate_radius_and_opacity_immediately() {
 }
 
 #[test]
-fn automatic_point_layers_follow_resolved_hue_domain() {
+fn automatic_point_layers_follow_an_independent_accent_sequence() {
     let plot = Plot::line(
         lichtung_plot::NumericValues::new("x", [0.0, 1.0, 0.0, 1.0]),
         lichtung_plot::NumericValues::new("y", [1.0, 2.0, 2.0, 3.0]),
@@ -125,11 +125,11 @@ fn automatic_point_layers_follow_resolved_hue_domain() {
         .collect::<Vec<_>>();
 
     assert_eq!(points.len(), 2);
-    assert!(points[0].contains("fill=\"#009E73\"") && points[1].contains("fill=\"#CC79A7\""));
+    assert!(points[0].contains("fill=\"#0072B2\"") && points[1].contains("fill=\"#D55E00\""));
 }
 
 #[test]
-fn canvas_absent_hue_levels_still_reserve_primary_palette_slots() {
+fn canvas_absent_hue_levels_do_not_consume_accent_slots() {
     let left = Plot::line(
         lichtung_plot::NumericValues::new("left x", [0.0, 1.0]),
         lichtung_plot::NumericValues::new("left y", [1.0, 2.0]),
@@ -162,7 +162,7 @@ fn canvas_absent_hue_levels_still_reserve_primary_palette_slots() {
     assert_eq!(points.len(), 2);
     assert!(points
         .iter()
-        .all(|point| point.contains("fill=\"#009E73\"")));
+        .all(|point| point.contains("fill=\"#0072B2\"")));
 }
 
 #[test]
