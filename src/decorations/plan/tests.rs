@@ -763,8 +763,6 @@ fn clearance_arithmetic_failures_are_fatal_through_every_owner() {
         &geometry,
         LegendClearance::HorizontalMaximum,
         0,
-        &theme,
-        &crate::layout::fit::ROOT_SCOPE
     )
     .is_err());
     assert!(automatic_clearance(
@@ -775,8 +773,6 @@ fn clearance_arithmetic_failures_are_fatal_through_every_owner() {
         &geometry,
         LegendDefault::LowestOverlap,
         0,
-        &theme,
-        &crate::layout::fit::ROOT_SCOPE
     )
     .is_err());
     assert!(expansion_ratio((0.0, f64::from_bits(1)), (0.0, f64::MAX))
@@ -1026,17 +1022,7 @@ fn automatic_outside_guides_avoid_annotations_at_all_inside_corners() {
             ));
             assert!(root.prepared().1.iter().all(|annotation| annotation
                 .avoids_legend_in(plan.result.layout.projection.panel_box(), legend.bounds)));
-            let mut invalid_theme = crate::Theme::Publication.resolve();
-            invalid_theme.typography.panel_text.font_size = 0;
-            assert!(auto_candidate_avoiding_panel_text(
-                &source,
-                &plan.result,
-                &legend.legend,
-                0,
-                &invalid_theme,
-                &crate::layout::fit::FitScope::root()
-            )
-            .is_err());
+            assert!(auto_candidate_avoiding_panel_text(&plan.result, &legend.legend, 0).is_none());
         }
     }
 }
@@ -2279,8 +2265,6 @@ fn automatic_clearance_does_not_expand_categorical_domains() {
         geometry.bounds(),
         PlotKind::HorizontalBar.legend_default(false),
         0,
-        &theme(),
-        &crate::layout::fit::ROOT_SCOPE,
     )
     .unwrap()
     .is_none());

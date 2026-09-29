@@ -1036,9 +1036,9 @@ caller styles while centralizing their ownership.
 | T5c3a2b | COMPLETE | T5c3a2a | `refactor(annotations): fit complete significance ink and exact windows` |
 | T5c3b | IN PROGRESS | T5c3a | Umbrella for remaining native overlays and text |
 | T5c3b1 | COMPLETE | T5c3a | `fix(annotations): fit visible supplemental point labels` |
-| T5c3b2 | IN PROGRESS | T5c3b1 | Umbrella for panel text and inside overlays |
+| T5c3b2 | COMPLETE | T5c3b1 | Umbrella for panel text and inside overlays |
 | T5c3b2a | COMPLETE | T5c3b1 | `refactor(annotations): retain canonical panel text ink` |
-| T5c3b2b | PENDING | T5c3b2a | `refactor(annotations): validate inside overlay obstacles` |
+| T5c3b2b | COMPLETE | T5c3b2a | `refactor(annotations): reuse frozen text for inside overlay obstacles` |
 | T5c3b3 | PENDING | T5c3b2 | `refactor(annotations): close required value and cell text` |
 | T5c4 | PENDING | T5c3 | `refactor(layout): replace deferred mark and annotation minima` |
 | T5c5 | PENDING | T5c4 | `test(theme): close native mark and annotation ownership` |
@@ -1903,6 +1903,17 @@ Custom resolved-role/glyph and translation tests, eight panel-text integration
 contracts, 37 root-parent feedback tests, seven Heatmap text-admission units,
 and strict Clippy pass. T5c3b2b audits the remaining inside-overlay obstacle
 order; T5c3b3 completes value/cell annotations.
+
+T5c3b2b closure: candidate, explicit-inside and post-allocation guide
+collision tests now consume the same selected `PlotRenderResult.panel_text`
+placements and canonical ink from T5c3b2a. The root no longer remeasures
+caller text under another theme or rebuilds a separate per-candidate list;
+translated canonical bounds are used during assigned-frame recovery. The
+existing parent-supplied mark/annotation geometry remains the static obstacle
+context, and only its root feedback driver can move a resolvable inside guide.
+All 37 root-plan units and eight panel-text integration contracts, including
+four occupied corners and the outside recovery, pass with strict Clippy.
+T5c3b3 completes other value and cell annotation owners.
 
 Separate normal-flow requirements from inside guides, significance, value labels,
 panel text, and supplemental layers. Implement the closed anchor order, source-

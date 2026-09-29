@@ -951,14 +951,7 @@ fn plan_panel_attempt(
                         geometry.bounds(),
                         legend_default,
                     );
-                    let candidate = auto_candidate_avoiding_panel_text(
-                        &planning_plot,
-                        &result,
-                        &legend,
-                        preferred,
-                        context.theme,
-                        &scope,
-                    )?;
+                    let candidate = auto_candidate_avoiding_panel_text(&result, &legend, preferred);
                     auto_annotation_miss = candidate.is_none();
                     // Keep provisional geometry for the failed preferred attempt;
                     // only a resolving pending assignment can make its miss provisional.
@@ -1066,8 +1059,6 @@ fn plan_panel_attempt(
                     geometry.bounds(),
                     legend_default,
                     auto_candidate_index.unwrap_or(0),
-                    context.theme,
-                    &scope,
                 ))? {
                     FitOutcome::Measured(clearance) => clearance,
                     FitOutcome::Miss(failure) => return Ok(FitOutcome::Miss(failure)),
@@ -1287,34 +1278,18 @@ fn plan_panel_attempt(
             }
         }
         if is_inside(position) {
-            let corner = match crate::layout::fit::outcome(
-                crate::decorations::panel_text::conflicting_legend_corner(
-                    &planning_plot,
-                    &result.layout,
-                    legend.bounds,
-                    context.theme,
-                    &scope,
-                ),
-            )? {
-                FitOutcome::Measured(corner) => corner,
-                FitOutcome::Miss(failure) => return Ok(FitOutcome::Miss(failure)),
-            };
+            let corner = crate::decorations::panel_text::conflicting_legend_corner(
+                &result.panel_text,
+                legend.bounds,
+            );
             if let Some(corner) = corner {
                 let resolved_by_assignment = (!auto_annotation_miss
                     || resolving_auto_bounds.is_some())
-                    && match crate::layout::fit::outcome(
-                        crate::decorations::panel_text::conflict_resolved_by_assignment(
-                            &planning_plot,
-                            &result.layout,
-                            next_axes,
-                            next_bounds,
-                            context.theme,
-                            &scope,
-                        ),
-                    )? {
-                        FitOutcome::Measured(resolved) => resolved,
-                        FitOutcome::Miss(failure) => return Ok(FitOutcome::Miss(failure)),
-                    };
+                    && crate::decorations::panel_text::conflict_resolved_by_assignment(
+                        &result.panel_text,
+                        next_axes,
+                        next_bounds,
+                    );
                 let message = if auto_annotation_miss {
                     "automatic legend cannot avoid the configured panel text annotations; hide the legend or choose an outside legend position".to_owned()
                 } else {
@@ -1339,17 +1314,7 @@ fn plan_panel_attempt(
                 axes,
             );
             if !fits || overlap > 0.0 {
-                let annotations = match crate::layout::fit::outcome(
-                    crate::decorations::panel_text::measure_plans(
-                        &planning_plot,
-                        &result.layout,
-                        context.theme,
-                        &scope,
-                    ),
-                )? {
-                    FitOutcome::Measured(plans) => plans,
-                    FitOutcome::Miss(failure) => return Ok(FitOutcome::Miss(failure)),
-                };
+                let annotations = &result.panel_text;
                 let allocation_can_help = legend_fits_panel(next_bounds, next_axes)
                     && geometry.overlap_after_assignment(
                         axes,
@@ -1587,10 +1552,6 @@ fn clearance_edge(position: LegendPosition, legend: LegendBox, panel: PanelBox) 
     }
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "automatic legend clearance consumes one immutable planned scene and theme"
-)]
 fn automatic_clearance(
     kind: PlotKind,
     plot: &Plot,
@@ -1599,8 +1560,6 @@ fn automatic_clearance(
     geometry: &[crate::render::geometry::GeometryBox],
     default: LegendDefault,
     current_candidate: usize,
-    theme: &crate::theme::ResolvedTheme,
-    scope: &FitScope,
 ) -> Result<Option<AutomaticClearance>, crate::layout::fit::PlanError> {
     match default {
         LegendDefault::TopRight(clearance) => top_right_clearance(
@@ -1611,19 +1570,13 @@ fn automatic_clearance(
             geometry,
             clearance,
             current_candidate,
-            theme,
-            scope,
         ),
         LegendDefault::LowestOverlap | LegendDefault::SelfManaged => {
-            lowest_overlap_clearance(kind, plot, result, legend, geometry, theme, scope)
+            lowest_overlap_clearance(kind, plot, result, legend, geometry)
         }
     }
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "candidate selection keeps the immutable legend-planning inputs explicit"
-)]
 fn top_right_clearance(
     kind: PlotKind,
     plot: &Plot,
@@ -1632,8 +1585,6 @@ fn top_right_clearance(
     geometry: &[crate::render::geometry::GeometryBox],
     clearance: LegendClearance,
     current_candidate: usize,
-    theme: &crate::theme::ResolvedTheme,
-    scope: &FitScope,
 ) -> Result<Option<AutomaticClearance>, crate::layout::fit::PlanError> {
     let margin = legend.metrics.font_size.max(6.0);
     let candidates = legend.inside_candidates(result.layout.projection.pixel_box());
@@ -1647,14 +1598,8 @@ fn top_right_clearance(
         crate::orchestrator::measurements::count(
             crate::orchestrator::measurements::Counter::InsideLegendCandidate,
         );
-        if crate::decorations::panel_text::conflicting_legend_corner(
-            plot,
-            &result.layout,
-            bounds,
-            theme,
-            scope,
-        )?
-        .is_some()
+        if crate::decorations::panel_text::conflicting_legend_corner(&result.panel_text, bounds)
+            .is_some()
         {
             continue;
         }
@@ -1707,8 +1652,6 @@ fn lowest_overlap_clearance(
     result: &PlotRenderResult,
     legend: &Legend,
     geometry: &[crate::render::geometry::GeometryBox],
-    theme: &crate::theme::ResolvedTheme,
-    scope: &FitScope,
 ) -> Result<Option<AutomaticClearance>, crate::layout::fit::PlanError> {
     let margin = legend.metrics.font_size.max(6.0);
     let candidates = legend.inside_candidates(result.layout.projection.pixel_box());
@@ -1726,14 +1669,8 @@ fn lowest_overlap_clearance(
             crate::orchestrator::measurements::Counter::InsideLegendCandidate,
         );
         if !legend_fits_panel(bounds, result.layout.projection.panel_box())
-            || crate::decorations::panel_text::conflicting_legend_corner(
-                plot,
-                &result.layout,
-                bounds,
-                theme,
-                scope,
-            )?
-            .is_some()
+            || crate::decorations::panel_text::conflicting_legend_corner(&result.panel_text, bounds)
+                .is_some()
         {
             continue;
         }
@@ -1993,16 +1930,11 @@ fn bar_expansion_moves_zero_anchor(
 }
 
 fn auto_candidate_avoiding_panel_text(
-    plot: &Plot,
     result: &PlotRenderResult,
     legend: &Legend,
     preferred: usize,
-    theme: &crate::theme::ResolvedTheme,
-    scope: &FitScope,
-) -> Result<Option<usize>, crate::layout::fit::PlanError> {
+) -> Option<usize> {
     let panel = result.layout.projection.panel_box();
-    let annotations =
-        crate::decorations::panel_text::measure_plans(plot, &result.layout, theme, scope)?;
     let candidates = legend.inside_candidates(panel.as_tuple());
     for offset in 0..candidates.len() {
         #[cfg(test)]
@@ -2010,14 +1942,15 @@ fn auto_candidate_avoiding_panel_text(
             crate::orchestrator::measurements::Counter::InsideLegendCandidate,
         );
         let index = (preferred + offset) % candidates.len();
-        if annotations
+        if result
+            .panel_text
             .iter()
             .all(|plan| plan.avoids_legend_in(panel, candidates[index]))
         {
-            return Ok(Some(index));
+            return Some(index);
         }
     }
-    Ok(None)
+    None
 }
 
 fn guide_panel(mut panel: PanelBox, gutters: [f64; 4], position: LegendPosition) -> PanelBox {

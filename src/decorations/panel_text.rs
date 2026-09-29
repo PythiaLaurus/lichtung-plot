@@ -57,36 +57,28 @@ impl PanelTextPlan {
 }
 
 pub(crate) fn conflicting_legend_corner(
-    plot: &Plot,
-    layout: &Layout,
+    plans: &[PanelTextPlan],
     legend: crate::decorations::legend::LegendBox,
-    theme: &ResolvedTheme,
-    scope: &crate::layout::fit::FitScope,
-) -> Result<Option<PanelCorner>, crate::layout::fit::PlanError> {
-    Ok(measure_plans(plot, layout, theme, scope)?
-        .into_iter()
-        .find_map(|plan| {
-            rectangles_overlap(
-                plan.bounds,
-                PanelBox::new(legend.left, legend.right, legend.bottom, legend.top),
-            )
-            .then_some(plan.corner)
-        }))
+) -> Option<PanelCorner> {
+    plans.iter().find_map(|plan| {
+        rectangles_overlap(
+            plan.bounds,
+            PanelBox::new(legend.left, legend.right, legend.bottom, legend.top),
+        )
+        .then_some(plan.corner)
+    })
 }
 
 /// Panel annotations are screen anchored. Domain-only changes cannot resolve
 /// their conflict with a legend; a changed assignment must actually separate it.
 pub(crate) fn conflict_resolved_by_assignment(
-    plot: &Plot,
-    layout: &Layout,
+    plans: &[PanelTextPlan],
     next_panel: PanelBox,
     next_legend: crate::decorations::legend::LegendBox,
-    theme: &ResolvedTheme,
-    scope: &crate::layout::fit::FitScope,
-) -> Result<bool, crate::layout::fit::PlanError> {
-    Ok(measure_plans(plot, layout, theme, scope)?
+) -> bool {
+    plans
         .iter()
-        .all(|plan| plan.avoids_legend_in(next_panel, next_legend)))
+        .all(|plan| plan.avoids_legend_in(next_panel, next_legend))
 }
 
 fn placement(
