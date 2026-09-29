@@ -23,6 +23,7 @@ pub(crate) struct SignificancePlan {
 
 #[derive(Debug)]
 pub(crate) struct PlannedSignificanceBracket {
+    pub(crate) source_index: usize,
     pub(crate) geometry: SignificanceBracket,
     pub(crate) label: DeferredAnnotationTextPlan,
 }
@@ -232,7 +233,10 @@ fn plan_comparisons_at_with_label(
     exact_override: bool,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<SignificancePlan, crate::layout::fit::PlanError> {
-    let metrics = bracket_metrics(mark_style);
+    let mut metrics = bracket_metrics(mark_style);
+    metrics.panel_padding = metrics
+        .panel_padding
+        .max(f64::from(theme.annotations.bracket_stroke.width) / 2.0 + 1.0 / 1024.0);
     validate_range(y_range, y_limits.is_some())?;
     if categories.len() != rendered_maxima.len()
         || anchor_positions.is_some_and(|positions| positions.len() != categories.len())
@@ -570,6 +574,7 @@ fn plan_comparisons_at_with_label(
                 ).into());
             }
             Ok(PlannedSignificanceBracket {
+                source_index: comparison.source_index,
                 geometry: SignificanceBracket {
                     x_left,
                     x_right,
@@ -581,6 +586,47 @@ fn plan_comparisons_at_with_label(
             })
         })
         )?;
+
+    for bracket in &brackets {
+        let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+        let label = &bracket.label.plan;
+        let style = BracketStyle {
+            color: theme.annotations.bracket_stroke.paint,
+            width: theme.annotations.bracket_stroke.width,
+            label_color: label.style.paint,
+            font_family: label.style.stack_source.clone(),
+            font_size: label.style.font_size,
+            line_height: label.line_height(),
+            weight: label.style.weight,
+            label_gap: metrics.label_gap,
+        };
+        let mut painted = bracket.geometry.clone();
+        let containing = if horizontal {
+            painted.orientation = BracketOrientation::Horizontal;
+            PanelBox::new(panel.y0, panel.y1, panel.x0, panel.x1)
+        } else {
+            panel
+        };
+        geometry.bracket(PlannedSignificanceCall {
+            bracket: &painted,
+            style: &style,
+            label: &bracket.label,
+        })?;
+        if geometry.bounds().iter().any(|ink| {
+            ink.left < containing.x0
+                || ink.right > containing.x1
+                || ink.bottom < containing.y0
+                || ink.top > containing.y1
+        }) {
+            return Err(scope
+                .child(crate::layout::AddressRole::Annotation, bracket.source_index)?
+                .failure(
+                    crate::layout::fit::FitKind::OverlayCollision,
+                    "complete significance bracket and label ink exceeds its assigned panel",
+                )
+                .into());
+        }
+    }
 
     Ok(SignificancePlan {
         y_range: planned_range,

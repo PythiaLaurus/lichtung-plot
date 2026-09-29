@@ -1029,12 +1029,12 @@ caller styles while centralizing their ownership.
 | T5c2d1b2a | COMPLETE | T5c2d1b1 | `feat(waterfall): measure signed step category ink` |
 | T5c2d1b2b | COMPLETE | T5c2d1b2a | `refactor(marks): measure Marginal and Matrix mark requirements` |
 | T5c3 | IN PROGRESS | T5c2d | Umbrella for native annotation and overlay consequences |
-| T5c3a | IN PROGRESS | T5c2d | Umbrella for typed significance targets and native shelves |
+| T5c3a | COMPLETE | T5c2d | Umbrella for typed significance targets and native shelves |
 | T5c3a1 | COMPLETE | T5c2d | `refactor(annotations): resolve grouped significance by typed targets` |
-| T5c3a2 | IN PROGRESS | T5c3a1 | Umbrella for significance shelves and painted containment |
+| T5c3a2 | COMPLETE | T5c3a1 | Umbrella for significance shelves and painted containment |
 | T5c3a2a | COMPLETE | T5c3a1 | `feat(annotations): pack significance labels by occupied ink` |
-| T5c3a2b | PENDING | T5c3a2a | `refactor(annotations): fit complete significance ink and exact windows` |
-| T5c3b | PENDING | T5c3a | `refactor(annotations): place remaining native overlays and text` |
+| T5c3a2b | COMPLETE | T5c3a2a | `refactor(annotations): fit complete significance ink and exact windows` |
+| T5c3b | IN PROGRESS | T5c3a | `refactor(annotations): place remaining native overlays and text` |
 | T5c4 | PENDING | T5c3 | `refactor(layout): replace deferred mark and annotation minima` |
 | T5c5 | PENDING | T5c4 | `test(theme): close native mark and annotation ownership` |
 
@@ -1862,6 +1862,18 @@ share one. Sixteen focused significance units, 19 integration significance
 contracts, final-domain distribution feedback, unchanged native Bar snapshots,
 and strict Clippy pass. T5c3a2b completes absolute selected-ink containment
 and exact-domain refusal before T5c3a closes.
+
+T5c3a2b closure: the prepared bracket and retained label now pass canonical
+unclipped geometry measurement in the actual containing panel, transposed for
+horizontal brackets. The complete stroke and glyph union must fit; failure is
+an annotation-scoped overlay-collision miss with the caller's original slot.
+The single shelf/domain producer reserves its actual bracket half-stroke
+before automatic domain growth, while an insufficient caller-exact numeric
+window remains an overlay miss. No later drawing-time clipping or second
+layout search repairs the bracket. Focused custom 24px automatic/exact domain
+and 200px categorical-stroke refusals, eighteen significance units, nineteen
+annotation contracts, unchanged Bar snapshots and strict Clippy pass.
+T5c3b follows for remaining overlays and required text.
 
 Separate normal-flow requirements from inside guides, significance, value labels,
 panel text, and supplemental layers. Implement the closed anchor order, source-

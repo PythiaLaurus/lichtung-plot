@@ -90,6 +90,73 @@ fn centered_label_ink_prevents_disjoint_spans_from_sharing_a_shelf() {
     }
 }
 
+#[test]
+fn complete_bracket_stroke_cannot_escape_the_category_panel_even_with_exact_limits() {
+    let mut theme = crate::Theme::Publication.resolve();
+    theme.annotations.bracket_stroke.width = 200.0;
+    let label = theme.typography.significance_label.clone();
+    for limits in [None, Some((0.0, 10.0))] {
+        let result = plan_comparisons_at_with_label(
+            &[comparison("a", "b", 0.01)],
+            &["a".into(), "b".into()],
+            &[1.0, 2.0],
+            None,
+            None,
+            (0.0, 10.0),
+            None,
+            limits,
+            PanelBox::new(50.0, 350.0, 40.0, 500.0),
+            LegendAnnotationConstraint::NoObstacle,
+            false,
+            SignificanceMarkStyle::default(),
+            &label,
+            &theme,
+            false,
+            &crate::layout::fit::ROOT_SCOPE,
+        );
+        assert!(matches!(
+            result,
+            Err(crate::layout::fit::PlanError::Fit(failure))
+                if failure.reason.kind == crate::layout::fit::FitKind::OverlayCollision
+                    && failure.reason.address == crate::layout::ComponentAddress::root()
+                        .child(crate::layout::AddressRole::Annotation, 0).unwrap()
+        ));
+    }
+}
+
+#[test]
+fn thick_bracket_stroke_expands_only_an_automatic_numeric_window() {
+    let mut theme = crate::Theme::Publication.resolve();
+    theme.annotations.bracket_stroke.width = 24.0;
+    let label = theme.typography.significance_label.clone();
+    let select = |limits| {
+        plan_comparisons_at_with_label(
+            &[comparison("a", "b", 0.01)],
+            &["a".into(), "b".into()],
+            &[9.0, 9.5],
+            None,
+            None,
+            (0.0, 10.0),
+            None,
+            limits,
+            PanelBox::new(50.0, 350.0, 40.0, 240.0),
+            LegendAnnotationConstraint::NoObstacle,
+            false,
+            SignificanceMarkStyle::default(),
+            &label,
+            &theme,
+            false,
+            &crate::layout::fit::ROOT_SCOPE,
+        )
+    };
+    assert!(select(None).unwrap().y_range.1 > 10.0);
+    assert!(matches!(
+        select(Some((0.0, 10.0))),
+        Err(crate::layout::fit::PlanError::Fit(failure))
+            if failure.reason.kind == crate::layout::fit::FitKind::OverlayCollision
+    ));
+}
+
 fn default_metrics() -> BracketMetrics {
     let style = SignificanceMarkStyle::default();
     bracket_metrics(style)
