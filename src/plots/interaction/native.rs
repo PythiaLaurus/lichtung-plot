@@ -56,9 +56,9 @@ fn native_bottom_conditions_keep_parent_trace_order_palette_sparse_connectors_an
         prepared
             .traces
             .iter()
-            .map(|trace| (trace.identity.group.as_deref(), trace.color_index))
+            .map(|trace| trace.identity.group.as_deref())
             .collect::<Vec<_>>(),
-        [(Some("two"), 1), (Some("one"), 2)]
+        [Some("two"), Some("one")]
     );
     assert_eq!(
         prepared.traces[0]
@@ -135,8 +135,18 @@ fn native_bottom_conditions_keep_parent_trace_order_palette_sparse_connectors_an
                 };
                 assert_eq!(payload.clip, panel);
                 assert_eq!(payload.traces.len(), prepared.traces.len());
+                let resources = OperationGenerationResources::new();
+                let colors = prepared
+                    .resolved_colors(&plot, &theme, plot.data().with_axis_resources(&resources))
+                    .unwrap();
                 for (actual, trace) in payload.traces.iter().zip(&prepared.traces) {
-                    let color = theme.colors[trace.color_index];
+                    let key = trace
+                        .identity
+                        .hue
+                        .as_deref()
+                        .or(trace.identity.group.as_deref())
+                        .unwrap();
+                    let color = colors.color(key, &resources).unwrap();
                     assert_eq!(actual.interval, LineStyle::solid(color, 1.2));
                     assert_eq!(
                         actual.connector,

@@ -2061,7 +2061,10 @@ ownership, statistical estimates, public extension points, or layout strategy.
 | T5d2 | IN PROGRESS | T5d1 | Umbrella for categorical maps, palettes and accents |
 | T5d2a | COMPLETE | T5d1 | `feat(scales): prepare raw-key maps and bounded accents` |
 | T5d2b | COMPLETE | T5d2a | `refactor(scales): migrate ordinary qualitative consumers` |
-| T5d2c | PENDING | T5d2b | `refactor(scales): migrate collective and specialized color owners` |
+| T5d2c | IN PROGRESS | T5d2b | Umbrella for collective and specialized color owners |
+| T5d2c1 | COMPLETE | T5d2b | `refactor(scales): resolve Interaction trace colors by raw identity` |
+| T5d2c2 | PENDING | T5d2c1 | `refactor(scales): resolve distribution group colors` |
+| T5d2c3 | PENDING | T5d2c2 | `refactor(scales): resolve Marginal and Matrix group colors` |
 | T5d2d | PENDING | T5d2c | `refactor(scales): close palettes, accents and guide equality` |
 | T5d3 | PENDING | T5d2 | `feat(scales): resolve sequential and diverging mappings` |
 | T5d4 | PENDING | T5d3 | `refactor(scales): coordinate final domains guides and contrast` |
@@ -2166,6 +2169,17 @@ Scatter, seventeen Line, thirteen Density, eleven Bar extraction and six
 native Bar feedback units, visible/hidden Canvas hue coordination, the
 intentional point-layer accent change, native path/Bar snapshots and strict
 Clippy pass. Collective and specialized owners follow in T5d2c.
+
+T5d2c1 closure: Interaction's prepared trace hue (or group when there is no
+hue) now indexes one exact raw-key mapping shared by marker, connector,
+interval and originating legend glyph. The complete parent hue/group domain
+precedes sparse facet selection, while a missing used caller key refuses
+before fonts. The former `Trace.color_index` field and render-time
+`categorical_color` lookup are removed; caller line pattern and point shape
+remain independent. Fourteen focused Interaction units, twenty-three
+integration contracts including crossed group/hue, exact caller colors,
+mixed-theme Canvas compatibility, unchanged ordinary SVG fingerprints and
+strict Clippy pass. T5d2c2 migrates collective distributions.
 
 Implement fixed/extendable palettes, exact raw-key maps, capacity/coverage checks,
 and nonempty extendable accent sequences under one deterministic color engine.

@@ -4,6 +4,7 @@ use crate::data::{ObservedCollectives, PlotData};
 use crate::decorations::legend::LegendEntry;
 use crate::render::backend::{Backend, LineStyle, Point2D, PointStyle};
 use crate::spec::{LinePattern, PlotRenderContext, PlotRenderResult, PointShape};
+use crate::theme::{CategoryColors, PaletteSource};
 use crate::{Error, Plot};
 
 #[cfg(test)]
@@ -43,7 +44,6 @@ struct Cell {
 #[derive(Debug)]
 struct Trace {
     identity: crate::data::CollectivePair,
-    color_index: usize,
     style: TraceStyle,
     cells: Vec<Cell>,
 }
@@ -145,6 +145,43 @@ pub(crate) fn intrinsic_body_minimum(
 }
 
 impl PreparedInteraction {
+    fn resolved_colors(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        data: PlotData<'_>,
+    ) -> Result<CategoryColors, Error> {
+        let has_hue = self.traces.iter().any(|trace| trace.identity.hue.is_some());
+        let parent = if has_hue {
+            chart.global_hue_levels()
+        } else {
+            chart.global_group_levels()
+        };
+        let keys = if let Some(levels) = parent {
+            data.collect_source(levels.iter().map(|level| data.copy_source_string(level)))?
+        } else {
+            let mut observed = Vec::new();
+            data.reserve_source(&mut observed, self.traces.len())?;
+            data.claim_source_visits(self.traces.len())?;
+            for trace in &self.traces {
+                let raw = if has_hue {
+                    trace.identity.hue.as_ref()
+                } else {
+                    trace.identity.group.as_ref()
+                }
+                .ok_or_else(|| Error::Render("Interaction color identity is missing".into()))?;
+                observed.push(data.copy_source_string(raw)?);
+            }
+            data.source_levels(&observed)?
+        };
+        CategoryColors::resolve(
+            &keys,
+            PaletteSource::Extendable(&theme.colors),
+            chart.categorical_colors_spec(),
+            data.source_resources()?,
+        )
+    }
+
     pub(crate) fn primary_mark_count(
         &self,
         resources: &crate::font::canonical::OperationGenerationResources,
@@ -179,6 +216,18 @@ impl PreparedInteraction {
         theme: &crate::theme::ResolvedTheme,
         data: PlotData<'_>,
     ) -> Result<Vec<LegendEntry>, Error> {
+        let colors = self.resolved_colors(chart, theme, data)?;
+        self.guide_entries_with_colors(chart, theme, data, &colors)
+    }
+
+    fn guide_entries_with_colors(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        data: PlotData<'_>,
+        colors: &CategoryColors,
+    ) -> Result<Vec<LegendEntry>, Error> {
+        let resources = data.source_resources()?;
         let mut entries = Vec::new();
         data.reserve_source(&mut entries, self.traces.len())?;
         for trace in &self.traces {
@@ -191,7 +240,7 @@ impl PreparedInteraction {
                 .as_deref()
                 .or(trace.identity.group.as_deref())
                 .ok_or_else(|| Error::Render("interaction trace has no color identity".into()))?;
-            let color = chart.categorical_color("interaction", key, trace.color_index, theme)?;
+            let color = colors.color(key, resources)?;
             let identity = chart.collective_legend_identity(&trace.identity, data)?;
             let point = chart
                 .point_style(theme, color, theme.marks.point_sizes.interaction)
@@ -314,16 +363,14 @@ pub(crate) fn prepare(
                     "interaction: graphical group {group:?} is absent from the resolved order"
                 ))
             })?;
-        let color_index = if let Some(hue) = &identity.hue {
+        if let Some(hue) = &identity.hue {
             data.claim_source_visits(hues.len())?;
-            hues.iter().position(|level| level == hue).ok_or_else(|| {
-                Error::Data(format!(
+            if !hues.contains(hue) {
+                return Err(Error::Data(format!(
                     "interaction: hue {hue:?} is absent from the resolved order"
-                ))
-            })?
-        } else {
-            0
-        };
+                )));
+            }
+        }
         let mut cells = Vec::new();
         data.claim_source_visits(channels.rows.len())?;
         let cell_count = channels.rows.iter().filter(|row| *row == identity).count();
@@ -343,12 +390,26 @@ pub(crate) fn prepare(
         }
         traces.push(Trace {
             identity: data.copy_source_pair(identity)?,
-            color_index,
             style: styles
                 .as_ref()
                 .map_or_else(TraceStyle::default, |styles| styles[index]),
             cells,
         });
+    }
+    if let Some(exact) = chart.categorical_colors_spec() {
+        for trace in &traces {
+            let key = trace
+                .identity
+                .hue
+                .as_deref()
+                .or(trace.identity.group.as_deref())
+                .ok_or_else(|| Error::Render("Interaction color identity is missing".into()))?;
+            if exact.color(key, data.source_resources()?)?.is_none() {
+                return Err(Error::Data(format!(
+                    "interaction: category {key:?} has no caller-owned color"
+                )));
+            }
+        }
     }
     data.claim_source_visits(lower.len())?;
     data.claim_source_visits(upper.len())?;
@@ -485,7 +546,8 @@ pub(crate) fn measure_marks(
         traces: Vec::new(),
         domain_expansions: [None; 2],
     };
-    let legends = marks.guide_entries(chart, context.theme, data)?;
+    let colors = marks.resolved_colors(chart, context.theme, data)?;
+    let legends = marks.guide_entries_with_colors(chart, context.theme, data, &colors)?;
     data.reserve_source(&mut payload.traces, marks.traces.len())?;
     let mut geometry = crate::render::geometry::GeometrySnapshot::new(context.theme)?;
     let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
@@ -496,8 +558,7 @@ pub(crate) fn measure_marks(
             .as_deref()
             .or(trace.identity.group.as_deref())
             .ok_or_else(|| Error::Render("interaction trace has no color identity".into()))?;
-        let color =
-            chart.categorical_color("interaction", key, trace.color_index, context.theme)?;
+        let color = colors.color(key, &resources)?;
         let point = chart
             .point_style(
                 context.theme,
