@@ -139,7 +139,7 @@ capability!(CoefficientOptions, "Coefficient-specific estimate-label configurati
 ]);
 capability!(CategoricalColors, "Plots that consume caller-owned categorical colors." => [
     Scatter, Line, Trajectory, LinePath, Density, Bar, HorizontalBar, StackedBar,
-    StackedHorizontalBar, Boxplot, Interaction, Violin, Raincloud, Marginal,
+    StackedHorizontalBar, Boxplot, Interaction, Violin, Raincloud, Marginal, Matrix,
 ]);
 capability!(PanelText, "Plots with one standard panel that accept corner text." => [
     Scatter, Histogram, Density, Qq, PointInterval, Line, Trajectory, LinePath, Interaction, Coefficient, Forest,

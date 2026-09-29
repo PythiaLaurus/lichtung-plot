@@ -2061,12 +2061,12 @@ ownership, statistical estimates, public extension points, or layout strategy.
 | T5d2 | IN PROGRESS | T5d1 | Umbrella for categorical maps, palettes and accents |
 | T5d2a | COMPLETE | T5d1 | `feat(scales): prepare raw-key maps and bounded accents` |
 | T5d2b | COMPLETE | T5d2a | `refactor(scales): migrate ordinary qualitative consumers` |
-| T5d2c | IN PROGRESS | T5d2b | Umbrella for collective and specialized color owners |
+| T5d2c | COMPLETE | T5d2b | Umbrella for collective and specialized color owners |
 | T5d2c1 | COMPLETE | T5d2b | `refactor(scales): resolve Interaction trace colors by raw identity` |
 | T5d2c2 | COMPLETE | T5d2c1 | `refactor(scales): resolve distribution group colors` |
-| T5d2c3 | IN PROGRESS | T5d2c2 | Umbrella for Marginal and Matrix group colors |
+| T5d2c3 | COMPLETE | T5d2c2 | Umbrella for Marginal and Matrix group colors |
 | T5d2c3a | COMPLETE | T5d2c2 | `refactor(scales): resolve Marginal group colors` |
-| T5d2c3b | PENDING | T5d2c3a | `refactor(scales): resolve Matrix cell colors` |
+| T5d2c3b | COMPLETE | T5d2c3a | `refactor(scales): resolve Matrix cell colors` |
 | T5d2d | PENDING | T5d2c | `refactor(scales): close palettes, accents and guide equality` |
 | T5d3 | PENDING | T5d2 | `feat(scales): resolve sequential and diverging mappings` |
 | T5d4 | PENDING | T5d3 | `refactor(scales): coordinate final domains guides and contrast` |
@@ -2207,6 +2207,17 @@ candidate-time hue-index fallback are gone; a missing used exact hue refuses
 before fonts. Thirteen Marginal units, full SVG fingerprints, exact/automatic
 edge and resource contracts, and strict Clippy pass. Matrix's coordinated
 variable square follows in T5d2c3b.
+
+T5d2c3b closure: Matrix's root-prepared normalized hue domain now resolves
+one raw-key mapping and unkeyed accent zero for all N×N cells. The same
+selected group colors feed off-diagonal point styles, diagonal density
+polygons and the self-managed legend; variable labels and separate group
+identities never invent hue slots. The obsolete per-group palette index and
+modulo are removed, and a missing exact *used* hue refuses during semantic
+preparation before fonts. Nineteen focused Matrix units, eight Matrix
+integration contracts, self-managed clip snapshots, exact resource refusal
+and strict Clippy pass. T5d2d reconciles the remaining unkeyed accent
+consumers and verifies guide/map equality before continuous mapping.
 
 Implement fixed/extendable palettes, exact raw-key maps, capacity/coverage checks,
 and nonempty extendable accent sequences under one deterministic color engine.

@@ -28,7 +28,7 @@ use crate::render::backend::{
 };
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::{gaussian_kde_with_source, strict_scott_bandwidth};
-use crate::theme::ResolvedTheme;
+use crate::theme::{AccentColors, CategoryColors, PaletteSource, ResolvedTheme};
 use crate::Error;
 use crate::{LegendPosition, Plot};
 
@@ -44,7 +44,6 @@ struct HueGroup {
     columns: Vec<Vec<f64>>,
     /// Strict Scott bandwidth per matrix column.
     bandwidths: Vec<f64>,
-    color_index: usize,
 }
 
 #[derive(Debug)]
@@ -52,7 +51,73 @@ pub(crate) struct PreparedMatrixAxes {
     ranges: Vec<(f64, f64)>,
     labels: Vec<String>,
     groups: Vec<HueGroup>,
+    hues: Vec<String>,
     diagonals: Vec<MatrixDensity>,
+}
+
+#[test]
+fn matrix_raw_hue_color_map_refuses_missing_used_key_before_fonts() {
+    let plot = Plot::matrix(vec![
+        crate::NumericValues::new("x", [1.0, 1.3, 1.7, 3.0, 3.3, 3.7]),
+        crate::NumericValues::new("y", [2.0, 2.3, 2.7, 4.0, 4.3, 4.7]),
+    ])
+    .hue(crate::CategoryValues::new("hue", ["a", "a", "a", "b", "b", "b"]).unwrap())
+    .categorical_colors(
+        crate::CategoricalColors::new([
+            ("a".into(), (10, 20, 30)),
+            ("unused".into(), (10, 20, 30)),
+        ])
+        .unwrap(),
+    )
+    .erase();
+    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+    let error = crate::plots::shared_x::prepare_plot(
+        &plot,
+        &crate::font::canonical::OperationGenerationResources::new(),
+    )
+    .err()
+    .expect("missing used Matrix hue must refuse");
+    assert!(matches!(error, Error::Data(message) if message.contains("category \"b\"")));
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        0
+    );
+}
+
+impl PreparedMatrixAxes {
+    fn resolved_colors(
+        &self,
+        chart: &Plot,
+        theme: &ResolvedTheme,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<(CategoryColors, AccentColors), Error> {
+        let resources = data.source_resources()?;
+        let colors = CategoryColors::resolve(
+            chart.global_hue_levels().unwrap_or(&self.hues),
+            PaletteSource::Extendable(&theme.colors),
+            chart.categorical_colors_spec(),
+            resources,
+        )?;
+        let accents = AccentColors::resolve(
+            &theme.colors,
+            usize::from(self.groups.iter().any(|group| group.identity.hue.is_none())),
+            resources,
+        )?;
+        Ok((colors, accents))
+    }
+
+    fn group_color(
+        group: &HueGroup,
+        colors: &CategoryColors,
+        accents: &AccentColors,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<(u8, u8, u8), Error> {
+        if let Some(hue) = &group.identity.hue {
+            colors.color(hue, resources)
+        } else {
+            accents.color(0)
+        }
+    }
 }
 
 /// Prepared variable count determines the number of cells, including empty
@@ -66,7 +131,7 @@ pub(crate) fn intrinsic_body_minimum(
         Error::Render("matrix intrinsic requires prepared variable domains".into())
     })?;
     let n = prepared.labels.len();
-    let density = theme.marks.matrix_density.backend_style(theme.colors[0]);
+    let density = theme.marks.matrix_density.backend_style((0, 0, 0));
     let (out_x, out_y) = crate::render::geometry::rectangular_fill_ink_outset(theme, &density)?;
     let mut cell = (
         (2.0 * out_x).max(1.0 / 1024.0),
@@ -91,11 +156,7 @@ pub(crate) fn intrinsic_body_minimum(
         for column in &group.columns {
             data.claim_source_visits(column.len())?;
         }
-        let style = chart.point_style(
-            theme,
-            theme.colors[group.color_index % theme.colors.len()],
-            theme.marks.point_sizes.matrix,
-        );
+        let style = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.matrix);
         let (x, y) = crate::render::geometry::point_ink_dimensions(theme, &style)?;
         cell.0 = cell.0.max(x);
         cell.1 = cell.1.max(y);
@@ -275,7 +336,16 @@ pub(crate) fn prepare_axes(
     data.reserve_source(&mut cols, chart.matrix_variable_names().len())?;
     cols.extend(chart.matrix_variable_names().iter().map(String::as_str));
     let labels = chart.resolve_axis_label_domain("matrix variables", cols.iter().copied(), data)?;
-    let groups = build_groups(chart, &cols, data)?;
+    let (groups, hues) = build_groups(chart, &cols, data)?;
+    if let Some(exact) = chart.categorical_colors_spec() {
+        for hue in &hues {
+            if exact.color(hue, data.source_resources()?)?.is_none() {
+                return Err(Error::Data(format!(
+                    "matrix: category {hue:?} has no caller-owned color"
+                )));
+            }
+        }
+    }
     let mut ranges = Vec::new();
     data.reserve_source(&mut ranges, cols.len())?;
     for (index, column) in cols.iter().enumerate() {
@@ -298,6 +368,7 @@ pub(crate) fn prepare_axes(
         ranges,
         labels,
         groups,
+        hues,
         diagonals,
     })
 }
@@ -428,9 +499,16 @@ pub(crate) fn measure(
     let display_cols = &prepared.labels;
 
     let groups = &prepared.groups;
+    let (colors, accents) = prepared.resolved_colors(chart, theme, data)?;
+    let group_colors = data.collect_source(
+        groups
+            .iter()
+            .map(|group| PreparedMatrixAxes::group_color(group, &colors, &accents, &resources)),
+    )?;
     let legend = match matrix_legend(
         chart,
         groups,
+        &group_colors,
         context.panel,
         theme,
         context.fit_scope(),
@@ -674,20 +752,16 @@ pub(crate) fn measure(
                 select_diagonal_kde(
                     theme,
                     &mut cell.marks,
-                    groups,
+                    &group_colors,
                     &prepared.diagonals[row],
                     &cell_layout.projection,
                     data,
                 )?;
             } else {
-                for group in groups {
+                for (group, &color) in groups.iter().zip(&group_colors) {
                     let xs = &group.columns[col];
                     let ys = &group.columns[row];
-                    let ps = chart.point_style(
-                        theme,
-                        theme.colors[group.color_index % theme.colors.len()],
-                        theme.marks.point_sizes.matrix,
-                    );
+                    let ps = chart.point_style(theme, color, theme.marks.point_sizes.matrix);
                     let pts = data.collect_source(xs.iter().zip(ys.iter()).map(|(&xi, &yi)| {
                         data.claim_source_visits(1)?;
                         let (px, py) = cell_layout.projection.project(xi, yi);
@@ -867,6 +941,7 @@ fn panel_box(chart: &Plot, theme: &ResolvedTheme) -> Result<crate::layout::Panel
 fn matrix_legend(
     chart: &Plot,
     groups: &[HueGroup],
+    group_colors: &[(u8, u8, u8)],
     available: crate::layout::PanelBox,
     theme: &ResolvedTheme,
     scope: &crate::layout::fit::FitScope,
@@ -880,18 +955,15 @@ fn matrix_legend(
     }
     let mut entries = Vec::new();
     data.reserve_source(&mut entries, groups.len())?;
-    for group in groups.iter().filter(|group| group.identity.hue.is_some()) {
+    for (group, &color) in groups
+        .iter()
+        .zip(group_colors)
+        .filter(|(group, _)| group.identity.hue.is_some())
+    {
         entries.push(LegendEntry::point_fill(
             chart.collective_legend_identity(&group.identity, data)?,
-            chart.point_style(
-                theme,
-                theme.colors[group.color_index % theme.colors.len()],
-                theme.marks.point_sizes.matrix,
-            ),
-            theme
-                .marks
-                .matrix_density
-                .backend_style(theme.colors[group.color_index % theme.colors.len()]),
+            chart.point_style(theme, color, theme.marks.point_sizes.matrix),
+            theme.marks.matrix_density.backend_style(color),
         ));
     }
     crate::decorations::legend::resolve_entries(
@@ -1001,7 +1073,7 @@ fn prepare_density(
 fn select_diagonal_kde(
     theme: &ResolvedTheme,
     marks: &mut Vec<MatrixPrimitive>,
-    groups: &[HueGroup],
+    group_colors: &[(u8, u8, u8)],
     density: &MatrixDensity,
     projection: &layout::Projection,
     data: crate::data::PlotData<'_>,
@@ -1020,8 +1092,12 @@ fn select_diagonal_kde(
     let (x0, y0) = projection.project(projection.x_range().0, 0.0);
     let (x1, _) = projection.project(projection.x_range().1, 0.0);
 
-    for (gi, densities) in density.densities.iter().enumerate() {
-        let color = theme.colors[groups[gi].color_index % theme.colors.len()];
+    if density.densities.len() != group_colors.len() {
+        return Err(Error::Render(
+            "matrix density groups differ from mapped colors".into(),
+        ));
+    }
+    for (densities, &color) in density.densities.iter().zip(group_colors) {
         let mut poly = Vec::new();
         data.reserve_source(&mut poly, KDE_POINTS + 2)?;
         poly.push(Point2D::new(x0, y0));
@@ -1055,7 +1131,7 @@ fn build_groups(
     chart: &Plot,
     cols: &[&str],
     data: crate::data::PlotData<'_>,
-) -> Result<Vec<HueGroup>, Error> {
+) -> Result<(Vec<HueGroup>, Vec<String>), Error> {
     #[cfg(test)]
     SEMANTIC_STAGES.with(|counts| {
         let [groups, densities] = counts.get();
@@ -1099,11 +1175,13 @@ fn build_groups(
             continue;
         }
         data.claim_source_visits(hue_levels.len())?;
-        let color_index = identity
-            .hue
-            .as_deref()
-            .and_then(|hue| hue_levels.iter().position(|level| level == hue))
-            .unwrap_or(0);
+        if let Some(hue) = &identity.hue {
+            if !hue_levels.contains(hue) {
+                return Err(Error::Data(format!(
+                    "matrix: hue {hue:?} is absent from the prepared domain"
+                )));
+            }
+        }
         groups.push(HueGroup {
             identity: data.copy_source_pair(identity)?,
             collapsed: channels.collapsed,
@@ -1113,7 +1191,6 @@ fn build_groups(
                     .map(|column| data.collect_source(rows.iter().map(|row| Ok(column[*row])))),
             )?,
             bandwidths: Vec::new(),
-            color_index,
         });
     }
     if groups.is_empty() {
@@ -1126,7 +1203,7 @@ fn build_groups(
         chart.hue_name(),
         data,
     )?;
-    Ok(groups)
+    Ok((groups, hue_levels))
 }
 
 fn validate_group_kdes(
@@ -1318,6 +1395,22 @@ mod semantic_tests {
         let prepared = prepare_axes(&source, source.data()).unwrap();
         let run = |limits: Option<(u128, u64)>| {
             let theme = crate::Theme::Publication.resolve();
+            let color_resources = crate::font::canonical::OperationGenerationResources::new();
+            let (colors, accents) = prepared
+                .resolved_colors(
+                    &source,
+                    &theme,
+                    source.data().with_axis_resources(&color_resources),
+                )
+                .unwrap();
+            let mapped = prepared
+                .groups
+                .iter()
+                .map(|group| {
+                    PreparedMatrixAxes::group_color(group, &colors, &accents, &color_resources)
+                })
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
             let resources = theme
                 .prepared_font_environment()
                 .unwrap()
@@ -1328,6 +1421,7 @@ mod semantic_tests {
             let result = matrix_legend(
                 &source,
                 &prepared.groups,
+                &mapped,
                 PanelBox::new(0.0, 1600.0, 0.0, 1000.0),
                 &theme,
                 &crate::layout::fit::FitScope::root(),
