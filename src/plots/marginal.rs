@@ -26,6 +26,7 @@ use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::{
     gaussian_kde_with_source, kde_support_range, strict_scott_bandwidth,
 };
+use crate::theme::{AccentColors, CategoryColors, PaletteSource};
 use crate::Error;
 use crate::Plot;
 
@@ -57,17 +58,52 @@ struct HueGroup {
     y: Vec<f64>,
     x_bandwidth: f64,
     y_bandwidth: f64,
-    color_index: usize,
 }
 
 #[derive(Debug)]
 pub(crate) struct PreparedMarginal {
     groups: Vec<HueGroup>,
+    hues: Vec<String>,
     pub(crate) ranges: [(f64, f64); 2],
     curves: MarginalCurves,
 }
 
 impl PreparedMarginal {
+    fn resolved_colors(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<(CategoryColors, AccentColors), Error> {
+        let resources = data.source_resources()?;
+        let keys = chart.global_hue_levels().unwrap_or(&self.hues);
+        let colors = CategoryColors::resolve(
+            keys,
+            PaletteSource::Extendable(&theme.colors),
+            chart.categorical_colors_spec(),
+            resources,
+        )?;
+        let accents = AccentColors::resolve(
+            &theme.colors,
+            usize::from(self.groups.iter().any(|group| group.identity.hue.is_none())),
+            resources,
+        )?;
+        Ok((colors, accents))
+    }
+
+    fn group_color(
+        group: &HueGroup,
+        colors: &CategoryColors,
+        accents: &AccentColors,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<(u8, u8, u8), Error> {
+        if let Some(hue) = &group.identity.hue {
+            colors.color(hue, resources)
+        } else {
+            accents.color(0)
+        }
+    }
+
     pub(crate) fn hue_levels(&self) -> impl Iterator<Item = &str> {
         self.groups
             .iter()
@@ -80,21 +116,26 @@ impl PreparedMarginal {
         theme: &crate::theme::ResolvedTheme,
         data: crate::data::PlotData<'_>,
     ) -> Result<Vec<LegendEntry>, Error> {
+        let (colors, accents) = self.resolved_colors(chart, theme, data)?;
+        self.guide_entries_with_colors(chart, theme, data, &colors, &accents)
+    }
+
+    fn guide_entries_with_colors(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        data: crate::data::PlotData<'_>,
+        colors: &CategoryColors,
+        accents: &AccentColors,
+    ) -> Result<Vec<LegendEntry>, Error> {
+        let resources = data.source_resources()?;
         let mut entries = Vec::new();
         data.reserve_source(&mut entries, self.groups.len())?;
         for group in &self.groups {
-            let Some(hue) = &group.identity.hue else {
+            if group.identity.hue.is_none() {
                 continue;
-            };
-            let color_index = chart
-                .global_hue_levels()
-                .map(|levels| {
-                    data.source_position(levels, |level| level == hue)
-                        .map(|found| found.unwrap_or(0))
-                })
-                .transpose()?
-                .unwrap_or(group.color_index);
-            let color = theme.colors[color_index % theme.colors.len()];
+            }
+            let color = Self::group_color(group, colors, accents, resources)?;
             entries.push(LegendEntry::point_fill(
                 chart.collective_legend_identity(&group.identity, data)?,
                 chart.point_style(theme, color, theme.marks.point_sizes.marginal),
@@ -120,13 +161,12 @@ pub(crate) fn intrinsic_body_minimum(
     let data = chart.data().with_axis_resources(&resources);
     for group in &prepared.groups {
         data.claim_source_visits(group.x.len())?;
-        let color = theme.colors[group.color_index % theme.colors.len()];
-        let style = chart.point_style(theme, color, theme.marks.point_sizes.marginal);
+        let style = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.marginal);
         let (x, y) = crate::render::geometry::point_ink_dimensions(theme, &style)?;
         central.0 = central.0.max(x);
         central.1 = central.1.max(y);
     }
-    let density = theme.marks.marginal_density.backend_style(theme.colors[0]);
+    let density = theme.marks.marginal_density.backend_style((0, 0, 0));
     let (out_x, out_y) = crate::render::geometry::rectangular_fill_ink_outset(theme, &density)?;
     // Each filled KDE strip has a positive extent even when its paint is
     // transparent. Its stroke is measured by the same canonical geometry as
@@ -476,22 +516,13 @@ pub(crate) fn measure(
     let right_panel = PanelBox::new(right_x0, right_x1, central_y0, central_y1);
     let mut selected = Vec::new();
     data.reserve_source(&mut selected, groups.len())?;
-    let legend_entries = prepared.guide_entries(chart, theme, data)?;
+    let (colors, accents) = prepared.resolved_colors(chart, theme, data)?;
+    let legend_entries =
+        prepared.guide_entries_with_colors(chart, theme, data, &colors, &accents)?;
     let mut source = [(f64::INFINITY, f64::NEG_INFINITY); 2];
     let mut point_ink: Option<crate::render::geometry::GeometryBox> = None;
     for (gi, group) in groups.iter().enumerate() {
-        let color_index = if let Some(levels) = chart.global_hue_levels() {
-            data.claim_source_visits(levels.len())?;
-            group
-                .identity
-                .hue
-                .as_ref()
-                .and_then(|hue| levels.iter().position(|level| level == hue))
-                .unwrap_or(0)
-        } else {
-            group.color_index
-        };
-        let color = theme.colors[color_index % theme.colors.len()];
+        let color = PreparedMarginal::group_color(group, &colors, &accents, &resources)?;
         let point_style = chart.point_style(theme, color, theme.marks.point_sizes.marginal);
         if let Some(ink) = crate::render::geometry::point_ink_bounds(theme, &point_style)? {
             point_ink = Some(point_ink.map_or(ink, |previous| previous.union(ink)));
@@ -594,10 +625,20 @@ pub(crate) fn prepare(
 ) -> Result<PreparedMarginal, Error> {
     #[cfg(test)]
     count(0);
-    let (groups, _) = build_groups(chart, data)?;
+    let (groups, hues) = build_groups(chart, data)?;
+    if let Some(exact) = chart.categorical_colors_spec() {
+        for hue in &hues {
+            if exact.color(hue, data.source_resources()?)?.is_none() {
+                return Err(Error::Data(format!(
+                    "marginal: category {hue:?} has no caller-owned color"
+                )));
+            }
+        }
+    }
     let ranges = ranges_from_groups(chart, data, &groups)?;
     Ok(PreparedMarginal {
         groups,
+        hues,
         ranges,
         curves: MarginalCurves::default(),
     })
@@ -842,12 +883,14 @@ fn build_groups<'a>(
                 identity.description(channels.collapsed)
             ))
         })?;
-        data.claim_source_visits(hue_levels.len())?;
-        let color_index = identity
-            .hue
-            .as_deref()
-            .and_then(|label| hue_levels.iter().position(|level| level == label))
-            .unwrap_or(0);
+        if let Some(hue) = &identity.hue {
+            data.claim_source_visits(hue_levels.len())?;
+            if !hue_levels.contains(hue) {
+                return Err(Error::Data(format!(
+                    "marginal: hue {hue:?} is absent from the prepared domain"
+                )));
+            }
+        }
         groups.push(HueGroup {
             identity: data.copy_source_pair(identity)?,
             collapsed: channels.collapsed,
@@ -855,7 +898,6 @@ fn build_groups<'a>(
             y,
             x_bandwidth,
             y_bandwidth,
-            color_index,
         });
     }
     Ok((groups, hue_levels))

@@ -12,6 +12,28 @@ fn source() -> Plot<crate::kind::Marginal> {
 }
 
 #[test]
+fn marginal_raw_hue_color_map_requires_every_observed_identity_before_fonts() {
+    let source = source()
+        .categorical_colors(
+            crate::CategoricalColors::new([
+                ("b".into(), (8, 16, 24)),
+                ("unused".into(), (8, 16, 24)),
+            ])
+            .unwrap(),
+        )
+        .erase();
+    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+    let error = crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+        .err()
+        .expect("missing visible hue must refuse");
+    assert!(matches!(error, Error::Data(message) if message.contains("category \"a\"")));
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        0
+    );
+}
+
+#[test]
 fn marginal_root_semantics_and_curves_have_exact_pre_font_admission() {
     let source = source().erase();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));

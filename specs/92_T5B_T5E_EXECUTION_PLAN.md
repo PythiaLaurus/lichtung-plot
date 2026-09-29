@@ -2064,7 +2064,9 @@ ownership, statistical estimates, public extension points, or layout strategy.
 | T5d2c | IN PROGRESS | T5d2b | Umbrella for collective and specialized color owners |
 | T5d2c1 | COMPLETE | T5d2b | `refactor(scales): resolve Interaction trace colors by raw identity` |
 | T5d2c2 | COMPLETE | T5d2c1 | `refactor(scales): resolve distribution group colors` |
-| T5d2c3 | PENDING | T5d2c2 | `refactor(scales): resolve Marginal and Matrix group colors` |
+| T5d2c3 | IN PROGRESS | T5d2c2 | Umbrella for Marginal and Matrix group colors |
+| T5d2c3a | COMPLETE | T5d2c2 | `refactor(scales): resolve Marginal group colors` |
+| T5d2c3b | PENDING | T5d2c3a | `refactor(scales): resolve Matrix cell colors` |
 | T5d2d | PENDING | T5d2c | `refactor(scales): close palettes, accents and guide equality` |
 | T5d3 | PENDING | T5d2 | `feat(scales): resolve sequential and diverging mappings` |
 | T5d4 | PENDING | T5d3 | `refactor(scales): coordinate final domains guides and contrast` |
@@ -2194,6 +2196,17 @@ identity are retained. Focused eleven distribution extraction and three
 supplied-cloud units, sampled/supplied Raincloud contracts, faceted sparse
 series, unchanged native distribution snapshots, and strict Clippy pass.
 Marginal/Matrix complete this umbrella in T5d2c3.
+
+T5d2c3a closure: Marginal's prepared hue domain now has one raw-key color
+resolution for central points, both linked density polygons and the complete
+originating guide. A group-only Marginal consumes unkeyed accent zero rather
+than fabricating hue keys. Parent hue order is consulted before local
+selection, while unpainted intrinsic point-ink measurement is independent of
+which opaque RGB is mapped. The old per-group palette index/modulo and
+candidate-time hue-index fallback are gone; a missing used exact hue refuses
+before fonts. Thirteen Marginal units, full SVG fingerprints, exact/automatic
+edge and resource contracts, and strict Clippy pass. Matrix's coordinated
+variable square follows in T5d2c3b.
 
 Implement fixed/extendable palettes, exact raw-key maps, capacity/coverage checks,
 and nonempty extendable accent sequences under one deterministic color engine.
