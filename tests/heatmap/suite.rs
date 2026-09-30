@@ -939,6 +939,29 @@ fn heatmap_png_is_rasterized_from_the_native_gradient_svg() {
     let svg = std::fs::read_to_string(svg_path).unwrap();
     let png = std::fs::read(png_path).unwrap();
     assert!(svg.contains("<linearGradient id=\"linear-gradient-0\""));
+    assert!(svg.contains("<stop offset=\"0.500000\" stop-color=\"#7A92B5\"/>"));
+    assert_eq!(decoded_cell_pixel(&svg, &png, "#7A92B5"), [122, 146, 181]);
+    let gradient = svg
+        .lines()
+        .find(|line| line.starts_with("<linearGradient id=\"linear-gradient-0\""))
+        .unwrap();
+    let coordinate = |name: &str| {
+        gradient
+            .split_once(&format!("{name}=\""))
+            .unwrap()
+            .1
+            .split_once('"')
+            .unwrap()
+            .0
+            .parse::<f64>()
+            .unwrap()
+    };
+    let center = decoded_png_pixel(
+        &png,
+        coordinate("x1"),
+        f64::midpoint(coordinate("y1"), coordinate("y2")),
+    );
+    assert_eq!(center, [122, 146, 181]);
     assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
     std::fs::remove_dir_all(directory).unwrap();
 }
@@ -962,11 +985,16 @@ fn constant_scale_mark_and_guide_stops_agree_with_decoded_png_pixel() {
         .unwrap();
     let svg = std::fs::read_to_string(svg_path).unwrap();
     assert_eq!(svg.matches("stop-color=\"#7A92B5\"").count(), 2);
-    let polygon = clipped_marks(&svg)
+    let bytes = std::fs::read(png_path).unwrap();
+    assert_eq!(decoded_cell_pixel(&svg, &bytes, "#7A92B5"), [122, 146, 181]);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+fn decoded_cell_pixel(svg: &str, png: &[u8], fill: &str) -> [u8; 3] {
+    let polygon = clipped_marks(svg)
         .lines()
-        .find(|line| line.starts_with("<polygon"))
+        .find(|line| line.starts_with("<polygon") && line.contains(&format!("fill=\"{fill}\"")))
         .unwrap();
-    assert!(polygon.contains("fill=\"#7A92B5\""));
     let points = polygon
         .split_once("points=\"")
         .unwrap()
@@ -983,8 +1011,11 @@ fn constant_scale_mark_and_guide_stops_agree_with_decoded_png_pixel() {
         .collect::<Vec<_>>();
     let x = f64::midpoint(corners[0].0, corners[1].0);
     let y = f64::midpoint(corners[0].1, corners[2].1);
-    let bytes = std::fs::read(png_path).unwrap();
-    let mut reader = png::Decoder::new(std::io::Cursor::new(bytes))
+    decoded_png_pixel(png, x, y)
+}
+
+fn decoded_png_pixel(png: &[u8], x: f64, y: f64) -> [u8; 3] {
+    let mut reader = png::Decoder::new(std::io::Cursor::new(png))
         .read_info()
         .unwrap();
     let mut pixels = vec![0; reader.output_buffer_size().unwrap()];
@@ -1003,8 +1034,7 @@ fn constant_scale_mark_and_guide_stops_agree_with_decoded_png_pixel() {
         other => panic!("unexpected Heatmap PNG color type: {other:?}"),
     };
     let index = (y * info.width as usize + x) * stride;
-    assert_eq!(&pixels[index..index + 3], &[122, 146, 181]);
-    std::fs::remove_dir_all(directory).unwrap();
+    pixels[index..index + 3].try_into().unwrap()
 }
 
 fn clipped_marks(svg: &str) -> &str {

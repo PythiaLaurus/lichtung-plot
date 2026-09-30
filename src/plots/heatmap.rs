@@ -49,6 +49,7 @@ pub(crate) struct HeatmapData {
     has_missing: bool,
     minimum: DeferredHeatmapMinimum,
     color: PreparedHeatmapColor,
+    colorbar_stops: Vec<GradientStop>,
     layout: HeatmapLayout,
     value_labels: Vec<Option<String>>,
     value_owners: Vec<Option<String>>,
@@ -92,6 +93,18 @@ impl HeatmapData {
         )
     }
 
+    pub(crate) fn guide_samples(&self, data: crate::data::PlotData<'_>) -> Result<Vec<f64>, Error> {
+        let mut samples = Vec::new();
+        data.reserve_source(&mut samples, self.cells.len())?;
+        for &value in &self.cells {
+            data.claim_source_visits(1)?;
+            if let Some(value) = value {
+                samples.push(value);
+            }
+        }
+        Ok(samples)
+    }
+
     pub(crate) fn install_shared_domain(
         &mut self,
         descriptor: &crate::decorations::legend::descriptor::ContinuousDescriptor,
@@ -118,9 +131,11 @@ impl HeatmapData {
                 .map(|value| color.scale.color(value, data.source_resources()?))
                 .transpose()
         }))?;
+        let colorbar_stops = color.guide_stops(&self.guide_samples(data)?, data)?;
         let colorbar_values = prepare_colorbar_values(domain, self.has_missing, data)?;
         self.color = color;
         self.fills = fills;
+        self.colorbar_stops = colorbar_stops;
         self.colorbar_values = colorbar_values;
         Ok(())
     }
@@ -252,21 +267,12 @@ impl PreparedHeatmapColor {
         })
     }
 
-    fn guide_stops(&self, data: crate::data::PlotData<'_>) -> Result<Vec<GradientStop>, Error> {
-        let color = if same_value(self.domain.minimum, self.domain.maximum) {
-            Some(
-                self.scale
-                    .color(self.domain.minimum, data.source_resources()?)?,
-            )
-        } else {
-            None
-        };
-        data.collect_source(
-            self.scale
-                .stops()
-                .iter()
-                .map(|stop| Ok(GradientStop::new(stop.offset, color.unwrap_or(stop.color)))),
-        )
+    fn guide_stops(
+        &self,
+        observed: &[f64],
+        data: crate::data::PlotData<'_>,
+    ) -> Result<Vec<GradientStop>, Error> {
+        self.scale.guide_stops(observed, data)
     }
 }
 
@@ -1010,7 +1016,7 @@ pub(crate) fn prepare<'a>(
             Ok(Some(owner))
         }))?;
     let colorbar_values = prepare_colorbar_values(domain, has_missing, data)?;
-    Ok(HeatmapData {
+    let mut prepared = HeatmapData {
         minimum: DeferredHeatmapMinimum {
             missing: has_missing,
         },
@@ -1027,7 +1033,12 @@ pub(crate) fn prepare<'a>(
         null_row_annotations,
         has_missing,
         color,
-    })
+        colorbar_stops: Vec::new(),
+    };
+    prepared.colorbar_stops = prepared
+        .color
+        .guide_stops(&prepared.guide_samples(data)?, data)?;
+    Ok(prepared)
 }
 
 fn prepare_colorbar_values(
@@ -1808,7 +1819,7 @@ fn select_colorbar(
     let bottom = panel_bottom + (available_height - height) / 2.0;
     data.claim_source_bytes(3 * std::mem::size_of::<GradientStop>())?;
     data.claim_source_visits(3)?;
-    let stops = prepared.color.guide_stops(data)?;
+    let stops = data.collect_source(prepared.colorbar_stops.iter().copied().map(Ok))?;
     let mut bar = ColorbarPayload {
         bounds: PanelBox::new(left, left + 12.0, bottom, bottom + height),
         start: Point2D::new(left + 6.0, bottom),

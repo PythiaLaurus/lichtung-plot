@@ -27,6 +27,7 @@ pub(crate) struct PreparedBeeswarm {
     rows: Vec<(usize, f64, f64, usize)>,
     points: Vec<(f64, f64, (u8, u8, u8))>,
     scale: crate::theme::ContinuousColors,
+    colorbar_stops: Vec<GradientStop>,
     values: [String; 2],
     pub(crate) color_label: String,
 }
@@ -184,6 +185,8 @@ pub(crate) fn prepare(
         ],
         data.source_resources()?,
     )?;
+    let samples = data.collect_source(rows.iter().map(|row| Ok(row.2)))?;
+    let colorbar_stops = scale.guide_stops(&samples, data)?;
     Ok(PreparedBeeswarm {
         levels,
         x_data,
@@ -191,25 +194,18 @@ pub(crate) fn prepare(
         points: Vec::new(),
         values,
         scale,
+        colorbar_stops,
         color_label: chart.prepare_color_label(data, None)?,
     })
 }
 
 impl PreparedBeeswarm {
-    fn guide_stops(&self, data: crate::data::PlotData<'_>) -> Result<[GradientStop; 2], Error> {
-        let stops = self.scale.stops();
-        let domain = self.scale.domain();
-        if domain.0.total_cmp(&domain.1).is_eq()
-            || (domain.0.abs().to_bits() == 0 && domain.1.abs().to_bits() == 0)
-        {
-            let midpoint = self.scale.color(domain.0, data.source_resources()?)?;
-            Ok([
-                GradientStop::new(0.0, midpoint),
-                GradientStop::new(1.0, midpoint),
-            ])
-        } else {
-            Ok([stops[0], stops[1]])
-        }
+    pub(crate) fn guide_samples(&self, data: crate::data::PlotData<'_>) -> Result<Vec<f64>, Error> {
+        data.collect_source(self.rows.iter().map(|row| Ok(row.2)))
+    }
+
+    fn guide_stops(&self, data: crate::data::PlotData<'_>) -> Result<Vec<GradientStop>, Error> {
+        data.collect_source(self.colorbar_stops.iter().copied().map(Ok))
     }
 
     #[cfg(test)]
@@ -226,10 +222,14 @@ impl PreparedBeeswarm {
         descriptor: &crate::decorations::legend::descriptor::ContinuousDescriptor,
         data: crate::data::PlotData<'_>,
     ) -> Result<(), Error> {
-        self.values = colorbar_values(descriptor.domain, data)?;
-        self.scale = self
+        let values = colorbar_values(descriptor.domain, data)?;
+        let scale = self
             .scale
             .with_domain(descriptor.domain, data.source_resources()?)?;
+        let colorbar_stops = scale.guide_stops(&self.guide_samples(data)?, data)?;
+        self.values = values;
+        self.scale = scale;
+        self.colorbar_stops = colorbar_stops;
         for ((_, _, color), &(_, _, value, _)) in self.points.iter_mut().zip(&self.rows) {
             *color = self.scale.color(value, data.source_resources()?)?;
         }
@@ -511,7 +511,7 @@ struct ColorbarPayload {
     bounds: PanelBox,
     start: Point2D,
     end: Point2D,
-    stops: [GradientStop; 2],
+    stops: Vec<GradientStop>,
     text: [PlacedText; 3],
 }
 
@@ -561,7 +561,7 @@ fn select_colorbar(
     layout: &Layout,
     label: &crate::layout::TextBlock,
     values: &[crate::layout::ResolvedTextPlan],
-    stops: [GradientStop; 2],
+    stops: Vec<GradientStop>,
     data: crate::data::PlotData<'_>,
 ) -> Result<ColorbarPayload, Error> {
     data.claim_source_visits(3)?;

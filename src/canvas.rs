@@ -362,9 +362,11 @@ mod d1_tests {
         };
         assert_eq!(guide.domain, (-1.0, 3.0));
         assert_eq!(guide.labels, ["-1", "0", "3"]);
-        assert_eq!(guide.stops.len(), 3);
+        assert_eq!(guide.stops.len(), 5);
         assert_eq!(guide.stops[1].offset.to_bits(), 0.25_f64.to_bits());
         assert_eq!(guide.stops[1].color, (247, 247, 247));
+        assert_eq!(guide.stops[2].offset.to_bits(), 0.5_f64.to_bits());
+        assert_eq!(guide.stops[3].offset.to_bits(), 0.75_f64.to_bits());
         canvas.render_scene().unwrap();
     }
 
@@ -579,6 +581,12 @@ mod d1_tests {
             .collect::<Vec<_>>();
         assert_eq!(colors[0], colors[1]);
         assert_ne!(colors[0], guide.stops.last().unwrap().color);
+        let shared_value = guide
+            .stops
+            .iter()
+            .find(|stop| stop.offset.to_bits() == 0.2_f64.to_bits())
+            .expect("both children retain a sampled color for the shared value");
+        assert_eq!(colors[0], shared_value.color);
     }
 
     #[test]

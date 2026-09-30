@@ -298,7 +298,10 @@ fn selected_payload_geometry_and_poisoned_capture_preserve_every_operand() {
         assert_eq!(payload.cells.len(), 5);
         assert!(payload.cells[3].cross.is_some());
         assert!(payload.cells[4].text.is_some());
-        assert_eq!(payload.colorbar.as_ref().unwrap().stops.len(), 3);
+        let stops = &payload.colorbar.as_ref().unwrap().stops;
+        assert_eq!(stops.len(), 4);
+        assert_eq!(stops[1].offset.to_bits(), 0.25_f64.to_bits());
+        assert_eq!(stops[2].color, (247, 247, 247));
         assert!(marks
             .geometry
             .bounds()

@@ -38,6 +38,7 @@ pub(crate) struct ContinuousContributor {
     pub field: String,
     pub title: String,
     pub stops: Vec<GradientStop>,
+    pub samples: Vec<f64>,
     pub center: Option<f64>,
     pub missing: Option<MissingKey>,
     pub domain: (f64, f64),
@@ -67,7 +68,7 @@ impl ContinuousContributor {
             return Ok(None);
         };
         let field = data.copy_source_string(field)?;
-        let (title, semantics, exact) = match plot.kind() {
+        let (title, semantics, samples, exact) = match plot.kind() {
             crate::PlotKind::Heatmap => {
                 let marks = input
                     .heatmap
@@ -81,6 +82,7 @@ impl ContinuousContributor {
                 (
                     data.copy_source_string(&marks.color_label)?,
                     semantics,
+                    marks.guide_samples(data)?,
                     plot.heatmap_color_limits_spec().is_some(),
                 )
             }
@@ -97,6 +99,7 @@ impl ContinuousContributor {
                 (
                     data.copy_source_string(&marks.color_label)?,
                     semantics,
+                    marks.guide_samples(data)?,
                     plot.beeswarm_color_limits_spec().is_some(),
                 )
             }
@@ -115,6 +118,7 @@ impl ContinuousContributor {
             field,
             title,
             stops: semantics.stops,
+            samples,
             center: semantics.center,
             missing: semantics.missing,
             domain: semantics.domain,
@@ -128,6 +132,7 @@ impl ContinuousContributor {
     ) -> Result<Option<ContinuousDescriptor>, Error> {
         let mut combined: Option<ContinuousDescriptor> = None;
         let mut automatic = None;
+        let mut samples = Vec::new();
         for contributor in contributors {
             data.claim_source_visits(1)?;
             if let Some(existing) = &mut combined {
@@ -186,6 +191,8 @@ impl ContinuousContributor {
                     labels: Vec::new(),
                 });
             }
+            data.reserve_source(&mut samples, contributor.samples.len())?;
+            samples.extend_from_slice(&contributor.samples);
         }
         if let (Some(existing), Some((low, high))) = (&combined, automatic) {
             if existing.exact && (low < existing.domain.0 || high > existing.domain.1) {
@@ -195,7 +202,13 @@ impl ContinuousContributor {
             }
         }
         if let Some(existing) = &mut combined {
-            existing.stops = final_stops(existing.domain, existing.center, &existing.stops, data)?;
+            existing.stops = final_stops(
+                existing.domain,
+                existing.center,
+                &existing.stops,
+                &samples,
+                data,
+            )?;
             existing.labels = generated_labels(existing, data)?;
         }
         Ok(combined)
@@ -224,10 +237,14 @@ fn final_stops(
     domain: (f64, f64),
     center: Option<f64>,
     semantic: &[GradientStop],
+    samples: &[f64],
     data: PlotData<'_>,
 ) -> Result<Vec<GradientStop>, Error> {
     let resources = data.source_resources()?;
     if let Some(center) = center {
+        // Validate the supplied semantic gradient before projecting its center
+        // into the selected domain; never repair malformed endpoint offsets.
+        let _ = crate::theme::ContinuousColors::resolve((0.0, 1.0), semantic, resources)?;
         if !center.is_finite() || center < domain.0 || center > domain.1 {
             return Err(Error::Data(
                 "shared diverging color domain excludes its center".into(),
@@ -275,10 +292,8 @@ fn final_stops(
         } else {
             2
         };
-        return Ok(
-            crate::theme::ContinuousColors::resolve(domain, &selected[..count], resources)?
-                .into_stops(),
-        );
+        return crate::theme::ContinuousColors::resolve(domain, &selected[..count], resources)?
+            .guide_stops(samples, data);
     }
     if same_value(domain.0, domain.1) {
         let scale = crate::theme::ContinuousColors::resolve((0.0, 1.0), semantic, resources)?;
@@ -287,11 +302,10 @@ fn final_stops(
             GradientStop::new(0.0, midpoint),
             GradientStop::new(1.0, midpoint),
         ];
-        return Ok(
-            crate::theme::ContinuousColors::resolve(domain, &stops, resources)?.into_stops(),
-        );
+        return crate::theme::ContinuousColors::resolve(domain, &stops, resources)?
+            .guide_stops(samples, data);
     }
-    Ok(crate::theme::ContinuousColors::resolve(domain, semantic, resources)?.into_stops())
+    crate::theme::ContinuousColors::resolve(domain, semantic, resources)?.guide_stops(samples, data)
 }
 
 fn same_value(left: f64, right: f64) -> bool {
@@ -371,6 +385,7 @@ mod tests {
                 GradientStop::new(0.5, (127, 127, 127)),
                 GradientStop::new(1.0, (255, 255, 255)),
             ],
+            samples: Vec::new(),
             center: Some(0.0),
             missing: None,
             domain,
@@ -409,6 +424,17 @@ mod tests {
             ContinuousContributor::merge([contributor((0.0, 1.0)), missing], data),
             Err(Error::Data(message)) if message.contains("missing block")
         ));
+        let mut malformed = contributor((-1.0, 1.0));
+        malformed.stops[0].offset = 0.1;
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        assert!(matches!(
+            ContinuousContributor::merge([malformed], data),
+            Err(Error::Data(message)) if message.contains("span exactly 0..1")
+        ));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
     }
 
     #[test]

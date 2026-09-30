@@ -203,10 +203,6 @@ impl ContinuousColors {
         &self.stops
     }
 
-    pub(crate) fn into_stops(self) -> Vec<GradientStop> {
-        self.stops
-    }
-
     pub(crate) fn domain(&self) -> (f64, f64) {
         self.domain
     }
@@ -270,6 +266,82 @@ impl ContinuousColors {
         Err(Error::Render(
             "resolved continuous stops omit the color value".into(),
         ))
+    }
+
+    /// Freeze a backend-interpolated gradient that contains every representable
+    /// observed mark color as an exact stop, under the backend's six-decimal
+    /// offset spelling. Distinct colors at one spelled position must refuse.
+    pub(crate) fn guide_stops(
+        &self,
+        observed: &[f64],
+        data: crate::data::PlotData<'_>,
+    ) -> Result<Vec<GradientStop>, Error> {
+        use crate::render::coordinates::{CanonicalCoordinate, CoordinatePrecision};
+
+        let resources = data.source_resources()?;
+        let constant = self.domain.0.total_cmp(&self.domain.1).is_eq()
+            || (self.domain.0.abs().to_bits() == 0 && self.domain.1.abs().to_bits() == 0);
+        let midpoint = constant
+            .then(|| self.color(self.domain.0, resources))
+            .transpose()?;
+        let capacity = if constant {
+            2
+        } else {
+            self.stops
+                .len()
+                .checked_add(observed.len())
+                .ok_or_else(|| Error::Render("continuous guide stop count overflowed".into()))?
+        };
+        let mut candidates = Vec::new();
+        data.reserve_source(&mut candidates, capacity)?;
+        let mut push = |stop: GradientStop| -> Result<(), Error> {
+            let canonical = CanonicalCoordinate::from_f64(
+                stop.offset,
+                CoordinatePrecision::Millionths,
+                "continuous guide stop offset",
+            )?;
+            candidates.push((
+                canonical.units(),
+                GradientStop::new(canonical.value(), stop.color),
+            ));
+            Ok(())
+        };
+        if let Some(color) = midpoint {
+            push(GradientStop::new(0.0, color))?;
+            push(GradientStop::new(1.0, color))?;
+        } else {
+            for &stop in &self.stops {
+                data.claim_source_visits(1)?;
+                push(stop)?;
+            }
+            for &value in observed {
+                data.claim_source_visits(1)?;
+                let offset = Self::normalized_fraction(self.domain, value)?;
+                push(GradientStop::new(offset, self.color(value, resources)?))?;
+            }
+        }
+        crate::data::source::sort_source_by(&mut candidates, Some(data), |left, right| {
+            left.0.cmp(&right.0)
+        })?;
+        let mut selected = Vec::new();
+        data.reserve_source(&mut selected, candidates.len())?;
+        let mut previous = None;
+        for (units, stop) in candidates {
+            data.claim_source_visits(1)?;
+            if let Some((last_units, last_color)) = previous {
+                if last_units == units {
+                    if last_color != stop.color {
+                        return Err(Error::Data(
+                            "distinct continuous mark colors collapse at one serialized guide offset".into(),
+                        ));
+                    }
+                    continue;
+                }
+            }
+            previous = Some((units, stop.color));
+            selected.push(stop);
+        }
+        Ok(selected)
     }
 }
 
@@ -349,6 +421,56 @@ mod tests {
         assert!(scale.color(f64::NAN, &resources).is_err());
         let limited = OperationGenerationResources::with_test_limits(0, 0);
         assert!(ContinuousColors::resolve((0.0, 1.0), &stops, &limited).is_err());
+    }
+
+    #[test]
+    fn sampled_guide_preserves_mark_colors_and_refuses_collapsed_distinct_stops() {
+        let plot = crate::Plot::scatter(
+            crate::NumericValues::new("x", [1.0, 2.0]),
+            crate::NumericValues::new("y", [2.0, 3.0]),
+        )
+        .erase();
+        let stops = [
+            GradientStop::new(0.0, (49, 130, 189)),
+            GradientStop::new(1.0, (222, 45, 38)),
+        ];
+        let run = |limits: Option<(u128, u64)>| {
+            let resources = OperationGenerationResources::new();
+            if let Some((visits, bytes)) = limits {
+                resources.set_test_limits(visits, bytes);
+            }
+            let data = plot.data().with_axis_resources(&resources);
+            let result = ContinuousColors::resolve((0.0, 1.0), &stops, &resources)
+                .and_then(|scale| scale.guide_stops(&[0.5, 0.5, 1.0], data));
+            (resources, result)
+        };
+        let (resources, selected) = run(None);
+        let selected = selected.unwrap();
+        assert_eq!(selected.len(), 3);
+        assert_eq!(selected[1], GradientStop::new(0.5, (157, 107, 124)));
+        let visits = resources.usage().unwrap().1;
+        let bytes = resources.byte_usage().unwrap();
+        assert_eq!(run(Some((visits, bytes))).1.unwrap(), selected);
+        assert!(run(Some((visits - 1, bytes))).1.is_err());
+        assert!(run(Some((visits, bytes - 1))).1.is_err());
+
+        let resources = OperationGenerationResources::new();
+        let close = [
+            GradientStop::new(0.0, (0, 0, 0)),
+            GradientStop::new(0.500_000_4, (0, 0, 0)),
+            GradientStop::new(0.500_000_49, (255, 255, 255)),
+            GradientStop::new(1.0, (255, 255, 255)),
+        ];
+        let scale = ContinuousColors::resolve((0.0, 1.0), &close, &resources).unwrap();
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        assert!(matches!(
+            scale.guide_stops(&[], plot.data().with_axis_resources(&resources)),
+            Err(Error::Data(message)) if message.contains("collapse")
+        ));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
     }
 
     #[test]

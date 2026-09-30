@@ -266,7 +266,15 @@ fn continuous_shared_heatmaps_draw_one_merged_guide_without_local_colorbars() {
             .filter(|node| node.has_tag_name("stop"))
             .map(|node| node.attribute("stop-color").unwrap())
             .collect::<Vec<_>>(),
-        ["#F7FBFF", "#08306B"]
+        ["#F7FBFF", "#C4D0E1", "#92A6C4", "#08306B"]
+    );
+    assert_eq!(
+        gradient
+            .children()
+            .filter(|node| node.has_tag_name("stop"))
+            .map(|node| node.attribute("offset").unwrap())
+            .collect::<Vec<_>>(),
+        ["0.000000", "0.200000", "0.400000", "1.000000"]
     );
     let guide = doc
         .descendants()

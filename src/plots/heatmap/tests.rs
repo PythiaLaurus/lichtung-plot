@@ -636,7 +636,7 @@ fn colorbar_gradient_stops_preserve_sequential_diverging_and_constant_scales() {
         &resources,
     )
     .unwrap()
-    .guide_stops(data)
+    .guide_stops(&[], data)
     .unwrap();
     let diverging = PreparedHeatmapColor::resolve(
         ColorDomain {
@@ -647,7 +647,7 @@ fn colorbar_gradient_stops_preserve_sequential_diverging_and_constant_scales() {
         &resources,
     )
     .unwrap()
-    .guide_stops(data)
+    .guide_stops(&[], data)
     .unwrap();
     let constant = PreparedHeatmapColor::resolve(
         ColorDomain {
@@ -658,7 +658,7 @@ fn colorbar_gradient_stops_preserve_sequential_diverging_and_constant_scales() {
         &resources,
     )
     .unwrap()
-    .guide_stops(data)
+    .guide_stops(&[], data)
     .unwrap();
 
     assert_eq!(
@@ -724,7 +724,10 @@ fn prepared_cell_guide_and_value_label_share_final_diverging_colors() {
     let prepared = &inputs.heatmap.as_ref().unwrap().panels[0].1;
     let data = source.data().with_axis_resources(&resources);
     let guide = prepared.guide_semantics(data).unwrap();
-    let stops = prepared.color.guide_stops(data).unwrap();
+    let stops = prepared
+        .color
+        .guide_stops(&prepared.guide_samples(data).unwrap(), data)
+        .unwrap();
     assert_eq!(
         prepared.fills[..3],
         [
