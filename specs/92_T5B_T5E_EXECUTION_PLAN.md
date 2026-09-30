@@ -2540,7 +2540,9 @@ The sole root driver and numerical/resource policies remain unchanged.
 | T5e0 | COMPLETE | T5d | `docs(layout): pin specialized and root sizing closure inputs` |
 | T5e1 | IN PROGRESS | T5e0 | Umbrella for Heatmap intrinsic and native grid ownership |
 | T5e1a | COMPLETE | T5e0 | `refactor(heatmap): derive prepared column-local hard widths` |
-| T5e1b | PENDING | T5e1a | `feat(heatmap): allocate measured column and row tracks` |
+| T5e1b | IN PROGRESS | T5e1a | Umbrella for assigned Heatmap Grid axes |
+| T5e1b1 | COMPLETE | T5e1a | `feat(heatmap): assign measured column tracks to selected cells and axes` |
+| T5e1b2 | PENDING | T5e1b1 | `feat(heatmap): allocate rows from constrained cell text` |
 | T5e1c | PENDING | T5e1b | `refactor(heatmap): retire specialized packing adapter` |
 | T5e2 | PENDING | T5e1 | `feat(matrix): allocate native variable grid tracks` |
 | T5e3 | PENDING | T5e2 | `feat(marginal): measure native linked subpanels` |
@@ -2594,8 +2596,28 @@ until T5e1b/c; this substep is not a claim of native track assignment.
 Forty-three focused Heatmap units, 40 Heatmap integrations, shared Canvas
 guide composition, regular and three interleaved ignored release specialized
 text workloads (including rejected Elide), `git diff --check` and strict
-Clippy pass. T5e1b now consumes these column-local hard inputs in the
-native assigned Grid before measuring row text.
+Clippy pass. T5e1b1 now assigns these hard widths to the selected Grid
+columns, cells and categorical x-axis in one route. T5e1b2 measures text
+under those widths, allocates row tracks and updates the y-axis before the
+remaining T5e1c adapter deletion. Neither is a completed T5e1b by itself.
+
+T5e1b1 closure: the selected Heatmap now invokes the shared quantized Grid
+axis allocator once for its x columns after the assigned label/colorbar
+reserves. Per-column painted ink and final-contrast value-label hard widths
+set minima; `2em` and square intent remain soft preferences. Canonical
+column edges feed every normal/missing/merged-row polygon, value-label
+width check, permitted x-label elision and the categorical x tick centers.
+Fixed facets compare prepared raw category order rather than candidate-
+specific numeric tick positions; the existing pre-font fixed-domain check
+still rejects incompatible categories. A deliberately unequal value-label
+fixture proves the wide value occupies only its column, every selected
+tick projects to the owning cell center, and all required text remains.
+Existing equal-column mixed Canvas SVG fingerprints stay byte-identical.
+Forty-four focused Heatmap units, 40 Heatmap integrations, 25 facet and
+shared Canvas contracts, the Beeswarm/Heatmap parent fingerprints, normal
+and three ignored release specialized-text workloads, strict Clippy and
+`git diff --check` pass. The active y rows are still equal legacy bands;
+T5e1b2 must assign them from constrained text before T5e1b or T5e1 closes.
 
 Replace legacy pitches/reserves with complete measured column/row tracks. Retain
 every semantic cell, merged row, highlight, value label, missing cell, and trailing

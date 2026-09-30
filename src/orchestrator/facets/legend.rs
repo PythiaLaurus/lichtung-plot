@@ -263,7 +263,7 @@ pub(super) fn resolve_shared_facet_axis(
     }
 }
 
-fn facet_axis_signature(result: &PlotRenderResult, x_axis: bool) -> Vec<(u64, String)> {
+fn facet_axis_signature(result: &PlotRenderResult, x_axis: bool) -> Vec<String> {
     let ticks = if x_axis {
         &result.layout.x_axis.ticks
     } else {
@@ -278,12 +278,9 @@ fn facet_axis_signature(result: &PlotRenderResult, x_axis: bool) -> Vec<(u64, St
         .iter()
         .enumerate()
         .map(|(index, tick)| {
-            (
-                tick.position.to_bits(),
-                keys.and_then(|keys| keys.get(index))
-                    .cloned()
-                    .unwrap_or_else(|| tick.label.clone()),
-            )
+            keys.and_then(|keys| keys.get(index))
+                .cloned()
+                .unwrap_or_else(|| tick.label.clone())
         })
         .collect()
 }

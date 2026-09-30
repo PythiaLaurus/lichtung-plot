@@ -214,6 +214,49 @@ fn intrinsic_width_accumulates_only_occupied_column_text_instead_of_repeating_th
 }
 
 #[test]
+fn assigned_columns_keep_each_value_and_categorical_tick_at_its_measured_cell_center() {
+    let source = Plot::heatmap(
+        CategoryValues::new("column", ["a", "b", "c"]).unwrap(),
+        CategoryValues::new("row", ["one"; 3]).unwrap(),
+        NumericValues::new("value", [1.0, 2.0, 123_456.78]),
+    )
+    .annotations(HeatmapAnnotations::Values(
+        crate::NumericLabelFormat::default(),
+    ))
+    .size(1200, 800)
+    .erase();
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let theme = crate::Theme::Publication.resolve();
+    let selected = chart
+        .measure_selected_interior(PlotRenderContext::new(
+            chart.data(),
+            PanelBox::new(50.0, 1050.0, 80.0, 680.0),
+            &theme,
+        ))
+        .unwrap();
+    let crate::layout::interior::MarkPayload::Heatmap(payload) =
+        &selected.marks.as_ref().unwrap().payload
+    else {
+        panic!("selected Heatmap")
+    };
+    assert_eq!(payload.cells.len(), 3);
+    let widths = payload
+        .cells
+        .iter()
+        .map(|cell| cell.corners[1].x - cell.corners[0].x)
+        .collect::<Vec<_>>();
+    assert!(widths[2] > widths[0] && widths[2] > widths[1], "{widths:?}");
+    for (tick, cell) in selected.layout.x_axis.ticks.iter().zip(&payload.cells) {
+        let (projected, _) = selected.layout.projection.project(tick.position, 0.5);
+        let center = f64::midpoint(cell.corners[0].x, cell.corners[1].x);
+        assert!((projected - center).abs() <= 1.0 / 1024.0);
+    }
+    assert!(payload.cells.iter().all(|cell| cell.text.is_some()));
+}
+
+#[test]
 fn missing_fill_and_backdrop_invalidate_cached_intrinsics_with_unequal_contrast_roles() {
     use crate::render::backend::Rgba;
 
@@ -1252,7 +1295,7 @@ fn fitted_unique_labels_rejects_space_too_narrow_for_an_ellipsis() {
         source.data().with_axis_resources(&resources),
         &theme,
         &["category".into()],
-        1.0,
+        |_| 1.0,
         "x",
         &crate::layout::fit::FitScope::root(),
     )

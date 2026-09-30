@@ -369,6 +369,16 @@ fn selected_cell_guide_storage_and_elision_refuse_at_exact_limits() {
             &theme,
         ))
         .unwrap();
+    let crate::layout::interior::MarkPayload::Heatmap(payload) =
+        &selected.marks.as_ref().unwrap().payload
+    else {
+        panic!("wrong payload")
+    };
+    let columns = [
+        payload.cells[0].corners[0].x,
+        payload.cells[0].corners[1].x,
+        payload.cells[1].corners[1].x,
+    ];
     let marks = retained(&source).unwrap();
     let text = PlotRenderContext::new(
         source.data(),
@@ -381,6 +391,7 @@ fn selected_cell_guide_storage_and_elision_refuse_at_exact_limits() {
         &source,
         marks,
         &selected.layout,
+        &columns,
         &theme,
         &crate::layout::fit::FitScope::root(),
         &text,
@@ -390,11 +401,6 @@ fn selected_cell_guide_storage_and_elision_refuse_at_exact_limits() {
         "Long category alpha".to_owned(),
         "Distinct category beta".to_owned(),
     ];
-    let crate::layout::interior::MarkPayload::Heatmap(payload) =
-        &selected.marks.as_ref().unwrap().payload
-    else {
-        panic!("wrong payload")
-    };
     let title = TextBlock::from_resolved(
         payload
             .colorbar
@@ -430,13 +436,20 @@ fn selected_cell_guide_storage_and_elision_refuse_at_exact_limits() {
                     data,
                     &theme,
                     &labels,
-                    55.0,
+                    |_| 55.0,
                     "x",
                     &crate::layout::fit::FitScope::root(),
                 )
                 .map_err(crate::layout::fit::PlanError::into_error)?;
             } else if component == 1 {
-                select_cells(marks, &selected.layout, &theme, &annotations, data)?;
+                select_cells(
+                    marks,
+                    &selected.layout,
+                    &columns,
+                    &theme,
+                    &annotations,
+                    data,
+                )?;
             } else {
                 select_colorbar(marks, &selected.layout, &title, &values, &theme, data)?;
             }
