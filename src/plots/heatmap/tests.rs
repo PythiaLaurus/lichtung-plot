@@ -187,6 +187,83 @@ fn heatmap_intrinsic_cache_rechecks_contrast_role_metrics_after_theme_change() {
 }
 
 #[test]
+fn missing_fill_and_backdrop_invalidate_cached_intrinsics_with_unequal_contrast_roles() {
+    use crate::render::backend::Rgba;
+
+    let source = Plot::heatmap(
+        CategoryValues::new("column", ["a", "b"]).unwrap(),
+        CategoryValues::new("row", ["absent", "absent"]).unwrap(),
+        NumericValues::nullable("fill", [None, None]),
+    )
+    .color_limits(0.0, 1.0)
+    .heatmap_null_row_annotation(
+        crate::HeatmapNullRowAnnotation::new("absent", "A long unavailable measurement").unwrap(),
+    )
+    .erase();
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let marks = &inputs.heatmap.as_ref().unwrap().panels[0].1;
+    let axes = &inputs.axes[0].1;
+    let mut theme = crate::Theme::Publication.resolve();
+    theme.surfaces.plot_panel = Rgba::new(0, 0, 0, 0);
+    theme.surfaces.canvas_root = Rgba::new(0, 0, 0, 0);
+    theme.marks.heatmap_missing_fill = Rgba::new(20, 40, 60, 0);
+    theme.annotations.planning_backdrop = Rgba::rgb(0, 0, 0);
+    theme.typography.contrast_light.font_size = 40;
+    theme.typography.contrast_dark.font_size = 9;
+    let large = prepare_intrinsics(marks, axes, source.data(), &theme, None).unwrap();
+    assert_eq!(
+        theme
+            .contrasting_text(theme.marks.heatmap_missing_fill)
+            .unwrap()
+            .font_size,
+        40
+    );
+    assert!(axes
+        .heatmap_intrinsics
+        .get()
+        .unwrap()
+        .matches(marks, &theme));
+
+    theme.annotations.planning_backdrop = Rgba::rgb(255, 255, 255);
+    assert!(!axes
+        .heatmap_intrinsics
+        .get()
+        .unwrap()
+        .matches(marks, &theme));
+    assert_eq!(
+        theme
+            .contrasting_text(theme.marks.heatmap_missing_fill)
+            .unwrap()
+            .font_size,
+        9
+    );
+    let small = prepare_intrinsics(marks, axes, source.data(), &theme, None).unwrap();
+    assert!(
+        small.0 < large.0 && small.1 <= large.1,
+        "small={small:?} large={large:?}"
+    );
+
+    theme.marks.heatmap_missing_fill = Rgba::rgb(0, 0, 0);
+    assert!(!axes
+        .heatmap_intrinsics
+        .get()
+        .unwrap()
+        .matches(marks, &theme));
+    assert_eq!(
+        theme
+            .contrasting_text(theme.marks.heatmap_missing_fill)
+            .unwrap()
+            .font_size,
+        40
+    );
+    assert_eq!(
+        prepare_intrinsics(marks, axes, source.data(), &theme, None).unwrap(),
+        large
+    );
+}
+
+#[test]
 fn heatmap_intrinsic_cache_rechecks_the_final_shared_color_domain() {
     let source = Plot::heatmap(
         CategoryValues::new("column", ["a", "b"]).unwrap(),

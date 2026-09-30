@@ -2076,7 +2076,7 @@ ownership, statistical estimates, public extension points, or layout strategy.
 | T5d3b3 | COMPLETE | T5d3b2 | `feat(scales): align continuous guide raster with OKLab marks` |
 | T5d4 | IN PROGRESS | T5d3 | Umbrella for final missing/contrast/target owners |
 | T5d4a | COMPLETE | T5d3 | `refactor(scales): resolve missing Heatmap paint from owner theme` |
-| T5d4b | PENDING | T5d4a | `test(theme): verify final mapped contrast and guide cache inputs` |
+| T5d4b | COMPLETE | T5d4a | `test(theme): verify final mapped contrast and guide cache inputs` |
 | T5d4c | PENDING | T5d4b | `test(scales): verify final typed annotation targets` |
 | T5d5 | PENDING | T5d4 | `test(scales): close mapping and guide consistency` |
 
@@ -2407,6 +2407,20 @@ and ignored release specialized-text contracts (three interleaved samples,
 including the rejected Elide workload), and strict Clippy pass with unchanged
 built-in SVG/output fingerprints. T5d4b now pins the variable-fill contrast
 and cache owner under unequal font and transparent surface inputs.
+
+T5d4b closure: the retained Heatmap fills supply the *only* value-label
+contrast candidates to the pre-font census. Replacing an exact local color
+domain with a broader final shared domain reselects the complete light/dark
+text stack before fonts; an unavailable unselected face remains absent from
+font preparation. A fully translucent missing fill over translucent Plot and
+Canvas surfaces chooses the light or dark role from the opaque planning
+backdrop, with unequal 39px/9px font sizes; no backdrop paint is added. A
+changed missing fill or backdrop invalidates the Heatmap intrinsic cache and
+remeasures the long merged-row text at its newly selected width rather than
+replaying the prior role's metrics. Existing exact local mark-style precedence,
+shared diverging descriptor/cache-on/off equality, two focused census units,
+the actual unselected-font operation, two neighboring intrinsic-cache tests
+and strict Clippy pass. T5d4c verifies final typed annotation targets.
 
 Feed final categorical identities, complete paints/glyphs, continuous domains,
 gradient/title/missing descriptors, and generated guide text into T5b's existing

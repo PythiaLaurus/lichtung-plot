@@ -2545,6 +2545,129 @@ mod tests {
     }
 
     #[test]
+    fn transparent_missing_row_census_uses_the_final_fill_and_planning_backdrop() {
+        use crate::render::backend::Rgba;
+
+        let plot = crate::Plot::heatmap(
+            crate::CategoryValues::new("column", ["a", "b"]).unwrap(),
+            crate::CategoryValues::new("row", ["absent", "absent"]).unwrap(),
+            crate::NumericValues::nullable("fill", [None, None]),
+        )
+        .color_limits(0.0, 1.0)
+        .heatmap_null_row_annotation(
+            crate::HeatmapNullRowAnnotation::new("absent", "Unavailable").unwrap(),
+        )
+        .erase();
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
+        let mut theme = crate::Theme::Publication.resolve();
+        theme.surfaces.plot_panel = Rgba::new(0, 0, 0, 0);
+        theme.surfaces.canvas_root = Rgba::new(0, 0, 0, 0);
+        theme.marks.heatmap_missing_fill = Rgba::new(20, 40, 60, 0);
+        theme.typography.contrast_light.stack = "Light missing row".into();
+        theme.typography.contrast_dark.stack = "Dark missing row".into();
+        theme.typography.contrast_light.font_size = 39;
+        theme.typography.contrast_dark.font_size = 9;
+        for (backdrop, expected) in [
+            (Rgba::rgb(0, 0, 0), "Light missing row"),
+            (Rgba::rgb(255, 255, 255), "Dark missing row"),
+        ] {
+            theme.annotations.planning_backdrop = backdrop;
+            let requirements = foundational_plot_requirements(
+                Some(&inputs),
+                &plot,
+                PlotKind::Heatmap,
+                &theme,
+                &ComponentAddress::root(),
+                true,
+                true,
+                true,
+                None,
+            )
+            .unwrap();
+            let selected = requirements
+                .iter()
+                .filter(|requirement| requirement.source == "Unavailable")
+                .collect::<Vec<_>>();
+            assert_eq!(selected.len(), 1);
+            assert_eq!(selected[0].stack_source, expected);
+            assert_eq!(
+                theme
+                    .contrasting_text(theme.marks.heatmap_missing_fill)
+                    .unwrap()
+                    .font_size,
+                if expected == "Light missing row" {
+                    39
+                } else {
+                    9
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn final_shared_heatmap_domain_reselects_complete_contrast_role_before_fonts() {
+        let plot = crate::Plot::heatmap(
+            crate::CategoryValues::new("column", ["a", "b"]).unwrap(),
+            crate::CategoryValues::new("row", ["one", "one"]).unwrap(),
+            crate::NumericValues::new("fill", [0.0, 1.0]),
+        )
+        .annotations(crate::HeatmapAnnotations::Values(
+            crate::NumericLabelFormat::default().precision(2).unwrap(),
+        ))
+        .erase();
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let mut inputs = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
+        let mut theme = crate::Theme::Publication.resolve();
+        theme.typography.contrast_light.stack = "Selected light contrast".into();
+        theme.typography.contrast_dark.stack = "Selected dark contrast".into();
+        theme.typography.contrast_light.font_size = 39;
+        theme.typography.contrast_dark.font_size = 9;
+        let selected_stack = |inputs: &crate::layout::interior::PreparedInteriorInputs| {
+            let requirements = foundational_plot_requirements(
+                Some(inputs),
+                &plot,
+                PlotKind::Heatmap,
+                &theme,
+                &ComponentAddress::root(),
+                true,
+                true,
+                true,
+                None,
+            )?;
+            Ok::<_, Error>(
+                requirements
+                    .iter()
+                    .find(|requirement| requirement.source == "1.00")
+                    .unwrap()
+                    .stack_source
+                    .clone(),
+            )
+        };
+        assert_eq!(selected_stack(&inputs).unwrap(), "Selected light contrast");
+        let descriptor = crate::decorations::legend::descriptor::ContinuousDescriptor {
+            field: "fill".into(),
+            title: "Fill".into(),
+            stops: vec![
+                crate::render::backend::GradientStop::new(0.0, (247, 251, 255)),
+                crate::render::backend::GradientStop::new(1.0, (8, 48, 107)),
+            ],
+            center: None,
+            missing: None,
+            domain: (0.0, 20.0),
+            exact: false,
+            labels: Vec::new(),
+        };
+        std::sync::Arc::get_mut(inputs.heatmap.as_mut().unwrap())
+            .unwrap()
+            .panels[0]
+            .1
+            .install_shared_domain(&descriptor, plot.data().with_axis_resources(&resources))
+            .unwrap();
+        assert_eq!(selected_stack(&inputs).unwrap(), "Selected dark contrast");
+    }
+
+    #[test]
     fn estimate_detail_census_uses_complete_role_for_required_unavailable_text() {
         let plot = crate::Plot::point_interval(
             crate::CategoryValues::new("term", ["available", "unavailable"]).unwrap(),
