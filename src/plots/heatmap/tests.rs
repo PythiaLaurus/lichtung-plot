@@ -187,6 +187,33 @@ fn heatmap_intrinsic_cache_rechecks_contrast_role_metrics_after_theme_change() {
 }
 
 #[test]
+fn intrinsic_width_accumulates_only_occupied_column_text_instead_of_repeating_the_longest() {
+    let theme = crate::Theme::Publication.resolve();
+    let measure = |values: [f64; 3]| {
+        let source = Plot::heatmap(
+            CategoryValues::new("column", ["a", "b", "c"]).unwrap(),
+            CategoryValues::new("row", ["one"; 3]).unwrap(),
+            NumericValues::new("value", values),
+        )
+        .annotations(HeatmapAnnotations::Values(
+            crate::NumericLabelFormat::default(),
+        ))
+        .size(1200, 800)
+        .erase();
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let minimum = intrinsic_body_minimum(&chart, &theme).unwrap();
+        chart.preflight().unwrap();
+        minimum
+    };
+    let sparse = measure([1.0, 2.0, 123_456.78]);
+    let dense = measure([123_456.78; 3]);
+    assert!(sparse.0 < dense.0, "sparse={sparse:?} dense={dense:?}");
+    assert_eq!(sparse.1.to_bits(), dense.1.to_bits());
+}
+
+#[test]
 fn missing_fill_and_backdrop_invalidate_cached_intrinsics_with_unequal_contrast_roles() {
     use crate::render::backend::Rgba;
 

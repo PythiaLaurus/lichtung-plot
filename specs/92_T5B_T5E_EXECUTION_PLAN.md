@@ -2538,7 +2538,10 @@ The sole root driver and numerical/resource policies remain unchanged.
 | Step | Status | Depends on | Logical commit |
 | --- | --- | --- | --- |
 | T5e0 | COMPLETE | T5d | `docs(layout): pin specialized and root sizing closure inputs` |
-| T5e1 | PENDING | T5e0 | `feat(heatmap): allocate native measured cell tracks` |
+| T5e1 | IN PROGRESS | T5e0 | Umbrella for Heatmap intrinsic and native grid ownership |
+| T5e1a | COMPLETE | T5e0 | `refactor(heatmap): derive prepared column-local hard widths` |
+| T5e1b | PENDING | T5e1a | `feat(heatmap): allocate measured column and row tracks` |
+| T5e1c | PENDING | T5e1b | `refactor(heatmap): retire specialized packing adapter` |
 | T5e2 | PENDING | T5e1 | `feat(matrix): allocate native variable grid tracks` |
 | T5e3 | PENDING | T5e2 | `feat(marginal): measure native linked subpanels` |
 | T5e4 | PENDING | T5e3 | `feat(beeswarm): implement bounded deterministic tangent packing` |
@@ -2566,6 +2569,33 @@ their replacement stage. Confirm all private automatic-root inputs have an owner
 and no new preference, hard floor, or algorithm choice is being invented locally.
 
 ### T5e1 — Heatmap
+
+T5e1 has three dependency-ordered commits: first replace the multiplied
+global cell-text width estimate with admitted column-local hard requirements
+in the *active* Heatmap intrinsic supplier, retaining its current assigned
+packing until the next step; then assign T5b's quantized Grid columns before
+constrained cell text and row tracks, making selected cells/axes consume the
+one native allocation; finally remove the Heatmap parity floor, equal-cell
+packing path and `SpecializedLegacy::Heatmap` route together. Neither first
+step is claimed to be native packing on its own. Keep an exact root's fit
+refusal while transitioning: a smaller intrinsic is not permission to clip
+required text or create an unbounded local retry.
+
+T5e1a closure: the active root-prepared Heatmap intrinsic now admits one
+hard width per observed column. It starts with complete painted cell/cross
+ink, then measures each value label with the *final T5d fill's* selected
+contrast role and raises only that label's source column. The summed widths
+replace `max_label_width × all_columns`; merged-row full-width text and the
+current height/body floor remain separately checked. A three-column source
+with one long label has a smaller hard width than three copies of that label,
+while both still render at a sufficient exact root. The selected legacy
+equal-cell constructor and `SpecializedLegacy::Heatmap` route remain active
+until T5e1b/c; this substep is not a claim of native track assignment.
+Forty-three focused Heatmap units, 40 Heatmap integrations, shared Canvas
+guide composition, regular and three interleaved ignored release specialized
+text workloads (including rejected Elide), `git diff --check` and strict
+Clippy pass. T5e1b now consumes these column-local hard inputs in the
+native assigned Grid before measuring row text.
 
 Replace legacy pitches/reserves with complete measured column/row tracks. Retain
 every semantic cell, merged row, highlight, value label, missing cell, and trailing

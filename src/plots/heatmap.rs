@@ -507,8 +507,19 @@ pub(crate) fn prepare_intrinsics(
     let mut minimum = prepared.minimum.body();
     let resources = environment.generation_resources();
     let data = data.with_axis_resources(&resources);
+    let cell = intrinsic_cell_ink(prepared, theme, data)?;
+    let columns = prepared.x_levels.len();
+    let base_column = (cell.0 / columns as f64).max(1.0 / 1024.0);
+    let mut column_hard = data.collect_source((0..columns).map(|_| Ok(base_column)))?;
     data.claim_source_visits(prepared.value_labels.len() + prepared.null_row_annotations.len())?;
-    for (source, fill) in prepared.annotation_labels() {
+    for (index, (source, fill)) in prepared
+        .value_labels
+        .iter()
+        .zip(&prepared.fills)
+        .enumerate()
+        .filter_map(|(index, (source, fill))| Some((index, (source.as_deref()?, (*fill)?))))
+    {
+        let fill = Rgba::from(fill);
         let appearance = theme.contrasting_text(fill)?;
         let plan = theme.measure_legacy_appearance_text(
             source,
@@ -517,13 +528,21 @@ pub(crate) fn prepare_intrinsics(
             "heatmap value intrinsic",
             false,
         )?;
-        minimum.0 = minimum
-            .0
-            .max((plan.width() + 6.0) * prepared.x_levels.len() as f64);
+        column_hard[index % columns] = column_hard[index % columns].max(plan.width() + 6.0);
         minimum.1 = minimum
             .1
             .max((plan.height() + 5.0) * prepared.y_levels.len() as f64);
     }
+    let total_columns = column_hard.into_iter().try_fold(0.0_f64, |total, width| {
+        let next = total + width;
+        if !next.is_finite() {
+            return Err(Error::Render(
+                "heatmap column hard widths overflowed".into(),
+            ));
+        }
+        Ok(next)
+    })?;
+    minimum.0 = minimum.0.max(total_columns);
     let appearance = theme.contrasting_text(theme.marks.heatmap_missing_fill)?;
     for source in prepared.null_row_annotations.iter().flatten() {
         let hard = crate::layout::fit::intrinsic_widths(
@@ -545,7 +564,6 @@ pub(crate) fn prepare_intrinsics(
             .1
             .max((unwrapped.height() + 4.0) * prepared.y_levels.len() as f64);
     }
-    let cell = intrinsic_cell_ink(prepared, theme, data)?;
     minimum.0 = minimum.0.max(cell.0);
     minimum.1 = minimum.1.max(cell.1);
     if axes.heatmap_intrinsics.get().is_none() {
