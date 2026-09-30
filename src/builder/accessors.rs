@@ -499,6 +499,10 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.beeswarm_color_limits
     }
 
+    pub(crate) fn beeswarm_gradient_spec(&self) -> Option<&[crate::render::backend::GradientStop]> {
+        self.beeswarm_gradient.as_deref()
+    }
+
     /// Requested heatmap annotation policy.
     #[must_use]
     pub(crate) const fn heatmap_annotations_spec(&self) -> &HeatmapAnnotations {

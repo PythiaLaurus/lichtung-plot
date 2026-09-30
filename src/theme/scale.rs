@@ -22,6 +22,10 @@ pub(crate) const HEATMAP_DIVERGING_STOPS: [GradientStop; 3] = [
     GradientStop::new(0.5, (247, 247, 247)),
     GradientStop::new(1.0, (222, 45, 38)),
 ];
+pub(crate) const BEESWARM_SEQUENTIAL_STOPS: [GradientStop; 2] = [
+    GradientStop::new(0.0, (49, 130, 189)),
+    GradientStop::new(1.0, (222, 45, 38)),
+];
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum PaletteSource<'a> {

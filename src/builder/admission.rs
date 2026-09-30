@@ -53,6 +53,7 @@ impl Plot {
             heatmap_label_fit: _,
             heatmap_color_limits: _,
             beeswarm_color_limits: _,
+            beeswarm_gradient: _,
             heatmap_annotations: _,
             heatmap_null_row_annotations: _,
             heatmap_highlight: _,
@@ -194,6 +195,9 @@ impl Plot {
             format.admit_clone(data)?;
         }
         if let Some(stops) = &self.heatmap_gradient {
+            data.admit_clone_slice(stops)?;
+        }
+        if let Some(stops) = &self.beeswarm_gradient {
             data.admit_clone_slice(stops)?;
         }
         data.admit_clone_slice(&self.heatmap_null_row_annotations)?;

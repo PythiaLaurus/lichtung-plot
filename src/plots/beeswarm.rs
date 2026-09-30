@@ -179,10 +179,9 @@ pub(crate) fn prepare(
     let values = colorbar_values(color_range, data)?;
     let scale = crate::theme::ContinuousColors::resolve(
         color_range,
-        &[
-            GradientStop::new(0.0, (49, 130, 189)),
-            GradientStop::new(1.0, (222, 45, 38)),
-        ],
+        chart
+            .beeswarm_gradient_spec()
+            .unwrap_or(&crate::theme::BEESWARM_SEQUENTIAL_STOPS),
         data.source_resources()?,
     )?;
     let samples = data.collect_source(rows.iter().map(|row| Ok(row.2)))?;

@@ -485,6 +485,86 @@ mod d1_tests {
     }
 
     #[test]
+    fn custom_heatmap_and_beeswarm_share_one_gradient_or_reject_conflicts_before_fonts() {
+        use crate::render::backend::GradientStop;
+
+        let gradient = [
+            GradientStop::new(0.0, (0, 0, 0)),
+            GradientStop::new(0.5, (255, 0, 0)),
+            GradientStop::new(1.0, (255, 255, 255)),
+        ];
+        let canvas = |bee_gradient: &[GradientStop]| {
+            Canvas::grid(1, 2)
+                .unwrap()
+                .panel(
+                    0,
+                    0,
+                    Plot::heatmap(
+                        crate::CategoryValues::new("column", ["a", "b"]).unwrap(),
+                        crate::CategoryValues::new("row", ["only", "only"]).unwrap(),
+                        crate::NumericValues::new("fill", [0.0, 1.0]),
+                    )
+                    .theme(Theme::Nature)
+                    .with_private_gradient(gradient.to_vec()),
+                )
+                .unwrap()
+                .panel(
+                    0,
+                    1,
+                    Plot::beeswarm(
+                        crate::CategoryValues::new("row", ["one", "one"]).unwrap(),
+                        crate::NumericValues::new("x", [0.0, 1.0]),
+                        crate::NumericValues::new("fill", [1.0, 3.0]),
+                    )
+                    .theme(Theme::Science)
+                    .with_private_gradient(bee_gradient.to_vec()),
+                )
+                .unwrap()
+                .legend_policy(CanvasLegendPolicy::Shared)
+                .size(1200, 640)
+        };
+        let compatible = canvas(&gradient);
+        let root = compatible.preflight_plan().unwrap();
+        let Some(PreparedGuideDescriptor::Continuous(guide)) =
+            root.prepared().shared_guide.as_ref()
+        else {
+            panic!("custom continuous Shared guide")
+        };
+        assert_eq!(guide.domain, (0.0, 3.0));
+        assert_eq!(guide.stops.first().unwrap().color, (0, 0, 0));
+        assert_eq!(guide.stops.last().unwrap().color, (255, 255, 255));
+        assert_eq!(guide.stops.len(), 4);
+        let bee_color = root.prepared().interiors[1]
+            .as_ref()
+            .unwrap()
+            .beeswarm
+            .as_ref()
+            .unwrap()
+            .panels[0]
+            .1
+            .color_for_source_value(1.0)
+            .unwrap();
+        assert_eq!(guide.stops[1].color, bee_color);
+        let rendered =
+            String::from_utf8(compatible.render_scene().unwrap().svg_bytes().to_vec()).unwrap();
+        let (r, g, b) = bee_color;
+        let paint = format!("#{r:02X}{g:02X}{b:02X}");
+        assert!(rendered.matches(&format!("fill=\"{paint}\"")).count() >= 2);
+
+        let mut conflicting = gradient;
+        conflicting[1].color = (0, 0, 255);
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        assert!(matches!(
+            canvas(&conflicting).preflight(),
+            Err(Error::Data(message)) if message.contains("incompatible identity, title, scale")
+        ));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+
+    #[test]
     fn merged_continuous_guide_text_is_censused_under_the_canvas_owner() {
         let plot = |values: [f64; 2]| {
             Plot::heatmap(

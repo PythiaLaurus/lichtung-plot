@@ -2079,9 +2079,9 @@ ownership, statistical estimates, public extension points, or layout strategy.
 | T5d4b | COMPLETE | T5d4a | `test(theme): verify final mapped contrast and guide cache inputs` |
 | T5d4c | COMPLETE | T5d4b | `test(scales): verify final typed annotation targets` |
 | T5d5 | IN PROGRESS | T5d4 | Umbrella for private custom gradients and scale closure |
-| T5d5a | IN PROGRESS | T5d4 | Umbrella for active private gradient replacements |
+| T5d5a | COMPLETE | T5d4 | Umbrella for active private gradient replacements |
 | T5d5a1 | COMPLETE | T5d4 | `feat(scales): resolve private Heatmap gradient inputs` |
-| T5d5a2 | PENDING | T5d5a1 | `feat(scales): coordinate Beeswarm and Canvas gradient owners` |
+| T5d5a2 | COMPLETE | T5d5a1 | `feat(scales): coordinate Beeswarm and Canvas gradient owners` |
 | T5d5b | PENDING | T5d5a | `test(scales): close mapping and guide consistency` |
 
 ### T5d0 — Domain And Consumer Census
@@ -2484,6 +2484,20 @@ faceted custom mark/guide and poisoned capture, 40 public Heatmap contracts,
 unchanged Beeswarm fingerprints and shared Canvas composition, builder
 configuration admission and strict Clippy pass. The public configuration
 surface remains T6; T5d5a2 connects Beeswarm and shared-guide equality.
+
+T5d5a2 closure: Beeswarm's built-in ordered stops now share the private theme
+scale owner with Heatmap. A narrower private Plot-local replacement feeds its
+one root-prepared scale, points and local colorbar before fonts, including
+under an explicit Science Plot theme; malformed stop bounds refuse with no
+font discovery or default-color fallback. Heap-owned replacement stops are
+admitted with every composed Plot clone. A mixed Nature Heatmap/Science
+Beeswarm Shared Canvas with identical custom stops resolves one final domain,
+one sampled guide and the same RGB for a numeric value common to both
+children. Changing the Beeswarm midpoint rejects as incompatible in the
+existing pre-font descriptor. Twelve Beeswarm units, forty-two Heatmap units,
+thirty-one Canvas shared/admission units, forty Heatmap integrations,
+unchanged Beeswarm parent SVG fingerprints, shared composition and strict
+Clippy pass. T5d5a closes; T5d5b owns the final matrix and broad gate.
 
 All marks, legends, gradients, colorbars, facets, and Canvas use one final mapping
 per semantic owner. Remove old mixed-palette, hardcoded-gradient, and duplicate

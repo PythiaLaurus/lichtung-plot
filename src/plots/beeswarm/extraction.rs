@@ -69,6 +69,48 @@ fn root_semantics_admit_sort_bins_offsets_and_exact_colors_before_fonts() {
 }
 
 #[test]
+fn private_beeswarm_gradient_maps_marks_and_local_guide_before_fonts() {
+    let custom = [
+        GradientStop::new(0.0, (0, 0, 0)),
+        GradientStop::new(0.5, (255, 0, 0)),
+        GradientStop::new(1.0, (255, 255, 255)),
+    ];
+    let plot = source()
+        .with_private_gradient(custom.to_vec())
+        .theme(crate::Theme::Science)
+        .erase();
+    let resources = OperationGenerationResources::new();
+    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+    let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
+    let marks = &inputs.beeswarm.as_ref().unwrap().panels[0].1;
+    assert_eq!(marks.color_for_source_value(0.5), Some(custom[1].color));
+    assert_eq!(marks.colorbar_stops[1], custom[1]);
+    assert_eq!(
+        marks
+            .guide_semantics(plot.data().with_axis_resources(&resources))
+            .unwrap()
+            .stops,
+        custom
+    );
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        0
+    );
+    let invalid = source()
+        .with_private_gradient(vec![custom[0], GradientStop::new(0.0, custom[1].color)])
+        .erase();
+    assert!(matches!(
+        crate::plots::shared_x::prepare_plot(&invalid, &OperationGenerationResources::new()),
+        Err(Error::Data(message)) if message.contains("span exactly 0..1")
+            || message.contains("strictly")
+    ));
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        0
+    );
+}
+
+#[test]
 fn constant_beeswarm_guide_and_marks_use_the_same_oklab_midpoint() {
     let source = Plot::beeswarm(
         CategoryValues::new("category", ["one", "one"]).unwrap(),
