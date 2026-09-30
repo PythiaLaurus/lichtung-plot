@@ -2074,7 +2074,10 @@ ownership, statistical estimates, public extension points, or layout strategy.
 | T5d3b1 | COMPLETE | T5d3a | `feat(scales): resolve Heatmap cell and local-guide colors` |
 | T5d3b2 | COMPLETE | T5d3b1 | `refactor(scales): share resolved continuous stops across compositions` |
 | T5d3b3 | COMPLETE | T5d3b2 | `feat(scales): align continuous guide raster with OKLab marks` |
-| T5d4 | PENDING | T5d3 | `refactor(scales): coordinate final domains guides and contrast` |
+| T5d4 | IN PROGRESS | T5d3 | Umbrella for final missing/contrast/target owners |
+| T5d4a | PENDING | T5d3 | `refactor(scales): resolve missing Heatmap paint from owner theme` |
+| T5d4b | PENDING | T5d4a | `test(theme): verify final mapped contrast and guide cache inputs` |
+| T5d4c | PENDING | T5d4b | `test(scales): verify final typed annotation targets` |
 | T5d5 | PENDING | T5d4 | `test(scales): close mapping and guide consistency` |
 
 ### T5d0 — Domain And Consumer Census
@@ -2376,6 +2379,17 @@ invalid centers/stops, missing values, resource refusal, and exact color agreeme
 between prepared marks, retained gradient stops, and decoded output pixels.
 
 ### T5d4 — Final Shared Descriptors, Contrast, And Targets
+
+T5d4 is split before implementation. T5d4a makes the existing Plot-owned
+`MarkAppearance` supply the non-data Heatmap missing fill to cells, fully-null
+rows and local/shared missing keys; shared descriptors compare the complete
+RGBA fill/outline from each contributor under its actual resolved Plot theme.
+T5d4b pins final mapped-cell contrast selection under transparent surfaces
+and unequal light/dark font metrics before the census, including cache
+identity and exact override precedence. T5d4c verifies typed final targets
+across the prepared scale/facet/Canvas owners, deleting a duplicate route if
+the focused evidence finds one. All three reuse T5b's descriptor and T5c's
+mark/annotation contracts; there is no new scale or annotation fallback.
 
 Feed final categorical identities, complete paints/glyphs, continuous domains,
 gradient/title/missing descriptors, and generated guide text into T5b's existing
