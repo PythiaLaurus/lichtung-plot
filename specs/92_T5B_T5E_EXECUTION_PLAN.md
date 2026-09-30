@@ -2079,8 +2079,8 @@ ownership, statistical estimates, public extension points, or layout strategy.
 | T5d4b | COMPLETE | T5d4a | `test(theme): verify final mapped contrast and guide cache inputs` |
 | T5d4c | COMPLETE | T5d4b | `test(scales): verify final typed annotation targets` |
 | T5d5 | IN PROGRESS | T5d4 | Umbrella for private custom gradients and scale closure |
-| T5d5a | PENDING | T5d4 | Umbrella for active private gradient replacements |
-| T5d5a1 | PENDING | T5d4 | `feat(scales): resolve private Heatmap gradient inputs` |
+| T5d5a | IN PROGRESS | T5d4 | Umbrella for active private gradient replacements |
+| T5d5a1 | COMPLETE | T5d4 | `feat(scales): resolve private Heatmap gradient inputs` |
 | T5d5a2 | PENDING | T5d5a1 | `feat(scales): coordinate Beeswarm and Canvas gradient owners` |
 | T5d5b | PENDING | T5d5a | `test(scales): close mapping and guide consistency` |
 
@@ -2457,15 +2457,33 @@ recoloring, reshaping, or target resolution in capture.
 ### T5d5 — Scale Closure
 
 T5d5a finishes the private customization boundary before the broad gate.
-T5d5a1 routes validated theme-owned, ordered sequential/diverging stops into
-the one prepared Heatmap scale and its pre-font contrast/guide producer,
-including explicit Plot-theme ownership. T5d5a2 connects the same owner to
+T5d5a1 moves built-in sequential/diverging defaults into the private theme
+scale owner and routes one validated Plot-local replacement into the prepared
+Heatmap scale and its pre-font contrast/guide producer. Explicit complete
+Plot themes leave the narrower local replacement in force. T5d5a2 connects
+the same owner to
 Beeswarm and mixed-theme Shared Canvas contributors without an intermediate
 default gradient or a late selected-mark recoloring path. Keep the public
 builder/configuration surface deferred to T6. T5d5b publishes the complete
 consumer/equality/error-precedence matrix and runs the required T5d phase
 `just verify` closure gate after focused affected-family checks and strict
 Clippy. Do not mark T5d complete from default-only gradient evidence.
+
+T5d5a1 closure: Heatmap's built-in semantic stops now live in `theme/scale.rs`.
+Its one prepared `ContinuousColors` validates either that default or the
+private Plot-local ordered replacement before fonts, retaining the exact
+semantic sequence for shared guides, final-domain reinstallation, faceted
+marks, selected local stops and value-label contrast. Invalid duplicate
+offsets or a diverging gradient without the one neutral midpoint refuse
+without silently selecting default paint. An explicit Science Plot theme
+does not override a narrower custom gradient. The Heatmap intrinsic cache
+now compares the complete selected continuous scale, so a color change at
+the same numeric domain reselects the contrasting text role/width. Plot
+clones admit custom stop records/bytes. Focused 42 Heatmap units including
+faceted custom mark/guide and poisoned capture, 40 public Heatmap contracts,
+unchanged Beeswarm fingerprints and shared Canvas composition, builder
+configuration admission and strict Clippy pass. The public configuration
+surface remains T6; T5d5a2 connects Beeswarm and shared-guide equality.
 
 All marks, legends, gradients, colorbars, facets, and Canvas use one final mapping
 per semantic owner. Remove old mixed-palette, hardcoded-gradient, and duplicate

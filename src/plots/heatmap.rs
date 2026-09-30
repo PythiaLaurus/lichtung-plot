@@ -22,16 +22,6 @@ use crate::theme::ResolvedTheme;
 use crate::Plot;
 
 const MAX_CELLS: usize = 1_000_000;
-const SEQUENTIAL_STOPS: [GradientStop; 2] = [
-    GradientStop::new(0.0, (247, 251, 255)),
-    GradientStop::new(1.0, (8, 48, 107)),
-];
-const DIVERGING_STOPS: [GradientStop; 3] = [
-    GradientStop::new(0.0, (49, 130, 189)),
-    GradientStop::new(0.5, (247, 247, 247)),
-    GradientStop::new(1.0, (222, 45, 38)),
-];
-
 #[derive(Debug, PartialEq)]
 pub(crate) struct HeatmapData {
     pub(crate) x_levels: Vec<String>,
@@ -59,12 +49,7 @@ impl HeatmapData {
     ) -> Result<crate::decorations::legend::descriptor::ContinuousSemantics, Error> {
         let domain = self.color.domain;
         let center = domain.center;
-        let semantic = if center.is_some() {
-            &DIVERGING_STOPS[..]
-        } else {
-            &SEQUENTIAL_STOPS[..]
-        };
-        let stops = data.collect_source(semantic.iter().copied().map(Ok))?;
+        let stops = data.collect_source(self.color.semantic_stops.iter().copied().map(Ok))?;
         let missing = self
             .has_missing
             .then(|| -> Result<_, Error> {
@@ -120,7 +105,11 @@ impl HeatmapData {
         domain: ColorDomain,
         data: crate::data::PlotData<'_>,
     ) -> Result<(), Error> {
-        let color = PreparedHeatmapColor::resolve(domain, data.source_resources()?)?;
+        let color = PreparedHeatmapColor::resolve(
+            domain,
+            &self.color.semantic_stops,
+            data.source_resources()?,
+        )?;
         let fills = data.collect_source(self.cells.iter().map(|value| {
             value
                 .map(|value| color.scale.color(value, data.source_resources()?))
@@ -179,17 +168,29 @@ struct ColorDomain {
 #[derive(Debug, PartialEq)]
 struct PreparedHeatmapColor {
     domain: ColorDomain,
+    semantic_stops: Vec<GradientStop>,
     scale: crate::theme::ContinuousColors,
 }
 
 impl PreparedHeatmapColor {
     fn resolve(
         domain: ColorDomain,
+        semantic: &[GradientStop],
         resources: &crate::font::canonical::OperationGenerationResources,
     ) -> Result<Self, Error> {
-        let low = DIVERGING_STOPS[0].color;
-        let neutral = DIVERGING_STOPS[1].color;
-        let high = DIVERGING_STOPS[2].color;
+        let semantic_stops =
+            crate::theme::ContinuousColors::resolve((0.0, 1.0), semantic, resources)?.into_stops();
+        if domain.center.is_some()
+            && (semantic_stops.len() != 3
+                || semantic_stops[1].offset.to_bits() != 0.5_f64.to_bits())
+        {
+            return Err(Error::Data(
+                "heatmap diverging gradient requires one neutral center stop".into(),
+            ));
+        }
+        let low = semantic_stops[0].color;
+        let neutral = semantic_stops[semantic_stops.len() / 2].color;
+        let high = semantic_stops[semantic_stops.len() - 1].color;
         let (stops, count) = if let Some(center) = domain.center {
             if !center.is_finite() || center < domain.minimum || center > domain.maximum {
                 return Err(Error::Data(
@@ -245,20 +246,25 @@ impl PreparedHeatmapColor {
         } else {
             (
                 [
-                    SEQUENTIAL_STOPS[0],
-                    SEQUENTIAL_STOPS[1],
-                    SEQUENTIAL_STOPS[1],
+                    semantic_stops[0],
+                    semantic_stops[semantic_stops.len() - 1],
+                    semantic_stops[semantic_stops.len() - 1],
                 ],
-                2,
+                semantic_stops.len(),
             )
         };
         Ok(Self {
             domain,
             scale: crate::theme::ContinuousColors::resolve(
                 (domain.minimum, domain.maximum),
-                &stops[..count],
+                if domain.center.is_none() {
+                    &semantic_stops
+                } else {
+                    &stops[..count]
+                },
                 resources,
             )?,
+            semantic_stops,
         })
     }
 
@@ -276,7 +282,7 @@ impl PreparedHeatmapColor {
 #[derive(Debug)]
 pub(crate) struct HeatmapIntrinsicCache {
     minimum: (f64, f64),
-    domain: ColorDomain,
+    color_scale: crate::theme::ContinuousColors,
     contrast_light: crate::theme::TextAppearance,
     contrast_dark: crate::theme::TextAppearance,
     plot_panel: crate::render::backend::Rgba,
@@ -292,7 +298,7 @@ pub(crate) struct HeatmapIntrinsicCache {
 
 impl HeatmapIntrinsicCache {
     fn matches(&self, prepared: &HeatmapData, theme: &ResolvedTheme) -> bool {
-        self.domain == prepared.color.domain
+        self.color_scale == prepared.color.scale
             && self.contrast_light == theme.typography.contrast_light
             && self.contrast_dark == theme.typography.contrast_dark
             && self.plot_panel == theme.surfaces.plot_panel
@@ -313,6 +319,7 @@ impl HeatmapIntrinsicCache {
         data: crate::data::PlotData<'_>,
     ) -> Result<Self, Error> {
         data.claim_source_bytes(std::mem::size_of::<Self>())?;
+        data.admit_clone_slice(prepared.color.scale.stops())?;
         let text = |role: &crate::theme::TextAppearance| -> Result<_, Error> {
             Ok(crate::theme::TextAppearance {
                 stack: data.copy_source_string(&role.stack)?,
@@ -324,7 +331,7 @@ impl HeatmapIntrinsicCache {
         };
         Ok(Self {
             minimum,
-            domain: prepared.color.domain,
+            color_scale: prepared.color.scale.clone(),
             contrast_light: text(&theme.typography.contrast_light)?,
             contrast_dark: text(&theme.typography.contrast_dark)?,
             plot_panel: theme.surfaces.plot_panel,
@@ -980,7 +987,14 @@ pub(crate) fn prepare<'a>(
         chart.heatmap_scale_spec(),
         chart.heatmap_color_limits_spec(),
     )?;
-    let color = PreparedHeatmapColor::resolve(domain, data.source_resources()?)?;
+    let semantic = chart.heatmap_gradient_spec().unwrap_or_else(|| {
+        if domain.center.is_some() {
+            &crate::theme::HEATMAP_DIVERGING_STOPS
+        } else {
+            &crate::theme::HEATMAP_SEQUENTIAL_STOPS
+        }
+    });
+    let color = PreparedHeatmapColor::resolve(domain, semantic, data.source_resources()?)?;
     let resolved_fills = data.collect_source(cells.iter().map(|value| {
         value
             .map(|value| color.scale.color(value, data.source_resources()?))

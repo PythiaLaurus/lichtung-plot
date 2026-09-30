@@ -373,6 +373,15 @@ impl<K: crate::kind::Marker> Plot<K> {
 }
 
 impl Plot<crate::kind::Heatmap> {
+    #[cfg(test)]
+    pub(crate) fn with_private_gradient(
+        mut self,
+        stops: Vec<crate::render::backend::GradientStop>,
+    ) -> Self {
+        self.heatmap_gradient = Some(stops);
+        self
+    }
+
     /// Set the heatmap color-scale policy.
     #[must_use]
     pub fn scale(mut self, scale: HeatmapScale) -> Self {

@@ -48,6 +48,7 @@ impl Plot {
             suppress_continuous_guide: _,
             color_label: _,
             heatmap_scale: _,
+            heatmap_gradient: _,
             heatmap_layout: _,
             heatmap_label_fit: _,
             heatmap_color_limits: _,
@@ -191,6 +192,9 @@ impl Plot {
         }
         if let crate::HeatmapAnnotations::Values(format) = &self.heatmap_annotations {
             format.admit_clone(data)?;
+        }
+        if let Some(stops) = &self.heatmap_gradient {
+            data.admit_clone_slice(stops)?;
         }
         data.admit_clone_slice(&self.heatmap_null_row_annotations)?;
         for annotation in &self.heatmap_null_row_annotations {

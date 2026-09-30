@@ -312,6 +312,68 @@ fn heatmap_intrinsic_cache_rechecks_the_final_shared_color_domain() {
 }
 
 #[test]
+fn a_custom_gradient_invalidates_the_cached_contrast_role_at_the_same_numeric_domain() {
+    let source = Plot::heatmap(
+        CategoryValues::new("column", ["a", "b"]).unwrap(),
+        CategoryValues::new("row", ["one", "one"]).unwrap(),
+        NumericValues::new("fill", [0.0, 1.0]),
+    )
+    .annotations(HeatmapAnnotations::Values(
+        crate::NumericLabelFormat::default()
+            .suffix(" long units")
+            .unwrap(),
+    ))
+    .erase();
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let mut inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let axes = &inputs.axes[0].1;
+    let mut theme = crate::Theme::Publication.resolve();
+    theme.typography.contrast_light.font_size = 40;
+    theme.typography.contrast_dark.font_size = 9;
+    let initial = prepare_intrinsics(
+        &inputs.heatmap.as_ref().unwrap().panels[0].1,
+        axes,
+        source.data(),
+        &theme,
+        None,
+    )
+    .unwrap();
+    let panels = std::sync::Arc::get_mut(inputs.heatmap.as_mut().unwrap()).unwrap();
+    let marks = &mut panels.panels[0].1;
+    marks.color = PreparedHeatmapColor::resolve(
+        marks.color.domain,
+        &[
+            GradientStop::new(0.0, (255, 255, 255)),
+            GradientStop::new(1.0, (255, 255, 255)),
+        ],
+        &resources,
+    )
+    .unwrap();
+    marks.fills = source
+        .data()
+        .with_axis_resources(&resources)
+        .collect_source(marks.cells.iter().map(|value| {
+            value
+                .map(|value| marks.color.scale.color(value, &resources))
+                .transpose()
+        }))
+        .unwrap();
+    assert!(!axes
+        .heatmap_intrinsics
+        .get()
+        .unwrap()
+        .matches(marks, &theme));
+    assert!(marks
+        .annotation_labels()
+        .all(|(_, fill)| { theme.contrasting_text(fill).unwrap().font_size == 9 }));
+    let changed = prepare_intrinsics(marks, axes, source.data(), &theme, None).unwrap();
+    assert!(
+        changed.0 < initial.0,
+        "changed={changed:?} initial={initial:?}"
+    );
+}
+
+#[test]
 fn heatmap_cell_and_missing_cross_ink_supply_preselection_track_bounds() {
     let source = Plot::heatmap(
         CategoryValues::new("column", ["a", "b", "c", "d", "e"]).unwrap(),
@@ -753,8 +815,18 @@ fn constant_domains_map_to_midpoint_colors_and_explicit_domains_saturate() {
     };
 
     let resources = crate::font::canonical::OperationGenerationResources::new();
-    let sequential = PreparedHeatmapColor::resolve(sequential, &resources).unwrap();
-    let diverging = PreparedHeatmapColor::resolve(diverging, &resources).unwrap();
+    let sequential = PreparedHeatmapColor::resolve(
+        sequential,
+        &crate::theme::HEATMAP_SEQUENTIAL_STOPS,
+        &resources,
+    )
+    .unwrap();
+    let diverging = PreparedHeatmapColor::resolve(
+        diverging,
+        &crate::theme::HEATMAP_DIVERGING_STOPS,
+        &resources,
+    )
+    .unwrap();
     assert_eq!(
         sequential.scale.color(2.0, &resources).unwrap(),
         (122, 146, 181)
@@ -784,6 +856,7 @@ fn colorbar_gradient_stops_preserve_sequential_diverging_and_constant_scales() {
             maximum: 1.0,
             center: None,
         },
+        &crate::theme::HEATMAP_SEQUENTIAL_STOPS,
         &resources,
     )
     .unwrap()
@@ -795,6 +868,7 @@ fn colorbar_gradient_stops_preserve_sequential_diverging_and_constant_scales() {
             maximum: 3.0,
             center: Some(0.0),
         },
+        &crate::theme::HEATMAP_DIVERGING_STOPS,
         &resources,
     )
     .unwrap()
@@ -806,6 +880,7 @@ fn colorbar_gradient_stops_preserve_sequential_diverging_and_constant_scales() {
             maximum: 2.0,
             center: None,
         },
+        &crate::theme::HEATMAP_SEQUENTIAL_STOPS,
         &resources,
     )
     .unwrap()
@@ -842,6 +917,7 @@ fn large_offset_diverging_center_uses_the_same_fraction_for_cell_and_guide() {
             maximum: high,
             center: Some(center),
         },
+        &crate::theme::HEATMAP_DIVERGING_STOPS,
         &resources,
     )
     .unwrap();
@@ -856,6 +932,180 @@ fn large_offset_diverging_center_uses_the_same_fraction_for_cell_and_guide() {
             .unwrap()
             .to_bits()
     );
+}
+
+#[test]
+fn private_plot_gradient_freezes_custom_sequential_and_diverging_marks_guides_before_fonts() {
+    let sequential = [
+        GradientStop::new(0.0, (0, 0, 0)),
+        GradientStop::new(0.5, (255, 0, 0)),
+        GradientStop::new(1.0, (255, 255, 255)),
+    ];
+    let diverging = [
+        GradientStop::new(0.0, (0, 0, 255)),
+        GradientStop::new(0.5, (0, 0, 0)),
+        GradientStop::new(1.0, (255, 255, 0)),
+    ];
+    for (plot, expected, center) in [
+        (
+            Plot::heatmap(
+                CategoryValues::new("column", ["low", "middle", "high"]).unwrap(),
+                CategoryValues::new("row", ["one"; 3]).unwrap(),
+                NumericValues::new("fill", [0.0, 5.0, 10.0]),
+            )
+            .color_limits(0.0, 10.0)
+            .with_private_gradient(sequential.to_vec())
+            .size(1200, 800)
+            .erase(),
+            [
+                sequential[0].color,
+                sequential[1].color,
+                sequential[2].color,
+            ],
+            None,
+        ),
+        (
+            Plot::heatmap(
+                CategoryValues::new("column", ["low", "middle", "high"]).unwrap(),
+                CategoryValues::new("row", ["one"; 3]).unwrap(),
+                NumericValues::new("fill", [-2.0, 0.0, 6.0]),
+            )
+            .scale(HeatmapScale::Diverging { center: 0.0 })
+            .color_limits(-2.0, 6.0)
+            .with_private_gradient(diverging.to_vec())
+            .theme(crate::Theme::Science)
+            .size(1200, 800)
+            .erase(),
+            [diverging[0].color, diverging[1].color, diverging[2].color],
+            Some(0.0),
+        ),
+    ] {
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
+        let marks = &inputs.heatmap.as_ref().unwrap().panels[0].1;
+        assert_eq!(marks.fills, expected.map(Some));
+        let theme = plot
+            .theme_spec()
+            .unwrap_or(crate::Theme::Publication)
+            .resolve();
+        let semantics = marks
+            .guide_semantics(&theme, plot.data().with_axis_resources(&resources))
+            .unwrap();
+        assert_eq!(semantics.center, center);
+        assert_eq!(
+            semantics
+                .stops
+                .iter()
+                .map(|stop| stop.color)
+                .collect::<Vec<_>>(),
+            expected
+        );
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+        let chart = inputs.attach(plot).unwrap();
+        let selected = chart
+            .measure_selected_interior(PlotRenderContext::new(
+                chart.data(),
+                PanelBox::new(50.0, 700.0, 50.0, 500.0),
+                &theme,
+            ))
+            .unwrap();
+        let crate::layout::interior::MarkPayload::Heatmap(payload) =
+            &selected.marks.as_ref().unwrap().payload
+        else {
+            panic!("custom Heatmap mark payload")
+        };
+        assert_eq!(
+            payload
+                .cells
+                .iter()
+                .map(|cell| cell.fill.color)
+                .collect::<Vec<_>>(),
+            expected.map(crate::render::backend::Rgba::from)
+        );
+        assert_eq!(
+            payload.colorbar.as_ref().unwrap().stops[1].color,
+            expected[1]
+        );
+    }
+
+    let source = Plot::heatmap(
+        CategoryValues::new("column", ["one", "two"]).unwrap(),
+        CategoryValues::new("row", ["one", "one"]).unwrap(),
+        NumericValues::new("fill", [0.0, 1.0]),
+    )
+    .with_private_gradient(vec![
+        GradientStop::new(0.0, (0, 0, 0)),
+        GradientStop::new(0.0, (255, 255, 255)),
+    ])
+    .erase();
+    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+    assert!(crate::plots::shared_x::prepare_plot(
+        &source,
+        &crate::font::canonical::OperationGenerationResources::new()
+    )
+    .is_err());
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        0
+    );
+    let wrong_center = Plot::heatmap(
+        CategoryValues::new("column", ["one", "two"]).unwrap(),
+        CategoryValues::new("row", ["one", "one"]).unwrap(),
+        NumericValues::new("fill", [-1.0, 1.0]),
+    )
+    .scale(HeatmapScale::Diverging { center: 0.0 })
+    .with_private_gradient(vec![
+        GradientStop::new(0.0, (0, 0, 0)),
+        GradientStop::new(0.4, (100, 100, 100)),
+        GradientStop::new(1.0, (255, 255, 255)),
+    ])
+    .erase();
+    assert!(matches!(
+        crate::plots::shared_x::prepare_plot(
+            &wrong_center,
+            &crate::font::canonical::OperationGenerationResources::new()
+        ),
+        Err(Error::Data(message)) if message.contains("neutral center stop")
+    ));
+}
+
+#[test]
+fn private_gradient_survives_faceted_root_preparation_and_shared_raw_domain() {
+    let source = Plot::heatmap(
+        CategoryValues::new("column", ["a", "b", "a", "b"]).unwrap(),
+        CategoryValues::new("row", ["one"; 4]).unwrap(),
+        NumericValues::new("fill", [0.0, 5.0, 10.0, 5.0]),
+    )
+    .with_private_gradient(vec![
+        GradientStop::new(0.0, (0, 0, 0)),
+        GradientStop::new(0.5, (255, 0, 0)),
+        GradientStop::new(1.0, (255, 255, 255)),
+    ])
+    .color_limits(0.0, 10.0)
+    .facet(crate::FacetSpec::column(
+        CategoryValues::new("panel", ["left", "left", "right", "right"]).unwrap(),
+    ))
+    .size(1200, 800)
+    .erase();
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let panels = &inputs.heatmap.as_ref().unwrap().panels;
+    assert_eq!(panels.len(), 2);
+    for (_, marks) in panels {
+        assert_eq!(marks.color.domain.minimum.to_bits(), 0.0_f64.to_bits());
+        assert_eq!(marks.color.domain.maximum.to_bits(), 10.0_f64.to_bits());
+        assert_eq!(marks.color.semantic_stops[1].color, (255, 0, 0));
+        assert!(marks
+            .fills
+            .iter()
+            .flatten()
+            .any(|fill| *fill == (255, 0, 0)));
+    }
+    source.preflight().unwrap();
 }
 
 #[test]

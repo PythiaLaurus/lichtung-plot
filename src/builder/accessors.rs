@@ -471,6 +471,10 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.heatmap_scale
     }
 
+    pub(crate) fn heatmap_gradient_spec(&self) -> Option<&[crate::render::backend::GradientStop]> {
+        self.heatmap_gradient.as_deref()
+    }
+
     /// Requested heatmap coordinate layout.
     #[must_use]
     pub(crate) fn heatmap_layout_spec(&self) -> HeatmapLayout {

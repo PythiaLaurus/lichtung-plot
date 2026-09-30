@@ -5,7 +5,10 @@ mod contrast;
 mod resolved;
 mod scale;
 
-pub(crate) use scale::{AccentColors, CategoryColors, ContinuousColors, PaletteSource};
+pub(crate) use scale::{
+    AccentColors, CategoryColors, ContinuousColors, PaletteSource, HEATMAP_DIVERGING_STOPS,
+    HEATMAP_SEQUENTIAL_STOPS,
+};
 
 #[cfg(test)]
 pub(crate) use resolved::FillOutlinePaint;

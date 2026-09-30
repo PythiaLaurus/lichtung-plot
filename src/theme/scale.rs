@@ -13,6 +13,16 @@ use crate::Error;
 
 type Rgb = (u8, u8, u8);
 
+pub(crate) const HEATMAP_SEQUENTIAL_STOPS: [GradientStop; 2] = [
+    GradientStop::new(0.0, (247, 251, 255)),
+    GradientStop::new(1.0, (8, 48, 107)),
+];
+pub(crate) const HEATMAP_DIVERGING_STOPS: [GradientStop; 3] = [
+    GradientStop::new(0.0, (49, 130, 189)),
+    GradientStop::new(0.5, (247, 247, 247)),
+    GradientStop::new(1.0, (222, 45, 38)),
+];
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum PaletteSource<'a> {
     Fixed(&'a [Rgb]),
@@ -201,6 +211,10 @@ impl ContinuousColors {
 
     pub(crate) fn stops(&self) -> &[GradientStop] {
         &self.stops
+    }
+
+    pub(crate) fn into_stops(self) -> Vec<GradientStop> {
+        self.stops
     }
 
     pub(crate) fn domain(&self) -> (f64, f64) {
