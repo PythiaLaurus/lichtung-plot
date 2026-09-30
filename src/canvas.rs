@@ -300,8 +300,12 @@ mod d1_tests {
                 |stage| {
                     let (interiors, _) = canvas.prepare_interiors(stage)?;
                     canvas.validate_shared_guide_kinds(&interiors)?;
-                    canvas
-                        .prepare_continuous_shared_guide(&interiors, &stage.generation_resources())
+                    let themes = ResolvedCanvasThemes::new(canvas.theme, &canvas.panels);
+                    canvas.prepare_continuous_shared_guide(
+                        &themes,
+                        &interiors,
+                        &stage.generation_resources(),
+                    )
                 },
                 |_, assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
                 |descriptor, _, (), _| Ok(descriptor.clone()),
@@ -460,7 +464,12 @@ mod d1_tests {
             |stage| {
                 let (interiors, _) = canvas.prepare_interiors(stage)?;
                 canvas.validate_shared_guide_kinds(&interiors)?;
-                canvas.prepare_continuous_shared_guide(&interiors, &stage.generation_resources())
+                let themes = ResolvedCanvasThemes::new(canvas.theme, &canvas.panels);
+                canvas.prepare_continuous_shared_guide(
+                    &themes,
+                    &interiors,
+                    &stage.generation_resources(),
+                )
             },
             |_, assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
             |_, _, (), _| Ok(()),
@@ -505,6 +514,7 @@ mod d1_tests {
             assert_eq!(
                 marks
                     .guide_semantics(
+                        root.prepared().themes.plot(index).unwrap(),
                         canvas.panels[index]
                             .as_ref()
                             .unwrap()
@@ -2596,6 +2606,7 @@ impl Canvas {
 
     fn prepare_continuous_shared_guide(
         &self,
+        themes: &ResolvedCanvasThemes,
         interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
         resources: &crate::font::canonical::OperationGenerationResources,
     ) -> Result<Option<crate::decorations::legend::descriptor::ContinuousDescriptor>, Error> {
@@ -2620,9 +2631,12 @@ impl Canvas {
                     Error::Render("shared continuous guide has no prepared interior".into())
                 })?;
             let data = plot.data().with_axis_resources(resources);
+            let theme = themes.plot(index).ok_or_else(|| {
+                Error::Render("shared continuous guide has no owning Plot theme".into())
+            })?;
             let contributor =
                 crate::decorations::legend::descriptor::ContinuousContributor::for_plot(
-                    plot, inputs, data,
+                    plot, inputs, theme, data,
                 )?
                 .ok_or_else(|| {
                     Error::Render("shared continuous guide has no color identity".into())
@@ -3252,6 +3266,7 @@ impl Canvas {
                     &prepared_stage.generation_resources(),
                 )?;
                 let continuous_shared_guide = self.prepare_continuous_shared_guide(
+                    &themes,
                     &interiors,
                     &prepared_stage.generation_resources(),
                 )?;

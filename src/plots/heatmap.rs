@@ -12,7 +12,7 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use crate::layout::{AxisSpec, AxisTick, Layout, PanelBox, PhysicalTextAlignment, TextBlock};
 use crate::render::backend::{
-    with_clip, Backend, FillStyle, GradientStop, LineStyle, PlacedText, Point2D, TextAnchor,
+    with_clip, Backend, FillStyle, GradientStop, LineStyle, PlacedText, Point2D, Rgba, TextAnchor,
 };
 use crate::spec::{
     CategoryOrder, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapScale, LegendPolicy,
@@ -22,8 +22,6 @@ use crate::theme::ResolvedTheme;
 use crate::Plot;
 
 const MAX_CELLS: usize = 1_000_000;
-const MISSING_FILL: (u8, u8, u8) = (224, 224, 224);
-const MISSING_STROKE: (u8, u8, u8) = (120, 120, 120);
 const SEQUENTIAL_STOPS: [GradientStop; 2] = [
     GradientStop::new(0.0, (247, 251, 255)),
     GradientStop::new(1.0, (8, 48, 107)),
@@ -33,10 +31,6 @@ const DIVERGING_STOPS: [GradientStop; 3] = [
     GradientStop::new(0.5, (247, 247, 247)),
     GradientStop::new(1.0, (222, 45, 38)),
 ];
-
-pub(crate) fn missing_fill() -> crate::render::backend::Rgba {
-    MISSING_FILL.into()
-}
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct HeatmapData {
@@ -60,6 +54,7 @@ pub(crate) struct HeatmapData {
 impl HeatmapData {
     pub(crate) fn guide_semantics(
         &self,
+        theme: &ResolvedTheme,
         data: crate::data::PlotData<'_>,
     ) -> Result<crate::decorations::legend::descriptor::ContinuousSemantics, Error> {
         let domain = self.color.domain;
@@ -77,8 +72,8 @@ impl HeatmapData {
                     Error::Render("heatmap missing key has no prepared label".into())
                 })?;
                 Ok(crate::decorations::legend::descriptor::MissingKey {
-                    fill: MISSING_FILL,
-                    outline: MISSING_STROKE,
+                    fill: theme.marks.heatmap_missing_fill,
+                    outline: theme.marks.heatmap_missing_key_outline.paint,
                     label: data.copy_source_string(label)?,
                 })
             })
@@ -288,6 +283,7 @@ pub(crate) struct HeatmapIntrinsicCache {
     canvas_root: crate::render::backend::Rgba,
     canvas_override: Option<crate::render::backend::Rgba>,
     backdrop: crate::render::backend::Rgba,
+    missing_fill: crate::render::backend::Rgba,
     cell_outline: crate::theme::FillOutlineAppearance,
     highlight_outline: crate::theme::FillOutlineAppearance,
     missing_row_outline: crate::theme::FillOutlineAppearance,
@@ -303,6 +299,7 @@ impl HeatmapIntrinsicCache {
             && self.canvas_root == theme.surfaces.canvas_root
             && self.canvas_override == theme.canvas_surface_override
             && self.backdrop == theme.annotations.planning_backdrop
+            && self.missing_fill == theme.marks.heatmap_missing_fill
             && self.cell_outline == theme.marks.heatmap_cell_outline
             && self.highlight_outline == theme.marks.heatmap_highlight_outline
             && self.missing_row_outline == theme.marks.heatmap_missing_row_outline
@@ -334,6 +331,7 @@ impl HeatmapIntrinsicCache {
             canvas_root: theme.surfaces.canvas_root,
             canvas_override: theme.canvas_surface_override,
             backdrop: theme.annotations.planning_backdrop,
+            missing_fill: theme.marks.heatmap_missing_fill,
             cell_outline: theme.marks.heatmap_cell_outline.clone(),
             highlight_outline: theme.marks.heatmap_highlight_outline.clone(),
             missing_row_outline: theme.marks.heatmap_missing_row_outline.clone(),
@@ -519,7 +517,7 @@ pub(crate) fn prepare_intrinsics(
             .1
             .max((plan.height() + 5.0) * prepared.y_levels.len() as f64);
     }
-    let appearance = theme.contrasting_text(missing_fill())?;
+    let appearance = theme.contrasting_text(theme.marks.heatmap_missing_fill)?;
     for source in prepared.null_row_annotations.iter().flatten() {
         let hard = crate::layout::fit::intrinsic_widths(
             theme,
@@ -1590,7 +1588,7 @@ fn select_cells(
                 fill: theme
                     .marks
                     .heatmap_missing_row_outline
-                    .backend_style(MISSING_FILL.into()),
+                    .backend_style(theme.marks.heatmap_missing_fill),
                 cross: None,
                 text: Some(PlacedText {
                     plan: annotation.clone(),
@@ -1617,7 +1615,8 @@ fn select_cells(
             let (right, top) = layout.projection.project(x1, y1);
             let value = prepared.cells[y_index * x_count + x_index];
             let highlighted = prepared.highlighted[y_index * x_count + x_index];
-            let color = prepared.fills[y_index * x_count + x_index].unwrap_or(MISSING_FILL);
+            let color = prepared.fills[y_index * x_count + x_index]
+                .map_or(theme.marks.heatmap_missing_fill, Rgba::from);
             let mut cell = CellPayload {
                 corners: [
                     Point2D::new(left, bottom),
@@ -1630,7 +1629,7 @@ fn select_cells(
                 } else {
                     &theme.marks.heatmap_cell_outline
                 }
-                .backend_style(color.into()),
+                .backend_style(color),
                 text: None,
                 cross: None,
             };
@@ -1770,7 +1769,7 @@ fn plan_annotations(
                     fit::measured(fit::text(
                         theme,
                         annotation,
-                        theme.contrasting_text(missing_fill())?,
+                        theme.contrasting_text(theme.marks.heatmap_missing_fill)?,
                         available_width,
                         PhysicalTextAlignment::Center,
                         "heatmap fully-null row annotation",
@@ -1878,7 +1877,7 @@ fn select_colorbar(
             fill: theme
                 .marks
                 .heatmap_missing_key_outline
-                .backend_style(MISSING_FILL.into()),
+                .backend_style(theme.marks.heatmap_missing_fill),
             cross: None,
             text: Some(PlacedText::from_deferred_first_line(
                 values

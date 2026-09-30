@@ -3,7 +3,7 @@
 
 use crate::data::PlotData;
 use crate::decorations::legend::LegendEntry;
-use crate::render::backend::GradientStop;
+use crate::render::backend::{GradientStop, Rgba};
 use crate::{Error, Plot};
 use std::sync::Arc;
 
@@ -19,8 +19,8 @@ pub(crate) enum PreparedGuideDescriptor {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct MissingKey {
-    pub fill: (u8, u8, u8),
-    pub outline: (u8, u8, u8),
+    pub fill: Rgba,
+    pub outline: Rgba,
     pub label: String,
 }
 
@@ -62,6 +62,7 @@ impl ContinuousContributor {
     pub(crate) fn for_plot(
         plot: &Plot,
         input: &crate::layout::interior::PreparedInteriorInputs,
+        theme: &crate::theme::ResolvedTheme,
         data: PlotData<'_>,
     ) -> Result<Option<Self>, Error> {
         let Some(field) = plot.color_dimension_key() else {
@@ -78,7 +79,7 @@ impl ContinuousContributor {
                     .ok_or_else(|| {
                         Error::Render("shared Heatmap guide has no prepared input".into())
                     })?;
-                let semantics = marks.guide_semantics(data)?;
+                let semantics = marks.guide_semantics(theme, data)?;
                 (
                     data.copy_source_string(&marks.color_label)?,
                     semantics,
@@ -416,14 +417,25 @@ mod tests {
         assert_eq!(constant.labels, ["1"]);
         let mut missing = contributor((0.0, 1.0));
         missing.missing = Some(MissingKey {
-            fill: (200, 200, 200),
-            outline: (50, 50, 50),
+            fill: (200, 200, 200).into(),
+            outline: (50, 50, 50).into(),
             label: "Missing".into(),
         });
         assert!(matches!(
-            ContinuousContributor::merge([contributor((0.0, 1.0)), missing], data),
+            ContinuousContributor::merge([contributor((0.0, 1.0)), missing.clone()], data),
             Err(Error::Data(message)) if message.contains("missing block")
         ));
+        let mut different_alpha = missing.clone();
+        different_alpha.missing.as_mut().unwrap().fill = Rgba::new(200, 200, 200, 127);
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        assert!(matches!(
+            ContinuousContributor::merge([missing, different_alpha], data),
+            Err(Error::Data(message)) if message.contains("missing block")
+        ));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
         let mut malformed = contributor((-1.0, 1.0));
         malformed.stops[0].offset = 0.1;
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));

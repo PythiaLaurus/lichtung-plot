@@ -1489,7 +1489,7 @@ fn push_deferred_plot_requirements(
                     &mut body_index,
                     annotation.text(),
                     &[],
-                    theme.contrasting_text(crate::plots::heatmap::missing_fill())?,
+                    theme.contrasting_text(theme.marks.heatmap_missing_fill)?,
                     prepared_stage.as_deref_mut(),
                 )?;
             }

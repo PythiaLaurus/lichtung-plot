@@ -39,6 +39,7 @@ fn custom_heatmap_outlines_and_cross_leave_selected_cells_and_missing_key_in_pla
     theme.marks.heatmap_cell_outline.paint = crate::render::backend::Rgba::new(1, 3, 5, 110);
     theme.marks.heatmap_cell_outline.width = 0.7;
     theme.marks.heatmap_missing_cross.paint = crate::render::backend::Rgba::new(7, 9, 11, 220);
+    theme.marks.heatmap_missing_fill = crate::render::backend::Rgba::new(19, 23, 29, 144);
     theme.marks.heatmap_missing_key_outline.paint =
         crate::render::backend::Rgba::new(13, 15, 17, 90);
     let selected = chart
@@ -65,6 +66,13 @@ fn custom_heatmap_outlines_and_cross_leave_selected_cells_and_missing_key_in_pla
                 .clone(),
             payload.cross_style.clone(),
             payload
+                .cells
+                .iter()
+                .find(|cell| cell.cross.is_some())
+                .unwrap()
+                .fill
+                .color,
+            payload
                 .colorbar
                 .as_ref()
                 .unwrap()
@@ -75,15 +83,81 @@ fn custom_heatmap_outlines_and_cross_leave_selected_cells_and_missing_key_in_pla
                 .clone(),
         )
     };
-    let (old_cells, old_cell, old_cross, old_key) = extract(&original);
-    let (new_cells, new_cell, new_cross, new_key) = extract(&selected);
+    let (old_cells, old_cell, old_cross, old_missing, old_key) = extract(&original);
+    let (new_cells, new_cell, new_cross, new_missing, new_key) = extract(&selected);
     assert_eq!(old_cells, new_cells);
     assert_eq!(old_cell.color, new_cell.color);
     assert_eq!(new_cell.stroke.alpha(), 110);
     assert_eq!(new_cell.stroke_width.to_bits(), 0.7_f32.to_bits());
     assert_ne!(old_cross.color, new_cross.color);
-    assert_eq!(new_key.color, old_key.color);
+    assert_ne!(old_missing, new_missing);
+    assert_eq!(new_missing, theme.marks.heatmap_missing_fill);
+    assert_eq!(new_key.color, new_missing);
+    assert_ne!(new_key.color, old_key.color);
     assert_eq!(new_key.stroke.alpha(), 90);
+    let prepared = &chart.prepared_heatmap.as_ref().unwrap().panels[0].1;
+    let missing = prepared
+        .guide_semantics(&theme, chart.data().with_axis_resources(&resources))
+        .unwrap()
+        .missing
+        .unwrap();
+    assert_eq!(missing.fill, new_missing);
+    assert_eq!(missing.outline, new_key.stroke);
+}
+
+#[test]
+fn missing_row_and_key_consume_one_plot_owned_fill_independent_of_the_gradient() {
+    let source = Plot::heatmap(
+        CategoryValues::new("column", ["a", "b", "a", "b"]).unwrap(),
+        CategoryValues::new("row", ["known", "known", "absent", "absent"]).unwrap(),
+        NumericValues::nullable("fill", [Some(0.0), None, None, None]),
+    )
+    .heatmap_null_row_annotation(
+        crate::HeatmapNullRowAnnotation::new("absent", "Unavailable").unwrap(),
+    )
+    .size(1200, 800)
+    .erase();
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let mut theme = crate::Theme::Publication.resolve();
+    theme.marks.heatmap_missing_fill = crate::render::backend::Rgba::new(30, 40, 50, 175);
+    let selected = chart
+        .measure_selected_interior(PlotRenderContext::new(
+            chart.data(),
+            PanelBox::new(50.0, 750.0, 40.0, 540.0),
+            &theme,
+        ))
+        .unwrap();
+    let crate::layout::interior::MarkPayload::Heatmap(payload) =
+        &selected.marks.as_ref().unwrap().payload
+    else {
+        panic!("Heatmap missing mark payload")
+    };
+    let row = payload
+        .cells
+        .iter()
+        .find(|cell| cell.text.is_some())
+        .unwrap();
+    let missing = payload
+        .cells
+        .iter()
+        .find(|cell| cell.cross.is_some())
+        .unwrap();
+    let key = payload.colorbar.as_ref().unwrap().missing.as_ref().unwrap();
+    assert_eq!(row.fill.color, theme.marks.heatmap_missing_fill);
+    assert_eq!(missing.fill.color, row.fill.color);
+    assert_eq!(key.fill.color, row.fill.color);
+    assert_ne!(
+        payload
+            .cells
+            .iter()
+            .find(|cell| cell.text.is_none() && cell.cross.is_none())
+            .unwrap()
+            .fill
+            .color,
+        row.fill.color
+    );
 }
 
 #[test]
@@ -723,7 +797,8 @@ fn prepared_cell_guide_and_value_label_share_final_diverging_colors() {
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
     let prepared = &inputs.heatmap.as_ref().unwrap().panels[0].1;
     let data = source.data().with_axis_resources(&resources);
-    let guide = prepared.guide_semantics(data).unwrap();
+    let theme = crate::Theme::Publication.resolve();
+    let guide = prepared.guide_semantics(&theme, data).unwrap();
     let stops = prepared
         .color
         .guide_stops(&prepared.guide_samples(data).unwrap(), data)
@@ -738,7 +813,10 @@ fn prepared_cell_guide_and_value_label_share_final_diverging_colors() {
     );
     assert_eq!(stops, guide.stops);
     assert_eq!(prepared.fills[3], None);
-    assert_eq!(guide.missing.as_ref().unwrap().fill, MISSING_FILL);
+    assert_eq!(
+        guide.missing.as_ref().unwrap().fill,
+        theme.marks.heatmap_missing_fill
+    );
     assert_eq!(
         prepared
             .annotation_labels()

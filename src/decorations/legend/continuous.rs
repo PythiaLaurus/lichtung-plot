@@ -289,11 +289,7 @@ impl MeasuredContinuousGuide {
             let row_height = plan.height().max(thickness);
             (
                 PanelBox::new(metrics.pad, metrics.pad + thickness, y0, y0 + thickness),
-                FillStyle::new(
-                    key.fill.into(),
-                    key.outline.into(),
-                    metrics.frame_stroke_width,
-                ),
+                FillStyle::new(key.fill, key.outline, metrics.frame_stroke_width),
                 PlacedText::middle(
                     plan,
                     Point2D::new(metrics.pad + thickness + key_gap, y0 + row_height / 2.0),
@@ -432,8 +428,8 @@ mod tests {
             ],
             center: Some(0.0),
             missing: Some(MissingKey {
-                fill: (224, 224, 224),
-                outline: (120, 120, 120),
+                fill: (224, 224, 224).into(),
+                outline: (120, 120, 120).into(),
                 label: "Missing".into(),
             }),
             domain: (-2.0, 3.0),

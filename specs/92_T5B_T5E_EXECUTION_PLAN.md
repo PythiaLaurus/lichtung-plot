@@ -2075,7 +2075,7 @@ ownership, statistical estimates, public extension points, or layout strategy.
 | T5d3b2 | COMPLETE | T5d3b1 | `refactor(scales): share resolved continuous stops across compositions` |
 | T5d3b3 | COMPLETE | T5d3b2 | `feat(scales): align continuous guide raster with OKLab marks` |
 | T5d4 | IN PROGRESS | T5d3 | Umbrella for final missing/contrast/target owners |
-| T5d4a | PENDING | T5d3 | `refactor(scales): resolve missing Heatmap paint from owner theme` |
+| T5d4a | COMPLETE | T5d3 | `refactor(scales): resolve missing Heatmap paint from owner theme` |
 | T5d4b | PENDING | T5d4a | `test(theme): verify final mapped contrast and guide cache inputs` |
 | T5d4c | PENDING | T5d4b | `test(scales): verify final typed annotation targets` |
 | T5d5 | PENDING | T5d4 | `test(scales): close mapping and guide consistency` |
@@ -2390,6 +2390,23 @@ identity and exact override precedence. T5d4c verifies typed final targets
 across the prepared scale/facet/Canvas owners, deleting a duplicate route if
 the focused evidence finds one. All three reuse T5b's descriptor and T5c's
 mark/annotation contracts; there is no new scale or annotation fallback.
+
+T5d4a closure: one private `MarkAppearance::heatmap_missing_fill` supplies
+complete RGBA to ordinary missing cells, fully-null merged rows and local
+missing-key swatches; missing-row text census/intrinsics use that same fill
+for T5c composited contrast, and the Heatmap intrinsic cache includes it.
+The shared continuous descriptor receives the actual resolved owning Plot
+theme for each contributor before fonts. Its missing-key equality now
+compares complete RGBA fill and owning outline paints rather than ignoring
+alpha; distinct alpha with equal RGB rejects pre-font. Custom translucent
+missing paint changes the selected cell, row and guide together without
+recoloring finite data stops. The former hardcoded missing fill/stroke and
+`heatmap::missing_fill` helper are removed. Focused Heatmap/descriptor/
+Canvas units, 40 Heatmap integrations, shared Canvas composition, regular
+and ignored release specialized-text contracts (three interleaved samples,
+including the rejected Elide workload), and strict Clippy pass with unchanged
+built-in SVG/output fingerprints. T5d4b now pins the variable-fill contrast
+and cache owner under unequal font and transparent surface inputs.
 
 Feed final categorical identities, complete paints/glyphs, continuous domains,
 gradient/title/missing descriptors, and generated guide text into T5b's existing

@@ -961,6 +961,8 @@ pub(crate) struct MarkAppearance {
     pub(crate) raw_overlay_radius: u32,
     pub(crate) heatmap_cell_outline: FillOutlineAppearance,
     pub(crate) heatmap_highlight_outline: FillOutlineAppearance,
+    /// Non-data missing paint shared by Heatmap cells, merged rows and keys.
+    pub(crate) heatmap_missing_fill: Rgba,
     pub(crate) heatmap_missing_row_outline: FillOutlineAppearance,
     pub(crate) heatmap_missing_key_outline: FillOutlineAppearance,
     pub(crate) heatmap_missing_cross: StrokeAppearance,
@@ -1442,6 +1444,7 @@ fn resolved_theme(
                 paint: foreground_paint,
                 width: 2.5,
             },
+            heatmap_missing_fill: Rgba::rgb(224, 224, 224),
             heatmap_missing_row_outline: FillOutlineAppearance {
                 paint: Rgba::rgb(255, 255, 255),
                 width: 0.5,
@@ -1962,6 +1965,7 @@ mod tests {
                     paint: foreground,
                     width: 2.5,
                 },
+                heatmap_missing_fill: Rgba::rgb(224, 224, 224),
                 heatmap_missing_row_outline: FillOutlineAppearance {
                     paint: Rgba::rgb(255, 255, 255),
                     width: 0.5,
