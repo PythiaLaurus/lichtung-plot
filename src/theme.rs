@@ -6,8 +6,8 @@ mod resolved;
 mod scale;
 
 pub(crate) use scale::{
-    AccentColors, CategoryColors, ContinuousColors, PaletteSource, BEESWARM_SEQUENTIAL_STOPS,
-    HEATMAP_DIVERGING_STOPS, HEATMAP_SEQUENTIAL_STOPS,
+    AccentColors, CategoryColors, ContinuousColors, PaletteCache, PaletteSource,
+    BEESWARM_SEQUENTIAL_STOPS, HEATMAP_DIVERGING_STOPS, HEATMAP_SEQUENTIAL_STOPS,
 };
 
 #[cfg(test)]

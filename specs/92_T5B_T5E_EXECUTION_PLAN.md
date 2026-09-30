@@ -1,6 +1,6 @@
 # T5b-T5e Execution Plan
 
-**Status: IN PROGRESS — T5b–T5c complete; T5d in progress; T5e pending.**
+**Status: IN PROGRESS — T5b–T5d complete; T5e pending.**
 
 This is the execution partition of the four T5b–T5e umbrellas in
 `91_IMPLEMENTATION_PLAN.md`, based on the verified T5a closure at `1e8e3ee`.
@@ -2078,11 +2078,11 @@ ownership, statistical estimates, public extension points, or layout strategy.
 | T5d4a | COMPLETE | T5d3 | `refactor(scales): resolve missing Heatmap paint from owner theme` |
 | T5d4b | COMPLETE | T5d4a | `test(theme): verify final mapped contrast and guide cache inputs` |
 | T5d4c | COMPLETE | T5d4b | `test(scales): verify final typed annotation targets` |
-| T5d5 | IN PROGRESS | T5d4 | Umbrella for private custom gradients and scale closure |
+| T5d5 | COMPLETE | T5d4 | Umbrella for private custom gradients and scale closure |
 | T5d5a | COMPLETE | T5d4 | Umbrella for active private gradient replacements |
 | T5d5a1 | COMPLETE | T5d4 | `feat(scales): resolve private Heatmap gradient inputs` |
 | T5d5a2 | COMPLETE | T5d5a1 | `feat(scales): coordinate Beeswarm and Canvas gradient owners` |
-| T5d5b | PENDING | T5d5a | `test(scales): close mapping and guide consistency` |
+| T5d5b | COMPLETE | T5d5a | `test(scales): close mapping and guide consistency` |
 
 ### T5d0 — Domain And Consumer Census
 
@@ -2498,6 +2498,30 @@ existing pre-font descriptor. Twelve Beeswarm units, forty-two Heatmap units,
 thirty-one Canvas shared/admission units, forty Heatmap integrations,
 unchanged Beeswarm parent SVG fingerprints, shared composition and strict
 Clippy pass. T5d5a closes; T5d5b owns the final matrix and broad gate.
+
+T5d5b closure: `docs/t5d5-scale-closure.md` inventories every categorical,
+unkeyed accent and continuous family, typed mark/guide owner, exact override,
+RGBA role, early validation and fatal/fit precedence. The initial broad
+`just verify` gate identified four many-entry legend failures from repeated
+OKLab candidate evaluation exhausting the 512 MiB operation ledger, plus
+one Beeswarm endpoint-only assertion. The palette now admits and evaluates
+candidate RGB/OKLab pairs once per ordinal; an operation-owned exact-seed
+cache admits calls and prefix copies without repeating that work across
+guide/mark probes or leaking between roots. The 18-hue historical reflow,
+normal/rejected/cache-off legend fixtures, all three ignored release legend
+groups, independent root/changed-seed resource tests, and strict Clippy pass
+with unchanged SVG output. The Beeswarm test now checks exact shared-domain
+endpoint colors plus the present interior observed-value stops/marks.
+After that repair, the broad gate passed 1,204 library tests (17 ignored),
+27 annotation and 44 categorical integrations. Its composition target
+found one obsolete three-stop fingerprint for the intentionally sampled
+diverging shared guide; the focused corrected 68-test target passes. The
+remaining distributions, estimates, Heatmap, interactions, layout, lines,
+Marginal/Matrix, output, rendering, statistics and visual-regression targets
+all pass separately, as do `just fmt-check`, `just lint`, `just docs` and
+`just package`. Per the no-repeat rule for a localized fingerprint change,
+the entire full-suite command was not rerun a third time. T5d is complete;
+T5e0 rebases specialized/automatic-root layout owners next.
 
 All marks, legends, gradients, colorbars, facets, and Canvas use one final mapping
 per semantic owner. Remove old mixed-palette, hardcoded-gradient, and duplicate

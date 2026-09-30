@@ -461,6 +461,12 @@ struct CandidateChoice {
     lab: Oklab,
 }
 
+#[derive(Clone, Copy)]
+struct PaletteCandidate {
+    color: (u8, u8, u8),
+    lab: Option<Oklab>,
+}
+
 fn candidate_better(distance: f64, index: usize, best: Option<&CandidateChoice>) -> bool {
     best.is_none_or(|choice| {
         distance.total_cmp(&choice.distance).is_gt()
@@ -494,12 +500,21 @@ fn select_candidate(
     colors: &[(u8, u8, u8)],
     labs: &[Oklab],
     candidates: usize,
+    generated: &mut Vec<PaletteCandidate>,
     resources: &OperationGenerationResources,
 ) -> Result<((u8, u8, u8), Oklab), Error> {
-    let mut best: Option<CandidateChoice> = None;
-    for ordinal in 0..candidates {
+    for ordinal in generated.len()..candidates {
         resources.claim_visits(1).map_err(work_error)?;
         let (rgb, _) = candidate_lab(character, ordinal).reduced_rgb(resources)?;
+        generated.push(PaletteCandidate {
+            color: rgb,
+            lab: None,
+        });
+    }
+    let mut best: Option<CandidateChoice> = None;
+    for (ordinal, candidate) in generated.iter_mut().enumerate().take(candidates) {
+        resources.claim_visits(1).map_err(work_error)?;
+        let rgb = candidate.color;
         let mut duplicate = false;
         for prior in colors {
             resources.claim_visits(1).map_err(work_error)?;
@@ -511,7 +526,13 @@ fn select_candidate(
         if duplicate {
             continue;
         }
-        let actual = Oklab::from_rgb(rgb, resources)?;
+        let actual = if let Some(lab) = candidate.lab {
+            lab
+        } else {
+            let lab = Oklab::from_rgb(rgb, resources)?;
+            candidate.lab = Some(lab);
+            lab
+        };
         let mut minimum = f64::INFINITY;
         for prior in labs {
             resources.claim_visits(1).map_err(work_error)?;
@@ -533,6 +554,27 @@ fn select_candidate(
         Error::Data("extendable color palette exhausted its finite distinct candidate set".into())
     })?;
     Ok((selected.color, selected.lab))
+}
+
+fn admit_candidates(
+    count: usize,
+    resources: &OperationGenerationResources,
+) -> Result<Vec<PaletteCandidate>, Error> {
+    resources.claim_slots(count as u128).map_err(work_error)?;
+    let bytes = count
+        .checked_mul(std::mem::size_of::<PaletteCandidate>())
+        .and_then(|bytes| u64::try_from(bytes).ok())
+        .ok_or_else(|| Error::Render("palette candidate cache storage overflowed".into()))?;
+    resources.claim_bytes(bytes).map_err(|error| {
+        Error::Render(format!(
+            "palette candidate cache storage admission: {error}"
+        ))
+    })?;
+    let mut values = Vec::new();
+    values
+        .try_reserve_exact(count)
+        .map_err(|_| Error::Render("cannot reserve palette candidates".into()))?;
+    Ok(values)
 }
 
 pub(super) fn extend_palette(
@@ -606,12 +648,24 @@ pub(super) fn extend_palette(
         chroma: (chroma / f64::from(denominator)).max(0.08),
     };
     let cap = HUE_DIRECTIONS * LIGHTNESS_BANDS.len() * CHROMA_BANDS.len();
+    let max_ordinal = requested - seeds.len() - 1;
+    let max_candidates = 128_usize
+        .saturating_add(max_ordinal.saturating_mul(32))
+        .min(cap);
+    let mut generated = admit_candidates(max_candidates, resources)?;
     while result.len() < requested {
         let new_ordinal = result.len() - seeds.len();
         let candidates = 128_usize
             .saturating_add(new_ordinal.saturating_mul(32))
             .min(cap);
-        let (rgb, actual) = select_candidate(character, &result, &lab, candidates, resources)?;
+        let (rgb, actual) = select_candidate(
+            character,
+            &result,
+            &lab,
+            candidates,
+            &mut generated,
+            resources,
+        )?;
         result.push(rgb);
         lab.push(actual);
     }

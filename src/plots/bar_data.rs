@@ -310,7 +310,7 @@ impl PreparedBars {
         };
         let colors = CategoryColors::resolve(
             if chart.colors_by_sign() { &[] } else { keys },
-            PaletteSource::Extendable(&theme.colors),
+            PaletteSource::Extendable(theme),
             if chart.colors_by_sign() {
                 None
             } else {

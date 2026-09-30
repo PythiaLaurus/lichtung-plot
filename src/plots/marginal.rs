@@ -79,7 +79,7 @@ impl PreparedMarginal {
         let keys = chart.global_hue_levels().unwrap_or(&self.hues);
         let colors = CategoryColors::resolve(
             keys,
-            PaletteSource::Extendable(&theme.colors),
+            PaletteSource::Extendable(theme),
             chart.categorical_colors_spec(),
             resources,
         )?;

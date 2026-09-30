@@ -30,7 +30,72 @@ pub(crate) const BEESWARM_SEQUENTIAL_STOPS: [GradientStop; 2] = [
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum PaletteSource<'a> {
     Fixed(&'a [Rgb]),
-    Extendable(&'a [Rgb]),
+    Extendable(&'a super::resolved::ResolvedTheme),
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct PaletteCache {
+    entries: Vec<CachedPalette>,
+}
+
+#[derive(Debug)]
+struct CachedPalette {
+    seeds: Vec<Rgb>,
+    colors: Vec<Rgb>,
+}
+
+impl super::resolved::ResolvedTheme {
+    fn extend_categorical_palette(
+        &self,
+        requested: usize,
+        resources: &OperationGenerationResources,
+    ) -> Result<Vec<Rgb>, Error> {
+        resources.claim_calls(1).map_err(work_error)?;
+        if requested <= self.colors.len() {
+            return super::color::extend_palette(&self.colors, requested, resources);
+        }
+        let mut cache = resources
+            .palette_cache
+            .lock()
+            .map_err(|_| Error::Render("resolved palette cache synchronization failed".into()))?;
+        for entry in &mut cache.entries {
+            resources.claim_visits(1).map_err(work_error)?;
+            if entry.seeds.len() != self.colors.len() {
+                continue;
+            }
+            let mut matching = true;
+            for (cached, current) in entry.seeds.iter().zip(&self.colors) {
+                resources.claim_visits(1).map_err(work_error)?;
+                if cached != current {
+                    matching = false;
+                    break;
+                }
+            }
+            if !matching {
+                continue;
+            }
+            if requested <= entry.colors.len() {
+                return super::color::extend_palette(&entry.colors, requested, resources);
+            }
+            let result = super::color::extend_palette(&self.colors, requested, resources)?;
+            let mut retained = Vec::new();
+            reserve(resources, &mut retained, result.len())?;
+            retained.extend_from_slice(&result);
+            entry.colors = retained;
+            return Ok(result);
+        }
+        let result = super::color::extend_palette(&self.colors, requested, resources)?;
+        let mut seeds = Vec::new();
+        reserve(resources, &mut seeds, self.colors.len())?;
+        seeds.extend_from_slice(&self.colors);
+        let mut colors = Vec::new();
+        reserve(resources, &mut colors, result.len())?;
+        colors.extend_from_slice(&result);
+        resources.claim_cache_entries(1).map_err(work_error)?;
+        reserve(resources, &mut cache.entries, 1)?;
+        cache.entries.push(CachedPalette { seeds, colors });
+        Ok(result)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -78,8 +143,8 @@ impl CategoryColors {
                     colors.extend_from_slice(&seeds[..identities.len()]);
                     colors
                 }
-                PaletteSource::Extendable(seeds) => {
-                    super::color::extend_palette(seeds, identities.len(), resources)?
+                PaletteSource::Extendable(theme) => {
+                    theme.extend_categorical_palette(identities.len(), resources)?
                 }
             }
         };
@@ -531,5 +596,37 @@ mod tests {
         assert_eq!(prefix.color(2).unwrap(), extended.color(2).unwrap());
         assert!(extended.color(4).is_err());
         assert_eq!(extended.color(0).unwrap(), seeds[0]);
+    }
+
+    #[test]
+    fn extended_palette_is_reused_only_within_one_operation_and_same_seed_prefix() {
+        let mut theme = crate::Theme::Publication.resolve();
+        let keys = (0..18)
+            .map(|index| format!("hue-{index}"))
+            .collect::<Vec<_>>();
+        let resolve = |theme: &crate::theme::ResolvedTheme,
+                       resources: &OperationGenerationResources| {
+            CategoryColors::resolve(&keys, PaletteSource::Extendable(theme), None, resources)
+        };
+        let resources = OperationGenerationResources::new();
+        let first = resolve(&theme, &resources).unwrap();
+        let bytes = resources.byte_usage().unwrap();
+        let visits = resources.usage().unwrap().1;
+        let cache_entries = resources.call_cache_usage().1;
+        assert_eq!(cache_entries, 1);
+        let again = resolve(&theme, &resources).unwrap();
+        assert_eq!(first.colors(), again.colors());
+        assert_eq!(resources.call_cache_usage().1, cache_entries);
+        assert!(resources.byte_usage().unwrap() - bytes < bytes);
+        assert!(resources.usage().unwrap().1 - visits < visits);
+
+        let other = OperationGenerationResources::new();
+        assert_eq!(resolve(&theme, &other).unwrap().colors(), first.colors());
+        assert_eq!(other.call_cache_usage().1, 1);
+        theme.colors[0] = (10, 20, 30);
+        let changed = resolve(&theme, &resources).unwrap();
+        assert_eq!(changed.colors()[0], (10, 20, 30));
+        assert_ne!(changed.colors(), first.colors());
+        assert_eq!(resources.call_cache_usage().1, 2);
     }
 }

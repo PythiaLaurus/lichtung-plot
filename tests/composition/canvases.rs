@@ -412,7 +412,10 @@ fn shared_diverging_heatmap_keeps_center_and_one_missing_key() {
         stops,
         [
             ("0.000000", "#3182BD"),
+            ("0.166667", "#78A9D2"),
             ("0.500000", "#F7F7F7"),
+            ("0.666667", "#F7BCB3"),
+            ("0.833333", "#EF7D70"),
             ("1.000000", "#DE2D26")
         ]
     );

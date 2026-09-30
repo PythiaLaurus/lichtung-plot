@@ -290,7 +290,23 @@ fn explicit_beeswarm_domains_are_shared_exactly_and_saturate_outside_values() {
         .render_kind(PlotKind::Beeswarm, &mut second_backend)
         .unwrap();
 
-    assert_eq!(first_backend.gradients, second_backend.gradients);
+    let first_stops = &first_backend.gradients[0];
+    let second_stops = &second_backend.gradients[0];
+    assert_eq!(first_stops.len(), 2);
+    assert_eq!(second_stops.len(), 4);
+    assert_eq!(first_stops[0], second_stops[0]);
+    assert_eq!(first_stops[1], second_stops[3]);
+    for (index, expected_offset) in [(1, 0.25_f64), (2, 0.75)] {
+        assert_eq!(
+            second_stops[index].offset.to_bits(),
+            expected_offset.to_bits()
+        );
+        let color = second_backend.scatter_draws[index - 1].1.color;
+        assert_eq!(
+            (color.red(), color.green(), color.blue()),
+            second_stops[index].color
+        );
+    }
     let point_colors = first_backend
         .scatter_draws
         .iter()

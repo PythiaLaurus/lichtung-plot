@@ -176,7 +176,7 @@ impl PreparedInteraction {
         };
         CategoryColors::resolve(
             &keys,
-            PaletteSource::Extendable(&theme.colors),
+            PaletteSource::Extendable(theme),
             chart.categorical_colors_spec(),
             data.source_resources()?,
         )

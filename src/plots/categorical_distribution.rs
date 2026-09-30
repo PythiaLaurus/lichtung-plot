@@ -39,14 +39,14 @@ impl PreparedDistribution {
             let parent = source.source_levels(&raw)?;
             return CategoryColors::resolve(
                 &parent,
-                PaletteSource::Extendable(&theme.colors),
+                PaletteSource::Extendable(theme),
                 chart.categorical_colors_spec(),
                 resources,
             );
         };
         CategoryColors::resolve(
             keys,
-            PaletteSource::Extendable(&theme.colors),
+            PaletteSource::Extendable(theme),
             chart.categorical_colors_spec(),
             resources,
         )

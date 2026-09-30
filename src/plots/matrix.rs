@@ -94,7 +94,7 @@ impl PreparedMatrixAxes {
         let resources = data.source_resources()?;
         let colors = CategoryColors::resolve(
             chart.global_hue_levels().unwrap_or(&self.hues),
-            PaletteSource::Extendable(&theme.colors),
+            PaletteSource::Extendable(theme),
             chart.categorical_colors_spec(),
             resources,
         )?;
