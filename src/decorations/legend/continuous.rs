@@ -44,16 +44,6 @@ fn projected_minimum(lengths: &[f64], gap: f64, traced: f64) -> f64 {
     required
 }
 
-fn fraction(value: f64, domain: (f64, f64)) -> f64 {
-    let span = domain.1 - domain.0;
-    if span.is_finite() {
-        ((value - domain.0) / span).clamp(0.0, 1.0)
-    } else {
-        let scale = domain.0.abs().max(domain.1.abs());
-        ((value / scale - domain.0 / scale) / (domain.1 / scale - domain.0 / scale)).clamp(0.0, 1.0)
-    }
-}
-
 impl MeasuredContinuousGuide {
     #[expect(
         clippy::too_many_lines,
@@ -231,17 +221,13 @@ impl MeasuredContinuousGuide {
             )));
         }
         let mut stops = Vec::new();
-        fit::reserve(theme, &mut stops, 3, "continuous guide gradient stops")?;
-        stops.push(GradientStop::new(0.0, descriptor.palette.low));
-        if let (Some(center), Some(color)) = (descriptor.center, descriptor.palette.center) {
-            if center > descriptor.domain.0 && center < descriptor.domain.1 {
-                stops.push(GradientStop::new(
-                    fraction(center, descriptor.domain),
-                    color,
-                ));
-            }
-        }
-        stops.push(GradientStop::new(1.0, descriptor.palette.high));
+        fit::reserve(
+            theme,
+            &mut stops,
+            descriptor.stops.len(),
+            "continuous guide gradient stops",
+        )?;
+        stops.extend_from_slice(&descriptor.stops);
         let base = metrics.pad + missing_height;
         let (gradient, start, end) = if horizontal {
             let x0 = metrics.pad + first;
@@ -285,10 +271,7 @@ impl MeasuredContinuousGuide {
             } else if index + 1 == descriptor.labels.len() {
                 1.0
             } else {
-                fraction(
-                    descriptor.center.expect("prepared center label"),
-                    descriptor.domain,
-                )
+                descriptor.stops[1].offset
             };
             labels.push(if horizontal {
                 centered_text(
@@ -436,17 +419,17 @@ impl MeasuredContinuousGuide {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::decorations::legend::descriptor::{MissingKey, Palette};
+    use crate::decorations::legend::descriptor::MissingKey;
 
     fn descriptor() -> ContinuousDescriptor {
         ContinuousDescriptor {
             field: "signal".into(),
             title: "Signal".into(),
-            palette: Palette {
-                low: (49, 130, 189),
-                center: Some((247, 247, 247)),
-                high: (222, 45, 38),
-            },
+            stops: vec![
+                GradientStop::new(0.0, (49, 130, 189)),
+                GradientStop::new(0.4, (247, 247, 247)),
+                GradientStop::new(1.0, (222, 45, 38)),
+            ],
             center: Some(0.0),
             missing: Some(MissingKey {
                 fill: (224, 224, 224),

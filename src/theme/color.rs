@@ -406,7 +406,7 @@ impl Oklab {
 
 /// Interpolate final opaque data colors in Cartesian OKLab. Exact endpoints
 /// retain the caller's RGB bytes and avoid an unnecessary matrix roundtrip.
-pub(crate) fn interpolate(
+pub(super) fn interpolate(
     first: (u8, u8, u8),
     second: (u8, u8, u8),
     fraction: f64,

@@ -943,6 +943,70 @@ fn heatmap_png_is_rasterized_from_the_native_gradient_svg() {
     std::fs::remove_dir_all(directory).unwrap();
 }
 
+#[test]
+fn constant_scale_mark_and_guide_stops_agree_with_decoded_png_pixel() {
+    let data = standard_data();
+    let directory = std::env::temp_dir().join(format!(
+        "lichtung-heatmap-color-pixel-{}-{}",
+        std::process::id(),
+        TEST_DIRECTORY_COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
+    std::fs::create_dir_all(&directory).unwrap();
+    let svg_path = directory.join("plot.svg");
+    let png_path = directory.join("plot.png");
+    chart(&data)
+        .color_limits(0.5, 0.5)
+        .svg_preserve_text(&svg_path)
+        .unwrap()
+        .png_preview(&png_path)
+        .unwrap();
+    let svg = std::fs::read_to_string(svg_path).unwrap();
+    assert_eq!(svg.matches("stop-color=\"#7A92B5\"").count(), 2);
+    let polygon = clipped_marks(&svg)
+        .lines()
+        .find(|line| line.starts_with("<polygon"))
+        .unwrap();
+    assert!(polygon.contains("fill=\"#7A92B5\""));
+    let points = polygon
+        .split_once("points=\"")
+        .unwrap()
+        .1
+        .split_once('"')
+        .unwrap()
+        .0;
+    let corners = points
+        .split_whitespace()
+        .map(|point| {
+            let (x, y) = point.split_once(',').unwrap();
+            (x.parse::<f64>().unwrap(), y.parse::<f64>().unwrap())
+        })
+        .collect::<Vec<_>>();
+    let x = f64::midpoint(corners[0].0, corners[1].0);
+    let y = f64::midpoint(corners[0].1, corners[2].1);
+    let bytes = std::fs::read(png_path).unwrap();
+    let mut reader = png::Decoder::new(std::io::Cursor::new(bytes))
+        .read_info()
+        .unwrap();
+    let mut pixels = vec![0; reader.output_buffer_size().unwrap()];
+    let info = reader.next_frame(&mut pixels).unwrap();
+    assert!(x >= 0.0 && x < f64::from(info.width));
+    assert!(y >= 0.0 && y < f64::from(info.height));
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "sample the interior of a checked finite positive pixel rectangle"
+    )]
+    let (x, y) = (x as usize, y as usize);
+    let stride = match info.color_type {
+        png::ColorType::Rgb => 3,
+        png::ColorType::Rgba => 4,
+        other => panic!("unexpected Heatmap PNG color type: {other:?}"),
+    };
+    let index = (y * info.width as usize + x) * stride;
+    assert_eq!(&pixels[index..index + 3], &[122, 146, 181]);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
 fn clipped_marks(svg: &str) -> &str {
     svg.split_once("<g clip-path=\"url(#clip-0)\">")
         .unwrap()

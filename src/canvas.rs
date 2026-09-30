@@ -337,6 +337,96 @@ mod d1_tests {
     }
 
     #[test]
+    fn shared_diverging_guide_projects_one_final_center_stop_for_unequal_child_domains() {
+        let plot = |values| {
+            Plot::heatmap(
+                crate::CategoryValues::new("column", ["a", "b"]).unwrap(),
+                crate::CategoryValues::new("row", ["one", "one"]).unwrap(),
+                crate::NumericValues::new("fill", values),
+            )
+            .scale(crate::HeatmapScale::Diverging { center: 0.0 })
+        };
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, plot([0.0, 2.0]).color_limits(-1.0, 3.0))
+            .unwrap()
+            .panel(0, 1, plot([-1.0, 1.0]))
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared)
+            .size(1200, 640);
+        let root = canvas.preflight_plan().unwrap();
+        let Some(PreparedGuideDescriptor::Continuous(guide)) =
+            root.prepared().shared_guide.as_ref()
+        else {
+            panic!("shared diverging guide")
+        };
+        assert_eq!(guide.domain, (-1.0, 3.0));
+        assert_eq!(guide.labels, ["-1", "0", "3"]);
+        assert_eq!(guide.stops.len(), 3);
+        assert_eq!(guide.stops[1].offset.to_bits(), 0.25_f64.to_bits());
+        assert_eq!(guide.stops[1].color, (247, 247, 247));
+        canvas.render_scene().unwrap();
+    }
+
+    #[test]
+    fn shared_diverging_guide_replays_identically_with_child_cache_disabled() {
+        let plot = || {
+            Plot::heatmap(
+                crate::CategoryValues::new("column", ["a", "b"]).unwrap(),
+                crate::CategoryValues::new("row", ["one", "one"]).unwrap(),
+                crate::NumericValues::new("fill", [-1.0, 2.0]),
+            )
+            .scale(crate::HeatmapScale::Diverging { center: 0.0 })
+        };
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, plot())
+            .unwrap()
+            .panel(0, 1, plot())
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared)
+            .size(1200, 640);
+        let mut outputs = Vec::new();
+        for disabled in [false, true] {
+            crate::decorations::plan::children::DISABLE_CHILD_REUSE.with(|flag| flag.set(disabled));
+            let result = canvas.render_scene();
+            crate::decorations::plan::children::DISABLE_CHILD_REUSE.with(|flag| flag.set(false));
+            outputs.push(result.unwrap().svg_bytes().to_vec());
+        }
+        assert_eq!(outputs[0], outputs[1]);
+    }
+
+    #[test]
+    fn shared_exact_constant_heatmap_retains_one_neutral_label_and_two_neutral_stops() {
+        let plot = || {
+            Plot::heatmap(
+                crate::CategoryValues::new("column", ["a", "b"]).unwrap(),
+                crate::CategoryValues::new("row", ["one", "one"]).unwrap(),
+                crate::NumericValues::new("fill", [0.0, 0.0]),
+            )
+            .scale(crate::HeatmapScale::Diverging { center: 0.0 })
+        };
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, plot().color_limits(0.0, 0.0))
+            .unwrap()
+            .panel(0, 1, plot())
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared)
+            .size(1200, 640);
+        let root = canvas.preflight_plan().unwrap();
+        let Some(PreparedGuideDescriptor::Continuous(guide)) =
+            root.prepared().shared_guide.as_ref()
+        else {
+            panic!("constant shared diverging guide")
+        };
+        assert_eq!(guide.labels, ["0"]);
+        assert_eq!(guide.stops.len(), 2);
+        assert!(guide.stops.iter().all(|stop| stop.color == (247, 247, 247)));
+        canvas.render_scene().unwrap();
+    }
+
+    #[test]
     fn continuous_shared_guide_rejects_incompatible_gradients_before_fonts() {
         let canvas = Canvas::grid(1, 2)
             .unwrap()
@@ -462,19 +552,33 @@ mod d1_tests {
             panic!("prepared continuous guide must own the shared domain");
         };
         assert_eq!(guide.domain, (0.0, 5.0));
+        let resources = crate::font::canonical::OperationGenerationResources::new();
         let colors = root
             .prepared()
             .interiors
             .iter()
-            .map(|input| {
+            .enumerate()
+            .map(|(index, input)| {
                 let marks = &input.as_ref().unwrap().beeswarm.as_ref().unwrap().panels[0].1;
-                assert_eq!(marks.guide_semantics().domain, guide.domain);
+                assert_eq!(
+                    marks
+                        .guide_semantics(
+                            canvas.panels[index]
+                                .as_ref()
+                                .unwrap()
+                                .data()
+                                .with_axis_resources(&resources),
+                        )
+                        .unwrap()
+                        .domain,
+                    guide.domain
+                );
                 assert_eq!(marks.guide_labels().collect::<Vec<_>>(), ["5.000", "0.000"]);
                 marks.color_for_source_value(1.0).unwrap()
             })
             .collect::<Vec<_>>();
         assert_eq!(colors[0], colors[1]);
-        assert_ne!(colors[0], guide.palette.high);
+        assert_ne!(colors[0], guide.stops.last().unwrap().color);
     }
 
     #[test]
@@ -511,8 +615,8 @@ mod d1_tests {
             .color_for_source_value(3.0)
             .unwrap();
         assert_eq!(guide.domain, (3.0, 3.0));
-        assert_eq!(guide.palette.low, color);
-        assert_eq!(guide.palette.high, color);
+        assert_eq!(guide.stops[0].color, color);
+        assert_eq!(guide.stops[1].color, color);
     }
 
     #[test]
@@ -3191,11 +3295,10 @@ impl Canvas {
                     if let Some(center) = guide.center {
                         round.observe_number(center)?;
                     }
-                    for color in [guide.palette.low, guide.palette.high]
-                        .into_iter()
-                        .chain(guide.palette.center)
-                    {
-                        for channel in [color.0, color.1, color.2] {
+                    round.observe_count(guide.stops.len())?;
+                    for stop in &guide.stops {
+                        round.observe_number(stop.offset)?;
+                        for channel in [stop.color.0, stop.color.1, stop.color.2] {
                             round.observe_count(usize::from(channel))?;
                         }
                     }

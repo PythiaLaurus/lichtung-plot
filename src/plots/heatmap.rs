@@ -24,6 +24,15 @@ use crate::Plot;
 const MAX_CELLS: usize = 1_000_000;
 const MISSING_FILL: (u8, u8, u8) = (224, 224, 224);
 const MISSING_STROKE: (u8, u8, u8) = (120, 120, 120);
+const SEQUENTIAL_STOPS: [GradientStop; 2] = [
+    GradientStop::new(0.0, (247, 251, 255)),
+    GradientStop::new(1.0, (8, 48, 107)),
+];
+const DIVERGING_STOPS: [GradientStop; 3] = [
+    GradientStop::new(0.0, (49, 130, 189)),
+    GradientStop::new(0.5, (247, 247, 247)),
+    GradientStop::new(1.0, (222, 45, 38)),
+];
 
 pub(crate) fn missing_fill() -> crate::render::backend::Rgba {
     MISSING_FILL.into()
@@ -54,14 +63,12 @@ impl HeatmapData {
     ) -> Result<crate::decorations::legend::descriptor::ContinuousSemantics, Error> {
         let domain = self.color.domain;
         let center = domain.center;
-        let resources = data.source_resources()?;
-        let palette = crate::decorations::legend::descriptor::Palette {
-            low: self.color.scale.color(domain.minimum, resources)?,
-            center: center
-                .map(|value| self.color.scale.color(value, resources))
-                .transpose()?,
-            high: self.color.scale.color(domain.maximum, resources)?,
+        let semantic = if center.is_some() {
+            &DIVERGING_STOPS[..]
+        } else {
+            &SEQUENTIAL_STOPS[..]
         };
+        let stops = data.collect_source(semantic.iter().copied().map(Ok))?;
         let missing = self
             .has_missing
             .then(|| -> Result<_, Error> {
@@ -79,7 +86,7 @@ impl HeatmapData {
             crate::decorations::legend::descriptor::ContinuousSemantics {
                 domain: (domain.minimum, domain.maximum),
                 center,
-                palette,
+                stops,
                 missing,
             },
         )
@@ -170,9 +177,9 @@ impl PreparedHeatmapColor {
         domain: ColorDomain,
         resources: &crate::font::canonical::OperationGenerationResources,
     ) -> Result<Self, Error> {
-        let low = (49, 130, 189);
-        let neutral = (247, 247, 247);
-        let high = (222, 45, 38);
+        let low = DIVERGING_STOPS[0].color;
+        let neutral = DIVERGING_STOPS[1].color;
+        let high = DIVERGING_STOPS[2].color;
         let (stops, count) = if let Some(center) = domain.center {
             if !center.is_finite() || center < domain.minimum || center > domain.maximum {
                 return Err(Error::Data(
@@ -228,9 +235,9 @@ impl PreparedHeatmapColor {
         } else {
             (
                 [
-                    GradientStop::new(0.0, (247, 251, 255)),
-                    GradientStop::new(1.0, (8, 48, 107)),
-                    GradientStop::new(1.0, (8, 48, 107)),
+                    SEQUENTIAL_STOPS[0],
+                    SEQUENTIAL_STOPS[1],
+                    SEQUENTIAL_STOPS[1],
                 ],
                 2,
             )

@@ -238,18 +238,17 @@ impl PreparedBeeswarm {
 
     pub(crate) fn guide_semantics(
         &self,
-    ) -> crate::decorations::legend::descriptor::ContinuousSemantics {
+        data: crate::data::PlotData<'_>,
+    ) -> Result<crate::decorations::legend::descriptor::ContinuousSemantics, Error> {
         let stops = self.scale.stops();
-        crate::decorations::legend::descriptor::ContinuousSemantics {
-            domain: self.scale.domain(),
-            center: None,
-            palette: crate::decorations::legend::descriptor::Palette {
-                low: stops[0].color,
+        Ok(
+            crate::decorations::legend::descriptor::ContinuousSemantics {
+                domain: self.scale.domain(),
                 center: None,
-                high: stops[1].color,
+                stops: data.collect_source(stops.iter().copied().map(Ok))?,
+                missing: None,
             },
-            missing: None,
-        }
+        )
     }
 
     pub(crate) fn finish(

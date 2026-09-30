@@ -203,6 +203,10 @@ impl ContinuousColors {
         &self.stops
     }
 
+    pub(crate) fn into_stops(self) -> Vec<GradientStop> {
+        self.stops
+    }
+
     pub(crate) fn domain(&self) -> (f64, f64) {
         self.domain
     }

@@ -7,8 +7,6 @@ mod scale;
 
 pub(crate) use scale::{AccentColors, CategoryColors, ContinuousColors, PaletteSource};
 
-pub(crate) use color::interpolate as interpolate_data_color;
-
 #[cfg(test)]
 pub(crate) use resolved::FillOutlinePaint;
 pub use resolved::Theme;

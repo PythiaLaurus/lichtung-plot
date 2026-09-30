@@ -2072,7 +2072,8 @@ ownership, statistical estimates, public extension points, or layout strategy.
 | T5d3a | COMPLETE | T5d2 | `feat(scales): resolve Beeswarm sequential colors and guide` |
 | T5d3b | IN PROGRESS | T5d3a | Umbrella for Heatmap scales and shared guide stops |
 | T5d3b1 | COMPLETE | T5d3a | `feat(scales): resolve Heatmap cell and local-guide colors` |
-| T5d3b2 | PENDING | T5d3b1 | `refactor(scales): share resolved continuous stops across compositions` |
+| T5d3b2 | COMPLETE | T5d3b1 | `refactor(scales): share resolved continuous stops across compositions` |
+| T5d3b3 | PENDING | T5d3b2 | `feat(scales): align continuous guide raster with OKLab marks` |
 | T5d4 | PENDING | T5d3 | `refactor(scales): coordinate final domains guides and contrast` |
 | T5d5 | PENDING | T5d4 | `test(scales): close mapping and guide consistency` |
 
@@ -2268,7 +2269,13 @@ exact center, symmetric/constant/explicit domains, value-label contrast and
 local guide stops; remove its RGB helper and duplicate domain/stop derivation
 in place. T5d3b2 passes complete resolved stops through the existing shared
 descriptor and selected guide, preserving missing style ownership and
-mark/guide equality at the final merged domain. These commits keep the
+exact mark/stop agreement at endpoints and the semantic center. T5d3b3
+closes the remaining interpolation boundary: SVG/PNG gradients currently
+interpolate in encoded RGB *between* stops, while data marks use OKLab. Pin
+bounded, resource-admitted guide sampling at observed representable values,
+including the local specialized colorbars and the final shared-domain guide;
+verify decoded pixel and retained-stop agreement without an unbudgeted
+per-mark SVG repair or silently conflating distinct colors. These commits keep the
 current public scale controls, native guide descriptor, and T5e packing boundary;
 T5d3 closes only after the final shared-domain mark/guide agreement passes.
 
@@ -2310,6 +2317,22 @@ three interleaved ignored release specialized-text samples (including
 rejected Elide), and strict all-target Clippy pass. The selected source
 work/capture and intrinsic-cache revalidation tests remain green. T5d3b2
 transfers the full resolved stop sequence to the one shared descriptor.
+
+T5d3b2 closure: the existing Canvas descriptor retains an admitted ordered
+stop sequence instead of a `Palette` triple. Heatmap and Beeswarm provide
+complete semantic stops before fonts; exact stop/color mismatch rejects, while
+Heatmap's diverging neutral uses the one final merged domain to determine its
+offset. Constant Sequential/Diverging descriptors freeze two midpoint/neutral
+stops, including exact constant limits; endpoint centers collapse to the
+relevant two-stop branch. The assigned shared guide copies these already
+selected stops, uses the same center offset for its label, and Canvas feedback
+observes every offset and RGB channel. Tests cover multi-stop comparison,
+unequal exact/automatic diverging domains, constant Heatmap and Beeswarm,
+mixed-guide incompatibility before fonts, checked resource refusal, real
+cache-on/off Canvas SVG equality, local/Canvas Heatmap integration, unchanged
+Beeswarm fingerprints/snapshot, and strict Clippy. An exact constant Heatmap
+also matches its retained SVG stops and decoded PNG cell pixel. Interior
+between-stop raster agreement is specifically T5d3b3; T5d3 remains open.
 
 Implement ordered opaque stops, deterministic sequential/diverging interpolation,
 exact semantic centers, symmetric automatic diverging domains where representable,

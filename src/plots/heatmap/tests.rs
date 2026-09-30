@@ -606,8 +606,7 @@ fn constant_domains_map_to_midpoint_colors_and_explicit_domains_saturate() {
     let diverging = PreparedHeatmapColor::resolve(diverging, &resources).unwrap();
     assert_eq!(
         sequential.scale.color(2.0, &resources).unwrap(),
-        crate::theme::interpolate_data_color((247, 251, 255), (8, 48, 107), 0.5, &resources)
-            .unwrap()
+        (122, 146, 181)
     );
     assert_eq!(
         diverging.scale.color(0.0, &resources).unwrap(),
@@ -729,19 +728,12 @@ fn prepared_cell_guide_and_value_label_share_final_diverging_colors() {
     assert_eq!(
         prepared.fills[..3],
         [
-            Some(guide.palette.low),
-            guide.palette.center,
-            Some(guide.palette.high)
+            Some(stops[0].color),
+            Some(stops[1].color),
+            Some(stops[2].color)
         ]
     );
-    assert_eq!(
-        stops.iter().map(|stop| stop.color).collect::<Vec<_>>(),
-        [
-            guide.palette.low,
-            guide.palette.center.unwrap(),
-            guide.palette.high
-        ]
-    );
+    assert_eq!(stops, guide.stops);
     assert_eq!(prepared.fills[3], None);
     assert_eq!(guide.missing.as_ref().unwrap().fill, MISSING_FILL);
     assert_eq!(
