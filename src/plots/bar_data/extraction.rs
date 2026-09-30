@@ -31,6 +31,35 @@ fn positioned_bar_colors_require_every_used_raw_series_before_fonts() {
 }
 
 #[test]
+fn displayed_series_alias_never_becomes_a_significance_target_or_color_key() {
+    let source = Plot::bar(
+        CategoryValues::new("category", ["same", "same"]).unwrap(),
+        BarInput::estimates(NumericValues::new("value", [2.0, 3.0])),
+    )
+    .series(CategoryValues::new("series", ["g1", "g2"]).unwrap())
+    .categorical_colors(
+        crate::CategoricalColors::new([("g1".into(), (20, 40, 60)), ("g2".into(), (20, 40, 60))])
+            .unwrap(),
+    )
+    .labels(crate::Labels::raw().alias("g1", "First display"))
+    .significance([crate::Significance::at(
+        crate::SignificanceTarget::category_series("same", "First display"),
+        crate::SignificanceMark::OneStar,
+    )])
+    .erase();
+    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+    let error = crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+        .err()
+        .expect("a display alias must not select a raw series");
+    assert!(matches!(error, Error::Data(message)
+        if message.contains("unknown series") && message.contains("First display")));
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        0
+    );
+}
+
+#[test]
 fn signed_bar_entries_use_only_sign_identities_and_match_body_colors() {
     let source = Plot::horizontal_bar(
         CategoryValues::new("category", ["zero", "fall", "rise"]).unwrap(),

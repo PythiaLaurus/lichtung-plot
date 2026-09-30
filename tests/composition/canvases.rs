@@ -1066,6 +1066,42 @@ fn shared_canvas_scatter_legend_rejects_null_hue_rows_preflight() {
 }
 
 #[test]
+fn shared_canvas_equal_color_entries_keep_a_typed_bar_target_in_its_owner() {
+    let bar = |values: [f64; 2]| {
+        Plot::bar(
+            CategoryValues::new("category", ["same", "same"]).unwrap(),
+            BarInput::estimates(NumericValues::new("value", values)),
+        )
+        .series(CategoryValues::new("series", ["g1", "g2"]).unwrap())
+        .categorical_colors(
+            CategoricalColors::new([("g1".into(), (20, 40, 60)), ("g2".into(), (20, 40, 60))])
+                .unwrap(),
+        )
+    };
+    let first = bar([1.0, 2.0]).significance([Significance::between(
+        SignificanceTarget::category_series("same", "g1"),
+        SignificanceTarget::category_series("same", "g2"),
+        SignificanceMark::OneStar,
+    )]);
+    let svg = render_canvas(
+        Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, first)
+            .unwrap()
+            .panel(0, 1, bar([2.0, 3.0]))
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared)
+            .size(1200, 640),
+        "shared-typed-bar-target",
+    )
+    .unwrap();
+    assert_eq!(svg.matches("class=\"significance-bracket\"").count(), 1);
+    let guide = svg.split_once("<g id=\"canvas-shared-legend\">").unwrap().1;
+    assert!(guide.contains(">G 1</text>") && guide.contains(">G 2</text>"));
+    assert_eq!(svg.matches("fill=\"#14283C\"").count(), 6);
+}
+
+#[test]
 fn all_canvas_grids_precede_any_marks() {
     let data = estimate_data();
     let svg = render_canvas(

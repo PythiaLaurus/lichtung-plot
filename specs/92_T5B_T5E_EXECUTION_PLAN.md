@@ -2074,10 +2074,10 @@ ownership, statistical estimates, public extension points, or layout strategy.
 | T5d3b1 | COMPLETE | T5d3a | `feat(scales): resolve Heatmap cell and local-guide colors` |
 | T5d3b2 | COMPLETE | T5d3b1 | `refactor(scales): share resolved continuous stops across compositions` |
 | T5d3b3 | COMPLETE | T5d3b2 | `feat(scales): align continuous guide raster with OKLab marks` |
-| T5d4 | IN PROGRESS | T5d3 | Umbrella for final missing/contrast/target owners |
+| T5d4 | COMPLETE | T5d3 | Umbrella for final missing/contrast/target owners |
 | T5d4a | COMPLETE | T5d3 | `refactor(scales): resolve missing Heatmap paint from owner theme` |
 | T5d4b | COMPLETE | T5d4a | `test(theme): verify final mapped contrast and guide cache inputs` |
-| T5d4c | PENDING | T5d4b | `test(scales): verify final typed annotation targets` |
+| T5d4c | COMPLETE | T5d4b | `test(scales): verify final typed annotation targets` |
 | T5d5 | PENDING | T5d4 | `test(scales): close mapping and guide consistency` |
 
 ### T5d0 — Domain And Consumer Census
@@ -2421,6 +2421,21 @@ replaying the prior role's metrics. Existing exact local mark-style precedence,
 shared diverging descriptor/cache-on/off equality, two focused census units,
 the actual unselected-font operation, two neighboring intrinsic-cache tests
 and strict Clippy pass. T5d4c verifies final typed annotation targets.
+
+T5d4c closure: Bar significance still binds the original typed
+category/series source target after the T5d raw-key color map and separate
+display aliases are resolved. Two used series may intentionally share exact
+RGB without merging their semantic anchors. In a faceted Bar only the
+specified right cell owns the pairwise bracket; a selected display alias is
+not accepted as a raw attached target and rejects before font discovery.
+The same-color pair contributes two complete shared Canvas guide entries
+while its bracket remains owned by the originating Bar cell. No late target
+lookup or new annotation path is needed. The sixteen Significance planner
+units, thirteen Bar extraction, thirteen categorical distribution units,
+twenty-five facet, affected Canvas, nineteen annotation and nineteen
+categorical grouping integration contracts, plus strict Clippy pass. T5d4
+now hands one final guide/contrast/target representation to T5d5's closure
+matrix and required broad-phase verification.
 
 Feed final categorical identities, complete paints/glyphs, continuous domains,
 gradient/title/missing descriptors, and generated guide text into T5b's existing

@@ -200,6 +200,51 @@ fn facet_series_preflight_keeps_repeated_endpoint_pairs_panel_local() {
 }
 
 #[test]
+fn final_equal_series_colors_and_aliases_do_not_replace_typed_facet_targets() {
+    let category = CategoryValues::new("category", ["same"; 4]).unwrap();
+    let series = CategoryValues::new("series", ["g1", "g2", "g1", "g2"]).unwrap();
+    let facet = CategoryValues::new("panel", ["left", "left", "right", "right"]).unwrap();
+    let plot = Plot::bar(
+        category,
+        BarInput::estimates(NumericValues::new("value", [2.0, 3.0, 4.0, 5.0])),
+    )
+    .series(series)
+    .categorical_colors(
+        CategoricalColors::new([
+            ("g1".into(), (20, 40, 60)),
+            ("g2".into(), (20, 40, 60)),
+            ("unused".into(), (1, 2, 3)),
+        ])
+        .unwrap(),
+    )
+    .labels(
+        Labels::raw()
+            .alias("g1", "First display")
+            .alias("g2", "Second display"),
+    )
+    .legend(LegendPolicy::Hidden)
+    .facet(FacetSpec::column(facet))
+    .significance([Significance::between(
+        SignificanceTarget::category_series("same", "g1"),
+        SignificanceTarget::category_series("same", "g2"),
+        SignificanceMark::OneStar,
+    )
+    .facet(FacetCell::single("right"))])
+    .size(1000, 640);
+    let svg = render_svg(plot, "facet-typed-color-target").unwrap();
+    assert_eq!(svg.matches("class=\"significance-bracket\"").count(), 1);
+    assert_eq!(svg.matches("fill=\"#14283C\"").count(), 4);
+    let panels = clip_rects(&svg);
+    assert_eq!(panels.len(), 2);
+    let right = panels
+        .iter()
+        .max_by(|left, right| left.0.total_cmp(&right.0))
+        .unwrap();
+    let bracket = significance_bracket_bounds(&svg);
+    assert!(bracket.0 >= right.0 && bracket.0 + bracket.2 <= right.0 + right.2);
+}
+
+#[test]
 fn facet_owned_comparison_on_unfaceted_plot_fails_preflight() {
     let error = Plot::bar(
         lichtung_plot::CategoryValues::new("factor", ["before", "after"]).unwrap(),
