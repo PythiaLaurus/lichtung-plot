@@ -2070,8 +2070,8 @@ ownership, statistical estimates, public extension points, or layout strategy.
 | T5d2d | COMPLETE | T5d2c | `refactor(scales): close palettes, accents and guide equality` |
 | T5d3 | IN PROGRESS | T5d2 | Umbrella for active sequential and diverging owners |
 | T5d3a | COMPLETE | T5d2 | `feat(scales): resolve Beeswarm sequential colors and guide` |
-| T5d3b | PENDING | T5d3a | Umbrella for Heatmap scales and shared guide stops |
-| T5d3b1 | PENDING | T5d3a | `feat(scales): resolve Heatmap cell and local-guide colors` |
+| T5d3b | IN PROGRESS | T5d3a | Umbrella for Heatmap scales and shared guide stops |
+| T5d3b1 | COMPLETE | T5d3a | `feat(scales): resolve Heatmap cell and local-guide colors` |
 | T5d3b2 | PENDING | T5d3b1 | `refactor(scales): share resolved continuous stops across compositions` |
 | T5d4 | PENDING | T5d3 | `refactor(scales): coordinate final domains guides and contrast` |
 | T5d5 | PENDING | T5d4 | `test(scales): close mapping and guide consistency` |
@@ -2272,7 +2272,8 @@ mark/guide equality at the final merged domain. These commits keep the
 current public scale controls, native guide descriptor, and T5e packing boundary;
 T5d3 closes only after the final shared-domain mark/guide agreement passes.
 
-T5d3a closure: `SequentialColors` retains admitted ordered opaque stops and a
+T5d3a closure: the prepared continuous color scale (now `ContinuousColors`)
+retains admitted ordered opaque stops and a
 finite numeric domain; exact endpoints, saturation, constant midpoint,
 opposite-extreme normalization, and the checked multi-stop position all use
 the pinned T5d1 OKLab conversion. Beeswarm prepares one scale before fonts,
@@ -2289,6 +2290,26 @@ unchanged clip snapshot and strict all-target Clippy pass. Fingerprint
 lengths remain unchanged; interiors and constant gradient paint account for
 the inspected byte changes. T5d3b now migrates Heatmap and closes the shared
 continuous mapping handoff.
+
+T5d3b1 closure: Heatmap prepares one ordered-stop scale before fonts from its
+existing finite/symmetric numeric domain and semantic center; each cell's
+opaque RGB is selected and admitted there. The same retained fills supply
+selected polygons and value-label contrast during census, intrinsics, and
+assigned measurement, including a changed shared domain. Local guide stops
+derive from that scale, with exact neutral on either center boundary, an
+interior center offset computed by the *same* normalization as cell colors,
+and a two-stop midpoint for a constant domain. Explicit color limits now
+allow a nondecreasing constant domain: Sequential selects its midpoint,
+Diverging requires the center and selects neutral, and every finite source
+value saturates to that single color. Missing cells/merged rows stay on
+their separate mark style. The old `heatmap_color`, RGB `interpolate`,
+`colorbar_gradient_stops`, and second normalization helper are deleted.
+Thirty-seven focused Heatmap units, 39 Heatmap integrations, mixed Canvas
+guide and Beeswarm fingerprints, the regular specialized-text contract,
+three interleaved ignored release specialized-text samples (including
+rejected Elide), and strict all-target Clippy pass. The selected source
+work/capture and intrinsic-cache revalidation tests remain green. T5d3b2
+transfers the full resolved stop sequence to the one shared descriptor.
 
 Implement ordered opaque stops, deterministic sequential/diverging interpolation,
 exact semantic centers, symmetric automatic diverging domains where representable,

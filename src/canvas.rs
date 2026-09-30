@@ -407,11 +407,18 @@ mod d1_tests {
             panic!("merged guide must retain its numeric domain");
         };
         assert_eq!(guide.domain, (0.0, 5.0));
+        let resources = crate::font::canonical::OperationGenerationResources::new();
         for (index, input) in root.prepared().interiors.iter().enumerate() {
             let marks = &input.as_ref().unwrap().heatmap.as_ref().unwrap().panels[0].1;
             assert_eq!(
                 marks
-                    .guide_semantics(canvas.panels[index].as_ref().unwrap().data())
+                    .guide_semantics(
+                        canvas.panels[index]
+                            .as_ref()
+                            .unwrap()
+                            .data()
+                            .with_axis_resources(&resources),
+                    )
                     .unwrap()
                     .domain,
                 guide.domain

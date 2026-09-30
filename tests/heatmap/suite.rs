@@ -483,8 +483,46 @@ fn heatmap_constant_values_use_midpoint_without_invalid_svg() {
     );
     let svg = render(&data, |chart| chart).unwrap();
 
-    assert_eq!(clipped_marks(&svg).matches("fill=\"#8096B5\"").count(), 2);
+    assert_eq!(clipped_marks(&svg).matches("fill=\"#7A92B5\"").count(), 2);
+    assert_eq!(svg.matches("stop-color=\"#7A92B5\"").count(), 2);
     assert!(!svg.contains("NaN") && !svg.contains(">inf</text>"));
+}
+
+#[test]
+fn exact_constant_color_domain_saturates_to_sequential_midpoint_or_diverging_neutral() {
+    let data = HeatmapData::new(
+        CategoryValues::new("column", ["one", "two"]).unwrap(),
+        CategoryValues::new("row", ["row", "row"]).unwrap(),
+        NumericValues::new("value", [-10.0, 10.0]),
+    );
+    let sequential = render(&data, |chart| chart.color_limits(5.0, 5.0)).unwrap();
+    assert_eq!(
+        clipped_marks(&sequential)
+            .matches("fill=\"#7A92B5\"")
+            .count(),
+        2
+    );
+    assert_eq!(sequential.matches("stop-color=\"#7A92B5\"").count(), 2);
+    let diverging = render(&data, |chart| {
+        chart
+            .scale(HeatmapScale::Diverging { center: 5.0 })
+            .color_limits(5.0, 5.0)
+    })
+    .unwrap();
+    assert_eq!(
+        clipped_marks(&diverging)
+            .matches("fill=\"#F7F7F7\"")
+            .count(),
+        2
+    );
+    assert_eq!(diverging.matches("stop-color=\"#F7F7F7\"").count(), 2);
+    let error = render(&data, |chart| {
+        chart
+            .scale(HeatmapScale::Diverging { center: 0.0 })
+            .color_limits(5.0, 5.0)
+    })
+    .unwrap_err();
+    assert!(error.contains("must contain center"), "{error}");
 }
 
 #[test]
@@ -854,7 +892,7 @@ fn heatmap_rejects_value_sorted_category_order() {
 fn heatmap_rejects_invalid_scale_options() {
     let data = standard_data();
     let errors = [
-        render(&data, |chart| chart.color_limits(1.0, 1.0)).unwrap_err(),
+        render(&data, |chart| chart.color_limits(2.0, 1.0)).unwrap_err(),
         render(&data, |chart| {
             chart
                 .scale(HeatmapScale::Diverging { center: 0.0 })

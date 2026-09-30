@@ -21,7 +21,8 @@ fn chart(data: &HeatmapValues) -> Plot<crate::kind::Heatmap> {
 
 fn prepare_chart(chart: &Plot<crate::kind::Heatmap>) -> Result<HeatmapData, Error> {
     let chart = chart.clone().erase();
-    prepare(&chart, &chart)
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    prepare(&chart, chart.data().with_axis_resources(&resources))
 }
 
 #[test]
@@ -138,11 +139,16 @@ fn heatmap_intrinsic_cache_rechecks_the_final_shared_color_domain() {
     assert_eq!(theme.contrasting_text(original).unwrap().font_size, 40);
     let panels = std::sync::Arc::get_mut(inputs.heatmap.as_mut().unwrap()).unwrap();
     let prepared = &mut panels.panels[0].1;
-    prepared.domain = ColorDomain {
-        minimum: -100.0,
-        maximum: 100.0,
-        center: Some(0.0),
-    };
+    prepared
+        .replace_domain(
+            ColorDomain {
+                minimum: -100.0,
+                maximum: 100.0,
+                center: Some(0.0),
+            },
+            source.data().with_axis_resources(&resources),
+        )
+        .unwrap();
     let remapped = prepared.annotation_labels().last().unwrap().1;
     assert_eq!(theme.contrasting_text(remapped).unwrap().font_size, 9);
     assert!(!axes
@@ -494,9 +500,16 @@ fn prepare_rejects_cartesian_grid_above_safety_limit() {
         fill: NumericValues::new("fill", vec![1.0; 1_001]),
     };
 
-    let error = prepare_chart(&chart(&data)).unwrap_err().to_string();
+    let source = chart(&data).erase();
+    let resources = crate::font::canonical::OperationGenerationResources::with_test_limits(
+        10_000_000,
+        100_000_000,
+    );
+    let error = prepare(&source, source.data().with_axis_resources(&resources))
+        .unwrap_err()
+        .to_string();
 
-    assert!(error.contains("safety limit"));
+    assert!(error.contains("safety limit"), "{error}");
 }
 
 #[test]
@@ -555,7 +568,12 @@ fn diverging_auto_domain_accepts_opposite_extremes_around_zero() {
     .unwrap();
 
     assert_eq!((domain.minimum, domain.maximum), (-f64::MAX, f64::MAX));
-    assert!(normalized_fraction(0.0, domain.minimum, domain.maximum).is_finite());
+    assert!(crate::theme::ContinuousColors::normalized_fraction(
+        (domain.minimum, domain.maximum),
+        0.0
+    )
+    .unwrap()
+    .is_finite());
 }
 
 #[test]
@@ -583,31 +601,66 @@ fn constant_domains_map_to_midpoint_colors_and_explicit_domains_saturate() {
         center: Some(0.0),
     };
 
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let sequential = PreparedHeatmapColor::resolve(sequential, &resources).unwrap();
+    let diverging = PreparedHeatmapColor::resolve(diverging, &resources).unwrap();
     assert_eq!(
-        heatmap_color(2.0, sequential),
-        interpolate((247, 251, 255), (8, 48, 107), 0.5)
+        sequential.scale.color(2.0, &resources).unwrap(),
+        crate::theme::interpolate_data_color((247, 251, 255), (8, 48, 107), 0.5, &resources)
+            .unwrap()
     );
-    assert_eq!(heatmap_color(-2.0, diverging), (49, 130, 189));
-    assert_eq!(heatmap_color(2.0, diverging), (222, 45, 38));
+    assert_eq!(
+        diverging.scale.color(0.0, &resources).unwrap(),
+        (247, 247, 247)
+    );
+    assert_eq!(
+        diverging.scale.color(-2.0, &resources).unwrap(),
+        (49, 130, 189)
+    );
+    assert_eq!(
+        diverging.scale.color(2.0, &resources).unwrap(),
+        (222, 45, 38)
+    );
 }
 
 #[test]
 fn colorbar_gradient_stops_preserve_sequential_diverging_and_constant_scales() {
-    let sequential = colorbar_gradient_stops(ColorDomain {
-        minimum: 0.0,
-        maximum: 1.0,
-        center: None,
-    });
-    let diverging = colorbar_gradient_stops(ColorDomain {
-        minimum: -1.0,
-        maximum: 3.0,
-        center: Some(0.0),
-    });
-    let constant = colorbar_gradient_stops(ColorDomain {
-        minimum: 2.0,
-        maximum: 2.0,
-        center: None,
-    });
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let source = chart(&valid_data()).erase();
+    let data = source.data().with_axis_resources(&resources);
+    let sequential = PreparedHeatmapColor::resolve(
+        ColorDomain {
+            minimum: 0.0,
+            maximum: 1.0,
+            center: None,
+        },
+        &resources,
+    )
+    .unwrap()
+    .guide_stops(data)
+    .unwrap();
+    let diverging = PreparedHeatmapColor::resolve(
+        ColorDomain {
+            minimum: -1.0,
+            maximum: 3.0,
+            center: Some(0.0),
+        },
+        &resources,
+    )
+    .unwrap()
+    .guide_stops(data)
+    .unwrap();
+    let constant = PreparedHeatmapColor::resolve(
+        ColorDomain {
+            minimum: 2.0,
+            maximum: 2.0,
+            center: None,
+        },
+        &resources,
+    )
+    .unwrap()
+    .guide_stops(data)
+    .unwrap();
 
     assert_eq!(
         sequential,
@@ -625,6 +678,82 @@ fn colorbar_gradient_stops_preserve_sequential_diverging_and_constant_scales() {
         ]
     );
     assert_eq!(constant[0].color, constant[1].color);
+}
+
+#[test]
+fn large_offset_diverging_center_uses_the_same_fraction_for_cell_and_guide() {
+    let low = 1.0e300_f64;
+    let center = f64::from_bits(low.to_bits() + 375);
+    let high = f64::from_bits(low.to_bits() + 1000);
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let resolved = PreparedHeatmapColor::resolve(
+        ColorDomain {
+            minimum: low,
+            maximum: high,
+            center: Some(center),
+        },
+        &resources,
+    )
+    .unwrap();
+    assert_eq!(
+        resolved.scale.color(center, &resources).unwrap(),
+        (247, 247, 247)
+    );
+    assert_eq!(resolved.scale.stops()[1].color, (247, 247, 247));
+    assert_eq!(
+        resolved.scale.stops()[1].offset.to_bits(),
+        crate::theme::ContinuousColors::normalized_fraction((low, high), center)
+            .unwrap()
+            .to_bits()
+    );
+}
+
+#[test]
+fn prepared_cell_guide_and_value_label_share_final_diverging_colors() {
+    let source = Plot::heatmap(
+        CategoryValues::new("column", ["low", "middle", "high", "missing"]).unwrap(),
+        CategoryValues::new("row", ["one"; 4]).unwrap(),
+        NumericValues::nullable("fill", [Some(-2.0), Some(0.0), Some(2.0), None]),
+    )
+    .scale(HeatmapScale::Diverging { center: 0.0 })
+    .annotations(HeatmapAnnotations::Values(
+        crate::NumericLabelFormat::default(),
+    ))
+    .erase();
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let prepared = &inputs.heatmap.as_ref().unwrap().panels[0].1;
+    let data = source.data().with_axis_resources(&resources);
+    let guide = prepared.guide_semantics(data).unwrap();
+    let stops = prepared.color.guide_stops(data).unwrap();
+    assert_eq!(
+        prepared.fills[..3],
+        [
+            Some(guide.palette.low),
+            guide.palette.center,
+            Some(guide.palette.high)
+        ]
+    );
+    assert_eq!(
+        stops.iter().map(|stop| stop.color).collect::<Vec<_>>(),
+        [
+            guide.palette.low,
+            guide.palette.center.unwrap(),
+            guide.palette.high
+        ]
+    );
+    assert_eq!(prepared.fills[3], None);
+    assert_eq!(guide.missing.as_ref().unwrap().fill, MISSING_FILL);
+    assert_eq!(
+        prepared
+            .annotation_labels()
+            .map(|(_, fill)| fill)
+            .collect::<Vec<_>>(),
+        prepared.fills[..3]
+            .iter()
+            .map(|fill| crate::render::backend::Rgba::from(fill.unwrap()))
+            .collect::<Vec<_>>()
+    );
 }
 
 #[test]

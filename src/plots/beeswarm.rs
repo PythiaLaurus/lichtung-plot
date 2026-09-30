@@ -26,7 +26,7 @@ pub(crate) struct PreparedBeeswarm {
     pub(crate) x_data: (f64, f64),
     rows: Vec<(usize, f64, f64, usize)>,
     points: Vec<(f64, f64, (u8, u8, u8))>,
-    scale: crate::theme::SequentialColors,
+    scale: crate::theme::ContinuousColors,
     values: [String; 2],
     pub(crate) color_label: String,
 }
@@ -176,7 +176,7 @@ pub(crate) fn prepare(
             .then_with(|| a.3.cmp(&b.3))
     })?;
     let values = colorbar_values(color_range, data)?;
-    let scale = crate::theme::SequentialColors::resolve(
+    let scale = crate::theme::ContinuousColors::resolve(
         color_range,
         &[
             GradientStop::new(0.0, (49, 130, 189)),

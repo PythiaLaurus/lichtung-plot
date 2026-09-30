@@ -143,13 +143,13 @@ impl AccentColors {
 
 /// One prepared numeric domain and ordered opaque stops, shared by marks and
 /// their guide. Normalization happens before first-party OKLab interpolation.
-#[derive(Debug, Clone)]
-pub(crate) struct SequentialColors {
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct ContinuousColors {
     domain: (f64, f64),
     stops: Vec<GradientStop>,
 }
 
-impl SequentialColors {
+impl ContinuousColors {
     pub(crate) fn resolve(
         domain: (f64, f64),
         stops: &[GradientStop],
@@ -207,15 +207,19 @@ impl SequentialColors {
         self.domain
     }
 
-    pub(crate) fn color(
-        &self,
-        value: f64,
-        resources: &OperationGenerationResources,
-    ) -> Result<Rgb, Error> {
-        if !value.is_finite() {
-            return Err(Error::Data("continuous color value must be finite".into()));
+    /// One arithmetic owner for mark values and diverging center-stop offsets.
+    pub(crate) fn normalized_fraction(domain: (f64, f64), value: f64) -> Result<f64, Error> {
+        if !value.is_finite() || !domain.0.is_finite() || !domain.1.is_finite() {
+            return Err(Error::Data(
+                "continuous color coordinates must be finite".into(),
+            ));
         }
-        let (low, high) = self.domain;
+        if domain.0 > domain.1 {
+            return Err(Error::Data(
+                "continuous color domain must be ordered".into(),
+            ));
+        }
+        let (low, high) = domain;
         let fraction = if low.total_cmp(&high).is_eq()
             || (low.abs().to_bits() == 0 && high.abs().to_bits() == 0)
         {
@@ -233,6 +237,20 @@ impl SequentialColors {
                 (value / scale - low / scale) / (high / scale - low / scale)
             }
         };
+        if !fraction.is_finite() {
+            return Err(Error::Data(
+                "continuous color fraction is not finite".into(),
+            ));
+        }
+        Ok(fraction.clamp(0.0, 1.0))
+    }
+
+    pub(crate) fn color(
+        &self,
+        value: f64,
+        resources: &OperationGenerationResources,
+    ) -> Result<Rgb, Error> {
+        let fraction = Self::normalized_fraction(self.domain, value)?;
         for pair in self.stops.windows(2) {
             resources.claim_visits(1).map_err(work_error)?;
             if fraction <= pair[1].offset {
@@ -288,7 +306,7 @@ mod tests {
             GradientStop::new(1.0, (222, 45, 38)),
         ];
         let resources = OperationGenerationResources::new();
-        let scale = SequentialColors::resolve((0.0, 1.0), &stops, &resources).unwrap();
+        let scale = ContinuousColors::resolve((0.0, 1.0), &stops, &resources).unwrap();
         assert_eq!(scale.stops(), stops);
         assert_eq!(scale.color(-1.0, &resources).unwrap(), stops[0].color);
         assert_eq!(scale.color(2.0, &resources).unwrap(), stops[1].color);
@@ -299,7 +317,7 @@ mod tests {
             .with_domain((-f64::MAX, f64::MAX), &resources)
             .unwrap();
         assert_eq!(extreme.color(0.0, &resources).unwrap(), (157, 107, 124));
-        let three = SequentialColors::resolve(
+        let three = ContinuousColors::resolve(
             (0.0, 4.0),
             &[stops[0], GradientStop::new(0.25, (10, 20, 30)), stops[1]],
             &resources,
@@ -320,13 +338,13 @@ mod tests {
             [stops[0], stops[0]],
             [stops[0], GradientStop::new(f64::NAN, (0, 0, 0))],
         ] {
-            assert!(SequentialColors::resolve((0.0, 1.0), &invalid, &resources).is_err());
+            assert!(ContinuousColors::resolve((0.0, 1.0), &invalid, &resources).is_err());
         }
-        assert!(SequentialColors::resolve((2.0, 1.0), &stops, &resources).is_err());
-        let scale = SequentialColors::resolve((0.0, 1.0), &stops, &resources).unwrap();
+        assert!(ContinuousColors::resolve((2.0, 1.0), &stops, &resources).is_err());
+        let scale = ContinuousColors::resolve((0.0, 1.0), &stops, &resources).unwrap();
         assert!(scale.color(f64::NAN, &resources).is_err());
         let limited = OperationGenerationResources::with_test_limits(0, 0);
-        assert!(SequentialColors::resolve((0.0, 1.0), &stops, &limited).is_err());
+        assert!(ContinuousColors::resolve((0.0, 1.0), &stops, &limited).is_err());
     }
 
     #[test]
