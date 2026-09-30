@@ -1,6 +1,6 @@
 # T5b-T5e Execution Plan
 
-**Status: IN PROGRESS — T5b–T5d complete; T5e pending.**
+**Status: IN PROGRESS — T5b–T5d complete; T5e in progress.**
 
 This is the execution partition of the four T5b–T5e umbrellas in
 `91_IMPLEMENTATION_PLAN.md`, based on the verified T5a closure at `1e8e3ee`.
@@ -2537,7 +2537,7 @@ The sole root driver and numerical/resource policies remain unchanged.
 
 | Step | Status | Depends on | Logical commit |
 | --- | --- | --- | --- |
-| T5e0 | PENDING | T5d | `docs(layout): pin specialized and root sizing closure inputs` |
+| T5e0 | COMPLETE | T5d | `docs(layout): pin specialized and root sizing closure inputs` |
 | T5e1 | PENDING | T5e0 | `feat(heatmap): allocate native measured cell tracks` |
 | T5e2 | PENDING | T5e1 | `feat(matrix): allocate native variable grid tracks` |
 | T5e3 | PENDING | T5e2 | `feat(marginal): measure native linked subpanels` |
@@ -2548,6 +2548,15 @@ The sole root driver and numerical/resource policies remain unchanged.
 | T5e8 | PENDING | T5e7 | `refactor(layout): close private scientific layout` |
 
 ### T5e0 — Rebase The Specialized Census
+
+T5e0 closure: `docs/t5e0-specialized-root-census.md` pins the five active
+`SpecializedLegacy` routes, prepared/hard/frozen ownership, exact remaining
+fixed floors/searches and their single deletion stages. The one exact root
+driver, inherited Canvas sizing, native track/preference suppliers, and
+the private three-mode T5e6 handoff are inventoried without adding another
+request or claiming T5e implementation. Historical Beeswarm/Waterfall SVG
+and Matrix/Marginal clips remain attributable. `git diff --check` is the
+documentation-only gate; T5e1 replaces Heatmap packing next.
 
 Map current specialized hard requirements, packing, topology and output to the
 native T5b tracks, T5c requirements, and T5d scales. T5a already removed dummy root
