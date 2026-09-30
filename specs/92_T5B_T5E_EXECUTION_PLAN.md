@@ -2078,7 +2078,11 @@ ownership, statistical estimates, public extension points, or layout strategy.
 | T5d4a | COMPLETE | T5d3 | `refactor(scales): resolve missing Heatmap paint from owner theme` |
 | T5d4b | COMPLETE | T5d4a | `test(theme): verify final mapped contrast and guide cache inputs` |
 | T5d4c | COMPLETE | T5d4b | `test(scales): verify final typed annotation targets` |
-| T5d5 | PENDING | T5d4 | `test(scales): close mapping and guide consistency` |
+| T5d5 | IN PROGRESS | T5d4 | Umbrella for private custom gradients and scale closure |
+| T5d5a | PENDING | T5d4 | Umbrella for active private gradient replacements |
+| T5d5a1 | PENDING | T5d4 | `feat(scales): resolve private Heatmap gradient inputs` |
+| T5d5a2 | PENDING | T5d5a1 | `feat(scales): coordinate Beeswarm and Canvas gradient owners` |
+| T5d5b | PENDING | T5d5a | `test(scales): close mapping and guide consistency` |
 
 ### T5d0 — Domain And Consumer Census
 
@@ -2451,6 +2455,17 @@ same-field conflicting glyphs, data-dependent guide cardinality, and no late
 recoloring, reshaping, or target resolution in capture.
 
 ### T5d5 — Scale Closure
+
+T5d5a finishes the private customization boundary before the broad gate.
+T5d5a1 routes validated theme-owned, ordered sequential/diverging stops into
+the one prepared Heatmap scale and its pre-font contrast/guide producer,
+including explicit Plot-theme ownership. T5d5a2 connects the same owner to
+Beeswarm and mixed-theme Shared Canvas contributors without an intermediate
+default gradient or a late selected-mark recoloring path. Keep the public
+builder/configuration surface deferred to T6. T5d5b publishes the complete
+consumer/equality/error-precedence matrix and runs the required T5d phase
+`just verify` closure gate after focused affected-family checks and strict
+Clippy. Do not mark T5d complete from default-only gradient evidence.
 
 All marks, legends, gradients, colorbars, facets, and Canvas use one final mapping
 per semantic owner. Remove old mixed-palette, hardcoded-gradient, and duplicate
