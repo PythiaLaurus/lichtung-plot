@@ -7,6 +7,132 @@ use crate::decorations::legend::LegendEntry;
 use crate::theme::ResolvedTheme;
 use crate::{Error, Plot, PlotKind};
 
+/// One measured mandatory right guide beside the flexible scientific body.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one common constrained guide and its adjacent Grid track retain the same owner"
+)]
+pub(crate) fn continuous_right(
+    descriptor: &crate::decorations::legend::descriptor::ContinuousDescriptor,
+    panel: crate::layout::PanelBox,
+    minimum: f64,
+    theme: &ResolvedTheme,
+    scope: &crate::layout::fit::FitScope,
+    data: PlotData<'_>,
+) -> Result<
+    (
+        crate::layout::PanelBox,
+        crate::decorations::legend::MeasuredContinuousGuide,
+    ),
+    crate::layout::fit::PlanError,
+> {
+    use crate::layout::fit::{self, FitKind};
+    use crate::layout::kernel::{allocate_grid_axis, GridRequirement, TrackSpec};
+    let metrics = crate::decorations::legend::LegendMetrics::from_theme(theme);
+    let (hard_title, natural_title) = fit::intrinsic_widths(
+        theme,
+        &descriptor.title,
+        &theme.typography.legend_title,
+        "continuous guide title",
+    )?;
+    let mut hard = hard_title;
+    for label in descriptor
+        .labels
+        .iter()
+        .map(String::as_str)
+        .chain(descriptor.missing.iter().map(|key| key.label.as_str()))
+    {
+        data.claim_source_visits(1)?;
+        let plan = theme.measure_text(
+            label,
+            &theme.typography.legend_label,
+            crate::layout::PhysicalTextAlignment::Start,
+            "continuous guide value",
+            false,
+        )?;
+        hard =
+            hard.max(metrics.handle_w + metrics.handle_text + plan.width().max(plan.fit_width()));
+    }
+    let available = panel.width() - minimum - metrics.outside_gap;
+    if hard_title + 2.0 * metrics.pad > available {
+        return Err(scope
+            .child(crate::layout::AddressRole::GuideTitle, 0)?
+            .failure(
+                FitKind::Text,
+                "continuous guide title cannot preserve its text and the hard data tracks",
+            )
+            .into());
+    }
+    let width = crate::layout::kernel::required_length(
+        natural_title.max(hard) + 2.0 * metrics.pad + 1.0 / 1024.0,
+    )?
+    .min(available);
+    if width < hard + 2.0 * metrics.pad {
+        return Err(scope
+            .failure(
+                FitKind::LegendOrGuide,
+                "continuous guide cannot preserve its values and the hard data tracks",
+            )
+            .into());
+    }
+    let guide = fit::measured(
+        crate::decorations::legend::MeasuredContinuousGuide::measure(
+            descriptor,
+            (width, panel.height()),
+            false,
+            false,
+            theme,
+            &mut false,
+            scope,
+        ),
+    )?;
+    let hard = crate::layout::kernel::ceil_spatial_quanta(minimum)?;
+    let width = crate::layout::kernel::ceil_spatial_quanta(guide.width)?;
+    let tracks = [
+        TrackSpec {
+            min: hard,
+            preferred: hard,
+            max: None,
+            flexible: true,
+        },
+        TrackSpec {
+            min: width,
+            preferred: width,
+            max: Some(width),
+            flexible: false,
+        },
+    ];
+    let children: [GridRequirement<'_>; 0] = [];
+    let start = crate::layout::kernel::nearest_spatial_quanta(panel.x0)?;
+    let end = crate::layout::kernel::nearest_spatial_quanta(panel.x1)?;
+    let span = end
+        .checked_sub(start)
+        .ok_or_else(|| Error::Render("continuous guide containing span overflow".into()))?;
+    let assigned = fit::measured(allocate_grid_axis(
+        &tracks,
+        &children,
+        span,
+        [0, 0],
+        crate::layout::kernel::ceil_spatial_quanta(metrics.outside_gap)?,
+        None,
+        true,
+        data.source_resources()?,
+        scope,
+    ))?;
+    let edge = start
+        .checked_add(assigned.sizes[0])
+        .ok_or_else(|| Error::Render("continuous guide body edge overflow".into()))?;
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "root-bounded spatial quanta convert exactly to CSS pixels"
+    )]
+    let body_right = edge as f64 / 1024.0;
+    Ok((
+        crate::layout::PanelBox::new(panel.x0, body_right, panel.y0, panel.y1),
+        guide,
+    ))
+}
+
 fn panel<'a, T>(
     panels: Option<&'a [(Option<String>, T)]>,
     scope: Option<&str>,

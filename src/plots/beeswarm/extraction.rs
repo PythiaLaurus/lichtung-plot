@@ -21,7 +21,7 @@ fn source() -> Plot<crate::kind::Beeswarm> {
 }
 
 #[test]
-fn root_semantics_admit_sort_bins_offsets_and_exact_colors_before_fonts() {
+fn root_semantics_retain_source_order_and_exact_colors_before_fonts() {
     let source = source().erase();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
     let resources = OperationGenerationResources::new();
@@ -30,18 +30,13 @@ fn root_semantics_admit_sort_bins_offsets_and_exact_colors_before_fonts() {
     assert_eq!(marks.levels, ["b", "a"]);
     assert_eq!(
         marks.rows.iter().map(|row| row.3).collect::<Vec<_>>(),
-        [2, 0, 4, 5, 6, 7, 8, 9, 10, 11, 3, 1]
+        [0, 2, 4, 5, 6, 7, 8, 9, 10, 11, 1, 3]
     );
-    let ys = [
-        0.5, 0.41, 0.59, 0.32, 0.68, 0.23, 0.77, 0.14, 0.86, 0.14, 1.5, 1.41,
-    ];
-    for (point, expected) in marks.points.iter().zip(ys) {
-        assert!((point.1 - expected).abs() < 1e-12);
-    }
-    assert_eq!(marks.points[0].2, (49, 130, 189));
-    assert_eq!(marks.points[1].2, (157, 107, 124));
-    assert_eq!(marks.points[10].2, (49, 130, 189));
-    assert_eq!(marks.points[11].2, (222, 45, 38));
+    assert_eq!(STAGES.with(std::cell::Cell::get)[2], 0);
+    assert_eq!(marks.colors[0], (157, 107, 124));
+    assert_eq!(marks.colors[1], (49, 130, 189));
+    assert_eq!(marks.colors[10], (222, 45, 38));
+    assert_eq!(marks.colors[11], (49, 130, 189));
     assert_eq!(marks.values, ["1.000", "0.000"]);
     let visits = resources.usage().unwrap().1;
     let bytes = resources.byte_usage().unwrap();
@@ -121,9 +116,9 @@ fn constant_beeswarm_guide_and_marks_use_the_same_oklab_midpoint() {
     let resources = OperationGenerationResources::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
     let marks = &inputs.beeswarm.as_ref().unwrap().panels[0].1;
-    let color = marks.points[0].2;
+    let color = marks.colors[0];
     assert_eq!(color, (157, 107, 124));
-    assert_eq!(marks.points[1].2, color);
+    assert_eq!(marks.colors[1], color);
     let stops = marks
         .guide_stops(source.data().with_axis_resources(&resources))
         .unwrap();
@@ -137,7 +132,11 @@ fn root_components_prepare_once_without_layout_backend() {
     crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|count| count.set(0));
     source().preflight().unwrap();
     assert_eq!(STAGES.with(std::cell::Cell::get)[0], 1);
-    assert_eq!(STAGES.with(std::cell::Cell::get)[2], 1);
+    assert!(STAGES.with(std::cell::Cell::get)[2] >= 1);
+    assert_eq!(
+        STAGES.with(std::cell::Cell::get)[1],
+        STAGES.with(std::cell::Cell::get)[2]
+    );
     assert_eq!(
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get),
         0
@@ -164,7 +163,11 @@ fn root_components_prepare_once_without_layout_backend() {
         .preflight()
         .unwrap();
         assert_eq!(STAGES.with(std::cell::Cell::get)[0], 2);
-        assert_eq!(STAGES.with(std::cell::Cell::get)[2], 2);
+        assert!(STAGES.with(std::cell::Cell::get)[2] >= 2);
+        assert_eq!(
+            STAGES.with(std::cell::Cell::get)[1],
+            STAGES.with(std::cell::Cell::get)[2]
+        );
     }
     STAGES.with(|counts| counts.set([0; 3]));
     crate::Canvas::grid(1, 2)
@@ -179,7 +182,11 @@ fn root_components_prepare_once_without_layout_backend() {
         .preflight()
         .unwrap();
     assert_eq!(STAGES.with(std::cell::Cell::get)[0], 2);
-    assert_eq!(STAGES.with(std::cell::Cell::get)[2], 2);
+    assert!(STAGES.with(std::cell::Cell::get)[2] >= 2);
+    assert_eq!(
+        STAGES.with(std::cell::Cell::get)[1],
+        STAGES.with(std::cell::Cell::get)[2]
+    );
 }
 
 #[test]
@@ -221,6 +228,23 @@ fn selected_payload_preserves_bounds_baselines_and_poisoned_capture_does_no_work
         selected.producer_text.len()
     );
     assert_eq!(payload.points.len(), 12);
+    assert_eq!(
+        payload.source_rows,
+        [
+            (0, 0),
+            (0, 2),
+            (0, 4),
+            (0, 5),
+            (0, 6),
+            (0, 7),
+            (0, 8),
+            (0, 9),
+            (0, 10),
+            (0, 11),
+            (1, 1),
+            (1, 3)
+        ]
+    );
     for (retained, selected) in payload
         .colorbar
         .as_ref()
@@ -317,12 +341,12 @@ fn missing_colors_and_unsupported_nesting_reject_before_fonts() {
 
 #[test]
 fn selected_candidate_storage_refuses_at_exact_operation_limits() {
-    let source = source().erase();
-    let inputs =
-        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-            .unwrap();
-    let source = inputs.attach(source).unwrap();
+    let raw = source().erase();
     let run = |limits: Option<(u128, u64)>| {
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&raw, &OperationGenerationResources::new())
+                .unwrap();
+        let source = inputs.attach(raw.clone()).unwrap();
         let theme = crate::Theme::Publication.resolve();
         let resources = theme
             .prepared_font_environment()
@@ -396,10 +420,7 @@ fn invalid_sources_win_over_unavailable_fonts_in_the_exact_root() {
             |(), _, (), _| Ok(()),
         );
         assert!(result.is_err());
-        assert_eq!(
-            STAGES.with(std::cell::Cell::get),
-            [1, 0, usize::from(valid)]
-        );
+        assert_eq!(STAGES.with(std::cell::Cell::get), [1, 0, 0]);
         if valid {
             assert!(result.err().unwrap().to_string().contains("font"));
         } else {

@@ -2546,7 +2546,7 @@ The sole root driver and numerical/resource policies remain unchanged.
 | T5e1c | COMPLETE | T5e1b | `refactor(heatmap): retire specialized packing adapter` |
 | T5e2 | COMPLETE | T5e1 | `feat(matrix): allocate native variable grid tracks` |
 | T5e3 | COMPLETE | T5e2 | `feat(marginal): measure native linked subpanels` |
-| T5e4 | PENDING | T5e3 | `feat(beeswarm): implement bounded deterministic tangent packing` |
+| T5e4 | COMPLETE | T5e3 | `feat(beeswarm): implement bounded deterministic tangent packing` |
 | T5e5 | PENDING | T5e4 | `feat(waterfall): measure native annotation shelves` |
 | T5e6 | PENDING | T5e5 | `feat(layout): resolve private automatic root requests` |
 | T5e7 | PENDING | T5e6 | `test(layout): close all producer resource and feedback contracts` |
@@ -2751,6 +2751,22 @@ work. Occupied height supplies native category tracks; tight height fails rather
 than repacking or hiding points. This intentionally changes geometry: retain bin
 baselines as historical evidence, inspect new snapshots, and measure increasing
 coincident/dense inputs and refusal scaling. Delete the Beeswarm adapter.
+
+T5e4 closure: Beeswarm is native `SpecializedGrid`, with source-row-ordered
+greedy tangent packing at the assigned numeric width. Preparation retains final
+colors/source identities without binning or font/width-dependent offsets.
+Conservative complete glyph disks, exact outward integer tangencies, ordered
+deduplicated offsets and all tested prior-point pairs consume the existing
+ledger; there is no backtracking, secondary cap or height-driven repacking.
+Occupied extent supplies native categorical tracks and a tight exact height
+miss preserves all rows. Common frozen axes and the shared measured right-guide
+track replace the legacy frame, 100px body floor and fixed guide arithmetic.
+`docs/t5e4-tangent-packing.md` records independently expected tangencies, both
+admitted stroked shapes, actual increasing work and dense refusal, source
+identities, replay and historical bin fingerprints. Eighteen focused units,
+all 20 parent fingerprints, inspected/updated structural snapshot, 25 facets,
+shared guide composition, 46 Heatmap units/40 integrations and the specialized
+text workload pass with strict Clippy and `git diff --check`.
 
 ### T5e5 — Waterfall
 

@@ -7,10 +7,8 @@
     clippy::too_many_lines
 )]
 
-use crate::layout::{Layout, PanelBox, PhysicalTextAlignment, TextBlock};
-use crate::render::backend::{
-    with_clip, Backend, GradientStop, LineStyle, PlacedText, Point2D, TextAnchor,
-};
+use crate::layout::{Layout, PanelBox, PhysicalTextAlignment};
+use crate::render::backend::{with_clip, Backend, GradientStop, LineStyle, PlacedText, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::Error;
 use crate::Plot;
@@ -25,7 +23,7 @@ pub(crate) struct PreparedBeeswarm {
     pub(crate) levels: Vec<String>,
     pub(crate) x_data: (f64, f64),
     rows: Vec<(usize, f64, f64, usize)>,
-    points: Vec<(f64, f64, (u8, u8, u8))>,
+    colors: Vec<(u8, u8, u8)>,
     scale: crate::theme::ContinuousColors,
     colorbar_stops: Vec<GradientStop>,
     values: [String; 2],
@@ -51,7 +49,7 @@ pub(crate) fn intrinsic_body_minimum(
         })?;
     if prepared.levels.is_empty()
         || prepared.rows.is_empty()
-        || prepared.rows.len() != prepared.points.len()
+        || prepared.rows.len() != prepared.colors.len()
     {
         return Err(Error::Render(
             "Beeswarm source rows and prepared points differ".into(),
@@ -65,21 +63,12 @@ pub(crate) fn intrinsic_body_minimum(
         .map_err(|error| {
             Error::Render(format!("Beeswarm occupied category admission: {error:?}"))
         })?;
-    let mut pitch = 1.0_f64 / 1024.0;
-    for (&(category, _, _, _), &(_, y, _)) in prepared.rows.iter().zip(&prepared.points) {
+    let pitch = 2.0 * quanta_pixels(packing::radius(theme, &point)?);
+    for &(category, _, _, _) in &prepared.rows {
         if category >= prepared.levels.len() {
             return Err(Error::Render(
                 "Beeswarm point category exceeds prepared levels".into(),
             ));
-        }
-        let offset = (y - (category as f64 + 0.5)).abs();
-        if offset >= 0.5 {
-            return Err(Error::Render(
-                "Beeswarm point exceeds its prepared category slot".into(),
-            ));
-        }
-        if let Some(ink) = ink {
-            pitch = pitch.max(ink.top.max(-ink.bottom) / (0.5 - offset));
         }
     }
     let count = u32::try_from(prepared.levels.len())
@@ -97,14 +86,20 @@ pub(crate) fn intrinsic_body_minimum(
             &theme.marks.beeswarm_reference.backend_style(),
         )?);
     }
+    let axes =
+        crate::layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
     Ok((
-        if chart.user_x_limits().is_none() {
+        axes.0.max(if chart.user_x_limits().is_none() {
             numeric
         } else {
             0.0
-        },
-        height,
+        }),
+        axes.1.max(height),
     ))
+}
+
+fn quanta_pixels(value: i64) -> f64 {
+    value as f64 / 1024.0
 }
 
 #[cfg(test)]
@@ -167,14 +162,11 @@ pub(crate) fn prepare(
             let index = indices
                 .binary_search_by_key(&category.as_str(), |entry| entry.0)
                 .map_err(|_| Error::Data("beeswarm: category identity missing".into()))?;
-            Ok((indices[index].1, *x, *color, row))
+            Ok((indices[index].1, *x, *color, data.source_row(row)))
         },
     ))?;
     crate::data::source::sort_source_by(&mut rows, Some(data), |a, b| {
-        a.0.cmp(&b.0)
-            .then_with(|| a.1.total_cmp(&b.1))
-            .then_with(|| a.2.total_cmp(&b.2))
-            .then_with(|| a.3.cmp(&b.3))
+        a.0.cmp(&b.0).then_with(|| a.3.cmp(&b.3))
     })?;
     let values = colorbar_values(color_range, data)?;
     let scale = crate::theme::ContinuousColors::resolve(
@@ -186,11 +178,15 @@ pub(crate) fn prepare(
     )?;
     let samples = data.collect_source(rows.iter().map(|row| Ok(row.2)))?;
     let colorbar_stops = scale.guide_stops(&samples, data)?;
+    let colors = data.collect_source(
+        rows.iter()
+            .map(|row| scale.color(row.2, data.source_resources()?)),
+    )?;
     Ok(PreparedBeeswarm {
         levels,
         x_data,
         rows,
-        points: Vec::new(),
+        colors,
         values,
         scale,
         colorbar_stops,
@@ -211,9 +207,9 @@ impl PreparedBeeswarm {
     pub(crate) fn color_for_source_value(&self, value: f64) -> Option<(u8, u8, u8)> {
         self.rows
             .iter()
-            .zip(&self.points)
+            .zip(&self.colors)
             .find(|(row, _)| row.2.to_bits() == value.to_bits())
-            .map(|(_, point)| point.2)
+            .map(|(_, color)| *color)
     }
 
     pub(crate) fn install_shared_domain(
@@ -229,7 +225,7 @@ impl PreparedBeeswarm {
         self.values = values;
         self.scale = scale;
         self.colorbar_stops = colorbar_stops;
-        for ((_, _, color), &(_, _, value, _)) in self.points.iter_mut().zip(&self.rows) {
+        for (color, &(_, _, value, _)) in self.colors.iter_mut().zip(&self.rows) {
             *color = self.scale.color(value, data.source_resources()?)?;
         }
         Ok(())
@@ -248,51 +244,6 @@ impl PreparedBeeswarm {
                 missing: None,
             },
         )
-    }
-
-    pub(crate) fn finish(
-        &mut self,
-        range: (f64, f64),
-        data: crate::data::PlotData<'_>,
-    ) -> Result<(), Error> {
-        #[cfg(test)]
-        count(2);
-        let mut occupied: Vec<((usize, i64), usize)> = Vec::new();
-        data.reserve_source(&mut occupied, self.rows.len())?;
-        data.reserve_source(&mut self.points, self.rows.len())?;
-        data.claim_source_visits(self.rows.len())?;
-        // Preserve signed 48-bin occupancy and capped data-space offsets until T5e.
-        for &(category, x, color, _) in &self.rows {
-            let bin = (((x - range.0) / (range.1 - range.0)) * 48.0).floor() as i64;
-            data.claim_source_visits(occupied.len().checked_ilog2().unwrap_or(0) as usize + 2)?;
-            let index = match occupied.binary_search_by_key(&(category, bin), |entry| entry.0) {
-                Ok(index) => index,
-                Err(index) => {
-                    data.claim_source_visits(occupied.len() - index)?;
-                    occupied.insert(index, ((category, bin), 0));
-                    index
-                }
-            };
-            let count = &mut occupied[index].1;
-            let layer = (*count).div_ceil(2);
-            let direction = if (*count).is_multiple_of(2) {
-                1.0
-            } else {
-                -1.0
-            };
-            let jitter = if *count == 0 {
-                0.0
-            } else {
-                direction * (layer as f64 * 0.09).min(0.36)
-            };
-            *count += 1;
-            self.points.push((
-                x,
-                category as f64 + 0.5 + jitter,
-                self.scale.color(color, data.source_resources()?)?,
-            ));
-        }
-        Ok(())
     }
 
     pub(crate) fn guide_labels(&self) -> impl Iterator<Item = &str> {
@@ -337,74 +288,141 @@ pub(crate) fn measure(
     let theme = context.theme;
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);
-    let text = context.producer_text()?;
-    let colorbar = if chart.continuous_guide_suppressed() {
-        None
+    let minimum = intrinsic_body_minimum(chart, theme)?;
+    let (panel, colorbar) = if chart.continuous_guide_suppressed() {
+        (context.panel, None)
     } else {
         let [high_label, low_label] = &prepared.values;
-        let color_label = &prepared.color_label;
         let guide_scope = context
             .fit_scope()
             .child(crate::layout::AddressRole::OutsideGuideRight, 0)?;
-        let title =
-            TextBlock::from_resolved(text.plan(color_label, "beeswarm colorbar title", || {
-                crate::layout::fit::measured(crate::layout::fit::text(
-                    theme,
-                    color_label,
-                    &theme.typography.legend_title,
-                    context.panel.height().min(150.0),
-                    PhysicalTextAlignment::Center,
-                    "beeswarm colorbar title",
-                    &guide_scope.child(crate::layout::AddressRole::GuideTitle, 0)?,
-                ))
-            })?);
-        let mut values = Vec::new();
-        data.reserve_source(&mut values, 2)?;
-        for label in [high_label, low_label] {
-            values.push(text.plan(label, "beeswarm colorbar value", || {
-                Ok(theme.measure_legacy_appearance_text(
-                    label,
-                    &theme.typography.legend_label,
-                    PhysicalTextAlignment::Start,
-                    "beeswarm colorbar value",
-                    false,
-                )?)
-            })?);
-        }
-        let value_width = values
-            .iter()
-            .map(crate::layout::ResolvedTextPlan::width)
-            .fold(0.0_f64, f64::max);
-        let reserve = (34.0 + value_width).max(
-            65.0 + title.lines().len().saturating_sub(1) as f64 * title.line_height()
-                + f64::from(theme.typography.legend_label.font_size) / 2.0,
-        ) + 4.0;
-        Some((title, values, reserve))
-    };
-    let colorbar_reserve = colorbar.as_ref().map_or(0.0, |(_, _, reserve)| *reserve);
-    if context.panel.width() - colorbar_reserve < 100.0 {
-        let guide_scope = context
-            .fit_scope()
-            .child(crate::layout::AddressRole::OutsideGuideRight, 0)?;
-        return Err(guide_scope.failure(crate::layout::fit::FitKind::LegendOrGuide,
-            "beeswarm: colorbar title does not fit while preserving the minimum 100px plot panel; increase chart width"
-        ).into());
-    }
-    let mut body = context.panel;
-    body.x1 -= colorbar_reserve;
-    let panel = body;
-    let layout = context.axis_layout(|| {
-        context.layout_with_axis_specs(
-            prepared.x_data,
-            (0.0, prepared.levels.len() as f64),
-            panel,
-            data.copy_source_string(chart.x_label_text().unwrap_or(""))?,
-            data.copy_source_string(chart.y_label_text().unwrap_or(""))?,
-            chart.x_axis_spec(),
-            chart.y_axis_spec(),
+        let labels: &[&str] =
+            if prepared.scale.domain().0.to_bits() == prepared.scale.domain().1.to_bits() {
+                &[low_label]
+            } else {
+                &[low_label, high_label]
+            };
+        let descriptor = crate::decorations::legend::descriptor::ContinuousDescriptor {
+            field: data.copy_source_string(chart.color_dimension_key().unwrap_or(""))?,
+            title: data.copy_source_string(&prepared.color_label)?,
+            stops: prepared.guide_stops(data)?,
+            center: None,
+            missing: None,
+            domain: prepared.scale.domain(),
+            exact: chart.beeswarm_color_limits_spec().is_some(),
+            labels: data
+                .collect_source(labels.iter().map(|label| data.copy_source_string(label)))?,
+        };
+        let (body, guide) = crate::layout::interior::guide::continuous_right(
+            &descriptor,
+            context.panel,
+            minimum.0,
             theme,
-        )
-    })?;
+            &guide_scope,
+            data,
+        )?;
+        (body, Some(guide))
+    };
+    let axes = chart
+        .prepared_axis_inputs()
+        .ok_or_else(|| Error::Render("Beeswarm axes require preparation".into()))?;
+    let range = context.axis_range(crate::layout::AxisSide::Bottom, || Ok(prepared.x_data))?;
+    let projection = crate::layout::Projection::new(
+        range,
+        (0.0, prepared.levels.len() as f64),
+        panel.as_tuple(),
+    );
+    let x = axes.specs[0].layout_ticks(
+        Vec::new(),
+        &projection,
+        crate::layout::AxisSide::Bottom,
+        theme,
+        context.fit_scope(),
+    )?;
+    let radius = packing::radius(
+        theme,
+        &chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.beeswarm),
+    )?;
+    #[cfg(test)]
+    count(2);
+    let packed = packing::pack(&prepared.rows, &projection, radius, data)?;
+    let labels = axes.display_categories[1]
+        .as_ref()
+        .ok_or_else(|| Error::Render("Beeswarm category labels missing".into()))?;
+    let mut hard_pitch = packed.hard_pitch;
+    let width = context.axis_label_width.max(1.0 / 1024.0);
+    if chart.y_tick_labels_visible() {
+        for label in labels {
+            data.claim_source_visits(1)?;
+            let plan = crate::layout::fit::measured(crate::layout::fit::text(
+                theme,
+                label,
+                &theme.typography.tick_label,
+                width,
+                PhysicalTextAlignment::End,
+                "y-axis tick label",
+                &context
+                    .fit_scope()
+                    .child(crate::layout::AddressRole::AxisLeft, 0)?,
+            ))?;
+            hard_pitch = hard_pitch.max(crate::layout::kernel::ceil_spatial_quanta(
+                plan.height() + 2.0 * crate::layout::LABEL_CLEARANCE,
+            )?);
+        }
+    }
+    let preferred = hard_pitch.max(crate::layout::kernel::ceil_spatial_quanta(
+        2.0 * f64::from(theme.typography.tick_label.font_size),
+    )?);
+    let tracks = data.collect_source(prepared.levels.iter().map(|_| {
+        Ok(crate::layout::kernel::TrackSpec {
+            min: hard_pitch,
+            preferred,
+            max: None,
+            flexible: true,
+        })
+    }))?;
+    let bands = crate::layout::interior::tracks::assign(
+        &tracks,
+        (panel.y0, panel.y1),
+        0.0,
+        false,
+        data,
+        context.fit_scope(),
+    )?;
+    let ticks = data.collect_source(labels.iter().zip(&bands).map(|(label, band)| {
+        data.claim_source_visits(1)?;
+        let middle = f64::midpoint(band.0, band.1);
+        Ok(crate::layout::AxisTick::new(
+            (middle - panel.y0) / panel.height() * prepared.levels.len() as f64,
+            if chart.y_tick_labels_visible() {
+                data.copy_source_string(label)?
+            } else {
+                String::new()
+            },
+        ))
+    }))?;
+    let layout = Layout {
+        projection,
+        x_axis: crate::layout::Axis {
+            label: data.copy_source_string(&axes.labels[0])?,
+            ticks: x.ticks,
+            source: x.source,
+            explicit_ticks: axes.specs[0].exact_ticks.is_some(),
+            assigned_tick_width: None,
+            assigned_cells: None,
+        },
+        y_axis: crate::layout::Axis {
+            label: data.copy_source_string(&axes.labels[1])?,
+            ticks,
+            source: crate::layout::TickSource::SUPPLIED,
+            explicit_ticks: false,
+            assigned_tick_width: Some(width),
+            assigned_cells: Some(data.collect_source(bands.iter().map(|band| {
+                data.claim_source_visits(1)?;
+                Ok(*band)
+            }))?),
+        },
+    };
     let x_range = layout.projection.x_range();
     let zero = if chart.zero_line_visible() && x_range.0 <= 0.0 && x_range.1 >= 0.0 {
         let (x, y0) = layout.projection.project(0.0, 0.0);
@@ -416,24 +434,33 @@ pub(crate) fn measure(
     } else {
         None
     };
-    let points = data.collect_source(prepared.points.iter().map(|&(x, y, color)| {
-        data.claim_source_visits(1)?;
-        let (x, y) = layout.projection.project(x, y);
-        Ok((
-            Point2D::new(x, y),
-            chart.point_style(theme, color, theme.marks.point_sizes.beeswarm),
-        ))
-    }))?;
+    let points = data.collect_source(packed.points.iter().zip(&prepared.colors).map(
+        |(point, &color)| {
+            data.claim_source_visits(1)?;
+            let band = bands[point.category];
+            let middle =
+                crate::layout::kernel::nearest_spatial_quanta(f64::midpoint(band.0, band.1))?;
+            let y = middle
+                .checked_add(point.offset)
+                .ok_or_else(|| Error::Render("Beeswarm arranged point overflow".into()))?;
+            Ok((
+                Point2D::new(quanta_pixels(point.x), quanta_pixels(y)),
+                chart.point_style(theme, color, theme.marks.point_sizes.beeswarm),
+            ))
+        },
+    ))?;
     let mut payload = BeeswarmPayload {
         clip: layout.projection.panel_box(),
         zero,
         points,
+        source_rows: data.collect_source(packed.points.iter().map(|point| {
+            data.claim_source_visits(1)?;
+            Ok((point.category, point.source_row))
+        }))?,
         domain_expansions: [None; 2],
         colorbar: colorbar
             .as_ref()
-            .map(|(title, values, _)| {
-                select_colorbar(&layout, title, values, prepared.guide_stops(data)?, data)
-            })
+            .map(|guide| select_colorbar(guide, panel, theme, data))
             .transpose()?,
     };
     let geometry = payload.geometry(theme)?;
@@ -486,6 +513,20 @@ pub(crate) fn measure(
     }
     let mut result = PlotRenderResult::new(layout, Vec::new());
     result.y_domain = crate::spec::AxisDomain::Categorical;
+    result.y_tick_keys = Some(
+        data.collect_source(
+            prepared
+                .levels
+                .iter()
+                .map(|level| data.copy_source_string(level)),
+        )?,
+    );
+    result.axes = Some(result.layout.measure_axes_with_inputs(
+        theme,
+        context.fit_scope(),
+        chart.axis_semantic_inputs([result.x_domain, result.y_domain]),
+        || crate::layout::StandardPanelInputs::new(theme),
+    )?);
     if let Some(bar) = &payload.colorbar {
         result.producer_text = data.collect_source(bar.text.iter().map(|text| Ok(text.clone())))?;
     }
@@ -501,6 +542,7 @@ pub(crate) struct BeeswarmPayload {
     clip: PanelBox,
     zero: Option<([Point2D; 2], LineStyle)>,
     points: Vec<(Point2D, crate::render::backend::PointStyle)>,
+    source_rows: Vec<(usize, usize)>,
     colorbar: Option<ColorbarPayload>,
     pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
 }
@@ -511,10 +553,21 @@ struct ColorbarPayload {
     start: Point2D,
     end: Point2D,
     stops: Vec<GradientStop>,
-    text: [PlacedText; 3],
+    text: Vec<PlacedText>,
 }
 
 impl BeeswarmPayload {
+    pub(crate) fn observe_sources(
+        &self,
+        round: &mut crate::layout::kernel::FeedbackRound,
+    ) -> Result<(), Error> {
+        round.observe_count(self.source_rows.len())?;
+        for &(category, row) in &self.source_rows {
+            round.observe_count(category)?;
+            round.observe_count(row)?;
+        }
+        Ok(())
+    }
     pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
         with_clip(backend, self.clip, |backend| {
             if let Some((line, style)) = &self.zero {
@@ -557,51 +610,52 @@ impl BeeswarmPayload {
 }
 
 fn select_colorbar(
-    layout: &Layout,
-    label: &crate::layout::TextBlock,
-    values: &[crate::layout::ResolvedTextPlan],
-    stops: Vec<GradientStop>,
+    guide: &crate::decorations::legend::MeasuredContinuousGuide,
+    panel: PanelBox,
+    theme: &crate::theme::ResolvedTheme,
     data: crate::data::PlotData<'_>,
 ) -> Result<ColorbarPayload, Error> {
-    data.claim_source_visits(3)?;
-    data.claim_source_bytes(std::mem::size_of::<ColorbarPayload>())?;
-    let (_, panel_right, panel_bottom, panel_top) = layout.projection.pixel_box();
-    let left = panel_right + 18.0;
-    let height = (panel_top - panel_bottom).min(150.0);
-    let bottom = panel_bottom + (panel_top - panel_bottom - height) / 2.0;
+    let selected = guide.select(
+        panel.x1 + theme.legend.outside_gap,
+        panel.y0 + (panel.height() - guide.height) / 2.0,
+        data,
+    )?;
+    let mut gradient = None;
+    let mut text = Vec::new();
+    data.reserve_source(&mut text, selected.calls.len())?;
+    for call in selected.calls {
+        data.claim_source_visits(1)?;
+        match call {
+            crate::decorations::legend::LegendCall::Gradient(bounds, start, end, stops) => {
+                gradient = Some((bounds, start, end, stops));
+            }
+            crate::decorations::legend::LegendCall::Text(placed) => text.push(placed),
+            crate::decorations::legend::LegendCall::Background(_, _) => {}
+            _ => {
+                return Err(Error::Render(
+                    "unexpected Beeswarm continuous guide operand".into(),
+                ))
+            }
+        }
+    }
+    if !text.is_empty() {
+        text.rotate_left(1);
+    }
+    let (bounds, start, end, stops) =
+        gradient.ok_or_else(|| Error::Render("Beeswarm guide has no gradient".into()))?;
     Ok(ColorbarPayload {
-        bounds: PanelBox::new(left, left + 10.0, bottom, bottom + height),
-        start: Point2D::new(left + 5.0, bottom),
-        end: Point2D::new(left + 5.0, bottom + height),
+        bounds,
+        start,
+        end,
         stops,
-        text: [
-            PlacedText::from_deferred_first_line(
-                values[0].clone(),
-                Point2D::new(
-                    (left + 16.0).trunc(),
-                    (bottom + height - 4.0).max(0.0).trunc(),
-                ),
-                TextAnchor::Start,
-                0.0,
-            ),
-            PlacedText::from_deferred_first_line(
-                values[1].clone(),
-                Point2D::new((left + 16.0).trunc(), (bottom - 13.0).max(0.0).trunc()),
-                TextAnchor::Start,
-                0.0,
-            ),
-            PlacedText::from_deferred_first_line(
-                label.plan().clone(),
-                Point2D::new((left + 47.0).trunc(), (bottom + height / 2.0).trunc()),
-                TextAnchor::Middle,
-                -90.0,
-            ),
-        ],
+        text,
     })
 }
 
 #[cfg(test)]
 mod extraction;
+
+mod packing;
 
 #[cfg(test)]
 mod fit_tests {
@@ -611,7 +665,7 @@ mod fit_tests {
     use crate::theme::ResolvedTheme;
 
     #[test]
-    fn prepared_bin_offsets_and_complete_marker_ink_raise_category_hard_pitch() {
+    fn complete_marker_ink_raises_native_category_hard_pitch() {
         let source = |exact: bool| {
             let plot = Plot::beeswarm(
                 crate::CategoryValues::new(
@@ -643,14 +697,45 @@ mod fit_tests {
         styled.marks.point_sizes.beeswarm = 54;
         let raised = intrinsic(source(false), &styled);
         assert!(raised.0 > baseline.0);
-        assert!(raised.1 > 700.0);
+        assert!(raised.1 > baseline.1);
         let exact = intrinsic(source(true), &styled);
-        assert_eq!(
-            exact.0.to_bits(),
-            crate::layout::canvas::MINIMUM_PANEL_SPAN.to_bits()
-        );
-        assert!(exact.0 < baseline.0);
+        assert!(exact.0 >= 1.0 / 1024.0);
+        assert!(exact.0 < raised.0);
         assert_eq!(exact.1.to_bits(), raised.1.to_bits());
+    }
+
+    #[test]
+    fn tight_native_height_refuses_without_hiding_coincident_source_points() {
+        let source = Plot::beeswarm(
+            crate::CategoryValues::new("category", ["a"; 12]).unwrap(),
+            crate::NumericValues::new("x", [0.0; 12]),
+            crate::NumericValues::new("color", [0.5; 12]),
+        )
+        .x_label("")
+        .y_label("")
+        .erase()
+        .with_suppressed_continuous_guide();
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let chart = crate::plots::shared_x::prepare_plot(&source, &resources)
+            .unwrap()
+            .attach(source)
+            .unwrap();
+        let theme = crate::Theme::Publication.resolve();
+        let result = chart.measure_selected_interior(PlotRenderContext::new(
+            chart.data(),
+            PanelBox::new(50.0, 850.0, 50.0, 80.0),
+            &theme,
+        ));
+        assert!(
+            matches!(result, Err(crate::layout::fit::PlanError::Fit(failure)) if failure.reason.kind == FitKind::TrackOrResidual)
+        );
+        assert_eq!(
+            chart.prepared_beeswarm.as_ref().unwrap().panels[0]
+                .1
+                .rows
+                .len(),
+            12
+        );
     }
 
     #[test]
@@ -662,7 +747,7 @@ mod fit_tests {
             crate::NumericValues::new("color", [0.5; 9]),
         )
         .color_limits(0.0, 1.0)
-        .size(1800, 6000)
+        .size(1800, 30000)
         .erase();
         let mut theme = crate::Theme::Publication.resolve();
         theme.marks.point_sizes.beeswarm = 300;
@@ -672,7 +757,7 @@ mod fit_tests {
             .generation_resources();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let cell = PanelBox::new(80.0, 1750.0, 80.0, 5900.0);
+        let cell = PanelBox::new(80.0, 1750.0, 80.0, 29900.0);
         let selected = crate::decorations::plan::plan_panel_for_test(
             &chart,
             crate::PlotKind::Beeswarm,

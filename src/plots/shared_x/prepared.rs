@@ -284,9 +284,6 @@ pub(crate) fn prepare_reference_plot(
         quantiles.validate_ranges(axes.ranges, data)?;
     }
     crate::orchestrator::layers::GuideSnapshot::validate_sources(source, axes.ranges, data)?;
-    if let Some(marks) = &mut beeswarm {
-        marks.finish(axes.ranges[0], data)?;
-    }
     let scope = || scope.map(|s| data.copy_source_string(s)).transpose();
     let mut retained = Vec::new();
     data.reserve_source(&mut retained, 1)?;
@@ -786,9 +783,6 @@ pub(crate) fn prepare_plot(
         }
         for ((_, quantiles), (_, axes)) in qq.iter().zip(&retained) {
             quantiles.validate_ranges(axes.ranges, source_data)?;
-        }
-        for ((_, marks), (_, axes)) in beeswarm.iter_mut().zip(&retained) {
-            marks.finish(axes.ranges[0], source_data)?;
         }
         for (_, axes) in &retained {
             if matches!(

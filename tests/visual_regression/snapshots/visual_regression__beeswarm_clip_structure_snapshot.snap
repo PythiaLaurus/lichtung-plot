@@ -2,13 +2,13 @@
 source: tests/visual_regression/suite.rs
 expression: "specialized_svg_structure(&svg,\n&[\"Beeswarm structural title\", \"Color\", \"0.100\", \"1.000\"])"
 ---
-<clipPath id="clip-0"><rect x="117.2001953125" y="46" width="138.2998046875" height="165.400390625"/></clipPath>
+<clipPath id="clip-0"><rect x="134" y="51" width="127.3076171875" height="162"/></clipPath>
 <g id="grid">
 <g clip-path="url(#clip-0)">
 MARKS circle=4 line=0 polygon=0 polyline=0 text=0
 END MARKS
-<text x="287.7919921875" y="60.857421875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" fill="#282828" text-anchor="start" direction="ltr">1.000</text>
-<text x="288.275390625" y="219.857421875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" fill="#282828" text-anchor="start" direction="ltr">0.100</text>
-<text x="303.998046875" y="132.1171875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" fill="#3C3C3C" text-anchor="start" direction="ltr" transform="rotate(-90.0,320,129)">Color</text>
+<text x="297.9833984375" y="201.5576171875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" fill="#282828" text-anchor="start" direction="ltr">0.100</text>
+<text x="297.5" y="87.95703125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" fill="#282828" text-anchor="start" direction="ltr">1.000</text>
+<text x="278.2333984375" y="68.9169921875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" fill="#3C3C3C" text-anchor="start" direction="ltr">Color</text>
 <g id="axes">
 <text x="52.9296875" y="27.1953125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">Beeswarm structural title</text>
