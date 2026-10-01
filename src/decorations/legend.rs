@@ -136,7 +136,7 @@ impl GuideKind {
 }
 
 #[derive(Debug)]
-enum LegendCall {
+pub(crate) enum LegendCall {
     Background([f64; 5], FillStyle),
     Gradient(
         crate::layout::PanelBox,
@@ -170,7 +170,7 @@ impl LegendCall {
 /// Assigned legend operands, including glyph and text placement.
 #[derive(Debug)]
 pub(crate) struct LegendDrawPlan {
-    calls: Vec<LegendCall>,
+    pub(crate) calls: Vec<LegendCall>,
 }
 
 impl LegendDrawPlan {

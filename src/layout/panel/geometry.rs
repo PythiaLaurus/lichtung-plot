@@ -241,17 +241,3 @@ fn default_panel_box(canvas_width: u32, canvas_height: u32) -> PanelBox {
         f64::from(canvas_height) - 30.0,
     )
 }
-
-pub(crate) fn y_axis_left_inset_for_tick_labels(
-    tick_label_width: f64,
-    tick_length: u32,
-    label_font_size: u32,
-    spacing: &crate::theme::AxisSpacing,
-) -> f64 {
-    spacing.y_title_edge_padding
-        + f64::from(label_font_size)
-        + spacing.y_title_tick_label_gap
-        + tick_label_width
-        + f64::from(tick_length)
-        + spacing.y_tick_label_gap
-}

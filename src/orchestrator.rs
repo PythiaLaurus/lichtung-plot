@@ -298,12 +298,18 @@ impl Plot {
             .map_err(|error| Error::Render(format!("interior call admission: {error:?}")))
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the closed family dispatch shares one selected annotation lifecycle"
+    )]
     fn measure_selected_interior_in_call(
         &self,
         context: PlotRenderContext<'_>,
         _call: &crate::font::canonical::MeasurementCall,
     ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-        use crate::layout::interior::{InteriorRoute as R, SpecializedLegacy as S};
+        use crate::layout::interior::{
+            InteriorRoute as R, SpecializedGrid as G, SpecializedLegacy as S,
+        };
         #[cfg(test)]
         SELECTED_INTERIOR_MEASUREMENTS.with(|calls| calls.set(calls.get() + 1));
         #[cfg(test)]
@@ -319,7 +325,7 @@ impl Plot {
             }
             R::SpecializedLegacy(S::Matrix) => crate::plots::matrix::measure(self, context)?,
             R::SpecializedLegacy(S::Marginal) => crate::plots::marginal::measure(self, context)?,
-            R::SpecializedLegacy(S::Heatmap) => crate::plots::heatmap::measure(self, context)?,
+            R::SpecializedGrid(G::Heatmap) => crate::plots::heatmap::measure(self, context)?,
             R::SpecializedLegacy(S::Beeswarm) => crate::plots::beeswarm::measure(self, context)?,
             R::SpecializedLegacy(S::Waterfall) => crate::plots::waterfall::measure(self, context)?,
         };

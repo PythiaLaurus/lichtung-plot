@@ -45,10 +45,11 @@ interior_routes! {
     native {
         StandardCoordinate { Scatter, Line, Trajectory, LinePath, Histogram, Density, Qq, Regression },
         OneCategoricalAxis { PointInterval, Coefficient, Forest, Dumbbell, Bar, HorizontalBar, StackedBar, StackedHorizontalBar, Boxplot, Violin, Raincloud, Interaction },
+        SpecializedGrid { Heatmap },
     }
     legacy {
         SpecializedLegacy {
-            Heatmap, Marginal, Matrix, Beeswarm, Waterfall,
+            Marginal, Matrix, Beeswarm, Waterfall,
         },
     }
 }
@@ -56,9 +57,18 @@ interior_routes! {
 impl InteriorRoute {
     pub(crate) const fn is_native(self) -> bool {
         match self {
-            Self::StandardCoordinate(_) | Self::OneCategoricalAxis(_) => true,
+            Self::StandardCoordinate(_)
+            | Self::OneCategoricalAxis(_)
+            | Self::SpecializedGrid(_) => true,
             Self::SpecializedLegacy(_) => false,
         }
+    }
+
+    pub(crate) const fn is_coordinate(self) -> bool {
+        matches!(
+            self,
+            Self::StandardCoordinate(_) | Self::OneCategoricalAxis(_)
+        )
     }
 
     pub(crate) fn validate(self, plot: &Plot) -> Result<(), Error> {
@@ -138,7 +148,7 @@ impl PreparedInteriorInputs {
     ) -> Result<(), Error> {
         self.route.validate(plot)?;
         for (index, (scope, axes)) in self.axes.iter().enumerate() {
-            if self.route.is_native() {
+            if self.route.is_coordinate() {
                 coordinate::Intrinsics::prepare(axes, theme, scope.as_deref())?;
             } else if let Some(heatmap) = &self.heatmap {
                 let prepared = heatmap
@@ -188,8 +198,10 @@ impl Plot {
         &self,
         theme: &crate::theme::ResolvedTheme,
     ) -> Result<(f64, f64), Error> {
-        let mut minimum = if InteriorRoute::classify(self.kind()).is_native() {
+        let mut minimum = if InteriorRoute::classify(self.kind()).is_coordinate() {
             coordinate::Intrinsics::prepared(self, theme)?.minimum(self)
+        } else if InteriorRoute::classify(self.kind()).is_native() {
+            (1.0 / 1024.0, 1.0 / 1024.0)
         } else {
             (
                 crate::layout::canvas::MINIMUM_PANEL_SPAN,

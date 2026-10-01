@@ -220,7 +220,7 @@ impl InteriorRoute {
                     && (!inputs.logarithmic
                         || (family == OneCategoricalAxis::Forest && inputs.categories[0].is_none()))
             }
-            Self::SpecializedLegacy(_) => false,
+            Self::SpecializedLegacy(_) | Self::SpecializedGrid(_) => false,
         };
         if !valid {
             return Err(Error::Render("invalid native coordinate axis orientation".into()).into());
@@ -394,7 +394,7 @@ impl InteriorRoute {
             Self::OneCategoricalAxis(OneCategoricalAxis::Interaction) => {
                 crate::plots::interaction::measure_marks(plot, context, layout)?
             }
-            Self::SpecializedLegacy(_) => {
+            Self::SpecializedLegacy(_) | Self::SpecializedGrid(_) => {
                 unreachable!("native route validated")
             }
         };

@@ -12,6 +12,7 @@ fn beeswarm_parent_svg_fingerprints() {
     // T5d3b3 pins sampled interior guide stops to the resolved mark colors.
     // T5c4's mixed Beeswarm/Heatmap Canvas uses actual child grid minima, so
     // that one assigned panel's SVG coordinates differ from the 80x60 floor.
+    // T5e1c uses the native Heatmap frame and common measured continuous guide.
     for (theme, expected) in [
         (
             lichtung_plot::Theme::Publication,
@@ -25,7 +26,7 @@ fn beeswarm_parent_svg_fingerprints() {
                 (21280, 0x6770_76e0_fc41_9692),
                 (21288, 0xfa4a_8d63_b80d_4c7e),
                 (23956, 0xd2cc_0b0e_32f7_043b),
-                (16582, 0x7fb9_e6ce_27b8_e792),
+                (16638, 3_444_976_425_010_708_410),
             ],
         ),
         (
@@ -40,7 +41,7 @@ fn beeswarm_parent_svg_fingerprints() {
                 (20487, 0x9db8_a421_2d7e_c3e1),
                 (20495, 0xe9af_9d4c_808a_8f2d),
                 (21996, 0xfac9_8f95_3aad_1e94),
-                (15242, 0x7fb2_2841_f097_c684),
+                (15462, 17_295_330_126_320_557_267),
             ],
         ),
     ] {

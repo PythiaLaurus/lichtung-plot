@@ -469,7 +469,7 @@ fn heatmap_rejects_canvas_too_short_for_missing_colorbar() {
     let error = render(&data, |chart| chart.size(320, 150)).unwrap_err();
 
     assert!(
-        error.contains("root title block exceeds its exact allocated height"),
+        error.contains("LegendOrGuide") && error.contains("continuous guide"),
         "{error}"
     );
 }
@@ -864,7 +864,7 @@ fn heatmap_annotations_error_when_cells_cannot_fit_values() {
             "layout fit FitReason { kind: TrackOrResidual, ",
             "address: ComponentAddress { root: AddressSegment { role: Root, slot_index: 0 }, ",
             "descendants: [] }, ordinal: 0 }: ",
-            "root title block leaves less than the measured child body minimum"
+            "assigned frame leaves insufficient body after measured gutters"
         )
     );
 
@@ -962,7 +962,11 @@ fn heatmap_png_is_rasterized_from_the_native_gradient_svg() {
         coordinate("x1"),
         f64::midpoint(coordinate("y1"), coordinate("y2")),
     );
-    assert_eq!(center, [122, 146, 181]);
+    // The nearest sampled pixel can straddle the exact midpoint of a quantized guide.
+    assert!(center
+        .into_iter()
+        .zip([122_u8, 146, 181])
+        .all(|(actual, expected)| actual.abs_diff(expected) <= 1));
     assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
     std::fs::remove_dir_all(directory).unwrap();
 }

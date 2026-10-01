@@ -480,7 +480,7 @@ pub(crate) fn prepare_plot(
     }
     if source.has_facets() {
         let row_topology = InteriorRoute::classify(source.kind())
-            .is_native()
+            .is_coordinate()
             .then(|| source_data.admit_row_topology())
             .transpose()?;
         let panels = crate::orchestrator::text_census_panels(source, source_data)?;

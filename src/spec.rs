@@ -1010,7 +1010,7 @@ impl<'a> PlotRenderContext<'a> {
     ) -> Result<Layout, crate::layout::fit::PlanError> {
         if self.retained_layout.is_none()
             && self.prepared_kind.is_some_and(|kind| {
-                crate::layout::interior::InteriorRoute::classify(kind).is_native()
+                crate::layout::interior::InteriorRoute::classify(kind).is_coordinate()
             })
         {
             return Err(Error::Render("native axes require the coordinate producer".into()).into());

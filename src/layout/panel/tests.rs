@@ -706,28 +706,6 @@ fn complete_sources_fit_endpoint_labels_inward_instead_of_filtering_positions() 
 }
 
 #[test]
-fn y_axis_inset_preserves_measured_tick_width_and_label_gap() {
-    let mut theme = crate::Theme::Publication.resolve();
-    let tick_width = theme
-        .measure_text(
-            "locus_0 aa",
-            &theme.typography.tick_label,
-            crate::layout::PhysicalTextAlignment::End,
-            "y-axis tick label",
-            false,
-        )
-        .unwrap()
-        .width();
-    theme.axes.spacing.y_title_edge_padding = 9.0;
-    theme.axes.spacing.y_title_tick_label_gap = 13.0;
-    theme.axes.spacing.y_tick_label_gap = 4.0;
-    let inset = y_axis_left_inset_for_tick_labels(tick_width, 5, 17, &theme.axes.spacing);
-
-    let expected = 9.0 + 17.0 + 13.0 + tick_width + 5.0 + 4.0;
-    assert!((inset - expected).abs() < f64::EPSILON);
-}
-
-#[test]
 fn categorical_y_ticks_preserve_the_supplied_vector_and_row_range() {
     let theme = crate::Theme::Publication.resolve();
     let y_ticks = (0..7)

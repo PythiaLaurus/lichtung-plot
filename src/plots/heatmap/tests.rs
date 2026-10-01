@@ -402,6 +402,34 @@ fn constrained_merged_row_gets_its_own_height_and_keeps_all_cells_and_ticks() {
 }
 
 #[test]
+fn native_heatmap_uses_traced_tracks_below_the_retired_parity_floor() {
+    let source = Plot::heatmap(
+        CategoryValues::new("column", ["a"]).unwrap(),
+        CategoryValues::new("row", ["b"]).unwrap(),
+        NumericValues::new("value", [1.0]),
+    )
+    .x_label("")
+    .y_label("")
+    .erase()
+    .with_suppressed_continuous_guide();
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let chart = crate::plots::shared_x::prepare_plot(&source, &resources)
+        .unwrap()
+        .attach(source)
+        .unwrap();
+    let theme = crate::Theme::Publication.resolve();
+    let hard = intrinsic_body_minimum(&chart, &theme).unwrap();
+    assert!(hard.0 < 40.0 && hard.1 < 60.0);
+    let panel = PanelBox::new(50.0, 83.0, 50.0, 74.0);
+    let selected = chart
+        .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
+        .unwrap();
+    assert!(selected.axes.is_some());
+    assert_eq!(selected.layout.projection.panel_box(), panel);
+    assert!(crate::layout::interior::InteriorRoute::classify(chart.kind()).is_native());
+}
+
+#[test]
 fn heatmap_intrinsic_cache_rechecks_the_final_shared_color_domain() {
     let source = Plot::heatmap(
         CategoryValues::new("column", ["a", "b"]).unwrap(),

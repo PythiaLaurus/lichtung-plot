@@ -2538,12 +2538,12 @@ The sole root driver and numerical/resource policies remain unchanged.
 | Step | Status | Depends on | Logical commit |
 | --- | --- | --- | --- |
 | T5e0 | COMPLETE | T5d | `docs(layout): pin specialized and root sizing closure inputs` |
-| T5e1 | IN PROGRESS | T5e0 | Umbrella for Heatmap intrinsic and native grid ownership |
+| T5e1 | COMPLETE | T5e0 | Umbrella for Heatmap intrinsic and native grid ownership |
 | T5e1a | COMPLETE | T5e0 | `refactor(heatmap): derive prepared column-local hard widths` |
 | T5e1b | COMPLETE | T5e1a | Umbrella for assigned Heatmap Grid axes |
 | T5e1b1 | COMPLETE | T5e1a | `feat(heatmap): assign measured column tracks to selected cells and axes` |
 | T5e1b2 | COMPLETE | T5e1b1 | `feat(heatmap): allocate rows from constrained cell text` |
-| T5e1c | PENDING | T5e1b | `refactor(heatmap): retire specialized packing adapter` |
+| T5e1c | COMPLETE | T5e1b | `refactor(heatmap): retire specialized packing adapter` |
 | T5e2 | PENDING | T5e1 | `feat(matrix): allocate native variable grid tracks` |
 | T5e3 | PENDING | T5e2 | `feat(marginal): measure native linked subpanels` |
 | T5e4 | PENDING | T5e3 | `feat(beeswarm): implement bounded deterministic tangent packing` |
@@ -2649,6 +2649,33 @@ the approved square preference as soft. Use final scales/contrast and explicit
 current overflow policy. Evidence includes merged spans, long unbreakable content,
 missing values, exact-size failure, and no silent elision beyond its owned policy.
 Delete the Heatmap specialized adapter when this native producer lands.
+
+T5e1c closure: Heatmap is a native `SpecializedGrid` producer. Its root now
+contains only root-owned padding/text; common frozen axis requirements drive
+the existing root feedback. `DeferredHeatmapMinimum`, its 40/60/90px parity
+floors, the legacy y-axis inset helper and equal category reconstruction are
+deleted. Column-local label/value requirements and row-local glyph/text
+requirements include the explicit Wrap/Elide policy; intrinsic cache identity
+includes tick/title typography and final contrast/paint. The mandatory right
+guide uses the common `MeasuredContinuousGuide` and an inflexible measured
+guide track beside the flexible data track in the shared Grid allocator,
+replacing the fixed title/reserve/gradient-length arithmetic. Native axes freeze
+with selected category edges; source/raw display labels and composed ownership
+remain distinct. A 33×24px assigned Heatmap without an owned guide proves the
+removed floors, with frozen axes retained. Sampled guide stops no longer move
+the numeric center label: its fraction comes from the final numeric domain,
+with an independently expected regression. The normal text workload now
+attributes 330 long-Elide prefix trials to rounds 115/215, and 108 to the
+rejected shared-prefix case; Wrap remains zero trials. Mixed Canvas fingerprints
+intentionally change only the Heatmap-containing case: the historical
+Publication `(16582, 0x7fb9e6ce27b8e792)` and Science
+`(15242, 0x7fb22841f097c684)` reflect the former fixed guide/frame geometry.
+The new fingerprints retain all scientific cells/stops/text; midpoint PNG
+sampling allows one channel unit for the nearest pixel of the quantized guide,
+while constant-domain pixel equality remains exact. Forty-six Heatmap units,
+40 integrations, five continuous-guide units, route census, facet/shared-guide
+composition, mixed fingerprints, alias rendering and the specialized text
+contract pass with strict Clippy and `git diff --check`.
 
 ### T5e2 — Matrix
 

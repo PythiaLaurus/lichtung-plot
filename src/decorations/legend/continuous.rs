@@ -271,7 +271,12 @@ impl MeasuredContinuousGuide {
             } else if index + 1 == descriptor.labels.len() {
                 1.0
             } else {
-                descriptor.stops[1].offset
+                crate::theme::ContinuousColors::normalized_fraction(
+                    descriptor.domain,
+                    descriptor.center.ok_or_else(|| {
+                        Error::Render("three-label continuous guide has no center".into())
+                    })?,
+                )?
             };
             labels.push(if horizontal {
                 centered_text(
@@ -447,6 +452,30 @@ mod tests {
         assert_eq!(
             projected_minimum(&[3.0], 5.0, 40.0).to_bits(),
             40.0_f64.to_bits()
+        );
+    }
+
+    #[test]
+    fn sampled_stops_do_not_move_the_numeric_center_label() {
+        let mut descriptor = descriptor();
+        descriptor
+            .stops
+            .insert(1, GradientStop::new(0.1, (70, 140, 200)));
+        let theme = crate::Theme::Publication.resolve();
+        let guide = fit::measured(MeasuredContinuousGuide::measure(
+            &descriptor,
+            (200.0, 400.0),
+            false,
+            false,
+            &theme,
+            &mut false,
+            &FitScope::root(),
+        ))
+        .unwrap();
+        let expected = guide.gradient.y0 + 0.4 * guide.gradient.height();
+        assert_eq!(
+            guide.labels[1].placement.position.y.to_bits(),
+            expected.to_bits()
         );
     }
 

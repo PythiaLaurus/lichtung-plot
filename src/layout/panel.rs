@@ -40,7 +40,6 @@ pub(crate) use sources::{numeric_tick_plan, NumericTickPlan, TickInterval, TickS
 
 pub(crate) use axis_frame_grid::PanelAxisPlan;
 pub(crate) use cells::LABEL_CLEARANCE;
-pub(crate) use geometry::y_axis_left_inset_for_tick_labels;
 pub(crate) use range_ticks::{anchored_auto_range, continuous_auto_range, display_axis_spec};
 #[cfg(test)]
 pub(crate) use range_ticks::{automatic_numeric_ticks, nice_ticks};

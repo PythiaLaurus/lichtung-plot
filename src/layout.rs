@@ -17,13 +17,11 @@ pub(crate) use panel::format_guide_label;
 #[cfg(test)]
 pub(crate) use panel::nice_ticks;
 pub use panel::AxisTick;
-#[cfg(test)]
 pub(crate) use panel::TickSource;
 pub(crate) use panel::LABEL_CLEARANCE;
 pub(crate) use panel::NUMERIC_ALPHABET;
 pub(crate) use panel::{
     anchored_auto_range, continuous_auto_range, display_axis_spec, numeric_tick_plan,
-    y_axis_left_inset_for_tick_labels,
 };
 pub(crate) use panel::{Axis, AxisSide, AxisSpec, Layout, PanelAxisPlan, Projection};
 pub(crate) use panel::{NumericTickPlan, TickInterval};

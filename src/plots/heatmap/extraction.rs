@@ -42,7 +42,7 @@ fn semantic_grids_text_and_styles_use_exact_root_admission_before_fonts() {
     );
     assert_eq!(marks.value_labels[0].as_deref(), Some("-1.00"));
     assert_eq!(marks.colorbar_values, ["-2", "2", "0", "Missing"]);
-    assert_eq!(marks.minimum.body(), (40.0, 90.0));
+    assert!(marks.has_missing);
     let visits = resources.usage().unwrap().1;
     let bytes = resources.byte_usage().unwrap();
     for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
@@ -406,33 +406,19 @@ fn selected_cell_guide_storage_and_elision_refuse_at_exact_limits() {
         "Long category alpha".to_owned(),
         "Distinct category beta".to_owned(),
     ];
-    let title = TextBlock::from_resolved(
-        payload
-            .colorbar
-            .as_ref()
-            .unwrap()
-            .text
-            .last()
-            .unwrap()
-            .plan
-            .clone(),
-    );
-    let values = marks
-        .colorbar_values
-        .iter()
-        .map(|label| {
-            theme
-                .measure_legacy_appearance_text(
-                    label,
-                    &theme
-                        .legacy_text_appearance(theme.detail_font_size, crate::TextWeight::Normal),
-                    PhysicalTextAlignment::Start,
-                    "heatmap colorbar value",
-                    false,
-                )
-                .unwrap()
-        })
-        .collect::<Vec<_>>();
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let (_, guide) = guide::measure(
+        marks,
+        selected.layout.projection.panel_box(),
+        1.0 / 1024.0,
+        &theme,
+        &crate::layout::fit::FitScope::root(),
+        source.data().with_axis_resources(&resources),
+    )
+    .unwrap();
     for component in 0..3 {
         let run = |resources: &OperationGenerationResources| -> Result<(), Error> {
             let data = source.data().with_axis_resources(resources);
@@ -449,7 +435,7 @@ fn selected_cell_guide_storage_and_elision_refuse_at_exact_limits() {
             } else if component == 1 {
                 select_cells(marks, &columns, &rows, &theme, &annotations, data)?;
             } else {
-                select_colorbar(marks, &selected.layout, &title, &values, &theme, data)?;
+                guide::select(&guide, selected.layout.projection.panel_box(), &theme, data)?;
             }
             Ok(())
         };

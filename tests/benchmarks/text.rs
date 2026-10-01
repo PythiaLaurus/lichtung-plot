@@ -47,7 +47,7 @@ fn heatmap_case(long: bool, wrap: bool, ambiguous: bool) -> CaseMeasurement {
     } else if long || ambiguous {
         assert_eq!(
             trials,
-            if ambiguous { 96 } else { 403 },
+            if ambiguous { 108 } else { 330 },
             "long labels must exercise actual prefix candidates: {:?}",
             sample.observations.roots
         );
@@ -62,7 +62,7 @@ fn heatmap_case(long: bool, wrap: bool, ambiguous: bool) -> CaseMeasurement {
             .iter()
             .map(|root| (root.ordinal, root.heatmap_prefix_trials, root.successful))
             .collect::<Vec<_>>();
-        assert_eq!(roots, [(0, 202, false), (1, 201, true)]);
+        assert_eq!(roots, [(0, 115, false), (1, 215, true)]);
         assert_eq!(trials, roots.iter().map(|root| root.1).sum::<u64>());
         println!("heatmap_prefix_roots,{roots:?}");
     }

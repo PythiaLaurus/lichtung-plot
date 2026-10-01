@@ -2935,7 +2935,7 @@ impl Canvas {
     ) -> Result<Option<PreparedDiscreteGuide>, Error> {
         if self.legend_policy != CanvasLegendPolicy::Shared
             || self.panels.iter().flatten().any(|plot| {
-                !crate::layout::interior::InteriorRoute::classify(plot.kind()).is_native()
+                !crate::layout::interior::InteriorRoute::classify(plot.kind()).is_coordinate()
                     && !matches!(plot.kind(), PlotKind::Marginal | PlotKind::Waterfall)
             })
         {
