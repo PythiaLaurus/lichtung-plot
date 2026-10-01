@@ -332,6 +332,7 @@ impl InteriorRoute {
                     ticks: ticks.ticks,
                     explicit_ticks: inputs.specs[side].exact_ticks.is_some(),
                     assigned_tick_width: None,
+                    assigned_cells: None,
                     source: ticks.source,
                 })
             }),

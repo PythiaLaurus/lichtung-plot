@@ -762,7 +762,8 @@ fn heatmap_null_row_annotation_errors_when_wrapped_text_cannot_fit() {
     .unwrap_err();
 
     assert!(
-        error.contains("does not fit its merged row"),
+        error.contains("TrackOrResidual")
+            && error.contains("assigned tracks cannot preserve their hard requirements"),
         "unexpected error: {error}"
     );
 }

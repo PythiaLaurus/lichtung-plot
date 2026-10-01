@@ -97,6 +97,7 @@ impl LabelCell {
 pub(super) fn assign(
     ticks: &[AxisTick],
     categorical: bool,
+    assigned: Option<&[(f64, f64)]>,
     projection: &Projection,
     side: AxisSide,
     theme: &ResolvedTheme,
@@ -128,7 +129,9 @@ pub(super) fn assign(
                 .into());
         }
         previous_key = Some(key);
-        let (center, start, end) = if categorical {
+        let (center, start, end) = if let Some(bounds) = assigned {
+            assigned_bounds(bounds, cells.len(), categorical)?
+        } else if categorical {
             let count = ticks.len() as u128;
             let index =
                 (u128::from(key) * count / u128::from(u64::MAX)).min(count.saturating_sub(1));
@@ -158,6 +161,11 @@ pub(super) fn assign(
             inward: false,
         });
     }
+    if assigned.is_some_and(|bounds| bounds.len() != ticks.len()) {
+        return Err(
+            Error::Render("assigned categorical cell count differs from ticks".into()).into(),
+        );
+    }
     if !categorical {
         let mut previous: Option<usize> = None;
         for (index, tick) in ticks.iter().enumerate() {
@@ -184,6 +192,17 @@ pub(super) fn assign(
             cells[last].inward = true;
         }
     }
+    apply_clearance(&mut cells, ticks, theme, scope)?;
+    Ok(cells)
+}
+
+fn apply_clearance(
+    cells: &mut [LabelCell],
+    ticks: &[AxisTick],
+    theme: &ResolvedTheme,
+    scope: &FitScope,
+) -> Result<(), PlanError> {
+    let environment = theme.prepared_font_environment()?;
     for (cell, tick) in cells.iter_mut().zip(ticks) {
         environment
             .claim_processing_visits(1)
@@ -201,7 +220,23 @@ pub(super) fn assign(
             }
         }
     }
-    Ok(cells)
+    Ok(())
+}
+
+fn assigned_bounds(
+    cells: &[(f64, f64)],
+    index: usize,
+    categorical: bool,
+) -> Result<(f64, f64, f64), Error> {
+    let (start, end) = cells.get(index).copied().ok_or_else(|| {
+        Error::Render("assigned categorical cell count differs from ticks".into())
+    })?;
+    if !categorical || !start.is_finite() || !end.is_finite() || start >= end {
+        return Err(Error::Render(
+            "invalid assigned categorical cell bounds".into(),
+        ));
+    }
+    Ok((f64::midpoint(start, end), start, end))
 }
 
 #[cfg(test)]
@@ -228,6 +263,7 @@ mod tests {
                 let result = assign(
                     &ticks,
                     categorical,
+                    None,
                     &projection,
                     AxisSide::Bottom,
                     &theme,
@@ -261,6 +297,7 @@ mod tests {
             let error = assign(
                 &ticks,
                 false,
+                None,
                 &projection,
                 AxisSide::Bottom,
                 &theme,

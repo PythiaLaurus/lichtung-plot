@@ -475,6 +475,7 @@ mod tests {
                 ticks: Vec::new(),
                 explicit_ticks: false,
                 assigned_tick_width: None,
+                assigned_cells: None,
                 source: crate::layout::TickSource::SUPPLIED,
             },
             y_axis: crate::layout::Axis {
@@ -482,6 +483,7 @@ mod tests {
                 ticks: Vec::new(),
                 explicit_ticks: false,
                 assigned_tick_width: None,
+                assigned_cells: None,
                 source: crate::layout::TickSource::SUPPLIED,
             },
         };

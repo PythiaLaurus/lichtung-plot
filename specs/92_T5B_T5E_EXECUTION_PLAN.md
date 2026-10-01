@@ -2540,9 +2540,9 @@ The sole root driver and numerical/resource policies remain unchanged.
 | T5e0 | COMPLETE | T5d | `docs(layout): pin specialized and root sizing closure inputs` |
 | T5e1 | IN PROGRESS | T5e0 | Umbrella for Heatmap intrinsic and native grid ownership |
 | T5e1a | COMPLETE | T5e0 | `refactor(heatmap): derive prepared column-local hard widths` |
-| T5e1b | IN PROGRESS | T5e1a | Umbrella for assigned Heatmap Grid axes |
+| T5e1b | COMPLETE | T5e1a | Umbrella for assigned Heatmap Grid axes |
 | T5e1b1 | COMPLETE | T5e1a | `feat(heatmap): assign measured column tracks to selected cells and axes` |
-| T5e1b2 | PENDING | T5e1b1 | `feat(heatmap): allocate rows from constrained cell text` |
+| T5e1b2 | COMPLETE | T5e1b1 | `feat(heatmap): allocate rows from constrained cell text` |
 | T5e1c | PENDING | T5e1b | `refactor(heatmap): retire specialized packing adapter` |
 | T5e2 | PENDING | T5e1 | `feat(matrix): allocate native variable grid tracks` |
 | T5e3 | PENDING | T5e2 | `feat(marginal): measure native linked subpanels` |
@@ -2618,6 +2618,29 @@ shared Canvas contracts, the Beeswarm/Heatmap parent fingerprints, normal
 and three ignored release specialized-text workloads, strict Clippy and
 `git diff --check` pass. The active y rows are still equal legacy bands;
 T5e1b2 must assign them from constrained text before T5e1b or T5e1 closes.
+
+T5e1b2 closure: columns now constrain required value and merged-row text
+before the shared Grid allocator assigns y-row tracks. Each row's hard
+height includes complete cell/cross ink, constrained annotation height and
+its displayed categorical y-label with the common axis clearance. Square
+intent and `2em` remain soft preferences. Selected polygons, value/merged
+text checks and y ticks consume the resulting quantized edges, preserving
+first-observed top-to-bottom order and the trailing row. The common axis
+planner retains producer-assigned category cells for both axes: frozen
+ticks, labels and grid lines now consume those cells instead of silently
+reconstructing equal bands. Retained copies admit cell storage/visits, with
+exact byte/visit refusal tests. A constrained merged-row fixture proves
+unequal heights, full-width span, complete required text and aligned ticks;
+an axis fixture checks the actual frozen tick/grid/label centers. The tight
+merged-row integration now expects `TrackOrResidual` when the sum of hard
+row requirements cannot fit, rather than the retired equal-row text check.
+Forty-five Heatmap units, 40 Heatmap integrations, 17 frozen-axis units,
+two axis-cell admission units, retained-axis admission, 25 facet contracts,
+shared sequential/diverging Canvas guides, alias rendering, mixed
+Beeswarm/Heatmap fingerprints, normal specialized-text workloads and the
+ignored release workload's three interleaved samples pass, together with
+strict Clippy and `git diff --check`. T5e1c still owns the parity floor,
+local reserves and specialized route deletion; T5e1 is not yet closed.
 
 Replace legacy pitches/reserves with complete measured column/row tracks. Retain
 every semantic cell, merged row, highlight, value label, missing cell, and trailing

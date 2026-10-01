@@ -741,6 +741,7 @@ pub(super) fn labels_fit(
     let cells = match super::cells::assign(
         ticks,
         false,
+        None,
         projection,
         side,
         theme,

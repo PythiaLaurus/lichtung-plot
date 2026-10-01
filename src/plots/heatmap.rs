@@ -129,7 +129,7 @@ impl HeatmapData {
     clippy::cast_precision_loss,
     reason = "selected CSS-pixel tracks are bounded by the exact u32 root dimensions"
 )]
-fn column_pixels(quanta: i64) -> f64 {
+fn track_pixels(quanta: i64) -> f64 {
     quanta as f64 / 1024.0
 }
 
@@ -202,12 +202,114 @@ fn assigned_columns(
     let mut edges = Vec::new();
     data.reserve_source(&mut edges, count + 1)?;
     let mut edge = start;
-    edges.push(column_pixels(edge));
+    edges.push(track_pixels(edge));
     for width in allocation.sizes {
         edge = edge
             .checked_add(width)
             .ok_or_else(|| Error::Render("Heatmap column edge overflowed spatial quanta".into()))?;
-        edges.push(column_pixels(edge));
+        edges.push(track_pixels(edge));
+    }
+    Ok(edges)
+}
+
+/// Measure each row only after the selected columns constrain its text.
+fn assigned_rows(
+    prepared: &HeatmapData,
+    annotations: &AnnotationPlans,
+    columns: &[f64],
+    labels: &[String],
+    tick_width: f64,
+    context: PlotRenderContext<'_>,
+    data: crate::data::PlotData<'_>,
+) -> Result<Vec<f64>, crate::layout::fit::PlanError> {
+    use crate::layout::fit::FitOutcome;
+    use crate::layout::kernel::{GridRequirement, TrackSpec};
+
+    let panel = context.panel;
+    let theme = context.theme;
+    let resources = data.source_resources()?;
+    let count = prepared.y_levels.len();
+    let width = prepared.x_levels.len();
+    if labels.len() != count {
+        return Err(
+            Error::Render("Heatmap prepared row label count differs from tracks".into()).into(),
+        );
+    }
+    let ink = intrinsic_cell_ink(prepared, theme, data)?;
+    let mut hard = data.collect_source((0..count).map(|_| Ok(ink.1 / count as f64)))?;
+    for (index, label) in labels.iter().enumerate() {
+        data.claim_source_visits(1)?;
+        let text = crate::layout::fit::measured(crate::layout::fit::text(
+            theme,
+            label,
+            &theme.typography.tick_label,
+            tick_width,
+            PhysicalTextAlignment::End,
+            "y-axis tick label",
+            &context
+                .fit_scope()
+                .child(crate::layout::AddressRole::AxisLeft, 0)?,
+        ))?;
+        hard[index] = hard[index].max(text.height() + 2.0 * crate::layout::LABEL_CLEARANCE);
+    }
+    for (index, plan) in annotations.values.iter().enumerate() {
+        data.claim_source_visits(1)?;
+        if let Some(plan) = plan {
+            hard[index / width] = hard[index / width].max(plan.height() + 5.0);
+        }
+    }
+    for (index, plan) in annotations.rows.iter().enumerate() {
+        data.claim_source_visits(1)?;
+        if let Some(plan) = plan {
+            hard[index] = hard[index].max(plan.height() + 4.0);
+        }
+    }
+    data.claim_source_visits(width)?;
+    let square = columns
+        .windows(2)
+        .map(|pair| pair[1] - pair[0])
+        .fold(0.0_f64, f64::max);
+    let preferred = crate::layout::kernel::ceil_spatial_quanta(
+        square.max(2.0 * f64::from(theme.typography.tick_label.font_size)),
+    )?;
+    let base = data.collect_source(hard.into_iter().map(|height| {
+        let min = crate::layout::kernel::ceil_spatial_quanta(height)?;
+        Ok(TrackSpec {
+            min,
+            preferred: min.max(preferred),
+            max: None,
+            flexible: true,
+        })
+    }))?;
+    let bottom = crate::layout::kernel::nearest_spatial_quanta(panel.y0)?;
+    let top = crate::layout::kernel::nearest_spatial_quanta(panel.y1)?;
+    let total = top
+        .checked_sub(bottom)
+        .ok_or_else(|| Error::Render("Heatmap assigned row track span overflowed".into()))?;
+    let children: [GridRequirement<'_>; 0] = [];
+    let allocation = match crate::layout::kernel::allocate_grid_axis(
+        &base,
+        &children,
+        total,
+        [0, 0],
+        0,
+        None,
+        true,
+        resources,
+        context.fit_scope(),
+    )? {
+        FitOutcome::Measured(allocation) => allocation,
+        FitOutcome::Miss(failure) => return Err(failure.into()),
+    };
+    let mut edges = Vec::new();
+    data.reserve_source(&mut edges, count + 1)?;
+    let mut edge = top;
+    edges.push(track_pixels(edge));
+    for height in allocation.sizes {
+        edge = edge
+            .checked_sub(height)
+            .ok_or_else(|| Error::Render("Heatmap row edge overflowed spatial quanta".into()))?;
+        edges.push(track_pixels(edge));
     }
     Ok(edges)
 }
@@ -756,6 +858,7 @@ pub(crate) fn measure(
     body.x1 -= colorbar_reserve;
     let mut annotations = None;
     let mut columns = None;
+    let mut rows = None;
     let layout = context.axis_layout(|| -> Result<_, crate::layout::fit::PlanError> {
     let x_labels = data.collect_source(context.prepared_category_labels(0)
         .ok_or_else(|| Error::Render("heatmap x labels require prepared axes".into()))?
@@ -816,6 +919,24 @@ pub(crate) fn measure(
     let assigned = assigned_columns(prepared, panel, theme, data, context.fit_scope())?;
     columns = Some(assigned);
     let column_edges = columns.as_ref().expect("assigned Heatmap columns");
+    let measured = measure_annotations(chart, prepared, column_edges, theme, context.fit_scope(), &text)?;
+    let y_labels = if wrap_labels {
+        y_labels
+    } else {
+        fitted_unique_labels(
+            data,
+            theme,
+            &y_labels,
+            |_| tick_width,
+            "y",
+            &context.fit_scope().child(crate::layout::AddressRole::AxisLeft, 0)?,
+        )?
+    };
+    let assigned = assigned_rows(prepared, &measured, column_edges, &y_labels, tick_width, context.with_panel(panel), data)?;
+    check_annotation_tracks(chart, prepared, &measured, column_edges, &assigned, context.fit_scope(), data)?;
+    annotations = Some(measured);
+    rows = Some(assigned);
+    let row_edges = rows.as_ref().expect("assigned Heatmap rows");
     let x_ticks = data.collect_source(prepared
         .x_levels
         .iter()
@@ -826,24 +947,15 @@ pub(crate) fn measure(
             let x = (middle - panel.x0) / panel.width() * x_count as f64;
             Ok(AxisTick::new(x, ""))
         }))?;
-    let y_labels = if wrap_labels {
-        y_labels
-    } else {
-        fitted_unique_labels(
-            data,
-            theme,
-            &y_labels,
-            |_| tick_width,
-            "y",
-            &context
-                .fit_scope()
-                .child(crate::layout::AddressRole::AxisLeft, 0)?,
-        )?
-    };
     let y_ticks = data.collect_source(y_labels
         .into_iter()
         .enumerate()
-        .map(|(index, label)| { data.claim_source_visits(1)?; Ok(AxisTick::new(row_y(index, y_count), label)) }))?;
+        .map(|(index, label)| {
+            data.claim_source_visits(1)?;
+            let middle = f64::midpoint(row_edges[index], row_edges[index + 1]);
+            let y = (middle - panel.y0) / panel.height() * y_count as f64;
+            Ok(AxisTick::new(y, label))
+        }))?;
     let x_spec = AxisSpec::default().limits(0.0, x_count as f64);
     let y_spec = AxisSpec::default().limits(0.0, y_count as f64);
         let mut layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
@@ -862,10 +974,15 @@ pub(crate) fn measure(
     // Elision already selected the complete displayed labels; do not wrap them again.
         layout.y_axis.explicit_ticks = !wrap_labels;
         layout.y_axis.assigned_tick_width = Some(tick_width);
-        // Preserve annotation-error precedence before the final x-label fit.
-        annotations = Some(plan_annotations(
-            chart, prepared, &layout, column_edges, theme, context.fit_scope(), &text,
-        )?);
+        layout.x_axis.assigned_cells = Some(data.collect_source(column_edges.windows(2).map(|edge| {
+            data.claim_source_visits(1)?;
+            Ok((edge[0], edge[1]))
+        }))?);
+        layout.y_axis.assigned_cells = Some(data.collect_source(row_edges.windows(2).map(|edge| {
+            data.claim_source_visits(1)?;
+            Ok((edge[1], edge[0]))
+        }))?);
+        // Row text and exact cell fit preceded this axis selection.
     let x_labels = if wrap_labels {
         x_labels
     } else {
@@ -889,25 +1006,16 @@ pub(crate) fn measure(
     let columns = columns
         .as_ref()
         .ok_or_else(|| Error::Render("selected Heatmap has no assigned column tracks".into()))?;
-    let annotations = annotations.map_or_else(
-        || {
-            plan_annotations(
-                chart,
-                prepared,
-                &layout,
-                columns,
-                theme,
-                context.fit_scope(),
-                &text,
-            )
-        },
-        Ok,
-    )?;
+    let rows = rows
+        .as_ref()
+        .ok_or_else(|| Error::Render("selected Heatmap has no assigned row tracks".into()))?;
+    let annotations = annotations
+        .ok_or_else(|| Error::Render("selected Heatmap has no measured cell text".into()))?;
 
     let payload = HeatmapPayload {
         clip: panel,
         cross_style: theme.marks.heatmap_missing_cross.backend_style(),
-        cells: select_cells(prepared, &layout, columns, theme, &annotations, data)?,
+        cells: select_cells(prepared, columns, rows, theme, &annotations, data)?,
         colorbar: colorbar
             .as_ref()
             .map(|(title, values, _)| {
@@ -1702,8 +1810,8 @@ fn required_heatmap_cell_text_must_fit_its_unclipped_cell() {
 
 fn select_cells(
     prepared: &HeatmapData,
-    layout: &Layout,
     columns: &[f64],
+    rows: &[f64],
     theme: &ResolvedTheme,
     annotations: &AnnotationPlans,
     data: crate::data::PlotData<'_>,
@@ -1715,11 +1823,8 @@ fn select_cells(
     data.reserve_source(&mut cells, prepared.cells.len())?;
     for y_index in 0..y_count {
         data.claim_source_visits(1)?;
-        let y0 = y_count as f64 - y_index as f64 - 1.0;
-        let y1 = y0 + 1.0;
+        let (bottom, top) = (rows[y_index + 1], rows[y_index]);
         if let Some(annotation) = &annotations.rows[y_index] {
-            let (_, bottom) = layout.projection.project(0.0, y0);
-            let (_, top) = layout.projection.project(0.0, y1);
             let (left, right) = (columns[0], columns[x_count]);
             cells.push(CellPayload {
                 corners: [
@@ -1753,8 +1858,6 @@ fn select_cells(
                 continue;
             }
             let (left, right) = (columns[x_index], columns[x_index + 1]);
-            let (_, bottom) = layout.projection.project(0.0, y0);
-            let (_, top) = layout.projection.project(0.0, y1);
             let value = prepared.cells[y_index * x_count + x_index];
             let highlighted = prepared.highlighted[y_index * x_count + x_index];
             let color = prepared.fills[y_index * x_count + x_index]
@@ -1823,10 +1926,9 @@ struct AnnotationPlans {
     rows: Vec<Option<crate::layout::ResolvedTextPlan>>,
 }
 
-fn plan_annotations(
+fn measure_annotations(
     chart: &Plot,
     prepared: &HeatmapData,
-    layout: &Layout,
     columns: &[f64],
     theme: &ResolvedTheme,
     scope: &crate::layout::fit::FitScope,
@@ -1862,8 +1964,7 @@ fn plan_annotations(
         .map_err(|_| Error::Render("heatmap row plans allocation failed".into()))?;
     plans.values.resize(prepared.cells.len(), None);
     plans.rows.resize(prepared.null_row_annotations.len(), None);
-    let cell_height = layout.projection.panel_box().height() / prepared.y_levels.len() as f64;
-    if let HeatmapAnnotations::Values(format) = chart.heatmap_annotations_spec() {
+    if let HeatmapAnnotations::Values(_) = chart.heatmap_annotations_spec() {
         for (index, value) in prepared.cells.iter().enumerate() {
             let Some(_) = value else { continue };
             let column = index % prepared.x_levels.len();
@@ -1878,30 +1979,28 @@ fn plan_annotations(
             let owner = prepared.value_owners[index]
                 .as_deref()
                 .ok_or_else(|| Error::Render("heatmap value owner missing".into()))?;
-            let plan = text.plan(source, owner, || {
-                Ok(theme.measure_legacy_appearance_text(
+            let cell_scope = scope.child(AddressRole::HeatmapValueLabel, index)?;
+            let measured = text.plan(source, owner, || {
+                fit::measured(fit::text(
+                    theme,
                     source,
                     appearance,
+                    (cell_width - 6.0).max(0.0),
                     PhysicalTextAlignment::Center,
                     owner,
-                    false,
-                )?)
-            })?;
-            let width = plan.width();
-            let height = plan.height();
-            plans.values[index] = Some(plan);
-            if cell_height < height + 5.0 || cell_width < width + 6.0 {
-                FitFailure::retain_least(&mut miss, scope.child(AddressRole::HeatmapValueLabel, index)?.failure(FitKind::Text, format!(
-                "heatmap: cells are too small for value annotations at precision {} (cell {cell_width:.1}x{cell_height:.1}px, need at least {:.1}x{:.1}px); increase chart size, reduce precision, or hide annotations",
-                format.configured_precision(),
-                width + 6.0,
-                height + 5.0
-                )));
+                    &cell_scope,
+                ))
+            });
+            match measured {
+                Ok(plan) => plans.values[index] = Some(plan),
+                Err(crate::layout::fit::PlanError::Fit(failure)) => {
+                    FitFailure::retain_least(&mut miss, failure);
+                }
+                Err(error) => return Err(error),
             }
         }
     }
-    let available_width = layout.projection.panel_box().width() - 12.0;
-    let available_height = cell_height - 4.0;
+    let available_width = columns[columns.len() - 1] - columns[0] - 12.0;
     for (y_index, annotation) in prepared.null_row_annotations.iter().enumerate() {
         let Some(annotation) = annotation else {
             continue;
@@ -1927,13 +2026,14 @@ fn plan_annotations(
                     continue;
                 }
             };
-        if block.width() > available_width || block.height() > available_height {
-            FitFailure::retain_least(&mut miss, row_scope.failure(FitKind::Text, format!(
-                "heatmap: wrapped fully-null row annotation for {:?} does not fit its merged row ({available_width:.1}x{available_height:.1}px available, {:.1}x{:.1}px needed); increase chart size or shorten the annotation",
-                prepared.y_levels[y_index],
-                block.width(),
-                block.height()
-            )));
+        if block.width() > available_width {
+            FitFailure::retain_least(
+                &mut miss,
+                row_scope.failure(
+                    FitKind::Text,
+                    "heatmap: wrapped fully-null row annotation exceeds its assigned Grid width",
+                ),
+            );
         }
         plans.rows[y_index] = Some(block.plan().clone());
     }
@@ -1941,6 +2041,48 @@ fn plan_annotations(
         Some(failure) => Err(failure.into()),
         None => Ok(plans),
     }
+}
+
+fn check_annotation_tracks(
+    chart: &Plot,
+    prepared: &HeatmapData,
+    annotations: &AnnotationPlans,
+    columns: &[f64],
+    rows: &[f64],
+    scope: &crate::layout::fit::FitScope,
+    data: crate::data::PlotData<'_>,
+) -> Result<(), crate::layout::fit::PlanError> {
+    use crate::layout::fit::{FitFailure, FitKind};
+    use crate::layout::AddressRole;
+
+    let mut miss = None;
+    let count = prepared.x_levels.len();
+    for (index, plan) in annotations.values.iter().enumerate() {
+        data.claim_source_visits(1)?;
+        let Some(plan) = plan else { continue };
+        let col = index % count;
+        let row = index / count;
+        let width = columns[col + 1] - columns[col];
+        let height = rows[row] - rows[row + 1];
+        if width < plan.width() + 6.0 || height < plan.height() + 5.0 {
+            let precision = match chart.heatmap_annotations_spec() {
+                HeatmapAnnotations::Values(format) => format.configured_precision(),
+                HeatmapAnnotations::Hidden => 0,
+            };
+            FitFailure::retain_least(&mut miss, scope.child(AddressRole::HeatmapValueLabel, index)?.failure(FitKind::Text, format!(
+                "heatmap: cell {col},{row} is too small for required value annotation at precision {precision}; increase chart size or hide annotations"
+            )));
+        }
+    }
+    for (row, plan) in annotations.rows.iter().enumerate() {
+        data.claim_source_visits(1)?;
+        let Some(plan) = plan else { continue };
+        if rows[row] - rows[row + 1] < plan.height() + 4.0 {
+            FitFailure::retain_least(&mut miss, scope.child(AddressRole::HeatmapMergedRow, row)?.failure(FitKind::Text,
+                "heatmap: required merged row text exceeds its assigned row; increase chart height"));
+        }
+    }
+    miss.map_or(Ok(()), |failure| Err(failure.into()))
 }
 
 fn select_colorbar(
@@ -2165,10 +2307,6 @@ fn fitted_unique_labels(
         }
     }
     Ok(fitted)
-}
-
-fn row_y(index: usize, count: usize) -> f64 {
-    count as f64 - index as f64 - 0.5
 }
 
 #[cfg(test)]

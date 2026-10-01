@@ -704,6 +704,7 @@ pub(crate) fn measure(
                     label: data.copy_source_string(label.unwrap_or_default())?,
                     explicit_ticks: false,
                     assigned_tick_width: None,
+                    assigned_cells: None,
                 })
             };
             let x_axis = axis(

@@ -1043,11 +1043,31 @@ impl<'a> PlotRenderContext<'a> {
                                 label: retain_string(&tick.label)?,
                             });
                         }
+                        let assigned_cells = axis
+                            .assigned_cells
+                            .as_ref()
+                            .map(|source| {
+                                let mut cells = Vec::new();
+                                crate::render::backend::reserve_text_records(
+                                    &mut cells,
+                                    source.len(),
+                                    environment,
+                                )?;
+                                for cell in source {
+                                    environment.claim_processing_visits(1).map_err(|error| {
+                                        Error::Render(format!("retained axis cells: {error:?}"))
+                                    })?;
+                                    cells.push(*cell);
+                                }
+                                Ok::<_, Error>(cells)
+                            })
+                            .transpose()?;
                         Ok(crate::layout::Axis {
                             label: retain_string(&axis.label)?,
                             ticks,
                             explicit_ticks: axis.explicit_ticks,
                             assigned_tick_width: axis.assigned_tick_width,
+                            assigned_cells,
                             source: axis.source,
                         })
                     };
@@ -1078,6 +1098,7 @@ fn deferred_retained_axis_consumption_admits_every_owned_source_copy() {
             ticks: vec![AxisTick::new(0.5, "first"), AxisTick::new(1.5, "second")],
             explicit_ticks: false,
             assigned_tick_width: None,
+            assigned_cells: Some(vec![(0.0, 100.0), (100.0, 400.0)]),
             source: TickSource::SUPPLIED,
         },
         y_axis: Axis {
@@ -1085,6 +1106,7 @@ fn deferred_retained_axis_consumption_admits_every_owned_source_copy() {
             ticks: vec![AxisTick::new(0.5, "exact")],
             explicit_ticks: true,
             assigned_tick_width: None,
+            assigned_cells: None,
             source: TickSource::EXACT,
         },
     };
@@ -1106,14 +1128,16 @@ fn deferred_retained_axis_consumption_admits_every_owned_source_copy() {
     let layout = consume(&theme).unwrap();
     assert_eq!(layout.x_axis.ticks, retained.x_axis.ticks);
     assert_eq!(layout.y_axis.ticks, retained.y_axis.ticks);
+    assert_eq!(layout.x_axis.assigned_cells, retained.x_axis.assigned_cells);
     let visits = resources.usage().unwrap().1 - before.0;
     let bytes = resources.byte_usage().unwrap() - before.1;
-    // Two titles and three tick strings; each axis reserves the four-record minimum.
+    // Two titles, three tick strings and selected cells; each vector reserves four records.
     assert_eq!(
         bytes,
-        (8 * std::mem::size_of::<AxisTick>() + 14 + 11 + 5) as u64
+        (8 * std::mem::size_of::<AxisTick>() + 4 * std::mem::size_of::<(f64, f64)>() + 14 + 11 + 5)
+            as u64
     );
-    assert_eq!(visits, 0);
+    assert_eq!(visits, 2);
     for (remaining_bytes, succeeds) in [(bytes, true), (bytes - 1, false)] {
         let theme = crate::Theme::Publication.resolve();
         let resources = theme
@@ -1131,6 +1155,21 @@ fn deferred_retained_axis_consumption_admits_every_owned_source_copy() {
                 result,
                 Err(crate::layout::fit::PlanError::Fatal(Error::Render(_)))
             ));
+        }
+    }
+    for available in [0, 1, 2, 3] {
+        let theme = crate::Theme::Publication.resolve();
+        let resources = theme
+            .prepared_font_environment()
+            .unwrap()
+            .generation_resources();
+        let before = resources.usage().unwrap().1;
+        resources.set_test_limits(before + available, u64::MAX);
+        let result = consume(&theme);
+        assert_eq!(result.is_ok(), available >= visits);
+        assert_eq!(resources.usage().unwrap().1 - before, available.min(visits));
+        if let Err(error) = result {
+            assert!(matches!(error, crate::layout::fit::PlanError::Fatal(_)));
         }
     }
 }

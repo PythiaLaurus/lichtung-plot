@@ -97,6 +97,8 @@ pub struct Axis {
     pub ticks: Vec<AxisTick>,
     pub(crate) explicit_ticks: bool,
     pub(crate) assigned_tick_width: Option<f64>,
+    /// Selected category track edges in panel coordinates, when a producer owns them.
+    pub(crate) assigned_cells: Option<Vec<(f64, f64)>>,
     pub(crate) source: TickSource,
 }
 

@@ -481,7 +481,15 @@ impl Axis {
             .claim_measurement_call()
             .map_err(|error| Error::Render(format!("axis call admission: {error:?}")))?;
         let categorical = self.source == TickSource::SUPPLIED;
-        let cells = cells::assign(&self.ticks, categorical, projection, side, theme, scope)?;
+        let cells = cells::assign(
+            &self.ticks,
+            categorical,
+            self.assigned_cells.as_deref(),
+            projection,
+            side,
+            theme,
+            scope,
+        )?;
         let panel = projection.panel_box();
         let vertical_width = if side == AxisSide::Left {
             self.vertical_label_width(panel, theme)?

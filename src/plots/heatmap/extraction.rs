@@ -379,6 +379,12 @@ fn selected_cell_guide_storage_and_elision_refuse_at_exact_limits() {
         payload.cells[0].corners[1].x,
         payload.cells[1].corners[1].x,
     ];
+    let rows = [
+        payload.cells[0].corners[2].y,
+        payload.cells[0].corners[0].y,
+        payload.cells[2].corners[0].y,
+        payload.cells[4].corners[0].y,
+    ];
     let marks = retained(&source).unwrap();
     let text = PlotRenderContext::new(
         source.data(),
@@ -387,10 +393,9 @@ fn selected_cell_guide_storage_and_elision_refuse_at_exact_limits() {
     )
     .producer_text()
     .unwrap();
-    let annotations = plan_annotations(
+    let annotations = measure_annotations(
         &source,
         marks,
-        &selected.layout,
         &columns,
         &theme,
         &crate::layout::fit::FitScope::root(),
@@ -442,14 +447,7 @@ fn selected_cell_guide_storage_and_elision_refuse_at_exact_limits() {
                 )
                 .map_err(crate::layout::fit::PlanError::into_error)?;
             } else if component == 1 {
-                select_cells(
-                    marks,
-                    &selected.layout,
-                    &columns,
-                    &theme,
-                    &annotations,
-                    data,
-                )?;
+                select_cells(marks, &columns, &rows, &theme, &annotations, data)?;
             } else {
                 select_colorbar(marks, &selected.layout, &title, &values, &theme, data)?;
             }

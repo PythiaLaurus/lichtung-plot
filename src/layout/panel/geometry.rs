@@ -16,6 +16,7 @@ impl Layout {
                 ticks: Vec::new(),
                 explicit_ticks: false,
                 assigned_tick_width: None,
+                assigned_cells: None,
                 source: TickSource::SUPPLIED,
             },
             y_axis: Axis {
@@ -23,6 +24,7 @@ impl Layout {
                 ticks: Vec::new(),
                 explicit_ticks: false,
                 assigned_tick_width: None,
+                assigned_cells: None,
                 source: TickSource::SUPPLIED,
             },
             projection: Projection::new(
@@ -147,6 +149,7 @@ impl Layout {
                 ticks: x_ticks.ticks,
                 explicit_ticks: x_spec.exact_ticks.is_some(),
                 assigned_tick_width: None,
+                assigned_cells: None,
                 source: x_ticks.source,
             },
             y_axis: Axis {
@@ -154,6 +157,7 @@ impl Layout {
                 ticks: y_ticks.ticks,
                 explicit_ticks: y_spec.exact_ticks.is_some(),
                 assigned_tick_width: None,
+                assigned_cells: None,
                 source: y_ticks.source,
             },
         })

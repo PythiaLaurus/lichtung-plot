@@ -166,6 +166,57 @@ fn native_categorical_trajectory_installs_band_projection_before_mark_capture() 
 }
 
 #[test]
+fn assigned_category_tracks_drive_frozen_ticks_grid_and_label_cells() {
+    let theme = crate::Theme::Publication.resolve();
+    let mut layout = layout(
+        PanelBox::new(80.0, 380.0, 80.0, 380.0),
+        vec![AxisTick::new(0.25, "first"), AxisTick::new(1.75, "second")],
+        vec![AxisTick::new(1.75, "top"), AxisTick::new(0.25, "bottom")],
+        TickSource::SUPPLIED,
+    );
+    layout.x_axis.assigned_cells = Some(vec![(80.0, 160.0), (160.0, 380.0)]);
+    layout.y_axis.assigned_cells = Some(vec![(160.0, 380.0), (80.0, 160.0)]);
+    let plan = layout.plan_axes(&theme).unwrap();
+    let grid = plan.grid.as_ref().unwrap();
+    for (index, center) in [120.0_f64, 270.0].into_iter().enumerate() {
+        assert_eq!(
+            plan.x_axis.ticks[index].segment[0].x.to_bits(),
+            center.to_bits()
+        );
+        assert_eq!(grid.lines[index][0].x.to_bits(), center.to_bits());
+        assert_eq!(
+            plan.x_axis.ticks[index]
+                .label
+                .as_ref()
+                .unwrap()
+                .1
+                .position
+                .x
+                .to_bits(),
+            center.to_bits()
+        );
+    }
+    for (index, center) in [270.0_f64, 120.0].into_iter().enumerate() {
+        assert_eq!(
+            plan.y_axis.ticks[index].segment[0].y.to_bits(),
+            center.to_bits()
+        );
+        assert_eq!(grid.lines[index + 2][0].y.to_bits(), center.to_bits());
+        assert_eq!(
+            plan.y_axis.ticks[index]
+                .label
+                .as_ref()
+                .unwrap()
+                .1
+                .position
+                .y
+                .to_bits(),
+            center.to_bits()
+        );
+    }
+}
+
+#[test]
 fn frozen_axis_retains_projection_source_and_unlabeled_positions() {
     let theme = crate::Theme::Publication.resolve();
     let source = TickSource {

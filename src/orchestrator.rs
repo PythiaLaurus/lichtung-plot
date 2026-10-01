@@ -578,6 +578,7 @@ fn rendered_axis_labels_refuse_at_measured_consumption_limits() {
             ticks: axes.categories[0].clone().unwrap(),
             explicit_ticks: false,
             assigned_tick_width: None,
+            assigned_cells: None,
             source: TickSource::SUPPLIED,
         },
         y_axis: Axis {
@@ -585,6 +586,7 @@ fn rendered_axis_labels_refuse_at_measured_consumption_limits() {
             ticks: axes.categories[1].clone().unwrap(),
             explicit_ticks: false,
             assigned_tick_width: Some(200.0),
+            assigned_cells: None,
             source: TickSource::SUPPLIED,
         },
     };

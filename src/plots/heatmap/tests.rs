@@ -334,6 +334,74 @@ fn missing_fill_and_backdrop_invalidate_cached_intrinsics_with_unequal_contrast_
 }
 
 #[test]
+fn constrained_merged_row_gets_its_own_height_and_keeps_all_cells_and_ticks() {
+    let source = Plot::heatmap(
+        CategoryValues::new("column", ["a", "b", "a", "b", "a", "b"]).unwrap(),
+        CategoryValues::new("row", ["first", "first", "second", "second", "absent", "absent"]).unwrap(),
+        NumericValues::nullable("value", [Some(1.0), Some(2.0), Some(3.0), Some(4.0), None, None]),
+    )
+    .annotations(HeatmapAnnotations::Values(crate::NumericLabelFormat::default()))
+    .heatmap_null_row_annotation(crate::HeatmapNullRowAnnotation::new(
+        "absent",
+        "This unavailable measurement requires several complete wrapped lines rather than clipping required annotation text.",
+    ).unwrap())
+    .size(600, 400)
+    .erase();
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let theme = crate::Theme::Publication.resolve();
+    let selected = chart
+        .measure_selected_interior(PlotRenderContext::new(
+            chart.data(),
+            PanelBox::new(50.0, 530.0, 50.0, 220.0),
+            &theme,
+        ))
+        .unwrap();
+    let crate::layout::interior::MarkPayload::Heatmap(payload) =
+        &selected.marks.as_ref().unwrap().payload
+    else {
+        panic!("selected Heatmap")
+    };
+    assert_eq!(payload.cells.len(), 5);
+    assert!(payload.cells.iter().all(|cell| cell.text.is_some()));
+    let merged = &payload.cells[4];
+    let height = |cell: &CellPayload| cell.corners[2].y - cell.corners[0].y;
+    assert!(merged.text.as_ref().unwrap().plan.lines.len() > 1);
+    assert!(height(merged) > height(&payload.cells[0]));
+    assert!(height(merged) > height(&payload.cells[2]));
+    assert_eq!(
+        merged.corners[0].x.to_bits(),
+        payload.cells[0].corners[0].x.to_bits()
+    );
+    assert_eq!(
+        merged.corners[1].x.to_bits(),
+        payload.cells[1].corners[1].x.to_bits()
+    );
+    assert_eq!(
+        merged.corners[2].y.to_bits(),
+        payload.cells[2].corners[0].y.to_bits()
+    );
+    assert_eq!(
+        merged.corners[0].y.to_bits(),
+        selected.layout.projection.panel_box().y0.to_bits()
+    );
+    for (row, cell) in [0, 2, 4].into_iter().enumerate() {
+        let cell = &payload.cells[cell];
+        let center = f64::midpoint(cell.corners[0].y, cell.corners[2].y);
+        let (_, projected) = selected
+            .layout
+            .projection
+            .project(0.0, selected.layout.y_axis.ticks[row].position);
+        assert!((projected - center).abs() <= 1.0 / 1024.0);
+        assert_eq!(
+            selected.layout.y_axis.assigned_cells.as_ref().unwrap()[row],
+            (cell.corners[0].y, cell.corners[2].y)
+        );
+    }
+}
+
+#[test]
 fn heatmap_intrinsic_cache_rechecks_the_final_shared_color_domain() {
     let source = Plot::heatmap(
         CategoryValues::new("column", ["a", "b"]).unwrap(),
