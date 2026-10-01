@@ -324,7 +324,7 @@ impl Plot {
                 route.measure(self, context)?
             }
             R::SpecializedGrid(G::Matrix) => crate::plots::matrix::measure(self, context)?,
-            R::SpecializedLegacy(S::Marginal) => crate::plots::marginal::measure(self, context)?,
+            R::SpecializedGrid(G::Marginal) => crate::plots::marginal::measure(self, context)?,
             R::SpecializedGrid(G::Heatmap) => crate::plots::heatmap::measure(self, context)?,
             R::SpecializedLegacy(S::Beeswarm) => crate::plots::beeswarm::measure(self, context)?,
             R::SpecializedLegacy(S::Waterfall) => crate::plots::waterfall::measure(self, context)?,

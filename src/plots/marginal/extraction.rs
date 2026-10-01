@@ -104,14 +104,44 @@ fn marginal_selected_geometry_and_poisoned_capture_share_operands() {
     let crate::layout::interior::MarkPayload::Marginal(payload) = &marks.payload else {
         panic!("wrong payload")
     };
-    assert_eq!(payload.clips[0], selected.layout.projection.panel_box());
+    assert_eq!(payload.clips()[0], selected.layout.projection.panel_box());
+    let [central, top, right] = payload.clips();
+    assert_eq!((central.x0, central.x1), (top.x0, top.x1));
+    assert_eq!((central.y0, central.y1), (right.y0, right.y1));
+    assert_eq!(
+        payload.panels[0].projection.x_range(),
+        payload.panels[1].projection.x_range()
+    );
+    assert_eq!(
+        payload.panels[0].projection.y_range(),
+        payload.panels[2].projection.y_range()
+    );
+    assert_eq!(
+        payload
+            .panels
+            .each_ref()
+            .map(|panel| panel.address.leaf_role()),
+        [
+            layout::AddressRole::MarginalCentral,
+            layout::AddressRole::MarginalTop,
+            layout::AddressRole::MarginalRight
+        ]
+    );
+    assert_eq!(
+        (top.y0 - central.y1).to_bits(),
+        theme.composition.canvas_grid_gap.to_bits()
+    );
+    assert_eq!(
+        (right.x0 - central.x1).to_bits(),
+        theme.composition.canvas_grid_gap.to_bits()
+    );
     assert_eq!(payload.groups.len(), 2);
     assert_eq!(payload.groups[0].top.len(), 82);
     assert!(marks
         .geometry
         .bounds()
         .iter()
-        .any(|ink| ink.left > payload.clips[0].x1));
+        .any(|ink| ink.left > payload.clips()[0].x1));
     let poison = Plot::marginal(
         NumericValues::new("poison", [f64::NAN]),
         NumericValues::new("poison", [f64::INFINITY]),
@@ -126,7 +156,7 @@ fn marginal_selected_geometry_and_poisoned_capture_share_operands() {
     poison
         .render_panel(
             crate::PlotKind::Marginal,
-            PlotRenderContext::new(poison.data(), payload.clips[0], &theme)
+            PlotRenderContext::new(poison.data(), payload.clips()[0], &theme)
                 .with_retained_body(&selected),
             &mut backend,
         )
@@ -194,7 +224,8 @@ fn marginal_root_and_canvas_prepare_curves_once_per_component() {
 #[test]
 fn marginal_render_grid_refusal_preserves_resource_errors_and_exact_limits() {
     let source = source().erase();
-    let prepared = prepare(&source, source.data()).unwrap();
+    let preparation = OperationGenerationResources::new();
+    let prepared = prepare(&source, source.data().with_axis_resources(&preparation)).unwrap();
     let run = |resources: &OperationGenerationResources| {
         render_curves(
             &prepared.groups,
@@ -223,6 +254,69 @@ fn marginal_render_grid_refusal_preserves_resource_errors_and_exact_limits() {
         visits, bytes,
     ))
     .unwrap();
+}
+
+#[test]
+fn marginal_declared_subpanels_refuse_topology_before_fonts_or_curves() {
+    let source = source().erase();
+    for available in [0, 1, 2, 3] {
+        let resources = OperationGenerationResources::new();
+        resources
+            .claim_topology_slots(1_000_000 - available)
+            .unwrap();
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        STAGES.with(|counts| counts.set([0; 3]));
+        let result = prepare(&source, source.data().with_axis_resources(&resources));
+        assert_eq!(result.is_ok(), available == 3);
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+        if let Err(error) = result {
+            assert!(
+                matches!(error, Error::Render(message) if message.contains("subpanel topology"))
+            );
+            assert_eq!(STAGES.with(std::cell::Cell::get)[1], 0);
+        }
+    }
+}
+
+#[test]
+fn linked_subpanel_call_and_record_refusals_are_fatal_at_exact_limits() {
+    let source = source().erase();
+    for calls in [false, true] {
+        for available in [0, 1] {
+            let theme = crate::Theme::Publication.resolve();
+            let resources = theme
+                .prepared_font_environment()
+                .unwrap()
+                .generation_resources();
+            if calls {
+                resources
+                    .claim_calls(1_000_000 - resources.call_cache_usage().0 - available)
+                    .unwrap();
+            } else {
+                resources
+                    .claim_slots(1_000_000 - resources.usage().unwrap().0 - available)
+                    .unwrap();
+            }
+            let result = measure_linked_panel(
+                PanelBox::new(10.0, 110.0, 10.0, 110.0),
+                [(0.0, 1.0); 2],
+                layout::AddressRole::MarginalTop,
+                PlotRenderContext::new(
+                    source.data(),
+                    PanelBox::new(0.0, 200.0, 0.0, 200.0),
+                    &theme,
+                ),
+                source.data().with_axis_resources(&resources),
+            );
+            assert_eq!(result.is_ok(), available == 1);
+            if let Err(error) = result {
+                assert!(matches!(error, layout::fit::PlanError::Fatal(_)));
+            }
+        }
+    }
 }
 
 #[test]

@@ -46,11 +46,11 @@ interior_routes! {
     native {
         StandardCoordinate { Scatter, Line, Trajectory, LinePath, Histogram, Density, Qq, Regression },
         OneCategoricalAxis { PointInterval, Coefficient, Forest, Dumbbell, Bar, HorizontalBar, StackedBar, StackedHorizontalBar, Boxplot, Violin, Raincloud, Interaction },
-        SpecializedGrid { Heatmap, Matrix },
+        SpecializedGrid { Heatmap, Matrix, Marginal },
     }
     legacy {
         SpecializedLegacy {
-            Marginal, Beeswarm, Waterfall,
+            Beeswarm, Waterfall,
         },
     }
 }

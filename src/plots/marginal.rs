@@ -69,6 +69,22 @@ pub(crate) struct PreparedMarginal {
 }
 
 impl PreparedMarginal {
+    pub(crate) fn primary_mark_count(
+        &self,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<u128, Error> {
+        let mut count = 0_u128;
+        for group in &self.groups {
+            resources
+                .claim_visits(1)
+                .map_err(|error| Error::Render(format!("Marginal mark count: {error:?}")))?;
+            count = count
+                .checked_add(group.x.len() as u128)
+                .ok_or_else(|| Error::Render("Marginal mark count overflow".into()))?;
+        }
+        Ok(count)
+    }
+
     fn resolved_colors(
         &self,
         chart: &Plot,
@@ -156,7 +172,8 @@ pub(crate) fn intrinsic_body_minimum(
         .prepared_marginal
         .as_ref()
         .ok_or_else(|| Error::Render("marginal intrinsic requires prepared groups".into()))?;
-    let mut central = (1.0 / 1024.0_f64, 1.0 / 1024.0_f64);
+    let mut central =
+        crate::layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = chart.data().with_axis_resources(&resources);
     for group in &prepared.groups {
@@ -172,8 +189,8 @@ pub(crate) fn intrinsic_body_minimum(
     // transparent. Its stroke is measured by the same canonical geometry as
     // selection, not inferred from the nominal line width.
     Ok((
-        central.0 + 12.0 + 96.0_f64.max(2.0 * out_x),
-        central.1 + 12.0 + 82.0_f64.max(2.0 * out_y),
+        central.0 + theme.composition.canvas_grid_gap + (1.0 / 1024.0_f64).max(2.0 * out_x),
+        central.1 + theme.composition.canvas_grid_gap + (1.0 / 1024.0_f64).max(2.0 * out_y),
     ))
 }
 
@@ -235,7 +252,7 @@ fn wide_finite_scales_normalize_each_linked_kde_to_its_actual_peak() {
     else {
         panic!("selected Marginal")
     };
-    let strip = payload.clips[1];
+    let strip = payload.clips()[1];
     let peak = payload
         .groups
         .iter()
@@ -344,8 +361,62 @@ struct MarginalGroupPayload {
 }
 
 #[derive(Debug)]
+struct LinkedPanelPlan {
+    address: crate::layout::ComponentAddress,
+    projection: layout::Projection,
+}
+
+fn measure_linked_panel(
+    panel: PanelBox,
+    ranges: [(f64, f64); 2],
+    role: layout::AddressRole,
+    context: PlotRenderContext<'_>,
+    data: crate::data::PlotData<'_>,
+) -> Result<LinkedPanelPlan, crate::layout::fit::PlanError> {
+    if ![panel.x0, panel.x1, panel.y0, panel.y1]
+        .into_iter()
+        .all(f64::is_finite)
+        || ranges
+            .iter()
+            .any(|range| !range.0.is_finite() || !range.1.is_finite() || range.0 >= range.1)
+    {
+        return Err(Error::Render(
+            "Marginal linked subpanel assignment/domain is not finite and ordered".into(),
+        )
+        .into());
+    }
+    let resources = data.source_resources()?;
+    resources
+        .claim_slots(1)
+        .map_err(|error| Error::Render(format!("Marginal subpanel record: {error:?}")))?;
+    data.claim_source_bytes(
+        std::mem::size_of::<LinkedPanelPlan>()
+            + context.fit_scope().address.storage_bytes()
+            + std::mem::size_of::<layout::kernel::AddressSegment>(),
+    )?;
+    context
+        .theme
+        .prepared_font_environment()?
+        .claim_measurement_call()
+        .map_err(|error| Error::Render(format!("Marginal subpanel call: {error:?}")))?;
+    let address = context.fit_scope().address.child(role, 0)?;
+    if panel.width() <= 0.0 || panel.height() <= 0.0 {
+        return Err(crate::layout::fit::FitScope::new(&address, 0)
+            .failure(
+                crate::layout::fit::FitKind::AssignedChild,
+                "Marginal linked subpanel has no positive assigned extent",
+            )
+            .into());
+    }
+    Ok(LinkedPanelPlan {
+        address,
+        projection: layout::Projection::new(ranges[0], ranges[1], panel.as_tuple()),
+    })
+}
+
+#[derive(Debug)]
 pub(crate) struct MarginalPayload {
-    clips: [PanelBox; 3],
+    panels: [LinkedPanelPlan; 3],
     ticks: Vec<[Point2D; 2]>,
     tick_style: Option<crate::render::backend::LineStyle>,
     groups: Vec<MarginalGroupPayload>,
@@ -353,6 +424,28 @@ pub(crate) struct MarginalPayload {
 }
 
 impl MarginalPayload {
+    fn clips(&self) -> [PanelBox; 3] {
+        self.panels
+            .each_ref()
+            .map(|panel| panel.projection.panel_box())
+    }
+
+    pub(crate) fn observe_subpanels(
+        &self,
+        round: &mut layout::kernel::FeedbackRound,
+    ) -> Result<(), Error> {
+        for panel in &self.panels {
+            round.begin_owner(&panel.address)?;
+            round.observe_box(panel.projection.panel_box())?;
+            let ranges = [panel.projection.x_range(), panel.projection.y_range()];
+            for (lower, upper) in ranges {
+                round.observe_number(lower)?;
+                round.observe_number(upper)?;
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
         if let Some(style) = &self.tick_style {
             for tick in &self.ticks {
@@ -360,13 +453,13 @@ impl MarginalPayload {
             }
         }
         for group in &self.groups {
-            with_clip(backend, self.clips[0], |backend| {
+            with_clip(backend, self.clips()[0], |backend| {
                 backend.draw_scatter(&group.points, &group.point_style)
             })?;
-            with_clip(backend, self.clips[1], |backend| {
+            with_clip(backend, self.clips()[1], |backend| {
                 backend.draw_polygon(&group.top, &group.fill)
             })?;
-            with_clip(backend, self.clips[2], |backend| {
+            with_clip(backend, self.clips()[2], |backend| {
                 backend.draw_polygon(&group.right, &group.fill)
             })?;
         }
@@ -391,9 +484,7 @@ pub(crate) fn measure(
 
     // --- Layout geometry ---
     let outer = context.panel;
-    let gap = 12.0;
-    let top_h = 82.0;
-    let right_w = 96.0;
+    let gap = theme.composition.canvas_grid_gap;
     let hard = intrinsic_body_minimum(chart, theme)?;
     if outer.width() < hard.0 || outer.height() < hard.1 {
         return Err(context.fit_scope().failure(
@@ -401,14 +492,56 @@ pub(crate) fn measure(
             "marginal linked strips leave less than the prepared central mark and density ink minimum",
         ).into());
     }
-    let central_x0 = outer.x0;
-    let central_y0 = outer.y0;
-    let central_x1 = outer.x1 - right_w - gap;
-    let central_y1 = outer.y1 - top_h - gap;
-    let top_y0 = central_y1 + gap;
-    let top_y1 = top_y0 + top_h;
-    let right_x0 = central_x1 + gap;
-    let right_x1 = right_x0 + right_w;
+    let density = theme.marks.marginal_density.backend_style((0, 0, 0));
+    let ink = crate::render::geometry::rectangular_fill_ink_outset(theme, &density)?;
+    let right_hard = (2.0 * ink.0).max(1.0 / 1024.0);
+    let top_hard = (2.0 * ink.1).max(1.0 / 1024.0);
+    let axes_hard =
+        layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
+    let central_hard = (
+        (hard.0 - gap - right_hard).max(axes_hard.0),
+        (hard.1 - gap - top_hard).max(axes_hard.1),
+    );
+    let preference = layout::interior::preference::mark_preference(chart, theme, central_hard)?;
+    let track = |min: f64, preferred: i64| -> Result<_, Error> {
+        let min = layout::kernel::ceil_spatial_quanta(min)?;
+        Ok(layout::kernel::TrackSpec {
+            min,
+            preferred: preferred.max(min),
+            max: None,
+            flexible: true,
+        })
+    };
+    let quarter = |value: i64| -> Result<i64, Error> {
+        i64::try_from((i128::from(value) + 3) / 4)
+            .map_err(|_| Error::Render("Marginal quarter preference overflow".into()))
+    };
+    let columns = layout::interior::tracks::assign(
+        &[
+            track(central_hard.0, preference.body_quanta.0)?,
+            track(right_hard, quarter(preference.body_quanta.0)?)?,
+        ],
+        (outer.x0, outer.x1),
+        gap,
+        false,
+        data,
+        context.fit_scope(),
+    )?;
+    let rows = layout::interior::tracks::assign(
+        &[
+            track(top_hard, quarter(preference.body_quanta.1)?)?,
+            track(central_hard.1, preference.body_quanta.1)?,
+        ],
+        (outer.y0, outer.y1),
+        gap,
+        true,
+        data,
+        context.fit_scope(),
+    )?;
+    let (central_x0, central_x1) = columns[0];
+    let (central_y0, central_y1) = rows[1];
+    let (top_y0, top_y1) = rows[0];
+    let (right_x0, right_x1) = columns[1];
 
     // --- Data ranges ---
     let (x_low, x_high) =
@@ -423,18 +556,28 @@ pub(crate) fn measure(
     let curves = changed_curves.as_ref().unwrap_or(&prepared.curves);
 
     // --- Build Layout for the central scatter ---
-    let layout = context.axis_layout(|| {
+    let layout = (|| {
         context.layout_with_axis_specs(
             (x_low, x_high),
             (y_low, y_high),
             crate::layout::PanelBox::new(central_x0, central_x1, central_y0, central_y1),
-            data.copy_source_string(chart.x_label_text().unwrap_or(""))?,
-            data.copy_source_string(chart.y_label_text().unwrap_or(""))?,
+            data.copy_source_string(
+                &chart
+                    .prepared_axis_inputs()
+                    .ok_or_else(|| Error::Render("Marginal axes missing".into()))?
+                    .labels[0],
+            )?,
+            data.copy_source_string(
+                &chart
+                    .prepared_axis_inputs()
+                    .ok_or_else(|| Error::Render("Marginal axes missing".into()))?
+                    .labels[1],
+            )?,
             &layout::display_axis_spec(chart.x_axis_spec(), (x_low, x_high)),
             &layout::display_axis_spec(chart.y_axis_spec(), (y_low, y_high)),
             theme,
         )
-    })?;
+    })()?;
 
     let proj = &layout.projection;
 
@@ -509,11 +652,32 @@ pub(crate) fn measure(
             .into());
     }
 
-    let usable_h = (top_y1 - top_y0) * 0.90;
-    let usable_w = (right_x1 - right_x0) * 0.90;
     let central_panel = PanelBox::new(central_x0, central_x1, central_y0, central_y1);
     let top_panel = PanelBox::new(central_x0, central_x1, top_y0, top_y1);
     let right_panel = PanelBox::new(right_x0, right_x1, central_y0, central_y1);
+    let panels = [
+        measure_linked_panel(
+            central_panel,
+            ranges,
+            layout::AddressRole::MarginalCentral,
+            context,
+            data,
+        )?,
+        measure_linked_panel(
+            top_panel,
+            [ranges[0], (0.0, 1.0)],
+            layout::AddressRole::MarginalTop,
+            context,
+            data,
+        )?,
+        measure_linked_panel(
+            right_panel,
+            [(0.0, 1.0), ranges[1]],
+            layout::AddressRole::MarginalRight,
+            context,
+            data,
+        )?,
+    ];
     let mut selected = Vec::new();
     data.reserve_source(&mut selected, groups.len())?;
     let (colors, accents) = prepared.resolved_colors(chart, theme, data)?;
@@ -533,7 +697,7 @@ pub(crate) fn measure(
             source[0].1 = source[0].1.max(x);
             source[1].0 = source[1].0.min(y);
             source[1].1 = source[1].1.max(y);
-            let (x, y) = proj.project(x, y);
+            let (x, y) = panels[0].projection.project(x, y);
             Ok(Point2D::new(x, y))
         }))?;
         let mut top_poly = Vec::new();
@@ -543,29 +707,15 @@ pub(crate) fn measure(
         top_poly.push(Point2D::new(central_x0, top_y0));
         right_poly.push(Point2D::new(right_x0, central_y0));
         for i in 0..n_grid {
-            let fraction = i as f64 / (n_grid - 1) as f64;
-            let px = if i == 0 {
-                central_x0
-            } else if i + 1 == n_grid {
-                central_x1
-            } else {
-                central_x0 + fraction * (central_x1 - central_x0)
-            };
-            let py = if i == 0 {
-                central_y0
-            } else if i + 1 == n_grid {
-                central_y1
-            } else {
-                proj.project(x_low, y_grid[i]).1
-            };
-            top_poly.push(Point2D::new(
-                px,
-                top_y0 + x_densities[gi][i] / x_dens_max * usable_h,
-            ));
-            right_poly.push(Point2D::new(
-                right_x0 + y_densities[gi][i] / y_dens_max * usable_w,
-                py,
-            ));
+            data.claim_source_visits(2)?;
+            let (x, y) = panels[1]
+                .projection
+                .project(curves.x_grid[i], x_densities[gi][i] / x_dens_max * 0.90);
+            top_poly.push(Point2D::new(x, y));
+            let (x, y) = panels[2]
+                .projection
+                .project(y_densities[gi][i] / y_dens_max * 0.90, y_grid[i]);
+            right_poly.push(Point2D::new(x, y));
         }
         top_poly.push(Point2D::new(central_x1, top_y0));
         right_poly.push(Point2D::new(right_x0, central_y1));
@@ -594,7 +744,7 @@ pub(crate) fn measure(
         [None; 2]
     };
     let payload = MarginalPayload {
-        clips: [central_panel, top_panel, right_panel],
+        panels,
         ticks,
         tick_style,
         groups: selected,
@@ -612,6 +762,12 @@ pub(crate) fn measure(
         geometry.polygon(&group.right, &group.fill, Some(right_panel))?;
     }
     let mut result = PlotRenderResult::new(layout, legend_entries);
+    result.axes = Some(result.layout.measure_axes_with_inputs(
+        theme,
+        context.fit_scope(),
+        chart.axis_semantic_inputs([crate::spec::AxisDomain::Continuous; 2]),
+        || layout::StandardPanelInputs::new(theme),
+    )?);
     result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
         payload: crate::layout::interior::MarkPayload::Marginal(payload),
         geometry,
@@ -625,6 +781,11 @@ pub(crate) fn prepare(
 ) -> Result<PreparedMarginal, Error> {
     #[cfg(test)]
     count(0);
+    data.source_resources()?
+        .claim_topology_slots(3)
+        .map_err(|error| {
+            Error::Render(format!("Marginal declared subpanel topology: {error:?}"))
+        })?;
     let (groups, hues) = build_groups(chart, data)?;
     if let Some(exact) = chart.categorical_colors_spec() {
         for hue in &hues {

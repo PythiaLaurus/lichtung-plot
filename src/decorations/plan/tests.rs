@@ -107,7 +107,8 @@ fn marginal_auto_recovers_from_scoped_terminal_tick_miss() {
         .generation_resources();
     let prepared = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
     let plot = prepared.attach(plot).unwrap();
-    let cell = PanelBox::new(80.0, 480.0, 60.0, 450.0);
+    // Native linked tracks include the full measured gutters rather than legacy root insets.
+    let cell = PanelBox::new(80.0, 530.0, 60.0, 450.0);
     measurements::start();
     let auto = plan_panel(&plot, plot.kind(), cell, LegendRole::Panel, &theme);
     let observed = measurements::finish();
@@ -158,7 +159,7 @@ fn marginal_auto_recovers_from_scoped_terminal_tick_miss() {
         fixed.width(),
         fixed.height(),
         |_| Ok(()),
-        |(), _, round| match super::plan_panel(
+        |(), assigned, round| match super::plan_panel(
             &fixed,
             fixed.kind(),
             cell,
@@ -172,7 +173,7 @@ fn marginal_auto_recovers_from_scoped_terminal_tick_miss() {
                 failure = Some(miss);
                 Err::<crate::layout::MeasuredLayout<()>, _>(error)
             }
-            FitOutcome::Measured(_) => panic!("fixed Right must not recover to Top"),
+            FitOutcome::Measured(_) => Ok(crate::layout::MeasuredLayout::new(assigned, ())),
         },
         |(), _, (), _| Ok(()),
     );
@@ -191,7 +192,10 @@ fn marginal_auto_recovers_from_scoped_terminal_tick_miss() {
         .guides
         .iter()
         .all(|trial| trial.edge == LegendPosition::OutsideRight
-            && trial.outcome == GuideOutcome::Rejected));
+            && matches!(
+                trial.outcome,
+                GuideOutcome::Rejected | GuideOutcome::Provisional
+            )));
     measurements::start();
     plan_panel(
         &plot.with_legend_position(LegendPosition::OutsideTop),

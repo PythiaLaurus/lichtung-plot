@@ -306,6 +306,16 @@ pub(crate) fn mark_preference(
                 point_ink(theme.marks.point_sizes.regression)?,
             )
         }
+        PlotKind::Marginal => {
+            let marks = plot
+                .prepared_marginal
+                .as_ref()
+                .ok_or_else(|| Error::Render("Marginal preference lacks preparation".into()))?;
+            (
+                marks.primary_mark_count(&resources)?,
+                point_ink(theme.marks.point_sizes.marginal)?,
+            )
+        }
         _ => {
             return Err(Error::Render(
                 "standard mark preference requires a standard coordinate family".into(),

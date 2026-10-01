@@ -2545,7 +2545,7 @@ The sole root driver and numerical/resource policies remain unchanged.
 | T5e1b2 | COMPLETE | T5e1b1 | `feat(heatmap): allocate rows from constrained cell text` |
 | T5e1c | COMPLETE | T5e1b | `refactor(heatmap): retire specialized packing adapter` |
 | T5e2 | COMPLETE | T5e1 | `feat(matrix): allocate native variable grid tracks` |
-| T5e3 | PENDING | T5e2 | `feat(marginal): measure native linked subpanels` |
+| T5e3 | COMPLETE | T5e2 | `feat(marginal): measure native linked subpanels` |
 | T5e4 | PENDING | T5e3 | `feat(beeswarm): implement bounded deterministic tangent packing` |
 | T5e5 | PENDING | T5e4 | `feat(waterfall): measure native annotation shelves` |
 | T5e6 | PENDING | T5e5 | `feat(layout): resolve private automatic root requests` |
@@ -2716,6 +2716,29 @@ share height; preserve the empty corner. Reuse existing KDE/source preparation
 and selected primitives. No alternating subpanel-size search. Check linked ranges,
 exact widths/heights, guides and labels, and typed fit refusal. Delete the fixed-
 band owner and Marginal specialized adapter.
+
+T5e3 closure: Marginal is a native `SpecializedGrid` with central `(1,0)`,
+top `(0,0)`, right `(1,1)` and no child in the empty corner. Shared quantized
+columns/rows replace fixed 96px/82px strips; preferences derive from the
+central retained-mark `66ch`/density/4:3 natural preference, with right width
+and top height one quarter of that initial preference. All three named
+subpanels have admitted constrained calls, immutable assigned projections and
+canonical addresses. Their three topology slots are admitted during semantic
+preparation before fonts; repeated measurement pays records/calls/bytes, not
+another topology. Actual projections drive the selected points and both KDE
+polygons; central/top share exact x bounds/range, central/right exact y
+bounds/range. Common frozen central axes feed the existing root gutters, while
+domain feedback only rebuilds render grids from retained samples/statistics.
+The selected-payload regression checks shared bounds, ranges, gaps and child
+addresses; exact topology and subpanel record/call refusal tests keep failures
+fatal. The containing Auto-recovery fixture now uses the full native gutter
+assignment and allows the explicit Right provisional round before its typed
+terminal tick miss, preserving right-to-top Auto recovery without changing an
+explicit guide edge. Fifteen Marginal units, 13 affected integrations, seven
+native-preference units, the recovery fixture, inspected/updated clip snapshot,
+Publication/Science full fingerprints, strict Clippy and `git diff --check`
+pass. The snapshot retains all central points and both density polygons with
+variable linked strips rather than the historical fixed-band clips.
 
 ### T5e4 — Beeswarm
 

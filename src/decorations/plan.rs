@@ -1116,6 +1116,14 @@ fn plan_panel_attempt(
     if let Some(text) = &panel_axes {
         text.observe_feedback(round)?;
     }
+    if let Some(crate::layout::interior::SelectedMarkPlan {
+        payload: crate::layout::interior::MarkPayload::Marginal(payload),
+        ..
+    }) = result.marks.as_deref()
+    {
+        payload.observe_subpanels(round)?;
+        round.begin_owner(address)?;
+    }
     if let Some(chrome) = &chrome {
         let mut overflow = [0.0_f64; 4];
         for bounds in chrome.bounds() {
