@@ -357,20 +357,15 @@ fn parent_width_keeps_natural_category_text_or_wraps_only_at_legal_boundaries() 
         vec![AxisTick::new(1.5, "Control group")],
         TickSource::SUPPLIED,
     );
-    layout
-        .y_axis
-        .assign_label_width(500.0, 400.0, &theme)
-        .unwrap();
+    layout.y_axis.assigned_tick_width = Some(500.0);
     let wide = layout.plan_axes(&theme).unwrap();
     assert_eq!(
         wide.y_axis.ticks[0].label.as_ref().unwrap().0.lines.len(),
         1
     );
-    let natural = layout.y_axis.assigned_tick_width.unwrap();
-    layout
-        .y_axis
-        .assign_label_width(natural - 1.0, 400.0, &theme)
-        .unwrap();
+    let plan = &wide.y_axis.ticks[0].label.as_ref().unwrap().0;
+    let natural = plan.width().max(plan.fit_width());
+    layout.y_axis.assigned_tick_width = Some(natural - 1.0);
     let compact = layout.plan_axes(&theme).unwrap();
     let text = &compact.y_axis.ticks[0].label.as_ref().unwrap().0;
     assert_eq!(text.source, "Control group");

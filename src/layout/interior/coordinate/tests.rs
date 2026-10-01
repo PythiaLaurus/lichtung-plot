@@ -100,7 +100,7 @@ fn ordinary_test_sources_cover_every_native_route_exactly_once() {
     assert_eq!(kinds.len(), 20);
     for (index, kind) in kinds.iter().enumerate() {
         assert!(!kinds[..index].contains(kind));
-        assert!(InteriorRoute::classify(*kind).is_native());
+        assert!(InteriorRoute::classify(*kind).is_coordinate());
     }
 }
 
@@ -823,7 +823,7 @@ fn every_native_route_uses_exact_assigned_projection_and_frozen_axes_without_leg
         let inputs =
             crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                 .unwrap();
-        assert!(inputs.route.is_native());
+        assert!(inputs.route.is_coordinate());
         let plot = inputs.attach(source).unwrap();
         for panel in [
             PanelBox::new(80.25, 550.75, 70.5, 410.25),
@@ -1186,7 +1186,16 @@ fn native_exact_sources_are_indivisible_and_missing_axes_never_fall_back() {
         assert!(context
             .with_prepared_axes(&plot)
             .unwrap()
-            .axis_layout(|| panic!("legacy fallback"))
+            .layout_with_axis_specs(
+                (0.0, 1.0),
+                (0.0, 1.0),
+                context.panel,
+                String::new(),
+                String::new(),
+                &crate::layout::AxisSpec::default(),
+                &crate::layout::AxisSpec::default(),
+                &theme
+            )
             .is_err());
         let mut invalid = plot.clone();
         let axes = std::sync::Arc::get_mut(&mut invalid.prepared_axes);

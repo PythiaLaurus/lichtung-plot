@@ -65,9 +65,7 @@ impl Plot {
         &self,
         theme: &ResolvedTheme,
     ) -> Result<RootFramePlan, Error> {
-        if crate::layout::interior::InteriorRoute::classify(self.kind()).is_native()
-            && !self.has_facets()
-        {
+        if !self.has_facets() {
             return crate::layout::interior::coordinate::canvas_layout(self, theme)
                 .map_err(crate::layout::fit::PlanError::into_error);
         }

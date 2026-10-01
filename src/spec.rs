@@ -719,7 +719,6 @@ pub(crate) struct PlotRenderContext<'a> {
     // second time merely because the assigned mark panel became narrower.
     pub(crate) axis_label_width: f64,
     pub(crate) retained_axes: Option<&'a crate::layout::PanelAxisPlan>,
-    retained_layout: Option<&'a Layout>,
     pub(crate) selected_interior: Option<&'a PlotRenderResult>,
     prepared_axes: Option<&'a crate::plots::shared_x::PreparedAxes>,
     prepared_limits: [Option<(f64, f64)>; 2],
@@ -744,7 +743,6 @@ impl<'a> PlotRenderContext<'a> {
             panel,
             axis_label_width: panel.width().max(0.0),
             retained_axes: None,
-            retained_layout: None,
             selected_interior: None,
             prepared_axes: None,
             prepared_limits: [None; 2],
@@ -769,7 +767,6 @@ impl<'a> PlotRenderContext<'a> {
             panel,
             axis_label_width: panel.width().max(0.0),
             retained_axes: None,
-            retained_layout: None,
             selected_interior: None,
             prepared_axes: None,
             prepared_limits: [None; 2],
@@ -843,7 +840,6 @@ impl<'a> PlotRenderContext<'a> {
     pub(crate) fn with_retained_body(mut self, result: &'a PlotRenderResult) -> Self {
         self.selected_interior = Some(result);
         self.retained_axes = result.axes.as_ref();
-        self.retained_layout = Some(&result.layout);
         self.producer_text = Some(&result.producer_text);
         self.panel_text = Some(&result.panel_text);
         self.self_managed_legend = Some(&result.self_managed_legend);
@@ -866,7 +862,7 @@ impl<'a> PlotRenderContext<'a> {
     }
 
     pub(crate) fn with_prepared_axes(mut self, plot: &'a crate::Plot) -> Result<Self, Error> {
-        if self.retained_layout.is_some() {
+        if self.selected_interior.is_some() {
             return Ok(self);
         }
         self.prepared_axes = plot.prepared_axis_inputs();
@@ -905,6 +901,11 @@ impl<'a> PlotRenderContext<'a> {
         y_spec: &crate::layout::AxisSpec,
         theme: &crate::theme::ResolvedTheme,
     ) -> Result<Layout, crate::layout::fit::PlanError> {
+        if self.prepared_kind.is_some_and(|kind| {
+            crate::layout::interior::InteriorRoute::classify(kind).is_coordinate()
+        }) {
+            return Err(Error::Render("native axes require the coordinate producer".into()).into());
+        }
         self.layout_with_ticks(
             x,
             y,
@@ -1001,176 +1002,6 @@ impl<'a> PlotRenderContext<'a> {
 
     pub(crate) fn prepared_category_labels(self, side: usize) -> Option<&'a [String]> {
         self.prepared_axes?.display_categories[side].as_deref()
-    }
-
-    /// Deferred specialized consumers may retain layouts or measure their own axes.
-    pub(crate) fn axis_layout(
-        self,
-        measure: impl FnOnce() -> Result<Layout, crate::layout::fit::PlanError>,
-    ) -> Result<Layout, crate::layout::fit::PlanError> {
-        if self.retained_layout.is_none()
-            && self.prepared_kind.is_some_and(|kind| {
-                crate::layout::interior::InteriorRoute::classify(kind).is_coordinate()
-            })
-        {
-            return Err(Error::Render("native axes require the coordinate producer".into()).into());
-        }
-        match self.retained_layout {
-            Some(layout) => {
-                let environment = self.theme.prepared_font_environment()?;
-                let retain_string = |source: &str| -> Result<String, Error> {
-                    environment
-                        .claim_unicode_bytes(source.len() as u64)
-                        .map_err(|error| Error::Render(error.to_string()))?;
-                    let mut retained = String::new();
-                    retained
-                        .try_reserve_exact(source.len())
-                        .map_err(|error| Error::Render(error.to_string()))?;
-                    retained.push_str(source);
-                    Ok(retained)
-                };
-                let retain_axis =
-                    |axis: &crate::layout::Axis| -> Result<crate::layout::Axis, Error> {
-                        let mut ticks = Vec::new();
-                        crate::render::backend::reserve_text_records(
-                            &mut ticks,
-                            axis.ticks.len(),
-                            environment,
-                        )?;
-                        for tick in &axis.ticks {
-                            ticks.push(crate::layout::AxisTick {
-                                position: tick.position,
-                                label: retain_string(&tick.label)?,
-                            });
-                        }
-                        let assigned_cells = axis
-                            .assigned_cells
-                            .as_ref()
-                            .map(|source| {
-                                let mut cells = Vec::new();
-                                crate::render::backend::reserve_text_records(
-                                    &mut cells,
-                                    source.len(),
-                                    environment,
-                                )?;
-                                for cell in source {
-                                    environment.claim_processing_visits(1).map_err(|error| {
-                                        Error::Render(format!("retained axis cells: {error:?}"))
-                                    })?;
-                                    cells.push(*cell);
-                                }
-                                Ok::<_, Error>(cells)
-                            })
-                            .transpose()?;
-                        Ok(crate::layout::Axis {
-                            label: retain_string(&axis.label)?,
-                            ticks,
-                            explicit_ticks: axis.explicit_ticks,
-                            assigned_tick_width: axis.assigned_tick_width,
-                            assigned_cells,
-                            source: axis.source,
-                        })
-                    };
-                Ok(Layout {
-                    projection: layout.projection.clone(),
-                    x_axis: retain_axis(&layout.x_axis)?,
-                    y_axis: retain_axis(&layout.y_axis)?,
-                })
-            }
-            None => measure(),
-        }
-    }
-}
-
-#[cfg(test)]
-#[test]
-fn deferred_retained_axis_consumption_admits_every_owned_source_copy() {
-    use crate::layout::{Axis, AxisTick, Projection, TickSource};
-    let plot = crate::Plot::scatter(
-        crate::NumericValues::new("x", [0.0, 1.0]),
-        crate::NumericValues::new("y", [0.0, 1.0]),
-    )
-    .erase();
-    let retained = Layout {
-        projection: Projection::new((0.0, 2.0), (0.0, 1.0), (0.0, 400.0, 0.0, 300.0)),
-        x_axis: Axis {
-            label: "x title".into(),
-            ticks: vec![AxisTick::new(0.5, "first"), AxisTick::new(1.5, "second")],
-            explicit_ticks: false,
-            assigned_tick_width: None,
-            assigned_cells: Some(vec![(0.0, 100.0), (100.0, 400.0)]),
-            source: TickSource::SUPPLIED,
-        },
-        y_axis: Axis {
-            label: "y title".into(),
-            ticks: vec![AxisTick::new(0.5, "exact")],
-            explicit_ticks: true,
-            assigned_tick_width: None,
-            assigned_cells: None,
-            source: TickSource::EXACT,
-        },
-    };
-    let consume = |theme: &crate::theme::ResolvedTheme| {
-        let mut context =
-            PlotRenderContext::new(plot.data(), PanelBox::new(0.0, 400.0, 0.0, 300.0), theme);
-        context.retained_layout = Some(&retained);
-        context.axis_layout(|| panic!("retained axes must be consumed"))
-    };
-    let theme = crate::Theme::Publication.resolve();
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
-    let before = (
-        resources.usage().unwrap().1,
-        resources.byte_usage().unwrap(),
-    );
-    let layout = consume(&theme).unwrap();
-    assert_eq!(layout.x_axis.ticks, retained.x_axis.ticks);
-    assert_eq!(layout.y_axis.ticks, retained.y_axis.ticks);
-    assert_eq!(layout.x_axis.assigned_cells, retained.x_axis.assigned_cells);
-    let visits = resources.usage().unwrap().1 - before.0;
-    let bytes = resources.byte_usage().unwrap() - before.1;
-    // Two titles, three tick strings and selected cells; each vector reserves four records.
-    assert_eq!(
-        bytes,
-        (8 * std::mem::size_of::<AxisTick>() + 4 * std::mem::size_of::<(f64, f64)>() + 14 + 11 + 5)
-            as u64
-    );
-    assert_eq!(visits, 2);
-    for (remaining_bytes, succeeds) in [(bytes, true), (bytes - 1, false)] {
-        let theme = crate::Theme::Publication.resolve();
-        let resources = theme
-            .prepared_font_environment()
-            .unwrap()
-            .generation_resources();
-        resources
-            .claim_bytes(536_870_912 - resources.byte_usage().unwrap() - remaining_bytes)
-            .unwrap();
-        let result = consume(&theme);
-        if succeeds {
-            result.unwrap();
-        } else {
-            assert!(matches!(
-                result,
-                Err(crate::layout::fit::PlanError::Fatal(Error::Render(_)))
-            ));
-        }
-    }
-    for available in [0, 1, 2, 3] {
-        let theme = crate::Theme::Publication.resolve();
-        let resources = theme
-            .prepared_font_environment()
-            .unwrap()
-            .generation_resources();
-        let before = resources.usage().unwrap().1;
-        resources.set_test_limits(before + available, u64::MAX);
-        let result = consume(&theme);
-        assert_eq!(result.is_ok(), available >= visits);
-        assert_eq!(resources.usage().unwrap().1 - before, available.min(visits));
-        if let Err(error) = result {
-            assert!(matches!(error, crate::layout::fit::PlanError::Fatal(_)));
-        }
     }
 }
 

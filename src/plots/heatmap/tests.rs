@@ -426,7 +426,12 @@ fn native_heatmap_uses_traced_tracks_below_the_retired_parity_floor() {
         .unwrap();
     assert!(selected.axes.is_some());
     assert_eq!(selected.layout.projection.panel_box(), panel);
-    assert!(crate::layout::interior::InteriorRoute::classify(chart.kind()).is_native());
+    assert!(matches!(
+        crate::layout::interior::InteriorRoute::classify(chart.kind()),
+        crate::layout::interior::InteriorRoute::SpecializedGrid(
+            crate::layout::interior::SpecializedGrid::Heatmap
+        )
+    ));
 }
 
 #[test]

@@ -1139,6 +1139,9 @@ pub(crate) struct AnnotationAppearance {
     pub(crate) bracket_stroke: BracketStrokeAppearance,
     /// Clearance from a labeled supplemental point's painted radius.
     pub(crate) point_label_gap: f64,
+    pub(crate) waterfall_shelf_padding: f64,
+    pub(crate) waterfall_shelf_gap: f64,
+    pub(crate) waterfall_shelf_row_gap: f64,
     /// Opaque calculation-only backdrop when output surfaces are translucent.
     pub(crate) planning_backdrop: Rgba,
 }
@@ -1534,6 +1537,9 @@ fn resolved_theme(
                 width: bracket_width,
             },
             point_label_gap: 2.0,
+            waterfall_shelf_padding: 4.0,
+            waterfall_shelf_gap: 4.0,
+            waterfall_shelf_row_gap: 4.0,
             planning_backdrop: Rgba::rgb(255, 255, 255),
         },
         composition: CompositionAppearance {
@@ -2087,6 +2093,9 @@ mod tests {
                     width: expected.bracket_width,
                 },
                 point_label_gap: 2.0,
+                waterfall_shelf_padding: 4.0,
+                waterfall_shelf_gap: 4.0,
+                waterfall_shelf_row_gap: 4.0,
                 planning_backdrop: Rgba::rgb(255, 255, 255),
             },
             composition: CompositionAppearance {

@@ -692,7 +692,6 @@ fn plan_panel_attempt(
     use crate::layout::fit::FitOutcome;
     let scope = FitScope::new(address, round.attempt_ordinal(address)?);
     let context = context.with_fit_scope(&scope);
-    let native = crate::layout::interior::InteriorRoute::classify(kind).is_native();
     let minimum = plot.intrinsic_body_minimum(context.theme)?;
     let cell = context.panel;
     round.begin_owner(address)?;
@@ -880,29 +879,12 @@ fn plan_panel_attempt(
     let mut gutters = result.grid_axis_gutters.unwrap_or([0.0; 4]);
     if let Some(axes) = &panel_axes {
         let required = axes.requirements();
-        let drawn_panel = result.layout.projection.panel_box();
-        if native && !planning_plot.parent_owns_axis_gutters() {
+        if !planning_plot.parent_owns_axis_gutters() {
             // The root cell excludes only root-owned padding/title/caption.
             // Replace the entire axis reserve, allowing contraction as well as
             // growth without spending another component's reserved space.
             gutters = [required.left, required.right, required.bottom, required.top]
                 .map(|value| (value + 4.0).ceil());
-        } else if !planning_plot.parent_owns_axis_gutters() {
-            let base = planning_plot.legacy_root_axes().insets(context.theme, true);
-            gutters = [
-                (required.left + 4.0 - base.left - (drawn_panel.x0 - panel_box.x0))
-                    .max(0.0)
-                    .ceil(),
-                (required.right + 4.0 - base.right - (panel_box.x1 - drawn_panel.x1))
-                    .max(0.0)
-                    .ceil(),
-                (required.bottom + 4.0 - base.bottom - (drawn_panel.y0 - panel_box.y0))
-                    .max(0.0)
-                    .ceil(),
-                (required.top + 4.0 - base.top - (panel_box.y1 - drawn_panel.y1))
-                    .max(0.0)
-                    .ceil(),
-            ];
         }
     }
     if let Some(chrome) = &chrome {

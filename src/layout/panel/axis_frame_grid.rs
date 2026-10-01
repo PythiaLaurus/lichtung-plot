@@ -359,36 +359,6 @@ impl Layout {
 }
 
 impl Axis {
-    pub(crate) fn assign_label_width(
-        &mut self,
-        available: f64,
-        height: f64,
-        theme: &ResolvedTheme,
-    ) -> Result<(), Error> {
-        let mut natural = 1.0 / 1024.0;
-        for tick in self.ticks.iter().filter(|tick| !tick.label.is_empty()) {
-            let plan = theme.measure_text(
-                &tick.label,
-                &theme.typography.tick_label,
-                PhysicalTextAlignment::End,
-                "y-axis tick label",
-                false,
-            )?;
-            natural = f64::max(natural, plan.width().max(plan.fit_width()));
-        }
-        self.assigned_tick_width = Some(if natural <= available {
-            natural
-        } else {
-            theme
-                .intrinsic_tick_label_width(
-                    self.ticks.iter().map(|tick| tick.label.as_str()),
-                    height,
-                )?
-                .min(available)
-        });
-        Ok(())
-    }
-
     pub(crate) fn validate_ticks(
         ticks: &[AxisTick],
         range: (f64, f64),

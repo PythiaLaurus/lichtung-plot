@@ -743,18 +743,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.caption.as_deref()
     }
 
-    /// The x-axis label, if any.
-    #[must_use]
-    pub(crate) fn x_label_text(&self) -> Option<&str> {
-        self.x_label.as_deref()
-    }
-
-    /// The y-axis label, if any.
-    #[must_use]
-    pub(crate) fn y_label_text(&self) -> Option<&str> {
-        self.y_label.as_deref()
-    }
-
     pub(crate) fn resolve_label(&self, raw: &str) -> String {
         self.labels.resolve(raw)
     }

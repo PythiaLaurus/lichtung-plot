@@ -1151,7 +1151,10 @@ mod feedback_tests {
             .panels
             .iter()
             .all(|panel| guide.bounds.bottom > panel.panel.y1));
-        assert_eq!(plan.horizontal_axis_label.as_deref(), source.x_label_text());
+        assert_eq!(
+            plan.horizontal_axis_label.as_deref(),
+            Some(source.resolved_axis_labels(source.kind()).0.as_str())
+        );
     }
 
     #[test]

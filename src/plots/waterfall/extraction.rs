@@ -195,11 +195,12 @@ fn selected_geometry_and_poisoned_capture_preserve_all_operands_without_work() {
 
 #[test]
 fn selected_storage_refuses_at_exact_operation_limits() {
-    let plot = source().erase();
-    let inputs =
-        crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new()).unwrap();
-    let plot = inputs.attach(plot).unwrap();
+    let raw = source().erase();
     let run = |limits: Option<(u128, u64)>| {
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&raw, &OperationGenerationResources::new())
+                .unwrap();
+        let plot = inputs.attach(raw.clone()).unwrap();
         let theme = crate::Theme::Publication.resolve();
         let resources = theme
             .prepared_font_environment()

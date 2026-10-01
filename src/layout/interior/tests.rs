@@ -30,7 +30,7 @@ fn exhaustive_route_census_has_twenty_ordinary_five_specialized_two_parents() {
         Beeswarm,
         Waterfall,
     ];
-    let mut counts = [0; 4];
+    let mut counts = [0; 3];
     for kind in kinds {
         let route = InteriorRoute::classify(kind);
         assert_eq!(route.kind(), kind);
@@ -39,20 +39,17 @@ fn exhaustive_route_census_has_twenty_ordinary_five_specialized_two_parents() {
             Scatter | Line | Trajectory | LinePath | Histogram | Density | Qq | Regression => 0,
             PointInterval | Coefficient | Forest | Dumbbell | Bar | HorizontalBar | StackedBar
             | StackedHorizontalBar | Boxplot | Violin | Raincloud | Interaction => 1,
-            Heatmap | Matrix | Marginal | Beeswarm => 2,
-            Waterfall => 3,
+            Heatmap | Matrix | Marginal | Beeswarm | Waterfall => 2,
         };
         let index = match route {
             InteriorRoute::StandardCoordinate(_) => 0,
             InteriorRoute::OneCategoricalAxis(_) => 1,
             InteriorRoute::SpecializedGrid(_) => 2,
-            InteriorRoute::SpecializedLegacy(_) => 3,
         };
         assert_eq!(index, expected);
-        assert_eq!(route.is_native(), index < 3);
         counts[index] += 1;
     }
-    assert_eq!(counts, [8, 12, 4, 1]);
+    assert_eq!(counts, [8, 12, 5]);
     let parents = [
         CompositionChildPolicy::Facet,
         CompositionChildPolicy::Canvas,

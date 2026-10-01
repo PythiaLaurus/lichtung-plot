@@ -43,7 +43,7 @@ pub(crate) struct PreparedWaterfall {
     pub(crate) totals: [(f64, String); 2],
 }
 
-pub(crate) fn intrinsic_body_minimum(
+fn mark_intrinsic_body_minimum(
     chart: &Plot,
     theme: &crate::theme::ResolvedTheme,
 ) -> Result<(f64, f64), Error> {
@@ -104,32 +104,7 @@ pub(crate) fn intrinsic_body_minimum(
             .map_err(|_| Error::Render("Waterfall category count exceeds spatial range".into()))?,
     );
     let mark_height = pitch * categories;
-    let mut text_height = 0.0_f64;
-    resources.claim_visits(2).map_err(|error| {
-        Error::Render(format!("Waterfall total intrinsic admission: {error:?}"))
-    })?;
-    for (value, label) in &prepared.totals {
-        if chart
-            .user_x_limits()
-            .is_some_and(|range| *value < range.0 || *value > range.1)
-        {
-            continue;
-        }
-        let plan = theme.measure_text(
-            label,
-            &theme.typography.waterfall_total,
-            crate::layout::PhysicalTextAlignment::Center,
-            "Waterfall total shelf intrinsic",
-            false,
-        )?;
-        text_height = text_height.max(plan.height());
-    }
-    let height = mark_height
-        + if text_height > 0.0 {
-            2.0 * ANNOTATION_PADDING + text_height
-        } else {
-            0.0
-        };
+    let height = mark_height;
     if !height.is_finite() {
         return Err(Error::Render(
             "Waterfall mark/annotation hard span overflowed".into(),
@@ -143,6 +118,53 @@ pub(crate) fn intrinsic_body_minimum(
         },
         height,
     ))
+}
+
+pub(crate) fn intrinsic_body_minimum(
+    chart: &Plot,
+    theme: &crate::theme::ResolvedTheme,
+) -> Result<(f64, f64), Error> {
+    let marks = mark_intrinsic_body_minimum(chart, theme)?;
+    let axes =
+        crate::layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
+    let prepared = chart
+        .prepared_waterfall
+        .as_ref()
+        .and_then(|inputs| {
+            inputs
+                .panels
+                .iter()
+                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        })
+        .map(|(_, marks)| marks)
+        .ok_or_else(|| Error::Render("Waterfall total intrinsic requires preparation".into()))?;
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let mut height = 0.0_f64;
+    for (value, text) in &prepared.totals {
+        resources
+            .claim_visits(1)
+            .map_err(|error| Error::Render(format!("Waterfall total intrinsic: {error:?}")))?;
+        if chart
+            .user_x_limits()
+            .is_some_and(|range| *value < range.0 || *value > range.1)
+        {
+            continue;
+        }
+        let plan = theme.measure_text(
+            text,
+            &theme.typography.waterfall_total,
+            PhysicalTextAlignment::Center,
+            "Waterfall total shelf intrinsic",
+            false,
+        )?;
+        height = height.max(plan.height());
+    }
+    let shelf = if height > 0.0 {
+        height + 2.0 * theme.annotations.waterfall_shelf_padding
+    } else {
+        0.0
+    };
+    Ok((marks.0.max(axes.0), marks.1.max(axes.1) + shelf))
 }
 
 pub(crate) fn prepare(
@@ -242,15 +264,6 @@ pub(crate) fn measure(
     let x_range = context.axis_range(crate::layout::AxisSide::Bottom, || {
         crate::layout::continuous_auto_range(range, chart.x_axis_spec(), data.source_resources()?)
     })?;
-    let y_ticks = || {
-        data.collect_source(labels.iter().enumerate().map(|(index, label)| {
-            data.claim_source_visits(1)?;
-            Ok(AxisTick::new(
-                index as f64 + 0.5,
-                data.copy_source_string(label)?,
-            ))
-        }))
-    };
     let panel = context.panel;
     let y_range = context.axis_range(crate::layout::AxisSide::Left, || {
         Ok(chart
@@ -268,41 +281,121 @@ pub(crate) fn measure(
         context,
         data,
     )?;
-    if annotations.height > panel.height() - MINIMUM_MARK_PANEL_HEIGHT {
+    let mark_minimum = mark_intrinsic_body_minimum(chart, theme)?;
+    let axes_minimum =
+        crate::layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
+    if annotations.height > panel.height() - mark_minimum.1.max(axes_minimum.1) {
         data.claim_source_bytes(context.fit_scope().address.storage_bytes())?;
         data.claim_source_bytes(1024)?;
         return Err(context.fit_scope().failure(crate::layout::fit::FitKind::SpecializedGeometry, format!(
-            "waterfall: total annotations require {:.0}px while preserving a {MINIMUM_MARK_PANEL_HEIGHT:.0}px mark panel; increase chart height or shorten the configured labels",
+            "waterfall: total annotations require {:.0}px while preserving the traced category tracks; increase chart height or shorten the configured labels",
             annotations.height
         )).into());
     }
     let mut mark_panel = panel;
     mark_panel.y1 -= annotations.height;
-    let layout = context.axis_layout(|| {
-        let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
-        context.layout_with_ticks(
-            x_range,
-            (0.0, labels.len() as f64),
-            mark_panel,
-            data.copy_source_string(chart.x_label_text().unwrap_or(""))?,
-            data.copy_source_string(chart.y_label_text().unwrap_or(""))?,
-            Vec::new(),
-            y_ticks()?,
-            &x_axis_spec,
-            chart.y_axis_spec(),
-            theme,
-        )
-    })?;
+    let axes = chart
+        .prepared_axis_inputs()
+        .ok_or_else(|| Error::Render("Waterfall native axes missing".into()))?;
+    let display = axes.display_categories[1]
+        .as_ref()
+        .ok_or_else(|| Error::Render("Waterfall category display missing".into()))?;
+    let mut pitch = mark_minimum.1 / labels.len() as f64;
+    let width = context.axis_label_width.max(1.0 / 1024.0);
+    if chart.y_tick_labels_visible() {
+        for label in display {
+            data.claim_source_visits(1)?;
+            let plan = crate::layout::fit::measured(crate::layout::fit::text(
+                theme,
+                label,
+                &theme.typography.tick_label,
+                width,
+                PhysicalTextAlignment::End,
+                "y-axis tick label",
+                &context
+                    .fit_scope()
+                    .child(crate::layout::AddressRole::AxisLeft, 0)?,
+            ))?;
+            pitch = pitch.max(plan.height() + 2.0 * crate::layout::LABEL_CLEARANCE);
+        }
+    }
+    let min = crate::layout::kernel::ceil_spatial_quanta(pitch)?;
+    let preferred = min.max(crate::layout::kernel::ceil_spatial_quanta(
+        2.0 * f64::from(theme.typography.tick_label.font_size),
+    )?);
+    let specs = data.collect_source(labels.iter().map(|_| {
+        Ok(crate::layout::kernel::TrackSpec {
+            min,
+            preferred,
+            max: None,
+            flexible: true,
+        })
+    }))?;
+    let bands = crate::layout::interior::tracks::assign(
+        &specs,
+        (mark_panel.y0, mark_panel.y1),
+        0.0,
+        false,
+        data,
+        context.fit_scope(),
+    )?;
+    let projection =
+        crate::layout::Projection::new(x_range, (0.0, labels.len() as f64), mark_panel.as_tuple());
+    let x = axes.specs[0].layout_ticks(
+        Vec::new(),
+        &projection,
+        crate::layout::AxisSide::Bottom,
+        theme,
+        context.fit_scope(),
+    )?;
+    let ticks = data.collect_source(display.iter().zip(&bands).map(|(label, band)| {
+        data.claim_source_visits(1)?;
+        Ok(AxisTick::new(
+            (f64::midpoint(band.0, band.1) - mark_panel.y0) / mark_panel.height()
+                * labels.len() as f64,
+            if chart.y_tick_labels_visible() {
+                data.copy_source_string(label)?
+            } else {
+                String::new()
+            },
+        ))
+    }))?;
+    let layout = crate::layout::Layout {
+        projection,
+        x_axis: crate::layout::Axis {
+            label: data.copy_source_string(&axes.labels[0])?,
+            ticks: x.ticks,
+            source: x.source,
+            explicit_ticks: axes.specs[0].exact_ticks.is_some(),
+            assigned_tick_width: None,
+            assigned_cells: None,
+        },
+        y_axis: crate::layout::Axis {
+            label: data.copy_source_string(&axes.labels[1])?,
+            ticks,
+            source: crate::layout::TickSource::SUPPLIED,
+            explicit_ticks: false,
+            assigned_tick_width: Some(width),
+            assigned_cells: Some(data.collect_source(bands.iter().map(|band| {
+                data.claim_source_visits(1)?;
+                Ok(*band)
+            }))?),
+        },
+    };
     let mut bars = Vec::new();
     let mut connectors = Vec::new();
     let accents = crate::theme::AccentColors::resolve(&theme.colors, 2, &resources)?;
     data.reserve_source(&mut bars, spans.len())?;
     data.reserve_source(&mut connectors, spans.len().saturating_sub(1))?;
     for (index, (start, end, delta)) in spans.iter().enumerate() {
+        data.claim_source_visits(1)?;
         let y0 = index as f64 + 0.2;
         let y1 = index as f64 + 0.8;
-        let (left, bottom) = layout.projection.project(*start, y0);
-        let (right, top) = layout.projection.project(*end, y1);
+        let left = layout.projection.project(*start, y0).0;
+        let right = layout.projection.project(*end, y1).0;
+        let band = bands[index];
+        let bottom = band.0 + 0.2 * (band.1 - band.0);
+        let top = band.0 + 0.8 * (band.1 - band.0);
         layout.projection.validate_span(
             crate::layout::AxisSide::Bottom,
             (*start, *end),
@@ -328,8 +421,10 @@ pub(crate) fn measure(
             theme.marks.waterfall_bar.backend_style(color),
         ));
         if index + 1 < spans.len() {
-            let (x, from_y) = layout.projection.project(*end, y1);
-            let (_, to_y) = layout.projection.project(*end, index as f64 + 1.2);
+            let x = right;
+            let from_y = top;
+            let next = bands[index + 1];
+            let to_y = next.0 + 0.2 * (next.1 - next.0);
             connectors.push((
                 [Point2D::new(x, from_y), Point2D::new(x, to_y)],
                 theme.marks.waterfall_connector.backend_style(),
@@ -346,21 +441,17 @@ pub(crate) fn measure(
         )
     });
     let AnnotationPlan {
-        items, row_height, ..
+        items, baselines, ..
     } = annotations;
     let mut text = Vec::new();
     data.reserve_source(&mut text, items.len())?;
     for annotation in items {
         let text_plan = annotation.text_plan;
         text.push(PlacedText {
-            placement: PlannedTextPlacement::middle(
+            placement: PlannedTextPlacement::baseline(
                 Point2D::new(
                     annotation.x,
-                    (layout.projection.panel_box().y1
-                        + ANNOTATION_PADDING
-                        + row_height / 2.0
-                        + annotation.row as f64 * (row_height + ANNOTATION_ROW_GAP))
-                        .round(),
+                    layout.projection.panel_box().y1 + baselines[annotation.row],
                 ),
                 TextAnchor::Middle,
                 0.0,
@@ -492,6 +583,14 @@ pub(crate) fn measure(
     }
     let mut result = PlotRenderResult::new(layout, Vec::new());
     result.y_domain = crate::spec::AxisDomain::Categorical;
+    result.y_tick_keys =
+        Some(data.collect_source(labels.iter().map(|label| data.copy_source_string(label)))?);
+    result.axes = Some(result.layout.measure_axes_with_inputs(
+        theme,
+        context.fit_scope(),
+        chart.axis_semantic_inputs([result.x_domain, result.y_domain]),
+        || crate::layout::StandardPanelInputs::new(theme),
+    )?);
     result.producer_text = data.collect_source(payload.text.iter().map(|text| Ok(text.clone())))?;
     result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
         payload: crate::layout::interior::MarkPayload::Waterfall(payload),
@@ -556,11 +655,6 @@ pub(crate) fn text_census_annotations(
     Ok(())
 }
 
-const ANNOTATION_PADDING: f64 = 4.0;
-const ANNOTATION_GAP: f64 = 4.0;
-const ANNOTATION_ROW_GAP: f64 = 4.0;
-const MINIMUM_MARK_PANEL_HEIGHT: f64 = 24.0;
-
 #[cfg(test)]
 mod extraction;
 
@@ -573,7 +667,13 @@ struct Annotation {
 struct AnnotationPlan {
     items: Vec<Annotation>,
     height: f64,
-    row_height: f64,
+    baselines: Vec<f64>,
+}
+
+struct ShelfRow {
+    intervals: Vec<(i64, i64)>,
+    above: i64,
+    below: i64,
 }
 
 fn plan_annotations(
@@ -586,29 +686,44 @@ fn plan_annotations(
 ) -> Result<AnnotationPlan, crate::layout::fit::PlanError> {
     let theme = context.theme;
     let scope = context.fit_scope();
-    let mut rows: Vec<Vec<(f64, f64)>> = Vec::new();
+    let mut rows: Vec<ShelfRow> = Vec::new();
     let mut items = Vec::new();
     let mut miss = None;
     data.reserve_source(&mut items, 2)?;
     data.reserve_source(&mut rows, 2)?;
+    let metrics = &theme.annotations;
+    if [
+        metrics.waterfall_shelf_padding,
+        metrics.waterfall_shelf_gap,
+        metrics.waterfall_shelf_row_gap,
+    ]
+    .into_iter()
+    .any(|value| !value.is_finite() || value < 0.0)
+    {
+        return Err(
+            Error::Render("Waterfall shelf spacing must be finite and nonnegative".into()).into(),
+        );
+    }
+    let padding = crate::layout::kernel::ceil_spatial_quanta(metrics.waterfall_shelf_padding)?;
+    let gap = crate::layout::kernel::ceil_spatial_quanta(metrics.waterfall_shelf_gap)?;
+    let row_gap = crate::layout::kernel::ceil_spatial_quanta(metrics.waterfall_shelf_row_gap)?;
+    let producer = context.producer_text()?;
     for (index, (value, text)) in candidates.iter().enumerate() {
+        data.claim_source_visits(1)?;
         if !projection.contains_data(*value, source_y) {
             continue;
         }
-        let text_plan =
-            context
-                .producer_text()?
-                .plan(text, "waterfall total annotation", || {
-                    Ok(theme.measure_text(
-                        text,
-                        &theme.typography.waterfall_total,
-                        PhysicalTextAlignment::Center,
-                        "waterfall total annotation",
-                        false,
-                    )?)
-                })?;
+        let text_plan = producer.plan(text, "waterfall total annotation", || {
+            Ok(theme.measure_text(
+                text,
+                &theme.typography.waterfall_total,
+                PhysicalTextAlignment::Center,
+                "waterfall total annotation",
+                false,
+            )?)
+        })?;
         let width = text_plan.width();
-        if width + 2.0 * ANNOTATION_PADDING > panel.width() {
+        if width + 2.0 * metrics.waterfall_shelf_padding > panel.width() {
             let identity_bytes = scope
                 .address
                 .storage_bytes()
@@ -629,48 +744,121 @@ fn plan_annotations(
             data.claim_source_bytes(diagnostic_bytes)?;
             crate::layout::fit::FitFailure::retain_least(&mut miss, scope.child(if index == 0 { crate::layout::AddressRole::WaterfallBaseLabel } else { crate::layout::AddressRole::WaterfallTerminalLabel }, 0)?.failure(crate::layout::fit::FitKind::Text, format!(
                 "waterfall: total annotation {text:?} requires {:.0}px but only {:.0}px is available; increase chart width or shorten the configured label",
-                width + 2.0 * ANNOTATION_PADDING,
+                width + 2.0 * metrics.waterfall_shelf_padding,
                 panel.width()
             )));
             continue;
         }
         let (projected_x, _) = projection.project(*value, source_y);
-        let half_width = width / 2.0;
-        let x = projected_x.round();
-        let bounds = (x - half_width, x + half_width);
-        let row = rows
-            .iter()
-            .position(|occupied| {
-                occupied.iter().all(|(left, right)| {
-                    bounds.1 + ANNOTATION_GAP <= *left || *right + ANNOTATION_GAP <= bounds.0
-                })
-            })
-            .unwrap_or(rows.len());
-        if row == rows.len() {
-            rows.push(Vec::new());
+        let x_quanta = crate::layout::kernel::nearest_spatial_quanta(projected_x)?;
+        let x = x_quanta as f64 / 1024.0;
+        let placement =
+            PlannedTextPlacement::baseline(Point2D::new(0.0, 0.0), TextAnchor::Middle, 0.0);
+        let ink = crate::render::geometry::planned_text_ink_bounds(
+            &text_plan,
+            placement.position,
+            placement.anchor,
+            placement.rotation,
+            placement.origin,
+            placement.reverse_lines,
+        );
+        let above = text_plan.first_baseline_quanta.unwrap_or(0).max(
+            crate::layout::kernel::ceil_spatial_quanta(ink.map_or(0.0, |ink| ink.top.max(0.0)))?,
+        );
+        let below = text_plan
+            .height_quanta
+            .checked_sub(text_plan.first_baseline_quanta.unwrap_or(0))
+            .ok_or_else(|| Error::Render("Waterfall baseline extent overflow".into()))?
+            .max(crate::layout::kernel::ceil_spatial_quanta(
+                ink.map_or(0.0, |ink| (-ink.bottom).max(0.0)),
+            )?);
+        let half = crate::render::backend::nearest_even_text_half(text_plan.width_quanta)
+            .ok_or_else(|| Error::Render("Waterfall text half width overflow".into()))?;
+        let lower = (-half).min(-crate::layout::kernel::ceil_spatial_quanta(
+            ink.map_or(0.0, |ink| (-ink.left).max(0.0)),
+        )?);
+        let upper = (text_plan.width_quanta - half).max(
+            crate::layout::kernel::ceil_spatial_quanta(ink.map_or(0.0, |ink| ink.right.max(0.0)))?,
+        );
+        let bounds = (
+            x_quanta
+                .checked_add(lower)
+                .ok_or_else(|| Error::Render("Waterfall label left edge overflow".into()))?,
+            x_quanta
+                .checked_add(upper)
+                .ok_or_else(|| Error::Render("Waterfall label right edge overflow".into()))?,
+        );
+        let mut row = rows.len();
+        for (candidate, occupied) in rows.iter().enumerate() {
+            data.claim_source_visits(1)?;
+            let mut fits = true;
+            for &(left, right) in &occupied.intervals {
+                data.claim_source_visits(1)?;
+                if i128::from(bounds.1) + i128::from(gap) > i128::from(left)
+                    && i128::from(right) + i128::from(gap) > i128::from(bounds.0)
+                {
+                    fits = false;
+                    break;
+                }
+            }
+            if fits {
+                row = candidate;
+                break;
+            }
         }
-        data.reserve_source(&mut rows[row], 1)?;
-        rows[row].push(bounds);
+        if row == rows.len() {
+            rows.push(ShelfRow {
+                intervals: Vec::new(),
+                above: 0,
+                below: 0,
+            });
+        }
+        data.reserve_source(&mut rows[row].intervals, 1)?;
+        rows[row].intervals.push(bounds);
+        rows[row].above = rows[row].above.max(above);
+        rows[row].below = rows[row].below.max(below);
         items.push(Annotation { text_plan, x, row });
     }
     if let Some(failure) = miss {
         return Err(failure.into());
     }
-    let row_height = items
-        .iter()
-        .map(|annotation| annotation.text_plan.height())
-        .fold(0.0_f64, f64::max);
-    let height = if rows.is_empty() {
-        0.0
+    let mut baselines = Vec::new();
+    data.reserve_source(&mut baselines, rows.len())?;
+    let mut height = if rows.is_empty() {
+        0_i128
     } else {
-        2.0 * ANNOTATION_PADDING
-            + rows.len() as f64 * row_height
-            + rows.len().saturating_sub(1) as f64 * ANNOTATION_ROW_GAP
+        i128::from(padding)
     };
+    for (index, row) in rows.iter().enumerate() {
+        data.claim_source_visits(1)?;
+        let baseline = height
+            .checked_add(i128::from(row.below))
+            .ok_or_else(|| Error::Render("Waterfall shelf baseline overflow".into()))?;
+        baselines.push(
+            i64::try_from(baseline).map_err(|_| {
+                Error::Render("Waterfall shelf baseline exceeds spatial range".into())
+            })? as f64
+                / 1024.0,
+        );
+        height = baseline
+            .checked_add(i128::from(row.above))
+            .and_then(|value| {
+                value.checked_add(i128::from(if index + 1 == rows.len() {
+                    padding
+                } else {
+                    row_gap
+                }))
+            })
+            .ok_or_else(|| Error::Render("Waterfall shelf height overflow".into()))?;
+    }
+    let height = i64::try_from(height)
+        .map_err(|_| Error::Render("Waterfall shelf height exceeds spatial range".into()))?
+        as f64
+        / 1024.0;
     Ok(AnnotationPlan {
         items,
         height,
-        row_height,
+        baselines,
     })
 }
 
@@ -717,6 +905,98 @@ mod tests {
                 .with_alpha(theme.marks.waterfall_bar.fill_alpha)
         );
         assert_ne!(first, second);
+    }
+
+    #[test]
+    fn overlapping_totals_use_separate_exact_baseline_shelves() {
+        let source = Plot::waterfall(
+            CategoryValues::new("step", ["a"]).unwrap(),
+            NumericValues::new("delta", [0.0]),
+            0.0,
+        )
+        .total_labels(crate::WaterfallLabels::new("Start", "Finish long label").unwrap())
+        .x_label("")
+        .y_label("")
+        .erase();
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+                .unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let theme = crate::Theme::Publication.resolve();
+        let panel = PanelBox::new(50.0, 850.0, 50.0, 550.0);
+        let selected = chart
+            .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
+            .unwrap();
+        let crate::layout::interior::MarkPayload::Waterfall(payload) =
+            &selected.marks.as_ref().unwrap().payload
+        else {
+            panic!("Waterfall payload")
+        };
+        assert_eq!(payload.text.len(), 2);
+        assert_eq!(
+            payload.text[0].placement.position.x.to_bits(),
+            payload.text[1].placement.position.x.to_bits()
+        );
+        assert!(payload.text[1].placement.position.y > payload.text[0].placement.position.y);
+        let mut first = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+        first
+            .text(payload.text[0].placement, &payload.text[0].plan, None)
+            .unwrap();
+        let mut second = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+        second
+            .text(payload.text[1].placement, &payload.text[1].plan, None)
+            .unwrap();
+        let first_top = first
+            .bounds()
+            .iter()
+            .map(|ink| ink.top)
+            .fold(f64::NEG_INFINITY, f64::max);
+        let second_bottom = second
+            .bounds()
+            .iter()
+            .map(|ink| ink.bottom)
+            .fold(f64::INFINITY, f64::min);
+        assert!(second_bottom - first_top >= theme.annotations.waterfall_shelf_row_gap);
+        assert!(first
+            .bounds()
+            .iter()
+            .chain(second.bounds())
+            .all(|ink| ink.bottom >= payload.clip.y1 && ink.top <= panel.y1));
+    }
+
+    #[test]
+    fn traced_category_tracks_fit_below_the_retired_twenty_four_pixel_floor() {
+        let source = Plot::waterfall(
+            CategoryValues::new("step", ["a"]).unwrap(),
+            NumericValues::new("delta", [0.0]),
+            0.0,
+        )
+        .x_label("")
+        .y_label("")
+        .erase();
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+                .unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let theme = crate::Theme::Publication.resolve();
+        let measure = |height| {
+            chart.measure_selected_interior(PlotRenderContext::new(
+                chart.data(),
+                PanelBox::new(50.0, 850.0, 50.0, 50.0 + height),
+                &theme,
+            ))
+        };
+        let roomy = measure(500.0).unwrap();
+        let band = 500.0 - roomy.layout.projection.panel_box().height();
+        let selected = measure(band + 21.0).unwrap();
+        assert!(selected.layout.projection.panel_box().height() < 24.0);
+        let crate::layout::interior::MarkPayload::Waterfall(payload) =
+            &selected.marks.as_ref().unwrap().payload
+        else {
+            panic!("Waterfall payload")
+        };
+        assert_eq!(payload.bars.len(), 1);
+        assert_eq!(payload.text.len(), 2);
     }
 
     #[test]
@@ -776,13 +1056,8 @@ mod tests {
                     panic!("final Waterfall")
                 };
                 assert!(final_payload.domain_expansions.iter().all(Option::is_none));
-                let base_x = final_plan
-                    .result
-                    .layout
-                    .projection
-                    .project(0.0, 0.0)
-                    .0
-                    .round();
+                let projected = final_plan.result.layout.projection.project(0.0, 0.0).0;
+                let base_x = nearest_spatial_quanta(projected).unwrap() as f64 / 1024.0;
                 assert_eq!(
                     final_payload.text[0].placement.position.x.to_bits(),
                     base_x.to_bits()

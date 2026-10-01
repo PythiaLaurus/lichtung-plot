@@ -2547,7 +2547,7 @@ The sole root driver and numerical/resource policies remain unchanged.
 | T5e2 | COMPLETE | T5e1 | `feat(matrix): allocate native variable grid tracks` |
 | T5e3 | COMPLETE | T5e2 | `feat(marginal): measure native linked subpanels` |
 | T5e4 | COMPLETE | T5e3 | `feat(beeswarm): implement bounded deterministic tangent packing` |
-| T5e5 | PENDING | T5e4 | `feat(waterfall): measure native annotation shelves` |
+| T5e5 | COMPLETE | T5e4 | `feat(waterfall): measure native annotation shelves` |
 | T5e6 | PENDING | T5e5 | `feat(layout): resolve private automatic root requests` |
 | T5e7 | PENDING | T5e6 | `test(layout): close all producer resource and feedback contracts` |
 | T5e8 | PENDING | T5e7 | `refactor(layout): close private scientific layout` |
@@ -2777,6 +2777,30 @@ data-window semantics, and source-aware collapse rejection. No row-index search
 or clipping of required shelf labels. Evidence includes overlapping labels,
 multiple shelf rows, mixed exact/automatic domains, and finite cumulative
 endpoints despite detached-sum overflow. Delete the Waterfall adapter.
+
+T5e5 closure: Waterfall now uses native categorical Grid tracks, preserving
+every source delta, cumulative endpoint, zero-span slot and adjacent connector.
+Present in-domain base then terminal labels choose the lowest available shelf
+from final logical/ink intervals at exact quantized projected targets. Rows
+retain independent above/below-baseline maxima and exact baselines; checked
+quanta compose the band with resolved plot-owned shelf padding/gaps. The
+24px mark-panel parity floor is removed, with a 21px traced-track fixture.
+Required total ink stays in its shelf and exact numeric windows still refuse
+text overflow rather than shifting labels or resizing; automatic numeric
+clearance continues through the one root driver. Overlapping labels exercise
+separate baselines and complete gap/containment checks. Fifteen Waterfall units,
+all 18 Publication/Science parent fingerprints, source-aware nonzero collapse
+and signed-zero tests, detached-sum overflow preservation, output replay and
+exact resource limits pass. All five specialized routes are now native: the
+`SpecializedLegacy` enum/dispatch, dead native/legacy selector, legacy categorical
+label reconstruction, retained-axis fallback/copier and unused label accessors
+are deleted, with repository test callers migrated to the active boundaries.
+Nineteen affected ordinary coordinate tests (including the independently
+completed long exact-resource audit), six native Bar tests, four estimate tests,
+17 frozen-axis tests, missing-frozen-axis refusal, facet guide recovery, route
+census, strict Clippy and `git diff --check` pass. Historical Waterfall targets
+rounded to whole pixels are replaced by quantized exact-target baselines; old
+fingerprints remain in commit `97f3096` and earlier documented history.
 
 ### T5e6 — One Private Three-Mode Root Engine
 

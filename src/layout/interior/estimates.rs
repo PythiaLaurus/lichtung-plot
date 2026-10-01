@@ -243,7 +243,16 @@ fn native_estimates_retain_orientation_raw_display_midpoints_and_selected_projec
                 assert!(PlotRenderContext::new(plot.data(), panel, &theme)
                     .with_prepared_axes(&plot)
                     .unwrap()
-                    .axis_layout(|| panic!("removed fallback"))
+                    .layout_with_axis_specs(
+                        (0.0, 1.0),
+                        (0.0, 1.0),
+                        panel,
+                        String::new(),
+                        String::new(),
+                        &crate::layout::AxisSpec::default(),
+                        &crate::layout::AxisSpec::default(),
+                        &theme
+                    )
                     .is_err());
             }
         }

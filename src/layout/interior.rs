@@ -13,28 +13,22 @@ pub(crate) mod preference;
 pub(crate) mod tracks;
 
 macro_rules! interior_routes {
-    (native { $($native:ident { $($native_kind:ident),+ $(,)? }),+ $(,)? }
-     legacy { $($class:ident { $($kind:ident),+ $(,)? }),+ $(,)? }) => {
-        $(#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub(crate) enum $native { $($native_kind),+ })+
-
+    ($($class:ident { $($kind:ident),+ $(,)? }),+ $(,)?) => {
         $(#[derive(Debug, Clone, Copy, PartialEq, Eq)]
         pub(crate) enum $class { $($kind),+ })+
 
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub(crate) enum InteriorRoute { $($native($native),)+ $($class($class)),+ }
+        pub(crate) enum InteriorRoute { $($class($class)),+ }
 
         impl InteriorRoute {
             pub(crate) const fn classify(kind: PlotKind) -> Self {
                 match kind {
-                    $($(PlotKind::$native_kind => Self::$native($native::$native_kind),)+)+
                     $($(PlotKind::$kind => Self::$class($class::$kind),)+)+
                 }
             }
 
             pub(crate) const fn kind(self) -> PlotKind {
                 match self {
-                    $($(Self::$native($native::$native_kind) => PlotKind::$native_kind,)+)+
                     $($(Self::$class($class::$kind) => PlotKind::$kind,)+)+
                 }
             }
@@ -43,28 +37,12 @@ macro_rules! interior_routes {
 }
 
 interior_routes! {
-    native {
-        StandardCoordinate { Scatter, Line, Trajectory, LinePath, Histogram, Density, Qq, Regression },
-        OneCategoricalAxis { PointInterval, Coefficient, Forest, Dumbbell, Bar, HorizontalBar, StackedBar, StackedHorizontalBar, Boxplot, Violin, Raincloud, Interaction },
-        SpecializedGrid { Heatmap, Matrix, Marginal, Beeswarm },
-    }
-    legacy {
-        SpecializedLegacy {
-            Waterfall,
-        },
-    }
+    StandardCoordinate { Scatter, Line, Trajectory, LinePath, Histogram, Density, Qq, Regression },
+    OneCategoricalAxis { PointInterval, Coefficient, Forest, Dumbbell, Bar, HorizontalBar, StackedBar, StackedHorizontalBar, Boxplot, Violin, Raincloud, Interaction },
+    SpecializedGrid { Heatmap, Matrix, Marginal, Beeswarm, Waterfall },
 }
 
 impl InteriorRoute {
-    pub(crate) const fn is_native(self) -> bool {
-        match self {
-            Self::StandardCoordinate(_)
-            | Self::OneCategoricalAxis(_)
-            | Self::SpecializedGrid(_) => true,
-            Self::SpecializedLegacy(_) => false,
-        }
-    }
-
     pub(crate) const fn is_coordinate(self) -> bool {
         matches!(
             self,
@@ -201,13 +179,8 @@ impl Plot {
     ) -> Result<(f64, f64), Error> {
         let mut minimum = if InteriorRoute::classify(self.kind()).is_coordinate() {
             coordinate::Intrinsics::prepared(self, theme)?.minimum(self)
-        } else if InteriorRoute::classify(self.kind()).is_native() {
-            (1.0 / 1024.0, 1.0 / 1024.0)
         } else {
-            (
-                crate::layout::canvas::MINIMUM_PANEL_SPAN,
-                crate::layout::canvas::MINIMUM_PANEL_SPAN,
-            )
+            (1.0 / 1024.0, 1.0 / 1024.0)
         };
         let mark = match self.kind() {
             PlotKind::Scatter => Some(crate::plots::scatter::intrinsic_body_minimum(self, theme)?),
