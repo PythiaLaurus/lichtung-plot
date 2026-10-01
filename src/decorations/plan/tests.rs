@@ -58,7 +58,10 @@ fn p2_planned_limit_metadata_is_admitted_for_every_copy_without_processing() {
     .erase();
     let plan = PanelPlan {
         panel_box: PanelBox::new(0.0, 800.0, 0.0, 600.0),
-        result: PlotRenderResult::new(crate::layout::Layout::self_managed(800, 600), Vec::new()),
+        result: PlotRenderResult::new(
+            crate::layout::Layout::envelope(crate::layout::PanelBox::new(80.0, 770.0, 60.0, 570.0)),
+            Vec::new(),
+        ),
         legend: None,
         planned_x_limits: Some((0.0, 3.0)),
         planned_y_limits: Some((0.0, 4.0)),

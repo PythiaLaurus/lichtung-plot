@@ -2544,7 +2544,7 @@ The sole root driver and numerical/resource policies remain unchanged.
 | T5e1b1 | COMPLETE | T5e1a | `feat(heatmap): assign measured column tracks to selected cells and axes` |
 | T5e1b2 | COMPLETE | T5e1b1 | `feat(heatmap): allocate rows from constrained cell text` |
 | T5e1c | COMPLETE | T5e1b | `refactor(heatmap): retire specialized packing adapter` |
-| T5e2 | PENDING | T5e1 | `feat(matrix): allocate native variable grid tracks` |
+| T5e2 | COMPLETE | T5e1 | `feat(matrix): allocate native variable grid tracks` |
 | T5e3 | PENDING | T5e2 | `feat(marginal): measure native linked subpanels` |
 | T5e4 | PENDING | T5e3 | `feat(beeswarm): implement bounded deterministic tangent packing` |
 | T5e5 | PENDING | T5e4 | `feat(waterfall): measure native annotation shelves` |
@@ -2686,6 +2686,27 @@ Replace local label/cell stabilization with common parent allocation and root
 feedback. Evidence includes unequal names, null pair patterns, shared axis spans,
 all cell modes, variable-count growth, tight exact roots, and admission before
 quadratic topology/storage. Delete the Matrix specialized adapter.
+
+T5e2 closure: Matrix joins native `SpecializedGrid`. Prepared variable-specific
+unbreakable labels and complete point/density ink supply independent track
+minima; preferred sides are `max(hard,12em)`. The common quantized allocator
+assigns columns and top-to-bottom rows with the owning composition Grid gap.
+The fixed 40px cell floor, equal-cell carrier and local eight-pass stabilization
+are removed. All declared diagonal/off-diagonal cells and prepared KDE/source
+data remain, while per-column X and per-row Y tick caches share only their
+actual orthogonal spans. Composite frozen axes expose measured outer gutters
+to the existing root driver, including a concrete axis-ink remedy for the
+provisional Grid; no local retry engine is added. The containing Layout retains
+its actual assigned box (`envelope`), replacing the old default-box carrier
+and migrating its test callers. A three-variable unequal-name fixture proves
+variable tracks, shared spans and all nine populated cells. Normal specialized
+text workloads attribute one allocation per call to bounded root feedback,
+rather than requiring the retired local-pass count. Twenty Matrix units,
+eight affected integration contracts, the inspected/updated Matrix structural
+snapshot, 17 frozen-axis units, three child-cache admission tests, route census,
+the text workload, strict Clippy and `git diff --check` pass. The snapshot
+preserves every diagonal density and off-diagonal point count while showing
+native variable tracks, measured axes and the resolved outside-guide gap.
 
 ### T5e3 — Marginal
 

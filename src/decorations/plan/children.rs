@@ -444,7 +444,9 @@ mod tests {
                     let mut produce = |_: &crate::font::canonical::MeasurementCall| {
                         produced += 1;
                         Ok(FitOutcome::Measured(PlotRenderResult::new(
-                            crate::layout::Layout::self_managed(800, 600),
+                            crate::layout::Layout::envelope(crate::layout::PanelBox::new(
+                                80.0, 770.0, 60.0, 570.0,
+                            )),
                             Vec::new(),
                         )))
                     };
@@ -545,7 +547,9 @@ mod tests {
                         result: Arc::new(PanelPlan {
                             panel_box: context.panel,
                             result: PlotRenderResult::new(
-                                crate::layout::Layout::self_managed(800, 600),
+                                crate::layout::Layout::envelope(crate::layout::PanelBox::new(
+                                    80.0, 770.0, 60.0, 570.0,
+                                )),
                                 Vec::new(),
                             ),
                             legend: None,

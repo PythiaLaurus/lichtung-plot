@@ -240,7 +240,7 @@ fn matrix_marks_ticks_and_reference_grid_share_large_fractional_cell_coordinates
                         .count(),
                     usize::from(col == 0)
                 );
-                let mut reference = Layout::self_managed(800, 600);
+                let mut reference = Layout::envelope(PanelBox::new(80.0, 770.0, 60.0, 570.0));
                 reference.projection = projection.clone();
                 reference.x_axis.ticks = x_ticks.clone();
                 reference.y_axis.ticks = y_ticks.clone();
@@ -320,7 +320,7 @@ fn selected_source_cells_keep_logical_and_ink_clearance_at_odd_quanta() {
                 &ROOT_SCOPE,
             )
             .unwrap();
-            let mut layout = Layout::self_managed(800, 600);
+            let mut layout = Layout::envelope(PanelBox::new(80.0, 770.0, 60.0, 570.0));
             layout.projection = projection.clone();
             let axis = match side {
                 layout::AxisSide::Bottom => &mut layout.x_axis,

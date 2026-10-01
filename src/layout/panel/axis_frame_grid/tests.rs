@@ -9,7 +9,7 @@ fn resource_audit_axis_calls_refuse_before_text_or_geometry_and_admit_the_last_c
             .unwrap()
             .generation_resources();
         resources.claim_calls(1_000_000 - available).unwrap();
-        let layout = Layout::self_managed(800, 600);
+        let layout = Layout::envelope(PanelBox::new(80.0, 770.0, 60.0, 570.0));
         let standard = super::super::StandardPanelInputs::new(&theme).unwrap();
         let before = (resources.usage().unwrap(), resources.byte_usage().unwrap());
         crate::font::canonical::FONT_SHAPE_CALLS.with(|count| count.set(0));
@@ -67,7 +67,7 @@ fn selected_axis_plan_retains_semantics_beside_projection_and_sources() {
 use crate::layout::PanelBox;
 
 fn layout(panel: PanelBox, x: Vec<AxisTick>, y: Vec<AxisTick>, source: TickSource) -> Layout {
-    let mut layout = Layout::self_managed(800, 600);
+    let mut layout = Layout::envelope(PanelBox::new(80.0, 770.0, 60.0, 570.0));
     layout.projection = Projection::new((0.0, 3.0), (0.0, 3.0), panel.as_tuple()).with_categories(
         [x.len(), y.len()]
             .map(|count| (source == TickSource::SUPPLIED && count > 0).then_some(count)),
@@ -646,7 +646,7 @@ fn automatic_selection_and_frozen_axis_agree_at_quantum_fit_boundary() {
             )
             .unwrap();
             assert_eq!(selected.source.ordinal == 0, span >= low);
-            let mut layout = Layout::self_managed(800, 600);
+            let mut layout = Layout::envelope(PanelBox::new(80.0, 770.0, 60.0, 570.0));
             layout.projection = projection;
             let axis = match side {
                 AxisSide::Bottom => &mut layout.x_axis,

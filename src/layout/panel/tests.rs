@@ -602,7 +602,7 @@ fn frozen_axes_and_grid_replay_without_layout_theme_or_shaping() {
 #[test]
 fn axis_plan_storage_refusal_precedes_text_and_geometry_materialization() {
     let theme = crate::Theme::Publication.resolve();
-    let mut layout = Layout::self_managed(400, 400);
+    let mut layout = Layout::envelope(crate::layout::PanelBox::new(80.0, 370.0, 60.0, 370.0));
     layout.x_axis.label = "unmeasured title".into();
     let environment = theme.prepared_font_environment().unwrap();
     let before = environment.resource_usage().unwrap();

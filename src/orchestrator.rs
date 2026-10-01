@@ -285,7 +285,7 @@ impl Plot {
         &self,
         theme: &crate::theme::ResolvedTheme,
     ) -> Result<crate::font::canonical::MeasurementCall, Error> {
-        if crate::layout::interior::InteriorRoute::classify(self.kind()).is_native()
+        if crate::layout::interior::InteriorRoute::classify(self.kind()).is_coordinate()
             && self.prepared_axes.is_empty()
         {
             return Err(Error::Render(
@@ -323,7 +323,7 @@ impl Plot {
             route @ (R::StandardCoordinate(_) | R::OneCategoricalAxis(_)) => {
                 route.measure(self, context)?
             }
-            R::SpecializedLegacy(S::Matrix) => crate::plots::matrix::measure(self, context)?,
+            R::SpecializedGrid(G::Matrix) => crate::plots::matrix::measure(self, context)?,
             R::SpecializedLegacy(S::Marginal) => crate::plots::marginal::measure(self, context)?,
             R::SpecializedGrid(G::Heatmap) => crate::plots::heatmap::measure(self, context)?,
             R::SpecializedLegacy(S::Beeswarm) => crate::plots::beeswarm::measure(self, context)?,
@@ -693,7 +693,8 @@ fn later_axis_font_failure_wins_over_an_earlier_text_fit() {
     use crate::layout::fit::{FitScope, PlanError};
     let theme = crate::Theme::Publication.resolve();
     theme.prepare_font_environment().unwrap();
-    let mut layout = crate::layout::Layout::self_managed(640, 480);
+    let mut layout =
+        crate::layout::Layout::envelope(crate::layout::PanelBox::new(80.0, 610.0, 60.0, 450.0));
     layout.x_axis.label = "W".repeat(200);
     let scope = FitScope::root();
     assert!(matches!(

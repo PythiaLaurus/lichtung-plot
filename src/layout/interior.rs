@@ -10,6 +10,7 @@ use crate::{Error, Plot};
 pub(crate) mod coordinate;
 pub(crate) mod guide;
 pub(crate) mod preference;
+pub(crate) mod tracks;
 
 macro_rules! interior_routes {
     (native { $($native:ident { $($native_kind:ident),+ $(,)? }),+ $(,)? }
@@ -45,11 +46,11 @@ interior_routes! {
     native {
         StandardCoordinate { Scatter, Line, Trajectory, LinePath, Histogram, Density, Qq, Regression },
         OneCategoricalAxis { PointInterval, Coefficient, Forest, Dumbbell, Bar, HorizontalBar, StackedBar, StackedHorizontalBar, Boxplot, Violin, Raincloud, Interaction },
-        SpecializedGrid { Heatmap },
+        SpecializedGrid { Heatmap, Matrix },
     }
     legacy {
         SpecializedLegacy {
-            Marginal, Matrix, Beeswarm, Waterfall,
+            Marginal, Beeswarm, Waterfall,
         },
     }
 }

@@ -1210,6 +1210,7 @@ impl ProducerText<'_> {
 pub(crate) struct PlotRenderResult {
     pub(crate) layout: Layout,
     pub(crate) axes: Option<crate::layout::PanelAxisPlan>,
+    pub(crate) grid_axis_gutters: Option<[f64; 4]>,
     pub(crate) x_domain: AxisDomain,
     pub(crate) y_domain: AxisDomain,
     pub(crate) significance: Option<SignificancePlan>,
@@ -1244,6 +1245,7 @@ impl PlotRenderResult {
         Self {
             layout,
             axes: None,
+            grid_axis_gutters: None,
             x_domain: AxisDomain::Continuous,
             y_domain: AxisDomain::Continuous,
             significance: None,

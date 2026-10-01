@@ -22,7 +22,7 @@
 )]
 
 use crate::decorations::legend::{Legend, LegendEntry};
-use crate::layout::{self, Layout, PanelBox, PhysicalTextAlignment, TextBlock};
+use crate::layout::{self, Layout, PanelBox};
 use crate::render::backend::{
     points_share_canonical_position, with_clip, with_layer, Backend, FillStyle, LineStyle, Point2D,
 };
@@ -122,7 +122,7 @@ impl PreparedMatrixAxes {
 
 /// Prepared variable count determines the number of cells, including empty
 /// off-diagonal cells. Painted primary points and diagonal density outlines
-/// determine the minimum mark area of every cell before T5e2 grid packing.
+/// determine the hard area of each variable's native tracks.
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
     theme: &ResolvedTheme,
@@ -139,19 +139,6 @@ pub(crate) fn intrinsic_body_minimum(
     );
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = chart.data().with_axis_resources(&resources);
-    // Column titles occupy the cell width; row titles are rotated into its
-    // height. Measure the longest unbreakable glyph run, not character count.
-    for label in &prepared.labels {
-        data.claim_source_visits(1)?;
-        let (hard, _) = crate::layout::fit::intrinsic_widths(
-            theme,
-            label,
-            &theme.typography.axis_title,
-            "matrix variable label",
-        )?;
-        cell.0 = cell.0.max(hard);
-        cell.1 = cell.1.max(hard);
-    }
     for group in &prepared.groups {
         for column in &group.columns {
             data.claim_source_visits(column.len())?;
@@ -161,8 +148,22 @@ pub(crate) fn intrinsic_body_minimum(
         cell.0 = cell.0.max(x);
         cell.1 = cell.1.max(y);
     }
-    let gaps = 8.0 * n.saturating_sub(1) as f64;
-    Ok((cell.0 * n as f64 + gaps, cell.1 * n as f64 + gaps))
+    let mut width = 0.0;
+    let mut height = 0.0;
+    for label in &prepared.labels {
+        data.claim_source_visits(1)?;
+        let hard = crate::layout::fit::intrinsic_widths(
+            theme,
+            label,
+            &theme.typography.axis_title,
+            "matrix variable label",
+        )?
+        .0;
+        width += cell.0.max(hard);
+        height += cell.1.max(hard);
+    }
+    let gaps = theme.composition.canvas_grid_gap * n.saturating_sub(1) as f64;
+    Ok((width + gaps, height + gaps))
 }
 
 #[test]
@@ -223,6 +224,60 @@ fn prepared_matrix_uses_variable_count_cell_labels_and_complete_mark_ink() {
     assert!(density.0 > thick_points.0 && density.1 > thick_points.1);
 }
 
+#[test]
+fn native_matrix_allocates_unequal_variable_tracks_and_retains_the_full_square() {
+    let source = Plot::matrix(vec![
+        crate::NumericValues::new("a", [1.0, 1.3, 1.7, 2.4]),
+        crate::NumericValues::new(
+            "deliberatelylongunbreakablevariablename",
+            [3.0, 3.3, 3.7, 4.4],
+        ),
+        crate::NumericValues::new("c", [2.0, 2.3, 2.7, 3.4]),
+    ])
+    .size(1200, 900)
+    .erase();
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let chart = crate::plots::shared_x::prepare_plot(&source, &resources)
+        .unwrap()
+        .attach(source)
+        .unwrap();
+    let theme = crate::Theme::Publication.resolve();
+    let selected = chart
+        .measure_selected_interior(PlotRenderContext::new(
+            chart.data(),
+            PanelBox::new(50.0, 1150.0, 50.0, 850.0),
+            &theme,
+        ))
+        .unwrap();
+    let crate::layout::interior::MarkPayload::Matrix(payload) =
+        &selected.marks.as_ref().unwrap().payload
+    else {
+        panic!("Matrix payload")
+    };
+    assert_eq!(payload.cells.len(), 9);
+    assert!(payload.cells[1].clip.width() > payload.cells[0].clip.width());
+    assert!(payload.cells[3].clip.height() > payload.cells[0].clip.height());
+    for row in 0..3 {
+        for col in 0..3 {
+            let cell = &payload.cells[row * 3 + col];
+            assert_eq!(
+                cell.clip.width().to_bits(),
+                payload.cells[col].clip.width().to_bits()
+            );
+            assert_eq!(
+                cell.clip.height().to_bits(),
+                payload.cells[row * 3].clip.height().to_bits()
+            );
+            assert!(!cell.marks.is_empty());
+        }
+    }
+    assert!(selected
+        .grid_axis_gutters
+        .unwrap()
+        .iter()
+        .any(|gutter| *gutter > 0.0));
+}
+
 #[derive(Debug)]
 struct MatrixDensity {
     positions: Vec<f64>,
@@ -274,6 +329,21 @@ pub(crate) struct MatrixPayload {
 }
 
 impl MatrixPayload {
+    pub(crate) fn axis_geometry(
+        &self,
+        theme: &ResolvedTheme,
+    ) -> Result<crate::render::geometry::GeometrySnapshot, Error> {
+        let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+        let resources = theme.prepared_font_environment()?.generation_resources();
+        for cell in &self.cells {
+            resources
+                .claim_visits(1)
+                .map_err(|error| Error::Render(format!("Matrix axis geometry: {error:?}")))?;
+            geometry.append(&cell.axes.geometry_snapshot(theme)?)?;
+        }
+        Ok(geometry)
+    }
+
     pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
         for cell in &self.cells {
             if let Some(style) = &self.frame_style {
@@ -522,90 +592,72 @@ pub(crate) fn measure(
         }
     };
 
-    // --- Layout geometry ---
-    let w = chart.width() as f64;
-    let insets = chart.legacy_root_axes().insets(theme, true);
     let outer = context.panel;
     let legend_reserve = legend.as_ref().map_or(0.0, |legend| {
-        (legend_total_width(legend) + 32.0 - insets.right).max(0.0)
+        legend.compute_box_width() + theme.legend.outside_gap
     });
-    let gap = 8.0;
-    let provisional_grid_width =
-        (outer.x1 - outer.x0 - legend_reserve - gap * n.saturating_sub(1) as f64).max(1.0);
-    let provisional_grid_height = (outer.y1 - outer.y0 - gap * n.saturating_sub(1) as f64).max(1.0);
-    let mut candidate_cell_width = provisional_grid_width / n as f64;
-    let mut candidate_cell_height = provisional_grid_height / n as f64;
-    let label_line_height = theme.typography.axis_title.line_height();
-    let mut resolved_layout = None;
-    for _ in 0..8 {
-        #[cfg(test)]
-        crate::orchestrator::measurements::count(
-            crate::orchestrator::measurements::Counter::MatrixLayoutPass,
-        );
-        let column_blocks = data.collect_source(display_cols.iter().map(|label| {
-            layout::fit::measured(layout::fit::text(
-                theme,
-                label,
-                &theme.typography.axis_title,
-                candidate_cell_width.max(1.0),
-                PhysicalTextAlignment::Center,
-                "matrix column label",
-                context.fit_scope(),
-            ))
-            .map(TextBlock::from_resolved)
-            .map_err(crate::layout::fit::PlanError::into_error)
-        }))?;
-        let row_blocks = data.collect_source(display_cols.iter().map(|label| {
-            layout::fit::measured(layout::fit::text(
-                theme,
-                label,
-                &theme.typography.axis_title,
-                candidate_cell_height.max(1.0),
-                PhysicalTextAlignment::Center,
-                "matrix row label",
-                context.fit_scope(),
-            ))
-            .map(TextBlock::from_resolved)
-            .map_err(crate::layout::fit::PlanError::into_error)
-        }))?;
-        let extra_bottom = column_blocks
-            .iter()
-            .map(|block| block.lines().len().saturating_sub(1) as f64 * label_line_height)
-            .fold(0.0_f64, f64::max);
-        let extra_left = row_blocks
-            .iter()
-            .map(|block| block.lines().len().saturating_sub(1) as f64 * label_line_height)
-            .fold(0.0_f64, f64::max);
-        let grid_left = outer.x0 + extra_left;
-        let grid_right = (outer.x1 - legend_reserve).max(grid_left + 1.0);
-        let grid_bottom = outer.y0 + extra_bottom;
-        let grid_top = outer.y1;
-        let grid_w = (grid_right - grid_left - gap * (n.saturating_sub(1) as f64)).max(1.0);
-        let grid_h = (grid_top - grid_bottom - gap * (n.saturating_sub(1) as f64)).max(1.0);
-        let cell_w = grid_w / n as f64;
-        let cell_h = grid_h / n as f64;
-        if cell_w < 40.0 || cell_h < 40.0 {
-            return Err(context.fit_scope().failure(
-                crate::layout::fit::FitKind::SpecializedGeometry,
-                format!("matrix labels and guides leave {cell_w:.1}x{cell_h:.1}px cells; minimum 40x40 matrix panels required until native grid packing"),
-            ).into());
-        }
-        if (cell_w - candidate_cell_width).abs() <= f64::EPSILON
-            && (cell_h - candidate_cell_height).abs() <= f64::EPSILON
-        {
-            resolved_layout = Some((grid_left, grid_bottom, grid_top, cell_w, cell_h));
-            break;
-        }
-        candidate_cell_width = cell_w;
-        candidate_cell_height = cell_h;
-    }
-    let Some((grid_left, grid_bottom, grid_top, cell_w, cell_h)) = resolved_layout else {
-        return Err(Error::Render(
-            "matrix label layout did not stabilize; increase chart size or shorten variable labels"
-                .into(),
-        )
-        .into());
-    };
+    let gap = theme.composition.canvas_grid_gap;
+    let density = theme.marks.matrix_density.backend_style((0, 0, 0));
+    let ink = crate::render::geometry::rectangular_fill_ink_outset(theme, &density)?;
+    let point = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.matrix);
+    let point = crate::render::geometry::point_ink_dimensions(theme, &point)?;
+    let specs = data.collect_source(display_cols.iter().map(|label| {
+        data.claim_source_visits(1)?;
+        let hard = layout::fit::intrinsic_widths(
+            theme,
+            label,
+            &theme.typography.axis_title,
+            "matrix variable label",
+        )?
+        .0;
+        let x = layout::kernel::ceil_spatial_quanta(
+            hard.max(point.0).max(2.0 * ink.0).max(1.0 / 1024.0),
+        )?;
+        let y = layout::kernel::ceil_spatial_quanta(
+            hard.max(point.1).max(2.0 * ink.1).max(1.0 / 1024.0),
+        )?;
+        let preferred = layout::kernel::ceil_spatial_quanta(
+            12.0 * f64::from(theme.typography.tick_label.font_size),
+        )?
+        .max(x)
+        .max(y);
+        let track = |min| layout::kernel::TrackSpec {
+            min,
+            preferred,
+            max: None,
+            flexible: true,
+        };
+        Ok((track(x), track(y)))
+    }))?;
+    let x_specs = data.collect_source(specs.iter().map(|(x, _)| {
+        data.claim_source_visits(1)?;
+        Ok(*x)
+    }))?;
+    let y_specs = data.collect_source(specs.iter().map(|(_, y)| {
+        data.claim_source_visits(1)?;
+        Ok(*y)
+    }))?;
+    let columns = layout::interior::tracks::assign(
+        &x_specs,
+        (outer.x0, outer.x1 - legend_reserve),
+        gap,
+        false,
+        data,
+        context.fit_scope(),
+    )?;
+    let rows = layout::interior::tracks::assign(
+        &y_specs,
+        (outer.y0, outer.y1),
+        gap,
+        true,
+        data,
+        context.fit_scope(),
+    )?;
+    let (grid_bottom, grid_top) = (outer.y0, outer.y1);
+    #[cfg(test)]
+    crate::orchestrator::measurements::count(
+        crate::orchestrator::measurements::Counter::MatrixLayoutPass,
+    );
 
     // --- Per-variable axis ranges ---
     // A pairplot is a coordinated matrix: each variable should use one
@@ -620,7 +672,7 @@ pub(crate) fn measure(
         .frame
         .as_ref()
         .map(|appearance| appearance.stroke.backend_style());
-    // Matrix owns its two-spine cell topology until T5e. Common plans own
+    // Matrix owns its two-spine cell topology. Common plans own
     // ticks and outer text, without introducing a four-sided frame or grid.
     let mut axis_theme = theme.clone();
     axis_theme.axes.frame = None;
@@ -658,12 +710,13 @@ pub(crate) fn measure(
     y_ticks.resize_with(cache_count, || None);
     let mut axes = MatrixAxisPlan {
         ranges: prepared_ranges,
-        cell_span: (cell_w, cell_h),
+        columns,
+        rows,
         x_ticks,
         y_ticks,
     };
     let variable_ranges = &axes.ranges;
-    let (cell_w, cell_h) = axes.cell_span;
+    let mut gutters = [0.0_f64; 4];
 
     let mut cells = Vec::new();
     data.reserve_source(
@@ -671,14 +724,12 @@ pub(crate) fn measure(
         n.checked_mul(n)
             .ok_or_else(|| Error::Render("matrix cell count overflow".into()))?,
     )?;
-    // Preserve the legacy cell order and local packing until T5e.
+    // Retain every declared cell in row-major semantic order.
     for row in 0..n {
         for col in 0..n {
-            let x0 = grid_left + col as f64 * (cell_w + gap);
-            let x1 = x0 + cell_w;
-            // row 0 = top visually → highest y in math coords
-            let y0 = grid_bottom + (n - 1 - row) as f64 * (cell_h + gap);
-            let y1 = y0 + cell_h;
+            data.claim_source_visits(1)?;
+            let (x0, x1) = axes.columns[col];
+            let (y0, y1) = axes.rows[row];
             let cell_panel = PanelBox::new(x0, x1, y0, y1);
             let projection = layout::Projection::new(
                 variable_ranges[col],
@@ -747,6 +798,19 @@ pub(crate) fn measure(
                     chart.axis_semantic_inputs([crate::spec::AxisDomain::Continuous; 2]),
                 )?,
             };
+            let required = cell.axes.requirements();
+            if col == 0 {
+                gutters[0] = gutters[0].max(required.left + 4.0);
+            }
+            if col == n - 1 {
+                gutters[1] = gutters[1].max(required.right + 4.0);
+            }
+            if row == n - 1 {
+                gutters[2] = gutters[2].max(required.bottom + 4.0);
+            }
+            if row == 0 {
+                gutters[3] = gutters[3].max(required.top + 4.0);
+            }
             data.reserve_source(&mut cell.marks, groups.len())?;
 
             if row == col {
@@ -778,7 +842,7 @@ pub(crate) fn measure(
 
     // --- Legend (when hue is active) ---
     let legend_payload = if let Some(legend) = &legend {
-        let right_edge = (w - 16.0).max(legend_total_width(legend));
+        let right_edge = outer.x1;
         let top_edge = grid_top - 4.0;
         let legend_w = legend.compute_box_width();
         let legend_h = legend.compute_box_height();
@@ -795,10 +859,10 @@ pub(crate) fn measure(
         None
     };
 
-    // Return a dummy layout — matrix is self-decorated.
-    let layout = Layout::self_managed(chart.width(), chart.height());
+    let layout = Layout::envelope(outer);
 
     let mut result = PlotRenderResult::new(layout, Vec::new()).with_self_managed_decorations();
+    result.grid_axis_gutters = Some(gutters.map(f64::ceil));
     let payload = MatrixPayload {
         cells,
         frame_style,
@@ -817,7 +881,8 @@ pub(crate) fn measure(
 #[derive(Debug)]
 pub(crate) struct MatrixAxisPlan {
     ranges: Vec<(f64, f64)>,
-    cell_span: (f64, f64),
+    columns: Vec<(f64, f64)>,
+    rows: Vec<(f64, f64)>,
     x_ticks: Vec<Option<layout::NumericTickPlan>>,
     y_ticks: Vec<Option<layout::NumericTickPlan>>,
 }
@@ -991,10 +1056,6 @@ fn matrix_legend(
         FitOutcome::Measured(legend) => Ok(FitOutcome::Measured(Some(legend))),
         FitOutcome::Miss(reason) => Ok(FitOutcome::Miss(reason)),
     }
-}
-
-fn legend_total_width(legend: &Legend) -> f64 {
-    legend.compute_box_width()
 }
 
 fn prepare_density(
@@ -1596,8 +1657,10 @@ mod semantic_tests {
             let axes = selected.matrix_axes.as_ref().unwrap();
             for (index, cell) in payload.cells.iter().enumerate() {
                 assert_eq!(cell.marks.len(), 2);
-                assert!((cell.clip.width() - axes.cell_span.0).abs() < 1e-10);
-                assert!((cell.clip.height() - axes.cell_span.1).abs() < 1e-10);
+                let column = axes.columns[index % 2];
+                let row = axes.rows[index / 2];
+                assert!((cell.clip.width() - (column.1 - column.0)).abs() < 1e-10);
+                assert!((cell.clip.height() - (row.1 - row.0)).abs() < 1e-10);
                 for mark in &cell.marks {
                     if index == 0 || index == 3 {
                         assert!(

@@ -8,8 +8,8 @@ use crate::theme::ResolvedTheme;
 use crate::Error;
 
 impl Layout {
-    /// Build the non-rendered carrier returned by a self-decorating plot.
-    pub(crate) fn self_managed(canvas_width: u32, canvas_height: u32) -> Self {
+    /// Retain the actual assigned containing box of a self-decorating Grid.
+    pub(crate) fn envelope(panel: PanelBox) -> Self {
         Self {
             x_axis: Axis {
                 label: String::new(),
@@ -27,11 +27,7 @@ impl Layout {
                 assigned_cells: None,
                 source: TickSource::SUPPLIED,
             },
-            projection: Projection::new(
-                (0.0, 1.0),
-                (0.0, 1.0),
-                default_panel_box(canvas_width, canvas_height).as_tuple(),
-            ),
+            projection: Projection::new((0.0, 1.0), (0.0, 1.0), panel.as_tuple()),
         }
     }
 
@@ -233,6 +229,7 @@ impl AxisSpec {
     }
 }
 
+#[cfg(test)]
 fn default_panel_box(canvas_width: u32, canvas_height: u32) -> PanelBox {
     PanelBox::new(
         80.0,

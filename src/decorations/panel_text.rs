@@ -233,7 +233,7 @@ fn panel_text_uses_complete_private_role_and_unclipped_canonical_bounds() {
         crate::PanelTextAnnotation::new(PanelCorner::TopRight, "Required note").unwrap(),
     )
     .erase();
-    let layout = Layout::self_managed(800, 600);
+    let layout = Layout::envelope(PanelBox::new(80.0, 770.0, 60.0, 570.0));
     let mut theme = crate::Theme::Publication.resolve();
     let original = plans(&plot, &layout, &theme).unwrap();
     theme.detail_font_size = 0;

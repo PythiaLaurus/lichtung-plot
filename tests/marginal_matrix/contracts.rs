@@ -434,7 +434,8 @@ fn matrix_legend_does_not_cover_points_and_stays_close_to_graphics() {
         "matrix-legend-clear",
     );
     assert_legend_does_not_overlap_graphics(&svg, "matrix");
-    assert!((10.0..=24.0).contains(&legend_gap_from_graphics(&svg)));
+    // Native allocation uses the resolved role-local outside gap (8.8px in Publication).
+    assert!((8.0..=24.0).contains(&legend_gap_from_graphics(&svg)));
 }
 
 #[test]

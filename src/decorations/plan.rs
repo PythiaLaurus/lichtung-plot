@@ -868,10 +868,16 @@ fn plan_panel_attempt(
     let panel_axes = &result.axes;
     let chrome = if let Some(axes) = &panel_axes {
         Some(axes.geometry_snapshot(context.theme)?)
+    } else if let Some(crate::layout::interior::SelectedMarkPlan {
+        payload: crate::layout::interior::MarkPayload::Matrix(payload),
+        ..
+    }) = result.marks.as_deref()
+    {
+        Some(payload.axis_geometry(context.theme)?)
     } else {
         None
     };
-    let mut gutters = [0.0; 4];
+    let mut gutters = result.grid_axis_gutters.unwrap_or([0.0; 4]);
     if let Some(axes) = &panel_axes {
         let required = axes.requirements();
         let drawn_panel = result.layout.projection.panel_box();
@@ -1398,6 +1404,14 @@ fn plan_panel_attempt(
             || bounds.bottom < 0.0
             || bounds.top > f64::from(plot.height())
         {
+            if result.grid_axis_gutters.is_some()
+                && chrome
+                    .as_ref()
+                    .is_some_and(|axes| axes.bounds().contains(bounds))
+            {
+                // The Grid's frozen outer axes have their own concrete gutter/ink request above.
+                continue;
+            }
             let declared = result
                 .deferred_annotation_text
                 .iter()

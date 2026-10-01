@@ -39,8 +39,8 @@ fn exhaustive_route_census_has_twenty_ordinary_five_specialized_two_parents() {
             Scatter | Line | Trajectory | LinePath | Histogram | Density | Qq | Regression => 0,
             PointInterval | Coefficient | Forest | Dumbbell | Bar | HorizontalBar | StackedBar
             | StackedHorizontalBar | Boxplot | Violin | Raincloud | Interaction => 1,
-            Heatmap => 2,
-            Marginal | Matrix | Beeswarm | Waterfall => 3,
+            Heatmap | Matrix => 2,
+            Marginal | Beeswarm | Waterfall => 3,
         };
         let index = match route {
             InteriorRoute::StandardCoordinate(_) => 0,
@@ -52,7 +52,7 @@ fn exhaustive_route_census_has_twenty_ordinary_five_specialized_two_parents() {
         assert_eq!(route.is_native(), index < 3);
         counts[index] += 1;
     }
-    assert_eq!(counts, [8, 12, 1, 4]);
+    assert_eq!(counts, [8, 12, 2, 3]);
     let parents = [
         CompositionChildPolicy::Facet,
         CompositionChildPolicy::Canvas,
