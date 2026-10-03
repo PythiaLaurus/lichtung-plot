@@ -10,8 +10,9 @@ storage, callback, or fallback. Approved boundaries are in `03_THEME_SYSTEM.md`,
 `05_LAYOUT_SYSTEM.md`, and T5a0s/D1-D6 in `91_IMPLEMENTATION_PLAN.md`.
 
 Every item has a stable ID and an explicit review checkpoint enforced by the
-entry/closure gates in `91_IMPLEMENTATION_PLAN.md`. Review is not an implementation
-promise and does not automatically expand T6. At its checkpoint, present the
+entry/closure gates or named successor milestones in `91_IMPLEMENTATION_PLAN.md`.
+Review is not an implementation promise and does not automatically expand T6.
+At its checkpoint, present the
 item's evidence and tradeoffs to the user and record one user-approved outcome:
 admit with an approved new phase, reject with a reason, or re-defer with a new
 explicit milestone checkpoint. A vague future review does not close a gate.
@@ -170,3 +171,43 @@ caption heights, tight-height fit failures, bidi, soft hyphens, and retained gly
 geometry. Revisit only if benefit justifies the wrapping/fit tradeoff; otherwise
 record rejection or explicit re-deferral. Any admission requires user acceptance
 of changed wrapping and a new approved phase under the process above.
+
+## DF11: Scientific Plotting For AI-Authored Workflows
+
+Reconsider the library's role and capabilities for LLM-authored, deeply customized
+scientific figures. The motivating user observation is that LLMs can write bespoke
+drawing scripts, use low-level libraries such as PIL directly, edit generated
+vector SVGs, and add custom shapes or annotations to both individual plots and
+manually composed multi-panel figures. A library limited to a closed catalog of
+internally predefined plot kinds may not provide enough value in those workflows.
+The review concerns the library's positioning as well as concrete capabilities;
+its evidence should establish how scientific plotting libraries, including
+matplotlib, fit these workflows and where a different interface adds value.
+
+**Review checkpoint**: The post-first-release checkpoint in
+`91_IMPLEMENTATION_PLAN.md`, after **all** of the following are complete:
+
+1. Refactoring the project into a Rust workspace.
+2. Completing the polars data adapter.
+3. Completing the ndarray data adapter.
+4. Completing the Python calling interface.
+5. Publishing the first version.
+
+The review begins only after the last prerequisite is satisfied. It is not a
+T6/T7 entry or closure gate. These prerequisites identify the future review timing;
+this item does not itself authorize their implementation or change today's
+standalone renderer boundary.
+
+**Evidence and decision**: Collect representative AI-authored workflows for
+single scientific plots and custom Canvas-like compositions, including direct
+low-level drawing, SVG post-editing, and caller-added graphical elements. Identify
+where the library contributes reliable scientific transforms/statistics, axes,
+text, layout and reproducible output, and where its fixed plot catalog or public
+controls force external reconstruction. Evaluate what changes would better fit
+LLM-generated scripts and iterative figure editing, including discoverability,
+composability, custom graphics, coordinate/annotation access and retained semantic
+identity. Compare concrete alternatives and their ownership, determinism,
+measurement/resource and SVG/PNG consequences before recommending any API or
+architectural change. Present the evidence and tradeoffs for a user-approved new
+phase, reasoned rejection, or explicit re-deferral. No plugin, drawing callback,
+mutable scene, SVG-editing API or alternate rendering path is reserved here.

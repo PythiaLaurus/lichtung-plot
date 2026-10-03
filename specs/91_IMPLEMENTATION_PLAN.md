@@ -6749,6 +6749,23 @@ Acceptance:
   retains an explicit checkpoint, including any user-approved replacement gate.
 - `just verify` passes from the completed worktree.
 
+## Post-First-Release Deferred Review Checkpoint
+
+DF11 in `99_DEFERRED_FEATURES.md` records the user-requested strategic review of
+scientific plotting for AI-authored workflows. Begin this review only after the
+Rust workspace refactor, both polars and ndarray adapters, the Python calling
+interface, and publication of the first version are **all complete**. If their
+completion order changes, the checkpoint remains after the last prerequisite.
+
+At that checkpoint, review actual single-plot and custom multi-panel workflows,
+including low-level drawing, hand-edited SVG and caller-added graphics, and
+reconsider what capabilities and interfaces make the library useful to LLM-driven
+scientific figure creation. Record a user-approved new implementation phase,
+reasoned rejection, or re-deferral with an explicit new milestone. This checkpoint
+does not expand T6/T7, authorize those successor milestones, reserve a new API, or
+alter the current standalone contract. T6/T7's existing DF1-DF10 gates remain as
+specified above.
+
 ## T1 Decisions
 
 Current approved target summary, incorporating T5a0s amendments; completed T1 and
