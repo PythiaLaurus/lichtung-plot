@@ -301,7 +301,11 @@ fn validate_bar_significance_collisions(
     let mut bounds = Vec::new();
     data.reserve_source(&mut bounds, prepared.significance.len())?;
     for (index, (mark, text_plan)) in prepared.significance.iter().zip(text_plans).enumerate() {
-        let scope = scope.child(crate::layout::AddressRole::Annotation, index)?;
+        let scope = scope.child(
+            crate::layout::AddressRole::Annotation,
+            index,
+            data.source_resources()?,
+        )?;
         let center = significance_center(mark.category_index, mark.series_index, prepared, mode);
         let (x, edge_y) = layout.projection.project(center, mark.edge);
         let width = text_plan.width();

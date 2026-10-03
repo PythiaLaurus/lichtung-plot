@@ -42,6 +42,7 @@ struct HueGroup {
     collapsed: bool,
     /// Per-column data vectors (same order as `cols`).
     columns: Vec<Vec<f64>>,
+    source_rows: Vec<usize>,
     /// Strict Scott bandwidth per matrix column.
     bandwidths: Vec<f64>,
 }
@@ -139,10 +140,8 @@ pub(crate) fn intrinsic_body_minimum(
     );
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = chart.data().with_axis_resources(&resources);
-    for group in &prepared.groups {
-        for column in &group.columns {
-            data.claim_source_visits(column.len())?;
-        }
+    for _ in &prepared.groups {
+        data.claim_source_visits(1)?;
         let style = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.matrix);
         let (x, y) = crate::render::geometry::point_ink_dimensions(theme, &style)?;
         cell.0 = cell.0.max(x);
@@ -164,6 +163,67 @@ pub(crate) fn intrinsic_body_minimum(
     }
     let gaps = theme.composition.canvas_grid_gap * n.saturating_sub(1) as f64;
     Ok((width + gaps, height + gaps))
+}
+
+pub(crate) fn natural_body_preference(
+    chart: &Plot,
+    theme: &ResolvedTheme,
+) -> Result<(f64, f64), Error> {
+    let marks = chart
+        .prepared_matrix_axes
+        .as_ref()
+        .ok_or_else(|| Error::Render("natural Matrix variables missing".into()))?;
+    let hard = intrinsic_body_minimum(chart, theme)?;
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let point = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.matrix);
+    let point = crate::render::geometry::point_ink_dimensions(theme, &point)?;
+    let density = theme.marks.matrix_density.backend_style((0, 0, 0));
+    let ink = crate::render::geometry::rectangular_fill_ink_outset(theme, &density)?;
+    let mut side = theme.composition.canvas_grid_gap * marks.labels.len().saturating_sub(1) as f64;
+    for label in &marks.labels {
+        resources
+            .claim_visits(1)
+            .map_err(|error| Error::Render(format!("Matrix preference: {error:?}")))?;
+        let width = layout::fit::intrinsic_widths(
+            theme,
+            label,
+            &theme.typography.axis_title,
+            "Matrix natural variable",
+        )?
+        .0;
+        side += width
+            .max(point.0)
+            .max(point.1)
+            .max(2.0 * ink.0)
+            .max(2.0 * ink.1)
+            .max(12.0 * f64::from(theme.typography.tick_label.font_size));
+    }
+    Ok((side.max(hard.0), side.max(hard.1)))
+}
+
+pub(crate) fn natural_guide_preference(
+    chart: &Plot,
+    theme: &ResolvedTheme,
+) -> Result<(f64, f64), Error> {
+    let prepared = chart
+        .prepared_matrix_axes
+        .as_ref()
+        .ok_or_else(|| Error::Render("Matrix natural guide requires preparation".into()))?;
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = chart.data().with_axis_resources(&resources);
+    let (colors, accents) = prepared.resolved_colors(chart, theme, data)?;
+    let mapped = data.collect_source(
+        prepared
+            .groups
+            .iter()
+            .map(|group| PreparedMatrixAxes::group_color(group, &colors, &accents, &resources)),
+    )?;
+    let entries = matrix_guide_entries(chart, &prepared.groups, &mapped, theme, data)?;
+    if entries.is_empty() {
+        return Ok((0.0, 0.0));
+    }
+    let title = crate::decorations::legend::resolved_title(&entries, &resources)?;
+    Legend::natural_preference(&title, &entries, theme)
 }
 
 #[test]
@@ -289,14 +349,14 @@ const KDE_POINTS: usize = 60;
 
 #[derive(Debug)]
 enum MatrixPrimitive {
-    Scatter(Vec<Point2D>, crate::render::backend::PointStyle),
+    Scatter(Vec<Point2D>, Vec<usize>, crate::render::backend::PointStyle),
     Polygon(Vec<Point2D>, FillStyle),
 }
 
 impl MatrixPrimitive {
     fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
         match self {
-            Self::Scatter(points, style) => backend.draw_scatter(points, style),
+            Self::Scatter(points, _, style) => backend.draw_scatter(points, style),
             Self::Polygon(points, style) => backend.draw_polygon(points, style),
         }
     }
@@ -307,7 +367,7 @@ impl MatrixPrimitive {
         clip: PanelBox,
     ) -> Result<(), Error> {
         match self {
-            Self::Scatter(points, style) => geometry.scatter(points, style, clip),
+            Self::Scatter(points, _, style) => geometry.scatter(points, style, clip),
             Self::Polygon(points, style) => geometry.polygon(points, style, Some(clip)),
         }
     }
@@ -315,6 +375,7 @@ impl MatrixPrimitive {
 
 #[derive(Debug)]
 struct MatrixCellPayload {
+    address: layout::ComponentAddress,
     clip: PanelBox,
     frame: [[Point2D; 2]; 2],
     marks: Vec<MatrixPrimitive>,
@@ -329,6 +390,23 @@ pub(crate) struct MatrixPayload {
 }
 
 impl MatrixPayload {
+    pub(crate) fn observe_axes(
+        &self,
+        round: &mut layout::kernel::FeedbackRound,
+    ) -> Result<(), Error> {
+        for cell in &self.cells {
+            round.begin_owner(&cell.address)?;
+            cell.axes.observe_feedback(round)?;
+            for mark in &cell.marks {
+                if let MatrixPrimitive::Scatter(_, rows, _) = mark {
+                    for row in rows {
+                        round.observe_count(*row)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
     pub(crate) fn axis_geometry(
         &self,
         theme: &ResolvedTheme,
@@ -403,6 +481,16 @@ pub(crate) fn prepare_axes(
     #[cfg(test)]
     crate::plots::shared_x::AXIS_PREPARATIONS.with(|count| count.set(count.get() + 1));
     let mut cols = Vec::new();
+    let variables = chart.matrix_variable_names().len();
+    let cells = variables
+        .checked_mul(variables)
+        .ok_or_else(|| Error::Render("Matrix declared square overflow".into()))?;
+    data.claim_topology_slots(cells)?;
+    let points = variables
+        .checked_mul(variables.saturating_sub(1))
+        .and_then(|panels| panels.checked_mul(data.height()))
+        .ok_or_else(|| Error::Render("Matrix source mark topology overflow".into()))?;
+    data.claim_topology_slots(points)?;
     data.reserve_source(&mut cols, chart.matrix_variable_names().len())?;
     cols.extend(chart.matrix_variable_names().iter().map(String::as_str));
     let labels = chart.resolve_axis_label_domain("matrix variables", cols.iter().copied(), data)?;
@@ -497,7 +585,13 @@ fn matrix_dispatch_preserves_scoped_tick_fit_miss() {
         .generation_resources();
     let prepared = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
     let plot = prepared.attach(plot).unwrap();
-    let scope = FitScope::root().child(AddressRole::CanvasCell, 2).unwrap();
+    let scope = FitScope::root()
+        .child(
+            AddressRole::CanvasCell,
+            2,
+            &crate::font::canonical::OperationGenerationResources::new(),
+        )
+        .unwrap();
     let outcome = plot
         .preflight_measurement(
             plot.kind(),
@@ -513,9 +607,17 @@ fn matrix_dispatch_preserves_scoped_tick_fit_miss() {
     assert_eq!(
         failure.reason.address,
         scope
-            .child(AddressRole::MatrixCell, 0)
+            .child(
+                AddressRole::MatrixCell,
+                0,
+                &crate::font::canonical::OperationGenerationResources::new()
+            )
             .unwrap()
-            .child(AddressRole::AxisBottom, 0)
+            .child(
+                AddressRole::AxisBottom,
+                0,
+                &crate::font::canonical::OperationGenerationResources::new()
+            )
             .unwrap()
             .address
     );
@@ -579,7 +681,10 @@ pub(crate) fn measure(
         chart,
         groups,
         &group_colors,
-        context.panel,
+        (
+            context.panel.width(),
+            (!context.content_height).then_some(context.panel.height()),
+        ),
         theme,
         context.fit_scope(),
         data,
@@ -592,10 +697,19 @@ pub(crate) fn measure(
         }
     };
 
-    let outer = context.panel;
+    let mut outer = context.panel;
     let legend_reserve = legend.as_ref().map_or(0.0, |legend| {
         legend.compute_box_width() + theme.legend.outside_gap
     });
+    if context.content_height {
+        let hard = intrinsic_body_minimum(chart, theme)?;
+        let height = (outer.width() - legend_reserve).max(hard.1).max(
+            legend
+                .as_ref()
+                .map_or(0.0, |legend| legend.compute_box_height()),
+        );
+        outer.y1 = outer.y0 + height;
+    }
     let gap = theme.composition.canvas_grid_gap;
     let density = theme.marks.matrix_density.backend_style((0, 0, 0));
     let ink = crate::render::geometry::rectangular_fill_ink_outset(theme, &density)?;
@@ -731,14 +845,33 @@ pub(crate) fn measure(
             let (x0, x1) = axes.columns[col];
             let (y0, y1) = axes.rows[row];
             let cell_panel = PanelBox::new(x0, x1, y0, y1);
+            // The native cell owns the polygon outline reserve. All cells in
+            // a variable track use the same inset, so pairwise coordinates and
+            // diagonal sources remain aligned with their frozen axes.
+            let mark_panel = PanelBox::new(
+                x0 + ink.0 + 2.0 / 1024.0,
+                x1 - ink.0 - 2.0 / 1024.0,
+                y0 + ink.1 + 2.0 / 1024.0,
+                y1 - ink.1 - 2.0 / 1024.0,
+            );
+            let scope = context.fit_scope().child(
+                layout::AddressRole::MatrixCell,
+                row * n + col,
+                data.source_resources()?,
+            )?;
+            if mark_panel.width() <= 0.0 || mark_panel.height() <= 0.0 {
+                return Err(scope
+                    .failure(
+                        layout::fit::FitKind::SpecializedGeometry,
+                        "Matrix density outline reserve leaves no representable cell domain",
+                    )
+                    .into());
+            }
             let projection = layout::Projection::new(
                 variable_ranges[col],
                 variable_ranges[row],
-                cell_panel.as_tuple(),
+                mark_panel.as_tuple(),
             );
-            let scope = context
-                .fit_scope()
-                .child(layout::AddressRole::MatrixCell, row * n + col)?;
             let axis = |ticks: &layout::NumericTickPlan, label: Option<&str>| {
                 Ok::<_, Error>(layout::Axis {
                     source: ticks.source,
@@ -785,18 +918,26 @@ pub(crate) fn measure(
                 x_axis,
                 y_axis,
             };
+            let cell_axes = cell_layout.measure_axes(
+                &axis_theme,
+                &scope,
+                chart.axis_semantic_inputs([crate::spec::AxisDomain::Continuous; 2]),
+            )?;
             let mut cell = MatrixCellPayload {
+                address: scope.address,
                 clip: cell_panel,
                 frame: [
-                    [Point2D::new(x0, y0), Point2D::new(x1, y0)],
-                    [Point2D::new(x0, y0), Point2D::new(x0, y1)],
+                    [
+                        Point2D::new(mark_panel.x0, mark_panel.y0),
+                        Point2D::new(mark_panel.x1, mark_panel.y0),
+                    ],
+                    [
+                        Point2D::new(mark_panel.x0, mark_panel.y0),
+                        Point2D::new(mark_panel.x0, mark_panel.y1),
+                    ],
                 ],
                 marks: Vec::new(),
-                axes: cell_layout.measure_axes(
-                    &axis_theme,
-                    &scope,
-                    chart.axis_semantic_inputs([crate::spec::AxisDomain::Continuous; 2]),
-                )?,
+                axes: cell_axes,
             };
             let required = cell.axes.requirements();
             if col == 0 {
@@ -832,8 +973,35 @@ pub(crate) fn measure(
                         let (px, py) = cell_layout.projection.project(xi, yi);
                         Ok(Point2D::new(px, py))
                     }))?;
-                    cell.marks.push(MatrixPrimitive::Scatter(pts, ps));
+                    let rows = data.collect_source(group.source_rows.iter().copied().map(Ok))?;
+                    cell.marks.push(MatrixPrimitive::Scatter(pts, rows, ps));
                 }
+            }
+
+            // Inspect independent, unclipped ink before the selected geometry
+            // applies the explicit cell clip. Matrix has no parent per-variable
+            // domain feedback owner; an uncontainable automatic mark is a FIT.
+            let mut full = crate::render::geometry::GeometrySnapshot::new(theme)?;
+            for mark in &cell.marks {
+                match mark {
+                    MatrixPrimitive::Scatter(points, _, style) => {
+                        full.scatter_with_clip(points, style, None)?;
+                    }
+                    MatrixPrimitive::Polygon(points, style) => full.polygon(points, style, None)?,
+                }
+            }
+            if full.bounds().iter().any(|bounds| {
+                (chart.user_x_limits().is_none()
+                    && (bounds.left < cell_panel.x0 || bounds.right > cell_panel.x1))
+                    || (chart.user_y_limits().is_none()
+                        && (bounds.bottom < cell_panel.y0 || bounds.top > cell_panel.y1))
+            }) {
+                return Err(layout::fit::FitScope::new(&cell.address, 0)
+                    .failure(
+                        layout::fit::FitKind::SpecializedGeometry,
+                        "Matrix automatic point or density ink exceeds its assigned cell",
+                    )
+                    .into());
             }
 
             cells.push(cell);
@@ -1008,16 +1176,46 @@ fn matrix_legend(
     chart: &Plot,
     groups: &[HueGroup],
     group_colors: &[(u8, u8, u8)],
-    available: crate::layout::PanelBox,
+    available: (f64, Option<f64>),
     theme: &ResolvedTheme,
     scope: &crate::layout::fit::FitScope,
     data: crate::data::PlotData<'_>,
 ) -> Result<crate::layout::fit::FitOutcome<Option<Legend>>, Error> {
     use crate::layout::fit::FitOutcome;
+    let entries = matrix_guide_entries(chart, groups, group_colors, theme, data)?;
+    if entries.is_empty() {
+        return Ok(FitOutcome::Measured(None));
+    }
+    let title = crate::decorations::legend::resolved_title(
+        &entries,
+        &theme.prepared_font_environment()?.generation_resources(),
+    )?;
+    let entries = Legend::admit_entries(entries, theme)?;
+    let scope = scope.child(
+        crate::layout::AddressRole::InsideGuide,
+        0,
+        &theme.prepared_font_environment()?.generation_resources(),
+    )?;
+    match Legend::measure_assigned(
+        &title, entries, available, false, false, theme, &mut false, &scope,
+    )? {
+        FitOutcome::Measured(legend) => Ok(FitOutcome::Measured(Some(legend))),
+        FitOutcome::Miss(reason) => Ok(FitOutcome::Miss(reason)),
+    }
+}
+
+fn matrix_guide_entries(
+    chart: &Plot,
+    groups: &[HueGroup],
+    group_colors: &[(u8, u8, u8)],
+    theme: &ResolvedTheme,
+    data: crate::data::PlotData<'_>,
+) -> Result<Vec<crate::decorations::legend::LegendEntry>, Error> {
+    data.claim_source_visits(groups.len())?;
     if !groups.iter().any(|group| group.identity.hue.is_some())
         || chart.legend_policy_spec() == crate::LegendPolicy::Hidden
     {
-        return Ok(FitOutcome::Measured(None));
+        return Ok(Vec::new());
     }
     let mut entries = Vec::new();
     data.reserve_source(&mut entries, groups.len())?;
@@ -1037,25 +1235,7 @@ fn matrix_legend(
         &mut entries,
         &theme.prepared_font_environment()?.generation_resources(),
     )?;
-    let title = crate::decorations::legend::resolved_title(
-        &entries,
-        &theme.prepared_font_environment()?.generation_resources(),
-    )?;
-    let entries = Legend::admit_entries(entries, theme)?;
-    let scope = scope.child(crate::layout::AddressRole::InsideGuide, 0)?;
-    match Legend::measure_assigned(
-        &title,
-        entries,
-        (available.width(), available.height()),
-        false,
-        false,
-        theme,
-        &mut false,
-        &scope,
-    )? {
-        FitOutcome::Measured(legend) => Ok(FitOutcome::Measured(Some(legend))),
-        FitOutcome::Miss(reason) => Ok(FitOutcome::Miss(reason)),
-    }
+    Ok(entries)
 }
 
 fn prepare_density(
@@ -1160,10 +1340,12 @@ fn select_diagonal_kde(
         ));
     }
     for (densities, &color) in density.densities.iter().zip(group_colors) {
+        data.claim_source_visits(1)?;
         let mut poly = Vec::new();
         data.reserve_source(&mut poly, KDE_POINTS + 2)?;
         poly.push(Point2D::new(x0, y0));
         for (i, (&x, &d)) in density.positions.iter().zip(densities).enumerate() {
+            data.claim_source_visits(1)?;
             let (px, py) = projection.project(x, d);
             let point = Point2D::new(px, py);
             let closure = if i == 0 {
@@ -1219,6 +1401,11 @@ fn build_groups(
     let identities = chart
         .global_collective_pairs()
         .unwrap_or(&channels.identities);
+    let density_targets = cols
+        .len()
+        .checked_mul(channels.identities.len())
+        .ok_or_else(|| Error::Render("Matrix density topology overflow".into()))?;
+    data.claim_topology_slots(density_targets)?;
     let mut groups = Vec::new();
     data.reserve_source(&mut groups, identities.len())?;
     let mut rows = Vec::new();
@@ -1247,6 +1434,7 @@ fn build_groups(
         groups.push(HueGroup {
             identity: data.copy_source_pair(identity)?,
             collapsed: channels.collapsed,
+            source_rows: data.collect_source(rows.iter().map(|row| Ok(data.source_row(*row))))?,
             columns: data.collect_source(
                 columns
                     .iter()
@@ -1398,6 +1586,217 @@ mod semantic_tests {
     use crate::{CategoryValues, NumericValues};
 
     #[test]
+    fn declared_square_and_source_mark_topology_refuse_before_fonts() {
+        let source = source();
+        // Four declared cells, six points in each of the two off-diagonal
+        // cells, and two density paths in each of two diagonal cells.
+        let expected = 4 + 6 * 2 + 2 * 2;
+        for available in [expected - 1, expected] {
+            let resources = OperationGenerationResources::new();
+            resources
+                .claim_topology_slots(1_000_000 - available)
+                .unwrap();
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+            let result = prepare_axes(&source, source.data().with_axis_resources(&resources));
+            assert_eq!(result.is_ok(), available == expected);
+            assert_eq!(
+                crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+                0
+            );
+        }
+    }
+
+    #[test]
+    fn matrix_composite_observes_tick_source_and_semantics_even_without_axis_ink() {
+        let source = source();
+        let mut theme = crate::Theme::Publication.resolve();
+        theme.axes.frame = None;
+        theme.axes.grid = None;
+        let scope = layout::fit::FitScope::root()
+            .child(
+                layout::AddressRole::MatrixCell,
+                3,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
+            .unwrap();
+        let make = |cap, configured| {
+            let mut cell = Layout::envelope(PanelBox::new(10.0, 200.0, 10.0, 200.0));
+            cell.x_axis.source.cap = cap;
+            let mut semantics =
+                source.axis_semantic_inputs([crate::spec::AxisDomain::Continuous; 2]);
+            if configured {
+                semantics[0].provenance = layout::RangeProvenance::Configured;
+            }
+            cell.measure_axes(&theme, &scope, semantics).unwrap()
+        };
+        for (cap, configured) in [(2, false), (1, true)] {
+            let original = make(1, false);
+            let changed = make(cap, configured);
+            assert_eq!(
+                original.geometry_snapshot(&theme).unwrap().bounds(),
+                changed.geometry_snapshot(&theme).unwrap().bounds()
+            );
+            let mut payload = MatrixPayload {
+                cells: vec![MatrixCellPayload {
+                    address: scope.address.clone(),
+                    clip: PanelBox::new(10.0, 200.0, 10.0, 200.0),
+                    frame: [[Point2D::new(10.0, 10.0), Point2D::new(200.0, 10.0)]; 2],
+                    marks: Vec::new(),
+                    axes: original,
+                }],
+                frame_style: None,
+                legend: None,
+            };
+            let mut changed = Some(changed);
+            layout::plan_exact_root(
+                300,
+                300,
+                |_| Ok(()),
+                |(), assigned, round| {
+                    let start = round.child_checkpoint();
+                    payload.observe_axes(round)?;
+                    let first = round.retain_child_feedback(start)?.unwrap();
+                    payload.cells[0].axes = changed.take().unwrap();
+                    let start = round.child_checkpoint();
+                    payload.observe_axes(round)?;
+                    let second = round.retain_child_feedback(start)?.unwrap();
+                    assert_ne!(first, second);
+                    Ok(layout::MeasuredLayout::new(assigned, ()))
+                },
+                |(), _, (), _| Ok(()),
+            )
+            .unwrap();
+        }
+    }
+
+    #[test]
+    fn diagonal_projection_admits_every_examined_group_and_vertex() {
+        let source = source();
+        let prepared = prepare_axes(&source, source.data()).unwrap();
+        let theme = crate::Theme::Publication.resolve();
+        let projection = layout::Projection::new(
+            prepared.ranges[0],
+            prepared.ranges[0],
+            (10.0, 600.0, 10.0, 500.0),
+        );
+        let expected = 2 * (1 + 60);
+        for available in [expected - 1, expected] {
+            let resources = OperationGenerationResources::with_test_limits(available, 1_000_000);
+            let mut marks = Vec::new();
+            let result = select_diagonal_kde(
+                &theme,
+                &mut marks,
+                &[(1, 2, 3), (4, 5, 6)],
+                &prepared.diagonals[0],
+                &projection,
+                source.data().with_axis_resources(&resources),
+            );
+            assert_eq!(result.is_ok(), available == expected);
+        }
+    }
+
+    #[test]
+    fn mapped_source_rows_survive_matrix_grouping_and_selected_cells() {
+        let source = source();
+        let resources = OperationGenerationResources::new();
+        let prepared = prepare_axes(
+            &source,
+            source
+                .data()
+                .map_source_rows(&[80, 30, 70, 60, 10, 90])
+                .with_axis_resources(&resources),
+        )
+        .unwrap();
+        assert_eq!(prepared.groups[0].source_rows, [80, 30, 70]);
+        assert_eq!(prepared.groups[1].source_rows, [60, 10, 90]);
+        let mut chart = source;
+        chart.prepared_matrix_axes = Some(
+            chart
+                .data()
+                .with_axis_resources(&resources)
+                .source_arc(prepared)
+                .unwrap(),
+        );
+        let theme = crate::Theme::Publication.resolve();
+        let selected = measure(
+            &chart,
+            PlotRenderContext::new(
+                chart.data(),
+                PanelBox::new(10.0, 900.0, 10.0, 700.0),
+                &theme,
+            ),
+        )
+        .unwrap();
+        let crate::layout::interior::MarkPayload::Matrix(payload) =
+            &selected.marks.as_ref().unwrap().payload
+        else {
+            panic!("Matrix")
+        };
+        for cell in &payload.cells {
+            for mark in &cell.marks {
+                if let MatrixPrimitive::Scatter(points, rows, _) = mark {
+                    assert_eq!(points.len(), rows.len());
+                    assert!(rows == &[80, 30, 70] || rows == &[60, 10, 90]);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn automatic_matrix_ink_is_complete_or_returns_a_typed_cell_fit() {
+        let source = source();
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+                .unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let mut theme = crate::Theme::Publication.resolve();
+        theme.marks.matrix_density.outline_width = 36.0;
+        theme.marks.point_sizes.matrix = 20;
+        let selected = measure(
+            &chart,
+            PlotRenderContext::new(
+                chart.data(),
+                PanelBox::new(10.0, 1200.0, 10.0, 900.0),
+                &theme,
+            ),
+        )
+        .unwrap();
+        let crate::layout::interior::MarkPayload::Matrix(payload) =
+            &selected.marks.as_ref().unwrap().payload
+        else {
+            panic!("Matrix")
+        };
+        for cell in &payload.cells {
+            let mut full = crate::render::geometry::GeometryBackend::new(&theme).unwrap();
+            full.begin(1400, 1000).unwrap();
+            for mark in &cell.marks {
+                mark.draw(&mut full).unwrap();
+            }
+            full.end().unwrap();
+            for bounds in full.bounds() {
+                assert!(bounds.left >= cell.clip.x0 && bounds.right <= cell.clip.x1);
+                assert!(bounds.bottom >= cell.clip.y0 && bounds.top <= cell.clip.y1);
+            }
+        }
+        theme.marks.point_sizes.matrix = 100;
+        let error = measure(
+            &chart,
+            PlotRenderContext::new(
+                chart.data(),
+                PanelBox::new(10.0, 900.0, 10.0, 700.0),
+                &theme,
+            ),
+        )
+        .unwrap_err();
+        assert!(
+            matches!(&error, layout::fit::PlanError::Fit(failure)
+            if failure.reason.kind == layout::fit::FitKind::SpecializedGeometry
+            && failure.reason.address.leaf_role() == layout::AddressRole::MatrixCell),
+            "{error:?}"
+        );
+    }
+
+    #[test]
     fn successful_kde_budget_does_not_depend_on_diagnostic_names() {
         let source = source();
         DIAGNOSTIC_CONTEXTS.with(|calls| calls.set(0));
@@ -1484,7 +1883,7 @@ mod semantic_tests {
                 &source,
                 &prepared.groups,
                 &mapped,
-                PanelBox::new(0.0, 1600.0, 0.0, 1000.0),
+                (1600.0, Some(1000.0)),
                 &theme,
                 &crate::layout::fit::FitScope::root(),
                 source.data().with_axis_resources(&resources),
@@ -1668,7 +2067,7 @@ mod semantic_tests {
                         );
                     } else {
                         assert!(
-                            matches!(mark, MatrixPrimitive::Scatter(points, _) if points.len() == 3)
+                            matches!(mark, MatrixPrimitive::Scatter(points, _, _) if points.len() == 3)
                         );
                     }
                 }

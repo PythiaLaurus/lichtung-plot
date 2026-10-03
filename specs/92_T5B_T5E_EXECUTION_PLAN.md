@@ -2548,9 +2548,9 @@ The sole root driver and numerical/resource policies remain unchanged.
 | T5e3 | COMPLETE | T5e2 | `feat(marginal): measure native linked subpanels` |
 | T5e4 | COMPLETE | T5e3 | `feat(beeswarm): implement bounded deterministic tangent packing` |
 | T5e5 | COMPLETE | T5e4 | `feat(waterfall): measure native annotation shelves` |
-| T5e6 | PENDING | T5e5 | `feat(layout): resolve private automatic root requests` |
-| T5e7 | PENDING | T5e6 | `test(layout): close all producer resource and feedback contracts` |
-| T5e8 | PENDING | T5e7 | `refactor(layout): close private scientific layout` |
+| T5e6 | COMPLETE | T5e5 | Integrated private three-mode root implementation |
+| T5e7 | COMPLETE | T5e6 | Integrated three-mode producer/resource closure |
+| T5e8 | COMPLETE | T5e7 | `feat(layout): close private three-mode scientific layout` |
 
 ### T5e0 — Rebase The Specialized Census
 
@@ -2822,7 +2822,68 @@ unchanged chosen width, 300px exact width with measured height, all 25 families,
 sparse/spanning mixed Canvas, changing guide/track constraints, eighth-round fit,
 cycles, extreme representability, and no hidden fallback to old exact defaults.
 
+T5e6 implementation evidence: the existing root driver
+now accepts all three private requests, freezes initial automatic width, and
+retains the selected finite dimensions. Focused evidence covers all 25 standalone
+families, 300px content height and caption reflow, ordinary and Canvas-shared
+Right-to-Top recovery, sparse mixed Canvas with spanning headers/row titles,
+wrapped owning facets, native Matrix hue guides, eighth-round content-height
+feedback, cycles, extreme CSS representability, sealed role-specific `ch` scalar
+preparation, immutable replay and terminal-local PNG DPI refusal. Canvas/facet
+natural tracks use the rendering Grid allocator rather than a proportional
+composition estimate. Free facet height summaries consume each cell's domain
+feedback; a focused independently scaled Waterfall shelf case exercises this.
+
+Canvas `PerPlot` outside guides and facet-owned continuous guides now contribute
+their complete scoped preferred width and width-dependent natural height through
+the same Grid allocator. Continuous summaries retain native endpoint/center
+labels, stops and missing keys and use the common unbounded-height guide measure.
+Containing width summaries and the mandatory-right allocator use the guide's
+effective allocation chrome and frame minimum, including broad frame/missing
+strokes and corner radius; a focused 30px/40px stroke case verifies the handoff.
+Discrete PerPlot edge recovery reports `ContentHeight` feedback to its owning cell
+in the existing root rounds. Its measured preferred height is independent of the
+physical row fill allocation: a taller sibling can enlarge the arranged Plot
+without becoming that Plot's content preference. Width-dependent scientific
+heights round upward in spatial quanta before arrangement. No extra edge-search
+driver or root-width reselection is introduced.
+
+The final root audit makes content height a replaceable owner consequence rather
+than cumulative ink. Retained heights are keyed by current width, effective
+domains/shared unions, scope, visibility, guide policy and parent/local insets;
+changed dependencies require admitted remeasurement, including contraction.
+Canvas installs those coordinated inputs before height composition and reuses
+them for final children. Both content allocations consume root-coordinated
+gutters, and an unchanged consequence cannot authorize an overflowing row.
+`Hidden` suppresses discrete and continuous Canvas guides before the census,
+intrinsics and all three requests while retaining scientific color domains.
+Containing facet guide minima use the private theme's actual facet gap.
+
+Focused guided evidence covers automatic and width-only mixed/sparse Canvas,
+300px PerPlot Right-to-Top recovery with independently checked scientific 4:3
+height, taller prose-row fill, identical captured SVG with child reuse disabled,
+scoped free Beeswarm and nullable Heatmap facets with independent numeric domains
+and retained missing blocks, and one owning discrete facet guide under explicit
+Top/Right placement. Public exact defaults and invalid-input validation remain
+at their existing entry boundaries. The broad T5e closure gate and all-producer
+resource/provenance/ink/cache census are closed under T5e7/T5e8 below.
+
 ### T5e7 — All-Producer Feedback, Cache, And Resource Census
+
+T5e7 closure: `docs/t5e7-producer-census.md` reconciles all 25 scientific kinds,
+16 retained mark payloads, two native parents, 24 eligible Canvas kinds and 23
+generic-facet kinds. It identifies actual source topology, prepared/intrinsic/
+assigned/frozen owners, keyed feedback and cache inputs, admission classes and
+immutable capture/replay. Address paths now admit and share their immutable
+storage; feedback comparisons price examined entries, fresh payloads and replay
+references separately. Complete theme/guide operands and numeric source labels
+participate in their real owners. Original Matrix/Marginal/Waterfall source IDs,
+automatic complete-ink clearance and explicit-window distinctions are covered.
+The real four-variable Matrix publication workload exposed quadratic feedback
+buffer growth: geometric replacement-buffer admission fixes it under unchanged
+caps, without refunds or fixture reduction. Independent exact-boundary tests and
+all three original release samples pass. Root, guide/cache, Marginal and snapshot
+audit documents record the bounded fixes and inspected rendering attribution.
 
 Close every native producer under all three requests with the common evidence
 matrix: prepared/intrinsic/measured/arranged/frozen data, canonical addresses,
@@ -2837,6 +2898,20 @@ shared hypothetical PNG rejection; extend its evidence to new modes instead of
 reintroducing and removing another gate. No third-party OOM-recovery promise.
 
 ### T5e8 — Private Layout Closure And T6 Entry
+
+T5e8 closure: final read-only architectural review found no remaining concrete
+implementation blocker after the singleton continuous-guide minimum and feedback
+growth corrections. `docs/t5e-closure.md` records 1,310 active units passing in the
+broad gate, three subsequently added focused units, all 483 integration tests
+covered by broad targets plus localized successful follow-ups, strict Clippy,
+formatting, rustdoc and package verification. All ten ignored release groups
+pass across the initial nine successful groups and publication-only retry.
+Intentional fingerprints/snapshots were inspected with source/style/geometry
+assertions and their historical checkpoints retained. The broad suite was not
+repeated after localized failures. Native specialized producers, one private
+three-mode driver and immutable replay have replaced the remaining adapters,
+fixed bands/floors and root estimates. T5e is COMPLETE; public defaults remain
+exact and T6 remains PENDING with its deferred-feature entry review intact.
 
 Audit all ledger portions and delete remaining specialized adapters, fixed-band/
 generic-minimum/global-search remnants, post-freeze reconstruction, and unused

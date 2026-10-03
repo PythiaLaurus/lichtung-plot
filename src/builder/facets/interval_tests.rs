@@ -136,18 +136,29 @@ fn interval_census_uses_the_source_alphabet_and_exact_precedence_suppresses_it()
         if exact {
             plot.x_axis_spec.exact_ticks = Some(vec![crate::AxisTick::new(1.0, "")]);
         }
-        let census = crate::layout::foundational_plot_requirements(
-            None,
-            &plot,
-            PlotKind::Scatter,
-            &theme,
-            &crate::layout::ComponentAddress::root(),
-            true,
-            true,
-            true,
-            None,
+        let mut census = None;
+        crate::layout::plan_exact_root(
+            1,
+            1,
+            |stage| {
+                census = Some(crate::layout::foundational_plot_requirements(
+                    None,
+                    &plot,
+                    PlotKind::Scatter,
+                    &theme,
+                    &crate::layout::ComponentAddress::root(),
+                    true,
+                    true,
+                    true,
+                    Some(stage),
+                )?);
+                Ok(())
+            },
+            |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+            |(), _, (), _| Ok(()),
         )
         .unwrap();
+        let census = census.unwrap();
         let automatic = census
             .iter()
             .filter(|record| {

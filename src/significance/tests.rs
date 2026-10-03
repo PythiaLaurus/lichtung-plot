@@ -119,7 +119,7 @@ fn complete_bracket_stroke_cannot_escape_the_category_panel_even_with_exact_limi
             Err(crate::layout::fit::PlanError::Fit(failure))
                 if failure.reason.kind == crate::layout::fit::FitKind::OverlayCollision
                     && failure.reason.address == crate::layout::ComponentAddress::root()
-                        .child(crate::layout::AddressRole::Annotation, 0).unwrap()
+                        .child(crate::layout::AddressRole::Annotation, 0, &crate::font::canonical::OperationGenerationResources::new()).unwrap()
         ));
     }
 }
@@ -171,7 +171,11 @@ fn fit_diagnostic_retains_caller_slot_after_bracket_sorting() {
     let style = SignificanceMarkStyle::default();
     let label = theme.typography.effective_significance_label(Some(style));
     let address = ComponentAddress::root()
-        .child(AddressRole::CanvasCell, 3)
+        .child(
+            AddressRole::CanvasCell,
+            3,
+            &crate::font::canonical::OperationGenerationResources::new(),
+        )
         .unwrap();
     let scope = FitScope::new(&address, 7);
     let result = plan_comparisons_with_label(
@@ -198,7 +202,13 @@ fn fit_diagnostic_retains_caller_slot_after_bracket_sorting() {
     assert_eq!(failure.reason.kind, FitKind::Text);
     assert_eq!(
         failure.reason.address,
-        address.child(AddressRole::Annotation, 0).unwrap()
+        address
+            .child(
+                AddressRole::Annotation,
+                0,
+                &crate::font::canonical::OperationGenerationResources::new()
+            )
+            .unwrap()
     );
     assert_eq!(failure.reason.ordinal, 0);
 }

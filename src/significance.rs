@@ -569,7 +569,7 @@ fn plan_comparisons_at_with_label(
             if label_center - label_half_extent < panel.x0
                 || label_center + label_half_extent > panel.x1
             {
-                return Err(scope.child(crate::layout::AddressRole::Annotation, comparison.source_index)?.failure(crate::layout::fit::FitKind::Text,
+                return Err(scope.child(crate::layout::AddressRole::Annotation, comparison.source_index, &theme.prepared_font_environment()?.generation_resources())?.failure(crate::layout::fit::FitKind::Text,
                     "significance bracket label does not fit inside the plot panel; enlarge the chart or reduce mark typography",
                 ).into());
             }
@@ -619,7 +619,11 @@ fn plan_comparisons_at_with_label(
                 || ink.top > containing.y1
         }) {
             return Err(scope
-                .child(crate::layout::AddressRole::Annotation, bracket.source_index)?
+                .child(
+                    crate::layout::AddressRole::Annotation,
+                    bracket.source_index,
+                    &theme.prepared_font_environment()?.generation_resources(),
+                )?
                 .failure(
                     crate::layout::fit::FitKind::OverlayCollision,
                     "complete significance bracket and label ink exceeds its assigned panel",

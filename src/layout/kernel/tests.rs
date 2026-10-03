@@ -3,6 +3,71 @@ use std::cell::Cell;
 use super::*;
 
 #[test]
+fn address_paths_admit_actual_storage_and_share_scope_and_failure_copies() {
+    let fixture = crate::font::canonical::OperationGenerationResources::new();
+    let parent = ComponentAddress::root()
+        .child(AddressRole::CanvasGrid, 0, &fixture)
+        .unwrap();
+    // Two segments plus one Vec payload header; buffer bytes plus the Vec/Arc
+    // allocation are 2*8 + 24 + 16 on this project's 64-bit test target.
+    let bytes = (2 * std::mem::size_of::<AddressSegment>()
+        + std::mem::size_of::<Vec<AddressSegment>>()
+        + 2 * std::mem::size_of::<usize>()) as u64;
+    for (records, allowance, succeeds) in [
+        (2, bytes, false),
+        (3, bytes - 1, false),
+        (3, bytes, true),
+        (4, bytes + 1, true),
+    ] {
+        let resources =
+            crate::font::canonical::OperationGenerationResources::with_test_limits(0, allowance);
+        resources.claim_slots(1_000_000 - records).unwrap();
+        let result = parent.child(AddressRole::CanvasCell, 7, &resources);
+        if succeeds {
+            let owner = result.unwrap();
+            assert_eq!(owner.leaf_role(), AddressRole::CanvasCell);
+            assert_eq!(owner.leaf_slot_index(), 7);
+            assert_eq!(resources.usage().unwrap(), (1_000_003 - records, 0));
+            assert_eq!(resources.byte_usage().unwrap(), bytes);
+            resources
+                .claim_slots(1_000_000 - resources.usage().unwrap().0)
+                .unwrap();
+            resources.set_test_limits(0, bytes);
+            let before = (resources.usage().unwrap(), resources.byte_usage().unwrap());
+            let scope = crate::layout::fit::FitScope::new(&owner, 6);
+            let failure = scope.clone().failure(FitKind::Text, String::new());
+            assert_eq!(failure.reason.ordinal, 6);
+            assert!(std::sync::Arc::ptr_eq(
+                owner.descendants.as_ref().unwrap(),
+                failure.reason.address.descendants.as_ref().unwrap()
+            ));
+            assert_eq!(
+                (resources.usage().unwrap(), resources.byte_usage().unwrap()),
+                before
+            );
+            assert!(scope.child(AddressRole::Annotation, 0, &resources).is_err());
+            assert_eq!(
+                (resources.usage().unwrap(), resources.byte_usage().unwrap()),
+                before
+            );
+        } else {
+            assert!(result.unwrap_err().to_string().contains(if records < 3 {
+                "address records"
+            } else {
+                "address bytes"
+            }));
+            assert_eq!(resources.byte_usage().unwrap(), 0);
+            assert_eq!(resources.usage().unwrap().1, 0);
+        }
+    }
+    let caption = ComponentAddress::root()
+        .child(AddressRole::RootCaption, 0, &fixture)
+        .unwrap();
+    assert!(parent.canonical_text_cmp(&caption).is_lt());
+    assert_eq!(format!("{parent:?}"), "ComponentAddress { root: AddressSegment { role: Root, slot_index: 0 }, descendants: [AddressSegment { role: CanvasGrid, slot_index: 0 }] }");
+}
+
+#[test]
 fn exact_quantum_conversion_and_constraints_preserve_boundaries() {
     let exact = LayoutScalar::exact_css_pixels(320).unwrap();
     assert_eq!(exact, LayoutScalar(327_680));
@@ -65,7 +130,7 @@ fn exact_root_prepares_measures_and_finalizes_once_with_assigned_dimensions() {
         |prepared, assigned, round| {
             measures.set(measures.get() + 1);
             assert_eq!(*prepared, 23);
-            assert_eq!(assigned.dimensions(), (317, 211));
+            assert_eq!(assigned.dimensions()?, (317, 211));
             round.observe_number(f64::from(*payload))?;
             let plan = payload.clone();
             measured_address.set(std::ptr::from_ref(plan.as_ref()));
@@ -74,7 +139,7 @@ fn exact_root_prepares_measures_and_finalizes_once_with_assigned_dimensions() {
         |prepared, assigned, plan, _| {
             finalizes.set(finalizes.get() + 1);
             assert_eq!(*prepared, 23);
-            assert_eq!(assigned.dimensions(), (317, 211));
+            assert_eq!(assigned.dimensions()?, (317, 211));
             assert_eq!(*plan, 17);
             assert_eq!(std::ptr::from_ref(plan.as_ref()), measured_address.get());
             Ok(plan)
@@ -127,8 +192,8 @@ fn exact_root_rejects_mismatched_measurement_and_nonpositive_size_before_finaliz
 #[test]
 fn preparation_and_measurement_errors_are_preserved_without_finalization() {
     let result = plan_exact_root(
-        0,
-        0,
+        320,
+        240,
         |_| -> Result<(), Error> { Err(Error::Data("preparation refused".into())) },
         |(), _, _| -> Result<MeasuredLayout<()>, Error> { panic!("preparation failed") },
         |(), _, (), _| -> Result<(), Error> { panic!("preparation failed") },
@@ -294,7 +359,7 @@ fn parent_feedback_reallocates_real_geometry_and_converges_on_round_eight() {
         100,
         |_| Ok(()),
         |(), assigned, round| {
-            let consumed = round.insets(&address, FeedbackKind::AxisGutter);
+            let consumed = round.insets(&address, FeedbackKind::AxisGutter)?;
             let panel = crate::layout::fit::measured(frame.assign_fit(
                 crate::layout::PanelBox::new(0.0, 100.0, 0.0, 100.0),
                 consumed,
@@ -327,6 +392,55 @@ fn parent_feedback_reallocates_real_geometry_and_converges_on_round_eight() {
 }
 
 #[test]
+fn root_state_admission_refusals_are_fatal_before_freeze_or_another_round() {
+    for policy in 0..3 {
+        let mut calls = 0;
+        let address = ComponentAddress::root();
+        let result = plan_exact_root(
+            100,
+            100,
+            |stage| Ok(stage.generation_resources()),
+            |resources, assigned, round| {
+                calls += 1;
+                if policy == 1 {
+                    round.record_failure(
+                        crate::layout::fit::FitScope::root()
+                            .failure(FitKind::Text, "terminal fit diagnostic"),
+                    )?;
+                } else {
+                    round.request_insets(
+                        &address,
+                        &address,
+                        FeedbackKind::AxisGutter,
+                        [f64::from(calls); 4],
+                    )?;
+                }
+                if policy != 2 || calls == 2 {
+                    // One admitted feedback sort input precedes convergence;
+                    // a miss also admits the diagnostic deduplication input.
+                    // Round two additionally examines consumed and next before
+                    // the history entry is refused.
+                    let prefix = match policy {
+                        1 => 2,
+                        2 => 3,
+                        _ => 1,
+                    };
+                    resources.set_test_limits(resources.usage().unwrap().1 + prefix, 536_870_912);
+                }
+                Ok(MeasuredLayout::new(assigned, ()))
+            },
+            |_, _, (), _| -> Result<(), Error> { panic!("admission refusal finalized") },
+        );
+        assert!(result
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("root processing visits"));
+        assert_eq!(calls, if policy == 2 { 2 } else { 1 });
+    }
+}
+
+#[test]
 fn feedback_cycles_exhaustion_and_unchanged_misses_never_finalize() {
     for policy in 0..3 {
         let address = ComponentAddress::root();
@@ -337,7 +451,7 @@ fn feedback_cycles_exhaustion_and_unchanged_misses_never_finalize() {
             |_| Ok(()),
             |(), assigned, round| {
                 calls += 1;
-                let consumed = round.insets(&address, FeedbackKind::AxisGutter);
+                let consumed = round.insets(&address, FeedbackKind::AxisGutter)?;
                 let next = match policy {
                     0 => 1.0 - consumed[0],
                     1 => consumed[0] + 1.0,
@@ -372,6 +486,121 @@ fn feedback_cycles_exhaustion_and_unchanged_misses_never_finalize() {
                 assert_eq!(calls, 2);
             }
         }
+    }
+}
+
+#[test]
+fn content_roots_choose_width_once_and_freeze_eighth_round_content_height() {
+    for width in [None, Some(300)] {
+        let mut calls = 0;
+        let address = ComponentAddress::root();
+        let root = plan_exact_root(
+            width,
+            None,
+            |_| Ok(()),
+            |(), assigned, round| {
+                calls += 1;
+                let (chosen, height) = assigned.requested_dimensions();
+                assert_eq!(height, None);
+                assert_eq!(
+                    chosen,
+                    if calls == 1 {
+                        width
+                    } else {
+                        Some(width.unwrap_or(317))
+                    }
+                );
+                let consumed = round.insets(&address, FeedbackKind::AxisGutter)?[2];
+                let next = (consumed + 1.0).min(7.0);
+                round.request_insets(
+                    &address,
+                    &address,
+                    FeedbackKind::AxisGutter,
+                    [0.0, 0.0, next, 0.0],
+                )?;
+                let size = RootSize::new(
+                    chosen.unwrap_or(317),
+                    100 + u32::try_from(nearest_spatial_quanta(consumed)? / 1024).unwrap(),
+                );
+                Ok(MeasuredLayout::new(size, calls))
+            },
+            |(), assigned, plan, _| {
+                assert_eq!(assigned.dimensions()?, (width.unwrap_or(317), 107));
+                Ok(plan)
+            },
+        )
+        .unwrap();
+        assert_eq!(calls, 8);
+        assert_eq!(*root.plan(), 8);
+        assert_eq!(root.dimensions(), (width.unwrap_or(317), 107));
+    }
+}
+
+#[test]
+fn automatic_width_reselection_and_invalid_requests_refuse_before_capture() {
+    let mut calls = 0;
+    let owner = ComponentAddress::root();
+    let result = plan_exact_root(
+        None,
+        None,
+        |_| Ok(()),
+        |(), _, round| {
+            calls += 1;
+            round.request_insets(&owner, &owner, FeedbackKind::AxisGutter, [1.0; 4])?;
+            Ok(MeasuredLayout::new(RootSize::new(300 + calls, 100), ()))
+        },
+        |(), _, (), _| -> Result<(), Error> { panic!("width reselection captured") },
+    );
+    assert!(result.err().unwrap().to_string().contains("sizing request"));
+    assert_eq!(calls, 2);
+    for (width, height) in [(None, Some(10)), (Some(0), None), (Some(10), Some(0))] {
+        let result = plan_exact_root(
+            width,
+            height,
+            |_| -> Result<(), Error> { panic!("invalid request reached preparation") },
+            |(), _, _| -> Result<MeasuredLayout<()>, Error> { panic!("invalid request measured") },
+            |(), _, (), _| -> Result<(), Error> { panic!("invalid request captured") },
+        );
+        assert!(result.is_err());
+    }
+    let root = plan_exact_root(
+        None,
+        None,
+        |_| Ok(()),
+        |(), _, _| Ok(MeasuredLayout::new(RootSize::new(u32::MAX, u32::MAX), ())),
+        |(), _, (), _| Ok(()),
+    )
+    .unwrap();
+    assert_eq!(root.dimensions(), (u32::MAX, u32::MAX));
+}
+
+#[test]
+fn both_content_modes_reject_feedback_cycles_before_finalization() {
+    for width in [None, Some(300)] {
+        let owner = ComponentAddress::root();
+        let mut calls = 0;
+        let result = plan_exact_root(
+            width,
+            None,
+            |_| Ok(()),
+            |(), assigned, round| {
+                calls += 1;
+                let previous = round.insets(&owner, FeedbackKind::AxisGutter)?[0];
+                round.request_insets(
+                    &owner,
+                    &owner,
+                    FeedbackKind::AxisGutter,
+                    [1.0 - previous, 0.0, 0.0, 0.0],
+                )?;
+                Ok(MeasuredLayout::new(
+                    RootSize::new(assigned.requested_dimensions().0.unwrap_or(317), 211),
+                    (),
+                ))
+            },
+            |(), _, (), _| -> Result<(), Error> { panic!("cyclic content root captured") },
+        );
+        assert!(result.err().unwrap().to_string().contains("cycle"));
+        assert!(calls <= 8);
     }
 }
 
@@ -465,8 +694,8 @@ fn feedback_reserves_and_domains_aggregate_without_reapplying_owned_ink() {
                 FeedbackKind::AutomaticDomainX,
                 (0.0, 6.0),
             )?;
-            let insets = round.insets(&address, FeedbackKind::OwnedInk);
-            let domain = round.domain(&address, FeedbackKind::AutomaticDomainX);
+            let insets = round.insets(&address, FeedbackKind::OwnedInk)?;
+            let domain = round.domain(&address, FeedbackKind::AutomaticDomainX)?;
             Ok(MeasuredLayout::new(assigned, (insets, domain)))
         },
         |(), _, plan, _| Ok(plan),
@@ -507,6 +736,7 @@ fn changed_feedback_remeasures_and_freezes_the_current_plan_for_every_input_kind
         FeedbackKind::AxisGutter,
         FeedbackKind::SharedAlignment,
         FeedbackKind::OwnedInk,
+        FeedbackKind::ContentHeight,
         FeedbackKind::AutomaticDomainX,
         FeedbackKind::AutomaticDomainY,
     ] {
@@ -520,12 +750,12 @@ fn changed_feedback_remeasures_and_freezes_the_current_plan_for_every_input_kind
             |(), assigned, round| {
                 let consumed = match kind {
                     FeedbackKind::AutomaticDomainX | FeedbackKind::AutomaticDomainY => {
-                        let consumed = round.domain(&address, kind).is_some();
+                        let consumed = round.domain(&address, kind)?.is_some();
                         round.request_domain(&address, &address, kind, (-1.0, 2.0))?;
                         consumed
                     }
                     _ => {
-                        let consumed = round.insets(&address, kind)[0] > 0.0;
+                        let consumed = round.insets(&address, kind)?[0] > 0.0;
                         round.request_insets(&address, &address, kind, [1.0, 0.0, 0.0, 0.0])?;
                         consumed
                     }

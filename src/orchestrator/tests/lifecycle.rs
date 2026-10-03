@@ -567,7 +567,9 @@ fn canvas_gutter_remeasurement_uses_the_assigned_projection() {
         .panel(0, 1, plot)
         .unwrap();
     let mut backend = RecordingBackend::default();
+    crate::orchestrator::measurements::start();
     canvas.render_with_backend(&mut backend).unwrap();
+    let work = crate::orchestrator::measurements::finish();
 
     crate::canvas::CANVAS_ASSIGNED_PANEL_EVIDENCE.with(|evidence| {
         let evidence = evidence.borrow();
@@ -577,11 +579,25 @@ fn canvas_gutter_remeasurement_uses_the_assigned_projection() {
             assert!(assigned.width() < 480.0);
         }
         assert!(evidence[0].0.x1 < evidence[1].0.x0);
-        assert_ne!(evidence[0].0, evidence[2].0);
+        // The complete-gutter probe already allocates the final projection.
+        // Publishing those measured root inputs still requires the next round.
+        assert_eq!(evidence[0].0, evidence[2].0);
         for (_, projection) in &evidence[2..4] {
             assert!(backend.clips.contains(projection));
         }
     });
+    assert_eq!(work.roots.len(), 2);
+    assert!(!work.roots[0].successful && work.roots[1].successful);
+    assert_eq!(work.gutters.len(), 2);
+    assert!(work.gutters.iter().all(|gutter| {
+        gutter.consumed.iter().all(|value| value.to_bits() == 0)
+            && gutter.requested[0] > 0.0
+            && gutter.requested[2] > 0.0
+    }));
+    assert_eq!(
+        work.capture_counters,
+        [0; crate::orchestrator::measurements::Counter::ALL.len()]
+    );
     assert_eq!((backend.begins, backend.ends), (1, 1));
 }
 
@@ -1626,9 +1642,11 @@ fn orchestration_runs_measurement_planning_and_render_passes() {
             preflight_calls,
             rendered_canvas_calls
         ),
-        // Native cells use selected plans at capture; only the facet's
-        // separate semantic probes still enter the legacy panel renderer.
-        (0, 4, 0, 0, 0)
+        // This counter belongs to measure_panel_in_call, not render_panel.
+        // Facets make four semantic probes; each Canvas measures its complete
+        // provisional gutters in two rounds. Capture/replay uses retained plans
+        // and the Canvas capture guard forbids this measurement entry point.
+        (0, 4, 2, 2, 2)
     );
 }
 
@@ -1756,6 +1774,19 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
         ),
     ];
     let mut preparation_work = [0_u64; 3];
+    for (kind, plot) in &plots {
+        for (width, height) in [(None, None), (Some(800), None)] {
+            let plan = crate::orchestrator::lifecycle::PlotPlan::new_with_sizing(
+                plot, *kind, width, height,
+            )
+            .unwrap_or_else(|error| panic!("natural {kind:?} {width:?}/{height:?}: {error}"));
+            let dimensions = plan.dimensions();
+            assert!(dimensions.0 > 0 && dimensions.1 > 0);
+            if let Some(width) = width {
+                assert_eq!(dimensions.0, width);
+            }
+        }
+    }
     crate::canvas::admission_tests::mixed_family_parent_audit(&plots);
     for (kind, plot) in plots {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));

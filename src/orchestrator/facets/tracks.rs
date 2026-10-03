@@ -28,6 +28,19 @@ fn checked(value: i128) -> Result<i64, Error> {
     i64::try_from(value).map_err(|_| Error::Render("facet track arithmetic overflowed".into()))
 }
 
+pub(super) struct ContentSizing<'a> {
+    pub plot: &'a crate::Plot,
+    pub inputs: &'a crate::layout::interior::PreparedInteriorInputs,
+    pub round: &'a crate::layout::kernel::FeedbackRound,
+    pub natural_width: bool,
+    pub natural_height: bool,
+}
+
+pub(super) struct GridAssignment {
+    pub cells: Vec<PanelBox>,
+    pub size: (f64, f64),
+}
+
 #[expect(
     clippy::too_many_arguments,
     clippy::too_many_lines,
@@ -42,7 +55,8 @@ pub(super) fn allocate(
     gutters: &[(usize, usize, PanelRequirements)],
     theme: &ResolvedTheme,
     scope: &FitScope,
-) -> Result<FitOutcome<Vec<PanelBox>>, Error> {
+    content: Option<&ContentSizing<'_>>,
+) -> Result<FitOutcome<GridAssignment>, Error> {
     let (rows, columns) = shape;
     if rows == 0 || columns == 0 || panels.len() != minima.len() {
         return Err(Error::Render(
@@ -53,6 +67,7 @@ pub(super) fn allocate(
         .checked_mul(columns)
         .ok_or_else(|| Error::Render("facet Grid topology overflowed".into()))?;
     let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = data.with_axis_resources(&resources);
     let gap = required(theme.composition.facet_gap)?;
     let em = required(f64::from(theme.facet_header_font_size))?;
     let mut column_insets = Vec::new();
@@ -74,7 +89,7 @@ pub(super) fn allocate(
         row_track[0] = row_track[0].max(required(req.bottom)?);
         row_track[1] = row_track[1].max(required(req.top)?);
     }
-    let grid = ComponentAddress::root().child(AddressRole::FacetGrid, 0)?;
+    let grid = ComponentAddress::root().child(AddressRole::FacetGrid, 0, &resources)?;
     let mut owners = Vec::new();
     data.reserve_source(&mut owners, panels.len())?;
     for panel in panels {
@@ -88,6 +103,7 @@ pub(super) fn allocate(
                 AddressRole::FacetCell,
                 u32::try_from(panel.panel_index)
                     .map_err(|_| Error::Render("facet cell address overflowed".into()))?,
+                &resources,
             )?,
         );
     }
@@ -96,11 +112,45 @@ pub(super) fn allocate(
     data.reserve_source(&mut widths, panels.len())?;
     data.reserve_source(&mut heights, panels.len())?;
     for ((panel, minimum), address) in panels.iter().zip(minima).zip(&owners) {
+        let preferred = if let Some(content) = content {
+            let plot = content
+                .plot
+                .admitted_clone(data)?
+                .with_render_scope(panel.render_scope(data)?);
+            let preference =
+                crate::layout::interior::sizing::body_preference(&plot, theme, *minimum)?;
+            let guided = if matches!(
+                plot.kind(),
+                crate::PlotKind::Heatmap | crate::PlotKind::Beeswarm
+            ) {
+                crate::layout::interior::sizing::guided_preference(&plot, content.inputs, theme)?
+            } else {
+                None
+            };
+            let preferred = if let Some(guide) = &guided {
+                let size = guide.preference(theme)?;
+                if guide.horizontal() {
+                    preference.0.max(size.0)
+                } else {
+                    preference.0 + size.0 + theme.legend.outside_gap
+                }
+            } else {
+                preference.0
+            };
+            let label = super::rendering::facet_label(&plot, &panel.cell, data)?;
+            let appearance = theme
+                .legacy_text_appearance(theme.facet_header_font_size, crate::TextWeight::Normal);
+            preferred.max(
+                crate::layout::interior::sizing::text_width(theme, &label, &appearance)? + 16.0,
+            )
+        } else {
+            minimum.0
+        };
         widths.push(GridRequirement {
             start: panel.column,
             span: 1,
             hard: required(minimum.0)?,
-            preferred: required(minimum.0)?,
+            preferred: required(preferred.max(minimum.0))?,
             fill: true,
             address,
         });
@@ -129,7 +179,9 @@ pub(super) fn allocate(
         .sum::<i128>();
     let width = i128::from(x1) - i128::from(x0) - horizontal_reserved;
     let height = i128::from(y1) - i128::from(y0) - vertical_reserved;
-    if width <= 0 || height <= 0 {
+    if (width <= 0 && !content.is_some_and(|value| value.natural_width))
+        || (height <= 0 && !content.is_some_and(|value| value.natural_height))
+    {
         return Ok(FitOutcome::Miss(scope.failure(
             FitKind::TrackOrResidual,
             "facet gutters leave no room for declared tracks",
@@ -156,7 +208,11 @@ pub(super) fn allocate(
     let columns = match allocate_grid_axis(
         &column_specs,
         &widths,
-        checked(width)?,
+        if content.is_some_and(|value| value.natural_width) {
+            None
+        } else {
+            Some(checked(width)?)
+        },
         [0, 0],
         gap,
         Some(em),
@@ -167,10 +223,93 @@ pub(super) fn allocate(
         FitOutcome::Measured(value) => value.sizes,
         FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
     };
+    if let Some(content) = content {
+        for (index, ((panel, child), minimum)) in
+            panels.iter().zip(&mut heights).zip(minima).enumerate()
+        {
+            let mut plot = content
+                .plot
+                .admitted_clone(data)?
+                .with_render_scope(panel.render_scope(data)?);
+            let address = ComponentAddress::root().child(
+                AddressRole::FacetCell,
+                u32::try_from(index)
+                    .map_err(|_| Error::Render("facet content domain address overflowed".into()))?,
+                &resources,
+            )?;
+            if let Some(domain) = content.round.domain(
+                &address,
+                crate::layout::kernel::FeedbackKind::AutomaticDomainX,
+            )? {
+                let domain = plot
+                    .x_axis_spec()
+                    .limits
+                    .map_or(domain, |base| (base.0.min(domain.0), base.1.max(domain.1)));
+                plot = plot.with_planned_x_limits(domain);
+            }
+            if let Some(domain) = content.round.domain(
+                &address,
+                crate::layout::kernel::FeedbackKind::AutomaticDomainY,
+            )? {
+                let domain = plot
+                    .y_axis_spec()
+                    .limits
+                    .map_or(domain, |base| (base.0.min(domain.0), base.1.max(domain.1)));
+                plot = plot.with_planned_y_limits(domain);
+            }
+            let preference =
+                crate::layout::interior::sizing::body_preference(&plot, theme, *minimum)?;
+            let width = pixels(columns[panel.column]);
+            let guide = if matches!(
+                plot.kind(),
+                crate::PlotKind::Heatmap | crate::PlotKind::Beeswarm
+            ) {
+                crate::layout::interior::sizing::guided_preference(&plot, content.inputs, theme)?
+            } else {
+                None
+            };
+            let mut height = if guide.is_some() {
+                crate::layout::interior::sizing::guided_body_height(
+                    &plot,
+                    theme,
+                    width,
+                    guide.as_ref(),
+                    scope,
+                )?
+            } else {
+                plot.natural_body_height(theme, width, preference.1)?
+            };
+            if row_insets[panel.row][1] == 0 {
+                let label = super::rendering::facet_label(&plot, &panel.cell, data)?;
+                let appearance = theme.legacy_text_appearance(
+                    theme.facet_header_font_size,
+                    crate::TextWeight::Normal,
+                );
+                let strip = crate::layout::fit::measured(crate::layout::fit::text(
+                    theme,
+                    &label,
+                    &appearance,
+                    width - 16.0,
+                    crate::layout::PhysicalTextAlignment::Center,
+                    "natural facet strip",
+                    scope,
+                ))
+                .map_err(crate::layout::fit::PlanError::into_error)?;
+                height += strip.lines.iter().fold(8.0, |height, _| {
+                    height + f64::from(theme.facet_header_font_size) + 6.0
+                });
+            }
+            child.preferred = required(height)?.max(child.hard);
+        }
+    }
     let rows = match allocate_grid_axis(
         &row_specs,
         &heights,
-        checked(height)?,
+        if content.is_some_and(|value| value.natural_height) {
+            None
+        } else {
+            Some(checked(height)?)
+        },
         [0, 0],
         gap,
         Some(em),
@@ -180,6 +319,25 @@ pub(super) fn allocate(
     )? {
         FitOutcome::Measured(value) => value.sizes,
         FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
+    };
+    let grid_width = checked(
+        columns.iter().map(|&value| i128::from(value)).sum::<i128>()
+            + horizontal_reserved
+            + i128::from(gap)
+                * i128::try_from(columns.len().saturating_sub(1))
+                    .map_err(|_| Error::Render("facet gap count overflowed".into()))?,
+    )?;
+    let grid_height = checked(
+        rows.iter().map(|&value| i128::from(value)).sum::<i128>()
+            + vertical_reserved
+            + i128::from(gap)
+                * i128::try_from(rows.len().saturating_sub(1))
+                    .map_err(|_| Error::Render("facet gap count overflowed".into()))?,
+    )?;
+    let y1 = if content.is_some_and(|value| value.natural_height) {
+        checked(i128::from(y0) + i128::from(grid_height))?
+    } else {
+        y1
     };
     let mut x_positions = Vec::new();
     let mut y_positions = Vec::new();
@@ -217,12 +375,73 @@ pub(super) fn allocate(
             ));
         }
     }
-    Ok(FitOutcome::Measured(cells))
+    Ok(FitOutcome::Measured(GridAssignment {
+        cells,
+        size: (pixels(grid_width), pixels(grid_height)),
+    }))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn incoming_scoped_data_is_bound_before_first_grid_storage_or_source_work() {
+        use crate::font::canonical::OperationGenerationResources;
+        let plot = crate::Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0, 2.0, 3.0]),
+            crate::NumericValues::new("y", [4.0, 5.0, 6.0, 7.0]),
+        )
+        .erase();
+        let rows = [1, 3];
+        let ids = [7, 29];
+        for records in [true, false] {
+            let theme = crate::Theme::Publication.resolve();
+            let resources = theme
+                .prepared_font_environment()
+                .unwrap()
+                .generation_resources();
+            let foreign = OperationGenerationResources::with_test_limits(0, 0);
+            let data = PlotData::with_rows(&plot, &rows, &ids).with_axis_resources(&foreign);
+            let before = (resources.usage().unwrap(), resources.byte_usage().unwrap());
+            if records {
+                resources.claim_slots(999_999 - before.0 .0).unwrap();
+            } else {
+                // Two columns retain exactly two [i64; 2] records: 32 bytes.
+                resources.set_test_limits(before.0 .1, before.1 + 31);
+            }
+            let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
+            let result = allocate(
+                data,
+                PanelBox::new(0.0, 400.0, 0.0, 200.0),
+                (2, 2),
+                &[],
+                &[],
+                &[],
+                &theme,
+                &FitScope::root(),
+                None,
+            );
+            assert!(result.err().unwrap().to_string().contains(if records {
+                "record admission"
+            } else {
+                "storage admission"
+            }));
+            assert_eq!(
+                resources.usage().unwrap().0,
+                if records { 999_999 } else { before.0 .0 + 2 }
+            );
+            assert_eq!(resources.usage().unwrap().1, before.0 .1);
+            assert_eq!(resources.byte_usage().unwrap(), before.1);
+            assert_eq!(foreign.usage().unwrap(), (0, 0));
+            assert_eq!(data.height(), 2);
+            assert_eq!([data.source_row(0), data.source_row(1)], ids);
+            assert_eq!(
+                crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
+                reads
+            );
+        }
+    }
 
     #[test]
     fn asymmetric_intrinsics_and_gutters_preserve_sparse_column_positions() {
@@ -272,10 +491,12 @@ mod tests {
             &gutters,
             &theme,
             &FitScope::root(),
+            None,
         )
         .unwrap() else {
             panic!("asymmetric measured tracks must fit");
         };
+        let cells = cells.cells;
         assert_eq!(cells.len(), 2);
         assert_eq!(cells[0].x0.to_bits(), 20.0_f64.to_bits());
         assert_eq!(cells[0].width().to_bits(), 149.0_f64.to_bits());

@@ -1631,7 +1631,7 @@ mod tests {
             |_| Ok(()),
             |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
             |(), assigned, (), final_stage| {
-                let (width, height) = assigned.dimensions();
+                let (width, height) = assigned.dimensions()?;
                 capture_text_replay_plan(width, height, "test capture", theme, final_stage, capture)
             },
         )

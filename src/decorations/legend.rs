@@ -151,6 +151,22 @@ pub(crate) enum LegendCall {
 }
 
 impl LegendCall {
+    fn geometry(
+        &self,
+        geometry: &mut crate::render::geometry::GeometrySnapshot,
+    ) -> Result<(), Error> {
+        match self {
+            Self::Background(rect, style) => geometry.rounded_rect(*rect, style, None),
+            Self::Gradient(bounds, start, end, stops) => {
+                geometry.linear_gradient(*bounds, *start, *end, stops, None)
+            }
+            Self::Fill(points, style) => geometry.polygon(points, style, None),
+            Self::Line(points, style) => geometry.line(points, style, None),
+            Self::Point(points, style) => geometry.scatter_with_clip(points, style, None),
+            Self::Text(text) => geometry.text(text.placement, &text.plan, None),
+        }
+    }
+
     fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
         match self {
             Self::Background([x, y, width, height, radius], style) => {
@@ -186,18 +202,7 @@ impl LegendDrawPlan {
         geometry: &mut crate::render::geometry::GeometrySnapshot,
     ) -> Result<(), Error> {
         for call in &self.calls {
-            match call {
-                LegendCall::Background(rect, style) => geometry.rounded_rect(*rect, style, None)?,
-                LegendCall::Gradient(bounds, start, end, stops) => {
-                    geometry.linear_gradient(*bounds, *start, *end, stops, None)?;
-                }
-                LegendCall::Fill(points, style) => geometry.polygon(points, style, None)?,
-                LegendCall::Line(points, style) => geometry.line(points, style, None)?,
-                LegendCall::Point(points, style) => {
-                    geometry.scatter_with_clip(points, style, None)?;
-                }
-                LegendCall::Text(text) => geometry.text(text.placement, &text.plan, None)?,
-            }
+            call.geometry(geometry)?;
         }
         Ok(())
     }
@@ -304,7 +309,7 @@ impl LegendIdentity {
         }
     }
 
-    fn same_identity(
+    pub(crate) fn same_identity(
         &self,
         other: &Self,
         resources: &OperationGenerationResources,
@@ -578,11 +583,50 @@ impl LegendEntry {
             && self.glyph.exact_eq(&other.glyph)
     }
 
-    fn glyph_extent(&self) -> f64 {
-        self.glyph
-            .point
-            .as_ref()
-            .map_or(0.0, |point| f64::from(point.radius))
+    fn glyph_ink(
+        &self,
+        metrics: &LegendMetrics,
+        theme: &crate::theme::ResolvedTheme,
+    ) -> Result<crate::render::geometry::GeometryBox, Error> {
+        let half_width = metrics.handle_w / 2.0;
+        let half_height = metrics.font_size * 0.32;
+        let mut ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
+        if let Some(fill) = &self.glyph.fill {
+            ink.polygon(
+                &[
+                    Point2D::new(-half_width, -half_height),
+                    Point2D::new(half_width, -half_height),
+                    Point2D::new(half_width, half_height),
+                    Point2D::new(-half_width, half_height),
+                ],
+                fill,
+                None,
+            )?;
+        }
+        if let Some(line) = &self.glyph.line {
+            ink.line(
+                &[
+                    Point2D::new(-half_width, 0.0),
+                    Point2D::new(half_width, 0.0),
+                ],
+                line,
+                None,
+            )?;
+        }
+        if let Some(point) = &self.glyph.point {
+            ink.scatter_with_clip(&[Point2D::new(0.0, 0.0)], point, None)?;
+        }
+        legend_visits(theme, ink.bounds().len())?;
+        Ok(ink.bounds().iter().copied().fold(
+            crate::render::geometry::GeometryBox {
+                left: -half_width,
+                right: half_width,
+                bottom: -half_height,
+                top: half_height,
+                weight: 1.0,
+            },
+            crate::render::geometry::GeometryBox::union,
+        ))
     }
 }
 
@@ -709,7 +753,7 @@ fn legend_visits(theme: &crate::theme::ResolvedTheme, count: usize) -> Result<()
         .map_err(|error| Error::Render(format!("legend work admission: {error:?}")))
 }
 
-fn legend_text_eq(
+pub(crate) fn legend_text_eq(
     left: &str,
     right: &str,
     resources: &OperationGenerationResources,
@@ -735,7 +779,6 @@ fn legend_text_eq(
 }
 
 fn copy_legend_string(source: &str, theme: &crate::theme::ResolvedTheme) -> Result<String, Error> {
-    legend_visits(theme, source.len())?;
     theme
         .prepared_font_environment()?
         .claim_unicode_bytes(
@@ -902,6 +945,8 @@ struct EntryIntrinsics {
     preferred: f64,
     key: f64,
     chrome: f64,
+    ascent: f64,
+    descent: f64,
 }
 
 struct DiscreteGuideIntrinsics {
@@ -923,13 +968,15 @@ fn discrete_guide_intrinsics(
     )?;
     let mut preferred_column = 0.0_f64;
     for entry in entries {
+        legend_visits(theme, 1)?;
         let (hard, natural) = crate::layout::fit::intrinsic_widths(
             theme,
             &entry.label,
             &theme.typography.legend_label,
             "legend entry intrinsic",
         )?;
-        let key = metrics.handle_w.max(2.0 * entry.glyph_extent());
+        let ink = entry.glyph_ink(metrics, theme)?;
+        let key = crate::layout::kernel::required_length(2.0 * (-ink.left).max(ink.right))?;
         let chrome = crate::layout::kernel::required_length(key + metrics.handle_text)?;
         let preferred = crate::layout::kernel::required_length(hard.max(natural) + chrome)?;
         preferred_column = preferred_column.max(preferred);
@@ -938,6 +985,8 @@ fn discrete_guide_intrinsics(
             preferred,
             key,
             chrome,
+            ascent: ink.top,
+            descent: -ink.bottom,
         });
     }
     Ok(DiscreteGuideIntrinsics {
@@ -1092,6 +1141,87 @@ impl LegendBox {
 }
 
 impl Legend {
+    fn allocation_metrics(
+        theme: &crate::theme::ResolvedTheme,
+    ) -> Result<(LegendMetrics, f64), Error> {
+        let mut metrics = LegendMetrics::from_theme(theme);
+        let inset =
+            crate::layout::kernel::required_length(f64::from(metrics.frame_stroke_width) / 2.0)?
+                .max(0.5);
+        metrics.pad = metrics.pad.max(inset);
+        let minimum = 2.0 * (inset + metrics.frame_radius);
+        Ok((metrics, minimum))
+    }
+
+    pub(crate) fn natural_preference(
+        title: &str,
+        entries: &[LegendEntry],
+        theme: &crate::theme::ResolvedTheme,
+    ) -> Result<(f64, f64), Error> {
+        let (metrics, frame_minimum) = Self::allocation_metrics(theme)?;
+        let intrinsic = discrete_guide_intrinsics(entries, theme, &metrics)?;
+        let mut width = crate::layout::interior::sizing::text_width(
+            theme,
+            title,
+            &theme.typography.legend_title,
+        )?;
+        for (entry, requirement) in entries.iter().zip(&intrinsic.entries) {
+            width = width.max(
+                crate::layout::interior::sizing::text_width(
+                    theme,
+                    &entry.label,
+                    &theme.typography.legend_label,
+                )? + requirement.chrome,
+            );
+        }
+        let title_plan = crate::layout::fit::measured(crate::layout::fit::text(
+            theme,
+            title,
+            &theme.typography.legend_title,
+            width,
+            crate::layout::PhysicalTextAlignment::Start,
+            "natural legend title",
+            &crate::layout::fit::FitScope::root(),
+        ))
+        .map_err(crate::layout::fit::PlanError::into_error)?;
+        let mut height = if title.is_empty() {
+            0.0
+        } else {
+            title_plan.height() + metrics.title_gap
+        };
+        for (index, entry) in entries.iter().enumerate() {
+            theme
+                .prepared_font_environment()?
+                .claim_processing_visits(1)
+                .map_err(|error| Error::Render(format!("natural legend entry: {error:?}")))?;
+            let plan = crate::layout::fit::measured(crate::layout::fit::text(
+                theme,
+                &entry.label,
+                &theme.typography.legend_label,
+                width - intrinsic.entries[index].chrome,
+                crate::layout::PhysicalTextAlignment::Start,
+                "natural legend entry",
+                &crate::layout::fit::FitScope::root(),
+            ))
+            .map_err(crate::layout::fit::PlanError::into_error)?;
+            width = width.max(intrinsic.entries[index].minimum);
+            let baseline = plan.first_baseline_quanta.unwrap_or(0) as f64 / 1024.0;
+            height += baseline.max(intrinsic.entries[index].ascent)
+                + (plan.height() - baseline).max(intrinsic.entries[index].descent);
+            if index + 1 < entries.len() {
+                height += metrics.row_gap;
+            }
+        }
+        Ok((
+            crate::layout::kernel::required_length(
+                (width + 2.0 * metrics.pad + 1.0 / 1024.0).max(frame_minimum),
+            )?,
+            crate::layout::kernel::required_length(
+                (height + 2.0 * (metrics.pad + GLYPH_EDGE_PAD_FACTOR * metrics.font_size))
+                    .max(frame_minimum),
+            )?,
+        ))
+    }
     #[cfg(test)]
     pub(crate) fn text_plans(&self) -> impl Iterator<Item = &crate::layout::ResolvedTextPlan> {
         std::iter::once(self.title_block.plan())
@@ -1105,7 +1235,7 @@ impl Legend {
     pub(crate) fn measure_assigned(
         title: &str,
         entries: std::sync::Arc<[LegendEntry]>,
-        available: (f64, f64),
+        available: (f64, impl Into<Option<f64>>),
         horizontal: bool,
         compact: bool,
         theme: &crate::theme::ResolvedTheme,
@@ -1114,11 +1244,19 @@ impl Legend {
     ) -> Result<crate::layout::fit::FitOutcome<Self>, Error> {
         use crate::layout::fit::{self, FitOutcome};
         use crate::layout::{kernel::FitKind, AddressRole};
+        theme
+            .prepared_font_environment()?
+            .claim_measurement_call()
+            .map_err(|error| {
+                Error::Render(format!("legend measurement call admission: {error:?}"))
+            })?;
+        let available = (available.0, available.1.into());
         theme.prepare_font_environment()?;
+        let resources = theme.prepared_font_environment()?.generation_resources();
         if !compact {
             *compact_changes = false;
         }
-        if !available.0.is_finite() || !available.1.is_finite() {
+        if !available.0.is_finite() || available.1.is_some_and(|height| !height.is_finite()) {
             return Err(Error::Render("nonfinite guide assignment".into()));
         }
         if entries.is_empty() {
@@ -1127,12 +1265,12 @@ impl Legend {
                 "an empty guide has no assigned geometry",
             )));
         }
-        let metrics = LegendMetrics::from_theme(theme);
+        let (metrics, frame_minimum) = Self::allocation_metrics(theme)?;
         let font_size = metrics.font_size.round() as u32;
         let edge_pad = metrics.pad + GLYPH_EDGE_PAD_FACTOR * f64::from(font_size);
         let inner_width = available.0 - 2.0 * metrics.pad;
-        let inner_height = available.1 - 2.0 * edge_pad;
-        if inner_width <= 0.0 || inner_height <= 0.0 {
+        let inner_height = available.1.map(|height| height - 2.0 * edge_pad);
+        if inner_width <= 0.0 || inner_height.is_some_and(|height| height <= 0.0) {
             return Ok(FitOutcome::Miss(scope.failure(
                 FitKind::LegendOrGuide,
                 "outside guide has no positive content extent",
@@ -1147,7 +1285,7 @@ impl Legend {
             inner_width,
             PhysicalTextAlignment::Start,
             "outside legend title",
-            &scope.child(AddressRole::LegendTitle, 0)?,
+            &scope.child(AddressRole::LegendTitle, 0, &resources)?,
         )? {
             FitOutcome::Measured(plan) => plan,
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
@@ -1157,8 +1295,8 @@ impl Legend {
         } else {
             metrics.title_gap
         };
-        let body_height = inner_height - title_plan.height() - title_gap;
-        if body_height <= 0.0 {
+        let body_height = inner_height.map(|height| height - title_plan.height() - title_gap);
+        if body_height.is_some_and(|height| height <= 0.0) {
             return Ok(FitOutcome::Miss(scope.failure(
                 FitKind::LegendOrGuide,
                 "outside legend title leaves no entry height",
@@ -1197,10 +1335,12 @@ impl Legend {
             };
             if allocated < entry.minimum {
                 return Ok(FitOutcome::Miss(
-                    scope.child(AddressRole::LegendEntry, index)?.failure(
-                        FitKind::Text,
-                        "guide entry allocation is below its hard unbroken requirement",
-                    ),
+                    scope
+                        .child(AddressRole::LegendEntry, index, &resources)?
+                        .failure(
+                            FitKind::Text,
+                            "guide entry allocation is below its hard unbroken requirement",
+                        ),
                 ));
             }
         }
@@ -1233,23 +1373,29 @@ impl Legend {
                 allocated - width.chrome,
                 PhysicalTextAlignment::Start,
                 "outside legend entry",
-                &scope.child(AddressRole::LegendEntry, index)?,
+                &scope.child(AddressRole::LegendEntry, index, &resources)?,
             )? {
                 FitOutcome::Measured(plan) => plan,
                 FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
             };
             let baseline = plan.first_baseline_quanta.unwrap_or(0) as f64 / 1024.0;
-            let key_half = entry.glyph_extent().max(f64::from(font_size) * 0.32);
-            let ascent = baseline.max(key_half);
+            let ascent = baseline.max(width.ascent);
             measured.push(MeasuredEntry {
                 width: allocated,
                 key: width.key,
                 chrome: width.chrome,
                 ascent,
-                descent: (plan.height() - baseline).max(key_half),
+                descent: (plan.height() - baseline).max(width.descent),
             });
             entry_blocks.push(TextBlock::from_resolved(plan));
         }
+        let body_height = body_height.unwrap_or_else(|| {
+            measured
+                .iter()
+                .map(|entry| entry.ascent + entry.descent)
+                .sum::<f64>()
+                + metrics.row_gap * entries.len().saturating_sub(1) as f64
+        });
         let flow = match flow_assigned_entries(
             &measured,
             inner_width,
@@ -1265,8 +1411,16 @@ impl Legend {
         };
         let title_baseline = title_plan.first_baseline_quanta.unwrap_or(0) as f64 / 1024.0;
         let layout = LegendLayout {
-            width: flow.width.max(title_plan.width()) + 2.0 * metrics.pad,
-            height: title_plan.height() + title_gap + flow.height + 2.0 * edge_pad,
+            width: crate::layout::kernel::required_length(
+                (flow
+                    .width
+                    .max(title_plan.width().max(title_plan.fit_width()))
+                    + 2.0 * metrics.pad)
+                    .max(frame_minimum),
+            )?,
+            height: crate::layout::kernel::required_length(
+                (title_plan.height() + title_gap + flow.height + 2.0 * edge_pad).max(frame_minimum),
+            )?,
             columns: flow.columns,
             title: PlannedTextPlacement::baseline(
                 Point2D::new(0.0, title_half - title_baseline),
@@ -1275,16 +1429,43 @@ impl Legend {
             ),
             entries: flow.slots,
         };
-        Ok(FitOutcome::Measured(Self {
+        if layout.width > available.0 || available.1.is_some_and(|height| layout.height > height) {
+            return Ok(FitOutcome::Miss(scope.failure(
+                FitKind::LegendOrGuide,
+                "complete discrete guide frame exceeds its assigned track",
+            )));
+        }
+        let legend = Self {
             entries,
             metrics,
             available_width: available.0,
-            available_height: available.1,
+            available_height: available.1.unwrap_or(layout.height),
             title_block: TextBlock::from_resolved(title_plan),
             entry_blocks,
             font_family: copy_legend_string(&theme.typography.legend_label.stack, theme)?,
             layout,
-        }))
+        };
+        let bounds = legend.box_at(0.0, 0.0);
+        let mut ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
+        let (x, y) = bounds.anchor();
+        legend.visit_calls(x, y, |call| {
+            legend_visits(theme, 1)?;
+            call.geometry(&mut ink)
+        })?;
+        for ink in ink.bounds() {
+            legend_visits(theme, 1)?;
+            if ink.left < bounds.left
+                || ink.right > bounds.right
+                || ink.bottom < bounds.bottom
+                || ink.top > bounds.top
+            {
+                return Ok(FitOutcome::Miss(scope.failure(
+                    FitKind::LegendOrGuide,
+                    "complete discrete guide ink exceeds its assigned allocation",
+                )));
+            }
+        }
+        Ok(FitOutcome::Measured(legend))
     }
 
     pub(crate) fn observe_feedback(
@@ -1499,12 +1680,14 @@ impl Legend {
         let ry_bot = y + self.glyph_edge_pad() + self.title_half_height() - box_h;
 
         let bg_fill = FillStyle::new(m.frame_fill, m.frame_outline, m.frame_stroke_width);
+        let inset =
+            crate::layout::kernel::required_length(f64::from(m.frame_stroke_width) / 2.0)?.max(0.5);
         emit(LegendCall::Background(
             [
-                rx + 0.5,
-                ry_bot + 0.5,
-                box_w - 1.0,
-                box_h - 1.0,
+                rx + inset,
+                ry_bot + inset,
+                box_w - 2.0 * inset,
+                box_h - 2.0 * inset,
                 m.frame_radius,
             ],
             bg_fill,
@@ -1512,10 +1695,7 @@ impl Legend {
 
         // ─── Title ───
         let translate = |placement: PlannedTextPlacement| PlannedTextPlacement {
-            position: Point2D::new(
-                (x + placement.position.x).round(),
-                (y + placement.position.y).round(),
-            ),
+            position: Point2D::new(x + placement.position.x, y + placement.position.y),
             ..placement
         };
         emit(LegendCall::Text(crate::render::backend::PlacedText {
@@ -1614,6 +1794,141 @@ pub(crate) fn test_assigned_legend(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn small_private_discrete_metrics_do_not_acquire_a_new_size_floor() {
+        let mut theme = crate::Theme::Publication.resolve();
+        theme.typography.legend_title.font_size = 2;
+        theme.typography.legend_label.font_size = 2;
+        theme.legend.padding = 0.0;
+        theme.legend.key_width = 1.0;
+        theme.legend.key_label_gap = 0.0;
+        theme.legend.title_gap = 0.0;
+        theme.legend.row_gap = 0.0;
+        theme.legend.frame_stroke_width = 0.0;
+        theme.legend.frame_radius = 0.0;
+        let mut key = LegendEntry::point(
+            LegendIdentity::literal("i", "i"),
+            PointStyle::plain((0, 0, 0), 1),
+        );
+        key.title = "i".into();
+        key.label = "i".into();
+        let guide = test_assigned_legend("i", vec![key], (10.0, 10.0), &theme).unwrap();
+        assert!(guide.compute_box_width() < 10.0);
+        assert!(guide.compute_box_height() < 10.0);
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "local and merged guides must preserve every stroked glyph operand in both flows"
+    )]
+    fn local_and_shared_discrete_guides_allocate_complete_custom_glyph_and_frame_ink() {
+        use crate::layout::fit::{self, FitScope};
+        use crate::render::backend::{Backend, PointOutline, Rgba};
+        let source = crate::Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0]),
+            crate::NumericValues::new("y", [0.0, 1.0]),
+        )
+        .hue(crate::CategoryValues::new("group", ["a", "b"]).unwrap())
+        .erase();
+        let prepared =
+            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+                .unwrap();
+        let plot = prepared.attach(source).unwrap();
+        for shape in [crate::PointShape::Circle, crate::PointShape::TriangleUp] {
+            let mut theme = crate::Theme::Publication.resolve();
+            theme.marks.primary_point.shape = shape;
+            theme.marks.point_sizes.scatter = 6;
+            theme.marks.primary_point.outline = PointOutline {
+                color: Rgba::rgb(11, 22, 33),
+                width_ratio: 4.0,
+            };
+            theme.legend.frame_stroke_width = 30.0;
+            theme.legend.frame_radius = 50.0;
+            let result = plot
+                .measure_selected_interior(crate::spec::PlotRenderContext::new(
+                    plot.data(),
+                    crate::layout::PanelBox::new(10.0, 700.0, 10.0, 700.0),
+                    &theme,
+                ))
+                .unwrap();
+            let resources = theme
+                .prepared_font_environment()
+                .unwrap()
+                .generation_resources();
+            let mut local = result.legend_entries;
+            assert_eq!(local.len(), 2);
+            let mut composite = LegendEntry::point_line_fill(
+                LegendIdentity::single("group", "composite"),
+                local[0].glyph.point.clone().unwrap(),
+                LineStyle::solid((20, 40, 60), 40.0),
+                FillStyle::new(Rgba::new(10, 20, 30, 140), Rgba::rgb(40, 50, 60), 36.0),
+            );
+            composite.title.clone_from(&local[0].title);
+            composite.label = "Composite".into();
+            local.push(composite);
+            let shared = merge_exact_entries(
+                local.iter().cloned().chain(local.iter().cloned()),
+                "shared test guide",
+                &resources,
+            )
+            .unwrap();
+            for entries in [local, shared] {
+                let entries = Legend::admit_entries(entries, &theme).unwrap();
+                let natural = Legend::natural_preference("Group", &entries, &theme).unwrap();
+                for horizontal in [false, true] {
+                    let guide = fit::measured(Legend::measure_assigned(
+                        "Group",
+                        entries.clone(),
+                        (natural.0 + 300.0, natural.1 + 300.0),
+                        horizontal,
+                        false,
+                        &theme,
+                        &mut false,
+                        &FitScope::root(),
+                    ))
+                    .unwrap();
+                    let bounds = guide.box_at(20.0, 30.0);
+                    let (x, y) = bounds.anchor();
+                    let selected = guide
+                        .select(x, y, plot.data().with_axis_resources(&resources))
+                        .unwrap();
+                    let mut ink = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+                    selected.geometry(&mut ink).unwrap();
+                    assert!(ink.bounds().iter().all(|ink| ink.left >= bounds.left
+                        && ink.right <= bounds.right
+                        && ink.bottom >= bounds.bottom
+                        && ink.top <= bounds.top));
+                    let mut drawn = crate::render::geometry::GeometryBackend::new(&theme).unwrap();
+                    drawn.begin(800, 800).unwrap();
+                    selected.draw(&mut drawn).unwrap();
+                    drawn.end().unwrap();
+                    assert_eq!(ink.bounds(), drawn.bounds());
+                    assert_eq!(selected.calls.iter().filter(|call| matches!(call, LegendCall::Point(_, style) if style.shape == shape)).count(), 3);
+                    let LegendCall::Background(rect, style) = &selected.calls[0] else {
+                        panic!("selected frame")
+                    };
+                    assert_eq!(rect[4].to_bits(), 50.0_f64.to_bits());
+                    assert_eq!(style.stroke_width.to_bits(), 30.0_f32.to_bits());
+                    assert!(matches!(
+                        Legend::measure_assigned(
+                            "Group",
+                            entries.clone(),
+                            (129.0, 600.0),
+                            horizontal,
+                            false,
+                            &theme,
+                            &mut false,
+                            &FitScope::root()
+                        )
+                        .unwrap(),
+                        fit::FitOutcome::Miss(_)
+                    ));
+                }
+            }
+        }
+    }
 
     #[test]
     fn assigned_outside_frame_uses_the_owner_theme_gap_once() {
@@ -1787,6 +2102,129 @@ mod tests {
     }
 
     #[test]
+    fn legend_string_copy_admits_bytes_without_synthetic_processing_work() {
+        let theme = crate::Theme::Publication.resolve();
+        let resources = theme
+            .prepared_font_environment()
+            .unwrap()
+            .generation_resources();
+        let text = "Group × condition";
+        let bytes = resources.byte_usage().unwrap();
+        let visits = resources.usage().unwrap().1;
+        let records = resources.usage().unwrap().0;
+        resources.set_test_limits(visits, bytes + text.len() as u64);
+        assert_eq!(copy_legend_string(text, &theme).unwrap(), text);
+        assert_eq!(resources.usage().unwrap(), (records, visits));
+        assert_eq!(resources.byte_usage().unwrap(), bytes + text.len() as u64);
+        assert!(copy_legend_string("x", &theme)
+            .unwrap_err()
+            .to_string()
+            .contains("legend string admission"));
+        assert_eq!(resources.usage().unwrap(), (records, visits));
+    }
+
+    #[test]
+    fn empty_and_unusable_legend_measurements_admit_their_own_call() {
+        use crate::layout::fit::{FitOutcome, FitScope};
+        for empty in [false, true] {
+            for remaining in [0, 1, 2] {
+                let theme = crate::Theme::Publication.resolve();
+                theme.prepare_font_environment().unwrap();
+                let resources = theme
+                    .prepared_font_environment()
+                    .unwrap()
+                    .generation_resources();
+                resources
+                    .claim_calls(1_000_000 - resources.call_cache_usage().0 - remaining)
+                    .unwrap();
+                let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
+                let entries: std::sync::Arc<[LegendEntry]> =
+                    if empty { vec![] } else { vec![entry("group")] }.into();
+                let mut compact_changes = true;
+                let result = Legend::measure_assigned(
+                    "",
+                    entries,
+                    (0.0, 0.0),
+                    false,
+                    false,
+                    &theme,
+                    &mut compact_changes,
+                    &FitScope::root(),
+                );
+                if remaining == 0 {
+                    assert!(result
+                        .err()
+                        .unwrap()
+                        .to_string()
+                        .contains("measurement/intrinsic call attempts"));
+                    assert!(
+                        compact_changes,
+                        "refusal must precede trial output mutation"
+                    );
+                } else {
+                    assert!(matches!(result.unwrap(), FitOutcome::Miss(_)));
+                    assert!(!compact_changes);
+                }
+                assert_eq!(
+                    resources.call_cache_usage().0,
+                    1_000_000 - remaining + u128::from(remaining > 0)
+                );
+                assert_eq!(
+                    crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
+                    shapes
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn repeated_legend_measurement_admits_calls_even_with_cached_text() {
+        use crate::layout::fit::{self, FitScope};
+        let theme = crate::Theme::Publication.resolve();
+        let resources = theme
+            .prepared_font_environment()
+            .unwrap()
+            .generation_resources();
+        let entries: std::sync::Arc<[LegendEntry]> = vec![entry("first"), entry("second")].into();
+        let measure = || {
+            fit::measured(Legend::measure_assigned(
+                "group",
+                entries.clone(),
+                (400.0, 400.0),
+                false,
+                false,
+                &theme,
+                &mut false,
+                &FitScope::root(),
+            ))
+            .unwrap()
+        };
+        let original = measure();
+        let before = resources.call_cache_usage().0;
+        let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
+        let repeated = measure();
+        // One guide call, one title query, and unassigned text + intrinsic +
+        // assigned text queries per entry. Cached text admits all eight calls.
+        assert_eq!(resources.call_cache_usage().0 - before, 8);
+        assert_eq!(
+            crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
+            shapes
+        );
+        assert!(repeated
+            .title_block
+            .plan()
+            .shares_payload(original.title_block.plan()));
+        assert_eq!(
+            repeated.layout.width.to_bits(),
+            original.layout.width.to_bits()
+        );
+        assert_eq!(
+            repeated.layout.height.to_bits(),
+            original.layout.height.to_bits()
+        );
+    }
+
+    #[test]
     fn assigned_guide_rejects_an_unbreakable_label_before_other_entries_wrap() {
         use crate::layout::fit::{FitOutcome, FitScope};
         let theme = crate::Theme::Publication.resolve();
@@ -1810,7 +2248,14 @@ mod tests {
         assert_eq!(
             failure.reason.address,
             crate::layout::ComponentAddress::root()
-                .child(crate::layout::AddressRole::LegendEntry, 1)
+                .child(
+                    crate::layout::AddressRole::LegendEntry,
+                    1,
+                    &theme
+                        .prepared_font_environment()
+                        .unwrap()
+                        .generation_resources()
+                )
                 .unwrap()
         );
     }
@@ -2211,16 +2656,22 @@ mod tests {
         let last = legend.layout.entries.last().unwrap();
         let text = legend.entry_blocks.last().unwrap();
         let baseline = text.plan().first_baseline_quanta.unwrap_or(0) as f64 / 1024.0;
-        let descent = (text.height() - baseline)
-            .max(legend.entries.last().unwrap().glyph_extent())
-            .max(legend.entry_font_size() * 0.32);
+        let descent = (text.height() - baseline).max(
+            -legend
+                .entries
+                .last()
+                .unwrap()
+                .glyph_ink(&legend.metrics, &crate::Theme::Publication.resolve())
+                .unwrap()
+                .bottom,
+        );
         let last_bottom = title_center + last.label.position.y - descent;
         let top_padding = bounds.top - title_top;
         let bottom_padding = last_bottom - bounds.bottom;
         let previous_bottom_comfort =
             legend.metrics.pad + GLYPH_EDGE_PAD_FACTOR * legend.entry_font_size();
 
-        assert!((top_padding - bottom_padding).abs() <= 1e-9);
+        assert!((top_padding - bottom_padding).abs() <= 1.0 / 1024.0);
         assert!(top_padding >= previous_bottom_comfort);
     }
 

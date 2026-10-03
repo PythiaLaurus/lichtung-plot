@@ -28,9 +28,11 @@ integration tests passed, 17 ignored, with strict Clippy, API docs, and package
 verification passing. All ten release benchmark groups separately passed. At
 that T5a checkpoint, the 20 native ordinary kinds, five specialized kinds, and
 two retained parent adapters did not make this document's target current. T5b
-has since completed native guides and composition tracks; T5c–T5e remain
-pending for mark/annotation consequences, scales, and specialized packing.
-Automatic sizing and public theme/layout APIs remain T6 work. Existing public
+has since completed native guides and composition tracks; T5c–T5e have completed
+mark/annotation consequences, resolved scales, native specialized packing and
+the private three-mode root engine. Current ownership and closure evidence are
+in `docs/t5e7-producer-census.md` and `docs/t5e-closure.md`.
+Public automatic sizing and theme/layout APIs remain T6 work. Existing public
 defaults remain exact 640x480 Plot and 960x640 Canvas until the atomic T6 switch.
 
 Post-T5a3 accepted policies are recorded in `91_IMPLEMENTATION_PLAN.md`, T5a3p0
@@ -118,11 +120,35 @@ policy sort by that tuple and deduplicate; the least is returned.
 A fit miss is either terminal or provisional with concrete named feedback
 requests and enough provisional geometry to derive those requests. It is not an
 empty successful plan. Only axis-gutter, shared-alignment, owned-ink reserve,
-and automatic-domain feedback can make a miss provisional. A request must
-actually change its consumed input and identify the predicate it can resolve.
+automatic-domain, and content-derived dimension feedback can make a miss
+provisional. A request must actually change its consumed input and identify the
+predicate it can resolve.
 An oversized unbreakable string, insufficient exact total after known minima,
 or sibling collision without a named remedy is terminal. Resource, arithmetic,
 font, and invariant errors are fatal immediately, never fit misses.
+
+Content-derived dimension feedback is an internal measured consequence of the
+column-before-row primitive contract, not another public sizing mode or search.
+`ContentHeight` transfers one guided Plot cell's preferred local frame/prose
+height from its measured owner to that cell under the owning Canvas Grid. It
+replaces the prior measurement, including contraction; neither its assigned
+width nor its height is aggregated as cumulative owned ink. Its dependency
+identity comprises the immutable prepared operation/owner (source data, labels,
+role typography and guide semantics), current coordinated numeric domains,
+assigned column width/guide capacity, applied parent and local gutter/owned-ink
+inputs, scope, tick-label visibility and discrete/continuous guide policy.
+Changing any dependency requires another admitted measurement. The parent may
+consume a retained height only when that complete identity matches; equal width
+alone is insufficient. Measurement keys, lookups, retained consequences and
+replacement requests use the same operation records/visits/calls/cache/bytes
+ledger as other child plans. A changed content consequence can provisionally
+resolve only its named row/residual fit predicate under the existing bounded
+root driver; it never restarts automatic width choice or adds an edge-search loop.
+Width-dependent content height and final cell allocation consume the same scoped
+numeric domains/shared unions, visibility and root-coordinated gutters. Gutters
+measured from the actual selected child return through that driver; a probe at a
+different provisional height must not silently replace the sizing inputs. An
+unchanged height request cannot authorize a frame extending outside its row.
 
 When child boxes can be constructed, siblings run in canonical order even after
 a fit miss, so a later fatal error wins; otherwise the least terminal reason

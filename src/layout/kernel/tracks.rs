@@ -289,7 +289,7 @@ fn raise_span(
 pub(crate) fn allocate_grid_axis(
     base: &[TrackSpec],
     children: &[GridRequirement<'_>],
-    total: i64,
+    total: impl Into<Option<i64>>,
     insets: [i64; 2],
     gap: i64,
     declared_em: Option<i64>,
@@ -427,6 +427,20 @@ pub(crate) fn allocate_grid_axis(
             )?;
         }
     }
+    let total = match total.into() {
+        Some(total) => total,
+        None => checked(
+            tracks
+                .iter()
+                .map(|track| i128::from(track.preferred))
+                .sum::<i128>()
+                + i128::from(insets[0])
+                + i128::from(insets[1])
+                + i128::from(gap)
+                    * i128::try_from(tracks.len().saturating_sub(1))
+                        .map_err(|_| Error::Render("natural Grid gap count overflowed".into()))?,
+        )?,
+    };
     let result = allocate_tracks(&tracks, total, insets, gap, require_full, resources, scope)?;
     if let FitOutcome::Measured(allocation) = &result {
         for &index in &order {
@@ -481,9 +495,56 @@ mod tests {
     }
 
     #[test]
+    fn natural_grid_uses_its_preferred_vector_and_retains_trailing_declared_tracks() {
+        let owner = ComponentAddress::root()
+            .child(
+                AddressRole::CanvasHeader,
+                0,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
+            .unwrap();
+        let children = [grid(&owner, 0, 2, 5, 9)];
+        let FitOutcome::Measured(natural) = allocate_grid_axis(
+            &[flex(0, 0, None); 3],
+            &children,
+            None,
+            [1, 1],
+            1,
+            Some(2),
+            true,
+            &OperationGenerationResources::new(),
+            &FitScope::root(),
+        )
+        .unwrap() else {
+            panic!("a natural preferred vector must fit its admitted hard spans");
+        };
+        assert_eq!(natural.sizes, [4, 4, 2]);
+        assert_eq!(natural.trailing_slack, 0);
+        let FitOutcome::Measured(exact) = allocate_grid_axis(
+            &[flex(0, 0, None); 3],
+            &children,
+            14,
+            [1, 1],
+            1,
+            Some(2),
+            true,
+            &OperationGenerationResources::new(),
+            &FitScope::root(),
+        )
+        .unwrap() else {
+            panic!("the natural extent must use the same exact allocator");
+        };
+        assert_eq!(natural.sizes, exact.sizes);
+    }
+
+    #[test]
     fn grid_spanning_header_raises_equal_tracks_before_assigned_allocation() {
         let address = ComponentAddress::root()
-            .child(AddressRole::CanvasHeader, 0)
+            .child(
+                AddressRole::CanvasHeader,
+                0,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
             .unwrap();
         let children = [grid(&address, 0, 2, 10, 14)];
         let FitOutcome::Measured(result) = allocate_grid_axis(
@@ -507,7 +568,11 @@ mod tests {
     #[test]
     fn spanning_hard_surplus_redistributes_after_one_track_caps() {
         let address = ComponentAddress::root()
-            .child(AddressRole::CanvasHeader, 0)
+            .child(
+                AddressRole::CanvasHeader,
+                0,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
             .unwrap();
         let mut base = [flex(0, 0, None); 3];
         base[0].max = Some(1);
@@ -531,10 +596,18 @@ mod tests {
     #[test]
     fn overlapping_spans_are_canonical_and_infeasible_total_misses() {
         let a = ComponentAddress::root()
-            .child(AddressRole::CanvasHeader, 0)
+            .child(
+                AddressRole::CanvasHeader,
+                0,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
             .unwrap();
         let b = ComponentAddress::root()
-            .child(AddressRole::CanvasHeader, 1)
+            .child(
+                AddressRole::CanvasHeader,
+                1,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
             .unwrap();
         let base = [flex(0, 0, None); 3];
         let run = |reversed, total| {
@@ -590,7 +663,11 @@ mod tests {
         };
         assert_eq!(declared.sizes, [4, 4, 4]);
         let empty = ComponentAddress::root()
-            .child(AddressRole::CanvasCell, 0)
+            .child(
+                AddressRole::CanvasCell,
+                0,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
             .unwrap();
         let FitOutcome::Measured(unoccupied) = allocate_grid_axis(
             &[TrackSpec {
@@ -615,7 +692,11 @@ mod tests {
         assert_eq!(unoccupied.trailing_slack, 5);
 
         let filled = ComponentAddress::root()
-            .child(AddressRole::CanvasCell, 2)
+            .child(
+                AddressRole::CanvasCell,
+                2,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
             .unwrap();
         let FitOutcome::Measured(sparse) = allocate_grid_axis(
             &[TrackSpec {
@@ -642,7 +723,11 @@ mod tests {
     #[test]
     fn invalid_or_capped_grid_topology_rejects_without_another_search() {
         let owner = ComponentAddress::root()
-            .child(AddressRole::CanvasHeader, 0)
+            .child(
+                AddressRole::CanvasHeader,
+                0,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
             .unwrap();
         let resources = OperationGenerationResources::new();
         let base = [flex(0, 0, Some(2)); 2];

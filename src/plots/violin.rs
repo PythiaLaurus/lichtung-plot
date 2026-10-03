@@ -611,7 +611,7 @@ pub(crate) fn measure_marks(
             let strip_min = strip_left + point_left;
             let strip_max = strip_right - point_right;
             if strip_min - point_left <= box_right + box_right_ink || strip_max < strip_min {
-                return Err(context.fit_scope().child(crate::layout::AddressRole::CategoricalSeriesSlot, index)?.failure(crate::layout::fit::FitKind::SpecializedGeometry,
+                return Err(context.fit_scope().child(crate::layout::AddressRole::CategoricalSeriesSlot, index, &theme.prepared_font_environment()?.generation_resources())?.failure(crate::layout::fit::FitKind::SpecializedGeometry,
                         "raincloud: panel is too narrow to separate the complete observation strip from the IQR box; increase width or reduce series"
                     ).into());
             }

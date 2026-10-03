@@ -34,6 +34,17 @@ pub(super) struct CanvasGridAssignment {
     pub cells: Vec<PanelBox>,
     pub headers: Vec<CanvasHeaderPlan>,
     pub row_titles: Vec<CanvasHeaderPlan>,
+    pub size: (f64, f64),
+    pub content_insets: Vec<[i64; 4]>,
+}
+
+pub(super) struct ContentSizing<'a> {
+    pub source: &'a super::Canvas,
+    pub interiors: &'a [Option<crate::layout::interior::PreparedInteriorInputs>],
+    pub round: &'a crate::layout::kernel::FeedbackRound,
+    pub measurements: Option<&'a super::sizing::HeightMeasurements>,
+    pub natural_width: bool,
+    pub natural_height: bool,
 }
 
 #[expect(
@@ -53,6 +64,7 @@ pub(super) fn allocate(
     gutters: &[(usize, usize, PanelRequirements)],
     themes: &ResolvedCanvasThemes,
     scope: &FitScope,
+    content: Option<&ContentSizing<'_>>,
 ) -> Result<FitOutcome<CanvasGridAssignment>, Error> {
     let (rows, columns) = shape;
     let count = rows
@@ -108,7 +120,7 @@ pub(super) fn allocate(
     }
     let header_outer = outer;
     let outer = PanelBox::new(outer.x0 + row_header_width, outer.x1, outer.y0, outer.y1);
-    if outer.width() <= 0.0 {
+    if outer.width() <= 0.0 && !content.is_some_and(|value| value.natural_width) {
         return Ok(FitOutcome::Miss(scope.failure(
             FitKind::TrackOrResidual,
             "Canvas row headers leave no width for cell tracks",
@@ -133,7 +145,11 @@ pub(super) fn allocate(
         row[0] = row[0].max(required(requirement.bottom)?);
         row[1] = row[1].max(required(requirement.top)?);
     }
-    let grid = ComponentAddress::root().child(AddressRole::CanvasGrid, 0)?;
+    let grid = ComponentAddress::root().child(
+        AddressRole::CanvasGrid,
+        0,
+        &theme.prepared_font_environment()?.generation_resources(),
+    )?;
     let mut owners = Vec::new();
     crate::layout::fit::reserve(theme, &mut owners, count, "Canvas cell owners")?;
     for index in 0..count {
@@ -142,6 +158,7 @@ pub(super) fn allocate(
                 AddressRole::CanvasCell,
                 u32::try_from(index)
                     .map_err(|_| Error::Render("Canvas cell address overflowed".into()))?,
+                &theme.prepared_font_environment()?.generation_resources(),
             )?,
         );
     }
@@ -198,7 +215,55 @@ pub(super) fn allocate(
             };
             hard.1 += top + bottom + if text_insets > 0.0 { 20.0 } else { 0.0 };
             hard.0 = hard.0.max(title.0 + text_insets);
-            Some((hard, hard.0.max(title.1 + text_insets)))
+            let preferred = if content.is_some() {
+                let body = crate::layout::interior::sizing::body_preference(
+                    plot,
+                    child_theme,
+                    plot.intrinsic_body_minimum(child_theme)?,
+                )?;
+                let mut width = body.0;
+                if let Some(content) = content.filter(|content| {
+                    content.source.legend_policy == crate::CanvasLegendPolicy::PerPlot
+                }) {
+                    if let Some(guide) = crate::layout::interior::sizing::guided_preference(
+                        plot,
+                        content.interiors[index]
+                            .as_ref()
+                            .expect("prepared Canvas guide scope"),
+                        child_theme,
+                    )? {
+                        let size = guide.preference(child_theme)?;
+                        width = if guide.horizontal() {
+                            width.max(size.0)
+                        } else {
+                            width + size.0 + child_theme.legend.outside_gap
+                        };
+                    }
+                }
+                for (source, appearance) in
+                    [plot.title_text(), plot.subtitle_text(), plot.caption_text()]
+                        .into_iter()
+                        .zip([
+                            &child_theme.typography.title,
+                            &child_theme.typography.subtitle,
+                            &child_theme.typography.caption,
+                        ])
+                {
+                    if let Some(source) = source {
+                        width = width.max(
+                            crate::layout::interior::sizing::text_width(
+                                child_theme,
+                                source,
+                                appearance,
+                            )? + text_insets,
+                        );
+                    }
+                }
+                width
+            } else {
+                title.1 + text_insets
+            };
+            Some((hard, hard.0.max(preferred)))
         } else {
             text_panels[index].map(|text| (text.minimum, text.preferred_width))
         };
@@ -235,7 +300,11 @@ pub(super) fn allocate(
             .checked_add(index)
             .and_then(|index| u32::try_from(index).ok())
             .ok_or_else(|| Error::Render("Canvas row-header address overflowed".into()))?;
-        row_header_owners.push(ComponentAddress::root().child(AddressRole::CanvasHeader, ordinal)?);
+        row_header_owners.push(ComponentAddress::root().child(
+            AddressRole::CanvasHeader,
+            ordinal,
+            &theme.prepared_font_environment()?.generation_resources(),
+        )?);
     }
     for ((header, plan), owner) in row_headers
         .iter()
@@ -275,6 +344,7 @@ pub(super) fn allocate(
                 AddressRole::CanvasHeader,
                 u32::try_from(index)
                     .map_err(|_| Error::Render("Canvas header address overflowed".into()))?,
+                &theme.prepared_font_environment()?.generation_resources(),
             )?,
         );
     }
@@ -311,6 +381,7 @@ pub(super) fn allocate(
             AddressRole::CanvasRowTitle,
             u32::try_from(index)
                 .map_err(|_| Error::Render("Canvas row-title address overflowed".into()))?,
+            &theme.prepared_font_environment()?.generation_resources(),
         )?;
         row_title_owners.push(owner);
     }
@@ -347,7 +418,9 @@ pub(super) fn allocate(
         .sum::<i128>();
     let width = i128::from(x1) - i128::from(x0) - horizontal_gutters;
     let height = i128::from(y1) - i128::from(y0) - vertical_gutters;
-    if width <= 0 || height <= 0 {
+    if (width <= 0 && !content.is_some_and(|value| value.natural_width))
+        || (height <= 0 && !content.is_some_and(|value| value.natural_height))
+    {
         return Ok(FitOutcome::Miss(scope.failure(
             FitKind::TrackOrResidual,
             "Canvas measured gutters leave no cell tracks",
@@ -368,7 +441,11 @@ pub(super) fn allocate(
     let columns = match allocate_grid_axis(
         &column_base,
         &widths,
-        checked(width)?,
+        if content.is_some_and(|value| value.natural_width) {
+            None
+        } else {
+            Some(checked(width)?)
+        },
         [0, 0],
         gap,
         Some(em),
@@ -390,6 +467,9 @@ pub(super) fn allocate(
             cursor += i128::from(gap);
         }
     }
+    let grid_width = pixels(checked(
+        cursor - i128::from(nearest_spatial_quanta(header_outer.x0)?),
+    )?);
     let mut column_plans = Vec::new();
     crate::layout::fit::reserve(
         theme,
@@ -467,9 +547,47 @@ pub(super) fn allocate(
         insets[1] = checked(i128::from(insets[1]) + i128::from(title_height))?;
     }
     let header_quanta = required(header_height)?;
-    let y1 = checked(i128::from(y1) - i128::from(header_quanta))?;
+    if let Some(content) = content {
+        for child in &mut heights {
+            if child.address.leaf_role() != AddressRole::CanvasCell {
+                continue;
+            }
+            resources.claim_visits(1).map_err(|error| {
+                Error::Render(format!("Canvas content owner lookup: {error:?}"))
+            })?;
+            let index = usize::try_from(child.address.leaf_slot_index())
+                .map_err(|_| Error::Render("Canvas content slot index overflowed".into()))?;
+            let width = pixels(columns[index % columns.len()]);
+            let height = if let Some(plot) = &plots[index] {
+                super::sizing::cell_height(
+                    plot,
+                    themes.plot(index).expect("prepared Plot theme"),
+                    width,
+                    content.interiors[index]
+                        .as_ref()
+                        .expect("prepared Canvas interior"),
+                    content.source.legend_policy == crate::CanvasLegendPolicy::PerPlot,
+                    content.round,
+                    child.address,
+                    [
+                        column_insets[index % columns.len()][0],
+                        column_insets[index % columns.len()][1],
+                        row_insets[index / columns.len()][0],
+                        row_insets[index / columns.len()][1],
+                    ],
+                    content.measurements,
+                )?
+            } else if let Some(text) = &content.source.text_panels[index] {
+                super::text_panel::natural_height(text, width, theme)?
+            } else {
+                0.0
+            };
+            child.preferred = required(height)?.max(child.hard);
+        }
+    }
+    let mut y1 = checked(i128::from(y1) - i128::from(header_quanta))?;
     let height = height - i128::from(header_quanta) - title_gutters;
-    if height <= 0 {
+    if height <= 0 && !content.is_some_and(|value| value.natural_height) {
         return Ok(FitOutcome::Miss(scope.failure(
             FitKind::TrackOrResidual,
             "Canvas measured headers and row titles leave no row tracks",
@@ -478,7 +596,11 @@ pub(super) fn allocate(
     let rows = match allocate_grid_axis(
         &row_base,
         &heights,
-        checked(height)?,
+        if content.is_some_and(|value| value.natural_height) {
+            None
+        } else {
+            Some(checked(height)?)
+        },
         [0, 0],
         gap,
         Some(em),
@@ -489,6 +611,21 @@ pub(super) fn allocate(
         FitOutcome::Measured(value) => value.sizes,
         FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
     };
+    let grid_height = pixels(checked(
+        rows.iter().map(|&value| i128::from(value)).sum::<i128>()
+            + i128::from(gap)
+                * i128::try_from(rows.len().saturating_sub(1))
+                    .map_err(|_| Error::Render("Canvas row gap overflowed".into()))?
+            + vertical_gutters
+            + title_gutters
+            + i128::from(header_quanta),
+    )?);
+    if content.is_some_and(|value| value.natural_height) {
+        y1 = checked(
+            i128::from(nearest_spatial_quanta(header_outer.y0 + grid_height)?)
+                - i128::from(header_quanta),
+        )?;
+    }
     let mut y_positions = Vec::new();
     crate::layout::fit::reserve(theme, &mut y_positions, rows.len(), "Canvas y positions")?;
     let mut cursor = i128::from(y1);
@@ -501,6 +638,15 @@ pub(super) fn allocate(
         }
     }
     let mut cells = Vec::new();
+    let mut content_insets = Vec::new();
+    if content.is_some() {
+        crate::layout::fit::reserve(
+            theme,
+            &mut content_insets,
+            count,
+            "Canvas content dependency insets",
+        )?;
+    }
     crate::layout::fit::reserve(theme, &mut cells, count, "Canvas assigned cells")?;
     resources
         .claim_visits(
@@ -509,13 +655,21 @@ pub(super) fn allocate(
         )
         .map_err(|error| Error::Render(format!("Canvas cell allocation admission: {error:?}")))?;
     for (row, &top) in y_positions.iter().enumerate() {
-        for (&left, &width) in x_positions.iter().zip(&columns) {
+        for (column, (&left, &width)) in x_positions.iter().zip(&columns).enumerate() {
             cells.push(PanelBox::new(
                 pixels(left),
                 pixels(checked(i128::from(left) + i128::from(width))?),
                 pixels(checked(i128::from(top) - i128::from(rows[row]))?),
                 pixels(top),
             ));
+            if content.is_some() {
+                content_insets.push([
+                    column_insets[column][0],
+                    column_insets[column][1],
+                    row_insets[row][0],
+                    row_insets[row][1],
+                ]);
+            }
         }
     }
     let mut headers = Vec::new();
@@ -583,6 +737,8 @@ pub(super) fn allocate(
         cells,
         headers,
         row_titles: measured_row_titles,
+        size: (grid_width, grid_height),
+        content_insets,
     }))
 }
 
@@ -610,6 +766,7 @@ mod tests {
             &[],
             &themes,
             &FitScope::root(),
+            None,
         )
         .unwrap() else {
             panic!("declared trailing Canvas cells must fit");
@@ -644,6 +801,7 @@ mod tests {
             &[],
             &themes,
             &FitScope::root(),
+            None,
         )
         .unwrap() else {
             panic!("both assigned TextPanel cells must fit");
@@ -686,6 +844,7 @@ mod tests {
             &[],
             &themes,
             &FitScope::root(),
+            None,
         )
         .unwrap() else {
             panic!("spanning header and trailing empty cell must fit");
@@ -718,6 +877,7 @@ mod tests {
             &[],
             &themes,
             &FitScope::root(),
+            None,
         )
         .unwrap() else {
             panic!("the measured row header must fit its two declared rows");
@@ -758,6 +918,7 @@ mod tests {
             )],
             &themes,
             &FitScope::root(),
+            None,
         )
         .unwrap() else {
             panic!("the wrapped row title must fit its assigned track");

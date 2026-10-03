@@ -138,9 +138,455 @@ struct UnfacetedPlotPlan {
     legend: Option<(String, crate::decorations::legend::LegendDrawPlan)>,
 }
 
+#[cfg(test)]
+mod natural_sizing_tests {
+    use super::*;
+
+    #[test]
+    fn private_facet_gap_participates_in_containing_guide_recovery() {
+        let source = Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0, 0.0, 1.0]),
+            crate::NumericValues::new("y", [0.0, 1.0, 1.0, 0.0]),
+        )
+        .hue(crate::CategoryValues::new("series", ["extraordinarycategory"; 4]).unwrap())
+        .facet(crate::FacetSpec::column(
+            crate::CategoryValues::new("facet", ["left", "left", "right", "right"]).unwrap(),
+        ))
+        .x_label("")
+        .y_label("")
+        .labels(
+            crate::Labels::raw()
+                .alias("facet", "f")
+                .alias("left", "l")
+                .alias("right", "r"),
+        )
+        .erase();
+        for gap in [12.0, 280.0] {
+            let mut theme = crate::Theme::Publication.resolve();
+            theme.composition.facet_gap = gap;
+            crate::orchestrator::measurements::start();
+            let result =
+                PlotPlan::new_with_theme_factory(&source, source.kind(), (Some(550), None), || {
+                    Box::new(theme)
+                });
+            let work = crate::orchestrator::measurements::finish();
+            let plan = result.unwrap_or_else(|error| panic!("gap {gap}: {error}"));
+            assert_eq!(plan.dimensions().0, 550);
+            let edge = if gap < 100.0 {
+                crate::LegendPosition::OutsideRight
+            } else {
+                crate::LegendPosition::OutsideTop
+            };
+            assert!(
+                work.guides.iter().any(|trial| trial.edge == edge
+                    && trial.outcome == crate::orchestrator::measurements::GuideOutcome::Accepted),
+                "gap {gap}: {:?}",
+                work.guides
+            );
+        }
+    }
+
+    #[test]
+    fn private_width_and_automatic_roots_use_content_and_keep_public_defaults_exact() {
+        let source = Plot::scatter(crate::NumericValues::new("x", [0.0, 1.0, 2.0]),
+            crate::NumericValues::new("y", [0.0, 1.0, 2.0])).caption(
+            "A complete explanatory caption with legal word boundaries that must reflow at the assigned width and contribute its complete measured height.").erase();
+        let exact = PlotPlan::new(&source, source.kind()).unwrap();
+        assert_eq!(exact.root.dimensions(), (640, 480));
+        let width = PlotPlan::new_with_sizing(&source, source.kind(), Some(300), None).unwrap();
+        assert_eq!(width.root.dimensions().0, 300);
+        assert!(width.root.dimensions().1 > 0);
+        let automatic = PlotPlan::new_with_sizing(&source, source.kind(), None, None).unwrap();
+        assert!(automatic.root.dimensions().0 > 0 && automatic.root.dimensions().1 > 0);
+        assert_ne!(automatic.root.dimensions(), (640, 480));
+        assert!(width
+            .root
+            .plan()
+            .retained_text()
+            .iter()
+            .any(|(_, text)| text.source == source.caption_text().unwrap()));
+        let short_source = source.clone().caption("Short caption.");
+        let short =
+            PlotPlan::new_with_sizing(&short_source, short_source.kind(), Some(300), None).unwrap();
+        assert!(width.dimensions().1 > short.dimensions().1);
+        assert!(
+            width
+                .root
+                .plan()
+                .retained_text()
+                .iter()
+                .find(|(_, text)| text.source == source.caption_text().unwrap())
+                .unwrap()
+                .1
+                .lines
+                .len()
+                > 1
+        );
+    }
+
+    #[test]
+    fn content_guide_trials_recover_right_to_top_without_changing_selected_width() {
+        let plot = Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0]),
+            crate::NumericValues::new("y", [1.0, 2.0]),
+        )
+        .hue(
+            crate::CategoryValues::new(
+                "series",
+                ["extraordinarycategory", "extraordinarycategory"],
+            )
+            .unwrap(),
+        )
+        .erase();
+        crate::orchestrator::measurements::start();
+        let plan = PlotPlan::new_with_sizing(&plot, plot.kind(), Some(300), None).unwrap();
+        let observed = crate::orchestrator::measurements::finish();
+        assert_eq!(plan.dimensions().0, 300);
+        assert!(observed
+            .guides
+            .iter()
+            .any(|trial| trial.edge == crate::LegendPosition::OutsideRight
+                && trial.outcome == crate::orchestrator::measurements::GuideOutcome::Rejected));
+        assert!(observed
+            .guides
+            .iter()
+            .any(|trial| trial.edge == crate::LegendPosition::OutsideTop
+                && trial.outcome == crate::orchestrator::measurements::GuideOutcome::Accepted));
+    }
+
+    #[test]
+    fn natural_prose_metrics_use_the_sealed_role_specific_font_pair() {
+        let plot = Plot::scatter(
+            crate::NumericValues::new("x", [1.0, 2.0]),
+            crate::NumericValues::new("y", [3.0, 4.0]),
+        )
+        .title("A complete title with independently bold typography and legal boundaries")
+        .erase();
+        let mut theme = crate::Theme::Publication.resolve();
+        theme.typography.title.weight = crate::TextWeight::Bold;
+        let plan =
+            PlotPlan::new_with_theme_factory(&plot, plot.kind(), (None, None), || Box::new(theme))
+                .unwrap();
+        assert!(plan
+            .root
+            .prepared()
+            .text_census
+            .requirements
+            .iter()
+            .any(
+                |entry| entry.text_role == crate::layout::PreparedTextRole::PreferenceMetric
+                    && entry.weight == crate::TextWeight::Bold
+                    && entry.source == "0"
+            ));
+    }
+
+    #[test]
+    fn content_root_capture_is_immutable_and_png_refusal_remains_terminal_local() {
+        for width in [None, Some(300)] {
+            let plot = Plot::scatter(
+                crate::NumericValues::new("x", [0.0, 1.0, 2.0]),
+                crate::NumericValues::new("y", [0.0, 1.0, 2.0]),
+            )
+            .caption("A complete explanatory caption that is retained at the chosen width.")
+            .erase();
+            crate::scene::PNG_TARGET_VALIDATION_CALLS.with(|calls| calls.set(0));
+            let plan = PlotPlan::new_with_sizing(&plot, plot.kind(), width, None).unwrap();
+            assert_eq!(
+                crate::scene::PNG_TARGET_VALIDATION_CALLS.with(std::cell::Cell::get),
+                0
+            );
+            let dimensions = plan.dimensions();
+            drop(plot);
+            let frozen = || {
+                [
+                    crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
+                    crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
+                    crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get),
+                    crate::orchestrator::SELECTED_INTERIOR_MEASUREMENTS.with(std::cell::Cell::get),
+                ]
+            };
+            let before = frozen();
+            let mut svg = plan.take_svg_backend().unwrap();
+            plan.render(&mut svg).unwrap();
+            let scene =
+                crate::scene::RenderedScene::new(dimensions.0, dimensions.1, svg.into_output())
+                    .unwrap();
+            let preserved = scene.svg_bytes().to_vec();
+            let outlined = scene.svg_with_text_as_paths().unwrap();
+            assert!(!std::str::from_utf8(&outlined).unwrap().contains("<text"));
+            assert!(scene
+                .png_bytes(&crate::PngOptions {
+                    sizing: crate::PngSizing::Dpi(120_000_000.0),
+                    ..crate::PngOptions::default()
+                })
+                .is_err());
+            assert_eq!(scene.svg_bytes(), preserved);
+            assert_eq!(scene.svg_with_text_as_paths().unwrap(), outlined);
+            assert_eq!(frozen(), before);
+        }
+    }
+
+    #[test]
+    fn faceted_content_roots_keep_owned_sparse_wrap_and_complete_multiline_caption() {
+        let plot = Plot::scatter(crate::NumericValues::new("x", [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]),
+            crate::NumericValues::new("y", [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]))
+            .facet(crate::FacetSpec::wrap(crate::CategoryValues::new("group", ["a", "a", "b", "b", "c", "c"]).unwrap(), 2).unwrap())
+            .caption("First complete explanatory paragraph with legal breaks.\nSecond complete explanatory paragraph.")
+            .erase();
+        for width in [None, Some(800)] {
+            let plan = PlotPlan::new_with_sizing(&plot, plot.kind(), width, None).unwrap();
+            if let Some(width) = width {
+                assert_eq!(plan.dimensions().0, width);
+            }
+            assert!(plan.dimensions().1 > 0);
+            assert!(plan
+                .root
+                .plan()
+                .retained_text()
+                .iter()
+                .any(|(_, text)| text.source == plot.caption_text().unwrap()));
+            let strips = plan
+                .root
+                .plan()
+                .retained_text()
+                .iter()
+                .filter(|(_, text)| text.source.contains(" = "))
+                .count();
+            assert_eq!(strips, 3);
+        }
+    }
+
+    #[test]
+    fn natural_outside_preferences_respect_explicit_horizontal_and_inside_placement() {
+        let source = Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0]),
+            crate::NumericValues::new("y", [1.0, 2.0]),
+        )
+        .hue(crate::CategoryValues::new("series", ["one", "two"]).unwrap());
+        let mut widths = Vec::new();
+        for policy in [
+            crate::LegendPolicy::Hidden,
+            crate::LegendPolicy::Visible(crate::LegendPosition::OutsideTop),
+            crate::LegendPolicy::Visible(crate::LegendPosition::InsideTopRight),
+            crate::LegendPolicy::Visible(crate::LegendPosition::Auto),
+        ] {
+            let source = source.clone().legend(policy).erase();
+            widths.push(
+                PlotPlan::new_with_sizing(&source, source.kind(), None, None)
+                    .unwrap()
+                    .dimensions()
+                    .0,
+            );
+        }
+        assert_eq!(widths[0], widths[1]);
+        assert_eq!(widths[0], widths[2]);
+        assert!(widths[3] > widths[0]);
+    }
+
+    #[test]
+    fn matrix_content_roots_compose_the_native_hue_guide_and_variable_square() {
+        let source = Plot::matrix(vec![
+            crate::NumericValues::new("first_value", [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]),
+            crate::NumericValues::new("second_value", [2.0, 1.0, 4.0, 3.0, 6.0, 5.0]),
+        ])
+        .hue(
+            crate::CategoryValues::new("series", ["one", "one", "one", "two", "two", "two"])
+                .unwrap(),
+        )
+        .caption("A complete explanatory caption for the native variable matrix.")
+        .erase();
+        for width in [None, Some(800)] {
+            let plan = PlotPlan::new_with_sizing(&source, source.kind(), width, None).unwrap();
+            if let Some(width) = width {
+                assert_eq!(plan.dimensions().0, width);
+            }
+            let mut svg = plan.take_svg_backend().unwrap();
+            plan.render(&mut svg).unwrap();
+            let dimensions = plan.dimensions();
+            let scene =
+                crate::scene::RenderedScene::new(dimensions.0, dimensions.1, svg.into_output())
+                    .unwrap();
+            assert!(std::str::from_utf8(scene.svg_bytes())
+                .unwrap()
+                .contains("First value"));
+        }
+    }
+
+    #[test]
+    fn free_waterfall_facets_measure_shelves_at_each_consumed_numeric_domain() {
+        let source = Plot::waterfall(
+            crate::CategoryValues::new(
+                "term",
+                ["first", "second", "third", "first", "second", "third"],
+            )
+            .unwrap(),
+            crate::NumericValues::new("delta", [1.0, 2.0, 3.0, 100.0, 200.0, 300.0]),
+            10.0,
+        )
+        .facet(
+            crate::FacetSpec::column(
+                crate::CategoryValues::new(
+                    "panel",
+                    ["narrow", "narrow", "narrow", "wide", "wide", "wide"],
+                )
+                .unwrap(),
+            )
+            .scales(crate::FacetScales::Free),
+        )
+        .caption("Complete explanatory caption for two independently scaled shelves.")
+        .erase();
+        for width in [None, Some(800)] {
+            let plan = PlotPlan::new_with_sizing(&source, source.kind(), width, None).unwrap();
+            if let Some(width) = width {
+                assert_eq!(plan.dimensions().0, width);
+            }
+            assert!(plan
+                .root
+                .plan()
+                .retained_text()
+                .iter()
+                .any(|(_, text)| text.source == source.caption_text().unwrap()));
+        }
+    }
+
+    #[test]
+    fn owning_continuous_facets_compose_each_scoped_guide_at_the_chosen_width() {
+        let source = Plot::beeswarm(
+            crate::CategoryValues::new("group", ["a", "a", "b", "b", "a", "a", "b", "b"]).unwrap(),
+            crate::NumericValues::new("x", [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]),
+            crate::NumericValues::new("color", [0.0, 1.0, 0.0, 1.0, 100.0, 200.0, 100.0, 200.0]),
+        )
+        .facet(
+            crate::FacetSpec::column(
+                crate::CategoryValues::new(
+                    "panel",
+                    [
+                        "first", "first", "first", "first", "second", "second", "second", "second",
+                    ],
+                )
+                .unwrap(),
+            )
+            .scales(crate::FacetScales::Free),
+        )
+        .caption("A complete explanatory caption for independently scoped continuous guides.")
+        .erase();
+        for width in [None, Some(1600)] {
+            let plan = PlotPlan::new_with_sizing(&source, source.kind(), width, None).unwrap();
+            if let Some(width) = width {
+                assert_eq!(plan.dimensions().0, width);
+            }
+            let titles = plan
+                .root
+                .plan()
+                .retained_text()
+                .iter()
+                .filter(|(_, text)| text.source == "Color")
+                .count();
+            assert_eq!(titles, 2);
+        }
+    }
+
+    #[test]
+    fn nullable_heatmap_facets_keep_independent_guide_domains_and_missing_blocks() {
+        let source = Plot::heatmap(crate::CategoryValues::new("x", ["a", "b", "a", "b", "a", "b", "a", "b"]).unwrap(),
+            crate::CategoryValues::new("y", ["first", "first", "second", "second", "first", "first", "second", "second"]).unwrap(),
+            crate::NumericValues::nullable("color response with independently measured legal word boundaries", [Some(1.0), None, Some(3.0), Some(4.0), Some(100.0), None, Some(250.0), Some(350.0)]))
+            .facet(crate::FacetSpec::column(crate::CategoryValues::new("panel", ["first", "first", "first", "first", "second", "second", "second", "second"]).unwrap()).scales(crate::FacetScales::Free))
+            .caption("First complete explanatory caption paragraph.\nSecond complete explanatory caption paragraph.").erase();
+        for width in [None, Some(1200)] {
+            let plan = PlotPlan::new_with_sizing(&source, source.kind(), width, None).unwrap();
+            if let Some(width) = width {
+                assert_eq!(plan.dimensions().0, width);
+            }
+            let retained = plan.root.plan().retained_text();
+            assert_eq!(
+                retained
+                    .iter()
+                    .filter(|(_, text)| text.source == "Missing")
+                    .count(),
+                2
+            );
+            for label in ["1", "4", "100", "350"] {
+                assert!(
+                    retained.iter().any(|(_, text)| text.source == label),
+                    "missing scoped endpoint {label}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn owning_facet_discrete_guide_preference_is_composed_once_at_its_explicit_edge() {
+        let source = Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0, 2.0, 3.0]),
+            crate::NumericValues::new("y", [1.0, 2.0, 3.0, 4.0]),
+        )
+        .hue(crate::CategoryValues::new("series", ["one", "two", "one", "two"]).unwrap())
+        .facet(crate::FacetSpec::column(
+            crate::CategoryValues::new("panel", ["first", "first", "second", "second"]).unwrap(),
+        ));
+        let mut widths = Vec::new();
+        for policy in [
+            crate::LegendPolicy::Hidden,
+            crate::LegendPolicy::Visible(crate::LegendPosition::OutsideTop),
+            crate::LegendPolicy::Visible(crate::LegendPosition::OutsideRight),
+        ] {
+            let plot = source.clone().legend(policy).erase();
+            widths.push(
+                PlotPlan::new_with_sizing(&plot, plot.kind(), None, None)
+                    .unwrap()
+                    .dimensions()
+                    .0,
+            );
+        }
+        assert_eq!(widths[0], widths[1]);
+        assert!(widths[2] > widths[0]);
+        assert!(
+            widths[2] - widths[0] < 150,
+            "one shared short-entry guide, not one per facet: {widths:?}"
+        );
+    }
+}
+
 impl PlotPlan {
     pub(super) fn new(source: &Plot, kind: PlotKind) -> Result<Self, Error> {
-        Self::new_with_theme_factory(source, kind, || {
+        Self::new_with_theme_factory(
+            source,
+            kind,
+            (Some(source.width()), Some(source.height())),
+            || {
+                Box::new(
+                    source
+                        .theme_spec()
+                        .unwrap_or(crate::Theme::Publication)
+                        .resolve(),
+                )
+            },
+        )
+    }
+
+    #[cfg(test)]
+    pub(super) fn new_with_resolved_theme(
+        source: &Plot,
+        kind: PlotKind,
+        theme: ResolvedTheme,
+    ) -> Result<Self, Error> {
+        Self::new_with_theme_factory(
+            source,
+            kind,
+            (Some(source.width()), Some(source.height())),
+            || Box::new(theme),
+        )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_with_sizing(
+        source: &Plot,
+        kind: PlotKind,
+        width: Option<u32>,
+        height: Option<u32>,
+    ) -> Result<Self, Error> {
+        Self::new_with_theme_factory(source, kind, (width, height), || {
             Box::new(
                 source
                     .theme_spec()
@@ -150,15 +596,6 @@ impl PlotPlan {
         })
     }
 
-    #[cfg(test)]
-    pub(super) fn new_with_resolved_theme(
-        source: &Plot,
-        kind: PlotKind,
-        theme: ResolvedTheme,
-    ) -> Result<Self, Error> {
-        Self::new_with_theme_factory(source, kind, || Box::new(theme))
-    }
-
     #[expect(
         clippy::too_many_lines,
         reason = "ordered axis preparation, font preparation, measurement, and capture lifecycle"
@@ -166,14 +603,18 @@ impl PlotPlan {
     fn new_with_theme_factory(
         source: &Plot,
         kind: PlotKind,
+        sizing: (Option<u32>, Option<u32>),
         resolve_theme: impl FnOnce() -> Box<ResolvedTheme>,
     ) -> Result<Self, Error> {
+        if source.width() == 0 || source.height() == 0 {
+            source.validate_configuration(kind)?;
+        }
         #[cfg(test)]
         super::PLOT_PLAN_CALLS.with(|calls| calls.set(calls.get() + 1));
         let mut children = crate::decorations::plan::children::ChildPlans::facets(source);
         let root = crate::layout::plan_exact_root(
-            source.width(),
-            source.height(),
+            sizing.0,
+            sizing.1,
             |prepared_stage| {
                 let theme = resolve_theme();
                 source.validate_configuration(kind)?;
@@ -193,7 +634,7 @@ impl PlotPlan {
                         )
                     })
                     .transpose()?;
-                let requirements = crate::layout::foundational_plot_requirements(
+                let mut requirements = crate::layout::foundational_plot_requirements(
                     Some(&axes),
                     source,
                     kind,
@@ -203,6 +644,12 @@ impl PlotPlan {
                     true,
                     true,
                     Some(prepared_stage),
+                )?;
+                crate::layout::PreparedTextRequirement::append_preference_metrics(
+                    &mut requirements,
+                    &theme,
+                    &crate::layout::ComponentAddress::root(),
+                    prepared_stage,
                 )?;
                 let text_topology =
                     crate::layout::PreparedTextCensus::structural_address_count(&requirements)
@@ -247,12 +694,42 @@ impl PlotPlan {
                 })
             },
             |prepared, assigned, round| {
-                let (width, height) = assigned.dimensions();
+                let assigned = if assigned.requested_dimensions().1.is_some() {
+                    assigned
+                } else {
+                    let resources = prepared
+                        .theme
+                        .prepared_font_environment()?
+                        .generation_resources();
+                    let attached = prepared.axes.attach(
+                        source.admitted_clone(source.data().with_axis_resources(&resources))?,
+                    )?;
+                    if source.has_facets() {
+                        super::facets::natural_size(
+                            &attached,
+                            &prepared.theme,
+                            assigned,
+                            round,
+                            prepared.facet_guide.as_ref().expect("prepared facet guide"),
+                            &prepared.axes,
+                        )?
+                    } else {
+                        crate::layout::interior::sizing::plot_size(
+                            &attached,
+                            &prepared.axes,
+                            &prepared.theme,
+                            assigned,
+                            round,
+                        )?
+                    }
+                };
+                let (width, height) = assigned.dimensions()?;
                 prepared
                     .root_text
                     .check_width(
                         f64::from(width) - 32.0,
                         &crate::layout::fit::FitScope::root(),
+                        round.resources(),
                     )
                     .map_err(crate::layout::fit::PlanError::into_error)?;
                 let resources = prepared
@@ -275,6 +752,8 @@ impl PlotPlan {
                                 .facet_guide
                                 .as_ref()
                                 .expect("faceted root guide was prepared"),
+                            sizing.1.is_none(),
+                            Some(&prepared.axes),
                         )
                         .map_err(crate::layout::fit::PlanError::into_error)?,
                     ))
@@ -284,13 +763,22 @@ impl PlotPlan {
                         kind,
                         &prepared.theme,
                         round,
+                        sizing.1.is_none(),
                     )?))
                 };
-                children.finish_round(round);
+                children.finish_round(round)?;
+                let assigned = match &plan {
+                    PlotLayoutPlan::Unfaceted(plan) => {
+                        crate::layout::RootSize::new(plan.plot.width(), plan.plot.height())
+                    }
+                    PlotLayoutPlan::Faceted(plan) => {
+                        crate::layout::RootSize::new(plan.dimensions.0, plan.dimensions.1)
+                    }
+                };
                 Ok(crate::layout::MeasuredLayout::new(assigned, plan))
             },
             |prepared, assigned, layout, final_stage| {
-                let (width, height) = assigned.dimensions();
+                let (width, height) = assigned.dimensions()?;
                 let replay = capture_text_replay_plan(
                     width,
                     height,
@@ -362,25 +850,45 @@ impl UnfacetedPlotPlan {
         kind: PlotKind,
         theme: &ResolvedTheme,
         round: &mut crate::layout::kernel::FeedbackRound,
+        content_height: bool,
     ) -> Result<Self, Error> {
         source.intrinsic_body_minimum(theme)?;
-        let canvas_layout = source.measured_canvas_layout(theme)?;
-        round.observe_canvas(&canvas_layout)?;
+        let mut canvas_layout = source.measured_canvas_layout(theme)?;
         let cell = canvas_layout.panel_box;
-        let panel_plan = crate::layout::fit::measured(crate::decorations::plan::plan_panel(
-            source,
-            kind,
-            cell,
-            crate::decorations::plan::LegendRole::Panel,
-            theme,
-            round,
-            &crate::layout::ComponentAddress::root()
-                .child(crate::layout::AddressRole::PlotBody, 0)?,
-        ))
-        .map_err(crate::layout::fit::PlanError::into_error)?;
+        let mut context = source.configured_source_rows()?.map_or_else(
+            || PlotRenderContext::new(source.data(), cell, theme),
+            |rows| PlotRenderContext::with_source_rows(source.data(), rows, cell, theme),
+        );
+        context.content_height = content_height;
+        let admission = source.admit_interior_call(theme)?;
+        let panel_plan =
+            crate::layout::fit::measured(crate::decorations::plan::plan_panel_with_context(
+                source,
+                kind,
+                crate::decorations::plan::LegendRole::Panel,
+                context,
+                None,
+                round,
+                &crate::layout::ComponentAddress::root().child(
+                    crate::layout::AddressRole::PlotBody,
+                    0,
+                    &theme.prepared_font_environment()?.generation_resources(),
+                )?,
+                &admission,
+            ))
+            .map_err(crate::layout::fit::PlanError::into_error)?;
         let resources = theme.prepared_font_environment()?.generation_resources();
         let data = source.data().with_axis_resources(&resources);
-        let plot = panel_plan.plot_with_planned_limits(source, data)?;
+        let mut plot = panel_plan.plot_with_planned_limits(source, data)?;
+        if content_height {
+            let height = crate::layout::interior::sizing::integral(
+                panel_plan.frame_box.y1 + canvas_layout.insets.top,
+            )?;
+            plot = plot.with_canvas_size(source.width(), height);
+            canvas_layout = plot.measured_canvas_layout(theme)?;
+            canvas_layout.panel_box = panel_plan.frame_box;
+        }
+        round.observe_canvas(&canvas_layout)?;
         let legend = panel_plan
             .legend
             .as_ref()
@@ -391,16 +899,17 @@ impl UnfacetedPlotPlan {
                 draw.geometry(&mut geometry)?;
                 geometry.observe_feedback(round)?;
                 let scope = crate::layout::fit::FitScope::root()
-                    .child(crate::layout::AddressRole::PlotBody, 0)?
+                    .child(crate::layout::AddressRole::PlotBody, 0, &resources)?
                     .child(
                         crate::decorations::legend::address_role(source.legend_position_spec()),
                         0,
+                        &resources,
                     )?;
                 if geometry.bounds().iter().any(|ink| {
                     ink.left < 0.0
                         || ink.right > f64::from(source.width())
                         || ink.bottom < 0.0
-                        || ink.top > f64::from(source.height())
+                        || ink.top > f64::from(plot.height())
                 }) {
                     round.record_failure(scope.failure(
                         crate::layout::fit::FitKind::LegendOrGuide,
@@ -590,7 +1099,7 @@ mod root_title_tests {
                 },
                 |inputs, assigned, round| {
                     let plot = inputs.attach(source.clone())?;
-                    let plan = UnfacetedPlotPlan::new(&plot, plot.kind(), &theme, round)?;
+                    let plan = UnfacetedPlotPlan::new(&plot, plot.kind(), &theme, round, false)?;
                     Ok(crate::layout::MeasuredLayout::new(assigned, plan))
                 },
                 |_, _, plan, _| Ok(plan),
@@ -787,7 +1296,7 @@ mod retained_legend_tests {
                 let plot = inputs.attach(source.clone())?;
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned,
-                    UnfacetedPlotPlan::new(&plot, plot.kind(), &theme, round)?,
+                    UnfacetedPlotPlan::new(&plot, plot.kind(), &theme, round, false)?,
                 ))
             },
             |_, _, mut plan, stage| {

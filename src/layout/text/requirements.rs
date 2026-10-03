@@ -27,6 +27,7 @@ pub(crate) enum PreparedTextRole {
     Header,
     Annotation,
     Body,
+    PreferenceMetric,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,6 +45,69 @@ pub(crate) struct PreparedTextRequirement {
 }
 
 impl PreparedTextRequirement {
+    /// Role-local `ch` metrics use a sealed scalar selection just like painted
+    /// text. They are census inputs, never generated glyphs appended at layout.
+    pub(crate) fn append_preference_metrics(
+        requirements: &mut Vec<Self>,
+        theme: &crate::theme::ResolvedTheme,
+        owner: &ComponentAddress,
+        stage: &mut crate::layout::kernel::PreparedStage<'_>,
+    ) -> Result<(), Error> {
+        let header =
+            theme.legacy_text_appearance(theme.composition_title_font_size, TextWeight::Normal);
+        let body = theme.legacy_text_appearance(theme.label_font_size, TextWeight::Normal);
+        for (index, appearance) in [
+            &theme.typography.title,
+            &theme.typography.subtitle,
+            &theme.typography.caption,
+            &theme.typography.tick_label,
+            &theme.typography.legend_title,
+            &theme.typography.legend_label,
+            &header,
+            &body,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let mut used = false;
+            for requirement in requirements.iter() {
+                stage
+                    .generation_resources()
+                    .claim_visits(1)
+                    .map_err(|error| {
+                        Error::Render(format!("preference metric font-pair lookup: {error:?}"))
+                    })?;
+                if requirement.stack_source == appearance.stack
+                    && requirement.weight == appearance.weight
+                {
+                    used = true;
+                    break;
+                }
+            }
+            if !used {
+                continue;
+            }
+            let address = owner.child(
+                crate::layout::AddressRole::PreferenceMetric,
+                u32::try_from(index).map_err(|_| {
+                    Error::Render("preference metric census address overflowed".into())
+                })?,
+                &stage.generation_resources(),
+            )?;
+            Self::push_into(
+                requirements,
+                address,
+                PreparedTextRole::PreferenceMetric,
+                0,
+                "0",
+                &[],
+                appearance,
+                Some(stage),
+            )
+            .map_err(|error| Error::Render(format!("preference metric census: {error}")))?;
+        }
+        Ok(())
+    }
     #[expect(
         clippy::too_many_arguments,
         reason = "admission receives the complete borrowed text identity"
@@ -785,22 +849,9 @@ fn prepared_address_child(
     slot_index: u32,
     prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<ComponentAddress, Error> {
-    if let Some(stage) = prepared_stage {
-        base.prepared_child(role, slot_index, stage)
-    } else {
-        base.child(role, slot_index)
-    }
-}
-
-fn prepared_address_clone(
-    address: &ComponentAddress,
-    prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
-) -> Result<ComponentAddress, Error> {
-    if let Some(stage) = prepared_stage {
-        address.prepared_clone(stage)
-    } else {
-        Ok(address.clone())
-    }
+    let stage = prepared_stage
+        .ok_or_else(|| Error::Render(PreparedTextCensusError::MissingPreparedStage.to_string()))?;
+    base.child(role, slot_index, &stage.generation_resources())
 }
 
 #[expect(
@@ -856,7 +907,6 @@ impl PreparedTextRequirement {
     ) -> Result<(), Error> {
         use crate::layout::kernel::AddressRole;
 
-        #[cfg(not(test))]
         if prepared_stage.is_none() {
             return Err(Error::Render(
                 PreparedTextCensusError::MissingPreparedStage.to_string(),
@@ -905,7 +955,7 @@ impl PreparedTextRequirement {
                 prepared_stage.as_deref_mut(),
             )?;
             if !x_title.is_empty() {
-                let address = prepared_address_clone(&x_axis, prepared_stage.as_deref_mut())?;
+                let address = x_axis.clone();
                 push_owned(
                     requirements,
                     address,
@@ -918,7 +968,7 @@ impl PreparedTextRequirement {
                 )?;
             }
             if !y_title.is_empty() {
-                let address = prepared_address_clone(&y_axis, prepared_stage.as_deref_mut())?;
+                let address = y_axis.clone();
                 push_owned(
                     requirements,
                     address,
@@ -1309,7 +1359,7 @@ fn push_deferred_plot_requirements(
     if kind == PlotKind::Matrix {
         for variable in plot.matrix_variable_names() {
             for _ in 0..2 {
-                let address = prepared_address_clone(&body_address, prepared_stage.as_deref_mut())?;
+                let address = body_address.clone();
                 push_owned(
                     requirements,
                     address,
@@ -1396,7 +1446,7 @@ fn push_deferred_plot_requirements(
             for (index, label) in marks.guide_labels().enumerate() {
                 push_owned(
                     requirements,
-                    prepared_address_clone(&guide, prepared_stage.as_deref_mut())?,
+                    guide.clone(),
                     PreparedTextRole::LegendLabel,
                     index.try_into().map_err(|_| {
                         Error::Render("beeswarm guide census index overflowed".into())
@@ -1444,7 +1494,7 @@ fn push_deferred_plot_requirements(
                 for (index, label) in marks.guide_labels().enumerate() {
                     push_owned(
                         requirements,
-                        prepared_address_clone(&guide, prepared_stage.as_deref_mut())?,
+                        guide.clone(),
                         PreparedTextRole::LegendLabel,
                         index.try_into().map_err(|_| {
                             Error::Render("heatmap guide census index overflowed".into())
@@ -1471,7 +1521,7 @@ fn push_deferred_plot_requirements(
             if let (Some(guide), Some(label)) = (guide.as_ref(), marks.missing_guide_label()) {
                 push_owned(
                     requirements,
-                    prepared_address_clone(guide, prepared_stage.as_deref_mut())?,
+                    guide.clone(),
                     PreparedTextRole::LegendLabel,
                     marks.guide_labels().count().try_into().map_err(|_| {
                         Error::Render("heatmap guide census index overflowed".into())
@@ -1563,9 +1613,9 @@ fn push_deferred_body<'a>(
     source: impl Into<CensusSource<'a>>,
     generated: &[char],
     appearance: &TextAppearance,
-    mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
+    prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), Error> {
-    let address = prepared_address_clone(body_address, prepared_stage.as_deref_mut())?;
+    let address = body_address.clone();
     push_owned(
         requirements,
         address,
@@ -1804,7 +1854,7 @@ fn push_axis_ticks(
 ) -> Result<(), Error> {
     if let Some(ticks) = exact {
         for (index, tick) in ticks.iter().enumerate() {
-            let address = prepared_address_clone(axis, prepared_stage.as_deref_mut())?;
+            let address = axis.clone();
             push_owned(
                 requirements,
                 address,
@@ -1819,7 +1869,7 @@ fn push_axis_ticks(
         }
     } else if let Some(categories) = automatic_categories {
         for (index, category) in categories.into_iter().enumerate() {
-            let address = prepared_address_clone(axis, prepared_stage.as_deref_mut())?;
+            let address = axis.clone();
             push_owned(
                 requirements,
                 address,
@@ -1834,7 +1884,7 @@ fn push_axis_ticks(
             )?;
         }
     } else {
-        let address = prepared_address_clone(axis, prepared_stage.as_deref_mut())?;
+        let address = axis.clone();
         push_owned(
             requirements,
             address,
@@ -1983,6 +2033,51 @@ pub(crate) enum PreparedTextCensusError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn text_census_without_an_operation_stage_refuses_before_font_or_address_work() {
+        let plot = crate::Plot::scatter(
+            crate::NumericValues::new("x", [1.0]),
+            crate::NumericValues::new("y", [2.0]),
+        )
+        .erase();
+        let theme = crate::Theme::Publication.resolve();
+        let discoveries = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
+        let error = foundational_plot_requirements(
+            None,
+            &plot,
+            PlotKind::Scatter,
+            &theme,
+            &ComponentAddress::root(),
+            true,
+            true,
+            true,
+            None,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("root prepared stage"));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            discoveries
+        );
+    }
+
+    fn with_prepared_stage<T>(
+        prepare: impl FnOnce(&mut crate::layout::kernel::PreparedStage<'_>) -> Result<T, Error>,
+    ) -> Result<T, Error> {
+        let mut result = None;
+        crate::layout::plan_exact_root(
+            1,
+            1,
+            |stage| {
+                result = Some(prepare(stage)?);
+                Ok(())
+            },
+            |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+            |(), _, (), _| Ok(()),
+        )?;
+        Ok(result.expect("root preparation completed"))
+    }
     use crate::layout::kernel::AddressRole;
     use crate::render::backend::Rgba;
 
@@ -2233,7 +2328,8 @@ mod tests {
                     )
                     .map_err(|error| Error::Render(error.to_string()))?;
                 }
-                let other = address.child(AddressRole::RootCaption, 0)?;
+                let other =
+                    address.child(AddressRole::RootCaption, 0, &stage.generation_resources())?;
                 let capacity = requirements.capacity();
                 let error = PreparedTextRequirement::push_into(
                     &mut requirements,
@@ -2354,7 +2450,13 @@ mod tests {
     #[test]
     fn census_orders_records_and_assigns_structural_pairs_by_first_use() {
         let root = ComponentAddress::root();
-        let panel = root.child(AddressRole::DataPanel, 0).unwrap();
+        let panel = root
+            .child(
+                AddressRole::DataPanel,
+                0,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
+            .unwrap();
         let normal = appearance(" Test Sans , sans-serif ", TextWeight::Normal);
         let same_normal = appearance("Test Sans,sans-serif", TextWeight::Normal);
         let bold = appearance("Test Sans, sans-serif", TextWeight::Bold);
@@ -2468,17 +2570,19 @@ mod tests {
         .x_ticks(vec![crate::layout::AxisTick::new(1.0, "exact")])
         .erase();
         let theme = crate::Theme::Publication.resolve();
-        let requirements = foundational_plot_requirements(
-            None,
-            &plot,
-            PlotKind::Scatter,
-            &theme,
-            &ComponentAddress::root(),
-            true,
-            true,
-            true,
-            None,
-        )
+        let requirements = with_prepared_stage(|stage| {
+            foundational_plot_requirements(
+                None,
+                &plot,
+                PlotKind::Scatter,
+                &theme,
+                &ComponentAddress::root(),
+                true,
+                true,
+                true,
+                Some(stage),
+            )
+        })
         .unwrap();
         let generated = requirements
             .iter()
@@ -2521,17 +2625,19 @@ mod tests {
             theme.typography.contrast_dark.stack = "Dark contrast font".into();
             theme.typography.contrast_light.font_size = 19;
             theme.typography.contrast_dark.font_size = 9;
-            let requirements = foundational_plot_requirements(
-                Some(&inputs),
-                &plot,
-                PlotKind::Heatmap,
-                &theme,
-                &ComponentAddress::root(),
-                true,
-                true,
-                true,
-                None,
-            )
+            let requirements = with_prepared_stage(|stage| {
+                foundational_plot_requirements(
+                    Some(&inputs),
+                    &plot,
+                    PlotKind::Heatmap,
+                    &theme,
+                    &ComponentAddress::root(),
+                    true,
+                    true,
+                    true,
+                    Some(stage),
+                )
+            })
             .unwrap();
             let selected = requirements
                 .iter()
@@ -2573,17 +2679,19 @@ mod tests {
             (Rgba::rgb(255, 255, 255), "Dark missing row"),
         ] {
             theme.annotations.planning_backdrop = backdrop;
-            let requirements = foundational_plot_requirements(
-                Some(&inputs),
-                &plot,
-                PlotKind::Heatmap,
-                &theme,
-                &ComponentAddress::root(),
-                true,
-                true,
-                true,
-                None,
-            )
+            let requirements = with_prepared_stage(|stage| {
+                foundational_plot_requirements(
+                    Some(&inputs),
+                    &plot,
+                    PlotKind::Heatmap,
+                    &theme,
+                    &ComponentAddress::root(),
+                    true,
+                    true,
+                    true,
+                    Some(stage),
+                )
+            })
             .unwrap();
             let selected = requirements
                 .iter()
@@ -2624,17 +2732,19 @@ mod tests {
         theme.typography.contrast_light.font_size = 39;
         theme.typography.contrast_dark.font_size = 9;
         let selected_stack = |inputs: &crate::layout::interior::PreparedInteriorInputs| {
-            let requirements = foundational_plot_requirements(
-                Some(inputs),
-                &plot,
-                PlotKind::Heatmap,
-                &theme,
-                &ComponentAddress::root(),
-                true,
-                true,
-                true,
-                None,
-            )?;
+            let requirements = with_prepared_stage(|stage| {
+                foundational_plot_requirements(
+                    Some(inputs),
+                    &plot,
+                    PlotKind::Heatmap,
+                    &theme,
+                    &ComponentAddress::root(),
+                    true,
+                    true,
+                    true,
+                    Some(stage),
+                )
+            })?;
             Ok::<_, Error>(
                 requirements
                     .iter()
@@ -2688,17 +2798,19 @@ mod tests {
         theme.typography.estimate_detail.stack = "Estimate detail only".into();
         theme.typography.estimate_detail.font_size = 20;
         theme.typography.estimate_detail.paint = crate::render::backend::Rgba::rgb(5, 7, 9);
-        let requirements = foundational_plot_requirements(
-            Some(&inputs),
-            &plot,
-            PlotKind::PointInterval,
-            &theme,
-            &ComponentAddress::root(),
-            true,
-            true,
-            true,
-            None,
-        )
+        let requirements = with_prepared_stage(|stage| {
+            foundational_plot_requirements(
+                Some(&inputs),
+                &plot,
+                PlotKind::PointInterval,
+                &theme,
+                &ComponentAddress::root(),
+                true,
+                true,
+                true,
+                Some(stage),
+            )
+        })
         .unwrap();
         let unavailable = requirements
             .iter()

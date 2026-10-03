@@ -3,7 +3,9 @@
 
 use super::{InteriorRoute, OneCategoricalAxis, StandardCoordinate};
 use crate::layout::fit::{self, FitKind, PlanError};
-use crate::layout::{Axis, AxisSide, Layout, PanelBox, Projection, StandardPanelInputs};
+#[cfg(test)]
+use crate::layout::PanelBox;
+use crate::layout::{Axis, AxisSide, Layout, Projection, StandardPanelInputs};
 use crate::spec::{AxisDomain, PlotRenderContext, PlotRenderResult};
 use crate::{Error, Plot};
 
@@ -65,6 +67,10 @@ impl Intrinsics {
         )
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "both foundational axis sources and their visibility summaries are analyzed together"
+    )]
     fn analyze(
         axes: &crate::plots::shared_x::PreparedAxes,
         theme: &crate::theme::ResolvedTheme,
@@ -142,24 +148,35 @@ impl Intrinsics {
                     minimum_body.1 = minimum_body.1.max(span);
                 }
             } else if axes.specs[side].exact_ticks.is_none() {
-                // An automatic numeric axis always retains a terminal
-                // midpoint candidate. Even an otherwise empty mark panel
-                // needs enough physical span for that candidate's glyph.
+                // The terminal source is derived from this scientific domain,
+                // using the same indivisible numeric formatter as tick selection.
+                let label = crate::layout::panel::format_label(
+                    f64::midpoint(axes.ranges[side].0, axes.ranges[side].1),
+                    axes.logarithmic && side == 0,
+                    false,
+                    0,
+                    Some(theme.prepared_font_environment()?),
+                )?;
+                let plan = theme.measure_text(
+                    &label,
+                    &standard.tick_label,
+                    crate::layout::PhysicalTextAlignment::Center,
+                    "numeric terminal source intrinsic",
+                    false,
+                )?;
+                let parallel = terminal_parallel_minimum(
+                    &plan,
+                    if side == 0 {
+                        AxisSide::Bottom
+                    } else {
+                        AxisSide::Left
+                    },
+                )?;
                 if side == 0 {
-                    let (hard, _) = fit::intrinsic_widths(
-                        theme,
-                        "0.5",
-                        &standard.tick_label,
-                        "numeric midpoint tick minimum",
-                    )?;
-                    minimum_body.0 = minimum_body
-                        .0
-                        .max(hard + 2.0 * crate::layout::panel::LABEL_CLEARANCE);
+                    minimum_body.0 = minimum_body.0.max(parallel);
                 } else {
-                    minimum_body.1 = minimum_body.1.max(
-                        standard.tick_label.line_height()
-                            + 2.0 * crate::layout::panel::LABEL_CLEARANCE,
-                    );
+                    minimum_body.1 = minimum_body.1.max(parallel);
+                    without_y_categories = minimum_body.1;
                 }
             }
         }
@@ -169,6 +186,50 @@ impl Intrinsics {
             without_y_categories,
         })
     }
+}
+
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "text plans and their half extents retain canonical i64 CSS quanta"
+)]
+fn terminal_parallel_minimum(
+    plan: &crate::layout::ResolvedTextPlan,
+    side: AxisSide,
+) -> Result<f64, Error> {
+    use crate::render::backend::{PlannedTextPlacement, Point2D, TextAnchor};
+    let (length, half, anchor) = match side {
+        AxisSide::Bottom => (plan.width(), plan.width_quanta, TextAnchor::Middle),
+        AxisSide::Left => (plan.height(), plan.height_quanta, TextAnchor::End),
+    };
+    let half = crate::render::backend::nearest_even_text_half(half)
+        .ok_or_else(|| Error::Render("numeric intrinsic half extent overflow".into()))?
+        as f64
+        / 1024.0;
+    let (mut lower, mut upper) = match side {
+        AxisSide::Bottom => (-half, length - half),
+        AxisSide::Left => (half - length, half),
+    };
+    let placement = PlannedTextPlacement::middle(Point2D::new(0.0, 0.0), anchor, 0.0);
+    if let Some(ink) = crate::render::geometry::planned_text_ink_bounds(
+        plan,
+        placement.position,
+        placement.anchor,
+        placement.rotation,
+        placement.origin,
+        placement.reverse_lines,
+    ) {
+        let (start, end) = match side {
+            AxisSide::Bottom => (ink.left, ink.right),
+            AxisSide::Left => (ink.bottom, ink.top),
+        };
+        lower = lower.min(start);
+        upper = upper.max(end);
+    }
+    let parallel = match side {
+        AxisSide::Bottom => (upper - lower).max(plan.fit_width()),
+        AxisSide::Left => upper - lower,
+    };
+    crate::layout::kernel::required_length(parallel + 2.0 * crate::layout::panel::LABEL_CLEARANCE)
 }
 
 impl InteriorRoute {
@@ -412,76 +473,150 @@ pub(crate) fn canvas_layout(
     plot: &Plot,
     theme: &crate::theme::ResolvedTheme,
 ) -> Result<crate::layout::RootFramePlan, PlanError> {
-    use crate::decorations::title_block::plan::{RootAlignments, RootTitleBlockPlan};
-    use crate::layout::canvas::CanvasInsets;
+    use crate::decorations::title_block::plan::RootAlignments;
     let minimum = plot.intrinsic_body_minimum(theme)?;
     // Only root-owned padding and text are hard reservations. Axis gutters are
     // measured from selected sources at the assigned span by the root round;
     // endpoint estimates must not reject a body before tick selection.
-    let mut insets = CanvasInsets {
-        left: 16.0,
-        right: 16.0,
-        bottom: 8.0,
-        top: 12.0,
-    };
-    let (width, height) = (f64::from(plot.width()), f64::from(plot.height()));
-    let text = RootTitleBlockPlan::measure(
+    let mut root = crate::layout::RootFramePlan::measure(
+        (plot.width(), plot.height()),
         theme,
         [plot.title_text(), plot.subtitle_text(), plot.caption_text()],
-        PanelBox::new(16.0, width - 16.0, 8.0, height - 12.0),
         RootAlignments::resolve(
             theme,
             [plot.title_alignment, plot.subtitle_alignment],
             [None; 2],
         ),
-        minimum.1,
-        &fit::FitScope::root(),
+        minimum,
     )?;
-    insets.top += text.top_reserve;
-    insets.bottom += text.bottom_reserve;
-    let panel_box = PanelBox::new(
-        insets.left,
-        width - insets.right,
-        insets.bottom,
-        height - insets.top,
-    );
-    fit::measured(
-        crate::layout::kernel::FrameRequirements {
-            minimum_body: minimum,
-            natural_insets: [0.0; 4],
+    root.native_preference = match super::InteriorRoute::classify(plot.kind()) {
+        super::InteriorRoute::StandardCoordinate(_) => {
+            Some(super::preference::NativePanelPreference::Standard(
+                super::preference::mark_preference(plot, theme, minimum)?,
+            ))
         }
-        .assign_fit(panel_box, [0.0; 4], &fit::FitScope::root()),
-    )?;
-    Ok(crate::layout::RootFramePlan {
-        panel_box,
-        insets,
-        root_text: text,
-        native_preference: match super::InteriorRoute::classify(plot.kind()) {
-            super::InteriorRoute::StandardCoordinate(_) => {
-                Some(super::preference::NativePanelPreference::Standard(
-                    super::preference::mark_preference(plot, theme, minimum)?,
-                ))
-            }
-            super::InteriorRoute::OneCategoricalAxis(
-                super::OneCategoricalAxis::PointInterval
-                | super::OneCategoricalAxis::Coefficient
-                | super::OneCategoricalAxis::Forest
-                | super::OneCategoricalAxis::Dumbbell
-                | super::OneCategoricalAxis::Bar
-                | super::OneCategoricalAxis::HorizontalBar
-                | super::OneCategoricalAxis::StackedBar
-                | super::OneCategoricalAxis::StackedHorizontalBar
-                | super::OneCategoricalAxis::Boxplot
-                | super::OneCategoricalAxis::Violin
-                | super::OneCategoricalAxis::Raincloud
-                | super::OneCategoricalAxis::Interaction,
-            ) => Some(super::preference::NativePanelPreference::Categorical(
-                super::preference::categorical_preference(plot, theme, minimum)?,
-            )),
-            _ => None,
-        },
-    })
+        super::InteriorRoute::OneCategoricalAxis(
+            super::OneCategoricalAxis::PointInterval
+            | super::OneCategoricalAxis::Coefficient
+            | super::OneCategoricalAxis::Forest
+            | super::OneCategoricalAxis::Dumbbell
+            | super::OneCategoricalAxis::Bar
+            | super::OneCategoricalAxis::HorizontalBar
+            | super::OneCategoricalAxis::StackedBar
+            | super::OneCategoricalAxis::StackedHorizontalBar
+            | super::OneCategoricalAxis::Boxplot
+            | super::OneCategoricalAxis::Violin
+            | super::OneCategoricalAxis::Raincloud
+            | super::OneCategoricalAxis::Interaction,
+        ) => Some(super::preference::NativePanelPreference::Categorical(
+            super::preference::categorical_preference(plot, theme, minimum)?,
+        )),
+        _ => None,
+    };
+    Ok(root)
 }
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod intrinsic_tests {
+    use super::*;
+
+    #[test]
+    fn terminal_sources_fit_the_traced_parallel_minimum_including_tight_vertical_ink() {
+        for tight_lines in [false, true] {
+            let source = Plot::scatter(
+                crate::NumericValues::new("x", [-1.0, 1.0]),
+                crate::NumericValues::new("y", [-1.0, 1.0]),
+            )
+            .x_limits(-1.0, 1.0)
+            .y_limits(-1.0, 1.0)
+            .x_label("")
+            .y_label("")
+            .erase();
+            let resources = crate::font::canonical::OperationGenerationResources::new();
+            let chart = crate::plots::shared_x::prepare_plot(&source, &resources)
+                .unwrap()
+                .attach(source)
+                .unwrap();
+            let mut theme = crate::Theme::Publication.resolve();
+            if tight_lines {
+                theme.typography.tick_label.line_height_multiplier = 0.1;
+            }
+            let minimum = Intrinsics::prepared(&chart, &theme)
+                .unwrap()
+                .minimum(&chart);
+            let projection = Projection::new(
+                (-1.0, 1.0),
+                (-1.0, 1.0),
+                (0.25, 0.25 + minimum.0, 0.25, 0.25 + minimum.1),
+            );
+            for side in [AxisSide::Bottom, AxisSide::Left] {
+                let selected = crate::layout::numeric_tick_plan(
+                    (-1.0, 1.0),
+                    None,
+                    false,
+                    &projection,
+                    side,
+                    &theme,
+                    false,
+                    &fit::ROOT_SCOPE,
+                )
+                .unwrap();
+                assert_eq!(selected.ticks.len(), 1);
+                assert_eq!(selected.ticks[0].label, "0");
+            }
+            assert_eq!(chart.user_x_limits(), Some((-1.0, 1.0)));
+            assert_eq!(chart.user_y_limits(), Some((-1.0, 1.0)));
+        }
+    }
+
+    #[test]
+    fn numeric_intrinsic_uses_the_actual_indivisible_terminal_domain_source() {
+        for range in [(-1.0, 1.0), (1e100, 3e100)] {
+            let source = Plot::scatter(
+                crate::NumericValues::new("x", [range.0, range.1]),
+                crate::NumericValues::new("y", [0.0, 1.0]),
+            )
+            .x_limits(range.0, range.1)
+            .x_label("")
+            .y_label("")
+            .erase();
+            let resources = crate::font::canonical::OperationGenerationResources::new();
+            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+            let chart = inputs.attach(source).unwrap();
+            let theme = crate::Theme::Publication.resolve();
+            let label = crate::layout::panel::format_label(
+                f64::midpoint(range.0, range.1),
+                false,
+                false,
+                0,
+                Some(theme.prepared_font_environment().unwrap()),
+            )
+            .unwrap();
+            let measured = theme
+                .measure_text(
+                    &label,
+                    &theme.typography.tick_label,
+                    crate::layout::PhysicalTextAlignment::Center,
+                    "independent numeric terminal source",
+                    false,
+                )
+                .unwrap();
+            let minimum = Intrinsics::prepared(&chart, &theme)
+                .unwrap()
+                .minimum(&chart);
+            assert_eq!(
+                minimum.0.to_bits(),
+                crate::layout::kernel::required_length(
+                    measured.width().max(measured.fit_width())
+                        + 2.0 * crate::layout::panel::LABEL_CLEARANCE,
+                )
+                .unwrap()
+                .to_bits()
+            );
+            assert_eq!(chart.prepared_axis_inputs().unwrap().ranges[0], range);
+        }
+    }
+}

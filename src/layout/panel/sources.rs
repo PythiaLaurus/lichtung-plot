@@ -593,6 +593,7 @@ impl NumericTickPlan {
                             AxisSide::Left => crate::layout::AddressRole::AxisLeft,
                         },
                         0,
+                        &theme.prepared_font_environment()?.generation_resources(),
                     )?
                     .failure(
                         crate::layout::fit::FitKind::Tick,
@@ -604,7 +605,7 @@ impl NumericTickPlan {
     }
 }
 
-pub(super) fn format_label(
+pub(crate) fn format_label(
     value: f64,
     log: bool,
     integral: bool,

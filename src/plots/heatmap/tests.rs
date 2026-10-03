@@ -1,6 +1,30 @@
 use super::*;
 use crate::{CategoryOrder, CategoryValues, NumericValues, ValueSort};
 
+fn missing_key_style(guide: &crate::decorations::legend::LegendDrawPlan) -> &FillStyle {
+    guide
+        .calls
+        .iter()
+        .find_map(|call| match call {
+            crate::decorations::legend::LegendCall::Fill(_, style) => Some(style),
+            _ => None,
+        })
+        .unwrap()
+}
+
+fn gradient_stops(guide: &crate::decorations::legend::LegendDrawPlan) -> &[GradientStop] {
+    guide
+        .calls
+        .iter()
+        .find_map(|call| match call {
+            crate::decorations::legend::LegendCall::Gradient(_, _, _, stops) => {
+                Some(stops.as_slice())
+            }
+            _ => None,
+        })
+        .unwrap()
+}
+
 struct HeatmapValues {
     x: CategoryValues,
     y: CategoryValues,
@@ -42,6 +66,7 @@ fn custom_heatmap_outlines_and_cross_leave_selected_cells_and_missing_key_in_pla
     theme.marks.heatmap_missing_fill = crate::render::backend::Rgba::new(19, 23, 29, 144);
     theme.marks.heatmap_missing_key_outline.paint =
         crate::render::backend::Rgba::new(13, 15, 17, 90);
+    theme.marks.heatmap_missing_key_outline.width = 2.5;
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
         .unwrap();
@@ -72,15 +97,7 @@ fn custom_heatmap_outlines_and_cross_leave_selected_cells_and_missing_key_in_pla
                 .unwrap()
                 .fill
                 .color,
-            payload
-                .colorbar
-                .as_ref()
-                .unwrap()
-                .missing
-                .as_ref()
-                .unwrap()
-                .fill
-                .clone(),
+            missing_key_style(payload.colorbar.as_ref().unwrap()).clone(),
         )
     };
     let (old_cells, old_cell, old_cross, old_missing, old_key) = extract(&original);
@@ -95,6 +112,7 @@ fn custom_heatmap_outlines_and_cross_leave_selected_cells_and_missing_key_in_pla
     assert_eq!(new_key.color, new_missing);
     assert_ne!(new_key.color, old_key.color);
     assert_eq!(new_key.stroke.alpha(), 90);
+    assert_eq!(new_key.stroke_width.to_bits(), 2.5_f32.to_bits());
     let prepared = &chart.prepared_heatmap.as_ref().unwrap().panels[0].1;
     let missing = prepared
         .guide_semantics(&theme, chart.data().with_axis_resources(&resources))
@@ -102,7 +120,11 @@ fn custom_heatmap_outlines_and_cross_leave_selected_cells_and_missing_key_in_pla
         .missing
         .unwrap();
     assert_eq!(missing.fill, new_missing);
-    assert_eq!(missing.outline, new_key.stroke);
+    assert_eq!(missing.outline.paint, new_key.stroke);
+    assert_eq!(
+        missing.outline.width.to_bits(),
+        new_key.stroke_width.to_bits()
+    );
 }
 
 #[test]
@@ -144,10 +166,10 @@ fn missing_row_and_key_consume_one_plot_owned_fill_independent_of_the_gradient()
         .iter()
         .find(|cell| cell.cross.is_some())
         .unwrap();
-    let key = payload.colorbar.as_ref().unwrap().missing.as_ref().unwrap();
+    let key = missing_key_style(payload.colorbar.as_ref().unwrap());
     assert_eq!(row.fill.color, theme.marks.heatmap_missing_fill);
     assert_eq!(missing.fill.color, row.fill.color);
-    assert_eq!(key.fill.color, row.fill.color);
+    assert_eq!(key.color, row.fill.color);
     assert_ne!(
         payload
             .cells
@@ -713,33 +735,25 @@ fn census_stops_on_first_admission_refusal_without_visiting_later_values() {
 }
 
 #[test]
-fn colorbar_display_preserves_signed_zero_thresholds_and_trimming() {
-    for value in [
-        -0.0,
-        0.0,
-        0.00001,
-        0.0001,
-        1.23,
-        -999_999.999_999_9,
-        1_000_000.0,
-        f64::MAX,
+fn guide_numbers_use_the_common_modern_grammar_and_normalize_signed_zero() {
+    let source = chart(&valid_data()).erase();
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    for (value, expected) in [
+        (-0.0, "0"),
+        (0.0, "0"),
+        (0.00001, "1.00e-5"),
+        (0.0001, "1.00e-4"),
+        (1.23, "1.2"),
+        (-999_999.999_999_9, "-1000k"),
+        (1_000_000.0, "1M"),
+        (f64::MAX, "1.80e308"),
     ] {
-        let normalized = if value.abs().to_bits() == 0 {
-            0.0
-        } else {
-            value
-        };
-        let expected = if normalized.abs() >= 1_000_000.0
-            || (normalized.abs().to_bits() != 0 && normalized.abs() < 0.0001)
-        {
-            format!("{normalized:.3e}")
-        } else {
-            format!("{normalized:.6}")
-                .trim_end_matches('0')
-                .trim_end_matches('.')
-                .to_string()
-        };
-        assert_eq!(ColorbarValue(value).to_string(), expected);
+        let labels = crate::decorations::legend::descriptor::numeric_labels(
+            &[value],
+            source.data().with_axis_resources(&resources),
+        )
+        .unwrap();
+        assert_eq!(labels, [expected]);
     }
 }
 
@@ -1198,7 +1212,7 @@ fn private_plot_gradient_freezes_custom_sequential_and_diverging_marks_guides_be
             expected.map(crate::render::backend::Rgba::from)
         );
         assert_eq!(
-            payload.colorbar.as_ref().unwrap().stops[1].color,
+            gradient_stops(payload.colorbar.as_ref().unwrap())[1].color,
             expected[1]
         );
     }

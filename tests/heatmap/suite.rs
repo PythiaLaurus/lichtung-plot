@@ -577,6 +577,128 @@ fn heatmap_diverging_colorbar_places_neutral_stop_at_normalized_center() {
 }
 
 #[test]
+fn asymmetric_diverging_guide_preserves_numeric_center_clearance_and_raster_colors() {
+    let data = HeatmapData::new(
+        CategoryValues::new("column", ["low", "center", "half", "high"]).unwrap(),
+        CategoryValues::new("row", ["row"; 4]).unwrap(),
+        NumericValues::new("value", [-1.0, 0.0, 9.0, 19.0]),
+    );
+    let directory = std::env::temp_dir().join(format!(
+        "lichtung-asymmetric-guide-{}-{}",
+        std::process::id(),
+        TEST_DIRECTORY_COUNTER.fetch_add(1, Ordering::Relaxed),
+    ));
+    std::fs::create_dir_all(&directory).unwrap();
+    let svg_path = directory.join("plot.svg");
+    let png_path = directory.join("plot.png");
+    chart(&data)
+        .size(560, 600)
+        .scale(HeatmapScale::Diverging { center: 0.0 })
+        .color_limits(-1.0, 19.0)
+        .svg_preserve_text(&svg_path)
+        .unwrap()
+        .png_preview(&png_path)
+        .unwrap();
+    let svg = std::fs::read_to_string(svg_path).unwrap();
+    let png = std::fs::read(png_path).unwrap();
+    let gradient = svg
+        .lines()
+        .find(|line| line.starts_with("<linearGradient id=\"linear-gradient-0\""))
+        .unwrap();
+    let (x, low, high) = (
+        attr(gradient, "x1"),
+        attr(gradient, "y1"),
+        attr(gradient, "y2"),
+    );
+    assert!((high - low).abs() >= 250.0);
+    let fraction = (text_attr(&svg, "-1", "y") - text_attr(&svg, "0", "y"))
+        / (text_attr(&svg, "-1", "y") - text_attr(&svg, "19", "y"));
+    assert!((fraction - 0.05).abs() < 1.0 / 1024.0);
+    assert!(svg.contains("<stop offset=\"0.050000\" stop-color=\"#F7F7F7\"/>"));
+    assert_eq!(decoded_cell_pixel(&svg, &png, "#F7F7F7"), [247, 247, 247]);
+    let center = decoded_png_pixel(&png, x, low + (high - low) * 0.05);
+    assert!(center
+        .into_iter()
+        .all(|channel| channel.abs_diff(247) <= 10));
+    let half = decoded_png_pixel(&png, x, f64::midpoint(low, high));
+    assert!(half.into_iter().any(|channel| channel.abs_diff(247) > 20));
+    std::fs::remove_dir_all(directory).unwrap();
+
+    let close = HeatmapData::new(
+        CategoryValues::new("column", ["low", "center", "high"]).unwrap(),
+        CategoryValues::new("row", ["row"; 3]).unwrap(),
+        NumericValues::new("value", [-0.01, 0.0, 100.0]),
+    );
+    let failure = render(&close, |chart| {
+        chart
+            .scale(HeatmapScale::Diverging { center: 0.0 })
+            .color_limits(-0.01, 100.0)
+    })
+    .unwrap_err();
+    assert!(failure.contains("LegendOrGuide"), "{failure}");
+}
+
+#[test]
+fn local_and_shared_guides_publish_the_same_distinct_close_numeric_labels() {
+    let beeswarm = Plot::beeswarm(
+        CategoryValues::new("group", ["a", "a"]).unwrap(),
+        NumericValues::new("x", [0.0, 1.0]),
+        NumericValues::new("color", [0.1, 0.1001]),
+    );
+    let heatmap = Plot::heatmap(
+        CategoryValues::new("column", ["a", "b"]).unwrap(),
+        CategoryValues::new("row", ["r", "r"]).unwrap(),
+        NumericValues::new("color", [0.1, 0.100_000_1]),
+    );
+    for (plot, canvas) in [
+        (
+            beeswarm.clone().erase(),
+            Canvas::grid(1, 1).unwrap().panel(0, 0, beeswarm).unwrap(),
+        ),
+        (
+            heatmap.clone().erase(),
+            Canvas::grid(1, 1).unwrap().panel(0, 0, heatmap).unwrap(),
+        ),
+    ] {
+        let directory = std::env::temp_dir().join(format!(
+            "lichtung-unique-guide-{}-{}",
+            std::process::id(),
+            TEST_DIRECTORY_COUNTER.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let local = directory.join("local.svg");
+        let shared = directory.join("shared.svg");
+        plot.clone()
+            .size(700, 500)
+            .svg_preserve_text(&local)
+            .unwrap();
+        canvas
+            .size(700, 500)
+            .legend_policy(lichtung_plot::CanvasLegendPolicy::Shared)
+            .svg_preserve_text(&shared)
+            .unwrap();
+        let local = std::fs::read_to_string(local).unwrap();
+        let shared = std::fs::read_to_string(shared).unwrap();
+        let labels = |svg: &str| {
+            svg.lines()
+                .filter(|line| line.starts_with("<text "))
+                .filter_map(|line| {
+                    line.split_once('>')
+                        .map(|(_, tail)| tail.trim_end_matches("</text>"))
+                })
+                .filter(|text| text.contains("e-1"))
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        };
+        let local = labels(&local);
+        assert_eq!(local.len(), 2);
+        assert_ne!(local[0], local[1]);
+        assert_eq!(local, labels(&shared));
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+}
+
+#[test]
 fn heatmap_annotations_use_default_and_chained_formats_with_contrasting_text() {
     let data = HeatmapData::new(
         CategoryValues::new("column", ["light", "dark"]).unwrap(),

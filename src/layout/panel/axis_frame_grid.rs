@@ -261,6 +261,7 @@ impl Layout {
         semantics: [super::AxisSemanticInputs; 2],
         standard: impl FnOnce() -> Result<super::StandardPanelInputs, Error>,
     ) -> Result<PanelAxisPlan, PlanError> {
+        let resources = theme.prepared_font_environment()?.generation_resources();
         theme
             .prepared_font_environment()?
             .claim_unicode_bytes(
@@ -275,14 +276,14 @@ impl Layout {
             AxisSide::Bottom,
             theme,
             &standard,
-            &scope.child(crate::layout::AddressRole::AxisBottom, 0)?,
+            &scope.child(crate::layout::AddressRole::AxisBottom, 0, &resources)?,
         );
         let y_axis = self.y_axis.measure(
             &self.projection,
             AxisSide::Left,
             theme,
             &standard,
-            &scope.child(crate::layout::AddressRole::AxisLeft, 0)?,
+            &scope.child(crate::layout::AddressRole::AxisLeft, 0, &resources)?,
         );
         let (x_axis, y_axis) = match (x_axis, y_axis) {
             (Err(PlanError::Fatal(error)), _) | (_, Err(PlanError::Fatal(error))) => {

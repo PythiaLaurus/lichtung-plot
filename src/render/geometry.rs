@@ -2271,7 +2271,7 @@ mod tests {
                     calls += 1;
                     let address = crate::layout::ComponentAddress::root();
                     let domain = round
-                        .domain(&address, FeedbackKind::AutomaticDomainX)
+                        .domain(&address, FeedbackKind::AutomaticDomainX)?
                         .unwrap_or((0.0, 1.0));
                     let panel = PanelBox::new(0.0, 100.0, 0.0, 100.0);
                     let current =

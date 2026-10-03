@@ -523,7 +523,11 @@ impl BarPayload {
                 };
                 if categorical_overflow || (numeric_overflow && !automatic) {
                     return Err(scope
-                        .child(crate::layout::AddressRole::Annotation, index)?
+                        .child(
+                            crate::layout::AddressRole::Annotation,
+                            index,
+                            &theme.prepared_font_environment()?.generation_resources(),
+                        )?
                         .failure(
                             crate::layout::fit::FitKind::OverlayCollision,
                             "required Bar annotation ink exceeds its assigned plot panel",

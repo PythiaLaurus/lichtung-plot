@@ -17,10 +17,10 @@ pub(crate) enum PreparedGuideDescriptor {
     Continuous(ContinuousDescriptor),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct MissingKey {
     pub fill: Rgba,
-    pub outline: Rgba,
+    pub outline: crate::theme::FillOutlineAppearance,
     pub label: String,
 }
 
@@ -309,7 +309,7 @@ fn final_stops(
     crate::theme::ContinuousColors::resolve(domain, semantic, resources)?.guide_stops(samples, data)
 }
 
-fn same_value(left: f64, right: f64) -> bool {
+pub(crate) fn same_value(left: f64, right: f64) -> bool {
     left.total_cmp(&right).is_eq() || (left.abs().to_bits() == 0 && right.abs().to_bits() == 0)
 }
 
@@ -348,15 +348,30 @@ fn generated_labels(
         values[count] = descriptor.domain.1;
         count + 1
     };
+    numeric_labels(&values[..count], data)
+}
+
+/// One pre-font numeric grammar and precision search for every continuous guide.
+/// Equal scientific values (including signed zero) may repeat in a family's
+/// retained census; distinct scientific values must have distinct labels.
+pub(crate) fn numeric_labels(values: &[f64], data: PlotData<'_>) -> Result<Vec<String>, Error> {
+    data.claim_source_visits(values.len())?;
+    if !matches!(values.len(), 1..=3) || values.iter().any(|value| !value.is_finite()) {
+        return Err(Error::Data(
+            "continuous guide needs one to three finite numeric values".into(),
+        ));
+    }
     for precision in std::iter::once(0).chain(2..=17) {
         let mut labels: Vec<String> = Vec::new();
-        data.reserve_source(&mut labels, count)?;
+        data.reserve_source(&mut labels, values.len())?;
         let mut unique = true;
-        for value in values[..count].iter().copied() {
+        for (index, value) in values.iter().copied().enumerate() {
             data.claim_source_visits(1)?;
             let label = crate::layout::format_guide_label(value, precision, data)?;
-            for existing in &labels {
-                if same_text(existing, &label, data)? {
+            for (previous, existing) in labels.iter().enumerate() {
+                if !same_value(values[previous], values[index])
+                    && same_text(existing, &label, data)?
+                {
                     unique = false;
                     break;
                 }
@@ -368,7 +383,7 @@ fn generated_labels(
         }
     }
     Err(Error::Data(
-        "shared continuous guide labels are not unique at supported numeric precisions".into(),
+        "continuous guide labels are not unique at supported numeric precisions".into(),
     ))
 }
 
@@ -376,6 +391,35 @@ fn generated_labels(
 mod tests {
     use super::*;
     use crate::font::canonical::OperationGenerationResources;
+
+    #[test]
+    fn numeric_guide_precision_is_unique_in_every_order_and_normalizes_signed_zero() {
+        let source = crate::Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0]),
+            crate::NumericValues::new("y", [0.0, 1.0]),
+        )
+        .erase();
+        let resources = OperationGenerationResources::new();
+        let data = source.data().with_axis_resources(&resources);
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        for values in [
+            [0.1, 0.1001],
+            [0.1, 0.100_000_1],
+            [1.0, f64::from_bits(1.0_f64.to_bits() + 1)],
+        ] {
+            let labels = numeric_labels(&values, data).unwrap();
+            assert_ne!(labels[0], labels[1]);
+            assert_eq!(
+                numeric_labels(&[values[1], values[0]], data).unwrap(),
+                [labels[1].clone(), labels[0].clone()]
+            );
+        }
+        assert_eq!(numeric_labels(&[-0.0, 0.0], data).unwrap(), ["0", "0"]);
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
 
     fn contributor(domain: (f64, f64)) -> ContinuousContributor {
         ContinuousContributor {
@@ -418,7 +462,10 @@ mod tests {
         let mut missing = contributor((0.0, 1.0));
         missing.missing = Some(MissingKey {
             fill: (200, 200, 200).into(),
-            outline: (50, 50, 50).into(),
+            outline: crate::theme::FillOutlineAppearance {
+                paint: (50, 50, 50).into(),
+                width: 1.0,
+            },
             label: "Missing".into(),
         });
         assert!(matches!(
@@ -427,6 +474,12 @@ mod tests {
         ));
         let mut different_alpha = missing.clone();
         different_alpha.missing.as_mut().unwrap().fill = Rgba::new(200, 200, 200, 127);
+        let mut different_width = missing.clone();
+        different_width.missing.as_mut().unwrap().outline.width = 3.0;
+        assert!(matches!(
+            ContinuousContributor::merge([missing.clone(), different_width], data),
+            Err(Error::Data(message)) if message.contains("missing block")
+        ));
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         assert!(matches!(
             ContinuousContributor::merge([missing, different_alpha], data),

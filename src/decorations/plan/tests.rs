@@ -57,6 +57,7 @@ fn p2_planned_limit_metadata_is_admitted_for_every_copy_without_processing() {
     .caption(caption)
     .erase();
     let plan = PanelPlan {
+        frame_box: PanelBox::new(0.0, 800.0, 0.0, 600.0),
         panel_box: PanelBox::new(0.0, 800.0, 0.0, 600.0),
         result: PlotRenderResult::new(
             crate::layout::Layout::envelope(crate::layout::PanelBox::new(80.0, 770.0, 60.0, 570.0)),
@@ -92,10 +93,14 @@ fn marginal_auto_recovers_from_scoped_terminal_tick_miss() {
         crate::NumericValues::new("x", [-1e-100, -2e-100, -3e-100]),
         crate::NumericValues::new("y", [0.0, 1.0, 2.0]),
     )
-    .hue(crate::CategoryValues::new("group", ["Group"; 3]).unwrap())
+    .hue(crate::CategoryValues::new("Experimental group", ["Group"; 3]).unwrap())
     .x_label("")
     .y_label("")
     .x_limits(-4e-100, -0.5e-100)
+    // The corrected automatic intrinsic guarantees its terminal source fits.
+    // Declare that same scientific midpoint/label as an indivisible caller
+    // source to retain a real body tick-label FIT, rather than underallocating it.
+    .x_ticks(vec![crate::AxisTick::new(-2.25e-100, "-2.25e-100")])
     .size(640, 480)
     .legend(LegendPolicy::Visible(LegendPosition::Auto))
     .erase();
@@ -107,8 +112,10 @@ fn marginal_auto_recovers_from_scoped_terminal_tick_miss() {
         .generation_resources();
     let prepared = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
     let plot = prepared.attach(plot).unwrap();
-    // Native linked tracks include the full measured gutters rather than legacy root insets.
-    let cell = PanelBox::new(80.0, 530.0, 60.0, 450.0);
+    // The real guide title makes preferred/compact entry allocations identical.
+    // At this width the guide fits, but its linked central x-axis cannot fit
+    // the complete caller source after the measured gutters consume its tracks.
+    let cell = PanelBox::new(80.0, 595.0, 60.0, 450.0);
     measurements::start();
     let auto = plan_panel(&plot, plot.kind(), cell, LegendRole::Panel, &theme);
     let observed = measurements::finish();
@@ -118,6 +125,7 @@ fn marginal_auto_recovers_from_scoped_terminal_tick_miss() {
             .guides
             .iter()
             .any(|trial| trial.edge == LegendPosition::OutsideRight
+                && !trial.compact
                 && trial.phase == GuidePhase::Body
                 && trial.outcome == GuideOutcome::Rejected),
         "{:?}",
@@ -134,16 +142,8 @@ fn marginal_auto_recovers_from_scoped_terminal_tick_miss() {
     );
     assert_eq!(
         observed.counters[Counter::TickFitMiss as usize],
-        u64::try_from(
-            observed
-                .guides
-                .iter()
-                .filter(|trial| trial.edge == LegendPosition::OutsideRight
-                    && trial.phase == GuidePhase::Body
-                    && trial.outcome == GuideOutcome::Rejected)
-                .count()
-        )
-        .unwrap()
+        0,
+        "caller sources must not enter automatic terminal-source exhaustion"
     );
     assert!(observed
         .guides
@@ -180,14 +180,19 @@ fn marginal_auto_recovers_from_scoped_terminal_tick_miss() {
     assert!(result.is_err());
     let fixed_observed = measurements::finish();
     let failure = failure.expect("fixed Right must retain a typed miss");
-    assert_eq!(failure.reason.kind, FitKind::Tick, "{failure}");
+    assert_eq!(failure.reason.kind, FitKind::Text, "{failure}");
+    assert!(failure.message.contains("x-axis tick label text planning"));
     assert_eq!(
         failure.reason.address,
         ComponentAddress::root()
-            .child(AddressRole::AxisBottom, 0)
+            .child(
+                AddressRole::AxisBottom,
+                0,
+                &crate::font::canonical::OperationGenerationResources::new()
+            )
             .unwrap()
     );
-    assert_eq!(fixed_observed.counters[Counter::TickFitMiss as usize], 1);
+    assert_eq!(fixed_observed.counters[Counter::TickFitMiss as usize], 0);
     assert!(fixed_observed
         .guides
         .iter()
@@ -197,7 +202,8 @@ fn marginal_auto_recovers_from_scoped_terminal_tick_miss() {
                 GuideOutcome::Rejected | GuideOutcome::Provisional
             )));
     measurements::start();
-    plan_panel(
+    let exact = plot.explicit_x_ticks().unwrap().to_vec();
+    let top_plan = plan_panel(
         &plot.with_legend_position(LegendPosition::OutsideTop),
         PlotKind::Marginal,
         cell,
@@ -205,11 +211,14 @@ fn marginal_auto_recovers_from_scoped_terminal_tick_miss() {
         &theme,
     )
     .unwrap();
+    assert!(top_plan.result.layout.x_axis.explicit_ticks);
+    assert_eq!(top_plan.result.layout.x_axis.ticks, exact);
     let top = measurements::finish();
     assert_eq!(top.counters[Counter::TickFitMiss as usize], 0);
     assert!(
-        observed.counters[Counter::TickSource as usize]
-            > top.counters[Counter::TickSource as usize]
+        observed.counters[Counter::GuideBodyCheck as usize]
+            > top.counters[Counter::GuideBodyCheck as usize],
+        "the rejected Right body must be examined in addition to the same Top body"
     );
 }
 
@@ -220,9 +229,13 @@ fn automatic_guide_recovers_from_terminal_numeric_tick_miss() {
         crate::NumericValues::new("x", [-1e-100, -2e-100]),
         crate::NumericValues::new("y", [0.0, 1.0]),
     )
-    .hue(crate::CategoryValues::new("group", ["MMMMMMMMMMMMMMMMMM"; 2]).unwrap())
+    .hue(crate::CategoryValues::new("Experimental group", ["Group"; 2]).unwrap())
     .x_label("")
     .y_label("")
+    .x_limits(-2.5e-100, -0.5e-100)
+    // Keep the identical terminal midpoint and font workload as a complete,
+    // indivisible caller source; automatic intrinsics now admit it correctly.
+    .x_ticks(vec![crate::AxisTick::new(-1.5e-100, "-1.50e-100")])
     .size(640, 480)
     .legend(LegendPolicy::Visible(LegendPosition::Auto))
     .erase();
@@ -234,7 +247,10 @@ fn automatic_guide_recovers_from_terminal_numeric_tick_miss() {
         .generation_resources();
     let prepared = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
     let plot = prepared.attach(plot).unwrap();
-    let cell = PanelBox::new(80.0, 480.0, 60.0, 450.0);
+    // Preserve the scientific domain and actual guide text. Preferred Right
+    // reaches the complete caller source; its logical text allocation misses,
+    // whereas Top leaves the full horizontal span for the same labels.
+    let cell = PanelBox::new(80.0, 445.0, 60.0, 450.0);
     measurements::start();
     let before = resources.usage().unwrap();
     let auto = plan_panel(&plot, plot.kind(), cell, LegendRole::Panel, &theme);
@@ -245,6 +261,7 @@ fn automatic_guide_recovers_from_terminal_numeric_tick_miss() {
             .guides
             .iter()
             .any(|trial| trial.edge == LegendPosition::OutsideRight
+                && !trial.compact
                 && trial.phase == GuidePhase::Body
                 && trial.outcome == GuideOutcome::Rejected),
         "{:?}",
@@ -260,7 +277,11 @@ fn automatic_guide_recovers_from_terminal_numeric_tick_miss() {
         observed.guides
     );
     assert!(observed.counters[Counter::TickSource as usize] > 0);
-    assert_eq!(observed.counters[Counter::TickFitMiss as usize], 3);
+    assert_eq!(
+        observed.counters[Counter::TickFitMiss as usize],
+        0,
+        "caller sources must not enter automatic terminal-source exhaustion"
+    );
     assert!(resources.usage().unwrap().1 > before.1);
     assert!(observed
         .guides
@@ -280,14 +301,16 @@ fn automatic_guide_recovers_from_terminal_numeric_tick_miss() {
     .expect("fixed right must fail");
     let fixed = measurements::finish();
     assert!(error.to_string().contains("layout fit"), "{error}");
-    assert_eq!(fixed.counters[Counter::TickFitMiss as usize], 1);
+    assert!(error.to_string().contains("x-axis tick label"), "{error}");
+    assert_eq!(fixed.counters[Counter::TickFitMiss as usize], 0);
     assert!(fixed
         .guides
         .iter()
         .all(|trial| trial.edge == LegendPosition::OutsideRight
             && trial.outcome == GuideOutcome::Rejected));
     measurements::start();
-    plan_panel(
+    let exact = plot.explicit_x_ticks().unwrap().to_vec();
+    let top_plan = plan_panel(
         &plot.with_legend_position(LegendPosition::OutsideTop),
         PlotKind::Scatter,
         cell,
@@ -295,11 +318,14 @@ fn automatic_guide_recovers_from_terminal_numeric_tick_miss() {
         &theme,
     )
     .unwrap();
+    assert!(top_plan.result.layout.x_axis.explicit_ticks);
+    assert_eq!(top_plan.result.layout.x_axis.ticks, exact);
     let top = measurements::finish();
     assert_eq!(top.counters[Counter::TickFitMiss as usize], 0);
     assert!(
-        observed.counters[Counter::TickSource as usize]
-            > top.counters[Counter::TickSource as usize]
+        observed.counters[Counter::GuideBodyCheck as usize]
+            > top.counters[Counter::GuideBodyCheck as usize],
+        "the rejected Right body must be examined in addition to the same Top body"
     );
 }
 
@@ -444,7 +470,7 @@ fn specialized_producer_plans_survive_first_capture_without_shaping() {
                 }
                 crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
                 crate::orchestrator::measurements::start();
-                let (width, height) = assigned.dimensions();
+                let (width, height) = assigned.dimensions()?;
                 let replay = crate::orchestrator::capture_text_replay_plan(
                     width,
                     height,
@@ -552,25 +578,13 @@ fn automatic_outside_guide_respects_native_body_intrinsics_before_allocation() {
             |stage| {
                 let inputs =
                     crate::plots::shared_x::prepare_plot(&plot, &stage.generation_resources())?;
-                let requirements = crate::layout::foundational_plot_requirements(
-                    None,
+                prepare_guide_producer_fonts(
                     &plot,
-                    PlotKind::Scatter,
+                    &inputs,
                     &theme,
                     &ComponentAddress::root(),
-                    true,
-                    true,
-                    true,
-                    None,
+                    stage,
                 )?;
-                let mut presence = stage.reserve_scalar_presence_map()?;
-                let mut census = crate::layout::PreparedTextCensus::materialize(
-                    requirements,
-                    Some(stage),
-                    Some(&mut presence),
-                )
-                .map_err(|error| Error::Render(format!("D1 text census: {error}")))?;
-                theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
                 Ok(inputs)
             },
             |inputs, assigned, round| {
@@ -770,6 +784,7 @@ fn clearance_arithmetic_failures_are_fatal_through_every_owner() {
         &geometry,
         LegendClearance::HorizontalMaximum,
         0,
+        &theme,
     )
     .is_err());
     assert!(automatic_clearance(
@@ -780,6 +795,7 @@ fn clearance_arithmetic_failures_are_fatal_through_every_owner() {
         &geometry,
         LegendDefault::LowestOverlap,
         0,
+        &theme,
     )
     .is_err());
     assert!(expansion_ratio((0.0, f64::from_bits(1)), (0.0, f64::MAX))
@@ -922,33 +938,7 @@ fn automatic_outside_guides_avoid_annotations_at_all_inside_corners() {
                 let inputs =
                     crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
                 let source = inputs.attach(source.clone())?;
-                let requirements = crate::layout::foundational_plot_requirements(
-                    None,
-                    &source,
-                    PlotKind::Scatter,
-                    &theme,
-                    &address,
-                    true,
-                    true,
-                    true,
-                    None,
-                )?;
-                stage.claim_topology_slots(
-                    crate::layout::PreparedTextCensus::structural_address_count(&requirements)
-                        .map_err(|error| {
-                            Error::Render(format!("automatic annotation test topology: {error}"))
-                        })?,
-                )?;
-                let mut presence = stage.reserve_scalar_presence_map()?;
-                let mut census = crate::layout::PreparedTextCensus::materialize(
-                    requirements,
-                    Some(stage),
-                    Some(&mut presence),
-                )
-                .map_err(|error| {
-                    Error::Render(format!("automatic annotation test census: {error}"))
-                })?;
-                theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
+                prepare_guide_producer_fonts(&source, &inputs, &theme, &address, stage)?;
                 let initial = source.preflight_panel(
                     PlotKind::Scatter,
                     PanelBox::new(100.0, 500.0, 80.0, 400.0),
@@ -990,9 +980,14 @@ fn automatic_outside_guides_avoid_annotations_at_all_inside_corners() {
                 );
                 let annotations = crate::decorations::panel_text::plans(&source, &current, &theme)?;
                 for bounds in legend.inside_candidates(narrow.as_tuple()) {
-                    assert!(annotations
-                        .iter()
-                        .any(|plan| !plan.avoids_legend_in(narrow, bounds)));
+                    assert!(
+                        !crate::decorations::panel_text::conflict_resolved_by_assignment(
+                            &annotations,
+                            narrow,
+                            bounds,
+                            &theme,
+                        )?
+                    );
                 }
                 let mut containing = if resolves { cell } else { narrow };
                 containing.x1 += axis_width;
@@ -1028,8 +1023,17 @@ fn automatic_outside_guides_avoid_annotations_at_all_inside_corners() {
                 plan.result.layout.projection.panel_box()
             ));
             assert!(root.prepared().1.iter().all(|annotation| annotation
-                .avoids_legend_in(plan.result.layout.projection.panel_box(), legend.bounds)));
-            assert!(auto_candidate_avoiding_panel_text(&plan.result, &legend.legend, 0).is_none());
+                .avoids_legend_in(
+                    plan.result.layout.projection.panel_box(),
+                    legend.bounds,
+                    &theme
+                )
+                .unwrap()));
+            assert!(
+                auto_candidate_avoiding_panel_text(&plan.result, &legend.legend, 0, &theme)
+                    .unwrap()
+                    .is_none()
+            );
         }
     }
 }
@@ -1039,6 +1043,48 @@ use crate::{CategoryValues, NumericValues};
 
 fn theme() -> crate::theme::ResolvedTheme {
     crate::Theme::Publication.resolve()
+}
+
+fn prepare_guide_producer_fonts(
+    plot: &Plot,
+    inputs: &crate::layout::interior::PreparedInteriorInputs,
+    theme: &crate::theme::ResolvedTheme,
+    address: &ComponentAddress,
+    stage: &mut crate::layout::kernel::PreparedStage<'_>,
+) -> Result<(), Error> {
+    let mut requirements = crate::layout::foundational_plot_requirements(
+        Some(inputs),
+        plot,
+        plot.kind(),
+        theme,
+        address,
+        true,
+        true,
+        true,
+        Some(stage),
+    )?;
+    crate::layout::PreparedTextRequirement::append_preference_metrics(
+        &mut requirements,
+        theme,
+        address,
+        stage,
+    )?;
+    let topology = crate::layout::PreparedTextCensus::structural_address_count(&requirements)
+        .map_err(|error| Error::Render(format!("guide producer topology: {error}")))?;
+    let mut presence = stage.reserve_scalar_presence_map()?;
+    let mut census = crate::layout::PreparedTextCensus::materialize(
+        requirements,
+        Some(stage),
+        Some(&mut presence),
+    )
+    .map_err(|error| Error::Render(format!("guide producer census: {error}")))?;
+    assert_eq!(census.counts.structural_addresses, topology);
+    theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
+    assert!(theme
+        .prepared_font_environment()?
+        .generation_resources()
+        .same_operation(&stage.generation_resources()));
+    Ok(())
 }
 
 struct LineValues {
@@ -2272,6 +2318,7 @@ fn automatic_clearance_does_not_expand_categorical_domains() {
         geometry.bounds(),
         PlotKind::HorizontalBar.legend_default(false),
         0,
+        &theme(),
     )
     .unwrap()
     .is_none());

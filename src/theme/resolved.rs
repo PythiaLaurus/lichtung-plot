@@ -335,6 +335,7 @@ impl PartialEq for ResolvedTheme {
             && self.surfaces == other.surfaces
             && self.canvas_surface_override == other.canvas_surface_override
             && self.typography == other.typography
+            && self.legend == other.legend
             && self.axes == other.axes
             && self.marks == other.marks
             && self.annotations == other.annotations

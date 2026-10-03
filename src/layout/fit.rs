@@ -71,11 +71,16 @@ impl FitScope {
     pub(crate) fn root() -> Self {
         Self::new(&ComponentAddress::root(), 0)
     }
-    pub(crate) fn child(&self, role: AddressRole, index: usize) -> Result<Self, Error> {
+    pub(crate) fn child(
+        &self,
+        role: AddressRole,
+        index: usize,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<Self, Error> {
         let index = u32::try_from(index)
             .map_err(|_| Error::Render("fit address index overflowed".into()))?;
         Ok(Self {
-            address: self.address.child(role, index)?,
+            address: self.address.child(role, index, resources)?,
             ordinal: 0,
         })
     }
@@ -254,7 +259,13 @@ mod tests {
     fn sibling_collection_preserves_later_fatal_and_canonical_child_identity() {
         let theme = crate::Theme::Publication.resolve();
         theme.prepare_font_environment().unwrap();
-        let first = FitScope::root().child(AddressRole::CanvasCell, 0).unwrap();
+        let first = FitScope::root()
+            .child(
+                AddressRole::CanvasCell,
+                0,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
+            .unwrap();
         let result = collect::<()>(
             &theme,
             "fit siblings",
@@ -274,7 +285,11 @@ mod tests {
             "fit siblings",
             [
                 Err(FitScope::root()
-                    .child(AddressRole::CanvasCell, 1)
+                    .child(
+                        AddressRole::CanvasCell,
+                        1,
+                        &crate::font::canonical::OperationGenerationResources::new(),
+                    )
                     .unwrap()
                     .failure(FitKind::Text, "second child")
                     .into()),
@@ -291,11 +306,24 @@ mod tests {
     #[test]
     fn inline_child_calls_do_not_inherit_the_parent_guide_attempt() {
         let parent = FitScope::new(&ComponentAddress::root(), 7);
-        let child = parent.child(AddressRole::AxisLeft, 0).unwrap();
+        let child = parent
+            .child(
+                AddressRole::AxisLeft,
+                0,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
+            .unwrap();
         assert_eq!(child.ordinal, 0);
         assert_eq!(
             child.address,
-            parent.address.child(AddressRole::AxisLeft, 0).unwrap()
+            parent
+                .address
+                .child(
+                    AddressRole::AxisLeft,
+                    0,
+                    &crate::font::canonical::OperationGenerationResources::new()
+                )
+                .unwrap()
         );
     }
 
@@ -312,8 +340,20 @@ mod tests {
             FitKind::AssignedChild,
         ];
         assert!(kinds.windows(2).all(|pair| pair[0] < pair[1]));
-        let first = FitScope::root().child(AddressRole::CanvasCell, 0).unwrap();
-        let second = FitScope::root().child(AddressRole::CanvasCell, 1).unwrap();
+        let first = FitScope::root()
+            .child(
+                AddressRole::CanvasCell,
+                0,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
+            .unwrap();
+        let second = FitScope::root()
+            .child(
+                AddressRole::CanvasCell,
+                1,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
+            .unwrap();
         let later_attempt = FitScope::new(&first.address, 1);
         let expected = first.failure(FitKind::Text, "last diagnostic alphabetically");
         let mut least = None;
@@ -330,7 +370,13 @@ mod tests {
 
     #[test]
     fn typed_propagation_preserves_the_original_child_reason() {
-        let child = FitScope::root().child(AddressRole::FacetCell, 2).unwrap();
+        let child = FitScope::root()
+            .child(
+                AddressRole::FacetCell,
+                2,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
+            .unwrap();
         let scope = FitScope::new(&child.address, 3);
         let failure = scope.failure(FitKind::LegendOrGuide, "guide does not fit");
         let expected = failure.reason.clone();

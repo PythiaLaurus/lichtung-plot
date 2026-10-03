@@ -139,17 +139,18 @@ fn preflight_panels(
     round: &crate::layout::kernel::FeedbackRound,
     phase: MeasurementPhase,
 ) -> Result<Vec<std::sync::Arc<PlotRenderResult>>, crate::layout::fit::PlanError> {
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = base_plot.data().with_axis_resources(&resources);
     let mut preflight = Vec::new();
-    base_plot
-        .data()
-        .reserve_source(&mut preflight, panels.len())?;
+    data.reserve_source(&mut preflight, panels.len())?;
     for (index, facet) in panels.iter().enumerate() {
         let panel_plot = base_plot
-            .clone()
-            .with_render_scope(facet.render_scope(base_plot.data())?)
+            .admitted_clone(data)?
+            .with_render_scope(facet.render_scope(data)?)
             .with_significance_subset(facet.significance_selectors());
         let context = PlotRenderContext::new(
-            crate::data::PlotData::with_rows(&panel_plot, &facet.rows, &facet.source_rows),
+            crate::data::PlotData::with_rows(&panel_plot, &facet.rows, &facet.source_rows)
+                .with_axis_resources(&resources),
             facet.panel,
             theme,
         )
@@ -157,6 +158,7 @@ fn preflight_panels(
         let owner = crate::layout::ComponentAddress::root().child(
             crate::layout::AddressRole::FacetCell,
             u32::try_from(index).map_err(|_| Error::Render("facet address overflowed".into()))?,
+            &resources,
         )?;
         let result = children.measure(&panel_plot, context, &owner, phase, round, |call| {
             crate::layout::fit::outcome(panel_plot.measure_panel_in_call(kind, context, call))
@@ -171,6 +173,7 @@ fn order_entries(
     shared_plot: &Plot,
     data: crate::data::PlotData<'_>,
 ) -> Result<(), Error> {
+    data.source_resources()?;
     if !entries.is_empty() {
         let identity_order = if let Some(pairs) = shared_plot.global_collective_pairs() {
             let mut identities = Vec::new();
@@ -194,12 +197,26 @@ fn order_entries(
                 },
             )?
         };
-        entries.sort_by_key(|entry| {
-            identity_order
-                .iter()
-                .position(|identity| identity == entry.identity())
-                .unwrap_or(usize::MAX)
-        });
+        let mut positions = data.collect_source(entries.iter().map(|entry| {
+            for (index, identity) in identity_order.iter().enumerate() {
+                data.claim_source_visits(1)?;
+                if identity.same_identity(entry.identity(), data.source_resources()?)? {
+                    return Ok(index);
+                }
+            }
+            Ok(usize::MAX)
+        }))?;
+        data.claim_source_visits(entries.len())?;
+        // Stable in-place sorting moves admitted storage; key searches above
+        // are the actual variable semantic work, not comparator estimates.
+        for index in 1..entries.len() {
+            let mut current = index;
+            while current > 0 && positions[current - 1] > positions[current] {
+                positions.swap(current - 1, current);
+                entries.swap(current - 1, current);
+                current -= 1;
+            }
+        }
     }
     Ok(())
 }
@@ -208,44 +225,62 @@ pub(super) fn resolve_shared_facet_axis(
     results: &[std::sync::Arc<PlotRenderResult>],
     shared: bool,
     x_axis: bool,
+    data: crate::data::PlotData<'_>,
 ) -> Result<Option<(f64, f64)>, Error> {
     if !shared || results.is_empty() {
         return Ok(None);
     }
+    data.source_resources()?;
     let domain = if x_axis {
         results[0].x_domain
     } else {
         results[0].y_domain
     };
-    if results.iter().any(|result| {
+    for result in results {
+        data.claim_source_visits(1)?;
         let candidate = if x_axis {
             result.x_domain
         } else {
             result.y_domain
         };
-        candidate != domain
-    }) {
-        return Err(Error::Render(
-            "fixed facet scales cannot combine categorical and continuous domains".into(),
-        ));
+        if candidate != domain {
+            return Err(Error::Render(
+                "fixed facet scales cannot combine categorical and continuous domains".into(),
+            ));
+        }
     }
     if domain == AxisDomain::Categorical {
-        let expected = facet_axis_signature(&results[0], x_axis);
-        if results
-            .iter()
-            .skip(1)
-            .any(|result| facet_axis_signature(result, x_axis) != expected)
-        {
-            return Err(Error::Render(format!(
+        for result in &results[1..] {
+            data.claim_source_visits(1)?;
+            let mut expected = facet_axis_signature(&results[0], x_axis);
+            let mut actual = facet_axis_signature(result, x_axis);
+            loop {
+                match (expected.next(), actual.next()) {
+                    (None, None) => break,
+                    (Some(a), Some(b)) => {
+                        data.claim_source_visits(1)?;
+                        if crate::decorations::legend::legend_text_eq(
+                            a,
+                            b,
+                            data.source_resources()?,
+                        )? {
+                            continue;
+                        }
+                    }
+                    _ => {}
+                }
+                return Err(Error::Render(format!(
                 "fixed facet {} axis requires identical categorical levels and ordering in every panel; use a free scale or provide complete panel data",
                 if x_axis { "x" } else { "y" }
             )));
+            }
         }
         return Ok(None);
     }
     let mut minimum = f64::INFINITY;
     let mut maximum = f64::NEG_INFINITY;
     for result in results {
+        data.claim_source_visits(1)?;
         let range = if x_axis {
             result.layout.projection.x_range()
         } else {
@@ -263,7 +298,7 @@ pub(super) fn resolve_shared_facet_axis(
     }
 }
 
-fn facet_axis_signature(result: &PlotRenderResult, x_axis: bool) -> Vec<String> {
+fn facet_axis_signature(result: &PlotRenderResult, x_axis: bool) -> impl Iterator<Item = &str> {
     let ticks = if x_axis {
         &result.layout.x_axis.ticks
     } else {
@@ -274,13 +309,8 @@ fn facet_axis_signature(result: &PlotRenderResult, x_axis: bool) -> Vec<String> 
     } else {
         result.y_tick_keys.as_deref()
     };
-    ticks
-        .iter()
-        .enumerate()
-        .map(|(index, tick)| {
-            keys.and_then(|keys| keys.get(index))
-                .cloned()
-                .unwrap_or_else(|| tick.label.clone())
-        })
-        .collect()
+    ticks.iter().enumerate().map(move |(index, tick)| {
+        keys.and_then(|keys| keys.get(index))
+            .map_or(tick.label.as_str(), String::as_str)
+    })
 }

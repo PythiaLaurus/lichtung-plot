@@ -316,14 +316,8 @@ fn explicit_beeswarm_domains_are_shared_exactly_and_saturate_outside_values() {
     assert_eq!(point_colors[0], point_colors[1]);
     assert_eq!(point_colors[2], point_colors[3]);
     assert_ne!(point_colors[0], point_colors[2]);
-    assert!(first_backend
-        .texts
-        .iter()
-        .any(|(_, _, text)| text == "0.000"));
-    assert!(first_backend
-        .texts
-        .iter()
-        .any(|(_, _, text)| text == "1.000"));
+    assert!(first_backend.texts.iter().any(|(_, _, text)| text == "0"));
+    assert!(first_backend.texts.iter().any(|(_, _, text)| text == "1"));
 }
 
 #[test]
@@ -504,10 +498,28 @@ fn detail_and_guide_text_use_publication_roles() {
         text_style(&heatmap_backend, "Heatmap detail").font_size,
         theme.typography.legend_title.font_size
     );
-    for (backend, label) in [(&beeswarm_backend, "0.000"), (&heatmap_backend, "Missing")] {
+    for (backend, label) in [
+        (&beeswarm_backend, "0"),
+        (&beeswarm_backend, "1"),
+        (&heatmap_backend, "0"),
+        (&heatmap_backend, "1"),
+        (&heatmap_backend, "Missing"),
+    ] {
         assert_eq!(
             text_style(backend, label).font_size,
             theme.typography.legend_label.font_size
+        );
+        assert_eq!(
+            text_style(backend, label).weight,
+            theme.typography.legend_label.weight
+        );
+        assert_eq!(
+            text_style(backend, label).font_family,
+            theme.typography.legend_label.stack
+        );
+        assert_eq!(
+            text_style(backend, label).color,
+            theme.typography.legend_label.paint
         );
     }
     assert_eq!(

@@ -2,34 +2,34 @@
 source: tests/visual_regression/suite.rs
 expression: "specialized_svg_structure(&svg,\n&[\"Matrix structural title\", \"Group\", \"X\", \"Y\", \"0\", \"5\"])"
 ---
-<clipPath id="clip-0"><rect x="85" y="50" width="91.033203125" height="75.884765625"/></clipPath>
-<clipPath id="clip-1"><rect x="188.033203125" y="50" width="90.36328125" height="75.884765625"/></clipPath>
-<clipPath id="clip-2"><rect x="85" y="137.884765625" width="91.033203125" height="75.115234375"/></clipPath>
-<clipPath id="clip-3"><rect x="188.033203125" y="137.884765625" width="90.36328125" height="75.115234375"/></clipPath>
+<clipPath id="clip-0"><rect x="85" y="50" width="90.369140625" height="75.884765625"/></clipPath>
+<clipPath id="clip-1"><rect x="187.369140625" y="50" width="89.6962890625" height="75.884765625"/></clipPath>
+<clipPath id="clip-2"><rect x="85" y="137.884765625" width="90.369140625" height="75.115234375"/></clipPath>
+<clipPath id="clip-3"><rect x="187.369140625" y="137.884765625" width="89.6962890625" height="75.115234375"/></clipPath>
 <g clip-path="url(#clip-0)">
 MARKS circle=0 line=0 polygon=2 polyline=0 text=0
 END MARKS
-<text x="64.482421875" y="117.865234375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">0</text>
-<text x="64.818359375" y="66.33203125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">5</text>
-<text x="35.2265625" y="92.3583984375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr" transform="rotate(-90.0,41.037109375,87.9423828125)">X</text>
+<text x="65.484375" y="117.1845703125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">0</text>
+<text x="65.8203125" y="67.0126953125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">5</text>
+<text x="36.228515625" y="92.3583984375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr" transform="rotate(-90.0,42.0390625,87.9423828125)">X</text>
 <g clip-path="url(#clip-1)">
 MARKS circle=4 line=0 polygon=0 polyline=0 text=0
 END MARKS
 <g clip-path="url(#clip-2)">
 MARKS circle=4 line=0 polygon=0 polyline=0 text=0
 END MARKS
-<text x="94.5205078125" y="238.556640625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">0</text>
-<text x="156.4189453125" y="238.556640625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">5</text>
-<text x="124.7060546875" y="263.31640625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr">X</text>
-<text x="64.482421875" y="205.103515625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">0</text>
-<text x="64.818359375" y="154.09375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">5</text>
-<text x="35.8447265625" y="179.8583984375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr" transform="rotate(-90.0,41.037109375,175.4423828125)">Y</text>
+<text x="95.0947265625" y="237.5546875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">0</text>
+<text x="155.1806640625" y="237.5546875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">5</text>
+<text x="124.3740234375" y="262.314453125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr">X</text>
+<text x="65.484375" y="204.4228515625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">0</text>
+<text x="65.8203125" y="154.7744140625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">5</text>
+<text x="36.8466796875" y="179.8583984375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr" transform="rotate(-90.0,42.0390625,175.4423828125)">Y</text>
 <g clip-path="url(#clip-3)">
 MARKS circle=0 line=0 polygon=2 polyline=0 text=0
 END MARKS
-<text x="197.4462890625" y="238.556640625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">0</text>
-<text x="258.8896484375" y="238.556640625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">5</text>
-<text x="228.0224609375" y="263.31640625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr">Y</text>
+<text x="197.35546875" y="237.5546875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">0</text>
+<text x="256.9853515625" y="237.5546875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">5</text>
+<text x="227.0244140625" y="262.314453125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr">Y</text>
 <g id="legend">
-<text x="295.326171875" y="74" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" fill="#3C3C3C" text-anchor="start" direction="ltr">Group</text>
+<text x="293.9912109375" y="74.1171875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" fill="#3C3C3C" text-anchor="start" direction="ltr">Group</text>
 <text x="73.8037109375" y="27.1953125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">Matrix structural title</text>

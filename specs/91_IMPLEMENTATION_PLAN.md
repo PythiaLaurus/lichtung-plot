@@ -271,7 +271,7 @@ The approved theme and layout targets follow these rules:
 | T5b | Legends, facets, and Canvas composition chrome | COMPLETE |
 | T5c | Mark defaults, annotations, and local styles | COMPLETE |
 | T5d | Categorical and continuous data scales | COMPLETE |
-| T5e | Scientific layout closure | IN PROGRESS |
+| T5e | Scientific layout closure | COMPLETE |
 | T6 | Public immutable theme, scale, tick-interval, and sizing API | PENDING |
 | T7 | Contract evidence, documentation, and final audit | PENDING |
 
@@ -6442,7 +6442,12 @@ Acceptance:
 
 ## Phase T5e: Scientific Layout Closure
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Closure evidence: `docs/t5e-closure.md` records the broad verification attempt,
+localized successful follow-ups, all ten release workload groups, current
+producer census and final architectural audit. Public exact defaults remain
+unchanged; T6 remains PENDING.
 
 Dependencies: T5d.
 

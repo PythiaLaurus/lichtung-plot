@@ -232,7 +232,7 @@ pub(super) fn base_plot(
     }
     if kind == PlotKind::Trajectory {
         if let Some(x_column) = source.x_col() {
-            let column = source.data().column(x_column).map_err(|error| {
+            let column = data.column(x_column).map_err(|error| {
                 Error::Data(format!("trajectory: column {x_column:?}: {error}"))
             })?;
             if !column.is_numeric() {

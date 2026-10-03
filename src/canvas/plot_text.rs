@@ -40,14 +40,23 @@ impl PlotLocalTextPlan {
         };
         if span.width() <= 0.0 || span.height() <= 0.0 {
             return Ok(FitOutcome::Miss(
-                scope.child(AddressRole::RootBody, 0)?.failure(
-                    FitKind::TrackOrResidual,
-                    "Canvas Plot local text leaves no content span",
-                ),
+                scope
+                    .child(
+                        AddressRole::RootBody,
+                        0,
+                        &theme.prepared_font_environment()?.generation_resources(),
+                    )?
+                    .failure(
+                        FitKind::TrackOrResidual,
+                        "Canvas Plot local text leaves no content span",
+                    ),
             ));
         }
-        if let FitOutcome::Miss(reason) = fit::outcome(intrinsics.check_width(span.width(), scope))?
-        {
+        if let FitOutcome::Miss(reason) = fit::outcome(intrinsics.check_width(
+            span.width(),
+            scope,
+            &theme.prepared_font_environment()?.generation_resources(),
+        ))? {
             return Ok(FitOutcome::Miss(reason));
         }
         let minimum = plot.intrinsic_body_minimum(theme)?;
@@ -70,10 +79,16 @@ impl PlotLocalTextPlan {
         );
         if body.width() < minimum.0 || body.height() < minimum.1 {
             return Ok(FitOutcome::Miss(
-                scope.child(AddressRole::RootBody, 0)?.failure(
-                    FitKind::TrackOrResidual,
-                    "Canvas Plot local title block leaves insufficient body space",
-                ),
+                scope
+                    .child(
+                        AddressRole::RootBody,
+                        0,
+                        &theme.prepared_font_environment()?.generation_resources(),
+                    )?
+                    .failure(
+                        FitKind::TrackOrResidual,
+                        "Canvas Plot local title block leaves insufficient body space",
+                    ),
             ));
         }
         Ok(FitOutcome::Measured(Self { text, body }))

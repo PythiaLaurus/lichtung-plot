@@ -307,7 +307,11 @@ fn native_root_mark_and_annotation_growth_freeze_the_final_domain() {
             .caption("Independent annotation caption");
         let theme = crate::Theme::Publication.resolve();
         let owner = ComponentAddress::root()
-            .child(AddressRole::PlotBody, 0)
+            .child(
+                AddressRole::PlotBody,
+                0,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
             .unwrap();
         let mut ranges = Vec::new();
         let root = crate::layout::plan_exact_root(
@@ -319,7 +323,7 @@ fn native_root_mark_and_annotation_growth_freeze_the_final_domain() {
                 let baseline = retained(&plot)?.range();
                 let plot = plot.with_planned_y_limits(baseline);
                 let consumed = round
-                    .domain(&owner, FeedbackKind::AutomaticDomainY)
+                    .domain(&owner, FeedbackKind::AutomaticDomainY)?
                     .unwrap_or(baseline);
                 let canvas = plot.measured_canvas_layout(&theme)?;
                 round.observe_canvas(&canvas)?;

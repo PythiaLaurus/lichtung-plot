@@ -39,25 +39,39 @@ pub(crate) struct PreparedWaterfall {
     pub(crate) labels: Vec<String>,
     pub(crate) range: (f64, f64),
     // Keep the source delta: subtracting rounded cumulative endpoints can lose its sign.
-    spans: Vec<(f64, f64, f64)>,
+    spans: Vec<WaterfallSpan>,
     pub(crate) totals: [(f64, String); 2],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct WaterfallSpan {
+    source_row: usize,
+    start: f64,
+    end: f64,
+    delta: f64,
+}
+
+fn retained<'a>(
+    chart: &'a Plot,
+    theme: &crate::theme::ResolvedTheme,
+) -> Result<&'a PreparedWaterfall, Error> {
+    let inputs = chart
+        .prepared_waterfall
+        .as_ref()
+        .ok_or_else(|| Error::Render("Waterfall requires root-prepared spans".into()))?;
+    crate::layout::interior::preference::panel(
+        &inputs.panels,
+        chart.axis_scope(),
+        "Waterfall",
+        &theme.prepared_font_environment()?.generation_resources(),
+    )
 }
 
 fn mark_intrinsic_body_minimum(
     chart: &Plot,
     theme: &crate::theme::ResolvedTheme,
 ) -> Result<(f64, f64), Error> {
-    let prepared = chart
-        .prepared_waterfall
-        .as_ref()
-        .and_then(|inputs| {
-            inputs
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
-        })
-        .map(|(_, marks)| marks)
-        .ok_or_else(|| Error::Render("Waterfall intrinsic requires root-prepared spans".into()))?;
+    let prepared = retained(chart, theme)?;
     if prepared.labels.is_empty() || prepared.labels.len() != prepared.spans.len() {
         return Err(Error::Render(
             "Waterfall categories and scientific spans differ".into(),
@@ -73,8 +87,8 @@ fn mark_intrinsic_body_minimum(
     let negative_ink = crate::render::geometry::rectangular_fill_ink_bounds(theme, &negative)?;
     let mut pitch = 1.0_f64 / 1024.0;
     let mut numeric = 0.0_f64;
-    for (_, _, delta) in &prepared.spans {
-        let ink = if *delta >= 0.0 {
+    for span in &prepared.spans {
+        let ink = if span.delta >= 0.0 {
             positive_ink
         } else {
             negative_ink
@@ -127,17 +141,7 @@ pub(crate) fn intrinsic_body_minimum(
     let marks = mark_intrinsic_body_minimum(chart, theme)?;
     let axes =
         crate::layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
-    let prepared = chart
-        .prepared_waterfall
-        .as_ref()
-        .and_then(|inputs| {
-            inputs
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
-        })
-        .map(|(_, marks)| marks)
-        .ok_or_else(|| Error::Render("Waterfall total intrinsic requires preparation".into()))?;
+    let prepared = retained(chart, theme)?;
     let resources = theme.prepared_font_environment()?.generation_resources();
     let mut height = 0.0_f64;
     for (value, text) in &prepared.totals {
@@ -167,10 +171,55 @@ pub(crate) fn intrinsic_body_minimum(
     Ok((marks.0.max(axes.0), marks.1.max(axes.1) + shelf))
 }
 
+pub(crate) fn natural_body_height(
+    chart: &Plot,
+    theme: &crate::theme::ResolvedTheme,
+    width: f64,
+) -> Result<f64, Error> {
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let inputs = chart
+        .prepared_waterfall
+        .as_ref()
+        .ok_or_else(|| Error::Render("natural Waterfall rows missing".into()))?;
+    let marks = crate::layout::interior::preference::panel(
+        &inputs.panels,
+        chart.axis_scope(),
+        "natural Waterfall",
+        &resources,
+    )?;
+    let axes = chart
+        .prepared_axis_inputs()
+        .ok_or_else(|| Error::Render("natural Waterfall axes missing".into()))?;
+    let range = chart.x_axis_spec().limits.unwrap_or(axes.ranges[0]);
+    let panel = PanelBox::new(0.0, width, 0.0, 1.0);
+    let projection =
+        crate::layout::Projection::new(range, (0.0, marks.labels.len() as f64), panel.as_tuple());
+    let data = chart.data().with_axis_resources(&resources);
+    let plan = plan_annotations(
+        &projection,
+        panel,
+        marks.labels.len() as f64,
+        &marks.totals,
+        PlotRenderContext::new(data, panel, theme),
+        data,
+    )
+    .map_err(crate::layout::fit::PlanError::into_error)?;
+    let hard = mark_intrinsic_body_minimum(chart, theme)?.1.max(
+        crate::layout::interior::coordinate::Intrinsics::prepared(chart, theme)?
+            .minimum(chart)
+            .1,
+    );
+    Ok(hard
+        .max(2.0 * f64::from(theme.typography.tick_label.font_size) * marks.labels.len() as f64)
+        .max(3.0 * width / 4.0)
+        + plan.height)
+}
+
 pub(crate) fn prepare(
     chart: &Plot,
     data: crate::data::PlotData<'_>,
 ) -> Result<PreparedWaterfall, Error> {
+    data.source_resources()?;
     #[cfg(test)]
     count(0);
     let label_col = chart
@@ -192,25 +241,14 @@ pub(crate) fn prepare(
     if !base.is_finite() {
         return Err(Error::Data("waterfall: base value must be finite".into()));
     }
-    let mut running = base;
-    let mut spans = Vec::new();
-    data.reserve_source(&mut spans, deltas.len())?;
-    data.claim_source_visits(deltas.len())?;
-    let mut range = (base, base);
-    for (index, delta) in deltas.iter().enumerate() {
-        let next = running + delta;
-        if !next.is_finite() {
-            data.claim_source_bytes(128)?;
-            return Err(Error::Data(format!(
-                "waterfall: cumulative endpoint is non-finite at source row {}",
-                data.source_row(index)
-            )));
-        }
-        range.0 = range.0.min(next);
-        range.1 = range.1.max(next);
-        spans.push((running, next, *delta));
-        running = next;
-    }
+    data.claim_mark_rows()?;
+    // Category slots, connectors, and the two named total targets survive
+    // caller-window clipping. Bar records are the original row slots above.
+    data.claim_topology_slots(labels.len())?;
+    data.claim_topology_slots(labels.len().saturating_sub(1))?;
+    data.claim_topology_slots(2)?;
+    let (spans, range) = prepare_spans(base, &deltas, data)?;
+    let running = spans.last().map_or(base, |span| span.end);
     let (base_label, terminal_label) = chart
         .waterfall_labels_spec()
         .map_or(("base", "total"), |labels| {
@@ -236,23 +274,46 @@ pub(crate) fn prepare(
     })
 }
 
+fn prepare_spans(
+    base: f64,
+    deltas: &[f64],
+    data: crate::data::PlotData<'_>,
+) -> Result<(Vec<WaterfallSpan>, (f64, f64)), Error> {
+    data.source_resources()?;
+    let mut running = base;
+    let mut spans = Vec::new();
+    data.reserve_source(&mut spans, deltas.len())?;
+    data.claim_source_visits(deltas.len())?;
+    let mut range = (base, base);
+    for (index, delta) in deltas.iter().enumerate() {
+        let next = running + delta;
+        if !next.is_finite() {
+            data.claim_source_bytes(128)?;
+            return Err(Error::Data(format!(
+                "waterfall: cumulative endpoint is non-finite at source row {}",
+                data.source_row(index)
+            )));
+        }
+        range.0 = range.0.min(next);
+        range.1 = range.1.max(next);
+        spans.push(WaterfallSpan {
+            source_row: data.source_row(index),
+            start: running,
+            end: next,
+            delta: *delta,
+        });
+        running = next;
+    }
+    Ok((spans, range))
+}
+
 pub(crate) fn measure(
     chart: &Plot,
     context: PlotRenderContext<'_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     #[cfg(test)]
     count(1);
-    let prepared = chart
-        .prepared_waterfall
-        .as_ref()
-        .and_then(|inputs| {
-            inputs
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
-        })
-        .map(|(_, marks)| marks)
-        .ok_or_else(|| Error::Render("waterfall requires root-prepared semantics".into()))?;
+    let prepared = retained(chart, context.theme)?;
     let theme = context.theme;
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);
@@ -285,7 +346,6 @@ pub(crate) fn measure(
     let axes_minimum =
         crate::layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
     if annotations.height > panel.height() - mark_minimum.1.max(axes_minimum.1) {
-        data.claim_source_bytes(context.fit_scope().address.storage_bytes())?;
         data.claim_source_bytes(1024)?;
         return Err(context.fit_scope().failure(crate::layout::fit::FitKind::SpecializedGeometry, format!(
             "waterfall: total annotations require {:.0}px while preserving the traced category tracks; increase chart height or shorten the configured labels",
@@ -314,7 +374,7 @@ pub(crate) fn measure(
                 "y-axis tick label",
                 &context
                     .fit_scope()
-                    .child(crate::layout::AddressRole::AxisLeft, 0)?,
+                    .child(crate::layout::AddressRole::AxisLeft, 0, &resources)?,
             ))?;
             pitch = pitch.max(plan.height() + 2.0 * crate::layout::LABEL_CLEARANCE);
         }
@@ -383,12 +443,15 @@ pub(crate) fn measure(
         },
     };
     let mut bars = Vec::new();
+    let mut source_rows = Vec::new();
     let mut connectors = Vec::new();
     let accents = crate::theme::AccentColors::resolve(&theme.colors, 2, &resources)?;
     data.reserve_source(&mut bars, spans.len())?;
+    data.reserve_source(&mut source_rows, spans.len())?;
     data.reserve_source(&mut connectors, spans.len().saturating_sub(1))?;
-    for (index, (start, end, delta)) in spans.iter().enumerate() {
+    for (index, span) in spans.iter().enumerate() {
         data.claim_source_visits(1)?;
+        let (start, end, delta) = (&span.start, &span.end, &span.delta);
         let y0 = index as f64 + 0.2;
         let y1 = index as f64 + 0.8;
         let left = layout.projection.project(*start, y0).0;
@@ -420,6 +483,7 @@ pub(crate) fn measure(
             ],
             theme.marks.waterfall_bar.backend_style(color),
         ));
+        source_rows.push(span.source_row);
         if index + 1 < spans.len() {
             let x = right;
             let from_y = top;
@@ -444,8 +508,11 @@ pub(crate) fn measure(
         items, baselines, ..
     } = annotations;
     let mut text = Vec::new();
+    let mut text_targets = Vec::new();
     data.reserve_source(&mut text, items.len())?;
+    data.reserve_source(&mut text_targets, items.len())?;
     for annotation in items {
+        text_targets.push(annotation.target);
         let text_plan = annotation.text_plan;
         text.push(PlacedText {
             placement: PlannedTextPlacement::baseline(
@@ -462,9 +529,11 @@ pub(crate) fn measure(
     let mut payload = WaterfallPayload {
         clip: layout.projection.panel_box(),
         bars,
+        source_rows,
         connectors,
         references,
         text,
+        text_targets,
         domain_expansions: [None; 2],
     };
     let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
@@ -494,7 +563,7 @@ pub(crate) fn measure(
             {
                 return Err(context
                     .fit_scope()
-                    .child(crate::layout::AddressRole::Annotation, index)?
+                    .child(payload.text_targets[index], 0, &resources)?
                     .failure(
                         crate::layout::fit::FitKind::Text,
                         "required Waterfall total ink exceeds its assigned annotation shelf",
@@ -603,13 +672,25 @@ pub(crate) fn measure(
 pub(crate) struct WaterfallPayload {
     clip: PanelBox,
     bars: Vec<([Point2D; 4], FillStyle)>,
+    source_rows: Vec<usize>,
     connectors: Vec<([Point2D; 2], LineStyle)>,
     references: [([Point2D; 2], LineStyle); 2],
     text: Vec<PlacedText>,
+    text_targets: Vec<crate::layout::AddressRole>,
     pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
 }
 
 impl WaterfallPayload {
+    pub(crate) fn observe_sources(
+        &self,
+        round: &mut crate::layout::kernel::FeedbackRound,
+    ) -> Result<(), Error> {
+        round.observe_count(self.source_rows.len())?;
+        for &row in &self.source_rows {
+            round.observe_count(row)?;
+        }
+        Ok(())
+    }
     pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
         with_clip(backend, self.clip, |backend| {
             for (index, (points, style)) in self.bars.iter().enumerate() {
@@ -659,6 +740,7 @@ pub(crate) fn text_census_annotations(
 mod extraction;
 
 struct Annotation {
+    target: crate::layout::AddressRole,
     text_plan: ResolvedTextPlan,
     x: f64,
     row: usize,
@@ -709,6 +791,11 @@ fn plan_annotations(
     let row_gap = crate::layout::kernel::ceil_spatial_quanta(metrics.waterfall_shelf_row_gap)?;
     let producer = context.producer_text()?;
     for (index, (value, text)) in candidates.iter().enumerate() {
+        let target = if index == 0 {
+            crate::layout::AddressRole::WaterfallBaseLabel
+        } else {
+            crate::layout::AddressRole::WaterfallTerminalLabel
+        };
         data.claim_source_visits(1)?;
         if !projection.contains_data(*value, source_y) {
             continue;
@@ -724,17 +811,8 @@ fn plan_annotations(
         })?;
         let width = text_plan.width();
         if width + 2.0 * metrics.waterfall_shelf_padding > panel.width() {
-            let identity_bytes = scope
-                .address
-                .storage_bytes()
-                .checked_add(std::mem::size_of::<crate::layout::kernel::AddressSegment>())
-                .and_then(|bytes| bytes.checked_mul(2))
-                .ok_or_else(|| {
-                    Error::Render("waterfall: diagnostic identity size overflow".into())
-                })?;
-            data.claim_source_bytes(identity_bytes)?;
             // Debug escaping can expand each source byte; admit both the text
-            // diagnostic and its child/failure address copies before allocation.
+            // diagnostic before allocation; child paths have their own admission.
             let diagnostic_bytes = text
                 .len()
                 .checked_mul(10)
@@ -742,7 +820,7 @@ fn plan_annotations(
                 .ok_or_else(|| Error::Render("waterfall: diagnostic text size overflow".into()))?;
             data.claim_source_visits(diagnostic_bytes)?;
             data.claim_source_bytes(diagnostic_bytes)?;
-            crate::layout::fit::FitFailure::retain_least(&mut miss, scope.child(if index == 0 { crate::layout::AddressRole::WaterfallBaseLabel } else { crate::layout::AddressRole::WaterfallTerminalLabel }, 0)?.failure(crate::layout::fit::FitKind::Text, format!(
+            crate::layout::fit::FitFailure::retain_least(&mut miss, scope.child(if index == 0 { crate::layout::AddressRole::WaterfallBaseLabel } else { crate::layout::AddressRole::WaterfallTerminalLabel }, 0, data.source_resources()?)?.failure(crate::layout::fit::FitKind::Text, format!(
                 "waterfall: total annotation {text:?} requires {:.0}px but only {:.0}px is available; increase chart width or shorten the configured label",
                 width + 2.0 * metrics.waterfall_shelf_padding,
                 panel.width()
@@ -817,7 +895,12 @@ fn plan_annotations(
         rows[row].intervals.push(bounds);
         rows[row].above = rows[row].above.max(above);
         rows[row].below = rows[row].below.max(below);
-        items.push(Annotation { text_plan, x, row });
+        items.push(Annotation {
+            target,
+            text_plan,
+            x,
+            row,
+        });
     }
     if let Some(failure) = miss {
         return Err(failure.into());
@@ -1183,8 +1266,8 @@ mod tests {
                     &OperationGenerationResources::new(),
                 )
                 .unwrap();
-                let (start, end, source_delta) =
-                    inputs.waterfall.as_ref().unwrap().panels[0].1.spans[0];
+                let span = inputs.waterfall.as_ref().unwrap().panels[0].1.spans[0];
+                let (start, end, source_delta) = (span.start, span.end, span.delta);
                 assert_eq!(source_delta.to_bits(), delta.to_bits());
                 let projection =
                     crate::layout::Projection::new(range, (0.0, 1.0), panel.as_tuple());

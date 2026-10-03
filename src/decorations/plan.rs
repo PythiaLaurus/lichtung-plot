@@ -16,6 +16,7 @@ use crate::spec::{
     LegendClearance, LegendDefault, LegendPolicy, LegendPosition, PlotKind, PlotRenderContext,
     PlotRenderResult,
 };
+use crate::theme::ResolvedTheme;
 use crate::Plot;
 
 pub(crate) mod children;
@@ -186,6 +187,9 @@ impl ResolvedLegend {
 }
 
 pub(crate) struct PanelPlan {
+    // Content requests expose their preferred frame here; embedded fill may
+    // arrange a taller physical panel_box under the owning Grid's row maximum.
+    pub(crate) frame_box: PanelBox,
     pub(crate) panel_box: PanelBox,
     pub(crate) result: PlotRenderResult,
     pub(crate) legend: Option<ResolvedLegend>,
@@ -276,6 +280,7 @@ impl PanelPlan {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn plan_panel(
     plot: &Plot,
     kind: PlotKind,
@@ -306,7 +311,7 @@ pub(crate) fn plan_panel_with_context(
     plot: &Plot,
     kind: PlotKind,
     role: LegendRole,
-    context: PlotRenderContext<'_>,
+    mut context: PlotRenderContext<'_>,
     legend_entries: Option<&[crate::decorations::legend::LegendEntry]>,
     round: &mut FeedbackRound,
     address: &ComponentAddress,
@@ -320,6 +325,18 @@ pub(crate) fn plan_panel_with_context(
         .generation_resources();
     let data = context.data.with_axis_resources(&resources);
     let minimum = plot.intrinsic_body_minimum(context.theme)?;
+    let position = plot.legend_position_spec();
+    let bypass_outside_guide = role == LegendRole::Suppressed
+        || plot.legend_policy_spec() == LegendPolicy::Hidden
+        || (position != LegendPosition::Auto && !is_outside(position));
+    if context.content_height
+        && !matches!(kind, PlotKind::Heatmap | PlotKind::Beeswarm)
+        && (!context.fill_content_height || bypass_outside_guide)
+    {
+        let (panel, preference) = content_frame(plot, context, round, address, None)?;
+        context.panel = panel;
+        context.content_preference = Some(preference);
+    }
     if let FitOutcome::Miss(failure) = (FrameRequirements {
         minimum_body: minimum,
         natural_insets: [0.0; 4],
@@ -328,11 +345,7 @@ pub(crate) fn plan_panel_with_context(
     {
         return Ok(FitOutcome::Miss(failure));
     }
-    let position = plot.legend_position_spec();
-    if role == LegendRole::Suppressed
-        || plot.legend_policy_spec() == LegendPolicy::Hidden
-        || (position != LegendPosition::Auto && !is_outside(position))
-    {
+    if bypass_outside_guide {
         return plan_panel_attempt(
             plot,
             kind,
@@ -358,6 +371,10 @@ pub(crate) fn plan_panel_with_context(
     if discovered.legend_entries.is_empty()
         || discovered.decoration_mode == crate::spec::DecorationMode::SelfManaged
     {
+        if context.content_height && context.fill_content_height {
+            let (_, preference) = content_frame(plot, context, round, address, None)?;
+            context.content_preference = Some(preference);
+        }
         return plan_panel_attempt(
             plot,
             kind,
@@ -424,11 +441,17 @@ pub(crate) fn plan_panel_with_context(
             #[cfg(test)]
             let guide_trial =
                 crate::orchestrator::measurements::GuideTrial::new(address, edge, compact);
-            let mut guide_scope =
-                scope.child(crate::decorations::legend::address_role(position), 0)?;
+            let mut guide_scope = scope.child(
+                crate::decorations::legend::address_role(position),
+                0,
+                &context
+                    .theme
+                    .prepared_font_environment()?
+                    .generation_resources(),
+            )?;
             guide_scope.ordinal = scope.ordinal;
-            let gutters = round.insets(address, FeedbackKind::AxisGutter);
-            let ink = round.insets(address, FeedbackKind::OwnedInk);
+            let gutters = round.insets(address, FeedbackKind::AxisGutter)?;
+            let ink = round.insets(address, FeedbackKind::OwnedInk)?;
             let metrics = crate::decorations::legend::LegendMetrics::from_theme(context.theme);
             let gap = metrics.outside_gap;
             let frame = AssignedGuideFrame::new(edge, minimum, gap);
@@ -444,7 +467,10 @@ pub(crate) fn plan_panel_with_context(
             let guide = match Legend::measure_assigned(
                 &title,
                 std::sync::Arc::clone(&entries),
-                available,
+                (
+                    available.0,
+                    (!context.content_height).then_some(available.1),
+                ),
                 horizontal,
                 compact,
                 context.theme,
@@ -460,22 +486,35 @@ pub(crate) fn plan_panel_with_context(
                 }
             };
             let size = (guide.compute_box_width(), guide.compute_box_height());
+            let trial_context = if context.content_height {
+                let (panel, preference) =
+                    content_frame(plot, context, round, address, Some((horizontal, size, gap)))?;
+                let mut trial = context.with_panel(panel);
+                trial.content_preference = Some(preference);
+                trial
+            } else {
+                context
+            };
             #[cfg(test)]
             guide_trial.body();
             let mut assigned_gutters = gutters;
             for (gutter, reserve) in assigned_gutters.iter_mut().zip(ink) {
                 *gutter += reserve;
             }
-            let panel =
-                match frame.assign_fit(context.panel, Some(size), assigned_gutters, &scope)? {
-                    FitOutcome::Measured(panel) => panel,
-                    FitOutcome::Miss(reason) => {
-                        FitFailure::retain_least(&mut first_miss, reason);
-                        #[cfg(test)]
-                        guide_trial.reject();
-                        continue;
-                    }
-                };
+            let panel = match frame.assign_fit(
+                trial_context.panel,
+                Some(size),
+                assigned_gutters,
+                &scope,
+            )? {
+                FitOutcome::Measured(panel) => panel,
+                FitOutcome::Miss(reason) => {
+                    FitFailure::retain_least(&mut first_miss, reason);
+                    #[cfg(test)]
+                    guide_trial.reject();
+                    continue;
+                }
+            };
             if let FitOutcome::Miss(reason) = check_assigned_body(
                 plot,
                 &discovered,
@@ -503,7 +542,7 @@ pub(crate) fn plan_panel_with_context(
                 &trial_plot,
                 kind,
                 role,
-                context,
+                trial_context,
                 legend_entries,
                 round,
                 address,
@@ -516,13 +555,13 @@ pub(crate) fn plan_panel_with_context(
                     #[cfg(test)]
                     guide_trial.reject();
                     round.record_failure(failure)?;
-                    if let TrialOutcome::Miss(failure) = round.finish_trial(checkpoint) {
+                    if let TrialOutcome::Miss(failure) = round.finish_trial(checkpoint)? {
                         FitFailure::retain_least(&mut first_miss, failure);
                     }
                     continue;
                 }
             };
-            match round.finish_trial(checkpoint) {
+            match round.finish_trial(checkpoint)? {
                 _outcome @ (TrialOutcome::Fit | TrialOutcome::Provisional) => {
                     #[cfg(test)]
                     #[expect(
@@ -546,6 +585,67 @@ pub(crate) fn plan_panel_with_context(
             "outside guide policy found no fitting containing frame",
         )
     })))
+}
+
+fn content_frame(
+    plot: &Plot,
+    context: PlotRenderContext<'_>,
+    round: &FeedbackRound,
+    address: &ComponentAddress,
+    guide: Option<(bool, (f64, f64), f64)>,
+) -> Result<(PanelBox, f64), Error> {
+    let resources = context
+        .theme
+        .prepared_font_environment()?
+        .generation_resources();
+    let mut plot = plot.admitted_clone(context.data.with_axis_resources(&resources))?;
+    if let Some(domain) = round.domain(address, FeedbackKind::AutomaticDomainX)? {
+        plot = plot.with_planned_x_limits(domain);
+    }
+    if let Some(domain) = round.domain(address, FeedbackKind::AutomaticDomainY)? {
+        plot = plot.with_planned_y_limits(domain);
+    }
+    let mut insets = round.insets(address, FeedbackKind::AxisGutter)?;
+    for (inset, ink) in insets
+        .iter_mut()
+        .zip(round.insets(address, FeedbackKind::OwnedInk)?)
+    {
+        *inset += ink;
+    }
+    let hard = plot.intrinsic_body_minimum(context.theme)?;
+    let preference = crate::layout::interior::sizing::body_preference(&plot, context.theme, hard)?;
+    let mut width = context.panel.width() - insets[0] - insets[1];
+    if let Some((false, (guide_width, _), gap)) = guide {
+        width -= guide_width + gap;
+    }
+    if width < hard.0 {
+        return Err(Error::Render(
+            "content frame cannot preserve the scientific body width".into(),
+        ));
+    }
+    let mut height = plot.natural_body_height(context.theme, width, preference.1)?;
+    if let Some((horizontal, (_, guide_height), gap)) = guide {
+        height = if horizontal {
+            height + guide_height + gap
+        } else {
+            height.max(guide_height)
+        };
+    }
+    height += insets[2] + insets[3];
+    let assigned = if context.fill_content_height {
+        height.max(context.panel.height())
+    } else {
+        height
+    };
+    Ok((
+        PanelBox::new(
+            context.panel.x0,
+            context.panel.x1,
+            context.panel.y0,
+            context.panel.y0 + assigned,
+        ),
+        height,
+    ))
 }
 
 #[allow(
@@ -633,10 +733,16 @@ pub(crate) fn check_assigned_body(
         {
             FitFailure::retain_least(
                 &mut miss,
-                scope.child(AddressRole::Annotation, index)?.failure(
-                    FitKind::Text,
-                    "panel annotation does not fit the assigned body after guide reservation",
-                ),
+                scope
+                    .child(
+                        AddressRole::Annotation,
+                        index,
+                        &theme.prepared_font_environment()?.generation_resources(),
+                    )?
+                    .failure(
+                        FitKind::Text,
+                        "panel annotation does not fit the assigned body after guide reservation",
+                    ),
             );
         }
     }
@@ -658,10 +764,16 @@ pub(crate) fn check_assigned_body(
             if a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0 {
                 FitFailure::retain_least(
                     &mut miss,
-                    scope.child(AddressRole::Annotation, index)?.failure(
-                        FitKind::OverlayCollision,
-                        "panel annotations collide in the assigned containing frame",
-                    ),
+                    scope
+                        .child(
+                            AddressRole::Annotation,
+                            index,
+                            &theme.prepared_font_environment()?.generation_resources(),
+                        )?
+                        .failure(
+                            FitKind::OverlayCollision,
+                            "panel annotations collide in the assigned containing frame",
+                        ),
                 );
             }
         }
@@ -707,14 +819,14 @@ fn plan_panel_attempt(
         planning_plot = planning_plot.with_suppressed_legend();
     }
     let planned_x_limits = round
-        .domain(address, FeedbackKind::AutomaticDomainX)
+        .domain(address, FeedbackKind::AutomaticDomainX)?
         .map(|range| {
             plot.x_axis_spec()
                 .limits
                 .map_or(range, |base| (base.0.min(range.0), base.1.max(range.1)))
         });
     let planned_y_limits = round
-        .domain(address, FeedbackKind::AutomaticDomainY)
+        .domain(address, FeedbackKind::AutomaticDomainY)?
         .map(|range| {
             plot.y_axis_spec()
                 .limits
@@ -727,10 +839,10 @@ fn plan_panel_attempt(
         planning_plot = planning_plot.with_planned_y_limits(limits);
     }
     let discovery_panel = if let Some(guide) = &assigned_guide {
-        let mut gutters = round.insets(address, FeedbackKind::AxisGutter);
+        let mut gutters = round.insets(address, FeedbackKind::AxisGutter)?;
         for (gutter, ink) in gutters
             .iter_mut()
-            .zip(round.insets(address, FeedbackKind::OwnedInk))
+            .zip(round.insets(address, FeedbackKind::OwnedInk)?)
         {
             *gutter += ink;
         }
@@ -763,8 +875,8 @@ fn plan_panel_attempt(
         initial
     } else {
         let width = if assigned_guide.is_some() {
-            let gutters = round.insets(address, FeedbackKind::AxisGutter);
-            let ink = round.insets(address, FeedbackKind::OwnedInk);
+            let gutters = round.insets(address, FeedbackKind::AxisGutter)?;
+            let ink = round.insets(address, FeedbackKind::OwnedInk)?;
             (discovery_panel.width() + gutters[0] + gutters[1] + ink[0] + ink[1] - minimum.0)
                 .max(0.0)
         } else {
@@ -807,7 +919,7 @@ fn plan_panel_attempt(
             )?,
             context.theme,
         )?;
-        let guide_scope = scope.child(AddressRole::InsideGuide, 0)?;
+        let guide_scope = scope.child(AddressRole::InsideGuide, 0, &resources)?;
         match Legend::measure_assigned(
             &title,
             entries,
@@ -831,8 +943,8 @@ fn plan_panel_attempt(
             .as_ref()
             .map_or(0.0, |guide| guide.metrics.outside_gap),
     );
-    let mut assigned_gutters = round.insets(address, FeedbackKind::AxisGutter);
-    let owned_ink = round.insets(address, FeedbackKind::OwnedInk);
+    let mut assigned_gutters = round.insets(address, FeedbackKind::AxisGutter)?;
+    let owned_ink = round.insets(address, FeedbackKind::OwnedInk)?;
     for (gutter, ink) in assigned_gutters.iter_mut().zip(owned_ink) {
         *gutter += ink;
     }
@@ -872,6 +984,8 @@ fn plan_panel_attempt(
         ..
     }) = result.marks.as_deref()
     {
+        payload.observe_axes(round)?;
+        round.begin_owner(address)?;
         Some(payload.axis_geometry(context.theme)?)
     } else {
         None
@@ -939,7 +1053,12 @@ fn plan_panel_attempt(
                         geometry.bounds(),
                         legend_default,
                     );
-                    let candidate = auto_candidate_avoiding_panel_text(&result, &legend, preferred);
+                    let candidate = auto_candidate_avoiding_panel_text(
+                        &result,
+                        &legend,
+                        preferred,
+                        context.theme,
+                    )?;
                     auto_annotation_miss = candidate.is_none();
                     // Keep provisional geometry for the failed preferred attempt;
                     // only a resolving pending assignment can make its miss provisional.
@@ -1002,10 +1121,10 @@ fn plan_panel_attempt(
             }
             _ => [None; 2],
         });
-    let mut requests = [None; 2];
+    let mut mark_requests = [None; 2];
     let mut count = 0;
     for expansion in mark_expansions.into_iter().flatten() {
-        requests[count] = expansion.submit(round, address, address)?;
+        mark_requests[count] = expansion.submit(round, address, address)?;
         count += 1;
         match expansion.axis {
             ClearanceAxis::X => {
@@ -1026,7 +1145,7 @@ fn plan_panel_attempt(
         round.miss(
             address,
             FitKind::OverlayCollision,
-            &requests[..count],
+            &mark_requests[..count],
             "mark ink or significance requires automatic domain clearance",
         )?;
     }
@@ -1048,6 +1167,7 @@ fn plan_panel_attempt(
                     geometry.bounds(),
                     legend_default,
                     auto_candidate_index.unwrap_or(0),
+                    context.theme,
                 ))? {
                     FitOutcome::Measured(clearance) => clearance,
                     FitOutcome::Miss(failure) => return Ok(FitOutcome::Miss(failure)),
@@ -1113,6 +1233,13 @@ fn plan_panel_attempt(
     {
         payload.observe_sources(round)?;
     }
+    if let Some(crate::layout::interior::SelectedMarkPlan {
+        payload: crate::layout::interior::MarkPayload::Waterfall(payload),
+        ..
+    }) = result.marks.as_deref()
+    {
+        payload.observe_sources(round)?;
+    }
     if let Some(chrome) = &chrome {
         let mut overflow = [0.0_f64; 4];
         for bounds in chrome.bounds() {
@@ -1131,8 +1258,8 @@ fn plan_panel_attempt(
         // overflow from its provisional cell. A child reserve would count it twice.
         // A pending axis gutter already moves this ink inward next round. Only
         // the residual overflow belongs to the containing-frame ink reserve.
-        let next_axis_gutters = round.next_insets(address, FeedbackKind::AxisGutter);
-        let current_axis_gutters = round.insets(address, FeedbackKind::AxisGutter);
+        let next_axis_gutters = round.next_insets(address, FeedbackKind::AxisGutter)?;
+        let current_axis_gutters = round.insets(address, FeedbackKind::AxisGutter)?;
         for (index, extra) in overflow.iter_mut().enumerate() {
             *extra = (*extra - (next_axis_gutters[index] - current_axis_gutters[index]).max(0.0))
                 .max(0.0);
@@ -1154,10 +1281,10 @@ fn plan_panel_attempt(
         }
         chrome.observe_feedback(round)?;
     }
-    let mut next_gutters = round.next_insets(address, FeedbackKind::AxisGutter);
+    let mut next_gutters = round.next_insets(address, FeedbackKind::AxisGutter)?;
     for (gutter, ink) in next_gutters
         .iter_mut()
-        .zip(round.next_insets(address, FeedbackKind::OwnedInk))
+        .zip(round.next_insets(address, FeedbackKind::OwnedInk)?)
     {
         *gutter += ink;
     }
@@ -1220,9 +1347,12 @@ fn plan_panel_attempt(
                 );
                 let bounds = candidates[(preferred + offset) % candidates.len()];
                 if legend_fits_panel(bounds, next_axes)
-                    && annotations
-                        .iter()
-                        .all(|plan| plan.avoids_legend_in(next_axes, bounds))
+                    && crate::decorations::panel_text::conflict_resolved_by_assignment(
+                        &annotations,
+                        next_axes,
+                        bounds,
+                        context.theme,
+                    )?
                 {
                     resolving_auto_bounds = Some(bounds);
                     break;
@@ -1285,7 +1415,8 @@ fn plan_panel_attempt(
             let corner = crate::decorations::panel_text::conflicting_legend_corner(
                 &result.panel_text,
                 legend.bounds,
-            );
+                context.theme,
+            )?;
             if let Some(corner) = corner {
                 let resolved_by_assignment = (!auto_annotation_miss
                     || resolving_auto_bounds.is_some())
@@ -1293,7 +1424,8 @@ fn plan_panel_attempt(
                         &result.panel_text,
                         next_axes,
                         next_bounds,
-                    );
+                        context.theme,
+                    )?;
                 let message = if auto_annotation_miss {
                     "automatic legend cannot avoid the configured panel text annotations; hide the legend or choose an outside legend position".to_owned()
                 } else {
@@ -1399,7 +1531,7 @@ fn plan_panel_attempt(
         if bounds.left < 0.0
             || bounds.right > f64::from(plot.width())
             || bounds.bottom < 0.0
-            || bounds.top > f64::from(plot.height())
+            || (!context.content_height && bounds.top > f64::from(plot.height()))
         {
             if result.grid_axis_gutters.is_some()
                 && chrome
@@ -1433,7 +1565,13 @@ fn plan_panel_attempt(
                 &next_projection,
                 declared,
             )?;
-            let requests = [gutter_request, ink_request, domain_request];
+            let requests = [
+                gutter_request,
+                ink_request,
+                domain_request,
+                mark_requests[0],
+                mark_requests[1],
+            ];
             round.miss(
                 address,
                 FitKind::OverlayCollision,
@@ -1454,6 +1592,28 @@ fn plan_panel_attempt(
     }
     geometry.observe_feedback(round)?;
     Ok(FitOutcome::Measured(PanelPlan {
+        frame_box: if context.fill_content_height {
+            PanelBox::new(
+                cell.x0,
+                cell.x1,
+                cell.y0,
+                cell.y0 + context.content_preference.unwrap_or(cell.height()),
+            )
+        } else if context.content_height
+            && matches!(
+                kind,
+                PlotKind::Heatmap | PlotKind::Beeswarm | PlotKind::Matrix
+            )
+        {
+            PanelBox::new(
+                cell.x0,
+                cell.x1,
+                cell.y0,
+                result.layout.projection.panel_box().y1 + assigned_gutters[3],
+            )
+        } else {
+            cell
+        },
         panel_box,
         result,
         legend: resolved,
@@ -1571,6 +1731,10 @@ fn clearance_edge(position: LegendPosition, legend: LegendBox, panel: PanelBox) 
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the existing clearance inputs additionally carry the operation's collision admission owner"
+)]
 fn automatic_clearance(
     kind: PlotKind,
     plot: &Plot,
@@ -1579,6 +1743,7 @@ fn automatic_clearance(
     geometry: &[crate::render::geometry::GeometryBox],
     default: LegendDefault,
     current_candidate: usize,
+    theme: &ResolvedTheme,
 ) -> Result<Option<AutomaticClearance>, crate::layout::fit::PlanError> {
     match default {
         LegendDefault::TopRight(clearance) => top_right_clearance(
@@ -1589,13 +1754,18 @@ fn automatic_clearance(
             geometry,
             clearance,
             current_candidate,
+            theme,
         ),
         LegendDefault::LowestOverlap | LegendDefault::SelfManaged => {
-            lowest_overlap_clearance(kind, plot, result, legend, geometry)
+            lowest_overlap_clearance(kind, plot, result, legend, geometry, theme)
         }
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the existing clearance inputs additionally carry the operation's collision admission owner"
+)]
 fn top_right_clearance(
     kind: PlotKind,
     plot: &Plot,
@@ -1604,6 +1774,7 @@ fn top_right_clearance(
     geometry: &[crate::render::geometry::GeometryBox],
     clearance: LegendClearance,
     current_candidate: usize,
+    theme: &ResolvedTheme,
 ) -> Result<Option<AutomaticClearance>, crate::layout::fit::PlanError> {
     let margin = legend.metrics.font_size.max(6.0);
     let candidates = legend.inside_candidates(result.layout.projection.pixel_box());
@@ -1617,8 +1788,12 @@ fn top_right_clearance(
         crate::orchestrator::measurements::count(
             crate::orchestrator::measurements::Counter::InsideLegendCandidate,
         );
-        if crate::decorations::panel_text::conflicting_legend_corner(&result.panel_text, bounds)
-            .is_some()
+        if crate::decorations::panel_text::conflicting_legend_corner(
+            &result.panel_text,
+            bounds,
+            theme,
+        )?
+        .is_some()
         {
             continue;
         }
@@ -1671,6 +1846,7 @@ fn lowest_overlap_clearance(
     result: &PlotRenderResult,
     legend: &Legend,
     geometry: &[crate::render::geometry::GeometryBox],
+    theme: &ResolvedTheme,
 ) -> Result<Option<AutomaticClearance>, crate::layout::fit::PlanError> {
     let margin = legend.metrics.font_size.max(6.0);
     let candidates = legend.inside_candidates(result.layout.projection.pixel_box());
@@ -1688,8 +1864,12 @@ fn lowest_overlap_clearance(
             crate::orchestrator::measurements::Counter::InsideLegendCandidate,
         );
         if !legend_fits_panel(bounds, result.layout.projection.panel_box())
-            || crate::decorations::panel_text::conflicting_legend_corner(&result.panel_text, bounds)
-                .is_some()
+            || crate::decorations::panel_text::conflicting_legend_corner(
+                &result.panel_text,
+                bounds,
+                theme,
+            )?
+            .is_some()
         {
             continue;
         }
@@ -1952,7 +2132,8 @@ fn auto_candidate_avoiding_panel_text(
     result: &PlotRenderResult,
     legend: &Legend,
     preferred: usize,
-) -> Option<usize> {
+    theme: &ResolvedTheme,
+) -> Result<Option<usize>, Error> {
     let panel = result.layout.projection.panel_box();
     let candidates = legend.inside_candidates(panel.as_tuple());
     for offset in 0..candidates.len() {
@@ -1961,15 +2142,16 @@ fn auto_candidate_avoiding_panel_text(
             crate::orchestrator::measurements::Counter::InsideLegendCandidate,
         );
         let index = (preferred + offset) % candidates.len();
-        if result
-            .panel_text
-            .iter()
-            .all(|plan| plan.avoids_legend_in(panel, candidates[index]))
-        {
-            return Some(index);
+        if crate::decorations::panel_text::conflict_resolved_by_assignment(
+            &result.panel_text,
+            panel,
+            candidates[index],
+            theme,
+        )? {
+            return Ok(Some(index));
         }
     }
-    None
+    Ok(None)
 }
 
 fn guide_panel(mut panel: PanelBox, gutters: [f64; 4], position: LegendPosition) -> PanelBox {

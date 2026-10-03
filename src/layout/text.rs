@@ -539,7 +539,6 @@ impl ResolvedTextPlan {
         std::sync::Arc::make_mut(&mut self.0)
     }
 
-    #[cfg(test)]
     pub(crate) fn shares_payload(&self, other: &Self) -> bool {
         std::sync::Arc::ptr_eq(&self.0, &other.0)
     }

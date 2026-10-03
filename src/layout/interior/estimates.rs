@@ -280,17 +280,31 @@ fn native_vertical_category_intrinsics_use_mandatory_lines_and_keep_fit_scope() 
                 false,
             )
             .unwrap();
-        let tick = crate::layout::fit::intrinsic_widths(
-            &theme,
-            "0.5",
-            &theme.typography.tick_label,
-            "numeric midpoint intrinsic test",
+        let range = plot.prepared_axis_inputs().unwrap().ranges[0];
+        let source = crate::layout::panel::format_label(
+            f64::midpoint(range.0, range.1),
+            plot.prepared_axis_inputs().unwrap().logarithmic,
+            false,
+            0,
+            Some(theme.prepared_font_environment().unwrap()),
         )
-        .unwrap()
-        .0;
+        .unwrap();
+        let tick = theme
+            .measure_text(
+                &source,
+                &theme.typography.tick_label,
+                crate::layout::PhysicalTextAlignment::Center,
+                "numeric midpoint intrinsic test",
+                false,
+            )
+            .unwrap();
         assert_eq!(
             minimum.0.to_bits(),
-            (tick + 2.0 * crate::layout::panel::LABEL_CLEARANCE).to_bits()
+            crate::layout::kernel::required_length(
+                tick.width().max(tick.fit_width()) + 2.0 * crate::layout::panel::LABEL_CLEARANCE
+            )
+            .unwrap()
+            .to_bits()
         );
         assert_eq!(
             minimum.1.to_bits(),
@@ -299,7 +313,11 @@ fn native_vertical_category_intrinsics_use_mandatory_lines_and_keep_fit_scope() 
         assert!(minimum.1 > crate::layout::canvas::MINIMUM_PANEL_SPAN);
         let scope = FitScope::new(
             &crate::layout::ComponentAddress::root()
-                .child(crate::layout::AddressRole::PlotBody, 3)
+                .child(
+                    crate::layout::AddressRole::PlotBody,
+                    3,
+                    &crate::font::canonical::OperationGenerationResources::new(),
+                )
                 .unwrap(),
             4,
         );

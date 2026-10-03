@@ -481,7 +481,11 @@ fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
 fn midpoint_is_conditional_and_must_itself_fit() {
     let theme = crate::Theme::Publication.resolve();
     let scope = crate::layout::fit::FitScope::root()
-        .child(crate::layout::AddressRole::FacetCell, 3)
+        .child(
+            crate::layout::AddressRole::FacetCell,
+            3,
+            &crate::font::canonical::OperationGenerationResources::new(),
+        )
         .unwrap();
     for width in [1.0, 100.0] {
         let projection = Projection::new((1.1, 1.2), (0.0, 1.0), (0.0, width, 0.0, 100.0));
@@ -502,7 +506,11 @@ fn midpoint_is_conditional_and_must_itself_fit() {
             assert_eq!(
                 failure.reason,
                 scope
-                    .child(crate::layout::AddressRole::AxisBottom, 0)
+                    .child(
+                        crate::layout::AddressRole::AxisBottom,
+                        0,
+                        &crate::font::canonical::OperationGenerationResources::new()
+                    )
                     .unwrap()
                     .failure(crate::layout::fit::FitKind::Tick, "")
                     .reason

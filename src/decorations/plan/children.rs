@@ -26,6 +26,8 @@ struct Inputs {
     owners: [ComponentAddress; 2],
     geometry: [u64; 4],
     axis_label_width: u64,
+    content_height: bool,
+    fill_content_height: bool,
     standard: crate::layout::StandardPanelInputs,
     plot: crate::builder::ComposedInputs,
     theme: crate::theme::ResolvedTheme,
@@ -43,38 +45,19 @@ impl Inputs {
         let environment = context.theme.prepared_font_environment()?;
         let resources = environment.generation_resources();
         let data = context.data.with_axis_resources(&resources);
-        data.admit_clone_slice(&context.theme.colors)?;
-        data.admit_clone_str(&context.theme.font_family)?;
-        for appearance in [
-            &context.theme.typography.title,
-            &context.theme.typography.subtitle,
-            &context.theme.typography.caption,
-            &context.theme.typography.axis_title,
-            &context.theme.typography.tick_label,
-            &context.theme.typography.significance_label,
-        ] {
-            data.admit_clone_str(&appearance.stack)?;
-        }
-        // under_grid requires one cell segment: its intermediate/final addresses
-        // use one/two segments, and the copied cell address uses one more.
-        environment
-            .claim_text_generation_slots(4)
-            .map_err(|error| Error::Render(format!("child address records: {error:?}")))?;
-        environment
-            .claim_unicode_bytes(
-                4 * std::mem::size_of::<crate::layout::kernel::AddressSegment>() as u64,
-            )
-            .map_err(|error| Error::Render(error.to_string()))?;
+        Self::admit_theme_clone(context.theme, data)?;
         let grid_role = if owner.leaf_role() == AddressRole::CanvasCell {
             AddressRole::CanvasGrid
         } else {
             AddressRole::FacetGrid
         };
-        let grid_owner = owner.under_grid(grid_role)?;
+        let grid_owner = owner.under_grid(grid_role, &resources)?;
         let owners = [owner.clone(), grid_owner];
         Ok(Self {
             geometry: geometry(context.panel),
             axis_label_width: context.axis_label_width.to_bits(),
+            content_height: context.content_height,
+            fill_content_height: context.fill_content_height,
             standard: crate::layout::StandardPanelInputs::new(context.theme)?,
             plot: plot.retain_composed_inputs(environment)?,
             theme: context.theme.clone(),
@@ -82,6 +65,33 @@ impl Inputs {
             feedback: round.child_inputs(&owners)?,
             owners,
         })
+    }
+
+    fn admit_theme_clone(
+        theme: &crate::theme::ResolvedTheme,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<(), Error> {
+        data.admit_clone_slice(&theme.colors)?;
+        data.admit_clone_str(&theme.font_family)?;
+        for appearance in [
+            &theme.typography.title,
+            &theme.typography.subtitle,
+            &theme.typography.caption,
+            &theme.typography.axis_title,
+            &theme.typography.tick_label,
+            &theme.typography.significance_label,
+            &theme.typography.estimate_detail,
+            &theme.typography.waterfall_total,
+            &theme.typography.point_layer_label,
+            &theme.typography.panel_text,
+            &theme.typography.contrast_light,
+            &theme.typography.contrast_dark,
+            &theme.typography.legend_title,
+            &theme.typography.legend_label,
+        ] {
+            data.admit_clone_str(&appearance.stack)?;
+        }
+        Ok(())
     }
 
     fn matches(
@@ -98,18 +108,35 @@ impl Inputs {
         Ok(self.owners[0] == *owner
             && self.geometry == geometry(context.panel)
             && self.axis_label_width == context.axis_label_width.to_bits()
+            && self.content_height == context.content_height
+            && self.fill_content_height == context.fill_content_height
             && self.standard.matches(context.theme)
             && plot
                 .same_composed_inputs(&self.plot, context.data.with_axis_resources(&resources))?
             && self.theme == *context.theme
             && self.scales == context.facet_scales()
-            && round.child_inputs_equal(&self.feedback, &self.owners)
-            && round.child_stable(&self.owners))
+            && round.child_inputs_equal(&self.feedback, &self.owners)?
+            && round.child_stable(&self.owners)?)
     }
 }
 
 fn geometry(panel: PanelBox) -> [u64; 4] {
     [panel.x0, panel.x1, panel.y0, panel.y1].map(f64::to_bits)
+}
+
+fn retain_stable<T>(
+    entries: &mut Vec<T>,
+    mut stable: impl FnMut(&T) -> Result<bool, Error>,
+) -> Result<(), Error> {
+    let mut retained = 0;
+    for examined in 0..entries.len() {
+        if stable(&entries[examined])? {
+            entries.swap(retained, examined);
+            retained += 1;
+        }
+    }
+    entries.truncate(retained);
+    Ok(())
 }
 
 struct Measurement {
@@ -199,6 +226,7 @@ impl<'a> ChildPlans<'a> {
         let owner = ComponentAddress::root().child(
             AddressRole::CanvasCell,
             u32::try_from(index).map_err(|_| Error::Render("canvas address overflowed".into()))?,
+            &theme.prepared_font_environment()?.generation_resources(),
         )?;
         let context = PlotRenderContext::new(plot.data(), panel, theme);
         crate::layout::fit::measured(self.measure(plot, context, &owner, phase, round, |call| {
@@ -215,18 +243,21 @@ impl<'a> ChildPlans<'a> {
 
     /// Called after all siblings and parent requests have been measured. A
     /// provisional result must not become an active entry for the next round.
-    pub(crate) fn finish_round(&mut self, round: &FeedbackRound) {
-        if round.child_stable(&[ComponentAddress::root()]) {
+    pub(crate) fn finish_round(&mut self, round: &FeedbackRound) -> Result<(), Error> {
+        if round.child_stable(&[ComponentAddress::root()])? {
             // The driver will freeze this plan. Do not retain discarded probes
             // and child keys through final capture and output admission.
             self.measurements.clear();
             self.panels.clear();
-            return;
+            return Ok(());
         }
-        self.measurements
-            .retain(|entry| round.child_stable(&entry.inputs.owners));
-        self.panels
-            .retain(|entry| round.child_stable(&entry.inputs.owners));
+        retain_stable(&mut self.measurements, |entry| {
+            round.child_stable(&entry.inputs.owners)
+        })?;
+        retain_stable(&mut self.panels, |entry| {
+            round.child_stable(&entry.inputs.owners)
+        })?;
+        Ok(())
     }
 
     pub(crate) fn measure(
@@ -387,7 +418,7 @@ impl<'a> ChildPlans<'a> {
         self.panels.retain(|entry| entry.inputs.owners[0] != *owner);
         if let Some(feedback) = round.retain_child_feedback(checkpoint)? {
             let inputs = Inputs::new(plot, context, owner, round)?;
-            if round.child_stable(&inputs.owners) {
+            if round.child_stable(&inputs.owners)? {
                 environment
                     .claim_cache_entries(1)
                     .map_err(|error| Error::Render(format!("child cache admission: {error:?}")))?;
@@ -418,6 +449,191 @@ mod tests {
     use super::*;
 
     #[test]
+    fn content_height_and_row_fill_each_invalidate_the_actual_child_input_key() {
+        let source = Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0]),
+            crate::NumericValues::new("y", [0.0, 1.0]),
+        )
+        .erase();
+        let theme = crate::Theme::Publication.resolve();
+        theme.prepare_font_environment().unwrap();
+        let root = crate::layout::plan_exact_root(
+            800,
+            600,
+            |_| Ok(()),
+            |(), assigned, round| {
+                let owner = ComponentAddress::root().child(
+                    AddressRole::CanvasCell,
+                    0,
+                    round.resources(),
+                )?;
+                let context = PlotRenderContext::new(
+                    source.data(),
+                    crate::layout::PanelBox::new(20.0, 400.0, 20.0, 500.0),
+                    &theme,
+                );
+                let key = Inputs::new(&source, context, &owner, round)?;
+                assert!(key.matches(&source, context, &owner, round)?);
+                for (content_height, fill_content_height) in
+                    [(true, false), (false, true), (true, true)]
+                {
+                    let mut changed = context;
+                    changed.content_height = content_height;
+                    changed.fill_content_height = fill_content_height;
+                    assert!(!key.matches(&source, changed, &owner, round)?);
+                }
+                Ok(crate::layout::MeasuredLayout::new(assigned, ()))
+            },
+            |(), _, (), _| Ok(()),
+        )
+        .unwrap();
+        assert_eq!(root.dimensions(), (800, 600));
+    }
+
+    #[test]
+    fn complete_theme_clone_admits_exact_owned_bytes_and_records_before_copy() {
+        let source = Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0]),
+            crate::NumericValues::new("y", [0.0, 1.0]),
+        )
+        .erase();
+        let mut theme = crate::Theme::Publication.resolve();
+        for (index, stack) in [
+            &mut theme.typography.title.stack,
+            &mut theme.typography.subtitle.stack,
+            &mut theme.typography.caption.stack,
+            &mut theme.typography.axis_title.stack,
+            &mut theme.typography.tick_label.stack,
+            &mut theme.typography.significance_label.stack,
+            &mut theme.typography.estimate_detail.stack,
+            &mut theme.typography.waterfall_total.stack,
+            &mut theme.typography.point_layer_label.stack,
+            &mut theme.typography.panel_text.stack,
+            &mut theme.typography.contrast_light.stack,
+            &mut theme.typography.contrast_dark.stack,
+            &mut theme.typography.legend_title.stack,
+            &mut theme.typography.legend_label.stack,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            *stack = "s".repeat(index + 1);
+        }
+        theme.font_family = "s".repeat(15);
+        let bytes = 120 + std::mem::size_of_val(theme.colors.as_slice()) as u64;
+        let records = theme.colors.len() as u128 + 15;
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        resources.set_test_limits(u128::MAX, bytes);
+        resources.claim_slots(1_000_000 - records).unwrap();
+        Inputs::admit_theme_clone(&theme, source.data().with_axis_resources(&resources)).unwrap();
+        assert_eq!(resources.byte_usage().unwrap(), bytes);
+        assert_eq!(resources.usage().unwrap().0, 1_000_000);
+
+        for refuse_bytes in [false, true] {
+            let resources = crate::font::canonical::OperationGenerationResources::new();
+            resources.set_test_limits(u128::MAX, bytes - u64::from(refuse_bytes));
+            resources
+                .claim_slots(1_000_000 - records + u128::from(!refuse_bytes))
+                .unwrap();
+            let error =
+                Inputs::admit_theme_clone(&theme, source.data().with_axis_resources(&resources))
+                    .unwrap_err();
+            assert!(error.to_string().contains(if refuse_bytes {
+                "system-font bytes"
+            } else {
+                "retained planning records"
+            }));
+            // The last stack has fourteen bytes. Its rejected claim never copies it.
+            assert_eq!(resources.byte_usage().unwrap(), bytes - 14);
+            assert_eq!(resources.usage().unwrap().0, 1_000_000);
+        }
+    }
+
+    #[test]
+    fn actual_child_hit_is_invalidated_by_legend_only_paint_and_geometry_changes() {
+        let source = Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0]),
+            crate::NumericValues::new("y", [0.0, 1.0]),
+        )
+        .erase();
+        let theme = crate::Theme::Publication.resolve();
+        let owner = ComponentAddress::root()
+            .child(
+                AddressRole::FacetCell,
+                0,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
+            .unwrap();
+        let mut children = ChildPlans::facets(&source);
+        let mut produced = 0;
+        crate::layout::plan_exact_root(
+            800,
+            600,
+            |_| Ok(()),
+            |(), assigned, round| {
+                let panel = PanelBox::new(10.0, 200.0, 30.0, 400.0);
+                let context = PlotRenderContext::new(source.data(), panel, &theme);
+                let mut produce = |_: &crate::font::canonical::MeasurementCall| {
+                    produced += 1;
+                    Ok(FitOutcome::Measured(PlotRenderResult::new(
+                        crate::layout::Layout::envelope(panel),
+                        Vec::new(),
+                    )))
+                };
+                let first = crate::layout::fit::measured(children.measure(
+                    &source,
+                    context,
+                    &owner,
+                    MeasurementPhase::Legend,
+                    round,
+                    &mut produce,
+                ))
+                .map_err(crate::layout::fit::PlanError::into_error)?;
+                let hit = crate::layout::fit::measured(children.measure(
+                    &source,
+                    context,
+                    &owner,
+                    MeasurementPhase::Legend,
+                    round,
+                    &mut produce,
+                ))
+                .map_err(crate::layout::fit::PlanError::into_error)?;
+                assert!(Arc::ptr_eq(&first, &hit));
+                let mut paint = theme.clone();
+                paint.legend.frame_fill = crate::render::backend::Rgba::new(1, 2, 3, 120);
+                let mut geometry = paint.clone();
+                geometry.legend.frame_stroke_width = 7.0;
+                for custom in [&paint, &geometry] {
+                    let changed = crate::layout::fit::measured(children.measure(
+                        &source,
+                        PlotRenderContext::new(source.data(), panel, custom),
+                        &owner,
+                        MeasurementPhase::Legend,
+                        round,
+                        &mut produce,
+                    ))
+                    .map_err(crate::layout::fit::PlanError::into_error)?;
+                    assert!(!Arc::ptr_eq(&first, &changed));
+                    let hit = crate::layout::fit::measured(children.measure(
+                        &source,
+                        PlotRenderContext::new(source.data(), panel, custom),
+                        &owner,
+                        MeasurementPhase::Legend,
+                        round,
+                        &mut produce,
+                    ))
+                    .map_err(crate::layout::fit::PlanError::into_error)?;
+                    assert!(Arc::ptr_eq(&changed, &hit));
+                }
+                Ok(crate::layout::MeasuredLayout::new(assigned, ()))
+            },
+            |(), _, (), _| Ok(()),
+        )
+        .unwrap();
+        assert_eq!(produced, 3);
+    }
+
+    #[test]
     fn child_measurement_hits_and_insertions_use_independent_cumulative_limits() {
         for cache_limit in [false, true] {
             let source = Plot::scatter(
@@ -427,7 +643,11 @@ mod tests {
             .erase();
             let theme = crate::Theme::Publication.resolve();
             let owner = ComponentAddress::root()
-                .child(AddressRole::FacetCell, 0)
+                .child(
+                    AddressRole::FacetCell,
+                    0,
+                    &crate::font::canonical::OperationGenerationResources::new(),
+                )
                 .unwrap();
             let mut children = ChildPlans::facets(&source);
             let mut produced = 0;
@@ -517,10 +737,18 @@ mod tests {
         .erase();
         let theme = crate::Theme::Publication.resolve();
         let owner = ComponentAddress::root()
-            .child(AddressRole::FacetCell, 0)
+            .child(
+                AddressRole::FacetCell,
+                0,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
             .unwrap();
         let sibling = ComponentAddress::root()
-            .child(AddressRole::FacetCell, 1)
+            .child(
+                AddressRole::FacetCell,
+                1,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
             .unwrap();
         let mut children = ChildPlans::facets(&source);
         let mut rounds = 0;
@@ -545,6 +773,7 @@ mod tests {
                         role: LegendRole::Suppressed,
                         legend_entries: None,
                         result: Arc::new(PanelPlan {
+                            frame_box: context.panel,
                             panel_box: context.panel,
                             result: PlotRenderResult::new(
                                 crate::layout::Layout::envelope(crate::layout::PanelBox::new(
@@ -608,10 +837,18 @@ mod tests {
         .erase();
         let theme = crate::Theme::Publication.resolve();
         let owner = ComponentAddress::root()
-            .child(AddressRole::CanvasCell, 0)
+            .child(
+                AddressRole::CanvasCell,
+                0,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
             .unwrap();
         let neighbor = ComponentAddress::root()
-            .child(AddressRole::CanvasCell, 1)
+            .child(
+                AddressRole::CanvasCell,
+                1,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
             .unwrap();
         crate::layout::plan_exact_root(
             800,
@@ -623,7 +860,7 @@ mod tests {
                 assert!(Inputs::new(
                     &source,
                     context,
-                    &owner.child(AddressRole::CanvasCell, 1)?,
+                    &owner.child(AddressRole::CanvasCell, 1, round.resources())?,
                     round
                 )
                 .is_err());
@@ -703,7 +940,7 @@ mod tests {
                         "discard test request",
                     )?;
                     assert!(matches!(
-                        round.finish_trial(checkpoint),
+                        round.finish_trial(checkpoint)?,
                         crate::layout::kernel::TrialOutcome::Miss(_)
                     ));
                 }

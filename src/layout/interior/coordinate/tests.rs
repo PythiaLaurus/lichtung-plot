@@ -186,9 +186,19 @@ fn native_root_producers_obey_eighth_round_and_cycle_limits_under_parent_feedbac
         for policy in 0..3 {
             let theme = crate::Theme::Publication.resolve();
             let parent = ComponentAddress::root()
-                .child(AddressRole::RootBody, 0)
+                .child(
+                    AddressRole::RootBody,
+                    0,
+                    &crate::font::canonical::OperationGenerationResources::new(),
+                )
                 .unwrap();
-            let owner = parent.child(AddressRole::PlotBody, 0).unwrap();
+            let owner = parent
+                .child(
+                    AddressRole::PlotBody,
+                    0,
+                    &crate::font::canonical::OperationGenerationResources::new(),
+                )
+                .unwrap();
             let mut assignments = Vec::new();
             let mut captures = 0;
             let root = crate::layout::plan_exact_root(
@@ -198,13 +208,13 @@ fn native_root_producers_obey_eighth_round_and_cycle_limits_under_parent_feedbac
                     crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())
                 },
                 |inputs, assigned, round| {
-                    let (width, height) = assigned.dimensions();
+                    let (width, height) = assigned.dimensions()?;
                     let plot = inputs
                         .attach(source.clone())?
                         .with_canvas_size(width, height);
                     let canvas = canvas_layout(&plot, &theme).map_err(PlanError::into_error)?;
                     round.observe_canvas(&canvas)?;
-                    let consumed = round.insets(&parent, FeedbackKind::AxisGutter);
+                    let consumed = round.insets(&parent, FeedbackKind::AxisGutter)?;
                     let cell = fit::measured(
                         FrameRequirements {
                             minimum_body: plot.intrinsic_body_minimum(&theme)?,
@@ -250,7 +260,7 @@ fn native_root_producers_obey_eighth_round_and_cycle_limits_under_parent_feedbac
                 |_, assigned, (plan, canvas), stage| {
                     captures += 1;
                     assert_eq!(policy, 0, "unstable native roots cannot capture");
-                    let (width, height) = assigned.dimensions();
+                    let (width, height) = assigned.dimensions()?;
                     crate::orchestrator::capture_text_replay_plan(
                         width,
                         height,
@@ -464,7 +474,11 @@ fn native_absolute_gutter_feedback_contracts_independently_of_multiline_caption(
             .with_suppressed_legend();
         let theme = crate::Theme::Publication.resolve();
         let owner = ComponentAddress::root()
-            .child(AddressRole::PlotBody, 0)
+            .child(
+                AddressRole::PlotBody,
+                0,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
             .unwrap();
         let mut outputs = Vec::new();
         for seeded in [false, true] {
@@ -493,8 +507,8 @@ fn native_absolute_gutter_feedback_contracts_independently_of_multiline_caption(
                         &owner,
                     ))
                     .map_err(PlanError::into_error)?;
-                    let prior = round.insets(&owner, FeedbackKind::AxisGutter);
-                    let next = round.next_insets(&owner, FeedbackKind::AxisGutter);
+                    let prior = round.insets(&owner, FeedbackKind::AxisGutter)?;
+                    let next = round.next_insets(&owner, FeedbackKind::AxisGutter)?;
                     contracted |= next[0] < prior[0] && next[2] < prior[2];
                     Ok(crate::layout::MeasuredLayout::new(assigned, (plan, canvas)))
                 },
@@ -882,7 +896,11 @@ fn every_native_route_reports_intrinsic_fit_before_mark_projection_or_backend_cr
         assert!(minimum.0 >= axes.0 && minimum.1 >= axes.1);
         let scope = fit::FitScope::new(
             &crate::layout::ComponentAddress::root()
-                .child(crate::layout::AddressRole::PlotBody, 0)
+                .child(
+                    crate::layout::AddressRole::PlotBody,
+                    0,
+                    &crate::font::canonical::OperationGenerationResources::new(),
+                )
                 .unwrap(),
             7,
         );
@@ -1236,7 +1254,11 @@ fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks()
         let theme = crate::Theme::Publication.resolve();
         let scope = fit::FitScope::new(
             &crate::layout::ComponentAddress::root()
-                .child(crate::layout::AddressRole::PlotBody, 0)
+                .child(
+                    crate::layout::AddressRole::PlotBody,
+                    0,
+                    &crate::font::canonical::OperationGenerationResources::new(),
+                )
                 .unwrap(),
             4,
         );
@@ -1259,7 +1281,11 @@ fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks()
         assert_eq!(
             failure.reason.address,
             scope
-                .child(crate::layout::AddressRole::AxisBottom, 0)
+                .child(
+                    crate::layout::AddressRole::AxisBottom,
+                    0,
+                    &crate::font::canonical::OperationGenerationResources::new()
+                )
                 .unwrap()
                 .address
         );
@@ -1290,10 +1316,18 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
             DISABLE_CHILD_REUSE.with(|flag| flag.set(disabled));
             let theme = crate::Theme::Publication.resolve();
             let owner = ComponentAddress::root()
-                .child(AddressRole::FacetCell, 0)
+                .child(
+                    AddressRole::FacetCell,
+                    0,
+                    &crate::font::canonical::OperationGenerationResources::new(),
+                )
                 .unwrap();
             let sibling = ComponentAddress::root()
-                .child(AddressRole::FacetCell, 1)
+                .child(
+                    AddressRole::FacetCell,
+                    1,
+                    &crate::font::canonical::OperationGenerationResources::new(),
+                )
                 .unwrap();
             let mut children = ChildPlans::facets(&source);
             let mut previous_selected = None;
@@ -1351,9 +1385,9 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
                         );
                     }
                     let requested = round
-                        .next_insets(&owner, FeedbackKind::AxisGutter)
+                        .next_insets(&owner, FeedbackKind::AxisGutter)?
                         .map(f64::to_bits);
-                    let stable_for_reuse = round.child_stable(std::slice::from_ref(&owner));
+                    let stable_for_reuse = round.child_stable(std::slice::from_ref(&owner))?;
                     let cached = fit::measured(children.plan(
                         &plot,
                         LegendRole::Suppressed,
@@ -1369,7 +1403,7 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
                     );
                     assert_eq!(
                         round
-                            .next_insets(&owner, FeedbackKind::AxisGutter)
+                            .next_insets(&owner, FeedbackKind::AxisGutter)?
                             .map(f64::to_bits),
                         requested
                     );
@@ -1393,17 +1427,18 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
                     ))
                     .map_err(PlanError::into_error)?;
                     let axes = plot.prepared_axis_inputs().unwrap();
-                    let with_existing_domain = |manual: (f64, f64), kind| {
-                        round.domain(&owner, kind).map_or(manual, |range| {
-                            (manual.0.min(range.0), manual.1.max(range.1))
-                        })
-                    };
+                    let with_existing_domain =
+                        |manual: (f64, f64), kind| -> Result<_, crate::Error> {
+                            Ok(round.domain(&owner, kind)?.map_or(manual, |range| {
+                                (manual.0.min(range.0), manual.1.max(range.1))
+                            }))
+                        };
                     assert_eq!(
                         rejected.result.layout.projection.x_range(),
                         if axes.categories[0].is_some() {
                             axes.ranges[0]
                         } else {
-                            with_existing_domain((-10.0, 10.0), FeedbackKind::AutomaticDomainX)
+                            with_existing_domain((-10.0, 10.0), FeedbackKind::AutomaticDomainX)?
                         }
                     );
                     assert_eq!(
@@ -1411,7 +1446,7 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
                         if axes.categories[1].is_some() {
                             axes.ranges[1]
                         } else {
-                            with_existing_domain((-5.0, 5.0), FeedbackKind::AutomaticDomainY)
+                            with_existing_domain((-5.0, 5.0), FeedbackKind::AutomaticDomainY)?
                         }
                     );
                     assert_ne!(first.panel_box, rejected.panel_box);
@@ -1421,7 +1456,7 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
                         &[],
                         "rejected ancestor trial",
                     )?;
-                    assert!(matches!(round.finish_trial(trial), TrialOutcome::Miss(_)));
+                    assert!(matches!(round.finish_trial(trial)?, TrialOutcome::Miss(_)));
                     assert!(resources.usage().unwrap().1 > before.0);
                     assert!(resources.byte_usage().unwrap() > before.1);
                     let selected = fit::measured(children.plan(
@@ -1444,7 +1479,7 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
                     assert_eq!(selected.panel_box, first.panel_box);
                     assert_eq!(
                         round
-                            .next_insets(&owner, FeedbackKind::AxisGutter)
+                            .next_insets(&owner, FeedbackKind::AxisGutter)?
                             .map(f64::to_bits),
                         requested
                     );
@@ -1455,7 +1490,7 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
                     // A controlled deferred sibling reserve keeps this root active
                     // without changing the native child's keyed allocation. Unlike
                     // guide reflow, this proves reuse from a previous root round.
-                    let consumed = round.insets(&sibling, FeedbackKind::OwnedInk);
+                    let consumed = round.insets(&sibling, FeedbackKind::OwnedInk)?;
                     let sibling_box = fit::measured(
                         crate::layout::kernel::FrameRequirements {
                             minimum_body: (1.0, 1.0),
@@ -1486,8 +1521,8 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
                     }
                     // A child's own pending mark-domain request invalidates its
                     // provisional key even when a sibling keeps the root alive.
-                    let reusable = round.child_stable(std::slice::from_ref(&owner));
-                    children.finish_round(round);
+                    let reusable = round.child_stable(std::slice::from_ref(&owner))?;
+                    children.finish_round(round)?;
                     previous_selected = reusable.then(|| std::sync::Arc::clone(&selected));
                     Ok(crate::layout::MeasuredLayout::new(
                         assigned,

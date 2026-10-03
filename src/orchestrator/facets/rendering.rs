@@ -112,7 +112,12 @@ pub(super) fn plan_facet_strip(
     facet: &FacetPanel,
     theme: &ResolvedTheme,
 ) -> Result<PlacedText, crate::layout::fit::PlanError> {
-    let label = facet_label(plot, &facet.cell)?;
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let label = facet_label(
+        plot,
+        &facet.cell,
+        plot.data().with_axis_resources(&resources),
+    )?;
     let plan = crate::layout::fit::measured(crate::layout::fit::text(
         theme,
         &label,
@@ -121,8 +126,16 @@ pub(super) fn plan_facet_strip(
         PhysicalTextAlignment::Center,
         "facet strip",
         &crate::layout::fit::FitScope::root()
-            .child(crate::layout::AddressRole::FacetCell, facet.panel_index)?
-            .child(crate::layout::AddressRole::FacetHeader, 0)?,
+            .child(
+                crate::layout::AddressRole::FacetCell,
+                facet.panel_index,
+                &theme.prepared_font_environment()?.generation_resources(),
+            )?
+            .child(
+                crate::layout::AddressRole::FacetHeader,
+                0,
+                &theme.prepared_font_environment()?.generation_resources(),
+            )?,
     ))?;
     let first_y =
         facet.panel.y1 + 14.0 + plan.lines.len().saturating_sub(1) as f64 * plan.line_height();
@@ -145,10 +158,6 @@ fn draw_facet_strip(
     crate::render::backend::with_layer(backend, layer, |backend| text.draw(backend))
 }
 
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "small wrapped-line indexes are projected into backend coordinates"
-)]
 pub(super) fn plan_shared_facet_axis_labels(
     horizontal_label: Option<&str>,
     vertical_label: Option<&str>,
@@ -170,13 +179,18 @@ pub(super) fn plan_shared_facet_axis_labels(
             grid.width(),
             PhysicalTextAlignment::Center,
             "shared facet x-axis title",
-            &crate::layout::fit::FitScope::root()
-                .child(crate::layout::AddressRole::AxisBottom, 0)?,
+            &crate::layout::fit::FitScope::root().child(
+                crate::layout::AddressRole::AxisBottom,
+                0,
+                &theme.prepared_font_environment()?.generation_resources(),
+            )?,
         ))?;
-        let first_y = axis_origin.1 - f64::from(theme.typography.axis_title.font_size);
-        plans.push(PlacedText::from_deferred_first_line(
+        let middle_y = axis_origin.1
+            - theme.axes.spacing.x_title_without_tick_labels_gap
+            - plan.height() / 2.0;
+        plans.push(PlacedText::middle(
             plan,
-            Point2D::new(f64::midpoint(grid.x0, grid.x1).round(), first_y.round()),
+            Point2D::new(f64::midpoint(grid.x0, grid.x1), middle_y),
             TextAnchor::Middle,
             0.0,
         ));
@@ -189,14 +203,18 @@ pub(super) fn plan_shared_facet_axis_labels(
             grid.height(),
             PhysicalTextAlignment::Center,
             "shared facet y-axis title",
-            &crate::layout::fit::FitScope::root().child(crate::layout::AddressRole::AxisLeft, 0)?,
+            &crate::layout::fit::FitScope::root().child(
+                crate::layout::AddressRole::AxisLeft,
+                0,
+                &theme.prepared_font_environment()?.generation_resources(),
+            )?,
         ))?;
-        let first_x = axis_origin.0 - f64::from(theme.typography.axis_title.font_size) - 8.0;
-        let first_x = first_x - plan.lines.len().saturating_sub(1) as f64 * plan.line_height();
+        let middle_x =
+            axis_origin.0 - theme.axes.spacing.y_title_edge_padding - plan.height() / 2.0;
         plans.push(
-            PlacedText::from_deferred_first_line(
+            PlacedText::middle(
                 plan,
-                Point2D::new(first_x.round(), f64::midpoint(grid.y0, grid.y1).round()),
+                Point2D::new(middle_x, f64::midpoint(grid.y0, grid.y1)),
                 TextAnchor::Middle,
                 -90.0,
             )
@@ -221,17 +239,23 @@ fn draw_shared_facet_axis_labels(
     })
 }
 
-pub(super) fn facet_label(plot: &Plot, cell: &FacetCell) -> Result<String, Error> {
+pub(super) fn facet_label(
+    plot: &Plot,
+    cell: &FacetCell,
+    data: crate::data::PlotData<'_>,
+) -> Result<String, Error> {
+    data.source_resources()?;
     let mut label = String::new();
     for (index, selector) in cell.iter().enumerate() {
-        let variable = plot.resolve_source_label(&selector.variable, plot.data())?;
-        let level = plot.resolve_source_label(&selector.level, plot.data())?;
+        data.claim_source_visits(1)?;
+        let variable = plot.resolve_source_label(&selector.variable, data)?;
+        let level = plot.resolve_source_label(&selector.level, data)?;
         let length = variable
             .len()
             .checked_add(level.len())
             .and_then(|length| length.checked_add(6))
             .ok_or_else(|| Error::Render("facet header length overflow".into()))?;
-        plot.data().reserve_source_string(&mut label, length)?;
+        data.reserve_source_string(&mut label, length)?;
         if index != 0 {
             label.push_str(" | ");
         }
@@ -247,11 +271,69 @@ mod tests {
     use super::*;
 
     #[test]
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "fixture has two retained lines per role"
-    )]
-    fn deferred_multiline_facet_chrome_keeps_old_final_pixel_placement() {
+    fn facet_label_admits_each_owned_string_and_refuses_before_unfunded_copies() {
+        use crate::font::canonical::OperationGenerationResources;
+        let plot = Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0]),
+            crate::NumericValues::new("y", [2.0, 3.0]),
+        )
+        .labels(crate::Labels::raw())
+        .erase();
+        let cell = vec![super::super::data::FacetSelector {
+            column: "facet",
+            variable: "ab".into(),
+            level: "cd".into(),
+        }];
+        let rows = [1];
+        let ids = [29];
+        // Two two-byte label copies and a ten-byte output reservation retain
+        // three String headers. The source work is one selector + four bytes.
+        for available in [2, 3, 4] {
+            let resources = OperationGenerationResources::with_test_limits(5, 14);
+            resources.claim_slots(1_000_000 - available).unwrap();
+            let data = crate::data::PlotData::with_rows(&plot, &rows, &ids)
+                .with_axis_resources(&resources);
+            let result = facet_label(&plot, &cell, data);
+            if available >= 3 {
+                assert_eq!(result.unwrap(), "ab = cd");
+            } else {
+                assert!(result.unwrap_err().to_string().contains("record admission"));
+            }
+            assert_eq!(resources.usage().unwrap().1, 5);
+            assert_eq!(
+                resources.byte_usage().unwrap(),
+                if available >= 3 { 14 } else { 4 }
+            );
+            assert_eq!(data.source_row(0), 29);
+        }
+        for bytes in [0, 13, 14, 15] {
+            let resources = OperationGenerationResources::with_test_limits(5, bytes);
+            let data = crate::data::PlotData::with_rows(&plot, &rows, &ids)
+                .with_axis_resources(&resources);
+            let result = facet_label(&plot, &cell, data);
+            if bytes >= 14 {
+                assert_eq!(result.unwrap(), "ab = cd");
+            } else {
+                assert!(result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("storage admission"));
+            }
+            assert_eq!(
+                resources.byte_usage().unwrap(),
+                if bytes >= 14 {
+                    14
+                } else if bytes == 0 {
+                    0
+                } else {
+                    4
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn shared_multiline_titles_use_measured_clearance_and_keep_centered_strips() {
         let plot = Plot::scatter(
             crate::NumericValues::new("x", [0.0, 1.0]),
             crate::NumericValues::new("y", [0.0, 1.0]),
@@ -285,64 +367,29 @@ mod tests {
             &theme,
         )
         .unwrap();
-        let size = f64::from(theme.typography.axis_title.font_size);
-        let first = [
-            Point2D::new(
-                f64::midpoint(grid.x0, grid.x1).round(),
-                (grid.y1 + 14.0 + strip.plan.line_height()).round(),
-            ),
-            Point2D::new(
-                f64::midpoint(grid.x0, grid.x1).round(),
-                (origin.1 - size).round(),
-            ),
-            Point2D::new(
-                (origin.0 - size - 8.0 - axes[1].plan.line_height()).round(),
-                f64::midpoint(grid.y0, grid.y1).round(),
-            ),
-        ];
-        let roles = [&strip, &axes[0], &axes[1]];
-        let mut old_placements = Vec::new();
-        for (role, first) in roles.iter().zip(first) {
+        for role in [&strip, &axes[0], &axes[1]] {
             assert_eq!(role.plan.lines.len(), 2);
-            let offset = (role.plan.lines.len() - 1) as f64 * role.plan.line_height() / 2.0;
-            let angle = role.placement.rotation.to_radians();
-            let unrounded = Point2D::new(
-                first.x - offset * angle.sin(),
-                first.y - offset * angle.cos(),
-            );
-            let old = crate::render::coordinates::canonical_text(
-                unrounded,
-                role.placement.rotation,
-                crate::render::coordinates::CoordinatePrecision::Integer,
-            )
+        }
+        assert_eq!(
+            strip.placement.position.x.to_bits(),
+            f64::midpoint(grid.x0, grid.x1).round().to_bits()
+        );
+        let mut horizontal = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+        horizontal
+            .text(axes[0].placement, &axes[0].plan, None)
             .unwrap();
-            assert_ne!(
-                unrounded,
-                old.position.value(),
-                "fixture must expose the removed backend snap"
-            );
-            assert_eq!(role.placement.position, old.position.value());
-            old_placements.push(crate::render::backend::PlannedTextPlacement {
-                position: old.position.value(),
-                ..role.placement
-            });
-        }
+        assert!(horizontal
+            .bounds()
+            .iter()
+            .all(|ink| ink.top <= origin.1 - theme.axes.spacing.x_title_without_tick_labels_gap));
+        let mut vertical = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+        vertical
+            .text(axes[1].placement, &axes[1].plan, None)
+            .unwrap();
+        assert!(vertical
+            .bounds()
+            .iter()
+            .all(|ink| ink.right <= origin.0 - theme.axes.spacing.y_title_edge_padding));
         assert!(axes[1].placement.reverse_lines);
-        let mut outputs = Vec::new();
-        for old in [false, true] {
-            let mut svg = crate::render::svg_backend::SvgBackend::in_memory_with_fonts(
-                480,
-                400,
-                theme.prepared_font_environment().unwrap().clone(),
-            );
-            svg.begin(480, 400).unwrap();
-            for (role, expected) in roles.iter().zip(&old_placements) {
-                svg.draw_planned_text(if old { *expected } else { role.placement }, &role.plan)
-                    .unwrap();
-            }
-            svg.end().unwrap();
-            outputs.push(svg.into_bytes().unwrap());
-        }
-        assert_eq!(outputs[0], outputs[1]);
     }
 }

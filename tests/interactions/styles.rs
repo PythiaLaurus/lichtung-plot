@@ -78,19 +78,22 @@ fn native_interaction_preserves_exact_root_svg_bytes() {
     // guide typography. T5c closes complete point/outline alpha and native
     // mark pitch, so the exact SVG bytes are intentionally repinned. T5a
     // fingerprints remain attributed in the benchmarks.
+    // T5e guide closure prices complete composite glyph ink and preserves
+    // fractional text baselines. All four inspected prior goldens are retained
+    // with attribution in docs/t5e7-guide-cache-closure.md.
     for (theme, expected) in [
         (
             lichtung_plot::Theme::Publication,
             [
-                (11009, 0x12aa_f180_97b9_c5cc_u64),
-                (11353, 0x89b9_c58e_98ee_340a),
+                (11007, 13_027_462_214_619_244_865_u64),
+                (11352, 15_258_619_364_319_190_699),
             ],
         ),
         (
             lichtung_plot::Theme::Science,
             [
-                (10616, 0x05b4_da36_4c19_7d7e),
-                (10960, 0xea68_c6db_aa4d_c974),
+                (10614, 15_450_700_033_276_445_789),
+                (10959, 11_883_049_564_942_211_587),
             ],
         ),
     ] {

@@ -98,6 +98,8 @@ fn outer_roles_use_one_root_producer_without_changing_centered_strips() {
                     round,
                     &mut children,
                     guide,
+                    false,
+                    None,
                 )
                 .map_err(fit::PlanError::into_error)?;
                 crate::render::geometry::GEOMETRY_BACKEND_BEGINS
@@ -111,11 +113,11 @@ fn outer_roles_use_one_root_producer_without_changing_centered_strips() {
                     .iter()
                     .all(|strip| strip.placement.anchor == TextAnchor::Middle));
                 assert_eq!(plan.panel_plans.len(), 2);
-                children.finish_round(round);
+                children.finish_round(round)?;
                 Ok(crate::layout::MeasuredLayout::new(assigned, plan))
             },
             |_, assigned, plan, stage| {
-                let (width, height) = assigned.dimensions();
+                let (width, height) = assigned.dimensions()?;
                 let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
                 let projections = crate::layout::Projection::test_projection_calls();
                 let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
@@ -188,7 +190,11 @@ fn measured_facet_tracks_keep_exact_fit_and_typed_owner() {
     )
     .erase();
     let scope = FitScope::root()
-        .child(crate::layout::AddressRole::FacetGrid, 0)
+        .child(
+            crate::layout::AddressRole::FacetGrid,
+            0,
+            &crate::font::canonical::OperationGenerationResources::new(),
+        )
         .unwrap();
     let theme = crate::Theme::Publication.resolve();
     for width in [80.0, 80.0 - 1.0 / 1024.0] {
@@ -209,11 +215,12 @@ fn measured_facet_tracks_keep_exact_fit_and_typed_owner() {
             &[],
             &theme,
             &scope,
+            None,
         )
         .unwrap();
         match outcome {
             FitOutcome::Measured(cells) => {
-                assert_eq!(cells[0].width().to_bits(), 80.0_f64.to_bits());
+                assert_eq!(cells.cells[0].width().to_bits(), 80.0_f64.to_bits());
             }
             FitOutcome::Miss(failure) => {
                 assert!(width < 80.0);
@@ -262,6 +269,7 @@ fn parent_topology_admits_exact_budget_and_does_not_refund_rejected_trials() {
                 &[],
                 &theme,
                 &scope,
+                None,
             )
         };
         let result = attempt(79.0);
@@ -321,6 +329,8 @@ fn impossible_outer_title_returns_typed_fit_before_child_measurement() {
                 round,
                 &mut crate::decorations::plan::children::ChildPlans::facets(&source),
                 guide,
+                false,
+                None,
             );
             let Err(fit::PlanError::Fit(failure)) = result else {
                 panic!("typed outer title fit");
@@ -328,8 +338,11 @@ fn impossible_outer_title_returns_typed_fit_before_child_measurement() {
             assert_eq!(failure.reason.kind, FitKind::Text);
             assert_eq!(
                 failure.reason.address,
-                crate::layout::ComponentAddress::root()
-                    .child(crate::layout::AddressRole::RootTitle, 0)?
+                crate::layout::ComponentAddress::root().child(
+                    crate::layout::AddressRole::RootTitle,
+                    0,
+                    round.resources()
+                )?
             );
             crate::decorations::plan::children::CHILD_MEASUREMENTS
                 .with(|calls| assert!(calls.borrow().is_empty()));

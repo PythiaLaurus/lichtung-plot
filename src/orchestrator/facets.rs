@@ -17,7 +17,9 @@ mod legend;
 mod parent_tests;
 mod planning;
 mod rendering;
+mod sizing;
 mod tracks;
+pub(super) use sizing::natural_size;
 
 pub(crate) fn text_census_labels(
     source: &Plot,
@@ -140,6 +142,7 @@ pub(super) fn prepare_discrete_guide(
 }
 
 pub(super) struct FacetPlan {
+    pub(super) dimensions: (u32, u32),
     panels: Vec<data::FacetPanel>,
     panel_plans: Vec<std::sync::Arc<crate::decorations::plan::PanelPlan>>,
     outside_legend: Option<ResolvedLegend>,
@@ -159,6 +162,7 @@ pub(super) struct FacetPlan {
 impl FacetPlan {
     #[expect(
         clippy::too_many_lines,
+        clippy::too_many_arguments,
         clippy::cast_precision_loss,
         reason = "the legacy parent adapter keeps complete-frame guide trials explicit"
     )]
@@ -169,6 +173,8 @@ impl FacetPlan {
         round: &mut crate::layout::kernel::FeedbackRound,
         children: &mut crate::decorations::plan::children::ChildPlans,
         prepared_guide: &PreparedFacetGuide,
+        content_sizing: bool,
+        inputs: Option<&crate::layout::interior::PreparedInteriorInputs>,
     ) -> Result<Self, crate::layout::fit::PlanError> {
         if !source.significance_annotations().is_empty()
             && !kind.supports_significance_annotations()
@@ -185,7 +191,7 @@ impl FacetPlan {
         let horizontal_axis_label =
             (!horizontal_axis_label.is_empty()).then_some(horizontal_axis_label);
         let vertical_axis_label = (!vertical_axis_label.is_empty()).then_some(vertical_axis_label);
-        let canvas_layout = planning::canvas_layout(
+        let mut canvas_layout = planning::canvas_layout(
             source,
             theme,
             horizontal_axis_label.as_deref(),
@@ -220,6 +226,13 @@ impl FacetPlan {
                 .with_render_scope(facet.render_scope(data)?);
             minima.push(scoped.intrinsic_body_minimum(theme)?);
         }
+        let provisional_content = content_sizing.then(|| tracks::ContentSizing {
+            plot: &base_plot,
+            inputs: inputs.expect("content facet root retains prepared inputs"),
+            round,
+            natural_width: false,
+            natural_height: false,
+        });
         let provisional = fit::measured(tracks::allocate(
             data,
             outer,
@@ -229,7 +242,9 @@ impl FacetPlan {
             &[],
             theme,
             &FitScope::root(),
-        ))?;
+            provisional_content.as_ref(),
+        ))?
+        .cells;
         for facet in &mut panels {
             facet.panel = provisional[facet.row * selectors.columns + facet.column];
         }
@@ -240,8 +255,8 @@ impl FacetPlan {
         )?;
         let fix_x = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeY);
         let fix_y = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeX);
-        let horizontal_domain = legend::resolve_shared_facet_axis(&preflight, fix_x, true)?;
-        let vertical_domain = legend::resolve_shared_facet_axis(&preflight, fix_y, false)?;
+        let horizontal_domain = legend::resolve_shared_facet_axis(&preflight, fix_x, true, data)?;
+        let vertical_domain = legend::resolve_shared_facet_axis(&preflight, fix_y, false, data)?;
         let shared_plot = base_plot
             .with_resolved_facet_ranges(kind, horizontal_domain, vertical_domain)
             .with_parent_axis_gutters();
@@ -261,8 +276,11 @@ impl FacetPlan {
         } else {
             std::slice::from_ref(&position)
         };
-        let owner = crate::layout::ComponentAddress::root()
-            .child(crate::decorations::legend::address_role(position), 0)?;
+        let owner = crate::layout::ComponentAddress::root().child(
+            crate::decorations::legend::address_role(position),
+            0,
+            &resources,
+        )?;
         let positive_span = crate::layout::canvas::MINIMUM_PANEL_SPAN;
         let mut columns = data.collect_source((0..selectors.columns).map(|_| Ok(positive_span)))?;
         let mut rows = data.collect_source((0..selectors.rows).map(|_| Ok(positive_span)))?;
@@ -272,32 +290,36 @@ impl FacetPlan {
             rows[facet.row] = rows[facet.row].max(hard.1);
         }
         let mut minimum = (
-            columns.iter().sum::<f64>() + selectors.columns.saturating_sub(1) as f64 * 12.0,
-            rows.iter().sum::<f64>() + selectors.rows.saturating_sub(1) as f64 * 12.0,
+            columns.iter().sum::<f64>()
+                + selectors.columns.saturating_sub(1) as f64 * theme.composition.facet_gap,
+            rows.iter().sum::<f64>()
+                + selectors.rows.saturating_sub(1) as f64 * theme.composition.facet_gap,
         );
         if !minimum.0.is_finite() || !minimum.1.is_finite() {
             return Err(Error::Render("facet intrinsic grid span overflowed".into()).into());
         }
         // The guide and grid share one containing frame. Reserve the consumed
         // column/row gutters before measuring flow, not after fixing its width.
-        let grid = crate::layout::ComponentAddress::root()
-            .child(crate::layout::AddressRole::FacetGrid, 0)?;
+        let grid = crate::layout::ComponentAddress::root().child(
+            crate::layout::AddressRole::FacetGrid,
+            0,
+            &resources,
+        )?;
         let mut columns = Vec::new();
-        source
-            .data()
-            .reserve_source(&mut columns, selectors.columns)?;
+        data.reserve_source(&mut columns, selectors.columns)?;
         columns.resize(selectors.columns, [0.0_f64; 2]);
         let mut rows = Vec::new();
-        source.data().reserve_source(&mut rows, selectors.rows)?;
+        data.reserve_source(&mut rows, selectors.rows)?;
         rows.resize(selectors.rows, [0.0_f64; 2]);
         for (index, panel) in panels.iter().enumerate() {
             let address = grid.child(
                 crate::layout::AddressRole::FacetCell,
                 u32::try_from(index)
                     .map_err(|_| Error::Render("facet address overflowed".into()))?,
+                &resources,
             )?;
             let [left, right, bottom, top] =
-                round.insets(&address, crate::layout::kernel::FeedbackKind::AxisGutter);
+                round.insets(&address, crate::layout::kernel::FeedbackKind::AxisGutter)?;
             columns[panel.column][0] = columns[panel.column][0].max(left);
             columns[panel.column][1] = columns[panel.column][1].max(right);
             rows[panel.row][0] = rows[panel.row][0].max(bottom);
@@ -308,14 +330,14 @@ impl FacetPlan {
         let baseline = if automatic
             || (!legend_entries.is_empty() && crate::decorations::plan::is_outside(position))
         {
-            planning::shared_axis_line_counts(
+            planning::shared_axis_requirements(
                 horizontal_axis_label.as_deref(),
                 vertical_axis_label.as_deref(),
                 theme,
                 canvas_layout.panel_box,
             )?
         } else {
-            (0, 0)
+            [0.0; 4]
         };
         let mut first_miss = None;
         for (edge_index, &edge) in edges.iter().enumerate() {
@@ -357,7 +379,7 @@ impl FacetPlan {
                     let guide = match crate::decorations::legend::Legend::measure_assigned(
                         title,
                         std::sync::Arc::clone(&legend_entries),
-                        available,
+                        (available.0, (!content_sizing).then_some(available.1)),
                         horizontal,
                         compact,
                         theme,
@@ -378,6 +400,48 @@ impl FacetPlan {
                     if let Some(trial) = &guide_trial {
                         trial.body();
                     }
+                    if content_sizing {
+                        let grid_width = canvas_layout.panel_box.width()
+                            - if horizontal {
+                                0.0
+                            } else {
+                                guide.compute_box_width() + metrics.outside_gap
+                            };
+                        let height = match sizing::grid_height(
+                            &shared_plot,
+                            &panels,
+                            (selectors.rows, selectors.columns),
+                            &minima,
+                            theme,
+                            round,
+                            grid_width,
+                            inputs.expect("content facet root retains prepared inputs"),
+                        )? {
+                            FitOutcome::Measured(height) => height,
+                            FitOutcome::Miss(reason) => {
+                                FitFailure::retain_least(&mut first_miss, reason);
+                                continue;
+                            }
+                        };
+                        let height = if horizontal {
+                            height + guide.compute_box_height() + metrics.outside_gap
+                        } else {
+                            height.max(guide.compute_box_height())
+                        };
+                        let height = crate::layout::interior::sizing::integral(
+                            height + canvas_layout.insets.bottom + canvas_layout.insets.top,
+                        )?;
+                        let owner = source
+                            .admitted_clone(data)?
+                            .with_canvas_size(source.width(), height);
+                        canvas_layout = planning::canvas_layout(
+                            &owner,
+                            theme,
+                            horizontal_axis_label.as_deref(),
+                            vertical_axis_label.as_deref(),
+                            round,
+                        )?;
+                    }
                     match crate::decorations::plan::place_outside_legend(
                         guide,
                         edge,
@@ -396,59 +460,58 @@ impl FacetPlan {
                         }
                     }
                 } else {
+                    if content_sizing {
+                        let height = fit::measured(sizing::grid_height(
+                            &shared_plot,
+                            &panels,
+                            (selectors.rows, selectors.columns),
+                            &minima,
+                            theme,
+                            round,
+                            canvas_layout.panel_box.width(),
+                            inputs.expect("content facet root retains prepared inputs"),
+                        ))?;
+                        let height = crate::layout::interior::sizing::integral(
+                            height + canvas_layout.insets.bottom + canvas_layout.insets.top,
+                        )?;
+                        let owner = source
+                            .admitted_clone(data)?
+                            .with_canvas_size(source.width(), height);
+                        canvas_layout = planning::canvas_layout(
+                            &owner,
+                            theme,
+                            horizontal_axis_label.as_deref(),
+                            vertical_axis_label.as_deref(),
+                            round,
+                        )?;
+                    }
                     (canvas_layout.panel_box, None)
                 };
                 if outside {
-                    let mut lines = [0_usize; 2];
-                    for (index, (label, span)) in [
-                        (horizontal_axis_label.as_deref(), reserved_outer.width()),
-                        (vertical_axis_label.as_deref(), reserved_outer.height()),
-                    ]
-                    .into_iter()
-                    .enumerate()
-                    {
-                        if let Some(label) = label {
-                            match fit::text(
-                                theme,
-                                label,
-                                &theme.typography.axis_title,
-                                span,
-                                crate::layout::PhysicalTextAlignment::Center,
-                                "shared facet axis title",
-                                &scope.child(
-                                    if index == 0 {
-                                        crate::layout::AddressRole::AxisBottom
-                                    } else {
-                                        crate::layout::AddressRole::AxisLeft
-                                    },
-                                    0,
-                                )?,
-                            )? {
-                                FitOutcome::Measured(plan) => lines[index] = plan.lines.len(),
-                                FitOutcome::Miss(reason) => {
-                                    #[cfg(test)]
-                                    if let Some(trial) = &guide_trial {
-                                        trial.reject();
-                                    }
-                                    FitFailure::retain_least(&mut first_miss, reason);
-                                    continue 'trial;
-                                }
+                    let measured = match fit::outcome(planning::shared_axis_requirements(
+                        horizontal_axis_label.as_deref(),
+                        vertical_axis_label.as_deref(),
+                        theme,
+                        reserved_outer,
+                    ))? {
+                        FitOutcome::Measured(insets) => insets,
+                        FitOutcome::Miss(reason) => {
+                            #[cfg(test)]
+                            if let Some(trial) = &guide_trial {
+                                trial.reject();
                             }
+                            FitFailure::retain_least(&mut first_miss, reason);
+                            continue 'trial;
                         }
-                    }
-                    if reserved_outer.width()
-                        - lines[1].saturating_sub(baseline.1) as f64
-                            * theme.typography.axis_title.line_height()
-                        < minimum.0
-                        || reserved_outer.height()
-                            - lines[0].saturating_sub(baseline.0) as f64
-                                * theme.typography.axis_title.line_height()
+                    };
+                    if reserved_outer.width() - (measured[0] - baseline[0]).max(0.0) < minimum.0
+                        || reserved_outer.height() - (measured[2] - baseline[2]).max(0.0)
                             < minimum.1
                     {
                         FitFailure::retain_least(
                             &mut first_miss,
                             scope
-                                .child(crate::layout::AddressRole::FacetGrid, 0)?
+                                .child(crate::layout::AddressRole::FacetGrid, 0, &resources)?
                                 .failure(
                                     FitKind::TrackOrResidual,
                                     "shared facet titles leave insufficient assigned grid space",
@@ -479,7 +542,7 @@ impl FacetPlan {
                             trial.reject();
                         }
                         round.record_failure(reason)?;
-                        if let TrialOutcome::Miss(reason) = round.finish_trial(checkpoint) {
+                        if let TrialOutcome::Miss(reason) = round.finish_trial(checkpoint)? {
                             FitFailure::retain_least(&mut first_miss, reason);
                         }
                         continue;
@@ -507,6 +570,8 @@ impl FacetPlan {
                     &legend_entries,
                     &scope,
                     children,
+                    content_sizing,
+                    inputs,
                 )?;
                 let (planned_plot, panel_plans) = match measured {
                     FitOutcome::Measured(value) => value,
@@ -516,7 +581,7 @@ impl FacetPlan {
                             trial.reject();
                         }
                         round.record_failure(failure)?;
-                        if let TrialOutcome::Miss(failure) = round.finish_trial(checkpoint) {
+                        if let TrialOutcome::Miss(failure) = round.finish_trial(checkpoint)? {
                             FitFailure::retain_least(&mut first_miss, failure);
                         }
                         continue;
@@ -524,7 +589,7 @@ impl FacetPlan {
                 };
                 #[cfg(test)]
                 let guide_outcome;
-                match round.finish_trial(checkpoint) {
+                match round.finish_trial(checkpoint)? {
                     TrialOutcome::Miss(reason) => {
                         #[cfg(test)]
                         if let Some(trial) = &guide_trial {
@@ -601,6 +666,12 @@ impl FacetPlan {
                     strip_layers.push(layer);
                 }
                 let plan = Self {
+                    dimensions: (
+                        source.width(),
+                        crate::layout::interior::sizing::integral(
+                            canvas_layout.panel_box.y1 + canvas_layout.insets.top,
+                        )?,
+                    ),
                     panel_layers,
                     panel_plots,
                     legends,
@@ -645,10 +716,11 @@ impl FacetPlan {
         theme: &ResolvedTheme,
         round: &mut crate::layout::kernel::FeedbackRound,
     ) -> Result<(), Error> {
-        round.begin_owner(
-            &crate::layout::ComponentAddress::root()
-                .child(crate::layout::AddressRole::FacetGrid, 0)?,
-        )?;
+        round.begin_owner(&crate::layout::ComponentAddress::root().child(
+            crate::layout::AddressRole::FacetGrid,
+            0,
+            round.resources(),
+        )?)?;
         round.observe_box(self.outer)?;
         for label in [&self.horizontal_axis_label, &self.vertical_axis_label]
             .into_iter()
@@ -745,10 +817,18 @@ mod feedback_tests {
         };
         use crate::layout::{AddressRole, ComponentAddress};
         let owner = ComponentAddress::root()
-            .child(AddressRole::FacetCell, 0)
+            .child(
+                AddressRole::FacetCell,
+                0,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
             .unwrap();
         let neighbor = ComponentAddress::root()
-            .child(AddressRole::FacetCell, 1)
+            .child(
+                AddressRole::FacetCell,
+                1,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
             .unwrap();
         for scales in [FacetScales::Free, FacetScales::Fixed] {
             let source = Plot::scatter(
@@ -826,6 +906,8 @@ mod feedback_tests {
                             round,
                             &mut children,
                             guide,
+                            false,
+                            None,
                         )
                         .map_err(crate::layout::fit::PlanError::into_error)?;
                         if calls == 2 {
@@ -845,11 +927,11 @@ mod feedback_tests {
                                 !disabled && scales == FacetScales::Free
                             );
                         }
-                        children.finish_round(round);
+                        children.finish_round(round)?;
                         Ok(crate::layout::MeasuredLayout::new(assigned, plan))
                     },
                     |_, assigned, plan, stage| {
-                        let (width, height) = assigned.dimensions();
+                        let (width, height) = assigned.dimensions()?;
                         let panels = plan
                             .panel_plans
                             .iter()
@@ -1013,6 +1095,8 @@ mod feedback_tests {
                         round,
                         &mut crate::decorations::plan::children::ChildPlans::facets(&source),
                         guide,
+                        false,
+                        None,
                     )
                     .map_err(crate::layout::fit::PlanError::into_error)?,
                 ))
@@ -1035,7 +1119,7 @@ mod feedback_tests {
                 crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
                 let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
                 let projections = crate::layout::Projection::test_projection_calls();
-                let (width, height) = assigned.dimensions();
+                let (width, height) = assigned.dimensions()?;
                 let replay = crate::orchestrator::capture_text_replay_plan(
                     width,
                     height,
@@ -1115,7 +1199,7 @@ mod feedback_tests {
                     true,
                     true,
                     true,
-                    None,
+                    Some(stage),
                 )?;
                 let mut presence = stage.reserve_scalar_presence_map()?;
                 let mut census = crate::layout::PreparedTextCensus::materialize(
@@ -1138,6 +1222,8 @@ mod feedback_tests {
                         round,
                         &mut crate::decorations::plan::children::ChildPlans::facets(&source),
                         guide,
+                        false,
+                        None,
                     )
                     .map_err(crate::layout::fit::PlanError::into_error)?,
                 ))
@@ -1231,6 +1317,8 @@ mod feedback_tests {
                         round,
                         &mut crate::decorations::plan::children::ChildPlans::facets(&source),
                         guide,
+                        false,
+                        None,
                     )
                     .map_err(crate::layout::fit::PlanError::into_error)?,
                 ))

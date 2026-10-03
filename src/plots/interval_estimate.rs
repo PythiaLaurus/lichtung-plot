@@ -806,9 +806,11 @@ fn project(
                 &detail_label,
                 &layout,
                 reference_line_x,
-                &context
-                    .fit_scope()
-                    .child(crate::layout::AddressRole::CategoricalValueLabel, index)?,
+                &context.fit_scope().child(
+                    crate::layout::AddressRole::CategoricalValueLabel,
+                    index,
+                    &theme.prepared_font_environment()?.generation_resources(),
+                )?,
             )
         })
         .transpose()?;
@@ -821,7 +823,7 @@ fn project(
                 return Ok(None);
             };
             let is_significance = *is_significance;
-            let scope = context.fit_scope().child(if is_significance { crate::layout::AddressRole::Annotation } else { crate::layout::AddressRole::CategoricalValueLabel }, index)?;
+            let scope = context.fit_scope().child(if is_significance { crate::layout::AddressRole::Annotation } else { crate::layout::AddressRole::CategoricalValueLabel }, index, &theme.prepared_font_environment()?.generation_resources())?;
             let (x, y) = layout
                 .projection
                 .project(tuple.estimate, row_count - index as f64 - 0.5);
@@ -1015,7 +1017,11 @@ fn project(
             if bounds.bottom < clip.y0 || bounds.top > clip.y1 {
                 return Err(context
                     .fit_scope()
-                    .child(crate::layout::AddressRole::CategoricalValueLabel, index)?
+                    .child(
+                        crate::layout::AddressRole::CategoricalValueLabel,
+                        index,
+                        &theme.prepared_font_environment()?.generation_resources(),
+                    )?
                     .failure(
                         crate::layout::fit::FitKind::Text,
                         "required Estimate text exceeds its categorical row",
@@ -1027,7 +1033,11 @@ fn project(
             {
                 return Err(context
                     .fit_scope()
-                    .child(crate::layout::AddressRole::CategoricalValueLabel, index)?
+                    .child(
+                        crate::layout::AddressRole::CategoricalValueLabel,
+                        index,
+                        &theme.prepared_font_environment()?.generation_resources(),
+                    )?
                     .failure(
                         crate::layout::fit::FitKind::OverlayCollision,
                         "required Estimate text exceeds its numeric panel",

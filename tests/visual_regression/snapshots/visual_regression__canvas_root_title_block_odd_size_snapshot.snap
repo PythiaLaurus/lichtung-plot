@@ -5,85 +5,76 @@ expression: normalize_embedded_font(&svg)
 <svg xmlns="http://www.w3.org/2000/svg" width="433" height="501" viewBox="0 0 433 501" role="img">
 <style>line,path,polyline,polygon,circle{vector-effect:non-scaling-stroke}</style>
 <defs>
-<clipPath id="clip-0"><rect x="94.33984375" y="194.4013671875" width="318.259765625" height="183.7978515625"/></clipPath>
+<clipPath id="clip-0"><rect x="109.26953125" y="194.4013671875" width="303.330078125" height="183.7978515625"/></clipPath>
 </defs>
 <rect width="100%" height="100%" fill="#FFFFFF"/>
-<rect x="94.33984375" y="194.4013671875" width="318.259765625" height="183.7978515625" fill="#FFFFFF"/>
+<rect x="109.26953125" y="194.4013671875" width="303.330078125" height="183.7978515625" fill="#FFFFFF"/>
 <g id="panel-0-grid">
-<polyline points="108.806640625,378.19921875 108.806640625,194.4013671875" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
-<polyline points="157.02734375,378.19921875 157.02734375,194.4013671875" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
-<polyline points="205.2490234375,378.19921875 205.2490234375,194.4013671875" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
-<polyline points="253.4697265625,378.19921875 253.4697265625,194.4013671875" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
-<polyline points="301.6904296875,378.19921875 301.6904296875,194.4013671875" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
-<polyline points="349.912109375,378.19921875 349.912109375,194.4013671875" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
-<polyline points="398.1328125,378.19921875 398.1328125,194.4013671875" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
-<polyline points="94.33984375,369.8447265625 412.599609375,369.8447265625" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
-<polyline points="94.33984375,286.2998046875 412.599609375,286.2998046875" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
-<polyline points="94.33984375,202.755859375 412.599609375,202.755859375" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+<polyline points="123.0576171875,378.19921875 123.0576171875,194.4013671875" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+<polyline points="214.9755859375,378.19921875 214.9755859375,194.4013671875" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+<polyline points="306.8935546875,378.19921875 306.8935546875,194.4013671875" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+<polyline points="398.8115234375,378.19921875 398.8115234375,194.4013671875" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+<polyline points="109.26953125,369.8447265625 412.599609375,369.8447265625" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+<polyline points="109.26953125,286.2998046875 412.599609375,286.2998046875" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+<polyline points="109.26953125,202.755859375 412.599609375,202.755859375" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
 </g>
 <g clip-path="url(#clip-0)">
-<circle cx="108.806640625" cy="286.2998046875" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="118.4501953125" cy="261.611328125" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="128.0947265625" cy="239.1279296875" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="137.7392578125" cy="220.857421875" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="147.3828125" cy="208.43359375" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="157.02734375" cy="202.96484375" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="166.671875" cy="204.9404296875" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="176.3154296875" cy="214.18359375" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="185.9599609375" cy="229.869140625" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="195.6044921875" cy="250.5947265625" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="205.2490234375" cy="274.5107421875" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="214.892578125" cy="299.4794921875" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="224.537109375" cy="323.2705078125" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="234.181640625" cy="343.759765625" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="243.8251953125" cy="359.115234375" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="253.4697265625" cy="367.9677734375" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="263.1142578125" cy="369.5244140625" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="272.7578125" cy="363.6474609375" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="282.40234375" cy="350.8603515625" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="292.046875" cy="332.306640625" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="301.6904296875" cy="309.6435546875" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="311.3349609375" cy="284.8955078125" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="320.9794921875" cy="260.2724609375" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="330.6240234375" cy="237.974609375" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="340.267578125" cy="219.994140625" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="349.912109375" cy="207.935546875" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="359.556640625" cy="202.8779296875" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="369.2001953125" cy="205.271484375" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="378.8447265625" cy="214.9033203125" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="388.4892578125" cy="230.9130859375" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="123.0576171875" cy="286.2998046875" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="132.2490234375" cy="261.611328125" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="141.4404296875" cy="239.1279296875" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="150.6328125" cy="220.857421875" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="159.82421875" cy="208.43359375" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="169.0166015625" cy="202.96484375" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="178.2080078125" cy="204.9404296875" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="187.400390625" cy="214.18359375" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="196.591796875" cy="229.869140625" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="205.783203125" cy="250.5947265625" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="214.9755859375" cy="274.5107421875" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="224.1669921875" cy="299.4794921875" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="233.359375" cy="323.2705078125" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="242.55078125" cy="343.759765625" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="251.7431640625" cy="359.115234375" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="260.9345703125" cy="367.9677734375" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="270.1259765625" cy="369.5244140625" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="279.318359375" cy="363.6474609375" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="288.509765625" cy="350.8603515625" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="297.7021484375" cy="332.306640625" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="306.8935546875" cy="309.6435546875" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="316.0859375" cy="284.8955078125" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="325.27734375" cy="260.2724609375" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="334.46875" cy="237.974609375" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="343.6611328125" cy="219.994140625" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="352.8525390625" cy="207.935546875" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="362.044921875" cy="202.8779296875" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="371.236328125" cy="205.271484375" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="380.4287109375" cy="214.9033203125" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="389.6201171875" cy="230.9130859375" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
 </g>
 <g id="panel-0-axes">
-<polyline points="94.33984375,378.19921875 412.599609375,378.19921875" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="109.26953125,378.19921875 412.599609375,378.19921875" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
 <polyline points="412.599609375,378.19921875 412.599609375,194.4013671875" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
-<polyline points="412.599609375,194.4013671875 94.33984375,194.4013671875" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
-<polyline points="94.33984375,194.4013671875 94.33984375,378.19921875" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
-<polyline points="108.806640625,378.599609375 108.806640625,383.599609375" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
-<text x="103.720703125" y="404.1552734375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">0</text>
-<polyline points="157.02734375,378.599609375 157.02734375,383.599609375" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
-<text x="144.41796875" y="404.1552734375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">2.5</text>
-<polyline points="205.2490234375,378.599609375 205.2490234375,383.599609375" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
-<text x="200.2412109375" y="404.1552734375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">5</text>
-<polyline points="253.4697265625,378.599609375 253.4697265625,383.599609375" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
-<text x="240.7900390625" y="404.1552734375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">7.5</text>
-<polyline points="301.6904296875,378.599609375 301.6904296875,383.599609375" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
-<text x="291.1630859375" y="404.1552734375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">10</text>
-<polyline points="349.912109375,378.599609375 349.912109375,383.599609375" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
-<text x="331.919921875" y="404.1552734375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">12.5</text>
-<polyline points="398.1328125,378.599609375 398.1328125,383.599609375" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
-<text x="387.7734375" y="404.1552734375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">15</text>
-<text x="247.6591796875" y="428.9150390625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr">X</text>
-<polyline points="93.939453125,369.8447265625 88.939453125,369.8447265625" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
-<text x="73.7587890625" y="372.35546875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">5</text>
-<polyline points="93.939453125,286.2998046875 88.939453125,286.2998046875" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
-<text x="63.2431640625" y="290.4560546875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">10</text>
-<polyline points="93.939453125,202.755859375 88.939453125,202.755859375" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
-<text x="63.5791015625" y="208.5576171875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">15</text>
-<text x="35.30859375" y="290.716796875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr" transform="rotate(-90.0,40.5009765625,286.30078125)">Y</text>
+<polyline points="412.599609375,194.4013671875 109.26953125,194.4013671875" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="109.26953125,194.4013671875 109.26953125,378.19921875" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="123.0576171875,378.599609375 123.0576171875,383.599609375" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="117.9716796875" y="404.1552734375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">0</text>
+<polyline points="214.9755859375,378.599609375 214.9755859375,383.599609375" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="209.9677734375" y="404.1552734375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">5</text>
+<polyline points="306.8935546875,378.599609375 306.8935546875,383.599609375" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="296.3662109375" y="404.1552734375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">10</text>
+<polyline points="398.8115234375,378.599609375 398.8115234375,383.599609375" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="388.4521484375" y="404.1552734375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">15</text>
+<text x="255.1240234375" y="428.9150390625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr">X</text>
+<polyline points="108.869140625,369.8447265625 103.869140625,369.8447265625" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="88.6884765625" y="372.35546875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">5</text>
+<polyline points="108.869140625,286.2998046875 103.869140625,286.2998046875" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="78.1728515625" y="290.4560546875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">10</text>
+<polyline points="108.869140625,202.755859375 103.869140625,202.755859375" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="78.5087890625" y="208.5576171875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">15</text>
+<text x="50.23828125" y="290.716796875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr" transform="rotate(-90.0,55.4306640625,286.30078125)">Y</text>
 </g>
 <g id="panel-0-title">
-<text x="203.3134765625" y="160.5966796875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">Panel title</text>
-<text x="202.4306640625" y="176.7978515625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="15" xml:space="preserve" fill="#505050" text-anchor="start" direction="ltr">Panel subtitle</text>
+<text x="210.7783203125" y="160.5966796875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">Panel title</text>
+<text x="209.8955078125" y="176.7978515625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="15" xml:space="preserve" fill="#505050" text-anchor="start" direction="ltr">Panel subtitle</text>
 </g>
 <text x="157.037109375" y="27.1953125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">Canvas title</text>
 <text x="189.244140625" y="53.1962890625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" fill="#000000" text-anchor="start" direction="ltr">Short</text>

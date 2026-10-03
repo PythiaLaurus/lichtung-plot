@@ -23,6 +23,122 @@ fn source() -> Plot<crate::kind::Heatmap> {
 }
 
 #[test]
+fn local_and_shared_heatmap_numeric_labels_are_unique_before_fonts() {
+    use crate::decorations::legend::descriptor::ContinuousContributor;
+    let source = Plot::heatmap(
+        CategoryValues::new("column", ["a", "b"]).unwrap(),
+        CategoryValues::new("row", ["r", "r"]).unwrap(),
+        NumericValues::new("color", [0.1, 0.100_000_1]),
+    )
+    .erase();
+    let theme = crate::Theme::Publication.resolve();
+    let resources = OperationGenerationResources::new();
+    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let marks = &inputs.heatmap.as_ref().unwrap().panels[0].1;
+    let contributor = ContinuousContributor::for_plot(
+        &source,
+        &inputs,
+        &theme,
+        source.data().with_axis_resources(&resources),
+    )
+    .unwrap()
+    .unwrap();
+    let shared =
+        ContinuousContributor::merge([contributor], source.data().with_axis_resources(&resources))
+            .unwrap()
+            .unwrap();
+    assert_ne!(marks.colorbar_values[0], marks.colorbar_values[1]);
+    assert_eq!(shared.labels, marks.colorbar_values);
+    assert_eq!(shared.domain, (0.1, 0.100_000_1));
+    assert_eq!(shared.stops, marks.colorbar_stops);
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        0
+    );
+}
+
+#[test]
+fn signed_zero_local_heatmap_has_one_numeric_label_without_changing_its_exact_domain() {
+    let source = Plot::heatmap(
+        CategoryValues::new("column", ["a", "b"]).unwrap(),
+        CategoryValues::new("row", ["r", "r"]).unwrap(),
+        NumericValues::new("color", [-0.0, 0.0]),
+    )
+    .color_limits(-0.0, 0.0)
+    .erase();
+    let resources = OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let domain = inputs.heatmap.as_ref().unwrap().panels[0].1.color.domain;
+    assert_eq!(domain.minimum.to_bits(), (-0.0_f64).to_bits());
+    assert_eq!(domain.maximum.to_bits(), 0.0_f64.to_bits());
+    let plot = inputs.attach(source).unwrap();
+    let theme = crate::Theme::Publication.resolve();
+    let selected = plot
+        .measure_selected_interior(PlotRenderContext::new(
+            plot.data(),
+            PanelBox::new(20.0, 700.0, 20.0, 500.0),
+            &theme,
+        ))
+        .unwrap();
+    assert_eq!(
+        selected
+            .producer_text
+            .iter()
+            .filter(|text| text.plan.source == "0")
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn heatmap_topology_prices_declared_cells_merged_missing_highlight_and_text_targets() {
+    // Five original rows; a 2x3 grid; two column and three row slots;
+    // four ordinary cells + one merged row; two missing-cross strokes;
+    // one merged text, one highlighted target, and three value texts.
+    let expected = 5 + 6 + 2 + 3 + 4 + 1 + 2 + 1 + 1 + 3;
+    let source = source().erase();
+    for available in [expected - 1, expected] {
+        let resources = OperationGenerationResources::new();
+        resources
+            .claim_topology_slots(1_000_000 - available)
+            .unwrap();
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        let result = prepare(&source, source.data().with_axis_resources(&resources));
+        assert_eq!(result.is_ok(), available == expected);
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+}
+
+#[test]
+fn heatmap_hidden_y_labels_use_the_same_cached_annotation_and_ink_summary() {
+    let source = Plot::heatmap(
+        CategoryValues::new("x", ["a", "b"]).unwrap(),
+        CategoryValues::new("y", ["r", "s"]).unwrap(),
+        NumericValues::new("value", [1.0, 2.0]),
+    )
+    .labels(crate::Labels::raw().alias("r", "One\nTwo\nThree\nFour\nFive"))
+    .x_label("")
+    .y_label("")
+    .erase();
+    let inputs =
+        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+            .unwrap();
+    let mut chart = inputs.attach(source).unwrap();
+    let theme = crate::Theme::Publication.resolve();
+    let visible = intrinsic_body_minimum(&chart, &theme).unwrap();
+    chart = chart.with_y_tick_labels_visible(false);
+    let hidden = intrinsic_body_minimum(&chart, &theme).unwrap();
+    assert!(hidden.1 < visible.1);
+    assert_eq!(hidden.0.to_bits(), visible.0.to_bits());
+    chart = chart.with_y_tick_labels_visible(true);
+    assert_eq!(intrinsic_body_minimum(&chart, &theme).unwrap(), visible);
+}
+
+#[test]
 fn semantic_grids_text_and_styles_use_exact_root_admission_before_fonts() {
     let source = source().erase();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
@@ -233,7 +349,7 @@ fn cell_label_minimum_precedes_constrained_heatmap_discovery_and_is_retained() {
         resources.call_cache_usage().0,
     );
     assert_eq!(intrinsic_body_minimum(&source, &theme).unwrap(), minimum);
-    assert_eq!(resources.usage().unwrap(), before.0);
+    assert_eq!(resources.usage().unwrap(), (before.0 .0, before.0 .1 + 1));
     assert_eq!(resources.byte_usage().unwrap(), before.1);
     assert_eq!(resources.call_cache_usage().0, before.2 + 1);
     STAGES.with(|counts| counts.set([0; 3]));
@@ -298,7 +414,17 @@ fn selected_payload_geometry_and_poisoned_capture_preserve_every_operand() {
         assert_eq!(payload.cells.len(), 5);
         assert!(payload.cells[3].cross.is_some());
         assert!(payload.cells[4].text.is_some());
-        let stops = &payload.colorbar.as_ref().unwrap().stops;
+        let stops = payload
+            .colorbar
+            .as_ref()
+            .unwrap()
+            .calls
+            .iter()
+            .find_map(|call| match call {
+                crate::decorations::legend::LegendCall::Gradient(_, _, _, stops) => Some(stops),
+                _ => None,
+            })
+            .unwrap();
         assert_eq!(stops.len(), 4);
         assert_eq!(stops[1].offset.to_bits(), 0.25_f64.to_bits());
         assert_eq!(stops[2].color, (247, 247, 247));
@@ -417,6 +543,7 @@ fn selected_cell_guide_storage_and_elision_refuse_at_exact_limits() {
         &theme,
         &crate::layout::fit::FitScope::root(),
         source.data().with_axis_resources(&resources),
+        None,
     )
     .unwrap();
     for component in 0..3 {

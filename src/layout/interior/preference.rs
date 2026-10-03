@@ -171,22 +171,23 @@ pub(crate) fn categorical_preference(
     })
 }
 
-fn panel<'a, T>(
+pub(crate) fn panel<'a, T>(
     panels: &'a [(Option<String>, T)],
     scope: Option<&str>,
     owner: &str,
     resources: &OperationGenerationResources,
 ) -> Result<&'a T, Error> {
-    resources
-        .claim_visits(panels.len() as u128)
-        .map_err(|error| {
+    for (key, marks) in panels {
+        resources.claim_visits(1).map_err(|error| {
             Error::Render(format!("{owner} primary-mark scope admission: {error:?}"))
         })?;
-    panels
-        .iter()
-        .find(|(key, _)| key.as_deref() == scope)
-        .map(|(_, marks)| marks)
-        .ok_or_else(|| Error::Render(format!("{owner} primary-mark scope is not prepared")))
+        if key.as_deref() == scope {
+            return Ok(marks);
+        }
+    }
+    Err(Error::Render(format!(
+        "{owner} primary-mark scope is not prepared"
+    )))
 }
 
 fn ceil_sqrt(value: u128) -> Result<u32, Error> {
@@ -357,6 +358,37 @@ pub(crate) fn mark_preference(
 mod tests {
     use super::*;
     use crate::{CategoryValues, NumericValues};
+
+    #[test]
+    fn retained_panel_lookup_prices_only_entries_actually_examined() {
+        let panels = [
+            (None, 10),
+            (Some("second".into()), 20),
+            (Some("unused".into()), 30),
+        ];
+        for (scope, visits, expected) in [(None, 1, 10), (Some("second"), 2, 20)] {
+            let resources = OperationGenerationResources::with_test_limits(visits, 0);
+            assert_eq!(
+                *panel(&panels, scope, "test", &resources).unwrap(),
+                expected
+            );
+            assert_eq!(resources.usage().unwrap(), (0, visits));
+            let limited = OperationGenerationResources::with_test_limits(visits - 1, 0);
+            assert!(panel(&panels, scope, "test", &limited).is_err());
+        }
+        for visits in [0, 2, 3, 4] {
+            let resources = OperationGenerationResources::with_test_limits(visits, 0);
+            let error = panel(&panels, Some("missing"), "test", &resources)
+                .unwrap_err()
+                .to_string();
+            assert_eq!(resources.usage().unwrap(), (0, visits.min(3)));
+            if visits < 3 {
+                assert!(error.contains("root processing visits"));
+            } else {
+                assert!(error.contains("scope is not prepared"));
+            }
+        }
+    }
 
     fn standard(root: &crate::layout::RootFramePlan) -> &StandardPanelPreference {
         let Some(NativePanelPreference::Standard(preference)) = root.native_preference.as_ref()

@@ -234,7 +234,11 @@ fn native_condition_hard_intrinsics_and_exact_numeric_labels_reject_before_marks
     assert!(minimum.0 > 80.0);
     let scope = FitScope::new(
         &crate::layout::ComponentAddress::root()
-            .child(crate::layout::AddressRole::PlotBody, 0)
+            .child(
+                crate::layout::AddressRole::PlotBody,
+                0,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
             .unwrap(),
         7,
     );

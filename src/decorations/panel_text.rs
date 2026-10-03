@@ -1,6 +1,5 @@
 //! Caller-owned text anchored inside one standard chart panel.
 
-#[cfg(test)]
 use crate::Error;
 
 use crate::layout::{Layout, PanelBox, PhysicalTextAlignment, ResolvedTextPlan};
@@ -41,13 +40,17 @@ impl PanelTextPlan {
         &self,
         panel: PanelBox,
         legend: crate::decorations::legend::LegendBox,
-    ) -> bool {
-        self.text_plan.width() + 2.0 * PANEL_TEXT_PADDING <= panel.width()
-            && self.text_plan.height() + 2.0 * PANEL_TEXT_PADDING <= panel.height()
-            && !rectangles_overlap(
-                self.bounds_in(panel),
-                PanelBox::new(legend.left, legend.right, legend.bottom, legend.top),
-            )
+        theme: &ResolvedTheme,
+    ) -> Result<bool, Error> {
+        admit_visit(theme)?;
+        Ok(
+            self.text_plan.width() + 2.0 * PANEL_TEXT_PADDING <= panel.width()
+                && self.text_plan.height() + 2.0 * PANEL_TEXT_PADDING <= panel.height()
+                && !overlap_predicate(
+                    self.bounds_in(panel),
+                    PanelBox::new(legend.left, legend.right, legend.bottom, legend.top),
+                ),
+        )
     }
 
     pub(crate) fn placement_in(&self, panel: PanelBox) -> PlannedTextPlacement {
@@ -59,14 +62,18 @@ impl PanelTextPlan {
 pub(crate) fn conflicting_legend_corner(
     plans: &[PanelTextPlan],
     legend: crate::decorations::legend::LegendBox,
-) -> Option<PanelCorner> {
-    plans.iter().find_map(|plan| {
-        rectangles_overlap(
+    theme: &ResolvedTheme,
+) -> Result<Option<PanelCorner>, Error> {
+    for plan in plans {
+        if rectangles_overlap(
             plan.bounds,
             PanelBox::new(legend.left, legend.right, legend.bottom, legend.top),
-        )
-        .then_some(plan.corner)
-    })
+            theme,
+        )? {
+            return Ok(Some(plan.corner));
+        }
+    }
+    Ok(None)
 }
 
 /// Panel annotations are screen anchored. Domain-only changes cannot resolve
@@ -75,10 +82,14 @@ pub(crate) fn conflict_resolved_by_assignment(
     plans: &[PanelTextPlan],
     next_panel: PanelBox,
     next_legend: crate::decorations::legend::LegendBox,
-) -> bool {
-    plans
-        .iter()
-        .all(|plan| plan.avoids_legend_in(next_panel, next_legend))
+    theme: &ResolvedTheme,
+) -> Result<bool, Error> {
+    for plan in plans {
+        if !plan.avoids_legend_in(next_panel, next_legend, theme)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 fn placement(
@@ -145,7 +156,7 @@ pub(crate) fn measure_plans(
         .iter()
         .enumerate()
         .map(|(index, annotation)| {
-            let scope = scope.child(AddressRole::Annotation, index)?;
+            let scope = scope.child(AddressRole::Annotation, index, &theme.prepared_font_environment()?.generation_resources())?;
             if available_width <= 0.0 {
                 return Err(scope.failure(FitKind::Constraint, "panel text has no usable space inside the resolved chart panel; increase the canvas").into());
             }
@@ -195,13 +206,27 @@ pub(crate) fn measure_plans(
             })
         })
         )?;
+    check_collisions(&plans, theme, scope)?;
+    Ok(plans)
+}
+
+fn check_collisions(
+    plans: &[PanelTextPlan],
+    theme: &ResolvedTheme,
+    scope: &crate::layout::fit::FitScope,
+) -> Result<(), crate::layout::fit::PlanError> {
+    use crate::layout::{kernel::FitKind, AddressRole};
     for (index, left) in plans.iter().enumerate() {
-        if let Some(right) = plans[index + 1..]
-            .iter()
-            .find(|right| rectangles_overlap(left.bounds, right.bounds))
-        {
+        for right in &plans[index + 1..] {
+            if !rectangles_overlap(left.bounds, right.bounds, theme)? {
+                continue;
+            }
             return Err(scope
-                .child(AddressRole::Annotation, index)?
+                .child(
+                    AddressRole::Annotation,
+                    index,
+                    &theme.prepared_font_environment()?.generation_resources(),
+                )?
                 .failure(
                     FitKind::OverlayCollision,
                     format!(
@@ -212,15 +237,122 @@ pub(crate) fn measure_plans(
                 .into());
         }
     }
-    Ok(plans)
+    Ok(())
 }
 
-fn rectangles_overlap(left: PanelBox, right: PanelBox) -> bool {
+fn admit_visit(theme: &ResolvedTheme) -> Result<(), Error> {
+    theme
+        .prepared_font_environment()?
+        .claim_processing_visits(1)
+        .map_err(|error| Error::Render(format!("panel text collision admission: {error:?}")))
+}
+
+fn rectangles_overlap(
+    left: PanelBox,
+    right: PanelBox,
+    theme: &ResolvedTheme,
+) -> Result<bool, Error> {
+    admit_visit(theme)?;
+    Ok(overlap_predicate(left, right))
+}
+
+fn overlap_predicate(left: PanelBox, right: PanelBox) -> bool {
     #[cfg(test)]
     crate::orchestrator::measurements::count(
         crate::orchestrator::measurements::Counter::AnnotationOverlapComparison,
     );
     left.x0 < right.x1 && left.x1 > right.x0 && left.y0 < right.y1 && left.y1 > right.y0
+}
+
+#[test]
+fn collision_scans_admit_actual_pairs_and_stop_before_unused_tails() {
+    use crate::decorations::legend::{test_assigned_legend, LegendEntry, LegendIdentity};
+    let plot = Plot::scatter(
+        crate::NumericValues::new("x", [0.0, 1.0]),
+        crate::NumericValues::new("y", [0.0, 1.0]),
+    )
+    .panel_text_annotation(crate::PanelTextAnnotation::new(PanelCorner::TopLeft, "note").unwrap())
+    .erase();
+    let layout = Layout::envelope(PanelBox::new(0.0, 400.0, 0.0, 400.0));
+    let theme = crate::Theme::Publication.resolve();
+    let original = plans(&plot, &layout, &theme).unwrap().remove(0);
+    let mut entries = vec![LegendEntry::point(
+        LegendIdentity::literal("group", "entry"),
+        crate::render::backend::PointStyle::new((0, 0, 0), 3),
+    )];
+    crate::decorations::legend::resolve_entries(
+        &plot,
+        &mut entries,
+        &theme
+            .prepared_font_environment()
+            .unwrap()
+            .generation_resources(),
+    )
+    .unwrap();
+    let mut legend = test_assigned_legend("", entries, (400.0, 400.0), &theme)
+        .unwrap()
+        .box_at(40.0, 0.0);
+    legend.right = 50.0;
+    legend.top = 10.0;
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let mut separated = vec![original; 4];
+    for (index, plan) in separated.iter_mut().enumerate() {
+        let x = u32::try_from(index).unwrap() * 20;
+        plan.bounds = PanelBox::new(f64::from(x), f64::from(x + 10), 0.0, 10.0);
+    }
+    for (collision, expected_pairs) in [(None, 6), (Some((0, 1)), 1), (Some((1, 3)), 5)] {
+        let mut candidates = separated.clone();
+        if let Some((left, right)) = collision {
+            candidates[right].bounds = candidates[left].bounds;
+        }
+        for available in [0, expected_pairs - 1, expected_pairs, expected_pairs + 1] {
+            let before = resources.usage().unwrap().1;
+            resources.set_test_limits(before + available, 536_870_912);
+            let result =
+                check_collisions(&candidates, &theme, &crate::layout::fit::FitScope::root());
+            assert_eq!(
+                resources.usage().unwrap().1 - before,
+                available.min(expected_pairs)
+            );
+            if available < expected_pairs {
+                assert!(result
+                    .unwrap_err()
+                    .into_error()
+                    .to_string()
+                    .contains("root processing visits"));
+            } else if collision.is_some() {
+                assert!(matches!(result, Err(crate::layout::fit::PlanError::Fit(_))));
+            } else {
+                result.unwrap();
+            }
+        }
+    }
+    let before = resources.usage().unwrap().1;
+    resources.set_test_limits(before + 3, 536_870_912);
+    assert_eq!(
+        conflicting_legend_corner(&separated, legend, &theme).unwrap(),
+        Some(PanelCorner::TopLeft)
+    );
+    assert_eq!(resources.usage().unwrap().1 - before, 3);
+    assert!(conflicting_legend_corner(&separated, legend, &theme)
+        .unwrap_err()
+        .to_string()
+        .contains("root processing visits"));
+    // The assignment's first width check already fails. Its entry is admitted,
+    // but the unused annotations and collision predicates are not visited.
+    let before = resources.usage().unwrap().1;
+    resources.set_test_limits(before + 1, 536_870_912);
+    assert!(!conflict_resolved_by_assignment(
+        &separated,
+        PanelBox::new(0.0, 1.0, 0.0, 1.0),
+        legend,
+        &theme
+    )
+    .unwrap());
+    assert_eq!(resources.usage().unwrap().1 - before, 1);
 }
 
 #[test]

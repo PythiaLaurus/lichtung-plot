@@ -21,6 +21,89 @@ fn source() -> Plot<crate::kind::Beeswarm> {
 }
 
 #[test]
+fn local_and_shared_beeswarm_numeric_labels_are_unique_before_fonts() {
+    use crate::decorations::legend::descriptor::ContinuousContributor;
+    let source = Plot::beeswarm(
+        CategoryValues::new("group", ["a", "a"]).unwrap(),
+        NumericValues::new("x", [0.0, 1.0]),
+        NumericValues::new("color", [0.1, 0.1001]),
+    )
+    .erase();
+    let theme = crate::Theme::Publication.resolve();
+    let resources = OperationGenerationResources::new();
+    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let marks = &inputs.beeswarm.as_ref().unwrap().panels[0].1;
+    let contributor = ContinuousContributor::for_plot(
+        &source,
+        &inputs,
+        &theme,
+        source.data().with_axis_resources(&resources),
+    )
+    .unwrap()
+    .unwrap();
+    let shared =
+        ContinuousContributor::merge([contributor], source.data().with_axis_resources(&resources))
+            .unwrap()
+            .unwrap();
+    assert_ne!(marks.values[0], marks.values[1]);
+    assert_eq!(
+        shared.labels,
+        [marks.values[1].clone(), marks.values[0].clone()]
+    );
+    assert_eq!(marks.scale.domain(), (0.1, 0.1001));
+    assert_eq!(shared.stops, marks.colorbar_stops);
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        0
+    );
+}
+
+#[test]
+fn beeswarm_topology_admits_all_original_points_and_category_slots_before_fonts() {
+    let source = source().erase();
+    let expected = 12 + 2;
+    for available in [expected - 1, expected] {
+        let resources = OperationGenerationResources::new();
+        resources
+            .claim_topology_slots(1_000_000 - available)
+            .unwrap();
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        let result = prepare(&source, source.data().with_axis_resources(&resources));
+        assert_eq!(result.is_ok(), available == expected);
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+}
+
+#[test]
+fn facet_partitions_share_original_point_topology_once() {
+    let source = source()
+        .facet(
+            crate::FacetSpec::column(
+                CategoryValues::new(
+                    "facet",
+                    [
+                        "one", "one", "one", "one", "one", "one", "two", "two", "two", "two",
+                        "two", "two",
+                    ],
+                )
+                .unwrap(),
+            )
+            .scales(crate::FacetScales::FreeY),
+        )
+        .erase();
+    let resources = OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    assert_eq!(inputs.beeswarm.as_ref().unwrap().panels.len(), 2);
+    // Original points are admitted at the parent once. The first panel has
+    // two category slots and the second has one.
+    assert_eq!(resources.topology_usage(), 12 + 2 + 1);
+}
+
+#[test]
 fn root_semantics_retain_source_order_and_exact_colors_before_fonts() {
     let source = source().erase();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
@@ -37,7 +120,7 @@ fn root_semantics_retain_source_order_and_exact_colors_before_fonts() {
     assert_eq!(marks.colors[1], (49, 130, 189));
     assert_eq!(marks.colors[10], (222, 45, 38));
     assert_eq!(marks.colors[11], (49, 130, 189));
-    assert_eq!(marks.values, ["1.000", "0.000"]);
+    assert_eq!(marks.values, ["1", "0"]);
     let visits = resources.usage().unwrap().1;
     let bytes = resources.byte_usage().unwrap();
     for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
@@ -224,7 +307,14 @@ fn selected_payload_preserves_bounds_baselines_and_poisoned_capture_does_no_work
     drawn.end().unwrap();
     assert_eq!(marks.geometry.bounds(), drawn.bounds());
     assert_eq!(
-        payload.colorbar.as_ref().unwrap().text.len(),
+        payload
+            .colorbar
+            .as_ref()
+            .unwrap()
+            .calls
+            .iter()
+            .filter(|call| matches!(call, crate::decorations::legend::LegendCall::Text(_)))
+            .count(),
         selected.producer_text.len()
     );
     assert_eq!(payload.points.len(), 12);
@@ -249,8 +339,12 @@ fn selected_payload_preserves_bounds_baselines_and_poisoned_capture_does_no_work
         .colorbar
         .as_ref()
         .unwrap()
-        .text
+        .calls
         .iter()
+        .filter_map(|call| match call {
+            crate::decorations::legend::LegendCall::Text(text) => Some(text),
+            _ => None,
+        })
         .zip(&selected.producer_text)
     {
         assert_eq!(retained.plan, selected.plan);

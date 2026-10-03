@@ -304,7 +304,11 @@ fn later_invalid_axis_source_wins_over_terminal_tick_fit_miss() {
     use crate::layout::fit::{FitScope, PlanError};
     let theme = crate::Theme::Publication.resolve();
     let scope = FitScope::root()
-        .child(crate::layout::AddressRole::FacetCell, 2)
+        .child(
+            crate::layout::AddressRole::FacetCell,
+            2,
+            &crate::font::canonical::OperationGenerationResources::new(),
+        )
         .unwrap();
     let x = AxisSpec::default().limits(1.1, 1.2);
     let y = AxisSpec {

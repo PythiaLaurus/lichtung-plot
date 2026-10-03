@@ -8,7 +8,7 @@ mod panel;
 mod text;
 mod unicode16;
 
-pub(crate) use canvas::{LegacyRootAxes, PanelBox, RootFramePlan};
+pub(crate) use canvas::{PanelBox, RootFramePlan};
 #[cfg(test)]
 pub(crate) use kernel::{force_reservation_failure, ReservationStage};
 pub(crate) use kernel::{plan_exact_root, FrozenRoot, MeasuredLayout, RootSize};

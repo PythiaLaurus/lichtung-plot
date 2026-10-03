@@ -49,6 +49,24 @@ impl TextPanelIntrinsics {
             "text panel body intrinsics",
         )?;
         let inset = theme.composition.text_panel_inset;
+        let title_ch = theme
+            .measure_text(
+                "0",
+                &title_style,
+                PhysicalTextAlignment::Start,
+                "TextPanel title 66ch",
+                false,
+            )?
+            .width();
+        let body_ch = theme
+            .measure_text(
+                "0",
+                &body_style,
+                PhysicalTextAlignment::Start,
+                "TextPanel body 66ch",
+                false,
+            )?
+            .width();
         Ok(Self {
             title,
             body,
@@ -59,9 +77,46 @@ impl TextPanelIntrinsics {
                     + theme.composition.text_panel_gap
                     + 2.0 * inset,
             ),
-            preferred_width: title.1.max(body.1) + 2.0 * inset,
+            preferred_width: title
+                .0
+                .max(title.1.min(66.0 * title_ch))
+                .max(body.0.max(body.1.min(66.0 * body_ch)))
+                + 2.0 * inset,
         })
     }
+}
+
+pub(super) fn natural_height(
+    source: &TextPanel,
+    width: f64,
+    theme: &ResolvedTheme,
+) -> Result<f64, Error> {
+    let [title, body] = text_appearance(theme);
+    let available = width - 2.0 * theme.composition.text_panel_inset;
+    let title = fit::measured(fit::text(
+        theme,
+        source.title(),
+        &title,
+        available,
+        PhysicalTextAlignment::Start,
+        "natural TextPanel title",
+        &FitScope::root(),
+    ))
+    .map_err(crate::layout::fit::PlanError::into_error)?;
+    let body = fit::measured(fit::text(
+        theme,
+        source.body(),
+        &body,
+        available,
+        PhysicalTextAlignment::Start,
+        "natural TextPanel body",
+        &FitScope::root(),
+    ))
+    .map_err(crate::layout::fit::PlanError::into_error)?;
+    Ok(title.height()
+        + body.height()
+        + theme.composition.text_panel_gap
+        + 2.0 * theme.composition.text_panel_inset)
 }
 
 impl TextPanelPlan {
@@ -77,9 +132,21 @@ impl TextPanelPlan {
         intrinsics: TextPanelIntrinsics,
         scope: &FitScope,
     ) -> Result<FitOutcome<Self>, Error> {
-        let owner = scope.child(AddressRole::TextPanelContent, index)?;
-        let title_scope = owner.child(AddressRole::TextPanelTitle, 0)?;
-        let body_scope = owner.child(AddressRole::TextPanelBody, 0)?;
+        let owner = scope.child(
+            AddressRole::TextPanelContent,
+            index,
+            &theme.prepared_font_environment()?.generation_resources(),
+        )?;
+        let title_scope = owner.child(
+            AddressRole::TextPanelTitle,
+            0,
+            &theme.prepared_font_environment()?.generation_resources(),
+        )?;
+        let body_scope = owner.child(
+            AddressRole::TextPanelBody,
+            0,
+            &theme.prepared_font_environment()?.generation_resources(),
+        )?;
         let [title_style, body_style] = text_appearance(theme);
         let (title_hard, title_preferred) = intrinsics.title;
         let (body_hard, body_preferred) = intrinsics.body;

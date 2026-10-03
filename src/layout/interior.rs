@@ -10,6 +10,7 @@ use crate::{Error, Plot};
 pub(crate) mod coordinate;
 pub(crate) mod guide;
 pub(crate) mod preference;
+pub(crate) mod sizing;
 pub(crate) mod tracks;
 
 macro_rules! interior_routes {

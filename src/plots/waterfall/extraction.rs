@@ -12,6 +12,67 @@ fn source() -> Plot<crate::kind::Waterfall> {
 }
 
 #[test]
+fn waterfall_topology_prices_categories_bars_connectors_and_named_totals_before_fonts() {
+    let source = source().erase();
+    let expected = 4 + 4 + 3 + 2;
+    for available in [expected - 1, expected] {
+        let resources = OperationGenerationResources::new();
+        resources
+            .claim_topology_slots(1_000_000 - available)
+            .unwrap();
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        let result = prepare(&source, source.data().with_axis_resources(&resources));
+        assert_eq!(result.is_ok(), available == expected);
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+}
+
+#[test]
+fn clipped_base_keeps_the_visible_terminal_containment_failure_named() {
+    let source = source().x_limits(11.0, 13.0).erase();
+    let inputs =
+        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+            .unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let theme = crate::Theme::Publication.resolve();
+    let scope = crate::layout::fit::FitScope::root()
+        .child(
+            crate::layout::AddressRole::CanvasCell,
+            7,
+            &OperationGenerationResources::new(),
+        )
+        .unwrap();
+    let error = chart
+        .measure_selected_interior(
+            PlotRenderContext::new(
+                chart.data(),
+                PanelBox::new(30.0, 630.0, 30.0, 430.0),
+                &theme,
+            )
+            .with_fit_scope(&scope),
+        )
+        .unwrap_err();
+    let crate::layout::fit::PlanError::Fit(failure) = error else {
+        panic!("terminal shelf FIT")
+    };
+    assert_eq!(
+        failure.reason.address,
+        scope
+            .child(
+                crate::layout::AddressRole::WaterfallTerminalLabel,
+                0,
+                &OperationGenerationResources::new()
+            )
+            .unwrap()
+            .address
+    );
+    assert!(failure.message.contains("annotation shelf"));
+}
+
+#[test]
 fn root_semantics_admit_every_span_label_and_exact_delta_before_fonts() {
     let source = source().erase();
     let resources = OperationGenerationResources::new();
@@ -20,7 +81,11 @@ fn root_semantics_admit_every_span_label_and_exact_delta_before_fonts() {
     let marks = &inputs.waterfall.as_ref().unwrap().panels[0].1;
     assert_eq!(marks.labels, ["gain", "loss", "gain", "loss"]);
     assert_eq!(
-        marks.spans,
+        marks
+            .spans
+            .iter()
+            .map(|span| (span.start, span.end, span.delta))
+            .collect::<Vec<_>>(),
         [
             (10.0, 14.0, 4.0),
             (14.0, 12.0, -2.0),
@@ -28,7 +93,7 @@ fn root_semantics_admit_every_span_label_and_exact_delta_before_fonts() {
             (12.0, 13.0, 1.0)
         ]
     );
-    assert_eq!(marks.spans[2].2.to_bits(), (-0.0_f64).to_bits());
+    assert_eq!(marks.spans[2].delta.to_bits(), (-0.0_f64).to_bits());
     assert_eq!(marks.range, (10.0, 14.0));
     assert_eq!(
         marks.totals,
@@ -62,9 +127,126 @@ fn finite_cumulative_endpoints_do_not_require_a_finite_detached_delta_sum() {
         -f64::MAX,
     )
     .erase();
-    let marks = prepare(&plot, plot.data()).unwrap();
-    assert_eq!(marks.spans[0].1.to_bits(), 0.0_f64.to_bits());
-    assert_eq!(marks.spans[1].1.to_bits(), f64::MAX.to_bits());
+    let resources = OperationGenerationResources::new();
+    let marks = prepare(&plot, plot.data().with_axis_resources(&resources)).unwrap();
+    assert_eq!(marks.spans[0].end.to_bits(), 0.0_f64.to_bits());
+    assert_eq!(marks.spans[1].end.to_bits(), f64::MAX.to_bits());
+}
+
+#[test]
+fn span_ids_and_storage_are_admitted_before_cumulative_source_work() {
+    let plot = source().erase();
+    let rows = [1];
+    let ids = [99];
+    for (records, bytes, succeeds) in [(0, 32, false), (1, 31, false), (1, 32, true), (2, 33, true)]
+    {
+        let resources = OperationGenerationResources::with_test_limits(1, bytes);
+        resources.claim_slots(1_000_000 - records).unwrap();
+        let data =
+            crate::data::PlotData::with_rows(&plot, &rows, &ids).with_axis_resources(&resources);
+        let result = prepare_spans(10.0, &[4.0], data);
+        if succeeds {
+            let (spans, range) = result.unwrap();
+            assert_eq!(
+                spans,
+                [WaterfallSpan {
+                    source_row: 99,
+                    start: 10.0,
+                    end: 14.0,
+                    delta: 4.0
+                }]
+            );
+            assert_eq!(range, (10.0, 14.0));
+            assert_eq!(spans[0].end.to_bits(), 14.0_f64.to_bits());
+            assert_eq!(resources.usage().unwrap(), (1_000_001 - records, 1));
+            assert_eq!(resources.byte_usage().unwrap(), 32);
+        } else {
+            assert!(result.err().unwrap().to_string().contains(if records == 0 {
+                "record admission"
+            } else {
+                "storage admission"
+            }));
+            assert_eq!(resources.usage().unwrap().1, 0);
+            assert_eq!(resources.byte_usage().unwrap(), 0);
+        }
+    }
+    let resources = OperationGenerationResources::with_test_limits(1, 0);
+    let data = crate::data::PlotData::with_rows(&plot, &rows, &ids).with_axis_resources(&resources);
+    assert!(prepare_spans(10.0, &[f64::NAN], data)
+        .err()
+        .unwrap()
+        .to_string()
+        .contains("storage admission"));
+    assert_eq!(
+        resources.usage().unwrap(),
+        (1, 0),
+        "refused storage precedes source examination"
+    );
+}
+
+#[test]
+fn original_source_ids_survive_preparation_selection_and_admitted_feedback() {
+    let ids = [5, 20, 47, 99];
+    let raw = source()
+        .source_rows(crate::SourceRows::new(ids).unwrap())
+        .erase();
+    let resources = OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&raw, &resources).unwrap();
+    assert_eq!(
+        inputs.waterfall.as_ref().unwrap().panels[0]
+            .1
+            .spans
+            .iter()
+            .map(|span| span.source_row)
+            .collect::<Vec<_>>(),
+        ids
+    );
+    let plot = inputs.attach(raw).unwrap();
+    let theme = crate::Theme::Publication.resolve();
+    let selected = plot
+        .measure_selected_interior(PlotRenderContext::with_source_rows(
+            plot.data(),
+            &ids,
+            PanelBox::new(70.0, 670.0, 60.0, 450.0),
+            &theme,
+        ))
+        .unwrap();
+    let crate::layout::interior::MarkPayload::Waterfall(payload) =
+        &selected.marks.as_ref().unwrap().payload
+    else {
+        panic!("Waterfall source identities")
+    };
+    assert_eq!(payload.source_rows, ids);
+    assert_eq!(payload.source_rows.len(), payload.bars.len());
+    for available in [9, 10, 11] {
+        let result = crate::layout::plan_exact_root(
+            800,
+            600,
+            |stage| Ok(stage.generation_resources()),
+            |resources, assigned, round| {
+                resources
+                    .claim_slots(1_000_000 - resources.usage().unwrap().0 - available)
+                    .unwrap();
+                let before = resources.usage().unwrap().0;
+                payload.observe_sources(round)?;
+                assert_eq!(
+                    resources.usage().unwrap().0 - before,
+                    10,
+                    "count plus four IDs each retain a payload and a stream reference"
+                );
+                Ok(crate::layout::MeasuredLayout::new(assigned, ()))
+            },
+            |_, _, (), _| Ok(()),
+        );
+        assert_eq!(result.is_ok(), available >= 10);
+        if available < 10 {
+            assert!(result
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("retained planning records"));
+        }
+    }
 }
 
 #[test]
@@ -308,7 +490,11 @@ fn total_labels_keep_typed_fit_identity_and_mark_panel_reserve() {
     use crate::layout::fit::{FitKind, FitOutcome, FitScope};
     use crate::layout::{AddressRole, ComponentAddress};
     let owner = ComponentAddress::root()
-        .child(AddressRole::CanvasCell, 2)
+        .child(
+            AddressRole::CanvasCell,
+            2,
+            &OperationGenerationResources::new(),
+        )
         .unwrap();
     let scope = FitScope::new(&owner, 7);
     for (labels, panel, kind, role) in [
@@ -340,7 +526,12 @@ fn total_labels_keep_typed_fit_identity_and_mark_panel_reserve() {
         assert_eq!(failure.reason.kind, kind);
         assert_eq!(
             failure.reason.address,
-            role.map_or_else(|| owner.clone(), |role| owner.child(role, 0).unwrap())
+            role.map_or_else(
+                || owner.clone(),
+                |role| owner
+                    .child(role, 0, &OperationGenerationResources::new())
+                    .unwrap()
+            )
         );
         assert_eq!(failure.reason.ordinal, if role.is_some() { 0 } else { 7 });
     }

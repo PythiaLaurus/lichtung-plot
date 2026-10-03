@@ -501,14 +501,18 @@ mod tests {
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::Publication.resolve();
+        let coordinate = crate::layout::interior::coordinate::Intrinsics::prepared(&chart, &theme)
+            .unwrap()
+            .minimum(&chart);
         let original = chart.intrinsic_body_minimum(&theme).unwrap();
         theme.marks.point_sizes.scatter = 54;
         let styled = chart.intrinsic_body_minimum(&theme).unwrap();
+        assert!(styled.0 > original.0 && styled.1 > original.1);
         // 54px radius with a 5.4px outline rounds that outline to 5530
         // quanta before the canonical bounds are formed.
         let diameter = 108.0 + 5530.0 / 1024.0;
-        assert_eq!(styled.0.to_bits(), original.0.max(diameter).to_bits());
-        assert_eq!(styled.1.to_bits(), original.1.max(diameter).to_bits());
+        assert_eq!(styled.0.to_bits(), coordinate.0.max(diameter).to_bits());
+        assert_eq!(styled.1.to_bits(), coordinate.1.max(diameter).to_bits());
         theme.marks.primary_point.shape = crate::PointShape::TriangleUp;
         let triangle = chart.intrinsic_body_minimum(&theme).unwrap();
         assert!(triangle.0 < styled.0);
@@ -525,7 +529,7 @@ mod tests {
         theme.marks.primary_point.fill_alpha = 0;
         theme.marks.primary_point.outline.color =
             crate::render::backend::Rgba::new(255, 255, 255, 0);
-        assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), original);
+        assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), coordinate);
 
         let source = Plot::scatter(
             NumericValues::new("x", [1.0, 2.0]),
@@ -538,9 +542,21 @@ mod tests {
         let chart = inputs.attach(source).unwrap();
         theme.marks.primary_point.fill_alpha = 255;
         theme.marks.primary_point.outline.color = crate::render::backend::Rgba::rgb(255, 255, 255);
+        let coordinate = crate::layout::interior::coordinate::Intrinsics::prepared(&chart, &theme)
+            .unwrap()
+            .minimum(&chart);
+        let mark_only = intrinsic_body_minimum(&chart, &theme).unwrap();
+        assert_eq!(mark_only.0.to_bits(), 0.0_f64.to_bits());
+        assert_eq!(mark_only.1.to_bits(), diameter.to_bits());
         let exact = chart.intrinsic_body_minimum(&theme).unwrap();
-        assert_eq!(exact.0.to_bits(), original.0.to_bits());
-        assert!(exact.1 >= diameter);
+        assert_eq!(exact.0.to_bits(), coordinate.0.to_bits());
+        assert_eq!(exact.1.to_bits(), coordinate.1.max(diameter).to_bits());
+        // A larger point still cannot raise the explicit x-window's hard size;
+        // the required axis/title source remains independently authoritative.
+        theme.marks.point_sizes.scatter = 100;
+        let larger = chart.intrinsic_body_minimum(&theme).unwrap();
+        assert_eq!(larger.0.to_bits(), coordinate.0.to_bits());
+        assert!(larger.1 > exact.1);
     }
 
     #[test]

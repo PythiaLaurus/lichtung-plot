@@ -715,6 +715,12 @@ use crate::Error;
 pub(crate) struct PlotRenderContext<'a> {
     pub(crate) data: crate::data::PlotData<'a>,
     pub(crate) panel: PanelBox,
+    pub(crate) content_height: bool,
+    // An embedded content-sized child still fills its parent's arranged row.
+    // Its own preferred height is reported separately to that same root driver.
+    pub(crate) fill_content_height: bool,
+    // Derived inside the containing-frame measure, never supplied by callers.
+    pub(crate) content_preference: Option<f64>,
     // Parent-owned perpendicular capacity; axis feedback must not shrink it a
     // second time merely because the assigned mark panel became narrower.
     pub(crate) axis_label_width: f64,
@@ -741,6 +747,9 @@ impl<'a> PlotRenderContext<'a> {
         Self {
             data,
             panel,
+            content_height: false,
+            fill_content_height: false,
+            content_preference: None,
             axis_label_width: panel.width().max(0.0),
             retained_axes: None,
             selected_interior: None,
@@ -765,6 +774,9 @@ impl<'a> PlotRenderContext<'a> {
         Self {
             data: data.map_source_rows(source_rows),
             panel,
+            content_height: false,
+            fill_content_height: false,
+            content_preference: None,
             axis_label_width: panel.width().max(0.0),
             retained_axes: None,
             selected_interior: None,
@@ -963,26 +975,22 @@ impl<'a> PlotRenderContext<'a> {
             };
         }
         if let Some(axes) = self.prepared_axes {
-            // Heatmap keeps its text-dependent rotated category adapter. Its raw
-            // labels are borrowed separately from this same preparation.
-            if self.prepared_kind != Some(PlotKind::Heatmap) {
-                for (side, (range, ticks)) in [(&mut x, &mut x_ticks), (&mut y, &mut y_ticks)]
-                    .into_iter()
-                    .enumerate()
-                {
-                    if let Some(categories) = &axes.categories[side] {
-                        *ticks = data.collect_source(categories.iter().map(|tick| {
-                            Ok(crate::layout::AxisTick::new(
-                                tick.position,
-                                data.copy_source_string(&tick.label)?,
-                            ))
-                        }))?;
-                        *range = axes.ranges[side];
-                    } else {
-                        *range = self.prepared_limits[side].unwrap_or(axes.ranges[side]);
-                    }
-                    specs[side].limits = Some(*range);
+            for (side, (range, ticks)) in [(&mut x, &mut x_ticks), (&mut y, &mut y_ticks)]
+                .into_iter()
+                .enumerate()
+            {
+                if let Some(categories) = &axes.categories[side] {
+                    *ticks = data.collect_source(categories.iter().map(|tick| {
+                        Ok(crate::layout::AxisTick::new(
+                            tick.position,
+                            data.copy_source_string(&tick.label)?,
+                        ))
+                    }))?;
+                    *range = axes.ranges[side];
+                } else {
+                    *range = self.prepared_limits[side].unwrap_or(axes.ranges[side]);
                 }
+                specs[side].limits = Some(*range);
             }
         }
         Layout::new_with_ticks_and_axis_specs_in_panel_box(

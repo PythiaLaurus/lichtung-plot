@@ -1,4 +1,4 @@
-//! Bounded exact-root parent feedback and operation-scoped preparation resources.
+//! Bounded root requests, parent feedback and operation-scoped preparation resources.
 
 use std::cmp::Ordering;
 
@@ -284,6 +284,7 @@ pub(crate) enum AddressRole {
     OutsideGuideBottom,
     OutsideGuideLeft,
     OutsideGuideAuto,
+    PreferenceMetric,
     Text,
     Glyph,
 }
@@ -294,35 +295,53 @@ pub(crate) struct AddressSegment {
     pub(crate) slot_index: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct ComponentAddress {
     root: AddressSegment,
-    descendants: Box<[AddressSegment]>,
+    descendants: Option<std::sync::Arc<Vec<AddressSegment>>>,
+}
+
+impl std::fmt::Debug for ComponentAddress {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ComponentAddress")
+            .field("root", &self.root)
+            .field("descendants", &self.descendants())
+            .finish()
+    }
 }
 
 impl ComponentAddress {
-    pub(crate) fn storage_bytes(&self) -> usize {
-        std::mem::size_of_val(self.descendants.as_ref())
+    fn descendants(&self) -> &[AddressSegment] {
+        self.descendants.as_deref().map_or(&[], Vec::as_slice)
     }
 
     pub(crate) fn leaf_role(&self) -> AddressRole {
-        self.descendants
+        self.descendants()
             .last()
             .map_or(self.root.role, |segment| segment.role)
     }
 
-    pub(crate) fn under_grid(&self, grid: AddressRole) -> Result<Self, Error> {
-        let [leaf] = self.descendants.as_ref() else {
+    pub(crate) fn leaf_slot_index(&self) -> u32 {
+        self.descendants().last().unwrap_or(&self.root).slot_index
+    }
+
+    pub(crate) fn under_grid(
+        &self,
+        grid: AddressRole,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<Self, Error> {
+        let [leaf] = self.descendants() else {
             return Err(Error::Render(
                 "child owner must be one root-local cell".into(),
             ));
         };
         Self::root()
-            .child(grid, 0)?
-            .child(leaf.role, leaf.slot_index)
+            .child(grid, 0, resources)?
+            .child(leaf.role, leaf.slot_index, resources)
     }
     fn is_within(&self, owner: &Self) -> bool {
-        self.root == owner.root && self.descendants.starts_with(&owner.descendants)
+        self.root == owner.root && self.descendants().starts_with(owner.descendants())
     }
     pub(crate) fn root() -> Self {
         Self {
@@ -330,58 +349,49 @@ impl ComponentAddress {
                 role: AddressRole::Root,
                 slot_index: 0,
             },
-            descendants: Box::new([]),
+            descendants: None,
         }
     }
 
-    pub(crate) fn child(&self, role: AddressRole, slot_index: u32) -> Result<Self, Error> {
-        let mut descendants = Vec::new();
-        descendants
-            .try_reserve_exact(self.descendants.len().saturating_add(1))
-            .map_err(|error| {
-                Error::Render(format!(
-                    "layout could not reserve canonical component address: {error}"
-                ))
-            })?;
-        descendants.extend_from_slice(&self.descendants);
-        descendants.push(AddressSegment { role, slot_index });
-        Ok(Self {
-            root: self.root,
-            descendants: descendants.into_boxed_slice(),
-        })
-    }
-
-    pub(crate) fn prepared_child(
+    pub(crate) fn child(
         &self,
         role: AddressRole,
         slot_index: u32,
-        stage: &mut PreparedStage<'_>,
+        resources: &crate::font::canonical::OperationGenerationResources,
     ) -> Result<Self, Error> {
+        let count = self
+            .descendants()
+            .len()
+            .checked_add(1)
+            .ok_or_else(|| Error::Render("component address length overflowed".into()))?;
+        let bytes = count
+            .checked_mul(std::mem::size_of::<AddressSegment>())
+            .and_then(|bytes| {
+                bytes.checked_add(
+                    std::mem::size_of::<Vec<AddressSegment>>() + 2 * std::mem::size_of::<usize>(),
+                )
+            })
+            .and_then(|bytes| u64::try_from(bytes).ok())
+            .ok_or_else(|| Error::Render("component address storage overflowed".into()))?;
+        // The immutable path owns its Vec header and each actual segment. A
+        // scope, failure, or feedback clone only shares that admitted payload.
+        resources
+            .claim_slots(count as u128 + 1)
+            .map_err(|error| Error::Render(format!("component address records: {error:?}")))?;
+        resources
+            .claim_bytes(bytes)
+            .map_err(|error| Error::Render(format!("component address bytes: {error:?}")))?;
         let mut descendants = Vec::new();
-        stage.reserve_prepared(
-            &mut descendants,
-            self.descendants.len().saturating_add(1),
-            "prepared component address",
-        )?;
-        descendants.extend_from_slice(&self.descendants);
+        descendants.try_reserve_exact(count).map_err(|error| {
+            Error::Render(format!(
+                "layout could not reserve canonical component address: {error}"
+            ))
+        })?;
+        descendants.extend_from_slice(self.descendants());
         descendants.push(AddressSegment { role, slot_index });
         Ok(Self {
             root: self.root,
-            descendants: descendants.into_boxed_slice(),
-        })
-    }
-
-    pub(crate) fn prepared_clone(&self, stage: &mut PreparedStage<'_>) -> Result<Self, Error> {
-        let mut descendants = Vec::new();
-        stage.reserve_prepared(
-            &mut descendants,
-            self.descendants.len(),
-            "prepared component address",
-        )?;
-        descendants.extend_from_slice(&self.descendants);
-        Ok(Self {
-            root: self.root,
-            descendants: descendants.into_boxed_slice(),
+            descendants: Some(std::sync::Arc::new(descendants)),
         })
     }
 
@@ -397,12 +407,12 @@ impl ComponentAddress {
         if root != Ordering::Equal {
             return root;
         }
-        self.descendants
+        self.descendants()
             .iter()
             .map(|segment| (segment.role.text_traversal_ordinal(), segment.slot_index))
             .cmp(
                 other
-                    .descendants
+                    .descendants()
                     .iter()
                     .map(|segment| (segment.role.text_traversal_ordinal(), segment.slot_index)),
             )
@@ -631,23 +641,46 @@ fn reservation_error(
     ))
 }
 
-/// Exact assigned CSS-pixel dimensions, not an intrinsic-size proposal.
+/// One private root request; measurement resolves both dimensions before freeze.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct RootSize {
-    width: u32,
-    height: u32,
+    width: Option<u32>,
+    height: Option<u32>,
 }
 
 impl RootSize {
-    pub(crate) const fn new(width: u32, height: u32) -> Self {
-        Self { width, height }
+    pub(crate) const fn natural() -> Self {
+        Self {
+            width: None,
+            height: None,
+        }
     }
-    pub(crate) const fn dimensions(self) -> (u32, u32) {
+    pub(crate) const fn width(width: u32) -> Self {
+        Self {
+            width: Some(width),
+            height: None,
+        }
+    }
+    pub(crate) const fn new(width: u32, height: u32) -> Self {
+        Self {
+            width: Some(width),
+            height: Some(height),
+        }
+    }
+    pub(crate) const fn requested_dimensions(self) -> (Option<u32>, Option<u32>) {
         (self.width, self.height)
+    }
+    pub(crate) fn dimensions(self) -> Result<(u32, u32), Error> {
+        match (self.width, self.height) {
+            (Some(width), Some(height)) => Ok((width, height)),
+            _ => Err(Error::Render(
+                "root content measurement must provide both finite dimensions".into(),
+            )),
+        }
     }
 
     pub(crate) fn validate_dimensions(self, width: u32, height: u32) -> Result<(), Error> {
-        if self.dimensions() != (width, height) {
+        if self.dimensions()? != (width, height) {
             return Err(Error::Render(
                 "measured root dimensions do not match the exact assignment".into(),
             ));
@@ -680,7 +713,10 @@ pub(crate) struct FrozenRoot<Plan, Prepared = ()> {
 
 impl<Plan, Prepared> FrozenRoot<Plan, Prepared> {
     pub(crate) fn dimensions(&self) -> (u32, u32) {
-        self.allocation[0].size.dimensions()
+        self.allocation[0]
+            .size
+            .dimensions()
+            .expect("frozen roots have validated finite dimensions")
     }
     pub(crate) fn plan(&self) -> &Plan {
         &self.allocation[0].plan
@@ -737,8 +773,8 @@ pub(crate) fn required_length(value: f64) -> Result<f64, Error> {
     reason = "preparation, cumulative round admission, convergence, and finalization stay ordered"
 )]
 pub(crate) fn plan_exact_root<Plan, FinalPlan, Prepared>(
-    width: u32,
-    height: u32,
+    width: impl Into<Option<u32>>,
+    height: impl Into<Option<u32>>,
     prepare: impl FnOnce(&mut PreparedStage<'_>) -> Result<Prepared, Error>,
     mut measure: impl FnMut(
         &Prepared,
@@ -747,8 +783,35 @@ pub(crate) fn plan_exact_root<Plan, FinalPlan, Prepared>(
     ) -> Result<MeasuredLayout<Plan>, Error>,
     finalize: impl FnOnce(&Prepared, RootSize, Plan, &mut FinalStage<'_>) -> Result<FinalPlan, Error>,
 ) -> Result<FrozenRoot<FinalPlan, Prepared>, Error> {
-    let assigned = RootSize::new(width, height);
-    let constraints = LayoutConstraints::exact_css_pixels(width, height)?;
+    let width = width.into();
+    let height = height.into();
+    if width.is_none() && height.is_some() {
+        return Err(Error::Render(
+            "an exact root height requires an exact width".into(),
+        ));
+    }
+    if width == Some(0) || height == Some(0) {
+        return Err(Error::Render(
+            "layout root dimensions must be finite and positive".into(),
+        ));
+    }
+    let mut assigned = match (width, height) {
+        (Some(width), Some(height)) => RootSize::new(width, height),
+        (Some(width), None) => RootSize::width(width),
+        (None, None) => RootSize::natural(),
+        (None, Some(_)) => unreachable!("height-only requests reject before preparation"),
+    };
+    let dimension = |value: Option<u32>| -> Result<LengthConstraint, Error> {
+        let exact = value.map(LayoutScalar::exact_css_pixels).transpose()?;
+        LengthConstraint::new(exact.unwrap_or(LayoutScalar(0)), exact)
+    };
+    let constraints = match (width, height) {
+        (Some(width), Some(height)) => LayoutConstraints::exact_css_pixels(width, height)?,
+        _ => LayoutConstraints {
+            width: dimension(width)?,
+            height: dimension(height)?,
+        },
+    };
     let mut resources = ResourceState::new();
     let mut reservations = ReservationDriver::new();
     let mut prepared_stage = PreparedStage {
@@ -788,23 +851,46 @@ pub(crate) fn plan_exact_root<Plan, FinalPlan, Prepared>(
             resources.generation_resources.clone(),
             history.len(),
         )?;
-        round.observe_number(f64::from(width))?;
-        round.observe_number(f64::from(height))?;
+        if let Some(width) = assigned.requested_dimensions().0 {
+            round.observe_number(f64::from(width))?;
+        }
+        if let Some(height) = height {
+            round.observe_number(f64::from(height))?;
+        }
         let result = measure(&prepared, assigned, &mut round)?;
-        result.size.validate_dimensions(width, height)?;
+        let (measured_width, measured_height) = result.size.dimensions()?;
+        if assigned.width.is_some_and(|width| width != measured_width)
+            || height.is_some_and(|height| height != measured_height)
+        {
+            return Err(Error::Render(
+                if height.is_some() {
+                    "measured root dimensions do not match the exact assignment"
+                } else {
+                    "measured root dimensions do not match the sizing request"
+                }
+                .into(),
+            ));
+        }
+        if measured_width == 0 || measured_height == 0 {
+            return Err(Error::Render(
+                "layout root dimensions must be finite and positive".into(),
+            ));
+        }
+        // Automatic width is chosen by initial bottom-up composition exactly once.
+        assigned.width = Some(measured_width);
         let state = round.finish()?;
-        if let Some(error) = state.terminal_error() {
+        if let Some(error) = state.terminal_error(&resources.generation_resources)? {
             return Err(error);
         }
         // Measure and validate the current assignment before accepting its plan.
         // Observation equality would require an unconditional duplicate pass.
-        if state.feedback_unchanged() {
-            if let Some(error) = state.unchanged_error() {
+        if state.feedback_unchanged(&resources.generation_resources)? {
+            if let Some(error) = state.unchanged_error(&resources.generation_resources)? {
                 return Err(error);
             }
             break result;
         }
-        if history.contains(&state) {
+        if state.repeats_history(&history, &resources.generation_resources)? {
             return Err(Error::Render("layout root feedback cycle detected".into()));
         }
         if history.len() == 7 {
@@ -820,10 +906,11 @@ pub(crate) fn plan_exact_root<Plan, FinalPlan, Prepared>(
         )?;
         history.push(state);
     };
-    let size = LayoutSize::exact_css_pixels(measured.size.width, measured.size.height)?;
+    let (width, height) = measured.size.dimensions()?;
+    let size = LayoutSize::exact_css_pixels(width, height)?;
     if !constraints.contains(size) {
         return Err(Error::Render(
-            "measured root dimensions do not match the exact assignment".into(),
+            "measured root dimensions do not match the sizing request".into(),
         ));
     }
     if size.width.0 == 0 || size.height.0 == 0 {
@@ -834,7 +921,10 @@ pub(crate) fn plan_exact_root<Plan, FinalPlan, Prepared>(
     let dimensions = size.canonical_dimensions().ok_or_else(|| {
         Error::Render("measured root dimensions are not canonically representable".into())
     })?;
-    assigned.validate_dimensions(dimensions.0, dimensions.1)?;
+    measured
+        .size
+        .validate_dimensions(dimensions.0, dimensions.1)?;
+    let assigned = RootSize::new(width, height);
 
     reservations.phase = ReservationStage::Final;
     let mut allocation = Vec::new();

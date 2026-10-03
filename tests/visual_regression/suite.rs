@@ -146,6 +146,8 @@ fn native_distribution_reference_snapshots() {
 
 #[test]
 fn matrix_clip_structure_snapshot() {
+    // T5e7: native cell density-outline reserves inset the shared mark/axis
+    // projection; declared clips and scientific mark counts are preserved.
     let x = NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]);
     let y = NumericValues::new("y", [4.0, 3.0, 2.0, 1.0]);
     let group = CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap();
@@ -519,7 +521,7 @@ fn native_interaction_snapshot() {
     let panel = parse_first_clip_rect(&svg);
     assert_eq!(
         [panel.x, panel.y, panel.width, panel.height].map(f64::to_bits),
-        [85.0, 51.0, 420.698_242_187_5, 175.0].map(f64::to_bits)
+        [85.0, 51.0, 418.896_484_375, 175.0].map(f64::to_bits)
     );
     assert!(SvgRect {
         x: 0.0,
@@ -552,7 +554,7 @@ fn beeswarm_clip_structure_snapshot() {
 
     insta::assert_snapshot!(specialized_svg_structure(
         &svg,
-        &["Beeswarm structural title", "Color", "0.100", "1.000"]
+        &["Beeswarm structural title", "Color", "0.1", "1"]
     ));
 }
 
@@ -584,6 +586,9 @@ fn horizontal_bar_clip_structure_snapshot() {
 
 #[test]
 fn marginal_clip_structure_snapshot() {
+    // T5e7: retained KDE sources clear automatic shared domains, and density
+    // amplitude/baseline reserves retain complete unclipped stroke ink.
+    // Terminal numeric tracks include conservative logical fit envelopes.
     let x = NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]);
     let y = NumericValues::new("y", [1.0, 4.0, 2.0, 3.0]);
     let dir = tempdir();

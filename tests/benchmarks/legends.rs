@@ -32,7 +32,9 @@ fn outside(fixture: &str, edge: LegendPosition) -> Plot<crate::kind::Scatter> {
         "historical_reflow_640x400" => scatter(18, true).size(640, 400),
         "preferred_right_control" => scatter(2, true)
             .x_label("MMMMMMMMMMMMMMMMMMMM")
-            .size(630, 480),
+            // Leave the measured hard body and complete key/frame ink enough
+            // room for normal Right, independently of compact-Right recovery.
+            .size(670, 480),
         "native_compact_right" => Plot::scatter(
             NumericValues::new("x", (0..16).map(f64::from)),
             NumericValues::new("y", (0..16).map(|i| f64::from((i * 7) % 13))),
@@ -50,6 +52,9 @@ fn outside(fixture: &str, edge: LegendPosition) -> Plot<crate::kind::Scatter> {
             )
             .unwrap(),
         )
+        // This real unbroken axis title supplies the body's logical text
+        // allocation while the guide still requires compact two-column flow.
+        .x_label("Coordinate")
         .size(520, 240),
         _ => panic!("unknown fixture"),
     };
@@ -163,27 +168,19 @@ fn outside_case(fixture: &str, edge: LegendPosition, success: bool) -> CaseMeasu
         let title = match fixture {
             "starvation" => "MMMMMMMMMMMMMMMMMMMMMMMMMMMM",
             "preferred_right_control" => "MMMMMMMMMMMMMMMMMMMM",
+            "native_compact_right" => "Coordinate",
             _ => "X",
         };
         let document = roxmltree::Document::parse(svg).unwrap();
         assert!(document
             .descendants()
             .any(|node| node.text() == Some(title)));
+        assert_complete_outside_labels(&document, fixture);
         if fixture == "native_compact_right" {
             let guide = document
                 .descendants()
                 .find(|node| node.attribute("id") == Some("legend"))
                 .unwrap();
-            let labels = guide
-                .descendants()
-                .filter(|node| node.has_tag_name("text"))
-                .filter_map(|node| node.text())
-                .collect::<String>();
-            let retained = labels.split_whitespace().collect::<String>();
-            assert!(retained.contains("Completeexplanatorycondition0"));
-            for index in 1..8 {
-                assert!(retained.contains(&format!("Condition{index}")));
-            }
             assert_eq!(
                 document
                     .descendants()
@@ -217,6 +214,37 @@ fn outside_case(fixture: &str, edge: LegendPosition, success: bool) -> CaseMeasu
     sample
 }
 
+fn assert_complete_outside_labels(document: &roxmltree::Document<'_>, fixture: &str) {
+    let guide = document
+        .descendants()
+        .find(|node| node.attribute("id") == Some("legend"))
+        .unwrap();
+    let retained = guide
+        .descendants()
+        .filter(|node| node.has_tag_name("text"))
+        .filter_map(|node| node.text())
+        .flat_map(str::split_whitespace)
+        .collect::<String>();
+    let count = match fixture {
+        "small" => 3,
+        "historical_reflow_640x400" => 18,
+        "starvation" | "preferred_right_control" => 2,
+        "native_compact_right" => 8,
+        _ => unreachable!(),
+    };
+    for index in 0..count {
+        let prefix = if fixture == "small" || (fixture == "native_compact_right" && index > 0) {
+            "Condition"
+        } else {
+            "Completeexplanatorycondition"
+        };
+        assert!(
+            retained.contains(&format!("{prefix}{index}")),
+            "complete label {index}: {retained}"
+        );
+    }
+}
+
 fn assert_outside_trace(sample: &CaseMeasurement, fixture: &str, edge: LegendPosition) {
     use GuideOutcome::{Accepted, Provisional, Rejected};
     use GuidePhase::{Body, GuideOnly};
@@ -226,12 +254,19 @@ fn assert_outside_trace(sample: &CaseMeasurement, fixture: &str, edge: LegendPos
     let first_edge = if edge == Auto { OutsideRight } else { edge };
     let mut expected = vec![(0, first_edge, false, Body, Provisional)];
     if fixture == "starvation" && right_flow {
-        expected.extend([
-            (1, OutsideRight, false, GuideOnly, Rejected),
-            (1, OutsideRight, true, GuideOnly, Rejected),
-        ]);
+        // Complete key/frame ink and the body's actual hard text minimum
+        // reject Right before body allocation, even with empty feedback.
+        expected = vec![
+            (0, OutsideRight, false, GuideOnly, Rejected),
+            (0, OutsideRight, true, GuideOnly, Rejected),
+        ];
         if edge == Auto {
-            expected.push((1, OutsideTop, false, Body, Accepted));
+            expected.extend([
+                (0, OutsideTop, false, Body, Provisional),
+                (1, OutsideRight, false, GuideOnly, Rejected),
+                (1, OutsideRight, true, GuideOnly, Rejected),
+                (1, OutsideTop, false, Body, Accepted),
+            ]);
         }
     } else if fixture == "historical_reflow_640x400" && right_flow {
         expected.extend([
@@ -241,9 +276,7 @@ fn assert_outside_trace(sample: &CaseMeasurement, fixture: &str, edge: LegendPos
     } else if fixture == "native_compact_right" && right_flow {
         expected.extend([
             (1, OutsideRight, false, GuideOnly, Rejected),
-            (1, OutsideRight, true, Body, Provisional),
-            (2, OutsideRight, false, GuideOnly, Rejected),
-            (2, OutsideRight, true, Body, Accepted),
+            (1, OutsideRight, true, Body, Accepted),
         ]);
     } else if fixture == "native_compact_right" {
         expected.extend([
@@ -255,15 +288,17 @@ fn assert_outside_trace(sample: &CaseMeasurement, fixture: &str, edge: LegendPos
     }
     // Assigned-width flow no longer shapes an unrelated "0" ch probe; exact
     // work changes while the chosen frames and failed terminals remain pinned.
+    // Actual-domain terminal intrinsics can add a distinct shaping query; keep
+    // that work explicit while retaining the complete edge/flow/round trace.
     let (rounds, trials, checks, proposals, exact) = match (fixture, edge) {
         ("small", _) => (2, 2, 2, 0, 26),
-        ("starvation", Auto) => (2, 4, 2, 10, 30),
-        ("starvation", OutsideRight) => (2, 3, 1, 10, 30),
-        ("starvation" | "preferred_right_control", _) if !right_flow => (2, 2, 2, 0, 24),
-        ("preferred_right_control", Auto | OutsideRight) => (2, 2, 2, 10, 30),
+        ("starvation", Auto) => (2, 6, 2, 10, 31),
+        ("starvation", OutsideRight) => (1, 2, 0, 10, 31),
+        ("starvation", _) if !right_flow => (2, 2, 2, 0, 25),
+        ("preferred_right_control", _) => (2, 2, 2, 0, 31),
         ("historical_reflow_640x400", Auto | OutsideRight) => (3, 3, 3, 0, 111),
         ("historical_reflow_640x400", _) => (2, 2, 2, 0, 108),
-        ("native_compact_right", Auto | OutsideRight) => (3, 5, 3, 9, 46),
+        ("native_compact_right", Auto | OutsideRight) => (2, 3, 2, 6, 46),
         ("native_compact_right", LegendPosition::OutsideBottom) => (3, 3, 3, 0, 43),
         _ => unreachable!(),
     };
@@ -316,7 +351,7 @@ fn outside_legend_measurements() {
         "requires --release"
     );
     println!("legend_conditions,release,three_interleaved_runs,selection_probe_before_pairs,OS_cache_and_scheduling_uncontrolled,SVG_outlined,PNG_source_balanced,preserved_text_checks_outside_timing");
-    println!("legend_dimensions,small=800x480,starvation=640x480,historical_reflow_640x400=640x400,preferred_right_control=630x480,native_compact_right=520x240");
+    println!("legend_dimensions,small=800x480,starvation=640x480,historical_reflow_640x400=640x400,preferred_right_control=670x480,native_compact_right=520x240");
     for fixture in [
         "small",
         "starvation",
@@ -354,7 +389,7 @@ fn outside_legend_measurements() {
 )]
 fn shared_case(facet: bool, pressure: bool, edge: LegendPosition) -> CaseMeasurement {
     use GuideOutcome::{Accepted, Provisional, Rejected};
-    use GuidePhase::Body;
+    use GuidePhase::{Body, GuideOnly};
     use LegendPosition::{OutsideRight, OutsideTop};
 
     let (width, height) = if pressure {
@@ -415,12 +450,20 @@ fn shared_case(facet: bool, pressure: bool, edge: LegendPosition) -> CaseMeasure
             .all(|trial| &trial.owner == owner),
         "shared guides must not become per-panel guide trials"
     );
+    println!(
+        "shared_trace,facet={facet},pressure={pressure},edge={edge:?},roots={:?},guides={:?},counters={:?}",
+        sample.observations.roots, sample.observations.guides, sample.observations.counters
+    );
     assert_child_reuse(&sample, facet, pressure);
     let (rounds, trials, checks, proposals, exact) = if pressure {
         if facet {
-            (3, 3, 6, 16, 84)
+            // The actual-domain hard body changes the guide's assigned width:
+            // this frame now settles after its first measured-gutter reflow.
+            (2, 2, 4, 8, 80)
         } else {
-            (3, 7, 6, 60, 109)
+            // Complete gutters reject the normal Right containing frame in
+            // the first round; complete compact key ink rejects before body.
+            (2, 6, 4, 60, 109)
         }
     } else {
         (
@@ -443,26 +486,19 @@ fn shared_case(facet: bool, pressure: bool, edge: LegendPosition) -> CaseMeasure
         [trials, checks, proposals, exact]
     );
     assert_eq!(u64::try_from(sample.shapes).unwrap(), exact);
-    let expected: &[_] = if !pressure {
+    let expected: &[_] = if !pressure || facet {
         &[
             (0, OutsideRight, false, Body, Provisional),
             (1, OutsideRight, false, Body, Accepted),
         ]
-    } else if facet {
-        &[
-            (0, OutsideRight, false, Body, Provisional),
-            (1, OutsideRight, false, Body, Provisional),
-            (2, OutsideRight, false, Body, Accepted),
-        ]
     } else {
         &[
-            (0, OutsideRight, false, Body, Provisional),
+            (0, OutsideRight, false, Body, Rejected),
+            (0, OutsideRight, true, GuideOnly, Rejected),
+            (0, OutsideTop, false, Body, Provisional),
             (1, OutsideRight, false, Body, Rejected),
-            (1, OutsideRight, true, Body, Rejected),
-            (1, OutsideTop, false, Body, Provisional),
-            (2, OutsideRight, false, Body, Rejected),
-            (2, OutsideRight, true, Body, Rejected),
-            (2, OutsideTop, false, Body, Accepted),
+            (1, OutsideRight, true, GuideOnly, Rejected),
+            (1, OutsideTop, false, Body, Accepted),
         ]
     };
     assert_eq!(
@@ -481,10 +517,6 @@ fn shared_case(facet: bool, pressure: bool, edge: LegendPosition) -> CaseMeasure
         expected
     );
     assert_eq!(selected(&sample), expected.last().unwrap().1);
-    println!(
-        "shared_trace,facet={facet},pressure={pressure},edge={edge:?},roots={:?},guides={:?}",
-        sample.observations.roots, sample.observations.guides
-    );
     sample
 }
 
@@ -534,7 +566,13 @@ fn assert_child_reuse(sample: &CaseMeasurement, facet: bool, pressure: bool) {
     assert_eq!(observed.counters[Counter::ChildFeedbackReplay as usize], 0);
     assert_eq!(
         observed.counters[Counter::ChildCacheMiss as usize],
-        if pressure { 12 } else { 8 }
+        if facet {
+            8
+        } else if pressure {
+            16
+        } else {
+            12
+        }
     );
     assert!(
         events.iter().all(|event| event.phase != "layout"),
@@ -635,6 +673,7 @@ fn shared_legend_child_cache_replay_contract() {
                     AddressRole::CanvasCell
                 },
                 0,
+                &crate::font::canonical::OperationGenerationResources::new(),
             )
             .unwrap();
         let theme = crate::Theme::Publication.resolve();
@@ -700,7 +739,7 @@ fn shared_legend_child_cache_replay_contract() {
                     round,
                     &owner,
                 )?;
-                if round.child_stable(std::slice::from_ref(&owner)) {
+                if round.child_stable(std::slice::from_ref(&owner))? {
                     let second = children.plan(
                         &plot,
                         crate::decorations::plan::LegendRole::Suppressed,
@@ -718,7 +757,7 @@ fn shared_legend_child_cache_replay_contract() {
                     };
                     assert!(Arc::ptr_eq(&first, &second));
                 }
-                children.finish_round(round);
+                children.finish_round(round)?;
                 Ok(MeasuredLayout::new(assigned, ()))
             },
             |_, _, (), _| Ok(()),
@@ -947,6 +986,27 @@ fn shared_legend_selected_edge_contract() {
 }
 
 #[test]
+fn outside_recovery_controls_replay_identical_without_cache() {
+    use crate::decorations::plan::children::DISABLE_CHILD_REUSE;
+    for fixture in [
+        "preferred_right_control",
+        "starvation",
+        "native_compact_right",
+    ] {
+        let cached = outside_case(fixture, LegendPosition::Auto, true);
+        DISABLE_CHILD_REUSE.with(|disabled| disabled.set(true));
+        let uncached =
+            std::panic::catch_unwind(|| outside_case(fixture, LegendPosition::Auto, true));
+        DISABLE_CHILD_REUSE.with(|disabled| disabled.set(false));
+        equal_output(&cached, &uncached.unwrap());
+    }
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one fixture checks measured frame requirements, full marks, and cache-on/off byte identity"
+)]
 fn measured_gutter_reflow_preserves_complete_frames_without_cache() {
     use crate::decorations::plan::children::DISABLE_CHILD_REUSE;
 
@@ -965,7 +1025,19 @@ fn measured_gutter_reflow_preserves_complete_frames_without_cache() {
         DISABLE_CHILD_REUSE.with(|disabled| disabled.set(true));
         let uncached = std::panic::catch_unwind(|| render(LegendPosition::OutsideRight));
         DISABLE_CHILD_REUSE.with(|disabled| disabled.set(false));
-        equal_output(&auto, &uncached.unwrap());
+        let uncached = uncached.unwrap();
+        equal_output(&auto, &uncached);
+        for sample in [&auto, &explicit, &uncached] {
+            assert_eq!(
+                sample.observations.counters[Counter::StandardPanelIntrinsic as usize],
+                if facet { 2 } else { 1 },
+                "each prepared panel supplies one summary across all root rounds"
+            );
+            assert_eq!(
+                sample.observations.capture_counters[Counter::StandardPanelIntrinsic as usize],
+                0
+            );
+        }
 
         let svg = std::str::from_utf8(
             auto.output
@@ -1000,6 +1072,45 @@ fn measured_gutter_reflow_preserves_complete_frames_without_cache() {
             (640.0, 400.0)
         };
         assert!(lx >= 0.0 && ly >= 0.0 && lx + lw <= width && ly + lh <= height);
+        // Compare the final data frames with this fixture's scientific and
+        // shaped-text requirements, rather than the retired 80x60 floor.
+        let source = if facet {
+            scatter(12, true)
+                .facet(
+                    crate::FacetSpec::wrap(
+                        CategoryValues::new(
+                            "Panel",
+                            (0..24).map(|i| if i % 2 == 0 { "A" } else { "B" }),
+                        )
+                        .unwrap(),
+                        2,
+                    )
+                    .unwrap(),
+                )
+                .size(560, 360)
+                .erase()
+        } else {
+            outside("historical_reflow_640x400", LegendPosition::OutsideRight).erase()
+        };
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let scopes = inputs
+            .axes
+            .iter()
+            .map(|(scope, _)| scope.clone())
+            .collect::<Vec<_>>();
+        let chart = inputs.attach(source).unwrap();
+        let theme = crate::Theme::Publication.resolve();
+        let minimums = scopes
+            .into_iter()
+            .map(|scope| {
+                let panel = scope.map_or_else(
+                    || chart.clone(),
+                    |scope| chart.clone().with_render_scope(scope),
+                );
+                panel.intrinsic_body_minimum(&theme).unwrap()
+            })
+            .collect::<Vec<_>>();
         let panels = document
             .descendants()
             .filter(|node| node.has_tag_name("clipPath"))
@@ -1012,8 +1123,12 @@ fn measured_gutter_reflow_preserves_complete_frames_without_cache() {
             })
             .collect::<Vec<_>>();
         assert_eq!(panels.len(), if facet { 2 } else { 1 });
-        for [x, y, w, h] in panels {
-            assert!(w >= 80.0 && h >= 60.0, "invalid data body: {w}x{h}");
+        assert_eq!(minimums.len(), panels.len());
+        for ([x, y, w, h], minimum) in panels.into_iter().zip(minimums) {
+            assert!(
+                w >= minimum.0 && h >= minimum.1,
+                "data body {w}x{h} is smaller than its traced {minimum:?}"
+            );
             assert!(x >= 0.0 && y >= 0.0 && x + w <= lx && y + h <= height);
         }
         assert_eq!(
@@ -1056,7 +1171,11 @@ fn historical_reflow_native_measured_gutter_control() {
     let plot = outside("historical_reflow_640x400", LegendPosition::Auto).erase();
     let theme = crate::Theme::Publication.resolve();
     let address = ComponentAddress::root()
-        .child(AddressRole::PlotBody, 0)
+        .child(
+            AddressRole::PlotBody,
+            0,
+            &crate::font::canonical::OperationGenerationResources::new(),
+        )
         .unwrap();
     let mut rounds = Vec::new();
     measurements::start();
@@ -1086,10 +1205,10 @@ fn historical_reflow_native_measured_gutter_control() {
             let requested = [required.left, required.right, required.bottom, required.top]
                 .map(|value| (value + 4.0).ceil());
             assert_eq!(
-                round.next_insets(&address, FeedbackKind::AxisGutter),
+                round.next_insets(&address, FeedbackKind::AxisGutter)?,
                 requested
             );
-            let consumed = round.insets(&address, FeedbackKind::AxisGutter);
+            let consumed = round.insets(&address, FeedbackKind::AxisGutter)?;
             assert_eq!(plan.panel_box.x0, canvas.panel_box.x0 + consumed[0]);
             assert_eq!(plan.panel_box.y0, canvas.panel_box.y0 + consumed[2]);
             assert_eq!(plan.panel_box.y1, canvas.panel_box.y1 - consumed[3]);
@@ -1107,16 +1226,18 @@ fn historical_reflow_native_measured_gutter_control() {
     assert_eq!(
         rounds,
         [
-            ([0.0; 4], [79.0, 5.0, 59.0, 5.0], 367.789_062_5),
+            // Complete glyph/frame enclosure reserves one more spatial quantum
+            // for this discrete guide. Consumed/requested gutters stay exact.
+            ([0.0; 4], [79.0, 5.0, 59.0, 5.0], 367.788_085_937_5),
             (
                 [79.0, 5.0, 59.0, 5.0],
                 [94.0, 5.0, 59.0, 5.0],
-                283.789_062_5
+                283.788_085_937_5
             ),
             (
                 [94.0, 5.0, 59.0, 5.0],
                 [94.0, 5.0, 59.0, 5.0],
-                268.789_062_5
+                268.788_085_937_5
             ),
         ]
     );

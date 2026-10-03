@@ -151,7 +151,11 @@ fn canvas_root_title_hard_width_rejects_before_child_measurement() {
     let error = canvas.preflight_plan().err().unwrap();
     let work = measurements::finish();
     let expected = FitScope::root()
-        .child(crate::layout::AddressRole::RootTitle, 0)
+        .child(
+            crate::layout::AddressRole::RootTitle,
+            0,
+            &crate::font::canonical::OperationGenerationResources::new(),
+        )
         .unwrap()
         .failure(
             FitKind::Text,
@@ -379,7 +383,11 @@ fn complete_parent_admission_has_exact_work_and_storage_boundaries() {
              assigned,
              round| {
                 root_text
-                    .check_width(f64::from(assigned.dimensions().0) - 32.0, &FitScope::root())
+                    .check_width(
+                        f64::from(assigned.dimensions()?.0) - 32.0,
+                        &FitScope::root(),
+                        round.resources(),
+                    )
                     .map_err(crate::layout::fit::PlanError::into_error)?;
                 let plan = canvas.build_canvas_plan(
                     Arc::clone(&themes),
@@ -392,8 +400,10 @@ fn complete_parent_admission_has_exact_work_and_storage_boundaries() {
                     text_intrinsics,
                     plot_intrinsics,
                     interiors,
+                    false,
+                    None,
                 )?;
-                children.finish_round(round);
+                children.finish_round(round)?;
                 Ok(crate::layout::MeasuredLayout::new(assigned, plan))
             },
             |(_, _, resources, _, _, _), _, _, _| {

@@ -19,6 +19,7 @@ pub(crate) fn continuous_right(
     theme: &ResolvedTheme,
     scope: &crate::layout::fit::FitScope,
     data: PlotData<'_>,
+    content_plot: Option<&Plot>,
 ) -> Result<
     (
         crate::layout::PanelBox,
@@ -28,7 +29,8 @@ pub(crate) fn continuous_right(
 > {
     use crate::layout::fit::{self, FitKind};
     use crate::layout::kernel::{allocate_grid_axis, GridRequirement, TrackSpec};
-    let metrics = crate::decorations::legend::LegendMetrics::from_theme(theme);
+    let (metrics, frame_minimum) =
+        crate::decorations::legend::MeasuredContinuousGuide::allocation_metrics(descriptor, theme)?;
     let (hard_title, natural_title) = fit::intrinsic_widths(
         theme,
         &descriptor.title,
@@ -56,7 +58,11 @@ pub(crate) fn continuous_right(
     let available = panel.width() - minimum - metrics.outside_gap;
     if hard_title + 2.0 * metrics.pad > available {
         return Err(scope
-            .child(crate::layout::AddressRole::GuideTitle, 0)?
+            .child(
+                crate::layout::AddressRole::GuideTitle,
+                0,
+                &theme.prepared_font_environment()?.generation_resources(),
+            )?
             .failure(
                 FitKind::Text,
                 "continuous guide title cannot preserve its text and the hard data tracks",
@@ -64,8 +70,17 @@ pub(crate) fn continuous_right(
             .into());
     }
     let width = crate::layout::kernel::required_length(
-        natural_title.max(hard) + 2.0 * metrics.pad + 1.0 / 1024.0,
+        natural_title
+            .min(crate::layout::interior::sizing::text_width(
+                theme,
+                &descriptor.title,
+                &theme.typography.legend_title,
+            )?)
+            .max(hard)
+            + 2.0 * metrics.pad
+            + 1.0 / 1024.0,
     )?
+    .max(frame_minimum)
     .min(available);
     if width < hard + 2.0 * metrics.pad {
         return Err(scope
@@ -78,7 +93,7 @@ pub(crate) fn continuous_right(
     let guide = fit::measured(
         crate::decorations::legend::MeasuredContinuousGuide::measure(
             descriptor,
-            (width, panel.height()),
+            (width, content_plot.is_none().then_some(panel.height())),
             false,
             false,
             theme,
@@ -127,8 +142,18 @@ pub(crate) fn continuous_right(
         reason = "root-bounded spatial quanta convert exactly to CSS pixels"
     )]
     let body_right = edge as f64 / 1024.0;
+    let top = if let Some(plot) = content_plot {
+        let hard = plot.intrinsic_body_minimum(theme)?;
+        let preference = crate::layout::interior::sizing::body_preference(plot, theme, hard)?;
+        panel.y0
+            + plot
+                .natural_body_height(theme, body_right - panel.x0, preference.1)?
+                .max(guide.height)
+    } else {
+        panel.y1
+    };
     Ok((
-        crate::layout::PanelBox::new(panel.x0, body_right, panel.y0, panel.y1),
+        crate::layout::PanelBox::new(panel.x0, body_right, panel.y0, top),
         guide,
     ))
 }

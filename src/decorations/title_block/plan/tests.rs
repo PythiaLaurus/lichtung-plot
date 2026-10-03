@@ -279,7 +279,11 @@ fn root_intrinsic_width_miss_and_storage_refusal_precede_materialization() {
     assert_eq!(
         failure.reason.address,
         FitScope::root()
-            .child(AddressRole::RootSubtitle, 0)
+            .child(
+                AddressRole::RootSubtitle,
+                0,
+                &crate::font::canonical::OperationGenerationResources::new()
+            )
             .unwrap()
             .address
     );
@@ -321,7 +325,16 @@ fn intrinsic_summary_and_constrained_title_share_glyph_analysis() {
     let alignments = RootAlignments::resolve(&theme, [None; 2], [None; 2]);
     for width in [640.0, 800.0] {
         let calls = resources.call_cache_usage().0;
-        intrinsics.check_width(width, &FitScope::root()).unwrap();
+        intrinsics
+            .check_width(
+                width,
+                &FitScope::root(),
+                &theme
+                    .prepared_font_environment()
+                    .unwrap()
+                    .generation_resources(),
+            )
+            .unwrap();
         let plan = RootTitleBlockPlan::measure(
             &theme,
             sources,

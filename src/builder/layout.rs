@@ -1,7 +1,8 @@
 use crate::Error;
 
 use super::Plot;
-use crate::layout::{LegacyRootAxes, RootFramePlan};
+use crate::layout::RootFramePlan;
+#[cfg(test)]
 use crate::spec::PlotKind;
 use crate::theme::ResolvedTheme;
 
@@ -53,14 +54,6 @@ impl Plot {
         canvas
     }
 
-    pub(crate) fn legacy_root_axes(&self) -> LegacyRootAxes {
-        let labels_present = self.axis_label_presence();
-        LegacyRootAxes {
-            has_x_label: labels_present.0,
-            has_y_label: labels_present.1,
-        }
-    }
-
     pub(crate) fn measured_canvas_layout(
         &self,
         theme: &ResolvedTheme,
@@ -69,38 +62,24 @@ impl Plot {
             return crate::layout::interior::coordinate::canvas_layout(self, theme)
                 .map_err(crate::layout::fit::PlanError::into_error);
         }
-        RootFramePlan::measured_plot_root(
+        RootFramePlan::measure(
             (self.width, self.height),
             theme,
-            self.legacy_root_axes(),
-            (
+            [
                 self.title.as_deref(),
                 self.subtitle.as_deref(),
                 self.caption.as_deref(),
-            ),
+            ],
             crate::decorations::title_block::plan::RootAlignments::resolve(
                 theme,
                 [self.title_alignment, self.subtitle_alignment],
                 [None, None],
             ),
-            !self.has_facets(),
-            if self.has_facets() {
-                (
-                    crate::layout::canvas::MINIMUM_PANEL_SPAN,
-                    crate::layout::canvas::MINIMUM_PANEL_SPAN,
-                )
-            } else {
-                self.intrinsic_body_minimum(theme)?
-            },
+            (
+                crate::layout::canvas::MINIMUM_PANEL_SPAN,
+                crate::layout::canvas::MINIMUM_PANEL_SPAN,
+            ),
         )
         .map_err(crate::layout::fit::PlanError::into_error)
-    }
-
-    fn axis_label_presence(&self) -> (bool, bool) {
-        if self.kind == PlotKind::Matrix {
-            return (true, true);
-        }
-        let (x, y) = self.resolved_axis_labels(self.kind);
-        (!x.is_empty(), !y.is_empty())
     }
 }

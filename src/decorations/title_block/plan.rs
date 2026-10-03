@@ -64,7 +64,12 @@ impl RootTitleBlockIntrinsics {
             .fold((0.0_f64, 0.0_f64), |a, b| (a.0.max(b.0), a.1.max(b.1)))
     }
 
-    pub(crate) fn check_width(self, width: f64, scope: &FitScope) -> Result<(), PlanError> {
+    pub(crate) fn check_width(
+        self,
+        width: f64,
+        scope: &FitScope,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<(), PlanError> {
         if width >= self.widths().0 {
             return Ok(());
         }
@@ -75,7 +80,7 @@ impl RootTitleBlockIntrinsics {
         ]) {
             if hard > 0.0 && hard > width {
                 return Err(scope
-                    .child(role, 0)?
+                    .child(role, 0, resources)?
                     .failure(
                         fit::FitKind::Text,
                         "root title block is narrower than its hard text intrinsic",
@@ -153,7 +158,6 @@ impl RootTitleBlockPlan {
 
     #[expect(
         clippy::cast_precision_loss,
-        clippy::too_many_lines,
         reason = "one assigned-width pass freezes bounded text and adjacent role geometry"
     )]
     pub(crate) fn measure(
@@ -187,58 +191,14 @@ impl RootTitleBlockPlan {
                 )
                 .into());
         }
-        let appearances = [
-            &theme.typography.title,
-            &theme.typography.subtitle,
-            &theme.typography.caption,
-        ];
-        let align = [alignments.title, alignments.subtitle, alignments.caption];
-        let addresses = [
-            AddressRole::RootTitle,
-            AddressRole::RootSubtitle,
-            AddressRole::RootCaption,
-        ];
-        let plans = fit::collect(
-            theme,
-            "root title block",
-            (0..3).map(|index| {
-                sources[index]
-                    .filter(|source| !source.is_empty())
-                    .map(|source| {
-                        fit::measured(fit::text(
-                            theme,
-                            source,
-                            appearances[index],
-                            span.width(),
-                            match align[index] {
-                                TitleAlignment::Start => PhysicalTextAlignment::Start,
-                                TitleAlignment::Center => PhysicalTextAlignment::Center,
-                                TitleAlignment::End => PhysicalTextAlignment::End,
-                            },
-                            "root title block",
-                            &scope.child(addresses[index], 0)?,
-                        ))
-                    })
-                    .transpose()
-            }),
-        )?;
+        let (plans, top_reserve, bottom_reserve) =
+            Self::measure_content(theme, sources, span.width(), alignments, scope)?;
         let spacing = &theme.composition.root_title_block;
         let gap = if plans[0].is_some() && plans[1].is_some() {
             spacing.title_subtitle_gap
         } else {
             0.0
         };
-        let top_reserve = plans[0].as_ref().map_or(0.0, ResolvedTextPlan::height)
-            + plans[1].as_ref().map_or(0.0, ResolvedTextPlan::height)
-            + gap
-            + if plans[0].is_some() || plans[1].is_some() {
-                spacing.title_block_to_content_clearance
-            } else {
-                0.0
-            };
-        let bottom_reserve = plans[2].as_ref().map_or(0.0, |plan| {
-            plan.height() + spacing.caption_to_content_clearance
-        });
         if top_reserve + bottom_reserve + minimum_body_height > span.height() {
             return Err(scope
                 .failure(
@@ -256,15 +216,16 @@ impl RootTitleBlockPlan {
                 } else {
                     cursor
                 };
-                let (mut x, anchor) = align[index].resolve_physical(span.x0, span.x1);
-                let left = match align[index] {
+                let alignment = [alignments.title, alignments.subtitle, alignments.caption][index];
+                let (mut x, anchor) = alignment.resolve_physical(span.x0, span.x1);
+                let left = match alignment {
                     TitleAlignment::Start => span.x0,
                     TitleAlignment::Center => {
                         span.x0 + ((span.width() - text.width()) * 512.0).round_ties_even() / 1024.0
                     }
                     TitleAlignment::End => span.x1 - text.width(),
                 };
-                if align[index] == TitleAlignment::Center {
+                if alignment == TitleAlignment::Center {
                     x = left
                         + crate::render::backend::nearest_even_text_half(text.width_quanta)
                             .ok_or_else(|| Error::Render("root text anchor overflowed".into()))?
@@ -294,6 +255,84 @@ impl RootTitleBlockPlan {
             top_reserve,
             bottom_reserve,
         })
+    }
+
+    /// Width-dependent text and owned gaps, before the parent assigns height.
+    pub(crate) fn content_reserves(
+        theme: &ResolvedTheme,
+        sources: [Option<&str>; 3],
+        width: f64,
+        alignments: RootAlignments,
+        scope: &FitScope,
+    ) -> Result<(f64, f64), PlanError> {
+        let (_, top, bottom) = Self::measure_content(theme, sources, width, alignments, scope)?;
+        Ok((top, bottom))
+    }
+
+    fn measure_content(
+        theme: &ResolvedTheme,
+        sources: [Option<&str>; 3],
+        width: f64,
+        alignments: RootAlignments,
+        scope: &FitScope,
+    ) -> Result<(Vec<Option<ResolvedTextPlan>>, f64, f64), PlanError> {
+        let appearances = [
+            &theme.typography.title,
+            &theme.typography.subtitle,
+            &theme.typography.caption,
+        ];
+        let align = [alignments.title, alignments.subtitle, alignments.caption];
+        let addresses = [
+            AddressRole::RootTitle,
+            AddressRole::RootSubtitle,
+            AddressRole::RootCaption,
+        ];
+        let plans = fit::collect(
+            theme,
+            "root title block",
+            (0..3).map(|index| {
+                sources[index]
+                    .filter(|source| !source.is_empty())
+                    .map(|source| {
+                        fit::measured(fit::text(
+                            theme,
+                            source,
+                            appearances[index],
+                            width,
+                            match align[index] {
+                                TitleAlignment::Start => PhysicalTextAlignment::Start,
+                                TitleAlignment::Center => PhysicalTextAlignment::Center,
+                                TitleAlignment::End => PhysicalTextAlignment::End,
+                            },
+                            "root title block",
+                            &scope.child(
+                                addresses[index],
+                                0,
+                                &theme.prepared_font_environment()?.generation_resources(),
+                            )?,
+                        ))
+                    })
+                    .transpose()
+            }),
+        )?;
+        let spacing = &theme.composition.root_title_block;
+        let gap = if plans[0].is_some() && plans[1].is_some() {
+            spacing.title_subtitle_gap
+        } else {
+            0.0
+        };
+        let top_reserve = plans[0].as_ref().map_or(0.0, ResolvedTextPlan::height)
+            + plans[1].as_ref().map_or(0.0, ResolvedTextPlan::height)
+            + gap
+            + if plans[0].is_some() || plans[1].is_some() {
+                spacing.title_block_to_content_clearance
+            } else {
+                0.0
+            };
+        let bottom_reserve = plans[2].as_ref().map_or(0.0, |plan| {
+            plan.height() + spacing.caption_to_content_clearance
+        });
+        Ok((plans, top_reserve, bottom_reserve))
     }
 
     pub(crate) fn draw(

@@ -533,6 +533,35 @@ fn measure<R>(
 }
 
 #[test]
+fn matrix_publication_feedback_storage_stays_within_the_operation_ledger() {
+    let sample = measure_case(
+        "matrix4_feedback_storage",
+        || {
+            Plot::matrix(
+                (0..4)
+                    .map(|j| {
+                        NumericValues::new(
+                            format!("Variable {j}"),
+                            (0..100).map(move |i| f64::from((i * (j * 12 + 7)) % 101)),
+                        )
+                    })
+                    .collect(),
+            )
+            .size(1400, 1400)
+        },
+        |matrix, path| matrix.svg(path),
+        true,
+        false,
+    );
+    println!(
+        "matrix_feedback_admission,records={},visits={},bytes={}",
+        sample.observations.records, sample.observations.visits, sample.observations.bytes
+    );
+    assert!(sample.error.is_none());
+    assert!(sample.observations.bytes < 536_870_912);
+}
+
+#[test]
 #[ignore = "release baseline; run explicitly with --release --ignored --nocapture --test-threads=1"]
 #[expect(
     clippy::too_many_lines,

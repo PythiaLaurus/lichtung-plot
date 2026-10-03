@@ -8,7 +8,7 @@
 )]
 
 use crate::layout::{Layout, PanelBox, PhysicalTextAlignment};
-use crate::render::backend::{with_clip, Backend, GradientStop, LineStyle, PlacedText, Point2D};
+use crate::render::backend::{with_clip, Backend, GradientStop, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::Error;
 use crate::Plot;
@@ -30,23 +30,27 @@ pub(crate) struct PreparedBeeswarm {
     pub(crate) color_label: String,
 }
 
+fn retained<'a>(
+    chart: &'a Plot,
+    theme: &crate::theme::ResolvedTheme,
+) -> Result<&'a PreparedBeeswarm, Error> {
+    let inputs = chart
+        .prepared_beeswarm
+        .as_ref()
+        .ok_or_else(|| Error::Render("Beeswarm requires root-prepared source rows".into()))?;
+    crate::layout::interior::preference::panel(
+        &inputs.panels,
+        chart.axis_scope(),
+        "Beeswarm",
+        &theme.prepared_font_environment()?.generation_resources(),
+    )
+}
+
 pub(crate) fn intrinsic_body_minimum(
     chart: &Plot,
     theme: &crate::theme::ResolvedTheme,
 ) -> Result<(f64, f64), Error> {
-    let prepared = chart
-        .prepared_beeswarm
-        .as_ref()
-        .and_then(|inputs| {
-            inputs
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
-        })
-        .map(|(_, marks)| marks)
-        .ok_or_else(|| {
-            Error::Render("Beeswarm intrinsic requires root-prepared source rows".into())
-        })?;
+    let prepared = retained(chart, theme)?;
     if prepared.levels.is_empty()
         || prepared.rows.is_empty()
         || prepared.rows.len() != prepared.colors.len()
@@ -140,6 +144,8 @@ pub(crate) fn prepare(
         ));
     }
     let levels = data.source_levels(&categories)?;
+    data.claim_mark_rows()?;
+    data.claim_topology_slots(levels.len())?;
     data.claim_source_visits(xs.len())?;
     let x_data = crate::data::min_max(xs.iter().copied(), "beeswarm")?;
     let color_range = if let Some((minimum, maximum)) = chart.beeswarm_color_limits_spec() {
@@ -168,7 +174,12 @@ pub(crate) fn prepare(
     crate::data::source::sort_source_by(&mut rows, Some(data), |a, b| {
         a.0.cmp(&b.0).then_with(|| a.3.cmp(&b.3))
     })?;
-    let values = colorbar_values(color_range, data)?;
+    let values = crate::decorations::legend::descriptor::numeric_labels(
+        &[color_range.1, color_range.0],
+        data,
+    )?
+    .try_into()
+    .map_err(|_| Error::Render("Beeswarm endpoint label count changed".into()))?;
     let scale = crate::theme::ContinuousColors::resolve(
         color_range,
         chart
@@ -195,6 +206,9 @@ pub(crate) fn prepare(
 }
 
 impl PreparedBeeswarm {
+    pub(crate) fn guide_values(&self) -> &[String] {
+        &self.values
+    }
     pub(crate) fn guide_samples(&self, data: crate::data::PlotData<'_>) -> Result<Vec<f64>, Error> {
         data.collect_source(self.rows.iter().map(|row| Ok(row.2)))
     }
@@ -217,7 +231,12 @@ impl PreparedBeeswarm {
         descriptor: &crate::decorations::legend::descriptor::ContinuousDescriptor,
         data: crate::data::PlotData<'_>,
     ) -> Result<(), Error> {
-        let values = colorbar_values(descriptor.domain, data)?;
+        let values = crate::decorations::legend::descriptor::numeric_labels(
+            &[descriptor.domain.1, descriptor.domain.0],
+            data,
+        )?
+        .try_into()
+        .map_err(|_| Error::Render("Beeswarm endpoint label count changed".into()))?;
         let scale = self
             .scale
             .with_domain(descriptor.domain, data.source_resources()?)?;
@@ -251,21 +270,42 @@ impl PreparedBeeswarm {
     }
 }
 
-fn colorbar_values(
-    range: (f64, f64),
-    data: crate::data::PlotData<'_>,
-) -> Result<[String; 2], Error> {
-    let mut values = [String::new(), String::new()];
-    for (label, value) in values.iter_mut().zip([range.1, range.0]) {
-        use std::fmt::Write;
-        data.reserve_source_string(label, 32)?;
-        if value.abs() >= 1_000_000.0 || (value.abs().to_bits() != 0 && value.abs() < 0.0001) {
-            write!(label, "{value:.3e}").expect("reserved colorbar label");
-        } else {
-            write!(label, "{value:.3}").expect("reserved colorbar label");
-        }
-    }
-    Ok(values)
+pub(crate) fn natural_body_height(
+    chart: &Plot,
+    theme: &crate::theme::ResolvedTheme,
+    width: f64,
+) -> Result<f64, Error> {
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let inputs = chart
+        .prepared_beeswarm
+        .as_ref()
+        .ok_or_else(|| Error::Render("natural Beeswarm rows missing".into()))?;
+    let marks = crate::layout::interior::preference::panel(
+        &inputs.panels,
+        chart.axis_scope(),
+        "natural Beeswarm",
+        &resources,
+    )?;
+    let axes = chart
+        .prepared_axis_inputs()
+        .ok_or_else(|| Error::Render("natural Beeswarm axes missing".into()))?;
+    let range = chart.x_axis_spec().limits.unwrap_or(axes.ranges[0]);
+    let projection = crate::layout::Projection::new(range, (0.0, 1.0), (0.0, width, 0.0, 1.0));
+    let radius = packing::radius(
+        theme,
+        &chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.beeswarm),
+    )?;
+    let packed = packing::pack(
+        &marks.rows,
+        &projection,
+        radius,
+        chart.data().with_axis_resources(&resources),
+    )?;
+    let hard = intrinsic_body_minimum(chart, theme)?;
+    let height = quanta_pixels(packed.hard_pitch)
+        .max(2.0 * f64::from(theme.typography.tick_label.font_size))
+        * marks.levels.len() as f64;
+    Ok(height.max(hard.1).max(3.0 * width / 4.0))
 }
 
 pub(crate) fn measure(
@@ -274,17 +314,7 @@ pub(crate) fn measure(
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     #[cfg(test)]
     count(1);
-    let prepared = chart
-        .prepared_beeswarm
-        .as_ref()
-        .and_then(|inputs| {
-            inputs
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
-        })
-        .map(|(_, marks)| marks)
-        .ok_or_else(|| Error::Render("beeswarm requires root-prepared semantics".into()))?;
+    let prepared = retained(chart, context.theme)?;
     let theme = context.theme;
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);
@@ -293,15 +323,19 @@ pub(crate) fn measure(
         (context.panel, None)
     } else {
         let [high_label, low_label] = &prepared.values;
-        let guide_scope = context
-            .fit_scope()
-            .child(crate::layout::AddressRole::OutsideGuideRight, 0)?;
-        let labels: &[&str] =
-            if prepared.scale.domain().0.to_bits() == prepared.scale.domain().1.to_bits() {
-                &[low_label]
-            } else {
-                &[low_label, high_label]
-            };
+        let guide_scope = context.fit_scope().child(
+            crate::layout::AddressRole::OutsideGuideRight,
+            0,
+            &theme.prepared_font_environment()?.generation_resources(),
+        )?;
+        let labels: &[&str] = if crate::decorations::legend::descriptor::same_value(
+            prepared.scale.domain().0,
+            prepared.scale.domain().1,
+        ) {
+            &[low_label]
+        } else {
+            &[low_label, high_label]
+        };
         let descriptor = crate::decorations::legend::descriptor::ContinuousDescriptor {
             field: data.copy_source_string(chart.color_dimension_key().unwrap_or(""))?,
             title: data.copy_source_string(&prepared.color_label)?,
@@ -320,6 +354,7 @@ pub(crate) fn measure(
             theme,
             &guide_scope,
             data,
+            context.content_height.then_some(chart),
         )?;
         (body, Some(guide))
     };
@@ -361,9 +396,11 @@ pub(crate) fn measure(
                 width,
                 PhysicalTextAlignment::End,
                 "y-axis tick label",
-                &context
-                    .fit_scope()
-                    .child(crate::layout::AddressRole::AxisLeft, 0)?,
+                &context.fit_scope().child(
+                    crate::layout::AddressRole::AxisLeft,
+                    0,
+                    &theme.prepared_font_environment()?.generation_resources(),
+                )?,
             ))?;
             hard_pitch = hard_pitch.max(crate::layout::kernel::ceil_spatial_quanta(
                 plan.height() + 2.0 * crate::layout::LABEL_CLEARANCE,
@@ -528,7 +565,13 @@ pub(crate) fn measure(
         || crate::layout::StandardPanelInputs::new(theme),
     )?);
     if let Some(bar) = &payload.colorbar {
-        result.producer_text = data.collect_source(bar.text.iter().map(|text| Ok(text.clone())))?;
+        for call in &bar.calls {
+            data.claim_source_visits(1)?;
+            if let crate::decorations::legend::LegendCall::Text(text) = call {
+                data.reserve_source(&mut result.producer_text, 1)?;
+                result.producer_text.push(text.clone());
+            }
+        }
     }
     result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
         payload: crate::layout::interior::MarkPayload::Beeswarm(payload),
@@ -543,17 +586,8 @@ pub(crate) struct BeeswarmPayload {
     zero: Option<([Point2D; 2], LineStyle)>,
     points: Vec<(Point2D, crate::render::backend::PointStyle)>,
     source_rows: Vec<(usize, usize)>,
-    colorbar: Option<ColorbarPayload>,
+    colorbar: Option<crate::decorations::legend::LegendDrawPlan>,
     pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
-}
-
-#[derive(Debug)]
-struct ColorbarPayload {
-    bounds: PanelBox,
-    start: Point2D,
-    end: Point2D,
-    stops: Vec<GradientStop>,
-    text: Vec<PlacedText>,
 }
 
 impl BeeswarmPayload {
@@ -579,10 +613,7 @@ impl BeeswarmPayload {
             Ok(())
         })?;
         if let Some(bar) = &self.colorbar {
-            backend.draw_linear_gradient(bar.bounds, bar.start, bar.end, &bar.stops)?;
-            for text in &bar.text {
-                text.draw(backend)?;
-            }
+            bar.draw(backend)?;
         }
         Ok(())
     }
@@ -600,10 +631,7 @@ impl BeeswarmPayload {
             geometry.scatter(&[*point], style, clip)?;
         }
         if let Some(bar) = &self.colorbar {
-            geometry.linear_gradient(bar.bounds, bar.start, bar.end, &bar.stops, None)?;
-            for text in &bar.text {
-                geometry.text(text.placement, &text.plan, None)?;
-            }
+            bar.geometry(&mut geometry)?;
         }
         Ok(geometry)
     }
@@ -614,42 +642,12 @@ fn select_colorbar(
     panel: PanelBox,
     theme: &crate::theme::ResolvedTheme,
     data: crate::data::PlotData<'_>,
-) -> Result<ColorbarPayload, Error> {
-    let selected = guide.select(
+) -> Result<crate::decorations::legend::LegendDrawPlan, Error> {
+    guide.select(
         panel.x1 + theme.legend.outside_gap,
         panel.y0 + (panel.height() - guide.height) / 2.0,
         data,
-    )?;
-    let mut gradient = None;
-    let mut text = Vec::new();
-    data.reserve_source(&mut text, selected.calls.len())?;
-    for call in selected.calls {
-        data.claim_source_visits(1)?;
-        match call {
-            crate::decorations::legend::LegendCall::Gradient(bounds, start, end, stops) => {
-                gradient = Some((bounds, start, end, stops));
-            }
-            crate::decorations::legend::LegendCall::Text(placed) => text.push(placed),
-            crate::decorations::legend::LegendCall::Background(_, _) => {}
-            _ => {
-                return Err(Error::Render(
-                    "unexpected Beeswarm continuous guide operand".into(),
-                ))
-            }
-        }
-    }
-    if !text.is_empty() {
-        text.rotate_left(1);
-    }
-    let (bounds, start, end, stops) =
-        gradient.ok_or_else(|| Error::Render("Beeswarm guide has no gradient".into()))?;
-    Ok(ColorbarPayload {
-        bounds,
-        start,
-        end,
-        stops,
-        text,
-    })
+    )
 }
 
 #[cfg(test)]
@@ -799,12 +797,16 @@ mod fit_tests {
         )
         .unwrap();
         let plot = inputs.attach(plot).unwrap();
-        let owner = ComponentAddress::root()
-            .child(AddressRole::CanvasCell, 2)
-            .unwrap();
-        let scope = FitScope::new(&owner, 7);
         let theme = crate::Theme::Publication.resolve();
         theme.prepare_font_environment().unwrap();
+        let resources = theme
+            .prepared_font_environment()
+            .unwrap()
+            .generation_resources();
+        let owner = ComponentAddress::root()
+            .child(AddressRole::CanvasCell, 2, &resources)
+            .unwrap();
+        let scope = FitScope::new(&owner, 7);
         let result = plot
             .preflight_measurement(
                 crate::spec::PlotKind::Beeswarm,
@@ -821,9 +823,9 @@ mod fit_tests {
         assert_eq!(
             failure.reason.address,
             owner
-                .child(AddressRole::OutsideGuideRight, 0)
+                .child(AddressRole::OutsideGuideRight, 0, &resources)
                 .unwrap()
-                .child(AddressRole::GuideTitle, 0)
+                .child(AddressRole::GuideTitle, 0, &resources)
                 .unwrap()
         );
 

@@ -476,10 +476,13 @@ pub(crate) fn prepare_plot(
         );
     }
     if source.has_facets() {
-        let row_topology = InteriorRoute::classify(source.kind())
-            .is_coordinate()
-            .then(|| source_data.admit_row_topology())
-            .transpose()?;
+        let row_topology = (InteriorRoute::classify(source.kind()).is_coordinate()
+            || matches!(
+                source.kind(),
+                PlotKind::Heatmap | PlotKind::Beeswarm | PlotKind::Waterfall
+            ))
+        .then(|| source_data.admit_row_topology())
+        .transpose()?;
         let panels = crate::orchestrator::text_census_panels(source, source_data)?;
         let interaction_parent = (source.kind() == PlotKind::Interaction)
             .then(|| {

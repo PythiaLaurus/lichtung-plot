@@ -88,7 +88,11 @@ impl PanelRequirements {
                 (available_panel.width() - 16.0).max(1.0),
                 PhysicalTextAlignment::Center,
                 "facet strip",
-                &scope.child(crate::layout::AddressRole::FacetHeader, 0)?,
+                &scope.child(
+                    crate::layout::AddressRole::FacetHeader,
+                    0,
+                    &theme.prepared_font_environment()?.generation_resources(),
+                )?,
             ))?;
             let line_height = f64::from(theme.facet_header_font_size) + 6.0;
             let facet_top = plan
@@ -125,7 +129,11 @@ impl PanelRequirements {
                     maximum_width,
                     PhysicalTextAlignment::Start,
                     "panel title",
-                    &scope.child(crate::layout::AddressRole::RootTitle, 0)?,
+                    &scope.child(
+                        crate::layout::AddressRole::RootTitle,
+                        0,
+                        &theme.prepared_font_environment()?.generation_resources(),
+                    )?,
                 ))?
                 .lines
                 .len(),
@@ -140,7 +148,11 @@ impl PanelRequirements {
                     maximum_width,
                     PhysicalTextAlignment::Start,
                     "panel subtitle",
-                    &scope.child(crate::layout::AddressRole::RootSubtitle, 0)?,
+                    &scope.child(
+                        crate::layout::AddressRole::RootSubtitle,
+                        0,
+                        &theme.prepared_font_environment()?.generation_resources(),
+                    )?,
                 ))?
                 .lines
                 .len(),
@@ -182,14 +194,12 @@ pub struct CanvasInsets {
     pub top: f64,
 }
 
-/// Axis reservations retained by the specialized and composition adapters.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct LegacyRootAxes {
-    /// Reserve space for the x-axis label.
-    pub has_x_label: bool,
-    /// Reserve space for the y-axis label.
-    pub has_y_label: bool,
-}
+pub(crate) const ROOT_PADDING: CanvasInsets = CanvasInsets {
+    left: 16.0,
+    right: 16.0,
+    bottom: 8.0,
+    top: 12.0,
+};
 
 /// A resolved canvas layout for one chart canvas.
 #[derive(Debug, Clone, PartialEq)]
@@ -204,32 +214,30 @@ pub(crate) struct RootFramePlan {
 }
 
 impl RootFramePlan {
-    pub(crate) fn measured_plot_root(
+    pub(crate) fn measure(
         canvas_size: (u32, u32),
         theme: &ResolvedTheme,
-        spec: LegacyRootAxes,
-        text: (Option<&str>, Option<&str>, Option<&str>),
+        text: [Option<&str>; 3],
         alignments: crate::decorations::title_block::plan::RootAlignments,
-        reserve_axes: bool,
         minimum_body: (f64, f64),
     ) -> Result<Self, crate::layout::fit::PlanError> {
         let (canvas_width, canvas_height) = canvas_size;
-        let mut insets = spec.insets(theme, reserve_axes);
+        let mut insets = ROOT_PADDING;
         let span = PanelBox::new(
-            16.0,
-            f64::from(canvas_width) - 16.0,
-            8.0,
-            f64::from(canvas_height) - 12.0,
+            insets.left,
+            f64::from(canvas_width) - insets.right,
+            insets.bottom,
+            f64::from(canvas_height) - insets.top,
         );
         let plan = crate::decorations::title_block::plan::RootTitleBlockPlan::measure(
             theme,
-            [text.0, text.1, text.2],
+            text,
             span,
             alignments,
-            minimum_body.1 + insets.bottom - 8.0,
+            minimum_body.1,
             &crate::layout::fit::FitScope::root(),
         )?;
-        insets.top = (12.0 + plan.top_reserve).max(30.0);
+        insets.top += plan.top_reserve;
         insets.bottom += plan.bottom_reserve;
         let panel_box = PanelBox::new(
             insets.left,
@@ -237,95 +245,19 @@ impl RootFramePlan {
             insets.bottom,
             f64::from(canvas_height) - insets.top,
         );
-        if panel_box.width() < minimum_body.0 || panel_box.height() < minimum_body.1 {
-            return Err(crate::layout::fit::FitScope::root()
-                .failure(
-                    crate::layout::fit::FitKind::TrackOrResidual,
-                    "root title block leaves less than the measured child body minimum",
-                )
-                .into());
-        }
+        crate::layout::fit::measured(
+            crate::layout::kernel::FrameRequirements {
+                minimum_body,
+                natural_insets: [0.0; 4],
+            }
+            .assign_fit(panel_box, [0.0; 4], &crate::layout::fit::FitScope::root()),
+        )?;
         Ok(Self {
             panel_box,
             insets,
             root_text: plan,
             native_preference: None,
         })
-    }
-
-    #[cfg(test)]
-    pub(crate) fn measured_composed_canvas(
-        canvas_width: u32,
-        canvas_height: u32,
-        theme: &ResolvedTheme,
-        spec: LegacyRootAxes,
-        text: (Option<&str>, Option<&str>, Option<&str>),
-    ) -> Result<Self, Error> {
-        Self::measured_plot_root(
-            (canvas_width, canvas_height),
-            theme,
-            spec,
-            text,
-            crate::decorations::title_block::plan::RootAlignments::resolve(
-                theme, [None; 2], [None; 2],
-            ),
-            false,
-            (MINIMUM_PANEL_SPAN, MINIMUM_PANEL_SPAN),
-        )
-        .map_err(crate::layout::fit::PlanError::into_error)
-    }
-}
-
-impl LegacyRootAxes {
-    // T5b/T5e retain this axis/packing estimate, not an alternate root layout.
-    // Root text is always measured separately and never estimated here.
-    pub(crate) fn insets(self, theme: &ResolvedTheme, reserve_axes: bool) -> CanvasInsets {
-        let tick_length = theme
-            .axes
-            .ticks
-            .as_ref()
-            .map_or(0.0, |ticks| f64::from(ticks.length));
-        let tick_h = if reserve_axes {
-            tick_length
-                + theme.axes.spacing.x_tick_label_gap
-                + theme.typography.tick_label.line_height()
-        } else {
-            0.0
-        };
-        let x_label_h = if self.has_x_label {
-            let gap = if reserve_axes {
-                theme.axes.spacing.x_title_tick_label_gap
-            } else {
-                theme.axes.spacing.x_title_without_tick_labels_gap
-            };
-            gap + theme.typography.axis_title.line_height()
-        } else {
-            0.0
-        };
-        let y_tick_w = if reserve_axes {
-            f64::from(theme.typography.tick_label.font_size) * 2.2
-                + tick_length
-                + theme.axes.spacing.y_tick_label_gap
-        } else {
-            0.0
-        };
-        let y_label_w = if self.has_y_label {
-            f64::from(theme.typography.axis_title.font_size)
-                + theme.axes.spacing.y_title_edge_padding
-        } else {
-            0.0
-        };
-
-        CanvasInsets {
-            left: if reserve_axes {
-                (y_tick_w + y_label_w + 4.0).max(62.0)
-            } else {
-                16.0 + y_label_w
-            },
-            right: if reserve_axes { 30.0 } else { 16.0 },
-            bottom: tick_h + x_label_h + 8.0,
-            top: 30.0,
-        }
     }
 }
 
@@ -370,6 +302,23 @@ mod tests {
     use crate::theme::Theme;
 
     #[test]
+    fn root_padding_has_no_axis_estimate_or_unconditional_top_minimum() {
+        let theme = Theme::Publication.resolve();
+        let frame = RootFramePlan::measure(
+            (100, 80),
+            &theme,
+            [None; 3],
+            crate::decorations::title_block::plan::RootAlignments::resolve(
+                &theme, [None; 2], [None; 2],
+            ),
+            (MINIMUM_PANEL_SPAN, MINIMUM_PANEL_SPAN),
+        )
+        .unwrap();
+        assert_eq!(frame.insets, ROOT_PADDING);
+        assert_eq!(frame.panel_box, PanelBox::new(16.0, 84.0, 8.0, 68.0));
+    }
+
+    #[test]
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
@@ -377,24 +326,18 @@ mod tests {
     )]
     fn measured_child_root_frame_rejects_residual_fit_without_clamping_or_text_fallback() {
         let theme = Theme::Publication.resolve();
-        let spec = LegacyRootAxes {
-            has_x_label: true,
-            has_y_label: true,
-        };
-        let insets = spec.insets(&theme, true);
+        let insets = ROOT_PADDING;
         let child_minimum = (13.0, 9.0);
         let width = (insets.left + insets.right + child_minimum.0).ceil() as u32;
         let height = (insets.bottom + insets.top + child_minimum.1).ceil() as u32;
         let measure = |width, height| {
-            RootFramePlan::measured_plot_root(
+            RootFramePlan::measure(
                 (width, height),
                 &theme,
-                spec,
-                (None, None, None),
+                [None; 3],
                 crate::decorations::title_block::plan::RootAlignments::resolve(
                     &theme, [None; 2], [None; 2],
                 ),
-                true,
                 child_minimum,
             )
         };
@@ -414,16 +357,15 @@ mod tests {
         let theme = Theme::Publication.resolve();
         let caption =
             "diagnostic provenance with a deliberately long model and adjustment description";
-        let spec = LegacyRootAxes {
-            has_x_label: true,
-            has_y_label: true,
-        };
-        let layout = RootFramePlan::measured_composed_canvas(
-            360,
-            240,
+        let alignments = crate::decorations::title_block::plan::RootAlignments::resolve(
+            &theme, [None; 2], [None; 2],
+        );
+        let layout = RootFramePlan::measure(
+            (360, 240),
             &theme,
-            spec,
-            (None, None, Some(caption)),
+            [None, None, Some(caption)],
+            alignments,
+            (MINIMUM_PANEL_SPAN, MINIMUM_PANEL_SPAN),
         )
         .unwrap();
         let lines = wrap_text(&theme, caption, &theme.typography.caption, 328.0);
@@ -432,12 +374,12 @@ mod tests {
         assert_eq!(lines.concat(), caption);
         let plan = &layout.root_text;
         assert!(plan.bottom_reserve > theme.typography.caption.line_height());
-        assert!(RootFramePlan::measured_composed_canvas(
-            160,
-            120,
+        assert!(RootFramePlan::measure(
+            (160, 120),
             &theme,
-            spec,
-            (None, None, Some(&caption.repeat(8))),
+            [None, None, Some(&caption.repeat(8))],
+            alignments,
+            (MINIMUM_PANEL_SPAN, MINIMUM_PANEL_SPAN),
         )
         .is_err());
     }
@@ -447,16 +389,26 @@ mod tests {
         let base = Theme::Publication.resolve();
         let mut spaced = base.clone();
         spaced.composition.root_title_block.title_subtitle_gap = 9.0;
-        let spec = LegacyRootAxes {
-            has_x_label: false,
-            has_y_label: false,
-        };
-        let content = (Some("title"), Some("subtitle"), None);
-        let base_layout = RootFramePlan::measured_composed_canvas(640, 480, &base, spec, content)
-            .expect("base title block fits");
-        let spaced_layout =
-            RootFramePlan::measured_composed_canvas(640, 480, &spaced, spec, content)
-                .expect("spaced title block fits");
+        let content = [Some("title"), Some("subtitle"), None];
+        let alignments = crate::decorations::title_block::plan::RootAlignments::resolve(
+            &base, [None; 2], [None; 2],
+        );
+        let base_layout = RootFramePlan::measure(
+            (640, 480),
+            &base,
+            content,
+            alignments,
+            (MINIMUM_PANEL_SPAN, MINIMUM_PANEL_SPAN),
+        )
+        .expect("base title block fits");
+        let spaced_layout = RootFramePlan::measure(
+            (640, 480),
+            &spaced,
+            content,
+            alignments,
+            (MINIMUM_PANEL_SPAN, MINIMUM_PANEL_SPAN),
+        )
+        .expect("spaced title block fits");
 
         assert!((spaced_layout.insets.top - base_layout.insets.top - 9.0).abs() < f64::EPSILON);
         assert_ne!(base_layout.root_text, spaced_layout.root_text);

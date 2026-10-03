@@ -211,7 +211,12 @@ fn matrix_marks_ticks_and_reference_grid_share_large_fractional_cell_coordinates
                 let projection = layout::Projection::new(
                     axes.ranges[col],
                     axes.ranges[row],
-                    cell.clip.as_tuple(),
+                    (
+                        cell.frame[0][0].x,
+                        cell.frame[0][1].x,
+                        cell.frame[1][0].y,
+                        cell.frame[1][1].y,
+                    ),
                 );
                 let mut actual = AxisRecorder::default();
                 cell.axes.draw(&mut actual).unwrap();
@@ -265,7 +270,7 @@ fn matrix_marks_ticks_and_reference_grid_share_large_fractional_cell_coordinates
                     }
                 }
                 if row != col {
-                    let MatrixPrimitive::Scatter(points, _) = &cell.marks[0] else {
+                    let MatrixPrimitive::Scatter(points, _, _) = &cell.marks[0] else {
                         panic!("scatter")
                     };
                     let expected = projection.project(0.0, 0.0);

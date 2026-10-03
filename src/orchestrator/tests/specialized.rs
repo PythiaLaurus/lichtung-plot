@@ -29,22 +29,62 @@ fn specialized_renderers_clip_resolved_marks_without_clipping_decorations() {
         .unwrap();
     let beeswarm_panel = beeswarm_backend.clips[0];
     assert!(beeswarm_panel.x1 < beeswarm.canvas_layout().panel_box.x1);
-    let height = beeswarm_panel.height().min(150.0);
-    let bottom = beeswarm_panel.y0 + (beeswarm_panel.height() - height) / 2.0;
+    assert_eq!(beeswarm_backend.rounded_rects.len(), 1);
+    let guide = beeswarm_backend.rounded_rects[0];
+    assert!(guide.x0 > beeswarm_panel.x1);
+    assert!(guide.y0 >= beeswarm_panel.y0 && guide.y1 <= beeswarm_panel.y1);
     let high_label = beeswarm_backend
         .texts
         .iter()
-        .find(|(_, _, text)| text == "1.000")
+        .find(|(x, y, text)| {
+            text == "1" && *x >= guide.x0 && *x <= guide.x1 && *y >= guide.y0 && *y <= guide.y1
+        })
         .unwrap();
-    assert!((high_label.0 - (beeswarm_panel.x1 + 34.0).trunc()).abs() < f64::EPSILON);
-    assert!((high_label.1 - (bottom + height - 4.0).trunc()).abs() < f64::EPSILON);
     let low_label = beeswarm_backend
         .texts
         .iter()
-        .find(|(_, _, text)| text == "0.100")
+        .find(|(x, y, text)| {
+            text == "0.1" && *x >= guide.x0 && *x <= guide.x1 && *y >= guide.y0 && *y <= guide.y1
+        })
         .unwrap();
-    assert!((low_label.0 - (beeswarm_panel.x1 + 34.0).trunc()).abs() < f64::EPSILON);
-    assert!((low_label.1 - (bottom - 13.0).max(0.0).trunc()).abs() < f64::EPSILON);
+    let title = beeswarm_backend
+        .texts
+        .iter()
+        .find(|(_, _, text)| text == "Color")
+        .unwrap();
+    assert!(title.1 > high_label.1 && high_label.1 > low_label.1);
+    let theme = crate::Theme::Publication.resolve();
+    for (label, appearance) in [
+        ("Color", &theme.typography.legend_title),
+        ("0.1", &theme.typography.legend_label),
+        ("1", &theme.typography.legend_label),
+    ] {
+        let draws = beeswarm_backend
+            .text_draws
+            .iter()
+            .filter(|(x, y, text, _)| {
+                text == label
+                    && *x >= guide.x0
+                    && *x <= guide.x1
+                    && *y >= guide.y0
+                    && *y <= guide.y1
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(draws.len(), 1, "complete guide text {label}");
+        let (x, y, _, style) = draws[0];
+        assert!(*x > beeswarm_panel.x1 && *x >= guide.x0 && *x <= guide.x1);
+        assert!(*y >= guide.y0 && *y <= guide.y1);
+        assert_eq!(style.rotation.to_bits(), 0.0_f64.to_bits());
+        assert_eq!(style.font_size, appearance.font_size);
+        assert_eq!(style.weight, appearance.weight);
+        assert_eq!(style.font_family, appearance.stack);
+        assert_eq!(style.color, appearance.paint);
+    }
+    assert!(beeswarm_backend
+        .scatter_draws
+        .iter()
+        .all(|(_, _, depth)| *depth == 1));
+    assert_eq!(beeswarm_backend.clip_ends, 1);
 
     let marginal = Plot::marginal(x.clone(), y.clone());
     let mut marginal_backend = RecordingBackend::default();

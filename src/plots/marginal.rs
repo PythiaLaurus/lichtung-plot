@@ -56,6 +56,7 @@ struct HueGroup {
     collapsed: bool,
     x: Vec<f64>,
     y: Vec<f64>,
+    source_rows: Vec<usize>,
     x_bandwidth: f64,
     y_bandwidth: f64,
 }
@@ -176,8 +177,8 @@ pub(crate) fn intrinsic_body_minimum(
         crate::layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = chart.data().with_axis_resources(&resources);
-    for group in &prepared.groups {
-        data.claim_source_visits(group.x.len())?;
+    for _ in &prepared.groups {
+        data.claim_source_visits(1)?;
         let style = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.marginal);
         let (x, y) = crate::render::geometry::point_ink_dimensions(theme, &style)?;
         central.0 = central.0.max(x);
@@ -259,7 +260,10 @@ fn wide_finite_scales_normalize_each_linked_kde_to_its_actual_peak() {
         .flat_map(|group| group.top.iter())
         .map(|point| point.y)
         .fold(f64::NEG_INFINITY, f64::max);
-    let expected = strip.y0 + 0.90 * strip.height();
+    let density = theme.marks.marginal_density.backend_style((0, 0, 0));
+    let ink = crate::render::geometry::rectangular_fill_ink_outset(&theme, &density).unwrap();
+    let expected =
+        strip.y0 + ink.1 + 2.0 / 1024.0 + 0.90 * (strip.height() - 2.0 * ink.1 - 4.0 / 1024.0);
     assert!((peak - expected).abs() < 1.0 / 1024.0);
 }
 
@@ -354,6 +358,7 @@ struct MarginalCurves {
 #[derive(Debug)]
 struct MarginalGroupPayload {
     points: Vec<Point2D>,
+    source_rows: Vec<usize>,
     point_style: crate::render::backend::PointStyle,
     top: Vec<Point2D>,
     right: Vec<Point2D>,
@@ -389,17 +394,13 @@ fn measure_linked_panel(
     resources
         .claim_slots(1)
         .map_err(|error| Error::Render(format!("Marginal subpanel record: {error:?}")))?;
-    data.claim_source_bytes(
-        std::mem::size_of::<LinkedPanelPlan>()
-            + context.fit_scope().address.storage_bytes()
-            + std::mem::size_of::<layout::kernel::AddressSegment>(),
-    )?;
+    data.claim_source_bytes(std::mem::size_of::<LinkedPanelPlan>())?;
     context
         .theme
         .prepared_font_environment()?
         .claim_measurement_call()
         .map_err(|error| Error::Render(format!("Marginal subpanel call: {error:?}")))?;
-    let address = context.fit_scope().address.child(role, 0)?;
+    let address = context.fit_scope().address.child(role, 0, resources)?;
     if panel.width() <= 0.0 || panel.height() <= 0.0 {
         return Err(crate::layout::fit::FitScope::new(&address, 0)
             .failure(
@@ -443,6 +444,12 @@ impl MarginalPayload {
                 round.observe_number(upper)?;
             }
         }
+        round.begin_owner(&self.panels[0].address)?;
+        for group in &self.groups {
+            for row in &group.source_rows {
+                round.observe_count(*row)?;
+            }
+        }
         Ok(())
     }
 
@@ -465,6 +472,86 @@ impl MarginalPayload {
         }
         Ok(())
     }
+}
+
+pub(crate) fn natural_body_preference(
+    chart: &Plot,
+    theme: &crate::theme::ResolvedTheme,
+) -> Result<(f64, f64), Error> {
+    let hard = intrinsic_body_minimum(chart, theme)?;
+    let gap = theme.composition.canvas_grid_gap;
+    let density = theme.marks.marginal_density.backend_style((0, 0, 0));
+    let ink = crate::render::geometry::rectangular_fill_ink_outset(theme, &density)?;
+    let axes = layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
+    let central = (
+        (hard.0 - gap - (2.0 * ink.0).max(1.0 / 1024.0)).max(axes.0),
+        (hard.1 - gap - (2.0 * ink.1).max(1.0 / 1024.0)).max(axes.1),
+    );
+    let preference = layout::interior::preference::mark_preference(chart, theme, central)?;
+    let width = preference.body_quanta.0 as f64 / 1024.0;
+    let height = preference.body_quanta.1 as f64 / 1024.0;
+    let quarter = |value: i64| -> Result<f64, Error> {
+        let quanta = i64::try_from((i128::from(value) + 3) / 4)
+            .map_err(|_| Error::Render("Marginal quarter preference overflowed".into()))?;
+        Ok(quanta as f64 / 1024.0)
+    };
+    Ok((
+        width + quarter(preference.body_quanta.0)?.max(2.0 * ink.0) + gap,
+        height + quarter(preference.body_quanta.1)?.max(2.0 * ink.1) + gap,
+    ))
+}
+
+pub(crate) fn natural_body_height(
+    chart: &Plot,
+    theme: &crate::theme::ResolvedTheme,
+    width: f64,
+) -> Result<f64, Error> {
+    let gap = theme.composition.canvas_grid_gap;
+    let hard = intrinsic_body_minimum(chart, theme)?;
+    let density = theme.marks.marginal_density.backend_style((0, 0, 0));
+    let ink = crate::render::geometry::rectangular_fill_ink_outset(theme, &density)?;
+    let right_hard = (2.0 * ink.0).max(1.0 / 1024.0);
+    let top_hard = (2.0 * ink.1).max(1.0 / 1024.0);
+    let axes = layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
+    let central_hard = (
+        (hard.0 - gap - right_hard).max(axes.0),
+        (hard.1 - gap - top_hard).max(axes.1),
+    );
+    let preference = layout::interior::preference::mark_preference(chart, theme, central_hard)?;
+    let track = |min: f64, preferred: i64| -> Result<_, Error> {
+        let min = layout::kernel::ceil_spatial_quanta(min)?;
+        Ok(layout::kernel::TrackSpec {
+            min,
+            preferred: preferred.max(min),
+            max: None,
+            flexible: true,
+        })
+    };
+    let quarter = i64::try_from((i128::from(preference.body_quanta.0) + 3) / 4)
+        .map_err(|_| Error::Render("Marginal quarter width overflowed".into()))?;
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let columns = layout::interior::tracks::assign(
+        &[
+            track(central_hard.0, preference.body_quanta.0)?,
+            track(right_hard, quarter)?,
+        ],
+        (0.0, width),
+        gap,
+        false,
+        chart.data().with_axis_resources(&resources),
+        &layout::fit::FitScope::root(),
+    )
+    .map_err(layout::fit::PlanError::into_error)?;
+    let central_width = columns[0].1 - columns[0].0;
+    let quarter_height = i64::try_from((i128::from(preference.body_quanta.1) + 3) / 4)
+        .map_err(|_| Error::Render("Marginal quarter height overflowed".into()))?;
+    let top = (quarter_height as f64 / 1024.0).max(top_hard);
+    Ok(central_hard
+        .1
+        .max(3.0 * central_width / 4.0)
+        .max(preference.density_side)
+        + top
+        + gap)
 }
 
 pub(crate) fn measure(
@@ -548,12 +635,10 @@ pub(crate) fn measure(
         context.axis_range(layout::AxisSide::Bottom, || Ok(prepared.ranges[0]))?;
     let (y_low, y_high) = context.axis_range(layout::AxisSide::Left, || Ok(prepared.ranges[1]))?;
     let ranges = [(x_low, x_high), (y_low, y_high)];
-    // Parent domain feedback changes the render grid, not the prepared samples
-    // or visible-support semantics. Stable candidates borrow the root curves.
-    let changed_curves = (ranges != prepared.ranges)
-        .then(|| render_curves(groups, ranges, data))
-        .transpose()?;
-    let curves = changed_curves.as_ref().unwrap_or(&prepared.curves);
+    // Automatic clearance expands the projection around the retained density
+    // source. Regenerating endpoints on each expanded boundary would recreate
+    // the same clipped outline and could never discharge that feedback.
+    let curves = &prepared.curves;
 
     // --- Build Layout for the central scatter ---
     let layout = (|| {
@@ -704,31 +789,47 @@ pub(crate) fn measure(
         let mut right_poly = Vec::new();
         data.reserve_source(&mut top_poly, n_grid + 2)?;
         data.reserve_source(&mut right_poly, n_grid + 2)?;
-        top_poly.push(Point2D::new(central_x0, top_y0));
-        right_poly.push(Point2D::new(right_x0, central_y0));
+        let (top_start, _) = panels[1].projection.project(curves.x_grid[0], 0.0);
+        let (_, right_start) = panels[2].projection.project(0.0, curves.y_grid[0]);
+        let baseline_y = top_y0 + ink.1 + 2.0 / 1024.0;
+        let baseline_x = right_x0 + ink.0 + 2.0 / 1024.0;
+        let top_span = top_panel.height() - 2.0 * ink.1 - 4.0 / 1024.0;
+        let right_span = right_panel.width() - 2.0 * ink.0 - 4.0 / 1024.0;
+        if top_span <= 0.0 || right_span <= 0.0 {
+            return Err(context
+                .fit_scope()
+                .failure(
+                    layout::fit::FitKind::SpecializedGeometry,
+                    "Marginal density outline reserve leaves no representable strip",
+                )
+                .into());
+        }
+        top_poly.push(Point2D::new(top_start, baseline_y));
+        right_poly.push(Point2D::new(baseline_x, right_start));
         for i in 0..n_grid {
             data.claim_source_visits(2)?;
-            let (x, y) = panels[1]
-                .projection
-                .project(curves.x_grid[i], x_densities[gi][i] / x_dens_max * 0.90);
+            let (x, _) = panels[1].projection.project(curves.x_grid[i], 0.0);
+            let y = baseline_y + x_densities[gi][i] / x_dens_max * 0.90 * top_span;
             top_poly.push(Point2D::new(x, y));
-            let (x, y) = panels[2]
-                .projection
-                .project(y_densities[gi][i] / y_dens_max * 0.90, y_grid[i]);
+            let (_, y) = panels[2].projection.project(0.0, y_grid[i]);
+            let x = baseline_x + y_densities[gi][i] / y_dens_max * 0.90 * right_span;
             right_poly.push(Point2D::new(x, y));
         }
-        top_poly.push(Point2D::new(central_x1, top_y0));
-        right_poly.push(Point2D::new(right_x0, central_y1));
+        let (top_end, _) = panels[1].projection.project(curves.x_grid[n_grid - 1], 0.0);
+        let (_, right_end) = panels[2].projection.project(0.0, curves.y_grid[n_grid - 1]);
+        top_poly.push(Point2D::new(top_end, baseline_y));
+        right_poly.push(Point2D::new(baseline_x, right_end));
         let fill = theme.marks.marginal_density.backend_style(color);
         selected.push(MarginalGroupPayload {
             points: pts,
+            source_rows: data.collect_source(group.source_rows.iter().copied().map(Ok))?,
             point_style,
             top: top_poly,
             right: right_poly,
             fill,
         });
     }
-    let domain_expansions = if let Some(ink) = point_ink {
+    let mut domain_expansions = if let Some(ink) = point_ink {
         crate::layout::interior::automatic_mark_ink_expansions(
             source,
             proj,
@@ -743,6 +844,51 @@ pub(crate) fn measure(
     } else {
         [None; 2]
     };
+    for (side, panel) in [(0, &panels[1]), (1, &panels[2])] {
+        let mut full = crate::render::geometry::GeometrySnapshot::new(theme)?;
+        for group in &selected {
+            full.polygon(
+                if side == 0 { &group.top } else { &group.right },
+                &group.fill,
+                None,
+            )?;
+        }
+        if let Some(bounds) = full
+            .bounds()
+            .iter()
+            .copied()
+            .reduce(crate::render::geometry::GeometryBox::union)
+        {
+            let assigned = panel.projection.panel_box();
+            if (side == 0 && (bounds.bottom < assigned.y0 || bounds.top > assigned.y1))
+                || (side == 1 && (bounds.left < assigned.x0 || bounds.right > assigned.x1))
+            {
+                return Err(layout::fit::FitScope::new(&panel.address, 0)
+                    .failure(
+                        layout::fit::FitKind::SpecializedGeometry,
+                        "Marginal density outline exceeds its assigned amplitude reserve",
+                    )
+                    .into());
+            }
+            let requests = crate::layout::interior::automatic_absolute_ink_expansions(
+                if side == 0 {
+                    [prepared.ranges[0], (0.0, 1.0)]
+                } else {
+                    [(0.0, 1.0), prepared.ranges[1]]
+                },
+                &panel.projection,
+                bounds,
+                [
+                    side == 0 && chart.user_x_limits().is_none(),
+                    side == 1 && chart.user_y_limits().is_none(),
+                ],
+                data,
+                context.fit_scope(),
+            )?;
+            domain_expansions =
+                crate::layout::interior::merge_mark_domain_expansions(domain_expansions, requests);
+        }
+    }
     let payload = MarginalPayload {
         panels,
         ticks,
@@ -990,6 +1136,7 @@ fn build_groups<'a>(
         .y_col()
         .ok_or_else(|| Error::Data("marginal: y column not set".into()))?;
     let rows = crate::data::aligned_finite_rows(data, x_col, y_col, "marginal")?;
+    data.claim_mark_rows()?;
     let retained_rows = data.collect_source(rows.iter().map(|(row, _, _)| Ok(*row)))?;
     let channels = crate::data::observed_collectives(
         data,
@@ -1008,6 +1155,13 @@ fn build_groups<'a>(
             .map(|level| data.copy_source_string(level)),
     )?;
     let mut groups = Vec::new();
+    data.claim_topology_slots(
+        channels
+            .identities
+            .len()
+            .checked_mul(2)
+            .ok_or_else(|| Error::Render("Marginal density topology overflow".into()))?,
+    )?;
     data.reserve_source(&mut groups, channels.identities.len())?;
     for identity in &channels.identities {
         data.claim_source_visits(rows.len())?;
@@ -1018,12 +1172,15 @@ fn build_groups<'a>(
             .filter(|(_, row_identity)| *row_identity == identity);
         let mut x = Vec::new();
         let mut y = Vec::new();
+        let mut source_rows = Vec::new();
         data.reserve_source(&mut x, count)?;
         data.reserve_source(&mut y, count)?;
+        data.reserve_source(&mut source_rows, count)?;
         data.claim_source_visits(rows.len())?;
-        for ((_, x_value, y_value), _) in selected {
+        for ((row, x_value, y_value), _) in selected {
             x.push(*x_value);
             y.push(*y_value);
+            source_rows.push(data.source_row(*row));
         }
         if x.is_empty() {
             continue;
@@ -1057,6 +1214,7 @@ fn build_groups<'a>(
             collapsed: channels.collapsed,
             x,
             y,
+            source_rows,
             x_bandwidth,
             y_bandwidth,
         });
