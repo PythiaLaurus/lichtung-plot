@@ -58,8 +58,8 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | Stage | Status | Depends on | Deliverable / suggested scoped commit |
 | --- | --- | --- | --- |
 | T6P | COMPLETE | T5e | This plan and user-approved entry decisions; `docs(planning): partition T6 public foundations and presentation` |
-| T6A | PENDING | T6P | Public foundation/caller/ledger census |
-| T6A1 | PENDING | T6P | Enumerate current exports, exact styles, components, scale consumers and deletions; `docs(api): map T6 public cutovers and consumers` |
+| T6A | IN PROGRESS | T6P | Public foundation/caller/ledger census |
+| T6A1 | COMPLETE | T6P | Current export/style/owner/caller/deletion census in `docs/t6a1-public-cutover-census.md`; `docs(api): map T6 public cutovers and consumers` |
 | T6A2 | PENDING | T6A1 | Derive complete validated component field/signature inventory and test fixtures from actual owners; `docs(theme): pin validated public component construction` |
 | T6B | PENDING | T6A | Immutable theme, color, font, scale and exact-style migration |
 | T6B1 | PENDING | T6A | Validated color/font and component values in the single private representation; `refactor(theme): retain validated foundational values` |
@@ -84,6 +84,20 @@ edits before T6B starts; the broad component names in spec03 are not permission
 to expose backend structs. Split a leaf further if its behavioral changes are
 not independently reviewable. Finish its owning API migration before claiming
 the related public contract current.
+
+T6A1 evidence: `docs/t6a1-public-cutover-census.md` inventories every current root
+re-export, exact tuple/opacity/font/scale surface, producer/parent/caller family,
+private owner and scheduled deletion. Independent source review checked named
+tests, capability sets and fingerprint attribution. It records actual legacy
+opacity endpoints, active typography/scale carrier gaps, raw font-constant
+retirement, conflicting Shared-gap ledger assignments and the surviving public
+Canvas 160×120 gate. Constructor/owner adjudication is explicitly T6A2 work;
+this documentation census changes no implemented API or renderer behavior.
+
+The Canvas universal minimum is the existing ledger retirement
+`validation.canvas.minimum-size`, not a new size policy. T6C2 must remove its
+remaining public validation gate while preserving positive-size timing and
+complete-content/resource refusal.
 
 ## Existing Public Foundations To Expose
 
