@@ -2531,6 +2531,10 @@ values must already exercise the final behavior and layout dependencies.
 
 ## T5e: Specialized Layout And Automatic-Root Closure
 
+Subsequent T6 entry decisions and implementation partition are recorded in
+`93_T6_EXECUTION_PLAN.md`. T6-PENDING and entry-review statements in this closed
+phase's evidence refer to the T5e closure checkpoint, not its later planning state.
+
 **Entry:** T5d complete. Native parents, exact mark/annotation requirements, and
 final data scales are inputs, not unfinished tasks inherited by this umbrella.
 The sole root driver and numerical/resource policies remain unchanged.

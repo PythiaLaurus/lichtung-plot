@@ -1,0 +1,502 @@
+# T6 — Public Foundations And Scientific Presentation
+
+**Status**: IN PROGRESS — planning and entry decisions complete; implementation pending.
+
+## Authority And Entry Decisions
+
+`91_IMPLEMENTATION_PLAN.md` owns the umbrella status. This document owns T6's
+substage dependencies, public cutovers, deletion targets and acceptance evidence.
+`03_THEME_SYSTEM.md` and `05_LAYOUT_SYSTEM.md` remain the architectural targets;
+`01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` describe implemented public
+behavior and change with the relevant implementation commit, not this plan.
+
+Baseline: T5e closed in `0cbd1d6`; future AI-workflow review recorded in `896b6b4`.
+The user approved the four-item T6 entry assessment and requested this plan.
+The user additionally selected raw-value numeric formatting for configured
+Forest Log10 ticks: an exponent `0.5` with two fractional digits displays `3.16`,
+not a formatted exponent or `10^0.5`.
+
+| Entry item | User-approved disposition | T6 work / remaining checkpoint |
+| --- | --- | --- |
+| DF1 separate legend sections | ADMIT the complete bounded discrete-section capability | T6L; remove DF1 from the active deferred list now |
+| DF2 caller numeric formatting | ADMIT one cross-surface, locale-free scientific core | T6N; residual locale/general formatting remains DF2, reviewed at T7 CLOSURE |
+| DF5 broader text controls | Existing approved typography/root alignment proceeds; RE-DEFER remaining controls | T6B exposes existing scope; remaining DF5 reviewed at T7 CLOSURE |
+| DF7 sparse compaction | RE-DEFER topology transformation | Preserve coordinates; review empty-track removal and occupied-cell repacking separately at T7 CLOSURE |
+
+TextPanel alignment, categorical label directions and identifier breaking are
+identified candidates for that later DF5 review, not additional T6 implementation.
+DF3/DF4 keep their T6 CLOSURE gates. DF6/DF8/DF9/DF10 keep T7 CLOSURE. DF11 stays
+after workspace, both adapters, Python interface and first release are complete.
+
+## Delivery Discipline
+
+- Keep the renderer standalone, offline and safe. No workspace conversion,
+  adapters, Python files, `tools/`, asset provisioning or new dependency is part
+  of T6. Existing pinned `num-bigint` is available for certified numeric work.
+- Extend T5e's one measured lifecycle, current prepared sources, scoped domains,
+  source identities, complete ink, operation ledger and immutable capture/replay.
+  No second renderer, local grow-until-fit loop or new resource cap.
+- Split behavioral implementation from mechanical repository-wide API migration.
+  Each completed leaf gets focused tests, strict Clippy and its own scoped commit
+  before the next leaf. Closure stages verify completed owners, not accumulate
+  missing implementation into another omnibus patch.
+- A private implementation stage may prepare a replacement behind the existing
+  current API, but must migrate storage onto one representation. Public cutover
+  removes the replaced API and migrates every caller. No aliases, deprecations,
+  version selectors, dormant public types or old/new fallback chains.
+- Commit intentional SVG snapshots with the behavior that changes them after
+  inspecting source counts, semantic values, styles and complete geometry.
+- Record stages as COMPLETE only after actual checks; an approved plan is not
+  evidence of an implemented or numerically certified primitive.
+
+## Stage Map
+
+The order is foundations, public sizing/ticks, numeric core, sectioned guides,
+then integrated closure. Each umbrella below consists of separately committed
+leaves. Suggested commit subjects are partition labels, not existing commits.
+
+| Stage | Status | Depends on | Deliverable / suggested scoped commit |
+| --- | --- | --- | --- |
+| T6P | COMPLETE | T5e | This plan and user-approved entry decisions; `docs(planning): partition T6 public foundations and presentation` |
+| T6A | PENDING | T6P | Public foundation/caller/ledger census |
+| T6A1 | PENDING | T6P | Enumerate current exports, exact styles, components, scale consumers and deletions; `docs(api): map T6 public cutovers and consumers` |
+| T6A2 | PENDING | T6A1 | Derive complete validated component field/signature inventory and test fixtures from actual owners; `docs(theme): pin validated public component construction` |
+| T6B | PENDING | T6A | Immutable theme, color, font, scale and exact-style migration |
+| T6B1 | PENDING | T6A | Validated color/font and component values in the single private representation; `refactor(theme): retain validated foundational values` |
+| T6B2 | PENDING | T6B1 | Complete Theme construction/customization and owner resolution using those values; `refactor(theme): construct immutable complete themes` |
+| T6B3 | PENDING | T6B2 | Exact element Color/alpha replacement and repository caller migration; `feat(styles): expose complete RGBA element paints` |
+| T6B4 | PENDING | T6B3 | Public complete Theme/components/fonts/scales, built-in constructors and palette/map/gradient attachments; remove closed selectors and old scale representations; `feat(theme): expose immutable theme and scale foundations` |
+| T6B5 | PENDING | T6B4 | Expose already implemented title/subtitle instructions and theme caption alignment; `feat(composition): expose independent heading alignment` |
+| T6B6 | PENDING | T6B5 | Public custom-value inheritance, contrast, scale and style evidence; `test(theme): close public foundation precedence` |
+| T6C | PENDING | T6B | Public root sizing and preferred tick intervals |
+| T6C1 | PENDING | T6B | Opaque validated TickInterval and sealed numeric-axis setters; `feat(axes): expose preferred numeric tick intervals` |
+| T6C2 | PENDING | T6C1 | Automatic defaults, consuming width, exact size and Output dimensions; migrate getters/callers atomically; `feat(layout): expose content-derived root sizing` |
+| T6C3 | PENDING | T6C2 | All modes/parents/setter order/PNG-local output evidence; `test(layout): close public sizing contracts` |
+| T6N | PENDING | T6C | Unified scientific numeric formatting; leaves below |
+| T6L | PENDING | T6N | One section-aware discrete guide; leaves below |
+| T6Z | PENDING | T6L | Integrated contract, deferred-decision and phase closure |
+| T6Z1 | PENDING | T6L | Complete public examples/current-spec and property/consumer census reconciliation; `docs(api): reconcile T6 scientific plotting contracts` |
+| T6Z2 | PENDING | T6Z1 | User-approved DF3/DF4 closure dispositions |
+| T6Z3 | PENDING | T6Z2 | Final audit, required broad gate/release evidence and closure commit; `test(api): close public scientific foundations` |
+
+T6A2 must specify all accessors, validated constructors and construction-only
+edits before T6B starts; the broad component names in spec03 are not permission
+to expose backend structs. Split a leaf further if its behavioral changes are
+not independently reviewable. Finish its owning API migration before claiming
+the related public contract current.
+
+## Existing Public Foundations To Expose
+
+Use spec03's complete `Theme`, `ThemeBuilder`, role components, typed font stack,
+RGBA `Color`, RGB-only `OpaqueColor`, palettes/maps and gradients. Builders are
+construction-only; a Plot/Canvas stores immutable complete values, never sparse
+edits. Built-ins are `Theme::{publication,nature,science,chi}()` constructors.
+
+Preserve explicit Plot replacement over Canvas inheritance, element paint over
+Plot scale over complete theme, separate fill/stroke alpha and exact alpha
+replacement. Migrate `CategoricalColors`, `HeatmapScale`, RGB tuple inputs and
+opacity naming to their single replacement owners. Do not alter scientific
+statistics or start data-mapped alpha work.
+
+Title instructions follow spec03's current private precedence. Expose only
+`Plot::title_alignment`, `Plot::subtitle_alignment`,
+`Canvas::panel_title_alignment`, `Canvas::panel_subtitle_alignment` and concrete
+theme root title/caption plus optional subtitle defaults. No TextPanel alignment,
+arbitrary rotation or generic anchors are added. Complete per-role font sizes
+are explicit typography, not automatic shrink-to-fit.
+
+Expose `TickInterval::{additive,log10_decades}` with existing validation,
+candidate ordering and exact-tick precedence. No count/density/callback controls.
+
+Omitted sizing becomes automatic. `Plot::width(u32)` and `Canvas::width(u32)`
+select exact width/content height; `size(u32,u32)` selects an exact pair. Every
+sizing setter replaces the full request. Remove pre-render Plot dimension getters;
+add `Output::width()`/`height()` for frozen canonical CSS pixels. Positive sizes
+continue validating at preflight. Canvas still owns embedded child dimensions.
+
+## T6N — One Scientific Numeric Presentation Core
+
+### Scope And Ownership
+
+Admit fixed fractional/significant precision, scientific and engineering
+notation, explicit percentage/decimal display scaling, literal affixes,
+negative-zero and trailing-zero handling. Formatting is semantic presentation,
+not a theme component and not a transformation of scientific data.
+
+Consumers are generated numeric axes, Heatmap/Beeswarm continuous guides,
+existing Heatmap finite-value annotations, existing point-only Coefficient
+labels and Waterfall base/terminal totals. Exact ticks, category/legend identities,
+point-label strings, significance stars and caller annotation text stay verbatim.
+Matrix has no new global numeric-axis setter. No new numeric annotation surface.
+
+### Target API And Validation
+
+One opaque crate-root `NumericFormat: Clone + Debug + PartialEq + Eq` replaces
+`NumericLabelFormat`. Proposed closed input discriminants are:
+
+```rust,ignore
+enum NumericNotation { Decimal, Scientific, Engineering }
+enum NumericPrecision {
+    Fractional(u8),
+    Significant(u8),
+    AdaptiveFractional { min: u8, max: u8 },
+    AdaptiveSignificant { min: u8, max: u8 },
+}
+enum NegativeZero { Preserve, Normalize }
+enum TrailingZeros { Keep, Trim }
+```
+
+`NumericFormat::new(notation, precision) -> Result<Self>` validates fractional
+`0..=17`, significant `1..=17` and adaptive `min<=max`. Consuming edits replace
+only their own input: `notation`, validated `precision`, validated
+`decimal_scale(i16)` in `-324..=324`, nonempty/control-free `prefix`/`suffix`,
+`negative_zero` and `trailing_zeros`. Fields remain private; no backend formatter
+or arbitrary formatting callback is public. Ordinary scalar getters follow the
+validated-value style fixed in T6A2.
+
+Percentage is exact scale `2` plus suffix `%`: `0.125` at one fractional digit
+becomes `12.5%`; suffix `%` alone does not scale. Decimal powers are the admitted
+display scaling primitive; arbitrary floating multipliers remain deferred. No
+implicit affix spacing, unit inference or shared multiplier annotation.
+
+Target attachments:
+
+| Attachment | Applicability |
+| --- | --- |
+| `Plot<K>::x_tick_format(NumericFormat)` | Existing sealed `NumericX` capability |
+| `Plot<K>::y_tick_format(NumericFormat)` | Existing sealed `NumericY` capability |
+| `Plot<K>::color_label_format(NumericFormat)` | Existing `ContinuousColor`: Heatmap/Beeswarm |
+| `HeatmapAnnotations::Values(NumericFormat)` | Existing Heatmap annotations |
+| `Plot<kind::Coefficient>::estimate_labels(NumericFormat)` | Existing point-only restriction retained |
+| `Plot<kind::Waterfall>::total_format(NumericFormat)` | Numeric part only; `WaterfallLabels` still owns names |
+
+No blanket setters on erased `kind::Any`. A capability permits families that can
+have numeric axes; configuring an actual categorical axis rejects before fonts.
+An exact tick list takes precedence over its interval/formatter regardless of
+setter order and contributes only its actual text, not suppressed format glyphs.
+
+### Numeric Conversion And Precision
+
+For ordinary finite binary64 inputs, format the exact represented rational times
+`10^scale`, rounding once with nearest/ties-to-even. Never multiply a scientific
+value by an intermediate binary64 scale or parse label text back into data.
+Use exact decimal coefficient/exponent arithmetic and admitted scratch with the
+existing integer dependency; derive bounds from binary64/precision/scale domains.
+
+Scientific spelling is one integral mantissa digit, lowercase `e`, no positive
+exponent sign or leading exponent zeros. Engineering exponent is divisible by
+three and nonzero mantissa is in `[1,1000)`; a rounding carry renormalizes it.
+Fractional precision applies to the displayed mantissa for exponent notations;
+significant precision applies to the whole numeric value. Engineering always
+emits its exponent, including `e0`, without automatic SI prefixes.
+
+| Policy | Exact input | Expected spelling |
+| --- | ---: | --- |
+| Decimal fractional 1 | `1.25` | `1.2` |
+| Scientific fractional 2 | `12345` | `1.23e4` |
+| Engineering fractional 2 | `12345` | `12.34e3` (nearest-even tie) |
+| Engineering significant 3 | `999.5` | `1.00e3` |
+| Decimal significant 3 | `12345` | `12300` |
+| Decimal fractional 1, scale 2, suffix `%` | `0.125` | `12.5%` |
+
+Negative-zero normalization applies after rounding, including a negative value
+rounded to zero. Trimming removes only fractional trailing zeros/empty decimal
+point, never integral place-value zeros, exponents or affixes. Significant zero
+has one integral zero and `p-1` fractional zeros before trimming.
+
+Exact precision never increases or switches notation. Generated axes reject a
+nonunique complete candidate through their existing source-miss ordering;
+continuous guides reject an indistinguishable required set as a pre-font data
+presentation error. Exact value labels/totals may intentionally share rounded
+text. Geometric fit is separate from numeric distinguishability.
+
+Adaptive precision formats the complete owner-local set at `min`, then increments
+uniformly through `max` until distinct scientific values have distinct labels.
+It never changes notation or scale. Equal scientific values, including signed
+zero, may repeat. Sets are one axis candidate, final continuous guide, prepared
+Heatmap panel values, prepared Coefficient panel estimates or two Waterfall
+totals. Value-set membership follows semantic preparation, not incidental ink or
+later feedback. Exhaustion is an axis source miss or pre-font presentation error
+for guides/values/totals. Resource refusal is immediately fatal. Large set
+ordering and comparisons require fallible admitted work; no unpriced sort or
+quadratic scan is permitted.
+
+### Certified Forest Log10 Operand
+
+The user-selected contract formats `10^(exact(e)+scale)`, where `e` is the selected
+finite binary64 logarithmic tick position. Precision applies to that mathematical
+positive value. For exponent `0.5`, fractional 2 yields `3.16`; scale 2 plus `%`
+yields `316.23%`. Tick projection and source identity remain exponent-space.
+Do not claim inversion of a rounded `log10` recovers every original observation.
+
+T6N2 is a numerical design/certification gate before this integration:
+
+1. Decode the exact dyadic exponent, add decimal scale exactly, and reduce to
+   `E=n+f`, `n=floor(E)`, `0<=f<1`. Retain a signed arbitrary-size integer `n`;
+   no narrowing or exponent clamp. Integral powers use symbolic exact decimal
+   formatting and admit output length before generating zeros.
+2. For fractional powers, bound `ln(10)=3*ln(2)+ln(5/4)` with the existing certified
+   integer-interval machinery. Bound `x=f*ln(10)/16`, so `0<=x<1/4`.
+3. Compute outward fixed-point bounds for a positive exponential series. Bound
+   its omitted tail by twice the first omitted term; four outward squarings
+   enclose `10^f`. The design must prove each recurrence, tail inequality,
+   accumulated rounding bound and enclosure convergence.
+4. Quantize both interval endpoints directly to the requested decimal result.
+   Accept only when they round identically; otherwise increase precision through
+   the existing cumulative ledger. No midpoint approximation, `powf`, temporary
+   binary64 value or best-effort label after refusal.
+5. Integral cases are exact; a nonintegral rational exponent yields an irrational
+   power, so it cannot equal a rational decimal tie boundary. Convergence gives
+   eventual certification with sufficient resources, not a promise within every
+   operation's remaining budget. Resource/arithmetic refusal stays fatal and
+   cannot trigger axis coarsening.
+6. Derive temporary-size/output-length admission bounds for dyadic numerators,
+   series products, squares, decimal quantization and large exponents. Do not
+   copy unrelated `log10` scratch constants or increase quotas.
+
+Use an independent Rust oracle based on repeated certified integer square roots
+of ten and exact interval products, with separately verified integer-square-root
+bounds, plus exact power comparisons for small-denominator cases. Record exact
+exponent bits, precision/scale, expected decimal results and oracle provenance.
+No Python support files, network or new numeric dependency. Proposed formulas
+are not certification evidence; proof and independent vectors must close the gate.
+
+All selected finite exponents are covered, including original-domain midpoint
+sources beyond the integral-seed clamp. Scientific output may represent powers
+outside binary64's finite value range. Unrepresentable/unadmitted Decimal output
+refuses before giant allocation. Adaptive label uniqueness remains bounded by
+public precision: different exponents can remain indistinguishable at precision
+17, in which case the axis candidate misses normally.
+
+### Defaults, Fonts, Identity And Composition
+
+Absent overrides preserve existing consumer semantics through private built-in
+profiles of the one engine: automatic magnitude/`k`/`M`/uniqueness grammar,
+Forest power grammar, fixed value precision 2 and Waterfall precision 3. Preserve
+the established default conversion operation order where it affects bytes;
+custom display scaling has the exact rule above. There is no second legacy
+formatter or public compatibility selector. `NumericFormat::default()` retains
+the existing fixed-value default, including retained zeros and signed zero.
+
+Prepare effective policies, applicability, guide/value adaptive sets and actual
+affixes before fonts. Later axes contribute policy-derived closed alphabets;
+affixes contribute real source spans for combining-mark fallback. Known numeric
+text contributes its complete concatenated formatted span. For later-generated
+axes, admit every possible terminal numeric scalar joined to the suffix's leading
+combining-mark span, and any other applicable prefix/numeric boundary unit,
+derived from the finite grammar rather than guessed sample numbers. Prepare the
+requirements before font census; select and retain whole-unit or permitted
+per-scalar face identities during canonical font resolution, before measurement.
+Independent digit/suffix scalar coverage cannot change the whole-unit preference.
+These requirements price their
+actual strings/units without enumerating numeric values. Domain feedback
+may change labels/precision, never introduce undeclared glyphs or rechoose root
+width. Use the same operand/policy in terminal intrinsics, natural gutter
+preferences, axis/guide measurement, annotation fit and frozen replay.
+
+Include full normalized policy and operand context in prepared/scoped copies,
+child/axis/intrinsic cache identities and feedback. Shared continuous contributors
+must have identical effective policies; reject mismatch before fonts, then
+format one set from the final merged domain. Canvas range sharing alone permits
+different panel presentation; a genuinely shared displayed axis requires one
+compatible effective format. No first-contributor-wins or Canvas format override.
+
+### Numeric Leaves And Checks
+
+| Stage | Status | Depends on | Deliverable / scoped commit |
+| --- | --- | --- | --- |
+| T6N0 | PENDING | T6C | Final actual consumer/key/default census and signatures; `docs(numbers): pin scientific format consumers and defaults` |
+| T6N1 | PENDING | T6N0 | Exact finite-binary64 decimal conversion, scaling and admitted rounding; `feat(numbers): implement exact scientific decimal formatting` |
+| T6N2a | PENDING | T6N1 | Forest interval/rounding/termination/scratch proof and oracle contract; `docs(numbers): certify Log10 display algorithm` |
+| T6N2b | PENDING | T6N2a | Exact exponent reduction, symbolic powers/output size; `feat(numbers): retain exact Log10 display operands` |
+| T6N2c | PENDING | T6N2b | Outward mantissa bounds and decimal certification with independent vectors; `feat(numbers): certify fractional Log10 labels` |
+| T6N3 | PENDING | T6N2c | One normalized private format/value implementation; migrate fixed values/default grammar onto it; `refactor(numbers): unify numeric presentation owners` |
+| T6N4a | PENDING | T6N3 | Numeric/Forest axes, alphabets, intrinsics and natural width; `feat(axes): measure configured numeric formats` |
+| T6N4b | PENDING | T6N4a | Continuous local/shared guides and policy compatibility; `feat(guides): coordinate scientific numeric formats` |
+| T6N4c | PENDING | T6N4b | Adaptive prepared value sets and total shelves; `feat(annotations): format prepared numeric values and totals` |
+| T6N5 | PENDING | T6N4c | Facet/Canvas/cache/domain-feedback identities; `test(numbers): close composed format identities` |
+| T6N6 | PENDING | T6N5 | Public NumericFormat/attachments, remove NumericLabelFormat and migrate callers/current contracts; `feat(api): expose unified scientific numeric formatting` |
+| T6N7 | PENDING | T6N6 | Scientific conversion/admission/all-surface/public-output evidence; `test(numbers): close scientific presentation contracts` |
+
+Tests must independently cover rounding ties/carries, subnormals/finite extremes,
+scale extremes without overflow/underflow, exact versus adaptive collisions,
+actual/rounded negative zero, prefix/suffix Unicode spans,
+numeric-affix boundary units where scalar and whole-unit fallback choose different
+faces, Forest refinement and fatal refusal, original midpoint scope,
+exact-tick precedence, actual categorical-axis rejection, same-domain policy
+invalidation, Shared conflict, width-dependent
+fit, cached/uncached output and frozen SVG/PNG. No extra full suite per numeric leaf.
+
+## T6L — One Section-Aware Discrete Guide
+
+### Public Authority And Representation
+
+Expose `LegendComposition::{Combined,Separate}` (default Combined),
+`Plot<K>::legend_composition` under the existing `kind::Legend` capability, and
+`Canvas::legend_composition`. Policy is independent of appearance/placement.
+Standalone/facets use the owning Plot selection; PerPlot uses each Plot's;
+Shared uses Canvas's selection for all contributors. Child selections remain
+stored but are not conflicts under Shared. Hidden entries have no factorization
+or font work, while visible marks retain existing color-domain coordination.
+Setters replace only their own value and are order-independent.
+
+Replace the flat descriptor with one ordered typed section representation for
+both policies. Section identity owns title compatibility; entry identity owns
+deduplication. Combined preserves actual pairs, complete glyphs, same-field
+collapse and current shared-primary-title compatibility. A separate guide is
+still one outer frame, one collision obstacle, one measured owner and one frozen
+plan. Continuous guides are not sectioned; discrete/continuous mixing remains
+rejected.
+
+### Truthful Factorization
+
+Prepare mapping provenance and keys before fonts. Group-style projections retain
+actual shape/pattern, component presence and constant geometry/paints; only
+hue-mapped RGB is neutralized to the RGB of the owning Plot's resolved
+`TypographyTheme` legend-label text paint, retaining the mapped paint's original
+alpha rather than the text paint's alpha. This is a named complete role, not the
+retired generic foreground carrier or Canvas's label paint. Hue projections
+retain actual resolved RGB/alpha and geometry;
+only group-mapped shape/pattern is neutralized to the producer's fixed default
+(Interaction circle/solid). Canvas never reconstructs keys from its palette.
+
+Projections of the same raw group/hue must agree across all observed occurrences.
+No representative-pair guess or inference from equal colors. Repeated explicit
+colors/styles remain allowed; composition does not promise perceptual injectivity.
+
+| Actual encoding | Separate result |
+| --- | --- |
+| Interaction independent group styles and hue | Group-style and hue-color sections |
+| Interaction group owns both style and group color, or same-field group/hue | One complete joint section |
+| Independent pair identities without a mapped group-style channel | Explicit pre-font unsupported-factorization error; do not invent styles |
+| Hue-only family or positioned categorical series | One truthful color section with complete producer glyph |
+| Trajectory/neutral LinePath with row hue | Hue point section; no invented group section or hue-colored connector |
+| Existing literal/reference/sign guide domains | Preserve typed domain and exact keys |
+| No guide contribution | No empty section or detached title |
+
+This supports every admitted guide owner while retaining explicit truthful
+rejection for encodings that cannot be decomposed. It adds no general group-style
+mapping to Line, Density, Marginal or Matrix.
+
+### Ordering, Labels, Layers And Shared Compatibility
+
+Separate section classes are group-style, joint, hue-color, literal, supplemental
+series. Within each class use canonical first contributing occurrence. Plot
+values follow prepared observed order; facets retain parent domain order;
+Canvas unions use row-major contributor order. Sections explain marginal
+mappings, not the observed pair support or a new Cartesian product.
+
+Same-field group/hue collapses; raw identities remain separate from display
+aliases. Reject conflicting labels or duplicate displayed identities within a
+section. Equal entry labels in differently titled sections are permitted;
+distinct section identities with equal nonempty display titles reject. No new
+field-scoped alias API.
+
+Labeled PointLayers get their existing typed layer-label identity, never a hue
+value or append-slot identity. Combined retains appended layer keys under its
+primary title (or literal `series` when alone). Separate gives them a final
+`series` section. Preserve existing label-resolution behavior, source order and
+accent-slot consumption; equal layer identity with unequal full glyph rejects.
+
+Separate Shared unions typed section identities and exact titles. Repeated entry
+identities require identical labels and complete projected keys, including
+neutral group paint, alpha, outlines and geometry. Different group fields can
+coexist with a common hue field if headings are unambiguous. Cross-family equality
+requires matching complete keys, not only RGB. A joint section and a hue section
+are different explanations and do not silently merge. Combined retains the
+existing one-compatible-primary-domain restriction.
+
+### Deterministic Measurement
+
+Stack sections vertically in semantic order in both orientations. Every section
+gets the full inner width `W`; one outer frame/padding is measured once. Section
+gap is the owning theme's `title_gap + row_gap`, reusing existing admitted spacing.
+No per-section position, permutations or extra local trial budgets.
+
+For each section, measure its title at `W`; an empty title has no active title
+gap. Entry key/label widths, baseline heights and hard minima use the current
+complete-ink rules. Preferred horizontal entries use `min(P[i],W)`; preferred
+vertical columns use `min(max(P[i]),W)`. Compact uses the same existing
+`C2=floor((W-column_gap)/2)` limit and remeasures labels. Duplicate allocations
+reuse the outcome. A variant is global to the guide, not independently selected
+for each section.
+
+Horizontal section rows are width-derived; compose all heights and test the
+total. Vertical automatic-height sections use one column each. For finite
+vertical inner height `H`, after entry measurement define:
+
+```text
+title[s] = measured title height + active title gap
+hard[s] = title[s] + max(entry heights in section s)
+preferred[s] = title[s] + sum(entry heights) + row gaps
+available = H - section_gap * (section_count - 1)
+```
+
+If available is below summed hard heights, miss. Otherwise use one existing
+proportional hard-to-preferred track allocation; capacity above summed preferred
+is slack. Greedily form equal-width columns within each assigned section body
+capacity, then check all columns fit `W`. Stack actual occupied section heights;
+do not redistribute unused capacity or retry sibling allocations. This remains
+a deterministic policy, not a guarantee to discover every feasible arrangement.
+Single-section flow retains its current semantics. The outer guide still shares
+the existing at-most-eight automatic edge/flow trials per root round.
+
+### Lifecycle And Leaves
+
+Census all section titles/entries in final semantic order. Section records have
+stable ordinals beneath the existing guide address and are inline measured work,
+not separate placement owners. Admit projections, lookups, keys, strings,
+buffers and flow records through the same cumulative ledger. Keys include
+composition, ordered typed sections, full glyphs, typography, constraints and
+consumed feedback. Freeze section boxes, texts, draw operands and complete outer
+ink/collision bounds. No draw-time factorization or layout reconstruction.
+
+| Stage | Status | Depends on | Deliverable / scoped commit |
+| --- | --- | --- | --- |
+| T6L0 | PENDING | T6N | Actual producer/mapping/title/layer census; `docs(legend): pin section composition semantics` |
+| T6L1 | PENDING | T6L0 | Typed section descriptor, Combined consumer migration and layer identity; `refactor(legend): retain typed discrete sections` |
+| T6L2 | PENDING | T6L1 | Producer-owned factorized keys and pre-font validation; `feat(legend): prepare factorized channel sections` |
+| T6L3 | PENDING | T6L2 | One bounded section flow/frame/collision plan; `feat(legend): measure bounded section flow` |
+| T6L4 | PENDING | T6L3 | Facet/Canvas authority, exact merging, fonts, cache and feedback; `feat(composition): coordinate sectioned guides` |
+| T6L5 | PENDING | T6L4 | Public selection and atomic current-contract/examples migration; `feat(api): expose legend composition policy` |
+| T6L6 | PENDING | T6L5 | Full local/shared/fit/resource/output evidence; `test(legend): close section composition contracts` |
+
+Retain current combined pair/same-field/sparse/row-hue/layer/conflict tests. Add
+dense independent-style crossings, sparse marginal-domain semantics, complete
+neutral glyph geometry, unsupported factorization, mixed-theme Shared conflicts,
+custom themes whose legend-label paint differs from axis/annotation roles,
+distinct sections/common hue, title ambiguity, Hidden and setter-order behavior,
+normal/compact finite-height worked examples, no redistribution, one-quantum
+fit boundaries, inside collision, changed section identity/cache, all root modes
+and identical retained SVG/PNG with reuse disabled. One owner budget and unchanged
+resource caps are mandatory; section count does not multiply placement trials.
+
+## Verification And Closure
+
+Documentation-only stages need `git diff --check` and source/spec consistency
+review, not test execution. Code stages require the narrowest affected unit tests
+and representative contract integrations plus `just fmt-check` and strict
+`just lint` (`cargo clippy --locked --offline --all-targets -- -D warnings`). Never
+substitute `cargo check`. Include compile-pass/fail coverage for sealed public
+capabilities and private module/value boundaries.
+
+T6Z3 is the required broad-phase closure gate: state this reason, run `just verify`
+and the ten ignored release benchmark groups, preserve full long-caption,
+legal-break, dense/compact/refusal and source fixtures, and report actual records,
+visits, calls, cache, topology, bytes and retained output identities. Add bounded
+numeric certification/format-set and sectioned-guide workload samples to the
+relevant Rust benchmark modules; baseline speedups are not inferred from fewer
+logical units. After a localized failure use its focused tests and relevant
+neighbors rather than repeating successful full suites.
+
+Final review must reconcile all 25 scientific kinds and valid parents, public
+custom-value behavior, current exports/callers, property-owner exclusions and
+actual numeric/guide policy consumers. Added semantic policies do not silently
+change the historical visual-property count; record justified ledger additions
+or splits with their owners. Remove every replaced selector, tuple/opacity
+carrier, formatter and flat-guide representation. No public target-only aliases.
+
+T6 completes only after DF3/DF4 decisions, public/current specifications and
+examples, verification, inspected snapshots, evidence and commits. T7 remains
+PENDING until then. The new residual DF2/DF5/DF7 T7 closure reviews are explicit
+review obligations, not automatic successor implementation.

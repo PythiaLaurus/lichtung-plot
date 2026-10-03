@@ -154,9 +154,11 @@ point-only coefficient estimate labels. A suffix does not scale or otherwise
 transform the numeric value.
 
 It does not configure automatic or exact axis ticks, heatmap or beeswarm
-colorbars, waterfall totals, point-layer labels, or legends. General scientific,
-engineering, compact, percentage, and cross-surface formatting remain deferred;
-the current API reserves no notation enum, callback, or format-string surface.
+colorbars, waterfall totals, point-layer labels, or legends. Broader scientific,
+engineering, compact, percentage and cross-surface controls are not current API.
+The admitted locale-free scientific replacement is planned in
+`93_T6_EXECUTION_PLAN.md`; residual scope remains in `99_DEFERRED_FEATURES.md`.
+Planning does not expose a notation enum, callback or format-string surface.
 
 ## Legends
 

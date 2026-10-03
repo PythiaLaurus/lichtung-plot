@@ -7,13 +7,14 @@
 This document records only genuinely excluded scope, not approved work awaiting
 implementation. It grants no implementation authorization and reserves no API,
 storage, callback, or fallback. Approved boundaries are in `03_THEME_SYSTEM.md`,
-`05_LAYOUT_SYSTEM.md`, and T5a0s/D1-D6 in `91_IMPLEMENTATION_PLAN.md`.
+`05_LAYOUT_SYSTEM.md`, T5a0s/D1-D6 in `91_IMPLEMENTATION_PLAN.md`, and the
+user-approved T6 entry decisions in `93_T6_EXECUTION_PLAN.md`.
 
 Every item has a stable ID and an explicit review checkpoint enforced by the
 entry/closure gates or named successor milestones in `91_IMPLEMENTATION_PLAN.md`.
 Review is not an implementation promise and does not automatically expand T6.
-At its checkpoint, present the
-item's evidence and tradeoffs to the user and record one user-approved outcome:
+At its checkpoint, present the item's evidence and tradeoffs to the user and
+record one user-approved outcome:
 admit with an approved new phase, reject with a reason, or re-defer with a new
 explicit milestone checkpoint. A vague future review does not close a gate.
 
@@ -30,33 +31,31 @@ records the reason and any lasting exclusion in the plan or canonical contract.
 Stable IDs are not reused. Related unadmitted scope may retain its ID only with
 an explicit next checkpoint.
 
-## DF1: Separate Legend Sections
+## DF2: Locale And Extended Numeric Formatting
 
-Caller selection of separate group-style and hue-color sections, instead of
-combined entries, remains excluded. Automatic placement and compact reflow are
-approved layout work, not deferred legend composition modes; see `05_LAYOUT_SYSTEM.md`.
+Locale-aware digits/separators/grouping, caller-selected compact/SI-prefix rules,
+arbitrary display multipliers, configurable rounding modes, shared multiplier or
+unit annotations, general format strings and callbacks remain excluded.
 
-**Review checkpoint**: T6 ENTRY, after T5e closure.
+The user admitted the locale-free scientific core at T6 ENTRY: fixed fractional
+and significant precision, scientific/engineering notation, exact decimal-power
+display scaling including percentage, literal affixes, negative-zero/trailing-zero
+policies and bounded adaptive precision across the actual numeric consumers.
+Configured Forest Log10 ticks format the underlying mathematical value, as
+explicitly selected by the user. This admitted scope is now planned in
+`93_T6_EXECUTION_PLAN.md` T6N and is removed from active deferral immediately.
+The current public `NumericLabelFormat` remains current until its implementation
+cutover; admission does not expose the replacement API early.
 
-**Evidence and decision**: Review combined-entry examples with independent group
-and hue, repeated hues, same-field collapse, sparse facets, and row-level hue.
-Specify ordering, titles, label mapping, collision behavior, and Canvas shared
-compatibility before recommending admission, rejection, or explicit re-deferral
-under the user-approval process above.
+**Review checkpoint**: T7 CLOSURE, before successor planning.
 
-## DF2: Caller Numeric Formatting
-
-Broader caller scientific, engineering, compact, percentage, and locale-aware
-formatting across axes, guides, values, totals, labels, and legends remains
-excluded. No general format string, callback, prefix, or notation enum is reserved.
-
-**Review checkpoint**: T6 ENTRY, after T5e closure, alongside DF1.
-
-**Evidence and decision**: Collect cross-surface workflows beyond current
-`NumericLabelFormat`; compare scaling, rounding, negative zero, extreme finite
-values, measured widths, collisions, and deterministic SVG/PNG behavior. Present
-a cohesive surface and its costs for the user-approved disposition, rather than
-admitting formatter controls implicitly through legend work.
+**Evidence and decision**: Use implemented T6 numeric policies on real scientific
+figures, including scaling, units, close values, Forest logarithmic axes, shared
+guides and exact-width wrapping, to identify unmet needs. For locale proposals,
+specify pinned data, Unicode/bidi/font coverage and reproducibility rather than
+ambient host settings. Compare the residual capabilities' semantics and bounded
+costs, then obtain user-approved new-phase admission, reasoned rejection, or
+re-deferral with an explicit new checkpoint.
 
 ## DF3: Data-Mapped Alpha
 
@@ -85,22 +84,27 @@ limits without a second planning route; obtain the user-approved disposition.
 
 ## DF5: Broader Text Layout Controls
 
-General per-role alignment/anchoring, arbitrary rotation, emergency identifier
-breaking, ellipsis, and font-shrink controls remain excluded. Independent title
-versus subtitle alignment is now user-approved for T6, including optional Plot
-overrides and Canvas panel defaults with the defined precedence; it is no longer
-deferred. Independent root captions and strict Unicode-legal wrapping also remain
-admitted; see `03_THEME_SYSTEM.md` and `05_LAYOUT_SYSTEM.md`. This narrow admission
-does not admit the remaining broader controls or change their review checkpoint.
+TextPanel title/body horizontal alignment, explicit categorical-axis directions,
+general per-role alignment/anchoring, arbitrary rotation, emergency identifier
+breaking, general ellipsis and automatic font shrink remain excluded.
 
-**Review checkpoint**: T6 ENTRY, after T5e closure.
+T6 ENTRY review found complete private heading precedence/typography, strict legal
+wrapping, fixed role orientations, corner annotations and the current Heatmap
+Wrap/Elide policy. The user approved completing the existing T6 public typography,
+title/subtitle overrides, Canvas panel defaults and independent theme captions,
+and re-deferred the additional controls. See `93_T6_EXECUTION_PLAN.md`; those
+existing approved capabilities are not missing DF5 implementation.
 
-**Evidence and decision**: Review narrow unbroken identifiers, crowded category
-labels, mixed-direction multiline text, and role-specific workflows. Compare
-strict fit failures with opt-in alternatives, source preservation, physical versus
-bidi-logical direction, precedence, collisions, and SVG/PNG agreement. Any proposed
-omission or shrink behavior requires an explicit revised contract and user
-approval; obtain the disposition without relaxing strict wrapping by default.
+**Review checkpoint**: T7 CLOSURE, before successor planning.
+
+**Evidence and decision**: Evaluate the implemented public typography and sizing
+controls first. Review TextPanel alignment, bounded categorical orientations and
+opt-in identifier breaking as distinct candidates, using narrow identifiers,
+crowded labels and mixed-direction multiline text. Assess general anchors,
+ellipsis and shrink separately, including source preservation, readability,
+physical versus bidi-logical direction, measured ink, cache/feedback identity,
+resource bounds and frozen SVG/PNG geometry. Obtain a user-approved disposition
+for each admitted subset; default strict wrapping is not relaxed by this review.
 
 ## DF6: Broader Root Bounds And Maximum Width
 
@@ -120,13 +124,20 @@ re-deferral; do not assume a general bounds surface is the destination.
 
 Packing occupied cells or collapsing empty rows, columns, or trailing wrap slots
 remains excluded; preserved topology is specified in `05_LAYOUT_SYSTEM.md`.
+At T6 ENTRY the user approved re-deferral: natural content sizing is implemented
+but does not transform topology, hand-authored Canvas can declare compact grids,
+and Cartesian holes can encode absent scientific combinations.
 
-**Review checkpoint**: T6 ENTRY, after T5e closure.
+**Review checkpoint**: T7 CLOSURE, before successor planning.
 
-**Evidence and decision**: Compare sparse Canvas and Cartesian facet examples,
-coordinate remapping, shared axes, header spans, row titles, range groups, empty
-semantic combinations, and deterministic ordering. Show the semantic cost of
-compaction and obtain the user-approved disposition rather than silently packing.
+**Evidence and decision**: Compare real public automatic/exact-width sparse
+figures after T6. Assess removal of wholly empty tracks separately from row-major
+occupied-cell repacking or an observed-combinations facet gallery. Specify
+occupancy, source/destination coordinate mapping, metadata-only tracks, header
+spans, row titles, range-group membership, shared label ownership and diagnostic
+identities. A partial wrapped final row is not solved by deleting wholly empty
+tracks. Show the semantic cost and actual benefit before obtaining user-approved
+new-phase admission, reasoned rejection or explicit re-deferral.
 
 ## DF8: Caller-Selected Layout Objectives
 

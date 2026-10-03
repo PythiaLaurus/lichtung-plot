@@ -18,7 +18,7 @@ Approval is not implementation evidence. T5a0s in `91_IMPLEMENTATION_PLAN.md`
 records the decisions and documentation review. Independent title/subtitle
 alignment and narrow Plot/Canvas overrides are also user-approved T6 targets.
 Broad public constraints remain deferred to DF6 review at T7 closure; remaining
-broader text controls remain deferred to DF5 review at T6 entry. Neither checkpoint
+broader text controls were re-deferred at T6 entry to DF5 review at T7 closure. Neither checkpoint
 is a promise to implement those extensions.
 
 Current exact-root T5a6d implementation evidence is in `docs/t5a-closure.md` and
@@ -34,6 +34,12 @@ the private three-mode root engine. Current ownership and closure evidence are
 in `docs/t5e7-producer-census.md` and `docs/t5e-closure.md`.
 Public automatic sizing and theme/layout APIs remain T6 work. Existing public
 defaults remain exact 640x480 Plot and 960x640 Canvas until the atomic T6 switch.
+
+T6 ENTRY decisions are complete in `93_T6_EXECUTION_PLAN.md`: the user admitted
+one scientific numeric presentation core and combined/separate discrete guide
+sections. These are additional approved targets, not current public behavior.
+Remaining broader formatting/text controls and sparse compaction retain explicit
+T7 review checkpoints.
 
 Post-T5a3 accepted policies are recorded in `91_IMPLEMENTATION_PLAN.md`, T5a3p0
 (PF1-PF7). The amendments below approve external conformance data, effective-
@@ -552,9 +558,19 @@ Source text remains available for accessibility/metadata without painting it twi
 Resolve themes, scales, semantic domains, exact limits, categories, shared-guide
 merges, and any domain-dependent generated text sources BEFORE their font census.
 Later geometry-dependent formatters contribute a closed alphabet, not guessed
-sample labels. Automatic numeric/Forest alphabet is ASCII `0123456789-.ekM^`;
-other generated literals, including discretionary break glyphs, are declared by
-their owner. All possible painted alphabet scalars require fallback coverage.
+sample labels. The unconfigured automatic numeric/Forest profile alphabet is
+ASCII `0123456789-.ekM^`. Configured numeric policies derive their complete alphabet
+from notation and operand kind; actual affixes retain source spans, including
+combining marks, rather than contributing only a scalar union. Known formatted
+labels contribute the full concatenated span. Geometry-dependent numeric labels
+add finite grammar-derived numeric/affix boundary units, including each possible
+terminal numeric scalar plus leading suffix marks, and retain whole-unit fallback
+requirements before font census. Select and retain whole-unit or permitted
+per-scalar fallback face identities during canonical font resolution, before
+measurement. Separate alphabet and affix scans cannot substitute for those
+units. Other generated
+literals, including discretionary break glyphs, are declared by their owner.
+All possible painted alphabet scalars require fallback coverage.
 
 Prepared text requirements visit canonical component preorder, role order, and
 local record order. Every present caller/display string, exact label, annotation,
@@ -724,7 +740,7 @@ absolute clamped exponent or representability; no intersection charges one
 requested miss then midpoint. Empty sources miss. No subsequences/adaptive
 sources occur in interval mode. Always use the original domain for midpoint.
 
-Generated labels use locale-free nearest-even decimal conversion: scientific
+Unconfigured generated labels use locale-free nearest-even decimal conversion: scientific
 with two fractional digits for absolute value `>=1e12` or nonzero `<0.01`;
 `>=1_000_000` uses millions with one fractional digit and `M`; `>=10_000` uses
 thousands similarly and `k`; otherwise fixed precision 0 for `>=100`, 1 for
@@ -732,6 +748,45 @@ thousands similarly and `k`; otherwise fixed precision 0 for `>=100`, 1 for
 uses lowercase `e`, no positive sign, shortest exponent without leading zeros.
 Normalize negative zero. If a complete list is not unique, retry the whole list
 at scientific precisions `2..=17`, retaining first unique; otherwise source miss.
+
+### Configured Scientific Numeric Presentation
+
+T6 exposes one normalized `NumericFormat` separately from typography and data
+scales. Its exact construction/application contract is in
+`93_T6_EXECUTION_PLAN.md` T6N. Ordinary finite values are converted from the exact
+binary64 rational times an exact decimal-power display scale, with one
+nearest/ties-to-even rounding. Scientific/engineering/fixed/significant policies
+do not mutate numeric positions, data windows, statistics or colors.
+
+Exact caller tick lists take precedence and retain their strings, regardless of
+interval/format setter order. Generated exact-precision candidates cannot change
+notation or precision to rescue label collisions; a nonunique complete axis
+candidate is a source miss. Adaptive candidates increase uniform set precision
+minimum-first through the caller's bounded maximum. The original source ordering
+and terminal midpoint remain; certification/resource errors are fatal, not
+coarsening opportunities.
+
+For configured Forest ticks, convert `10^(exact(selected_exponent)+display_scale)`
+directly to the requested decimal result. An exponent `0.5` with two fractional
+digits displays `3.16`. Retain original exponent-space projection/identity and
+the unconfigured power-label grammar. Certified outward integer intervals must
+prove identical endpoint rounding before accepting a fractional-power label;
+no platform `powf`, approximate midpoint or intermediate binary64 output value.
+Selected original-domain midpoints are not newly clamped. Exact symbolic powers,
+output representability and cumulative scratch/work admission precede materialization.
+
+Continuous guides format required values once after final-domain merging and
+require numeric distinguishability; incompatible effective policies reject
+before fonts. Exact value/totals formatting may repeat rounded strings; adaptive
+value/totals sets follow admitted semantic membership and either produce a
+uniform distinct set or reject before fonts. Caller-owned names/strings are not
+parsed as numbers. All set comparisons and precision attempts remain priced.
+
+The same policy and numeric operand drive terminal-label hard intrinsics, natural
+gutter preferences, constrained labels/guides, cell/attached/shelf requirements,
+cache/feedback identities and frozen publication. Domain changes may remeasure
+labels but cannot invent glyphs, reselect root width or add a formatting-specific
+layout driver. Frames continue rejecting required visible text that cannot fit.
 
 Numeric projection uses endpoints 0/1 and `(v-lo)/(hi-lo)` when both direct
 subtractions are finite; otherwise it uses
@@ -856,6 +911,44 @@ labels, baseline heights, gaps, padding, and border ink all participate in final
 fit. Zero entries mean an absent legend, not a detached title. Flow slots and
 allocated entry widths are plan payload, not semantic topology.
 
+### Discrete Semantic Sections
+
+The admitted T6 Combined/Separate policy uses one ordered typed discrete-section
+descriptor, one outer frame and one placement/collision owner. Combined retains
+observed-pair and same-field behavior and current shared-primary-title rules.
+Separate exposes only actual encoded group-style, joint, hue-color, literal and
+supplemental domains, in the order defined by `93_T6_EXECUTION_PLAN.md` T6L.
+It explains marginal mappings, not observed pair support, and never changes marks
+or facet topology. Unsupported factorization rejects before fonts.
+
+Producers retain mapping provenance and construct complete explanatory keys:
+group keys neutralize only hue-mapped RGB to the owning Plot's resolved
+TypographyTheme legend-label text RGB while retaining the mapped paint's original
+alpha/geometry. They do not use the legacy generic foreground carrier or Canvas
+label paint. Hue keys neutralize only mapped group shape/pattern to producer
+defaults. Canvas compares these immutable keys and does not reconstruct palette
+swatches. Exact section identities own title compatibility and entry identities
+own duplicates. Distinct sections with equal nonempty display titles reject.
+Labeled PointLayers remain separate semantic identities, never category values.
+
+Sections stack vertically, each receiving full inner width and existing normal
+or compact flow. The flow variant belongs to the whole guide. Section gap is the
+owning `title_gap+row_gap`; one outer chrome envelope is measured. Horizontal
+section height derives from width; vertical automatic height uses one column per
+section. For finite vertical height, measure entries first, derive each section's
+hard height (title plus tallest entry) and preferred height (title plus complete
+one-column entries/gaps), subtract section gaps, and allocate available height
+once with the existing hard-to-preferred proportional allocator. Each section
+then greedily fills its assigned capacity and validates its columns against
+width. Stack actual occupied heights; unused capacity is not redistributed and
+failed section allocations do not trigger sibling retries. This remains a
+bounded local policy with possible fit misses, not a search over allocations.
+
+Titles, keys, labels, section boxes and complete outer ink all participate in
+measurement and retained feedback. Stable section ordinals are inline records
+under the existing guide owner, not new placement owners or extra root trials.
+The existing automatic/explicit edge-flow budget is shared by the whole guide.
+
 Outside suffix alignment is start/center/end along the panel-parallel track:
 right/left Top/none/Bottom and top/bottom Left/none/Right respectively. Automatic
 uses center. Track sets stack first canonical guide nearest panel, subsequent
@@ -872,6 +965,10 @@ Canvas prepares one kind-tagged shared descriptor under
 and continuous-domain merging occur before layout/font census. Shared labels are
 formatted once under Canvas typography from the final merged domain, never copied
 from arbitrary contributing Plot labels.
+Continuous contributors require one equal normalized effective numeric policy;
+discrete contributors merge by the selected composition's typed section/entry
+rules. Canvas Shared selects composition, PerPlot retains Plot selections, and
+Hidden suppresses both guide kinds without removing scientific scale participation.
 
 Continuous orientation is horizontal top/bottom, vertical left/right. Labels
 are lo, an interior diverging center if present, hi; constant domains have one

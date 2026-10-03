@@ -34,6 +34,12 @@ the umbrella statuses here remain authoritative for overall progress. No stage
 starts merely because its partition is documented. Its baseline is completed
 T5a at `1e8e3ee`, not the earlier combined-renderer implementation.
 
+T6's execution partition is `93_T6_EXECUTION_PLAN.md`, based on completed T5e
+(`0cbd1d6`). Its user-approved entry decisions and substage/deletion/evidence
+tables are authoritative for the new public migration and numeric/legend work.
+T6 is IN PROGRESS; planning and entry decisions are complete, and implementation
+leaves remain PENDING until started.
+
 The primary-approved T5a1r2-r4/T5a3a1-f closure is one coupled interface migration
 after the completed T5a1r1 commit, as recorded under T5a3f. Its original per-stage
 commit titles are intended partition labels, not claims that those commits exist.
@@ -272,7 +278,7 @@ The approved theme and layout targets follow these rules:
 | T5c | Mark defaults, annotations, and local styles | COMPLETE |
 | T5d | Categorical and continuous data scales | COMPLETE |
 | T5e | Scientific layout closure | COMPLETE |
-| T6 | Public immutable theme, scale, tick-interval, and sizing API | PENDING |
+| T6 | Public foundations, sizing, scientific numeric presentation and sectioned guides | IN PROGRESS |
 | T7 | Contract evidence, documentation, and final audit | PENDING |
 
 ## Phase T1: Approved Theme Architecture
@@ -6446,8 +6452,9 @@ Acceptance:
 
 Closure evidence: `docs/t5e-closure.md` records the broad verification attempt,
 localized successful follow-ups, all ten release workload groups, current
-producer census and final architectural audit. Public exact defaults remain
-unchanged; T6 remains PENDING.
+producer census and final architectural audit. Public exact defaults remained
+unchanged and T6 was PENDING at that closure; its subsequent entry planning is
+recorded under T6 and `93_T6_EXECUTION_PLAN.md`.
 
 Dependencies: T5d.
 
@@ -6526,19 +6533,37 @@ Acceptance:
   resource, output, and snapshot tests pass.
 - `just verify` passes.
 
-## Phase T6: Public Immutable Theme, Scale, Tick-Interval, And Sizing API
+## Phase T6: Public Foundations And Scientific Presentation
 
-**Status**: PENDING
+**Status**: IN PROGRESS — planning/entry decisions complete; implementation pending.
 
 Dependencies: T5e.
 
-ENTRY gate, after T5e closure and before T6 implementation: review DF1 separate
-legend sections, DF2 caller numeric formatting, DF5 broader text layout controls
-(including emergency breaks/rotation/alignment), and DF7 sparse compaction using
-the evidence requirements in `99_DEFERRED_FEATURES.md`. For each ID, record a
-user-approved admission with a new approved phase, rejection with reason, or
-re-deferral to a new explicit milestone checkpoint. Review is not an implementation
-promise; none of these reviews automatically expands T6.
+Execution: `93_T6_EXECUTION_PLAN.md` T6P/T6A/T6B/T6C/T6N/T6L/T6Z. Complete and
+commit independently verified leaves; separate behavior from mechanical public
+cutovers instead of accumulating one large source/closure bundle.
+
+ENTRY gate is CLOSED by the user's explicit approval of the current-implementation
+assessment and request to plan T6:
+
+| Reviewed item | Approved disposition |
+| --- | --- |
+| DF1 separate legend sections | Admit complete Combined/Separate composition through one section-aware discrete guide; move scope from deferred list to T6L |
+| DF2 caller numeric formatting | Admit one locale-free scientific core across actual numeric consumers in T6N; re-defer locale/general/compact rules, arbitrary multipliers, rounding controls and shared unit annotations to T7 CLOSURE |
+| DF5 broader text controls | Proceed with existing approved typography/heading alignment; re-defer TextPanel alignment, categorical directions, identifiers and broader controls to T7 CLOSURE |
+| DF7 sparse compaction | Re-defer empty-track removal and occupied-cell repacking as distinct proposals to T7 CLOSURE |
+
+The user separately selected mathematical raw-value formatting for configured
+Forest Log10 ticks: exponent `0.5` with fractional precision 2 displays `3.16`.
+T6N includes a dedicated certified fractional-power-to-decimal design and
+implementation gate; exponent precision is not substituted for value precision.
+Existing unconfigured power labels remain unchanged. This admission adds no
+platform `powf`, dependency, resource-cap increase or alternate rendering route.
+
+The new scope is deliberately admitted here, not inferred from a review gate.
+T6's pre-existing foundation commitments below remain in force. DF3/DF4 keep
+T6 CLOSURE; T7 additionally reviews residual DF2/DF5/DF7. DF11 retains its
+post-first-release milestone prerequisites.
 
 Expose the complete foundations only after every admitted consumer uses the
 private resolved model.
@@ -6614,6 +6639,23 @@ Scope:
 - Update examples and user documentation with standalone, Canvas inheritance,
   Plot replacement, palette, exact local style, automatic sizing, exact-width
   wrapping, exact sizing, and rendered-dimension examples.
+- Implement T6N's single validated NumericFormat and conversion engine, including
+  exact fractional/significant and scientific/engineering precision, bounded
+  adaptive sets, decimal-power scaling/percentage, affixes, negative-zero and
+  trailing-zero policies. Migrate generated axes, continuous local/shared guides,
+  existing Heatmap/Coefficient values and Waterfall totals; remove
+  NumericLabelFormat and old independent formatters at public cutover.
+- Certify configured Forest raw-value conversion from exact selected binary64
+  exponent with outward integer bounds and independent Rust evidence. Retain
+  tick-space identity, unconfigured labels, exact caller strings, source ordering
+  and original midpoint scope. Certification/resource refusal is fatal; no
+  approximate numeric fallback or exponent-operand reinterpretation.
+- Implement T6L's Combined/Separate discrete guide composition with producer-owned
+  typed sections and truthful group-style/hue projections. Retain one measurement/
+  placement owner, existing bounded flow/edge policy, exact Shared compatibility,
+  same-field collapse, sparse/row-hue semantics and supplemental layer identity.
+  Expose Plot selection and Canvas Shared authority only after end-to-end paths
+  are implemented; remove the flat descriptor rather than retain another renderer.
 
 Acceptance:
 
@@ -6652,12 +6694,28 @@ Acceptance:
   ownership boundaries.
 - All canonical specifications describe the implemented replacement API before
   the phase is complete.
+- Every admitted numeric surface uses one effective normalized policy for font
+  census, intrinsics, measurement, cache/feedback and frozen output. Exact ticks
+  remain verbatim; percent/display scaling never changes scientific geometry or
+  color domains. Shared continuous formats agree before fonts. Independent
+  decimal/Log10 rounding, extreme values, adaptive uniqueness and exact resource
+  boundaries pass the T6N proof/test gates.
+- Combined defaults retain current guide semantics; Separate explains actual
+  independent encodings and rejects unsupported decomposition before fonts.
+  Sections do not multiply placement trials, search sibling allocations, invent
+  group styles or alter sparse marks. Complete section geometry and keys match
+  retained SVG/PNG and cached/uncached output in all root modes.
 - CLOSURE gate, before T7: review DF3 data-mapped alpha and DF4 broader count/
   density tick controls against implemented T6 evidence, following each item's
   `99` evidence requirements. Record for each ID a user-approved new-phase
   admission, reasoned rejection, or re-deferral to a new explicit milestone.
   Review does not promise implementation or retroactively expand T6.
 - `just verify` passes.
+
+T6Z3 owns the required broad gate and ten ignored release benchmark groups,
+including retained complete caption/legal-break/refusal fixtures and bounded
+numeric/section workloads. Run focused checks plus strict Clippy during each
+implementation leaf; use the full suite at closure, not repeatedly for discovery.
 
 ## Phase T7: Contract Evidence And Final Audit
 
@@ -6742,7 +6800,13 @@ Acceptance:
   extension against post-p2/p3/p4/p6 release evidence. Revisit only if meaningful
   benefit justifies the wrapping/fit tradeoff; record user-approved admission with
   a new phase, rejection with reason, or re-deferral to an explicit new checkpoint.
-  PF7's KEEP disposition remains in force; DF1-DF9 checkpoints are unchanged.
+  PF7's KEEP disposition remains in force; this review does not alter other
+  items' recorded checkpoints, including the T6 entry re-deferrals below.
+- CLOSURE gate, before successor planning: review the residual DF2 locale/extended
+  numeric controls, DF5 additional text controls, and DF7 sparse topology changes
+  re-deferred by the user at T6 ENTRY. Use actual public T6 workflows and separate
+  subset decisions as required by `99_DEFERRED_FEATURES.md`; record approved
+  new-phase admission, reasoned rejection or an explicit new review milestone.
 - Audit all DF1-DF10 entry/closure dispositions and user approvals. Remove admitted
   features from `99` on approved planning, not code completion; only implementation
   makes the corresponding current contracts change. Every still-deferred item

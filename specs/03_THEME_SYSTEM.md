@@ -23,6 +23,12 @@ satisfies them. Independent title/subtitle alignment and the narrow Plot/Canvas
 overrides below are also user-approved T6 targets. Remaining broader text controls
 remain deferred with explicit review gates.
 
+The completed T6 ENTRY review additionally admits one locale-free scientific
+numeric presentation core and selectable combined/separate discrete legend
+composition. Their execution and detailed contracts are in
+`93_T6_EXECUTION_PLAN.md`. Both are semantic presentation policies, not theme
+appearance. Remaining DF2/DF5/DF7 scope is reviewed at T7 CLOSURE.
+
 After that migration, this model governs standalone plots, facets, composed
 canvases, shared legends, text panels, SVG, and PNG. It does not authorize
 mutable global configuration, dynamic style plugins, backend-specific
@@ -71,6 +77,7 @@ The public foundations consist of these roles:
 | `AxisTheme` | Frame sides, axis and tick strokes, grid, lengths, and role-local spacing relationships |
 | `LegendTheme` | Discrete legend and continuous color-guide chrome, keys, padding, and role-local spacing relationships |
 | `CanvasLegendPolicy` | Per-plot, hidden, or one shared Canvas legend behavior |
+| `LegendComposition` | Closed Combined/Separate semantic composition of one discrete guide; not a component theme |
 | `TitleAlignment` | Closed `Start`, `Center`, or `End` horizontal alignment for Plot or Canvas root titles, subtitles, and captions |
 | `CompositionTheme` | Plot and Canvas root title, optional subtitle, and independent caption alignment defaults and spacing relationships, facet strips, Canvas headers, row titles, text-panel chrome, and role-local composition spacing relationships |
 | `MarkTheme` | Common point, line, fill, interval, ribbon, reference, outline, missing-mark, and supplemental-accent defaults |
@@ -131,8 +138,9 @@ The component taxonomy is role-based rather than plot-family-based:
   marks may be absent. It does not decide whether caller-provided titles, exact
   ticks, tick labels, or axis labels exist.
 - `LegendTheme` owns appearance and measured geometry of discrete legends and
-  continuous color guides. Existing legend policies continue to own visibility
-  and placement.
+  continuous color guides. Legend policies continue to own visibility,
+  placement and combined/separate semantic composition. Numeric presentation
+  policies own generated label spelling separately from typography.
 - `CompositionTheme` owns independent title, optional subtitle, and caption alignment defaults,
   spatial relationships for Plot and Canvas root title blocks, and Canvas/facet chrome.
   `TypographyTheme` still owns each title, subtitle, and caption text role.
@@ -400,9 +408,11 @@ cell-label contrast uses the light/dark `TypographyTheme` roles and the
 ## Shared Legends
 
 A shared discrete Canvas legend uses Canvas `LegendTheme`, Canvas typography,
-and Canvas surface roles for its container. Its entries retain the exact final
-glyphs resolved by their owning plots, including shape, line pattern, fill,
-outline, and RGBA paint.
+and Canvas surface roles for its container. Combined entries retain the exact
+final glyphs resolved by their owning plots, including shape, line pattern, fill,
+outline, and RGBA paint. Separate sections retain the complete producer-owned
+channel projections defined in spec05/spec93, including explicitly neutralized
+non-target mapping properties. Canvas does not invent those projections.
 
 Mixed explicit Plot themes are allowed. Entries with distinct semantic
 identities coexist. Entries with the same typed semantic identity merge only
@@ -422,29 +432,61 @@ Canvas legend policy owns composition behavior:
   an explicit per-plot legend position rejects under `Shared` because that
   position cannot be honored.
 
-One shared Canvas guide is either discrete or continuous; mixing the two kinds,
-or combining independently titled sections, rejects during Canvas preflight. A
-continuous contributor carries its typed field identity, scale kind, resolved
+One shared Canvas guide is either discrete or continuous; mixing the two kinds
+rejects during Canvas preflight. The T6 discrete target supports typed sections
+under one measured guide; continuous guides are not sectioned. A continuous
+contributor carries its typed field identity, scale kind, resolved
 title, gradient stops, diverging center when present, automatic-domain data
 envelope or exact caller domain, and missing-value block. Contributors merge
-only when field identity, scale kind, title, complete gradient, center, and
-missing-value block are exactly equal. With only automatic domains, the shared
-domain is their finite lower/upper union. If any contributor has an exact domain,
+only when field identity, scale kind, title, complete gradient, center,
+missing-value block and normalized numeric presentation policy are exactly equal.
+With only automatic domains, the shared domain is their finite lower/upper union.
+If any contributor has an exact domain,
 all exact domains must be equal and that domain must contain every automatic
 envelope; otherwise preflight rejects. The shared guide generates its labels once
 from that final domain and resolved Canvas typography. It never merges separately
-generated per-Plot guide labels or lets one Plot's gradient win.
+generated per-Plot guide labels or lets one Plot's gradient/formatter win.
 
-One shared discrete legend requires one exact typed semantic title identity and
-one resolved display title across all contributing entries. Conflicting field
-identities, titles, labels, or glyphs reject. Multiple independently titled
-legend sections remain deferred rather than being silently concatenated.
+Combined shared composition retains one exact typed primary semantic title
+identity and resolved display title across contributing primary entries.
+Separate shared composition unions typed sections with exact title, label and
+complete projected-glyph compatibility. Distinct sections with equal nonempty
+display titles reject; sections are never identified by display strings alone.
+Same-field group/hue collapses and unsupported pair factorization rejects before
+fonts. See `93_T6_EXECUTION_PLAN.md` T6L for ordering and actual encoding rules.
+
+`LegendComposition::{Combined,Separate}` defaults to Combined. Standalone/facets
+use the owning Plot selection; Canvas PerPlot preserves each Plot selection;
+Canvas Shared owns its selection for all contributors. Hidden entries contribute
+no section/font work while visible marks retain color-domain coordination.
+Shared composition does not consult child selections or turn them into conflicts;
+switching back to PerPlot restores their unchanged meaning. Placement and theme
+attachments do not mutate composition.
 
 A labeled `PointLayer` owns a typed layer-entry identity. When its Plot already
 has a categorical legend title, the layer entry uses that title for display but
 does not become a categorical identity or affect its domain. Otherwise it uses
-the standard literal `series` title identity. Shared-legend title compatibility
-then follows the same exact rule as every other entry.
+the standard literal `series` title identity. Separate composition places labeled
+layers in a final typed `series` section. Shared compatibility follows the chosen
+composition's exact section/entry rule; layer labels never become hue values.
+
+## Scientific Numeric Presentation
+
+The admitted T6 `NumericFormat` controls numeric labels independently of Theme
+appearance. It replaces current `NumericLabelFormat` at its implementation
+cutover. Fixed fractional/significant precision, scientific/engineering notation,
+decimal-power display scaling including percentage, literal affixes, explicit
+negative-zero/trailing-zero handling and bounded adaptive precision are in scope.
+`93_T6_EXECUTION_PLAN.md` T6N owns construction and attachment details; spec05 owns
+its pre-font, measurement, source-fit and frozen-replay consequences.
+
+Formats apply to generated numeric axes, continuous guides, existing Heatmap/
+Coefficient value labels and Waterfall totals. They do not change scientific
+values, projections, colors, exact tick strings, categories or annotation text.
+Configured Forest Log10 ticks format the mathematical value of their selected
+exponent through certified decimal rounding, not exponent-operand precision.
+Shared continuous guides require identical normalized effective policies and
+format one final-domain label set. Themes do not infer or override units.
 
 ## Visibility And Content
 
