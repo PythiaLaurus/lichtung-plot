@@ -55,6 +55,12 @@ subagent; a successful non-linting build is not a substitute for strict Clippy.
 Use Conventional Commits with mandatory scopes. Keep commits to one logical
 change.
 
+Commit subjects and bodies must describe enduring behavior or architecture,
+never temporary planning identifiers or numbered implementation stages. Planning
+labels will be removed from the final specifications; commit messages must remain
+understandable without them. This applies to documentation commits as well as
+code commits.
+
 Before any Git push, satisfy the T5a3p1 corpus-history cleanup gate in
 `specs/91_IMPLEMENTATION_PLAN.md`. Do not publish a ref that retains the full
 Unicode conformance corpus in its ancestry; a forward deletion is insufficient.

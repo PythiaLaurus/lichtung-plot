@@ -2441,7 +2441,7 @@ Acceptance:
 - `git diff --check` and focused independent specification review pass. This
   documentation-only subphase does not run the test suite.
 
-Commit: `docs(layout): adjudicate T5a implementation partition`.
+Commit: `docs(layout): adjudicate layout implementation boundaries`.
 
 ### T5a0r: Parent-Constraint Documentation Adjudication
 

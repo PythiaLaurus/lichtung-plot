@@ -8,7 +8,7 @@ decisions closed; implementation and public cutovers remain pending.
 This is the construction, validation, inspection and owner contract for T6's
 approved foundations. It derives from the committed T6A1 census
 [`docs/t6a1-public-cutover-census.md`](../docs/t6a1-public-cutover-census.md)
-(`c96749b`), [spec03](03_THEME_SYSTEM.md), [spec05](05_LAYOUT_SYSTEM.md),
+(`6ef761f`), [spec03](03_THEME_SYSTEM.md), [spec05](05_LAYOUT_SYSTEM.md),
 [spec93](93_T6_EXECUTION_PLAN.md), and the active adjudication overlay in
 [spec04](04_VISUAL_PROPERTY_OWNERSHIP.md). It specifies the replacement API;
 it does not claim that API is implemented or currently exported.

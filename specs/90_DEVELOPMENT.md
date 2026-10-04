@@ -42,6 +42,19 @@ path dependencies are prohibited. A dependency change updates and commits
 No dependency may introduce application-owned analysis, report, runtime,
 network-provisioning, or first-party Lichtung behavior into the renderer.
 
+## Commit Messages
+
+Use Conventional Commits with a scope and describe the actual behavior,
+architecture, contract or documentation change. Both the subject and body must
+remain understandable after temporary planning documents and stage labels are
+removed.
+
+Do not include planning identifiers or numbered implementation stages in commit
+subjects or bodies. Documentation changes follow the same rule. Use descriptions
+such as `docs(api): map public cutovers and consumers` or
+`refactor(color): retain validated foundational paint values`, rather than naming
+an internal milestone. Review the complete message before committing.
+
 ## Visual Changes
 
 Changes to layout, themes, text, SVG serialization, clipping, or marks require

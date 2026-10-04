@@ -10,7 +10,7 @@ substage dependencies, public cutovers, deletion targets and acceptance evidence
 `01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` describe implemented public
 behavior and change with the relevant implementation commit, not this plan.
 
-Baseline: T5e closed in `0cbd1d6`; future AI-workflow review recorded in `896b6b4`.
+Baseline: T5e closed in `b803f2a`; future AI-workflow review recorded in `b8b75a7`.
 The user approved the four-item T6 entry assessment and requested this plan.
 The user additionally selected raw-value numeric formatting for configured
 Forest Log10 ticks: an exponent `0.5` with two fractional digits displays `3.16`,
@@ -57,9 +57,9 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 
 | Stage | Status | Depends on | Deliverable / suggested scoped commit |
 | --- | --- | --- | --- |
-| T6P | COMPLETE | T5e | This plan and user-approved entry decisions; `docs(planning): partition T6 public foundations and presentation` |
+| T6P | COMPLETE | T5e | This plan and user-approved entry decisions; `docs(planning): partition public foundations and presentation` |
 | T6A | COMPLETE | T6P | Public foundation/caller/ledger census and construction design |
-| T6A1 | COMPLETE | T6P | Current export/style/owner/caller/deletion census in `docs/t6a1-public-cutover-census.md`; `docs(api): map T6 public cutovers and consumers` |
+| T6A1 | COMPLETE | T6P | Current export/style/owner/caller/deletion census in `docs/t6a1-public-cutover-census.md`; `docs(api): map public cutovers and consumers` |
 | T6A2 | COMPLETE | T6A1 | Validated construction, fields, metrics, owners and future fixtures in `94_T6_FOUNDATION_CONSTRUCTION.md`; `docs(theme): pin validated public component construction` |
 | T6B | PENDING | T6A | Immutable theme, color, font, scale and exact-style migration |
 | T6B1 | PENDING | T6A | Validated color/font and component values in the single private representation; `refactor(theme): retain validated foundational values` |
@@ -79,7 +79,7 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6N | PENDING | T6C | Unified scientific numeric formatting; leaves below |
 | T6L | PENDING | T6N | One section-aware discrete guide; leaves below |
 | T6Z | PENDING | T6L | Integrated contract, deferred-decision and phase closure |
-| T6Z1 | PENDING | T6L | Complete public examples/current-spec and property/consumer census reconciliation; `docs(api): reconcile T6 scientific plotting contracts` |
+| T6Z1 | PENDING | T6L | Complete public examples/current-spec and property/consumer census reconciliation; `docs(api): reconcile scientific plotting contracts` |
 | T6Z2 | PENDING | T6Z1 | User-approved DF3/DF4 closure dispositions |
 | T6Z3 | PENDING | T6Z2 | Final audit, required broad gate/release evidence and closure commit; `test(api): close public scientific foundations` |
 
