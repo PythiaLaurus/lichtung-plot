@@ -14,7 +14,7 @@ use crate::font::canonical::{
     PairProvenance, PreparedFontEnvironment, RequestedWeight, ResolvedFontPair,
     ScalarFaceSelection, ShapedRun as CanonicalShapedRun, ShapingDirection,
 };
-use crate::render::backend::Rgba;
+use crate::theme::Color;
 use crate::TextWeight;
 
 mod requirements;
@@ -72,7 +72,7 @@ pub(crate) struct TextPlanInput<'a> {
     pub(crate) line_height: TextLineHeight,
     pub(crate) maximum_width_quanta: i64,
     pub(crate) alignment: PhysicalTextAlignment,
-    pub(crate) paint: Rgba,
+    pub(crate) paint: Color,
     pub(crate) provenance: TextPlanProvenance,
     pub(crate) exact_override: bool,
 }
@@ -167,7 +167,7 @@ pub(crate) struct ResolvedTextStyle {
     pub(crate) font_size: u32,
     pub(crate) line_height_quanta: i64,
     pub(crate) alignment: PhysicalTextAlignment,
-    pub(crate) paint: Rgba,
+    pub(crate) paint: Color,
     pub(crate) provenance: TextPlanProvenance,
     pub(crate) exact_override: bool,
 }
@@ -2776,7 +2776,7 @@ mod tests {
             line_height: TextLineHeight::Multiplier(1.2),
             maximum_width_quanta,
             alignment,
-            paint: Rgba::rgb(1, 2, 3),
+            paint: Color::rgb(1, 2, 3),
             provenance: TextPlanProvenance {
                 pair_ordinal: 0,
                 owner: "test".into(),

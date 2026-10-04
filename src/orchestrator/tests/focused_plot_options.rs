@@ -114,7 +114,13 @@ fn hue_path_style_uses_caller_colors_for_paths_markers_and_legend_lines() {
         .map(|(_, style, _)| style.color)
         .collect::<Vec<_>>();
 
-    assert_eq!(path_colors, [(51, 51, 51), (0, 114, 178)]);
+    assert_eq!(
+        path_colors,
+        [
+            crate::theme::Color::rgb(51, 51, 51),
+            crate::theme::Color::rgb(0, 114, 178)
+        ]
+    );
     let alpha = crate::Theme::Publication
         .resolve()
         .marks
@@ -125,10 +131,16 @@ fn hue_path_style_uses_caller_colors_for_paths_markers_and_legend_lines() {
         [(51, 51, 51); 3]
             .into_iter()
             .chain([(0, 114, 178); 3])
-            .map(|color| crate::render::backend::Rgba::from(color).with_alpha(alpha))
+            .map(|color| crate::theme::color_from_rgb(color).with_alpha(alpha))
             .collect::<Vec<_>>()
     );
-    assert_eq!(legend_colors, [(51, 51, 51), (0, 114, 178)]);
+    assert_eq!(
+        legend_colors,
+        [
+            crate::theme::Color::rgb(51, 51, 51),
+            crate::theme::Color::rgb(0, 114, 178)
+        ]
+    );
 }
 
 #[test]
@@ -152,7 +164,13 @@ fn hue_path_style_splits_one_group_into_observed_hue_paths() {
         .map(|(_, style, _)| style.color)
         .collect::<Vec<_>>();
 
-    assert_eq!(path_colors, [(0, 114, 178), (213, 94, 0)]);
+    assert_eq!(
+        path_colors,
+        [
+            crate::theme::Color::rgb(0, 114, 178),
+            crate::theme::Color::rgb(213, 94, 0)
+        ]
+    );
 }
 
 #[test]

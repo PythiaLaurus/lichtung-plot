@@ -932,11 +932,11 @@ mod tests {
         };
         assert_eq!(
             payload.curves[0].fill_style.color,
-            crate::render::backend::Rgba::from(theme.colors[0]).with_alpha(56)
+            crate::theme::color_from_rgb(theme.colors[0]).with_alpha(56)
         );
         assert_eq!(
             payload.curves[1].fill_style.color,
-            crate::render::backend::Rgba::from(theme.colors[1]).with_alpha(56)
+            crate::theme::color_from_rgb(theme.colors[1]).with_alpha(56)
         );
         assert!(payload.curves[0].fill[0].x > payload.curves[1].fill[0].x);
         theme.marks.density_line.width = 2.5;

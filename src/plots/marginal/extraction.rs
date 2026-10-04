@@ -599,17 +599,17 @@ fn marginal_parent_hue_order_controls_selected_colors_without_repreparation() {
     };
     assert_eq!(
         payload.groups[0].point_style.color,
-        crate::render::backend::Rgba::from(theme.colors[1])
+        crate::theme::color_from_rgb(theme.colors[1])
             .with_alpha(theme.marks.primary_point.fill_alpha)
     );
     assert_eq!(
         payload.groups[1].point_style.color,
-        crate::render::backend::Rgba::from(theme.colors[0])
+        crate::theme::color_from_rgb(theme.colors[0])
             .with_alpha(theme.marks.primary_point.fill_alpha)
     );
     assert_eq!(
         payload.groups[0].fill.color,
-        crate::render::backend::Rgba::from(theme.colors[1]).with_alpha(115)
+        crate::theme::color_from_rgb(theme.colors[1]).with_alpha(115)
     );
     assert_eq!(stages[..2], STAGES.with(std::cell::Cell::get)[..2]);
 }

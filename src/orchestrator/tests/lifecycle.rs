@@ -6,15 +6,13 @@ use super::{
     RENDER_THEME_ADDRESSES, TEMP_FILE_COUNTER,
 };
 use crate::orchestrator::{DeferredBackend, TEXT_PLAN_CAPTURE_SESSIONS, TEXT_REPLAY_SESSIONS};
-use crate::render::backend::{
-    Backend, LineStyle, Point2D, Rgba, SurfaceRole, TextAnchor, TextStyle,
-};
+use crate::render::backend::{Backend, LineStyle, Point2D, SurfaceRole, TextAnchor, TextStyle};
 use crate::{AxisValues, CategoryValues, NumericValues};
 
 fn valid_line() -> ([Point2D; 2], LineStyle) {
     (
         [Point2D::new(1.0, 1.0), Point2D::new(2.0, 2.0)],
-        LineStyle::solid((0, 0, 0), 1.0),
+        LineStyle::solid(crate::theme::Color::rgb(0, 0, 0), 1.0),
     )
 }
 
@@ -246,7 +244,7 @@ fn deferred_backend_forwards_signed_text_positions_unchanged() {
                 Point2D::new(-7.0, 225.0),
                 "outside",
                 &TextStyle {
-                    color: (0, 0, 0).into(),
+                    color: crate::theme::Color::rgb(0, 0, 0),
                     font_family: "sans-serif".into(),
                     font_size: 12,
                     weight: crate::TextWeight::Normal,
@@ -449,7 +447,7 @@ fn standalone_terminal_resolves_and_plans_once_with_one_final_lifecycle() {
     assert!(backend
         .surfaces
         .iter()
-        .all(|surface| surface.paint == Rgba::rgb(255, 255, 255)));
+        .all(|surface| surface.paint == crate::theme::Color::rgb(255, 255, 255)));
     RENDER_THEME_ADDRESSES.with(|addresses| {
         let addresses = addresses.borrow();
         assert!(!addresses.is_empty());
@@ -465,8 +463,8 @@ fn standalone_lifecycle_preserves_distinct_transparent_root_and_panel_surfaces()
     )
     .erase();
     let mut theme = crate::Theme::Publication.resolve();
-    theme.surfaces.canvas_root = Rgba::new(17, 34, 51, 128);
-    theme.surfaces.plot_panel = Rgba::new(68, 85, 102, 64);
+    theme.surfaces.canvas_root = crate::theme::Color::rgba(17, 34, 51, 128);
+    theme.surfaces.plot_panel = crate::theme::Color::rgba(68, 85, 102, 64);
     let plan = crate::orchestrator::lifecycle::PlotPlan::new_with_resolved_theme(
         &plot,
         PlotKind::Scatter,
@@ -480,11 +478,17 @@ fn standalone_lifecycle_preserves_distinct_transparent_root_and_panel_surfaces()
     assert_eq!(recorded.surfaces.len(), 2);
     assert_eq!(
         (recorded.surfaces[0].role, recorded.surfaces[0].paint),
-        (SurfaceRole::CanvasRoot, Rgba::new(17, 34, 51, 128))
+        (
+            SurfaceRole::CanvasRoot,
+            crate::theme::Color::rgba(17, 34, 51, 128)
+        )
     );
     assert_eq!(
         (recorded.surfaces[1].role, recorded.surfaces[1].paint),
-        (SurfaceRole::PlotPanel, Rgba::new(68, 85, 102, 64))
+        (
+            SurfaceRole::PlotPanel,
+            crate::theme::Color::rgba(68, 85, 102, 64)
+        )
     );
 
     let (width, height) = plan.dimensions();
@@ -699,7 +703,7 @@ fn canvas_text_panel_uses_one_private_nonpublication_root() {
             .find(|(_, _, candidate, _)| candidate == text)
             .expect("private Nature root text is rendered")
             .3;
-        assert_eq!(style.color, (40, 40, 40));
+        assert_eq!(style.color, crate::theme::Color::rgb(40, 40, 40));
         assert_eq!(style.font_size, size);
     }
 }
@@ -852,7 +856,7 @@ fn canvas_preflight_and_render_reuse_one_chrome_and_one_theme_per_child() {
                 .into_iter()
                 .enumerate()
                 .map(|(index, color)| {
-                    crate::render::backend::Rgba::from(color)
+                    crate::theme::color_from_rgb(color)
                         .with_alpha(themes[index].resolve().marks.primary_point.fill_alpha)
                 })
                 .collect::<Vec<_>>()
@@ -962,7 +966,7 @@ fn canvas_shared_headers_use_canvas_root_for_plan_and_render() {
             .find(|(_, _, candidate, _)| candidate == text)
             .expect("shared Canvas header is rendered")
             .3;
-        assert_eq!(style.color, (60, 60, 60));
+        assert_eq!(style.color, crate::theme::Color::rgb(60, 60, 60));
         assert_eq!(style.font_size, 19);
     }
 
@@ -1070,7 +1074,7 @@ fn canvas_row_titles_use_canvas_root_for_plan_and_render() {
         .find(|(_, _, text, _)| text == "Shared outcome")
         .expect("Canvas row title is rendered")
         .3;
-    assert_eq!(style.color, (60, 60, 60));
+    assert_eq!(style.color, crate::theme::Color::rgb(60, 60, 60));
     assert_eq!(style.font_size, 19);
 
     let mut reversed = RecordingBackend::default();

@@ -10,7 +10,7 @@ use crate::layout::{
 };
 use crate::render::backend::{
     self, Backend, BracketStyle, FillStyle, GradientStop, LayerRole, LineStyle,
-    PlannedSignificanceCall, PlannedTextPlacement, Point2D, PointStyle, Rgba, SignificanceBracket,
+    PlannedSignificanceCall, PlannedTextPlacement, Point2D, PointStyle, SignificanceBracket,
     SurfaceRole, TextAnchor, TextStyle,
 };
 use crate::render::coordinates::CanonicalPoint;
@@ -137,7 +137,7 @@ impl Backend for DeferredBackend<'_> {
     fn draw_surface(
         &mut self,
         bounds: PanelBox,
-        paint: Rgba,
+        paint: crate::theme::Color,
         role: SurfaceRole,
     ) -> Result<(), Error> {
         self.ensure_started()?;
@@ -372,7 +372,7 @@ enum PlannedCall {
     EndClip,
     Surface {
         bounds: CanonicalBox,
-        paint: Rgba,
+        paint: crate::theme::Color,
         role: SurfaceRole,
     },
     Scatter(CanonicalScatter),
@@ -738,7 +738,7 @@ impl Backend for TextPlanningBackend<'_, '_> {
     fn draw_surface(
         &mut self,
         bounds: PanelBox,
-        paint: Rgba,
+        paint: crate::theme::Color,
         role: SurfaceRole,
     ) -> Result<(), Error> {
         self.claim_call()?;
@@ -1004,7 +1004,7 @@ impl Backend for TextReplayBackend<'_> {
     fn draw_surface(
         &mut self,
         bounds: PanelBox,
-        paint: Rgba,
+        paint: crate::theme::Color,
         role: SurfaceRole,
     ) -> Result<(), Error> {
         self.backend.draw_surface(bounds, paint, role)
@@ -1354,7 +1354,7 @@ impl Backend for ValidationRecorder {
     fn draw_surface(
         &mut self,
         bounds: PanelBox,
-        _paint: Rgba,
+        _paint: crate::theme::Color,
         _role: SurfaceRole,
     ) -> Result<(), Error> {
         self.ensure_open("draw_surface")?;
@@ -1365,7 +1365,7 @@ impl Backend for ValidationRecorder {
     fn draw_canonical_surface(
         &mut self,
         _bounds: CanonicalBox,
-        _paint: Rgba,
+        _paint: crate::theme::Color,
         _role: SurfaceRole,
     ) -> Result<(), Error> {
         self.ensure_open("draw_surface")
@@ -1507,14 +1507,14 @@ null_backend_methods! {
     fn draw_canonical_polygon(points: &[CanonicalPoint], style: &CanonicalFillStyle);
     fn draw_canonical_gradient(gradient: &CanonicalGradientFill);
     fn begin_canonical_clip(region: CanonicalBox);
-    fn draw_canonical_surface(bounds: CanonicalBox, paint: Rgba, role: SurfaceRole);
+    fn draw_canonical_surface(bounds: CanonicalBox, paint: crate::theme::Color, role: SurfaceRole);
     fn draw_canonical_rounded_rect(rounded: CanonicalRoundedBox);
     fn begin_layer(name: &str);
     fn begin_layer_with_role(name: &str, role: LayerRole);
     fn end_layer();
     fn begin_clip(region: PanelBox);
     fn end_clip();
-    fn draw_surface(bounds: PanelBox, paint: Rgba, role: SurfaceRole);
+    fn draw_surface(bounds: PanelBox, paint: crate::theme::Color, role: SurfaceRole);
     fn draw_scatter(points: &[Point2D], style: &PointStyle);
     fn draw_line(points: &[Point2D], style: &LineStyle);
     fn draw_polygon(points: &[Point2D], style: &FillStyle);
@@ -1529,8 +1529,9 @@ null_backend_methods! {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::render::backend::{BracketOrientation, Rgba, SurfaceRole};
+    use crate::render::backend::{BracketOrientation, SurfaceRole};
     use crate::render::svg_backend::{SvgBackend, SVG_PLANNED_TEXT_CALLS, SVG_RAW_TEXT_CALLS};
+    use crate::theme::Color;
 
     fn paired_draw_result(
         draw: impl Fn(&mut dyn Backend) -> Result<(), Error>,
@@ -1566,17 +1567,20 @@ mod tests {
             Point2D::new(2.0, 0.0),
         ];
         assert_paired_rejection(|backend| {
-            backend.draw_line(&points, &LineStyle::solid((0, 0, 0), 1.0 / 4096.0))
+            backend.draw_line(
+                &points,
+                &LineStyle::solid(Color::rgb(0, 0, 0), 1.0 / 4096.0),
+            )
         });
         assert_paired_rejection(|backend| {
             backend.draw_polygon(
                 &points,
-                &FillStyle::new(Rgba::rgb(0, 0, 0), Rgba::rgb(0, 0, 0), 1.0 / 4096.0),
+                &FillStyle::new(Color::rgb(0, 0, 0), Color::rgb(0, 0, 0), 1.0 / 4096.0),
             )
         });
         let mut outlined = PointStyle::new((0, 0, 0), 1);
         outlined.outline = Some(crate::render::backend::PointOutline {
-            color: (0, 0, 0).into(),
+            color: Color::rgb(0, 0, 0),
             width_ratio: 1.0 / 4096.0,
         });
         assert_paired_rejection(|backend| backend.draw_scatter(&points, &outlined));
@@ -1592,19 +1596,19 @@ mod tests {
                     Point2D::new(0.0, -9_007_199_254_740_992.0),
                     Point2D::new(1.0, 0.0),
                 ],
-                &LineStyle::solid((0, 0, 0), 1.0),
+                &LineStyle::solid(Color::rgb(0, 0, 0), 1.0),
             )
         });
         assert_paired_rejection(|backend| {
             backend.draw_line(
                 &[points[0], points[1], Point2D::new(1.0 / 4096.0, 0.0)],
-                &LineStyle::solid((0, 0, 0), 1.0),
+                &LineStyle::solid(Color::rgb(0, 0, 0), 1.0),
             )
         });
         assert_paired_success(|backend| {
             backend.draw_line(
                 &[points[0], points[1], points[0]],
-                &LineStyle::solid((0, 0, 0), 1.0),
+                &LineStyle::solid(Color::rgb(0, 0, 0), 1.0),
             )
         });
     }
@@ -1672,10 +1676,10 @@ mod tests {
                 &points[1..2],
                 &PointStyle::new((4, 5, 6), 2).with_shape(crate::PointShape::TriangleUp),
             )?;
-            backend.draw_line(&points, &LineStyle::short_dashed((7, 8, 9), 0.8))?;
+            backend.draw_line(&points, &LineStyle::short_dashed(Color::rgb(7, 8, 9), 0.8))?;
             backend.draw_polygon(
                 &[points[0], points[1], points[2], points[0]],
-                &FillStyle::new(Rgba::new(10, 11, 12, 191), Rgba::rgb(13, 14, 15), 0.8),
+                &FillStyle::new(Color::rgba(10, 11, 12, 191), Color::rgb(13, 14, 15), 0.8),
             )?;
             backend.draw_linear_gradient(
                 PanelBox::new(-0.25, 4.5, -3.0, 5.75),
@@ -1771,8 +1775,8 @@ mod tests {
                         orientation,
                     },
                     &BracketStyle {
-                        color: Rgba::rgb(1, 2, 3),
-                        label_color: Rgba::rgb(4, 5, 6),
+                        color: Color::rgb(1, 2, 3),
+                        label_color: Color::rgb(4, 5, 6),
                         width: 0.8,
                         font_family: theme.font_family.clone(),
                         font_size: 12,
@@ -1980,7 +1984,7 @@ mod tests {
         let root = capture_test_plan(&theme, |backend| {
             SPATIAL_CONVERSIONS.with(|count| count.set(0));
             let bounds = PanelBox::new(-0.25, 50.125, -2.5, 80.25);
-            backend.draw_surface(bounds, Rgba::rgb(1, 2, 3), SurfaceRole::PlotPanel)?;
+            backend.draw_surface(bounds, Color::rgb(1, 2, 3), SurfaceRole::PlotPanel)?;
             backend.begin_clip(bounds)?;
             backend.draw_rounded_rect(
                 -0.25,
@@ -1988,7 +1992,7 @@ mod tests {
                 20.125,
                 10.25,
                 1.125,
-                &FillStyle::new(Rgba::new(4, 5, 6, 191), Rgba::rgb(7, 8, 9), 0.8),
+                &FillStyle::new(Color::rgba(4, 5, 6, 191), Color::rgb(7, 8, 9), 0.8),
             )?;
             backend.end_clip()?;
             SPATIAL_CONVERSIONS.with(|count| {
@@ -2026,10 +2030,10 @@ mod tests {
             Point2D::new(30.0, 40.0),
             Point2D::new(50.0, 10.0),
         ];
-        let line = LineStyle::short_dashed((1, 2, 3), 0.8);
-        let fill = FillStyle::new(Rgba::new(10, 20, 30, 191), Rgba::rgb(1, 2, 3), 0.5);
-        backend.draw_surface(bounds, Rgba::rgb(255, 255, 255), SurfaceRole::CanvasRoot)?;
-        backend.draw_surface(bounds, Rgba::new(1, 2, 3, 128), SurfaceRole::PlotPanel)?;
+        let line = LineStyle::short_dashed(Color::rgb(1, 2, 3), 0.8);
+        let fill = FillStyle::new(Color::rgba(10, 20, 30, 191), Color::rgb(1, 2, 3), 0.5);
+        backend.draw_surface(bounds, Color::rgb(255, 255, 255), SurfaceRole::CanvasRoot)?;
+        backend.draw_surface(bounds, Color::rgba(1, 2, 3, 128), SurfaceRole::PlotPanel)?;
         backend.begin_layer_with_role("grid<&", LayerRole::Grid)?;
         backend.draw_line(&points, &line)?;
         backend.end_layer()?;
@@ -2065,8 +2069,8 @@ mod tests {
                 orientation: BracketOrientation::Vertical,
             },
             &BracketStyle {
-                color: Rgba::rgb(1, 2, 3),
-                label_color: Rgba::rgb(3, 2, 1),
+                color: Color::rgb(1, 2, 3),
+                label_color: Color::rgb(3, 2, 1),
                 width: 0.8,
                 font_family: theme.font_family.clone(),
                 font_size: 12,
@@ -2140,7 +2144,7 @@ mod tests {
         let root = capture_test_plan(&theme, |backend| {
             backend.draw_surface(
                 PanelBox::new(0.0, 100.0, 0.0, 100.0),
-                Rgba::rgb(255, 255, 255),
+                Color::rgb(255, 255, 255),
                 SurfaceRole::CanvasRoot,
             )?;
             backend.draw_scatter(
@@ -2213,8 +2217,8 @@ mod tests {
                                         orientation: BracketOrientation::Vertical,
                                     },
                                     &BracketStyle {
-                                        color: Rgba::rgb(0, 0, 0),
-                                        label_color: Rgba::rgb(0, 0, 0),
+                                        color: Color::rgb(0, 0, 0),
+                                        label_color: Color::rgb(0, 0, 0),
                                         width: 1.0,
                                         font_family: String::new(),
                                         font_size: 12,
@@ -2535,7 +2539,7 @@ mod tests {
                     for _ in 0..3 {
                         backend.draw_surface(
                             PanelBox::new(0.0, 10.0, 0.0, 10.0),
-                            (0, 0, 0).into(),
+                            Color::rgb(0, 0, 0),
                             SurfaceRole::CanvasRoot,
                         )?;
                     }
@@ -2590,7 +2594,7 @@ mod tests {
                             for _ in 0..3 {
                                 backend.draw_surface(
                                     PanelBox::new(0.0, 10.0, 0.0, 10.0),
-                                    (0, 0, 0).into(),
+                                    Color::rgb(0, 0, 0),
                                     SurfaceRole::CanvasRoot,
                                 )?;
                             }
@@ -2615,7 +2619,7 @@ mod tests {
                                 ),
                                 "prepared line points" => backend.draw_line(
                                     &[Point2D::new(0.0, 0.0), Point2D::new(1.0, 1.0)],
-                                    &LineStyle::solid((0, 0, 0), 1.0),
+                                    &LineStyle::solid(Color::rgb(0, 0, 0), 1.0),
                                 ),
                                 "prepared polygon points" => backend.draw_polygon(
                                     &[
@@ -2623,7 +2627,7 @@ mod tests {
                                         Point2D::new(1.0, 1.0),
                                         Point2D::new(2.0, 0.0),
                                     ],
-                                    &FillStyle::new(Rgba::rgb(0, 0, 0), Rgba::rgb(0, 0, 0), 1.0),
+                                    &FillStyle::new(Color::rgb(0, 0, 0), Color::rgb(0, 0, 0), 1.0),
                                 ),
                                 _ => backend.draw_linear_gradient(
                                     PanelBox::new(0.0, 10.0, 0.0, 10.0),
@@ -2692,7 +2696,7 @@ mod tests {
             orientation: BracketOrientation::Vertical,
         };
         let style = BracketStyle {
-            color: Rgba::rgb(0, 0, 0),
+            color: Color::rgb(0, 0, 0),
             label_color: deferred.plan.style.paint,
             width: 1.0,
             font_family: deferred.plan.style.stack_source.clone(),
@@ -2749,7 +2753,7 @@ mod tests {
             orientation: BracketOrientation::Vertical,
         };
         let style = BracketStyle {
-            color: Rgba::rgb(0, 0, 0),
+            color: Color::rgb(0, 0, 0),
             label_color: deferred.plan.style.paint,
             width: 0.8,
             font_family: deferred.plan.style.stack_source.clone(),
@@ -2790,8 +2794,8 @@ mod tests {
             orientation: BracketOrientation::Vertical,
         };
         let style = BracketStyle {
-            color: Rgba::rgb(0, 0, 0),
-            label_color: Rgba::rgb(1, 2, 3),
+            color: Color::rgb(0, 0, 0),
+            label_color: Color::rgb(1, 2, 3),
             width: 1.0,
             font_family: theme.font_family.clone(),
             font_size: 12,
@@ -2818,8 +2822,8 @@ mod tests {
 
     #[test]
     fn null_backend_preserves_degenerate_line_and_polygon_noops() {
-        let invalid_line = LineStyle::solid((0, 0, 0), f32::NAN);
-        let invalid_fill = FillStyle::new(Rgba::rgb(0, 0, 0), Rgba::rgb(0, 0, 0), f32::NAN);
+        let invalid_line = LineStyle::solid(Color::rgb(0, 0, 0), f32::NAN);
+        let invalid_fill = FillStyle::new(Color::rgb(0, 0, 0), Color::rgb(0, 0, 0), f32::NAN);
 
         let (result, svg) = paired_draw_result(|backend| {
             backend.draw_line(&[Point2D::new(f64::NAN, f64::NAN)], &invalid_line)?;
@@ -2839,18 +2843,18 @@ mod tests {
 
     #[test]
     fn null_and_svg_share_non_degenerate_line_and_polygon_failures() {
-        let invalid_fill = FillStyle::new(Rgba::rgb(0, 0, 0), Rgba::rgb(0, 0, 0), f32::NAN);
+        let invalid_fill = FillStyle::new(Color::rgb(0, 0, 0), Color::rgb(0, 0, 0), f32::NAN);
 
         assert_paired_rejection(|backend| {
             backend.draw_line(
                 &[Point2D::new(0.0, 0.0), Point2D::new(0.0004, 0.0004)],
-                &LineStyle::solid((0, 0, 0), 1.0),
+                &LineStyle::solid(Color::rgb(0, 0, 0), 1.0),
             )
         });
         assert_paired_rejection(|backend| {
             backend.draw_line(
                 &[Point2D::new(0.0, 0.0), Point2D::new(1.0, 1.0)],
-                &LineStyle::solid((0, 0, 0), f32::NAN),
+                &LineStyle::solid(Color::rgb(0, 0, 0), f32::NAN),
             )
         });
         assert_paired_rejection(|backend| {
@@ -2916,7 +2920,7 @@ mod tests {
         assert_paired_success(|backend| {
             backend.draw_surface(
                 PanelBox::new(1.0, 99.0, 2.0, 98.0),
-                Rgba::new(1, 2, 3, 0),
+                Color::rgba(1, 2, 3, 0),
                 SurfaceRole::PlotPanel,
             )
         });
@@ -2927,15 +2931,15 @@ mod tests {
             PanelBox::new(-f64::MAX, f64::MAX, 0.0, 10.0),
         ] {
             assert_paired_rejection(|backend| {
-                backend.draw_surface(bounds, Rgba::rgb(1, 2, 3), SurfaceRole::CanvasRoot)
+                backend.draw_surface(bounds, Color::rgb(1, 2, 3), SurfaceRole::CanvasRoot)
             });
         }
     }
 
     #[test]
     fn null_and_svg_share_rounded_rect_geometry_style_and_order() {
-        let valid_fill = FillStyle::new(Rgba::rgb(0, 0, 0), Rgba::rgb(0, 0, 0), 1.0);
-        let invalid_fill = FillStyle::new(Rgba::rgb(0, 0, 0), Rgba::rgb(0, 0, 0), f32::NAN);
+        let valid_fill = FillStyle::new(Color::rgb(0, 0, 0), Color::rgb(0, 0, 0), 1.0);
+        let invalid_fill = FillStyle::new(Color::rgb(0, 0, 0), Color::rgb(0, 0, 0), f32::NAN);
 
         assert_paired_success(|backend| {
             backend.draw_rounded_rect(1.0, 2.0, 0.0, 0.0, 0.0, &valid_fill)
@@ -2970,9 +2974,9 @@ mod tests {
             orientation: BracketOrientation::Vertical,
         };
         let bracket_style = BracketStyle {
-            color: (0, 0, 0).into(),
+            color: Color::rgb(0, 0, 0),
             width: 1.0,
-            label_color: (0, 0, 0).into(),
+            label_color: Color::rgb(0, 0, 0),
             font_family: "sans-serif".into(),
             font_size: 12,
             line_height: 14.4,
@@ -2996,7 +3000,7 @@ mod tests {
     fn null_backend_enforces_canvas_lifecycle_and_allows_reuse() {
         let mut backend = NullBackend::default();
         let points = [Point2D::new(1.0, 1.0), Point2D::new(2.0, 2.0)];
-        let style = LineStyle::solid((0, 0, 0), 1.0);
+        let style = LineStyle::solid(Color::rgb(0, 0, 0), 1.0);
 
         assert!(backend.begin(0, 100).is_err());
         assert!(backend.begin(100, 0).is_err());

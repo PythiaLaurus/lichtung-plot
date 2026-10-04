@@ -633,8 +633,7 @@ mod tests {
         assert_eq!(styled.panel_box, original.panel_box);
 
         theme.marks.primary_point.fill_alpha = 0;
-        theme.marks.primary_point.outline.color =
-            crate::render::backend::Rgba::new(255, 255, 255, 0);
+        theme.marks.primary_point.outline.color = crate::theme::Color::rgba(255, 255, 255, 0);
         let invisible = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
         assert_eq!(standard(&invisible).primary_marks, 25);
         assert_eq!(

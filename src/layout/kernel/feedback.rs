@@ -67,7 +67,7 @@ enum Observation {
     LegendGlyph {
         point: Option<PointGlyphState>,
         line: Option<(
-            crate::render::backend::Rgba,
+            crate::theme::Color,
             u64,
             crate::render::backend::StrokePattern,
         )>,
@@ -77,16 +77,16 @@ enum Observation {
 
 #[derive(Debug, PartialEq, Eq)]
 struct PointGlyphState {
-    color: crate::render::backend::Rgba,
+    color: crate::theme::Color,
     radius: u32,
     shape: crate::PointShape,
-    outline: Option<(crate::render::backend::Rgba, u64)>,
+    outline: Option<(crate::theme::Color, u64)>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 struct FillGlyphState {
-    color: crate::render::backend::Rgba,
-    stroke: crate::render::backend::Rgba,
+    color: crate::theme::Color,
+    stroke: crate::theme::Color,
     stroke_width: u64,
 }
 
@@ -2371,7 +2371,7 @@ mod tests {
                 line_height: crate::layout::TextLineHeight::Multiplier(1.2),
                 maximum_width_quanta: i64::MAX,
                 alignment: crate::layout::PhysicalTextAlignment::Start,
-                paint: crate::render::backend::Rgba::rgb(0, 0, 0),
+                paint: crate::theme::Color::rgb(0, 0, 0),
                 provenance: crate::layout::TextPlanProvenance {
                     pair_ordinal: 0,
                     owner: "feedback test".into(),

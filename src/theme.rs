@@ -2,6 +2,7 @@
 
 mod color;
 mod contrast;
+mod paint;
 mod resolved;
 mod scale;
 
@@ -16,3 +17,10 @@ pub use resolved::Theme;
 #[cfg(test)]
 pub(crate) use resolved::THEME_RESOLUTION_CALLS;
 pub(crate) use resolved::{FillOutlineAppearance, ResolvedTheme, TextAppearance, TitleAlignment};
+
+pub(crate) use paint::{Color, OpaqueColor};
+
+/// Convert the current RGB tuple inputs at their private paint boundary.
+pub(crate) fn color_from_rgb((red, green, blue): (u8, u8, u8)) -> Color {
+    OpaqueColor::rgb(red, green, blue).into()
+}

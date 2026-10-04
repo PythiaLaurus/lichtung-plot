@@ -865,8 +865,8 @@ pub(crate) struct LegendMetrics {
     pub column_gap: f64,
     pub row_gap: f64,
     pub title_gap: f64,
-    pub frame_fill: crate::render::backend::Rgba,
-    pub frame_outline: crate::render::backend::Rgba,
+    pub frame_fill: crate::theme::Color,
+    pub frame_outline: crate::theme::Color,
     pub frame_stroke_width: f32,
     pub frame_radius: f64,
 }
@@ -1825,7 +1825,8 @@ mod tests {
     )]
     fn local_and_shared_discrete_guides_allocate_complete_custom_glyph_and_frame_ink() {
         use crate::layout::fit::{self, FitScope};
-        use crate::render::backend::{Backend, PointOutline, Rgba};
+        use crate::render::backend::{Backend, PointOutline};
+        use crate::theme::Color;
         let source = crate::Plot::scatter(
             crate::NumericValues::new("x", [0.0, 1.0]),
             crate::NumericValues::new("y", [0.0, 1.0]),
@@ -1841,7 +1842,7 @@ mod tests {
             theme.marks.primary_point.shape = shape;
             theme.marks.point_sizes.scatter = 6;
             theme.marks.primary_point.outline = PointOutline {
-                color: Rgba::rgb(11, 22, 33),
+                color: Color::rgb(11, 22, 33),
                 width_ratio: 4.0,
             };
             theme.legend.frame_stroke_width = 30.0;
@@ -1862,8 +1863,8 @@ mod tests {
             let mut composite = LegendEntry::point_line_fill(
                 LegendIdentity::single("group", "composite"),
                 local[0].glyph.point.clone().unwrap(),
-                LineStyle::solid((20, 40, 60), 40.0),
-                FillStyle::new(Rgba::new(10, 20, 30, 140), Rgba::rgb(40, 50, 60), 36.0),
+                LineStyle::solid(Color::rgb(20, 40, 60), 40.0),
+                FillStyle::new(Color::rgba(10, 20, 30, 140), Color::rgb(40, 50, 60), 36.0),
             );
             composite.title.clone_from(&local[0].title);
             composite.label = "Composite".into();
@@ -2429,8 +2430,8 @@ mod tests {
             LegendEntry::fill(
                 identity,
                 crate::render::backend::FillStyle::new(
-                    crate::render::backend::Rgba::from((10, 20, 30)),
-                    crate::render::backend::Rgba::from((0, 0, 0)),
+                    crate::theme::Color::rgb(10, 20, 30),
+                    crate::theme::Color::rgb(0, 0, 0),
                     1.0,
                 ),
             )

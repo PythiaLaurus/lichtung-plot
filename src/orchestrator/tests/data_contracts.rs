@@ -460,13 +460,17 @@ fn null_backend_rejects_non_finite_geometry_and_styles() {
                 Point2D::new(f64::NAN, 1.0),
                 Point2D::new(1.0, 0.0),
             ],
-            &FillStyle::new((0, 0, 0).into(), (0, 0, 0).into(), 1.0),
+            &FillStyle::new(
+                crate::theme::Color::rgb(0, 0, 0),
+                crate::theme::Color::rgb(0, 0, 0),
+                1.0,
+            ),
         )
         .unwrap_err();
     let style_error = backend
         .draw_line(
             &[Point2D::new(0.0, 0.0), Point2D::new(1.0, 1.0)],
-            &LineStyle::solid((0, 0, 0), f32::NAN),
+            &LineStyle::solid(crate::theme::Color::rgb(0, 0, 0), f32::NAN),
         )
         .unwrap_err();
     let clip_error = backend

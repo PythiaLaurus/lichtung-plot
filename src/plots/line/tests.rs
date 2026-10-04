@@ -383,7 +383,7 @@ fn point_layer_label_uses_theme_font_and_exact_layer_paint() {
     )
     .unwrap();
     theme.typography.point_layer_label.font_size = 16;
-    theme.typography.point_layer_label.paint = crate::render::backend::Rgba::rgb(1, 2, 3);
+    theme.typography.point_layer_label.paint = crate::theme::Color::rgb(1, 2, 3);
     let changed = project(
         &plot,
         prepared,

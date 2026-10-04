@@ -223,7 +223,7 @@ fn prepared_marginal_points_and_density_strokes_enlarge_linked_tracks() {
     let mut point_only = theme;
     point_only.marks.primary_point.outline.width_ratio = 15.0;
     let shown = intrinsic_body_minimum(&chart, &point_only).unwrap().0;
-    point_only.marks.primary_point.outline.color = crate::render::backend::Rgba::new(0, 0, 0, 0);
+    point_only.marks.primary_point.outline.color = crate::theme::Color::rgba(0, 0, 0, 0);
     assert!(shown > intrinsic_body_minimum(&chart, &point_only).unwrap().0);
 }
 

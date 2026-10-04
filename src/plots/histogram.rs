@@ -962,7 +962,7 @@ mod tests {
         assert_eq!(styled.0.to_bits(), baseline.0.to_bits());
         assert!(styled.1 > 140.0);
         theme.marks.histogram_bin.outline_paint =
-            crate::theme::FillOutlinePaint::Fixed(crate::render::backend::Rgba::new(1, 2, 3, 0));
+            crate::theme::FillOutlinePaint::Fixed(crate::theme::Color::rgba(1, 2, 3, 0));
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), baseline);
 
         let source = sample()

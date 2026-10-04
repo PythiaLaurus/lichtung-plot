@@ -600,7 +600,7 @@ mod tests {
                 .map_err(crate::layout::fit::PlanError::into_error)?;
                 assert!(Arc::ptr_eq(&first, &hit));
                 let mut paint = theme.clone();
-                paint.legend.frame_fill = crate::render::backend::Rgba::new(1, 2, 3, 120);
+                paint.legend.frame_fill = crate::theme::Color::rgba(1, 2, 3, 120);
                 let mut geometry = paint.clone();
                 geometry.legend.frame_stroke_width = 7.0;
                 for custom in [&paint, &geometry] {

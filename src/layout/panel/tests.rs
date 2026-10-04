@@ -532,9 +532,8 @@ fn resolved_tick_label_size_controls_automatic_tick_measurement_and_drawing() {
 fn frame_and_ticks_draw_with_their_independent_resolved_strokes() {
     let mut theme = crate::Theme::Science.resolve();
     theme.axes.grid = None;
-    theme.axes.frame.as_mut().unwrap().stroke.paint = crate::render::backend::Rgba::rgb(1, 2, 3);
-    theme.axes.ticks.as_mut().unwrap().stroke.paint =
-        crate::render::backend::Rgba::rgb(161, 178, 195);
+    theme.axes.frame.as_mut().unwrap().stroke.paint = crate::theme::Color::rgb(1, 2, 3);
+    theme.axes.ticks.as_mut().unwrap().stroke.paint = crate::theme::Color::rgb(161, 178, 195);
     let layout = Layout::new_with_axis_specs_in_panel_box(
         (0.0, 10.0),
         (0.0, 10.0),

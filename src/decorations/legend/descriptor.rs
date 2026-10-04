@@ -3,7 +3,8 @@
 
 use crate::data::PlotData;
 use crate::decorations::legend::LegendEntry;
-use crate::render::backend::{GradientStop, Rgba};
+use crate::render::backend::GradientStop;
+use crate::theme::Color;
 use crate::{Error, Plot};
 use std::sync::Arc;
 
@@ -19,7 +20,7 @@ pub(crate) enum PreparedGuideDescriptor {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct MissingKey {
-    pub fill: Rgba,
+    pub fill: Color,
     pub outline: crate::theme::FillOutlineAppearance,
     pub label: String,
 }
@@ -461,9 +462,9 @@ mod tests {
         assert_eq!(constant.labels, ["1"]);
         let mut missing = contributor((0.0, 1.0));
         missing.missing = Some(MissingKey {
-            fill: (200, 200, 200).into(),
+            fill: Color::rgb(200, 200, 200),
             outline: crate::theme::FillOutlineAppearance {
-                paint: (50, 50, 50).into(),
+                paint: Color::rgb(50, 50, 50),
                 width: 1.0,
             },
             label: "Missing".into(),
@@ -473,7 +474,7 @@ mod tests {
             Err(Error::Data(message)) if message.contains("missing block")
         ));
         let mut different_alpha = missing.clone();
-        different_alpha.missing.as_mut().unwrap().fill = Rgba::new(200, 200, 200, 127);
+        different_alpha.missing.as_mut().unwrap().fill = Color::rgba(200, 200, 200, 127);
         let mut different_width = missing.clone();
         different_width.missing.as_mut().unwrap().outline.width = 3.0;
         assert!(matches!(

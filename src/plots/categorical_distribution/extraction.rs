@@ -34,7 +34,7 @@ fn p2_retained_line_copy_admits_records_and_bytes_without_processing() {
     )
     .erase();
     let points = [Point2D::new(0.0, 0.0), Point2D::new(1.0, 1.0)];
-    let style = LineStyle::solid((0, 0, 0), 1.0);
+    let style = LineStyle::solid(crate::theme::Color::rgb(0, 0, 0), 1.0);
     let bytes = (std::mem::size_of_val(&points) + std::mem::size_of::<Mark>()) as u64;
     for records in [0, 2, 3, 4] {
         let resources =
@@ -617,7 +617,11 @@ fn parent_palette_and_absent_series_slots_are_retained_before_native_projection(
                 .marks
                 .iter()
                 .filter_map(|mark| match mark {
-                    Mark::Polygon(_, fill) if fill.color != (255, 255, 255) => Some(fill.color),
+                    Mark::Polygon(_, fill)
+                        if fill.color != crate::theme::Color::rgb(255, 255, 255) =>
+                    {
+                        Some(fill.color)
+                    }
                     _ => None,
                 })
                 .collect::<Vec<_>>();
@@ -629,7 +633,7 @@ fn parent_palette_and_absent_series_slots_are_retained_before_native_projection(
             assert_eq!(
                 colors,
                 [theme.colors[2], theme.colors[1]]
-                    .map(|color| crate::render::backend::Rgba::from(color).with_alpha(alpha))
+                    .map(|color| crate::theme::color_from_rgb(color).with_alpha(alpha))
             );
         }
     }

@@ -14,7 +14,8 @@ use crate::font::canonical::PreparedFontEnvironment;
 use crate::layout::{
     PhysicalTextAlignment, ResolvedTextPlan, TextLineHeight, TextPlanInput, TextPlanProvenance,
 };
-use crate::render::backend::{LineStyle, Rgba, StrokePattern, TextAnchor};
+use crate::render::backend::{LineStyle, StrokePattern, TextAnchor};
+use crate::theme::{color_from_rgb, Color};
 use crate::{Error, SignificanceMarkStyle, TextWeight};
 
 /// Built-in axis tick-label font size in points.
@@ -85,7 +86,7 @@ pub(crate) struct ResolvedTheme {
     /// Canvas-root and Plot-panel paints.
     pub(crate) surfaces: SurfaceAppearance,
     /// An explicit Plot inside Canvas composes over the Canvas owner's surface.
-    pub(crate) canvas_surface_override: Option<Rgba>,
+    pub(crate) canvas_surface_override: Option<Color>,
     /// Complete foundational text roles.
     pub(crate) typography: FoundationalTypography,
     /// Legend typography-adjacent chrome with owner-local lengths.
@@ -523,7 +524,7 @@ impl ResolvedTheme {
     ) -> TextAppearance {
         TextAppearance {
             stack: self.font_family.clone(),
-            paint: self.foreground.into(),
+            paint: color_from_rgb(self.foreground),
             font_size,
             weight,
             line_height_multiplier: 1.2,
@@ -532,7 +533,7 @@ impl ResolvedTheme {
 
     /// Select a complete text role over one final variable-fill paint before
     /// font preparation, using owner-local panel/root surfaces and backdrop.
-    pub(crate) fn contrasting_text(&self, fill: Rgba) -> Result<&TextAppearance, Error> {
+    pub(crate) fn contrasting_text(&self, fill: Color) -> Result<&TextAppearance, Error> {
         super::contrast::select(
             fill,
             self.surfaces.plot_panel,
@@ -827,9 +828,9 @@ const fn pair_ordinal(weight: TextWeight) -> u32 {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct SurfaceAppearance {
     /// Canvas root paint.
-    pub(crate) canvas_root: Rgba,
+    pub(crate) canvas_root: Color,
     /// Plot panel paint.
-    pub(crate) plot_panel: Rgba,
+    pub(crate) plot_panel: Color,
 }
 
 /// Complete text appearance for one semantic typography role.
@@ -838,7 +839,7 @@ pub(crate) struct TextAppearance {
     /// CSS-compatible system-font family stack.
     pub(crate) stack: String,
     /// Text paint.
-    pub(crate) paint: Rgba,
+    pub(crate) paint: Color,
     /// Font size in points.
     pub(crate) font_size: u32,
     /// Closed renderer-owned font weight.
@@ -896,8 +897,8 @@ pub(crate) struct LegendAppearance {
     pub(crate) row_gap: f64,
     pub(crate) column_gap: f64,
     pub(crate) title_gap: f64,
-    pub(crate) frame_fill: Rgba,
-    pub(crate) frame_outline: Rgba,
+    pub(crate) frame_fill: Color,
+    pub(crate) frame_outline: Color,
     pub(crate) frame_stroke_width: f32,
     pub(crate) frame_radius: f64,
 }
@@ -922,7 +923,7 @@ impl FoundationalTypography {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct StrokeAppearance {
     /// Stroke paint.
-    pub(crate) paint: Rgba,
+    pub(crate) paint: Color,
     /// Finite positive stroke width in pixels.
     pub(crate) width: f32,
     /// Closed stroke pattern.
@@ -963,7 +964,7 @@ pub(crate) struct MarkAppearance {
     pub(crate) heatmap_cell_outline: FillOutlineAppearance,
     pub(crate) heatmap_highlight_outline: FillOutlineAppearance,
     /// Non-data missing paint shared by Heatmap cells, merged rows and keys.
-    pub(crate) heatmap_missing_fill: Rgba,
+    pub(crate) heatmap_missing_fill: Color,
     pub(crate) heatmap_missing_row_outline: FillOutlineAppearance,
     pub(crate) heatmap_missing_key_outline: FillOutlineAppearance,
     pub(crate) heatmap_missing_cross: StrokeAppearance,
@@ -1015,25 +1016,25 @@ pub(crate) struct DataFillAppearance {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum FillOutlinePaint {
-    Fixed(Rgba),
+    Fixed(Color),
     Data,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct FixedFillAppearance {
-    pub(crate) paint: Rgba,
-    pub(crate) outline_paint: Rgba,
+    pub(crate) paint: Color,
+    pub(crate) outline_paint: Color,
     pub(crate) outline_width: f32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct FillOutlineAppearance {
-    pub(crate) paint: Rgba,
+    pub(crate) paint: Color,
     pub(crate) width: f32,
 }
 
 impl FillOutlineAppearance {
-    pub(crate) fn backend_style(&self, fill: Rgba) -> crate::render::backend::FillStyle {
+    pub(crate) fn backend_style(&self, fill: Color) -> crate::render::backend::FillStyle {
         crate::render::backend::FillStyle::new(fill, self.paint, self.width)
     }
 }
@@ -1047,10 +1048,10 @@ impl FixedFillAppearance {
 impl DataFillAppearance {
     pub(crate) fn backend_style(&self, color: (u8, u8, u8)) -> crate::render::backend::FillStyle {
         crate::render::backend::FillStyle::new(
-            Rgba::from(color).with_alpha(self.fill_alpha),
+            color_from_rgb(color).with_alpha(self.fill_alpha),
             match self.outline_paint {
                 FillOutlinePaint::Fixed(paint) => paint,
-                FillOutlinePaint::Data => color.into(),
+                FillOutlinePaint::Data => color_from_rgb(color),
             },
             self.outline_width,
         )
@@ -1108,7 +1109,7 @@ impl PointAppearance {
         outline_visible: bool,
     ) -> crate::render::backend::PointStyle {
         crate::render::backend::PointStyle {
-            color: Rgba::from(color).with_alpha(self.fill_alpha),
+            color: color_from_rgb(color).with_alpha(self.fill_alpha),
             radius,
             outline: outline_visible.then_some(self.outline),
             shape: self.shape,
@@ -1127,7 +1128,7 @@ pub(crate) struct DataLineAppearance {
 impl DataLineAppearance {
     pub(crate) fn backend_style(&self, color: (u8, u8, u8)) -> LineStyle {
         LineStyle {
-            color: Rgba::new(color.0, color.1, color.2, self.alpha),
+            color: color_from_rgb(color).with_alpha(self.alpha),
             width: self.width,
             pattern: self.pattern,
         }
@@ -1144,13 +1145,13 @@ pub(crate) struct AnnotationAppearance {
     pub(crate) waterfall_shelf_gap: f64,
     pub(crate) waterfall_shelf_row_gap: f64,
     /// Opaque calculation-only backdrop when output surfaces are translucent.
-    pub(crate) planning_backdrop: Rgba,
+    pub(crate) planning_backdrop: Color,
 }
 
 /// Bracket paths have a fixed solid topology; only their paint and width vary.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct BracketStrokeAppearance {
-    pub(crate) paint: Rgba,
+    pub(crate) paint: Color,
     pub(crate) width: f32,
 }
 
@@ -1282,8 +1283,8 @@ fn resolved_theme(
     source_show_top_right_spines: bool,
 ) -> ResolvedTheme {
     let stack = crate::DEFAULT_FONT_FAMILY_STACK.to_owned();
-    let foreground_paint = Rgba::from(foreground);
-    let muted_paint = Rgba::from(MUTED_TEXT);
+    let foreground_paint = color_from_rgb(foreground);
+    let muted_paint = color_from_rgb(MUTED_TEXT);
 
     ResolvedTheme {
         colors,
@@ -1294,8 +1295,8 @@ fn resolved_theme(
         composition_title_font_size: title_font_size,
         facet_header_font_size: subtitle_font_size,
         surfaces: SurfaceAppearance {
-            canvas_root: Rgba::rgb(255, 255, 255),
-            plot_panel: Rgba::rgb(255, 255, 255),
+            canvas_root: Color::rgb(255, 255, 255),
+            plot_panel: Color::rgb(255, 255, 255),
         },
         canvas_surface_override: None,
         typography: FoundationalTypography {
@@ -1329,10 +1330,10 @@ fn resolved_theme(
             waterfall_total: text_appearance(&stack, foreground_paint, 14, 1.2),
             point_layer_label: text_appearance(&stack, foreground_paint, 10, 1.2),
             panel_text: text_appearance(&stack, foreground_paint, 14, 1.2),
-            contrast_light: text_appearance(&stack, Rgba::rgb(255, 255, 255), 11, 1.2),
-            contrast_dark: text_appearance(&stack, Rgba::rgb(0, 0, 0), 11, 1.2),
-            legend_title: text_appearance(&stack, Rgba::rgb(60, 60, 60), 12, 1.2),
-            legend_label: text_appearance(&stack, Rgba::rgb(40, 40, 40), 11, 1.2),
+            contrast_light: text_appearance(&stack, Color::rgb(255, 255, 255), 11, 1.2),
+            contrast_dark: text_appearance(&stack, Color::rgb(0, 0, 0), 11, 1.2),
+            legend_title: text_appearance(&stack, Color::rgb(60, 60, 60), 12, 1.2),
+            legend_label: text_appearance(&stack, Color::rgb(40, 40, 40), 11, 1.2),
         },
         legend: LegendAppearance {
             padding: 8.8,
@@ -1345,8 +1346,8 @@ fn resolved_theme(
             row_gap: 3.3,
             column_gap: 13.2,
             title_gap: 7.8,
-            frame_fill: Rgba::new(255, 255, 255, 204),
-            frame_outline: Rgba::rgb(200, 200, 200),
+            frame_fill: Color::rgba(255, 255, 255, 204),
+            frame_outline: Color::rgb(200, 200, 200),
             frame_stroke_width: 1.0,
             frame_radius: 2.0,
         },
@@ -1360,7 +1361,7 @@ fn resolved_theme(
                 length: 5,
             }),
             grid: Some(stroke_appearance(
-                Rgba::from(grid_color),
+                color_from_rgb(grid_color),
                 0.5,
                 StrokePattern::MediumDash,
             )),
@@ -1420,7 +1421,7 @@ fn resolved_theme(
                 outline_width: 1.0,
             },
             raincloud_box: FixedFillAppearance {
-                paint: Rgba::rgb(255, 255, 255),
+                paint: Color::rgb(255, 255, 255),
                 outline_paint: foreground_paint,
                 outline_width: 1.0,
             },
@@ -1441,24 +1442,24 @@ fn resolved_theme(
             },
             raw_overlay_radius: 2,
             heatmap_cell_outline: FillOutlineAppearance {
-                paint: Rgba::rgb(255, 255, 255),
+                paint: Color::rgb(255, 255, 255),
                 width: 0.5,
             },
             heatmap_highlight_outline: FillOutlineAppearance {
                 paint: foreground_paint,
                 width: 2.5,
             },
-            heatmap_missing_fill: Rgba::rgb(224, 224, 224),
+            heatmap_missing_fill: Color::rgb(224, 224, 224),
             heatmap_missing_row_outline: FillOutlineAppearance {
-                paint: Rgba::rgb(255, 255, 255),
+                paint: Color::rgb(255, 255, 255),
                 width: 0.5,
             },
             heatmap_missing_key_outline: FillOutlineAppearance {
-                paint: Rgba::rgb(120, 120, 120),
+                paint: Color::rgb(120, 120, 120),
                 width: 0.8,
             },
             heatmap_missing_cross: StrokeAppearance {
-                paint: Rgba::rgb(120, 120, 120),
+                paint: Color::rgb(120, 120, 120),
                 width: 1.0,
                 pattern: StrokePattern::Solid,
             },
@@ -1541,7 +1542,7 @@ fn resolved_theme(
             waterfall_shelf_padding: 4.0,
             waterfall_shelf_gap: 4.0,
             waterfall_shelf_row_gap: 4.0,
-            planning_backdrop: Rgba::rgb(255, 255, 255),
+            planning_backdrop: Color::rgb(255, 255, 255),
         },
         composition: CompositionAppearance {
             root_title_alignment: TitleAlignment::Center,
@@ -1568,7 +1569,7 @@ fn resolved_theme(
 
 fn text_appearance(
     stack: &str,
-    paint: Rgba,
+    paint: Color,
     font_size: u32,
     line_height_multiplier: f64,
 ) -> TextAppearance {
@@ -1581,7 +1582,7 @@ fn text_appearance(
     }
 }
 
-fn stroke_appearance(paint: Rgba, width: f32, pattern: StrokePattern) -> StrokeAppearance {
+fn stroke_appearance(paint: Color, width: f32, pattern: StrokePattern) -> StrokeAppearance {
     StrokeAppearance {
         paint,
         width,
@@ -1800,7 +1801,7 @@ mod tests {
     fn expected_theme(theme: Theme) -> ResolvedTheme {
         let (colors, expected) = expected_preset(theme);
         let stack = crate::DEFAULT_FONT_FAMILY_STACK.to_owned();
-        let foreground = Rgba::from(expected.foreground);
+        let foreground = color_from_rgb(expected.foreground);
         let text = |paint, font_size, line_height_multiplier| TextAppearance {
             stack: stack.clone(),
             paint,
@@ -1818,8 +1819,8 @@ mod tests {
             composition_title_font_size: expected.title_size,
             facet_header_font_size: expected.subtitle_size,
             surfaces: SurfaceAppearance {
-                canvas_root: Rgba::new(255, 255, 255, 255),
-                plot_panel: Rgba::new(255, 255, 255, 255),
+                canvas_root: Color::rgba(255, 255, 255, 255),
+                plot_panel: Color::rgba(255, 255, 255, 255),
             },
             canvas_surface_override: None,
             typography: FoundationalTypography {
@@ -1829,12 +1830,12 @@ mod tests {
                     (f64::from(expected.title_size) + 6.0) / f64::from(expected.title_size),
                 ),
                 subtitle: text(
-                    Rgba::rgb(80, 80, 80),
+                    Color::rgb(80, 80, 80),
                     expected.subtitle_size,
                     (f64::from(expected.subtitle_size) + 6.0) / f64::from(expected.subtitle_size),
                 ),
                 caption: text(
-                    Rgba::rgb(80, 80, 80),
+                    Color::rgb(80, 80, 80),
                     expected.caption_size,
                     (f64::from(expected.caption_size) + 6.0) / f64::from(expected.caption_size),
                 ),
@@ -1845,10 +1846,10 @@ mod tests {
                 waterfall_total: text(foreground, 14, 1.2),
                 point_layer_label: text(foreground, 10, 1.2),
                 panel_text: text(foreground, 14, 1.2),
-                contrast_light: text(Rgba::rgb(255, 255, 255), 11, 1.2),
-                contrast_dark: text(Rgba::rgb(0, 0, 0), 11, 1.2),
-                legend_title: text(Rgba::rgb(60, 60, 60), 12, 1.2),
-                legend_label: text(Rgba::rgb(40, 40, 40), 11, 1.2),
+                contrast_light: text(Color::rgb(255, 255, 255), 11, 1.2),
+                contrast_dark: text(Color::rgb(0, 0, 0), 11, 1.2),
+                legend_title: text(Color::rgb(60, 60, 60), 12, 1.2),
+                legend_label: text(Color::rgb(40, 40, 40), 11, 1.2),
             },
             legend: LegendAppearance {
                 padding: 8.8,
@@ -1861,8 +1862,8 @@ mod tests {
                 row_gap: 3.3,
                 column_gap: 13.2,
                 title_gap: 7.8,
-                frame_fill: Rgba::new(255, 255, 255, 204),
-                frame_outline: Rgba::rgb(200, 200, 200),
+                frame_fill: Color::rgba(255, 255, 255, 204),
+                frame_outline: Color::rgb(200, 200, 200),
                 frame_stroke_width: 1.0,
                 frame_radius: 2.0,
             },
@@ -1884,7 +1885,7 @@ mod tests {
                     length: 5,
                 }),
                 grid: Some(StrokeAppearance {
-                    paint: Rgba::from(expected.grid_color),
+                    paint: color_from_rgb(expected.grid_color),
                     width: 0.5,
                     pattern: StrokePattern::MediumDash,
                 }),
@@ -1944,7 +1945,7 @@ mod tests {
                     outline_width: 1.0,
                 },
                 raincloud_box: FixedFillAppearance {
-                    paint: Rgba::rgb(255, 255, 255),
+                    paint: Color::rgb(255, 255, 255),
                     outline_paint: foreground,
                     outline_width: 1.0,
                 },
@@ -1965,24 +1966,24 @@ mod tests {
                 },
                 raw_overlay_radius: 2,
                 heatmap_cell_outline: FillOutlineAppearance {
-                    paint: Rgba::rgb(255, 255, 255),
+                    paint: Color::rgb(255, 255, 255),
                     width: 0.5,
                 },
                 heatmap_highlight_outline: FillOutlineAppearance {
                     paint: foreground,
                     width: 2.5,
                 },
-                heatmap_missing_fill: Rgba::rgb(224, 224, 224),
+                heatmap_missing_fill: Color::rgb(224, 224, 224),
                 heatmap_missing_row_outline: FillOutlineAppearance {
-                    paint: Rgba::rgb(255, 255, 255),
+                    paint: Color::rgb(255, 255, 255),
                     width: 0.5,
                 },
                 heatmap_missing_key_outline: FillOutlineAppearance {
-                    paint: Rgba::rgb(120, 120, 120),
+                    paint: Color::rgb(120, 120, 120),
                     width: 0.8,
                 },
                 heatmap_missing_cross: StrokeAppearance {
-                    paint: Rgba::rgb(120, 120, 120),
+                    paint: Color::rgb(120, 120, 120),
                     width: 1.0,
                     pattern: StrokePattern::Solid,
                 },
@@ -2097,7 +2098,7 @@ mod tests {
                 waterfall_shelf_padding: 4.0,
                 waterfall_shelf_gap: 4.0,
                 waterfall_shelf_row_gap: 4.0,
-                planning_backdrop: Rgba::rgb(255, 255, 255),
+                planning_backdrop: Color::rgb(255, 255, 255),
             },
             composition: CompositionAppearance {
                 root_title_alignment: TitleAlignment::Center,
@@ -2176,12 +2177,18 @@ mod tests {
     fn built_in_foundational_paints_are_complete_rgba() {
         for theme in BUILT_IN_THEMES {
             let resolved = theme.resolve();
-            let foreground = Rgba::from(resolved.foreground);
-            assert_eq!(resolved.surfaces.canvas_root, Rgba::new(255, 255, 255, 255));
-            assert_eq!(resolved.surfaces.plot_panel, Rgba::new(255, 255, 255, 255));
+            let foreground = color_from_rgb(resolved.foreground);
+            assert_eq!(
+                resolved.surfaces.canvas_root,
+                Color::rgba(255, 255, 255, 255)
+            );
+            assert_eq!(
+                resolved.surfaces.plot_panel,
+                Color::rgba(255, 255, 255, 255)
+            );
             assert_eq!(resolved.typography.title.paint, foreground);
-            assert_eq!(resolved.typography.subtitle.paint, Rgba::rgb(80, 80, 80));
-            assert_eq!(resolved.typography.caption.paint, Rgba::rgb(80, 80, 80));
+            assert_eq!(resolved.typography.subtitle.paint, Color::rgb(80, 80, 80));
+            assert_eq!(resolved.typography.caption.paint, Color::rgb(80, 80, 80));
             assert_eq!(resolved.typography.axis_title.paint, foreground);
             assert_eq!(resolved.typography.tick_label.paint, foreground);
             assert_eq!(resolved.typography.significance_label.paint, foreground);
@@ -2192,16 +2199,16 @@ mod tests {
     fn private_uncertainty_and_summary_strokes_are_independent_of_axis_chrome() {
         let mut theme = Theme::Publication.resolve();
         let axis = theme.axes.frame.as_ref().unwrap().stroke.backend_style();
-        theme.marks.uncertainty_stroke.paint = Rgba::rgb(11, 23, 37);
+        theme.marks.uncertainty_stroke.paint = Color::rgb(11, 23, 37);
         theme.marks.uncertainty_stroke.width = 2.5;
-        theme.marks.summary_stroke.paint = Rgba::rgb(43, 59, 71);
+        theme.marks.summary_stroke.paint = Color::rgb(43, 59, 71);
         theme.marks.summary_stroke.width = 3.5;
 
         let uncertainty = theme.marks.uncertainty_stroke.backend_style();
         let summary = theme.marks.summary_stroke.backend_style();
-        assert_eq!(uncertainty.color, Rgba::rgb(11, 23, 37));
+        assert_eq!(uncertainty.color, Color::rgb(11, 23, 37));
         assert_eq!(uncertainty.width.to_bits(), 2.5_f32.to_bits());
-        assert_eq!(summary.color, Rgba::rgb(43, 59, 71));
+        assert_eq!(summary.color, Color::rgb(43, 59, 71));
         assert_eq!(summary.width.to_bits(), 3.5_f32.to_bits());
         assert_eq!(
             theme.axes.frame.as_ref().unwrap().stroke.backend_style(),
@@ -2214,12 +2221,12 @@ mod tests {
     fn custom_bracket_stroke_changes_annotation_identity_without_recoloring_text_or_axes() {
         let mut theme = Theme::Nature.resolve();
         let original = theme.clone();
-        theme.annotations.bracket_stroke.paint = Rgba::rgb(15, 29, 41);
+        theme.annotations.bracket_stroke.paint = Color::rgb(15, 29, 41);
         theme.annotations.bracket_stroke.width = 2.25;
         assert_ne!(theme, original);
         assert_eq!(
             theme.annotations.bracket_stroke.paint,
-            Rgba::rgb(15, 29, 41)
+            Color::rgb(15, 29, 41)
         );
         assert_eq!(
             theme.annotations.bracket_stroke.width.to_bits(),
@@ -2251,15 +2258,15 @@ mod tests {
     #[test]
     fn composed_plot_contrast_uses_the_canvas_owner_surface() {
         let mut theme = Theme::Publication.resolve();
-        theme.surfaces.canvas_root = Rgba::new(0, 0, 0, 0);
-        theme.surfaces.plot_panel = Rgba::new(0, 0, 0, 0);
-        theme.annotations.planning_backdrop = Rgba::rgb(0, 0, 0);
-        let fill = Rgba::new(0, 0, 0, 0);
+        theme.surfaces.canvas_root = Color::rgba(0, 0, 0, 0);
+        theme.surfaces.plot_panel = Color::rgba(0, 0, 0, 0);
+        theme.annotations.planning_backdrop = Color::rgb(0, 0, 0);
+        let fill = Color::rgba(0, 0, 0, 0);
         assert_eq!(
             theme.contrasting_text(fill).unwrap(),
             &theme.typography.contrast_light
         );
-        theme.canvas_surface_override = Some(Rgba::rgb(255, 255, 255));
+        theme.canvas_surface_override = Some(Color::rgb(255, 255, 255));
         assert_eq!(
             theme.contrasting_text(fill).unwrap(),
             &theme.typography.contrast_dark
@@ -2270,9 +2277,9 @@ mod tests {
     fn histogram_curve_and_rug_styles_do_not_inherit_axis_or_bin_strokes() {
         let mut theme = Theme::Science.resolve();
         let original = theme.clone();
-        theme.marks.histogram_curve.paint = Rgba::rgb(25, 49, 73);
+        theme.marks.histogram_curve.paint = Color::rgb(25, 49, 73);
         theme.marks.histogram_curve.width = 2.5;
-        theme.marks.histogram_rug.paint = Rgba::rgb(97, 121, 145);
+        theme.marks.histogram_rug.paint = Color::rgb(97, 121, 145);
         theme.marks.histogram_rug.width = 0.5;
         assert_ne!(theme, original);
         assert_eq!(theme.axes, original.axes);
@@ -2282,11 +2289,11 @@ mod tests {
         );
         assert_eq!(
             theme.marks.histogram_curve.backend_style().color,
-            Rgba::rgb(25, 49, 73)
+            Color::rgb(25, 49, 73)
         );
         assert_eq!(
             theme.marks.histogram_rug.backend_style().color,
-            Rgba::rgb(97, 121, 145)
+            Color::rgb(97, 121, 145)
         );
     }
 
@@ -2294,11 +2301,11 @@ mod tests {
     fn estimate_reference_and_dumbbell_roles_do_not_alias_each_other() {
         let mut theme = Theme::Nature.resolve();
         let original = theme.clone();
-        theme.marks.estimate_interval.paint = Rgba::rgb(23, 47, 71);
+        theme.marks.estimate_interval.paint = Color::rgb(23, 47, 71);
         theme.marks.estimate_interval.width = 2.25;
-        theme.marks.point_interval_reference.paint = Rgba::rgb(31, 53, 79);
+        theme.marks.point_interval_reference.paint = Color::rgb(31, 53, 79);
         theme.marks.estimate_reference.width = 3.0;
-        theme.marks.qq_reference.paint = Rgba::rgb(41, 67, 89);
+        theme.marks.qq_reference.paint = Color::rgb(41, 67, 89);
         theme.marks.dumbbell_connector.width = 2.0;
         assert_ne!(theme, original);
         assert_eq!(theme.axes, original.axes);
@@ -2380,7 +2387,7 @@ mod tests {
             let ticks = resolved.axes.ticks.expect("built-in ticks");
             let grid = resolved.axes.grid.expect("built-in grid");
 
-            assert_eq!(frame.stroke.paint, Rgba::from(expected.foreground));
+            assert_eq!(frame.stroke.paint, color_from_rgb(expected.foreground));
             assert!((frame.stroke.width - expected.axis_width).abs() < f32::EPSILON);
             assert_eq!(frame.stroke.pattern, StrokePattern::Solid);
             assert_eq!(
@@ -2389,7 +2396,7 @@ mod tests {
             );
             assert_eq!(ticks.stroke, frame.stroke);
             assert_eq!(ticks.length, 5);
-            assert_eq!(grid.paint, Rgba::from(expected.grid_color));
+            assert_eq!(grid.paint, color_from_rgb(expected.grid_color));
             assert!((grid.width - 0.5).abs() < f32::EPSILON);
             assert_eq!(grid.pattern, StrokePattern::MediumDash);
         }
@@ -2601,7 +2608,7 @@ mod tests {
             )
             .is_err());
         let mut changed = appearance.clone();
-        changed.paint = Rgba::rgb(3, 2, 1);
+        changed.paint = Color::rgb(3, 2, 1);
         let changed = root
             .plan_text(
                 "Measured responses",
@@ -2612,7 +2619,7 @@ mod tests {
                 false,
             )
             .unwrap();
-        assert_eq!(changed.style.paint, Rgba::rgb(3, 2, 1));
+        assert_eq!(changed.style.paint, Color::rgb(3, 2, 1));
         assert!(!first.shares_payload(&changed));
         assert!(first.shares_analysis(&changed));
         let other_root = Theme::Publication.resolve();
@@ -2638,7 +2645,7 @@ mod tests {
                 false,
             )
             .unwrap();
-        appearance.paint = Rgba::rgb(4, 5, 6);
+        appearance.paint = Color::rgb(4, 5, 6);
         appearance.line_height_multiplier = 1.5;
         let restyled = root
             .plan_text(
@@ -2882,7 +2889,7 @@ mod tests {
             match change {
                 0 => changed.maximum_width_quanta += 1,
                 1 => changed.alignment = PhysicalTextAlignment::End,
-                2 => changed.paint = Rgba::new(4, 5, 6, 7),
+                2 => changed.paint = Color::rgba(4, 5, 6, 7),
                 3 => changed.line_height = TextLineHeight::ResolvedQuanta(1000),
                 4 => changed.exact_override = true,
                 5 => changed.provenance.owner.push('x'),

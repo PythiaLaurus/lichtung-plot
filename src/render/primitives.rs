@@ -1,7 +1,7 @@
 //! Admitted final primitive payloads. All positions are retained top-down quanta.
 
 use super::backend::{
-    self, FillStyle, GradientStop, LineStyle, Point2D, PointStyle, Rgba, StrokePattern,
+    self, FillStyle, GradientStop, LineStyle, Point2D, PointStyle, StrokePattern,
 };
 use super::backend::{
     PlannedSignificanceCall, PlannedTextOrigin, PlannedTextPlacement, TextAnchor,
@@ -12,6 +12,7 @@ use super::coordinates::{
 };
 use crate::layout::ResolvedTextPlan;
 use crate::layout::{kernel::FinalStage, PanelBox};
+use crate::theme::Color;
 use crate::{Error, PointShape};
 use std::sync::Arc;
 
@@ -204,7 +205,7 @@ pub(crate) struct CanonicalPlannedBracket {
     pub(crate) points: [CanonicalPoint; 4],
     pub(crate) orientation: backend::BracketOrientation,
     pub(crate) width: CanonicalCoordinate,
-    pub(crate) color: Rgba,
+    pub(crate) color: Color,
     pub(crate) text: CanonicalPlannedText,
 }
 
@@ -273,7 +274,7 @@ fn storage<T>(
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CanonicalLineStyle {
-    pub(crate) color: Rgba,
+    pub(crate) color: Color,
     pub(crate) width: CanonicalCoordinate,
     pub(crate) pattern: StrokePattern,
 }
@@ -294,8 +295,8 @@ impl CanonicalLineStyle {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CanonicalFillStyle {
-    pub(crate) color: Rgba,
-    pub(crate) stroke: Rgba,
+    pub(crate) color: Color,
+    pub(crate) stroke: Color,
     pub(crate) stroke_width: CanonicalCoordinate,
 }
 
@@ -362,8 +363,8 @@ pub(crate) enum CanonicalMarkers {
 #[derive(Debug)]
 pub(crate) struct CanonicalScatter {
     pub(crate) markers: CanonicalMarkers,
-    pub(crate) color: Rgba,
-    pub(crate) outline: Option<(Rgba, CanonicalCoordinate)>,
+    pub(crate) color: Color,
+    pub(crate) outline: Option<(Color, CanonicalCoordinate)>,
 }
 
 impl CanonicalScatter {

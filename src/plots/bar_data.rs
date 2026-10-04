@@ -2373,9 +2373,9 @@ mod tests {
             .unwrap();
         theme.marks.bar_body.fill_alpha = 128;
         theme.marks.bar_body.outline_paint =
-            crate::theme::FillOutlinePaint::Fixed(crate::render::backend::Rgba::new(1, 3, 5, 64));
+            crate::theme::FillOutlinePaint::Fixed(crate::theme::Color::rgba(1, 3, 5, 64));
         theme.marks.bar_body.outline_width = 2.0;
-        theme.marks.bar_zero.paint = crate::render::backend::Rgba::new(2, 4, 6, 188);
+        theme.marks.bar_zero.paint = crate::theme::Color::rgba(2, 4, 6, 188);
         theme.marks.bar_zero.width = 1.25;
         let selected = chart
             .measure_selected_interior(crate::spec::PlotRenderContext::new(

@@ -1,7 +1,7 @@
 //! Finite-domain sRGB contrast operands. Each table entry is the binary64
 //! result for one `u8` channel; no host-dependent power routine runs at render.
 
-use crate::render::backend::Rgba;
+use crate::theme::Color;
 use crate::Error;
 
 use super::resolved::TextAppearance;
@@ -277,7 +277,7 @@ pub(super) fn linear_channel(channel: u8) -> f64 {
     f64::from_bits(SRGB_LINEAR_BITS[usize::from(channel)])
 }
 
-fn source_over(destination: &mut [f64; 3], paint: Rgba) {
+fn source_over(destination: &mut [f64; 3], paint: Color) {
     let a = f64::from(paint.alpha()) / 255.0;
     let one_minus_a = 1.0 - a;
     for (channel, source) in [paint.red(), paint.green(), paint.blue()]
@@ -302,10 +302,10 @@ fn contrast(first: f64, second: f64) -> f64 {
 }
 
 pub(super) fn select<'a>(
-    fill: Rgba,
-    panel: Rgba,
-    canvas: Rgba,
-    backdrop: Rgba,
+    fill: Color,
+    panel: Color,
+    canvas: Color,
+    backdrop: Color,
     light: &'a TextAppearance,
     dark: &'a TextAppearance,
 ) -> Result<&'a TextAppearance, Error> {
@@ -347,7 +347,7 @@ mod tests {
     use super::*;
     use sha2::{Digest, Sha256};
 
-    fn text(stack: &str, paint: Rgba, font_size: u32) -> TextAppearance {
+    fn text(stack: &str, paint: Color, font_size: u32) -> TextAppearance {
         TextAppearance {
             stack: stack.into(),
             paint,
@@ -386,29 +386,35 @@ mod tests {
 
     #[test]
     fn complete_contrast_role_is_selected_over_composited_translucent_surfaces() {
-        let light = text("Light sans", Rgba::rgb(255, 255, 255), 17);
-        let dark = text("Dark serif", Rgba::rgb(0, 0, 0), 9);
-        let opaque = Rgba::rgb(255, 255, 255);
-        let transparent = Rgba::new(0, 0, 0, 0);
+        let light = text("Light sans", Color::rgb(255, 255, 255), 17);
+        let dark = text("Dark serif", Color::rgb(0, 0, 0), 9);
+        let opaque = Color::rgb(255, 255, 255);
+        let transparent = Color::rgba(0, 0, 0, 0);
         for (fill, panel, canvas, backdrop, expected) in [
-            (Rgba::rgb(0, 0, 0), opaque, opaque, opaque, &light),
-            (Rgba::rgb(255, 255, 255), opaque, opaque, opaque, &dark),
+            (Color::rgb(0, 0, 0), opaque, opaque, opaque, &light),
+            (Color::rgb(255, 255, 255), opaque, opaque, opaque, &dark),
             (
                 transparent,
                 transparent,
                 transparent,
-                Rgba::rgb(0, 0, 0),
+                Color::rgb(0, 0, 0),
                 &light,
             ),
             (transparent, transparent, transparent, opaque, &dark),
-            (Rgba::new(0, 0, 0, 128), transparent, opaque, opaque, &dark),
+            (
+                Color::rgba(0, 0, 0, 128),
+                transparent,
+                opaque,
+                opaque,
+                &dark,
+            ),
         ] {
             assert!(std::ptr::eq(
                 select(fill, panel, canvas, backdrop, &light, &dark).unwrap(),
                 expected
             ));
         }
-        let same = text("Second role", Rgba::rgb(0, 0, 0), 21);
+        let same = text("Second role", Color::rgb(0, 0, 0), 21);
         assert_eq!(
             select(opaque, opaque, opaque, opaque, &dark, &same)
                 .unwrap()
@@ -416,7 +422,7 @@ mod tests {
             "Second role"
         );
         let mut invalid = light.clone();
-        invalid.paint = Rgba::new(255, 255, 255, 254);
+        invalid.paint = Color::rgba(255, 255, 255, 254);
         assert!(select(opaque, opaque, opaque, opaque, &invalid, &dark).is_err());
         assert!(select(opaque, opaque, opaque, transparent, &light, &dark).is_err());
     }

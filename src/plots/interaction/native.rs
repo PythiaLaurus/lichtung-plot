@@ -147,7 +147,10 @@ fn native_bottom_conditions_keep_parent_trace_order_palette_sparse_connectors_an
                         .or(trace.identity.group.as_deref())
                         .unwrap();
                     let color = colors.color(key, &resources).unwrap();
-                    assert_eq!(actual.interval, LineStyle::solid(color, 1.2));
+                    assert_eq!(
+                        actual.interval,
+                        LineStyle::solid(crate::theme::color_from_rgb(color), 1.2)
+                    );
                     assert_eq!(
                         actual.connector,
                         Some(trace.style.line_pattern.line_style(color, 1.8))

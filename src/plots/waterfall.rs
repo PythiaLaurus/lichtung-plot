@@ -984,7 +984,7 @@ mod tests {
         let second = payload.bars[1].1.color;
         assert_eq!(
             first,
-            crate::render::backend::Rgba::from(theme.colors[0])
+            crate::theme::color_from_rgb(theme.colors[0])
                 .with_alpha(theme.marks.waterfall_bar.fill_alpha)
         );
         assert_ne!(first, second);
@@ -1212,7 +1212,7 @@ mod tests {
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
             .unwrap();
         theme.typography.waterfall_total.font_size = 18;
-        theme.typography.waterfall_total.paint = crate::render::backend::Rgba::rgb(3, 5, 7);
+        theme.typography.waterfall_total.paint = crate::theme::Color::rgb(3, 5, 7);
         let selected = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
             .unwrap();
@@ -1244,8 +1244,7 @@ mod tests {
         assert_eq!(old_text[0].font_size, 14);
         assert!(new_text
             .iter()
-            .all(|text| text.font_size == 18
-                && text.paint == crate::render::backend::Rgba::rgb(3, 5, 7)));
+            .all(|text| text.font_size == 18 && text.paint == crate::theme::Color::rgb(3, 5, 7)));
     }
 
     #[test]

@@ -616,9 +616,9 @@ mod tests {
             ],
             center: None,
             missing: Some(crate::decorations::legend::descriptor::MissingKey {
-                fill: (224, 224, 224).into(),
+                fill: crate::theme::Color::rgb(224, 224, 224),
                 outline: crate::theme::FillOutlineAppearance {
-                    paint: (120, 120, 120).into(),
+                    paint: crate::theme::Color::rgb(120, 120, 120),
                     width: 40.0,
                 },
                 label: "Missing".into(),

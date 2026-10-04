@@ -14,11 +14,13 @@ use crate::render::backend::{
 };
 #[cfg(test)]
 use crate::render::backend::{
-    Backend, BracketOrientation, BracketStyle, Rgba, SignificanceBracket, SurfaceRole, TextStyle,
+    Backend, BracketOrientation, BracketStyle, SignificanceBracket, SurfaceRole, TextStyle,
 };
 #[cfg(test)]
 use crate::render::coordinates::CanonicalBracket;
 use crate::render::coordinates::CanonicalPoint;
+#[cfg(test)]
+use crate::theme::Color;
 use crate::PointShape;
 
 // Labels and annotation glyphs are less tolerable legend targets than translucent marks.
@@ -1537,7 +1539,7 @@ impl Backend for GeometryBackend {
     fn draw_surface(
         &mut self,
         bounds: PanelBox,
-        _paint: Rgba,
+        _paint: Color,
         _role: SurfaceRole,
     ) -> Result<(), Error> {
         self.ensure_open("draw_surface")?;
@@ -1773,12 +1775,12 @@ mod tests {
         match kind {
             "line" => geometry.draw_line(
                 &[Point2D::new(x, 10.0), Point2D::new(x, 20.0)],
-                &LineStyle::solid((0, 0, 0), width),
+                &LineStyle::solid(Color::rgb(0, 0, 0), width),
             ),
             "circle" => {
                 let mut style = PointStyle::new((0, 0, 0), 1).with_opacity(0.0).unwrap();
                 style.outline = Some(backend::PointOutline {
-                    color: (0, 0, 0).into(),
+                    color: Color::rgb(0, 0, 0),
                     width_ratio: f64::from(width),
                 });
                 geometry.draw_scatter(&[Point2D::new(x, 15.0)], &style)
@@ -1792,9 +1794,9 @@ mod tests {
                     orientation: BracketOrientation::Vertical,
                 },
                 &BracketStyle {
-                    color: (0, 0, 0).into(),
+                    color: Color::rgb(0, 0, 0),
                     width,
-                    label_color: (0, 0, 0).into(),
+                    label_color: Color::rgb(0, 0, 0),
                     font_family: "Test Sans".into(),
                     font_size: 12,
                     line_height: 14.4,
@@ -1859,7 +1861,7 @@ mod tests {
             geometry
                 .draw_line(
                     &[Point2D::new(10.0, x), Point2D::new(20.0, x)],
-                    &LineStyle::solid((0, 0, 0), 1.0 / 1024.0),
+                    &LineStyle::solid(Color::rgb(0, 0, 0), 1.0 / 1024.0),
                 )
                 .unwrap();
             assert_eq!(
@@ -2021,7 +2023,7 @@ mod tests {
         geometry
             .draw_line(
                 &[Point2D::new(1.0, 2.0), Point2D::new(3.0, 2.0)],
-                &LineStyle::solid((0, 0, 0), 1.0 / 1024.0),
+                &LineStyle::solid(Color::rgb(0, 0, 0), 1.0 / 1024.0),
             )
             .unwrap();
         let bounds = geometry.bounds()[0];
@@ -2037,9 +2039,9 @@ mod tests {
     fn bracket_uses_quantized_stroke_before_outward_clipped_bounds() {
         let mut geometry = begun_backend();
         let style = BracketStyle {
-            color: (0, 0, 0).into(),
+            color: Color::rgb(0, 0, 0),
             width: 0.8009,
-            label_color: (0, 0, 0).into(),
+            label_color: Color::rgb(0, 0, 0),
             font_family: "Test Sans".into(),
             font_size: 12,
             line_height: 14.4,
@@ -2171,7 +2173,7 @@ mod tests {
 
     fn test_text_style() -> TextStyle {
         TextStyle {
-            color: (0, 0, 0).into(),
+            color: Color::rgb(0, 0, 0),
             font_family: "Test Sans".into(),
             font_size: 12,
             weight: crate::TextWeight::Normal,
@@ -2336,9 +2338,9 @@ mod tests {
 
     fn test_fill_style(opacity: f64, stroke_width: f32) -> FillStyle {
         FillStyle::new(
-            crate::render::backend::Rgba::rgb(0, 0, 0)
-                .with_alpha(crate::render::backend::Rgba::quantized_alpha(opacity).unwrap()),
-            crate::render::backend::Rgba::rgb(0, 0, 0),
+            Color::rgb(0, 0, 0)
+                .with_alpha(crate::render::backend::quantize_legacy_opacity(opacity).unwrap()),
+            Color::rgb(0, 0, 0),
             stroke_width,
         )
     }
@@ -2358,7 +2360,7 @@ mod tests {
     #[test]
     fn geometry_lifecycle_requires_one_balanced_session_and_fresh_reuse() {
         let points = [Point2D::new(1.0, 1.0), Point2D::new(2.0, 2.0)];
-        let style = LineStyle::solid((0, 0, 0), 1.0);
+        let style = LineStyle::solid(Color::rgb(0, 0, 0), 1.0);
         let mut backend = GeometryBackend::with_environment(
             PreparedFontEnvironment::synthetic(),
             "Test Sans".into(),
@@ -2409,14 +2411,14 @@ mod tests {
         backend
             .draw_surface(
                 PanelBox::new(0.0, 100.0, 0.0, 100.0),
-                Rgba::new(1, 2, 3, 128),
+                Color::rgba(1, 2, 3, 128),
                 SurfaceRole::CanvasRoot,
             )
             .unwrap();
         assert!(backend
             .draw_surface(
                 PanelBox::new(1.0, 1.0, 2.0, 3.0),
-                Rgba::rgb(4, 5, 6),
+                Color::rgb(4, 5, 6),
                 SurfaceRole::PlotPanel,
             )
             .is_err());
@@ -2520,16 +2522,16 @@ mod tests {
         for shape in [PointShape::Circle, PointShape::TriangleUp] {
             let mut style = PointStyle::new((1, 2, 3), 2).with_shape(shape);
             style.outline = Some(backend::PointOutline {
-                color: backend::Rgba::new(4, 5, 6, 0),
+                color: Color::rgba(4, 5, 6, 0),
                 width_ratio: 0.5,
             });
-            style.color = backend::Rgba::new(1, 2, 3, 0);
+            style.color = Color::rgba(1, 2, 3, 0);
             let mut empty = GeometrySnapshot::new(&theme).unwrap();
             empty
                 .scatter(&[Point2D::new(40.0, 40.0)], &style, panel)
                 .unwrap();
             assert!(empty.bounds.is_empty());
-            style.outline.as_mut().unwrap().color = backend::Rgba::new(4, 5, 6, 128);
+            style.outline.as_mut().unwrap().color = Color::rgba(4, 5, 6, 128);
             let mut stroked = GeometrySnapshot::new(&theme).unwrap();
             stroked
                 .scatter(&[Point2D::new(40.0, 40.0)], &style, panel)
@@ -2542,7 +2544,7 @@ mod tests {
     fn transparent_line_has_no_painted_ink_but_still_validates_geometry() {
         let theme = crate::Theme::Publication.resolve();
         let style = LineStyle {
-            color: backend::Rgba::new(1, 2, 3, 0),
+            color: Color::rgba(1, 2, 3, 0),
             width: 140.0,
             pattern: backend::StrokePattern::Solid,
         };
@@ -2580,13 +2582,13 @@ mod tests {
         backend
             .draw_line(
                 &[Point2D::new(1.0, 1.0), Point2D::new(2.0, 2.0)],
-                &LineStyle::solid((0, 0, 0), 0.0),
+                &LineStyle::solid(Color::rgb(0, 0, 0), 0.0),
             )
             .unwrap();
         let error = backend
             .draw_line(
                 &[Point2D::new(0.0, 0.0), Point2D::new(0.0004, 0.0004)],
-                &LineStyle::solid((0, 0, 0), 0.0),
+                &LineStyle::solid(Color::rgb(0, 0, 0), 0.0),
             )
             .unwrap_err();
         backend.end().unwrap();
@@ -2605,13 +2607,13 @@ mod tests {
                     Point2D::new(20.0, 20.0),
                     Point2D::new(20.0, 30.0),
                 ],
-                &LineStyle::solid((0, 0, 0), 4.0),
+                &LineStyle::solid(Color::rgb(0, 0, 0), 4.0),
             )
             .unwrap();
         backend
             .draw_line(
                 &[Point2D::new(10.0, 40.0), Point2D::new(30.0, 40.0)],
-                &LineStyle::short_dashed((0, 0, 0), 4.0),
+                &LineStyle::short_dashed(Color::rgb(0, 0, 0), 4.0),
             )
             .unwrap();
         backend.end().unwrap();
@@ -2669,16 +2671,8 @@ mod tests {
         assert!(stroke.left < -0.9 && stroke.right > 12.4);
         assert!(stroke.bottom < -0.9 && stroke.top > 12.4);
         assert!(recorded_polygon(&triangle, &test_fill_style(0.0, 0.0)).is_none());
-        let fill_only = FillStyle::new(
-            crate::render::backend::Rgba::rgb(0, 0, 0),
-            crate::render::backend::Rgba::new(0, 0, 0, 0),
-            2.0,
-        );
-        let stroke_only = FillStyle::new(
-            crate::render::backend::Rgba::new(0, 0, 0, 0),
-            crate::render::backend::Rgba::new(0, 0, 0, 128),
-            2.0,
-        );
+        let fill_only = FillStyle::new(Color::rgb(0, 0, 0), Color::rgba(0, 0, 0, 0), 2.0);
+        let stroke_only = FillStyle::new(Color::rgba(0, 0, 0, 0), Color::rgba(0, 0, 0, 128), 2.0);
         let invisible = FillStyle::new(fill_only.stroke, fill_only.stroke, 2.0);
         assert_eq!(recorded_polygon(&triangle, &fill_only), Some(fill));
         assert_eq!(recorded_polygon(&triangle, &stroke_only), Some(stroke));
@@ -2797,7 +2791,7 @@ mod tests {
             .draw_scatter(&points[..2], &PointStyle::plain((0, 0, 0), 2))
             .unwrap();
         backend
-            .draw_line(&points, &LineStyle::solid((0, 0, 0), 2.0))
+            .draw_line(&points, &LineStyle::solid(Color::rgb(0, 0, 0), 2.0))
             .unwrap();
         backend.end().unwrap();
 
@@ -2813,7 +2807,7 @@ mod tests {
         backend
             .draw_line(
                 &[Point2D::new(0.0, 0.0), Point2D::new(0.0006, 0.0006)],
-                &LineStyle::solid((0, 0, 0), 2.0),
+                &LineStyle::solid(Color::rgb(0, 0, 0), 2.0),
             )
             .unwrap();
         backend.end().unwrap();
@@ -2897,7 +2891,7 @@ mod tests {
                 line_height: TextLineHeight::Multiplier(1.2),
                 maximum_width_quanta: i64::MAX,
                 alignment: PhysicalTextAlignment::Center,
-                paint: (0, 0, 0).into(),
+                paint: Color::rgb(0, 0, 0),
                 provenance: TextPlanProvenance {
                     pair_ordinal: 0,
                     owner: "planned geometry test".into(),
@@ -2937,7 +2931,7 @@ mod tests {
     #[test]
     fn geometry_and_svg_reject_the_same_collapsed_line() {
         let points = [Point2D::new(0.0, 0.0), Point2D::new(0.0004, 0.0004)];
-        let style = LineStyle::solid((0, 0, 0), 0.0);
+        let style = LineStyle::solid(Color::rgb(0, 0, 0), 0.0);
         let mut geometry = begun_backend();
         let geometry_error = geometry.draw_line(&points, &style).unwrap_err();
         geometry.end().unwrap();
@@ -3008,9 +3002,9 @@ mod tests {
     #[test]
     fn brackets_record_label_overhang_in_both_orientations() {
         let style = BracketStyle {
-            color: (0, 0, 0).into(),
+            color: Color::rgb(0, 0, 0),
             width: 1.0,
-            label_color: (0, 0, 0).into(),
+            label_color: Color::rgb(0, 0, 0),
             font_family: "Test Sans".into(),
             font_size: 20,
             line_height: 24.0,

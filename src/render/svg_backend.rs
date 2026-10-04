@@ -3,12 +3,13 @@
 use std::fmt::{self, Write as _};
 use std::ops::Range;
 
+use crate::theme::{color_from_rgb, Color};
 use crate::Error;
 
 use super::backend::{
     validate_bracket, validate_clip_region, validate_fill_style, validate_rounded_rect,
     validate_surface_bounds, validate_text, Backend, BracketStyle, FillStyle, GradientStop,
-    LayerRole, LineStyle, PlannedSignificanceCall, PlannedTextPlacement, Point2D, PointStyle, Rgba,
+    LayerRole, LineStyle, PlannedSignificanceCall, PlannedTextPlacement, Point2D, PointStyle,
     SignificanceBracket, SurfaceRole, TextAnchor, TextStyle, POLYGON_MITER_LIMIT,
 };
 use super::coordinates::{self, CanonicalPoint};
@@ -683,7 +684,7 @@ enum SvgCanvasState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct SvgPaint(Rgba);
+struct SvgPaint(Color);
 
 impl SvgPaint {
     fn attributes(self, property: &str) -> PaintAttributes<'_> {
@@ -962,7 +963,7 @@ svg_backend_methods! {
     fn draw_canonical_polygon(points: &[CanonicalPoint], style: &CanonicalFillStyle);
     fn draw_canonical_gradient(gradient: &CanonicalGradientFill);
     fn begin_canonical_clip(region: coordinates::CanonicalBox);
-    fn draw_canonical_surface(bounds: coordinates::CanonicalBox, paint: Rgba, role: SurfaceRole);
+    fn draw_canonical_surface(bounds: coordinates::CanonicalBox, paint: Color, role: SurfaceRole);
     fn draw_canonical_rounded_rect(rounded: coordinates::CanonicalRoundedBox);
     fn begin(width: u32, height: u32);
     fn end();
@@ -971,7 +972,7 @@ svg_backend_methods! {
     fn end_layer();
     fn begin_clip(region: PanelBox);
     fn end_clip();
-    fn draw_surface(bounds: PanelBox, paint: Rgba, role: SurfaceRole);
+    fn draw_surface(bounds: PanelBox, paint: Color, role: SurfaceRole);
     fn draw_scatter(points: &[Point2D], style: &PointStyle);
     fn draw_line(points: &[Point2D], style: &LineStyle);
     fn draw_polygon(points: &[Point2D], style: &FillStyle);
@@ -985,12 +986,12 @@ svg_backend_methods! {
 
 impl From<(u8, u8, u8)> for SvgPaint {
     fn from(color: (u8, u8, u8)) -> Self {
-        Self(color.into())
+        Self(color_from_rgb(color))
     }
 }
 
-impl From<Rgba> for SvgPaint {
-    fn from(color: Rgba) -> Self {
+impl From<Color> for SvgPaint {
+    fn from(color: Color) -> Self {
         Self(color)
     }
 }
@@ -1516,7 +1517,7 @@ impl<S: SvgSink> SvgSerializer<S> {
     pub(crate) fn draw_surface(
         &mut self,
         bounds: PanelBox,
-        paint: Rgba,
+        paint: Color,
         role: SurfaceRole,
     ) -> Result<(), Error> {
         self.ensure_begun("draw_surface")?;
@@ -1531,7 +1532,7 @@ impl<S: SvgSink> SvgSerializer<S> {
     pub(crate) fn draw_canonical_surface(
         &mut self,
         bounds: coordinates::CanonicalBox,
-        paint: Rgba,
+        paint: Color,
         role: SurfaceRole,
     ) -> Result<(), Error> {
         self.ensure_begun("draw_surface")?;
@@ -2056,7 +2057,7 @@ mod tests {
     fn shared_svg_tokens_count_escaped_utf8_and_refuse_overflow() {
         let escaped = EscapedText("<&\"'\u{03b1}");
         let attribute = EscapedAttribute("\t\n\r<&");
-        let paint = SvgPaint(Rgba::new(1, 2, 3, 128)).attributes("fill");
+        let paint = SvgPaint(Color::rgba(1, 2, 3, 128)).attributes("fill");
         let mut count = CountBuffer::default();
         write!(count, "{escaped} {paint} {attribute}").unwrap();
         let mut output = WriteBuffer::default();
@@ -2118,7 +2119,7 @@ mod tests {
     #[test]
     fn fixed_primitive_and_document_overflows_reject_enclosing_svg_output() {
         let points = [Point2D::new(10.0, 20.0), Point2D::new(30.0, 40.0)];
-        let style = LineStyle::solid((1, 2, 3), 1.0);
+        let style = LineStyle::solid(Color::rgb(1, 2, 3), 1.0);
         let mut svg = SvgBackend::in_memory(100, 100);
         Backend::begin(&mut svg, 100, 100).unwrap();
         svg.body.fixed = true;
@@ -2156,7 +2157,7 @@ mod tests {
                 line_height: TextLineHeight::Multiplier(1.2),
                 maximum_width_quanta: i64::MAX,
                 alignment: PhysicalTextAlignment::Start,
-                paint: Rgba::rgb(1, 2, 3),
+                paint: Color::rgb(1, 2, 3),
                 provenance: TextPlanProvenance {
                     pair_ordinal: 0,
                     owner: "outline overflow".into(),
@@ -2305,14 +2306,14 @@ mod tests {
         backend
             .draw_line(
                 &[Point2D::new(1.0, 1.0), Point2D::new(2.0, 2.0)],
-                &LineStyle::solid((0, 0, 0), 1.0),
+                &LineStyle::solid(Color::rgb(0, 0, 0), 1.0),
             )
             .unwrap();
     }
 
     fn test_text_style() -> TextStyle {
         TextStyle {
-            color: (0, 0, 0).into(),
+            color: Color::rgb(0, 0, 0),
             font_family: "sans-serif".into(),
             font_size: 12,
             weight: crate::TextWeight::Normal,
@@ -2342,7 +2343,7 @@ mod tests {
     }
 
     fn test_fill_style() -> FillStyle {
-        FillStyle::new(Rgba::rgb(1, 2, 3), Rgba::rgb(4, 5, 6), 0.0)
+        FillStyle::new(Color::rgb(1, 2, 3), Color::rgb(4, 5, 6), 0.0)
     }
 
     #[test]
@@ -2356,7 +2357,7 @@ mod tests {
                 line_height: TextLineHeight::Multiplier(1.2),
                 maximum_width_quanta: i64::MAX,
                 alignment: PhysicalTextAlignment::Center,
-                paint: (1, 2, 3).into(),
+                paint: Color::rgb(1, 2, 3),
                 provenance: TextPlanProvenance {
                     pair_ordinal: 1,
                     owner: "multiline SVG test".into(),
@@ -2404,7 +2405,7 @@ mod tests {
                 line_height: TextLineHeight::Multiplier(1.2),
                 maximum_width_quanta: i64::MAX,
                 alignment: PhysicalTextAlignment::Start,
-                paint: (1, 2, 3).into(),
+                paint: Color::rgb(1, 2, 3),
                 provenance: TextPlanProvenance {
                     pair_ordinal: 0,
                     owner: "RTL SVG anchor test".into(),
@@ -2431,7 +2432,7 @@ mod tests {
     fn canvas_lifecycle_reuses_clean_state_and_invalidates_stale_output() {
         let mut backend = SvgBackend::in_memory(200, 100);
         let points = [Point2D::new(1.0, 1.0), Point2D::new(2.0, 2.0)];
-        let style = LineStyle::solid((0, 0, 0), 1.0);
+        let style = LineStyle::solid(Color::rgb(0, 0, 0), 1.0);
 
         assert!(backend.end().is_err());
         assert!(backend.draw_line(&points, &style).is_err());
@@ -2484,7 +2485,7 @@ mod tests {
         backend
             .draw_line(
                 &[Point2D::new(0.0, 0.0), Point2D::new(0.0006, 0.0006)],
-                &LineStyle::solid((0, 0, 0), 0.0),
+                &LineStyle::solid(Color::rgb(0, 0, 0), 0.0),
             )
             .unwrap();
         backend.end().unwrap();
@@ -2570,7 +2571,7 @@ mod tests {
         backend
             .draw_line(
                 &[Point2D::new(f64::NAN, f64::NAN)],
-                &LineStyle::solid((0, 0, 0), f32::NAN),
+                &LineStyle::solid(Color::rgb(0, 0, 0), f32::NAN),
             )
             .unwrap();
         backend
@@ -2579,15 +2580,15 @@ mod tests {
                     Point2D::new(f64::NAN, f64::NAN),
                     Point2D::new(f64::NAN, f64::NAN),
                 ],
-                &FillStyle::new(Rgba::rgb(0, 0, 0), Rgba::rgb(0, 0, 0), f32::NAN),
+                &FillStyle::new(Color::rgb(0, 0, 0), Color::rgb(0, 0, 0), f32::NAN),
             )
             .unwrap();
         let points = [Point2D::new(1.0, 1.0), Point2D::new(2.0, 2.0)];
         for style in [
-            LineStyle::solid((0, 0, 0), 1.25),
-            LineStyle::short_dashed((0, 0, 0), 1.25),
-            LineStyle::medium_dashed((0, 0, 0), 1.25),
-            LineStyle::long_dashed((0, 0, 0), 1.25),
+            LineStyle::solid(Color::rgb(0, 0, 0), 1.25),
+            LineStyle::short_dashed(Color::rgb(0, 0, 0), 1.25),
+            LineStyle::medium_dashed(Color::rgb(0, 0, 0), 1.25),
+            LineStyle::long_dashed(Color::rgb(0, 0, 0), 1.25),
         ] {
             backend.draw_line(&points, &style).unwrap();
         }
@@ -2621,7 +2622,7 @@ mod tests {
                 30.0,
                 20.0,
                 3.0,
-                &FillStyle::new(Rgba::new(1, 2, 3, 64), Rgba::rgb(4, 5, 6), 1.5),
+                &FillStyle::new(Color::rgba(1, 2, 3, 64), Color::rgb(4, 5, 6), 1.5),
             )
             .unwrap();
         backend.end().unwrap();
@@ -2641,10 +2642,74 @@ mod tests {
     }
 
     #[test]
+    #[cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))]
+    fn all_byte_channels_round_trip_through_independently_parsed_svg_paints() {
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "the independently parsed opacity is checked in [0, 1] before byte recovery"
+        )]
+        fn decoded_paint(node: roxmltree::Node<'_, '_>, property: &str) -> [u8; 4] {
+            let encoded = node.attribute(property).unwrap();
+            assert_eq!(encoded.len(), 7);
+            assert!(encoded.starts_with('#'));
+            let rgb = u32::from_str_radix(&encoded[1..], 16).unwrap();
+            let opacity_property = format!("{property}-opacity");
+            let opacity = node.attribute(opacity_property.as_str());
+            let opacity_value = opacity.map_or(1.0, |value| value.parse::<f64>().unwrap());
+            assert!((0.0..=1.0).contains(&opacity_value));
+            let alpha = (opacity_value * 255.0).round() as u8;
+            assert_eq!(opacity.is_none(), alpha == 255);
+            assert!(node.attribute("opacity").is_none());
+            [
+                u8::try_from(rgb >> 16).unwrap(),
+                u8::try_from((rgb >> 8) & 255).unwrap(),
+                u8::try_from(rgb & 255).unwrap(),
+                alpha,
+            ]
+        }
+
+        let mut backend = SvgBackend::in_memory(100, 100);
+        backend.begin(100, 100).unwrap();
+        let mut expected = Vec::new();
+        for byte in 0..=u8::MAX {
+            for fill in [
+                [byte, 1, 255, 0],
+                [0, byte, 1, 255],
+                [255, 0, byte, 1],
+                [1, 255, 0, byte],
+            ] {
+                let [red, green, blue, alpha] = fill;
+                let stroke = [blue, red, green, 255 - alpha];
+                let encoded = format!("#{red:02x}{green:02X}{blue:02x}{alpha:02X}");
+                let style = FillStyle::new(
+                    Color::hex(&encoded).unwrap(),
+                    Color::rgba(stroke[0], stroke[1], stroke[2], stroke[3]),
+                    1.0,
+                );
+                backend
+                    .draw_rounded_rect(10.0, 10.0, 20.0, 20.0, 2.0, &style)
+                    .unwrap();
+                expected.push((fill, stroke));
+            }
+        }
+        backend.end().unwrap();
+        let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+        let document = roxmltree::Document::parse(&svg).unwrap();
+        let decoded = document
+            .descendants()
+            .filter(|node| node.has_tag_name("rect"))
+            .map(|node| (decoded_paint(node, "fill"), decoded_paint(node, "stroke")))
+            .collect::<Vec<_>>();
+        assert_eq!(decoded.len(), 1024);
+        assert_eq!(decoded, expected);
+    }
+
+    #[test]
     fn filled_paths_emit_independent_fill_and_stroke_alphas() {
         let mut backend = SvgBackend::in_memory(100, 100);
         backend.begin(100, 100).unwrap();
-        let style = FillStyle::new(Rgba::new(1, 2, 3, 128), Rgba::new(4, 5, 6, 64), 1.0);
+        let style = FillStyle::new(Color::rgba(1, 2, 3, 128), Color::rgba(4, 5, 6, 64), 1.0);
         backend
             .draw_polygon(
                 &[
@@ -2676,10 +2741,10 @@ mod tests {
         backend.begin(100, 100).unwrap();
         let mut style = PointStyle::new((1, 2, 3), 2);
         style.outline = Some(crate::render::backend::PointOutline {
-            color: Rgba::new(4, 5, 6, 64),
+            color: Color::rgba(4, 5, 6, 64),
             width_ratio: 0.5,
         });
-        style.color = Rgba::new(1, 2, 3, 128);
+        style.color = Color::rgba(1, 2, 3, 128);
         backend
             .draw_scatter(&[Point2D::new(10.0, 10.0)], &style)
             .unwrap();
@@ -2707,9 +2772,9 @@ mod tests {
         let mut text_style = test_text_style();
         text_style.font_family = special.into();
         let bracket_style = BracketStyle {
-            color: (0, 0, 0).into(),
+            color: Color::rgb(0, 0, 0),
             width: 1.0,
-            label_color: (0, 0, 0).into(),
+            label_color: Color::rgb(0, 0, 0),
             font_family: special.into(),
             font_size: 12,
             line_height: 14.4,
@@ -2767,28 +2832,28 @@ mod tests {
         backend
             .draw_surface(
                 PanelBox::new(10.0, 30.0, 20.0, 40.0),
-                Rgba::rgb(7, 8, 9),
+                Color::rgb(7, 8, 9),
                 SurfaceRole::PlotPanel,
             )
             .unwrap();
         backend
             .draw_surface(
                 PanelBox::new(0.0, 100.0, 0.0, 80.0),
-                Rgba::rgb(1, 2, 3),
+                Color::rgb(1, 2, 3),
                 SurfaceRole::CanvasRoot,
             )
             .unwrap();
         backend
             .draw_surface(
                 PanelBox::new(12.0, 32.0, 22.0, 42.0),
-                Rgba::new(10, 11, 12, 0),
+                Color::rgba(10, 11, 12, 0),
                 SurfaceRole::PlotPanel,
             )
             .unwrap();
         backend
             .draw_surface(
                 PanelBox::new(0.0, 100.0, 0.0, 80.0),
-                Rgba::new(4, 5, 6, 0),
+                Color::rgba(4, 5, 6, 0),
                 SurfaceRole::CanvasRoot,
             )
             .unwrap();
@@ -2817,7 +2882,7 @@ mod tests {
         backend
             .draw_surface(
                 PanelBox::new(0.0, 10.0, 0.0, 10.0),
-                Rgba::new(17, 34, 51, 128),
+                Color::rgba(17, 34, 51, 128),
                 SurfaceRole::CanvasRoot,
             )
             .unwrap();
@@ -2839,7 +2904,7 @@ mod tests {
             .draw_line(
                 &[Point2D::new(1.0, 1.0), Point2D::new(20.0, 20.0)],
                 &LineStyle {
-                    color: Rgba::new(17, 34, 51, 128),
+                    color: Color::rgba(17, 34, 51, 128),
                     width: 1.0,
                     pattern: super::super::backend::StrokePattern::Solid,
                 },
@@ -2850,7 +2915,7 @@ mod tests {
                 Point2D::new(10.0, 10.0),
                 "label",
                 &TextStyle {
-                    color: Rgba::new(68, 85, 102, 64),
+                    color: Color::rgba(68, 85, 102, 64),
                     ..test_text_style()
                 },
             )
@@ -2865,9 +2930,9 @@ mod tests {
                     orientation: super::super::backend::BracketOrientation::Vertical,
                 },
                 &BracketStyle {
-                    color: Rgba::new(119, 136, 153, 32),
+                    color: Color::rgba(119, 136, 153, 32),
                     width: 1.0,
-                    label_color: Rgba::new(170, 187, 204, 16),
+                    label_color: Color::rgba(170, 187, 204, 16),
                     font_family: "sans-serif".into(),
                     font_size: 12,
                     line_height: 14.4,
@@ -2893,14 +2958,14 @@ mod tests {
         backend
             .draw_surface(
                 PanelBox::new(0.0, 1.0, 0.0, 1.0),
-                Rgba::new(255, 0, 0, 128),
+                Color::rgba(255, 0, 0, 128),
                 SurfaceRole::CanvasRoot,
             )
             .unwrap();
         backend
             .draw_surface(
                 PanelBox::new(0.0, 1.0, 0.0, 1.0),
-                Rgba::new(0, 0, 255, 128),
+                Color::rgba(0, 0, 255, 128),
                 SurfaceRole::PlotPanel,
             )
             .unwrap();
@@ -2979,9 +3044,9 @@ mod tests {
                     orientation: super::super::backend::BracketOrientation::Vertical,
                 },
                 &BracketStyle {
-                    color: (0, 0, 0).into(),
+                    color: Color::rgb(0, 0, 0),
                     width: 1.0,
-                    label_color: (0, 0, 0).into(),
+                    label_color: Color::rgb(0, 0, 0),
                     font_family: "sans-serif".into(),
                     font_size: 12,
                     line_height: 14.4,
@@ -3045,14 +3110,14 @@ mod tests {
         backend
             .draw_surface(
                 PanelBox::new(10.0, 190.0, 20.0, 80.0),
-                Rgba::rgb(4, 5, 6),
+                Color::rgb(4, 5, 6),
                 SurfaceRole::PlotPanel,
             )
             .unwrap();
         backend
             .draw_surface(
                 PanelBox::new(0.0, 200.0, 0.0, 100.0),
-                Rgba::rgb(1, 2, 3),
+                Color::rgb(1, 2, 3),
                 SurfaceRole::CanvasRoot,
             )
             .unwrap();
@@ -3089,7 +3154,7 @@ mod tests {
                 line_height: TextLineHeight::Multiplier(1.2),
                 maximum_width_quanta: i64::MAX,
                 alignment: PhysicalTextAlignment::Start,
-                paint: (1, 2, 3).into(),
+                paint: Color::rgb(1, 2, 3),
                 provenance: TextPlanProvenance {
                     pair_ordinal: 0,
                     owner: "outline test".into(),
@@ -3147,7 +3212,7 @@ mod tests {
             line_height: TextLineHeight::Multiplier(1.6),
             maximum_width_quanta: i64::MAX,
             alignment: PhysicalTextAlignment::Center,
-            paint: Rgba::rgb(1, 2, 3),
+            paint: Color::rgb(1, 2, 3),
             provenance: TextPlanProvenance {
                 pair_ordinal: 0,
                 owner: "rotated columns".into(),
@@ -3226,7 +3291,7 @@ mod tests {
                 line_height: TextLineHeight::Multiplier(1.2),
                 maximum_width_quanta: i64::MAX,
                 alignment: PhysicalTextAlignment::Start,
-                paint: Rgba::rgb(1, 2, 3),
+                paint: Color::rgb(1, 2, 3),
                 provenance: TextPlanProvenance {
                     pair_ordinal: 0,
                     owner: "absolute origins".into(),
@@ -3276,7 +3341,7 @@ mod tests {
                 line_height: TextLineHeight::Multiplier(1.2),
                 maximum_width_quanta: 8_704,
                 alignment: PhysicalTextAlignment::Start,
-                paint: Rgba::rgb(1, 2, 3),
+                paint: Color::rgb(1, 2, 3),
                 provenance: TextPlanProvenance {
                     pair_ordinal: 0,
                     owner: "paragraph bidi".into(),
@@ -3330,7 +3395,7 @@ mod tests {
                 line_height: TextLineHeight::Multiplier(1.2),
                 maximum_width_quanta: i64::MAX,
                 alignment: PhysicalTextAlignment::Start,
-                paint: Rgba::rgb(1, 2, 3),
+                paint: Color::rgb(1, 2, 3),
                 provenance: TextPlanProvenance {
                     pair_ordinal: 0,
                     owner: "logical selection".into(),
@@ -3442,7 +3507,7 @@ mod tests {
                         line_height: TextLineHeight::Multiplier(1.2),
                         maximum_width_quanta,
                         alignment: PhysicalTextAlignment::Start,
-                        paint: Rgba::rgb(1, 2, 3),
+                        paint: Color::rgb(1, 2, 3),
                         provenance: TextPlanProvenance {
                             pair_ordinal: 0,
                             owner: "soft hyphen SVG".into(),
@@ -3495,7 +3560,7 @@ mod tests {
             line_height: TextLineHeight::Multiplier(1.2),
             maximum_width_quanta: i64::MAX,
             alignment: PhysicalTextAlignment::Start,
-            paint: (1, 2, 3).into(),
+            paint: Color::rgb(1, 2, 3),
             provenance: TextPlanProvenance {
                 pair_ordinal: 0,
                 owner: "no-outline test".into(),
@@ -3588,7 +3653,7 @@ mod tests {
         backend
             .draw_line(
                 &[Point2D::new(0.0, 0.0), Point2D::new(200.0, 100.0)],
-                &LineStyle::solid((0, 0, 0), 1.0),
+                &LineStyle::solid(Color::rgb(0, 0, 0), 1.0),
             )
             .unwrap();
         backend.end_clip().unwrap();

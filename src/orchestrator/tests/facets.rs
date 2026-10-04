@@ -165,7 +165,8 @@ fn facet_strips_preserve_each_preset_foreground_and_header_size() {
             .collect::<Vec<_>>();
         assert_eq!(strip_styles.len(), 2, "{theme:?}");
         assert!(strip_styles.iter().all(|style| {
-            style.color == expected.foreground && style.font_size == expected.facet_header_font_size
+            style.color == crate::theme::color_from_rgb(expected.foreground)
+                && style.font_size == expected.facet_header_font_size
         }));
     }
 }

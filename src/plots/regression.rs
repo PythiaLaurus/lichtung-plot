@@ -528,15 +528,14 @@ mod style_tests {
         assert_eq!(sized.0.to_bits(), (108.0_f64 + 5530.0 / 1024.0).to_bits());
         assert_eq!(sized.1.to_bits(), (108.0_f64 + 5530.0 / 1024.0).to_bits());
         theme.marks.primary_point.fill_alpha = 0;
-        theme.marks.primary_point.outline.color =
-            crate::render::backend::Rgba::new(255, 255, 255, 0);
+        theme.marks.primary_point.outline.color = crate::theme::Color::rgba(255, 255, 255, 0);
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), before);
         theme.marks.regression_fit.width = 140.0;
         assert_eq!(
             chart.intrinsic_body_minimum(&theme).unwrap(),
             (140.0, 140.0)
         );
-        theme.marks.regression_fit.paint = crate::render::backend::Rgba::new(1, 2, 3, 0);
+        theme.marks.regression_fit.paint = crate::theme::Color::rgba(1, 2, 3, 0);
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), before);
         theme.marks.regression_band.outline_width = 140.0;
         let band = chart.intrinsic_body_minimum(&theme).unwrap();
@@ -611,7 +610,7 @@ mod style_tests {
         let old = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
             .unwrap();
-        theme.marks.regression_fit.paint = crate::render::backend::Rgba::rgb(17, 41, 67);
+        theme.marks.regression_fit.paint = crate::theme::Color::rgb(17, 41, 67);
         theme.marks.regression_fit.width = 2.5;
         let changed = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
@@ -628,10 +627,7 @@ mod style_tests {
         let (new_line, new_style) = payload(&changed);
         assert_eq!(old_line, new_line);
         assert_ne!(old_style, new_style);
-        assert_eq!(
-            new_style.color,
-            crate::render::backend::Rgba::rgb(17, 41, 67)
-        );
+        assert_eq!(new_style.color, crate::theme::Color::rgb(17, 41, 67));
         assert_eq!(new_style.width.to_bits(), 2.5_f32.to_bits());
         assert!(crate::decorations::legend::merge_exact_entries(
             [

@@ -6,8 +6,8 @@ use super::backend::NullBackend;
 use super::*;
 use crate::layout::PanelBox;
 use crate::render::backend::{
-    BracketStyle, FillStyle, GradientStop, LineStyle, Point2D, PointStyle, Rgba,
-    SignificanceBracket, SurfaceRole, TextStyle,
+    BracketStyle, FillStyle, GradientStop, LineStyle, Point2D, PointStyle, SignificanceBracket,
+    SurfaceRole, TextStyle,
 };
 use crate::render::coordinates::CanonicalPoint;
 use crate::render::coordinates::{CanonicalBox, CanonicalRoundedBox};
@@ -73,7 +73,7 @@ struct RecordingBackend {
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct SurfaceCall {
     bounds: PanelBox,
-    paint: Rgba,
+    paint: crate::theme::Color,
     role: SurfaceRole,
 }
 
@@ -248,7 +248,7 @@ impl Backend for RecordingBackend {
     fn draw_canonical_surface(
         &mut self,
         bounds: CanonicalBox,
-        paint: Rgba,
+        paint: crate::theme::Color,
         role: SurfaceRole,
     ) -> Result<(), Error> {
         self.surfaces.push(SurfaceCall {
@@ -303,7 +303,7 @@ impl Backend for RecordingBackend {
     fn draw_surface(
         &mut self,
         bounds: PanelBox,
-        paint: Rgba,
+        paint: crate::theme::Color,
         role: SurfaceRole,
     ) -> Result<(), Error> {
         crate::render::backend::validate_surface_bounds(bounds)?;
@@ -497,7 +497,7 @@ fn deferred_backend_lazily_begins_and_forwards_complete_surface_calls() {
     let mut recorded = RecordingBackend::default();
     let surface = SurfaceCall {
         bounds: PanelBox::new(0.0, 320.0, 0.0, 200.0),
-        paint: Rgba::new(1, 2, 3, 4),
+        paint: crate::theme::Color::rgba(1, 2, 3, 4),
         role: SurfaceRole::CanvasRoot,
     };
 

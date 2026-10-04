@@ -370,7 +370,7 @@ fn panel_text_uses_complete_private_role_and_unclipped_canonical_bounds() {
     let original = plans(&plot, &layout, &theme).unwrap();
     theme.detail_font_size = 0;
     theme.typography.panel_text.font_size = 32;
-    theme.typography.panel_text.paint = crate::render::backend::Rgba::rgb(18, 34, 56);
+    theme.typography.panel_text.paint = crate::theme::Color::rgb(18, 34, 56);
     let selected = plans(&plot, &layout, &theme).unwrap();
     assert!(selected[0].bounds.width() > original[0].bounds.width());
     assert_eq!(selected[0].text_plan.style.font_size, 32);

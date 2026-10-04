@@ -9,6 +9,7 @@
 
 #![deny(missing_docs)]
 
+use crate::theme::{color_from_rgb, Color};
 use crate::Error;
 
 use super::primitives::{
@@ -44,86 +45,26 @@ impl Point2D {
     }
 }
 
-/// Complete RGBA paint at the private backend boundary.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Rgba {
-    red: u8,
-    green: u8,
-    blue: u8,
-    alpha: u8,
-}
-
-impl Rgba {
-    /// Construct an opaque RGB paint.
-    #[must_use]
-    pub(crate) const fn rgb(red: u8, green: u8, blue: u8) -> Self {
-        Self::new(red, green, blue, 255)
+/// Quantize a validated floating-opacity input to one canonical byte alpha.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "finite validated unit opacity rounds to an integral value in 0..=255"
+)]
+pub(crate) fn quantize_legacy_opacity(opacity: f64) -> Result<u8, Error> {
+    if !opacity.is_finite() || !(0.0..=1.0).contains(&opacity) {
+        return Err(Error::Render(format!(
+            "paint opacity must be finite and in [0, 1]; got {opacity}"
+        )));
     }
-
-    /// Construct a complete RGBA paint.
-    #[must_use]
-    pub(crate) const fn new(red: u8, green: u8, blue: u8, alpha: u8) -> Self {
-        Self {
-            red,
-            green,
-            blue,
-            alpha,
-        }
-    }
-
-    pub(crate) const fn with_alpha(self, alpha: u8) -> Self {
-        Self { alpha, ..self }
-    }
-
-    /// Resolve one validated legacy unit opacity to the canonical 8-bit alpha.
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "finite validated unit opacity rounds to an integral value in 0..=255"
-    )]
-    pub(crate) fn quantized_alpha(opacity: f64) -> Result<u8, Error> {
-        if !opacity.is_finite() || !(0.0..=1.0).contains(&opacity) {
-            return Err(Error::Render(format!(
-                "paint opacity must be finite and in [0, 1]; got {opacity}"
-            )));
-        }
-        Ok((opacity * 255.0).round_ties_even() as u8)
-    }
-
-    pub(crate) const fn red(self) -> u8 {
-        self.red
-    }
-
-    pub(crate) const fn green(self) -> u8 {
-        self.green
-    }
-
-    pub(crate) const fn blue(self) -> u8 {
-        self.blue
-    }
-
-    pub(crate) const fn alpha(self) -> u8 {
-        self.alpha
-    }
-}
-
-impl From<(u8, u8, u8)> for Rgba {
-    fn from((red, green, blue): (u8, u8, u8)) -> Self {
-        Self::rgb(red, green, blue)
-    }
-}
-
-impl PartialEq<(u8, u8, u8)> for Rgba {
-    fn eq(&self, other: &(u8, u8, u8)) -> bool {
-        (self.red, self.green, self.blue) == *other && self.alpha == 255
-    }
+    Ok((opacity * 255.0).round_ties_even() as u8)
 }
 
 /// Visual style for a scatter point.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct PointStyle {
     /// Complete point fill paint.
-    pub(crate) color: Rgba,
+    pub(crate) color: Color,
     /// Radius in pixels.
     pub(crate) radius: u32,
     /// Optional outline stroke.
@@ -138,7 +79,7 @@ impl PointStyle {
     #[must_use]
     pub(crate) fn new(color: (u8, u8, u8), radius: u32) -> Self {
         Self {
-            color: Rgba::from(color).with_alpha(209),
+            color: color_from_rgb(color).with_alpha(209),
             radius,
             outline: Some(PointOutline::default()),
             shape: PointShape::Circle,
@@ -149,7 +90,7 @@ impl PointStyle {
     #[must_use]
     pub(crate) fn plain(color: (u8, u8, u8), radius: u32) -> Self {
         Self {
-            color: Rgba::from(color).with_alpha(209),
+            color: color_from_rgb(color).with_alpha(209),
             radius,
             outline: None,
             shape: PointShape::Circle,
@@ -165,7 +106,7 @@ impl PointStyle {
 
     /// Set the point fill opacity.
     pub(crate) fn with_opacity(mut self, opacity: f64) -> Result<Self, Error> {
-        self.color = self.color.with_alpha(Rgba::quantized_alpha(opacity)?);
+        self.color = self.color.with_alpha(quantize_legacy_opacity(opacity)?);
         Ok(self)
     }
 }
@@ -174,7 +115,7 @@ impl PointStyle {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct PointOutline {
     /// Independent complete outline paint.
-    pub(crate) color: Rgba,
+    pub(crate) color: Color,
     /// Stroke width as a proportion of the point radius.
     pub(crate) width_ratio: f64,
 }
@@ -190,7 +131,7 @@ impl PointOutline {
 impl Default for PointOutline {
     fn default() -> Self {
         Self {
-            color: Rgba::rgb(255, 255, 255),
+            color: Color::rgb(255, 255, 255),
             width_ratio: 0.1,
         }
     }
@@ -200,7 +141,7 @@ impl Default for PointOutline {
 #[derive(Debug, Clone, PartialEq)]
 pub struct LineStyle {
     /// Complete stroke paint.
-    pub(crate) color: Rgba,
+    pub(crate) color: Color,
     /// Stroke width in pixels (supports sub-pixel, e.g. 0.8).
     pub width: f32,
     /// Closed stroke pattern.
@@ -211,9 +152,9 @@ impl LineStyle {
     /// Create a solid line style.
     #[must_use]
     #[cfg(test)]
-    pub fn solid(color: impl Into<Rgba>, width: f32) -> Self {
+    pub(crate) fn solid(color: Color, width: f32) -> Self {
         Self {
-            color: color.into(),
+            color,
             width,
             pattern: StrokePattern::Solid,
         }
@@ -222,9 +163,9 @@ impl LineStyle {
     /// Create a line using the fixed `3 2` dash pattern.
     #[must_use]
     #[cfg(test)]
-    pub(crate) fn short_dashed(color: impl Into<Rgba>, width: f32) -> Self {
+    pub(crate) fn short_dashed(color: Color, width: f32) -> Self {
         Self {
-            color: color.into(),
+            color,
             width,
             pattern: StrokePattern::ShortDash,
         }
@@ -233,9 +174,9 @@ impl LineStyle {
     /// Create a line using the fixed `4 3` dash pattern.
     #[must_use]
     #[cfg(test)]
-    pub(crate) fn medium_dashed(color: impl Into<Rgba>, width: f32) -> Self {
+    pub(crate) fn medium_dashed(color: Color, width: f32) -> Self {
         Self {
-            color: color.into(),
+            color,
             width,
             pattern: StrokePattern::MediumDash,
         }
@@ -244,9 +185,9 @@ impl LineStyle {
     /// Create a line using the fixed `5 3` dash pattern.
     #[must_use]
     #[cfg(test)]
-    pub(crate) fn long_dashed(color: impl Into<Rgba>, width: f32) -> Self {
+    pub(crate) fn long_dashed(color: Color, width: f32) -> Self {
         Self {
-            color: color.into(),
+            color,
             width,
             pattern: StrokePattern::LongDash,
         }
@@ -280,14 +221,14 @@ impl StrokePattern {
 /// Independent complete fill and stroke paints for a polygon or rectangle.
 #[derive(Debug, Clone)]
 pub(crate) struct FillStyle {
-    pub(crate) color: Rgba,
-    pub(crate) stroke: Rgba,
+    pub(crate) color: Color,
+    pub(crate) stroke: Color,
     /// Stroke width in pixels (0.0 for no outline).
     pub(crate) stroke_width: f32,
 }
 
 impl FillStyle {
-    pub(crate) const fn new(color: Rgba, stroke: Rgba, stroke_width: f32) -> Self {
+    pub(crate) const fn new(color: Color, stroke: Color, stroke_width: f32) -> Self {
         Self {
             color,
             stroke,
@@ -329,7 +270,7 @@ pub enum TextAnchor {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextStyle {
     /// Complete text paint.
-    pub(crate) color: Rgba,
+    pub(crate) color: Color,
     /// Font family.
     pub font_family: String,
     /// Font size in points.
@@ -409,9 +350,9 @@ pub(crate) const POLYGON_MITER_LIMIT: f64 = 4.0;
 #[derive(Debug, Clone)]
 pub struct BracketStyle {
     /// Complete bracket-path stroke paint.
-    pub(crate) color: Rgba,
+    pub(crate) color: Color,
     /// Complete bracket-label text paint.
-    pub(crate) label_color: Rgba,
+    pub(crate) label_color: Color,
     /// Stroke width in pixels.
     pub width: f32,
     /// Label font family.
@@ -639,7 +580,7 @@ pub trait Backend {
     fn draw_canonical_surface(
         &mut self,
         _bounds: coordinates::CanonicalBox,
-        _paint: Rgba,
+        _paint: Color,
         _role: SurfaceRole,
     ) -> Result<(), Error> {
         Err(Error::Render(
@@ -694,7 +635,7 @@ pub trait Backend {
     fn draw_surface(
         &mut self,
         bounds: PanelBox,
-        paint: Rgba,
+        paint: Color,
         role: SurfaceRole,
     ) -> Result<(), Error>;
 
@@ -1220,9 +1161,9 @@ mod tests {
                 orientation: BracketOrientation::Vertical,
             },
             BracketStyle {
-                color: (0, 0, 0).into(),
+                color: Color::rgb(0, 0, 0),
                 width: 1.0,
-                label_color: (0, 0, 0).into(),
+                label_color: Color::rgb(0, 0, 0),
                 font_family: "sans-serif".into(),
                 font_size: 12,
                 line_height: 14.4,
@@ -1246,7 +1187,7 @@ mod tests {
 
     fn valid_text_style() -> TextStyle {
         TextStyle {
-            color: (0, 0, 0).into(),
+            color: Color::rgb(0, 0, 0),
             font_family: "sans-serif".into(),
             font_size: 12,
             weight: crate::TextWeight::Normal,
@@ -1258,10 +1199,10 @@ mod tests {
     #[test]
     fn line_patterns_have_one_exact_closed_serialization() {
         let styles = [
-            LineStyle::solid((1, 2, 3), 1.0),
-            LineStyle::short_dashed((1, 2, 3), 1.0),
-            LineStyle::medium_dashed((1, 2, 3), 1.0),
-            LineStyle::long_dashed((1, 2, 3), 1.0),
+            LineStyle::solid(Color::rgb(1, 2, 3), 1.0),
+            LineStyle::short_dashed(Color::rgb(1, 2, 3), 1.0),
+            LineStyle::medium_dashed(Color::rgb(1, 2, 3), 1.0),
+            LineStyle::long_dashed(Color::rgb(1, 2, 3), 1.0),
         ];
 
         assert_eq!(
@@ -1298,7 +1239,7 @@ mod tests {
                 line_height: crate::layout::TextLineHeight::ResolvedQuanta(17 * 1024),
                 maximum_width_quanta: i64::MAX,
                 alignment: PhysicalTextAlignment::Center,
-                paint: Rgba::rgb(0, 0, 0),
+                paint: Color::rgb(0, 0, 0),
                 provenance: crate::layout::TextPlanProvenance {
                     pair_ordinal: 0,
                     owner: "deferred placement".into(),
@@ -1361,10 +1302,10 @@ mod tests {
     }
 
     #[test]
-    fn rgba_construction_and_rgb_conversion_preserve_channels() {
-        let opaque = Rgba::rgb(1, 2, 3);
-        let converted = Rgba::from((1, 2, 3));
-        let transparent = Rgba::new(4, 5, 6, 0);
+    fn rgb_boundary_conversion_preserves_complete_paint_channels() {
+        let opaque = Color::rgb(1, 2, 3);
+        let converted = color_from_rgb((1, 2, 3));
+        let transparent = Color::rgba(4, 5, 6, 0);
 
         assert_eq!(opaque, converted);
         assert_eq!(
@@ -1386,6 +1327,7 @@ mod tests {
     fn legacy_opacity_rounds_nearest_even_once_before_complete_paint() {
         for (opacity, alpha) in [
             (0.0, 0),
+            (-0.0, 0),
             (1.0 / 510.0, 0),
             (3.0 / 510.0, 2),
             (0.25, 64),
@@ -1393,14 +1335,22 @@ mod tests {
             (0.82, 209),
             (1.0, 255),
         ] {
-            assert_eq!(Rgba::quantized_alpha(opacity).unwrap(), alpha);
+            assert_eq!(quantize_legacy_opacity(opacity).unwrap(), alpha);
         }
-        for opacity in [f64::NAN, f64::INFINITY, -0.1, 1.1] {
-            assert!(Rgba::quantized_alpha(opacity).is_err());
+        for opacity in [
+            f64::NAN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            -f64::from_bits(1),
+            f64::from_bits(1.0_f64.to_bits() + 1),
+            -0.1,
+            1.1,
+        ] {
+            assert!(quantize_legacy_opacity(opacity).is_err());
         }
         let fill = FillStyle::new(
-            Rgba::rgb(1, 2, 3).with_alpha(Rgba::quantized_alpha(0.25).unwrap()),
-            Rgba::new(4, 5, 6, 128),
+            Color::rgb(1, 2, 3).with_alpha(quantize_legacy_opacity(0.25).unwrap()),
+            Color::rgba(4, 5, 6, 128),
             1.0,
         );
         assert_eq!(fill.color.alpha(), 64);
@@ -1533,10 +1483,10 @@ mod tests {
 
     #[test]
     fn line_style_validation_accepts_nonnegative_finite_widths_only() {
-        assert!(validate_line_style(&LineStyle::solid((0, 0, 0), 0.0)).is_ok());
-        assert!(validate_line_style(&LineStyle::solid((0, 0, 0), 1.0)).is_ok());
+        assert!(validate_line_style(&LineStyle::solid(Color::rgb(0, 0, 0), 0.0)).is_ok());
+        assert!(validate_line_style(&LineStyle::solid(Color::rgb(0, 0, 0), 1.0)).is_ok());
         for width in [-1.0, f32::NAN, f32::INFINITY] {
-            assert!(validate_line_style(&LineStyle::solid((0, 0, 0), width)).is_err());
+            assert!(validate_line_style(&LineStyle::solid(Color::rgb(0, 0, 0), width)).is_err());
         }
     }
 

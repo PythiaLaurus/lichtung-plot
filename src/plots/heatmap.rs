@@ -12,7 +12,7 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use crate::layout::{AxisSpec, AxisTick, Layout, PanelBox, PhysicalTextAlignment, TextBlock};
 use crate::render::backend::{
-    with_clip, Backend, FillStyle, GradientStop, LineStyle, PlacedText, Point2D, Rgba, TextAnchor,
+    with_clip, Backend, FillStyle, GradientStop, LineStyle, PlacedText, Point2D, TextAnchor,
 };
 use crate::spec::{
     CategoryOrder, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapScale, LegendPolicy,
@@ -165,7 +165,7 @@ fn assigned_columns(
         let (Some(source), Some(fill)) = (source, fill) else {
             continue;
         };
-        let appearance = theme.contrasting_text(Rgba::from(*fill))?;
+        let appearance = theme.contrasting_text(crate::theme::color_from_rgb(*fill))?;
         let widths = crate::layout::fit::intrinsic_widths(
             theme,
             source,
@@ -504,11 +504,11 @@ pub(crate) struct HeatmapIntrinsicCache {
     contrast_dark: crate::theme::TextAppearance,
     tick_label: crate::theme::TextAppearance,
     axis_title: crate::theme::TextAppearance,
-    plot_panel: crate::render::backend::Rgba,
-    canvas_root: crate::render::backend::Rgba,
-    canvas_override: Option<crate::render::backend::Rgba>,
-    backdrop: crate::render::backend::Rgba,
-    missing_fill: crate::render::backend::Rgba,
+    plot_panel: crate::theme::Color,
+    canvas_root: crate::theme::Color,
+    canvas_override: Option<crate::theme::Color>,
+    backdrop: crate::theme::Color,
+    missing_fill: crate::theme::Color,
     cell_outline: crate::theme::FillOutlineAppearance,
     highlight_outline: crate::theme::FillOutlineAppearance,
     missing_row_outline: crate::theme::FillOutlineAppearance,
@@ -684,7 +684,7 @@ fn intrinsic_cell_ink(
     }
     let quantum = 1.0 / 1024.0;
     let cell = |style: &crate::theme::FillOutlineAppearance| -> Result<_, Error> {
-        let fill = style.backend_style((0, 0, 0).into());
+        let fill = style.backend_style(crate::theme::Color::rgb(0, 0, 0));
         let (x, y) = crate::render::geometry::rectangular_fill_ink_outset(theme, &fill)?;
         Ok((x + quantum, y + quantum))
     };
@@ -879,7 +879,7 @@ fn analyze_intrinsics(
         .enumerate()
         .filter_map(|(index, (source, fill))| Some((index, (source.as_deref()?, (*fill)?))))
     {
-        let fill = Rgba::from(fill);
+        let fill = crate::theme::color_from_rgb(fill);
         let appearance = theme.contrasting_text(fill)?;
         let plan = theme.measure_legacy_appearance_text(
             source,
@@ -977,13 +977,13 @@ impl HeatmapData {
             .flatten()
     }
 
-    pub(crate) fn annotation_labels(
-        &self,
-    ) -> impl Iterator<Item = (&str, crate::render::backend::Rgba)> {
+    pub(crate) fn annotation_labels(&self) -> impl Iterator<Item = (&str, crate::theme::Color)> {
         self.value_labels
             .iter()
             .zip(&self.fills)
-            .filter_map(|(label, fill)| Some((label.as_deref()?, (*fill)?.into())))
+            .filter_map(|(label, fill)| {
+                Some((label.as_deref()?, crate::theme::color_from_rgb((*fill)?)))
+            })
     }
 }
 
@@ -1999,7 +1999,7 @@ fn required_heatmap_cell_text_must_fit_its_unclipped_cell() {
             fill: theme
                 .marks
                 .heatmap_cell_outline
-                .backend_style((0, 0, 0).into()),
+                .backend_style(crate::theme::Color::rgb(0, 0, 0)),
             text: Some(PlacedText::middle(
                 text,
                 Point2D::new(10.0, 15.0),
@@ -2089,8 +2089,10 @@ fn select_cells(
             let (left, right) = (columns[x_index], columns[x_index + 1]);
             let value = prepared.cells[y_index * x_count + x_index];
             let highlighted = prepared.highlighted[y_index * x_count + x_index];
-            let color = prepared.fills[y_index * x_count + x_index]
-                .map_or(theme.marks.heatmap_missing_fill, Rgba::from);
+            let color = prepared.fills[y_index * x_count + x_index].map_or(
+                theme.marks.heatmap_missing_fill,
+                crate::theme::color_from_rgb,
+            );
             let mut cell = CellPayload {
                 corners: [
                     Point2D::new(left, bottom),
@@ -2204,7 +2206,7 @@ fn measure_annotations(
             let fill = prepared.fills[index].ok_or_else(|| {
                 Error::Render("heatmap value has no prepared resolved fill".into())
             })?;
-            let appearance = theme.contrasting_text(fill.into())?;
+            let appearance = theme.contrasting_text(crate::theme::color_from_rgb(fill))?;
             let owner = prepared.value_owners[index]
                 .as_deref()
                 .ok_or_else(|| Error::Render("heatmap value owner missing".into()))?;

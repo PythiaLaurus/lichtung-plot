@@ -2079,7 +2079,7 @@ mod tests {
         Ok(result.expect("root preparation completed"))
     }
     use crate::layout::kernel::AddressRole;
-    use crate::render::backend::Rgba;
+    use crate::theme::Color;
 
     #[test]
     fn soft_hyphen_census_derives_one_literal_per_requirement_in_the_owning_pair() {
@@ -2429,7 +2429,7 @@ mod tests {
     fn appearance(stack: &str, weight: TextWeight) -> TextAppearance {
         TextAppearance {
             stack: stack.to_owned(),
-            paint: Rgba::rgb(0, 0, 0),
+            paint: Color::rgb(0, 0, 0),
             font_size: 12,
             weight,
             line_height_multiplier: 1.2,
@@ -2652,7 +2652,7 @@ mod tests {
 
     #[test]
     fn transparent_missing_row_census_uses_the_final_fill_and_planning_backdrop() {
-        use crate::render::backend::Rgba;
+        use crate::theme::Color;
 
         let plot = crate::Plot::heatmap(
             crate::CategoryValues::new("column", ["a", "b"]).unwrap(),
@@ -2667,16 +2667,16 @@ mod tests {
         let resources = crate::font::canonical::OperationGenerationResources::new();
         let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
         let mut theme = crate::Theme::Publication.resolve();
-        theme.surfaces.plot_panel = Rgba::new(0, 0, 0, 0);
-        theme.surfaces.canvas_root = Rgba::new(0, 0, 0, 0);
-        theme.marks.heatmap_missing_fill = Rgba::new(20, 40, 60, 0);
+        theme.surfaces.plot_panel = Color::rgba(0, 0, 0, 0);
+        theme.surfaces.canvas_root = Color::rgba(0, 0, 0, 0);
+        theme.marks.heatmap_missing_fill = Color::rgba(20, 40, 60, 0);
         theme.typography.contrast_light.stack = "Light missing row".into();
         theme.typography.contrast_dark.stack = "Dark missing row".into();
         theme.typography.contrast_light.font_size = 39;
         theme.typography.contrast_dark.font_size = 9;
         for (backdrop, expected) in [
-            (Rgba::rgb(0, 0, 0), "Light missing row"),
-            (Rgba::rgb(255, 255, 255), "Dark missing row"),
+            (Color::rgb(0, 0, 0), "Light missing row"),
+            (Color::rgb(255, 255, 255), "Dark missing row"),
         ] {
             theme.annotations.planning_backdrop = backdrop;
             let requirements = with_prepared_stage(|stage| {
@@ -2797,7 +2797,7 @@ mod tests {
         let mut theme = crate::Theme::Publication.resolve();
         theme.typography.estimate_detail.stack = "Estimate detail only".into();
         theme.typography.estimate_detail.font_size = 20;
-        theme.typography.estimate_detail.paint = crate::render::backend::Rgba::rgb(5, 7, 9);
+        theme.typography.estimate_detail.paint = crate::theme::Color::rgb(5, 7, 9);
         let requirements = with_prepared_stage(|stage| {
             foundational_plot_requirements(
                 Some(&inputs),
@@ -3002,7 +3002,7 @@ mod tests {
                 line_height: crate::layout::TextLineHeight::Multiplier(1.2),
                 maximum_width_quanta: i64::MAX,
                 alignment: crate::layout::PhysicalTextAlignment::Start,
-                paint: Rgba::rgb(0, 0, 0),
+                paint: Color::rgb(0, 0, 0),
                 provenance: crate::layout::TextPlanProvenance {
                     pair_ordinal: u32::MAX,
                     owner: "prepared census test".into(),
@@ -3021,7 +3021,7 @@ mod tests {
                 line_height: crate::layout::TextLineHeight::Multiplier(1.2),
                 maximum_width_quanta: i64::MAX,
                 alignment: crate::layout::PhysicalTextAlignment::Start,
-                paint: Rgba::rgb(0, 0, 0),
+                paint: Color::rgb(0, 0, 0),
                 provenance: crate::layout::TextPlanProvenance {
                     pair_ordinal: u32::MAX,
                     owner: "uncensused scalar test".into(),

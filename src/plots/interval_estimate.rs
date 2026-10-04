@@ -1227,7 +1227,7 @@ mod tests {
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
             .unwrap();
         theme.typography.estimate_detail.font_size = 18;
-        theme.typography.estimate_detail.paint = crate::render::backend::Rgba::rgb(5, 7, 9);
+        theme.typography.estimate_detail.paint = crate::theme::Color::rgb(5, 7, 9);
         let selected = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
             .unwrap();
@@ -1245,7 +1245,7 @@ mod tests {
         assert_eq!(old_interval, new_interval);
         assert_eq!(old_text.font_size, 14);
         assert_eq!(new_text.font_size, 18);
-        assert_eq!(new_text.paint, crate::render::backend::Rgba::rgb(5, 7, 9));
+        assert_eq!(new_text.paint, crate::theme::Color::rgb(5, 7, 9));
     }
 
     fn tick_theme() -> ResolvedTheme {

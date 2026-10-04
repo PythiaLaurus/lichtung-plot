@@ -123,7 +123,12 @@ impl Backend for AxisRecorder {
     fn end_clip(&mut self) -> Result<(), Error> {
         unreachable!()
     }
-    fn draw_surface(&mut self, _: PanelBox, _: Rgba, _: SurfaceRole) -> Result<(), Error> {
+    fn draw_surface(
+        &mut self,
+        _: PanelBox,
+        _: crate::theme::Color,
+        _: SurfaceRole,
+    ) -> Result<(), Error> {
         unreachable!()
     }
     fn draw_scatter(&mut self, _: &[Point2D], _: &PointStyle) -> Result<(), Error> {

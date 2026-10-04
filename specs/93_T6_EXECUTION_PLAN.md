@@ -61,9 +61,9 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6A | COMPLETE | T6P | Public foundation/caller/ledger census and construction design |
 | T6A1 | COMPLETE | T6P | Current export/style/owner/caller/deletion census in `docs/t6a1-public-cutover-census.md`; `docs(api): map public cutovers and consumers` |
 | T6A2 | COMPLETE | T6A1 | Validated construction, fields, metrics, owners and future fixtures in `94_T6_FOUNDATION_CONSTRUCTION.md`; `docs(theme): pin validated public component construction` |
-| T6B | PENDING | T6A | Immutable theme, color, font, scale and exact-style migration |
-| T6B1 | PENDING | T6A | Validated color/font and component values in the single private representation; `refactor(theme): retain validated foundational values` |
-| T6B1a | PENDING | T6A | One Color/OpaqueColor paint representation and private channel/hex validation; `refactor(color): retain validated foundational paint values` |
+| T6B | IN PROGRESS | T6A | Immutable theme, color, font, scale and exact-style migration |
+| T6B1 | IN PROGRESS | T6A | Validated color/font and component values in the single private representation; `refactor(theme): retain validated foundational values` |
+| T6B1a | COMPLETE | T6A | One Color/OpaqueColor paint representation and private channel/hex validation; `refactor(color): retain validated foundational paint values` |
 | T6B1b | PENDING | T6B1a | Typed font preferences and complete role-stack inputs; `refactor(font): retain validated role font stacks` |
 | T6B1c | PENDING | T6B1b | Exact relative spacing and bounded local metric operands; `feat(theme): retain exact relative spacing values` |
 | T6B1d | PENDING | T6B1c | Complete component/role/scale inputs and structural validation; `refactor(theme): retain complete validated components` |
@@ -97,6 +97,17 @@ opacity endpoints, active typography/scale carrier gaps, raw font-constant
 retirement, conflicting Shared-gap ledger assignments and the surviving public
 Canvas 160×120 gate. Constructor/owner adjudication is explicitly T6A2 work;
 this documentation census changes no implemented API or renderer behavior.
+
+T6B1a evidence: `docs/t6b1a-paint-values.md` records the sole production paint
+representation in `theme::Color`/`OpaqueColor`, strict ASCII hex construction,
+opaque conversion, exact alpha replacement and complete caller migration.
+Backend `Rgba` is deleted; no alias, tuple conversion trait or alpha-dropping
+conversion replaces it. Legacy floating opacity remains at its existing private
+boundary until B3. Thirty-five focused tests cover byte-channel/independent SVG
+round trips, PNG alpha, contrast, guide/cache/lifecycle and unchanged snapshots;
+the phase owner additionally confirmed the eight core parser/backend/SVG/PNG
+tests and strict all-target Clippy. Public exposure and data-scale migration stay
+with B3/B4 and B1d/B2. No snapshot or gradient expectation changed in this leaf.
 
 The Canvas universal minimum is the existing ledger retirement
 `validation.canvas.minimum-size`, not a new size policy. T6C2 must remove its

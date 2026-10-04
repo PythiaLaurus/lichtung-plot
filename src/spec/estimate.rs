@@ -236,7 +236,7 @@ impl LinePattern {
         width: f32,
     ) -> crate::render::backend::LineStyle {
         crate::render::backend::LineStyle {
-            color: color.into(),
+            color: crate::theme::color_from_rgb(color),
             width,
             pattern: self.stroke_pattern(),
         }

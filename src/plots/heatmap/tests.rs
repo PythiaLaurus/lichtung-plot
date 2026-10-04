@@ -60,12 +60,11 @@ fn custom_heatmap_outlines_and_cross_leave_selected_cells_and_missing_key_in_pla
     let original = chart
         .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
         .unwrap();
-    theme.marks.heatmap_cell_outline.paint = crate::render::backend::Rgba::new(1, 3, 5, 110);
+    theme.marks.heatmap_cell_outline.paint = crate::theme::Color::rgba(1, 3, 5, 110);
     theme.marks.heatmap_cell_outline.width = 0.7;
-    theme.marks.heatmap_missing_cross.paint = crate::render::backend::Rgba::new(7, 9, 11, 220);
-    theme.marks.heatmap_missing_fill = crate::render::backend::Rgba::new(19, 23, 29, 144);
-    theme.marks.heatmap_missing_key_outline.paint =
-        crate::render::backend::Rgba::new(13, 15, 17, 90);
+    theme.marks.heatmap_missing_cross.paint = crate::theme::Color::rgba(7, 9, 11, 220);
+    theme.marks.heatmap_missing_fill = crate::theme::Color::rgba(19, 23, 29, 144);
+    theme.marks.heatmap_missing_key_outline.paint = crate::theme::Color::rgba(13, 15, 17, 90);
     theme.marks.heatmap_missing_key_outline.width = 2.5;
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
@@ -143,7 +142,7 @@ fn missing_row_and_key_consume_one_plot_owned_fill_independent_of_the_gradient()
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
     let chart = inputs.attach(source).unwrap();
     let mut theme = crate::Theme::Publication.resolve();
-    theme.marks.heatmap_missing_fill = crate::render::backend::Rgba::new(30, 40, 50, 175);
+    theme.marks.heatmap_missing_fill = crate::theme::Color::rgba(30, 40, 50, 175);
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
@@ -280,7 +279,7 @@ fn assigned_columns_keep_each_value_and_categorical_tick_at_its_measured_cell_ce
 
 #[test]
 fn missing_fill_and_backdrop_invalidate_cached_intrinsics_with_unequal_contrast_roles() {
-    use crate::render::backend::Rgba;
+    use crate::theme::Color;
 
     let source = Plot::heatmap(
         CategoryValues::new("column", ["a", "b"]).unwrap(),
@@ -297,10 +296,10 @@ fn missing_fill_and_backdrop_invalidate_cached_intrinsics_with_unequal_contrast_
     let marks = &inputs.heatmap.as_ref().unwrap().panels[0].1;
     let axes = &inputs.axes[0].1;
     let mut theme = crate::Theme::Publication.resolve();
-    theme.surfaces.plot_panel = Rgba::new(0, 0, 0, 0);
-    theme.surfaces.canvas_root = Rgba::new(0, 0, 0, 0);
-    theme.marks.heatmap_missing_fill = Rgba::new(20, 40, 60, 0);
-    theme.annotations.planning_backdrop = Rgba::rgb(0, 0, 0);
+    theme.surfaces.plot_panel = Color::rgba(0, 0, 0, 0);
+    theme.surfaces.canvas_root = Color::rgba(0, 0, 0, 0);
+    theme.marks.heatmap_missing_fill = Color::rgba(20, 40, 60, 0);
+    theme.annotations.planning_backdrop = Color::rgb(0, 0, 0);
     theme.typography.contrast_light.font_size = 40;
     theme.typography.contrast_dark.font_size = 9;
     let large = prepare_intrinsics(marks, axes, source.data(), &theme, None).unwrap();
@@ -317,7 +316,7 @@ fn missing_fill_and_backdrop_invalidate_cached_intrinsics_with_unequal_contrast_
         .unwrap()
         .matches(marks, &theme));
 
-    theme.annotations.planning_backdrop = Rgba::rgb(255, 255, 255);
+    theme.annotations.planning_backdrop = Color::rgb(255, 255, 255);
     assert!(!axes
         .heatmap_intrinsics
         .get()
@@ -336,7 +335,7 @@ fn missing_fill_and_backdrop_invalidate_cached_intrinsics_with_unequal_contrast_
         "small={small:?} large={large:?}"
     );
 
-    theme.marks.heatmap_missing_fill = Rgba::rgb(0, 0, 0);
+    theme.marks.heatmap_missing_fill = Color::rgb(0, 0, 0);
     assert!(!axes
         .heatmap_intrinsics
         .get()
@@ -1209,7 +1208,7 @@ fn private_plot_gradient_freezes_custom_sequential_and_diverging_marks_guides_be
                 .iter()
                 .map(|cell| cell.fill.color)
                 .collect::<Vec<_>>(),
-            expected.map(crate::render::backend::Rgba::from)
+            expected.map(crate::theme::color_from_rgb)
         );
         assert_eq!(
             gradient_stops(payload.colorbar.as_ref().unwrap())[1].color,
@@ -1336,7 +1335,7 @@ fn prepared_cell_guide_and_value_label_share_final_diverging_colors() {
             .collect::<Vec<_>>(),
         prepared.fills[..3]
             .iter()
-            .map(|fill| crate::render::backend::Rgba::from(fill.unwrap()))
+            .map(|fill| crate::theme::color_from_rgb(fill.unwrap()))
             .collect::<Vec<_>>()
     );
 }

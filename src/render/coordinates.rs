@@ -580,8 +580,8 @@ pub(crate) struct CanonicalRoundedBox {
     pub(crate) bounds: CanonicalBox,
     pub(crate) radius: CanonicalCoordinate,
     pub(crate) stroke_width: CanonicalCoordinate,
-    pub(crate) color: crate::render::backend::Rgba,
-    pub(crate) stroke: crate::render::backend::Rgba,
+    pub(crate) color: crate::theme::Color,
+    pub(crate) stroke: crate::theme::Color,
 }
 
 impl CanonicalRoundedBox {

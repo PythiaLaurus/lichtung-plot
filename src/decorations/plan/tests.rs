@@ -1256,13 +1256,19 @@ fn automatic_legend_ignores_zero_width_lines_but_avoids_painted_lines() {
     let mut zero_width = GeometryBackend::new(&resolved_theme).unwrap();
     zero_width.begin(plot.width(), plot.height()).unwrap();
     zero_width
-        .draw_line(&line, &LineStyle::solid((0, 0, 0), 0.0))
+        .draw_line(
+            &line,
+            &LineStyle::solid(crate::theme::Color::rgb(0, 0, 0), 0.0),
+        )
         .unwrap();
     zero_width.end().unwrap();
     let mut painted = GeometryBackend::new(&resolved_theme).unwrap();
     painted.begin(plot.width(), plot.height()).unwrap();
     painted
-        .draw_line(&line, &LineStyle::solid((0, 0, 0), 4.0))
+        .draw_line(
+            &line,
+            &LineStyle::solid(crate::theme::Color::rgb(0, 0, 0), 4.0),
+        )
         .unwrap();
     painted.end().unwrap();
 

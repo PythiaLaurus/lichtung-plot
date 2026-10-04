@@ -345,7 +345,8 @@ mod tests {
         use crate::layout::{
             PhysicalTextAlignment, TextLineHeight, TextPlanInput, TextPlanProvenance,
         };
-        use crate::render::backend::{PlannedTextPlacement, Point2D, Rgba, TextAnchor};
+        use crate::render::backend::{PlannedTextPlacement, Point2D, TextAnchor};
+        use crate::theme::Color;
         let environment = crate::font::canonical::PreparedFontEnvironment::synthetic();
         let plan = environment
             .plan_text(TextPlanInput {
@@ -356,7 +357,7 @@ mod tests {
                 line_height: TextLineHeight::Multiplier(1.2),
                 maximum_width_quanta: i64::MAX,
                 alignment: PhysicalTextAlignment::Start,
-                paint: Rgba::rgb(1, 2, 3),
+                paint: Color::rgb(1, 2, 3),
                 provenance: TextPlanProvenance {
                     pair_ordinal: 0,
                     owner: "parser count test".into(),

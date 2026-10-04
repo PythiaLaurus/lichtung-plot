@@ -631,9 +631,9 @@ mod tests {
             ],
             center: Some(0.0),
             missing: Some(MissingKey {
-                fill: (224, 224, 224).into(),
+                fill: crate::theme::Color::rgb(224, 224, 224),
                 outline: crate::theme::FillOutlineAppearance {
-                    paint: (120, 120, 120).into(),
+                    paint: crate::theme::Color::rgb(120, 120, 120),
                     width: 1.0,
                 },
                 label: "Missing".into(),
@@ -1028,8 +1028,8 @@ mod tests {
         )
         .erase();
         let mut theme = crate::Theme::Publication.resolve();
-        theme.legend.frame_fill = backend::Rgba::new(1, 2, 3, 127);
-        theme.legend.frame_outline = backend::Rgba::new(4, 5, 6, 210);
+        theme.legend.frame_fill = crate::theme::Color::rgba(1, 2, 3, 127);
+        theme.legend.frame_outline = crate::theme::Color::rgba(4, 5, 6, 210);
         theme.legend.frame_stroke_width = 30.0;
         theme.legend.frame_radius = 18.0;
         let mut descriptor = descriptor();
