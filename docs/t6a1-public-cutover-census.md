@@ -6,6 +6,10 @@ This is the documentation census for T6A1, taken from the working tree after
 T5e. It records implemented surfaces and their approved replacement owners;
 it does not expose the target API or settle T6A2 construction decisions.
 
+The subsequent construction decisions are closed in
+`specs/94_T6_FOUNDATION_CONSTRUCTION.md`. Open A2 items below record this census's
+handoff checkpoint, not remaining product decisions after that adjudication.
+
 Authority: [spec93](../specs/93_T6_EXECUTION_PLAN.md), especially T6A1/A2,
 the stage map, T6N and T6L;
 [spec03](../specs/03_THEME_SYSTEM.md), including public foundations, component

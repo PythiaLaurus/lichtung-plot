@@ -58,11 +58,15 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | Stage | Status | Depends on | Deliverable / suggested scoped commit |
 | --- | --- | --- | --- |
 | T6P | COMPLETE | T5e | This plan and user-approved entry decisions; `docs(planning): partition T6 public foundations and presentation` |
-| T6A | IN PROGRESS | T6P | Public foundation/caller/ledger census |
+| T6A | COMPLETE | T6P | Public foundation/caller/ledger census and construction design |
 | T6A1 | COMPLETE | T6P | Current export/style/owner/caller/deletion census in `docs/t6a1-public-cutover-census.md`; `docs(api): map T6 public cutovers and consumers` |
-| T6A2 | PENDING | T6A1 | Derive complete validated component field/signature inventory and test fixtures from actual owners; `docs(theme): pin validated public component construction` |
+| T6A2 | COMPLETE | T6A1 | Validated construction, fields, metrics, owners and future fixtures in `94_T6_FOUNDATION_CONSTRUCTION.md`; `docs(theme): pin validated public component construction` |
 | T6B | PENDING | T6A | Immutable theme, color, font, scale and exact-style migration |
 | T6B1 | PENDING | T6A | Validated color/font and component values in the single private representation; `refactor(theme): retain validated foundational values` |
+| T6B1a | PENDING | T6A | One Color/OpaqueColor paint representation and private channel/hex validation; `refactor(color): retain validated foundational paint values` |
+| T6B1b | PENDING | T6B1a | Typed font preferences and complete role-stack inputs; `refactor(font): retain validated role font stacks` |
+| T6B1c | PENDING | T6B1b | Exact relative spacing and bounded local metric operands; `feat(theme): retain exact relative spacing values` |
+| T6B1d | PENDING | T6B1c | Complete component/role/scale inputs and structural validation; `refactor(theme): retain complete validated components` |
 | T6B2 | PENDING | T6B1 | Complete Theme construction/customization and owner resolution using those values; `refactor(theme): construct immutable complete themes` |
 | T6B3 | PENDING | T6B2 | Exact element Color/alpha replacement and repository caller migration; `feat(styles): expose complete RGBA element paints` |
 | T6B4 | PENDING | T6B3 | Public complete Theme/components/fonts/scales, built-in constructors and palette/map/gradient attachments; remove closed selectors and old scale representations; `feat(theme): expose immutable theme and scale foundations` |
@@ -99,9 +103,19 @@ The Canvas universal minimum is the existing ledger retirement
 remaining public validation gate while preserving positive-size timing and
 complete-content/resource refusal.
 
+T6A2 evidence: `94_T6_FOUNDATION_CONSTRUCTION.md` pins complete fields, typed
+construction/accessors/consuming edits, actual CSS units, exact local metrics,
+default operand bits, validation, deletion stages and future focused fixtures.
+Independent review closed missing neutral path/flier paint, independent Waterfall
+breadth, continuous-guide successor and declared-track em owners. The user
+explicitly chose theme-only Shared legend gap and a common Heatmap-style
+`#F7FBFF -> #08306B` default sequential gradient; Beeswarm's color change belongs
+to B2 and is not described as default-byte preservation. Old source inventories
+remain historical; the field/ownership decisions are authoritative for T6B.
+
 ## Existing Public Foundations To Expose
 
-Use spec03's complete `Theme`, `ThemeBuilder`, role components, typed font stack,
+Use spec03 and spec94's complete `Theme`, `ThemeBuilder`, role components, typed font stack,
 RGBA `Color`, RGB-only `OpaqueColor`, palettes/maps and gradients. Builders are
 construction-only; a Plot/Canvas stores immutable complete values, never sparse
 edits. Built-ins are `Theme::{publication,nature,science,chi}()` constructors.
@@ -146,7 +160,8 @@ Matrix has no new global numeric-axis setter. No new numeric annotation surface.
 ### Target API And Validation
 
 One opaque crate-root `NumericFormat: Clone + Debug + PartialEq + Eq` replaces
-`NumericLabelFormat`. Proposed closed input discriminants are:
+`NumericLabelFormat`. Spec94 fixes the construction/accessor vocabulary; closed
+input discriminants are:
 
 ```rust,ignore
 enum NumericNotation { Decimal, Scientific, Engineering }
@@ -162,9 +177,10 @@ enum TrailingZeros { Keep, Trim }
 
 `NumericFormat::new(notation, precision) -> Result<Self>` validates fractional
 `0..=17`, significant `1..=17` and adaptive `min<=max`. Consuming edits replace
-only their own input: `notation`, validated `precision`, validated
-`decimal_scale(i16)` in `-324..=324`, nonempty/control-free `prefix`/`suffix`,
-`negative_zero` and `trailing_zeros`. Fields remain private; no backend formatter
+only their own input using spec94's `with_field` names: `with_notation`, validated
+`with_precision`, `with_decimal_scale(i16)` in `-324..=324`, nonempty/control-free
+`with_prefix`/`with_suffix`, `with_negative_zero` and `with_trailing_zeros`.
+Bare field names are readonly getters. Fields remain private; no backend formatter
 or arbitrary formatting callback is public. Ordinary scalar getters follow the
 validated-value style fixed in T6A2.
 

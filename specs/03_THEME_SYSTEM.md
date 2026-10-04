@@ -29,6 +29,12 @@ composition. Their execution and detailed contracts are in
 `93_T6_EXECUTION_PLAN.md`. Both are semantic presentation policies, not theme
 appearance. Remaining DF2/DF5/DF7 scope is reviewed at T7 CLOSURE.
 
+T6A2's authoritative validated construction, fields, metrics and migration
+signatures are in `94_T6_FOUNDATION_CONSTRUCTION.md`. They complete this target's
+role taxonomy without making it current early. The user chose theme-only Shared
+legend spacing and one shared `#F7FBFF -> #08306B` sequential default; the latter
+intentionally replaces Beeswarm's different built-in sequence at T6B2.
+
 After that migration, this model governs standalone plots, facets, composed
 canvases, shared legends, text panels, SVG, and PNG. It does not authorize
 mutable global configuration, dynamic style plugins, backend-specific
@@ -123,6 +129,12 @@ Phase T6 replaces the current closed `Theme` enum, `CategoricalColors`,
 with the target types that own those responsibilities. It migrates every
 repository caller and deletes the replaced representations; target names are not
 compatibility wrappers around the current API.
+
+Spec94 assigns the current exact-style, root font-export, palette/map/gradient
+attachment and consuming-edit cutovers explicitly. `TitleAlignment` is public
+with its consumed complete CompositionTheme at B4; the four instruction setters
+follow at B5. `Canvas::shared_legend_gap` and its override field are removed at B4;
+custom Shared spacing is supplied only by the complete LegendTheme component.
 
 ## Component Boundaries
 

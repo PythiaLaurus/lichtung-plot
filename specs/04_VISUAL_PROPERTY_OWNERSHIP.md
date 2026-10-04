@@ -8762,3 +8762,37 @@ It changes no key totals or historical implementation evidence. T5c0 maps every
 affected family/policy key, T5c1-T5c5 supply implementation/evidence, and T5e tests
 the distinction in all root modes. No new clip switch, omission policy, or early
 public sizing/theme API is admitted.
+
+### T6A2 Construction Adjudication
+
+`94_T6_FOUNDATION_CONSTRUCTION.md` fixes the validated field/signature/metric
+contract derived from the actual post-T5e owners in
+`docs/t6a1-public-cutover-census.md`. Its append-only successor tables supersede
+conflicting historical target wording without rewriting source provenance or
+changing the 1883-key materialized count by implication.
+
+- `canvas.legend.shared-gap` and `canvas.legend.shared-gap-current-fallback`
+  have one Theme-component successor, `LegendTheme` shared spacing. The user
+  explicitly selected removal of `Canvas::shared_legend_gap`, its override field
+  and non-Shared validation at T6B4. This supersedes the historical relationship
+  saying that the explicit override remains. The appearance value is configured
+  through the owning Canvas Theme; no replacement override API is introduced.
+- The user selected the shared built-in sequential gradient `#F7FBFF` at offset 0
+  through `#08306B` at offset 1 for both continuous-color families. T6B2 retires
+  the different Beeswarm default, with intentional mark/guide RGB/output evidence;
+  Heatmap's current sequence is preserved. There is no family-specific hidden
+  compatibility choice. General typed gradient replacement remains available.
+- Public font constants retire at T6B4 as already assigned. Named role stacks,
+  default point/significance geometry, neutral path/flier RGB, mandatory strip
+  versus optional raw roles, independent Waterfall breadth, root/chrome spacing
+  and continuous-guide allocation successors are explicitly constructible in
+  spec94. Equal current scalar values do not merge distinct semantic owners.
+- Actual positive integral font sizes remain CSS pixels, not converted points.
+  Relative spacing retains exact input identity and declared local metric/rounding
+  roles; old leading/source operand bits and aggregate-boundary behavior are
+  separately pinned. Present widths/structural absence, alpha replacement and
+  exact-element precedence use one representation and no new resource cap.
+
+This is an approved construction/ownership handoff, not implementation evidence.
+Owning B-stage cutovers migrate callers/current contracts and inspect affected
+outputs; later evidence and justified ledger reconciliation remain required.
