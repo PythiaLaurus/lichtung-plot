@@ -169,7 +169,16 @@ fn fit_diagnostic_retains_caller_slot_after_bracket_sorting() {
     let theme = crate::Theme::Publication.resolve();
     theme.prepare_font_environment().unwrap();
     let style = SignificanceMarkStyle::default();
-    let label = theme.typography.effective_significance_label(Some(style));
+    let label = theme
+        .typography
+        .effective_significance_label(
+            Some(style),
+            &theme
+                .prepared_font_environment()
+                .unwrap()
+                .generation_resources(),
+        )
+        .unwrap();
     let address = ComponentAddress::root()
         .child(
             AddressRole::CanvasCell,
@@ -451,7 +460,14 @@ fn planner_retains_the_exact_effective_significance_label() {
     let plan_theme = crate::Theme::Nature.resolve();
     let label = plan_theme
         .typography
-        .effective_significance_label(Some(style));
+        .effective_significance_label(
+            Some(style),
+            &plan_theme
+                .prepared_font_environment()
+                .unwrap()
+                .generation_resources(),
+        )
+        .unwrap();
     let plan = plan_comparisons_with_label(
         &[comparison("a", "b", 0.01)],
         &categories(),
@@ -470,7 +486,7 @@ fn planner_retains_the_exact_effective_significance_label() {
     .unwrap();
 
     let planned_label = &plan.brackets[0].label;
-    assert_eq!(planned_label.plan.style.stack_source, label.stack);
+    assert_eq!(planned_label.plan.style.stack, label.stack);
     assert_eq!(planned_label.plan.style.paint, label.paint);
     assert_eq!(planned_label.plan.style.font_size, label.font_size);
     assert_eq!(planned_label.plan.style.weight, label.weight);

@@ -342,7 +342,7 @@ impl Plot {
                         color: context.theme.annotations.bracket_stroke.paint,
                         width: context.theme.annotations.bracket_stroke.width,
                         label_color: label.style.paint,
-                        font_family: data.copy_source_string(&label.style.stack_source)?,
+                        font_family: data.copy_font_stack(&label.style.stack)?,
                         font_size: label.style.font_size,
                         line_height: label.line_height(),
                         weight: label.style.weight,

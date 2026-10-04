@@ -37,9 +37,13 @@ pub(crate) fn unicode16_source(name: &str) -> String {
         .join("\n")
 }
 
-/// Preferred system font family.
+/// The literal name of the first named family in the built-in typography profile.
+///
+/// This string denotes that one family; it is not an operation-default sentinel.
 pub const DEFAULT_FONT_FAMILY: &str = "Noto Sans";
 
-/// Ordered CSS system-font fallback stack used by built-in themes.
+/// CSS publication spelling of the built-in typography profile.
+///
+/// Built-in roles retain typed preferences directly, independently of this string.
 pub const DEFAULT_FONT_FAMILY_STACK: &str =
     "Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif";

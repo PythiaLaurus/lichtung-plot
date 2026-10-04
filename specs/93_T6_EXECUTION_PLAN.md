@@ -64,7 +64,7 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6B | IN PROGRESS | T6A | Immutable theme, color, font, scale and exact-style migration |
 | T6B1 | IN PROGRESS | T6A | Validated color/font and component values in the single private representation; `refactor(theme): retain validated foundational values` |
 | T6B1a | COMPLETE | T6A | One Color/OpaqueColor paint representation and private channel/hex validation; `refactor(color): retain validated foundational paint values` |
-| T6B1b | PENDING | T6B1a | Typed font preferences and complete role-stack inputs; `refactor(font): retain validated role font stacks` |
+| T6B1b | COMPLETE | T6B1a | Typed font preferences and complete role-stack inputs; `refactor(font): retain validated role font stacks` |
 | T6B1c | PENDING | T6B1b | Exact relative spacing and bounded local metric operands; `feat(theme): retain exact relative spacing values` |
 | T6B1d | PENDING | T6B1c | Complete component/role/scale inputs and structural validation; `refactor(theme): retain complete validated components` |
 | T6B2 | PENDING | T6B1 | Complete Theme construction/customization and owner resolution using those values; `refactor(theme): construct immutable complete themes` |
@@ -113,6 +113,16 @@ The Canvas universal minimum is the existing ledger retirement
 `validation.canvas.minimum-size`, not a new size policy. T6C2 must remove its
 remaining public validation gate while preserving positive-size timing and
 complete-content/resource refusal.
+
+T6B1b evidence: `docs/font-stack-values.md` records typed literal/generic stacks
+through all eighteen roles, canonical selection, source requirements, retained
+plans, identity and CSS publication. The raw parser, parser cache and first-family
+sentinel are removed; current root constants remain only until their public
+cutover. Independent admission review closed hashing/equality, staged-copy,
+significance/Matrix clones and redundant child/census charges. Exact boundary
+tests cover actual examined bytes and single-use copy admission; fatal refusal
+does not become a cache miss. Focused font, Unicode Mark, census, lifecycle/cache,
+snapshot and Chinese fallback checks and strict Clippy pass with no repinning.
 
 The numeric/guide design refinement is complete in `06_NUMERIC_PRESENTATION.md`,
 `07_LOG10_DISPLAY.md` and `08_DISCRETE_GUIDES.md`. These architectural targets

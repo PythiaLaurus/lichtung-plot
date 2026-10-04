@@ -28,7 +28,6 @@ struct Inputs {
     axis_label_width: u64,
     content_height: bool,
     fill_content_height: bool,
-    standard: crate::layout::StandardPanelInputs,
     plot: crate::builder::ComposedInputs,
     theme: crate::theme::ResolvedTheme,
     scales: Option<FacetScales>,
@@ -45,7 +44,7 @@ impl Inputs {
         let environment = context.theme.prepared_font_environment()?;
         let resources = environment.generation_resources();
         let data = context.data.with_axis_resources(&resources);
-        Self::admit_theme_clone(context.theme, data)?;
+        let theme = context.theme.admitted_clone(data)?;
         let grid_role = if owner.leaf_role() == AddressRole::CanvasCell {
             AddressRole::CanvasGrid
         } else {
@@ -58,40 +57,12 @@ impl Inputs {
             axis_label_width: context.axis_label_width.to_bits(),
             content_height: context.content_height,
             fill_content_height: context.fill_content_height,
-            standard: crate::layout::StandardPanelInputs::new(context.theme)?,
             plot: plot.retain_composed_inputs(environment)?,
-            theme: context.theme.clone(),
+            theme,
             scales: context.facet_scales(),
             feedback: round.child_inputs(&owners)?,
             owners,
         })
-    }
-
-    fn admit_theme_clone(
-        theme: &crate::theme::ResolvedTheme,
-        data: crate::data::PlotData<'_>,
-    ) -> Result<(), Error> {
-        data.admit_clone_slice(&theme.colors)?;
-        data.admit_clone_str(&theme.font_family)?;
-        for appearance in [
-            &theme.typography.title,
-            &theme.typography.subtitle,
-            &theme.typography.caption,
-            &theme.typography.axis_title,
-            &theme.typography.tick_label,
-            &theme.typography.significance_label,
-            &theme.typography.estimate_detail,
-            &theme.typography.waterfall_total,
-            &theme.typography.point_layer_label,
-            &theme.typography.panel_text,
-            &theme.typography.contrast_light,
-            &theme.typography.contrast_dark,
-            &theme.typography.legend_title,
-            &theme.typography.legend_label,
-        ] {
-            data.admit_clone_str(&appearance.stack)?;
-        }
-        Ok(())
     }
 
     fn matches(
@@ -110,10 +81,9 @@ impl Inputs {
             && self.axis_label_width == context.axis_label_width.to_bits()
             && self.content_height == context.content_height
             && self.fill_content_height == context.fill_content_height
-            && self.standard.matches(context.theme)
             && plot
                 .same_composed_inputs(&self.plot, context.data.with_axis_resources(&resources))?
-            && self.theme == *context.theme
+            && self.theme.same(context.theme, &resources)?
             && self.scales == context.facet_scales()
             && round.child_inputs_equal(&self.feedback, &self.owners)?
             && round.child_stable(&self.owners)?)
@@ -491,6 +461,71 @@ mod tests {
     }
 
     #[test]
+    fn changed_child_tick_stack_cannot_bypass_content_admission() {
+        let source = Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0]),
+            crate::NumericValues::new("y", [0.0, 1.0]),
+        )
+        .erase();
+        let theme = crate::Theme::Publication.resolve();
+        theme.prepare_font_environment().unwrap();
+        crate::layout::plan_exact_root(
+            800,
+            600,
+            |_| Ok(()),
+            |(), assigned, round| {
+                let owner = ComponentAddress::root().child(
+                    AddressRole::CanvasCell,
+                    0,
+                    round.resources(),
+                )?;
+                let context = PlotRenderContext::new(
+                    source.data(),
+                    crate::layout::PanelBox::new(20.0, 400.0, 20.0, 500.0),
+                    &theme,
+                );
+                let key = Inputs::new(&source, context, &owner, round)?;
+                let resources = theme.prepared_font_environment()?.generation_resources();
+                let mut changed =
+                    theme.admitted_clone(source.data().with_axis_resources(&resources))?;
+                changed.typography.tick_label.stack = crate::font::canonical::FontStack::new(
+                    [crate::font::canonical::FontFamily::named("Noto Sand")?]
+                        .into_iter()
+                        .chain(
+                            theme.typography.tick_label.stack.families()[1..]
+                                .iter()
+                                .cloned(),
+                        ),
+                )?;
+                let changed_context =
+                    PlotRenderContext::new(source.data(), context.panel, &changed);
+                let before = resources.usage().unwrap().1;
+                assert!(!key.matches(&source, changed_context, &owner, round)?);
+                let work = resources.usage().unwrap().1 - before;
+                // Four complete unchanged role stacks (68 each), then the changed
+                // tick role's first name through its ninth/terminating byte (12).
+                assert!(work >= 4 * 68 + 12);
+                for remaining in [0, work - 1, work] {
+                    let before = resources.usage().unwrap().1;
+                    let bytes = resources.byte_usage().unwrap();
+                    resources.set_test_limits(before + remaining, bytes);
+                    let result = key.matches(&source, changed_context, &owner, round);
+                    if remaining == work {
+                        assert!(!result?);
+                    } else {
+                        assert!(result.is_err());
+                    }
+                    assert_eq!(resources.usage().unwrap().1 - before, remaining);
+                    assert_eq!(resources.byte_usage().unwrap(), bytes);
+                }
+                Ok(crate::layout::MeasuredLayout::new(assigned, ()))
+            },
+            |(), _, (), _| Ok(()),
+        )
+        .unwrap();
+    }
+
+    #[test]
     fn complete_theme_clone_admits_exact_owned_bytes_and_records_before_copy() {
         let source = Plot::scatter(
             crate::NumericValues::new("x", [0.0, 1.0]),
@@ -513,19 +548,26 @@ mod tests {
             &mut theme.typography.contrast_dark.stack,
             &mut theme.typography.legend_title.stack,
             &mut theme.typography.legend_label.stack,
+            &mut theme.typography.facet_header.stack,
+            &mut theme.typography.composition_header.stack,
+            &mut theme.typography.text_panel_title.stack,
+            &mut theme.typography.body.stack,
         ]
         .into_iter()
         .enumerate()
         {
-            *stack = "s".repeat(index + 1);
+            *stack = crate::font::canonical::named_stack(&[&"s".repeat(index + 1)]);
         }
-        theme.font_family = "s".repeat(15);
-        let bytes = 120 + std::mem::size_of_val(theme.colors.as_slice()) as u64;
-        let records = theme.colors.len() as u128 + 15;
+        let bytes = 171
+            + 18 * std::mem::size_of::<crate::font::canonical::FontFamily>() as u64
+            + std::mem::size_of_val(theme.colors.as_slice()) as u64;
+        let records = theme.colors.len() as u128 + 36;
         let resources = crate::font::canonical::OperationGenerationResources::new();
         resources.set_test_limits(u128::MAX, bytes);
         resources.claim_slots(1_000_000 - records).unwrap();
-        Inputs::admit_theme_clone(&theme, source.data().with_axis_resources(&resources)).unwrap();
+        theme
+            .admitted_clone(source.data().with_axis_resources(&resources))
+            .unwrap();
         assert_eq!(resources.byte_usage().unwrap(), bytes);
         assert_eq!(resources.usage().unwrap().0, 1_000_000);
 
@@ -535,16 +577,16 @@ mod tests {
             resources
                 .claim_slots(1_000_000 - records + u128::from(!refuse_bytes))
                 .unwrap();
-            let error =
-                Inputs::admit_theme_clone(&theme, source.data().with_axis_resources(&resources))
-                    .unwrap_err();
+            let error = theme
+                .admitted_clone(source.data().with_axis_resources(&resources))
+                .unwrap_err();
             assert!(error.to_string().contains(if refuse_bytes {
                 "system-font bytes"
             } else {
                 "retained planning records"
             }));
-            // The last stack has fourteen bytes. Its rejected claim never copies it.
-            assert_eq!(resources.byte_usage().unwrap(), bytes - 14);
+            // The final role's literal name has eighteen bytes; refusal precedes copying it.
+            assert_eq!(resources.byte_usage().unwrap(), bytes - 18);
             assert_eq!(resources.usage().unwrap().0, 1_000_000);
         }
     }

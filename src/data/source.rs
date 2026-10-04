@@ -202,6 +202,36 @@ impl<'a> PlotData<'a> {
         Ok(value)
     }
 
+    pub(crate) fn copy_font_stack(
+        self,
+        source: &crate::font::canonical::FontStack,
+    ) -> Result<crate::font::canonical::FontStack, Error> {
+        #[cfg(test)]
+        let local;
+        #[cfg(test)]
+        let resources = if let Some(resources) = self.axis_resources {
+            resources
+        } else {
+            local = crate::font::canonical::OperationGenerationResources::new();
+            &local
+        };
+        #[cfg(not(test))]
+        let resources = self.axis_resources.ok_or_else(|| {
+            Error::Render("font stack retention requires operation resources".into())
+        })?;
+        source
+            .copy_with_generation(resources)
+            .map_err(|error| Error::Render(format!("font stack retention: {error}")))
+    }
+
+    pub(crate) fn require_source_resources(
+        self,
+    ) -> Result<&'a crate::font::canonical::OperationGenerationResources, Error> {
+        self.axis_resources.ok_or_else(|| {
+            Error::Render("owned theme retention requires operation resources".into())
+        })
+    }
+
     pub(crate) fn source_levels(self, values: &[String]) -> Result<Vec<String>, Error> {
         let mut levels = Vec::new();
         for value in values {

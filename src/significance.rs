@@ -69,9 +69,10 @@ pub(crate) fn plan(
     theme: &crate::theme::ResolvedTheme,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<SignificancePlan, crate::layout::fit::PlanError> {
-    let label = theme
-        .typography
-        .effective_significance_label(chart.significance_mark_style_override());
+    let label = theme.typography.effective_significance_label(
+        chart.significance_mark_style_override(),
+        &theme.prepared_font_environment()?.generation_resources(),
+    )?;
     plan_comparisons_with_label(
         chart.significance_annotations(),
         categories,
@@ -106,9 +107,10 @@ fn plan_comparisons(
     mark_style: SignificanceMarkStyle,
 ) -> Result<SignificancePlan, Error> {
     let theme = crate::Theme::Publication.resolve();
-    let label = theme
-        .typography
-        .effective_significance_label(Some(mark_style));
+    let label = theme.typography.effective_significance_label(
+        Some(mark_style),
+        &theme.prepared_font_environment()?.generation_resources(),
+    )?;
     plan_comparisons_with_label(
         annotations,
         categories,
@@ -185,9 +187,10 @@ fn plan_comparisons_at(
     mark_style: SignificanceMarkStyle,
 ) -> Result<SignificancePlan, Error> {
     let theme = crate::Theme::Publication.resolve();
-    let label = theme
-        .typography
-        .effective_significance_label(Some(mark_style));
+    let label = theme.typography.effective_significance_label(
+        Some(mark_style),
+        &theme.prepared_font_environment()?.generation_resources(),
+    )?;
     plan_comparisons_at_with_label(
         annotations,
         categories,
@@ -594,7 +597,9 @@ fn plan_comparisons_at_with_label(
             color: theme.annotations.bracket_stroke.paint,
             width: theme.annotations.bracket_stroke.width,
             label_color: label.style.paint,
-            font_family: label.style.stack_source.clone(),
+            font_family: label
+                .copy_stack()
+                .map_err(|error| Error::Render(error.to_string()))?,
             font_size: label.style.font_size,
             line_height: label.line_height(),
             weight: label.style.weight,
@@ -812,9 +817,10 @@ fn plan_grouped_oriented(
             resolve_grouped_endpoint(endpoint_b, categories, groups, rendered_maxima)?;
         }
     }
-    let label = theme
-        .typography
-        .effective_significance_label(chart.significance_mark_style_override());
+    let label = theme.typography.effective_significance_label(
+        chart.significance_mark_style_override(),
+        &theme.prepared_font_environment()?.generation_resources(),
+    )?;
     let mut result = plan_comparisons_at_with_label(
         chart.significance_annotations(),
         &labels,
@@ -1200,7 +1206,9 @@ pub(crate) fn render(
             color: theme.annotations.bracket_stroke.paint,
             width: theme.annotations.bracket_stroke.width,
             label_color: label.style.paint,
-            font_family: label.style.stack_source.clone(),
+            font_family: label
+                .copy_stack()
+                .map_err(|error| Error::Render(error.to_string()))?,
             font_size: label.style.font_size,
             line_height: label.line_height(),
             weight: label.style.weight,

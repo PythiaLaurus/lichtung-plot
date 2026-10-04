@@ -121,7 +121,7 @@ pub(super) fn plan_facet_strip(
     let plan = crate::layout::fit::measured(crate::layout::fit::text(
         theme,
         &label,
-        &theme.legacy_text_appearance(theme.facet_header_font_size, crate::TextWeight::Normal),
+        &theme.typography.facet_header,
         facet.panel.width() - 16.0,
         PhysicalTextAlignment::Center,
         "facet strip",

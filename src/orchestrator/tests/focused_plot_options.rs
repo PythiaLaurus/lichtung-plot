@@ -563,7 +563,9 @@ fn text_bounds(backend: &RecordingBackend, text: &str) -> PanelBox {
         .unwrap_or_else(|| panic!("text draw {text:?} should exist"));
     assert_eq!(style.anchor, TextAnchor::Middle);
     let theme = crate::Theme::Publication.resolve();
-    let mut appearance = theme.legacy_text_appearance(style.font_size, style.weight);
+    let mut appearance = theme.typography.panel_text.clone();
+    appearance.font_size = style.font_size;
+    appearance.weight = style.weight;
     appearance.stack.clone_from(&style.font_family);
     let plan = theme
         .measure_text(

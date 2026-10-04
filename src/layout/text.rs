@@ -10,9 +10,9 @@ use unicode_script::{Script, UnicodeScript};
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::font::canonical::{
-    self, DesignMetrics, FaceIdentity, FamilyPreference, FamilyStackError, FontError, GlyphInk,
-    PairProvenance, PreparedFontEnvironment, RequestedWeight, ResolvedFontPair,
-    ScalarFaceSelection, ShapedRun as CanonicalShapedRun, ShapingDirection,
+    self, DesignMetrics, FaceIdentity, FontError, FontStack, GlyphInk, PairProvenance,
+    PreparedFontEnvironment, RequestedWeight, ResolvedFontPair, ScalarFaceSelection,
+    ShapedRun as CanonicalShapedRun, ShapingDirection,
 };
 use crate::theme::Color;
 use crate::TextWeight;
@@ -66,7 +66,7 @@ pub(crate) struct TextPlanProvenance {
 #[derive(Debug, Clone)]
 pub(crate) struct TextPlanInput<'a> {
     pub(crate) source: &'a str,
-    pub(crate) stack: &'a str,
+    pub(crate) stack: &'a FontStack,
     pub(crate) weight: TextWeight,
     pub(crate) font_size: u32,
     pub(crate) line_height: TextLineHeight,
@@ -162,7 +162,7 @@ pub(crate) struct TextLinePlan {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ResolvedTextStyle {
     pub(crate) stack_source: String,
-    pub(crate) stack: Vec<FamilyPreference>,
+    pub(crate) stack: FontStack,
     pub(crate) weight: TextWeight,
     pub(crate) font_size: u32,
     pub(crate) line_height_quanta: i64,
@@ -266,6 +266,29 @@ impl std::ops::Deref for ResolvedTextPlan {
 }
 
 impl ResolvedTextPlan {
+    pub(crate) fn same_stack(&self, stack: &FontStack) -> Result<bool, TextPlanError> {
+        let environment = &self
+            .1
+            .as_ref()
+            .ok_or(TextPlanError::Arithmetic("missing text analysis"))?
+            .environment;
+        Ok(self
+            .style
+            .stack
+            .same(stack, &environment.generation_resources())?)
+    }
+    pub(crate) fn copy_stack(&self) -> Result<FontStack, TextPlanError> {
+        let environment = &self
+            .1
+            .as_ref()
+            .ok_or(TextPlanError::Arithmetic("missing text analysis"))?
+            .environment;
+        Ok(self
+            .style
+            .stack
+            .copy_with_generation(&environment.generation_resources())?)
+    }
+
     pub(crate) fn intrinsic_from_analysis(
         &self,
         preferred_lines: usize,
@@ -400,8 +423,9 @@ impl ResolvedTextPlan {
             .ok_or(TextPlanError::Arithmetic("missing text analysis"))?;
         let environment = &analysis.environment;
         let original = &analysis.original;
-        if input.source != original.source
-            || input.stack != original.style.stack_source
+        let resources = environment.generation_resources();
+        if !canonical::same_bytes(input.source, &original.source, &resources)?
+            || !input.stack.same(&original.style.stack, &resources)?
             || input.weight != original.style.weight
             || input.font_size != original.style.font_size
         {
@@ -476,7 +500,7 @@ impl ResolvedTextPlan {
         )?;
         candidates.extend_from_slice(&provenance.candidates);
         input.provenance.pair_ordinal = provenance.pair_ordinal;
-        let stack = environment.parse_family_stack(input.stack)?;
+        let stack = input.stack;
         let mut plan = finalize_plan(
             environment,
             input,
@@ -723,8 +747,6 @@ pub(crate) struct TextFitMiss {
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum TextPlanError {
     #[error(transparent)]
-    Stack(#[from] FamilyStackError),
-    #[error(transparent)]
     Font(FontError),
     #[error(transparent)]
     Fit(#[from] TextFitMiss),
@@ -876,7 +898,7 @@ fn measure_text(
     }
     let _ = u32::try_from(input.source.len()).map_err(|_| TextPlanError::SourceTooLong)?;
 
-    let stack = environment.parse_family_stack(input.stack)?;
+    let stack = input.stack;
     let line_height_quanta = resolve_line_height(input.line_height, input.font_size)?;
     claim_processing_visits(environment, input.source.chars().count() as u128)?;
     let scalar_count = input.source.chars().count();
@@ -891,7 +913,7 @@ fn measure_text(
         required_scalars.push('-');
     }
     let weight = requested_weight(input.weight);
-    let prepared = environment.prepared_pair(&stack, weight)?;
+    let prepared = environment.prepared_pair(stack, weight)?;
     let mut pair = match prepared {
         Some(pair) if prepared_only => pair,
         Some(pair) => {
@@ -903,7 +925,7 @@ fn measure_text(
             }) {
                 environment.resolve_pair(
                     pair.provenance.pair_ordinal,
-                    &stack,
+                    stack,
                     weight,
                     &required_scalars,
                 )?
@@ -915,13 +937,13 @@ fn measure_text(
         None => {
             environment.prepare_pair(
                 input.provenance.pair_ordinal,
-                &stack,
+                stack,
                 weight,
                 &required_scalars,
                 None,
             )?;
             environment
-                .prepared_pair(&stack, weight)?
+                .prepared_pair(stack, weight)?
                 .ok_or(TextPlanError::MissingPreparedPair)?
         }
     };
@@ -929,7 +951,7 @@ fn measure_text(
     if !prepared_only {
         environment.prepare_source_units(pair.provenance.pair_ordinal, input.source, None)?;
         pair.selected_units = environment
-            .prepared_pair(&stack, weight)?
+            .prepared_pair(stack, weight)?
             .ok_or(TextPlanError::MissingPreparedPair)?
             .selected_units;
     }
@@ -2367,7 +2389,7 @@ fn scaled_metrics(metrics: DesignMetrics, font_size: u32) -> Result<(i64, i64), 
 fn finalize_plan(
     environment: &PreparedFontEnvironment,
     input: TextPlanInput<'_>,
-    stack: Vec<FamilyPreference>,
+    stack: &FontStack,
     pair_provenance: PairProvenance,
     line_height_quanta: i64,
     mut built_lines: Vec<BuiltLine>,
@@ -2448,7 +2470,8 @@ fn finalize_plan(
     };
 
     let mut source = String::new();
-    let mut stack_source = String::new();
+    let stack_source = stack.css(&environment.font_resources()?)?;
+    let stack = stack.copy_with_stage(&environment.font_resources()?, None)?;
     let mut lines = Vec::new();
     claim_unicode(
         environment,
@@ -2456,10 +2479,7 @@ fn finalize_plan(
             input
                 .source
                 .len()
-                .checked_add(input.stack.len())
-                .and_then(|bytes| {
-                    bytes.checked_add(size_of::<ResolvedTextPayload>() + 2 * size_of::<usize>())
-                })
+                .checked_add(size_of::<ResolvedTextPayload>() + 2 * size_of::<usize>())
                 .ok_or(TextPlanError::Arithmetic("text payload bytes"))?,
         )
         .map_err(|_| TextPlanError::Arithmetic("text payload bytes"))?,
@@ -2468,14 +2488,10 @@ fn finalize_plan(
     source
         .try_reserve_exact(input.source.len())
         .map_err(|_| TextPlanError::Allocation("text source"))?;
-    stack_source
-        .try_reserve_exact(input.stack.len())
-        .map_err(|_| TextPlanError::Allocation("text stack source"))?;
     super::unicode16::reserve(&mut lines, built_lines.len(), &mut |bytes, work| {
         claim_unicode(environment, bytes, work)
     })?;
     source.push_str(input.source);
-    stack_source.push_str(input.stack);
     lines.extend(built_lines.into_iter().map(|line| line.plan));
     Ok(ResolvedTextPlan(
         std::sync::Arc::new(ResolvedTextPayload {
@@ -2770,7 +2786,7 @@ mod tests {
     ) -> TextPlanInput<'_> {
         TextPlanInput {
             source,
-            stack: "  Test Sans  ",
+            stack: canonical::test_sans_stack(),
             weight: TextWeight::Normal,
             font_size: 10,
             line_height: TextLineHeight::Multiplier(1.2),
@@ -2919,24 +2935,22 @@ mod tests {
     }
 
     #[test]
-    fn stack_parser_trims_names_and_closes_generics() {
-        assert_eq!(
-            canonical::parse_family_stack(" Test Sans , serif, SANS-SERIF, monospace").unwrap(),
-            [
-                FamilyPreference::Named("Test Sans".into()),
-                FamilyPreference::Serif,
-                FamilyPreference::SansSerif,
-                FamilyPreference::Monospace,
-            ]
-        );
-        assert!(matches!(
-            canonical::parse_family_stack("Test Sans,,serif"),
-            Err(FamilyStackError::EmptyEntry { entry_index: 1 })
-        ));
-        assert!(matches!(
-            canonical::parse_family_stack("cursive"),
-            Err(FamilyStackError::UnsupportedGeneric { .. })
-        ));
+    fn literal_families_reject_untrimmed_names_and_keep_keywords_named() {
+        use canonical::{FontFamily, GenericFontFamily};
+        for name in [
+            " Test Sans",
+            "Test Sans ",
+            "",
+            "A\nB",
+            "A\u{7f}B",
+            "\u{2003}Test Sans",
+        ] {
+            assert!(FontFamily::named(name).is_err(), "{name:?}");
+        }
+        assert!(FontStack::new([]).is_err());
+        let named = FontFamily::named("sans-serif").unwrap();
+        assert_eq!(named.name(), Some("sans-serif"));
+        assert_ne!(named, FontFamily::generic(GenericFontFamily::SansSerif));
     }
 
     #[test]
@@ -3051,12 +3065,35 @@ mod tests {
         assert_eq!(plan.source, expected.source);
         assert_eq!(plan.style.provenance, expected.provenance);
         assert_eq!(plan.pair_provenance.pair_ordinal, 7);
-        assert_eq!(plan.style.stack_source, expected.stack);
+        assert_eq!(&plan.style.stack, expected.stack);
         assert_eq!(plan.style.weight, expected.weight);
         assert_eq!(plan.style.font_size, expected.font_size);
         assert_eq!(plan.style.paint, expected.paint);
         assert_eq!(plan.style.alignment, expected.alignment);
         assert!(plan.style.exact_override);
+    }
+
+    #[test]
+    fn reflow_accepts_exact_stack_clones_and_rejects_different_literal_profiles() {
+        let environment = PreparedFontEnvironment::synthetic();
+        let request = input("A A", i64::MAX, PhysicalTextAlignment::Start);
+        let plan = environment.plan_text(request.clone()).unwrap();
+        let exact = plan.copy_stack().unwrap();
+        let mut changed = request;
+        changed.stack = &exact;
+        assert_eq!(plan.reflow(changed.clone()).unwrap().style.stack, exact);
+        for stack in [
+            canonical::named_stack(&["TEST SANS"]),
+            canonical::named_stack(&["Test Sans", "Test Sans"]),
+            canonical::named_stack(&["Test Sans, Test Sans"]),
+        ] {
+            let mut changed = changed.clone();
+            changed.stack = &stack;
+            assert!(matches!(
+                plan.reflow(changed.clone()),
+                Err(TextPlanError::Arithmetic("text analysis profile mismatch"))
+            ));
+        }
     }
 
     #[test]
@@ -3497,7 +3534,8 @@ mod tests {
                 768 * CSS_PIXEL_QUANTA,
                 PhysicalTextAlignment::Start,
             );
-            request.stack = crate::DEFAULT_FONT_FAMILY_STACK;
+            let stack = canonical::builtin_font_stack();
+            request.stack = &stack;
             request.font_size = 15;
             TEXT_WORK.with(|work| work.set(TextWork::default()));
             let planned = environment.plan_text(request).unwrap();

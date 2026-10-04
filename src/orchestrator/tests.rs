@@ -120,7 +120,7 @@ impl Backend for RecordingBackend {
             &plan.source,
             &TextStyle {
                 color: plan.style.paint,
-                font_family: plan.style.stack_source.clone(),
+                font_family: plan.style.stack.clone(),
                 font_size: plan.style.font_size,
                 weight: plan.style.weight,
                 anchor,

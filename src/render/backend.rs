@@ -272,8 +272,8 @@ pub struct TextStyle {
     /// Complete text paint.
     pub(crate) color: Color,
     /// Font family.
-    pub font_family: String,
-    /// Font size in points.
+    pub(crate) font_family: crate::font::canonical::FontStack,
+    /// Font size in actual CSS pixels.
     pub font_size: u32,
     /// Closed font-weight policy.
     pub weight: crate::TextWeight,
@@ -356,7 +356,7 @@ pub struct BracketStyle {
     /// Stroke width in pixels.
     pub width: f32,
     /// Label font family.
-    pub font_family: String,
+    pub(crate) font_family: crate::font::canonical::FontStack,
     /// Label font size in pixels.
     pub font_size: u32,
     /// Label line height in pixels.
@@ -678,7 +678,7 @@ pub trait Backend {
         self.draw_text(
             placement.position,
             &plan.source,
-            &planned_text_style(placement, plan),
+            &planned_text_style(placement, plan)?,
         )
     }
 
@@ -823,15 +823,17 @@ pub(crate) fn validate_text(position: Point2D, style: &TextStyle) -> Result<Cano
 pub(crate) fn planned_text_style(
     placement: PlannedTextPlacement,
     plan: &ResolvedTextPlan,
-) -> TextStyle {
-    TextStyle {
+) -> Result<TextStyle, Error> {
+    Ok(TextStyle {
         color: plan.style.paint,
-        font_family: plan.style.stack_source.clone(),
+        font_family: plan
+            .copy_stack()
+            .map_err(|error| Error::Render(error.to_string()))?,
         font_size: plan.style.font_size,
         weight: plan.style.weight,
         anchor: placement.anchor,
         rotation: placement.rotation,
-    }
+    })
 }
 
 pub(crate) const fn nearest_even_text_half(value: i64) -> Option<i64> {
@@ -1048,7 +1050,9 @@ pub(crate) fn validate_bracket_label(
     if call.label.exact_override != plan.style.exact_override
         || call.bracket.label != plan.source
         || call.style.label_color != plan.style.paint
-        || call.style.font_family != plan.style.stack_source
+        || !plan
+            .same_stack(&call.style.font_family)
+            .map_err(|error| Error::Render(error.to_string()))?
         || call.style.font_size != plan.style.font_size
         || call.style.weight != plan.style.weight
     {
@@ -1164,7 +1168,12 @@ mod tests {
                 color: Color::rgb(0, 0, 0),
                 width: 1.0,
                 label_color: Color::rgb(0, 0, 0),
-                font_family: "sans-serif".into(),
+                font_family: crate::font::canonical::FontStack::new([
+                    crate::font::canonical::FontFamily::generic(
+                        crate::font::canonical::GenericFontFamily::SansSerif,
+                    ),
+                ])
+                .unwrap(),
                 font_size: 12,
                 line_height: 14.4,
                 weight: crate::TextWeight::Normal,
@@ -1188,7 +1197,12 @@ mod tests {
     fn valid_text_style() -> TextStyle {
         TextStyle {
             color: Color::rgb(0, 0, 0),
-            font_family: "sans-serif".into(),
+            font_family: crate::font::canonical::FontStack::new([
+                crate::font::canonical::FontFamily::generic(
+                    crate::font::canonical::GenericFontFamily::SansSerif,
+                ),
+            ])
+            .unwrap(),
             font_size: 12,
             weight: crate::TextWeight::Normal,
             anchor: TextAnchor::Start,
@@ -1233,7 +1247,7 @@ mod tests {
         let plan = environment
             .plan_text(crate::layout::TextPlanInput {
                 source: "A\nAA",
-                stack: "Test Sans",
+                stack: crate::font::canonical::test_sans_stack(),
                 weight: crate::TextWeight::Normal,
                 font_size: 10,
                 line_height: crate::layout::TextLineHeight::ResolvedQuanta(17 * 1024),

@@ -788,7 +788,7 @@ pub(crate) fn measure(
         .map(|appearance| appearance.stroke.backend_style());
     // Matrix owns its two-spine cell topology. Common plans own
     // ticks and outer text, without introducing a four-sided frame or grid.
-    let mut axis_theme = theme.clone();
+    let mut axis_theme = theme.admitted_clone(data)?;
     axis_theme.axes.frame = None;
     axis_theme.axes.grid = None;
 

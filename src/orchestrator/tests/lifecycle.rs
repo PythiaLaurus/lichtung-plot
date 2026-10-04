@@ -245,7 +245,12 @@ fn deferred_backend_forwards_signed_text_positions_unchanged() {
                 "outside",
                 &TextStyle {
                     color: crate::theme::Color::rgb(0, 0, 0),
-                    font_family: "sans-serif".into(),
+                    font_family: crate::font::canonical::FontStack::new([
+                        crate::font::canonical::FontFamily::generic(
+                            crate::font::canonical::GenericFontFamily::SansSerif,
+                        ),
+                    ])
+                    .unwrap(),
                     font_size: 12,
                     weight: crate::TextWeight::Normal,
                     anchor: TextAnchor::Start,

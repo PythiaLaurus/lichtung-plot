@@ -6,11 +6,13 @@ use std::ops::Range;
 use crate::theme::{color_from_rgb, Color};
 use crate::Error;
 
+#[cfg(test)]
+use super::backend::{validate_bracket, validate_text, TextAnchor};
 use super::backend::{
-    validate_bracket, validate_clip_region, validate_fill_style, validate_rounded_rect,
-    validate_surface_bounds, validate_text, Backend, BracketStyle, FillStyle, GradientStop,
-    LayerRole, LineStyle, PlannedSignificanceCall, PlannedTextPlacement, Point2D, PointStyle,
-    SignificanceBracket, SurfaceRole, TextAnchor, TextStyle, POLYGON_MITER_LIMIT,
+    validate_clip_region, validate_fill_style, validate_rounded_rect, validate_surface_bounds,
+    Backend, BracketStyle, FillStyle, GradientStop, LayerRole, LineStyle, PlannedSignificanceCall,
+    PlannedTextPlacement, Point2D, PointStyle, SignificanceBracket, SurfaceRole, TextStyle,
+    POLYGON_MITER_LIMIT,
 };
 use super::coordinates::{self, CanonicalPoint};
 use super::primitives::{
@@ -947,6 +949,24 @@ fn emit_svg_parts<S: SvgSink>(
 macro_rules! svg_backend_methods {
     ($(fn $name:ident($($arg:ident: $ty:ty),*);)*) => {
         impl Backend for SvgBackend {
+            #[cfg(test)]
+            fn draw_text(&mut self, position: Point2D, text: &str, style: &TextStyle) -> Result<(), Error> {
+                SvgSerializer::draw_text(self, position, text, style)?;
+                self.check_buffers()
+            }
+            #[cfg(test)]
+            fn draw_bracket(&mut self, bracket: &SignificanceBracket, style: &BracketStyle) -> Result<(), Error> {
+                SvgSerializer::draw_bracket(self, bracket, style)?;
+                self.check_buffers()
+            }
+            #[cfg(not(test))]
+            fn draw_text(&mut self, _position: Point2D, _text: &str, _style: &TextStyle) -> Result<(), Error> {
+                Err(Error::Render("SVG text publication requires a resolved text plan".into()))
+            }
+            #[cfg(not(test))]
+            fn draw_bracket(&mut self, _bracket: &SignificanceBracket, _style: &BracketStyle) -> Result<(), Error> {
+                Err(Error::Render("SVG bracket publication requires a resolved label plan".into()))
+            }
             $(fn $name(&mut self, $($arg: $ty),*) -> Result<(), Error> {
                 SvgSerializer::$name(self, $($arg),*)?;
                 self.check_buffers()
@@ -977,10 +997,8 @@ svg_backend_methods! {
     fn draw_line(points: &[Point2D], style: &LineStyle);
     fn draw_polygon(points: &[Point2D], style: &FillStyle);
     fn draw_linear_gradient(bounds: PanelBox, start: Point2D, end: Point2D, stops: &[GradientStop]);
-    fn draw_text(position: Point2D, text: &str, style: &TextStyle);
     fn draw_planned_text(placement: PlannedTextPlacement, plan: &ResolvedTextPlan);
     fn draw_rounded_rect(x: f64, y: f64, width: f64, height: f64, radius: f64, style: &FillStyle);
-    fn draw_bracket(bracket: &SignificanceBracket, style: &BracketStyle);
     fn draw_planned_bracket(call: PlannedSignificanceCall<'_>);
 }
 
@@ -1771,6 +1789,7 @@ impl<S: SvgSink> SvgSerializer<S> {
         Ok(())
     }
 
+    #[cfg(test)]
     pub(crate) fn draw_text(
         &mut self,
         position: Point2D,
@@ -1805,7 +1824,7 @@ impl<S: SvgSink> SvgSerializer<S> {
                 "<text x=\"{}\" y=\"{}\" font-family=\"{}\" font-size=\"{}\"{weight}{preserve_space} {fill} text-anchor=\"{anchor}\" dominant-baseline=\"middle\" transform=\"rotate({},{},{})\">{escaped}</text>",
                 x,
                 y,
-                Self::escape_text(&style.font_family),
+                Self::escape_text(&style.font_family.css(&crate::font::canonical::OperationFontResources::new()).map_err(|error| Error::Render(error.to_string()))?),
                 style.font_size,
                 canonical.rotation,
                 x,
@@ -1817,7 +1836,7 @@ impl<S: SvgSink> SvgSerializer<S> {
                 "<text x=\"{}\" y=\"{}\" font-family=\"{}\" font-size=\"{}\"{weight}{preserve_space} {fill} text-anchor=\"{anchor}\" dominant-baseline=\"middle\">{escaped}</text>",
                 x,
                 y,
-                Self::escape_text(&style.font_family),
+                Self::escape_text(&style.font_family.css(&crate::font::canonical::OperationFontResources::new()).map_err(|error| Error::Render(error.to_string()))?),
                 style.font_size
             );
         }
@@ -1843,6 +1862,7 @@ impl<S: SvgSink> SvgSerializer<S> {
         self.draw_multiline_planned_text(text)
     }
 
+    #[cfg(test)]
     pub(crate) fn draw_bracket(
         &mut self,
         bracket: &SignificanceBracket,
@@ -1853,7 +1873,11 @@ impl<S: SvgSink> SvgSerializer<S> {
         let stroke = SvgPaint::from(style.color).attributes("stroke");
         let fill = SvgPaint::from(style.label_color).attributes("fill");
         let label = Self::escape_text(&bracket.label);
-        let font_family = Self::escape_text(&style.font_family);
+        let css = style
+            .font_family
+            .css(&crate::font::canonical::OperationFontResources::new())
+            .map_err(|error| Error::Render(error.to_string()))?;
+        let font_family = Self::escape_text(&css);
         let weight = FontWeight(style.weight);
         let height = self.height;
         let line_start_y = canonical.line_start.y.inverted(height)?;
@@ -2151,7 +2175,7 @@ mod tests {
         let plan = environment
             .plan_text(TextPlanInput {
                 source: "A",
-                stack: "Test Sans",
+                stack: crate::font::canonical::test_sans_stack(),
                 weight: crate::TextWeight::Normal,
                 font_size: 12,
                 line_height: TextLineHeight::Multiplier(1.2),
@@ -2314,7 +2338,12 @@ mod tests {
     fn test_text_style() -> TextStyle {
         TextStyle {
             color: Color::rgb(0, 0, 0),
-            font_family: "sans-serif".into(),
+            font_family: crate::font::canonical::FontStack::new([
+                crate::font::canonical::FontFamily::generic(
+                    crate::font::canonical::GenericFontFamily::SansSerif,
+                ),
+            ])
+            .unwrap(),
             font_size: 12,
             weight: crate::TextWeight::Normal,
             anchor: TextAnchor::Start,
@@ -2351,7 +2380,7 @@ mod tests {
         let plan = PreparedFontEnvironment::synthetic()
             .plan_text(TextPlanInput {
                 source: "A\nA",
-                stack: "Test Sans",
+                stack: crate::font::canonical::test_sans_stack(),
                 weight: crate::TextWeight::Semibold,
                 font_size: 12,
                 line_height: TextLineHeight::Multiplier(1.2),
@@ -2399,7 +2428,7 @@ mod tests {
         let mut plan = PreparedFontEnvironment::synthetic()
             .plan_text(TextPlanInput {
                 source: "A",
-                stack: "Test Sans",
+                stack: crate::font::canonical::test_sans_stack(),
                 weight: crate::TextWeight::Normal,
                 font_size: 12,
                 line_height: TextLineHeight::Multiplier(1.2),
@@ -2770,12 +2799,12 @@ mod tests {
         let special = "<&\"'>";
         let escaped = "&lt;&amp;&quot;&apos;&gt;";
         let mut text_style = test_text_style();
-        text_style.font_family = special.into();
+        text_style.font_family = crate::font::canonical::named_stack(&[special]);
         let bracket_style = BracketStyle {
             color: Color::rgb(0, 0, 0),
             width: 1.0,
             label_color: Color::rgb(0, 0, 0),
-            font_family: special.into(),
+            font_family: crate::font::canonical::named_stack(&[special]),
             font_size: 12,
             line_height: 14.4,
             weight: crate::TextWeight::Normal,
@@ -2805,11 +2834,53 @@ mod tests {
         let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
         assert!(svg.contains(&format!("<g id=\"{escaped}\">")));
         assert_eq!(
-            svg.matches(&format!("font-family=\"{escaped}\"")).count(),
+            svg.matches("font-family=\"&quot;&lt;&amp;\\&quot;&apos;&gt;&quot;\"")
+                .count(),
             2
         );
         assert_eq!(svg.matches(&format!(">{escaped}</text>")).count(), 2);
         assert!(!svg.contains(special));
+    }
+
+    #[test]
+    fn frozen_literal_font_css_is_escaped_once_without_changing_selection() {
+        let name = "A, B<&\"\\C";
+        let stack = crate::font::canonical::named_stack(&[name]);
+        let environment = PreparedFontEnvironment::synthetic_faces(&[(name, &['X'])]);
+        let plan = environment
+            .plan_text(TextPlanInput {
+                source: "X",
+                stack: &stack,
+                weight: crate::TextWeight::Normal,
+                font_size: 12,
+                line_height: TextLineHeight::Multiplier(1.2),
+                maximum_width_quanta: i64::MAX,
+                alignment: PhysicalTextAlignment::Start,
+                paint: Color::rgb(1, 2, 3),
+                provenance: TextPlanProvenance {
+                    pair_ordinal: 0,
+                    owner: "literal font CSS".into(),
+                },
+                exact_override: false,
+            })
+            .unwrap();
+        assert_eq!(plan.style.stack, stack);
+        assert_eq!(plan.style.stack_source, "\"A, B<&\\\"\\\\C\"");
+        let mut backend = SvgBackend::in_memory_with_fonts(100, 40, environment);
+        Backend::begin(&mut backend, 100, 40).unwrap();
+        Backend::draw_planned_text(
+            &mut backend,
+            PlannedTextPlacement::middle(Point2D::new(10.0, 20.0), TextAnchor::Start, 0.0),
+            &plan,
+        )
+        .unwrap();
+        Backend::end(&mut backend).unwrap();
+        let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+        assert!(
+            svg.contains("font-family=\"&quot;A, B&lt;&amp;\\&quot;\\\\C&quot;\""),
+            "{svg}"
+        );
+        assert!(svg.contains(">X</text>"));
     }
 
     #[test]
@@ -2933,7 +3004,12 @@ mod tests {
                     color: Color::rgba(119, 136, 153, 32),
                     width: 1.0,
                     label_color: Color::rgba(170, 187, 204, 16),
-                    font_family: "sans-serif".into(),
+                    font_family: crate::font::canonical::FontStack::new([
+                        crate::font::canonical::FontFamily::generic(
+                            crate::font::canonical::GenericFontFamily::SansSerif,
+                        ),
+                    ])
+                    .unwrap(),
                     font_size: 12,
                     line_height: 14.4,
                     weight: crate::TextWeight::Normal,
@@ -3047,7 +3123,12 @@ mod tests {
                     color: Color::rgb(0, 0, 0),
                     width: 1.0,
                     label_color: Color::rgb(0, 0, 0),
-                    font_family: "sans-serif".into(),
+                    font_family: crate::font::canonical::FontStack::new([
+                        crate::font::canonical::FontFamily::generic(
+                            crate::font::canonical::GenericFontFamily::SansSerif,
+                        ),
+                    ])
+                    .unwrap(),
                     font_size: 12,
                     line_height: 14.4,
                     weight: crate::TextWeight::Normal,
@@ -3148,7 +3229,7 @@ mod tests {
         let plan = environment
             .plan_text(TextPlanInput {
                 source: "A",
-                stack: "Test Sans",
+                stack: crate::font::canonical::test_sans_stack(),
                 weight: crate::TextWeight::Normal,
                 font_size: 20,
                 line_height: TextLineHeight::Multiplier(1.2),
@@ -3206,7 +3287,7 @@ mod tests {
         let environment = PreparedFontEnvironment::synthetic();
         let input = |source| TextPlanInput {
             source,
-            stack: "Test Sans",
+            stack: crate::font::canonical::test_sans_stack(),
             weight: crate::TextWeight::Normal,
             font_size: 10,
             line_height: TextLineHeight::Multiplier(1.6),
@@ -3285,7 +3366,7 @@ mod tests {
         let mut plan = environment
             .plan_text(TextPlanInput {
                 source: "AA",
-                stack: "Test Sans",
+                stack: crate::font::canonical::test_sans_stack(),
                 weight: crate::TextWeight::Normal,
                 font_size: 20,
                 line_height: TextLineHeight::Multiplier(1.2),
@@ -3335,7 +3416,7 @@ mod tests {
         let plan = environment
             .plan_text(TextPlanInput {
                 source,
-                stack: "Test Sans",
+                stack: crate::font::canonical::test_sans_stack(),
                 weight: crate::TextWeight::Normal,
                 font_size: 10,
                 line_height: TextLineHeight::Multiplier(1.2),
@@ -3389,7 +3470,7 @@ mod tests {
         let plan = environment
             .plan_text(TextPlanInput {
                 source,
-                stack: "Latin, Hebrew",
+                stack: &crate::font::canonical::named_stack(&["Latin", "Hebrew"]),
                 weight: crate::TextWeight::Normal,
                 font_size: 10,
                 line_height: TextLineHeight::Multiplier(1.2),
@@ -3481,7 +3562,7 @@ mod tests {
         for (environment, stack, selected_runs) in [
             (
                 PreparedFontEnvironment::synthetic_faces(&[("Soft", &['A', '-'])]),
-                "Soft",
+                crate::font::canonical::named_stack(&["Soft"]),
                 1,
             ),
             (
@@ -3489,7 +3570,7 @@ mod tests {
                     ("Letters", &['A']),
                     ("Hyphens", &['-']),
                 ]),
-                "Letters, Hyphens",
+                crate::font::canonical::named_stack(&["Letters", "Hyphens"]),
                 2,
             ),
         ] {
@@ -3501,7 +3582,7 @@ mod tests {
                 let plan = environment
                     .plan_text(TextPlanInput {
                         source,
-                        stack,
+                        stack: &stack,
                         weight: crate::TextWeight::Normal,
                         font_size: 10,
                         line_height: TextLineHeight::Multiplier(1.2),
@@ -3554,7 +3635,7 @@ mod tests {
         let environment = PreparedFontEnvironment::synthetic();
         let input = |source| TextPlanInput {
             source,
-            stack: "Test Sans",
+            stack: crate::font::canonical::test_sans_stack(),
             weight: crate::TextWeight::Normal,
             font_size: 20,
             line_height: TextLineHeight::Multiplier(1.2),

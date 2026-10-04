@@ -652,6 +652,22 @@ impl FeedbackRound {
         self.observe_text(block.plan())
     }
 
+    pub(crate) fn observe_font_stack(
+        &mut self,
+        stack: &crate::font::canonical::FontStack,
+    ) -> Result<(), Error> {
+        self.observe_count(stack.families().len())?;
+        for family in stack.families() {
+            self.observe_count(usize::from(family.name().is_some()))?;
+            if let Some(name) = family.name() {
+                self.observe_string(name)?;
+            } else {
+                self.observe_count(family.generic_family().expect("generic family") as usize)?;
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn observe_string(&mut self, value: &str) -> Result<(), Error> {
         self.resources
             .claim_bytes(u64::try_from(value.len()).map_err(claim_error)?)
@@ -1247,11 +1263,6 @@ fn equal_text_plan(
         || !equal_string(resources, &left.source, &right.source)?
         || !equal_string(
             resources,
-            &left.style.stack_source,
-            &right.style.stack_source,
-        )?
-        || !equal_string(
-            resources,
             &left.style.provenance.owner,
             &right.style.provenance.owner,
         )?
@@ -1265,11 +1276,8 @@ fn equal_text_plan(
             resources,
             &left.style.stack,
             &right.style.stack,
-            |a, b| match (a, b) {
-                (
-                    crate::font::canonical::FamilyPreference::Named(a),
-                    crate::font::canonical::FamilyPreference::Named(b),
-                ) => equal_string(resources, a, b),
+            |a, b| match (a.name(), b.name()) {
+                (Some(a), Some(b)) => equal_string(resources, a, b),
                 _ => Ok(a == b),
             },
         )?
@@ -2365,7 +2373,7 @@ mod tests {
         crate::font::canonical::PreparedFontEnvironment::synthetic()
             .plan_text(crate::layout::TextPlanInput {
                 source: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                stack: "Test Sans",
+                stack: crate::font::canonical::test_sans_stack(),
                 weight: crate::TextWeight::Normal,
                 font_size: 10,
                 line_height: crate::layout::TextLineHeight::Multiplier(1.2),

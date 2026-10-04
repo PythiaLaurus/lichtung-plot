@@ -111,15 +111,10 @@ pub(crate) struct StandardPanelInputs {
 impl StandardPanelInputs {
     pub(crate) fn new(theme: &crate::theme::ResolvedTheme) -> Result<Self, crate::Error> {
         let retain = |source: &crate::theme::TextAppearance| -> Result<_, crate::Error> {
-            theme
-                .prepared_font_environment()?
-                .claim_unicode_bytes(source.stack.len() as u64)
+            let stack = source
+                .stack
+                .copy_with_generation(&theme.prepared_font_environment()?.generation_resources())
                 .map_err(|error| crate::Error::Render(error.to_string()))?;
-            let mut stack = String::new();
-            stack
-                .try_reserve_exact(source.stack.len())
-                .map_err(|error| crate::Error::Render(error.to_string()))?;
-            stack.push_str(&source.stack);
             Ok(crate::theme::TextAppearance { stack, ..*source })
         };
         Ok(Self {
@@ -129,9 +124,17 @@ impl StandardPanelInputs {
         })
     }
 
-    pub(crate) fn matches(&self, theme: &crate::theme::ResolvedTheme) -> bool {
-        self.tick_label == theme.typography.tick_label
-            && self.axis_title == theme.typography.axis_title
+    pub(crate) fn matches(
+        &self,
+        theme: &crate::theme::ResolvedTheme,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<bool, crate::Error> {
+        Ok(self
+            .tick_label
+            .same(&theme.typography.tick_label, resources)?
+            && self
+                .axis_title
+                .same(&theme.typography.axis_title, resources)?)
     }
 
     pub(crate) fn observe_feedback(
@@ -139,7 +142,7 @@ impl StandardPanelInputs {
         round: &mut crate::layout::kernel::FeedbackRound,
     ) -> Result<(), crate::Error> {
         for text in [&self.tick_label, &self.axis_title] {
-            round.observe_string(&text.stack)?;
+            round.observe_font_stack(&text.stack)?;
             round.observe_count(text.font_size as usize)?;
             round.observe_count(text.weight as usize)?;
             round.observe_number(text.line_height_multiplier)?;
@@ -167,15 +170,51 @@ mod tests {
     fn standard_panel_owns_complete_typography_and_four_to_three_preference() {
         let mut theme = crate::Theme::Publication.resolve();
         let standard = StandardPanelInputs::new(&theme).unwrap();
+        let resources = theme
+            .prepared_font_environment()
+            .unwrap()
+            .generation_resources();
         assert_eq!(standard.preferred_aspect, [4, 3]);
-        assert!(standard.matches(&theme));
+        assert!(standard.matches(&theme, &resources).unwrap());
         theme.typography.tick_label.line_height_multiplier += 0.25;
-        assert!(!standard.matches(&theme));
+        assert!(!standard.matches(&theme, &resources).unwrap());
         theme.typography.tick_label = standard.tick_label.clone();
         theme.typography.axis_title.weight = crate::TextWeight::Bold;
-        theme.typography.axis_title.stack.push_str(", serif");
-        assert!(!standard.matches(&theme));
+        theme.typography.axis_title.stack = crate::font::canonical::FontStack::new(
+            theme
+                .typography
+                .axis_title
+                .stack
+                .families()
+                .iter()
+                .cloned()
+                .chain([crate::font::canonical::FontFamily::generic(
+                    crate::font::canonical::GenericFontFamily::Serif,
+                )]),
+        )
+        .unwrap();
+        assert!(!standard.matches(&theme, &resources).unwrap());
         assert_ne!(standard.axis_title.stack, theme.typography.axis_title.stack);
+    }
+
+    #[test]
+    fn standard_panel_stack_mismatch_admits_its_terminating_byte() {
+        use crate::font::canonical::{named_stack, OperationGenerationResources};
+        let mut theme = crate::Theme::Publication.resolve();
+        theme.typography.tick_label.stack = named_stack(&["αZ"]);
+        let standard = StandardPanelInputs::new(&theme).unwrap();
+        theme.typography.tick_label.stack = named_stack(&["αY"]);
+        for remaining in [0, 5, 6] {
+            let resources = OperationGenerationResources::with_test_limits(remaining, 0);
+            let result = standard.matches(&theme, &resources);
+            if remaining == 6 {
+                assert!(!result.unwrap());
+            } else {
+                assert!(result.is_err());
+            }
+            assert_eq!(resources.usage().unwrap().1, remaining);
+            assert_eq!(resources.byte_usage().unwrap(), 0);
+        }
     }
 
     #[test]

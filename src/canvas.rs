@@ -4468,13 +4468,9 @@ impl Canvas {
             }
         }
 
-        let composition_title = themes.root().legacy_text_appearance(
-            themes.root().composition_title_font_size,
-            crate::TextWeight::Normal,
-        );
-        let body = themes
-            .root()
-            .legacy_text_appearance(themes.root().label_font_size, crate::TextWeight::Normal);
+        let composition_title = &themes.root().typography.composition_header;
+        let text_panel_title = &themes.root().typography.text_panel_title;
+        let body = &themes.root().typography.body;
         for (index, header) in self.column_headers.iter().enumerate() {
             let address = root.child(
                 crate::layout::AddressRole::CanvasHeader,
@@ -4489,7 +4485,7 @@ impl Canvas {
                 crate::layout::PreparedTextRole::Header,
                 0,
                 &header.text,
-                &composition_title,
+                composition_title,
                 prepared_stage,
             )?;
         }
@@ -4507,7 +4503,7 @@ impl Canvas {
                 crate::layout::PreparedTextRole::Header,
                 0,
                 &header.text,
-                &composition_title,
+                composition_title,
                 prepared_stage,
             )?;
         }
@@ -4525,7 +4521,7 @@ impl Canvas {
                 crate::layout::PreparedTextRole::Header,
                 0,
                 &title.text,
-                &composition_title,
+                composition_title,
                 prepared_stage,
             )?;
         }
@@ -4542,14 +4538,9 @@ impl Canvas {
                     crate::layout::PreparedTextRole::Header,
                     0,
                     panel.title(),
-                    &composition_title,
+                    text_panel_title,
                 ),
-                (
-                    crate::layout::PreparedTextRole::Body,
-                    0,
-                    panel.body(),
-                    &body,
-                ),
+                (crate::layout::PreparedTextRole::Body, 0, panel.body(), body),
             ] {
                 let requirement_address = address.clone();
                 push_text_requirement(

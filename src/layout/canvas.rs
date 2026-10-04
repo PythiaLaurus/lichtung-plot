@@ -81,10 +81,7 @@ impl PanelRequirements {
             let plan = crate::layout::fit::measured(crate::layout::fit::text(
                 theme,
                 text,
-                &theme.legacy_text_appearance(
-                    theme.facet_header_font_size,
-                    crate::TextWeight::Normal,
-                ),
+                &theme.typography.facet_header,
                 (available_panel.width() - 16.0).max(1.0),
                 PhysicalTextAlignment::Center,
                 "facet strip",
@@ -455,7 +452,8 @@ mod tests {
     #[test]
     fn wrapping_uses_shared_measurement_for_wide_combining_and_newline_text() {
         let theme = Theme::Publication.resolve();
-        let appearance = theme.legacy_text_appearance(12, crate::TextWeight::Normal);
+        let mut appearance = theme.typography.panel_text.clone();
+        appearance.font_size = 12;
 
         let explicit = wrap_text(&theme, "first line\nsecond line\n", &appearance, 200.0);
         assert_eq!(explicit, ["first line", "second line", ""]);

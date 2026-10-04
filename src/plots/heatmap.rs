@@ -544,7 +544,7 @@ impl HeatmapIntrinsicCache {
         data.admit_clone_slice(prepared.color.scale.stops())?;
         let text = |role: &crate::theme::TextAppearance| -> Result<_, Error> {
             Ok(crate::theme::TextAppearance {
-                stack: data.copy_source_string(&role.stack)?,
+                stack: data.copy_font_stack(&role.stack)?,
                 paint: role.paint,
                 font_size: role.font_size,
                 weight: role.weight,

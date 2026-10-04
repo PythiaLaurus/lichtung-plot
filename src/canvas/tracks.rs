@@ -84,8 +84,7 @@ pub(super) fn allocate(
     let resources = theme.prepared_font_environment()?.generation_resources();
     let gap = required(theme.composition.canvas_grid_gap)?;
     let em = required(f64::from(theme.composition_title_font_size))?;
-    let appearance =
-        theme.legacy_text_appearance(theme.composition_title_font_size, crate::TextWeight::Normal);
+    let appearance = &theme.typography.composition_header;
     let mut row_header_plans = Vec::new();
     crate::layout::fit::reserve(
         theme,
@@ -107,7 +106,7 @@ pub(super) fn allocate(
         }
         let plan = theme.measure_legacy_appearance_text(
             &header.text,
-            &appearance,
+            appearance,
             PhysicalTextAlignment::Center,
             "Canvas row header intrinsic",
             false,
@@ -352,7 +351,7 @@ pub(super) fn allocate(
         let (hard, preferred) = crate::layout::fit::intrinsic_widths(
             theme,
             &header.text,
-            &appearance,
+            appearance,
             "Canvas column header intrinsic",
         )?;
         widths.push(GridRequirement {
@@ -386,12 +385,8 @@ pub(super) fn allocate(
         row_title_owners.push(owner);
     }
     for (title, owner) in row_titles.iter().zip(&row_title_owners) {
-        let (hard, preferred) = fit::intrinsic_widths(
-            theme,
-            &title.text,
-            &appearance,
-            "Canvas row title intrinsic",
-        )?;
+        let (hard, preferred) =
+            fit::intrinsic_widths(theme, &title.text, appearance, "Canvas row title intrinsic")?;
         let padding = theme.composition.row_title_horizontal_padding;
         widths.push(GridRequirement {
             start: 0,
@@ -487,7 +482,7 @@ pub(super) fn allocate(
         let plan = match fit::text(
             theme,
             &header.text,
-            &appearance,
+            appearance,
             right - left,
             PhysicalTextAlignment::Center,
             "Canvas column header",
@@ -523,7 +518,7 @@ pub(super) fn allocate(
         let plan = match fit::text(
             theme,
             &title.text,
-            &appearance,
+            appearance,
             title_right - title_left - theme.composition.row_title_horizontal_padding,
             PhysicalTextAlignment::Center,
             "Canvas row title",
@@ -821,14 +816,11 @@ mod tests {
             span: 2,
             text: "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM".into(),
         };
-        let appearance = themes.root().legacy_text_appearance(
-            themes.root().composition_title_font_size,
-            crate::TextWeight::Normal,
-        );
+        let appearance = &themes.root().typography.composition_header;
         let (hard, _) = crate::layout::fit::intrinsic_widths(
             themes.root(),
             &header.text,
-            &appearance,
+            appearance,
             "header span fixture",
         )
         .unwrap();

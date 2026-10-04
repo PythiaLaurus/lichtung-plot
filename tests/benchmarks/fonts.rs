@@ -1,5 +1,5 @@
 use crate::font::canonical::{
-    FamilyPreference, FontPairPreparationRequest, PreparedFontEnvironment, RequestedWeight,
+    FontFamily, FontPairPreparationRequest, FontStack, PreparedFontEnvironment, RequestedWeight,
     ScalarFaceSelection, FONT_DISCOVERY_CALLS, FONT_PAIR_RESOLUTION_CALLS,
 };
 use crate::orchestrator::measurements::{self, Counter};
@@ -64,10 +64,12 @@ fn synthetic_case(candidates: usize, characters: u8, split: bool, run: usize) ->
         PreparedFontEnvironment::synthetic_faces(&faces)
     });
     assert_eq!(probes, [0, 0]);
-    let stack = names
-        .into_iter()
-        .map(FamilyPreference::Named)
-        .collect::<Vec<_>>();
+    let stack = FontStack::new(
+        names
+            .into_iter()
+            .map(|name| FontFamily::named(name).unwrap()),
+    )
+    .unwrap();
     FONT_PAIR_RESOLUTION_CALLS.with(|calls| calls.set(0));
     let half = bases.len() / 2;
     for (phase, scalars, misses) in [
@@ -193,9 +195,7 @@ fn font_system_preparation_measurements() {
         setup.push(elapsed);
         assert_eq!(probes, [0, 0]);
         assert_eq!(FONT_DISCOVERY_CALLS.with(std::cell::Cell::get), 1);
-        let stack = environment
-            .parse_family_stack(crate::DEFAULT_FONT_FAMILY_STACK)
-            .unwrap();
+        let stack = crate::font::canonical::builtin_font_stack();
         let mut previous = None;
         for (phase, source) in [
             ("first", "Measured responses"),
@@ -264,11 +264,13 @@ fn font_observer_overhead_measurements() {
             (name.as_str(), scalars)
         })
         .collect::<Vec<_>>();
-    let stack = names
-        .iter()
-        .cloned()
-        .map(FamilyPreference::Named)
-        .collect::<Vec<_>>();
+    let stack = FontStack::new(
+        names
+            .iter()
+            .cloned()
+            .map(|name| FontFamily::named(name).unwrap()),
+    )
+    .unwrap();
     let mut samples = [Vec::new(), Vec::new()];
     let mut deltas = Vec::new();
     let mut expected = None;

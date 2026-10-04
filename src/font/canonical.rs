@@ -21,7 +21,6 @@ thread_local! {
     pub(crate) static FONT_PAIR_RESOLUTION_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static FONT_NORMALIZATION_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static FONT_SELECTION_PROBES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    static FONT_STACK_PARSE_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static FONT_SHAPE_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static SHAPED_GLYPH_RETAINS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static FONT_OUTLINE_GLYPHS: std::cell::RefCell<Vec<(FaceIdentity, u16)>> = const { std::cell::RefCell::new(Vec::new()) };
@@ -172,8 +171,6 @@ pub(crate) fn format_census_source(
 pub(crate) enum FontError {
     #[error("text shaping output admission failed: {0:?}")]
     ShapeAdmission(TextGenerationClaimError),
-    #[error(transparent)]
-    FamilyStack(#[from] FamilyStackError),
     #[error("{resource} limit of {limit} was exceeded")]
     Limit { resource: &'static str, limit: u64 },
     #[error("font preflight arithmetic overflow while calculating {0}")]
@@ -231,22 +228,6 @@ pub(crate) enum FontError {
     Synchronization,
 }
 
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
-pub(crate) enum FamilyStackError {
-    #[error("font stack is empty")]
-    Empty,
-    #[error("font stack entry {entry_index} is empty")]
-    EmptyEntry { entry_index: usize },
-    #[error("font stack entry {entry_index} contains a control character")]
-    ControlCharacter { entry_index: usize },
-    #[error("font stack entry {entry_index} uses unsupported CSS generic family '{name}'")]
-    UnsupportedGeneric { entry_index: usize, name: String },
-    #[error("font stack allocation refused for {0}")]
-    Allocation(&'static str),
-    #[error("{0}")]
-    Reservation(String),
-}
-
 #[derive(Debug, Clone, Copy)]
 struct ResourceLimits {
     discovery_entries: u64,
@@ -270,7 +251,7 @@ struct FontBudget {
 
 #[derive(Debug)]
 struct NormalizedStack {
-    source: Vec<FamilyPreference>,
+    source: FontStack,
     names: Vec<(String, bool)>,
 }
 
@@ -527,103 +508,394 @@ impl RequestedWeight {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum FamilyPreference {
-    Named(String),
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GenericFontFamily {
     Serif,
     SansSerif,
     Monospace,
 }
 
-pub(crate) fn parse_family_stack(stack: &str) -> Result<Vec<FamilyPreference>, FamilyStackError> {
-    parse_family_stack_with_stage(stack, None)
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum FontFamilyKind {
+    Named(String),
+    Generic(GenericFontFamily),
 }
 
-pub(crate) fn parse_family_stack_with_stage(
-    stack: &str,
-    mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
-) -> Result<Vec<FamilyPreference>, FamilyStackError> {
-    #[cfg(test)]
-    FONT_STACK_PARSE_CALLS.with(|calls| calls.set(calls.get() + 1));
-    if stack.trim().is_empty() {
-        return Err(FamilyStackError::Empty);
+/// A literal family identity or one of the three host generic preferences.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct FontFamily {
+    kind: FontFamilyKind,
+}
+
+impl FontFamily {
+    pub(crate) fn named(name: impl Into<String>) -> crate::Result<Self> {
+        let name = name.into();
+        if name.is_empty() {
+            return Err(crate::Error::Data("font family name is empty".into()));
+        }
+        if name.chars().any(char::is_control) {
+            return Err(crate::Error::Data(
+                "font family name contains a control character".into(),
+            ));
+        }
+        if name.trim() != name {
+            return Err(crate::Error::Data(
+                "font family name must already be trimmed".into(),
+            ));
+        }
+        Ok(Self {
+            kind: FontFamilyKind::Named(name),
+        })
     }
-    let entry_count = stack.split(',').count();
-    let mut parsed = Vec::new();
-    if let Some(stage) = prepared_stage.as_deref_mut() {
-        let bytes = entry_count
-            .checked_mul(std::mem::size_of::<FamilyPreference>())
-            .and_then(|bytes| u64::try_from(bytes).ok())
-            .ok_or(FamilyStackError::Allocation("font stack byte extent"))?;
-        stage
-            .font_resources()
-            .claim_bytes(bytes)
-            .map_err(|error| FamilyStackError::Reservation(error.to_string()))?;
-        stage
-            .reserve_prepared(&mut parsed, entry_count, "prepared font stack entries")
-            .map_err(|error| FamilyStackError::Reservation(error.to_string()))?;
-    } else {
-        parsed
-            .try_reserve_exact(entry_count)
-            .map_err(|_| FamilyStackError::Allocation("font stack entries"))?;
+    pub(crate) const fn generic(family: GenericFontFamily) -> Self {
+        Self {
+            kind: FontFamilyKind::Generic(family),
+        }
+    }
+    pub(crate) fn name(&self) -> Option<&str> {
+        match &self.kind {
+            FontFamilyKind::Named(name) => Some(name),
+            FontFamilyKind::Generic(_) => None,
+        }
+    }
+    pub(crate) const fn generic_family(&self) -> Option<GenericFontFamily> {
+        match self.kind {
+            FontFamilyKind::Generic(family) => Some(family),
+            FontFamilyKind::Named(_) => None,
+        }
+    }
+}
+
+/// Nonempty, ordered preferences; original named bytes and duplicates are retained.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct FontStack {
+    families: Vec<FontFamily>,
+}
+
+impl FontStack {
+    pub(crate) fn new(families: impl IntoIterator<Item = FontFamily>) -> crate::Result<Self> {
+        let mut retained = Vec::new();
+        for family in families {
+            retained
+                .try_reserve(1)
+                .map_err(|_| crate::Error::Data("font stack allocation refused".into()))?;
+            retained.push(family);
+        }
+        if retained.is_empty() {
+            return Err(crate::Error::Data("font stack is empty".into()));
+        }
+        Ok(Self { families: retained })
+    }
+    pub(crate) fn families(&self) -> &[FontFamily] {
+        &self.families
     }
 
-    for (entry_index, entry) in stack.split(',').enumerate() {
-        let entry = entry.trim();
-        if entry.is_empty() {
-            return Err(FamilyStackError::EmptyEntry { entry_index });
-        }
-        if entry.chars().any(char::is_control) {
-            return Err(FamilyStackError::ControlCharacter { entry_index });
-        }
-        let preference = match entry {
-            name if name.eq_ignore_ascii_case("serif") => FamilyPreference::Serif,
-            name if name.eq_ignore_ascii_case("sans-serif") => FamilyPreference::SansSerif,
-            name if name.eq_ignore_ascii_case("monospace") => FamilyPreference::Monospace,
-            name if [
-                "cursive",
-                "fantasy",
-                "system-ui",
-                "ui-serif",
-                "ui-sans-serif",
-                "ui-monospace",
-                "ui-rounded",
-                "math",
-                "fangsong",
-            ]
+    /// One complete entry/name-byte copy pass; lengths are known without scanning names.
+    pub(crate) fn byte_work(&self) -> Result<usize, FontError> {
+        self.families
             .iter()
-            .any(|generic| name.eq_ignore_ascii_case(generic)) =>
-            {
-                return Err(FamilyStackError::UnsupportedGeneric {
-                    entry_index,
-                    name: entry.to_owned(),
-                });
-            }
-            _ => {
-                let mut name = String::new();
-                if let Some(stage) = prepared_stage.as_deref_mut() {
-                    stage
-                        .font_resources()
-                        .claim_bytes(entry.len() as u64)
-                        .map_err(|error| FamilyStackError::Reservation(error.to_string()))?;
-                    stage
-                        .reserve_prepared_string(
-                            &mut name,
-                            entry.len(),
-                            "prepared font family name",
-                        )
-                        .map_err(|error| FamilyStackError::Reservation(error.to_string()))?;
-                } else {
-                    name.try_reserve_exact(entry.len())
-                        .map_err(|_| FamilyStackError::Allocation("font family name"))?;
-                }
-                name.push_str(entry);
-                FamilyPreference::Named(name)
-            }
-        };
-        parsed.push(preference);
+            .filter_map(FontFamily::name)
+            .try_fold(self.len(), |total, name| {
+                total
+                    .checked_add(name.len())
+                    .ok_or(FontError::Arithmetic("font stack byte work"))
+            })
     }
-    Ok(parsed)
+
+    pub(crate) fn same(
+        &self,
+        other: &Self,
+        resources: &OperationGenerationResources,
+    ) -> Result<bool, FontError> {
+        resources
+            .claim_visits(1)
+            .map_err(FontError::ShapeAdmission)?;
+        if self.len() != other.len() {
+            return Ok(false);
+        }
+        for (left, right) in self.families.iter().zip(&other.families) {
+            resources
+                .claim_visits(1)
+                .map_err(FontError::ShapeAdmission)?;
+            match (&left.kind, &right.kind) {
+                (FontFamilyKind::Named(left), FontFamilyKind::Named(right)) => {
+                    if !same_bytes(left, right, resources)? {
+                        return Ok(false);
+                    }
+                }
+                (FontFamilyKind::Generic(left), FontFamilyKind::Generic(right))
+                    if left == right => {}
+                _ => return Ok(false),
+            }
+        }
+        Ok(true)
+    }
+
+    pub(crate) fn hash_into(
+        &self,
+        hash: &mut Sha256,
+        resources: &OperationGenerationResources,
+    ) -> Result<(), FontError> {
+        resources
+            .claim_visits(8)
+            .map_err(FontError::ShapeAdmission)?;
+        hash.update((self.len() as u64).to_le_bytes());
+        for family in &self.families {
+            resources
+                .claim_visits(1)
+                .map_err(FontError::ShapeAdmission)?;
+            match &family.kind {
+                FontFamilyKind::Named(name) => {
+                    resources
+                        .claim_visits(9 + name.len() as u128)
+                        .map_err(FontError::ShapeAdmission)?;
+                    hash.update([0]);
+                    hash.update((name.len() as u64).to_le_bytes());
+                    hash.update(name.as_bytes());
+                }
+                FontFamilyKind::Generic(family) => {
+                    resources
+                        .claim_visits(2)
+                        .map_err(FontError::ShapeAdmission)?;
+                    hash.update([1, *family as u8]);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn copy_with_generation(
+        &self,
+        resources: &OperationGenerationResources,
+    ) -> Result<Self, FontError> {
+        resources
+            .claim_visits(self.byte_work()? as u128)
+            .map_err(FontError::ShapeAdmission)?;
+        resources
+            .claim_slots(self.len() as u128)
+            .map_err(FontError::ShapeAdmission)?;
+        resources.claim_bytes(
+            self.len()
+                .checked_mul(size_of::<FontFamily>())
+                .ok_or(FontError::Arithmetic("font stack bytes"))? as u64,
+        )?;
+        let mut families = Vec::new();
+        families
+            .try_reserve_exact(self.len())
+            .map_err(|_| FontError::Allocation("font stack entries"))?;
+        for family in self {
+            let kind = match &family.kind {
+                FontFamilyKind::Named(name) => {
+                    resources.claim_bytes(name.len() as u64)?;
+                    let mut retained = String::new();
+                    retained
+                        .try_reserve_exact(name.len())
+                        .map_err(|_| FontError::Allocation("font family name"))?;
+                    retained.push_str(name);
+                    FontFamilyKind::Named(retained)
+                }
+                FontFamilyKind::Generic(family) => FontFamilyKind::Generic(*family),
+            };
+            families.push(FontFamily { kind });
+        }
+        Ok(Self { families })
+    }
+
+    pub(crate) fn copy_with_stage(
+        &self,
+        resources: &OperationFontResources,
+        stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
+    ) -> Result<Self, FontError> {
+        copy_stack_with_stage(self, resources, stage)
+    }
+
+    pub(crate) fn admit_copy<'a>(
+        &'a self,
+        resources: &OperationFontResources,
+    ) -> Result<AdmittedFontStackCopy<'a>, FontError> {
+        resources.claim_visits(self.byte_work()? as u64)?;
+        Ok(AdmittedFontStackCopy {
+            source: self,
+            resources: resources.clone(),
+        })
+    }
+
+    fn write_css(&self, output: &mut impl std::fmt::Write) -> std::fmt::Result {
+        for (index, family) in self.families.iter().enumerate() {
+            if index != 0 {
+                output.write_str(", ")?;
+            }
+            match &family.kind {
+                FontFamilyKind::Generic(family) => output.write_str(match family {
+                    GenericFontFamily::Serif => "serif",
+                    GenericFontFamily::SansSerif => "sans-serif",
+                    GenericFontFamily::Monospace => "monospace",
+                })?,
+                FontFamilyKind::Named(name) => {
+                    if css_unquoted_family(name) {
+                        output.write_str(name)?;
+                    } else {
+                        output.write_char('"')?;
+                        for scalar in name.chars() {
+                            if matches!(scalar, '"' | '\\') {
+                                output.write_char('\\')?;
+                            }
+                            output.write_char(scalar)?;
+                        }
+                        output.write_char('"')?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn css(&self, resources: &OperationFontResources) -> Result<String, FontError> {
+        // Count and materialization each consume the known UTF-8 input once.
+        let work = self
+            .byte_work()?
+            .checked_mul(2)
+            .ok_or(FontError::Arithmetic("font stack CSS work"))?;
+        resources.claim_visits(work as u64)?;
+        let mut count = CssCount(0);
+        self.write_css(&mut count)
+            .map_err(|_| FontError::Arithmetic("font stack CSS bytes"))?;
+        resources.claim_bytes(count.0 as u64)?;
+        let mut output = String::new();
+        output
+            .try_reserve_exact(count.0)
+            .map_err(|_| FontError::Allocation("font stack CSS"))?;
+        self.write_css(&mut output)
+            .map_err(|_| FontError::Arithmetic("font stack CSS"))?;
+        Ok(output)
+    }
+}
+
+/// Single-use proof of copy work admission; holds the immutable source and its actual operation.
+pub(crate) struct AdmittedFontStackCopy<'a> {
+    source: &'a FontStack,
+    resources: OperationFontResources,
+}
+
+impl AdmittedFontStackCopy<'_> {
+    pub(crate) fn copy_with_stage(
+        self,
+        stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
+    ) -> Result<FontStack, FontError> {
+        copy_admitted_stack_with_stage(self, stage)
+    }
+}
+
+struct CssCount(usize);
+impl std::fmt::Write for CssCount {
+    fn write_str(&mut self, text: &str) -> std::fmt::Result {
+        self.0 = self.0.checked_add(text.len()).ok_or(std::fmt::Error)?;
+        Ok(())
+    }
+}
+
+fn css_unquoted_family(name: &str) -> bool {
+    ![
+        "serif",
+        "sans-serif",
+        "monospace",
+        "cursive",
+        "fantasy",
+        "system-ui",
+        "ui-serif",
+        "ui-sans-serif",
+        "ui-monospace",
+        "ui-rounded",
+        "math",
+        "fangsong",
+        "emoji",
+        "inherit",
+        "initial",
+        "unset",
+        "revert",
+        "revert-layer",
+        "default",
+    ]
+    .iter()
+    .any(|keyword| {
+        name.split(' ')
+            .any(|word| word.eq_ignore_ascii_case(keyword))
+    }) && name.split(' ').all(css_identifier)
+}
+
+fn css_identifier(word: &str) -> bool {
+    let start = |c: char| c.is_ascii_alphabetic() || c == '_' || !c.is_ascii();
+    let mut chars = word.chars();
+    let valid_start = match chars.next() {
+        Some('-') => chars.next().is_some_and(|c| start(c) || c == '-'),
+        Some(c) => start(c),
+        None => false,
+    };
+    valid_start && chars.all(|c| start(c) || c.is_ascii_digit() || c == '-')
+}
+
+impl std::ops::Deref for FontStack {
+    type Target = [FontFamily];
+    fn deref(&self) -> &Self::Target {
+        self.families()
+    }
+}
+
+impl<'a> IntoIterator for &'a FontStack {
+    type Item = &'a FontFamily;
+    type IntoIter = std::slice::Iter<'a, FontFamily>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.families.iter()
+    }
+}
+
+pub(crate) fn same_bytes(
+    left: &str,
+    right: &str,
+    resources: &OperationGenerationResources,
+) -> Result<bool, FontError> {
+    resources
+        .claim_visits(1)
+        .map_err(FontError::ShapeAdmission)?;
+    if left.len() != right.len() {
+        return Ok(false);
+    }
+    for index in 0..left.len() {
+        resources
+            .claim_visits(1)
+            .map_err(FontError::ShapeAdmission)?;
+        if left.as_bytes()[index] != right.as_bytes()[index] {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+pub(crate) fn builtin_font_stack() -> FontStack {
+    FontStack::new(
+        [
+            "Noto Sans",
+            "Noto Sans CJK SC",
+            "DejaVu Sans",
+            "Liberation Sans",
+            "Arial",
+        ]
+        .into_iter()
+        .map(|name| FontFamily::named(name).expect("built-in literal family"))
+        .chain([FontFamily::generic(GenericFontFamily::SansSerif)]),
+    )
+    .expect("nonempty built-in font preferences")
+}
+
+#[cfg(test)]
+pub(crate) fn named_stack(names: &[&str]) -> FontStack {
+    FontStack::new(names.iter().map(|name| FontFamily::named(*name).unwrap())).unwrap()
+}
+
+#[cfg(test)]
+pub(crate) fn test_sans_stack() -> &'static FontStack {
+    static STACK: std::sync::OnceLock<FontStack> = std::sync::OnceLock::new();
+    STACK.get_or_init(|| named_stack(&["Test Sans"]))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -863,7 +1135,6 @@ pub(crate) struct CanonicalFontCore {
     scalar_presence: Vec<u64>,
     prepared_pairs: Vec<PreparedPair>,
     incremental_pairs: Vec<IncrementalPair>,
-    parsed_stacks: Vec<(String, Vec<FamilyPreference>)>,
     prepared_pairs_sealed: bool,
     generation_resources: OperationGenerationResources,
     budget: FontBudget,
@@ -871,7 +1142,7 @@ pub(crate) struct CanonicalFontCore {
 
 #[derive(Debug)]
 struct IncrementalPair {
-    stack: Vec<FamilyPreference>,
+    stack: FontStack,
     weight: RequestedWeight,
     candidates: Vec<CandidateFace>,
     selected_scalars: Vec<SelectedScalarFace>,
@@ -879,7 +1150,7 @@ struct IncrementalPair {
 
 #[derive(Debug, Clone)]
 struct PreparedPair {
-    stack: Vec<FamilyPreference>,
+    stack: FontStack,
     weight: RequestedWeight,
     resolved: ResolvedFontPair,
 }
@@ -887,7 +1158,7 @@ struct PreparedPair {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct FontPairPreparationRequest<'a> {
     pair_ordinal: u32,
-    stack: &'a [FamilyPreference],
+    stack: &'a FontStack,
     weight: RequestedWeight,
     required_scalars: &'a [char],
 }
@@ -895,7 +1166,7 @@ pub(crate) struct FontPairPreparationRequest<'a> {
 impl<'a> FontPairPreparationRequest<'a> {
     pub(crate) const fn new(
         pair_ordinal: u32,
-        stack: &'a [FamilyPreference],
+        stack: &'a FontStack,
         weight: RequestedWeight,
         required_scalars: &'a [char],
     ) -> Self {
@@ -919,7 +1190,7 @@ struct PairPreparation<'a> {
     provenance: Vec<FaceIdentity>,
     selected_scalars: Vec<SelectedScalarFace>,
     probes: Vec<GlyphProbe>,
-    retained_stack: Vec<FamilyPreference>,
+    retained_stack: Vec<FontFamily>,
 }
 
 impl<'a> PairPreparation<'a> {
@@ -951,13 +1222,13 @@ impl<'a> PairPreparation<'a> {
                 .retained_stack
                 .iter()
                 .zip(self.request.stack)
-                .all(|(retained, source)| match (retained, source) {
-                    (FamilyPreference::Named(retained), FamilyPreference::Named(source)) => {
+                .all(|(retained, source)| match (&retained.kind, &source.kind) {
+                    (FontFamilyKind::Named(retained), FontFamilyKind::Named(source)) => {
                         retained.capacity() >= source.len()
                     }
-                    (FamilyPreference::Serif, FamilyPreference::Serif)
-                    | (FamilyPreference::SansSerif, FamilyPreference::SansSerif)
-                    | (FamilyPreference::Monospace, FamilyPreference::Monospace) => true,
+                    (FontFamilyKind::Generic(retained), FontFamilyKind::Generic(source)) => {
+                        retained == source
+                    }
                     _ => false,
                 })
     }
@@ -1159,45 +1430,15 @@ impl OperationGenerationResources {
 }
 
 impl PreparedFontEnvironment {
-    pub(crate) fn parse_family_stack(
-        &self,
-        source: &str,
-    ) -> Result<Vec<FamilyPreference>, FontError> {
-        let mut core = self.core.write().map_err(|_| FontError::Synchronization)?;
-        u32::try_from(source.len()).map_err(|_| FontError::Arithmetic("font stack input"))?;
-        for (key, parsed) in &core.parsed_stacks {
-            core.budget.resources.claim_visits(1)?;
-            if key == source {
-                return copy_stack(parsed, &core.budget.resources);
-            }
-        }
-        let length = source.len() as u64;
-        core.budget.claim_visits(source.chars().count() as u64)?;
-        // Bound the parser's entry storage and both the ASCII generic check
-        // and retained name strings before invoking the first-party parser.
-        let bytes = (length + 1)
-            .checked_mul(std::mem::size_of::<FamilyPreference>() as u64)
-            .and_then(|bytes| bytes.checked_add(length * 2))
-            .ok_or(FontError::Arithmetic("font stack parsing bytes"))?;
-        core.budget.claim_bytes(bytes)?;
-        let parsed = parse_family_stack(source)?;
-        let retained = copy_stack(&parsed, &core.budget.resources)?;
-        let key = copy_name(source, &core.budget.resources)?;
-        let CanonicalFontCore {
-            parsed_stacks,
-            budget,
-            ..
-        } = &mut *core;
-        budget
+    pub(crate) fn font_resources(&self) -> Result<OperationFontResources, FontError> {
+        Ok(self
+            .core
+            .read()
+            .map_err(|_| FontError::Synchronization)?
+            .budget
             .resources
-            .generation
-            .claim_cache_entries(1)
-            .map_err(FontError::ShapeAdmission)?;
-        reserve_cached(parsed_stacks, 1, &budget.resources)?;
-        parsed_stacks.push((key, retained));
-        Ok(parsed)
+            .clone())
     }
-
     pub(crate) fn discover_system() -> Result<Self, FontError> {
         #[cfg(test)]
         FONT_DISCOVERY_CALLS.with(|calls| calls.set(calls.get() + 1));
@@ -1253,7 +1494,7 @@ impl PreparedFontEnvironment {
     pub(crate) fn resolve_pair(
         &self,
         pair_ordinal: u32,
-        stack: &[FamilyPreference],
+        stack: &FontStack,
         weight: RequestedWeight,
         required_scalars: &[char],
     ) -> Result<ResolvedFontPair, FontError> {
@@ -1373,7 +1614,7 @@ impl PreparedFontEnvironment {
     pub(crate) fn prepare_pair(
         &self,
         pair_ordinal: u32,
-        stack: &[FamilyPreference],
+        stack: &FontStack,
         weight: RequestedWeight,
         required_scalars: &[char],
         mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
@@ -1382,11 +1623,16 @@ impl PreparedFontEnvironment {
         if core.prepared_pairs_sealed {
             return Err(FontError::PreparedPairAfterSeal { pair_ordinal });
         }
-        if core.prepared_pairs.iter().any(|prepared| {
-            prepared.resolved.provenance.pair_ordinal == pair_ordinal
-                || (prepared.stack == stack && prepared.weight == weight)
-        }) {
-            return Err(FontError::DuplicatePreparedPair { pair_ordinal });
+        for prepared in &core.prepared_pairs {
+            core.generation_resources
+                .claim_visits(1)
+                .map_err(FontError::ShapeAdmission)?;
+            if prepared.resolved.provenance.pair_ordinal == pair_ordinal
+                || (prepared.weight == weight
+                    && prepared.stack.same(stack, &core.generation_resources)?)
+            {
+                return Err(FontError::DuplicatePreparedPair { pair_ordinal });
+            }
         }
         let resolved = core.resolve_pair_with_stage(
             pair_ordinal,
@@ -1396,14 +1642,7 @@ impl PreparedFontEnvironment {
             false,
             prepared_stage.as_deref_mut(),
         )?;
-        let mut retained_stack = Vec::new();
-        reserve_prepared_or_local(
-            &mut retained_stack,
-            stack.len(),
-            "prepared font stack",
-            prepared_stage,
-        )?;
-        retained_stack.extend_from_slice(stack);
+        let retained_stack = copy_stack_with_stage(stack, &core.budget.resources, prepared_stage)?;
         core.prepared_pairs.push(PreparedPair {
             stack: retained_stack,
             weight,
@@ -1538,17 +1777,21 @@ impl PreparedFontEnvironment {
 
     pub(crate) fn prepared_pair(
         &self,
-        stack: &[FamilyPreference],
+        stack: &FontStack,
         weight: RequestedWeight,
     ) -> Result<Option<ResolvedFontPair>, FontError> {
-        Ok(self
-            .core
-            .read()
-            .map_err(|_| FontError::Synchronization)?
-            .prepared_pairs
-            .iter()
-            .find(|prepared| prepared.stack == stack && prepared.weight == weight)
-            .map(|prepared| prepared.resolved.clone()))
+        let core = self.core.read().map_err(|_| FontError::Synchronization)?;
+        for prepared in &core.prepared_pairs {
+            core.generation_resources
+                .claim_visits(1)
+                .map_err(FontError::ShapeAdmission)?;
+            if prepared.weight == weight
+                && prepared.stack.same(stack, &core.generation_resources)?
+            {
+                return Ok(Some(prepared.resolved.clone()));
+            }
+        }
+        Ok(None)
     }
 
     pub(crate) fn resource_usage(&self) -> Result<FontResourceUsage, FontError> {
@@ -1763,20 +2006,39 @@ impl CanonicalFontCore {
                     pair_ordinal: request.pair_ordinal,
                 });
             }
-            if self.prepared_pairs.iter().any(|prepared| {
-                prepared.resolved.provenance.pair_ordinal == request.pair_ordinal
-                    || (prepared.stack == request.stack && prepared.weight == request.weight)
-            }) || preparations
+            for (ordinal, stack, weight) in self
+                .prepared_pairs
                 .iter()
-                .any(|preparation: &PairPreparation<'_>| {
-                    preparation.request.pair_ordinal == request.pair_ordinal
-                        || (preparation.request.stack == request.stack
-                            && preparation.request.weight == request.weight)
+                .map(|prepared| {
+                    (
+                        prepared.resolved.provenance.pair_ordinal,
+                        &prepared.stack,
+                        prepared.weight,
+                    )
                 })
+                .chain(
+                    preparations
+                        .iter()
+                        .map(|preparation: &PairPreparation<'_>| {
+                            (
+                                preparation.request.pair_ordinal,
+                                preparation.request.stack,
+                                preparation.request.weight,
+                            )
+                        }),
+                )
             {
-                return Err(FontError::DuplicatePreparedPair {
-                    pair_ordinal: request.pair_ordinal,
-                });
+                self.generation_resources
+                    .claim_visits(1)
+                    .map_err(FontError::ShapeAdmission)?;
+                if ordinal == request.pair_ordinal
+                    || (weight == request.weight
+                        && stack.same(request.stack, &self.generation_resources)?)
+                {
+                    return Err(FontError::DuplicatePreparedPair {
+                        pair_ordinal: request.pair_ordinal,
+                    });
+                }
             }
             preparations.push(PairPreparation::new(request));
         }
@@ -1855,6 +2117,18 @@ impl CanonicalFontCore {
                 "font glyph probes",
                 prepared_stage.as_deref_mut(),
             )?;
+            self.budget
+                .resources
+                .claim_visits(preparation.request.stack.byte_work()? as u64)?;
+            self.budget.resources.claim_bytes(
+                preparation
+                    .request
+                    .stack
+                    .len()
+                    .checked_mul(size_of::<FontFamily>())
+                    .ok_or(FontError::Arithmetic("prepared font stack bytes"))?
+                    as u64,
+            )?;
             reserve_prepared_or_local(
                 &mut preparation.retained_stack,
                 preparation.request.stack.len(),
@@ -1864,6 +2138,7 @@ impl CanonicalFontCore {
             reserve_family_stack_names(
                 &mut preparation.retained_stack,
                 preparation.request.stack,
+                &self.budget.resources,
                 prepared_stage.as_deref_mut(),
             )?;
         }
@@ -1951,7 +2226,9 @@ impl CanonicalFontCore {
             )?;
             fill_reserved_family_stack(&mut preparation.retained_stack, request.stack)?;
             self.prepared_pairs.push(PreparedPair {
-                stack: preparation.retained_stack,
+                stack: FontStack {
+                    families: preparation.retained_stack,
+                },
                 weight: request.weight,
                 resolved: ResolvedFontPair {
                     provenance: PairProvenance {
@@ -1971,7 +2248,7 @@ impl CanonicalFontCore {
     pub(crate) fn resolve_pair(
         &mut self,
         pair_ordinal: u32,
-        stack: &[FamilyPreference],
+        stack: &FontStack,
         weight: RequestedWeight,
         required_scalars: &[char],
         charge_required_scalars: bool,
@@ -1993,7 +2270,7 @@ impl CanonicalFontCore {
     fn resolve_pair_with_stage(
         &mut self,
         pair_ordinal: u32,
-        stack: &[FamilyPreference],
+        stack: &FontStack,
         weight: RequestedWeight,
         required_scalars: &[char],
         charge_required_scalars: bool,
@@ -2003,7 +2280,7 @@ impl CanonicalFontCore {
         let mut cached_index = None;
         for (index, cached) in self.incremental_pairs.iter().enumerate() {
             self.budget.claim_visits(1)?;
-            if cached.weight == weight && cached.stack == stack {
+            if cached.weight == weight && cached.stack.same(stack, &self.generation_resources)? {
                 cached_index = Some(index);
                 break;
             }
@@ -2315,7 +2592,6 @@ impl CanonicalFontCore {
             scalar_presence,
             prepared_pairs: Vec::new(),
             incremental_pairs: Vec::new(),
-            parsed_stacks: Vec::new(),
             prepared_pairs_sealed: false,
             generation_resources,
             budget,
@@ -2460,7 +2736,7 @@ fn decodes_like_ttf_parser(
 fn canonical_candidates(
     database: &Database,
     faces: &[FaceMetadata],
-    stack: &[FamilyPreference],
+    stack: &FontStack,
     requested_weight: RequestedWeight,
     budget: &mut FontBudget,
 ) -> Result<Vec<CandidateFace>, FontError> {
@@ -2470,7 +2746,7 @@ fn canonical_candidates(
 fn canonical_candidates_with_stage(
     database: &Database,
     faces: &[FaceMetadata],
-    stack: &[FamilyPreference],
+    stack: &FontStack,
     requested_weight: RequestedWeight,
     budget: &mut FontBudget,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
@@ -2524,7 +2800,7 @@ fn canonical_candidates_with_stage(
 
 fn resolve_stack_names_into(
     database: &Database,
-    stack: &[FamilyPreference],
+    stack: &FontStack,
     resolved_names: &mut Vec<(String, bool)>,
     budget: &mut FontBudget,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
@@ -2532,7 +2808,10 @@ fn resolve_stack_names_into(
     budget.claim_visits(stack.len() as u64)?;
     for cached in &budget.normalized_stacks {
         budget.resources.claim_visits(1)?;
-        if cached.source == stack {
+        if cached
+            .source
+            .same(stack, &budget.resources.generation_resources())?
+        {
             for (name, generic) in &cached.names {
                 resolved_names.push((
                     copy_name_with_stage(name, &budget.resources, prepared_stage.as_deref_mut())?,
@@ -2543,11 +2822,17 @@ fn resolve_stack_names_into(
         }
     }
     for family in stack {
-        let (name, generic) = match family {
-            FamilyPreference::Named(name) => (name.as_str(), false),
-            FamilyPreference::Serif => (database.family_name(&Family::Serif), true),
-            FamilyPreference::SansSerif => (database.family_name(&Family::SansSerif), true),
-            FamilyPreference::Monospace => (database.family_name(&Family::Monospace), true),
+        let (name, generic) = match &family.kind {
+            FontFamilyKind::Named(name) => (name.as_str(), false),
+            FontFamilyKind::Generic(GenericFontFamily::Serif) => {
+                (database.family_name(&Family::Serif), true)
+            }
+            FontFamilyKind::Generic(GenericFontFamily::SansSerif) => {
+                (database.family_name(&Family::SansSerif), true)
+            }
+            FontFamilyKind::Generic(GenericFontFamily::Monospace) => {
+                (database.family_name(&Family::Monospace), true)
+            }
         };
         resolved_names.push((fold_family_name(name, budget)?, generic));
     }
@@ -2630,10 +2915,6 @@ fn reserve_cached_with_stage<T>(
     Ok(())
 }
 
-fn copy_name(source: &str, resources: &OperationFontResources) -> Result<String, FontError> {
-    copy_name_with_stage(source, resources, None)
-}
-
 fn copy_name_with_stage(
     source: &str,
     resources: &OperationFontResources,
@@ -2651,45 +2932,48 @@ fn copy_name_with_stage(
     Ok(output)
 }
 
-fn copy_stack(
-    source: &[FamilyPreference],
+fn copy_stack_with_stage(
+    source: &FontStack,
     resources: &OperationFontResources,
-) -> Result<Vec<FamilyPreference>, FontError> {
-    copy_stack_with_stage(source, resources, None)
+    prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
+) -> Result<FontStack, FontError> {
+    source
+        .admit_copy(resources)?
+        .copy_with_stage(prepared_stage)
 }
 
-fn copy_stack_with_stage(
-    source: &[FamilyPreference],
-    resources: &OperationFontResources,
+fn copy_admitted_stack_with_stage(
+    admitted: AdmittedFontStackCopy<'_>,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
-) -> Result<Vec<FamilyPreference>, FontError> {
+) -> Result<FontStack, FontError> {
+    let AdmittedFontStackCopy { source, resources } = admitted;
     let mut output = Vec::new();
     reserve_cached_with_stage(
         &mut output,
         source.len(),
-        resources,
+        &resources,
         prepared_stage.as_deref_mut(),
     )?;
     for entry in source {
-        output.push(match entry {
-            FamilyPreference::Named(name) => {
-                let mut retained = String::new();
-                resources.claim_bytes(name.len() as u64)?;
-                reserve_string_prepared_or_local(
-                    &mut retained,
-                    name.len(),
-                    "cached font name",
-                    prepared_stage.as_deref_mut(),
-                )?;
-                retained.push_str(name);
-                FamilyPreference::Named(retained)
-            }
-            FamilyPreference::Serif => FamilyPreference::Serif,
-            FamilyPreference::SansSerif => FamilyPreference::SansSerif,
-            FamilyPreference::Monospace => FamilyPreference::Monospace,
+        output.push(FontFamily {
+            kind: match &entry.kind {
+                FontFamilyKind::Named(name) => {
+                    let mut retained = String::new();
+                    resources.claim_bytes(name.len() as u64)?;
+                    reserve_string_prepared_or_local(
+                        &mut retained,
+                        name.len(),
+                        "cached font name",
+                        prepared_stage.as_deref_mut(),
+                    )?;
+                    retained.push_str(name);
+                    FontFamilyKind::Named(retained)
+                }
+                FontFamilyKind::Generic(family) => FontFamilyKind::Generic(*family),
+            },
         });
     }
-    Ok(output)
+    Ok(FontStack { families: output })
 }
 
 fn materialize_candidate_occurrences(
@@ -3543,40 +3827,42 @@ fn reserve_string_prepared_or_local(
 }
 
 fn reserve_family_stack_names(
-    retained: &mut Vec<FamilyPreference>,
-    source: &[FamilyPreference],
+    retained: &mut Vec<FontFamily>,
+    source: &FontStack,
+    resources: &OperationFontResources,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), FontError> {
     for preference in source {
-        retained.push(match preference {
-            FamilyPreference::Named(name) => {
-                let mut reserved = String::new();
-                if let Some(stage) = prepared_stage.as_deref_mut() {
-                    stage
-                        .reserve_prepared_string(
-                            &mut reserved,
-                            name.len(),
-                            "prepared font family name",
-                        )
-                        .map_err(|error| FontError::Reservation(error.to_string()))?;
-                } else {
-                    reserved
-                        .try_reserve_exact(name.len())
-                        .map_err(|_| FontError::Allocation("prepared font family name"))?;
+        retained.push(FontFamily {
+            kind: match &preference.kind {
+                FontFamilyKind::Named(name) => {
+                    resources.claim_bytes(name.len() as u64)?;
+                    let mut reserved = String::new();
+                    if let Some(stage) = prepared_stage.as_deref_mut() {
+                        stage
+                            .reserve_prepared_string(
+                                &mut reserved,
+                                name.len(),
+                                "prepared font family name",
+                            )
+                            .map_err(|error| FontError::Reservation(error.to_string()))?;
+                    } else {
+                        reserved
+                            .try_reserve_exact(name.len())
+                            .map_err(|_| FontError::Allocation("prepared font family name"))?;
+                    }
+                    FontFamilyKind::Named(reserved)
                 }
-                FamilyPreference::Named(reserved)
-            }
-            FamilyPreference::Serif => FamilyPreference::Serif,
-            FamilyPreference::SansSerif => FamilyPreference::SansSerif,
-            FamilyPreference::Monospace => FamilyPreference::Monospace,
+                FontFamilyKind::Generic(family) => FontFamilyKind::Generic(*family),
+            },
         });
     }
     Ok(())
 }
 
 fn fill_reserved_family_stack(
-    retained: &mut [FamilyPreference],
-    source: &[FamilyPreference],
+    retained: &mut [FontFamily],
+    source: &FontStack,
 ) -> Result<(), FontError> {
     if retained.len() != source.len() {
         return Err(FontError::Arithmetic(
@@ -3584,8 +3870,8 @@ fn fill_reserved_family_stack(
         ));
     }
     for (retained, source) in retained.iter_mut().zip(source) {
-        match (retained, source) {
-            (FamilyPreference::Named(retained), FamilyPreference::Named(source)) => {
+        match (&mut retained.kind, &source.kind) {
+            (FontFamilyKind::Named(retained), FontFamilyKind::Named(source)) => {
                 if retained.capacity() < source.len() || !retained.is_empty() {
                     return Err(FontError::Arithmetic(
                         "prepared font family reservation mismatch",
@@ -3593,9 +3879,8 @@ fn fill_reserved_family_stack(
                 }
                 retained.push_str(source);
             }
-            (FamilyPreference::Serif, FamilyPreference::Serif)
-            | (FamilyPreference::SansSerif, FamilyPreference::SansSerif)
-            | (FamilyPreference::Monospace, FamilyPreference::Monospace) => {}
+            (FontFamilyKind::Generic(retained), FontFamilyKind::Generic(source))
+                if retained == source => {}
             _ => {
                 return Err(FontError::Arithmetic(
                     "prepared font stack materialization mismatch",
@@ -4477,6 +4762,333 @@ mod tests {
     use super::*;
 
     #[test]
+    fn font_stack_comparisons_charge_the_terminating_byte_and_entry() {
+        let left = FontStack::new([
+            FontFamily::named("αZ").unwrap(),
+            FontFamily::generic(GenericFontFamily::Serif),
+        ])
+        .unwrap();
+        let mismatch = FontStack::new([
+            FontFamily::named("αY").unwrap(),
+            FontFamily::generic(GenericFontFamily::Monospace),
+        ])
+        .unwrap();
+        // Stack length, first entry, name length, and three examined UTF-8 bytes.
+        for remaining in [0, 5, 6] {
+            let resources = OperationGenerationResources::with_test_limits(remaining, 0);
+            let result = left.same(&mismatch, &resources);
+            if remaining == 6 {
+                assert!(!result.unwrap());
+            } else {
+                assert!(result.is_err());
+            }
+            assert_eq!(resources.usage().unwrap().1, remaining);
+            assert_eq!(resources.byte_usage().unwrap(), 0);
+        }
+        // Equal names also examine the terminating generic entry.
+        for remaining in [6, 7] {
+            let resources = OperationGenerationResources::with_test_limits(remaining, 0);
+            let result = left.same(&left.clone(), &resources);
+            assert_eq!(result.is_ok(), remaining == 7);
+            assert_eq!(resources.usage().unwrap().1, remaining);
+        }
+    }
+
+    #[test]
+    fn css_admits_known_utf8_passes_without_an_unpriced_scalar_prescan() {
+        let stack = named_stack(&["α, A"]);
+        // Each count/materialization pass visits one entry and five source bytes.
+        for remaining in [0, 11, 12] {
+            let resources = OperationFontResources::new();
+            resources
+                .generation_resources()
+                .set_test_limits(remaining, 536_870_912);
+            let result = stack.css(&resources);
+            if remaining == 12 {
+                assert_eq!(result.unwrap(), "\"α, A\"");
+                assert_eq!(resources.usage().unwrap().processing_visits, 12);
+                assert_eq!(resources.usage().unwrap().font_bytes, 7);
+            } else {
+                assert!(result.is_err());
+                assert_eq!(resources.usage().unwrap().processing_visits, 0);
+                assert_eq!(resources.usage().unwrap().font_bytes, 0);
+            }
+        }
+    }
+
+    #[test]
+    fn prepared_font_pair_hit_admits_name_content_before_returning_a_pair() {
+        let environment = PreparedFontEnvironment::synthetic();
+        let stack = named_stack(&["Test Sans"]);
+        environment
+            .prepare_pair(0, &stack, RequestedWeight::Normal, &['A'], None)
+            .unwrap();
+        for remaining in [0, 12, 13] {
+            let resources = environment.generation_resources();
+            let before = resources.usage().unwrap().1;
+            let bytes = resources.byte_usage().unwrap();
+            resources.set_test_limits(before + remaining, bytes);
+            let result = environment.prepared_pair(&stack, RequestedWeight::Normal);
+            if remaining == 13 {
+                assert_eq!(result.unwrap().unwrap().provenance.pair_ordinal, 0);
+            } else {
+                assert!(result.is_err());
+            }
+            assert_eq!(resources.usage().unwrap().1 - before, remaining);
+            assert_eq!(resources.byte_usage().unwrap(), bytes);
+        }
+    }
+
+    #[test]
+    fn incremental_and_normalized_hits_price_content_without_reprobing_fonts() {
+        for normalized in [false, true] {
+            let environment = PreparedFontEnvironment::synthetic();
+            let stack = named_stack(&["Test Sans"]);
+            environment
+                .resolve_pair(0, &stack, RequestedWeight::Normal, &['A'])
+                .unwrap();
+            // Entry scan + cache scan + stack comparison (12). Incremental
+            // lookup additionally visits one supplied and one retained scalar.
+            let work = if normalized { 14 } else { 16 };
+            for remaining in [0, work - 1, work] {
+                let resources = environment.generation_resources();
+                let before = resources.usage().unwrap().1;
+                resources.set_test_limits(before + remaining, 536_870_912);
+                FONT_PAIR_RESOLUTION_CALLS.with(|calls| calls.set(0));
+                FONT_NORMALIZATION_CALLS.with(|calls| calls.set(0));
+                FONT_SELECTION_PROBES.with(|calls| calls.set(0));
+                let success = if normalized {
+                    let mut core = environment.core.write().unwrap();
+                    let CanonicalFontCore {
+                        database, budget, ..
+                    } = &mut *core;
+                    let mut names = Vec::with_capacity(1);
+                    resolve_stack_names_into(database, &stack, &mut names, budget, None).is_ok()
+                } else {
+                    environment
+                        .resolve_pair(1, &stack, RequestedWeight::Normal, &['A'])
+                        .is_ok()
+                };
+                assert_eq!(success, remaining == work);
+                assert_eq!(resources.usage().unwrap().1 - before, remaining);
+                FONT_PAIR_RESOLUTION_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+                FONT_NORMALIZATION_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+                FONT_SELECTION_PROBES.with(|calls| assert_eq!(calls.get(), 0));
+            }
+        }
+    }
+
+    #[test]
+    fn staged_stack_copy_prices_one_byte_pass_before_any_font_storage() {
+        let source = FontStack::new([
+            FontFamily::named("αX").unwrap(),
+            FontFamily::named("A, B").unwrap(),
+            FontFamily::generic(GenericFontFamily::Serif),
+        ])
+        .unwrap();
+        let bytes = 3 * size_of::<FontFamily>() + 3 + 4;
+        let work = 3 + 3 + 4;
+        for remaining in [0, work - 1, work] {
+            let stopped = crate::layout::plan_exact_root(
+                1,
+                1,
+                |stage| {
+                    let resources = stage.font_resources();
+                    resources
+                        .generation_resources()
+                        .set_test_limits(remaining, bytes as u64);
+                    let copy = source.copy_with_stage(&resources, Some(stage));
+                    if remaining == work {
+                        let copy = copy.unwrap();
+                        assert_eq!(copy, source);
+                        assert_ne!(copy.families().as_ptr(), source.families().as_ptr());
+                        assert_eq!(resources.usage().unwrap().processing_visits, work);
+                        assert_eq!(resources.usage().unwrap().font_bytes, bytes as u128);
+                    } else {
+                        assert!(copy.is_err());
+                        assert_eq!(resources.usage().unwrap().processing_visits, 0);
+                        assert_eq!(resources.usage().unwrap().font_bytes, 0);
+                        assert_eq!(resources.generation_resources().usage().unwrap().0, 0);
+                    }
+                    // Stop the enclosing root before unrelated feedback storage;
+                    // the producer's success/refusal has been inspected above.
+                    Err::<(), _>(crate::Error::Render("font copy boundary inspected".into()))
+                },
+                |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+                |(), _, (), _| Ok(()),
+            )
+            .err()
+            .unwrap();
+            assert!(stopped.to_string().contains("font copy boundary inspected"));
+        }
+    }
+
+    #[test]
+    fn literal_font_values_preserve_bytes_duplicates_and_css_semantics() {
+        let discoveries = FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
+        let named = FontFamily::named("A, B").unwrap();
+        let stack = FontStack::new([
+            named.clone(),
+            FontFamily::named("sans-serif").unwrap(),
+            named.clone(),
+            FontFamily::generic(GenericFontFamily::SansSerif),
+        ])
+        .unwrap();
+        assert_eq!(stack.families()[0].name(), Some("A, B"));
+        assert_eq!(stack.families()[2], named);
+        assert_eq!(stack.families()[1].generic_family(), None);
+        assert_eq!(
+            stack.families()[3].generic_family(),
+            Some(GenericFontFamily::SansSerif)
+        );
+        assert_eq!(
+            stack.css(&OperationFontResources::new()).unwrap(),
+            "\"A, B\", \"sans-serif\", \"A, B\", sans-serif"
+        );
+        for name in [
+            "serif",
+            "MONOSPACE",
+            "cursive",
+            "fantasy",
+            "system-ui",
+            "ui-serif",
+            "ui-sans-serif",
+            "ui-monospace",
+            "ui-rounded",
+            "math",
+            "fangsong",
+            "inherit",
+            "initial",
+            "unset",
+            "revert",
+            "revert-layer",
+            "default",
+        ] {
+            assert_eq!(
+                named_stack(&[name])
+                    .css(&OperationFontResources::new())
+                    .unwrap(),
+                format!("\"{name}\"")
+            );
+        }
+        assert_eq!(
+            named_stack(&["A\"B\\C", "A  B", "16 Font", "A; B"])
+                .css(&OperationFontResources::new())
+                .unwrap(),
+            "\"A\\\"B\\\\C\", \"A  B\", \"16 Font\", \"A; B\""
+        );
+        assert_eq!(
+            builtin_font_stack()
+                .css(&OperationFontResources::new())
+                .unwrap(),
+            crate::DEFAULT_FONT_FAMILY_STACK
+        );
+        assert_eq!(
+            named_stack(&["-Font", "--Font", "-16 Font", "sans-serif Display", "emoji"])
+                .css(&OperationFontResources::new())
+                .unwrap(),
+            "-Font, --Font, \"-16 Font\", \"sans-serif Display\", \"emoji\""
+        );
+        assert_eq!(FONT_DISCOVERY_CALLS.with(std::cell::Cell::get), discoveries);
+    }
+
+    #[test]
+    fn literal_comma_and_keyword_select_named_faces_independently_of_generics() {
+        let environment = PreparedFontEnvironment::synthetic_faces(&[
+            ("A, B", &['X']),
+            ("A", &['X']),
+            ("B", &['X']),
+            ("sans-serif", &['X']),
+        ]);
+        environment
+            .core
+            .write()
+            .unwrap()
+            .database
+            .set_sans_serif_family("B");
+        let literal = named_stack(&["A, B"]);
+        let separate = named_stack(&["A", "B"]);
+        let keyword = named_stack(&["sans-serif"]);
+        let generic = FontStack::new([FontFamily::generic(GenericFontFamily::SansSerif)]).unwrap();
+        for (ordinal, stack) in [&literal, &separate, &keyword, &generic]
+            .into_iter()
+            .enumerate()
+        {
+            environment
+                .prepare_pair(
+                    u32::try_from(ordinal).unwrap(),
+                    stack,
+                    RequestedWeight::Normal,
+                    &['X'],
+                    None,
+                )
+                .unwrap();
+        }
+        environment.seal_prepared_pairs().unwrap();
+        let pairs = [&literal, &separate, &keyword, &generic].map(|stack| {
+            environment
+                .prepared_pair(stack, RequestedWeight::Normal)
+                .unwrap()
+                .unwrap()
+        });
+        assert_eq!(pairs[0].provenance.candidates.len(), 1);
+        assert_eq!(pairs[1].provenance.candidates.len(), 2);
+        assert_ne!(pairs[0].primary, pairs[1].primary);
+        assert_ne!(pairs[2].primary, pairs[3].primary);
+        assert_eq!(pairs[3].primary, pairs[1].provenance.candidates[1]);
+        assert!(environment
+            .prepared_pair(&named_stack(&["A,B"]), RequestedWeight::Normal)
+            .unwrap()
+            .is_none());
+        assert!(environment
+            .prepared_pair(&named_stack(&["Noto Sans"]), RequestedWeight::Normal)
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn literal_stack_clone_admits_exact_storage_and_refuses_before_copy() {
+        let source = FontStack::new([
+            FontFamily::named("A, B").unwrap(),
+            FontFamily::named("A, B").unwrap(),
+            FontFamily::generic(GenericFontFamily::Serif),
+        ])
+        .unwrap();
+        let bytes = 3 * size_of::<FontFamily>() + 2 * "A, B".len();
+        for remaining in [bytes - 1, bytes] {
+            let resources = OperationGenerationResources::with_test_limits(
+                source.byte_work().unwrap() as u128,
+                remaining as u64,
+            );
+            let result = source.copy_with_generation(&resources);
+            if remaining == bytes {
+                let retained = result.unwrap();
+                assert_eq!(retained, source);
+                assert_ne!(retained.families().as_ptr(), source.families().as_ptr());
+                assert_ne!(
+                    retained.families()[0].name().unwrap().as_ptr(),
+                    source.families()[0].name().unwrap().as_ptr()
+                );
+                assert_eq!(resources.byte_usage().unwrap(), bytes as u64);
+            } else {
+                assert!(matches!(
+                    result,
+                    Err(FontError::Limit {
+                        resource: "system-font bytes",
+                        ..
+                    })
+                ));
+            }
+        }
+        let resources = OperationGenerationResources::with_test_limits(
+            source.byte_work().unwrap() as u128 - 1,
+            bytes as u64,
+        );
+        assert!(source.copy_with_generation(&resources).is_err());
+        assert_eq!(resources.byte_usage().unwrap(), 0);
+    }
+
+    #[test]
     fn retained_face_lookups_admit_each_comparison_before_shaping_metrics_or_outlining() {
         struct OutlineCalls(usize);
         impl ttf_parser::OutlineBuilder for OutlineCalls {
@@ -4643,19 +5255,38 @@ mod tests {
     #[test]
     fn font_cache_refusal_does_not_insert_or_prevent_existing_entry_reuse() {
         let environment = PreparedFontEnvironment::synthetic();
-        let parsed = environment.parse_family_stack("Test Sans").unwrap();
+        let stack = named_stack(&["Test Sans"]);
+        environment
+            .resolve_pair(0, &stack, RequestedWeight::Normal, &['A'])
+            .unwrap();
         let resources = environment.generation_resources();
-        assert_eq!(resources.call_cache_usage().1, 1);
-        resources.claim_cache_entries(999_999).unwrap();
-        assert_eq!(environment.parse_family_stack("Test Sans").unwrap(), parsed);
+        let used = resources.call_cache_usage().1;
+        resources.claim_cache_entries(1_000_000 - used).unwrap();
+        environment
+            .resolve_pair(0, &stack, RequestedWeight::Normal, &['A'])
+            .unwrap();
         assert!(matches!(
-            environment.parse_family_stack("Test Serif"),
+            environment.resolve_pair(
+                1,
+                &named_stack(&["Test Serif"]),
+                RequestedWeight::Normal,
+                &['A']
+            ),
             Err(FontError::ShapeAdmission(TextGenerationClaimError::Limit {
                 resource: "root-local cache entries",
                 ..
             }))
         ));
-        assert_eq!(environment.core.read().unwrap().parsed_stacks.len(), 1);
+        assert_eq!(
+            environment
+                .core
+                .read()
+                .unwrap()
+                .budget
+                .normalized_stacks
+                .len(),
+            1
+        );
         assert_eq!(resources.call_cache_usage().1, 1_000_000);
     }
 
@@ -4694,7 +5325,7 @@ mod tests {
     #[test]
     fn canonical_shaping_admits_only_consumed_context_before_the_engine() {
         let environment = PreparedFontEnvironment::synthetic();
-        let stack = environment.parse_family_stack("Test Sans").unwrap();
+        let stack = named_stack(&["Test Sans"]);
         let pair = environment
             .resolve_pair(0, &stack, RequestedWeight::Normal, &['A'])
             .unwrap();
@@ -4747,8 +5378,7 @@ mod tests {
         FONT_NORMALIZATION_CALLS.with(|calls| calls.set(0));
         FONT_PAIR_RESOLUTION_CALLS.with(|calls| calls.set(0));
         FONT_SELECTION_PROBES.with(|calls| calls.set(0));
-        FONT_STACK_PARSE_CALLS.with(|calls| calls.set(0));
-        let stack = environment.parse_family_stack("Test Sans").unwrap();
+        let stack = named_stack(&["Test Sans"]);
         environment
             .resolve_pair(0, &stack, RequestedWeight::Normal, &['A'])
             .unwrap();
@@ -4756,7 +5386,7 @@ mod tests {
         resources.claim_visits(900_000).unwrap();
         let before = resources.usage().unwrap().processing_visits;
         for ordinal in 1..=1000 {
-            let stack = shared.parse_family_stack("Test Sans").unwrap();
+            let stack = stack.clone();
             let pair = shared
                 .resolve_pair(ordinal, &stack, RequestedWeight::Normal, &['A', 'A'])
                 .unwrap();
@@ -4765,7 +5395,6 @@ mod tests {
         }
         let after = resources.usage().unwrap().processing_visits;
         assert!(after > before && after < 1_000_000);
-        FONT_STACK_PARSE_CALLS.with(|calls| assert_eq!(calls.get(), 1));
         FONT_NORMALIZATION_CALLS.with(|calls| assert_eq!(calls.get(), 1));
         FONT_PAIR_RESOLUTION_CALLS.with(|calls| assert_eq!(calls.get(), 1));
         FONT_SELECTION_PROBES.with(|calls| assert_eq!(calls.get(), 1));
@@ -4799,7 +5428,7 @@ mod tests {
     #[test]
     fn sealed_census_reuses_one_normalization_per_stack_and_one_selection_per_pair() {
         let environment = PreparedFontEnvironment::synthetic();
-        let stack = parse_family_stack("Test Sans").unwrap();
+        let stack = named_stack(&["Test Sans"]);
         FONT_NORMALIZATION_CALLS.with(|calls| calls.set(0));
         FONT_PAIR_RESOLUTION_CALLS.with(|calls| calls.set(0));
         FONT_SELECTION_PROBES.with(|calls| calls.set(0));
@@ -5593,7 +6222,7 @@ mod tests {
         let candidates = canonical_candidates(
             &database,
             &[face],
-            &[FamilyPreference::Named("Other Sans".into())],
+            &named_stack(&["Other Sans"]),
             RequestedWeight::Normal,
             &mut budget,
         )
@@ -5742,7 +6371,7 @@ mod tests {
     #[test]
     fn sealed_environment_rejects_every_late_pair_resolution_route() {
         let environment = PreparedFontEnvironment::synthetic();
-        let stack = parse_family_stack("Test Sans").unwrap();
+        let stack = named_stack(&["Test Sans"]);
         environment.reserve_prepared_pairs(1, None).unwrap();
         environment
             .prepare_pair(0, &stack, RequestedWeight::Normal, &['A'], None)
@@ -5770,7 +6399,7 @@ mod tests {
     #[test]
     fn batch_pair_preparation_preserves_order_and_exact_work() {
         let environment = PreparedFontEnvironment::synthetic();
-        let stack = parse_family_stack("Test Sans").unwrap();
+        let stack = named_stack(&["Test Sans"]);
         let normal_scalars = ['A'];
         let bold_scalars = ['\n', 'A', '\n'];
         let before = environment.resource_usage().unwrap().processing_visits;
@@ -5820,9 +6449,10 @@ mod tests {
     #[test]
     fn batch_pair_preparation_rejects_duplicates_before_resolution() {
         let environment = PreparedFontEnvironment::synthetic();
-        let stack = parse_family_stack("Test Sans").unwrap();
+        let stack = named_stack(&["Test Sans"]);
         let scalars = ['A'];
         let before = environment.resource_usage().unwrap().processing_visits;
+        FONT_PAIR_RESOLUTION_CALLS.with(|calls| calls.set(0));
 
         let error = environment
             .prepare_pairs(
@@ -5841,15 +6471,16 @@ mod tests {
         ));
         assert_eq!(
             environment.resource_usage().unwrap().processing_visits,
-            before
+            before + 1 + 1 + 1 + 1 + "Test Sans".len() as u128
         );
+        FONT_PAIR_RESOLUTION_CALLS.with(|calls| assert_eq!(calls.get(), 0));
         assert!(environment.core.read().unwrap().prepared_pairs.is_empty());
     }
 
     #[test]
     fn batch_counts_every_pair_before_first_pair_materialization() {
         let environment = PreparedFontEnvironment::synthetic();
-        let stack = parse_family_stack("Test Sans").unwrap();
+        let stack = named_stack(&["Test Sans"]);
         let scalars = ['A'];
         environment
             .claim_processing_visits(
@@ -5878,7 +6509,7 @@ mod tests {
         let pair = core
             .resolve_pair(
                 0,
-                &[FamilyPreference::Named("TEST SANS".into())],
+                &named_stack(&["TEST SANS"]),
                 RequestedWeight::Normal,
                 &['A'],
                 true,
@@ -5925,7 +6556,7 @@ mod tests {
             .count();
         let resolved = core.resolve_pair(
             0,
-            &[FamilyPreference::SansSerif],
+            &FontStack::new([FontFamily::generic(GenericFontFamily::SansSerif)]).unwrap(),
             RequestedWeight::Normal,
             &['A'],
             true,
@@ -6127,8 +6758,8 @@ mod tests {
                 .unwrap(),
             )),
         };
-        let complete = parse_family_stack("Base, Complete").unwrap();
-        let split = parse_family_stack("Base, Mark").unwrap();
+        let complete = named_stack(&["Base", "Complete"]);
+        let split = named_stack(&["Base", "Mark"]);
         environment
             .prepare_pairs(
                 [
@@ -6209,7 +6840,7 @@ mod tests {
             ["A\u{0301}", "B\u{0301}", "\u{200D}", "A", "\u{FE0F}"]
         );
         let mut core = generated_core();
-        let stack = parse_family_stack("Test Sans").unwrap();
+        let stack = named_stack(&["Test Sans"]);
         core.resolve_pair(
             0,
             &stack,

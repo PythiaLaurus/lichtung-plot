@@ -36,7 +36,7 @@ pub(crate) fn measure_marks(
     let mark_style = chart.significance_mark_style_spec();
     let significance_label = theme
         .typography
-        .effective_significance_label(chart.significance_mark_style_override());
+        .effective_significance_label(chart.significance_mark_style_override(), &resources)?;
     let attached_label_plans = bar_data::attached_significance_text_plans(
         context,
         &prepared.significance,

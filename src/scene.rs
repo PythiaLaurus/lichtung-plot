@@ -351,7 +351,7 @@ mod tests {
         let plan = environment
             .plan_text(TextPlanInput {
                 source: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                stack: "Test Sans",
+                stack: crate::font::canonical::test_sans_stack(),
                 weight: crate::TextWeight::Normal,
                 font_size: 10,
                 line_height: TextLineHeight::Multiplier(1.2),

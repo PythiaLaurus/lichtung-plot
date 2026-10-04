@@ -117,7 +117,7 @@ fn post_font_canvas_intrinsics_are_scoped_once_before_allocation_and_rebuilt_for
                 .unwrap()
                 .1;
             assert_eq!(plan.style.paint, theme.typography.axis_title.paint);
-            assert_eq!(plan.style.stack_source, theme.typography.axis_title.stack);
+            assert_eq!(plan.style.stack, theme.typography.axis_title.stack);
         }
         let reference = preset.resolve();
         let widths = crate::layout::fit::intrinsic_widths(

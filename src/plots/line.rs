@@ -967,7 +967,7 @@ fn project(
                 let owner = std::str::from_utf8(&buffer[..length]).expect("ASCII layer index");
                 let label_role = &theme.typography.point_layer_label;
                 let appearance = crate::theme::TextAppearance {
-                    stack: data.copy_source_string(&label_role.stack)?,
+                    stack: data.copy_font_stack(&label_role.stack)?,
                     paint: style.color,
                     font_size: label_role.font_size,
                     weight: label_role.weight,

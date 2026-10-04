@@ -778,22 +778,6 @@ pub(crate) fn legend_text_eq(
     Ok(true)
 }
 
-fn copy_legend_string(source: &str, theme: &crate::theme::ResolvedTheme) -> Result<String, Error> {
-    theme
-        .prepared_font_environment()?
-        .claim_unicode_bytes(
-            u64::try_from(source.len())
-                .map_err(|_| Error::Render("legend string length overflow".into()))?,
-        )
-        .map_err(|error| Error::Render(format!("legend string admission: {error}")))?;
-    let mut value = String::new();
-    value
-        .try_reserve_exact(source.len())
-        .map_err(|error| Error::Render(format!("legend string reservation: {error}")))?;
-    value.push_str(source);
-    Ok(value)
-}
-
 fn optional_point_style_eq(left: Option<&PointStyle>, right: Option<&PointStyle>) -> bool {
     match (left, right) {
         (Some(left), Some(right)) => {
@@ -911,7 +895,7 @@ pub(crate) struct Legend {
     available_height: f64,
     title_block: TextBlock,
     entry_blocks: Vec<TextBlock>,
-    font_family: String,
+    font_family: crate::font::canonical::FontStack,
     layout: LegendLayout,
 }
 
@@ -1442,7 +1426,18 @@ impl Legend {
             available_height: available.1.unwrap_or(layout.height),
             title_block: TextBlock::from_resolved(title_plan),
             entry_blocks,
-            font_family: copy_legend_string(&theme.typography.legend_label.stack, theme)?,
+            font_family: theme
+                .typography
+                .legend_label
+                .stack
+                .copy_with_stage(
+                    &theme
+                        .prepared_font_environment()?
+                        .font_resources()
+                        .map_err(|error| Error::Render(error.to_string()))?,
+                    None,
+                )
+                .map_err(|error| Error::Render(error.to_string()))?,
             layout,
         };
         let bounds = legend.box_at(0.0, 0.0);
@@ -1500,7 +1495,7 @@ impl Legend {
             }
         }
         round.observe_count(self.entry_blocks.len())?;
-        round.observe_string(&self.font_family)?;
+        round.observe_font_stack(&self.font_family)?;
         for entry in self.entries.iter() {
             round.observe_legend_glyph(
                 entry.glyph.point.as_ref(),
@@ -2103,25 +2098,22 @@ mod tests {
     }
 
     #[test]
-    fn legend_string_copy_admits_bytes_without_synthetic_processing_work() {
-        let theme = crate::Theme::Publication.resolve();
-        let resources = theme
-            .prepared_font_environment()
-            .unwrap()
-            .generation_resources();
-        let text = "Group × condition";
-        let bytes = resources.byte_usage().unwrap();
-        let visits = resources.usage().unwrap().1;
-        let records = resources.usage().unwrap().0;
-        resources.set_test_limits(visits, bytes + text.len() as u64);
-        assert_eq!(copy_legend_string(text, &theme).unwrap(), text);
-        assert_eq!(resources.usage().unwrap(), (records, visits));
-        assert_eq!(resources.byte_usage().unwrap(), bytes + text.len() as u64);
-        assert!(copy_legend_string("x", &theme)
+    fn legend_stack_copy_admits_literal_storage_and_work_before_copy() {
+        use crate::font::canonical::{named_stack, FontFamily, OperationGenerationResources};
+        let resources = OperationGenerationResources::new();
+        let stack = named_stack(&["Group, condition"]);
+        let bytes = (size_of::<FontFamily>() + "Group, condition".len()) as u64;
+        let visits = stack.byte_work().unwrap() as u128;
+        resources.set_test_limits(visits + 2, bytes);
+        assert_eq!(stack.copy_with_generation(&resources).unwrap(), stack);
+        assert_eq!(resources.usage().unwrap(), (1, visits));
+        assert_eq!(resources.byte_usage().unwrap(), bytes);
+        assert!(named_stack(&["x"])
+            .copy_with_generation(&resources)
             .unwrap_err()
             .to_string()
-            .contains("legend string admission"));
-        assert_eq!(resources.usage().unwrap(), (records, visits));
+            .contains("system-font bytes"));
+        assert_eq!(resources.byte_usage().unwrap(), bytes);
     }
 
     #[test]

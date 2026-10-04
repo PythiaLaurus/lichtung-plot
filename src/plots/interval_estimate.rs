@@ -118,7 +118,7 @@ impl PreparedEstimate {
             })?;
         let significance = theme
             .typography
-            .effective_significance_label(chart.significance_mark_style_override());
+            .effective_significance_label(chart.significance_mark_style_override(), &resources)?;
         for adjacent in self.adjacent.iter().flatten() {
             let appearance = if adjacent.1 {
                 &significance
@@ -782,7 +782,7 @@ fn project(
     let base = &theme.typography.significance_label;
     let exact = chart.significance_mark_style_override();
     let significance_label = crate::theme::TextAppearance {
-        stack: data.copy_source_string(&base.stack)?,
+        stack: data.copy_font_stack(&base.stack)?,
         paint: base.paint,
         font_size: exact.map_or(base.font_size, crate::SignificanceMarkStyle::font_size_spec),
         weight: exact.map_or(base.weight, crate::SignificanceMarkStyle::weight_spec),
@@ -790,7 +790,7 @@ fn project(
     };
     let detail_role = &theme.typography.estimate_detail;
     let detail_label = crate::theme::TextAppearance {
-        stack: data.copy_source_string(&detail_role.stack)?,
+        stack: data.copy_font_stack(&detail_role.stack)?,
         paint: detail_role.paint,
         font_size: detail_role.font_size,
         weight: detail_role.weight,

@@ -455,7 +455,8 @@ fn facet_owned_significance_is_retained_only_by_its_selected_panel() {
 fn final_guides_ticks_and_invalid_tuples_precede_unavailable_fonts() {
     fn with_unavailable_fonts(source: &Plot) -> Result<(), Error> {
         let mut theme = crate::Theme::Publication.resolve();
-        theme.typography.tick_label.stack = "T5a6a3c unavailable font 91f7".into();
+        theme.typography.tick_label.stack =
+            crate::font::canonical::named_stack(&["T5a6a3c unavailable font 91f7"]);
         crate::layout::plan_exact_root(
             640,
             480,

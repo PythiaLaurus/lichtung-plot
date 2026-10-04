@@ -456,7 +456,6 @@ struct PlannedBracketCall {
 pub(super) struct TextPlanningBackend<'a, 'b> {
     height: u32,
     font_environment: PreparedFontEnvironment,
-    operation_default_stack: String,
     calls: Vec<PlannedCall>,
     final_stage: &'a mut crate::layout::kernel::FinalStage<'b>,
 }
@@ -469,29 +468,12 @@ impl<'a, 'b> TextPlanningBackend<'a, 'b> {
     ) -> Result<Self, Error> {
         #[cfg(test)]
         TEXT_PLAN_CAPTURE_SESSIONS.with(|calls| calls.set(calls.get() + 1));
-        let mut stack = Vec::new();
-        final_stage.reserve_capture(
-            &mut stack,
-            theme.font_family.len(),
-            "prepared default font stack",
-        )?;
-        stack.extend_from_slice(theme.font_family.as_bytes());
         Ok(Self {
             height,
             font_environment: theme.prepared_font_environment()?.clone(),
-            operation_default_stack: String::from_utf8(stack)
-                .map_err(|error| Error::Render(format!("prepared default font stack: {error}")))?,
             calls: Vec::new(),
             final_stage,
         })
-    }
-
-    fn stack_for<'c>(&'c self, style: &'c TextStyle) -> &'c str {
-        if style.font_family == crate::DEFAULT_FONT_FAMILY {
-            &self.operation_default_stack
-        } else {
-            &style.font_family
-        }
     }
 
     fn plan_text(
@@ -505,7 +487,7 @@ impl<'a, 'b> TextPlanningBackend<'a, 'b> {
         self.font_environment
             .plan_prepared_text(TextPlanInput {
                 source,
-                stack: self.stack_for(style),
+                stack: &style.font_family,
                 weight: style.weight,
                 font_size: style.font_size,
                 line_height,
@@ -530,16 +512,11 @@ impl<'a, 'b> TextPlanningBackend<'a, 'b> {
             backend::BracketOrientation::Vertical => PhysicalTextAlignment::Center,
             backend::BracketOrientation::Horizontal => PhysicalTextAlignment::Start,
         };
-        let stack = if style.font_family == crate::DEFAULT_FONT_FAMILY {
-            &self.operation_default_stack
-        } else {
-            &style.font_family
-        };
         let plan = self
             .font_environment
             .plan_prepared_text(TextPlanInput {
                 source: &bracket.label,
-                stack,
+                stack: &style.font_family,
                 font_size: style.font_size,
                 weight: style.weight,
                 line_height: TextLineHeight::Multiplier(
@@ -642,7 +619,16 @@ impl<'a, 'b> TextPlanningBackend<'a, 'b> {
         style: &BracketStyle,
     ) -> Result<(SignificanceBracket, BracketStyle), Error> {
         let label = self.copy_string(&bracket.label, "prepared bracket label")?;
-        let font_family = self.copy_string(&style.font_family, "prepared bracket font family")?;
+        let font_family = style
+            .font_family
+            .copy_with_stage(
+                &self
+                    .font_environment
+                    .font_resources()
+                    .map_err(|error| Error::Render(error.to_string()))?,
+                None,
+            )
+            .map_err(|error| Error::Render(error.to_string()))?;
         Ok((
             SignificanceBracket { label, ..*bracket },
             BracketStyle {
@@ -1778,7 +1764,7 @@ mod tests {
                         color: Color::rgb(1, 2, 3),
                         label_color: Color::rgb(4, 5, 6),
                         width: 0.8,
-                        font_family: theme.font_family.clone(),
+                        font_family: theme.typography.title.stack.clone(),
                         font_size: 12,
                         line_height: 14.4,
                         weight: crate::TextWeight::Normal,
@@ -2072,7 +2058,7 @@ mod tests {
                 color: Color::rgb(1, 2, 3),
                 label_color: Color::rgb(3, 2, 1),
                 width: 0.8,
-                font_family: theme.font_family.clone(),
+                font_family: theme.typography.title.stack.clone(),
                 font_size: 12,
                 line_height: 14.4,
                 weight: crate::TextWeight::Normal,
@@ -2220,7 +2206,9 @@ mod tests {
                                         color: Color::rgb(0, 0, 0),
                                         label_color: Color::rgb(0, 0, 0),
                                         width: 1.0,
-                                        font_family: String::new(),
+                                        font_family: crate::font::canonical::named_stack(&[
+                                            "Unavailable capture family",
+                                        ]),
                                         font_size: 12,
                                         line_height: 14.4,
                                         weight: crate::TextWeight::Normal,
@@ -2229,7 +2217,9 @@ mod tests {
                                 )
                             } else {
                                 let mut style = replay_text_style(&theme);
-                                style.font_family.clear();
+                                style.font_family = crate::font::canonical::named_stack(&[
+                                    "Unavailable capture family",
+                                ]);
                                 backend.draw_text(Point2D::new(50.0, 50.0), "raw text", &style)
                             }
                         },
@@ -2237,7 +2227,7 @@ mod tests {
                 },
             );
             let Err(error) = result else {
-                panic!("an empty raw font stack must be rejected");
+                panic!("an unprepared raw font stack must be rejected");
             };
             assert!(error.to_string().contains("capture"), "{error}");
             NULL_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
@@ -2699,7 +2689,7 @@ mod tests {
             color: Color::rgb(0, 0, 0),
             label_color: deferred.plan.style.paint,
             width: 1.0,
-            font_family: deferred.plan.style.stack_source.clone(),
+            font_family: deferred.plan.style.stack.clone(),
             font_size: deferred.plan.style.font_size,
             line_height: deferred.plan.line_height(),
             weight: deferred.plan.style.weight,
@@ -2756,7 +2746,7 @@ mod tests {
             color: Color::rgb(0, 0, 0),
             label_color: deferred.plan.style.paint,
             width: 0.8,
-            font_family: deferred.plan.style.stack_source.clone(),
+            font_family: deferred.plan.style.stack.clone(),
             font_size: deferred.plan.style.font_size,
             line_height: deferred.plan.line_height(),
             weight: deferred.plan.style.weight,
@@ -2797,7 +2787,7 @@ mod tests {
             color: Color::rgb(0, 0, 0),
             label_color: Color::rgb(1, 2, 3),
             width: 1.0,
-            font_family: theme.font_family.clone(),
+            font_family: theme.typography.title.stack.clone(),
             font_size: 12,
             line_height: 14.4,
             weight: crate::TextWeight::Semibold,
@@ -2977,7 +2967,12 @@ mod tests {
             color: Color::rgb(0, 0, 0),
             width: 1.0,
             label_color: Color::rgb(0, 0, 0),
-            font_family: "sans-serif".into(),
+            font_family: crate::font::canonical::FontStack::new([
+                crate::font::canonical::FontFamily::generic(
+                    crate::font::canonical::GenericFontFamily::SansSerif,
+                ),
+            ])
+            .unwrap(),
             font_size: 12,
             line_height: 14.4,
             weight: crate::TextWeight::Normal,

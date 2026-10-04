@@ -349,7 +349,7 @@ mod tests {
 
     fn text(stack: &str, paint: Color, font_size: u32) -> TextAppearance {
         TextAppearance {
-            stack: stack.into(),
+            stack: crate::font::canonical::named_stack(&[stack]),
             paint,
             font_size,
             weight: crate::TextWeight::Normal,
@@ -419,7 +419,7 @@ mod tests {
             select(opaque, opaque, opaque, opaque, &dark, &same)
                 .unwrap()
                 .stack,
-            "Second role"
+            crate::font::canonical::named_stack(&["Second role"])
         );
         let mut invalid = light.clone();
         invalid.paint = Color::rgba(255, 255, 255, 254);

@@ -48,7 +48,10 @@ impl Intrinsics {
             let _ = axes.intrinsics.set(summary);
         }
         let summary = axes.intrinsics.get().expect("initialized panel intrinsics");
-        if !summary.standard.matches(theme) {
+        if !summary
+            .standard
+            .matches(theme, &environment.generation_resources())?
+        {
             return Err(Error::Render(
                 "prepared panel intrinsic typography changed".into(),
             ));

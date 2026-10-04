@@ -178,7 +178,6 @@ pub(crate) struct GeometryBackend {
     clips: Vec<PanelBox>,
     scopes: Vec<GeometryScope>,
     state: GeometryCanvasState,
-    operation_default_stack: String,
 }
 
 /// Retained consequences of selected geometry, independent of backend sessions.
@@ -233,14 +232,10 @@ impl GeometryBackend {
     pub(crate) fn new(theme: &crate::theme::ResolvedTheme) -> Result<Self, Error> {
         Ok(Self::with_environment(
             theme.prepared_font_environment()?.clone(),
-            theme.font_family.clone(),
         ))
     }
 
-    fn with_environment(
-        font_environment: PreparedFontEnvironment,
-        operation_default_stack: String,
-    ) -> Self {
+    fn with_environment(font_environment: PreparedFontEnvironment) -> Self {
         #[cfg(test)]
         GEOMETRY_BACKEND_CONSTRUCTIONS.with(|calls| calls.set(calls.get() + 1));
         Self {
@@ -252,7 +247,6 @@ impl GeometryBackend {
             clips: Vec::new(),
             scopes: Vec::new(),
             state: GeometryCanvasState::Fresh,
-            operation_default_stack,
         }
     }
 
@@ -857,17 +851,10 @@ impl GeometryBackend {
     ) -> Result<ResolvedTextPlan, Error> {
         #[cfg(test)]
         GEOMETRY_RAW_TEXT_PLAN_CALLS.with(|calls| calls.set(calls.get() + 1));
-        // Point-layer labels still carry the legacy first-family token until
-        // their renderer owns immutable text plans; use the operation policy.
-        let stack = if style.font_family == crate::DEFAULT_FONT_FAMILY {
-            &self.operation_default_stack
-        } else {
-            &style.font_family
-        };
         self.font_environment
             .plan_prepared_text(TextPlanInput {
                 source: text,
-                stack,
+                stack: &style.font_family,
                 weight: style.weight,
                 font_size: style.font_size,
                 line_height: TextLineHeight::Multiplier(1.2),
@@ -1797,7 +1784,7 @@ mod tests {
                     color: Color::rgb(0, 0, 0),
                     width,
                     label_color: Color::rgb(0, 0, 0),
-                    font_family: "Test Sans".into(),
+                    font_family: crate::font::canonical::named_stack(&["Test Sans"]),
                     font_size: 12,
                     line_height: 14.4,
                     weight: crate::TextWeight::Normal,
@@ -2042,7 +2029,7 @@ mod tests {
             color: Color::rgb(0, 0, 0),
             width: 0.8009,
             label_color: Color::rgb(0, 0, 0),
-            font_family: "Test Sans".into(),
+            font_family: crate::font::canonical::named_stack(&["Test Sans"]),
             font_size: 12,
             line_height: 14.4,
             weight: crate::TextWeight::Normal,
@@ -2174,7 +2161,7 @@ mod tests {
     fn test_text_style() -> TextStyle {
         TextStyle {
             color: Color::rgb(0, 0, 0),
-            font_family: "Test Sans".into(),
+            font_family: crate::font::canonical::named_stack(&["Test Sans"]),
             font_size: 12,
             weight: crate::TextWeight::Normal,
             anchor: TextAnchor::Middle,
@@ -2183,10 +2170,7 @@ mod tests {
     }
 
     fn begun_backend() -> GeometryBackend {
-        let mut backend = GeometryBackend::with_environment(
-            PreparedFontEnvironment::synthetic(),
-            "Test Sans".into(),
-        );
+        let mut backend = GeometryBackend::with_environment(PreparedFontEnvironment::synthetic());
         backend.begin(100, 100).unwrap();
         backend
     }
@@ -2361,10 +2345,7 @@ mod tests {
     fn geometry_lifecycle_requires_one_balanced_session_and_fresh_reuse() {
         let points = [Point2D::new(1.0, 1.0), Point2D::new(2.0, 2.0)];
         let style = LineStyle::solid(Color::rgb(0, 0, 0), 1.0);
-        let mut backend = GeometryBackend::with_environment(
-            PreparedFontEnvironment::synthetic(),
-            "Test Sans".into(),
-        );
+        let mut backend = GeometryBackend::with_environment(PreparedFontEnvironment::synthetic());
 
         assert!(backend.begin(0, 100).is_err());
         assert!(backend.draw_line(&points, &style).is_err());
@@ -2885,7 +2866,7 @@ mod tests {
         let plan = PreparedFontEnvironment::synthetic()
             .plan_text(TextPlanInput {
                 source: "A",
-                stack: "Test Sans",
+                stack: crate::font::canonical::test_sans_stack(),
                 weight: crate::TextWeight::Normal,
                 font_size: 12,
                 line_height: TextLineHeight::Multiplier(1.2),
@@ -3005,7 +2986,7 @@ mod tests {
             color: Color::rgb(0, 0, 0),
             width: 1.0,
             label_color: Color::rgb(0, 0, 0),
-            font_family: "Test Sans".into(),
+            font_family: crate::font::canonical::named_stack(&["Test Sans"]),
             font_size: 20,
             line_height: 24.0,
             weight: crate::TextWeight::Normal,

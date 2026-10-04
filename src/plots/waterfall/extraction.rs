@@ -440,7 +440,8 @@ fn missing_labels_and_invalid_intermediate_endpoints_win_before_unavailable_font
         .x_limits(-10.0, 10.0)
         .erase();
         let mut theme = crate::Theme::Publication.resolve();
-        theme.typography.tick_label.stack = "T5a6a4e unavailable font 91f7".into();
+        theme.typography.tick_label.stack =
+            crate::font::canonical::named_stack(&["T5a6a4e unavailable font 91f7"]);
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let result = crate::layout::plan_exact_root(
             640,

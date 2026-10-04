@@ -26,7 +26,7 @@ fn typography_performance_evidence_and_root_cache_budgets() {
         let resources = environment.generation_resources();
         environment.share_generation_resources(&resources).unwrap();
         eprintln!(
-            "{name} setup_us={} initial={:?} stack={}",
+            "{name} setup_us={} initial={:?} stack={:?}",
             setup.elapsed().as_micros(),
             environment.resource_usage().unwrap(),
             theme.typography.caption.stack
@@ -95,7 +95,38 @@ fn typography_performance_evidence_and_root_cache_budgets() {
                 assert_eq!(after.0, before.0);
                 assert_eq!(font_after.font_bytes, font_before.font_bytes);
                 let binary_comparisons = if phase == "hit" { 1 } else { 2 };
-                assert_eq!(after.1 - before.1, binary_comparisons + 1);
+                // One complete key hash and one exact-content check, including
+                // named bytes. A payload hit skips shaping, never identity work.
+                let families = theme.typography.caption.stack.families();
+                let name_bytes: usize = families
+                    .iter()
+                    .filter_map(canonical::FontFamily::name)
+                    .map(str::len)
+                    .sum();
+                let literal_count = families
+                    .iter()
+                    .filter(|family| family.name().is_some())
+                    .count();
+                let generic = families.len() - literal_count;
+                let hash = 58
+                    + source.len()
+                    + "performance caption".len()
+                    + families.len()
+                    + 9 * literal_count
+                    + name_bytes
+                    + 2 * generic;
+                let equality = 1
+                    + source.len()
+                    + 1
+                    + families.len()
+                    + literal_count
+                    + name_bytes
+                    + 1
+                    + "performance caption".len();
+                assert_eq!(
+                    after.1 - before.1,
+                    binary_comparisons + 1 + (hash + equality) as u128
+                );
             } else if phase == "cold" {
                 cold_work = after.1 - before.1;
                 first = Some(plan);
@@ -209,7 +240,8 @@ fn reflow_reuses_analysis_through_unwrapped_wrapped_and_blank_paragraphs() {
         i64::MAX,
         PhysicalTextAlignment::Start,
     );
-    request.stack = "Base, Complete";
+    let stack = canonical::named_stack(&["Base", "Complete"]);
+    request.stack = &stack;
     let original = environment.plan_text(request.clone()).unwrap();
     let mut previous = original.clone();
     for width in [20_000, 14_848, i64::MAX] {
@@ -254,7 +286,8 @@ fn reflow_reuses_analysis_through_unwrapped_wrapped_and_blank_paragraphs() {
 fn review_selected_soft_hyphen_paints_and_participates_in_fit() {
     let environment = PreparedFontEnvironment::synthetic_faces(&[("Soft", &['A', '-'])]);
     let mut request = tests::input("A\u{ad}AA", 12_288, PhysicalTextAlignment::Start);
-    request.stack = "Soft";
+    let stack = canonical::named_stack(&["Soft"]);
+    request.stack = &stack;
     let plan = environment.plan_text(request.clone()).unwrap();
     assert_eq!(plan.line_texts(), ["A\u{ad}", "AA"]);
     assert_eq!(plan.lines[0].logical_advance_quanta, 12_288);
@@ -273,7 +306,8 @@ fn review_selected_soft_hyphen_paints_and_participates_in_fit() {
         Err(TextPlanError::Fit(_))
     ));
     let mut request = tests::input("A\u{ad}AA", i64::MAX, PhysicalTextAlignment::Start);
-    request.stack = "Soft";
+    let stack = canonical::named_stack(&["Soft"]);
+    request.stack = &stack;
     let whole = environment.plan_text(request).unwrap();
     assert_eq!(whole.source, "A\u{ad}AA");
     assert_eq!(whole.lines[0].selected_soft_hyphen, None);
@@ -284,7 +318,7 @@ fn review_selected_soft_hyphen_paints_and_participates_in_fit() {
 fn selected_soft_hyphen_uses_the_sealed_literal_hyphen_fallback() {
     let environment =
         PreparedFontEnvironment::synthetic_faces(&[("Base", &['A']), ("Hyphen", &['-'])]);
-    let stack = environment.parse_family_stack("Base, Hyphen").unwrap();
+    let stack = canonical::named_stack(&["Base", "Hyphen"]);
     environment
         .prepare_pair(
             0,
@@ -299,7 +333,7 @@ fn selected_soft_hyphen_uses_the_sealed_literal_hyphen_fallback() {
         .unwrap();
     environment.seal_prepared_pairs().unwrap();
     let mut request = tests::input("A\u{ad}AA", 12_288, PhysicalTextAlignment::Start);
-    request.stack = "Base, Hyphen";
+    request.stack = &stack;
     let planned = environment.plan_prepared_text(request).unwrap();
     assert_eq!(planned.source, "A\u{ad}AA");
     let runs = &planned.lines[0].runs;
@@ -344,7 +378,8 @@ fn selected_soft_hyphen_preserves_same_face_gpos_and_original_clusters() {
         .collect();
     let environment = PreparedFontEnvironment::synthetic_shaping_fonts(fonts);
     let mut request = tests::input("A\u{ad}A", 11_264, PhysicalTextAlignment::Start);
-    request.stack = "First";
+    let stack = canonical::named_stack(&["First"]);
+    request.stack = &stack;
     let plan = environment.plan_text(request.clone()).unwrap();
     let mut wide_request = request.clone();
     wide_request.maximum_width_quanta = i64::MAX;
@@ -409,7 +444,8 @@ fn review_context_survives_forced_face_boundaries() {
     let environment = contextual_environment();
     let source = "\u{628}\u{628}\u{64e}\u{628}";
     let mut request = tests::input(source, i64::MAX, PhysicalTextAlignment::Start);
-    request.stack = "First, Second";
+    let stack = canonical::named_stack(&["First", "Second"]);
+    request.stack = &stack;
     let plan = environment.plan_text(request).unwrap();
     assert_eq!(plan.source, source);
     let runs = &plan.lines[0].runs;
@@ -463,7 +499,8 @@ fn wrapped_arabic_context_stops_at_selected_line_boundaries() {
     let environment = contextual_environment();
     let source = "\u{628}\u{628}\u{64e}\u{ad}\u{628}\u{628}";
     let mut request = tests::input(source, 15_360, PhysicalTextAlignment::Start);
-    request.stack = "First, Second";
+    let stack = canonical::named_stack(&["First", "Second"]);
+    request.stack = &stack;
     let plan = environment.plan_text(request.clone()).unwrap();
     let mut wide_request = request.clone();
     wide_request.maximum_width_quanta = i64::MAX;
@@ -541,7 +578,7 @@ fn review_hard_metrics_round_outward_for_empty_lines() {
     let line = empty_line(TextSourceSpan::new(0, 0).unwrap(), 0, metrics, 1).unwrap();
     assert_eq!((line.ascent, line.descent), (401, 101));
     let environment = PreparedFontEnvironment::synthetic();
-    let stack = environment.parse_family_stack("Test Sans").unwrap();
+    let stack = canonical::named_stack(&["Test Sans"]);
     let pair = environment
         .resolve_pair(0, &stack, RequestedWeight::Normal, &[' '])
         .unwrap();
@@ -579,7 +616,7 @@ fn review_hard_metrics_round_outward_for_empty_lines() {
     let plan = finalize_plan(
         &environment,
         request,
-        stack,
+        &stack,
         pair.provenance,
         1,
         vec![line, whitespace],
@@ -594,7 +631,7 @@ fn review_hard_metrics_round_outward_for_empty_lines() {
 #[test]
 fn actual_gsub_count_and_root_bytes_gate_every_glyph_copy() {
     let environment = contextual_environment();
-    let stack = environment.parse_family_stack("Second").unwrap();
+    let stack = canonical::named_stack(&["Second"]);
     let pair = environment
         .resolve_pair(0, &stack, RequestedWeight::Normal, &['A', '\u{301}'])
         .unwrap();
@@ -636,7 +673,7 @@ fn actual_gsub_count_and_root_bytes_gate_every_glyph_copy() {
     ));
 
     let environment = PreparedFontEnvironment::synthetic();
-    let stack = environment.parse_family_stack("Test Sans").unwrap();
+    let stack = canonical::named_stack(&["Test Sans"]);
     let pair = environment
         .resolve_pair(0, &stack, RequestedWeight::Normal, &['A'])
         .unwrap();
@@ -660,7 +697,7 @@ fn actual_gsub_count_and_root_bytes_gate_every_glyph_copy() {
     canonical::SHAPED_GLYPH_RETAINS.with(|count| assert_eq!(count.get(), 0));
     let request = tests::input("", 0, PhysicalTextAlignment::Start);
     assert!(matches!(
-        finalize_plan(&environment, request, stack, pair.provenance, 1, vec![]),
+        finalize_plan(&environment, request, &stack, pair.provenance, 1, vec![]),
         Err(TextPlanError::Font(FontError::Limit {
             resource: "system-font bytes",
             ..
@@ -677,9 +714,9 @@ fn source_units_select_complete_faces_without_reassigning_standalone_bases() {
     ]);
     let source = "AA\u{301}A\nA\u{300}AA\u{301}";
     let mut request = tests::input(source, i64::MAX, PhysicalTextAlignment::Start);
-    request.stack = "Base, Acute, Grave";
+    let stack = canonical::named_stack(&["Base", "Acute", "Grave"]);
+    request.stack = &stack;
     let planned = environment.plan_text(request.clone()).unwrap();
-    let stack = environment.parse_family_stack(request.stack).unwrap();
     let pair = environment
         .prepared_pair(&stack, RequestedWeight::Normal)
         .unwrap()
@@ -768,7 +805,8 @@ fn unsealed_queries_extend_scalars_and_prepare_new_units_before_selection() {
         ("Complete", &['A', '\u{301}']),
     ]);
     let mut request = tests::input("A", i64::MAX, PhysicalTextAlignment::Start);
-    request.stack = "Base, Complete";
+    let stack = canonical::named_stack(&["Base", "Complete"]);
+    request.stack = &stack;
     let standalone = environment.plan_text(request.clone()).unwrap();
     request.source = "AA\u{301}A";
     let marked = environment.plan_text(request.clone()).unwrap();
@@ -791,7 +829,8 @@ fn uncovered_whole_units_use_the_canonical_scalar_fallback() {
     let environment =
         PreparedFontEnvironment::synthetic_faces(&[("Base", &['A']), ("Mark", &['\u{301}'])]);
     let mut request = tests::input("A\u{301}A", i64::MAX, PhysicalTextAlignment::Start);
-    request.stack = "Base, Mark";
+    let stack = canonical::named_stack(&["Base", "Mark"]);
+    request.stack = &stack;
     let planned = environment.plan_text(request).unwrap();
     let runs = &planned.lines[0].runs;
     assert_eq!(runs.len(), 3);
@@ -799,7 +838,7 @@ fn uncovered_whole_units_use_the_canonical_scalar_fallback() {
     assert_ne!(runs[0].face, runs[1].face);
     assert_eq!(&planned.source[runs[1].source_span.range()], "\u{301}");
     assert!(runs.iter().all(|run| run.script == Script::Latin));
-    let stack = environment.parse_family_stack("Base, Mark").unwrap();
+    let stack = canonical::named_stack(&["Base", "Mark"]);
     let pair = environment
         .prepared_pair(&stack, RequestedWeight::Normal)
         .unwrap()
@@ -821,7 +860,8 @@ fn fallback_controls_keep_source_and_neighbor_face_without_nominal_coverage() {
     ]);
     let source = "\u{200d}A\u{301}\u{fe0f}\u{200c}A";
     let mut request = tests::input(source, i64::MAX, PhysicalTextAlignment::Start);
-    request.stack = "Base, Complete";
+    let stack = canonical::named_stack(&["Base", "Complete"]);
+    request.stack = &stack;
     let planned = environment.plan_text(request).unwrap();
     assert_eq!(planned.source, source);
     let runs = &planned.lines[0].runs;
@@ -864,7 +904,8 @@ fn control_only_text_does_not_require_a_space_or_control_glyph() {
     let environment = PreparedFontEnvironment::synthetic_faces(&[("Base", &['A'])]);
     let source = "\u{2067}\u{200d}\u{2069}";
     let mut request = tests::input(source, i64::MAX, PhysicalTextAlignment::Start);
-    request.stack = "Base";
+    let base_stack = canonical::named_stack(&["Base"]);
+    request.stack = &base_stack;
     let planned = environment.plan_text(request).unwrap();
     assert_eq!(planned.source, source);
     assert_eq!(planned.lines[0].logical_advance_quanta, 0);
@@ -878,7 +919,8 @@ fn fallback_runs_with_different_font_units_share_one_exact_pen_and_outward_ink()
         ("Complete", &['A', '\u{301}']),
     ]);
     let mut request = tests::input("AA\u{301}A", i64::MAX, PhysicalTextAlignment::Start);
-    request.stack = "Base, Complete";
+    let stack = canonical::named_stack(&["Base", "Complete"]);
+    request.stack = &stack;
     let planned = environment.plan_text(request).unwrap();
     let mut pen_x = ExactRational::ZERO;
     let mut pen_y = ExactRational::ZERO;

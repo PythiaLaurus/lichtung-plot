@@ -304,8 +304,7 @@ pub(super) fn native_parent(
                 fit::FitFailure::retain_least(&mut child_miss, reason);
             }
             let label = facet_label(&panel_plot, &facet.cell, data)?;
-            let appearance = theme
-                .legacy_text_appearance(theme.facet_header_font_size, crate::TextWeight::Normal);
+            let appearance = &theme.typography.facet_header;
             let strip_scope = scope
                 .child(AddressRole::FacetCell, index, &resources)?
                 .child(AddressRole::FacetHeader, 0, &resources)?;
@@ -317,7 +316,7 @@ pub(super) fn native_parent(
             } else if let FitOutcome::Miss(reason) = fit::text(
                 theme,
                 &label,
-                &appearance,
+                appearance,
                 cell.width() - 16.0,
                 PhysicalTextAlignment::Center,
                 "facet strip",

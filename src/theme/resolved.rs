@@ -71,11 +71,9 @@ define_themes! {
 pub(crate) struct ResolvedTheme {
     /// Series colors in draw order. Index 0 is the first series.
     pub(crate) colors: Vec<(u8, u8, u8)>,
-    /// Legacy stack source retained for later legend, mark, and annotation roles.
-    pub(crate) font_family: String,
     /// Legacy paint source retained for later legend, mark, and annotation roles.
     pub(crate) foreground: (u8, u8, u8),
-    /// Font size in points for annotations, status text, and color scales.
+    /// Font size in actual CSS pixels for annotations, status text, and color scales.
     pub(crate) detail_font_size: u32,
     /// Legacy label-size source retained for later body and annotation roles.
     pub(crate) label_font_size: u32,
@@ -155,10 +153,14 @@ impl TextQueryCache {
                 break;
             }
             let query = &self.entries[candidate.entry];
-            if query.matches_shaping(input, prepared_only)
+            if query.matches_shaping(input, prepared_only, &environment.generation_resources())?
                 && (!exact
                     || (query.width == input.maximum_width_quanta
-                        && query.matches_presentation(input, preferred_lines)))
+                        && query.matches_presentation(
+                            input,
+                            preferred_lines,
+                            &environment.generation_resources(),
+                        )?))
             {
                 return Ok(Some(candidate.entry));
             }
@@ -241,15 +243,28 @@ impl CachedTextQuery {
         input: &TextPlanInput<'_>,
         preferred_lines: Option<usize>,
         prepared_only: bool,
-    ) -> ([u8; 32], [u8; 32]) {
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<([u8; 32], [u8; 32]), Error> {
+        resources
+            .claim_visits(8 + input.source.len() as u128)
+            .map_err(|error| Error::Render(format!("text query hashing: {error:?}")))?;
         let mut hash = Sha256::new();
         // The complete, unnormalized source fixes paragraph bidi and scripts;
         // language and Unicode policy are fixed for this renderer. The memo is
         // shared only together with its immutable operation font environment.
-        for text in [input.source, input.stack] {
-            hash.update((text.len() as u64).to_le_bytes());
-            hash.update(text.as_bytes());
-        }
+        hash.update((input.source.len() as u64).to_le_bytes());
+        hash.update(input.source.as_bytes());
+        input
+            .stack
+            .hash_into(&mut hash, resources)
+            .map_err(|error| Error::Render(format!("text query hashing: {error}")))?;
+        // The remaining fixed operands, owner bytes, and optional line count are one known full pass.
+        resources
+            .claim_visits(
+                42 + input.provenance.owner.len() as u128
+                    + if preferred_lines.is_some() { 8 } else { 0 },
+            )
+            .map_err(|error| Error::Render(format!("text query hashing: {error:?}")))?;
         hash.update(input.font_size.to_le_bytes());
         hash.update([
             match input.weight {
@@ -290,30 +305,42 @@ impl CachedTextQuery {
         if let Some(lines) = preferred_lines {
             hash.update((lines as u64).to_le_bytes());
         }
-        (shaping, hash.finalize().into())
+        Ok((shaping, hash.finalize().into()))
     }
 
-    fn matches_shaping(&self, input: &TextPlanInput<'_>, prepared_only: bool) -> bool {
-        self.source == input.source
-            && self.appearance.stack == input.stack
-            && self.appearance.font_size == input.font_size
+    fn matches_shaping(
+        &self,
+        input: &TextPlanInput<'_>,
+        prepared_only: bool,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<bool, Error> {
+        Ok(self.appearance.font_size == input.font_size
             && self.appearance.weight == input.weight
             && self.prepared_only == prepared_only
+            && crate::font::canonical::same_bytes(&self.source, input.source, resources)
+                .map_err(|error| Error::Render(error.to_string()))?
+            && self
+                .appearance
+                .stack
+                .same(input.stack, resources)
+                .map_err(|error| Error::Render(error.to_string()))?)
     }
 
     fn matches_presentation(
         &self,
         input: &TextPlanInput<'_>,
         preferred_lines: Option<usize>,
-    ) -> bool {
-        self.appearance.paint == input.paint
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<bool, Error> {
+        Ok(self.appearance.paint == input.paint
             && input.line_height
                 == TextLineHeight::Multiplier(self.appearance.line_height_multiplier)
             && self.alignment == input.alignment
-            && self.owner == input.provenance.owner
             && self.pair_ordinal == input.provenance.pair_ordinal
             && self.exact_override == input.exact_override
             && self.preferred_lines == preferred_lines
+            && crate::font::canonical::same_bytes(&self.owner, &input.provenance.owner, resources)
+                .map_err(|error| Error::Render(error.to_string()))?)
     }
 
     fn matches_width(&self, width: i64) -> bool {
@@ -326,8 +353,13 @@ impl CachedTextQuery {
 
 impl PartialEq for ResolvedTheme {
     fn eq(&self, other: &Self) -> bool {
+        self.non_text_eq(other) && self.typography == other.typography
+    }
+}
+
+impl ResolvedTheme {
+    fn non_text_eq(&self, other: &Self) -> bool {
         self.colors == other.colors
-            && self.font_family == other.font_family
             && self.foreground == other.foreground
             && self.detail_font_size == other.detail_font_size
             && self.label_font_size == other.label_font_size
@@ -335,7 +367,6 @@ impl PartialEq for ResolvedTheme {
             && self.facet_header_font_size == other.facet_header_font_size
             && self.surfaces == other.surfaces
             && self.canvas_surface_override == other.canvas_surface_override
-            && self.typography == other.typography
             && self.legend == other.legend
             && self.axes == other.axes
             && self.marks == other.marks
@@ -345,6 +376,47 @@ impl PartialEq for ResolvedTheme {
 }
 
 impl ResolvedTheme {
+    pub(crate) fn same(
+        &self,
+        other: &Self,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<bool, Error> {
+        if !self.non_text_eq(other) {
+            return Ok(false);
+        }
+        for (left, right) in self
+            .typography
+            .roles()
+            .into_iter()
+            .zip(other.typography.roles())
+        {
+            if !left.same(right, resources)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    pub(crate) fn admitted_clone(&self, data: crate::data::PlotData<'_>) -> Result<Self, Error> {
+        data.require_source_resources()?;
+        data.admit_clone_slice(&self.colors)?;
+        for appearance in self.typography.roles() {
+            data.claim_source_visits(
+                appearance
+                    .stack
+                    .byte_work()
+                    .map_err(|error| Error::Render(error.to_string()))?,
+            )?;
+            data.admit_clone_slice(appearance.stack.families())?;
+            for family in appearance.stack.families() {
+                if let Some(name) = family.name() {
+                    data.admit_clone_str(name)?;
+                }
+            }
+        }
+        // All owned arrays/name buffers are admitted before the standard-library clone.
+        Ok(self.clone())
+    }
     /// Initialize this operation's canonical system-font environment.
     pub(crate) fn prepare_font_environment(&self) -> Result<(), Error> {
         self.prepared_font_environment().map(|_| ())
@@ -516,21 +588,6 @@ impl ResolvedTheme {
         )
     }
 
-    /// Build the current private appearance for a legacy T5b body-text role.
-    pub(crate) fn legacy_text_appearance(
-        &self,
-        font_size: u32,
-        weight: TextWeight,
-    ) -> TextAppearance {
-        TextAppearance {
-            stack: self.font_family.clone(),
-            paint: color_from_rgb(self.foreground),
-            font_size,
-            weight,
-            line_height_multiplier: 1.2,
-        }
-    }
-
     /// Select a complete text role over one final variable-fill paint before
     /// font preparation, using owner-local panel/root surfaces and backdrop.
     pub(crate) fn contrasting_text(&self, fill: Color) -> Result<&TextAppearance, Error> {
@@ -660,8 +717,12 @@ impl ResolvedTheme {
             .text_queries
             .lock()
             .map_err(|_| Error::Render("text query cache lock poisoned".into()))?;
-        let (shaping_fingerprint, fingerprint) =
-            CachedTextQuery::fingerprints(input, preferred_lines, prepared_only);
+        let (shaping_fingerprint, fingerprint) = CachedTextQuery::fingerprints(
+            input,
+            preferred_lines,
+            prepared_only,
+            &environment.generation_resources(),
+        )?;
         let key = (input, preferred_lines, prepared_only);
         if let Some(index) = cache.find(&cache.exact, fingerprint, key, true, environment)? {
             return Ok(Some(cache.entries[index].result.clone()));
@@ -674,7 +735,11 @@ impl ResolvedTheme {
                 .claim_processing_visits(1)
                 .map_err(|error| Error::Render(format!("text query lookup: {error:?}")))?;
             if query.matches_width(input.maximum_width_quanta)
-                && query.matches_presentation(input, preferred_lines)
+                && query.matches_presentation(
+                    input,
+                    preferred_lines,
+                    &environment.generation_resources(),
+                )?
             {
                 return Ok(Some(query.result.clone()));
             }
@@ -705,11 +770,11 @@ impl ResolvedTheme {
         let key_bytes = input
             .source
             .len()
-            .checked_add(input.stack.len())
-            .and_then(|bytes| bytes.checked_add(input.provenance.owner.len()))
+            .checked_add(input.provenance.owner.len())
             .ok_or_else(|| Error::Render("text query cache byte count overflow".into()))?;
+        let resources = environment.generation_resources();
         let (shaping_fingerprint, fingerprint) =
-            CachedTextQuery::fingerprints(input, preferred_lines, prepared_only);
+            CachedTextQuery::fingerprints(input, preferred_lines, prepared_only, &resources)?;
         let key = (input, preferred_lines, prepared_only);
         if cache
             .find(&cache.exact, fingerprint, key, true, environment)?
@@ -765,6 +830,7 @@ impl ResolvedTheme {
             owned.push_str(text);
             Ok(owned)
         };
+        let appearance = appearance.copy_with_generation(&resources)?;
         cache.entries.push(CachedTextQuery {
             unwrapped_width: match &result {
                 CachedTextResult::Plan(plan) => plan
@@ -773,10 +839,7 @@ impl ResolvedTheme {
                 CachedTextResult::PreferredWidth(_) | CachedTextResult::Reflow(_) => None,
             },
             source: copy(input.source)?,
-            appearance: TextAppearance {
-                stack: copy(&appearance.stack)?,
-                ..*appearance
-            },
+            appearance,
             alignment: input.alignment,
             owner: copy(&input.provenance.owner)?,
             pair_ordinal: input.provenance.pair_ordinal,
@@ -836,11 +899,11 @@ pub(crate) struct SurfaceAppearance {
 /// Complete text appearance for one semantic typography role.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct TextAppearance {
-    /// CSS-compatible system-font family stack.
-    pub(crate) stack: String,
+    /// Ordered literal named and host-generic family preferences.
+    pub(crate) stack: crate::font::canonical::FontStack,
     /// Text paint.
     pub(crate) paint: Color,
-    /// Font size in points.
+    /// Font size in actual CSS pixels.
     pub(crate) font_size: u32,
     /// Closed renderer-owned font weight.
     pub(crate) weight: TextWeight,
@@ -849,6 +912,33 @@ pub(crate) struct TextAppearance {
 }
 
 impl TextAppearance {
+    pub(crate) fn same(
+        &self,
+        other: &Self,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<bool, Error> {
+        Ok(self.font_size == other.font_size
+            && self.weight == other.weight
+            && self.paint == other.paint
+            && self.line_height_multiplier.to_bits() == other.line_height_multiplier.to_bits()
+            && self
+                .stack
+                .same(&other.stack, resources)
+                .map_err(|error| Error::Render(error.to_string()))?)
+    }
+
+    pub(crate) fn copy_with_generation(
+        &self,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            stack: self
+                .stack
+                .copy_with_generation(resources)
+                .map_err(|error| Error::Render(error.to_string()))?,
+            ..*self
+        })
+    }
     /// Resolve this role's current line pitch in pixels.
     pub(crate) fn line_height(&self) -> f64 {
         f64::from(self.font_size) * self.line_height_multiplier
@@ -883,6 +973,10 @@ pub(crate) struct FoundationalTypography {
     pub(crate) contrast_dark: TextAppearance,
     pub(crate) legend_title: TextAppearance,
     pub(crate) legend_label: TextAppearance,
+    pub(crate) facet_header: TextAppearance,
+    pub(crate) composition_header: TextAppearance,
+    pub(crate) text_panel_title: TextAppearance,
+    pub(crate) body: TextAppearance,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -904,18 +998,41 @@ pub(crate) struct LegendAppearance {
 }
 
 impl FoundationalTypography {
+    pub(crate) fn roles(&self) -> [&TextAppearance; 18] {
+        [
+            &self.title,
+            &self.subtitle,
+            &self.caption,
+            &self.axis_title,
+            &self.tick_label,
+            &self.significance_label,
+            &self.estimate_detail,
+            &self.waterfall_total,
+            &self.point_layer_label,
+            &self.panel_text,
+            &self.contrast_light,
+            &self.contrast_dark,
+            &self.legend_title,
+            &self.legend_label,
+            &self.facet_header,
+            &self.composition_header,
+            &self.text_panel_title,
+            &self.body,
+        ]
+    }
     /// Resolve the effective significance-label typography while preserving an
     /// exact caller size and weight over the theme defaults.
     pub(crate) fn effective_significance_label(
         &self,
         exact: Option<SignificanceMarkStyle>,
-    ) -> TextAppearance {
-        let mut effective = self.significance_label.clone();
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<TextAppearance, Error> {
+        let mut effective = self.significance_label.copy_with_generation(resources)?;
         if let Some(exact) = exact {
             effective.font_size = exact.font_size_spec();
             effective.weight = exact.weight_spec();
         }
-        effective
+        Ok(effective)
     }
 }
 
@@ -1282,13 +1399,12 @@ fn resolved_theme(
     grid_color: (u8, u8, u8),
     source_show_top_right_spines: bool,
 ) -> ResolvedTheme {
-    let stack = crate::DEFAULT_FONT_FAMILY_STACK.to_owned();
+    let stack = crate::font::canonical::builtin_font_stack();
     let foreground_paint = color_from_rgb(foreground);
     let muted_paint = color_from_rgb(MUTED_TEXT);
 
     ResolvedTheme {
         colors,
-        font_family: stack.clone(),
         foreground,
         detail_font_size: 14,
         label_font_size: axis_title_font_size,
@@ -1334,6 +1450,10 @@ fn resolved_theme(
             contrast_dark: text_appearance(&stack, Color::rgb(0, 0, 0), 11, 1.2),
             legend_title: text_appearance(&stack, Color::rgb(60, 60, 60), 12, 1.2),
             legend_label: text_appearance(&stack, Color::rgb(40, 40, 40), 11, 1.2),
+            facet_header: text_appearance(&stack, foreground_paint, subtitle_font_size, 1.2),
+            composition_header: text_appearance(&stack, foreground_paint, title_font_size, 1.2),
+            text_panel_title: text_appearance(&stack, foreground_paint, title_font_size, 1.2),
+            body: text_appearance(&stack, foreground_paint, axis_title_font_size, 1.2),
         },
         legend: LegendAppearance {
             padding: 8.8,
@@ -1568,13 +1688,13 @@ fn resolved_theme(
 }
 
 fn text_appearance(
-    stack: &str,
+    stack: &crate::font::canonical::FontStack,
     paint: Color,
     font_size: u32,
     line_height_multiplier: f64,
 ) -> TextAppearance {
     TextAppearance {
-        stack: stack.to_owned(),
+        stack: stack.clone(),
         paint,
         font_size,
         weight: TextWeight::Normal,
@@ -1800,7 +1920,7 @@ mod tests {
     )]
     fn expected_theme(theme: Theme) -> ResolvedTheme {
         let (colors, expected) = expected_preset(theme);
-        let stack = crate::DEFAULT_FONT_FAMILY_STACK.to_owned();
+        let stack = crate::font::canonical::builtin_font_stack();
         let foreground = color_from_rgb(expected.foreground);
         let text = |paint, font_size, line_height_multiplier| TextAppearance {
             stack: stack.clone(),
@@ -1812,7 +1932,6 @@ mod tests {
 
         ResolvedTheme {
             colors,
-            font_family: stack.clone(),
             foreground: expected.foreground,
             detail_font_size: 14,
             label_font_size: expected.axis_title_size,
@@ -1850,6 +1969,10 @@ mod tests {
                 contrast_dark: text(Color::rgb(0, 0, 0), 11, 1.2),
                 legend_title: text(Color::rgb(60, 60, 60), 12, 1.2),
                 legend_label: text(Color::rgb(40, 40, 40), 11, 1.2),
+                facet_header: text(foreground, expected.subtitle_size, 1.2),
+                composition_header: text(foreground, expected.title_size, 1.2),
+                text_panel_title: text(foreground, expected.title_size, 1.2),
+                body: text(foreground, expected.axis_title_size, 1.2),
             },
             legend: LegendAppearance {
                 padding: 8.8,
@@ -2141,10 +2264,21 @@ mod tests {
                 &resolved.typography.axis_title,
                 &resolved.typography.tick_label,
                 &resolved.typography.significance_label,
+                &resolved.typography.estimate_detail,
+                &resolved.typography.waterfall_total,
+                &resolved.typography.point_layer_label,
+                &resolved.typography.panel_text,
+                &resolved.typography.contrast_light,
+                &resolved.typography.contrast_dark,
+                &resolved.typography.legend_title,
+                &resolved.typography.legend_label,
+                &resolved.typography.facet_header,
+                &resolved.typography.composition_header,
+                &resolved.typography.text_panel_title,
+                &resolved.typography.body,
             ];
 
             assert!(!resolved.colors.is_empty(), "{theme:?} has no colors");
-            assert_eq!(resolved.font_family, crate::DEFAULT_FONT_FAMILY_STACK);
             assert!(resolved.marks.uncertainty_stroke.width.is_finite());
             assert!(resolved.marks.uncertainty_stroke.width > 0.0);
             assert!(resolved.marks.summary_stroke.width.is_finite());
@@ -2157,7 +2291,8 @@ mod tests {
             assert_eq!(resolved.composition_title_font_size, expected.title_size);
             assert_eq!(resolved.facet_header_font_size, expected.subtitle_size);
             assert!(text_roles.iter().all(|role| {
-                !role.stack.trim().is_empty()
+                !role.stack.families().is_empty()
+                    && role.stack == crate::font::canonical::builtin_font_stack()
                     && role.font_size > 0
                     && role.line_height_multiplier.is_finite()
                     && role.line_height_multiplier > 0.0
@@ -2406,7 +2541,10 @@ mod tests {
     fn significance_label_defaults_and_exact_precedence_are_complete() {
         for theme in BUILT_IN_THEMES {
             let typography = theme.resolve().typography;
-            let default = typography.effective_significance_label(None);
+            let resources = crate::font::canonical::OperationGenerationResources::new();
+            let default = typography
+                .effective_significance_label(None, &resources)
+                .unwrap();
             assert_eq!(default.font_size, 16, "{theme:?}");
             assert_eq!(default.weight, TextWeight::Normal, "{theme:?}");
             assert!(
@@ -2416,7 +2554,9 @@ mod tests {
 
             let exact = SignificanceMarkStyle::new(23, TextWeight::Bold, 9.0)
                 .expect("valid exact significance style");
-            let effective = typography.effective_significance_label(Some(exact));
+            let effective = typography
+                .effective_significance_label(Some(exact), &resources)
+                .unwrap();
             assert_eq!(effective.stack, default.stack, "{theme:?}");
             assert_eq!(effective.paint, default.paint, "{theme:?}");
             assert_eq!(effective.font_size, 23, "{theme:?}");
@@ -2633,7 +2773,7 @@ mod tests {
             .set(Ok(PreparedFontEnvironment::synthetic()))
             .unwrap();
         let mut appearance = root.typography.caption.clone();
-        appearance.stack = "Test Sans".into();
+        appearance.stack = crate::font::canonical::named_stack(&["Test Sans"]);
         appearance.font_size = 10;
         let first = root
             .plan_text(
@@ -2742,7 +2882,7 @@ mod tests {
         let resources = environment.generation_resources();
         environment.share_generation_resources(&resources).unwrap();
         let mut appearance = root.typography.caption.clone();
-        appearance.stack = "Test Sans".into();
+        appearance.stack = crate::font::canonical::named_stack(&["Test Sans"]);
         appearance.font_size = 10;
         let mut first = None;
         for index in 0..128 {
@@ -2761,7 +2901,8 @@ mod tests {
             }
         }
         let input = indexed_query_input("A", &appearance, "owner 000");
-        let (_, fingerprint) = CachedTextQuery::fingerprints(&input, None, true);
+        let (_, fingerprint) =
+            CachedTextQuery::fingerprints(&input, None, true, &resources).unwrap();
         let comparisons = {
             let cache = root.text_queries.lock().unwrap();
             assert_eq!(cache.entries.len(), 128);
@@ -2799,7 +2940,9 @@ mod tests {
             .unwrap();
         assert!(first.unwrap().shares_payload(&hit));
         let after = resources.usage().unwrap();
-        assert_eq!(after.1 - before.1, comparisons + 1);
+        // 87 hash bytes/entry visits, source equality 2, stack equality 12,
+        // owner equality 10, plus binary/candidate lookup work.
+        assert_eq!(after.1 - before.1, comparisons + 1 + 87 + 2 + 12 + 10);
         assert_eq!(after.0, before.0);
         assert_eq!(environment.resource_usage().unwrap().font_bytes, bytes);
 
@@ -2837,7 +2980,7 @@ mod tests {
         );
         assert_eq!(
             resources.usage().unwrap().1 - before,
-            8 + cache.exact.len() as u128
+            8 + cache.exact.len() as u128 + 128 + 3 + 12 + 10
         );
         let before = resources.usage().unwrap().1;
         assert_eq!(
@@ -2852,7 +2995,7 @@ mod tests {
                 .unwrap(),
             Some(expected)
         );
-        assert_eq!(resources.usage().unwrap().1 - before, 4);
+        assert_eq!(resources.usage().unwrap().1 - before, 4 + 1 + 3 + 12);
         let mut wrong_provenance = collision.clone();
         wrong_provenance.provenance.pair_ordinal += 1;
         assert!(cache
@@ -2883,7 +3026,8 @@ mod tests {
     fn indexed_query_fingerprints_include_exact_presentation_and_provenance() {
         let appearance = Theme::Publication.resolve().typography.caption;
         let input = indexed_query_input("A", &appearance, "owner");
-        let fingerprints = CachedTextQuery::fingerprints(&input, None, true);
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let fingerprints = CachedTextQuery::fingerprints(&input, None, true, &resources).unwrap();
         for change in 0..7 {
             let mut changed = input.clone();
             match change {
@@ -2895,31 +3039,244 @@ mod tests {
                 5 => changed.provenance.owner.push('x'),
                 _ => changed.provenance.pair_ordinal += 1,
             }
-            let changed = CachedTextQuery::fingerprints(&changed, None, true);
+            let changed = CachedTextQuery::fingerprints(&changed, None, true, &resources).unwrap();
             assert_eq!(changed.0, fingerprints.0);
             assert_ne!(changed.1, fingerprints.1);
         }
         assert_ne!(
-            CachedTextQuery::fingerprints(&input, Some(2), true).1,
+            CachedTextQuery::fingerprints(&input, Some(2), true, &resources)
+                .unwrap()
+                .1,
             fingerprints.1
         );
         for change in 0..4 {
             let mut changed = input.clone();
+            let other = crate::font::canonical::named_stack(&["Other"]);
             match change {
                 0 => changed.source = "AA",
-                1 => changed.stack = "Other",
+                1 => changed.stack = &other,
                 2 => changed.font_size += 1,
                 _ => changed.weight = TextWeight::Bold,
             }
             assert_ne!(
-                CachedTextQuery::fingerprints(&changed, None, true).0,
+                CachedTextQuery::fingerprints(&changed, None, true, &resources)
+                    .unwrap()
+                    .0,
                 fingerprints.0
             );
         }
         assert_ne!(
-            CachedTextQuery::fingerprints(&input, None, false).0,
+            CachedTextQuery::fingerprints(&input, None, false, &resources)
+                .unwrap()
+                .0,
             fingerprints.0
         );
+    }
+
+    #[test]
+    fn query_hashing_admits_every_font_byte_before_the_complete_hash_pass() {
+        use crate::font::canonical::{named_stack, OperationGenerationResources};
+        let appearance = TextAppearance {
+            stack: named_stack(&["α, A"]),
+            ..Theme::Publication.resolve().typography.caption
+        };
+        let input = indexed_query_input("A", &appearance, "owner");
+        // 58 fixed bytes, source/owner bytes, one entry visit, tag+length, five name bytes.
+        let work = 58 + 1 + 5 + 1 + 9 + 5;
+        for remaining in [0, work - 1, work] {
+            let resources = OperationGenerationResources::with_test_limits(remaining, 0);
+            let result = CachedTextQuery::fingerprints(&input, None, true, &resources);
+            assert_eq!(result.is_ok(), remaining == work);
+            if remaining == work {
+                assert_eq!(resources.usage().unwrap().1, work);
+            }
+            assert_eq!(resources.byte_usage().unwrap(), 0);
+        }
+    }
+
+    #[test]
+    fn cached_text_hit_refuses_content_work_without_allocating_or_reshaping() {
+        use crate::font::canonical::{named_stack, FONT_SHAPE_CALLS};
+        let theme = Theme::Publication.resolve();
+        theme
+            .font_environment
+            .set(Ok(PreparedFontEnvironment::synthetic()))
+            .unwrap();
+        let appearance = TextAppearance {
+            stack: named_stack(&["Test Sans"]),
+            font_size: 10,
+            ..theme.typography.caption.clone()
+        };
+        let first = theme
+            .plan_text(
+                "A",
+                &appearance,
+                100.0,
+                PhysicalTextAlignment::Start,
+                "owner",
+                false,
+            )
+            .unwrap();
+        let resources = theme
+            .prepared_font_environment()
+            .unwrap()
+            .generation_resources();
+        // Hash: 83; binary/candidate lookup: 2; source/name/owner equality: 2+12+6.
+        for remaining in [0, 104, 105] {
+            let before = resources.usage().unwrap();
+            let bytes = resources.byte_usage().unwrap();
+            resources.set_test_limits(before.1 + remaining, bytes);
+            FONT_SHAPE_CALLS.with(|calls| calls.set(0));
+            let result = theme.plan_text(
+                "A",
+                &appearance,
+                100.0,
+                PhysicalTextAlignment::Start,
+                "owner",
+                false,
+            );
+            if remaining == 105 {
+                assert!(first.shares_payload(&result.unwrap()));
+            } else {
+                assert!(result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("root processing visits"));
+            }
+            assert_eq!(resources.usage().unwrap().1 - before.1, remaining);
+            assert_eq!(resources.usage().unwrap().0, before.0);
+            assert_eq!(resources.byte_usage().unwrap(), bytes);
+            FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+        }
+    }
+
+    #[test]
+    fn effective_significance_copy_uses_actual_role_storage_and_refuses_before_copy() {
+        use crate::font::canonical::{named_stack, FontFamily, OperationGenerationResources};
+        let mut theme = Theme::Publication.resolve();
+        theme.typography.significance_label.stack = named_stack(&["αX", "A, B"]);
+        let bytes = 2 * size_of::<FontFamily>() + 3 + 4;
+        let work = 2 + 3 + 4;
+        let exact = SignificanceMarkStyle::new(23, TextWeight::Bold, 9.0).unwrap();
+        for (visits, limit) in [
+            (0, bytes),
+            (work - 1, bytes),
+            (work, bytes - 1),
+            (work, bytes),
+        ] {
+            let resources = OperationGenerationResources::with_test_limits(visits, limit as u64);
+            let result = theme
+                .typography
+                .effective_significance_label(Some(exact), &resources);
+            if visits == work && limit == bytes {
+                let result = result.unwrap();
+                assert_eq!(result.stack, theme.typography.significance_label.stack);
+                assert_eq!(result.font_size, 23);
+                assert_eq!(result.weight, TextWeight::Bold);
+                assert_eq!(resources.byte_usage().unwrap(), bytes as u64);
+                assert_eq!(resources.usage().unwrap(), (2, work));
+            } else {
+                assert!(result.is_err());
+            }
+            if visits < work {
+                assert_eq!(resources.byte_usage().unwrap(), 0);
+            }
+        }
+    }
+
+    #[test]
+    fn admitted_theme_clone_covers_all_eighteen_roles_with_exact_refusal_boundaries() {
+        use crate::font::canonical::{
+            named_stack, FontFamily, OperationGenerationResources, FONT_DISCOVERY_CALLS,
+        };
+        let plot = crate::Plot::scatter(
+            crate::NumericValues::new("x", [0.0]),
+            crate::NumericValues::new("y", [0.0]),
+        )
+        .erase();
+        let mut theme = Theme::Publication.resolve();
+        theme.typography.title.stack = named_stack(&["αX", "A, B"]);
+        let roles = theme.typography.roles();
+        assert_eq!(roles.len(), 18);
+        let name_bytes: usize = roles
+            .iter()
+            .flat_map(|role| role.stack.families())
+            .filter_map(crate::font::canonical::FontFamily::name)
+            .map(str::len)
+            .sum();
+        let entries: usize = roles.iter().map(|role| role.stack.families().len()).sum();
+        let bytes =
+            size_of_val(theme.colors.as_slice()) + entries * size_of::<FontFamily>() + name_bytes;
+        let work = (entries + name_bytes) as u128;
+        let discoveries = FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
+        for (visits, limit) in [
+            (0, bytes),
+            (work - 1, bytes),
+            (work, bytes - 1),
+            (work, bytes),
+        ] {
+            let resources = OperationGenerationResources::with_test_limits(visits, limit as u64);
+            let copy = theme.admitted_clone(plot.data().with_axis_resources(&resources));
+            if visits == work && limit == bytes {
+                let copy = copy.unwrap();
+                assert_eq!(copy, theme);
+                assert_eq!(resources.usage().unwrap().1, work);
+                assert_eq!(resources.byte_usage().unwrap(), bytes as u64);
+                for (retained, original) in copy.typography.roles().into_iter().zip(roles) {
+                    assert_ne!(
+                        retained.stack.families().as_ptr(),
+                        original.stack.families().as_ptr()
+                    );
+                    for (retained, original) in retained
+                        .stack
+                        .families()
+                        .iter()
+                        .zip(original.stack.families())
+                    {
+                        if let (Some(retained), Some(original)) = (retained.name(), original.name())
+                        {
+                            assert_ne!(retained.as_ptr(), original.as_ptr());
+                        }
+                    }
+                }
+            } else {
+                assert!(copy.is_err());
+            }
+        }
+        assert_eq!(FONT_DISCOVERY_CALLS.with(std::cell::Cell::get), discoveries);
+        assert!(theme.admitted_clone(plot.data()).is_err());
+    }
+
+    #[test]
+    fn retained_theme_matching_prices_all_eighteen_stack_profiles() {
+        use crate::font::canonical::{named_stack, OperationGenerationResources};
+        let theme = Theme::Publication.resolve();
+        let mut retained = theme.clone();
+        let work: usize = theme
+            .typography
+            .roles()
+            .iter()
+            .map(|role| {
+                let families = role.stack.families();
+                1 + families.len()
+                    + families
+                        .iter()
+                        .filter_map(crate::font::canonical::FontFamily::name)
+                        .map(|name| 1 + name.len())
+                        .sum::<usize>()
+            })
+            .sum();
+        for remaining in [0, work - 1, work] {
+            let resources = OperationGenerationResources::with_test_limits(remaining as u128, 0);
+            let result = retained.same(&theme, &resources);
+            assert_eq!(result.is_ok(), remaining == work);
+            assert_eq!(resources.usage().unwrap().1, remaining as u128);
+            assert_eq!(resources.byte_usage().unwrap(), 0);
+        }
+        retained.typography.title.stack = named_stack(&["A, B"]);
+        let resources = OperationGenerationResources::with_test_limits(1, 0);
+        assert!(!retained.same(&theme, &resources).unwrap());
+        assert_eq!(resources.usage().unwrap().1, 1); // entry count differs: no name bytes examined
     }
 
     #[test]
@@ -2929,7 +3286,7 @@ mod tests {
             root.font_environment
                 .set(Ok(PreparedFontEnvironment::synthetic()))
                 .unwrap();
-            root.typography.tick_label.stack = "Test Sans".into();
+            root.typography.tick_label.stack = crate::font::canonical::named_stack(&["Test Sans"]);
             let query = || {
                 if intrinsic {
                     root.intrinsic_tick_label_width(["A"].into_iter(), 100.0)
@@ -2980,7 +3337,7 @@ mod tests {
             .set(Ok(PreparedFontEnvironment::synthetic()))
             .unwrap();
         let mut appearance = root.typography.caption.clone();
-        appearance.stack = "Test Sans".into();
+        appearance.stack = crate::font::canonical::named_stack(&["Test Sans"]);
         let first = root
             .measure_text(
                 "A",

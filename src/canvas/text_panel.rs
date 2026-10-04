@@ -18,11 +18,8 @@ fn pixels(quanta: i64) -> f64 {
     quanta as f64 / 1024.0
 }
 
-fn text_appearance(theme: &ResolvedTheme) -> [TextAppearance; 2] {
-    [
-        theme.legacy_text_appearance(theme.composition_title_font_size, crate::TextWeight::Normal),
-        theme.legacy_text_appearance(theme.label_font_size, crate::TextWeight::Normal),
-    ]
+fn text_appearance(theme: &ResolvedTheme) -> [&TextAppearance; 2] {
+    [&theme.typography.text_panel_title, &theme.typography.body]
 }
 
 #[derive(Clone, Copy)]
@@ -39,20 +36,20 @@ impl TextPanelIntrinsics {
         let title = fit::intrinsic_widths(
             theme,
             source.title(),
-            &title_style,
+            title_style,
             "text panel title intrinsics",
         )?;
         let body = fit::intrinsic_widths(
             theme,
             source.body(),
-            &body_style,
+            body_style,
             "text panel body intrinsics",
         )?;
         let inset = theme.composition.text_panel_inset;
         let title_ch = theme
             .measure_text(
                 "0",
-                &title_style,
+                title_style,
                 PhysicalTextAlignment::Start,
                 "TextPanel title 66ch",
                 false,
@@ -61,7 +58,7 @@ impl TextPanelIntrinsics {
         let body_ch = theme
             .measure_text(
                 "0",
-                &body_style,
+                body_style,
                 PhysicalTextAlignment::Start,
                 "TextPanel body 66ch",
                 false,
@@ -96,7 +93,7 @@ pub(super) fn natural_height(
     let title = fit::measured(fit::text(
         theme,
         source.title(),
-        &title,
+        title,
         available,
         PhysicalTextAlignment::Start,
         "natural TextPanel title",
@@ -106,7 +103,7 @@ pub(super) fn natural_height(
     let body = fit::measured(fit::text(
         theme,
         source.body(),
-        &body,
+        body,
         available,
         PhysicalTextAlignment::Start,
         "natural TextPanel body",
@@ -232,7 +229,7 @@ impl TextPanelPlan {
         let title = match fit::text(
             theme,
             source.title(),
-            &title_style,
+            title_style,
             maximum_width,
             PhysicalTextAlignment::Start,
             "text panel title",
@@ -244,7 +241,7 @@ impl TextPanelPlan {
         let body = match fit::text(
             theme,
             source.body(),
-            &body_style,
+            body_style,
             maximum_width,
             PhysicalTextAlignment::Start,
             "text panel body",
