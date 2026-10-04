@@ -114,6 +114,15 @@ The Canvas universal minimum is the existing ledger retirement
 remaining public validation gate while preserving positive-size timing and
 complete-content/resource refusal.
 
+The numeric/guide design refinement is complete in `06_NUMERIC_PRESENTATION.md`,
+`07_LOG10_DISPLAY.md` and `08_DISCRETE_GUIDES.md`. These architectural targets
+close the consumer/default/key/font contracts, Forest interval/rounding/
+termination/resource/oracle proofs, and every discrete producer's section/mapping
+identity and measured-flow rules. Source-backed and independent mathematical
+reviews are documentation evidence, not successful execution of the future code.
+Implementation-time source refreshes below check their mapping to changed
+foundations; they do not leave public signatures or product choices unplanned.
+
 T6A2 evidence: `94_T6_FOUNDATION_CONSTRUCTION.md` pins complete fields, typed
 construction/accessors/consuming edits, actual CSS units, exact local metrics,
 default operand bits, validation, deletion stages and future focused fixtures.
@@ -154,6 +163,11 @@ add `Output::width()`/`height()` for frozen canonical CSS pixels. Positive sizes
 continue validating at preflight. Canvas still owns embedded child dimensions.
 
 ## T6N — One Scientific Numeric Presentation Core
+
+`06_NUMERIC_PRESENTATION.md` is the detailed authoritative contract and current
+consumer migration census. `07_LOG10_DISPLAY.md` supplies the complete numerical
+design and document-level proof. The summary below remains the execution handoff;
+their implementation, executable oracle and measured admission tests are pending.
 
 ### Scope And Ownership
 
@@ -255,9 +269,12 @@ Adaptive precision formats the complete owner-local set at `min`, then increment
 uniformly through `max` until distinct scientific values have distinct labels.
 It never changes notation or scale. Equal scientific values, including signed
 zero, may repeat. Sets are one axis candidate, final continuous guide, prepared
-Heatmap panel values, prepared Coefficient panel estimates or two Waterfall
-totals. Value-set membership follows semantic preparation, not incidental ink or
-later feedback. Exhaustion is an axis source miss or pre-font presentation error
+Heatmap panel values, prepared Coefficient panel estimates or semantically
+window-eligible Waterfall totals. Value-set membership follows prepared scientific
+inputs, not incidental ink or fit. Waterfall may select another pre-admitted
+eligibility mask after a legitimate domain consequence; reachable masks, their
+results/refusals and potential font requirements are prepared before fonts.
+Exhaustion is an axis source miss or pre-font presentation error
 for guides/values/totals. Resource refusal is immediately fatal. Large set
 ordering and comparisons require fallible admitted work; no unpriced sort or
 quadratic scan is permitted.
@@ -270,7 +287,10 @@ positive value. For exponent `0.5`, fractional 2 yields `3.16`; scale 2 plus `%`
 yields `316.23%`. Tick projection and source identity remain exponent-space.
 Do not claim inversion of a rounded `log10` recovers every original observation.
 
-T6N2 is a numerical design/certification gate before this integration:
+The numerical design gate is closed by `07_LOG10_DISPLAY.md`, including exact
+recurrences, accumulated-error/convergence proofs, scratch/capacity bounds and
+independent root-oracle certificates. Implementation/certification remains a
+separate required gate before integration. Its design summary is:
 
 1. Decode the exact dyadic exponent, add decimal scale exactly, and reduce to
    `E=n+f`, `n=floor(E)`, `0<=f<1`. Retain a signed arbitrary-size integer `n`;
@@ -299,8 +319,9 @@ Use an independent Rust oracle based on repeated certified integer square roots
 of ten and exact interval products, with separately verified integer-square-root
 bounds, plus exact power comparisons for small-denominator cases. Record exact
 exponent bits, precision/scale, expected decimal results and oracle provenance.
-No Python support files, network or new numeric dependency. Proposed formulas
-are not certification evidence; proof and independent vectors must close the gate.
+No Python support files, network or new numeric dependency. The document-level
+proof is complete; executable independent vectors and admission tests must still
+certify the implementation. No mathematical outline is substituted for those tests.
 
 All selected finite exponents are covered, including original-domain midpoint
 sources beyond the integral-seed clamp. Scientific output may represent powers
@@ -346,10 +367,11 @@ compatible effective format. No first-contributor-wins or Canvas format override
 
 | Stage | Status | Depends on | Deliverable / scoped commit |
 | --- | --- | --- | --- |
-| T6N0 | PENDING | T6C | Final actual consumer/key/default census and signatures; `docs(numbers): pin scientific format consumers and defaults` |
+| T6N0d | COMPLETE | T6A | Complete numeric consumer/default/transport/font/key design in `06_NUMERIC_PRESENTATION.md`; `docs(numbers): pin numeric presentation consumers and defaults` |
+| T6N0 | PENDING | T6C, T6N0d | Refresh source names/callers and verify the closed contract against implemented foundations/sizing; implementation handoff, not new product design |
 | T6N1 | PENDING | T6N0 | Exact finite-binary64 decimal conversion, scaling and admitted rounding; `feat(numbers): implement exact scientific decimal formatting` |
-| T6N2a | PENDING | T6N1 | Forest interval/rounding/termination/scratch proof and oracle contract; `docs(numbers): certify Log10 display algorithm` |
-| T6N2b | PENDING | T6N2a | Exact exponent reduction, symbolic powers/output size; `feat(numbers): retain exact Log10 display operands` |
+| T6N2a | COMPLETE | T6N0d | Mathematical interval/rounding/termination, resource and independent-oracle design in `07_LOG10_DISPLAY.md`; document-level proof only; `docs(numbers): prove logarithmic display rounding and resource bounds` |
+| T6N2b | PENDING | T6N1, T6N2a | Exact exponent reduction, symbolic powers/output size; `feat(numbers): retain exact Log10 display operands` |
 | T6N2c | PENDING | T6N2b | Outward mantissa bounds and decimal certification with independent vectors; `feat(numbers): certify fractional Log10 labels` |
 | T6N3 | PENDING | T6N2c | One normalized private format/value implementation; migrate fixed values/default grammar onto it; `refactor(numbers): unify numeric presentation owners` |
 | T6N4a | PENDING | T6N3 | Numeric/Forest axes, alphabets, intrinsics and natural width; `feat(axes): measure configured numeric formats` |
@@ -369,6 +391,11 @@ invalidation, Shared conflict, width-dependent
 fit, cached/uncached output and frozen SVG/PNG. No extra full suite per numeric leaf.
 
 ## T6L — One Section-Aware Discrete Guide
+
+`08_DISCRETE_GUIDES.md` closes the actual producer matrix, typed section/entry
+schema, mapping masks, layer/literal routing, Shared compatibility, finite-height
+flow examples and every flat-storage/census/cache/result deletion. Its design is
+source-reviewed; the new representation and acceptance tests are not implemented.
 
 ### Public Authority And Representation
 
@@ -494,7 +521,8 @@ ink/collision bounds. No draw-time factorization or layout reconstruction.
 
 | Stage | Status | Depends on | Deliverable / scoped commit |
 | --- | --- | --- | --- |
-| T6L0 | PENDING | T6N | Actual producer/mapping/title/layer census; `docs(legend): pin section composition semantics` |
+| T6L0d | COMPLETE | T6A | Complete producer/mapping/title/layer and measured-section design in `08_DISCRETE_GUIDES.md`; `docs(legend): pin discrete guide producer and section contracts` |
+| T6L0 | PENDING | T6N, T6L0d | Refresh actual producer/descriptor/key names after preceding migrations; verify the closed design against those sources, without reopening product choices |
 | T6L1 | PENDING | T6L0 | Typed section descriptor, Combined consumer migration and layer identity; `refactor(legend): retain typed discrete sections` |
 | T6L2 | PENDING | T6L1 | Producer-owned factorized keys and pre-font validation; `feat(legend): prepare factorized channel sections` |
 | T6L3 | PENDING | T6L2 | One bounded section flow/frame/collision plan; `feat(legend): measure bounded section flow` |

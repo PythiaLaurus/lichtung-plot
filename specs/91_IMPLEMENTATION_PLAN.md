@@ -6555,8 +6555,11 @@ assessment and request to plan T6:
 
 The user separately selected mathematical raw-value formatting for configured
 Forest Log10 ticks: exponent `0.5` with fractional precision 2 displays `3.16`.
-T6N includes a dedicated certified fractional-power-to-decimal design and
-implementation gate; exponent precision is not substituted for value precision.
+The numerical/guide refinement is design-closed in
+`06_NUMERIC_PRESENTATION.md`, `07_LOG10_DISPLAY.md` and `08_DISCRETE_GUIDES.md`.
+The Forest mathematical design/proof/resource/oracle gate is complete at document
+level; its code implementation and executable certification gates remain pending.
+Exponent precision is not substituted for value precision.
 Existing unconfigured power labels remain unchanged. This admission adds no
 platform `powf`, dependency, resource-cap increase or alternate rendering route.
 

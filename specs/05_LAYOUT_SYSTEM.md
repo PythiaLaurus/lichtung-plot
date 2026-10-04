@@ -40,6 +40,10 @@ one scientific numeric presentation core and combined/separate discrete guide
 sections. These are additional approved targets, not current public behavior.
 Remaining broader formatting/text controls and sparse compaction retain explicit
 T7 review checkpoints.
+The numeric consumer design, Forest mathematical proof/resource model and
+discrete producer/section design are fully specified in
+`06_NUMERIC_PRESENTATION.md`, `07_LOG10_DISPLAY.md` and `08_DISCRETE_GUIDES.md`.
+These targets are design-closed; the corresponding code/test cutovers are pending.
 
 Post-T5a3 accepted policies are recorded in `91_IMPLEMENTATION_PLAN.md`, T5a3p0
 (PF1-PF7). The amendments below approve external conformance data, effective-
@@ -753,7 +757,8 @@ at scientific precisions `2..=17`, retaining first unique; otherwise source miss
 
 T6 exposes one normalized `NumericFormat` separately from typography and data
 scales. Its exact construction/application contract is in
-`93_T6_EXECUTION_PLAN.md` T6N. Ordinary finite values are converted from the exact
+`06_NUMERIC_PRESENTATION.md`, with logarithmic conversion proved in
+`07_LOG10_DISPLAY.md`. Ordinary finite values are converted from the exact
 binary64 rational times an exact decimal-power display scale, with one
 nearest/ties-to-even rounding. Scientific/engineering/fixed/significant policies
 do not mutate numeric positions, data windows, statistics or colors.
@@ -918,6 +923,8 @@ descriptor, one outer frame and one placement/collision owner. Combined retains
 observed-pair and same-field behavior and current shared-primary-title rules.
 Separate exposes only actual encoded group-style, joint, hue-color, literal and
 supplemental domains, in the order defined by `93_T6_EXECUTION_PLAN.md` T6L.
+`08_DISCRETE_GUIDES.md` supplies the complete producer schema, source mapping,
+compatibility and worked allocation contract; spec93 supplies execution timing.
 It explains marginal mappings, not observed pair support, and never changes marks
 or facet topology. Unsupported factorization rejects before fonts.
 

@@ -28,6 +28,9 @@ numeric presentation core and selectable combined/separate discrete legend
 composition. Their execution and detailed contracts are in
 `93_T6_EXECUTION_PLAN.md`. Both are semantic presentation policies, not theme
 appearance. Remaining DF2/DF5/DF7 scope is reviewed at T7 CLOSURE.
+Their refined architectural contracts and consumer/proof designs are closed in
+`06_NUMERIC_PRESENTATION.md`, `07_LOG10_DISPLAY.md` and `08_DISCRETE_GUIDES.md`;
+implementation and executable acceptance evidence remain pending.
 
 T6A2's authoritative validated construction, fields, metrics and migration
 signatures are in `94_T6_FOUNDATION_CONSTRUCTION.md`. They complete this target's
@@ -489,8 +492,9 @@ appearance. It replaces current `NumericLabelFormat` at its implementation
 cutover. Fixed fractional/significant precision, scientific/engineering notation,
 decimal-power display scaling including percentage, literal affixes, explicit
 negative-zero/trailing-zero handling and bounded adaptive precision are in scope.
-`93_T6_EXECUTION_PLAN.md` T6N owns construction and attachment details; spec05 owns
-its pre-font, measurement, source-fit and frozen-replay consequences.
+`06_NUMERIC_PRESENTATION.md` owns construction/attachment/default/set/identity
+details, and `07_LOG10_DISPLAY.md` proves the logarithmic display design. Spec05
+owns their layout consequences; spec93 owns implementation timing and evidence.
 
 Formats apply to generated numeric axes, continuous guides, existing Heatmap/
 Coefficient value labels and Waterfall totals. They do not change scientific
