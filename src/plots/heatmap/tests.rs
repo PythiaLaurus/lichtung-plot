@@ -56,7 +56,9 @@ fn custom_heatmap_outlines_and_cross_leave_selected_cells_and_missing_key_in_pla
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
     let chart = inputs.attach(source).unwrap();
     let panel = PanelBox::new(10.0, 850.0, 20.0, 620.0);
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let original = chart
         .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
         .unwrap();
@@ -141,7 +143,9 @@ fn missing_row_and_key_consume_one_plot_owned_fill_independent_of_the_gradient()
     let resources = crate::font::canonical::OperationGenerationResources::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
     let chart = inputs.attach(source).unwrap();
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     theme.marks.heatmap_missing_fill = crate::theme::Color::rgba(30, 40, 50, 175);
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
@@ -193,7 +197,9 @@ fn heatmap_intrinsic_cache_rechecks_contrast_role_metrics_after_theme_change() {
     let resources = crate::font::canonical::OperationGenerationResources::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
     let chart = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let original = intrinsic_body_minimum(&chart, &theme).unwrap();
     assert_eq!(intrinsic_body_minimum(&chart, &theme).unwrap(), original);
     let mut custom = theme.clone();
@@ -209,7 +215,9 @@ fn heatmap_intrinsic_cache_rechecks_contrast_role_metrics_after_theme_change() {
 
 #[test]
 fn intrinsic_width_accumulates_only_occupied_column_text_instead_of_repeating_the_longest() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let measure = |values: [f64; 3]| {
         let source = Plot::heatmap(
             CategoryValues::new("column", ["a", "b", "c"]).unwrap(),
@@ -249,7 +257,9 @@ fn assigned_columns_keep_each_value_and_categorical_tick_at_its_measured_cell_ce
     let resources = crate::font::canonical::OperationGenerationResources::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
     let chart = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
@@ -295,7 +305,9 @@ fn missing_fill_and_backdrop_invalidate_cached_intrinsics_with_unequal_contrast_
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
     let marks = &inputs.heatmap.as_ref().unwrap().panels[0].1;
     let axes = &inputs.axes[0].1;
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     theme.surfaces.plot_panel = Color::rgba(0, 0, 0, 0);
     theme.surfaces.canvas_root = Color::rgba(0, 0, 0, 0);
     theme.marks.heatmap_missing_fill = Color::rgba(20, 40, 60, 0);
@@ -371,7 +383,9 @@ fn constrained_merged_row_gets_its_own_height_and_keeps_all_cells_and_ticks() {
     let resources = crate::font::canonical::OperationGenerationResources::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
     let chart = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
@@ -438,7 +452,9 @@ fn native_heatmap_uses_traced_tracks_below_the_retired_parity_floor() {
         .unwrap()
         .attach(source)
         .unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let hard = intrinsic_body_minimum(&chart, &theme).unwrap();
     assert!(hard.0 < 40.0 && hard.1 < 60.0);
     let panel = PanelBox::new(50.0, 83.0, 50.0, 74.0);
@@ -472,7 +488,9 @@ fn heatmap_intrinsic_cache_rechecks_the_final_shared_color_domain() {
     .erase();
     let resources = crate::font::canonical::OperationGenerationResources::new();
     let mut inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     theme.typography.contrast_light.font_size = 40;
     theme.typography.contrast_dark.font_size = 9;
     let axes = &inputs.axes[0].1;
@@ -519,7 +537,9 @@ fn a_custom_gradient_invalidates_the_cached_contrast_role_at_the_same_numeric_do
     let resources = crate::font::canonical::OperationGenerationResources::new();
     let mut inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
     let axes = &inputs.axes[0].1;
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     theme.typography.contrast_light.font_size = 40;
     theme.typography.contrast_dark.font_size = 9;
     let initial = prepare_intrinsics(
@@ -576,7 +596,9 @@ fn heatmap_cell_and_missing_cross_ink_supply_preselection_track_bounds() {
     let resources = crate::font::canonical::OperationGenerationResources::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
     let chart = inputs.attach(source).unwrap();
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let baseline = chart.intrinsic_body_minimum(&theme).unwrap();
     theme.marks.heatmap_cell_outline.width = 100.0;
     let outlined = chart.intrinsic_body_minimum(&theme).unwrap();
@@ -601,7 +623,9 @@ fn highlighted_cell_outline_invalidates_only_its_matching_intrinsic_input() {
     let resources = crate::font::canonical::OperationGenerationResources::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
     let chart = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let baseline = chart.intrinsic_body_minimum(&theme).unwrap();
     let mut changed = theme.clone();
     changed.marks.heatmap_highlight_outline.width = 100.0;
@@ -622,7 +646,9 @@ fn wide_missing_cell_cross_retains_complete_ink_within_its_cell() {
     let resources = crate::font::canonical::OperationGenerationResources::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
     let chart = inputs.attach(source).unwrap();
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     theme.marks.heatmap_missing_cross.width = 24.0;
     let panel = PanelBox::new(50.0, 1000.0, 50.0, 800.0);
     let result = chart
@@ -1172,7 +1198,8 @@ fn private_plot_gradient_freezes_custom_sequential_and_diverging_marks_guides_be
         let theme = plot
             .theme_spec()
             .unwrap_or(crate::Theme::Publication)
-            .resolve();
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let semantics = marks
             .guide_semantics(&theme, plot.data().with_axis_resources(&resources))
             .unwrap();
@@ -1308,7 +1335,9 @@ fn prepared_cell_guide_and_value_label_share_final_diverging_colors() {
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
     let prepared = &inputs.heatmap.as_ref().unwrap().panels[0].1;
     let data = source.data().with_axis_resources(&resources);
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let guide = prepared.guide_semantics(&theme, data).unwrap();
     let stops = prepared
         .color
@@ -1355,7 +1384,9 @@ fn validate_options_rejects_heatmap_incompatible_configuration() {
 
 #[test]
 fn fitted_label_elides_only_at_extended_grapheme_boundaries() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let expected = "e\u{301}...";
     let maximum_width = theme
         .measure_text(
@@ -1399,7 +1430,9 @@ fn fitted_label_elides_only_at_extended_grapheme_boundaries() {
 
 #[test]
 fn fitted_unique_labels_rejects_space_too_narrow_for_an_ellipsis() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let source = chart(&valid_data()).erase();
     let resources = theme
         .prepared_font_environment()

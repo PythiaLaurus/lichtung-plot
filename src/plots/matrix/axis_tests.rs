@@ -4,7 +4,9 @@ use crate::render::backend::*;
 
 #[test]
 fn cache_hit_admits_the_last_call_even_with_no_cache_entries_left() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let resources = theme
         .prepared_font_environment()
         .unwrap()
@@ -49,7 +51,9 @@ fn cache_hit_admits_the_last_call_even_with_no_cache_entries_left() {
 #[test]
 fn cache_miss_reuses_its_call_ticket_and_admits_insertion_independently() {
     for available_entries in [0, 1] {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let resources = theme
             .prepared_font_environment()
             .unwrap()
@@ -196,7 +200,9 @@ fn matrix_marks_ticks_and_reference_grid_share_large_fractional_cell_coordinates
             .unwrap()
             .attach(plot)
             .unwrap();
-            let theme = crate::Theme::Publication.resolve();
+            let theme = crate::Theme::Publication
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             let panel = PanelBox::new(
                 origin,
                 origin + 608.0 + 6.0 / 1024.0,
@@ -312,7 +318,9 @@ fn matrix_marks_ticks_and_reference_grid_share_large_fractional_cell_coordinates
 #[test]
 fn selected_source_cells_keep_logical_and_ink_clearance_at_odd_quanta() {
     for side in [layout::AxisSide::Bottom, layout::AxisSide::Left] {
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.axes.frame = None;
         theme.axes.grid = None;
         for span in [81_923, 204_803, 307_205] {

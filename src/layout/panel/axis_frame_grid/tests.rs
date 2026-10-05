@@ -1,9 +1,12 @@
 use super::*;
+use crate::font::canonical::OperationGenerationResources;
 
 #[test]
 fn resource_audit_axis_calls_refuse_before_text_or_geometry_and_admit_the_last_call() {
     for available in [0, 1, 2] {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&OperationGenerationResources::new())
+            .unwrap();
         let resources = theme
             .prepared_font_environment()
             .unwrap()
@@ -38,7 +41,9 @@ fn resource_audit_axis_calls_refuse_before_text_or_geometry_and_admit_the_last_c
 
 #[test]
 fn selected_axis_plan_retains_semantics_beside_projection_and_sources() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let layout = layout(
         PanelBox::new(80.0, 680.0, 80.0, 480.0),
         vec![AxisTick::new(1.0, "one")],
@@ -81,7 +86,9 @@ fn layout(panel: PanelBox, x: Vec<AxisTick>, y: Vec<AxisTick>, source: TickSourc
 
 #[test]
 fn categorical_marks_ticks_and_grid_use_exact_band_ratios_at_odd_origins() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     for origin in [80.0, 80.0 + 1.0 / 1024.0, 80.1, 80.2] {
         let end = origin + 300.0 + 1.0 / 1024.0;
         let ticks = || {
@@ -138,7 +145,9 @@ fn native_categorical_trajectory_installs_band_projection_before_mark_capture() 
     .unwrap()
     .attach(source)
     .unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let selected = plot
         .measure_selected_interior(crate::spec::PlotRenderContext::new(
             plot.data(),
@@ -167,7 +176,9 @@ fn native_categorical_trajectory_installs_band_projection_before_mark_capture() 
 
 #[test]
 fn assigned_category_tracks_drive_frozen_ticks_grid_and_label_cells() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let mut layout = layout(
         PanelBox::new(80.0, 380.0, 80.0, 380.0),
         vec![AxisTick::new(0.25, "first"), AxisTick::new(1.75, "second")],
@@ -218,7 +229,9 @@ fn assigned_category_tracks_drive_frozen_ticks_grid_and_label_cells() {
 
 #[test]
 fn frozen_axis_retains_projection_source_and_unlabeled_positions() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let source = TickSource {
         kind: SourceKind::LogInterval(3),
         ordinal: 2,
@@ -247,7 +260,9 @@ fn frozen_axis_retains_projection_source_and_unlabeled_positions() {
 
 #[test]
 fn exact_cells_use_adjacent_label_midpoints_and_skip_empty_labels() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let mut layout = layout(
         PanelBox::new(80.0, 680.0, 80.0, 480.0),
         vec![
@@ -280,7 +295,9 @@ fn exact_cells_use_adjacent_label_midpoints_and_skip_empty_labels() {
 
 #[test]
 fn category_bands_round_exact_ratios_and_preserve_reverse_semantic_order() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let ticks = vec![
         AxisTick::new(2.5, "third"),
         AxisTick::new(1.5, "second"),
@@ -312,7 +329,9 @@ fn category_bands_round_exact_ratios_and_preserve_reverse_semantic_order() {
 
 #[test]
 fn unbreakable_category_fails_intact_and_cannot_rotate_or_drop() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let label = "W".repeat(50);
     let layout = layout(
         PanelBox::new(80.0, 280.0, 80.0, 280.0),
@@ -330,7 +349,9 @@ fn unbreakable_category_fails_intact_and_cannot_rotate_or_drop() {
 
 #[test]
 fn vertical_category_cells_reject_insufficient_height_without_dropping() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let layout = layout(
         PanelBox::new(80.0, 680.0, 80.0, 100.0),
         Vec::new(),
@@ -350,7 +371,9 @@ fn vertical_category_cells_reject_insufficient_height_without_dropping() {
 
 #[test]
 fn parent_width_keeps_natural_category_text_or_wraps_only_at_legal_boundaries() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let mut layout = layout(
         PanelBox::new(200.0, 700.0, 80.0, 480.0),
         Vec::new(),
@@ -384,7 +407,9 @@ fn parent_width_keeps_natural_category_text_or_wraps_only_at_legal_boundaries() 
 
 #[test]
 fn gutter_is_provisional_below_at_and_above_forty_percent() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let mut layout = layout(
         PanelBox::new(80.0, 680.0, 80.0, 480.0),
         Vec::new(),
@@ -411,7 +436,9 @@ fn gutter_is_provisional_below_at_and_above_forty_percent() {
 #[test]
 fn frozen_requirements_contain_drawn_ink_and_tick_strokes_with_or_without_frame() {
     for frame_present in [false, true] {
-        let mut theme = crate::Theme::Science.resolve();
+        let mut theme = crate::Theme::Science
+            .resolve(&OperationGenerationResources::new())
+            .unwrap();
         if !frame_present {
             theme.axes.frame = None;
         }
@@ -475,7 +502,9 @@ fn frozen_requirements_contain_drawn_ink_and_tick_strokes_with_or_without_frame(
 
 #[test]
 fn measured_gutters_are_translation_invariant_at_fractional_parent_origins() {
-    let theme = crate::Theme::Science.resolve();
+    let theme = crate::Theme::Science
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let mut layout = layout(
         PanelBox::new(80.0, 480.0, 80.0, 480.0),
         Vec::new(),
@@ -496,7 +525,9 @@ fn measured_gutters_are_translation_invariant_at_fractional_parent_origins() {
 
 #[test]
 fn numeric_marks_ticks_and_grid_share_odd_quantum_spans_and_fractional_origins() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     for origin in [0.0, 1.0 / 1024.0, 0.1, -0.1] {
         let end = origin + 81_923.0 / 1024.0;
         let mut layout = layout(
@@ -530,7 +561,9 @@ fn numeric_marks_ticks_and_grid_share_odd_quantum_spans_and_fractional_origins()
 
 #[test]
 fn canonical_label_fit_accepts_touching_ink_and_rejects_one_quantum_beyond() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     for side in [AxisSide::Bottom, AxisSide::Left] {
         let text = theme
             .measure_text(
@@ -596,9 +629,15 @@ fn canonical_label_fit_accepts_touching_ink_and_rejects_one_quantum_beyond() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one boundary search checks automatic selection, frozen placement and painted ink for both axis orientations"
+)]
 fn automatic_selection_and_frozen_axis_agree_at_quantum_fit_boundary() {
     use super::super::sources::{labels_fit, numeric_tick_plan, TickInterval};
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let ticks = [
         AxisTick::new(0.0, "0"),
         AxisTick::new(1.0, "1"),

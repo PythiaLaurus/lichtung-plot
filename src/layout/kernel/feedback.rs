@@ -80,7 +80,7 @@ struct PointGlyphState {
     color: crate::theme::Color,
     radius: u32,
     shape: crate::PointShape,
-    outline: Option<(crate::theme::Color, u64)>,
+    outline: Option<(crate::theme::Color, crate::theme::RelativeSpacing)>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -594,10 +594,8 @@ impl FeedbackRound {
                     shape: style.shape,
                     outline: style
                         .outline
-                        .map(|outline| {
-                            Ok::<_, Error>((outline.color, number(outline.width_ratio)?))
-                        })
-                        .transpose()?,
+                        .as_ref()
+                        .map(|outline| (outline.color, outline.width_ratio.clone())),
                 })
             })
             .transpose()?;
@@ -1420,6 +1418,31 @@ mod tests {
     use super::*;
 
     #[test]
+    fn guide_feedback_retains_exact_ratio_identity_with_only_reference_storage() {
+        let mut exact = crate::render::backend::PointStyle::new((0, 0, 0), 3);
+        exact.outline.as_mut().unwrap().width_ratio =
+            crate::theme::RelativeSpacing::ratio(3, 5).unwrap();
+        let mut dyadic = exact.clone();
+        dyadic.outline.as_mut().unwrap().width_ratio =
+            crate::theme::RelativeSpacing::new(0.6).unwrap();
+        let mut equivalent = exact.clone();
+        equivalent.outline.as_mut().unwrap().width_ratio =
+            crate::theme::RelativeSpacing::ratio(6, 10).unwrap();
+        let bytes = arc_payload_bytes::<Observation>()
+            + std::mem::size_of::<std::sync::Arc<Observation>>() as u64;
+        let observe = |style: &crate::render::backend::PointStyle| {
+            let resources =
+                crate::font::canonical::OperationGenerationResources::with_test_limits(0, bytes);
+            let mut round = FeedbackRound::new(None, resources.clone(), 0).unwrap();
+            round.observe_legend_glyph(Some(style), None, None).unwrap();
+            assert_eq!(resources.byte_usage().unwrap(), bytes);
+            round.state.observations.pop().unwrap()
+        };
+        assert_eq!(observe(&exact), observe(&equivalent));
+        assert_ne!(observe(&exact), observe(&dyadic));
+    }
+
+    #[test]
     fn large_feedback_stream_prices_geometric_buffers_without_quadratic_prefix_storage() {
         const COUNT: usize = 16_384;
         let payload_bytes =
@@ -1879,14 +1902,15 @@ mod tests {
         assert_eq!(plan.lines.len(), 1);
         assert_eq!(plan.lines[0].runs.len(), 1);
         assert_eq!(plan.lines[0].runs[0].glyphs.len(), 32);
-        // 32 source bytes, 9 stack-source bytes, 13 owner bytes, one candidate,
+        // 32 source bytes, 13 owner bytes, one candidate,
         // one named family + its 9 bytes, one line, one run, and 32 glyph pairs.
-        for available in [0, 98, 99, 100] {
+        // Typed stack identity does not compare the former serialized stack source.
+        for available in [0, 89, 90, 91] {
             let bounded = crate::font::canonical::OperationGenerationResources::with_test_limits(
                 available, 0,
             );
             let result = equal_text_plan(&bounded, &plan, &independent);
-            if available < 99 {
+            if available < 90 {
                 assert!(result
                     .unwrap_err()
                     .to_string()
@@ -1894,7 +1918,7 @@ mod tests {
             } else {
                 assert!(result.unwrap());
             }
-            assert_eq!(bounded.usage().unwrap(), (0, available.min(99)));
+            assert_eq!(bounded.usage().unwrap(), (0, available.min(90)));
         }
         let resources = crate::font::canonical::OperationGenerationResources::new();
         assert!(equal_text_plan(&resources, &plan, &independent).unwrap());
@@ -1905,7 +1929,7 @@ mod tests {
         assert!(!equal_text_plan(&resources, &plan, &changed).unwrap());
         assert_eq!(
             resources.usage().unwrap().1 - before,
-            68,
+            59,
             "the first differing glyph leaves 31 unexamined glyphs"
         );
         resources.set_test_limits(resources.usage().unwrap().1, 536_870_912);
@@ -2222,7 +2246,9 @@ mod tests {
         )
         .erase();
         let domains = [crate::spec::AxisDomain::Continuous; 2];
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let standard = crate::layout::StandardPanelInputs::new(&theme).unwrap();
         let state = |plot: &crate::Plot, standard: &crate::layout::StandardPanelInputs| {
             let resources = crate::font::canonical::OperationGenerationResources::new();

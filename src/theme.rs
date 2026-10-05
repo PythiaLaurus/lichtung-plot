@@ -5,6 +5,7 @@ mod contrast;
 mod paint;
 mod resolved;
 mod scale;
+mod spacing;
 
 pub(crate) use scale::{
     AccentColors, CategoryColors, ContinuousColors, PaletteCache, PaletteSource,
@@ -19,6 +20,7 @@ pub(crate) use resolved::THEME_RESOLUTION_CALLS;
 pub(crate) use resolved::{FillOutlineAppearance, ResolvedTheme, TextAppearance, TitleAlignment};
 
 pub(crate) use paint::{Color, OpaqueColor};
+pub(crate) use spacing::{LocalMetric, RelativeSpacing};
 
 /// Convert the current RGB tuple inputs at their private paint boundary.
 pub(crate) fn color_from_rgb((red, green, blue): (u8, u8, u8)) -> Color {

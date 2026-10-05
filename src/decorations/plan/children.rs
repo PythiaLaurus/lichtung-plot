@@ -425,7 +425,9 @@ mod tests {
             crate::NumericValues::new("y", [0.0, 1.0]),
         )
         .erase();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.prepare_font_environment().unwrap();
         let root = crate::layout::plan_exact_root(
             800,
@@ -467,7 +469,9 @@ mod tests {
             crate::NumericValues::new("y", [0.0, 1.0]),
         )
         .erase();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.prepare_font_environment().unwrap();
         crate::layout::plan_exact_root(
             800,
@@ -502,9 +506,13 @@ mod tests {
                 let before = resources.usage().unwrap().1;
                 assert!(!key.matches(&source, changed_context, &owner, round)?);
                 let work = resources.usage().unwrap().1 - before;
-                // Four complete unchanged role stacks (68 each), then the changed
+                // Four shared immutable role stacks (one each), then the changed
                 // tick role's first name through its ninth/terminating byte (12).
-                assert!(work >= 4 * 68 + 12);
+                assert_eq!(
+                    work,
+                    4 + 12,
+                    "later role names and feedback tails remain unexamined"
+                );
                 for remaining in [0, work - 1, work] {
                     let before = resources.usage().unwrap().1;
                     let bytes = resources.byte_usage().unwrap();
@@ -532,7 +540,9 @@ mod tests {
             crate::NumericValues::new("y", [0.0, 1.0]),
         )
         .erase();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         for (index, stack) in [
             &mut theme.typography.title.stack,
             &mut theme.typography.subtitle.stack,
@@ -558,25 +568,35 @@ mod tests {
         {
             *stack = crate::font::canonical::named_stack(&[&"s".repeat(index + 1)]);
         }
-        let bytes = 171
-            + 18 * std::mem::size_of::<crate::font::canonical::FontFamily>() as u64
-            + std::mem::size_of_val(theme.colors.as_slice()) as u64;
-        let records = theme.colors.len() as u128 + 36;
+        let bytes = 24; // eight retained RGB triples; font and spacing payloads are shared
+        let records = 8; // only the copied color entries consume record admission
+        let work = 18; // one immutable handle operation for each complete text role
         let resources = crate::font::canonical::OperationGenerationResources::new();
-        resources.set_test_limits(u128::MAX, bytes);
+        resources.set_test_limits(work, bytes);
         resources.claim_slots(1_000_000 - records).unwrap();
-        theme
+        let copy = theme
             .admitted_clone(source.data().with_axis_resources(&resources))
             .unwrap();
         assert_eq!(resources.byte_usage().unwrap(), bytes);
         assert_eq!(resources.usage().unwrap().0, 1_000_000);
+        assert_eq!(resources.usage().unwrap().1, work);
+        for (original, retained) in theme
+            .typography
+            .roles()
+            .into_iter()
+            .zip(copy.typography.roles())
+        {
+            assert_eq!(
+                original.stack.families().as_ptr(),
+                retained.stack.families().as_ptr()
+            );
+        }
 
         for refuse_bytes in [false, true] {
             let resources = crate::font::canonical::OperationGenerationResources::new();
             resources.set_test_limits(u128::MAX, bytes - u64::from(refuse_bytes));
-            resources
-                .claim_slots(1_000_000 - records + u128::from(!refuse_bytes))
-                .unwrap();
+            let admitted_prefix = 1_000_000 - records + u128::from(!refuse_bytes);
+            resources.claim_slots(admitted_prefix).unwrap();
             let error = theme
                 .admitted_clone(source.data().with_axis_resources(&resources))
                 .unwrap_err();
@@ -585,9 +605,17 @@ mod tests {
             } else {
                 "retained planning records"
             }));
-            // The final role's literal name has eighteen bytes; refusal precedes copying it.
-            assert_eq!(resources.byte_usage().unwrap(), bytes - 18);
-            assert_eq!(resources.usage().unwrap().0, 1_000_000);
+            // Color admission refuses before any payload copy or immutable handle work.
+            assert_eq!(resources.byte_usage().unwrap(), 0);
+            assert_eq!(
+                resources.usage().unwrap().0,
+                if refuse_bytes {
+                    1_000_000
+                } else {
+                    admitted_prefix
+                }
+            );
+            assert_eq!(resources.usage().unwrap().1, 0);
         }
     }
 
@@ -598,7 +626,9 @@ mod tests {
             crate::NumericValues::new("y", [0.0, 1.0]),
         )
         .erase();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let owner = ComponentAddress::root()
             .child(
                 AddressRole::FacetCell,
@@ -683,7 +713,9 @@ mod tests {
                 crate::NumericValues::new("y", [0.0, 1.0]),
             )
             .erase();
-            let theme = crate::Theme::Publication.resolve();
+            let theme = crate::Theme::Publication
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             let owner = ComponentAddress::root()
                 .child(
                     AddressRole::FacetCell,
@@ -777,7 +809,9 @@ mod tests {
             crate::NumericValues::new("y", [0.0, 1.0]),
         )
         .erase();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let owner = ComponentAddress::root()
             .child(
                 AddressRole::FacetCell,
@@ -877,7 +911,9 @@ mod tests {
             crate::NumericValues::new("y", [0.0, 1.0]),
         )
         .erase();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let owner = ComponentAddress::root()
             .child(
                 AddressRole::CanvasCell,

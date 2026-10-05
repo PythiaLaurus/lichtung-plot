@@ -308,7 +308,12 @@ impl GeometrySnapshot {
             self.admit_scratch::<[CanonicalPoint; 3]>(points.len())?;
             self.admit_scratch::<[Option<[StrokeInterval; 2]>; 3]>(points.len())?;
         }
-        scatter_bounds(points, style, |bounds| self.record(bounds, clip))
+        scatter_bounds(
+            points,
+            style,
+            &self.font_environment.generation_resources(),
+            |bounds| self.record(bounds, clip),
+        )
     }
 
     pub(crate) fn rounded_rect(
@@ -982,19 +987,19 @@ fn physical_alignment(anchor: TextAnchor) -> PhysicalTextAlignment {
 fn scatter_bounds(
     points: &[Point2D],
     style: &PointStyle,
+    resources: &crate::font::canonical::OperationGenerationResources,
     mut record: impl FnMut(Option<GeometryBox>) -> Result<(), Error>,
 ) -> Result<(), Error> {
     let canonical_points = backend::validate_points(points, "scatter")?;
     backend::validate_point_style(style)?;
     let outline_width = style
         .outline
+        .as_ref()
         .filter(|outline| outline.color.alpha() > 0)
         .map(|outline| {
-            super::coordinates::CanonicalCoordinate::nonnegative_length(
-                outline.width_for_radius(style.radius),
-                "scatter outline width",
-            )
-            .map(super::coordinates::CanonicalCoordinate::units)
+            outline
+                .width_for_radius(style.radius, resources)
+                .map(super::coordinates::CanonicalCoordinate::units)
         })
         .transpose()?
         .unwrap_or(0);
@@ -1536,10 +1541,15 @@ impl Backend for GeometryBackend {
 
     fn draw_scatter(&mut self, points: &[Point2D], style: &PointStyle) -> Result<(), Error> {
         self.ensure_open("draw_scatter")?;
-        scatter_bounds(points, style, |bounds| {
-            self.record(bounds);
-            Ok(())
-        })
+        scatter_bounds(
+            points,
+            style,
+            &self.font_environment.generation_resources(),
+            |bounds| {
+                self.record(bounds);
+                Ok(())
+            },
+        )
     }
 
     fn draw_line(&mut self, points: &[Point2D], style: &LineStyle) -> Result<(), Error> {
@@ -1768,7 +1778,7 @@ mod tests {
                 let mut style = PointStyle::new((0, 0, 0), 1).with_opacity(0.0).unwrap();
                 style.outline = Some(backend::PointOutline {
                     color: Color::rgb(0, 0, 0),
-                    width_ratio: f64::from(width),
+                    width_ratio: crate::theme::RelativeSpacing::new(f64::from(width)).unwrap(),
                 });
                 geometry.draw_scatter(&[Point2D::new(x, 15.0)], &style)
             }
@@ -2061,7 +2071,9 @@ mod tests {
     #[test]
     fn selected_geometry_admits_scratch_and_bounds_before_allocating() {
         for remaining in [0, std::mem::size_of::<CanonicalPoint>() as u64] {
-            let theme = crate::Theme::Publication.resolve();
+            let theme = crate::Theme::Publication
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             let mut geometry = GeometrySnapshot::new(&theme).unwrap();
             let used = geometry
                 .font_environment
@@ -2498,13 +2510,15 @@ mod tests {
 
     #[test]
     fn invisible_point_parts_do_not_create_collision_bounds() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let panel = PanelBox::new(0.0, 100.0, 0.0, 100.0);
         for shape in [PointShape::Circle, PointShape::TriangleUp] {
             let mut style = PointStyle::new((1, 2, 3), 2).with_shape(shape);
             style.outline = Some(backend::PointOutline {
                 color: Color::rgba(4, 5, 6, 0),
-                width_ratio: 0.5,
+                width_ratio: crate::theme::RelativeSpacing::ratio(1, 2).unwrap(),
             });
             style.color = Color::rgba(1, 2, 3, 0);
             let mut empty = GeometrySnapshot::new(&theme).unwrap();
@@ -2523,7 +2537,9 @@ mod tests {
 
     #[test]
     fn transparent_line_has_no_painted_ink_but_still_validates_geometry() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let style = LineStyle {
             color: Color::rgba(1, 2, 3, 0),
             width: 140.0,

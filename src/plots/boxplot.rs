@@ -499,7 +499,9 @@ mod tests {
                 .intrinsic_body_minimum(theme)
                 .unwrap()
         };
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.marks.box_body.outline_width = 100.0;
         let grouped_body = intrinsic(grouped.clone(), &theme);
         let single_body = intrinsic(single.clone(), &theme);
@@ -507,7 +509,16 @@ mod tests {
         theme.marks.box_body.outline_width = 1.0;
         theme.marks.point_sizes.box_flier = 80;
         let flier = intrinsic(grouped.clone(), &theme);
-        assert!(flier.0 > intrinsic(grouped, &crate::Theme::Publication.resolve()).0);
+        assert!(
+            flier.0
+                > intrinsic(
+                    grouped,
+                    &crate::Theme::Publication
+                        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                        .unwrap()
+                )
+                .0
+        );
         let exact = Plot::boxplot(
             crate::CategoryValues::new("category", ["a", "a", "a", "a", "b", "b", "b", "b"])
                 .unwrap(),
@@ -516,7 +527,12 @@ mod tests {
         .y_limits(0.0, 101.0)
         .erase();
         let styled = intrinsic(exact, &theme);
-        let plain = intrinsic(single, &crate::Theme::Publication.resolve());
+        let plain = intrinsic(
+            single,
+            &crate::Theme::Publication
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap(),
+        );
         assert_eq!(styled.1.to_bits(), plain.1.to_bits());
     }
 

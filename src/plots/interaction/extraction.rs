@@ -27,7 +27,9 @@ fn sparse_trace_points_claim_category_pitch_and_complete_numeric_ink() {
     )
     .size(1400, 900)
     .erase();
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     theme.marks.point_sizes.interaction = 160;
     let resources = OperationGenerationResources::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
@@ -79,7 +81,9 @@ fn custom_connector_appearance_keeps_exact_group_patterns_and_guide_identity() {
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
     let chart = inputs.attach(source).unwrap();
     let panel = crate::layout::PanelBox::new(80.0, 550.0, 70.0, 410.0);
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let old = chart
         .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
         .unwrap();
@@ -159,7 +163,9 @@ fn same_assignment_marks_match_canonical_projection_fingerprints() {
             crate::Theme::Nature,
             crate::Theme::Science,
         ] {
-            let theme = preset.resolve();
+            let theme = preset
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             let plot =
                 crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                     .unwrap()
@@ -200,7 +206,9 @@ fn sparse_marks_ticks_and_grid_share_odd_quantum_coordinates() {
         .unwrap()
         .attach(source)
         .unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let panel = crate::layout::PanelBox::new(
         80.0 + 1.0 / 1024.0,
         550.0 + 4.0 / 1024.0,
@@ -465,7 +473,9 @@ fn selected_geometry_and_capture_are_immutable() {
     let source = source()
         .hue(CategoryValues::new("color", ["red", "red", "red", "blue", "blue"]).unwrap())
         .erase();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let inputs =
         crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
             .unwrap();

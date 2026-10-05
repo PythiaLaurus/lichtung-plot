@@ -1584,7 +1584,9 @@ mod tests {
             ]
         }
         fn prepare_with_unavailable_fonts(plot: &Plot) -> Result<(), Error> {
-            let mut theme = crate::Theme::Publication.resolve();
+            let mut theme = crate::Theme::Publication
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             theme.typography.tick_label.stack =
                 crate::font::canonical::named_stack(&["Lichtung T5a6a3a Unavailable Font 8c42e1"]);
             crate::layout::plan_exact_root(

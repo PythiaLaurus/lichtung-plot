@@ -37,7 +37,9 @@ fn clipped_base_keeps_the_visible_terminal_containment_failure_named() {
         crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
             .unwrap();
     let chart = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let scope = crate::layout::fit::FitScope::root()
         .child(
             crate::layout::AddressRole::CanvasCell,
@@ -202,7 +204,9 @@ fn original_source_ids_survive_preparation_selection_and_admitted_feedback() {
         ids
     );
     let plot = inputs.attach(raw).unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let selected = plot
         .measure_selected_interior(PlotRenderContext::with_source_rows(
             plot.data(),
@@ -299,7 +303,9 @@ fn selected_geometry_and_poisoned_capture_preserve_all_operands_without_work() {
     let inputs =
         crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new()).unwrap();
     let plot = inputs.attach(plot).unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
     let selected = plot
         .measure_selected_interior(PlotRenderContext::new(
@@ -329,7 +335,9 @@ fn selected_geometry_and_poisoned_capture_preserve_all_operands_without_work() {
         f64::INFINITY,
     )
     .erase();
-    let mut poisoned_theme = crate::Theme::Science.resolve();
+    let mut poisoned_theme = crate::Theme::Science
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     poisoned_theme.colors.clear();
     poisoned_theme.detail_font_size = 0;
     let projections = crate::layout::Projection::test_projection_calls();
@@ -383,7 +391,9 @@ fn selected_storage_refuses_at_exact_operation_limits() {
             crate::plots::shared_x::prepare_plot(&raw, &OperationGenerationResources::new())
                 .unwrap();
         let plot = inputs.attach(raw.clone()).unwrap();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let resources = theme
             .prepared_font_environment()
             .unwrap()
@@ -439,7 +449,9 @@ fn missing_labels_and_invalid_intermediate_endpoints_win_before_unavailable_font
         .source_rows(crate::SourceRows::new([19, 43, 71]).unwrap())
         .x_limits(-10.0, 10.0)
         .erase();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.typography.tick_label.stack =
             crate::font::canonical::named_stack(&["T5a6a4e unavailable font 91f7"]);
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
@@ -517,7 +529,9 @@ fn total_labels_keep_typed_fit_identity_and_mark_panel_reserve() {
             crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new())
                 .unwrap();
         let plot = inputs.attach(plot).unwrap();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let result = plot
             .preflight_measurement(crate::PlotKind::Waterfall, panel, &theme, &scope)
             .unwrap();

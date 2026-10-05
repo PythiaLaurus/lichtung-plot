@@ -120,7 +120,9 @@ fn wide_estimate_labels_request_automatic_headroom_but_not_exact_x() {
             plot.erase()
         }
     };
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let panel = crate::layout::PanelBox::new(80.0, 920.0, 80.0, 580.0);
     for exact in [false, true] {
         let source = source(exact);
@@ -320,7 +322,9 @@ fn projected_limits_and_geometry_match_selected_draw_order() {
         .into_iter()
         .chain([labels(false), labels(true)])
     {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let inputs =
             crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                 .unwrap();
@@ -398,7 +402,9 @@ fn raw_interval_intent_survives_correctly_rounded_logarithms() {
         assert_eq!(tuple.upper.unwrap().to_bits(), 16.0_f64.to_bits());
         assert_eq!(tuple.nonzero_interval, nonzero);
         let source = inputs.attach(source).unwrap();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let result = source.measure_selected_interior(PlotRenderContext::new(
             source.data(),
             crate::layout::PanelBox::new(80.0, 600.0, 60.0, 400.0),
@@ -454,7 +460,9 @@ fn facet_owned_significance_is_retained_only_by_its_selected_panel() {
 #[test]
 fn final_guides_ticks_and_invalid_tuples_precede_unavailable_fonts() {
     fn with_unavailable_fonts(source: &Plot) -> Result<(), Error> {
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.typography.tick_label.stack =
             crate::font::canonical::named_stack(&["T5a6a3c unavailable font 91f7"]);
         crate::layout::plan_exact_root(
@@ -638,7 +646,9 @@ fn poisoned_capture_repeats_no_source_projection_axis_or_shaping_work() {
         STAGES.with(|counts| counts.set([[0; 4]; 3]));
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|count| count.set(0));
         crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(|count| count.set(0));
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let root = crate::layout::plan_exact_root(
             640,
             480,

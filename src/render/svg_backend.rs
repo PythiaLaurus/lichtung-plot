@@ -94,6 +94,7 @@ impl SvgBackend {
             next_gradient_id: 0,
             state: SvgCanvasState::Fresh,
             font_environment: None,
+            spacing_resources: crate::font::canonical::OperationGenerationResources::new(),
             text_replacements: Vec::new(),
             replacement_count: 0,
             fixed: false,
@@ -109,6 +110,7 @@ impl SvgBackend {
         font_environment: PreparedFontEnvironment,
     ) -> Self {
         let mut backend = Self::in_memory(width, height);
+        backend.spacing_resources = font_environment.generation_resources();
         backend.font_environment = Some(font_environment);
         backend
     }
@@ -1258,6 +1260,7 @@ pub struct SvgSerializer<S: SvgSink> {
     next_gradient_id: usize,
     state: SvgCanvasState,
     font_environment: Option<PreparedFontEnvironment>,
+    spacing_resources: crate::font::canonical::OperationGenerationResources,
     text_replacements: Vec<TextReplacement>,
     replacement_count: usize,
     fixed: bool,
@@ -1308,6 +1311,7 @@ impl SvgStorage {
             next_gradient_id: 0,
             state: SvgCanvasState::Open,
             font_environment: None,
+            spacing_resources: environment.generation_resources(),
             text_replacements: Vec::new(),
             replacement_count: 0,
             fixed: true,
@@ -1375,6 +1379,7 @@ impl SvgStorage {
                 next_clip_id: 0,
                 next_gradient_id: 0,
                 state: SvgCanvasState::Fresh,
+                spacing_resources: environment.generation_resources(),
                 font_environment: Some(environment),
                 text_replacements: replacements,
                 replacement_count: 0,
@@ -1585,7 +1590,8 @@ impl<S: SvgSink> SvgSerializer<S> {
         style: &PointStyle,
     ) -> Result<(), Error> {
         self.ensure_begun("draw_scatter")?;
-        let scatter = CanonicalScatter::new(points, style, self.height, None)?;
+        let scatter =
+            CanonicalScatter::new(points, style, self.height, &self.spacing_resources, None)?;
         self.draw_canonical_scatter(&scatter)
     }
 
@@ -2771,7 +2777,7 @@ mod tests {
         let mut style = PointStyle::new((1, 2, 3), 2);
         style.outline = Some(crate::render::backend::PointOutline {
             color: Color::rgba(4, 5, 6, 64),
-            width_ratio: 0.5,
+            width_ratio: crate::theme::RelativeSpacing::ratio(1, 2).unwrap(),
         });
         style.color = Color::rgba(1, 2, 3, 128);
         backend

@@ -657,7 +657,9 @@ fn publication_efficiency_measurements() {
 
     for run in 0..3 {
         let start = Instant::now();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.prepare_font_environment().unwrap();
         println!(
             "font_probe,{run},fresh_environment,{:.6}",

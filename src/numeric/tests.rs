@@ -232,7 +232,9 @@ fn nice_ranges_and_prepared_forest_limits_propagate_root_refusal() {
     .scale(crate::AxisScale::Log10)
     .x_limits(1.0, 2.0)
     .erase();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let resources = theme
         .prepared_font_environment()
         .unwrap()

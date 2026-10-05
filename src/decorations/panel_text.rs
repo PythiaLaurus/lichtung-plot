@@ -274,7 +274,9 @@ fn collision_scans_admit_actual_pairs_and_stop_before_unused_tails() {
     .panel_text_annotation(crate::PanelTextAnnotation::new(PanelCorner::TopLeft, "note").unwrap())
     .erase();
     let layout = Layout::envelope(PanelBox::new(0.0, 400.0, 0.0, 400.0));
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let original = plans(&plot, &layout, &theme).unwrap().remove(0);
     let mut entries = vec![LegendEntry::point(
         LegendIdentity::literal("group", "entry"),
@@ -366,7 +368,9 @@ fn panel_text_uses_complete_private_role_and_unclipped_canonical_bounds() {
     )
     .erase();
     let layout = Layout::envelope(PanelBox::new(80.0, 770.0, 60.0, 570.0));
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let original = plans(&plot, &layout, &theme).unwrap();
     theme.detail_font_size = 0;
     theme.typography.panel_text.font_size = 32;

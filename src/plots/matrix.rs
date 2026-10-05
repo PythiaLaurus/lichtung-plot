@@ -257,7 +257,9 @@ fn prepared_matrix_uses_variable_count_cell_labels_and_complete_mark_ink() {
         .unwrap()
         .attach(second)
         .unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let baseline = intrinsic_body_minimum(&first, &theme).unwrap();
     let more_cells = intrinsic_body_minimum(&second, &theme).unwrap();
     assert!(more_cells.0 > baseline.0 && more_cells.1 > baseline.1);
@@ -276,7 +278,8 @@ fn prepared_matrix_uses_variable_count_cell_labels_and_complete_mark_ink() {
     let label = intrinsic_body_minimum(&long, &theme).unwrap();
     assert!(label.0 > baseline.0 && label.1 > baseline.1);
     let mut styled = theme;
-    styled.marks.primary_point.outline.width_ratio = 80.0;
+    styled.marks.primary_point.outline.width_ratio =
+        crate::theme::RelativeSpacing::ratio(80, 1).unwrap();
     let thick_points = intrinsic_body_minimum(&first, &styled).unwrap();
     assert!(thick_points.0 > baseline.0 && thick_points.1 > baseline.1);
     styled.marks.matrix_density.outline_width = 220.0;
@@ -301,7 +304,9 @@ fn native_matrix_allocates_unequal_variable_tracks_and_retains_the_full_square()
         .unwrap()
         .attach(source)
         .unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
@@ -553,7 +558,9 @@ fn prefont_variable_domains_and_labels_are_consumed_by_matrix_measurement() {
     );
     let inputs = prepared.prepared_matrix_axes.as_ref().unwrap();
     let preparations = crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get);
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let panel = panel_box(&prepared, &theme).unwrap();
     let measured = prepared
         .preflight_panel(crate::PlotKind::Matrix, panel, &theme)
@@ -577,7 +584,9 @@ fn matrix_dispatch_preserves_scoped_tick_fit_miss() {
         crate::NumericValues::new("y", [0.0, 1.0, 2.0]),
     ])
     .erase();
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     theme.typography.tick_label.font_size = 48;
     let resources = theme
         .prepared_font_environment()
@@ -639,7 +648,9 @@ fn tick_planner_failure_is_not_reported_as_small_matrix_cells() {
     .unwrap()
     .attach(plot)
     .unwrap();
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     theme.prepare_font_environment().unwrap();
     theme.typography.tick_label.font_size = 0;
     let context =
@@ -1086,7 +1097,9 @@ fn matrix_ticks<'a>(
 
 #[test]
 fn matrix_tick_selection_is_shared_only_along_the_orthogonal_axis() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let environment = theme.prepared_font_environment().unwrap();
     let resources = environment.generation_resources();
     environment.share_generation_resources(&resources).unwrap();
@@ -1145,7 +1158,9 @@ fn matrix_tick_selection_is_shared_only_along_the_orthogonal_axis() {
 
 #[test]
 fn matrix_tick_source_refusal_leaves_no_retained_cache_entry() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let environment = theme.prepared_font_environment().unwrap();
     let used = environment.resource_usage().unwrap().font_bytes;
     environment
@@ -1609,7 +1624,9 @@ mod semantic_tests {
     #[test]
     fn matrix_composite_observes_tick_source_and_semantics_even_without_axis_ink() {
         let source = source();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.axes.frame = None;
         theme.axes.grid = None;
         let scope = layout::fit::FitScope::root()
@@ -1673,7 +1690,9 @@ mod semantic_tests {
     fn diagonal_projection_admits_every_examined_group_and_vertex() {
         let source = source();
         let prepared = prepare_axes(&source, source.data()).unwrap();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let projection = layout::Projection::new(
             prepared.ranges[0],
             prepared.ranges[0],
@@ -1717,7 +1736,9 @@ mod semantic_tests {
                 .source_arc(prepared)
                 .unwrap(),
         );
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let selected = measure(
             &chart,
             PlotRenderContext::new(
@@ -1749,7 +1770,9 @@ mod semantic_tests {
             crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                 .unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.marks.matrix_density.outline_width = 36.0;
         theme.marks.point_sizes.matrix = 20;
         let selected = measure(
@@ -1855,7 +1878,9 @@ mod semantic_tests {
         .erase();
         let prepared = prepare_axes(&source, source.data()).unwrap();
         let run = |limits: Option<(u128, u64)>| {
-            let theme = crate::Theme::Publication.resolve();
+            let theme = crate::Theme::Publication
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             let color_resources = crate::font::canonical::OperationGenerationResources::new();
             let (colors, accents) = prepared
                 .resolved_colors(
@@ -2009,7 +2034,9 @@ mod semantic_tests {
                 .unwrap();
         let source = inputs.attach(source).unwrap();
         let stages = SEMANTIC_STAGES.with(std::cell::Cell::get);
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         for panel in [
             PanelBox::new(80.0, 700.0, 60.0, 540.0),
             PanelBox::new(80.25, 700.75, 60.5, 500.25),
@@ -2029,7 +2056,9 @@ mod semantic_tests {
                 crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                     .unwrap();
             let source = inputs.attach(source).unwrap();
-            let theme = preset.resolve();
+            let theme = preset
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             let panel = PanelBox::new(80.25, 700.75, 60.5, 500.25);
             let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
             let begins =
@@ -2133,7 +2162,9 @@ mod semantic_tests {
                 .unwrap();
         let source = inputs.attach(source).unwrap();
         let run = |limits: Option<(u128, u64)>| {
-            let theme = crate::Theme::Publication.resolve();
+            let theme = crate::Theme::Publication
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             let resources = theme
                 .prepared_font_environment()
                 .unwrap()

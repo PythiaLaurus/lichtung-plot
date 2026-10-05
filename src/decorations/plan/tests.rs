@@ -104,7 +104,9 @@ fn marginal_auto_recovers_from_scoped_terminal_tick_miss() {
     .size(640, 480)
     .legend(LegendPolicy::Visible(LegendPosition::Auto))
     .erase();
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     theme.typography.tick_label.font_size = 48;
     let resources = theme
         .prepared_font_environment()
@@ -239,7 +241,9 @@ fn automatic_guide_recovers_from_terminal_numeric_tick_miss() {
     .size(640, 480)
     .legend(LegendPolicy::Visible(LegendPosition::Auto))
     .erase();
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     theme.typography.tick_label.font_size = 40;
     let resources = theme
         .prepared_font_environment()
@@ -393,7 +397,9 @@ fn specialized_producer_plans_survive_first_capture_without_shaping() {
     for plot in plots {
         let plot = plot.with_canvas_size(1000, 1000);
         let kind = plot.kind();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         crate::layout::plan_exact_root(
             plot.width(),
             plot.height(),
@@ -1042,7 +1048,9 @@ use crate::render::backend::{Backend, LineStyle, Point2D};
 use crate::{CategoryValues, NumericValues};
 
 fn theme() -> crate::theme::ResolvedTheme {
-    crate::Theme::Publication.resolve()
+    crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap()
 }
 
 fn prepare_guide_producer_fonts(

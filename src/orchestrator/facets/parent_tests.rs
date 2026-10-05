@@ -70,7 +70,9 @@ fn outer_roles_use_one_root_producer_without_changing_centered_strips() {
         .erase();
         source.title_alignment = alignments[0];
         source.subtitle_alignment = alignments[1];
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.prepare_font_environment().unwrap();
         let mut children = crate::decorations::plan::children::ChildPlans::facets(&source);
         crate::layout::plan_exact_root(
@@ -196,7 +198,9 @@ fn measured_facet_tracks_keep_exact_fit_and_typed_owner() {
             &crate::font::canonical::OperationGenerationResources::new(),
         )
         .unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     for width in [80.0, 80.0 - 1.0 / 1024.0] {
         let outcome = tracks::allocate(
             plot.data(),
@@ -240,7 +244,9 @@ fn parent_topology_admits_exact_budget_and_does_not_refund_rejected_trials() {
     .erase();
     let scope = FitScope::root();
     let run = |limits: Option<(u128, u64)>, repeat: bool| {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.prepare_font_environment().unwrap();
         let resources = theme
             .prepared_font_environment()
@@ -303,7 +309,9 @@ fn impossible_outer_title_returns_typed_fit_before_child_measurement() {
     .title("M".repeat(200))
     .size(160, 120)
     .erase();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     theme.prepare_font_environment().unwrap();
     crate::layout::plan_exact_root(
         source.width(),

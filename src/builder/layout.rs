@@ -11,15 +11,17 @@ impl<K: crate::kind::Marker> Plot<K> {
     #[must_use]
     #[cfg(test)]
     pub(crate) fn canvas_layout(&self) -> RootFramePlan {
-        let theme = self.theme.unwrap_or(crate::Theme::Publication).resolve();
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let theme = self
+            .theme
+            .unwrap_or(crate::Theme::Publication)
+            .resolve(&resources)
+            .unwrap();
         let plot = crate::kind::into_erased(self.clone());
-        let plot = crate::plots::shared_x::prepare_plot(
-            &plot,
-            &crate::font::canonical::OperationGenerationResources::new(),
-        )
-        .expect("valid test plot")
-        .attach(plot)
-        .expect("matching test route");
+        let plot = crate::plots::shared_x::prepare_plot(&plot, &resources)
+            .expect("valid test plot")
+            .attach(plot)
+            .expect("matching test route");
         plot.canvas_layout_erased(&theme)
     }
 }

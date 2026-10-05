@@ -1,5 +1,89 @@
 use super::*;
 
+#[test]
+fn canvas_preset_construction_uses_one_prepared_ledger_for_root_and_explicit_children() {
+    let plot = Plot::scatter(
+        crate::NumericValues::new("x", [0.0, 1.0]),
+        crate::NumericValues::new("y", [0.0, 1.0]),
+    )
+    .erase();
+    let plots = [Some(plot.clone()), Some(plot.theme(Theme::Science))];
+    // Root plus one explicit child have four retained outline values; the
+    // inherited child shares the root rather than constructing another preset.
+    let outline_bytes = (std::mem::size_of::<crate::theme::RelativeSpacing>()
+        + 2 * std::mem::size_of::<num_bigint::BigUint>()
+        + std::mem::size_of::<f64>()
+        + 2 * std::mem::size_of::<usize>()) as u64
+        + 4 * (16 + std::mem::size_of::<num_bigint::BigUint>() as u64);
+    let bytes = 4 * outline_bytes;
+    for preset in [
+        Theme::Publication,
+        Theme::Nature,
+        Theme::Science,
+        Theme::CHI,
+    ] {
+        for (visits, byte_limit) in [
+            (0, bytes),
+            (20, 0),
+            (19, bytes),
+            (20, bytes - 1),
+            (20, bytes),
+        ] {
+            let retained = std::cell::RefCell::new(None);
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+            crate::render::svg_backend::SVG_BEGIN_CALLS.with(|calls| calls.set(0));
+            let result = crate::layout::plan_exact_root::<(), (), ()>(
+                800,
+                600,
+                |stage| {
+                    let resources = stage.generation_resources();
+                    assert!(
+                        resources.same_operation(&stage.font_resources().generation_resources())
+                    );
+                    resources.set_test_limits(visits, byte_limit);
+                    *retained.borrow_mut() = Some(resources.clone());
+                    let themes = ResolvedCanvasThemes::new(preset, &plots, &resources)?;
+                    assert_eq!(resources.usage().unwrap().1, 20);
+                    assert_eq!(resources.byte_usage().unwrap(), bytes);
+                    assert!(std::ptr::eq(themes.root(), themes.plot(0).unwrap()));
+                    assert!(!std::ptr::eq(themes.root(), themes.plot(1).unwrap()));
+                    for theme in [themes.root(), themes.plot(1).unwrap()] {
+                        assert_eq!(
+                            theme
+                                .marks
+                                .primary_point
+                                .outline
+                                .width_ratio
+                                .as_f64()
+                                .to_bits(),
+                            0x3fb9_9999_9999_999a
+                        );
+                    }
+                    Err(Error::Render(
+                        "Canvas preset construction boundary reached".into(),
+                    ))
+                },
+                |(), _, _| unreachable!("constructor boundary precedes measurement"),
+                |(), _, (), _| unreachable!("constructor boundary precedes capture"),
+            );
+            let error = result.err().unwrap().to_string();
+            let retained = retained.borrow();
+            let resources = retained.as_ref().unwrap();
+            if (visits, byte_limit) == (20, bytes) {
+                assert!(error.contains("Canvas preset construction boundary reached"));
+            } else {
+                assert!(
+                    error.contains("relative spacing:") && error.contains("admission"),
+                    "{error}"
+                );
+                assert!(resources.byte_usage().unwrap() < bytes);
+            }
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+            crate::render::svg_backend::SVG_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+        }
+    }
+}
+
 fn intrinsic_canvas() -> Canvas {
     Canvas::grid(2, 3)
         .unwrap()
@@ -119,7 +203,9 @@ fn post_font_canvas_intrinsics_are_scoped_once_before_allocation_and_rebuilt_for
             assert_eq!(plan.style.paint, theme.typography.axis_title.paint);
             assert_eq!(plan.style.stack, theme.typography.axis_title.stack);
         }
-        let reference = preset.resolve();
+        let reference = preset
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let widths = crate::layout::fit::intrinsic_widths(
             &reference,
             title,
@@ -353,7 +439,14 @@ fn complete_parent_admission_has_exact_work_and_storage_boundaries() {
         .legend_policy(CanvasLegendPolicy::Shared)
         .size(1201, 901);
     let run = |limits: Option<(u128, u64)>| {
-        let themes = Arc::new(ResolvedCanvasThemes::new(canvas.theme, &canvas.panels));
+        let themes = Arc::new(
+            ResolvedCanvasThemes::new(
+                canvas.theme,
+                &canvas.panels,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
+            .unwrap(),
+        );
         let mut children = crate::decorations::plan::children::ChildPlans::canvas(&canvas);
         crate::layout::plan_exact_root(
             canvas.width,

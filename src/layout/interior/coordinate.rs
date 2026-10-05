@@ -543,7 +543,9 @@ mod intrinsic_tests {
                 .unwrap()
                 .attach(source)
                 .unwrap();
-            let mut theme = crate::Theme::Publication.resolve();
+            let mut theme = crate::Theme::Publication
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             if tight_lines {
                 theme.typography.tick_label.line_height_multiplier = 0.1;
             }
@@ -589,7 +591,9 @@ mod intrinsic_tests {
             let resources = crate::font::canonical::OperationGenerationResources::new();
             let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
             let chart = inputs.attach(source).unwrap();
-            let theme = crate::Theme::Publication.resolve();
+            let theme = crate::Theme::Publication
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             let label = crate::layout::panel::format_label(
                 f64::midpoint(range.0, range.1),
                 false,

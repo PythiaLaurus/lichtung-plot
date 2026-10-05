@@ -562,6 +562,7 @@ impl<'a, 'b> TextPlanningBackend<'a, 'b> {
         if depth != 0 {
             return Err(Error::Render("prepared scene has unclosed scopes".into()));
         }
+        let spacing_resources = self.font_environment.generation_resources();
         let svg = crate::render::svg_backend::SvgStorage::prepare(
             width,
             height,
@@ -575,7 +576,9 @@ impl<'a, 'b> TextPlanningBackend<'a, 'b> {
                 Ok(())
             },
         )?;
-        let mut null = NullBackend::default();
+        let mut null = NullBackend {
+            recorder: ValidationRecorder::with_resources(spacing_resources),
+        };
         crate::render::svg_backend::reserve_storage(
             self.final_stage,
             &mut null.recorder.scopes,
@@ -741,7 +744,13 @@ impl Backend for TextPlanningBackend<'_, '_> {
 
     fn draw_scatter(&mut self, points: &[Point2D], style: &PointStyle) -> Result<(), Error> {
         self.claim_call()?;
-        let scatter = CanonicalScatter::new(points, style, self.height, Some(self.final_stage))?;
+        let scatter = CanonicalScatter::new(
+            points,
+            style,
+            self.height,
+            &self.font_environment.generation_resources(),
+            Some(self.final_stage),
+        )?;
         self.calls.push(PlannedCall::Scatter(scatter));
         Ok(())
     }
@@ -1171,12 +1180,30 @@ pub(super) struct NullBackend {
     recorder: ValidationRecorder,
 }
 
-#[derive(Default)]
 struct ValidationRecorder {
+    resources: crate::font::canonical::OperationGenerationResources,
     height: u32,
     state: NullCanvasState,
     scopes: Vec<NullScope>,
     fixed: bool,
+}
+
+impl Default for ValidationRecorder {
+    fn default() -> Self {
+        Self::with_resources(crate::font::canonical::OperationGenerationResources::new())
+    }
+}
+
+impl ValidationRecorder {
+    fn with_resources(resources: crate::font::canonical::OperationGenerationResources) -> Self {
+        Self {
+            resources,
+            height: 0,
+            state: NullCanvasState::default(),
+            scopes: Vec::new(),
+            fixed: false,
+        }
+    }
 }
 
 #[derive(Default, Clone, Copy, PartialEq, Eq)]
@@ -1363,7 +1390,7 @@ impl Backend for ValidationRecorder {
 
     fn draw_scatter(&mut self, points: &[Point2D], style: &PointStyle) -> Result<(), Error> {
         self.ensure_open("draw_scatter")?;
-        CanonicalScatter::new(points, style, self.height, None)?;
+        CanonicalScatter::new(points, style, self.height, &self.resources, None)?;
         Ok(())
     }
 
@@ -1567,7 +1594,7 @@ mod tests {
         let mut outlined = PointStyle::new((0, 0, 0), 1);
         outlined.outline = Some(crate::render::backend::PointOutline {
             color: Color::rgb(0, 0, 0),
-            width_ratio: 1.0 / 4096.0,
+            width_ratio: crate::theme::RelativeSpacing::ratio(1, 4096).unwrap(),
         });
         assert_paired_rejection(|backend| backend.draw_scatter(&points, &outlined));
         assert_paired_rejection(|backend| {
@@ -1647,7 +1674,9 @@ mod tests {
                 count.set(0);
             });
         };
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let root = capture_test_plan(&theme, |backend| {
             COORDINATE_CONVERSIONS.with(|count| count.set(0));
             SPATIAL_CONVERSIONS.with(|count| count.set(0));
@@ -1719,7 +1748,9 @@ mod tests {
             TEXT_PLACEMENTS.with(|count| assert_eq!(count.get(), 0));
             FONT_SHAPE_CALLS.with(|count| assert_eq!(count.get(), 0));
         };
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let source = " A & B\n\nC \u{5d0}\u{5d1}  D";
         let root = capture_test_plan(&theme, |backend| {
             for (anchor, alignment) in [
@@ -1811,7 +1842,9 @@ mod tests {
 
     #[test]
     fn canonical_text_checks_absolute_origins_and_bottom_up_overflow_before_freeze() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let plan = theme
             .measure_text(
                 "A",
@@ -1868,7 +1901,9 @@ mod tests {
     #[test]
     fn canonical_text_storage_is_admitted_before_each_allocation() {
         use crate::render::primitives::{CanonicalTextLine, CanonicalTextRun};
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let plan = theme
             .measure_text(
                 "A",
@@ -1966,7 +2001,9 @@ mod tests {
     #[test]
     fn frozen_rectangles_replay_without_spatial_conversion() {
         use crate::render::coordinates::SPATIAL_CONVERSIONS;
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let root = capture_test_plan(&theme, |backend| {
             SPATIAL_CONVERSIONS.with(|count| count.set(0));
             let bounds = PanelBox::new(-0.25, 50.125, -2.5, 80.25);
@@ -2071,7 +2108,9 @@ mod tests {
 
     #[test]
     fn prepared_svg_replay_moves_the_actual_reserved_buffers_unchanged() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         crate::font::canonical::FONT_OUTLINE_GLYPHS.with(|glyphs| glyphs.borrow_mut().clear());
         NULL_BEGIN_CALLS.with(|calls| calls.set(0));
         NULL_END_CALLS.with(|calls| calls.set(0));
@@ -2126,7 +2165,9 @@ mod tests {
     #[test]
     fn prepared_storage_uses_quantum_primitive_svg_and_matching_png_bytes() {
         use sha2::{Digest as _, Sha256};
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let root = capture_test_plan(&theme, |backend| {
             backend.draw_surface(
                 PanelBox::new(0.0, 100.0, 0.0, 100.0),
@@ -2176,7 +2217,9 @@ mod tests {
 
     #[test]
     fn raw_font_stack_failure_precedes_final_backend_lifecycles() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         for bracket in [false, true] {
             NULL_BEGIN_CALLS.with(|calls| calls.set(0));
             crate::render::svg_backend::SVG_BEGIN_CALLS.with(|calls| calls.set(0));
@@ -2237,7 +2280,9 @@ mod tests {
 
     #[test]
     fn every_nonempty_canonical_storage_refusal_precedes_null() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         for payload in [
             "canonical SVG scopes",
             "canonical SVG replacements",
@@ -2396,7 +2441,9 @@ mod tests {
 
     #[test]
     fn raw_text_capture_is_immutable_and_svg_replay_uses_only_planned_calls() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let style = replay_text_style(&theme);
         let position = Point2D::new(40.5, 61.5);
         NULL_BEGIN_CALLS.with(|calls| calls.set(0));
@@ -2439,7 +2486,9 @@ mod tests {
 
     #[test]
     fn capture_call_limit_uses_shared_root_admission_before_shaping() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let mut captures = 0;
         NULL_BEGIN_CALLS.with(|calls| calls.set(0));
         crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
@@ -2473,7 +2522,9 @@ mod tests {
 
     #[test]
     fn capture_append_refusal_precedes_payload_shaping() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let mut pass = 0;
         NULL_BEGIN_CALLS.with(|calls| calls.set(0));
         crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
@@ -2515,7 +2566,9 @@ mod tests {
 
     #[test]
     fn capture_payload_bytes_use_the_shared_root_limit() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let mut captures = 0;
         NULL_BEGIN_CALLS.with(|calls| calls.set(0));
         let result = crate::layout::plan_exact_root(
@@ -2554,7 +2607,9 @@ mod tests {
 
     #[test]
     fn retained_capture_payload_refusal_precedes_null() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         for payload in [
             "prepared layer name",
             "prepared scatter points",
@@ -2646,7 +2701,9 @@ mod tests {
 
     #[test]
     fn frozen_scene_replay_consumes_exactly_the_captured_calls() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let style = replay_text_style(&theme);
         let position = Point2D::new(40.0, 60.0);
         let plan = capture_test_plan(&theme, |backend| {
@@ -2667,7 +2724,9 @@ mod tests {
 
     #[test]
     fn planned_significance_capture_preserves_the_exact_deferred_plan() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let resolved = theme
             .measure_text(
                 "**",
@@ -2724,7 +2783,9 @@ mod tests {
 
     #[test]
     fn direct_planned_bracket_null_and_svg_reject_absolute_and_y_overflow() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let resolved = theme
             .measure_text(
                 "A",
@@ -2775,7 +2836,9 @@ mod tests {
 
     #[test]
     fn raw_bracket_capture_freezes_and_replays_one_label_plan() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let bracket = SignificanceBracket {
             x_left: 10.0,
             x_right: 20.0,

@@ -233,7 +233,9 @@ fn exact_tick_configuration_preserves_empty_and_duplicate_labels_and_checks_know
 
 #[test]
 fn exact_axis_sources_bypass_automatic_measurement_in_both_constructors() {
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     // Automatic measurement would fail immediately with this role. Exact source
     // selection must not measure any generated label before the axis text pass.
     theme.typography.tick_label.font_size = 0;
@@ -291,7 +293,9 @@ fn exact_axis_sources_bypass_automatic_measurement_in_both_constructors() {
 
 #[test]
 fn automatic_tick_fit_never_swallows_fatal_text_errors() {
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     theme.typography.tick_label.font_size = 0;
     let projection = Projection::new((0.0, 10.0), (0.0, 1.0), (0.0, 400.0, 0.0, 200.0));
     let error =
@@ -302,7 +306,9 @@ fn automatic_tick_fit_never_swallows_fatal_text_errors() {
 #[test]
 fn later_invalid_axis_source_wins_over_terminal_tick_fit_miss() {
     use crate::layout::fit::{FitScope, PlanError};
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let scope = FitScope::root()
         .child(
             crate::layout::AddressRole::FacetCell,
@@ -336,7 +342,9 @@ fn later_invalid_axis_source_wins_over_terminal_tick_fit_miss() {
 
 #[test]
 fn narrower_x_panel_uses_fewer_automatic_ticks_without_changing_resolved_range() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let wide = Layout::new_with_axis_specs_in_panel_box(
         (0.0, 100.0),
         (0.0, 100.0),
@@ -366,7 +374,9 @@ fn narrower_x_panel_uses_fewer_automatic_ticks_without_changing_resolved_range()
 
 #[test]
 fn shorter_y_panel_uses_fewer_automatic_ticks_without_changing_resolved_range() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let tall = Layout::new_with_axis_specs_in_panel_box(
         (0.0, 100.0),
         (0.0, 100.0),
@@ -396,7 +406,9 @@ fn shorter_y_panel_uses_fewer_automatic_ticks_without_changing_resolved_range() 
 
 #[test]
 fn wider_numeric_labels_reduce_automatic_x_tick_density() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let panel_box = crate::layout::PanelBox::new(0.0, 400.0, 0.0, 100.0);
     let wider_label_spec = AxisSpec::default().limits(0.0, 1e12);
     let shorter_label_spec = AxisSpec::default().limits(0.0, 1.0);
@@ -443,7 +455,9 @@ fn wider_numeric_labels_reduce_automatic_x_tick_density() {
 
 #[test]
 fn automatic_ticks_keep_the_first_span_adaptive_source_when_labels_fit() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let spec = AxisSpec::default().limits(0.0, 100.0);
     let layout = Layout::new_with_axis_specs_in_panel_box(
         (0.0, 100.0),
@@ -472,7 +486,9 @@ fn automatic_ticks_keep_the_first_span_adaptive_source_when_labels_fit() {
 fn resolved_tick_label_size_controls_automatic_tick_measurement_and_drawing() {
     let spec = AxisSpec::default().limits(0.0, 100.0);
     let panel = crate::layout::PanelBox::new(0.0, 400.0, 0.0, 400.0);
-    let default_theme = crate::Theme::Publication.resolve();
+    let default_theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let default_layout = Layout::new_with_axis_specs_in_panel_box(
         (0.0, 100.0),
         (0.0, 100.0),
@@ -530,7 +546,9 @@ fn resolved_tick_label_size_controls_automatic_tick_measurement_and_drawing() {
 
 #[test]
 fn frame_and_ticks_draw_with_their_independent_resolved_strokes() {
-    let mut theme = crate::Theme::Science.resolve();
+    let mut theme = crate::Theme::Science
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     theme.axes.grid = None;
     theme.axes.frame.as_mut().unwrap().stroke.paint = crate::theme::Color::rgb(1, 2, 3);
     theme.axes.ticks.as_mut().unwrap().stroke.paint = crate::theme::Color::rgb(161, 178, 195);
@@ -559,7 +577,9 @@ fn frame_and_ticks_draw_with_their_independent_resolved_strokes() {
 
 #[test]
 fn frozen_axes_and_grid_replay_without_layout_theme_or_shaping() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let spec = AxisSpec {
         provenance: RangeProvenance::Configured,
         limits: Some((0.0, 10.0)),
@@ -604,7 +624,9 @@ fn frozen_axes_and_grid_replay_without_layout_theme_or_shaping() {
 
 #[test]
 fn axis_plan_storage_refusal_precedes_text_and_geometry_materialization() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let mut layout = Layout::envelope(crate::layout::PanelBox::new(80.0, 370.0, 60.0, 370.0));
     layout.x_axis.label = "unmeasured title".into();
     let environment = theme.prepared_font_environment().unwrap();
@@ -627,7 +649,9 @@ fn axis_plan_storage_refusal_precedes_text_and_geometry_materialization() {
 
 #[test]
 fn absent_frame_and_ticks_leave_axis_text_without_panicking() {
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     theme.axes.frame = None;
     theme.axes.ticks = None;
     theme.axes.grid = None;
@@ -655,7 +679,9 @@ fn absent_frame_and_ticks_leave_axis_text_without_panicking() {
 
 #[test]
 fn automatic_ticks_reject_when_even_the_terminal_midpoint_cannot_fit() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let projection = Projection::new((0.0, 10.0), (0.0, 10.0), (0.0, 0.0, 0.0, 0.0));
 
     assert!(automatic_numeric_ticks((0.0, 10.0), &projection, AxisSide::Bottom, &theme).is_err());
@@ -663,7 +689,9 @@ fn automatic_ticks_reject_when_even_the_terminal_midpoint_cannot_fit() {
 
 #[test]
 fn wide_numeric_sources_retain_more_than_five_ticks() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let projection = Projection::new((0.0, 9.0), (0.0, 1.0), (0.0, 1_000.0, 0.0, 100.0));
     let fitted =
         automatic_numeric_ticks((0.0, 9.0), &projection, AxisSide::Bottom, &theme).unwrap();
@@ -672,7 +700,9 @@ fn wide_numeric_sources_retain_more_than_five_ticks() {
 
 #[test]
 fn automatic_ticks_use_the_assigned_span_instead_of_a_five_tick_ceiling() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let spec = AxisSpec::default().limits(5.0, 30.0);
     let layout = Layout::new_with_axis_specs_in_panel_box(
         (5.0, 30.0),
@@ -691,7 +721,9 @@ fn automatic_ticks_use_the_assigned_span_instead_of_a_five_tick_ceiling() {
 
 #[test]
 fn complete_sources_fit_endpoint_labels_inward_instead_of_filtering_positions() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let projection = Projection::new((0.0, 100.0), (0.0, 1.0), (0.0, 160.0, 0.0, 100.0));
     let ticks = vec![
         AxisTick::new(0.0, "0"),
@@ -710,7 +742,9 @@ fn complete_sources_fit_endpoint_labels_inward_instead_of_filtering_positions() 
 
 #[test]
 fn categorical_y_ticks_preserve_the_supplied_vector_and_row_range() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let y_ticks = (0..7)
         .map(|index| AxisTick::new(f64::from(index) + 0.5, format!("row {index}")))
         .collect::<Vec<_>>();
@@ -825,7 +859,9 @@ fn opposite_extreme_ticks_use_scaled_steps_and_distinct_labels() {
 
 #[test]
 fn numeric_layout_preserves_explicit_adjacent_range_and_ticks() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let upper = f64::from_bits(1);
     let spec = AxisSpec::default().limits(0.0, upper);
     let layout = Layout::new_with_axis_specs(

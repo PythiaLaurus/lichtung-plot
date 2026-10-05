@@ -4,10 +4,13 @@
 )]
 use super::super::projection::{projection_key, ratio_position};
 use super::*;
+use crate::font::canonical::OperationGenerationResources;
 
 #[test]
 fn resource_audit_numeric_axis_ticket_charges_one_owner_and_refusal_never_coarsens() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let environment = theme.prepared_font_environment().unwrap();
     let resources = environment.generation_resources();
     let projection = Projection::new((0.0, 1.0), (0.0, 1.0), (0.0, 1000.0, 0.0, 1000.0));
@@ -159,7 +162,9 @@ fn adaptive_step_uses_decimal_table_ties_and_scaled_extreme_subtraction() {
 
 #[test]
 fn adaptive_source_order_is_seed_descending_then_one_midpoint() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let environment = theme.prepared_font_environment().unwrap();
     let mut sources = Sources::new((0.0, 10.0), false, None, 4).unwrap();
     assert_eq!(sources.cap, 5);
@@ -192,7 +197,9 @@ fn adaptive_source_order_is_seed_descending_then_one_midpoint() {
 
 #[test]
 fn additive_sources_are_requested_first_then_complete_decimal_coarsenings() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let environment = theme.prepared_font_environment().unwrap();
     let mut sources =
         Sources::new((-7.0, 9.0), false, Some(TickInterval::Additive(1.0)), 100).unwrap();
@@ -215,7 +222,9 @@ fn additive_sources_are_requested_first_then_complete_decimal_coarsenings() {
 
 #[test]
 fn dense_and_empty_interval_misses_do_not_poison_coarser_sources() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let environment = theme.prepared_font_environment().unwrap();
     let mut dense =
         Sources::new((0.0, 10_000.0), false, Some(TickInterval::Additive(1.0)), 2).unwrap();
@@ -236,7 +245,9 @@ fn dense_and_empty_interval_misses_do_not_poison_coarser_sources() {
 
 #[test]
 fn additive_full_binary64_span_stays_within_declared_cap() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let environment = theme.prepared_font_environment().unwrap();
     let mut sources = Sources::new(
         (1.0, f64::MAX),
@@ -262,7 +273,9 @@ fn additive_full_binary64_span_stays_within_declared_cap() {
 
 #[test]
 fn logarithmic_interval_vectors_are_divisible_integral_exponents_not_subsequences() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let environment = theme.prepared_font_environment().unwrap();
     let mut sources = Sources::new(
         (-400.0, 400.0),
@@ -284,7 +297,9 @@ fn logarithmic_interval_vectors_are_divisible_integral_exponents_not_subsequence
 
 #[test]
 fn logarithmic_empty_intersection_charges_one_miss_then_original_midpoint() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let environment = theme.prepared_font_environment().unwrap();
     let mut sources = Sources::new(
         (400.0, 500.0),
@@ -302,7 +317,9 @@ fn logarithmic_empty_intersection_charges_one_miss_then_original_midpoint() {
 
 #[test]
 fn logarithmic_integer_overflow_terminates_without_wrapping() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let environment = theme.prepared_font_environment().unwrap();
     let mut sources = Sources::new(
         (-3.0, 3.0),
@@ -320,7 +337,9 @@ fn logarithmic_integer_overflow_terminates_without_wrapping() {
 
 #[test]
 fn logarithmic_automatic_order_has_full_integrals_then_even_indices() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let environment = theme.prepared_font_environment().unwrap();
     let mut sources = Sources::new((-3.0, 3.0), true, None, 3).unwrap();
     assert_eq!(
@@ -353,7 +372,9 @@ fn source_semantics_reject_before_fonts() {
         ((0.0, 1.0), true, Some(TickInterval::Additive(1.0))),
         ((0.0, 1.0), false, Some(TickInterval::Log10Decades(1))),
     ] {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&OperationGenerationResources::new())
+            .unwrap();
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let projection = Projection::new(range, range, (0.0, 1000.0, 0.0, 1000.0));
         assert!(numeric_tick_plan(
@@ -376,7 +397,9 @@ fn source_semantics_reject_before_fonts() {
 
 #[test]
 fn source_admission_refuses_before_position_storage_or_ordinal_advancement() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let environment = theme.prepared_font_environment().unwrap();
     let used = environment.generation_resources().usage().unwrap().0;
     environment
@@ -395,7 +418,9 @@ fn source_admission_refuses_before_position_storage_or_ordinal_advancement() {
 
 #[test]
 fn dense_source_miss_has_no_position_allocation_charge() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let environment = theme.prepared_font_environment().unwrap();
     let before = environment.resource_usage().unwrap().font_bytes;
     assert!(linear_positions((0.0, 10_000.0), 1.0, Some(environment))
@@ -436,7 +461,9 @@ fn projection_keys_are_exact_at_endpoints_midpoints_and_subnormal_fractions() {
 
 #[test]
 fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let projection = Projection::new((0.0, 100.0), (0.0, 100.0), (0.0, 1000.0, 0.0, 1000.0));
     let plan = numeric_tick_plan(
         (0.0, 100.0),
@@ -479,7 +506,9 @@ fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
 
 #[test]
 fn midpoint_is_conditional_and_must_itself_fit() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let scope = crate::layout::fit::FitScope::root()
         .child(
             crate::layout::AddressRole::FacetCell,
@@ -524,7 +553,9 @@ fn midpoint_is_conditional_and_must_itself_fit() {
 #[test]
 fn numeric_source_resource_and_font_failures_remain_fatal() {
     use crate::layout::fit::{PlanError, ROOT_SCOPE};
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let environment = theme.prepared_font_environment().unwrap();
     let used = environment.generation_resources().usage().unwrap().0;
     environment
@@ -544,7 +575,9 @@ fn numeric_source_resource_and_font_failures_remain_fatal() {
         ),
         Err(PlanError::Fatal(_))
     ));
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     theme.typography.tick_label.font_size = 0;
     assert!(matches!(
         numeric_tick_plan(
@@ -576,7 +609,9 @@ fn numeric_source_resource_and_font_failures_remain_fatal() {
 
 #[test]
 fn generated_labels_are_unique_and_covered_by_the_closed_census() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     for (range, log) in [
         ((1.000_000_000_000_01, 1.000_000_000_000_09), false),
         ((-400.0, 400.0), true),
@@ -654,7 +689,9 @@ fn numeric_formatting_uses_nearest_even_and_declared_thresholds() {
 
 #[test]
 fn exact_source_overrides_intervals_and_provenance_survives_layout_cloning() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&OperationGenerationResources::new())
+        .unwrap();
     let x = super::super::AxisSpec {
         provenance: super::super::RangeProvenance::Configured,
         limits: Some((0.0, 10.0)),

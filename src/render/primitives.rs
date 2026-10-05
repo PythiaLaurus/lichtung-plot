@@ -372,6 +372,7 @@ impl CanonicalScatter {
         raw: &[Point2D],
         style: &PointStyle,
         height: u32,
+        resources: &crate::font::canonical::OperationGenerationResources,
         stage: Option<&mut FinalStage<'_>>,
     ) -> Result<Self, Error> {
         let markers = match style.shape {
@@ -404,13 +405,11 @@ impl CanonicalScatter {
         backend::validate_point_style(style)?;
         let outline = style
             .outline
+            .as_ref()
             .map(|outline| {
                 Ok::<_, Error>((
                     outline.color,
-                    CanonicalCoordinate::nonnegative_length(
-                        outline.width_for_radius(style.radius),
-                        "scatter outline width",
-                    )?,
+                    outline.width_for_radius(style.radius, resources)?,
                 ))
             })
             .transpose()?;

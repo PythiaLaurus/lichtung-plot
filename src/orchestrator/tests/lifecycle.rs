@@ -467,7 +467,9 @@ fn standalone_lifecycle_preserves_distinct_transparent_root_and_panel_surfaces()
         NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
     )
     .erase();
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     theme.surfaces.canvas_root = crate::theme::Color::rgba(17, 34, 51, 128);
     theme.surfaces.plot_panel = crate::theme::Color::rgba(68, 85, 102, 64);
     let plan = crate::orchestrator::lifecycle::PlotPlan::new_with_resolved_theme(
@@ -771,11 +773,21 @@ fn caller_content_presence_is_independent_from_foundational_appearance() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one two-child fixture verifies preflight and render identity, chrome and selected paint across explicit preset combinations"
+)]
 fn canvas_preflight_and_render_reuse_one_chrome_and_one_theme_per_child() {
     let x = NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]);
     let y = NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]);
-    let nature_color = crate::Theme::Nature.resolve().colors[0];
-    let science_color = crate::Theme::Science.resolve().colors[0];
+    let nature_color = crate::Theme::Nature
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap()
+        .colors[0];
+    let science_color = crate::Theme::Science
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap()
+        .colors[0];
     let canvas = |themes: [crate::Theme; 2]| {
         crate::Canvas::grid(1, 2)
             .unwrap()
@@ -861,8 +873,14 @@ fn canvas_preflight_and_render_reuse_one_chrome_and_one_theme_per_child() {
                 .into_iter()
                 .enumerate()
                 .map(|(index, color)| {
-                    crate::theme::color_from_rgb(color)
-                        .with_alpha(themes[index].resolve().marks.primary_point.fill_alpha)
+                    crate::theme::color_from_rgb(color).with_alpha(
+                        themes[index]
+                            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                            .unwrap()
+                            .marks
+                            .primary_point
+                            .fill_alpha,
+                    )
                 })
                 .collect::<Vec<_>>()
         );
@@ -1866,7 +1884,9 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
                     "{kind:?} {side}: {error}"
                 );
             }
-            let theme = crate::Theme::Publication.resolve();
+            let theme = crate::Theme::Publication
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             let preparations = crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get);
             let panel = prepared.measured_canvas_layout(&theme).unwrap().panel_box;
             // Extracted families have no unprepared combined route.

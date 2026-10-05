@@ -300,7 +300,9 @@ mod tests {
 
     #[test]
     fn root_padding_has_no_axis_estimate_or_unconditional_top_minimum() {
-        let theme = Theme::Publication.resolve();
+        let theme = Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let frame = RootFramePlan::measure(
             (100, 80),
             &theme,
@@ -322,7 +324,9 @@ mod tests {
         reason = "positive built-in insets plus the measured child minimum fit u32 after ceiling"
     )]
     fn measured_child_root_frame_rejects_residual_fit_without_clamping_or_text_fallback() {
-        let theme = Theme::Publication.resolve();
+        let theme = Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let insets = ROOT_PADDING;
         let child_minimum = (13.0, 9.0);
         let width = (insets.left + insets.right + child_minimum.0).ceil() as u32;
@@ -351,7 +355,9 @@ mod tests {
 
     #[test]
     fn measured_caption_wraps_without_shortening_and_rejects_impossible_fit() {
-        let theme = Theme::Publication.resolve();
+        let theme = Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let caption =
             "diagnostic provenance with a deliberately long model and adjustment description";
         let alignments = crate::decorations::title_block::plan::RootAlignments::resolve(
@@ -383,7 +389,9 @@ mod tests {
 
     #[test]
     fn root_title_subtitle_gap_affects_reservation_and_position() {
-        let base = Theme::Publication.resolve();
+        let base = Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let mut spaced = base.clone();
         spaced.composition.root_title_block.title_subtitle_gap = 9.0;
         let content = [Some("title"), Some("subtitle"), None];
@@ -413,7 +421,9 @@ mod tests {
 
     #[test]
     fn facet_measurement_uses_the_same_legacy_metrics_as_facet_drawing() {
-        let mut theme = Theme::Publication.resolve();
+        let mut theme = Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.typography.subtitle.font_size = 7;
         theme.facet_header_font_size = 32;
         let panel = PanelBox::new(20.0, 420.0, 20.0, 320.0);
@@ -451,7 +461,9 @@ mod tests {
 
     #[test]
     fn wrapping_uses_shared_measurement_for_wide_combining_and_newline_text() {
-        let theme = Theme::Publication.resolve();
+        let theme = Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let mut appearance = theme.typography.panel_text.clone();
         appearance.font_size = 12;
 

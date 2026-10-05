@@ -521,7 +521,9 @@ mod style_tests {
         let resources = OperationGenerationResources::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let before = chart.intrinsic_body_minimum(&theme).unwrap();
         theme.marks.point_sizes.regression = 54;
         let sized = chart.intrinsic_body_minimum(&theme).unwrap();
@@ -555,7 +557,9 @@ mod style_tests {
         let resources = OperationGenerationResources::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let panel = crate::layout::PanelBox::new(10.0, 620.0, 20.0, 420.0);
         let old = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
@@ -605,7 +609,9 @@ mod style_tests {
         let resources = OperationGenerationResources::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let panel = crate::layout::PanelBox::new(10.0, 620.0, 20.0, 420.0);
         let old = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))

@@ -73,7 +73,9 @@ fn native_bottom_conditions_keep_parent_trace_order_palette_sparse_connectors_an
         crate::Theme::Nature,
         crate::Theme::Science,
     ] {
-        let theme = preset.resolve();
+        let theme = preset
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let plot =
             crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new())
                 .unwrap()
@@ -223,7 +225,9 @@ fn native_condition_hard_intrinsics_and_exact_numeric_labels_reject_before_marks
         crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
             .unwrap();
     let plot = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let minimum = Intrinsics::prepared(&plot, &theme).unwrap().minimum(&plot);
     let hard = crate::layout::fit::intrinsic_widths(
         &theme,
@@ -306,7 +310,9 @@ fn native_parent_feedback_freezes_actual_marks_axes_and_gutters_at_the_assigned_
             crate::Theme::Nature,
             crate::Theme::Science,
         ] {
-            let theme = preset.resolve();
+            let theme = preset
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             let plot =
                 crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new())
                     .unwrap()

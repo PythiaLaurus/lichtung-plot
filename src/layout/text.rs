@@ -266,6 +266,16 @@ impl std::ops::Deref for ResolvedTextPlan {
 }
 
 impl ResolvedTextPlan {
+    /// Lend the immutable original profile after the cache has verified the caller's complete input.
+    pub(crate) fn analysis_profile(&self) -> Result<(&str, &FontStack), TextPlanError> {
+        let original = &self
+            .1
+            .as_ref()
+            .ok_or(TextPlanError::Arithmetic("missing text analysis"))?
+            .original;
+        Ok((&original.source, &original.style.stack))
+    }
+
     pub(crate) fn same_stack(&self, stack: &FontStack) -> Result<bool, TextPlanError> {
         let environment = &self
             .1
@@ -434,7 +444,7 @@ impl ResolvedTextPlan {
         if input.maximum_width_quanta < 0 {
             return Err(TextPlanError::InvalidMaximumWidth);
         }
-        let line_height = resolve_line_height(input.line_height, input.font_size)?;
+        let line_height = resolve_line_height(input.line_height, input.font_size, &resources)?;
         let mut lines = Vec::new();
         for paragraph in &analysis.paragraphs {
             claim_processing_visits(environment, 1)?;
@@ -747,6 +757,8 @@ pub(crate) struct TextFitMiss {
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum TextPlanError {
     #[error(transparent)]
+    Spacing(#[from] crate::Error),
+    #[error(transparent)]
     Font(FontError),
     #[error(transparent)]
     Fit(#[from] TextFitMiss),
@@ -899,7 +911,11 @@ fn measure_text(
     let _ = u32::try_from(input.source.len()).map_err(|_| TextPlanError::SourceTooLong)?;
 
     let stack = input.stack;
-    let line_height_quanta = resolve_line_height(input.line_height, input.font_size)?;
+    let line_height_quanta = resolve_line_height(
+        input.line_height,
+        input.font_size,
+        &environment.generation_resources(),
+    )?;
     claim_processing_visits(environment, input.source.chars().count() as u128)?;
     let scalar_count = input.source.chars().count();
     let mut required_scalars = Vec::new();
@@ -2688,60 +2704,34 @@ fn scale_design(
     ExactRational::new(numerator, i128::from(units_per_em))
 }
 
-fn resolve_line_height(line_height: TextLineHeight, font_size: u32) -> Result<i64, TextPlanError> {
+fn resolve_line_height(
+    line_height: TextLineHeight,
+    font_size: u32,
+    resources: &canonical::OperationGenerationResources,
+) -> Result<i64, TextPlanError> {
     match line_height {
         TextLineHeight::Multiplier(multiplier) => {
             if !multiplier.is_finite() || multiplier <= 0.0 {
                 return Err(TextPlanError::InvalidLineHeight);
             }
-            binary64_product(
-                multiplier,
-                i128::from(font_size) * i128::from(CSS_PIXEL_QUANTA),
-            )?
-            .ceil_i64("resolved line height")
+            Ok(
+                crate::theme::RelativeSpacing::new_in(multiplier, resources)?
+                    .product(crate::theme::LocalMetric::css_pixels(font_size)?, resources)?
+                    .round(super::kernel::SpatialRounding::Ceil, resources)?
+                    .quanta(),
+            )
         }
         TextLineHeight::ResolvedQuanta(height) if height > 0 => Ok(height),
         TextLineHeight::ResolvedQuanta(_) => Err(TextPlanError::InvalidLineHeight),
     }
 }
 
-fn binary64_product(value: f64, factor: i128) -> Result<ExactRational, TextPlanError> {
-    let bits = value.to_bits();
-    let exponent_bits = ((bits >> 52) & 0x7FF) as i32;
-    let fraction = bits & ((1_u64 << 52) - 1);
-    let (significand, exponent) = if exponent_bits == 0 {
-        (fraction, -1022 - 52)
-    } else {
-        (fraction | (1_u64 << 52), exponent_bits - 1023 - 52)
-    };
-    let mut numerator = i128::from(significand)
-        .checked_mul(factor)
-        .ok_or(TextPlanError::Arithmetic("binary64 rational"))?;
-    let mut denominator = 1_i128;
-    if exponent >= 0 {
-        numerator = checked_shift_left(numerator, exponent.cast_unsigned(), "binary64 rational")?;
-    } else {
-        denominator = checked_shift_left(1, exponent.unsigned_abs(), "binary64 rational")?;
-    }
-    ExactRational::new(numerator, denominator)
-}
-
 pub(crate) fn maximum_width_quanta(maximum_width: f64) -> Result<i64, TextPlanError> {
-    binary64_product(maximum_width, i128::from(CSS_PIXEL_QUANTA))?.floor_i64("maximum text width")
-}
-
-fn checked_shift_left(
-    value: i128,
-    shift: u32,
-    resource: &'static str,
-) -> Result<i128, TextPlanError> {
-    let shifted = value
-        .checked_shl(shift)
-        .ok_or(TextPlanError::Arithmetic(resource))?;
-    if shift != 0 && shifted.checked_shr(shift) != Some(value) {
-        return Err(TextPlanError::Arithmetic(resource));
-    }
-    Ok(shifted)
+    Ok(super::kernel::LayoutScalar::from_css_pixels(
+        maximum_width,
+        super::kernel::SpatialRounding::Floor,
+    )?
+    .quanta())
 }
 
 /// Pixel-space view over an immutable operation-owned text plan.
@@ -2778,6 +2768,42 @@ impl TextBlock {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn represented_title_leading_uses_the_exact_local_product_on_plan_and_reflow() {
+        let environment = PreparedFontEnvironment::synthetic();
+        let mut request = input("A\nA", i64::MAX, PhysicalTextAlignment::Start);
+        request.font_size = 20;
+        request.line_height = TextLineHeight::Multiplier(1.3);
+        assert_eq!(1.3_f64.to_bits(), 0x3ff4_cccc_cccc_cccd);
+        let plan = environment.plan_text(request.clone()).unwrap();
+        assert_eq!(plan.style.line_height_quanta, 26625);
+        assert_eq!(plan.line_pitch_quanta, 26625);
+        assert_eq!(plan.lines.len(), 2);
+        assert_eq!(plan.reflow(request).unwrap().line_pitch_quanta, 26625);
+        assert_eq!(maximum_width_quanta(f64::from_bits(1)).unwrap(), 0);
+    }
+
+    #[test]
+    fn leading_refuses_at_the_real_operation_entry_before_shaping() {
+        for byte_limit in [false, true] {
+            let environment = PreparedFontEnvironment::synthetic();
+            let resources = environment.generation_resources();
+            let used_visits = resources.usage().unwrap().1;
+            let used_bytes = resources.byte_usage().unwrap();
+            resources.set_test_limits(
+                if byte_limit { u128::MAX } else { used_visits },
+                if byte_limit { used_bytes } else { u64::MAX },
+            );
+            canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
+            let result = environment.plan_text(input("A", i64::MAX, PhysicalTextAlignment::Start));
+            assert!(
+                matches!(result, Err(TextPlanError::Spacing(crate::Error::Render(message))) if message.contains("admission"))
+            );
+            canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+            assert_eq!(resources.byte_usage().unwrap(), used_bytes);
+        }
+    }
 
     pub(super) fn input(
         source: &str,

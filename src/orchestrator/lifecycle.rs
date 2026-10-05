@@ -27,6 +27,85 @@ enum PlotLayoutPlan {
     Faceted(Box<super::facets::FacetPlan>),
 }
 
+#[cfg(test)]
+#[test]
+fn plot_preset_construction_refuses_on_its_prepared_ledger_before_fonts_or_backend() {
+    use crate::font::canonical::{OperationGenerationResources, FONT_DISCOVERY_CALLS};
+    let plot = Plot::scatter(
+        crate::NumericValues::new("x", [0.0, 1.0]),
+        crate::NumericValues::new("y", [0.0, 1.0]),
+    )
+    .erase();
+    // Two independent retained publication outlines: five visits and 240 bytes
+    // each on this target. The byte oracle follows value/Arc and limb headers.
+    let outline_bytes = (std::mem::size_of::<crate::theme::RelativeSpacing>()
+        + 2 * std::mem::size_of::<num_bigint::BigUint>()
+        + std::mem::size_of::<f64>()
+        + 2 * std::mem::size_of::<usize>()) as u64
+        + 4 * (16 + std::mem::size_of::<num_bigint::BigUint>() as u64);
+    let bytes = 2 * outline_bytes;
+    for preset in [
+        crate::Theme::Publication,
+        crate::Theme::Nature,
+        crate::Theme::Science,
+        crate::Theme::CHI,
+    ] {
+        let source = plot.clone().theme(preset);
+        for (visits, byte_limit) in [
+            (0, bytes),
+            (10, 0),
+            (9, bytes),
+            (10, bytes - 1),
+            (10, bytes),
+        ] {
+            let retained = std::cell::RefCell::new(None::<OperationGenerationResources>);
+            FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+            crate::render::svg_backend::SVG_BEGIN_CALLS.with(|calls| calls.set(0));
+            let result = PlotPlan::new_with_theme_factory(
+                &source,
+                source.kind(),
+                (Some(800), Some(600)),
+                |resources| {
+                    *retained.borrow_mut() = Some(resources.clone());
+                    resources.set_test_limits(visits, byte_limit);
+                    let theme = source.theme_spec().unwrap().resolve(resources)?;
+                    assert_eq!(resources.usage().unwrap().1, 10);
+                    assert_eq!(resources.byte_usage().unwrap(), bytes);
+                    assert_eq!(
+                        theme
+                            .marks
+                            .primary_point
+                            .outline
+                            .width_ratio
+                            .as_f64()
+                            .to_bits(),
+                        0x3fb9_9999_9999_999a
+                    );
+                    // Stop at the tested preparation boundary; no font/capture work
+                    // can consume this deliberately exact constructor allowance.
+                    Err(Error::Render("preset construction boundary reached".into()))
+                },
+            );
+            let error = result.err().unwrap().to_string();
+            let resources = retained.borrow();
+            let resources = resources.as_ref().unwrap();
+            if (visits, byte_limit) == (10, bytes) {
+                assert!(error.contains("preset construction boundary reached"));
+                assert_eq!(resources.usage().unwrap().1, 10);
+                assert_eq!(resources.byte_usage().unwrap(), bytes);
+            } else {
+                assert!(
+                    error.contains("relative spacing:") && error.contains("admission"),
+                    "{error}"
+                );
+                assert!(resources.byte_usage().unwrap() < bytes);
+            }
+            FONT_DISCOVERY_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+            crate::render::svg_backend::SVG_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+        }
+    }
+}
+
 #[cfg(all(test, unix, not(any(target_os = "macos", target_os = "android"))))]
 mod soft_hyphen_tests {
     use super::*;
@@ -46,7 +125,9 @@ mod soft_hyphen_tests {
             .y_ticks(vec![crate::layout::AxisTick::new(0.0, "A")])
             .size(width, 1000)
             .erase();
-            let mut theme = crate::Theme::Publication.resolve();
+            let mut theme = crate::Theme::Publication
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             theme.typography.title.font_size = 240;
             theme.typography.title.weight = crate::TextWeight::Bold;
             assert_ne!(
@@ -162,12 +243,14 @@ mod natural_sizing_tests {
         )
         .erase();
         for gap in [12.0, 280.0] {
-            let mut theme = crate::Theme::Publication.resolve();
+            let mut theme = crate::Theme::Publication
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             theme.composition.facet_gap = gap;
             crate::orchestrator::measurements::start();
             let result =
-                PlotPlan::new_with_theme_factory(&source, source.kind(), (Some(550), None), || {
-                    Box::new(theme)
+                PlotPlan::new_with_theme_factory(&source, source.kind(), (Some(550), None), |_| {
+                    Ok(Box::new(theme))
                 });
             let work = crate::orchestrator::measurements::finish();
             let plan = result.unwrap_or_else(|error| panic!("gap {gap}: {error}"));
@@ -262,11 +345,14 @@ mod natural_sizing_tests {
         )
         .title("A complete title with independently bold typography and legal boundaries")
         .erase();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.typography.title.weight = crate::TextWeight::Bold;
-        let plan =
-            PlotPlan::new_with_theme_factory(&plot, plot.kind(), (None, None), || Box::new(theme))
-                .unwrap();
+        let plan = PlotPlan::new_with_theme_factory(&plot, plot.kind(), (None, None), |_| {
+            Ok(Box::new(theme))
+        })
+        .unwrap();
         assert!(plan
             .root
             .prepared()
@@ -554,13 +640,13 @@ impl PlotPlan {
             source,
             kind,
             (Some(source.width()), Some(source.height())),
-            || {
-                Box::new(
+            |resources| {
+                Ok(Box::new(
                     source
                         .theme_spec()
                         .unwrap_or(crate::Theme::Publication)
-                        .resolve(),
-                )
+                        .resolve(resources)?,
+                ))
             },
         )
     }
@@ -575,7 +661,7 @@ impl PlotPlan {
             source,
             kind,
             (Some(source.width()), Some(source.height())),
-            || Box::new(theme),
+            |_| Ok(Box::new(theme)),
         )
     }
 
@@ -586,13 +672,13 @@ impl PlotPlan {
         width: Option<u32>,
         height: Option<u32>,
     ) -> Result<Self, Error> {
-        Self::new_with_theme_factory(source, kind, (width, height), || {
-            Box::new(
+        Self::new_with_theme_factory(source, kind, (width, height), |resources| {
+            Ok(Box::new(
                 source
                     .theme_spec()
                     .unwrap_or(crate::Theme::Publication)
-                    .resolve(),
-            )
+                    .resolve(resources)?,
+            ))
         })
     }
 
@@ -604,7 +690,9 @@ impl PlotPlan {
         source: &Plot,
         kind: PlotKind,
         sizing: (Option<u32>, Option<u32>),
-        resolve_theme: impl FnOnce() -> Box<ResolvedTheme>,
+        resolve_theme: impl FnOnce(
+            &crate::font::canonical::OperationGenerationResources,
+        ) -> Result<Box<ResolvedTheme>, Error>,
     ) -> Result<Self, Error> {
         if source.width() == 0 || source.height() == 0 {
             source.validate_configuration(kind)?;
@@ -616,7 +704,7 @@ impl PlotPlan {
             sizing.0,
             sizing.1,
             |prepared_stage| {
-                let theme = resolve_theme();
+                let theme = resolve_theme(&prepared_stage.generation_resources())?;
                 source.validate_configuration(kind)?;
                 let axes = crate::plots::shared_x::prepare_plot(
                     source,
@@ -1090,7 +1178,9 @@ mod root_title_tests {
         let mut reserves = Vec::new();
         for caption in ["", "Independent caption\nSecond caption line"] {
             let source = source.clone().caption(caption);
-            let theme = crate::Theme::Publication.resolve();
+            let theme = crate::Theme::Publication
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             let root = crate::layout::plan_exact_root(
                 800,
                 600,
@@ -1146,7 +1236,9 @@ mod root_title_tests {
                     plot.title_alignment = Some(End);
                     plot.subtitle_alignment = Some(Start);
                 }
-                let theme = preset.resolve();
+                let theme = preset
+                    .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                    .unwrap();
                 assert_eq!(theme.composition.root_title_alignment, Center);
                 assert_eq!(theme.composition.root_subtitle_alignment, None);
                 assert_eq!(theme.composition.root_caption_alignment, Start);
@@ -1235,7 +1327,9 @@ mod root_title_tests {
             .erase();
             plot.title_alignment = Some(End);
             plot.subtitle_alignment = Some(Start);
-            let mut theme = preset.resolve();
+            let mut theme = preset
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             theme.composition.root_caption_alignment = Center;
             let plan = PlotPlan::new_with_resolved_theme(&plot, PlotKind::Scatter, theme).unwrap();
             let retained = plan.root.plan().retained_text();
@@ -1286,7 +1380,9 @@ mod retained_legend_tests {
         .size(800, 600)
         .erase()
         .with_legend_position(crate::LegendPosition::OutsideRight);
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         measurements::start();
         let root = crate::layout::plan_exact_root(
             800,

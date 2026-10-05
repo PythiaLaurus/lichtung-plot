@@ -53,7 +53,9 @@ fn specialized_renderers_clip_resolved_marks_without_clipping_decorations() {
         .find(|(_, _, text)| text == "Color")
         .unwrap();
     assert!(title.1 > high_label.1 && high_label.1 > low_label.1);
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     for (label, appearance) in [
         ("Color", &theme.typography.legend_title),
         ("0.1", &theme.typography.legend_label),

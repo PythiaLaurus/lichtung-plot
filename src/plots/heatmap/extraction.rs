@@ -31,7 +31,9 @@ fn local_and_shared_heatmap_numeric_labels_are_unique_before_fonts() {
         NumericValues::new("color", [0.1, 0.100_000_1]),
     )
     .erase();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let resources = OperationGenerationResources::new();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
@@ -73,7 +75,9 @@ fn signed_zero_local_heatmap_has_one_numeric_label_without_changing_its_exact_do
     assert_eq!(domain.minimum.to_bits(), (-0.0_f64).to_bits());
     assert_eq!(domain.maximum.to_bits(), 0.0_f64.to_bits());
     let plot = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let selected = plot
         .measure_selected_interior(PlotRenderContext::new(
             plot.data(),
@@ -128,7 +132,9 @@ fn heatmap_hidden_y_labels_use_the_same_cached_annotation_and_ink_summary() {
         crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
             .unwrap();
     let mut chart = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let visible = intrinsic_body_minimum(&chart, &theme).unwrap();
     chart = chart.with_y_tick_labels_visible(false);
     let hidden = intrinsic_body_minimum(&chart, &theme).unwrap();
@@ -334,7 +340,9 @@ fn cell_label_minimum_precedes_constrained_heatmap_discovery_and_is_retained() {
     let inputs =
         crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
             .unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     inputs.prepare_intrinsics(&source, &theme).unwrap();
     let source = inputs.attach(source).unwrap();
     let minimum = intrinsic_body_minimum(&source, &theme).unwrap();
@@ -384,7 +392,9 @@ fn selected_payload_geometry_and_poisoned_capture_preserve_every_operand() {
             crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                 .unwrap();
         let source = inputs.attach(source).unwrap();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
         let begins = crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get);
         let selected = source
@@ -487,7 +497,9 @@ fn selected_cell_guide_storage_and_elision_refuse_at_exact_limits() {
         crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
             .unwrap();
     let source = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let selected = source
         .measure_selected_interior(PlotRenderContext::new(
             source.data(),

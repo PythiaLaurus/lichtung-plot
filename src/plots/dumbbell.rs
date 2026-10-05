@@ -502,7 +502,9 @@ mod tests {
         let resources = OperationGenerationResources::new();
         let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
         let chart = inputs.attach(plot).unwrap();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let base = chart.intrinsic_body_minimum(&theme).unwrap();
         theme.marks.point_sizes.dumbbell = 54;
         let styled = chart.intrinsic_body_minimum(&theme).unwrap();
@@ -595,7 +597,9 @@ mod tests {
     #[test]
     fn projected_limits_and_geometry_match_drawn_ink() {
         let source = source().x_limits(1.5, 3.5).erase();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let resources = OperationGenerationResources::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
         let attached = inputs.attach(source).unwrap();
@@ -695,7 +699,9 @@ mod tests {
     fn selected_capture_does_not_read_project_or_shape() {
         use crate::orchestrator::measurements::{self, Counter};
         let source = source().erase();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         STAGES.with(|counts| counts.set([0; 4]));
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|count| count.set(0));
         crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(|count| count.set(0));

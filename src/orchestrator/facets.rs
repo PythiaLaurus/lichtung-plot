@@ -856,7 +856,9 @@ mod feedback_tests {
             for disabled in [true, false] {
                 DISABLE_CHILD_REUSE.with(|value| value.set(disabled));
                 CHILD_MEASUREMENTS.with(|events| events.borrow_mut().clear());
-                let theme = crate::Theme::Publication.resolve();
+                let theme = crate::Theme::Publication
+                    .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                    .unwrap();
                 let mut children = ChildPlans::facets(&source);
                 let mut calls = 0;
                 let mut retained_neighbor = None;
@@ -1049,7 +1051,9 @@ mod feedback_tests {
         .hue(crate::CategoryValues::new("hue", ["a", "b", "a", "b"]).unwrap())
         .size(900, 900)
         .erase();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         crate::layout::plan_exact_root(
             source.width(),
             source.height(),
@@ -1176,7 +1180,9 @@ mod feedback_tests {
         .x_label("MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM")
         .size(960, 640)
         .erase();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let root = crate::layout::plan_exact_root(
             source.width(),
             source.height(),
@@ -1288,7 +1294,9 @@ mod feedback_tests {
         .legend(crate::LegendPolicy::Visible(LegendPosition::OutsideRight))
         .size(960, 640)
         .erase();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.prepare_font_environment().unwrap();
         let mut arranged = None;
         crate::layout::plan_exact_root(

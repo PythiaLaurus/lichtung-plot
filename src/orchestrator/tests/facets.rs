@@ -144,7 +144,9 @@ fn facet_strips_preserve_each_preset_foreground_and_header_size() {
         crate::Theme::Science,
         crate::Theme::CHI,
     ] {
-        let expected = theme.resolve();
+        let expected = theme
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let facet = CategoryValues::new("facet", ["left", "left", "right", "right"]).unwrap();
         let plot = Plot::scatter(
             NumericValues::new("x", [1.0, 2.0, 1.0, 2.0]),

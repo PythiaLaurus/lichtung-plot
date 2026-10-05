@@ -21,7 +21,9 @@ fn significance_case(count: usize) -> [Duration; 2] {
         )
     }))
     .erase();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     theme.prepare_font_environment().unwrap();
     let panel = crate::layout::PanelBox::new(0.0, 800.0, 0.0, 600.0);
     let mut expected: Option<((f64, f64), [u64; Counter::ALL.len()])> = None;

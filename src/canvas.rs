@@ -1015,7 +1015,11 @@ mod d1_tests {
                 |stage| {
                     let (interiors, _) = canvas.prepare_interiors(stage)?;
                     canvas.validate_shared_guide_kinds(&interiors)?;
-                    let themes = ResolvedCanvasThemes::new(canvas.theme, &canvas.panels);
+                    let themes = ResolvedCanvasThemes::new(
+                        canvas.theme,
+                        &canvas.panels,
+                        &stage.generation_resources(),
+                    )?;
                     canvas.prepare_continuous_shared_guide(
                         &themes,
                         &interiors,
@@ -1179,7 +1183,11 @@ mod d1_tests {
             |stage| {
                 let (interiors, _) = canvas.prepare_interiors(stage)?;
                 canvas.validate_shared_guide_kinds(&interiors)?;
-                let themes = ResolvedCanvasThemes::new(canvas.theme, &canvas.panels);
+                let themes = ResolvedCanvasThemes::new(
+                    canvas.theme,
+                    &canvas.panels,
+                    &stage.generation_resources(),
+                )?;
                 canvas.prepare_continuous_shared_guide(
                     &themes,
                     &interiors,
@@ -2225,7 +2233,14 @@ mod d1_tests {
         for disabled in [true, false] {
             DISABLE_CHILD_REUSE.with(|value| value.set(disabled));
             CHILD_MEASUREMENTS.with(|events| events.borrow_mut().clear());
-            let themes = Arc::new(ResolvedCanvasThemes::new(canvas.theme, &canvas.panels));
+            let themes = Arc::new(
+                ResolvedCanvasThemes::new(
+                    canvas.theme,
+                    &canvas.panels,
+                    &crate::font::canonical::OperationGenerationResources::new(),
+                )
+                .unwrap(),
+            );
             let mut children = ChildPlans::canvas(&canvas);
             let mut calls = 0;
             let mut retained_neighbor = None;
@@ -2426,7 +2441,14 @@ mod d1_tests {
             } else {
                 canvas = canvas.column_header(0, 2, "A\u{301} shared").unwrap();
             }
-            let themes = Arc::new(ResolvedCanvasThemes::new(canvas.theme, &canvas.panels));
+            let themes = Arc::new(
+                ResolvedCanvasThemes::new(
+                    canvas.theme,
+                    &canvas.panels,
+                    &crate::font::canonical::OperationGenerationResources::new(),
+                )
+                .unwrap(),
+            );
             crate::layout::plan_exact_root(
                 canvas.width,
                 canvas.height,
@@ -2539,7 +2561,14 @@ mod d1_tests {
             .unwrap()
             .size(640, 480)
             .legend_policy(CanvasLegendPolicy::Shared);
-        let themes = Arc::new(ResolvedCanvasThemes::new(canvas.theme, &canvas.panels));
+        let themes = Arc::new(
+            ResolvedCanvasThemes::new(
+                canvas.theme,
+                &canvas.panels,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
+            .unwrap(),
+        );
         let root = crate::layout::plan_exact_root(
             canvas.width,
             canvas.height,
@@ -2719,23 +2748,29 @@ enum ResolvedPlotTheme {
 }
 
 impl ResolvedCanvasThemes {
-    fn new(root: Theme, plots: &[Option<Plot>]) -> Self {
-        let root = Box::new(root.resolve());
+    fn new(
+        root: Theme,
+        plots: &[Option<Plot>],
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<Self, Error> {
+        let root = Box::new(root.resolve(resources)?);
         let plots = plots
             .iter()
             .map(|plot| {
-                plot.as_ref().map(|plot| {
-                    plot.theme_spec()
-                        .map_or(ResolvedPlotTheme::InheritedRoot, |theme| {
-                            let mut theme = Box::new(theme.resolve());
+                plot.as_ref()
+                    .map(|plot| match plot.theme_spec() {
+                        None => Ok(ResolvedPlotTheme::InheritedRoot),
+                        Some(theme) => {
+                            let mut theme = Box::new(theme.resolve(resources)?);
                             theme.canvas_surface_override = Some(root.surfaces.canvas_root);
                             theme.share_font_environment_from(&root);
-                            ResolvedPlotTheme::ExplicitPlot(theme)
-                        })
-                })
+                            Ok(ResolvedPlotTheme::ExplicitPlot(theme))
+                        }
+                    })
+                    .transpose()
             })
-            .collect();
-        Self { root, plots }
+            .collect::<Result<Vec<_>, Error>>()?;
+        Ok(Self { root, plots })
     }
 
     fn prepare_font_environment(
@@ -4050,7 +4085,11 @@ impl Canvas {
                             .map_err(|_| Error::Render("Canvas theme storage overflow".into()))?,
                     )
                     .map_err(|error| Error::Render(format!("Canvas theme admission: {error}")))?;
-                let themes = Arc::new(ResolvedCanvasThemes::new(self.theme, &self.panels));
+                let themes = Arc::new(ResolvedCanvasThemes::new(
+                    self.theme,
+                    &self.panels,
+                    &resources,
+                )?);
                 #[cfg(test)]
                 {
                     record_canvas_theme(usize::MAX, "resolved", themes.root());

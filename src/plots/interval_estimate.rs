@@ -1159,7 +1159,9 @@ mod tests {
         let resources = crate::font::canonical::OperationGenerationResources::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let base = chart.intrinsic_body_minimum(&theme).unwrap();
         theme.typography.estimate_detail.font_size = 48;
         let text = chart.intrinsic_body_minimum(&theme).unwrap();
@@ -1194,7 +1196,9 @@ mod tests {
                 .intrinsic_body_minimum(theme)
                 .unwrap()
         };
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.typography.estimate_detail.font_size = 48;
         let without = intrinsic(source(false), &theme);
         let with = intrinsic(source(true), &theme);
@@ -1222,7 +1226,9 @@ mod tests {
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
         let chart = inputs.attach(source).unwrap();
         let panel = crate::layout::PanelBox::new(100.0, 900.0, 60.0, 600.0);
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let old = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
             .unwrap();
@@ -1249,7 +1255,9 @@ mod tests {
     }
 
     fn tick_theme() -> ResolvedTheme {
-        crate::Theme::Publication.resolve()
+        crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap()
     }
 
     #[test]

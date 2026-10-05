@@ -248,7 +248,9 @@ fn assigned_panel_marks_match_canonical_projection_fingerprints() {
             crate::Theme::Nature,
             crate::Theme::Science,
         ] {
-            let theme = preset.resolve();
+            let theme = preset
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             let plot =
                 crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                     .unwrap()
@@ -290,7 +292,9 @@ fn canonical_distribution_coordinates_preserve_quartiles_and_observations() {
                 .unwrap()
                 .attach(source)
                 .unwrap();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         // Odd quantum spans and origins exercise projection before width/strip arithmetic.
         let panel = crate::layout::PanelBox::new(
             80.0 + 1.0 / 1024.0,
@@ -595,7 +599,9 @@ fn parent_palette_and_absent_series_slots_are_retained_before_native_projection(
             crate::Theme::Nature,
             crate::Theme::Science,
         ] {
-            let theme = preset.resolve();
+            let theme = preset
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             let plot =
                 crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new())
                     .unwrap()
@@ -642,7 +648,9 @@ fn parent_palette_and_absent_series_slots_are_retained_before_native_projection(
 #[test]
 fn selected_mark_snapshot_matches_drawn_geometry() {
     for source in sources(None).into_iter().chain([supplied(), annotated()]) {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let inputs =
             crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                 .unwrap();
@@ -680,7 +688,9 @@ fn poisoned_capture_repeats_no_sources_statistics_projection_axes_or_shaping() {
     for source in sources(None).into_iter().chain([supplied(), annotated()]) {
         STAGES.with(|counts| counts.set([[0; 4]; 3]));
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|count| count.set(0));
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let root = crate::layout::plan_exact_root(
             640,
             480,

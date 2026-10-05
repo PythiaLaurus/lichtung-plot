@@ -372,7 +372,9 @@ mod appearance_tests {
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
         let chart = inputs.attach(source).unwrap();
         let panel = crate::layout::PanelBox::new(10.0, 620.0, 20.0, 420.0);
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let old = chart
             .measure_selected_interior(crate::spec::PlotRenderContext::new(
                 chart.data(),
@@ -452,7 +454,9 @@ mod appearance_tests {
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
         let chart = inputs.attach(source).unwrap();
         let panel = crate::layout::PanelBox::new(10.0, 620.0, 20.0, 420.0);
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let old = chart
             .measure_selected_interior(crate::spec::PlotRenderContext::new(
                 chart.data(),

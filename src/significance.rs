@@ -106,7 +106,9 @@ fn plan_comparisons(
     legend_constraint: LegendAnnotationConstraint,
     mark_style: SignificanceMarkStyle,
 ) -> Result<SignificancePlan, Error> {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let label = theme.typography.effective_significance_label(
         Some(mark_style),
         &theme.prepared_font_environment()?.generation_resources(),
@@ -186,7 +188,9 @@ fn plan_comparisons_at(
     horizontal: bool,
     mark_style: SignificanceMarkStyle,
 ) -> Result<SignificancePlan, Error> {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let label = theme.typography.effective_significance_label(
         Some(mark_style),
         &theme.prepared_font_environment()?.generation_resources(),

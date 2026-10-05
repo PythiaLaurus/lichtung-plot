@@ -26,7 +26,9 @@ fn grouped_targets_resolve_typed_series_and_category_anchors() {
         SignificanceMark::TwoStars,
     )])
     .erase();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let categories = ["a".to_owned(), "b".to_owned()];
     let groups = ["g1".to_owned(), "g2".to_owned()];
     let maxima = [vec![1.0, 2.0], vec![3.0, 4.0]];
@@ -59,7 +61,9 @@ fn centered_label_ink_prevents_disjoint_spans_from_sharing_a_shelf() {
     let categories = ["a", "b", "c", "d", "e", "f"].map(str::to_owned);
     let maxima = [1.0, 2.0, 1.0, 2.0, 1.0, 2.0];
     let panel = PanelBox::new(50.0, 650.0, 40.0, 640.0);
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     for (size, shared) in [(16, true), (140, false)] {
         let mut appearance = theme.typography.significance_label.clone();
         appearance.font_size = size;
@@ -92,7 +96,9 @@ fn centered_label_ink_prevents_disjoint_spans_from_sharing_a_shelf() {
 
 #[test]
 fn complete_bracket_stroke_cannot_escape_the_category_panel_even_with_exact_limits() {
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     theme.annotations.bracket_stroke.width = 200.0;
     let label = theme.typography.significance_label.clone();
     for limits in [None, Some((0.0, 10.0))] {
@@ -126,7 +132,9 @@ fn complete_bracket_stroke_cannot_escape_the_category_panel_even_with_exact_limi
 
 #[test]
 fn thick_bracket_stroke_expands_only_an_automatic_numeric_window() {
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     theme.annotations.bracket_stroke.width = 24.0;
     let label = theme.typography.significance_label.clone();
     let select = |limits| {
@@ -166,7 +174,9 @@ fn default_metrics() -> BracketMetrics {
 fn fit_diagnostic_retains_caller_slot_after_bracket_sorting() {
     use crate::layout::fit::{FitKind, FitScope, PlanError};
     use crate::layout::{AddressRole, ComponentAddress};
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     theme.prepare_font_environment().unwrap();
     let style = SignificanceMarkStyle::default();
     let label = theme
@@ -457,7 +467,9 @@ fn planner_level_maximum_covers_every_category_under_each_span() {
 #[test]
 fn planner_retains_the_exact_effective_significance_label() {
     let style = SignificanceMarkStyle::new(23, crate::TextWeight::Bold, 9.0).unwrap();
-    let plan_theme = crate::Theme::Nature.resolve();
+    let plan_theme = crate::Theme::Nature
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let label = plan_theme
         .typography
         .effective_significance_label(
@@ -503,7 +515,9 @@ fn planner_retains_the_exact_effective_significance_label() {
     )
     .significance_mark_style(style)
     .erase();
-    let render_theme = crate::Theme::Publication.resolve();
+    let render_theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let mut backend = crate::render::svg_backend::SvgBackend::in_memory(400, 300);
     backend.begin(400, 300).unwrap();
     render(&chart, &plan, &render_theme, &mut backend).unwrap();

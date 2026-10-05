@@ -21,7 +21,9 @@ fn typography_performance_evidence_and_root_cache_budgets() {
     let mut scaling = Vec::new();
     for (name, source) in workloads {
         let setup = std::time::Instant::now();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&canonical::OperationGenerationResources::new())
+            .unwrap();
         let environment = theme.prepared_font_environment().unwrap();
         let resources = environment.generation_resources();
         environment.share_generation_resources(&resources).unwrap();
@@ -95,37 +97,15 @@ fn typography_performance_evidence_and_root_cache_budgets() {
                 assert_eq!(after.0, before.0);
                 assert_eq!(font_after.font_bytes, font_before.font_bytes);
                 let binary_comparisons = if phase == "hit" { 1 } else { 2 };
-                // One complete key hash and one exact-content check, including
-                // named bytes. A payload hit skips shaping, never identity work.
-                let families = theme.typography.caption.stack.families();
-                let name_bytes: usize = families
-                    .iter()
-                    .filter_map(canonical::FontFamily::name)
-                    .map(str::len)
-                    .sum();
-                let literal_count = families
-                    .iter()
-                    .filter(|family| family.name().is_some())
-                    .count();
-                let generic = families.len() - literal_count;
-                let hash = 58
-                    + source.len()
-                    + "performance caption".len()
-                    + families.len()
-                    + 9 * literal_count
-                    + name_bytes
-                    + 2 * generic;
-                let equality = 1
-                    + source.len()
-                    + 1
-                    + families.len()
-                    + literal_count
-                    + name_bytes
-                    + 1
-                    + "performance caption".len();
+                // Profile metadata + source bytes, exact immutable font handle,
+                // then only presentation hash and owner equality. The complete
+                // source/font hash prepass is retained from the cold call.
+                let profile = 1 + source.len() + 1;
+                let hash = 36 + "performance caption".len();
+                let equality = 1 + "performance caption".len();
                 assert_eq!(
                     after.1 - before.1,
-                    binary_comparisons + 1 + (hash + equality) as u128
+                    binary_comparisons + 1 + (profile + hash + equality) as u128
                 );
             } else if phase == "cold" {
                 cold_work = after.1 - before.1;

@@ -28,21 +28,29 @@ pub(crate) fn force_reservation_failure(stage: ReservationStage) {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct LayoutScalar(i64);
+pub(crate) struct LayoutScalar(i64);
 
 #[derive(Debug, Clone, Copy)]
-enum SpatialRounding {
+pub(crate) enum SpatialRounding {
     Floor,
     Ceil,
     NearestEven,
 }
 
 impl LayoutScalar {
-    fn exact_css_pixels(value: u32) -> Result<Self, Error> {
+    pub(crate) fn exact_css_pixels(value: u32) -> Result<Self, Error> {
         i64::from(value)
             .checked_mul(QUANTA_PER_CSS_PIXEL)
             .map(Self)
             .ok_or_else(|| Error::Render("exact layout dimension overflowed layout quanta".into()))
+    }
+
+    pub(crate) const fn from_quanta(value: i64) -> Self {
+        Self(value)
+    }
+
+    pub(crate) const fn quanta(self) -> i64 {
+        self.0
     }
 
     fn is_nonnegative(self) -> bool {
@@ -56,7 +64,7 @@ impl LayoutScalar {
         u32::try_from(rounded).ok()
     }
 
-    fn from_css_pixels(value: f64, rounding: SpatialRounding) -> Result<Self, Error> {
+    pub(crate) fn from_css_pixels(value: f64, rounding: SpatialRounding) -> Result<Self, Error> {
         let bits = value.to_bits();
         let exponent_bits = ((bits >> 52) & 0x7ff) as u16;
         if exponent_bits == 0x7ff {

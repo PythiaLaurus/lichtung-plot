@@ -647,7 +647,9 @@ mod tests {
     #[test]
     fn unusable_guide_admits_a_call_before_any_measurement_work() {
         for remaining in [0, 1, 2] {
-            let theme = crate::Theme::Publication.resolve();
+            let theme = crate::Theme::Publication
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             theme.prepare_font_environment().unwrap();
             let resources = theme
                 .prepared_font_environment()
@@ -689,7 +691,9 @@ mod tests {
 
     #[test]
     fn repeated_continuous_guide_admits_calls_for_cached_text() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let resources = theme
             .prepared_font_environment()
             .unwrap()
@@ -754,7 +758,9 @@ mod tests {
             crate::NumericValues::new("y", [0.0, 1.0]),
         )
         .erase();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.typography.legend_label.font_size = 96;
         theme.typography.legend_label.weight = crate::TextWeight::Bold;
         theme.legend.row_gap = 5.0;
@@ -856,7 +862,9 @@ mod tests {
 
     #[test]
     fn asymmetric_numeric_centers_keep_their_fraction_or_return_typed_fit() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let mut descriptor = descriptor();
         descriptor.missing = None;
         descriptor.domain = (-0.01, 100.0);
@@ -938,7 +946,9 @@ mod tests {
         descriptor
             .stops
             .insert(1, GradientStop::new(0.1, (70, 140, 200)));
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let guide = fit::measured(MeasuredContinuousGuide::measure(
             &descriptor,
             (200.0, 400.0),
@@ -958,7 +968,9 @@ mod tests {
 
     #[test]
     fn horizontal_and_vertical_guides_freeze_one_gradient_and_missing_block() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let guide = descriptor();
         let scope = FitScope::root();
         for horizontal in [false, true] {
@@ -1003,7 +1015,9 @@ mod tests {
 
     #[test]
     fn insufficient_projected_length_is_a_guide_fit_miss() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let scope = FitScope::root();
         assert!(matches!(
             MeasuredContinuousGuide::measure(
@@ -1027,7 +1041,9 @@ mod tests {
             crate::NumericValues::new("y", [0.0, 1.0]),
         )
         .erase();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.legend.frame_fill = crate::theme::Color::rgba(1, 2, 3, 127);
         theme.legend.frame_outline = crate::theme::Color::rgba(4, 5, 6, 210);
         theme.legend.frame_stroke_width = 30.0;
@@ -1095,7 +1111,9 @@ mod tests {
 
     #[test]
     fn custom_text_ink_overhang_cannot_be_hidden_by_the_guide_frame() {
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.typography.legend_title.font_size = 40;
         theme.typography.legend_title.weight = crate::TextWeight::Bold;
         let mut measured = fit::measured(MeasuredContinuousGuide::measure(
@@ -1116,7 +1134,9 @@ mod tests {
 
     #[test]
     fn compact_gradient_keeps_all_labels_and_skips_duplicate_allocations() {
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let guide = descriptor();
         let scope = FitScope::root();
         let mut changes = false;

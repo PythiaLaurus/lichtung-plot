@@ -51,7 +51,9 @@ fn source_point_collapse_matches_canonical_line_distinctions() {
             crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                 .unwrap();
         let source = inputs.attach(source).unwrap();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let result = source.measure_selected_interior(PlotRenderContext::new(
             source.data(),
             crate::layout::PanelBox::new(0.0, 100.0, 0.0, 200.0),
@@ -226,7 +228,9 @@ fn visible_point_layer_labels_expand_automatic_edges_but_refuse_exact_overflow()
             plot.erase()
         }
     };
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let panel = crate::layout::PanelBox::new(60.0, 760.0, 70.0, 570.0);
     for exact in [false, true] {
         let plot = source(exact);
@@ -286,7 +290,9 @@ fn exact_window_keeps_the_declared_off_domain_point_label_gate() {
         crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
             .unwrap();
     let chart = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
@@ -309,7 +315,9 @@ fn point_layer_label_gap_moves_the_selected_text_without_moving_its_mark() {
     let resources = OperationGenerationResources::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
     let plot = inputs.attach(source).unwrap();
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let selected = plot
         .measure_selected_interior(PlotRenderContext::new(
             plot.data(),
@@ -367,7 +375,9 @@ fn point_layer_label_uses_theme_font_and_exact_layer_paint() {
     let resources = OperationGenerationResources::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
     let plot = inputs.attach(source).unwrap();
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let panel = crate::layout::PanelBox::new(10.0, 600.0, 10.0, 410.0);
     let selected = plot
         .measure_selected_interior(PlotRenderContext::new(plot.data(), panel, &theme))
@@ -426,7 +436,9 @@ fn path_hard_ink_observes_visibility_and_resolved_stroke_on_automatic_axes() {
     let resources = OperationGenerationResources::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
     let chart = inputs.attach(source).unwrap();
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let original = chart.intrinsic_body_minimum(&theme).unwrap();
     theme.marks.point_sizes.path = 54;
     assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), original);
@@ -455,7 +467,9 @@ fn path_hard_ink_observes_visibility_and_resolved_stroke_on_automatic_axes() {
 #[test]
 fn categorical_trajectory_and_exact_path_windows_only_expand_numeric_automatic_axes() {
     let theme = {
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.marks.point_sizes.trajectory = 18;
         theme
     };
@@ -509,7 +523,9 @@ fn custom_series_line_style_is_shared_by_selected_marks_and_guide_identity() {
     let resources = OperationGenerationResources::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
     let plot = inputs.attach(source).unwrap();
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let selected = plot
         .measure_selected_interior(PlotRenderContext::new(
             plot.data(),
@@ -577,7 +593,9 @@ fn prepared_path_family_glyphs_match_selected_marks_before_fonts() {
         let resources = OperationGenerationResources::new();
         let data = plot.data().with_axis_resources(&resources);
         let prepared = PreparedLine::new(&plot, data, None).unwrap();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let order = prepared.group_order(&plot, data).unwrap();
         let mut entries = prepared
@@ -703,7 +721,9 @@ fn selected_capture_never_prepares_projects_reads_sources_or_shapes_and_replays_
         .chain([decorated_line()])
     {
         let plot = plot.size(640, 480);
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let kind = plot.kind();
         STAGES.with(|stages| stages.set([[0; 4]; 3]));
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| calls.set(0));
@@ -879,7 +899,9 @@ fn invalid_semantics_and_missing_preparation_reject_without_fonts() {
         .zip(sources(false, Some(f64::INFINITY)))
     {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let context = PlotRenderContext::new(
             plot.data(),
             crate::layout::PanelBox::new(0.0, 100.0, 0.0, 100.0),
@@ -954,7 +976,9 @@ fn invalid_semantics_and_missing_preparation_reject_without_fonts() {
 #[test]
 fn projected_buffers_share_exact_admission_and_payload_geometry_matches_clipped_ink() {
     for plot in sources(false, None).into_iter().chain([decorated_line()]) {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let resources = OperationGenerationResources::new();
         let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
         let attached = inputs.attach(plot.clone()).unwrap();
@@ -1038,7 +1062,9 @@ fn sparse_intervals_do_not_create_empty_series_and_path_policies_keep_draw_order
         .iter()
         .all(|point| point.interval.is_some()));
     let plot = inputs.attach(plot).unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let selected = plot
         .measure_selected_interior(PlotRenderContext::new(
             plot.data(),

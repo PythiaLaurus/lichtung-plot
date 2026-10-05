@@ -600,7 +600,9 @@ mod tests {
 
     #[test]
     fn extended_palette_is_reused_only_within_one_operation_and_same_seed_prefix() {
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&OperationGenerationResources::new())
+            .unwrap();
         let keys = (0..18)
             .map(|index| format!("hue-{index}"))
             .collect::<Vec<_>>();

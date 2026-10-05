@@ -761,7 +761,9 @@ mod tests {
                 .intrinsic_body_minimum(theme)
                 .unwrap()
         };
-        let plain = crate::Theme::Publication.resolve();
+        let plain = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let mut styled = plain.clone();
         styled.marks.violin_body.outline_width = 100.0;
         for grouped in [false, true] {
@@ -784,7 +786,9 @@ mod tests {
     #[test]
     fn sampled_collective_bodies_preserve_all_ink_at_assigned_category_tracks() {
         let theme = {
-            let mut theme = crate::Theme::Publication.resolve();
+            let mut theme = crate::Theme::Publication
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             theme.marks.violin_body.outline_width = 100.0;
             theme.marks.raw_overlay_radius = 12;
             theme

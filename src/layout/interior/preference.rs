@@ -457,7 +457,9 @@ mod tests {
             let resources = OperationGenerationResources::new();
             let prepared = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
             let chart = prepared.attach(source).unwrap();
-            let theme = crate::Theme::Publication.resolve();
+            let theme = crate::Theme::Publication
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             let root = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
             let preference = categorical(&root);
             assert_eq!(preference.axis, axis);
@@ -488,7 +490,9 @@ mod tests {
         let resources = OperationGenerationResources::new();
         let prepared = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
         let chart = prepared.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let original = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
         theme.marks.bar_body.outline_width = 100.0;
         let styled = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
@@ -568,7 +572,9 @@ mod tests {
             let resources = OperationGenerationResources::new();
             let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
             let chart = inputs.attach(source).unwrap();
-            let theme = crate::Theme::Publication.resolve();
+            let theme = crate::Theme::Publication
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             let root = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
             let preference = categorical(&root);
             assert_eq!(preference.axis, crate::layout::AxisSide::Bottom);
@@ -611,7 +617,9 @@ mod tests {
         let resources = OperationGenerationResources::new();
         let prepared = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
         let chart = prepared.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let original = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
         let preference = standard(&original);
         assert_eq!(preference.primary_marks, 25);
@@ -666,7 +674,9 @@ mod tests {
             let chart = prepared.attach(source).unwrap();
             let root = super::super::coordinate::canvas_layout(
                 &chart,
-                &crate::Theme::Publication.resolve(),
+                &crate::Theme::Publication
+                    .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                    .unwrap(),
             )
             .unwrap();
             assert_eq!(standard(&root).primary_marks, expected);
@@ -682,9 +692,13 @@ mod tests {
         let resources = OperationGenerationResources::new();
         let prepared = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
         let chart = prepared.attach(source).unwrap();
-        let root =
-            super::super::coordinate::canvas_layout(&chart, &crate::Theme::Publication.resolve())
-                .unwrap();
+        let root = super::super::coordinate::canvas_layout(
+            &chart,
+            &crate::Theme::Publication
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap(),
+        )
+        .unwrap();
         assert_eq!(standard(&root).primary_marks, 4);
     }
 }

@@ -168,7 +168,9 @@ mod tests {
 
     #[test]
     fn standard_panel_owns_complete_typography_and_four_to_three_preference() {
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let standard = StandardPanelInputs::new(&theme).unwrap();
         let resources = theme
             .prepared_font_environment()
@@ -200,7 +202,9 @@ mod tests {
     #[test]
     fn standard_panel_stack_mismatch_admits_its_terminating_byte() {
         use crate::font::canonical::{named_stack, OperationGenerationResources};
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.typography.tick_label.stack = named_stack(&["αZ"]);
         let standard = StandardPanelInputs::new(&theme).unwrap();
         theme.typography.tick_label.stack = named_stack(&["αY"]);

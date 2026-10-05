@@ -432,7 +432,9 @@ mod tests {
 
     #[test]
     fn prepared_hues_extend_without_palette_cycling_and_exact_missing_keys_precede_fonts() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let count = theme.colors.len() + 2;
         let hues = (0..count)
             .map(|index| format!("hue-{index}"))
@@ -500,7 +502,9 @@ mod tests {
         let resources = OperationGenerationResources::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let coordinate = crate::layout::interior::coordinate::Intrinsics::prepared(&chart, &theme)
             .unwrap()
             .minimum(&chart);
@@ -568,7 +572,9 @@ mod tests {
         let resources = OperationGenerationResources::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.marks.point_sizes.scatter = 18;
         let panel = crate::layout::PanelBox::new(30.0, 190.0, 40.0, 180.0);
         let result = chart
@@ -620,7 +626,9 @@ mod tests {
     #[test]
     fn prepared_guide_glyphs_match_selected_marks_without_fonts_or_a_panel_search() {
         let plot = source();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let resources = OperationGenerationResources::new();
         let data = plot.data().with_axis_resources(&resources);
         let prepared = PreparedScatter::new(&plot, data).unwrap();
@@ -659,7 +667,9 @@ mod tests {
         let data = plot.data().with_axis_resources(&resources);
         let prepared = PreparedScatter::new(&plot, data).unwrap();
         let order = prepared.group_order(&plot, data).unwrap();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let original = prepared
             .project(
                 &plot,
@@ -693,7 +703,7 @@ mod tests {
         assert_eq!(style.color.alpha(), 128);
         assert_eq!(style.shape, crate::PointShape::TriangleUp);
         assert_eq!(style.radius, 5);
-        assert_eq!(style.outline.unwrap().color.alpha(), 64);
+        assert_eq!(style.outline.as_ref().unwrap().color.alpha(), 64);
         assert!(selected
             .legends
             .iter()
@@ -742,7 +752,9 @@ mod tests {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| calls.set(0));
         let plot = source();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let context = PlotRenderContext::new(
             plot.data(),
             crate::layout::PanelBox::new(0.0, 100.0, 0.0, 100.0),
@@ -809,7 +821,9 @@ mod tests {
         .legend(crate::LegendPolicy::Hidden)
         .size(640, 480)
         .erase();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         STAGES.with(|stages| stages.set([0; 4]));
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| calls.set(0));
         let root = crate::layout::plan_exact_root(
@@ -952,7 +966,9 @@ mod tests {
     #[test]
     fn selected_extents_match_clipped_legacy_ink_for_every_point_shape() {
         use crate::render::geometry::{GeometryBackend, GeometrySnapshot};
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let clip = crate::layout::PanelBox::new(10.25, 100.75, 20.5, 90.25);
         let points = [
             Point2D::new(10.25, 20.5),
@@ -1009,7 +1025,9 @@ mod tests {
     #[test]
     fn semantic_and_projected_buffers_use_the_callers_exact_admission() {
         let plot = source();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let projection =
             crate::layout::Projection::new((1.0, 3.0), (2.0, 6.0), (10.25, 210.75, 20.5, 120.25));
         let resources = OperationGenerationResources::new();
@@ -1106,7 +1124,9 @@ mod tests {
         let resources = OperationGenerationResources::new();
         let prepared =
             PreparedScatter::new(&short, short.data().with_axis_resources(&resources)).unwrap();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let projection =
             crate::layout::Projection::new((0.0, 1.0), (0.0, 1.0), (10.25, 210.75, 20.5, 120.25));
         let mut usage = Vec::new();

@@ -271,13 +271,16 @@ mod tests {
     #[test]
     fn stroked_circle_and_triangle_glyphs_have_complete_conservative_disks() {
         let source = source();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let rows = (0..12)
             .map(|row| (0, 0.0, row as f64, row))
             .collect::<Vec<_>>();
         for shape in [crate::PointShape::Circle, crate::PointShape::TriangleUp] {
             let mut style = crate::render::backend::PointStyle::new((0, 0, 0), 3).with_shape(shape);
-            style.outline.as_mut().unwrap().width_ratio = 4.0;
+            style.outline.as_mut().unwrap().width_ratio =
+                crate::theme::RelativeSpacing::ratio(4, 1).unwrap();
             let radius = radius(&theme, &style).unwrap();
             let ink = crate::render::geometry::point_ink_bounds(&theme, &style)
                 .unwrap()

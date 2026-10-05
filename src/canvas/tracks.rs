@@ -745,7 +745,12 @@ mod tests {
     fn sparse_mixed_grid_keeps_declared_gaps_and_trailing_cells() {
         let plots: Vec<Option<Plot>> = (0..4).map(|_| None).collect();
         let plot_titles = [None; 4];
-        let themes = ResolvedCanvasThemes::new(crate::Theme::Publication, &plots);
+        let themes = ResolvedCanvasThemes::new(
+            crate::Theme::Publication,
+            &plots,
+            &crate::font::canonical::OperationGenerationResources::new(),
+        )
+        .unwrap();
         let text = super::super::TextPanel::new("A", "B").unwrap();
         let mut intrinsics = [None; 4];
         intrinsics[0] = Some(TextPanelIntrinsics::prepare(&text, themes.root()).unwrap());
@@ -776,7 +781,12 @@ mod tests {
     #[test]
     fn text_panels_with_asymmetric_intrinsics_get_unequal_fill_columns() {
         let plots: Vec<Option<Plot>> = [None, None].into();
-        let themes = ResolvedCanvasThemes::new(crate::Theme::Publication, &plots);
+        let themes = ResolvedCanvasThemes::new(
+            crate::Theme::Publication,
+            &plots,
+            &crate::font::canonical::OperationGenerationResources::new(),
+        )
+        .unwrap();
         let long =
             super::super::TextPanel::new("MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM", "Body").unwrap();
         let short = super::super::TextPanel::new("Brief", "Body").unwrap();
@@ -810,7 +820,12 @@ mod tests {
     #[test]
     fn spanning_column_header_preserves_title_width_without_repacking_sparse_cells() {
         let plots: Vec<Option<Plot>> = [None, None, None].into();
-        let themes = ResolvedCanvasThemes::new(crate::Theme::Publication, &plots);
+        let themes = ResolvedCanvasThemes::new(
+            crate::Theme::Publication,
+            &plots,
+            &crate::font::canonical::OperationGenerationResources::new(),
+        )
+        .unwrap();
         let header = CanvasHeader {
             start: 0,
             span: 2,
@@ -851,7 +866,12 @@ mod tests {
     #[test]
     fn spanning_row_header_owns_its_left_track_and_vertical_span() {
         let plots: Vec<Option<Plot>> = [None, None].into();
-        let themes = ResolvedCanvasThemes::new(crate::Theme::Publication, &plots);
+        let themes = ResolvedCanvasThemes::new(
+            crate::Theme::Publication,
+            &plots,
+            &crate::font::canonical::OperationGenerationResources::new(),
+        )
+        .unwrap();
         let row = CanvasHeader {
             start: 0,
             span: 2,
@@ -885,7 +905,12 @@ mod tests {
     #[test]
     fn wrapped_row_title_owns_a_top_track_above_axis_gutters() {
         let plots: Vec<Option<Plot>> = [None, None].into();
-        let themes = ResolvedCanvasThemes::new(crate::Theme::Publication, &plots);
+        let themes = ResolvedCanvasThemes::new(
+            crate::Theme::Publication,
+            &plots,
+            &crate::font::canonical::OperationGenerationResources::new(),
+        )
+        .unwrap();
         let title = CanvasHeader {
             start: 0,
             span: 1,

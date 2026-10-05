@@ -340,7 +340,9 @@ mod tests {
         )
         .labels(crate::Labels::raw())
         .erase();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.facet_header_font_size = 17;
         theme.typography.axis_title.line_height_multiplier = 1.25;
         let grid = PanelBox::new(71.25, 372.75, 83.25, 304.75);

@@ -1976,7 +1976,9 @@ impl HeatmapPayload {
 
 #[test]
 fn required_heatmap_cell_text_must_fit_its_unclipped_cell() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let text = theme
         .measure_legacy_appearance_text(
             "Required",

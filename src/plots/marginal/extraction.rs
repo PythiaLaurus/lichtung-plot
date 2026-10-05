@@ -37,7 +37,9 @@ fn mapped_rows_survive_finite_filtering_grouping_and_selected_central_marks() {
     )
     .unwrap();
     let chart = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let selected = measure(
         &chart,
         PlotRenderContext::new(
@@ -69,7 +71,9 @@ fn complete_large_point_and_density_ink_survives_feedback_per_automatic_dimensio
             crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                 .unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.marks.point_sizes.marginal = 80;
         theme.marks.marginal_density.outline_width = 32.0;
         let selected = crate::decorations::plan::plan_panel_for_test(
@@ -158,7 +162,9 @@ fn nested_linked_panel_storage_admits_the_new_path_without_repricing_shared_pare
         (records, bytes, true),
         (records + 1, bytes + 1, true),
     ] {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let resources = theme
             .prepared_font_environment()
             .unwrap()
@@ -300,7 +306,9 @@ fn marginal_selected_geometry_and_poisoned_capture_share_operands() {
         crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
             .unwrap();
     let source = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
     let begins = crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get);
     let selected = source
@@ -513,7 +521,9 @@ fn linked_subpanel_call_and_record_refusals_are_fatal_at_exact_limits() {
         // in addition to the LinkedPanelPlan record; it performs one call.
         let expected = if calls { 1 } else { 1 + 1 + 1 };
         for available in [0, expected - 1, expected, expected + 1] {
-            let theme = crate::Theme::Publication.resolve();
+            let theme = crate::Theme::Publication
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             let resources = theme
                 .prepared_font_environment()
                 .unwrap()
@@ -583,7 +593,9 @@ fn marginal_parent_hue_order_controls_selected_colors_without_repreparation() {
         .attach(source)
         .unwrap()
         .with_global_hue_levels(vec!["a".into(), "b".into()]);
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let stages = STAGES.with(std::cell::Cell::get);
     let selected = source
         .measure_selected_interior(PlotRenderContext::new(

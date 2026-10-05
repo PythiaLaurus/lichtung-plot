@@ -29,7 +29,9 @@ fn local_and_shared_beeswarm_numeric_labels_are_unique_before_fonts() {
         NumericValues::new("color", [0.1, 0.1001]),
     )
     .erase();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let resources = OperationGenerationResources::new();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
@@ -279,7 +281,9 @@ fn selected_payload_preserves_bounds_baselines_and_poisoned_capture_does_no_work
         crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
             .unwrap();
     let source = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
     let begins = crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get);
     let selected = source
@@ -357,7 +361,9 @@ fn selected_payload_preserves_bounds_baselines_and_poisoned_capture_does_no_work
     )
     .hide_point_outline()
     .erase();
-    let mut poisoned_theme = crate::Theme::Science.resolve();
+    let mut poisoned_theme = crate::Theme::Science
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     poisoned_theme.foreground = (0, 255, 0);
     poisoned_theme.detail_font_size = 0;
     let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
@@ -441,7 +447,9 @@ fn selected_candidate_storage_refuses_at_exact_operation_limits() {
             crate::plots::shared_x::prepare_plot(&raw, &OperationGenerationResources::new())
                 .unwrap();
         let source = inputs.attach(raw.clone()).unwrap();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let resources = theme
             .prepared_font_environment()
             .unwrap()
@@ -480,7 +488,9 @@ fn invalid_sources_win_over_unavailable_fonts_in_the_exact_root() {
             NumericValues::new("color", [if valid { 1.0 } else { f64::NAN }]),
         )
         .erase();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.typography.tick_label.stack =
             crate::font::canonical::named_stack(&["T5a6a4d unavailable font 91f7"]);
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));

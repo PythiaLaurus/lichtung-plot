@@ -689,7 +689,9 @@ mod fit_tests {
                 .intrinsic_body_minimum(theme)
                 .unwrap()
         };
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let baseline = intrinsic(source(false), &theme);
         let mut styled = theme.clone();
         styled.marks.point_sizes.beeswarm = 54;
@@ -718,7 +720,9 @@ mod fit_tests {
             .unwrap()
             .attach(source)
             .unwrap();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let result = chart.measure_selected_interior(PlotRenderContext::new(
             chart.data(),
             PanelBox::new(50.0, 850.0, 50.0, 80.0),
@@ -747,7 +751,9 @@ mod fit_tests {
         .color_limits(0.0, 1.0)
         .size(1800, 30000)
         .erase();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.marks.point_sizes.beeswarm = 300;
         let resources = theme
             .prepared_font_environment()
@@ -797,7 +803,9 @@ mod fit_tests {
         )
         .unwrap();
         let plot = inputs.attach(plot).unwrap();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.prepare_font_environment().unwrap();
         let resources = theme
             .prepared_font_environment()
@@ -829,7 +837,9 @@ mod fit_tests {
                 .unwrap()
         );
 
-        let mut invalid = crate::Theme::Publication.resolve();
+        let mut invalid = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         invalid.typography.legend_title.font_size = 0;
         invalid.prepare_font_environment().unwrap();
         assert!(plot

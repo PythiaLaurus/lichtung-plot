@@ -253,7 +253,9 @@ mod tests {
         let projection = Projection::new((0.0, 3.0), (0.0, 3.0), (10.0, 310.0, 20.0, 320.0));
         for (categorical, visits) in [(false, 9), (true, 6)] {
             for available in [0, visits - 1, visits, visits + 1] {
-                let theme = crate::Theme::Publication.resolve();
+                let theme = crate::Theme::Publication
+                    .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                    .unwrap();
                 let resources = theme
                     .prepared_font_environment()
                     .unwrap()
@@ -287,7 +289,9 @@ mod tests {
         ];
         let projection = Projection::new((0.0, 3.0), (0.0, 3.0), (0.0, 300.0, 0.0, 300.0));
         for available in [1, 2, 3] {
-            let theme = crate::Theme::Publication.resolve();
+            let theme = crate::Theme::Publication
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             let resources = theme
                 .prepared_font_environment()
                 .unwrap()

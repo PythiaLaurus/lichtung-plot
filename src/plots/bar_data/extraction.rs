@@ -72,7 +72,9 @@ fn signed_bar_entries_use_only_sign_identities_and_match_body_colors() {
     let resources = OperationGenerationResources::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
     let prepared = &inputs.bars.as_ref().unwrap().panels[0].1;
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     theme.colors.truncate(1);
     let data = source.data().with_axis_resources(&resources);
     let (colors, accents) = prepared.resolved_colors(&source, &theme, data).unwrap();
@@ -135,7 +137,9 @@ fn attached_bar_glyphs_cannot_escape_categorical_frame_under_numeric_feedback() 
             )])
             .erase(),
     ];
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     theme.typography.significance_label.font_size = 1000;
     for plot in plots {
         let inputs =
@@ -334,7 +338,9 @@ fn bar_legend_identity_admits_long_dimensions_once_per_candidate() {
     .series(CategoryValues::new(&dimension, ["first", "second"]).unwrap())
     .erase();
     let prepared = prepare(&source, source.data(), BarMode::Grouped).unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let candidate = |resources: &OperationGenerationResources| {
         let data = source.data().with_axis_resources(resources);
         let (colors, accents) = prepared.resolved_colors(&source, &theme, data)?;
@@ -470,7 +476,9 @@ fn bar_standalone_facets_and_mixed_shared_canvas_prepare_once() {
 #[test]
 fn bar_geometry_matches_payload_with_caps_points_and_attached_text() {
     for source in sources(false).into_iter().chain(annotated()) {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let inputs =
             crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                 .unwrap();
@@ -647,7 +655,9 @@ fn bar_poisoned_capture_repeats_no_preparation_projection_axis_or_shaping() {
     for source in sources(false).into_iter().chain(annotated()) {
         STAGES.with(|counts| counts.set([[0; 4]; 4]));
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|count| count.set(0));
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let root = crate::layout::plan_exact_root(
             640,
             480,

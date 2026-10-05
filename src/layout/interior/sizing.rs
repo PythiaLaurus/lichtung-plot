@@ -604,7 +604,9 @@ impl Plot {
 mod tests {
     #[test]
     fn continuous_intrinsic_width_admits_broad_frame_and_missing_key_chrome() {
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.legend.frame_stroke_width = 30.0;
         theme.legend.frame_radius = 50.0;
         let descriptor = crate::decorations::legend::descriptor::ContinuousDescriptor {

@@ -257,7 +257,9 @@ mod tests {
 
     #[test]
     fn sibling_collection_preserves_later_fatal_and_canonical_child_identity() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.prepare_font_environment().unwrap();
         let first = FitScope::root()
             .child(

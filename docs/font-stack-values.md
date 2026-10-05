@@ -22,6 +22,9 @@ with no generic or CSS-directive semantics.
 families. It preserves order and duplicates. `families()` lends a readonly slice.
 Equality compares complete typed entries and original named bytes, rather than
 CSS, normalized names, face selections, or pointer identity.
+The ordered payload is immutable and reference-counted. Independently constructed
+values retain full semantic equality; sharing the exact immutable payload is a
+valid admitted constant-work equality path, not an alternate identity.
 
 For example, these are different stacks:
 
@@ -92,11 +95,15 @@ duplicating its typography check/storage in a StandardPanelInputs carrier.
 The coordinate-intrinsic owner's independent StandardPanelInputs comparison is
 fallible and uses the current operation's admitted appearance/stack comparison.
 
-Query hashing admits the source, owner, tagged family entries and fixed operand
-bytes before the corresponding complete hash passes. A cache hit still pays
-for hashing and exact content verification; payload/analysis reuse skips shaping
-and allocation, not identity work. The representation remains one Vec-owned
-stack, with no pointer-identity shortcut or alternate serialized key.
+The first shaping-profile hash admits the source, tagged family entries and fixed
+operands before computing them. The operation-local cache retains that immutable
+hash prefix. Later queries admit exact profile/source verification through an
+indexed source lookup, then hash only their presentation/provenance operands.
+One verified key is carried through lookup and insertion. Cached profile IDs are
+lookup witnesses for these verified immutable inputs, never substitutes for
+semantic equality or a hash-collision escape. See
+[`font-work-admission.md`](font-work-admission.md) for the unchanged caption
+fixture, measured baseline/fix evidence and mutable-input-address regression.
 
 Font matching still uses Unicode-16 NFKC casefold. Candidate order, weights
 400/600/700, Normal style/stretch, host generics, base-plus-Mark units, same-byte
@@ -115,12 +122,13 @@ synthetic font-stack scalar pass. Source scalar/unit and generated-alphabet work
 are separate real consumers and retain their own admission.
 Font limits remain 1,000,000 processing visits and 536,870,912 retained bytes.
 Budget failure remains fatal before the concrete backend begins. Child-theme
-clone admission includes every role's entry array and owned name strings.
+clone admission includes the actual color array and all eighteen font-handle
+operations. The immutable entry/name arrays are shared rather than deep-cloned.
 Effective significance roles use fallible admitted appearance copies, including
 the pre-font census route and the later annotation/mark planners. Matrix's
 axis-only theme copy and retained child-theme copies use the same complete
 18-role admission helper, with the actual operation resources required before
-the standard-library clone can copy any owned buffer. Built-in data-only
+the standard-library clone retains handles and copies the color buffer. Built-in data-only
 construction and test assertions are separate from these operation-time copies.
 
 Private CSS serialization is publication syntax. Frozen plans retain
@@ -166,30 +174,31 @@ The measured/independently counted fixtures are:
 | Incremental cached `Test Sans` pair with one retained scalar | 16 |
 | Normalized-stack cache hit for `Test Sans` | 14 |
 | Complete query hash: source `A`, owner `owner`, named `α, A` | 79 |
-| Actual text payload hit: source `A`, owner `owner`, named `Test Sans` | 105 |
-| Retained-theme matching: all eighteen built-in stacks | 1224 |
-| Two-record staged census (`Alpha0`, `Alpha1`): count, first uses, copies and ordinals | 64 |
+| Actual retained-profile text payload hit: source `A`, owner `owner`, shared named `Test Sans` | 52 |
+| Retained-theme matching: all eighteen shared immutable stacks | 18 |
+| Two-record staged census (`Alpha0`, `Alpha1`): count, first uses, copies and ordinals | 48 |
 | Staged copy: named `αX`, named `A, B`, generic Serif | 10 |
 | Effective significance copy: named `αX`, named `A, B` | 9 |
 | Empty-source census requirement, named `α`: one entry plus two UTF-8 bytes | 3 |
 | CSS count/materialization, named `α, A`: two entry/UTF-8 passes | 12 |
 
-The staged-copy storage boundary is `3 * size_of::<FontFamily>() + 7` bytes;
-the significance-copy boundary is `2 * size_of::<FontFamily>() + 7` bytes.
-The complete-theme test independently sums the arrays and names of all eighteen
-roles plus the owned color array, and checks one-under byte/work refusal and
-distinct copied name/entry buffers. It uses the same helper as Matrix measurement.
+Explicit staged-copy storage is `3 * size_of::<FontFamily>() + 7` bytes plus the
+retained Arc allocation layout; explicit significance-copy storage is
+`2 * size_of::<FontFamily>() + 7` bytes plus that layout. The complete-theme test
+checks one-under color-byte/handle-work refusal and all eighteen shared immutable
+entry/name buffers. It uses the same helper as Matrix measurement.
 No system-font discovery is needed for those clone tests.
 
 For the existing `Test Sans` census fixture, source admission stays three visits
 (two scalars and one unit), and its one owned stack copy costs ten:
 **13 visits**. The earlier 23-visit assertion counted an imaginary unparsed-stack
 pass and has been removed. Copy admission still precedes all source/font-buffer
-allocation. For `Alpha0`/`Alpha1`, the **64-visit materialization** boundary covers
+allocation. For `Alpha0`/`Alpha1`, the **48-visit materialization** boundary covers
 two comparison passes at 10 each, two distinct pair-owned copies at 7 each, and
-ordinal lookups at 10 and 20. The two requirements are constructed beforehand at
+ordinal lookups at 2 and 12 (exact immutable references cost one comparison,
+whereas the different literal examines its terminating byte). The two requirements are constructed beforehand at
 9 visits each (one 7-visit copy and two source visits), so construction plus
-materialization costs **82 visits**, not an extra stack-processing pass.
+materialization costs **66 visits**, not an extra stack-processing pass.
 Likewise the performance/cache tests now count complete hash/content work rather
 than pinning hits to only binary-index comparisons. Default sizes, leading,
 retained labels and snapshot expectations are not repinned to accommodate this

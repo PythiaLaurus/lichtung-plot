@@ -874,7 +874,9 @@ mod tests {
         let resources = crate::font::canonical::OperationGenerationResources::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let original = chart.intrinsic_body_minimum(&theme).unwrap();
         theme.marks.density_line.width = 140.0;
         let thick = chart.intrinsic_body_minimum(&theme).unwrap();
@@ -912,7 +914,9 @@ mod tests {
                     hue: Some("a".into()),
                 },
             ]);
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
         let selected = chart
             .measure_selected_interior(PlotRenderContext::new(

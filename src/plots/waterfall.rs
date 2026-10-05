@@ -965,7 +965,9 @@ mod tests {
             crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                 .unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.colors.truncate(1);
         let selected = chart
             .measure_selected_interior(PlotRenderContext::new(
@@ -1005,7 +1007,9 @@ mod tests {
             crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                 .unwrap();
         let chart = inputs.attach(source).unwrap();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let panel = PanelBox::new(50.0, 850.0, 50.0, 550.0);
         let selected = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
@@ -1061,7 +1065,9 @@ mod tests {
             crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                 .unwrap();
         let chart = inputs.attach(source).unwrap();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let measure = |height| {
             chart.measure_selected_interior(PlotRenderContext::new(
                 chart.data(),
@@ -1099,7 +1105,9 @@ mod tests {
             }
         };
         let panel = PanelBox::new(180.0, 780.0, 80.0, 800.0);
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.typography.waterfall_total.font_size = 48;
         for exact in [false, true] {
             let chart = source(exact);
@@ -1158,7 +1166,9 @@ mod tests {
         )
         .size(800, 900)
         .erase();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.marks.waterfall_bar.outline_width = 80.0;
         theme.marks.waterfall_connector.width = 16.0;
         let resources = OperationGenerationResources::new();
@@ -1207,7 +1217,9 @@ mod tests {
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
         let chart = inputs.attach(source).unwrap();
         let panel = PanelBox::new(80.0, 750.0, 60.0, 500.0);
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let old = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
             .unwrap();
@@ -1275,7 +1287,9 @@ mod tests {
                     nearest_spatial_quanta(projection.project(end, 0.8).0).unwrap()
                 );
                 let plot = inputs.attach(plot).unwrap();
-                let theme = crate::Theme::Publication.resolve();
+                let theme = crate::Theme::Publication
+                    .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                    .unwrap();
                 let result = plot.measure_selected_interior(PlotRenderContext::new(
                     plot.data(),
                     panel,

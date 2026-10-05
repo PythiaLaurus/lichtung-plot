@@ -15,7 +15,9 @@ fn interval_copy_and_composed_identity_include_both_axes() {
     let mut plot = plot().erase();
     plot.x_axis_spec.interval = Some(TickInterval::Additive(2.0));
     plot.y_axis_spec.interval = Some(TickInterval::Additive(1.0));
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let retained = plot
         .retain_composed_inputs(theme.prepared_font_environment().unwrap())
         .unwrap();
@@ -31,7 +33,9 @@ fn interval_copy_and_composed_identity_include_both_axes() {
 
 #[test]
 fn equal_composed_endpoints_do_not_erase_range_provenance() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let configured = plot().erase();
     let automatic = Plot::scatter(
         crate::NumericValues::new("x", [0.0, 10.0]),
@@ -128,7 +132,9 @@ fn invalid_intervals_reject_before_font_discovery() {
 
 #[test]
 fn interval_census_uses_the_source_alphabet_and_exact_precedence_suppresses_it() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let mut plot = plot().erase();
     plot.x_axis_spec.interval = Some(TickInterval::Additive(0.01));
     plot.y_axis_spec.interval = Some(TickInterval::Additive(0.1));

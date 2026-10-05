@@ -140,7 +140,9 @@ fn native_categorical_distributions_keep_bottom_identity_sparse_groups_and_suppo
             crate::Theme::Nature,
             crate::Theme::Science,
         ] {
-            let theme = preset.resolve();
+            let theme = preset
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             let plot =
                 crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new())
                     .unwrap()
@@ -222,7 +224,9 @@ fn native_distribution_significance_uses_root_feedback_and_final_assigned_geomet
                 crate::Theme::Nature,
                 crate::Theme::Science,
             ] {
-                let theme = preset.resolve();
+                let theme = preset
+                    .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                    .unwrap();
                 let plot = crate::plots::shared_x::prepare_plot(
                     &plot,
                     &OperationGenerationResources::new(),
@@ -305,7 +309,9 @@ fn native_root_mark_and_annotation_growth_freeze_the_final_domain() {
             .size(900, 700)
             .title("Measured root title")
             .caption("Independent annotation caption");
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let owner = ComponentAddress::root()
             .child(
                 AddressRole::PlotBody,
@@ -386,7 +392,9 @@ fn native_distribution_exact_limits_and_labels_are_indivisible_and_never_expand(
                 crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                     .unwrap();
             let plot = inputs.attach(source).unwrap();
-            let theme = crate::Theme::Publication.resolve();
+            let theme = crate::Theme::Publication
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             let result = plot.measure_selected_interior(PlotRenderContext::new(
                 plot.data(),
                 PanelBox::new(80.0, 600.0, 70.0, 450.0),
@@ -578,7 +586,9 @@ fn native_distribution_raw_categories_and_all_overlays_remain_complete_and_uncli
                 crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                     .unwrap();
             let plot = inputs.attach(source).unwrap();
-            let theme = crate::Theme::Publication.resolve();
+            let theme = crate::Theme::Publication
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             let panel = PanelBox::new(80.25, 600.75, 70.5, 450.25);
             let selected = plot
                 .measure_selected_interior(PlotRenderContext::new(plot.data(), panel, &theme))

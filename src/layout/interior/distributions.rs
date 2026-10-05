@@ -154,7 +154,9 @@ fn projected_storage_refuses_exact_limits_and_selected_extents_match_drawn_ink()
         let source = source
             .with_planned_x_limits((2.0, 6.0))
             .with_planned_y_limits((0.0, 5.0));
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let resources = OperationGenerationResources::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
         let attached = inputs.attach(source.clone()).unwrap();
@@ -300,7 +302,9 @@ fn native_scientific_ranges_retain_full_sample_statistics_across_assignments() {
         );
         let plot = inputs.attach(source).unwrap();
         assert_eq!(plot.prepared_axis_inputs().unwrap().ranges, expected);
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
         for panel in [
             crate::layout::PanelBox::new(30.0, 610.0, 50.0, 440.0),
@@ -449,7 +453,9 @@ fn invalid_statistics_and_exact_sources_reject_before_unavailable_fonts() {
                     .with_test_axis_ticks(0, vec![crate::AxisTick::new(2.0, "outside")])
             }),
     ) {
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.typography.tick_label.stack =
             crate::font::canonical::named_stack(&["Lichtung unavailable T5a6a3b 901e"]);
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
@@ -501,7 +507,9 @@ fn selected_capture_and_replay_do_no_source_projection_statistics_axis_or_shapin
         STAGES.with(|counts| counts.set([[0; 4]; 4]));
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|count| count.set(0));
         crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(|count| count.set(0));
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let root = crate::layout::plan_exact_root(
             640,
             480,

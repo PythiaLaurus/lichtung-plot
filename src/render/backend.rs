@@ -81,7 +81,12 @@ impl PointStyle {
         Self {
             color: color_from_rgb(color).with_alpha(209),
             radius,
-            outline: Some(PointOutline::default()),
+            outline: Some(
+                PointOutline::publication(
+                    &crate::font::canonical::OperationGenerationResources::new(),
+                )
+                .unwrap(),
+            ),
             shape: PointShape::Circle,
         }
     }
@@ -112,27 +117,147 @@ impl PointStyle {
 }
 
 /// Outline stroke for scatter-like point marks.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PointOutline {
     /// Independent complete outline paint.
     pub(crate) color: Color,
     /// Stroke width as a proportion of the point radius.
-    pub(crate) width_ratio: f64,
+    pub(crate) width_ratio: crate::theme::RelativeSpacing,
 }
 
 impl PointOutline {
+    /// Construct the publication outline on the caller's operation ledger.
+    pub(crate) fn publication(
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            color: Color::rgb(255, 255, 255),
+            width_ratio: crate::theme::RelativeSpacing::new_in(0.1, resources)?,
+        })
+    }
+
     /// Resolve the outline stroke width for the given point radius.
-    #[must_use]
-    pub fn width_for_radius(self, radius: u32) -> f64 {
-        f64::from(radius) * self.width_ratio
+    pub(crate) fn width_for_radius(
+        &self,
+        radius: u32,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<coordinates::CanonicalCoordinate, Error> {
+        let width = self
+            .width_ratio
+            .product(crate::theme::LocalMetric::css_pixels(radius)?, resources)?
+            .round(
+                crate::layout::kernel::SpatialRounding::NearestEven,
+                resources,
+            )?
+            .quanta();
+        if width > (1_i64 << 53) - 1 || (width == 0 && !self.width_ratio.is_zero()) {
+            return Err(Error::Render("point outline width exceeds canonical coordinates or its positive extent collapses".into()));
+        }
+        Ok(coordinates::CanonicalCoordinate::from_quanta(width))
     }
 }
 
-impl Default for PointOutline {
-    fn default() -> Self {
-        Self {
+#[cfg(test)]
+mod relative_outline_tests {
+    use super::*;
+    use crate::font::canonical::OperationGenerationResources;
+    use crate::theme::RelativeSpacing;
+
+    #[test]
+    fn publication_outline_construction_admits_exact_work_and_bytes_before_retention() {
+        // One shared handle, a two-integer-plus-float payload, Arc counters,
+        // then four one-limb operands with doubled limb capacity and headers.
+        let header = (std::mem::size_of::<RelativeSpacing>()
+            + 2 * std::mem::size_of::<num_bigint::BigUint>()
+            + std::mem::size_of::<f64>()
+            + 2 * std::mem::size_of::<usize>()) as u64;
+        let bytes = header + 4 * (16 + std::mem::size_of::<num_bigint::BigUint>() as u64);
+        let visits = 5; // handle entry plus the four bounded one-limb operands
+        for (work_limit, byte_limit) in [
+            (0, bytes),
+            (visits, 0),
+            (visits - 1, bytes),
+            (visits, bytes - 1),
+            (visits, bytes),
+        ] {
+            let resources = OperationGenerationResources::with_test_limits(work_limit, byte_limit);
+            let result = PointOutline::publication(&resources);
+            if (work_limit, byte_limit) == (visits, bytes) {
+                let outline = result.unwrap();
+                assert_eq!(
+                    outline.width_ratio.as_f64().to_bits(),
+                    0x3fb9_9999_9999_999a
+                );
+                assert_eq!(resources.usage().unwrap().1, visits);
+                assert_eq!(resources.byte_usage().unwrap(), bytes);
+                assert!(PointOutline::publication(&resources.clone()).is_err());
+            } else {
+                assert!(result.is_err());
+                assert_eq!(
+                    resources.byte_usage().unwrap(),
+                    if work_limit > 0 && byte_limit > 0 {
+                        header
+                    } else {
+                        0
+                    }
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn outline_retains_source_bits_and_resolves_exact_radius_quanta() {
+        let resources = OperationGenerationResources::new();
+        let outline = PointOutline::publication(&resources).unwrap();
+        assert_eq!(
+            outline.width_ratio.as_f64().to_bits(),
+            0x3fb9_9999_9999_999a
+        );
+        assert_ne!(outline.width_ratio, RelativeSpacing::ratio(1, 10).unwrap());
+        for (radius, width) in [(1, 102), (2, 205), (3, 307), (4, 410)] {
+            assert_eq!(
+                outline
+                    .width_for_radius(radius, &resources)
+                    .unwrap()
+                    .units(),
+                width
+            );
+        }
+        let ratio = PointOutline {
             color: Color::rgb(255, 255, 255),
-            width_ratio: 0.1,
+            width_ratio: RelativeSpacing::ratio(5, 14).unwrap(),
+        };
+        assert_eq!(
+            ratio.width_for_radius(14, &resources).unwrap().units(),
+            5120
+        );
+        let copy = ratio.clone();
+        assert_eq!(copy, ratio);
+    }
+
+    #[test]
+    fn outline_refuses_collapse_overflow_and_entry_budget_exhaustion() {
+        let resources = OperationGenerationResources::new();
+        let outline = |width_ratio| PointOutline {
+            color: Color::rgb(0, 0, 0),
+            width_ratio,
+        };
+        assert!(outline(RelativeSpacing::ratio(1, 4096).unwrap())
+            .width_for_radius(1, &resources)
+            .is_err());
+        assert!(outline(RelativeSpacing::new(f64::MAX).unwrap())
+            .width_for_radius(1, &resources)
+            .is_err());
+        // Fits i64 layout, exceeds exactly representable backend coordinates.
+        assert!(outline(RelativeSpacing::new(8_796_093_022_208.0).unwrap())
+            .width_for_radius(1, &resources)
+            .is_err());
+        let default = PointOutline::publication(&resources).unwrap();
+        assert!(default.width_for_radius(0, &resources).is_err());
+        for (visits, bytes) in [(0, u64::MAX), (u128::MAX, 0)] {
+            let resources = OperationGenerationResources::with_test_limits(visits, bytes);
+            assert!(default.width_for_radius(3, &resources).is_err());
+            assert_eq!(resources.byte_usage().unwrap(), 0);
         }
     }
 }
@@ -758,14 +883,10 @@ pub(crate) fn validate_triangle_points(
 }
 
 pub(crate) fn validate_point_style(style: &PointStyle) -> Result<(), Error> {
-    if let Some(outline) = style.outline {
-        let width = outline.width_for_radius(style.radius);
-        if !outline.width_ratio.is_finite() || outline.width_ratio < 0.0 || !width.is_finite() {
-            return Err(Error::Render(format!(
-                "point outline width must be finite and non-negative; got {}",
-                outline.width_ratio
-            )));
-        }
+    if style.outline.is_some() && style.radius == 0 {
+        return Err(Error::Render(
+            "outlined point radius must be positive".into(),
+        ));
     }
     Ok(())
 }

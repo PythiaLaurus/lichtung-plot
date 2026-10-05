@@ -29,7 +29,9 @@ fn measure(
 #[test]
 fn root_alignment_precedence_preserves_independent_optional_instructions() {
     for preset in PRESETS {
-        let mut theme = preset.resolve();
+        let mut theme = preset
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let defaults = RootAlignments::resolve(&theme, [None; 2], [None; 2]);
         assert_eq!(
             defaults,
@@ -107,7 +109,9 @@ fn private_plot_inputs_survive_erasure_theme_order_and_replacement() {
     canvas.panel_title_alignment = Some(Start);
     canvas.panel_subtitle_alignment = Some(End);
     let effective = RootAlignments::resolve(
-        &crate::Theme::Nature.resolve(),
+        &crate::Theme::Nature
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap(),
         [before.title_alignment, before.subtitle_alignment],
         [
             canvas.panel_title_alignment,
@@ -120,7 +124,9 @@ fn private_plot_inputs_survive_erasure_theme_order_and_replacement() {
 #[test]
 fn root_role_presence_keeps_blank_lines_whitespace_and_exact_baselines() {
     for preset in PRESETS {
-        let theme = preset.resolve();
+        let theme = preset
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         for mask in 0..8 {
             let sources = [Some("Title\n\n"), Some(" \nSubtitle"), Some("Caption\n ")];
             let sources = std::array::from_fn(|index| {
@@ -185,7 +191,9 @@ fn root_role_presence_keeps_blank_lines_whitespace_and_exact_baselines() {
 
 #[test]
 fn independent_physical_alignment_does_not_change_wrapping_or_fit() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     for source in [
         "Unequal lines\nx",
         "Deterministic wrapping keeps every word in this deliberately long root heading without changing its alignment-independent fit",
@@ -258,7 +266,9 @@ fn independent_physical_alignment_does_not_change_wrapping_or_fit() {
 
 #[test]
 fn root_intrinsic_width_miss_and_storage_refusal_precede_materialization() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let sources = [None, Some("Unbreakable"), None];
     let align = RootAlignments::resolve(&theme, [None; 2], [None; 2]);
     let (hard, _) = RootTitleBlockPlan::intrinsic_widths(&theme, sources, None)
@@ -310,7 +320,9 @@ fn root_intrinsic_width_miss_and_storage_refusal_precede_materialization() {
 
 #[test]
 fn intrinsic_summary_and_constrained_title_share_glyph_analysis() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let sources = [
         Some("Retained glyph analysis"),
         Some("Subtitle"),
@@ -379,7 +391,9 @@ fn intrinsic_summary_and_constrained_title_share_glyph_analysis() {
 
 #[test]
 fn root_exact_height_refusal_is_typed_and_source_checks_remain_strict() {
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let align = RootAlignments::resolve(&theme, [Some(End), None], [None; 2]);
     let sources = [None, Some("Subtitle only\nsecond line"), Some("Caption")];
     let plan = measure(&theme, sources, align);

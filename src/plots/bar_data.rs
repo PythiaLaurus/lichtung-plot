@@ -2279,7 +2279,9 @@ mod tests {
                 .intrinsic_body_minimum(theme)
                 .unwrap()
         };
-        let plain = crate::Theme::Publication.resolve();
+        let plain = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let mut styled = plain.clone();
         styled.marks.bar_body.outline_width = 100.0;
         for horizontal in [false, true] {
@@ -2324,7 +2326,9 @@ mod tests {
             ),
         )
         .erase();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.marks.uncertainty_stroke.width = 120.0;
         let ordinary = intrinsic(baseline, &theme);
         let with_caps = intrinsic(intervals, &theme);
@@ -2363,7 +2367,9 @@ mod tests {
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
         let chart = inputs.attach(source).unwrap();
         let panel = crate::layout::PanelBox::new(10.0, 900.0, 20.0, 600.0);
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let original = chart
             .measure_selected_interior(crate::spec::PlotRenderContext::new(
                 chart.data(),

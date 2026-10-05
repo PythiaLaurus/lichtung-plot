@@ -562,7 +562,9 @@ mod tests {
         let resources = crate::font::canonical::OperationGenerationResources::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let before = chart.intrinsic_body_minimum(&theme).unwrap();
         theme.marks.point_sizes.qq = 54;
         let sized = chart.intrinsic_body_minimum(&theme).unwrap();

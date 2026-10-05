@@ -676,7 +676,9 @@ fn shared_legend_child_cache_replay_contract() {
                 &crate::font::canonical::OperationGenerationResources::new(),
             )
             .unwrap();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         measurements::start();
         crate::layout::plan_exact_root(
             1200,
@@ -1100,7 +1102,9 @@ fn measured_gutter_reflow_preserves_complete_frames_without_cache() {
             .map(|(scope, _)| scope.clone())
             .collect::<Vec<_>>();
         let chart = inputs.attach(source).unwrap();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let minimums = scopes
             .into_iter()
             .map(|scope| {
@@ -1169,7 +1173,9 @@ fn historical_reflow_native_measured_gutter_control() {
     use crate::orchestrator::measurements;
 
     let plot = outside("historical_reflow_640x400", LegendPosition::Auto).erase();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let address = ComponentAddress::root()
         .child(
             AddressRole::PlotBody,

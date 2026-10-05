@@ -564,7 +564,9 @@ mod tests {
 
     #[test]
     fn same_width_local_gutter_replacement_remeasures_and_contracts_height() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.prepare_font_environment().unwrap();
         let resources = theme
             .prepared_font_environment()
@@ -627,8 +629,14 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one retained-height fixture checks width, domain, gutter, visibility and contraction against the same cached plan"
+    )]
     fn retained_height_rejects_width_domain_gutter_and_visibility_changes() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.prepare_font_environment().unwrap();
         let resources = theme
             .prepared_font_environment()

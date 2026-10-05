@@ -205,7 +205,9 @@ fn prepared_marginal_points_and_density_strokes_enlarge_linked_tracks() {
     let resources = crate::font::canonical::OperationGenerationResources::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
     let chart = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let baseline = intrinsic_body_minimum(&chart, &theme).unwrap();
     assert!(
         matches!(chart.measure_selected_interior(PlotRenderContext::new(
@@ -221,7 +223,8 @@ fn prepared_marginal_points_and_density_strokes_enlarge_linked_tracks() {
     assert!(expanded.0 > baseline.0);
     assert!(expanded.1 > baseline.1);
     let mut point_only = theme;
-    point_only.marks.primary_point.outline.width_ratio = 15.0;
+    point_only.marks.primary_point.outline.width_ratio =
+        crate::theme::RelativeSpacing::ratio(15, 1).unwrap();
     let shown = intrinsic_body_minimum(&chart, &point_only).unwrap().0;
     point_only.marks.primary_point.outline.color = crate::theme::Color::rgba(0, 0, 0, 0);
     assert!(shown > intrinsic_body_minimum(&chart, &point_only).unwrap().0);
@@ -240,7 +243,9 @@ fn wide_finite_scales_normalize_each_linked_kde_to_its_actual_peak() {
     )
     .unwrap();
     let chart = inputs.attach(chart).unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
@@ -281,7 +286,9 @@ fn unrepresentable_linked_kde_rejects_instead_of_substituting_a_density_floor() 
     )
     .unwrap();
     let chart = inputs.attach(chart).unwrap();
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     assert!(
         matches!(chart.measure_selected_interior(PlotRenderContext::new(
         chart.data(), PanelBox::new(70.0, 670.0, 60.0, 450.0), &theme,
@@ -304,7 +311,9 @@ fn marginal_central_points_request_only_automatic_numeric_edges() {
             plot.erase()
         }
     };
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     theme.marks.point_sizes.marginal = 350;
     for exact in [false, true] {
         let plot = source(exact);

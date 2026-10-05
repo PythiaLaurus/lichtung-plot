@@ -784,10 +784,9 @@ fn optional_point_style_eq(left: Option<&PointStyle>, right: Option<&PointStyle>
             left.color == right.color
                 && left.radius == right.radius
                 && left.shape == right.shape
-                && match (left.outline, right.outline) {
+                && match (&left.outline, &right.outline) {
                     (Some(left), Some(right)) => {
-                        left.color == right.color
-                            && left.width_ratio.to_bits() == right.width_ratio.to_bits()
+                        left.color == right.color && left.width_ratio == right.width_ratio
                     }
                     (None, None) => true,
                     _ => false,
@@ -796,6 +795,35 @@ fn optional_point_style_eq(left: Option<&PointStyle>, right: Option<&PointStyle>
         (None, None) => true,
         _ => false,
     }
+}
+
+#[cfg(test)]
+#[test]
+fn point_outline_guide_identity_uses_the_exact_relationship() {
+    let mut left = PointStyle::new((0, 0, 0), 3);
+    let mut right = left.clone();
+    left.outline.as_mut().unwrap().width_ratio =
+        crate::theme::RelativeSpacing::ratio(3, 5).unwrap();
+    right.outline.as_mut().unwrap().width_ratio = crate::theme::RelativeSpacing::new(0.6).unwrap();
+    assert_eq!(
+        left.outline
+            .as_ref()
+            .unwrap()
+            .width_ratio
+            .as_f64()
+            .to_bits(),
+        right
+            .outline
+            .as_ref()
+            .unwrap()
+            .width_ratio
+            .as_f64()
+            .to_bits()
+    );
+    assert!(!optional_point_style_eq(Some(&left), Some(&right)));
+    right.outline.as_mut().unwrap().width_ratio =
+        crate::theme::RelativeSpacing::ratio(6, 10).unwrap();
+    assert!(optional_point_style_eq(Some(&left), Some(&right)));
 }
 
 fn optional_line_style_eq(left: Option<&LineStyle>, right: Option<&LineStyle>) -> bool {
@@ -1792,7 +1820,9 @@ mod tests {
 
     #[test]
     fn small_private_discrete_metrics_do_not_acquire_a_new_size_floor() {
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&OperationGenerationResources::new())
+            .unwrap();
         theme.typography.legend_title.font_size = 2;
         theme.typography.legend_label.font_size = 2;
         theme.legend.padding = 0.0;
@@ -1833,12 +1863,14 @@ mod tests {
                 .unwrap();
         let plot = prepared.attach(source).unwrap();
         for shape in [crate::PointShape::Circle, crate::PointShape::TriangleUp] {
-            let mut theme = crate::Theme::Publication.resolve();
+            let mut theme = crate::Theme::Publication
+                .resolve(&OperationGenerationResources::new())
+                .unwrap();
             theme.marks.primary_point.shape = shape;
             theme.marks.point_sizes.scatter = 6;
             theme.marks.primary_point.outline = PointOutline {
                 color: Color::rgb(11, 22, 33),
-                width_ratio: 4.0,
+                width_ratio: crate::theme::RelativeSpacing::ratio(4, 1).unwrap(),
             };
             theme.legend.frame_stroke_width = 30.0;
             theme.legend.frame_radius = 50.0;
@@ -1928,7 +1960,9 @@ mod tests {
 
     #[test]
     fn assigned_outside_frame_uses_the_owner_theme_gap_once() {
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&OperationGenerationResources::new())
+            .unwrap();
         theme.legend.outside_gap = 24.0;
         let legend =
             test_assigned_legend("group", vec![entry("one")], (300.0, 240.0), &theme).unwrap();
@@ -1956,7 +1990,9 @@ mod tests {
     )]
     fn assigned_discrete_flow_matches_horizontal_and_vertical_worked_examples() {
         use crate::layout::fit::{FitOutcome, FitScope};
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&OperationGenerationResources::new())
+            .unwrap();
         let mut metrics = LegendMetrics::from_theme(&theme);
         metrics.column_gap = 5.0;
         metrics.row_gap = 4.0;
@@ -2066,7 +2102,9 @@ mod tests {
     #[test]
     fn entries_in_one_row_share_a_baseline_and_union_their_ink_heights() {
         use crate::layout::fit::{FitOutcome, FitScope};
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&OperationGenerationResources::new())
+            .unwrap();
         let metrics = LegendMetrics::from_theme(&theme);
         let entries = [(6.0, 4.0), (9.0, 1.0)].map(|(ascent, descent)| MeasuredEntry {
             width: 40.0,
@@ -2121,7 +2159,9 @@ mod tests {
         use crate::layout::fit::{FitOutcome, FitScope};
         for empty in [false, true] {
             for remaining in [0, 1, 2] {
-                let theme = crate::Theme::Publication.resolve();
+                let theme = crate::Theme::Publication
+                    .resolve(&OperationGenerationResources::new())
+                    .unwrap();
                 theme.prepare_font_environment().unwrap();
                 let resources = theme
                     .prepared_font_environment()
@@ -2173,7 +2213,9 @@ mod tests {
     #[test]
     fn repeated_legend_measurement_admits_calls_even_with_cached_text() {
         use crate::layout::fit::{self, FitScope};
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&OperationGenerationResources::new())
+            .unwrap();
         let resources = theme
             .prepared_font_environment()
             .unwrap()
@@ -2220,7 +2262,9 @@ mod tests {
     #[test]
     fn assigned_guide_rejects_an_unbreakable_label_before_other_entries_wrap() {
         use crate::layout::fit::{FitOutcome, FitScope};
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&OperationGenerationResources::new())
+            .unwrap();
         let scope = FitScope::root();
         let entries: std::sync::Arc<[LegendEntry]> =
             vec![entry("first"), entry("M".repeat(40))].into();
@@ -2256,7 +2300,9 @@ mod tests {
     #[test]
     fn assigned_guide_admits_long_label_arc_and_slots_before_text_work() {
         let run = |limits: Option<(u128, u64)>| {
-            let theme = crate::Theme::Publication.resolve();
+            let theme = crate::Theme::Publication
+                .resolve(&OperationGenerationResources::new())
+                .unwrap();
             let resources = theme
                 .prepared_font_environment()
                 .unwrap()
@@ -2312,7 +2358,9 @@ mod tests {
     fn resolved_pair_strings_merge_and_title_obey_exact_limits() {
         let plot = crate::Plot::matrix(vec![crate::NumericValues::new("x", [1.0, 2.0])]).erase();
         let run = |limits: Option<(u128, u64)>| {
-            let theme = crate::Theme::Publication.resolve();
+            let theme = crate::Theme::Publication
+                .resolve(&OperationGenerationResources::new())
+                .unwrap();
             let resources = theme
                 .prepared_font_environment()
                 .unwrap()
@@ -2478,7 +2526,9 @@ mod tests {
     }
 
     fn legend() -> Legend {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&OperationGenerationResources::new())
+            .unwrap();
         test_assigned_legend(
             "group",
             vec![entry("first"), entry("second")],
@@ -2490,7 +2540,9 @@ mod tests {
 
     #[test]
     fn legend_text_roles_do_not_scale_with_assigned_size() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&OperationGenerationResources::new())
+            .unwrap();
         let smaller = test_assigned_legend(
             "group",
             vec![entry("one"), entry("two")],
@@ -2525,7 +2577,9 @@ mod tests {
     #[test]
     fn compact_vertical_flow_remeasures_labels_and_fits_two_columns() {
         use crate::layout::fit::FitOutcome;
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&OperationGenerationResources::new())
+            .unwrap();
         let entries: std::sync::Arc<[LegendEntry]> =
             vec![entry("longer longer"), entry("a"), entry("b"), entry("c")].into();
         let probe = match Legend::measure_assigned(
@@ -2654,7 +2708,12 @@ mod tests {
                 .entries
                 .last()
                 .unwrap()
-                .glyph_ink(&legend.metrics, &crate::Theme::Publication.resolve())
+                .glyph_ink(
+                    &legend.metrics,
+                    &crate::Theme::Publication
+                        .resolve(&OperationGenerationResources::new())
+                        .unwrap(),
+                )
                 .unwrap()
                 .bottom,
         );
@@ -2673,7 +2732,9 @@ mod tests {
         let entries = (1..=8)
             .map(|index| entry(format!("item {index}")))
             .collect();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&OperationGenerationResources::new())
+            .unwrap();
         let legend = test_assigned_legend("group", entries, (640.0, 480.0), &theme).unwrap();
 
         assert_eq!(legend.column_count(), 1);
@@ -2681,7 +2742,9 @@ mod tests {
 
     #[test]
     fn overwide_legend_text_returns_the_planning_error() {
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&OperationGenerationResources::new())
+            .unwrap();
         let error = test_assigned_legend(
             &"W".repeat(10_000),
             vec![entry("entry")],

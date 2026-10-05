@@ -52,7 +52,9 @@ fn source_with_limits(with_hues: bool, limits: Option<(f64, f64)>) -> Plot {
 #[test]
 fn supplied_raincloud_cloud_and_strip_ink_fit_automatic_y_at_root() {
     let source = source(true).size(800, 600);
-    let mut theme = crate::Theme::Publication.resolve();
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     theme.marks.violin_body.outline_width = 120.0;
     theme.marks.raw_overlay_radius = 50;
     let resources = theme
@@ -186,7 +188,9 @@ fn repeated_measurement_uses_retained_raw_keys_and_charges_candidate_work() {
         else {
             unreachable!()
         };
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let resources = theme
             .prepared_font_environment()
             .unwrap()

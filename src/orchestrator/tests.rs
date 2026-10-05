@@ -178,9 +178,9 @@ impl Backend for RecordingBackend {
                 .map(|(color, width)| crate::render::backend::PointOutline {
                     color,
                     width_ratio: if radius == 0 {
-                        0.0
+                        crate::theme::RelativeSpacing::new(0.0).unwrap()
                     } else {
-                        width.value() / f64::from(radius)
+                        crate::theme::RelativeSpacing::from_pixels(width.value(), radius).unwrap()
                     },
                 }),
         };

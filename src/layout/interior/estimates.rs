@@ -174,7 +174,9 @@ fn native_estimates_retain_orientation_raw_display_midpoints_and_selected_projec
                 .unwrap();
         assert_eq!(inputs.route, InteriorRoute::OneCategoricalAxis(route));
         let plot = inputs.attach(source).unwrap();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
         for panel in [
             PanelBox::new(80.25, 550.75, 70.5, 410.25),
@@ -269,7 +271,9 @@ fn native_vertical_category_intrinsics_use_mandatory_lines_and_keep_fit_scope() 
             crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                 .unwrap();
         let plot = inputs.attach(source).unwrap();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let minimum = Intrinsics::prepared(&plot, &theme).unwrap().minimum(&plot);
         let label = theme
             .measure_text(
@@ -383,7 +387,9 @@ fn native_forest_selects_sole_log_source_and_transforms_raw_exact_ticks_only_in_
         );
         assert_eq!(inputs.axes[0].1.ranges[0], (-2.0, 3.0));
         let plot = inputs.attach(source).unwrap();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         for range in [(-2.0, 3.0), (-3.0, 4.0)] {
             let plot =
                 plot.clone()

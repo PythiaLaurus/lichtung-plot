@@ -391,7 +391,9 @@ mod tests {
         let rows = [1, 3];
         let ids = [7, 29];
         for records in [true, false] {
-            let theme = crate::Theme::Publication.resolve();
+            let theme = crate::Theme::Publication
+                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                .unwrap();
             let resources = theme
                 .prepared_font_environment()
                 .unwrap()
@@ -445,7 +447,9 @@ mod tests {
             crate::NumericValues::new("y", [3.0, 4.0]),
         )
         .erase();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let panels = [0, 1].map(|index| FacetPanel {
             panel_index: index,
             row: 0,

@@ -569,7 +569,7 @@ impl FontFamily {
 /// Nonempty, ordered preferences; original named bytes and duplicates are retained.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FontStack {
-    families: Vec<FontFamily>,
+    families: Arc<Vec<FontFamily>>,
 }
 
 impl FontStack {
@@ -584,7 +584,9 @@ impl FontStack {
         if retained.is_empty() {
             return Err(crate::Error::Data("font stack is empty".into()));
         }
-        Ok(Self { families: retained })
+        Ok(Self {
+            families: Arc::new(retained),
+        })
     }
     pub(crate) fn families(&self) -> &[FontFamily] {
         &self.families
@@ -610,10 +612,13 @@ impl FontStack {
         resources
             .claim_visits(1)
             .map_err(FontError::ShapeAdmission)?;
+        if Arc::ptr_eq(&self.families, &other.families) {
+            return Ok(true);
+        }
         if self.len() != other.len() {
             return Ok(false);
         }
-        for (left, right) in self.families.iter().zip(&other.families) {
+        for (left, right) in self.families.iter().zip(other.families.iter()) {
             resources
                 .claim_visits(1)
                 .map_err(FontError::ShapeAdmission)?;
@@ -640,7 +645,7 @@ impl FontStack {
             .claim_visits(8)
             .map_err(FontError::ShapeAdmission)?;
         hash.update((self.len() as u64).to_le_bytes());
-        for family in &self.families {
+        for family in self.families.iter() {
             resources
                 .claim_visits(1)
                 .map_err(FontError::ShapeAdmission)?;
@@ -671,6 +676,7 @@ impl FontStack {
         resources
             .claim_visits(self.byte_work()? as u128)
             .map_err(FontError::ShapeAdmission)?;
+        resources.claim_bytes(font_stack_arc_bytes()?)?;
         resources
             .claim_slots(self.len() as u128)
             .map_err(FontError::ShapeAdmission)?;
@@ -698,7 +704,19 @@ impl FontStack {
             };
             families.push(FontFamily { kind });
         }
-        Ok(Self { families })
+        Ok(Self {
+            families: Arc::new(families),
+        })
+    }
+
+    pub(crate) fn share(
+        &self,
+        resources: &OperationGenerationResources,
+    ) -> Result<Self, FontError> {
+        resources
+            .claim_visits(1)
+            .map_err(FontError::ShapeAdmission)?;
+        Ok(self.clone())
     }
 
     pub(crate) fn copy_with_stage(
@@ -786,6 +804,15 @@ impl AdmittedFontStackCopy<'_> {
     }
 }
 
+fn font_stack_arc_bytes() -> Result<u64, FontError> {
+    let layout = std::alloc::Layout::new::<[std::sync::atomic::AtomicUsize; 2]>()
+        .extend(std::alloc::Layout::new::<Vec<FontFamily>>())
+        .map_err(|_| FontError::Arithmetic("font stack Arc layout"))?
+        .0
+        .pad_to_align();
+    u64::try_from(layout.size()).map_err(|_| FontError::Arithmetic("font stack Arc bytes"))
+}
+
 struct CssCount(usize);
 impl std::fmt::Write for CssCount {
     fn write_str(&mut self, text: &str) -> std::fmt::Result {
@@ -857,6 +884,10 @@ pub(crate) fn same_bytes(
     resources
         .claim_visits(1)
         .map_err(FontError::ShapeAdmission)?;
+    // Concurrent immutable borrows of this exact range already denote the same bytes.
+    if std::ptr::eq(left, right) {
+        return Ok(true);
+    }
     if left.len() != right.len() {
         return Ok(false);
     }
@@ -2227,7 +2258,10 @@ impl CanonicalFontCore {
             fill_reserved_family_stack(&mut preparation.retained_stack, request.stack)?;
             self.prepared_pairs.push(PreparedPair {
                 stack: FontStack {
-                    families: preparation.retained_stack,
+                    families: {
+                        self.budget.resources.claim_bytes(font_stack_arc_bytes()?)?;
+                        Arc::new(preparation.retained_stack)
+                    },
                 },
                 weight: request.weight,
                 resolved: ResolvedFontPair {
@@ -2947,6 +2981,7 @@ fn copy_admitted_stack_with_stage(
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<FontStack, FontError> {
     let AdmittedFontStackCopy { source, resources } = admitted;
+    resources.claim_bytes(font_stack_arc_bytes()?)?;
     let mut output = Vec::new();
     reserve_cached_with_stage(
         &mut output,
@@ -2973,7 +3008,9 @@ fn copy_admitted_stack_with_stage(
             },
         });
     }
-    Ok(FontStack { families: output })
+    Ok(FontStack {
+        families: Arc::new(output),
+    })
 }
 
 fn materialize_candidate_occurrences(
@@ -4786,9 +4823,14 @@ mod tests {
             assert_eq!(resources.byte_usage().unwrap(), 0);
         }
         // Equal names also examine the terminating generic entry.
+        let independent = FontStack::new([
+            FontFamily::named("αZ").unwrap(),
+            FontFamily::generic(GenericFontFamily::Serif),
+        ])
+        .unwrap();
         for remaining in [6, 7] {
             let resources = OperationGenerationResources::with_test_limits(remaining, 0);
-            let result = left.same(&left.clone(), &resources);
+            let result = left.same(&independent, &resources);
             assert_eq!(result.is_ok(), remaining == 7);
             assert_eq!(resources.usage().unwrap().1, remaining);
         }
@@ -4886,7 +4928,10 @@ mod tests {
             FontFamily::generic(GenericFontFamily::Serif),
         ])
         .unwrap();
-        let bytes = 3 * size_of::<FontFamily>() + 3 + 4;
+        let bytes = 3 * size_of::<FontFamily>()
+            + 3
+            + 4
+            + usize::try_from(font_stack_arc_bytes().unwrap()).unwrap();
         let work = 3 + 3 + 4;
         for remaining in [0, work - 1, work] {
             let stopped = crate::layout::plan_exact_root(
@@ -5054,7 +5099,9 @@ mod tests {
             FontFamily::generic(GenericFontFamily::Serif),
         ])
         .unwrap();
-        let bytes = 3 * size_of::<FontFamily>() + 2 * "A, B".len();
+        let bytes = 3 * size_of::<FontFamily>()
+            + 2 * "A, B".len()
+            + usize::try_from(font_stack_arc_bytes().unwrap()).unwrap();
         for remaining in [bytes - 1, bytes] {
             let resources = OperationGenerationResources::with_test_limits(
                 source.byte_work().unwrap() as u128,
@@ -6471,7 +6518,7 @@ mod tests {
         ));
         assert_eq!(
             environment.resource_usage().unwrap().processing_visits,
-            before + 1 + 1 + 1 + 1 + "Test Sans".len() as u128
+            before + 1 + 1 // one prior-request visit and the identical immutable stack handle
         );
         FONT_PAIR_RESOLUTION_CALLS.with(|calls| assert_eq!(calls.get(), 0));
         assert!(environment.core.read().unwrap().prepared_pairs.is_empty());

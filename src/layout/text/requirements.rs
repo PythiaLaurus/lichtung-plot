@@ -1991,7 +1991,9 @@ mod tests {
             crate::NumericValues::new("y", [2.0]),
         )
         .erase();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&canonical::OperationGenerationResources::new())
+            .unwrap();
         let discoveries = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
         let error = foundational_plot_requirements(
             None,
@@ -2235,8 +2237,11 @@ mod tests {
                         stage.font_resources().usage().unwrap().processing_visits,
                         2 + 1 + 10 // source scalars/unit and one actual stack copy
                     );
-                    let expected_bytes =
-                        3 + "Test Sans".len() + std::mem::size_of::<canonical::FontFamily>();
+                    let expected_bytes = 3
+                        + "Test Sans".len()
+                        + std::mem::size_of::<canonical::FontFamily>()
+                        + size_of::<[std::sync::atomic::AtomicUsize; 2]>()
+                        + size_of::<Vec<canonical::FontFamily>>();
                     assert_eq!(
                         stage.font_resources().usage().unwrap().font_bytes,
                         expected_bytes as u128
@@ -2359,7 +2364,11 @@ mod tests {
                     assert_eq!(resources.usage().unwrap().processing_visits, 3); // one entry + two UTF-8 bytes
                     assert_eq!(
                         resources.usage().unwrap().font_bytes,
-                        (size_of::<canonical::FontFamily>() + 2) as u128
+                        (size_of::<canonical::FontFamily>()
+                            + 2
+                            + size_of::<[std::sync::atomic::AtomicUsize; 2]>()
+                            + size_of::<Vec<canonical::FontFamily>>())
+                            as u128
                     );
                 } else {
                     assert!(result.is_err());
@@ -2561,7 +2570,7 @@ mod tests {
 
     #[test]
     fn staged_census_dedup_and_ordinals_admit_each_examined_name_byte() {
-        for remaining in [0, 63, 64] {
+        for remaining in [0, 47, 48] {
             with_prepared_stage(|stage| {
                 let requirements = ["Alpha0", "Alpha1"]
                     .into_iter()
@@ -2584,9 +2593,9 @@ mod tests {
                 let bytes = resources.byte_usage().unwrap();
                 resources.set_test_limits(before + remaining, 536_870_912);
                 let result = PreparedTextCensus::materialize(requirements, Some(stage), None);
-                // Two count/fill comparisons at 10 each, two copies at 7 each,
-                // and ordinal lookup comparisons at 10 and 20: 64 visits.
-                if remaining == 64 {
+                // Count/fill comparisons: 10 each; two copies: 7 each.
+                // Ordinals: 2 for the exact first source, 10+2 for the second.
+                if remaining == 48 {
                     let census = result.unwrap();
                     assert_eq!(census.pairs.len(), 2);
                     assert_eq!(
@@ -2677,7 +2686,9 @@ mod tests {
         )
         .x_ticks(vec![crate::layout::AxisTick::new(1.0, "exact")])
         .erase();
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&canonical::OperationGenerationResources::new())
+            .unwrap();
         let requirements = with_prepared_stage(|stage| {
             foundational_plot_requirements(
                 None,
@@ -2728,7 +2739,9 @@ mod tests {
             .erase();
             let resources = crate::font::canonical::OperationGenerationResources::new();
             let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
-            let mut theme = crate::Theme::Publication.resolve();
+            let mut theme = crate::Theme::Publication
+                .resolve(&canonical::OperationGenerationResources::new())
+                .unwrap();
             theme.typography.contrast_light.stack =
                 canonical::named_stack(&["Light contrast font"]);
             theme.typography.contrast_dark.stack = canonical::named_stack(&["Dark contrast font"]);
@@ -2776,7 +2789,9 @@ mod tests {
         .erase();
         let resources = crate::font::canonical::OperationGenerationResources::new();
         let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.surfaces.plot_panel = Color::rgba(0, 0, 0, 0);
         theme.surfaces.canvas_root = Color::rgba(0, 0, 0, 0);
         theme.marks.heatmap_missing_fill = Color::rgba(20, 40, 60, 0);
@@ -2836,7 +2851,9 @@ mod tests {
         .erase();
         let resources = crate::font::canonical::OperationGenerationResources::new();
         let mut inputs = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.typography.contrast_light.stack =
             canonical::named_stack(&["Selected light contrast"]);
         theme.typography.contrast_dark.stack = canonical::named_stack(&["Selected dark contrast"]);
@@ -2911,7 +2928,9 @@ mod tests {
         .erase();
         let resources = crate::font::canonical::OperationGenerationResources::new();
         let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
-        let mut theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication
+            .resolve(&canonical::OperationGenerationResources::new())
+            .unwrap();
         theme.typography.estimate_detail.stack = canonical::named_stack(&["Estimate detail only"]);
         theme.typography.estimate_detail.font_size = 20;
         theme.typography.estimate_detail.paint = crate::theme::Color::rgb(5, 7, 9);
@@ -2957,7 +2976,9 @@ mod tests {
                 crate::NumericLabelFormat::default(),
             ))
             .erase();
-            let mut theme = crate::Theme::Publication.resolve();
+            let mut theme = crate::Theme::Publication
+                .resolve(&canonical::OperationGenerationResources::new())
+                .unwrap();
             let available = theme.typography.contrast_light.stack.clone();
             let missing = canonical::named_stack(&["No Such Contrast Face In This Operation"]);
             theme.typography.contrast_light.stack = if light_selected {

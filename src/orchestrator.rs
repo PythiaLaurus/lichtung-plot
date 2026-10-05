@@ -37,7 +37,9 @@ fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
         } else {
             source.clone()
         };
-        let theme = crate::Theme::Publication.resolve();
+        let theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
         let context = PlotRenderContext::new(
             plot.data(),
             crate::layout::PanelBox::new(0.0, 400.0, 0.0, 300.0),
@@ -453,7 +455,9 @@ fn missing_frozen_axes_do_not_trigger_label_reconstruction() {
     .labels(crate::Labels::raw())
     .erase();
     let panel = crate::layout::PanelBox::new(0.0, 600.0, 0.0, 400.0);
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     let mut result = PlotRenderResult::new(crate::layout::Layout::envelope(panel), Vec::new());
     let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
     let error = validate_frozen_axes_and_guides(
@@ -476,7 +480,9 @@ fn missing_frozen_axes_do_not_trigger_label_reconstruction() {
 #[test]
 fn later_axis_font_failure_wins_over_an_earlier_text_fit() {
     use crate::layout::fit::{FitScope, PlanError};
-    let theme = crate::Theme::Publication.resolve();
+    let theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
     theme.prepare_font_environment().unwrap();
     let mut layout =
         crate::layout::Layout::envelope(crate::layout::PanelBox::new(80.0, 610.0, 60.0, 450.0));

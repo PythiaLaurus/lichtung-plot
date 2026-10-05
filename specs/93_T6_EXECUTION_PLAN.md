@@ -65,7 +65,7 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6B1 | IN PROGRESS | T6A | Validated color/font and component values in the single private representation; `refactor(theme): retain validated foundational values` |
 | T6B1a | COMPLETE | T6A | One Color/OpaqueColor paint representation and private channel/hex validation; `refactor(color): retain validated foundational paint values` |
 | T6B1b | COMPLETE | T6B1a | Typed font preferences and complete role-stack inputs; `refactor(font): retain validated role font stacks` |
-| T6B1c | PENDING | T6B1b | Exact relative spacing and bounded local metric operands; `feat(theme): retain exact relative spacing values` |
+| T6B1c | COMPLETE | T6B1b | Exact relative spacing and bounded local metric operands; `feat(theme): retain exact relative spacing values` |
 | T6B1d | PENDING | T6B1c | Complete component/role/scale inputs and structural validation; `refactor(theme): retain complete validated components` |
 | T6B2 | PENDING | T6B1 | Complete Theme construction/customization and owner resolution using those values; `refactor(theme): construct immutable complete themes` |
 | T6B3 | PENDING | T6B2 | Exact element Color/alpha replacement and repository caller migration; `feat(styles): expose complete RGBA element paints` |
@@ -113,6 +113,17 @@ The Canvas universal minimum is the existing ledger retirement
 `validation.canvas.minimum-size`, not a new size policy. T6C2 must remove its
 remaining public validation gate while preserving positive-size timing and
 complete-content/resource refusal.
+
+T6B1c evidence: `docs/relative-spacing-values.md` records reduced exact rational
+values, immutable sharing, admitted local metric arithmetic, aggregate rounding
+and active text-leading/point-outline consumers. Production preset construction
+uses the supplied root ledger and propagates refusal before fonts. Forty resumed
+focused tests pass, including complete caption fixtures and seven unchanged SVG
+snapshots. `docs/font-work-admission.md` records the adjacent font regression
+repair: admitted hash-prefix/query identity reuse and shared immutable inputs
+keep all 2048 words inside the unchanged million-visit cap. Strict Clippy,
+formatting and independent constructor/admission review pass; complete spacing
+component storage and consumer resolution remain the next owning migration.
 
 T6B1b evidence: `docs/font-stack-values.md` records typed literal/generic stacks
 through all eighteen roles, canonical selection, source requirements, retained
