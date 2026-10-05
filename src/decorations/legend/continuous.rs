@@ -622,6 +622,16 @@ mod tests {
 
     fn descriptor() -> ContinuousDescriptor {
         ContinuousDescriptor {
+            selection: crate::theme::ContinuousColorScale::diverging(
+                0.0,
+                Some(
+                    crate::theme::scale_values::test_defaults()
+                        .diverging()
+                        .clone(),
+                ),
+                None,
+            )
+            .unwrap(),
             field: "signal".into(),
             title: "Signal".into(),
             stops: vec![
@@ -771,6 +781,15 @@ mod tests {
             .generation_resources();
         let data = source.data().with_axis_resources(&resources);
         let descriptor = ContinuousDescriptor {
+            selection: crate::theme::ContinuousColorScale::sequential(
+                Some(
+                    crate::theme::scale_values::test_defaults()
+                        .sequential()
+                        .clone(),
+                ),
+                Some(crate::theme::ColorDomain::exact(12_345.0, 12_345.0).unwrap()),
+            )
+            .unwrap(),
             field: "signal".into(),
             title: "Signal".into(),
             domain: (12_345.0, 12_345.0),

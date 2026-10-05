@@ -23,7 +23,8 @@ pub(super) fn measure(
     ) {
         &[0]
     } else if semantics
-        .center
+        .selection
+        .center()
         .is_some_and(|center| center > semantics.domain.0 && center < semantics.domain.1)
     {
         &[0, 2, 1]
@@ -34,7 +35,8 @@ pub(super) fn measure(
         field: data.copy_source_string(&marks.color_label)?,
         title: data.copy_source_string(&marks.color_label)?,
         stops: data.collect_source(marks.colorbar_stops.iter().copied().map(Ok))?,
-        center: semantics.center,
+        center: semantics.selection.center(),
+        selection: semantics.selection,
         missing: semantics.missing,
         domain: semantics.domain,
         exact: true,

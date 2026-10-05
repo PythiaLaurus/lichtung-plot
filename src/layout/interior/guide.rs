@@ -245,7 +245,7 @@ impl PreparedInteriorInputs {
                     kind,
                 )?;
                 let color = crate::theme::AccentColors::resolve(
-                    &theme.colors,
+                    &theme.marks.accents,
                     1,
                     data.source_resources()?,
                 )?

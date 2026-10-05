@@ -577,7 +577,7 @@ mod tests {
             crate::NumericValues::new("y", [1.0, 2.0]),
         )
         .erase();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let plot = inputs.attach(source).unwrap();
         let owner = ComponentAddress::root()
             .child(AddressRole::CanvasGrid, 0, &resources)
@@ -648,7 +648,7 @@ mod tests {
             crate::NumericValues::new("color", [0.0; 40]),
         )
         .erase();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let plot = inputs
             .attach(source)
             .unwrap()

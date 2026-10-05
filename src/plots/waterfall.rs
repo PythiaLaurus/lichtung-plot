@@ -445,7 +445,7 @@ pub(crate) fn measure(
     let mut bars = Vec::new();
     let mut source_rows = Vec::new();
     let mut connectors = Vec::new();
-    let accents = crate::theme::AccentColors::resolve(&theme.colors, 2, &resources)?;
+    let accents = crate::theme::AccentColors::resolve(&theme.marks.accents, 2, &resources)?;
     data.reserve_source(&mut bars, spans.len())?;
     data.reserve_source(&mut source_rows, spans.len())?;
     data.reserve_source(&mut connectors, spans.len().saturating_sub(1))?;
@@ -961,14 +961,19 @@ mod tests {
             0.0,
         )
         .erase();
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        theme.colors.truncate(1);
+        theme.marks.accents =
+            crate::theme::AccentPalette::new(theme.marks.accents.seeds()[..1].iter().copied())
+                .unwrap();
         let selected = chart
             .measure_selected_interior(PlotRenderContext::new(
                 chart.data(),
@@ -986,7 +991,7 @@ mod tests {
         let second = payload.bars[1].1.color;
         assert_eq!(
             first,
-            crate::theme::color_from_rgb(theme.colors[0])
+            crate::theme::Color::from(theme.marks.accents.seeds()[0])
                 .with_alpha(theme.marks.waterfall_bar.fill_alpha)
         );
         assert_ne!(first, second);
@@ -1003,9 +1008,12 @@ mod tests {
         .x_label("")
         .y_label("")
         .erase();
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let chart = inputs.attach(source).unwrap();
         let theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -1061,9 +1069,12 @@ mod tests {
         .x_label("")
         .y_label("")
         .erase();
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let chart = inputs.attach(source).unwrap();
         let theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -1111,9 +1122,12 @@ mod tests {
         theme.typography.waterfall_total.font_size = 48;
         for exact in [false, true] {
             let chart = source(exact);
-            let inputs =
-                crate::plots::shared_x::prepare_plot(&chart, &OperationGenerationResources::new())
-                    .unwrap();
+            let inputs = crate::plots::shared_x::prepare_plot(
+                &chart,
+                &OperationGenerationResources::new(),
+                None,
+            )
+            .unwrap();
             let chart = inputs.attach(chart).unwrap();
             let selected = chart.measure_selected_interior(PlotRenderContext::new(
                 chart.data(),
@@ -1183,7 +1197,7 @@ mod tests {
         ));
         theme.marks.waterfall_connector.width = 16.0;
         let resources = OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let cell = PanelBox::new(80.0, 700.0, 80.0, 800.0);
         let selected = crate::decorations::plan::plan_panel_for_test(
@@ -1225,7 +1239,7 @@ mod tests {
         .size(1200, 800)
         .erase();
         let resources = OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let panel = PanelBox::new(80.0, 750.0, 60.0, 500.0);
         let mut theme = crate::Theme::Publication
@@ -1286,6 +1300,7 @@ mod tests {
                 let inputs = crate::plots::shared_x::prepare_plot(
                     &plot,
                     &OperationGenerationResources::new(),
+                    None,
                 )
                 .unwrap();
                 let span = inputs.waterfall.as_ref().unwrap().panels[0].1.spans[0];

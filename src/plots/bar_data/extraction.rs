@@ -20,9 +20,10 @@ fn positioned_bar_colors_require_every_used_raw_series_before_fonts() {
     )
     .erase();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-    let error = crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-        .err()
-        .expect("missing positioned series must refuse");
+    let error =
+        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new(), None)
+            .err()
+            .expect("missing positioned series must refuse");
     assert!(matches!(error, Error::Data(message) if message.contains("second")));
     assert_eq!(
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
@@ -48,9 +49,10 @@ fn displayed_series_alias_never_becomes_a_significance_target_or_color_key() {
     )])
     .erase();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-    let error = crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-        .err()
-        .expect("a display alias must not select a raw series");
+    let error =
+        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new(), None)
+            .err()
+            .expect("a display alias must not select a raw series");
     assert!(matches!(error, Error::Data(message)
         if message.contains("unknown series") && message.contains("First display")));
     assert_eq!(
@@ -70,18 +72,19 @@ fn signed_bar_entries_use_only_sign_identities_and_match_body_colors() {
     .color_by_sign()
     .erase();
     let resources = OperationGenerationResources::new();
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let prepared = &inputs.bars.as_ref().unwrap().panels[0].1;
     let mut theme = crate::Theme::Publication
         .resolve(&crate::font::canonical::OperationGenerationResources::new())
         .unwrap();
-    theme.colors.truncate(1);
+    theme.marks.accents =
+        crate::theme::AccentPalette::new(theme.marks.accents.seeds()[..1].iter().copied()).unwrap();
     let data = source.data().with_axis_resources(&resources);
     let (colors, accents) = prepared.resolved_colors(&source, &theme, data).unwrap();
     assert!(colors.colors().is_empty());
     let positive = accents.color(0).unwrap();
     let negative = accents.color(1).unwrap();
-    assert_eq!(positive, theme.colors[0]);
+    assert_eq!(positive, theme.marks.accents.seeds()[0].as_rgb());
     assert_ne!(positive, negative);
     for bar in &prepared.bars {
         assert_eq!(
@@ -143,7 +146,7 @@ fn attached_bar_glyphs_cannot_escape_categorical_frame_under_numeric_feedback() 
     theme.typography.significance_label.font_size = 1000;
     for plot in plots {
         let inputs =
-            crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new())
+            crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new(), None)
                 .unwrap();
         let chart = inputs.attach(plot).unwrap();
         let selected = chart.measure_selected_interior(PlotRenderContext::new(
@@ -391,7 +394,7 @@ fn bar_semantics_admit_exact_resources_and_attach_without_copying() {
         STAGES.with(|counts| counts.set([[0; 4]; 4]));
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
         let resources = OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         assert_eq!(
             STAGES
                 .with(std::cell::Cell::get)
@@ -405,13 +408,15 @@ fn bar_semantics_admit_exact_resources_and_attach_without_copying() {
         for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
             assert!(crate::plots::shared_x::prepare_plot(
                 &source,
-                &OperationGenerationResources::with_test_limits(visits, bytes)
+                &OperationGenerationResources::with_test_limits(visits, bytes),
+                None,
             )
             .is_err());
         }
         crate::plots::shared_x::prepare_plot(
             &source,
             &OperationGenerationResources::with_test_limits(visits, bytes),
+            None,
         )
         .unwrap();
         let attached = inputs.attach(source).unwrap();
@@ -479,9 +484,12 @@ fn bar_geometry_matches_payload_with_caps_points_and_attached_text() {
         let theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let source = inputs.attach(source).unwrap();
         let selected = source
             .measure_selected_interior(PlotRenderContext::new(
@@ -555,7 +563,7 @@ fn bar_facets_retain_selected_annotations_global_hues_and_final_ticks() {
         ],
     );
     let inputs =
-        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new(), None)
             .unwrap();
     let panels = &inputs.bars.as_ref().unwrap().panels;
     assert!(panels[0].1.significance.is_empty());
@@ -596,7 +604,11 @@ fn bar_invalid_sources_and_anchors_fail_before_fonts() {
     for source in sources {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
         assert!(matches!(
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new()),
+            crate::plots::shared_x::prepare_plot(
+                &source,
+                &OperationGenerationResources::new(),
+                None
+            ),
             Err(Error::Data(_))
         ));
         assert_eq!(
@@ -621,7 +633,7 @@ fn bar_bootstrap_is_retained_bit_exact_in_each_facet() {
     )
     .erase();
     let inputs =
-        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new(), None)
             .unwrap();
     for (index, rows) in [[0, 1, 2], [3, 4, 5]].iter().enumerate() {
         let data = crate::data::PlotData::with_rows(&source, rows, rows);
@@ -662,8 +674,11 @@ fn bar_poisoned_capture_repeats_no_preparation_projection_axis_or_shaping() {
             640,
             480,
             |stage| {
-                let inputs =
-                    crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
+                let inputs = crate::plots::shared_x::prepare_plot(
+                    &source,
+                    &stage.generation_resources(),
+                    None,
+                )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     Some(&inputs),
                     &source,

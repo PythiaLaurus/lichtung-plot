@@ -349,7 +349,7 @@ pub(crate) fn project(
             Ok(points)
         }))?,
         fill: theme.marks.histogram_bin.backend_style(
-            crate::theme::AccentColors::resolve(&theme.colors, 1, data.source_resources()?)?
+            crate::theme::AccentColors::resolve(&theme.marks.accents, 1, data.source_resources()?)?
                 .color(0)?,
         ),
         curve_style: theme.marks.histogram_curve.backend_style(),
@@ -950,7 +950,7 @@ mod tests {
         };
         let source = sample().erase();
         let resources = crate::font::canonical::OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -985,7 +985,7 @@ mod tests {
             ))
             .erase();
         let resources = crate::font::canonical::OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let overlay = chart.intrinsic_body_minimum(&theme).unwrap();
         assert_eq!(overlay.0.to_bits(), baseline.0.to_bits());

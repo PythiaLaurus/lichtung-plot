@@ -17,7 +17,7 @@ use crate::spec::{
     BarInput, BarSource, BarSpacing, ConfidenceIntervalAlgorithm, ErrorBarKind, PercentileInterval,
     StandardDeviation, StandardError,
 };
-use crate::theme::{AccentColors, CategoryColors, PaletteSource, ResolvedTheme};
+use crate::theme::{AccentColors, CategoryColors, ResolvedTheme};
 use crate::{CategoryOrder, Plot, ValueSort};
 
 #[cfg(test)]
@@ -310,7 +310,7 @@ impl PreparedBars {
         };
         let colors = CategoryColors::resolve(
             if chart.colors_by_sign() { &[] } else { keys },
-            PaletteSource::Extendable(theme),
+            theme.color_scales.qualitative(),
             if chart.colors_by_sign() {
                 None
             } else {
@@ -319,7 +319,7 @@ impl PreparedBars {
             resources,
         )?;
         let accents = AccentColors::resolve(
-            &theme.colors,
+            &theme.marks.accents,
             if chart.colors_by_sign() { 2 } else { 0 },
             resources,
         )?;
@@ -810,7 +810,7 @@ pub(crate) fn prepare_scoped<'a>(
         .filter(|_| !chart.colors_by_sign())
     {
         for key in prepared.color_keys() {
-            if exact.color(key, data.source_resources()?)?.is_none() {
+            if exact.color_in(key, data.source_resources()?)?.is_none() {
                 return Err(Error::Data(format!(
                     "bar: category {key:?} has no caller-owned color"
                 )));
@@ -2272,7 +2272,7 @@ mod tests {
         };
         let intrinsic = |source: Plot, theme: &crate::theme::ResolvedTheme| {
             let resources = crate::font::canonical::OperationGenerationResources::new();
-            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
             inputs
                 .attach(source)
                 .unwrap()
@@ -2314,7 +2314,7 @@ mod tests {
     fn bar_interval_caps_and_exact_supplemental_points_extend_category_pitch() {
         let intrinsic = |source: Plot, theme: &crate::theme::ResolvedTheme| {
             let resources = crate::font::canonical::OperationGenerationResources::new();
-            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
             inputs
                 .attach(source)
                 .unwrap()
@@ -2375,7 +2375,7 @@ mod tests {
         .zero_line()
         .erase();
         let resources = crate::font::canonical::OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let panel = crate::layout::PanelBox::new(10.0, 900.0, 20.0, 600.0);
         let mut theme = crate::Theme::Publication

@@ -2270,7 +2270,7 @@ pub(crate) fn plan_panel_for_test<K: crate::kind::Marker>(
     crate::layout::plan_exact_root(
         plot.width(),
         plot.height(),
-        |stage| crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources()),
+        |stage| crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources(), None),
         |inputs, assigned, round| {
             let plot = inputs.attach(source.clone())?;
             Ok(crate::layout::MeasuredLayout::new(

@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use crate::Error;
 
@@ -43,16 +43,17 @@ impl From<ValueSort> for CategoryOrder {
 /// Exact caller-owned colors for categorical plot levels.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CategoricalColors {
-    entries: Vec<(String, (u8, u8, u8))>,
+    entries: Arc<Vec<(String, crate::theme::OpaqueColor)>>,
 }
 
 impl CategoricalColors {
+    #[expect(
+        clippy::unused_self,
+        reason = "the source map's copy-admission contract prices one immutable handle before the enclosing Plot clone"
+    )]
     pub(crate) fn admit_clone(&self, data: crate::data::PlotData<'_>) -> Result<(), Error> {
-        data.admit_clone_slice(&self.entries)?;
-        for (label, _) in &self.entries {
-            data.admit_clone_str(label)?;
-        }
-        Ok(())
+        data.require_source_resources()?;
+        data.claim_source_visits(1)
     }
 
     /// Constructs a non-empty color map with unique, exact category labels.
@@ -62,43 +63,77 @@ impl CategoricalColors {
     /// Returns an error when a label is empty, has surrounding whitespace or
     /// control characters, or appears more than once.
     pub fn new(entries: impl IntoIterator<Item = (String, (u8, u8, u8))>) -> Result<Self, Error> {
-        let entries = entries.into_iter().collect::<Vec<_>>();
+        Self::from_opaque(
+            entries
+                .into_iter()
+                .map(|(key, (r, g, b))| (key, crate::theme::OpaqueColor::rgb(r, g, b))),
+        )
+    }
+
+    pub(crate) fn from_opaque(
+        input: impl IntoIterator<Item = (String, crate::theme::OpaqueColor)>,
+    ) -> Result<Self, Error> {
+        let mut entries: Vec<(String, crate::theme::OpaqueColor)> = Vec::new();
+        for (key, color) in input {
+            if key.is_empty() || key.trim() != key || key.chars().any(char::is_control) {
+                return Err(Error::Data("categorical color labels must be non-empty and contain no surrounding whitespace or control characters".into()));
+            }
+            if entries.iter().any(|(previous, _)| previous == &key) {
+                return Err(Error::Data(format!(
+                    "categorical color label {key:?} is duplicated"
+                )));
+            }
+            entries
+                .len()
+                .checked_add(1)
+                .ok_or_else(|| Error::Data("categorical map length overflow".into()))?;
+            entries
+                .try_reserve_exact(1)
+                .map_err(|_| Error::Data("cannot reserve categorical color map".into()))?;
+            entries.push((key, color));
+        }
         if entries.is_empty() {
             return Err(Error::Data(
                 "categorical colors require at least one category label".into(),
             ));
         }
-        let mut labels = BTreeSet::new();
-        for (label, _) in &entries {
-            if label.trim().is_empty()
-                || label.trim() != label
-                || label.chars().any(char::is_control)
-            {
-                return Err(Error::Data(
-                    "categorical color labels must be non-empty and contain no surrounding whitespace or control characters"
-                        .into(),
-                ));
-            }
-            if !labels.insert(label.as_str()) {
-                return Err(Error::Data(format!(
-                    "categorical color label {label:?} is duplicated"
-                )));
-            }
-        }
-        Ok(Self { entries })
+        Ok(Self {
+            entries: Arc::new(entries),
+        })
     }
 
-    pub(crate) fn color(
+    pub(crate) fn entries(
+        &self,
+    ) -> impl ExactSizeIterator<Item = (&str, crate::theme::OpaqueColor)> + '_ {
+        self.entries
+            .iter()
+            .map(|(key, color)| (key.as_str(), *color))
+    }
+
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "readonly opaque map inspection awaits the categorical public cutover"
+        )
+    )]
+    pub(crate) fn color(&self, label: &str) -> Option<crate::theme::OpaqueColor> {
+        self.entries
+            .iter()
+            .find(|(key, _)| key == label)
+            .map(|(_, color)| *color)
+    }
+
+    pub(crate) fn color_in(
         &self,
         label: &str,
         resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<Option<(u8, u8, u8)>, Error> {
-        for (candidate, color) in &self.entries {
-            resources.claim_visits(1).map_err(|error| {
-                Error::Render(format!("exact categorical color key lookup: {error:?}"))
-            })?;
-            if candidate == label {
-                return Ok(Some(*color));
+    ) -> Result<Option<crate::theme::OpaqueColor>, Error> {
+        for (candidate, color) in self.entries() {
+            if crate::font::canonical::same_bytes(candidate, label, resources)
+                .map_err(|e| Error::Render(e.to_string()))?
+            {
+                return Ok(Some(color));
             }
         }
         Ok(None)

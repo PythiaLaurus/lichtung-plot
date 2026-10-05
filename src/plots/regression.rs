@@ -422,8 +422,9 @@ pub(crate) fn project(
     data: PlotData<'_>,
 ) -> Result<PlotRenderResult, Error> {
     let projection = &layout.projection;
-    let color = crate::theme::AccentColors::resolve(&theme.colors, 1, data.source_resources()?)?
-        .color(0)?;
+    let color =
+        crate::theme::AccentColors::resolve(&theme.marks.accents, 1, data.source_resources()?)?
+            .color(0)?;
     let point_style = chart.point_style(theme, color, theme.marks.point_sizes.regression);
     let scatter_points =
         data.collect_source(prepared.points.iter().map(|(x_value, y_value)| {
@@ -519,7 +520,7 @@ mod style_tests {
         )
         .erase();
         let resources = OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -557,7 +558,7 @@ mod style_tests {
         ))
         .erase();
         let resources = OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -610,7 +611,7 @@ mod style_tests {
         ))
         .erase();
         let resources = OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())

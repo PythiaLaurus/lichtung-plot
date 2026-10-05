@@ -60,19 +60,19 @@ fn semantic_storage_and_statistics_are_admitted_once_before_fonts() {
         STAGES.with(|counts| counts.set([[0; 4]; 4]));
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
         let resources = OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         assert_eq!(STAGES.with(std::cell::Cell::get)[family], [1, 0, 0, 0]);
         let bytes = resources.byte_usage().unwrap();
         let visits = resources.usage().unwrap().1;
         for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
             let resources = OperationGenerationResources::with_test_limits(visits, bytes);
             assert!(matches!(
-                crate::plots::shared_x::prepare_plot(&source, &resources),
+                crate::plots::shared_x::prepare_plot(&source, &resources, None),
                 Err(Error::Render(_))
             ));
         }
         let resources = OperationGenerationResources::with_test_limits(visits, bytes);
-        crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let attached = inputs.attach(source).unwrap();
         assert!(std::sync::Arc::ptr_eq(
             &attached.prepared_axes,
@@ -158,7 +158,7 @@ fn projected_storage_refuses_exact_limits_and_selected_extents_match_drawn_ink()
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
         let resources = OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let attached = inputs.attach(source.clone()).unwrap();
         let selected = attached
             .measure_selected_interior(crate::spec::PlotRenderContext::new(
@@ -293,9 +293,12 @@ fn native_scientific_ranges_retain_full_sample_statistics_across_assignments() {
         }
         .unwrap();
         STAGES.with(|counts| counts.set([[0; 4]; 4]));
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         assert_eq!(
             inputs.route,
             InteriorRoute::StandardCoordinate(routes[family])
@@ -463,7 +466,7 @@ fn invalid_statistics_and_exact_sources_reject_before_unavailable_fonts() {
             640,
             480,
             |stage| {
-                crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
+                crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources(), None)?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     None,
                     &source,
@@ -514,8 +517,11 @@ fn selected_capture_and_replay_do_no_source_projection_statistics_axis_or_shapin
             640,
             480,
             |stage| {
-                let inputs =
-                    crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
+                let inputs = crate::plots::shared_x::prepare_plot(
+                    &source,
+                    &stage.generation_resources(),
+                    None,
+                )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     None,
                     &source,

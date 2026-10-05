@@ -196,6 +196,7 @@ fn matrix_marks_ticks_and_reference_grid_share_large_fractional_cell_coordinates
             let plot = crate::plots::shared_x::prepare_plot(
                 &plot,
                 &crate::font::canonical::OperationGenerationResources::new(),
+                None,
             )
             .unwrap()
             .attach(plot)

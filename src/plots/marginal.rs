@@ -26,7 +26,7 @@ use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::{
     gaussian_kde_with_source, kde_support_range, strict_scott_bandwidth,
 };
-use crate::theme::{AccentColors, CategoryColors, PaletteSource};
+use crate::theme::{AccentColors, CategoryColors};
 use crate::Error;
 use crate::Plot;
 
@@ -96,12 +96,12 @@ impl PreparedMarginal {
         let keys = chart.global_hue_levels().unwrap_or(&self.hues);
         let colors = CategoryColors::resolve(
             keys,
-            PaletteSource::Extendable(theme),
+            theme.color_scales.qualitative(),
             chart.categorical_colors_spec(),
             resources,
         )?;
         let accents = AccentColors::resolve(
-            &theme.colors,
+            &theme.marks.accents,
             usize::from(self.groups.iter().any(|group| group.identity.hue.is_none())),
             resources,
         )?;
@@ -203,7 +203,7 @@ fn prepared_marginal_points_and_density_strokes_enlarge_linked_tracks() {
     )
     .erase();
     let resources = crate::font::canonical::OperationGenerationResources::new();
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let theme = crate::Theme::Publication
         .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -252,6 +252,7 @@ fn wide_finite_scales_normalize_each_linked_kde_to_its_actual_peak() {
     let inputs = crate::plots::shared_x::prepare_plot(
         &chart,
         &crate::font::canonical::OperationGenerationResources::new(),
+        None,
     )
     .unwrap();
     let chart = inputs.attach(chart).unwrap();
@@ -295,6 +296,7 @@ fn unrepresentable_linked_kde_rejects_instead_of_substituting_a_density_floor() 
     let inputs = crate::plots::shared_x::prepare_plot(
         &chart,
         &crate::font::canonical::OperationGenerationResources::new(),
+        None,
     )
     .unwrap();
     let chart = inputs.attach(chart).unwrap();
@@ -332,6 +334,7 @@ fn marginal_central_points_request_only_automatic_numeric_edges() {
         let inputs = crate::plots::shared_x::prepare_plot(
             &plot,
             &crate::font::canonical::OperationGenerationResources::new(),
+            None,
         )
         .unwrap();
         let chart = inputs.attach(plot).unwrap();
@@ -956,7 +959,7 @@ pub(crate) fn prepare(
     let (groups, hues) = build_groups(chart, data)?;
     if let Some(exact) = chart.categorical_colors_spec() {
         for hue in &hues {
-            if exact.color(hue, data.source_resources()?)?.is_none() {
+            if exact.color_in(hue, data.source_resources()?)?.is_none() {
                 return Err(Error::Data(format!(
                     "marginal: category {hue:?} has no caller-owned color"
                 )));

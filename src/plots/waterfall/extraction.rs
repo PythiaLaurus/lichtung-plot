@@ -34,7 +34,7 @@ fn waterfall_topology_prices_categories_bars_connectors_and_named_totals_before_
 fn clipped_base_keeps_the_visible_terminal_containment_failure_named() {
     let source = source().x_limits(11.0, 13.0).erase();
     let inputs =
-        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new(), None)
             .unwrap();
     let chart = inputs.attach(source).unwrap();
     let theme = crate::Theme::Publication
@@ -79,7 +79,7 @@ fn root_semantics_admit_every_span_label_and_exact_delta_before_fonts() {
     let source = source().erase();
     let resources = OperationGenerationResources::new();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let marks = &inputs.waterfall.as_ref().unwrap().panels[0].1;
     assert_eq!(marks.labels, ["gain", "loss", "gain", "loss"]);
     assert_eq!(
@@ -106,13 +106,15 @@ fn root_semantics_admit_every_span_label_and_exact_delta_before_fonts() {
     for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
         assert!(crate::plots::shared_x::prepare_plot(
             &source,
-            &OperationGenerationResources::with_test_limits(visits, bytes)
+            &OperationGenerationResources::with_test_limits(visits, bytes),
+            None,
         )
         .is_err());
     }
     crate::plots::shared_x::prepare_plot(
         &source,
         &OperationGenerationResources::with_test_limits(visits, bytes),
+        None,
     )
     .unwrap();
     assert_eq!(
@@ -193,7 +195,7 @@ fn original_source_ids_survive_preparation_selection_and_admitted_feedback() {
         .source_rows(crate::SourceRows::new(ids).unwrap())
         .erase();
     let resources = OperationGenerationResources::new();
-    let inputs = crate::plots::shared_x::prepare_plot(&raw, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&raw, &resources, None).unwrap();
     assert_eq!(
         inputs.waterfall.as_ref().unwrap().panels[0]
             .1
@@ -301,7 +303,8 @@ fn root_components_prepare_once_without_a_geometry_measurement_backend() {
 fn selected_geometry_and_poisoned_capture_preserve_all_operands_without_work() {
     let plot = source().erase();
     let inputs =
-        crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new()).unwrap();
+        crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new(), None)
+            .unwrap();
     let plot = inputs.attach(plot).unwrap();
     let theme = crate::Theme::Publication
         .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -338,7 +341,8 @@ fn selected_geometry_and_poisoned_capture_preserve_all_operands_without_work() {
     let mut poisoned_theme = crate::Theme::Science
         .resolve(&crate::font::canonical::OperationGenerationResources::new())
         .unwrap();
-    poisoned_theme.colors.clear();
+    poisoned_theme.marks.accents =
+        crate::theme::AccentPalette::new([crate::theme::OpaqueColor::rgb(255, 0, 0)]).unwrap();
     poisoned_theme.detail_font_size = 0;
     let projections = crate::layout::Projection::test_projection_calls();
     let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
@@ -388,7 +392,7 @@ fn selected_storage_refuses_at_exact_operation_limits() {
     let raw = source().erase();
     let run = |limits: Option<(u128, u64)>| {
         let inputs =
-            crate::plots::shared_x::prepare_plot(&raw, &OperationGenerationResources::new())
+            crate::plots::shared_x::prepare_plot(&raw, &OperationGenerationResources::new(), None)
                 .unwrap();
         let plot = inputs.attach(raw.clone()).unwrap();
         let theme = crate::Theme::Publication
@@ -459,8 +463,11 @@ fn missing_labels_and_invalid_intermediate_endpoints_win_before_unavailable_font
             640,
             480,
             |stage| {
-                let inputs =
-                    crate::plots::shared_x::prepare_plot(&plot, &stage.generation_resources())?;
+                let inputs = crate::plots::shared_x::prepare_plot(
+                    &plot,
+                    &stage.generation_resources(),
+                    None,
+                )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     Some(&inputs),
                     &plot,
@@ -526,7 +533,7 @@ fn total_labels_keep_typed_fit_identity_and_mark_panel_reserve() {
     ] {
         let plot = source().total_labels(labels).erase();
         let inputs =
-            crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new())
+            crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new(), None)
                 .unwrap();
         let plot = inputs.attach(plot).unwrap();
         let theme = crate::Theme::Publication

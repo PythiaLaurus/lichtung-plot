@@ -109,9 +109,12 @@ fn native_categorical_distributions_keep_bottom_identity_sparse_groups_and_suppo
     ]) {
         let source =
             source.labels(crate::Labels::humanized().alias("after_visit", "Follow-up visit"));
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         assert_eq!(inputs.route, InteriorRoute::OneCategoricalAxis(family));
         let plot = inputs.attach(source).unwrap();
         let prepared = retained(&plot).unwrap();
@@ -143,11 +146,14 @@ fn native_categorical_distributions_keep_bottom_identity_sparse_groups_and_suppo
             let theme = preset
                 .resolve(&crate::font::canonical::OperationGenerationResources::new())
                 .unwrap();
-            let plot =
-                crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new())
-                    .unwrap()
-                    .attach(plot.clone())
-                    .unwrap();
+            let plot = crate::plots::shared_x::prepare_plot(
+                &plot,
+                &OperationGenerationResources::new(),
+                None,
+            )
+            .unwrap()
+            .attach(plot.clone())
+            .unwrap();
             let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
             for panel in [
                 PanelBox::new(80.25, 550.75, 70.5, 410.25),
@@ -215,9 +221,12 @@ fn native_distribution_significance_uses_root_feedback_and_final_assigned_geomet
     for grouped in [false, true] {
         for source in configured(true, grouped, None) {
             let source = source.with_suppressed_legend().size(900, 700);
-            let inputs =
-                crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                    .unwrap();
+            let inputs = crate::plots::shared_x::prepare_plot(
+                &source,
+                &OperationGenerationResources::new(),
+                None,
+            )
+            .unwrap();
             let plot = inputs.attach(source).unwrap();
             for preset in [
                 crate::Theme::Publication,
@@ -230,6 +239,7 @@ fn native_distribution_significance_uses_root_feedback_and_final_assigned_geomet
                 let plot = crate::plots::shared_x::prepare_plot(
                     &plot,
                     &OperationGenerationResources::new(),
+                    None,
                 )
                 .unwrap()
                 .attach(plot.clone())
@@ -323,7 +333,9 @@ fn native_root_mark_and_annotation_growth_freeze_the_final_domain() {
         let root = crate::layout::plan_exact_root(
             900,
             700,
-            |stage| crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources()),
+            |stage| {
+                crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources(), None)
+            },
             |inputs, assigned, round| {
                 let plot = inputs.attach(source.clone())?;
                 let baseline = retained(&plot)?.range();
@@ -388,9 +400,12 @@ fn native_distribution_exact_limits_and_labels_are_indivisible_and_never_expand(
                     crate::AxisTick::new(range.1, "raw_upper"),
                 ],
             );
-            let inputs =
-                crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                    .unwrap();
+            let inputs = crate::plots::shared_x::prepare_plot(
+                &source,
+                &OperationGenerationResources::new(),
+                None,
+            )
+            .unwrap();
             let plot = inputs.attach(source).unwrap();
             let theme = crate::Theme::Publication
                 .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -582,9 +597,12 @@ fn native_distribution_raw_categories_and_all_overlays_remain_complete_and_uncli
         .enumerate()
         {
             let source = source.labels(crate::Labels::raw());
-            let inputs =
-                crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                    .unwrap();
+            let inputs = crate::plots::shared_x::prepare_plot(
+                &source,
+                &OperationGenerationResources::new(),
+                None,
+            )
+            .unwrap();
             let plot = inputs.attach(source).unwrap();
             let theme = crate::Theme::Publication
                 .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -627,9 +645,12 @@ fn native_distribution_raw_categories_and_all_overlays_remain_complete_and_uncli
             assert!(axes.bounds().iter().any(|ink| ink.bottom < panel.y0));
             // Fit cannot silently hide a category or put its text under the mark clip.
             let source = plot.labels(crate::Labels::raw().alias("raw_B", "W".repeat(100)));
-            let inputs =
-                crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                    .unwrap();
+            let inputs = crate::plots::shared_x::prepare_plot(
+                &source,
+                &OperationGenerationResources::new(),
+                None,
+            )
+            .unwrap();
             let plot = inputs.attach(source).unwrap();
             let projections = crate::layout::Projection::test_projection_calls();
             assert!(matches!(

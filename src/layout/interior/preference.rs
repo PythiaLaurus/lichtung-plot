@@ -455,7 +455,7 @@ mod tests {
             (grouped(true), crate::layout::AxisSide::Left, 2),
         ] {
             let resources = OperationGenerationResources::new();
-            let prepared = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+            let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
             let chart = prepared.attach(source).unwrap();
             let theme = crate::Theme::Publication
                 .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -488,7 +488,7 @@ mod tests {
         .size(1200, 900)
         .erase();
         let resources = OperationGenerationResources::new();
-        let prepared = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = prepared.attach(source).unwrap();
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -581,7 +581,7 @@ mod tests {
             .chain([(supplied, 2, 2), (interaction, 3, 4)])
         {
             let resources = OperationGenerationResources::new();
-            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
             let chart = inputs.attach(source).unwrap();
             let theme = crate::Theme::Publication
                 .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -626,7 +626,7 @@ mod tests {
         .size(800, 600)
         .erase();
         let resources = OperationGenerationResources::new();
-        let prepared = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = prepared.attach(source).unwrap();
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -669,7 +669,7 @@ mod tests {
         .size(800, 600)
         .erase();
         let resources = OperationGenerationResources::new();
-        let prepared = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let clipped = prepared.attach(source).unwrap();
         let exact = super::super::coordinate::canvas_layout(&clipped, &theme).unwrap();
         assert_eq!(standard(&exact).primary_marks, 25);
@@ -682,7 +682,7 @@ mod tests {
             .zip([8, 2, 6, 6])
         {
             let resources = OperationGenerationResources::new();
-            let prepared = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+            let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
             let chart = prepared.attach(source).unwrap();
             let root = super::super::coordinate::canvas_layout(
                 &chart,
@@ -702,7 +702,7 @@ mod tests {
         let group = CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap();
         let source = Plot::trajectory(x, y, group).size(800, 600).erase();
         let resources = OperationGenerationResources::new();
-        let prepared = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = prepared.attach(source).unwrap();
         let root = super::super::coordinate::canvas_layout(
             &chart,

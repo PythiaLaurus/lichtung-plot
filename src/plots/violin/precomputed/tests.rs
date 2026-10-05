@@ -72,7 +72,7 @@ fn supplied_raincloud_cloud_and_strip_ink_fit_automatic_y_at_root() {
         .prepared_font_environment()
         .unwrap()
         .generation_resources();
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let narrow = crate::layout::PanelBox::new(80.0, 700.0, 80.0, 520.0);
     assert!(chart.intrinsic_body_minimum(&theme).unwrap().0 > narrow.width());
@@ -93,7 +93,7 @@ fn supplied_raincloud_cloud_and_strip_ink_fit_automatic_y_at_root() {
         .prepared_font_environment()
         .unwrap()
         .generation_resources();
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let cell = crate::layout::PanelBox::new(80.0, 4900.0, 80.0, 1300.0);
     let selected = crate::decorations::plan::plan_panel_for_test(
@@ -135,7 +135,7 @@ fn supplied_raincloud_cloud_and_strip_ink_fit_automatic_y_at_root() {
         .prepared_font_environment()
         .unwrap()
         .generation_resources();
-    let inputs = crate::plots::shared_x::prepare_plot(&exact_source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&exact_source, &resources, None).unwrap();
     let exact_chart = inputs.attach(exact_source).unwrap();
     let exact = crate::decorations::plan::plan_panel_for_test(
         &exact_chart,
@@ -188,9 +188,12 @@ fn repeated_measurement_uses_retained_raw_keys_and_charges_candidate_work() {
     for with_hues in [true, false] {
         let source = source(with_hues);
         HUE_LOOKUP_VISITS.with(|count| count.set(0));
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let source = inputs.attach(source).unwrap();
         let lookup_visits = HUE_LOOKUP_VISITS.with(std::cell::Cell::get);
         assert_eq!(lookup_visits, if with_hues { 5 } else { 0 });
@@ -231,7 +234,7 @@ fn repeated_measurement_uses_retained_raw_keys_and_charges_candidate_work() {
                         &resources
                     )
                     .unwrap(),
-                theme.colors[expected]
+                theme.color_scales.qualitative().colors()[expected].as_rgb()
             );
         }
         inputs.prepare_intrinsics(&source, &theme).unwrap();

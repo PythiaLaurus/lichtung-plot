@@ -920,7 +920,7 @@ fn project(
         interval_style: theme.marks.estimate_interval.backend_style(),
         point_style: chart.point_style(
             theme,
-            crate::theme::AccentColors::resolve(&theme.colors, 1, data.source_resources()?)?
+            crate::theme::AccentColors::resolve(&theme.marks.accents, 1, data.source_resources()?)?
                 .color(0)?,
             theme.marks.point_sizes.interval_estimate,
         ),
@@ -1160,7 +1160,7 @@ mod tests {
         .x_limits(0.0, 2.0)
         .erase();
         let resources = crate::font::canonical::OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -1192,7 +1192,7 @@ mod tests {
         };
         let intrinsic = |source: Plot, theme: &ResolvedTheme| {
             let resources = crate::font::canonical::OperationGenerationResources::new();
-            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
             inputs
                 .attach(source)
                 .unwrap()
@@ -1226,7 +1226,7 @@ mod tests {
         .size(1200, 800)
         .erase();
         let resources = crate::font::canonical::OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let panel = crate::layout::PanelBox::new(100.0, 900.0, 60.0, 600.0);
         let mut theme = crate::Theme::Publication

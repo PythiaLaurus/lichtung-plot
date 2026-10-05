@@ -4,7 +4,7 @@ use crate::data::{ObservedCollectives, PlotData};
 use crate::decorations::legend::LegendEntry;
 use crate::render::backend::{Backend, LineStyle, Point2D, PointStyle};
 use crate::spec::{LinePattern, PlotRenderContext, PlotRenderResult, PointShape};
-use crate::theme::{CategoryColors, PaletteSource};
+use crate::theme::CategoryColors;
 use crate::{Error, Plot};
 
 #[cfg(test)]
@@ -176,7 +176,7 @@ impl PreparedInteraction {
         };
         CategoryColors::resolve(
             &keys,
-            PaletteSource::Extendable(theme),
+            theme.color_scales.qualitative(),
             chart.categorical_colors_spec(),
             data.source_resources()?,
         )
@@ -404,7 +404,7 @@ pub(crate) fn prepare(
                 .as_deref()
                 .or(trace.identity.group.as_deref())
                 .ok_or_else(|| Error::Render("Interaction color identity is missing".into()))?;
-            if exact.color(key, data.source_resources()?)?.is_none() {
+            if exact.color_in(key, data.source_resources()?)?.is_none() {
                 return Err(Error::Data(format!(
                     "interaction: category {key:?} has no caller-owned color"
                 )));

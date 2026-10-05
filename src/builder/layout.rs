@@ -18,7 +18,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             .resolve(&resources)
             .unwrap();
         let plot = crate::kind::into_erased(self.clone());
-        let plot = crate::plots::shared_x::prepare_plot(&plot, &resources)
+        let plot = crate::plots::shared_x::prepare_plot(&plot, &resources, None)
             .expect("valid test plot")
             .attach(plot)
             .expect("matching test route");

@@ -30,6 +30,7 @@ fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
             crate::plots::shared_x::prepare_plot(
                 &source,
                 &crate::font::canonical::OperationGenerationResources::new(),
+                None,
             )
             .unwrap()
             .attach(source.clone())

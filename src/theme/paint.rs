@@ -42,6 +42,11 @@ impl OpaqueColor {
     pub(crate) const fn blue(&self) -> u8 {
         self.blue
     }
+
+    /// Private adaptation to the current exact-paint/backend tuple inputs.
+    pub(crate) const fn as_rgb(self) -> (u8, u8, u8) {
+        (self.red, self.green, self.blue)
+    }
 }
 
 /// Complete RGBA paint with one opaque RGB identity and one byte alpha.

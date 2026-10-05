@@ -1896,9 +1896,12 @@ mod tests {
         )
         .hue(crate::CategoryValues::new("group", ["a", "b"]).unwrap())
         .erase();
-        let prepared =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let prepared = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let plot = prepared.attach(source).unwrap();
         for shape in [crate::PointShape::Circle, crate::PointShape::TriangleUp] {
             let mut theme = crate::Theme::Publication

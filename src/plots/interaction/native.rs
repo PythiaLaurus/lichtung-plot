@@ -42,7 +42,7 @@ fn native_bottom_conditions_keep_parent_trace_order_palette_sparse_connectors_an
             },
         ]);
     let inputs =
-        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new(), None)
             .unwrap();
     assert_eq!(
         inputs.route,
@@ -77,7 +77,7 @@ fn native_bottom_conditions_keep_parent_trace_order_palette_sparse_connectors_an
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
         let plot =
-            crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new())
+            crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new(), None)
                 .unwrap()
                 .attach(plot.clone())
                 .unwrap();
@@ -222,7 +222,7 @@ fn native_condition_hard_intrinsics_and_exact_numeric_labels_reject_before_marks
     ])
     .erase();
     let inputs =
-        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new(), None)
             .unwrap();
     let plot = inputs.attach(source).unwrap();
     let theme = crate::Theme::Publication
@@ -300,9 +300,12 @@ fn native_parent_feedback_freezes_actual_marks_axes_and_gutters_at_the_assigned_
             source = source.y_limits(0.0, 8.0);
         }
         let source = source.size(900, 700).erase();
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let range = inputs.axes[0].1.ranges[1];
         let plot = inputs.attach(source).unwrap();
         for preset in [
@@ -313,11 +316,14 @@ fn native_parent_feedback_freezes_actual_marks_axes_and_gutters_at_the_assigned_
             let theme = preset
                 .resolve(&crate::font::canonical::OperationGenerationResources::new())
                 .unwrap();
-            let plot =
-                crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new())
-                    .unwrap()
-                    .attach(plot.clone())
-                    .unwrap();
+            let plot = crate::plots::shared_x::prepare_plot(
+                &plot,
+                &OperationGenerationResources::new(),
+                None,
+            )
+            .unwrap()
+            .attach(plot.clone())
+            .unwrap();
             for cell in [
                 PanelBox::new(16.0, 625.0, 8.0, 390.0),
                 PanelBox::new(30.25, 800.5, 40.75, 610.0),

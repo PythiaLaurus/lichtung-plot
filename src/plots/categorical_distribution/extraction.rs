@@ -16,9 +16,10 @@ fn distribution_series_color_keys_refuse_missing_raw_identity_before_fonts() {
     )
     .erase();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-    let error = crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new())
-        .err()
-        .expect("used missing series must refuse");
+    let error =
+        crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new(), None)
+            .err()
+            .expect("used missing series must refuse");
     assert!(matches!(error, Error::Data(message) if message.contains("second")));
     assert_eq!(
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
@@ -251,11 +252,14 @@ fn assigned_panel_marks_match_canonical_projection_fingerprints() {
             let theme = preset
                 .resolve(&crate::font::canonical::OperationGenerationResources::new())
                 .unwrap();
-            let plot =
-                crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                    .unwrap()
-                    .attach(source.clone())
-                    .unwrap();
+            let plot = crate::plots::shared_x::prepare_plot(
+                &source,
+                &OperationGenerationResources::new(),
+                None,
+            )
+            .unwrap()
+            .attach(source.clone())
+            .unwrap();
             for panel in [
                 crate::layout::PanelBox::new(80.25, 550.75, 70.5, 410.25),
                 crate::layout::PanelBox::new(30.0, 810.0, 50.0, 600.0),
@@ -287,11 +291,14 @@ fn assigned_panel_marks_match_canonical_projection_fingerprints() {
 fn canonical_distribution_coordinates_preserve_quartiles_and_observations() {
     for source in sources(None).into_iter().chain([supplied()]) {
         let source = source.labels(crate::Labels::raw());
-        let plot =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap()
-                .attach(source)
-                .unwrap();
+        let plot = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap()
+        .attach(source)
+        .unwrap();
         let theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
@@ -432,7 +439,7 @@ fn semantics_are_admitted_once_before_fonts_and_shared_on_attachment() {
         STAGES.with(|counts| counts.set([[0; 4]; 3]));
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
         let resources = OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         assert_eq!(
             STAGES
                 .with(std::cell::Cell::get)
@@ -446,13 +453,15 @@ fn semantics_are_admitted_once_before_fonts_and_shared_on_attachment() {
         for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
             assert!(crate::plots::shared_x::prepare_plot(
                 &source,
-                &OperationGenerationResources::with_test_limits(visits, bytes)
+                &OperationGenerationResources::with_test_limits(visits, bytes),
+                None,
             )
             .is_err());
         }
         crate::plots::shared_x::prepare_plot(
             &source,
             &OperationGenerationResources::with_test_limits(visits, bytes),
+            None,
         )
         .unwrap();
         let attached = inputs.attach(source).unwrap();
@@ -513,7 +522,11 @@ fn invalid_sample_statistics_fail_before_font_discovery() {
     ] {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
         assert!(matches!(
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new()),
+            crate::plots::shared_x::prepare_plot(
+                &source,
+                &OperationGenerationResources::new(),
+                None
+            ),
             Err(Error::Data(_))
         ));
         assert_eq!(
@@ -577,9 +590,12 @@ fn parent_palette_and_absent_series_slots_are_retained_before_native_projection(
         let source = source
             .with_global_group_levels(vec!["absent".into(), "two".into(), "one".into()])
             .with_global_hue_levels(vec!["absent".into(), "two".into(), "one".into()]);
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let plot = inputs.attach(source).unwrap();
         let sample = match retained(&plot).unwrap() {
             PreparedDistribution::Boxplot(input) => &input.sample,
@@ -602,11 +618,14 @@ fn parent_palette_and_absent_series_slots_are_retained_before_native_projection(
             let theme = preset
                 .resolve(&crate::font::canonical::OperationGenerationResources::new())
                 .unwrap();
-            let plot =
-                crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new())
-                    .unwrap()
-                    .attach(plot.clone())
-                    .unwrap();
+            let plot = crate::plots::shared_x::prepare_plot(
+                &plot,
+                &OperationGenerationResources::new(),
+                None,
+            )
+            .unwrap()
+            .attach(plot.clone())
+            .unwrap();
             let result = plot
                 .measure_selected_interior(PlotRenderContext::new(
                     plot.data(),
@@ -638,8 +657,11 @@ fn parent_palette_and_absent_series_slots_are_retained_before_native_projection(
             };
             assert_eq!(
                 colors,
-                [theme.colors[2], theme.colors[1]]
-                    .map(|color| crate::theme::color_from_rgb(color).with_alpha(alpha))
+                [
+                    theme.color_scales.qualitative().colors()[2].as_rgb(),
+                    theme.color_scales.qualitative().colors()[1].as_rgb()
+                ]
+                .map(|color| crate::theme::color_from_rgb(color).with_alpha(alpha))
             );
         }
     }
@@ -651,9 +673,12 @@ fn selected_mark_snapshot_matches_drawn_geometry() {
         let theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let attached = inputs.attach(source).unwrap();
         let selected = attached
             .measure_selected_interior(PlotRenderContext::new(
@@ -695,8 +720,11 @@ fn poisoned_capture_repeats_no_sources_statistics_projection_axes_or_shaping() {
             640,
             480,
             |stage| {
-                let inputs =
-                    crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
+                let inputs = crate::plots::shared_x::prepare_plot(
+                    &source,
+                    &stage.generation_resources(),
+                    None,
+                )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     None,
                     &source,

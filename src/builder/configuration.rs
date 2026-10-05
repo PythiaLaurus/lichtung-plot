@@ -378,7 +378,8 @@ impl Plot<crate::kind::Heatmap> {
         mut self,
         stops: Vec<crate::render::backend::GradientStop>,
     ) -> Self {
-        self.heatmap_gradient = Some(stops);
+        self.heatmap_gradient =
+            Some(crate::theme::scale_values::gradient_input(stops).map_err(|e| e.to_string()));
         self
     }
 
@@ -426,7 +427,8 @@ impl Plot<crate::kind::Beeswarm> {
         mut self,
         stops: Vec<crate::render::backend::GradientStop>,
     ) -> Self {
-        self.beeswarm_gradient = Some(stops);
+        self.beeswarm_gradient =
+            Some(crate::theme::scale_values::gradient_input(stops).map_err(|e| e.to_string()));
         self
     }
 

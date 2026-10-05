@@ -112,7 +112,7 @@ fn marginal_auto_recovers_from_scoped_terminal_tick_miss() {
         .prepared_font_environment()
         .unwrap()
         .generation_resources();
-    let prepared = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
+    let prepared = crate::plots::shared_x::prepare_plot(&plot, &resources, None).unwrap();
     let plot = prepared.attach(plot).unwrap();
     // The real guide title makes preferred/compact entry allocations identical.
     // At this width the guide fits, but its linked central x-axis cannot fit
@@ -249,7 +249,7 @@ fn automatic_guide_recovers_from_terminal_numeric_tick_miss() {
         .prepared_font_environment()
         .unwrap()
         .generation_resources();
-    let prepared = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
+    let prepared = crate::plots::shared_x::prepare_plot(&plot, &resources, None).unwrap();
     let plot = prepared.attach(plot).unwrap();
     // Preserve the scientific domain and actual guide text. Preferred Right
     // reaches the complete caller source; its logical text allocation misses,
@@ -411,6 +411,7 @@ fn specialized_producer_plans_survive_first_capture_without_shaping() {
                     Some(crate::plots::shared_x::prepare_plot(
                         &plot,
                         &stage.generation_resources(),
+                        None,
                     )?)
                 } else {
                     None
@@ -582,8 +583,11 @@ fn automatic_outside_guide_respects_native_body_intrinsics_before_allocation() {
             plot.width(),
             plot.height(),
             |stage| {
-                let inputs =
-                    crate::plots::shared_x::prepare_plot(&plot, &stage.generation_resources())?;
+                let inputs = crate::plots::shared_x::prepare_plot(
+                    &plot,
+                    &stage.generation_resources(),
+                    None,
+                )?;
                 prepare_guide_producer_fonts(
                     &plot,
                     &inputs,
@@ -679,7 +683,7 @@ fn clearance_arithmetic_failures_are_fatal_through_every_owner() {
     let plot =
         crate::kind::into_erased(line_plot(&line_data(["upper", "upper", "lower", "lower"])));
     let resources = crate::font::canonical::OperationGenerationResources::new();
-    let plot = crate::plots::shared_x::prepare_plot(&plot, &resources)
+    let plot = crate::plots::shared_x::prepare_plot(&plot, &resources, None)
         .unwrap()
         .attach(plot)
         .unwrap();
@@ -827,6 +831,7 @@ fn annotation_conflict_links_only_to_a_resolving_assignment() {
             .prepared_font_environment()
             .unwrap()
             .generation_resources(),
+        None,
     )
     .unwrap()
     .attach(initial_source)
@@ -871,6 +876,7 @@ fn annotation_conflict_links_only_to_a_resolving_assignment() {
             crate::plots::shared_x::prepare_plot(
                 &source.clone().erase(),
                 &stage.generation_resources(),
+                None,
             )
         },
         |inputs, assigned, round| {
@@ -941,8 +947,11 @@ fn automatic_outside_guides_avoid_annotations_at_all_inside_corners() {
             source.width(),
             source.height(),
             |stage| {
-                let inputs =
-                    crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
+                let inputs = crate::plots::shared_x::prepare_plot(
+                    &source,
+                    &stage.generation_resources(),
+                    None,
+                )?;
                 let source = inputs.attach(source.clone())?;
                 prepare_guide_producer_fonts(&source, &inputs, &theme, &address, stage)?;
                 let initial = source.preflight_panel(
@@ -1179,7 +1188,7 @@ fn auto_legend_avoids_recorded_line_and_ribbon_geometry() {
     let plot_with_planned_limits = plan.plot_with_planned_limits(&plot, plot.data()).unwrap();
     let resources = crate::font::canonical::OperationGenerationResources::new();
     let plot_with_planned_limits =
-        crate::plots::shared_x::prepare_plot(&plot_with_planned_limits, &resources)
+        crate::plots::shared_x::prepare_plot(&plot_with_planned_limits, &resources, None)
             .unwrap()
             .attach(plot_with_planned_limits)
             .unwrap();
@@ -1210,7 +1219,7 @@ fn production_geometry_discovery_returns_a_backend_independent_snapshot() {
     let data = line_data(["upper", "upper", "lower", "lower"]);
     let plot = crate::kind::into_erased(line_plot(&data));
     let resources = crate::font::canonical::OperationGenerationResources::new();
-    let plot = crate::plots::shared_x::prepare_plot(&plot, &resources)
+    let plot = crate::plots::shared_x::prepare_plot(&plot, &resources, None)
         .unwrap()
         .attach(plot)
         .unwrap();
@@ -1230,7 +1239,7 @@ fn automatic_legend_ignores_zero_width_lines_but_avoids_painted_lines() {
     let data = line_data(["upper", "upper", "lower", "lower"]);
     let plot = crate::kind::into_erased(line_plot(&data));
     let resources = crate::font::canonical::OperationGenerationResources::new();
-    let plot = crate::plots::shared_x::prepare_plot(&plot, &resources)
+    let plot = crate::plots::shared_x::prepare_plot(&plot, &resources, None)
         .unwrap()
         .attach(plot)
         .unwrap();
@@ -1529,7 +1538,7 @@ fn scatter_painted_edges_expand_both_automatic_axes_in_one_root_feedback_driver(
         .prepared_font_environment()
         .unwrap()
         .generation_resources();
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let cell = PanelBox::new(70.0, 270.0, 70.0, 270.0);
     let result = plan_panel(&chart, PlotKind::Scatter, cell, LegendRole::Panel, &theme).unwrap();
@@ -1575,7 +1584,7 @@ fn line_marker_ink_uses_the_same_root_domain_feedback_without_explicit_clipping(
         .prepared_font_environment()
         .unwrap()
         .generation_resources();
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let cell = PanelBox::new(70.0, 270.0, 70.0, 270.0);
     let result = plan_panel(&chart, PlotKind::Line, cell, LegendRole::Panel, &theme).unwrap();
@@ -1621,7 +1630,7 @@ fn line_ribbon_full_stroke_is_retained_inside_the_final_automatic_panel() {
         .prepared_font_environment()
         .unwrap()
         .generation_resources();
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let cell = PanelBox::new(70.0, 420.0, 70.0, 420.0);
     let minimum = chart.intrinsic_body_minimum(&theme).unwrap();
@@ -1667,7 +1676,7 @@ fn line_ribbon_full_stroke_is_retained_inside_the_final_automatic_panel() {
         .prepared_font_environment()
         .unwrap()
         .generation_resources();
-    let inputs = crate::plots::shared_x::prepare_plot(&exact_source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&exact_source, &resources, None).unwrap();
     let exact_chart = inputs.attach(exact_source).unwrap();
     let exact = plan_panel(
         &exact_chart,
@@ -1691,7 +1700,7 @@ fn qq_observation_ink_expands_two_automatic_domains_without_moving_source_quanti
         .prepared_font_environment()
         .unwrap()
         .generation_resources();
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let cell = PanelBox::new(70.0, 420.0, 70.0, 420.0);
     let result = plan_panel(&chart, PlotKind::Qq, cell, LegendRole::Panel, &theme).unwrap();
@@ -1729,7 +1738,7 @@ fn qq_observation_ink_expands_two_automatic_domains_without_moving_source_quanti
         .prepared_font_environment()
         .unwrap()
         .generation_resources();
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let exact = plan_panel(&chart, PlotKind::Qq, cell, LegendRole::Panel, &theme).unwrap();
     assert!(exact.planned_x_limits().is_none());
@@ -1752,7 +1761,7 @@ fn regression_observation_ink_remeasures_under_root_feedback_without_changing_ol
         .prepared_font_environment()
         .unwrap()
         .generation_resources();
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let cell = PanelBox::new(70.0, 420.0, 70.0, 420.0);
     let result = plan_panel(
@@ -1815,7 +1824,7 @@ fn grouped_dumbbell_endpoints_clear_only_the_automatic_numeric_axis() {
         .prepared_font_environment()
         .unwrap()
         .generation_resources();
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let cell = PanelBox::new(80.0, 900.0, 80.0, 800.0);
     let selected = plan_panel(
@@ -1881,7 +1890,7 @@ fn bar_orientations_clear_the_painted_zero_edge_through_one_numeric_feedback_own
             .prepared_font_environment()
             .unwrap()
             .generation_resources();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let cell = PanelBox::new(80.0, 700.0, 80.0, 520.0);
         let selected = plan_panel(&chart, chart.kind(), cell, LegendRole::Panel, &theme).unwrap();
@@ -1936,7 +1945,7 @@ fn boxplot_whisker_and_body_ink_clear_the_automatic_value_edge() {
         .prepared_font_environment()
         .unwrap()
         .generation_resources();
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let cell = PanelBox::new(80.0, 700.0, 80.0, 520.0);
     let selected = plan_panel(&chart, PlotKind::Boxplot, cell, LegendRole::Panel, &theme).unwrap();
@@ -1978,7 +1987,7 @@ fn boxplot_whisker_and_body_ink_clear_the_automatic_value_edge() {
         .prepared_font_environment()
         .unwrap()
         .generation_resources();
-    let inputs = crate::plots::shared_x::prepare_plot(&exact_source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&exact_source, &resources, None).unwrap();
     let exact_chart = inputs.attach(exact_source).unwrap();
     let exact = plan_panel(
         &exact_chart,
@@ -2015,7 +2024,7 @@ fn supplemental_bar_point_outside_bar_values_extends_numeric_ink_domain() {
         .prepared_font_environment()
         .unwrap()
         .generation_resources();
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let cell = PanelBox::new(80.0, 700.0, 80.0, 520.0);
     let selected = plan_panel(&chart, PlotKind::Bar, cell, LegendRole::Panel, &theme).unwrap();
@@ -2047,7 +2056,7 @@ fn density_curve_support_clears_automatic_edges_without_repreparing_kde() {
         .prepared_font_environment()
         .unwrap()
         .generation_resources();
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let cell = PanelBox::new(70.0, 420.0, 70.0, 420.0);
     let result = plan_panel(&chart, PlotKind::Density, cell, LegendRole::Panel, &theme).unwrap();
@@ -2076,7 +2085,7 @@ fn density_curve_support_clears_automatic_edges_without_repreparing_kde() {
         .prepared_font_environment()
         .unwrap()
         .generation_resources();
-    let inputs = crate::plots::shared_x::prepare_plot(&exact_source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&exact_source, &resources, None).unwrap();
     let exact_chart = inputs.attach(exact_source).unwrap();
     let exact = plan_panel(
         &exact_chart,
@@ -2120,7 +2129,7 @@ fn histogram_bin_and_overlay_ink_remeasure_under_one_root_domain_owner() {
         .prepared_font_environment()
         .unwrap()
         .generation_resources();
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let cell = PanelBox::new(70.0, 420.0, 70.0, 420.0);
     let result = plan_panel(&chart, PlotKind::Histogram, cell, LegendRole::Panel, &theme).unwrap();
@@ -2172,7 +2181,7 @@ fn auto_legend_keeps_categorical_tracks_while_clearing_painted_zero_ink() {
     let data = dense_horizontal_data();
     let plot = dense_bar_plot(&data, true);
     let resources = crate::font::canonical::OperationGenerationResources::new();
-    let plot = crate::plots::shared_x::prepare_plot(&plot, &resources)
+    let plot = crate::plots::shared_x::prepare_plot(&plot, &resources, None)
         .unwrap()
         .attach(plot)
         .unwrap();
@@ -2339,7 +2348,7 @@ fn automatic_clearance_does_not_expand_categorical_domains() {
     let data = dense_horizontal_data();
     let plot = dense_bar_plot(&data, true);
     let resources = crate::font::canonical::OperationGenerationResources::new();
-    let plot = crate::plots::shared_x::prepare_plot(&plot, &resources)
+    let plot = crate::plots::shared_x::prepare_plot(&plot, &resources, None)
         .unwrap()
         .attach(plot)
         .unwrap();

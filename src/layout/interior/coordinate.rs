@@ -539,7 +539,7 @@ mod intrinsic_tests {
             .y_label("")
             .erase();
             let resources = crate::font::canonical::OperationGenerationResources::new();
-            let chart = crate::plots::shared_x::prepare_plot(&source, &resources)
+            let chart = crate::plots::shared_x::prepare_plot(&source, &resources, None)
                 .unwrap()
                 .attach(source)
                 .unwrap();
@@ -589,7 +589,7 @@ mod intrinsic_tests {
             .y_label("")
             .erase();
             let resources = crate::font::canonical::OperationGenerationResources::new();
-            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
             let chart = inputs.attach(source).unwrap();
             let theme = crate::Theme::Publication
                 .resolve(&crate::font::canonical::OperationGenerationResources::new())

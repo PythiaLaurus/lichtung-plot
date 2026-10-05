@@ -2739,7 +2739,12 @@ mod tests {
             ))
             .erase();
             let resources = crate::font::canonical::OperationGenerationResources::new();
-            let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
+            let inputs = crate::plots::shared_x::prepare_plot(
+                &plot,
+                &resources,
+                Some(&crate::theme::scale_values::test_defaults()),
+            )
+            .unwrap();
             let mut theme = crate::Theme::Publication
                 .resolve(&canonical::OperationGenerationResources::new())
                 .unwrap();
@@ -2789,7 +2794,12 @@ mod tests {
         )
         .erase();
         let resources = crate::font::canonical::OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &plot,
+            &resources,
+            Some(&crate::theme::scale_values::test_defaults()),
+        )
+        .unwrap();
         let mut theme = crate::Theme::Publication
             .resolve(&canonical::OperationGenerationResources::new())
             .unwrap();
@@ -2851,7 +2861,12 @@ mod tests {
         ))
         .erase();
         let resources = crate::font::canonical::OperationGenerationResources::new();
-        let mut inputs = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
+        let mut inputs = crate::plots::shared_x::prepare_plot(
+            &plot,
+            &resources,
+            Some(&crate::theme::scale_values::test_defaults()),
+        )
+        .unwrap();
         let mut theme = crate::Theme::Publication
             .resolve(&canonical::OperationGenerationResources::new())
             .unwrap();
@@ -2888,6 +2903,15 @@ mod tests {
             canonical::named_stack(&["Selected light contrast"])
         );
         let descriptor = crate::decorations::legend::descriptor::ContinuousDescriptor {
+            selection: crate::theme::ContinuousColorScale::sequential(
+                Some(
+                    crate::theme::scale_values::test_defaults()
+                        .sequential()
+                        .clone(),
+                ),
+                None,
+            )
+            .unwrap(),
             field: "fill".into(),
             title: "Fill".into(),
             stops: vec![
@@ -2928,7 +2952,12 @@ mod tests {
         ])
         .erase();
         let resources = crate::font::canonical::OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &plot,
+            &resources,
+            Some(&crate::theme::scale_values::test_defaults()),
+        )
+        .unwrap();
         let mut theme = crate::Theme::Publication
             .resolve(&canonical::OperationGenerationResources::new())
             .unwrap();
@@ -2994,8 +3023,11 @@ mod tests {
                 800,
                 600,
                 |stage| {
-                    let inputs =
-                        crate::plots::shared_x::prepare_plot(&plot, &stage.generation_resources())?;
+                    let inputs = crate::plots::shared_x::prepare_plot(
+                        &plot,
+                        &stage.generation_resources(),
+                        Some(&crate::theme::scale_values::test_defaults()),
+                    )?;
                     let requirements = foundational_plot_requirements(
                         Some(&inputs),
                         &plot,

@@ -500,7 +500,7 @@ mod tests {
     fn grouped_dumbbell_pitch_tracks_only_occupied_endpoint_slots() {
         let plot = source().erase();
         let resources = OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources, None).unwrap();
         let chart = inputs.attach(plot).unwrap();
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -513,7 +513,7 @@ mod tests {
 
         let plot = source().x_limits(0.0, 5.0).erase();
         let resources = OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources, None).unwrap();
         let chart = inputs.attach(plot).unwrap();
         let exact = chart.intrinsic_body_minimum(&theme).unwrap();
         assert_eq!(exact.0.to_bits(), base.0.to_bits());
@@ -526,7 +526,7 @@ mod tests {
         STAGES.with(|counts| counts.set([0; 4]));
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
         let resources = OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources, None).unwrap();
         assert_eq!(STAGES.with(std::cell::Cell::get), [1, 0, 0, 0]);
         assert_eq!(inputs.axes[0].1.ranges, [(0.85, 4.15), (0.0, 2.0)]);
         let bytes = resources.byte_usage().unwrap();
@@ -534,13 +534,15 @@ mod tests {
         for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
             assert!(crate::plots::shared_x::prepare_plot(
                 &plot,
-                &OperationGenerationResources::with_test_limits(visits, bytes)
+                &OperationGenerationResources::with_test_limits(visits, bytes),
+                None,
             )
             .is_err());
         }
         crate::plots::shared_x::prepare_plot(
             &plot,
             &OperationGenerationResources::with_test_limits(visits, bytes),
+            None,
         )
         .unwrap();
         assert_eq!(
@@ -601,7 +603,7 @@ mod tests {
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
         let resources = OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let attached = inputs.attach(source).unwrap();
         let selected = attached
             .measure_selected_interior(PlotRenderContext::new(
@@ -676,6 +678,7 @@ mod tests {
                 let prepared = crate::plots::shared_x::prepare_plot(
                     &plot,
                     &OperationGenerationResources::new(),
+                    None,
                 );
                 if inside_union && matches!(scales, FacetScales::Fixed | FacetScales::FreeY) {
                     let prepared = prepared.unwrap();
@@ -709,8 +712,11 @@ mod tests {
             640,
             480,
             |stage| {
-                let inputs =
-                    crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
+                let inputs = crate::plots::shared_x::prepare_plot(
+                    &source,
+                    &stage.generation_resources(),
+                    None,
+                )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     None,
                     &source,

@@ -93,9 +93,12 @@ fn native_bars_preserve_signed_stacks_midpoints_raw_labels_and_assigned_projecti
         let horizontal = family % 2 == 1;
         let source =
             source.labels(crate::Labels::humanized().alias("after_visit", "Follow-up visit"));
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         assert_eq!(inputs.route, InteriorRoute::OneCategoricalAxis(route));
         let plot = inputs.attach(source).unwrap();
         let prepared = crate::plots::bar_data::retained(&plot).unwrap();
@@ -248,9 +251,12 @@ fn native_hidden_horizontal_categories_preserve_identity_without_intrinsic_or_gu
                 "after_visit",
                 "First line\nSecond line\nThird line\nFourth line",
             ));
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let plot = inputs.attach(source).unwrap();
         let theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -300,9 +306,12 @@ fn native_bar_domain_feedback_is_conditional_and_final_axes_match_marks_at_the_p
     for (family, source) in configured_sources(true).into_iter().enumerate() {
         let horizontal = family % 2 == 1;
         let source = source.with_suppressed_legend().size(900, 700);
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let plot = inputs.attach(source).unwrap();
         let theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -453,9 +462,12 @@ fn native_bar_fixed_limits_and_exact_numeric_labels_never_expand_and_invalid_sou
                     crate::AxisTick::new(range.1, "raw_upper"),
                 ],
             );
-            let inputs =
-                crate::plots::shared_x::prepare_plot(&exact, &OperationGenerationResources::new())
-                    .unwrap();
+            let inputs = crate::plots::shared_x::prepare_plot(
+                &exact,
+                &OperationGenerationResources::new(),
+                None,
+            )
+            .unwrap();
             let plot = inputs.attach(exact).unwrap();
             let theme = crate::Theme::Publication
                 .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -520,9 +532,12 @@ fn native_bar_signs_keep_the_scientific_zero_anchor_in_both_orientations() {
             Plot::stacked_horizontal_bar(categories, numeric, series).erase(),
         ];
         for (family, source) in plots.into_iter().enumerate() {
-            let inputs =
-                crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                    .unwrap();
+            let inputs = crate::plots::shared_x::prepare_plot(
+                &source,
+                &OperationGenerationResources::new(),
+                None,
+            )
+            .unwrap();
             let range = inputs.axes[0].1.ranges[usize::from(family % 2 == 0)];
             if values.iter().all(|value| *value >= 0.0) {
                 assert_eq!(range.0.to_bits(), 0.0_f64.to_bits());

@@ -148,6 +148,10 @@ fn scoped_guide<'a, T>(
 
 /// The prepared scope owns the guide. No panel assignment or edge trial occurs
 /// while this intrinsic input is retained.
+#[expect(
+    clippy::too_many_lines,
+    reason = "both continuous families transport their complete retained selection and owner-local guide operands"
+)]
 pub(crate) fn guided_preference(
     plot: &Plot,
     inputs: &super::PreparedInteriorInputs,
@@ -173,7 +177,7 @@ pub(crate) fn guided_preference(
                 let indices: &[usize] =
                     if semantics.domain.0.to_bits() == semantics.domain.1.to_bits() {
                         &[0]
-                    } else if semantics.center.is_some_and(|center| {
+                    } else if semantics.selection.center().is_some_and(|center| {
                         center > semantics.domain.0 && center < semantics.domain.1
                     }) {
                         &[0, 2, 1]
@@ -183,8 +187,15 @@ pub(crate) fn guided_preference(
                 ContinuousDescriptor {
                     field: data.copy_source_string(plot.color_dimension_key().unwrap_or(""))?,
                     title: data.copy_source_string(&marks.color_label)?,
-                    stops: semantics.stops,
-                    center: semantics.center,
+                    stops: data.collect_source(
+                        semantics
+                            .selection
+                            .stops()?
+                            .iter()
+                            .map(|s| Ok(s.backend_stop())),
+                    )?,
+                    center: semantics.selection.center(),
+                    selection: semantics.selection,
                     missing: semantics.missing,
                     domain: semantics.domain,
                     exact: plot.heatmap_color_limits_spec().is_some(),
@@ -211,8 +222,15 @@ pub(crate) fn guided_preference(
                 ContinuousDescriptor {
                     field: data.copy_source_string(plot.color_dimension_key().unwrap_or(""))?,
                     title: data.copy_source_string(&marks.color_label)?,
-                    stops: semantics.stops,
-                    center: semantics.center,
+                    stops: data.collect_source(
+                        semantics
+                            .selection
+                            .stops()?
+                            .iter()
+                            .map(|s| Ok(s.backend_stop())),
+                    )?,
+                    center: semantics.selection.center(),
+                    selection: semantics.selection,
                     missing: semantics.missing,
                     domain: semantics.domain,
                     exact: plot.beeswarm_color_limits_spec().is_some(),
@@ -610,6 +628,15 @@ mod tests {
         theme.legend.frame_stroke_width = 30.0;
         theme.legend.frame_radius = 50.0;
         let descriptor = crate::decorations::legend::descriptor::ContinuousDescriptor {
+            selection: crate::theme::ContinuousColorScale::sequential(
+                Some(
+                    crate::theme::scale_values::test_defaults()
+                        .sequential()
+                        .clone(),
+                ),
+                None,
+            )
+            .unwrap(),
             field: "signal".into(),
             title: "Signal".into(),
             stops: vec![

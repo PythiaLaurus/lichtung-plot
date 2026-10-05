@@ -754,7 +754,7 @@ mod tests {
         };
         let intrinsic = |source: crate::Plot, theme: &crate::theme::ResolvedTheme| {
             let resources = crate::font::canonical::OperationGenerationResources::new();
-            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
             inputs
                 .attach(source)
                 .unwrap()
@@ -849,7 +849,7 @@ mod tests {
                     .erase()
             };
             let resources = crate::font::canonical::OperationGenerationResources::new();
-            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
             let chart = inputs.attach(source).unwrap();
             let cell = crate::layout::PanelBox::new(80.0, 1500.0, 80.0, 800.0);
             let selected = crate::decorations::plan::plan_panel_for_test(

@@ -6,6 +6,7 @@
     reason = "T5d1 numerical kernel is wired to active scale consumers in T5d2/T5d3"
 )]
 
+use super::OpaqueColor;
 use crate::font::canonical::OperationGenerationResources;
 use crate::Error;
 use num_bigint::BigUint;
@@ -457,13 +458,13 @@ struct PaletteCharacter {
 struct CandidateChoice {
     distance: f64,
     index: usize,
-    color: (u8, u8, u8),
+    color: OpaqueColor,
     lab: Oklab,
 }
 
 #[derive(Clone, Copy)]
 struct PaletteCandidate {
-    color: (u8, u8, u8),
+    color: OpaqueColor,
     lab: Option<Oklab>,
 }
 
@@ -497,17 +498,17 @@ fn candidate_lab(character: PaletteCharacter, ordinal: usize) -> Oklab {
 
 fn select_candidate(
     character: PaletteCharacter,
-    colors: &[(u8, u8, u8)],
+    colors: &[OpaqueColor],
     labs: &[Oklab],
     candidates: usize,
     generated: &mut Vec<PaletteCandidate>,
     resources: &OperationGenerationResources,
-) -> Result<((u8, u8, u8), Oklab), Error> {
+) -> Result<(OpaqueColor, Oklab), Error> {
     for ordinal in generated.len()..candidates {
         resources.claim_visits(1).map_err(work_error)?;
         let (rgb, _) = candidate_lab(character, ordinal).reduced_rgb(resources)?;
         generated.push(PaletteCandidate {
-            color: rgb,
+            color: OpaqueColor::rgb(rgb.0, rgb.1, rgb.2),
             lab: None,
         });
     }
@@ -529,7 +530,7 @@ fn select_candidate(
         let actual = if let Some(lab) = candidate.lab {
             lab
         } else {
-            let lab = Oklab::from_rgb(rgb, resources)?;
+            let lab = Oklab::from_rgb(rgb.as_rgb(), resources)?;
             candidate.lab = Some(lab);
             lab
         };
@@ -578,10 +579,10 @@ fn admit_candidates(
 }
 
 pub(super) fn extend_palette(
-    seeds: &[(u8, u8, u8)],
+    seeds: &[OpaqueColor],
     requested: usize,
     resources: &OperationGenerationResources,
-) -> Result<Vec<(u8, u8, u8)>, Error> {
+) -> Result<Vec<OpaqueColor>, Error> {
     if seeds.is_empty() {
         return Err(Error::Data(
             "extendable color palette requires a nonempty prefix".into(),
@@ -595,7 +596,7 @@ pub(super) fn extend_palette(
             .claim_slots(requested as u128)
             .map_err(work_error)?;
         let bytes = requested
-            .checked_mul(std::mem::size_of::<(u8, u8, u8)>())
+            .checked_mul(std::mem::size_of::<OpaqueColor>())
             .and_then(|bytes| u64::try_from(bytes).ok())
             .ok_or_else(|| Error::Render("palette prefix storage overflowed".into()))?;
         resources
@@ -627,7 +628,7 @@ pub(super) fn extend_palette(
     lab.try_reserve_exact(records)
         .map_err(|_| Error::Render("cannot reserve resolved OKLab colors".into()))?;
     for &color in seeds {
-        lab.push(Oklab::from_rgb(color, resources)?);
+        lab.push(Oklab::from_rgb(color.as_rgb(), resources)?);
         if result.len() < requested {
             result.push(color);
         }
@@ -982,14 +983,18 @@ mod tests {
 
     #[test]
     fn candidate_order_is_prefix_stable_and_never_cycles_a_seed() {
-        let seeds = [(0, 114, 178), (230, 159, 0)];
+        let seeds = [OpaqueColor::rgb(0, 114, 178), OpaqueColor::rgb(230, 159, 0)];
         let short = extend_palette(&seeds, 3, &OperationGenerationResources::new()).unwrap();
         let extended = extend_palette(&seeds, 5, &OperationGenerationResources::new()).unwrap();
         assert_eq!(short.as_slice(), &extended[..3]);
         assert_eq!(&extended[..2], &seeds);
         assert_eq!(
             &extended[2..],
-            &[(192, 83, 122), (76, 145, 54), (157, 138, 238)]
+            &[
+                OpaqueColor::rgb(192, 83, 122),
+                OpaqueColor::rgb(76, 145, 54),
+                OpaqueColor::rgb(157, 138, 238)
+            ]
         );
         assert!(extended
             .iter()
@@ -999,7 +1004,7 @@ mod tests {
         let first = CandidateChoice {
             distance: 0.25,
             index: 5,
-            color: (0, 0, 0),
+            color: OpaqueColor::rgb(0, 0, 0),
             lab: Oklab {
                 l: 0.0,
                 a: 0.0,

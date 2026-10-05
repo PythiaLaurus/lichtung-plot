@@ -6,7 +6,7 @@ use crate::render::backend::{
     with_clip, Backend, FillStyle, LineStyle, PlacedText, Point2D, PointStyle, TextAnchor,
 };
 use crate::spec::{AxisDomain, LinePathStyle, PlotRenderContext, PlotRenderResult};
-use crate::theme::{AccentColors, CategoryColors, PaletteSource};
+use crate::theme::{AccentColors, CategoryColors};
 use crate::{Error, Plot, PlotKind};
 
 #[cfg(test)]
@@ -167,7 +167,7 @@ impl PreparedLine {
         let resources = data.source_resources()?;
         let map = CategoryColors::resolve(
             chart.global_hue_levels().unwrap_or(&self.hues),
-            PaletteSource::Extendable(theme),
+            theme.color_scales.qualitative(),
             chart.categorical_colors_spec(),
             resources,
         )?;
@@ -175,7 +175,7 @@ impl PreparedLine {
             .primary_accent_slots
             .checked_add(self.layers.len())
             .ok_or_else(|| Error::Render("Line accent slot count overflowed".into()))?;
-        let accent = AccentColors::resolve(&theme.colors, slots, resources)?;
+        let accent = AccentColors::resolve(&theme.marks.accents, slots, resources)?;
         Ok((map, accent))
     }
 
@@ -422,7 +422,7 @@ impl PreparedLine {
         )?;
         if let Some(exact) = chart.categorical_colors_spec() {
             for hue in &hues {
-                if exact.color(hue, data.source_resources()?)?.is_none() {
+                if exact.color_in(hue, data.source_resources()?)?.is_none() {
                     return Err(Error::Data(format!(
                         "line: category {hue:?} has no caller-owned color"
                     )));

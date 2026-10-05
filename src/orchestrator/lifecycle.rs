@@ -43,20 +43,32 @@ fn plot_preset_construction_refuses_on_its_prepared_ledger_before_fonts_or_backe
         + std::mem::size_of::<f64>()
         + 2 * std::mem::size_of::<usize>()) as u64
         + 4 * (16 + std::mem::size_of::<num_bigint::BigUint>() as u64);
-    let bytes = 2 * outline_bytes;
     for preset in [
         crate::Theme::Publication,
         crate::Theme::Nature,
         crate::Theme::Science,
         crate::Theme::CHI,
     ] {
+        let seeds = if preset == crate::Theme::Publication {
+            8
+        } else {
+            5
+        };
+        // Two opaque seed payloads, two stop payloads, four Vec/Arc headers;
+        // element retention plus endpoint/order/neutral validation is admitted.
+        let bytes = 2 * outline_bytes
+            + 4 * (std::mem::size_of::<Vec<crate::theme::OpaqueColor>>()
+                + 2 * std::mem::size_of::<usize>()) as u64
+            + 2 * seeds * std::mem::size_of::<crate::theme::OpaqueColor>() as u64
+            + 5 * std::mem::size_of::<crate::theme::ColorStop>() as u64;
+        let work = 31_u128 + 2 * u128::from(seeds);
         let source = plot.clone().theme(preset);
         for (visits, byte_limit) in [
             (0, bytes),
-            (10, 0),
-            (9, bytes),
-            (10, bytes - 1),
-            (10, bytes),
+            (work, 0),
+            (work - 1, bytes),
+            (work, bytes - 1),
+            (work, bytes),
         ] {
             let retained = std::cell::RefCell::new(None::<OperationGenerationResources>);
             FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
@@ -69,7 +81,7 @@ fn plot_preset_construction_refuses_on_its_prepared_ledger_before_fonts_or_backe
                     *retained.borrow_mut() = Some(resources.clone());
                     resources.set_test_limits(visits, byte_limit);
                     let theme = source.theme_spec().unwrap().resolve(resources)?;
-                    assert_eq!(resources.usage().unwrap().1, 10);
+                    assert_eq!(resources.usage().unwrap().1, work);
                     assert_eq!(resources.byte_usage().unwrap(), bytes);
                     assert_eq!(
                         theme
@@ -91,16 +103,22 @@ fn plot_preset_construction_refuses_on_its_prepared_ledger_before_fonts_or_backe
             let error = result.err().unwrap().to_string();
             let resources = retained.borrow();
             let resources = resources.as_ref().unwrap();
-            if (visits, byte_limit) == (10, bytes) {
+            if (visits, byte_limit) == (work, bytes) {
                 assert!(error.contains("preset construction boundary reached"));
-                assert_eq!(resources.usage().unwrap().1, 10);
+                assert_eq!(resources.usage().unwrap().1, work);
                 assert_eq!(resources.byte_usage().unwrap(), bytes);
             } else {
                 assert!(
-                    error.contains("relative spacing:") && error.contains("admission"),
+                    error.contains("admission")
+                        || error.contains("scale input")
+                        || error.contains("gradient validation")
+                        || error.contains("bytes limit"),
                     "{error}"
                 );
-                assert!(resources.byte_usage().unwrap() < bytes);
+                assert!(resources.byte_usage().unwrap() <= bytes);
+                if byte_limit < bytes {
+                    assert!(resources.byte_usage().unwrap() < bytes);
+                }
             }
             FONT_DISCOVERY_CALLS.with(|calls| assert_eq!(calls.get(), 0));
             crate::render::svg_backend::SVG_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
@@ -711,6 +729,7 @@ impl PlotPlan {
                 let axes = crate::plots::shared_x::prepare_plot(
                     source,
                     &prepared_stage.generation_resources(),
+                    Some(&theme.color_scales),
                 )?;
                 let facet_guide = source
                     .has_facets()
@@ -1187,7 +1206,11 @@ mod root_title_tests {
                 800,
                 600,
                 |stage| {
-                    crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())
+                    crate::plots::shared_x::prepare_plot(
+                        &source,
+                        &stage.generation_resources(),
+                        None,
+                    )
                 },
                 |inputs, assigned, round| {
                     let plot = inputs.attach(source.clone())?;
@@ -1247,6 +1270,7 @@ mod root_title_tests {
                 let prepared = crate::plots::shared_x::prepare_plot(
                     &plot,
                     &crate::font::canonical::OperationGenerationResources::new(),
+                    None,
                 )
                 .unwrap()
                 .attach(plot.clone())
@@ -1389,7 +1413,9 @@ mod retained_legend_tests {
         let root = crate::layout::plan_exact_root(
             800,
             600,
-            |stage| crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources()),
+            |stage| {
+                crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources(), None)
+            },
             |inputs, assigned, round| {
                 let plot = inputs.attach(source.clone())?;
                 Ok(crate::layout::MeasuredLayout::new(

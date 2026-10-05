@@ -84,7 +84,12 @@ fn prepared_contract_retains_sources_and_uses_the_callers_operation_limits() {
     )
     .erase();
     let resources = OperationGenerationResources::new();
-    let prepared = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let prepared = crate::plots::shared_x::prepare_plot(
+        &source,
+        &resources,
+        Some(&crate::theme::scale_values::test_defaults()),
+    )
+    .unwrap();
     assert_eq!(prepared.route, InteriorRoute::classify(PlotKind::Scatter));
     let visits = resources.usage().unwrap().1;
     let bytes = resources.byte_usage().unwrap();
@@ -106,12 +111,22 @@ fn prepared_contract_retains_sources_and_uses_the_callers_operation_limits() {
     ] {
         let resources = OperationGenerationResources::with_test_limits(visits, bytes);
         assert_eq!(
-            crate::plots::shared_x::prepare_plot(&source, &resources).is_ok(),
+            crate::plots::shared_x::prepare_plot(
+                &source,
+                &resources,
+                Some(&crate::theme::scale_values::test_defaults())
+            )
+            .is_ok(),
             succeeds
         );
         if succeeds {
             // Another preparation cannot silently acquire a fresh budget.
-            assert!(crate::plots::shared_x::prepare_plot(&source, &resources).is_err());
+            assert!(crate::plots::shared_x::prepare_plot(
+                &source,
+                &resources,
+                Some(&crate::theme::scale_values::test_defaults())
+            )
+            .is_err());
         }
     }
 }

@@ -471,8 +471,13 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.heatmap_scale
     }
 
-    pub(crate) fn heatmap_gradient_spec(&self) -> Option<&[crate::render::backend::GradientStop]> {
-        self.heatmap_gradient.as_deref()
+    pub(crate) fn heatmap_gradient_spec(
+        &self,
+    ) -> Result<Option<&crate::theme::SequentialGradient>, crate::Error> {
+        self.heatmap_gradient
+            .as_ref()
+            .map(|input| input.as_ref().map_err(|e| crate::Error::Data(e.clone())))
+            .transpose()
     }
 
     /// Requested heatmap coordinate layout.
@@ -499,8 +504,13 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.beeswarm_color_limits
     }
 
-    pub(crate) fn beeswarm_gradient_spec(&self) -> Option<&[crate::render::backend::GradientStop]> {
-        self.beeswarm_gradient.as_deref()
+    pub(crate) fn beeswarm_gradient_spec(
+        &self,
+    ) -> Result<Option<&crate::theme::SequentialGradient>, crate::Error> {
+        self.beeswarm_gradient
+            .as_ref()
+            .map(|input| input.as_ref().map_err(|e| crate::Error::Data(e.clone())))
+            .transpose()
     }
 
     /// Requested heatmap annotation policy.

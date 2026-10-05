@@ -28,7 +28,7 @@ use crate::render::backend::{
 };
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::{gaussian_kde_with_source, strict_scott_bandwidth};
-use crate::theme::{AccentColors, CategoryColors, PaletteSource, ResolvedTheme};
+use crate::theme::{AccentColors, CategoryColors, ResolvedTheme};
 use crate::Error;
 use crate::{LegendPosition, Plot};
 
@@ -75,6 +75,7 @@ fn matrix_raw_hue_color_map_refuses_missing_used_key_before_fonts() {
     let error = crate::plots::shared_x::prepare_plot(
         &plot,
         &crate::font::canonical::OperationGenerationResources::new(),
+        None,
     )
     .err()
     .expect("missing used Matrix hue must refuse");
@@ -95,12 +96,12 @@ impl PreparedMatrixAxes {
         let resources = data.source_resources()?;
         let colors = CategoryColors::resolve(
             chart.global_hue_levels().unwrap_or(&self.hues),
-            PaletteSource::Extendable(theme),
+            theme.color_scales.qualitative(),
             chart.categorical_colors_spec(),
             resources,
         )?;
         let accents = AccentColors::resolve(
-            &theme.colors,
+            &theme.marks.accents,
             usize::from(self.groups.iter().any(|group| group.identity.hue.is_none())),
             resources,
         )?;
@@ -249,11 +250,11 @@ fn prepared_matrix_uses_variable_count_cell_labels_and_complete_mark_ink() {
     let resources = crate::font::canonical::OperationGenerationResources::new();
     let first = plot(2);
     let second = plot(3);
-    let first = crate::plots::shared_x::prepare_plot(&first, &resources)
+    let first = crate::plots::shared_x::prepare_plot(&first, &resources, None)
         .unwrap()
         .attach(first)
         .unwrap();
-    let second = crate::plots::shared_x::prepare_plot(&second, &resources)
+    let second = crate::plots::shared_x::prepare_plot(&second, &resources, None)
         .unwrap()
         .attach(second)
         .unwrap();
@@ -271,7 +272,7 @@ fn prepared_matrix_uses_variable_count_cell_labels_and_complete_mark_ink() {
         crate::NumericValues::new("short", [3.0, 3.3, 3.7, 4.4]),
     ])
     .erase();
-    let long = crate::plots::shared_x::prepare_plot(&long, &resources)
+    let long = crate::plots::shared_x::prepare_plot(&long, &resources, None)
         .unwrap()
         .attach(long)
         .unwrap();
@@ -306,7 +307,7 @@ fn native_matrix_allocates_unequal_variable_tracks_and_retains_the_full_square()
     .size(1200, 900)
     .erase();
     let resources = crate::font::canonical::OperationGenerationResources::new();
-    let chart = crate::plots::shared_x::prepare_plot(&source, &resources)
+    let chart = crate::plots::shared_x::prepare_plot(&source, &resources, None)
         .unwrap()
         .attach(source)
         .unwrap();
@@ -508,7 +509,7 @@ pub(crate) fn prepare_axes(
     let (groups, hues) = build_groups(chart, &cols, data)?;
     if let Some(exact) = chart.categorical_colors_spec() {
         for hue in &hues {
-            if exact.color(hue, data.source_resources()?)?.is_none() {
+            if exact.color_in(hue, data.source_resources()?)?.is_none() {
                 return Err(Error::Data(format!(
                     "matrix: category {hue:?} has no caller-owned color"
                 )));
@@ -554,6 +555,7 @@ fn prefont_variable_domains_and_labels_are_consumed_by_matrix_measurement() {
     let prepared = crate::plots::shared_x::prepare_plot(
         &plot,
         &crate::font::canonical::OperationGenerationResources::new(),
+        None,
     )
     .unwrap()
     .attach(plot.clone())
@@ -598,7 +600,7 @@ fn matrix_dispatch_preserves_scoped_tick_fit_miss() {
         .prepared_font_environment()
         .unwrap()
         .generation_resources();
-    let prepared = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
+    let prepared = crate::plots::shared_x::prepare_plot(&plot, &resources, None).unwrap();
     let plot = prepared.attach(plot).unwrap();
     let scope = FitScope::root()
         .child(
@@ -650,6 +652,7 @@ fn tick_planner_failure_is_not_reported_as_small_matrix_cells() {
     let plot = crate::plots::shared_x::prepare_plot(
         &plot,
         &crate::font::canonical::OperationGenerationResources::new(),
+        None,
     )
     .unwrap()
     .attach(plot)
@@ -1772,9 +1775,12 @@ mod semantic_tests {
     #[test]
     fn automatic_matrix_ink_is_complete_or_returns_a_typed_cell_fit() {
         let source = source();
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -1956,7 +1962,7 @@ mod semantic_tests {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         SEMANTIC_STAGES.with(|counts| counts.set([0; 2]));
         let resources = OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         assert_eq!(SEMANTIC_STAGES.with(std::cell::Cell::get), [1, 2]);
         let prepared = inputs.matrix.as_ref().unwrap();
         assert_eq!(prepared.groups.len(), 2);
@@ -1971,12 +1977,14 @@ mod semantic_tests {
             assert!(crate::plots::shared_x::prepare_plot(
                 &source,
                 &OperationGenerationResources::with_test_limits(visits, bytes),
+                None,
             )
             .is_err());
         }
         crate::plots::shared_x::prepare_plot(
             &source,
             &OperationGenerationResources::with_test_limits(visits, bytes),
+            None,
         )
         .unwrap();
         let attached = inputs.attach(source).unwrap();
@@ -2036,9 +2044,12 @@ mod semantic_tests {
     #[test]
     fn repeated_matrix_measurements_do_not_rebuild_groups_or_statistics() {
         let source = source();
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let source = inputs.attach(source).unwrap();
         let stages = SEMANTIC_STAGES.with(std::cell::Cell::get);
         let theme = crate::Theme::Publication
@@ -2059,9 +2070,12 @@ mod semantic_tests {
     fn selected_matrix_cells_preserve_geometry_and_poisoned_capture_does_no_layout_work() {
         for preset in [crate::Theme::Publication, crate::Theme::Science] {
             let source = source();
-            let inputs =
-                crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                    .unwrap();
+            let inputs = crate::plots::shared_x::prepare_plot(
+                &source,
+                &OperationGenerationResources::new(),
+                None,
+            )
+            .unwrap();
             let source = inputs.attach(source).unwrap();
             let theme = preset
                 .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -2164,9 +2178,12 @@ mod semantic_tests {
     #[test]
     fn selected_matrix_storage_refuses_at_exact_operation_limits() {
         let source = source();
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let source = inputs.attach(source).unwrap();
         let run = |limits: Option<(u128, u64)>| {
             let theme = crate::Theme::Publication

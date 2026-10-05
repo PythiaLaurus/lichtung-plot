@@ -69,7 +69,7 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6B1d | IN PROGRESS | T6B1c | Complete component/role/scale inputs and structural validation; `refactor(theme): retain complete validated components` |
 | T6B1d1 | COMPLETE | T6B1c | Replace live text/surface appearances with validated TextTheme/SurfaceTheme; `refactor(theme): validate text and surface values` |
 | T6B1d2 | COMPLETE | T6B1d1 | Replace live compound stroke/point/fill inputs with validated values and structural absence; `refactor(theme): validate complete mark paints` |
-| T6B1d3 | PENDING | T6B1d2 | Retain validated opaque palettes/maps/gradients and domain selection; `refactor(scales): retain validated complete scale values` |
+| T6B1d3 | COMPLETE | T6B1d2 | Retain validated opaque palettes/maps/gradients and domain selection; `refactor(scales): retain validated complete scale values` |
 | T6B1d4 | PENDING | T6B1d3 | Assemble validated complete role/chrome/annotation groups with actual consumer mappings; `refactor(theme): assemble complete validated components` |
 | T6B2 | PENDING | T6B1 | Complete Theme construction/customization and owner resolution using those values; `refactor(theme): construct immutable complete themes` |
 | T6B3 | PENDING | T6B2 | Exact element Color/alpha replacement and repository caller migration; `feat(styles): expose complete RGBA element paints` |
@@ -164,6 +164,15 @@ formatting and source/identity review pass. Two inspected Density/Regression
 snapshots change only five zero-width stroke attribute sets; an independent
 raster fixture proves identical PNG bytes and nonempty alpha-56 paint. Complete
 group assembly and public exposure remain with subsequent owning leaves.
+
+T6B1d3 evidence: `docs/scale-values.md` records immutable validated opaque
+palettes, gradients/domains and selection values, actual prepared transport and
+separate qualitative/accent ownership. Current categorical API spelling owns
+one opaque map representation until public cutover. Sixty-eight focused initial
+tests pass; review additionally closed signed-zero diverging-center normalization
+and immutable gradient-handle cache admission with fifteen focused follow-up
+tests. Strict Clippy, formatting and unchanged selected snapshots pass. Unified
+Beeswarm defaults and general diverging consumption remain the B2 behavior change.
 
 T6A2 evidence: `94_T6_FOUNDATION_CONSTRUCTION.md` pins complete fields, typed
 construction/accessors/consuming edits, actual CSS units, exact local metrics,

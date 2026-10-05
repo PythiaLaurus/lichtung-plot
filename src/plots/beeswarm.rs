@@ -23,7 +23,8 @@ pub(crate) struct PreparedBeeswarm {
     pub(crate) levels: Vec<String>,
     pub(crate) x_data: (f64, f64),
     rows: Vec<(usize, f64, f64, usize)>,
-    colors: Vec<(u8, u8, u8)>,
+    colors: Vec<crate::theme::OpaqueColor>,
+    selection: crate::theme::ContinuousColorScale,
     scale: crate::theme::ContinuousColors,
     colorbar_stops: Vec<GradientStop>,
     values: [String; 2],
@@ -180,13 +181,25 @@ pub(crate) fn prepare(
     )?
     .try_into()
     .map_err(|_| Error::Render("Beeswarm endpoint label count changed".into()))?;
-    let scale = crate::theme::ContinuousColors::resolve(
-        color_range,
-        chart
-            .beeswarm_gradient_spec()
-            .unwrap_or(&crate::theme::BEESWARM_SEQUENTIAL_STOPS),
-        data.source_resources()?,
-    )?;
+    let resources = data.source_resources()?;
+    let gradient = if let Some(gradient) = chart.beeswarm_gradient_spec()? {
+        resources
+            .claim_visits(1)
+            .map_err(|e| Error::Render(format!("Beeswarm gradient sharing: {e:?}")))?;
+        gradient.clone()
+    } else {
+        crate::theme::SequentialGradient::new_in(
+            crate::theme::BEESWARM_SEQUENTIAL_STOPS,
+            resources,
+        )?
+    };
+    let domain = chart
+        .beeswarm_color_limits_spec()
+        .map(|(minimum, maximum)| crate::theme::ColorDomain::exact(minimum, maximum))
+        .transpose()?;
+    let selection = crate::theme::ContinuousColorScale::sequential(Some(gradient), domain)?;
+    let scale =
+        crate::theme::ContinuousColors::resolve(color_range, selection.stops()?, resources)?;
     let samples = data.collect_source(rows.iter().map(|row| Ok(row.2)))?;
     let colorbar_stops = scale.guide_stops(&samples, data)?;
     let colors = data.collect_source(
@@ -200,6 +213,7 @@ pub(crate) fn prepare(
         colors,
         values,
         scale,
+        selection,
         colorbar_stops,
         color_label: chart.prepare_color_label(data, None)?,
     })
@@ -223,7 +237,7 @@ impl PreparedBeeswarm {
             .iter()
             .zip(&self.colors)
             .find(|(row, _)| row.2.to_bits() == value.to_bits())
-            .map(|(_, color)| *color)
+            .map(|(_, color)| color.as_rgb())
     }
 
     pub(crate) fn install_shared_domain(
@@ -254,12 +268,10 @@ impl PreparedBeeswarm {
         &self,
         data: crate::data::PlotData<'_>,
     ) -> Result<crate::decorations::legend::descriptor::ContinuousSemantics, Error> {
-        let stops = self.scale.stops();
         Ok(
             crate::decorations::legend::descriptor::ContinuousSemantics {
                 domain: self.scale.domain(),
-                center: None,
-                stops: data.collect_source(stops.iter().copied().map(Ok))?,
+                selection: self.selection.share(data.source_resources()?)?,
                 missing: None,
             },
         )
@@ -340,6 +352,7 @@ pub(crate) fn measure(
             field: data.copy_source_string(chart.color_dimension_key().unwrap_or(""))?,
             title: data.copy_source_string(&prepared.color_label)?,
             stops: prepared.guide_stops(data)?,
+            selection: prepared.selection.share(data.source_resources()?)?,
             center: None,
             missing: None,
             domain: prepared.scale.domain(),
@@ -482,7 +495,7 @@ pub(crate) fn measure(
                 .ok_or_else(|| Error::Render("Beeswarm arranged point overflow".into()))?;
             Ok((
                 Point2D::new(quanta_pixels(point.x), quanta_pixels(y)),
-                chart.point_style(theme, color, theme.marks.point_sizes.beeswarm),
+                chart.point_style(theme, color.as_rgb(), theme.marks.point_sizes.beeswarm),
             ))
         },
     ))?;
@@ -682,7 +695,7 @@ mod fit_tests {
         };
         let intrinsic = |source: Plot, theme: &ResolvedTheme| {
             let resources = crate::font::canonical::OperationGenerationResources::new();
-            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
             inputs
                 .attach(source)
                 .unwrap()
@@ -716,7 +729,7 @@ mod fit_tests {
         .erase()
         .with_suppressed_continuous_guide();
         let resources = crate::font::canonical::OperationGenerationResources::new();
-        let chart = crate::plots::shared_x::prepare_plot(&source, &resources)
+        let chart = crate::plots::shared_x::prepare_plot(&source, &resources, None)
             .unwrap()
             .attach(source)
             .unwrap();
@@ -759,7 +772,7 @@ mod fit_tests {
             .prepared_font_environment()
             .unwrap()
             .generation_resources();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let cell = PanelBox::new(80.0, 1750.0, 80.0, 29900.0);
         let selected = crate::decorations::plan::plan_panel_for_test(
@@ -800,6 +813,7 @@ mod fit_tests {
         let inputs = crate::plots::shared_x::prepare_plot(
             &plot,
             &crate::font::canonical::OperationGenerationResources::new(),
+            None,
         )
         .unwrap();
         let plot = inputs.attach(plot).unwrap();

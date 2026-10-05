@@ -10,7 +10,7 @@ use crate::layout::Layout;
 use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::strict_scott_bandwidth;
-use crate::theme::{AccentColors, CategoryColors, PaletteSource};
+use crate::theme::{AccentColors, CategoryColors};
 use crate::Plot;
 
 const MIN_GRID_POINTS: usize = 128;
@@ -100,12 +100,12 @@ impl PreparedDensity {
         };
         let map = CategoryColors::resolve(
             &keys,
-            PaletteSource::Extendable(theme),
+            theme.color_scales.qualitative(),
             chart.categorical_colors_spec(),
             resources,
         )?;
         let accent = AccentColors::resolve(
-            &theme.colors,
+            &theme.marks.accents,
             usize::from(self.curves.iter().any(|curve| curve.identity.hue.is_none())),
             resources,
         )?;
@@ -203,7 +203,7 @@ impl PreparedDensity {
         let prepared = prepare_density_for_chart(chart, data, column)?;
         if let Some(exact) = chart.categorical_colors_spec() {
             for hue in prepared.hue_levels() {
-                if exact.color(hue, data.source_resources()?)?.is_none() {
+                if exact.color_in(hue, data.source_resources()?)?.is_none() {
                     return Err(Error::Data(format!(
                         "density: category {hue:?} has no caller-owned color"
                     )));
@@ -872,7 +872,7 @@ mod tests {
             .x_limits(0.0, 5.0)
             .erase();
         let resources = crate::font::canonical::OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -900,7 +900,7 @@ mod tests {
         .hue(CategoryValues::new("series", ["a", "a", "a", "b", "b", "b"]).unwrap())
         .erase();
         let resources = crate::font::canonical::OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs
             .attach(source)
             .unwrap()
@@ -937,11 +937,11 @@ mod tests {
         };
         assert_eq!(
             payload.curves[0].fill_style.color,
-            crate::theme::color_from_rgb(theme.colors[0]).with_alpha(56)
+            crate::theme::Color::from(theme.color_scales.qualitative().colors()[0]).with_alpha(56)
         );
         assert_eq!(
             payload.curves[1].fill_style.color,
-            crate::theme::color_from_rgb(theme.colors[1]).with_alpha(56)
+            crate::theme::Color::from(theme.color_scales.qualitative().colors()[1]).with_alpha(56)
         );
         assert!(payload.curves[0].fill[0].x > payload.curves[1].fill[0].x);
         theme.marks.density_line.width = 2.5;

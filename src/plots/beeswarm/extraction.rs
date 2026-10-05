@@ -34,7 +34,7 @@ fn local_and_shared_beeswarm_numeric_labels_are_unique_before_fonts() {
         .unwrap();
     let resources = OperationGenerationResources::new();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let marks = &inputs.beeswarm.as_ref().unwrap().panels[0].1;
     let contributor = ContinuousContributor::for_plot(
         &source,
@@ -98,7 +98,7 @@ fn facet_partitions_share_original_point_topology_once() {
         )
         .erase();
     let resources = OperationGenerationResources::new();
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     assert_eq!(inputs.beeswarm.as_ref().unwrap().panels.len(), 2);
     // Original points are admitted at the parent once. The first panel has
     // two category slots and the second has one.
@@ -110,7 +110,7 @@ fn root_semantics_retain_source_order_and_exact_colors_before_fonts() {
     let source = source().erase();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
     let resources = OperationGenerationResources::new();
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let marks = &inputs.beeswarm.as_ref().unwrap().panels[0].1;
     assert_eq!(marks.levels, ["b", "a"]);
     assert_eq!(
@@ -118,23 +118,25 @@ fn root_semantics_retain_source_order_and_exact_colors_before_fonts() {
         [0, 2, 4, 5, 6, 7, 8, 9, 10, 11, 1, 3]
     );
     assert_eq!(STAGES.with(std::cell::Cell::get)[2], 0);
-    assert_eq!(marks.colors[0], (157, 107, 124));
-    assert_eq!(marks.colors[1], (49, 130, 189));
-    assert_eq!(marks.colors[10], (222, 45, 38));
-    assert_eq!(marks.colors[11], (49, 130, 189));
+    assert_eq!(marks.colors[0].as_rgb(), (157, 107, 124));
+    assert_eq!(marks.colors[1].as_rgb(), (49, 130, 189));
+    assert_eq!(marks.colors[10].as_rgb(), (222, 45, 38));
+    assert_eq!(marks.colors[11].as_rgb(), (49, 130, 189));
     assert_eq!(marks.values, ["1", "0"]);
     let visits = resources.usage().unwrap().1;
     let bytes = resources.byte_usage().unwrap();
     for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
         assert!(crate::plots::shared_x::prepare_plot(
             &source,
-            &OperationGenerationResources::with_test_limits(visits, bytes)
+            &OperationGenerationResources::with_test_limits(visits, bytes),
+            None,
         )
         .is_err());
     }
     crate::plots::shared_x::prepare_plot(
         &source,
         &OperationGenerationResources::with_test_limits(visits, bytes),
+        None,
     )
     .unwrap();
     let attached = inputs.attach(source).unwrap();
@@ -161,7 +163,7 @@ fn private_beeswarm_gradient_maps_marks_and_local_guide_before_fonts() {
         .erase();
     let resources = OperationGenerationResources::new();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-    let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources, None).unwrap();
     let marks = &inputs.beeswarm.as_ref().unwrap().panels[0].1;
     assert_eq!(marks.color_for_source_value(0.5), Some(custom[1].color));
     assert_eq!(marks.colorbar_stops[1], custom[1]);
@@ -169,7 +171,12 @@ fn private_beeswarm_gradient_maps_marks_and_local_guide_before_fonts() {
         marks
             .guide_semantics(plot.data().with_axis_resources(&resources))
             .unwrap()
-            .stops,
+            .selection
+            .stops()
+            .unwrap()
+            .iter()
+            .map(crate::theme::ColorStop::backend_stop)
+            .collect::<Vec<_>>(),
         custom
     );
     assert_eq!(
@@ -180,7 +187,7 @@ fn private_beeswarm_gradient_maps_marks_and_local_guide_before_fonts() {
         .with_private_gradient(vec![custom[0], GradientStop::new(0.0, custom[1].color)])
         .erase();
     assert!(matches!(
-        crate::plots::shared_x::prepare_plot(&invalid, &OperationGenerationResources::new()),
+        crate::plots::shared_x::prepare_plot(&invalid, &OperationGenerationResources::new(), None),
         Err(Error::Data(message)) if message.contains("span exactly 0..1")
             || message.contains("strictly")
     ));
@@ -199,16 +206,16 @@ fn constant_beeswarm_guide_and_marks_use_the_same_oklab_midpoint() {
     )
     .erase();
     let resources = OperationGenerationResources::new();
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let marks = &inputs.beeswarm.as_ref().unwrap().panels[0].1;
     let color = marks.colors[0];
-    assert_eq!(color, (157, 107, 124));
+    assert_eq!(color.as_rgb(), (157, 107, 124));
     assert_eq!(marks.colors[1], color);
     let stops = marks
         .guide_stops(source.data().with_axis_resources(&resources))
         .unwrap();
-    assert_eq!(stops[0].color, color);
-    assert_eq!(stops[1].color, color);
+    assert_eq!(stops[0].color, color.as_rgb());
+    assert_eq!(stops[1].color, color.as_rgb());
 }
 
 #[test]
@@ -278,7 +285,7 @@ fn root_components_prepare_once_without_layout_backend() {
 fn selected_payload_preserves_bounds_baselines_and_poisoned_capture_does_no_work() {
     let source = source().erase();
     let inputs =
-        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new(), None)
             .unwrap();
     let source = inputs.attach(source).unwrap();
     let theme = crate::Theme::Publication
@@ -444,7 +451,7 @@ fn selected_candidate_storage_refuses_at_exact_operation_limits() {
     let raw = source().erase();
     let run = |limits: Option<(u128, u64)>| {
         let inputs =
-            crate::plots::shared_x::prepare_plot(&raw, &OperationGenerationResources::new())
+            crate::plots::shared_x::prepare_plot(&raw, &OperationGenerationResources::new(), None)
                 .unwrap();
         let source = inputs.attach(raw.clone()).unwrap();
         let theme = crate::Theme::Publication
@@ -499,8 +506,11 @@ fn invalid_sources_win_over_unavailable_fonts_in_the_exact_root() {
             640,
             480,
             |stage| {
-                let inputs =
-                    crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
+                let inputs = crate::plots::shared_x::prepare_plot(
+                    &source,
+                    &stage.generation_resources(),
+                    None,
+                )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     Some(&inputs),
                     &source,

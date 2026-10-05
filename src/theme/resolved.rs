@@ -20,6 +20,10 @@ use crate::layout::{
 };
 use crate::render::backend::{StrokePattern, TextAnchor};
 use crate::theme::{color_from_rgb, Color};
+use crate::theme::{
+    AccentPalette, ColorScales, DivergingGradient, OpaqueColor, QualitativePalette,
+    SequentialGradient,
+};
 use crate::{Error, SignificanceMarkStyle, TextWeight};
 
 /// Built-in axis tick-label font size in actual CSS pixels.
@@ -73,8 +77,8 @@ define_themes! {
 /// this value to produce concrete backend styles and layout decisions.
 #[derive(Debug, Clone)]
 pub(crate) struct ResolvedTheme {
-    /// Series colors in draw order. Index 0 is the first series.
-    pub(crate) colors: Vec<(u8, u8, u8)>,
+    /// Independent categorical palette and continuous scale defaults.
+    pub(crate) color_scales: ColorScales,
     /// Legacy paint source retained for later legend, mark, and annotation roles.
     pub(crate) foreground: (u8, u8, u8),
     /// Font size in actual CSS pixels for annotations, status text, and color scales.
@@ -529,7 +533,7 @@ impl PartialEq for ResolvedTheme {
 
 impl ResolvedTheme {
     fn non_text_eq(&self, other: &Self) -> bool {
-        self.colors == other.colors
+        self.color_scales == other.color_scales
             && self.foreground == other.foreground
             && self.detail_font_size == other.detail_font_size
             && self.label_font_size == other.label_font_size
@@ -551,6 +555,11 @@ impl ResolvedTheme {
         other: &Self,
         resources: &crate::font::canonical::OperationGenerationResources,
     ) -> Result<bool, Error> {
+        self.color_scales
+            .admit_comparison(&other.color_scales, resources)?;
+        self.marks
+            .accents
+            .admit_comparison(&other.marks.accents, resources)?;
         if !self.non_text_eq(other) {
             return Ok(false);
         }
@@ -569,9 +578,8 @@ impl ResolvedTheme {
 
     pub(crate) fn admitted_clone(&self, data: crate::data::PlotData<'_>) -> Result<Self, Error> {
         data.require_source_resources()?;
-        data.admit_clone_slice(&self.colors)?;
-        data.claim_source_visits(self.typography.roles().len())?;
-        // Color storage and all immutable font-handle operations are admitted before cloning.
+        data.claim_source_visits(self.typography.roles().len() + 4)?;
+        // Three scale payload handles, one accent handle and all font handles.
         Ok(self.clone())
     }
     /// Initialize this operation's canonical system-font environment.
@@ -1478,6 +1486,8 @@ impl FoundationalTypography {
 /// Mark strokes are independent of structurally similar axis chrome.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct MarkAppearance {
+    /// Stable non-categorical mark slots, independent of categorical palette edits.
+    pub(crate) accents: AccentPalette,
     /// Shared primary-point paint/outline before family-specific size selection.
     pub(crate) primary_point: PointTheme,
     /// Ordinary bar bodies in either orientation and originating guide glyphs.
@@ -1704,7 +1714,7 @@ pub(crate) struct CompositionAppearance {
 )]
 fn resolved_theme(
     resources: &OperationGenerationResources,
-    colors: Vec<(u8, u8, u8)>,
+    colors: &[(u8, u8, u8)],
     foreground: (u8, u8, u8),
     axis_width: f32,
     bracket_width: f32,
@@ -1720,6 +1730,13 @@ fn resolved_theme(
     let stack = crate::font::canonical::builtin_font_stack();
     let foreground_paint = color_from_rgb(foreground);
     let muted_paint = color_from_rgb(MUTED_TEXT);
+    let opaque = |&(r, g, b): &(u8, u8, u8)| OpaqueColor::rgb(r, g, b);
+    let color_scales = ColorScales::new(
+        QualitativePalette::extendable_in(colors.iter().map(opaque), resources)?,
+        SequentialGradient::new_in(crate::theme::HEATMAP_SEQUENTIAL_STOPS, resources)?,
+        DivergingGradient::new_in(crate::theme::HEATMAP_DIVERGING_STOPS, resources)?,
+    )?;
+    let accents = AccentPalette::new_in(colors.iter().map(opaque), resources)?;
     let stroke = |width, pattern| StrokeTheme::new(foreground_paint, width, pattern);
     let filled = |alpha, width| {
         DataFillTheme::new(
@@ -1741,7 +1758,7 @@ fn resolved_theme(
     };
 
     Ok(ResolvedTheme {
-        colors,
+        color_scales,
         foreground,
         detail_font_size: 14,
         label_font_size: axis_title_font_size,
@@ -1821,6 +1838,7 @@ fn resolved_theme(
             },
         },
         marks: MarkAppearance {
+            accents,
             primary_point: PointTheme::new(209, crate::PointShape::Circle, Some(primary_outline))?,
             bar_body: filled(255, 1.0)?,
             line_band: DataFillTheme::new(46, None)?,
@@ -1913,7 +1931,7 @@ fn publication_theme(resources: &OperationGenerationResources) -> Result<Resolve
     // Okabe-Ito 8-color qualitative palette (colorblind-safe).
     resolved_theme(
         resources,
-        vec![
+        &[
             (0, 114, 178),
             (213, 94, 0),
             (0, 158, 115),
@@ -1938,7 +1956,7 @@ fn publication_theme(resources: &OperationGenerationResources) -> Result<Resolve
 fn nature_theme(resources: &OperationGenerationResources) -> Result<ResolvedTheme, Error> {
     resolved_theme(
         resources,
-        vec![
+        &[
             (40, 86, 130),
             (130, 160, 188),
             (200, 215, 230),
@@ -1960,7 +1978,7 @@ fn nature_theme(resources: &OperationGenerationResources) -> Result<ResolvedThem
 fn science_theme(resources: &OperationGenerationResources) -> Result<ResolvedTheme, Error> {
     resolved_theme(
         resources,
-        vec![
+        &[
             (255, 0, 0),
             (0, 0, 255),
             (0, 175, 0),
@@ -1982,7 +2000,7 @@ fn science_theme(resources: &OperationGenerationResources) -> Result<ResolvedThe
 fn chi_theme(resources: &OperationGenerationResources) -> Result<ResolvedTheme, Error> {
     resolved_theme(
         resources,
-        vec![
+        &[
             (171, 199, 232),
             (243, 169, 175),
             (174, 224, 174),
@@ -2279,7 +2297,15 @@ mod tests {
         };
 
         ResolvedTheme {
-            colors,
+            color_scales: ColorScales::new(
+                QualitativePalette::extendable(
+                    colors.iter().map(|&(r, g, b)| OpaqueColor::rgb(r, g, b)),
+                )
+                .unwrap(),
+                SequentialGradient::new(crate::theme::HEATMAP_SEQUENTIAL_STOPS).unwrap(),
+                DivergingGradient::new(crate::theme::HEATMAP_DIVERGING_STOPS).unwrap(),
+            )
+            .unwrap(),
             foreground: expected.foreground,
             detail_font_size: 14,
             label_font_size: expected.axis_title_size,
@@ -2371,6 +2397,10 @@ mod tests {
                 },
             },
             marks: MarkAppearance {
+                accents: AccentPalette::new(
+                    colors.iter().map(|&(r, g, b)| OpaqueColor::rgb(r, g, b)),
+                )
+                .unwrap(),
                 primary_point: PointTheme {
                     fill_alpha: 209,
                     shape: crate::PointShape::Circle,
@@ -2635,7 +2665,10 @@ mod tests {
                 &resolved.typography.body,
             ];
 
-            assert!(!resolved.colors.is_empty(), "{theme:?} has no colors");
+            assert!(
+                !resolved.color_scales.qualitative().colors().is_empty(),
+                "{theme:?} has no colors"
+            );
             assert!(resolved.marks.uncertainty_stroke.width.is_finite());
             assert!(resolved.marks.uncertainty_stroke.width > 0.0);
             assert!(resolved.marks.summary_stroke.width.is_finite());
@@ -3823,22 +3856,17 @@ mod tests {
         theme.typography.title.stack = named_stack(&["αX", "A, B"]);
         let roles = theme.typography.roles();
         assert_eq!(roles.len(), 18);
-        let bytes = size_of_val(theme.colors.as_slice());
-        let work = 18; // one immutable stack-handle clone for each complete role
+        let bytes = 0_u64; // all palette/gradient payloads and font entries are immutable shares
+        let work = 22; // eighteen font handles, three scale handles and one accent handle
         let discoveries = FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
-        for (visits, limit) in [
-            (0, bytes),
-            (work - 1, bytes),
-            (work, bytes - 1),
-            (work, bytes),
-        ] {
-            let resources = OperationGenerationResources::with_test_limits(visits, limit as u64);
+        for (visits, limit) in [(0, bytes), (work - 1, bytes), (work, bytes)] {
+            let resources = OperationGenerationResources::with_test_limits(visits, limit);
             let copy = theme.admitted_clone(plot.data().with_axis_resources(&resources));
             if visits == work && limit == bytes {
                 let copy = copy.unwrap();
                 assert_eq!(copy, theme);
                 assert_eq!(resources.usage().unwrap().1, work);
-                assert_eq!(resources.byte_usage().unwrap(), bytes as u64);
+                assert_eq!(resources.byte_usage().unwrap(), bytes);
                 for (retained, original) in copy.typography.roles().into_iter().zip(roles) {
                     assert_eq!(
                         retained.stack.families().as_ptr(),
@@ -3871,7 +3899,7 @@ mod tests {
             .resolve(&OperationGenerationResources::new())
             .unwrap();
         let mut retained = theme.clone();
-        let work: usize = 18; // identical immutable payloads, not independent named inputs
+        let work: usize = 22; // four scale/accent handles plus eighteen font handles
         for remaining in [0, work - 1, work] {
             let resources = OperationGenerationResources::with_test_limits(remaining as u128, 0);
             let result = retained.same(&theme, &resources);
@@ -3880,9 +3908,9 @@ mod tests {
             assert_eq!(resources.byte_usage().unwrap(), 0);
         }
         retained.typography.title.stack = named_stack(&["A, B"]);
-        let resources = OperationGenerationResources::with_test_limits(1, 0);
+        let resources = OperationGenerationResources::with_test_limits(5, 0);
         assert!(!retained.same(&theme, &resources).unwrap());
-        assert_eq!(resources.usage().unwrap().1, 1); // entry count differs: no name bytes examined
+        assert_eq!(resources.usage().unwrap().1, 5); // four scale handles, then differing font entry count
     }
 
     #[test]

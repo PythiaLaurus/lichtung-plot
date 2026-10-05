@@ -40,7 +40,11 @@ pub(crate) enum PreparedReference {
 }
 
 impl PreparedReference {
-    pub(crate) fn new(source: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
+    pub(crate) fn new(
+        source: &Plot,
+        data: PlotData<'_>,
+        color_scales: Option<&crate::theme::ColorScales>,
+    ) -> Result<Self, Error> {
         match source.kind() {
             PlotKind::Waterfall => Ok(Self::Waterfall(crate::plots::waterfall::prepare(
                 source, data,
@@ -51,7 +55,13 @@ impl PreparedReference {
             PlotKind::Marginal => Ok(Self::Marginal(crate::plots::marginal::prepare(
                 source, data,
             )?)),
-            PlotKind::Heatmap => Ok(Self::Heatmap(crate::plots::heatmap::prepare(source, data)?)),
+            PlotKind::Heatmap => Ok(Self::Heatmap(crate::plots::heatmap::prepare(
+                source,
+                data,
+                color_scales.ok_or_else(|| {
+                    Error::Render("Heatmap preparation requires its owning color scales".into())
+                })?,
+            )?)),
             PlotKind::Interaction => Ok(Self::Interaction(crate::plots::interaction::prepare(
                 source, data, None,
             )?)),
@@ -403,6 +413,7 @@ pub(crate) fn prepare_reference_plot(
 pub(crate) fn prepare_plot(
     source: &Plot,
     resources: &crate::font::canonical::OperationGenerationResources,
+    color_scales: Option<&crate::theme::ColorScales>,
 ) -> Result<PreparedInteriorInputs, Error> {
     let mut matrix = None;
     let mut retained = Vec::new();
@@ -451,7 +462,7 @@ pub(crate) fn prepare_plot(
         return prepare_reference_plot(
             source,
             resources,
-            PreparedReference::new(source, source_data)?,
+            PreparedReference::new(source, source_data, color_scales)?,
             source.axis_scope(),
             None,
             None,
@@ -641,7 +652,17 @@ pub(crate) fn prepare_plot(
                 .transpose()?;
             let estimates = estimate_panels.get_mut(index).and_then(Option::take);
             let heatmap_marks = (source.kind() == PlotKind::Heatmap)
-                .then(|| crate::plots::heatmap::prepare(source, data))
+                .then(|| {
+                    crate::plots::heatmap::prepare(
+                        source,
+                        data,
+                        color_scales.ok_or_else(|| {
+                            Error::Render(
+                                "Heatmap preparation requires its owning color scales".into(),
+                            )
+                        })?,
+                    )
+                })
                 .transpose()?;
             let beeswarm_marks = (source.kind() == PlotKind::Beeswarm)
                 .then(|| crate::plots::beeswarm::prepare(source, data))
@@ -1595,7 +1616,11 @@ mod tests {
                 |stage| {
                     // Exercise the root boundary, independently of the current public
                     // restriction on combining supplemental guides with faceting.
-                    prepare_plot(plot, &stage.generation_resources())?;
+                    prepare_plot(
+                        plot,
+                        &stage.generation_resources(),
+                        Some(&crate::theme::scale_values::test_defaults()),
+                    )?;
                     let requirements = crate::layout::foundational_plot_requirements(
                         None,
                         plot,
@@ -1656,7 +1681,11 @@ mod tests {
                         } else {
                             scales == FacetScales::FreeX
                         };
-                    let prepared = prepare_plot(&plot, &resources);
+                    let prepared = prepare_plot(
+                        &plot,
+                        &resources,
+                        Some(&crate::theme::scale_values::test_defaults()),
+                    );
                     if shared {
                         let prepared = prepared.unwrap();
                         for (_, axes) in prepared.axes.iter() {
@@ -1692,7 +1721,7 @@ mod tests {
             .erase();
         let natural = natural.erase();
         let resources = crate::font::canonical::OperationGenerationResources::new();
-        let prepared = prepare_plot(&plot, &resources).unwrap();
+        let prepared = prepare_plot(&plot, &resources, None).unwrap();
         assert_eq!(prepared.axes[0].1.ranges[0], (-100.0, 100.0));
         assert_eq!(
             crate::plots::density::axis_ranges(
@@ -1738,19 +1767,19 @@ mod tests {
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
             let count = std::sync::Arc::strong_count(&source.prepared_axes);
             let resources = OperationGenerationResources::new();
-            let retained = prepare_plot(&source, &resources).unwrap();
+            let retained = prepare_plot(&source, &resources, None).unwrap();
             assert_eq!(std::sync::Arc::strong_count(&source.prepared_axes), count);
             let bytes = resources.byte_usage().unwrap();
             let visits = resources.usage().unwrap().1;
             for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
                 let resources = OperationGenerationResources::with_test_limits(visits, bytes);
                 assert!(matches!(
-                    prepare_plot(&source, &resources),
+                    prepare_plot(&source, &resources, None),
                     Err(Error::Render(_))
                 ));
             }
             let resources = OperationGenerationResources::with_test_limits(visits, bytes);
-            prepare_plot(&source, &resources).unwrap();
+            prepare_plot(&source, &resources, None).unwrap();
             // Unused text and policy values stay borrowed, not copied and charged.
             let large = "unused".repeat(10_000);
             let decorated = source
@@ -1759,7 +1788,7 @@ mod tests {
                 .caption(large.clone())
                 .labels(crate::Labels::humanized().alias("unreferenced", large));
             let resources = OperationGenerationResources::with_test_limits(u128::MAX, bytes);
-            prepare_plot(&decorated, &resources).unwrap();
+            prepare_plot(&decorated, &resources, None).unwrap();
             let attached = retained.attach(source).unwrap();
             assert!(std::sync::Arc::ptr_eq(
                 &attached.prepared_axes,
@@ -1874,7 +1903,11 @@ mod tests {
                     .unwrap();
                 crate::data::SOURCE_COLUMN_READS.with(|count| count.set(0));
                 crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
-                let result = prepare_plot(&source, &resources);
+                let result = prepare_plot(
+                    &source,
+                    &resources,
+                    Some(&crate::theme::scale_values::test_defaults()),
+                );
                 if available < 4 {
                     let error = result
                         .err()
@@ -1994,7 +2027,7 @@ mod tests {
         )
         .erase();
         let resources = crate::font::canonical::OperationGenerationResources::new();
-        let retained = prepare_plot(&source, &resources).unwrap();
+        let retained = prepare_plot(&source, &resources, None).unwrap();
         let panels = crate::orchestrator::text_census_panels(&source, source.data()).unwrap();
         for (panel, (scope, axes)) in panels.iter().zip(retained.axes.iter()) {
             let child = source
@@ -2043,7 +2076,7 @@ mod tests {
             .scales(FacetScales::Free),
         )
         .erase();
-        let retained = prepare_plot(&trajectory, &resources).unwrap();
+        let retained = prepare_plot(&trajectory, &resources, None).unwrap();
         for (_, axes) in retained.axes.iter() {
             assert_eq!(axes.ranges[0], (0.0, 3.0));
             assert_eq!(
@@ -2128,7 +2161,7 @@ mod tests {
             .facet(FacetSpec::column(facets.clone()).scales(FacetScales::Free))
             .erase();
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-        let free = prepare_plot(&free, &resources)
+        let free = prepare_plot(&free, &resources, None)
             .unwrap()
             .attach(free)
             .unwrap();
@@ -2144,7 +2177,7 @@ mod tests {
             .clone()
             .facet(FacetSpec::column(facets.clone()).scales(FacetScales::FreeX))
             .erase();
-        let mixed = prepare_plot(&mixed, &resources)
+        let mixed = prepare_plot(&mixed, &resources, None)
             .unwrap()
             .attach(mixed)
             .unwrap();
@@ -2185,7 +2218,7 @@ mod tests {
         .erase();
         let resources = crate::font::canonical::OperationGenerationResources::new();
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-        let prepared = prepare_plot(&source, &resources)
+        let prepared = prepare_plot(&source, &resources, None)
             .unwrap()
             .attach(source.clone())
             .unwrap();

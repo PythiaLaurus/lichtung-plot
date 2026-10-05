@@ -1013,13 +1013,13 @@ mod d1_tests {
                 1200,
                 640,
                 |stage| {
-                    let (interiors, _) = canvas.prepare_interiors(stage)?;
-                    canvas.validate_shared_guide_kinds(&interiors)?;
                     let themes = ResolvedCanvasThemes::new(
                         canvas.theme,
                         &canvas.panels,
                         &stage.generation_resources(),
                     )?;
+                    let (interiors, _) = canvas.prepare_interiors(stage, Some(&themes))?;
+                    canvas.validate_shared_guide_kinds(&interiors)?;
                     canvas.prepare_continuous_shared_guide(
                         &themes,
                         &interiors,
@@ -1181,13 +1181,13 @@ mod d1_tests {
             1200,
             640,
             |stage| {
-                let (interiors, _) = canvas.prepare_interiors(stage)?;
-                canvas.validate_shared_guide_kinds(&interiors)?;
                 let themes = ResolvedCanvasThemes::new(
                     canvas.theme,
                     &canvas.panels,
                     &stage.generation_resources(),
                 )?;
+                let (interiors, _) = canvas.prepare_interiors(stage, Some(&themes))?;
+                canvas.validate_shared_guide_kinds(&interiors)?;
                 canvas.prepare_continuous_shared_guide(
                     &themes,
                     &interiors,
@@ -1461,7 +1461,7 @@ mod d1_tests {
             960,
             640,
             |stage| {
-                let (interiors, _) = canvas.prepare_interiors(stage)?;
+                let (interiors, _) = canvas.prepare_interiors(stage, None)?;
                 let groups = canvas
                     .prepared_point_path_hue_groups(&interiors, &stage.generation_resources())?
                     .unwrap();
@@ -1506,7 +1506,7 @@ mod d1_tests {
             960,
             640,
             |stage| {
-                let (interiors, _) = canvas.prepare_interiors(stage)?;
+                let (interiors, _) = canvas.prepare_interiors(stage, None)?;
                 let levels = canvas
                     .prepared_point_path_hue_groups(&interiors, &stage.generation_resources())?
                     .unwrap();
@@ -1813,7 +1813,12 @@ mod d1_tests {
                 960,
                 640,
                 |stage| {
-                    let (interiors, _) = canvas.prepare_interiors(stage)?;
+                    let themes = ResolvedCanvasThemes::new(
+                        canvas.theme,
+                        &canvas.panels,
+                        &stage.generation_resources(),
+                    )?;
+                    let (interiors, _) = canvas.prepare_interiors(stage, Some(&themes))?;
                     canvas.validate_shared_guide_kinds(&interiors)?;
                     Ok(())
                 },
@@ -2249,7 +2254,7 @@ mod d1_tests {
                 canvas.width,
                 canvas.height,
                 |stage| {
-                    let (interiors, _) = canvas.prepare_interiors(stage)?;
+                    let (interiors, _) = canvas.prepare_interiors(stage, Some(&themes))?;
                     let (mut census, presence) =
                         canvas.foundational_text_census(&themes, &interiors, None, stage)?;
                     themes.prepare_font_environment(&mut census, presence, stage)?;
@@ -2453,7 +2458,7 @@ mod d1_tests {
                 canvas.width,
                 canvas.height,
                 |stage| {
-                    let (interiors, _) = canvas.prepare_interiors(stage)?;
+                    let (interiors, _) = canvas.prepare_interiors(stage, Some(&themes))?;
                     let (mut census, presence) =
                         canvas.foundational_text_census(&themes, &interiors, None, stage)?;
                     themes.prepare_font_environment(&mut census, presence, stage)?;
@@ -2573,7 +2578,7 @@ mod d1_tests {
             canvas.width,
             canvas.height,
             |stage| {
-                let (interiors, _) = canvas.prepare_interiors(stage)?;
+                let (interiors, _) = canvas.prepare_interiors(stage, Some(&themes))?;
                 let (mut census, presence) =
                     canvas.foundational_text_census(&themes, &interiors, None, stage)?;
                 themes.prepare_font_environment(&mut census, presence, stage)?;
@@ -2687,7 +2692,7 @@ mod d1_tests {
                             if let Some((visits, bytes)) = limits {
                                 resources.set_test_limits(visits, bytes);
                             }
-                            let (inputs, shared) = canvas.prepare_interiors(stage)?;
+                            let (inputs, shared) = canvas.prepare_interiors(stage, None)?;
                             for (index, input) in inputs.iter().enumerate() {
                                 let input = input.as_ref().unwrap();
                                 assert_eq!(
@@ -3860,6 +3865,7 @@ impl Canvas {
     fn prepare_interiors(
         &self,
         stage: &mut crate::layout::kernel::PreparedStage<'_>,
+        themes: Option<&ResolvedCanvasThemes>,
     ) -> Result<
         (
             Vec<Option<crate::layout::interior::PreparedInteriorInputs>>,
@@ -3880,7 +3886,7 @@ impl Canvas {
             self.panels.len(),
             "Canvas distribution/reference semantics",
         )?;
-        for plot in &self.panels {
+        for (index, plot) in self.panels.iter().enumerate() {
             reference.push(
                 match plot.as_ref().filter(|plot| {
                     matches!(
@@ -3912,7 +3918,13 @@ impl Canvas {
                             .configured_source_rows()?
                             .map_or_else(|| plot.data(), |rows| plot.data().map_source_rows(rows))
                             .with_axis_resources(&resources);
-                        Some(crate::plots::shared_x::PreparedReference::new(plot, data)?)
+                        Some(crate::plots::shared_x::PreparedReference::new(
+                            plot,
+                            data,
+                            themes
+                                .and_then(|themes| themes.plot(index))
+                                .map(|theme| &theme.color_scales),
+                        )?)
                     }
                     None => None,
                 },
@@ -4100,7 +4112,8 @@ impl Canvas {
                     }
                 }
                 self.validate_structure()?;
-                let (mut interiors, shared_x) = self.prepare_interiors(prepared_stage)?;
+                let (mut interiors, shared_x) =
+                    self.prepare_interiors(prepared_stage, Some(&themes))?;
                 self.validate_shared_guide_kinds(&interiors)?;
                 let point_path_hue_groups = self.prepared_point_path_hue_groups(
                     &interiors,

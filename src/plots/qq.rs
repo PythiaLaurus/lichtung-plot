@@ -227,7 +227,7 @@ pub(crate) fn project(
         line_style: theme.marks.qq_reference.backend_style(),
         point_style: chart.point_style(
             theme,
-            crate::theme::AccentColors::resolve(&theme.colors, 1, data.source_resources()?)?
+            crate::theme::AccentColors::resolve(&theme.marks.accents, 1, data.source_resources()?)?
                 .color(0)?,
             theme.marks.point_sizes.qq,
         ),
@@ -560,7 +560,7 @@ mod tests {
             .x_limits(-2.0, 2.0)
             .erase();
         let resources = crate::font::canonical::OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())

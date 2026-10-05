@@ -15,7 +15,7 @@ use crate::Error;
 use crate::decorations::legend::LegendEntry;
 use crate::render::backend::{with_clip, Backend, Point2D, PointStyle};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
-use crate::theme::{AccentColors, CategoryColors, PaletteSource};
+use crate::theme::{AccentColors, CategoryColors};
 use crate::Plot;
 
 #[cfg(test)]
@@ -189,7 +189,7 @@ impl PreparedScatter {
         if let Some(exact) = chart.categorical_colors_spec() {
             for group in &groups {
                 if let Some(label) = &group.label {
-                    if exact.color(label, data.source_resources()?)?.is_none() {
+                    if exact.color_in(label, data.source_resources()?)?.is_none() {
                         return Err(Error::Data(format!(
                             "scatter: category {label:?} has no caller-owned color"
                         )));
@@ -222,7 +222,7 @@ impl PreparedScatter {
         };
         CategoryColors::resolve(
             &keys,
-            PaletteSource::Extendable(theme),
+            theme.color_scales.qualitative(),
             chart.categorical_colors_spec(),
             resources,
         )
@@ -319,7 +319,7 @@ impl PreparedScatter {
             .groups
             .iter()
             .any(|group| group.label.is_none())
-            .then(|| AccentColors::resolve(&theme.colors, 1, resources))
+            .then(|| AccentColors::resolve(&theme.marks.accents, 1, resources))
             .transpose()?;
         for group_index in order {
             let group = &self.groups[group_index];
@@ -435,7 +435,8 @@ mod tests {
         let theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        let count = theme.colors.len() + 2;
+        let seeds = theme.color_scales.qualitative().colors();
+        let count = seeds.len() + 2;
         let hues = (0..count)
             .map(|index| format!("hue-{index}"))
             .collect::<Vec<_>>();
@@ -458,11 +459,14 @@ mod tests {
                 source.data().with_axis_resources(&resources),
             )
             .unwrap();
-        assert_eq!(&mapping.colors()[..theme.colors.len()], &theme.colors);
-        assert!(mapping.colors()[theme.colors.len()..]
+        assert_eq!(&mapping.colors()[..seeds.len()], seeds);
+        assert!(mapping.colors()[seeds.len()..]
             .iter()
-            .all(|color| !theme.colors.contains(color)));
-        assert_eq!(mapping.color("hue-0", &resources).unwrap(), theme.colors[0]);
+            .all(|color| !seeds.contains(color)));
+        assert_eq!(
+            mapping.color("hue-0", &resources).unwrap(),
+            seeds[0].as_rgb()
+        );
 
         let exact = crate::CategoricalColors::new([("hue-0".into(), (1, 2, 3))]).unwrap();
         let source = Plot::scatter(
@@ -500,7 +504,7 @@ mod tests {
     fn complete_scatter_point_ink_sets_only_automatic_axis_hard_size() {
         let source = source();
         let resources = OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -542,7 +546,7 @@ mod tests {
         .x_limits(0.0, 3.0)
         .erase();
         let resources = OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         theme.marks.primary_point.fill_alpha = 255;
         theme.marks.primary_point.outline.as_mut().unwrap().color =
@@ -572,7 +576,7 @@ mod tests {
         )
         .erase();
         let resources = OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -611,7 +615,7 @@ mod tests {
         .x_limits(0.0, 10.0)
         .erase();
         let resources = OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let exact = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
@@ -833,8 +837,11 @@ mod tests {
             640,
             480,
             |stage| {
-                let inputs =
-                    crate::plots::shared_x::prepare_plot(&plot, &stage.generation_resources())?;
+                let inputs = crate::plots::shared_x::prepare_plot(
+                    &plot,
+                    &stage.generation_resources(),
+                    None,
+                )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     None,
                     &plot,

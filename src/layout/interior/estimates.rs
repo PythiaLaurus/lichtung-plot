@@ -159,6 +159,10 @@ pub(crate) fn sources() -> [Plot; 4] {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "the complete multi-family projection fixture now supplies the explicit preparation owner operand"
+)]
 fn native_estimates_retain_orientation_raw_display_midpoints_and_selected_projection() {
     let routes = [
         OneCategoricalAxis::PointInterval,
@@ -169,9 +173,12 @@ fn native_estimates_retain_orientation_raw_display_midpoints_and_selected_projec
     for (source, route) in sources().into_iter().zip(routes) {
         let source =
             source.labels(crate::Labels::humanized().alias("after_visit", "Follow-up visit"));
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         assert_eq!(inputs.route, InteriorRoute::OneCategoricalAxis(route));
         let plot = inputs.attach(source).unwrap();
         let theme = crate::Theme::Publication
@@ -267,9 +274,12 @@ fn native_vertical_category_intrinsics_use_mandatory_lines_and_keep_fit_scope() 
         let source = source.x_label("").y_label("").labels(
             crate::Labels::raw().alias("after_visit", "First line\nSecond line\nThird line"),
         );
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let plot = inputs.attach(source).unwrap();
         let theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -377,9 +387,12 @@ fn native_forest_selects_sole_log_source_and_transforms_raw_exact_ticks_only_in_
         }
         .erase();
         measurements::start();
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let work = measurements::finish();
         assert_eq!(
             work.counters[Counter::ForestRawTickProjection as usize],

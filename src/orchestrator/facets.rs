@@ -869,6 +869,7 @@ mod feedback_tests {
                         let inputs = crate::plots::shared_x::prepare_plot(
                             &source,
                             &stage.generation_resources(),
+                            Some(&crate::theme::scale_values::test_defaults()),
                         )?;
                         let guide = prepare_discrete_guide(
                             &source,
@@ -1058,8 +1059,11 @@ mod feedback_tests {
             source.width(),
             source.height(),
             |stage| {
-                let inputs =
-                    crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
+                let inputs = crate::plots::shared_x::prepare_plot(
+                    &source,
+                    &stage.generation_resources(),
+                    Some(&crate::theme::scale_values::test_defaults()),
+                )?;
                 let guide = prepare_discrete_guide(
                     &source,
                     PlotKind::Scatter,
@@ -1187,8 +1191,11 @@ mod feedback_tests {
             source.width(),
             source.height(),
             |stage| {
-                let inputs =
-                    crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
+                let inputs = crate::plots::shared_x::prepare_plot(
+                    &source,
+                    &stage.generation_resources(),
+                    Some(&crate::theme::scale_values::test_defaults()),
+                )?;
                 let guide = prepare_discrete_guide(
                     &source,
                     PlotKind::Scatter,
@@ -1265,7 +1272,13 @@ mod feedback_tests {
         let result = crate::layout::plan_exact_root(
             source.width(),
             source.height(),
-            |stage| crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources()),
+            |stage| {
+                crate::plots::shared_x::prepare_plot(
+                    &source,
+                    &stage.generation_resources(),
+                    Some(&crate::theme::scale_values::test_defaults()),
+                )
+            },
             |_, _, _| -> Result<crate::layout::MeasuredLayout<()>, Error> {
                 panic!("invalid semantics must reject before layout")
             },
@@ -1303,8 +1316,11 @@ mod feedback_tests {
             source.width(),
             source.height(),
             |stage| {
-                let inputs =
-                    crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
+                let inputs = crate::plots::shared_x::prepare_plot(
+                    &source,
+                    &stage.generation_resources(),
+                    Some(&crate::theme::scale_values::test_defaults()),
+                )?;
                 let guide = prepare_discrete_guide(
                     &source,
                     PlotKind::Scatter,

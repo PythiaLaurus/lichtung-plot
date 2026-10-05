@@ -141,6 +141,7 @@ fn native_categorical_trajectory_installs_band_projection_before_mark_capture() 
     let plot = crate::plots::shared_x::prepare_plot(
         &source,
         &crate::font::canonical::OperationGenerationResources::new(),
+        None,
     )
     .unwrap()
     .attach(source)

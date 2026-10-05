@@ -683,7 +683,9 @@ fn shared_legend_child_cache_replay_contract() {
         crate::layout::plan_exact_root(
             1200,
             720,
-            |stage| crate::plots::shared_x::prepare_plot(&plot, &stage.generation_resources()),
+            |stage| {
+                crate::plots::shared_x::prepare_plot(&plot, &stage.generation_resources(), None)
+            },
             |inputs, assigned, round| {
                 let plot = inputs.attach(plot.clone())?;
                 let panel = PanelBox::new(100.0, 1100.0, 100.0, 620.0);
@@ -1095,7 +1097,7 @@ fn measured_gutter_reflow_preserves_complete_frames_without_cache() {
             outside("historical_reflow_640x400", LegendPosition::OutsideRight).erase()
         };
         let resources = crate::font::canonical::OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let scopes = inputs
             .axes
             .iter()
@@ -1190,7 +1192,7 @@ fn historical_reflow_native_measured_gutter_control() {
     crate::layout::plan_exact_root(
         640,
         400,
-        |stage| crate::plots::shared_x::prepare_plot(&plot, &stage.generation_resources()),
+        |stage| crate::plots::shared_x::prepare_plot(&plot, &stage.generation_resources(), None),
         |inputs, assigned, round| {
             let plot = inputs.attach(plot.clone())?;
             let canvas = plot.measured_canvas_layout(&theme)?;

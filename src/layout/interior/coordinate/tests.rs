@@ -54,7 +54,7 @@ fn resource_audit_ordinary_topology_precedes_every_prepared_row_materialization(
                 .unwrap();
             crate::data::SOURCE_COLUMN_READS.with(|count| count.set(0));
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
-            let result = crate::plots::shared_x::prepare_plot(&source, &resources);
+            let result = crate::plots::shared_x::prepare_plot(&source, &resources, None);
             if available < rows {
                 let error = result.err().expect("source-row topology must refuse first");
                 assert!(
@@ -86,7 +86,7 @@ fn resource_audit_ordinary_topology_precedes_every_prepared_row_materialization(
     )
     .erase();
     let resources = OperationGenerationResources::new();
-    crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     assert_eq!(
         resources.topology_usage(),
         3,
@@ -109,7 +109,7 @@ fn prepared_intrinsic_hits_are_admitted_without_analysis_or_storage() {
     let source = categorical_source();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
     let inputs =
-        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new(), None)
             .unwrap();
     assert!(inputs.axes[0].1.intrinsics.get().is_none());
     assert_eq!(
@@ -209,7 +209,11 @@ fn native_root_producers_obey_eighth_round_and_cycle_limits_under_parent_feedbac
                 640,
                 480,
                 |stage| {
-                    crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())
+                    crate::plots::shared_x::prepare_plot(
+                        &source,
+                        &stage.generation_resources(),
+                        None,
+                    )
                 },
                 |inputs, assigned, round| {
                     let (width, height) = assigned.dimensions()?;
@@ -329,9 +333,12 @@ fn native_multiline_axis_gutters_cannot_consume_root_caption_or_title_reserves()
         let theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let plot = inputs.attach(source).unwrap();
         let canvas = canvas_layout(&plot, &theme).unwrap();
         let plan = plan_panel_for_test(
@@ -421,9 +428,12 @@ fn native_narrow_root_selects_actual_ticks_and_automatic_painted_domains() {
         let theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let plot = inputs.attach(source).unwrap();
         let canvas = canvas_layout(&plot, &theme).unwrap();
         let endpoint = fit::intrinsic_widths(
@@ -498,7 +508,11 @@ fn native_absolute_gutter_feedback_contracts_independently_of_multiline_caption(
                 source.width(),
                 source.height(),
                 |stage| {
-                    crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())
+                    crate::plots::shared_x::prepare_plot(
+                        &source,
+                        &stage.generation_resources(),
+                        None,
+                    )
                 },
                 |inputs, assigned, round| {
                     if first && seeded {
@@ -559,9 +573,12 @@ fn native_hard_title_spans_and_category_slots_come_from_shaped_text() {
         })
         .chain([(category, 0)])
     {
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let plot = inputs.attach(source).unwrap();
         let minimum = Intrinsics::prepared(&plot, &theme).unwrap().minimum(&plot);
         let is_category = plot.prepared_axis_inputs().unwrap().display_categories[0]
@@ -631,9 +648,12 @@ fn native_hard_title_spans_and_category_slots_come_from_shaped_text() {
 #[test]
 fn native_resource_refusal_precedes_mark_materialization_and_backend_creation() {
     for source in all_sources().chain([categorical_source()]) {
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let plot = inputs.attach(source).unwrap();
         let theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -850,9 +870,12 @@ fn every_native_route_uses_exact_assigned_projection_and_frozen_axes_without_leg
         .resolve(&crate::font::canonical::OperationGenerationResources::new())
         .unwrap();
     for source in sources() {
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         assert!(inputs.route.is_coordinate());
         let plot = inputs.attach(source).unwrap();
         for panel in [
@@ -905,9 +928,12 @@ fn every_native_route_reports_intrinsic_fit_before_mark_projection_or_backend_cr
         .unwrap();
     for source in sources() {
         let source = source.x_label("").y_label("");
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let plot = inputs.attach(source).unwrap();
         let axes = Intrinsics::prepared(&plot, &theme).unwrap().minimum(&plot);
         let minimum = plot.intrinsic_body_minimum(&theme).unwrap();
@@ -960,7 +986,7 @@ fn exact_scatter_marks_fit_below_the_retired_generic_panel_floor() {
     .y_label("")
     .erase();
     let inputs =
-        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new(), None)
             .unwrap();
     let plot = inputs.attach(source).unwrap();
     let theme = crate::Theme::Publication
@@ -986,7 +1012,7 @@ fn categorical_trajectory_retains_bottom_slots_raw_and_display_identity() {
     )
     .erase();
     let inputs =
-        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new(), None)
             .unwrap();
     let plot = inputs.attach(source).unwrap();
     let theme = crate::Theme::Publication
@@ -1039,9 +1065,12 @@ fn categorical_trajectory_retains_bottom_slots_raw_and_display_identity() {
 fn every_native_route_admits_intrinsics_and_selected_candidates_at_exact_resource_caps() {
     for source in all_sources() {
         let prepare = || {
-            let inputs =
-                crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                    .unwrap();
+            let inputs = crate::plots::shared_x::prepare_plot(
+                &source,
+                &OperationGenerationResources::new(),
+                None,
+            )
+            .unwrap();
             inputs.attach(source.clone()).unwrap()
         };
         for intrinsic_only in [true, false] {
@@ -1188,9 +1217,12 @@ fn native_exact_sources_are_indivisible_and_missing_axes_never_fall_back() {
         } else {
             source
         };
-        let mut inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let mut inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let axes = &mut std::sync::Arc::get_mut(&mut inputs.axes).unwrap()[0].1;
         axes.specs[0].exact_ticks = Some(vec![
             crate::layout::AxisTick::new(0.0, "first"),
@@ -1270,9 +1302,12 @@ fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks()
         } else {
             source
         };
-        let mut inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let mut inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let axes = &mut std::sync::Arc::get_mut(&mut inputs.axes).unwrap()[0].1;
         axes.specs[0].exact_ticks = Some(vec![crate::layout::AxisTick::new(1.0, "W".repeat(200))]);
         if axes.categories[1].is_none() {
@@ -1371,6 +1406,7 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
                     let inputs = crate::plots::shared_x::prepare_plot(
                         &source,
                         &stage.generation_resources(),
+                        None,
                     )?;
                     let requirements = crate::layout::foundational_plot_requirements(
                         Some(&inputs),

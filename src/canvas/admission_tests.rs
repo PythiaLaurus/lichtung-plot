@@ -15,19 +15,26 @@ fn canvas_preset_construction_uses_one_prepared_ledger_for_root_and_explicit_chi
         + std::mem::size_of::<f64>()
         + 2 * std::mem::size_of::<usize>()) as u64
         + 4 * (16 + std::mem::size_of::<num_bigint::BigUint>() as u64);
-    let bytes = 4 * outline_bytes;
     for preset in [
         Theme::Publication,
         Theme::Nature,
         Theme::Science,
         Theme::CHI,
     ] {
+        let seeds = if preset == Theme::Publication { 8 } else { 5 };
+        let total_seeds = seeds + 5; // explicit Science child; inherited child shares the root
+        let bytes = 4 * outline_bytes
+            + 8 * (std::mem::size_of::<Vec<crate::theme::OpaqueColor>>()
+                + 2 * std::mem::size_of::<usize>()) as u64
+            + 2 * total_seeds * std::mem::size_of::<crate::theme::OpaqueColor>() as u64
+            + 10 * std::mem::size_of::<crate::theme::ColorStop>() as u64;
+        let work = 62_u128 + 2 * u128::from(total_seeds);
         for (visits, byte_limit) in [
             (0, bytes),
-            (20, 0),
-            (19, bytes),
-            (20, bytes - 1),
-            (20, bytes),
+            (work, 0),
+            (work - 1, bytes),
+            (work, bytes - 1),
+            (work, bytes),
         ] {
             let retained = std::cell::RefCell::new(None);
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
@@ -43,7 +50,7 @@ fn canvas_preset_construction_uses_one_prepared_ledger_for_root_and_explicit_chi
                     resources.set_test_limits(visits, byte_limit);
                     *retained.borrow_mut() = Some(resources.clone());
                     let themes = ResolvedCanvasThemes::new(preset, &plots, &resources)?;
-                    assert_eq!(resources.usage().unwrap().1, 20);
+                    assert_eq!(resources.usage().unwrap().1, work);
                     assert_eq!(resources.byte_usage().unwrap(), bytes);
                     assert!(std::ptr::eq(themes.root(), themes.plot(0).unwrap()));
                     assert!(!std::ptr::eq(themes.root(), themes.plot(1).unwrap()));
@@ -71,14 +78,20 @@ fn canvas_preset_construction_uses_one_prepared_ledger_for_root_and_explicit_chi
             let error = result.err().unwrap().to_string();
             let retained = retained.borrow();
             let resources = retained.as_ref().unwrap();
-            if (visits, byte_limit) == (20, bytes) {
+            if (visits, byte_limit) == (work, bytes) {
                 assert!(error.contains("Canvas preset construction boundary reached"));
             } else {
                 assert!(
-                    error.contains("relative spacing:") && error.contains("admission"),
+                    error.contains("admission")
+                        || error.contains("scale input")
+                        || error.contains("gradient validation")
+                        || error.contains("bytes limit"),
                     "{error}"
                 );
-                assert!(resources.byte_usage().unwrap() < bytes);
+                assert!(resources.byte_usage().unwrap() <= bytes);
+                if byte_limit < bytes {
+                    assert!(resources.byte_usage().unwrap() < bytes);
+                }
             }
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| assert_eq!(calls.get(), 0));
             crate::render::svg_backend::SVG_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
@@ -459,7 +472,7 @@ fn complete_parent_admission_has_exact_work_and_storage_boundaries() {
                     resources.set_test_limits(visits, bytes);
                 }
                 canvas.admit_parent_metadata(&resources)?;
-                let (interiors, shared) = canvas.prepare_interiors(stage)?;
+                let (interiors, shared) = canvas.prepare_interiors(stage, Some(&themes))?;
                 let (mut census, presence) =
                     canvas.foundational_text_census(&themes, &interiors, None, stage)?;
                 themes.prepare_font_environment(&mut census, presence, stage)?;

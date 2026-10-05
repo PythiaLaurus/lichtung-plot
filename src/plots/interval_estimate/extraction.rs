@@ -126,9 +126,12 @@ fn wide_estimate_labels_request_automatic_headroom_but_not_exact_x() {
     let panel = crate::layout::PanelBox::new(80.0, 920.0, 80.0, 580.0);
     for exact in [false, true] {
         let source = source(exact);
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let chart = inputs.attach(source).unwrap();
         let selected =
             chart.measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme));
@@ -172,7 +175,7 @@ fn semantics_and_label_strings_obey_exact_limits_before_fonts() {
         STAGES.with(|counts| counts.set([[0; 4]; 3]));
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
         let resources = OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         assert_eq!(
             STAGES
                 .with(std::cell::Cell::get)
@@ -187,7 +190,8 @@ fn semantics_and_label_strings_obey_exact_limits_before_fonts() {
             assert!(matches!(
                 crate::plots::shared_x::prepare_plot(
                     &source,
-                    &OperationGenerationResources::with_test_limits(visits, bytes)
+                    &OperationGenerationResources::with_test_limits(visits, bytes),
+                    None,
                 ),
                 Err(Error::Render(_))
             ));
@@ -195,6 +199,7 @@ fn semantics_and_label_strings_obey_exact_limits_before_fonts() {
         crate::plots::shared_x::prepare_plot(
             &source,
             &OperationGenerationResources::with_test_limits(visits, bytes),
+            None,
         )
         .unwrap();
         let attached = inputs.attach(source).unwrap();
@@ -247,7 +252,7 @@ fn missing_facets_and_mixed_shared_canvas_prepare_each_family_once() {
         for (family, source) in sources(Some(scales), None).into_iter().enumerate() {
             STAGES.with(|counts| counts.set([[0; 4]; 3]));
             let resources = OperationGenerationResources::new();
-            let prepared = crate::plots::shared_x::prepare_plot(&source, &resources);
+            let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None);
             assert_eq!(STAGES.with(std::cell::Cell::get)[family], [2, 0, 0, 0]);
             if matches!(scales, FacetScales::FreeX | FacetScales::Free) {
                 assert!(matches!(prepared, Err(Error::Data(_))));
@@ -325,9 +330,12 @@ fn projected_limits_and_geometry_match_selected_draw_order() {
         let theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let attached = inputs.attach(source).unwrap();
         let context = PlotRenderContext::new(
             attached.data(),
@@ -394,9 +402,12 @@ fn raw_interval_intent_survives_correctly_rounded_logarithms() {
         .scale(crate::AxisScale::Log10)
         .x_limits(1e15, 1e17)
         .erase();
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let tuple = inputs.estimate.as_ref().unwrap().panels[0].1.estimates[0].unwrap();
         assert_eq!(tuple.lower.unwrap().to_bits(), 16.0_f64.to_bits());
         assert_eq!(tuple.upper.unwrap().to_bits(), 16.0_f64.to_bits());
@@ -445,7 +456,7 @@ fn facet_owned_significance_is_retained_only_by_its_selected_panel() {
     .size(1000, 480)
     .erase();
     let inputs =
-        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new(), None)
             .unwrap();
     let panels = &inputs.estimate.as_ref().unwrap().panels;
     assert_eq!(panels[0].1.adjacent, [None]);
@@ -469,7 +480,7 @@ fn final_guides_ticks_and_invalid_tuples_precede_unavailable_fonts() {
             640,
             480,
             |stage| {
-                crate::plots::shared_x::prepare_plot(source, &stage.generation_resources())?;
+                crate::plots::shared_x::prepare_plot(source, &stage.generation_resources(), None)?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     None,
                     source,
@@ -576,6 +587,7 @@ fn logarithmic_shared_limits_and_raw_exact_ticks_are_transformed_once() {
     let marks = crate::plots::shared_x::PreparedReference::new(
         &source,
         source.data().with_axis_resources(&resources),
+        None,
     )
     .unwrap();
     let inputs = crate::plots::shared_x::prepare_reference_plot(
@@ -653,8 +665,11 @@ fn poisoned_capture_repeats_no_source_projection_axis_or_shaping_work() {
             640,
             480,
             |stage| {
-                let inputs =
-                    crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
+                let inputs = crate::plots::shared_x::prepare_plot(
+                    &source,
+                    &stage.generation_resources(),
+                    None,
+                )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     None,
                     &source,

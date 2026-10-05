@@ -3,7 +3,7 @@
 use crate::data::PlotData;
 use crate::decorations::legend::LegendEntry;
 use crate::render::backend::{Backend, FillStyle, LineStyle, Point2D, PointStyle};
-use crate::theme::{CategoryColors, PaletteSource};
+use crate::theme::CategoryColors;
 use crate::{Error, Plot, PlotKind};
 
 #[cfg(test)]
@@ -39,14 +39,14 @@ impl PreparedDistribution {
             let parent = source.source_levels(&raw)?;
             return CategoryColors::resolve(
                 &parent,
-                PaletteSource::Extendable(theme),
+                theme.color_scales.qualitative(),
                 chart.categorical_colors_spec(),
                 resources,
             );
         };
         CategoryColors::resolve(
             keys,
-            PaletteSource::Extendable(theme),
+            theme.color_scales.qualitative(),
             chart.categorical_colors_spec(),
             resources,
         )
@@ -145,7 +145,7 @@ impl PreparedDistribution {
                 prepared.hue_levels()
             };
             for key in keys {
-                if exact.color(key, data.source_resources()?)?.is_none() {
+                if exact.color_in(key, data.source_resources()?)?.is_none() {
                     return Err(Error::Data(format!(
                         "distribution: category {key:?} has no caller-owned color"
                     )));
@@ -369,7 +369,7 @@ mod appearance_tests {
         )
         .erase();
         let resources = crate::font::canonical::OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let panel = crate::layout::PanelBox::new(10.0, 620.0, 20.0, 420.0);
         let mut theme = crate::Theme::Publication
@@ -451,7 +451,7 @@ mod appearance_tests {
         )
         .erase();
         let resources = crate::font::canonical::OperationGenerationResources::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let panel = crate::layout::PanelBox::new(10.0, 620.0, 20.0, 420.0);
         let mut theme = crate::Theme::Publication

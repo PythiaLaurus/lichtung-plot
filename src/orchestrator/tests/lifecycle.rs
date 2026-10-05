@@ -783,11 +783,17 @@ fn canvas_preflight_and_render_reuse_one_chrome_and_one_theme_per_child() {
     let nature_color = crate::Theme::Nature
         .resolve(&crate::font::canonical::OperationGenerationResources::new())
         .unwrap()
-        .colors[0];
+        .marks
+        .accents
+        .seeds()[0]
+        .as_rgb();
     let science_color = crate::Theme::Science
         .resolve(&crate::font::canonical::OperationGenerationResources::new())
         .unwrap()
-        .colors[0];
+        .marks
+        .accents
+        .seeds()[0]
+        .as_rgb();
     let canvas = |themes: [crate::Theme; 2]| {
         crate::Canvas::grid(1, 2)
             .unwrap()
@@ -1824,6 +1830,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
         let prepared = crate::plots::shared_x::prepare_plot(
             &plot,
             &crate::font::canonical::OperationGenerationResources::new(),
+            Some(&crate::theme::scale_values::test_defaults()),
         )
         .unwrap_or_else(|error| panic!("{kind:?}: {error}"))
         .attach(plot.clone())

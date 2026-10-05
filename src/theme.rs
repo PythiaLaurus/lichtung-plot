@@ -6,11 +6,15 @@ mod mark_paint;
 mod paint;
 mod resolved;
 mod scale;
+pub(crate) mod scale_values;
 mod spacing;
 
-pub(crate) use scale::{
-    AccentColors, CategoryColors, ContinuousColors, PaletteCache, PaletteSource,
-    BEESWARM_SEQUENTIAL_STOPS, HEATMAP_DIVERGING_STOPS, HEATMAP_SEQUENTIAL_STOPS,
+pub(crate) use scale::{AccentColors, CategoryColors, ContinuousColors, PaletteCache};
+pub(crate) use scale_values::{
+    AccentPalette, CategoricalColorScale, ColorDomain, ColorScales, ColorStop,
+    ContinuousColorScale, ContinuousScaleKind, DivergingGradient, PaletteCapacity,
+    QualitativePalette, SequentialGradient, BEESWARM_SEQUENTIAL_STOPS, HEATMAP_DIVERGING_STOPS,
+    HEATMAP_SEQUENTIAL_STOPS,
 };
 
 pub(crate) use mark_paint::{

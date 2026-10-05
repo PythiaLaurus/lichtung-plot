@@ -67,9 +67,12 @@ fn complete_large_point_and_density_ink_survives_feedback_per_automatic_dimensio
             source().size(1600, 1400)
         }
         .erase();
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
+        let inputs = crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::new(),
+            None,
+        )
+        .unwrap();
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -253,9 +256,10 @@ fn marginal_raw_hue_color_map_requires_every_observed_identity_before_fonts() {
         )
         .erase();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-    let error = crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-        .err()
-        .expect("missing visible hue must refuse");
+    let error =
+        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new(), None)
+            .err()
+            .expect("missing visible hue must refuse");
     assert!(matches!(error, Error::Data(message) if message.contains("category \"a\"")));
     assert_eq!(
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
@@ -269,7 +273,7 @@ fn marginal_root_semantics_and_curves_have_exact_pre_font_admission() {
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
     STAGES.with(|counts| counts.set([0; 3]));
     let resources = OperationGenerationResources::new();
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     assert_eq!(STAGES.with(std::cell::Cell::get), [1, 1, 0]);
     let marks = inputs.marginal.as_ref().unwrap();
     assert_eq!(marks.ranges, inputs.axes[0].1.ranges);
@@ -280,13 +284,15 @@ fn marginal_root_semantics_and_curves_have_exact_pre_font_admission() {
     for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
         assert!(crate::plots::shared_x::prepare_plot(
             &source,
-            &OperationGenerationResources::with_test_limits(visits, bytes)
+            &OperationGenerationResources::with_test_limits(visits, bytes),
+            None,
         )
         .is_err());
     }
     crate::plots::shared_x::prepare_plot(
         &source,
         &OperationGenerationResources::with_test_limits(visits, bytes),
+        None,
     )
     .unwrap();
     let attached = inputs.attach(source).unwrap();
@@ -304,7 +310,7 @@ fn marginal_root_semantics_and_curves_have_exact_pre_font_admission() {
 fn marginal_selected_geometry_and_poisoned_capture_share_operands() {
     let source = source().erase();
     let inputs =
-        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new(), None)
             .unwrap();
     let source = inputs.attach(source).unwrap();
     let theme = crate::Theme::Publication
@@ -566,6 +572,7 @@ fn marginal_parent_shared_domain_is_applied_before_curve_preparation() {
     let marks = crate::plots::shared_x::PreparedReference::new(
         &source,
         source.data().with_axis_resources(&resources),
+        None,
     )
     .unwrap();
     let inputs = crate::plots::shared_x::prepare_reference_plot(
@@ -588,7 +595,7 @@ fn marginal_parent_shared_domain_is_applied_before_curve_preparation() {
 fn marginal_parent_hue_order_controls_selected_colors_without_repreparation() {
     let source = source().erase();
     let inputs =
-        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new(), None)
             .unwrap();
     let source = inputs
         .attach(source)
@@ -612,17 +619,17 @@ fn marginal_parent_hue_order_controls_selected_colors_without_repreparation() {
     };
     assert_eq!(
         payload.groups[0].point_style.color,
-        crate::theme::color_from_rgb(theme.colors[1])
+        crate::theme::Color::from(theme.color_scales.qualitative().colors()[1])
             .with_alpha(theme.marks.primary_point.fill_alpha)
     );
     assert_eq!(
         payload.groups[1].point_style.color,
-        crate::theme::color_from_rgb(theme.colors[0])
+        crate::theme::Color::from(theme.color_scales.qualitative().colors()[0])
             .with_alpha(theme.marks.primary_point.fill_alpha)
     );
     assert_eq!(
         payload.groups[0].fill.color,
-        crate::theme::color_from_rgb(theme.colors[1]).with_alpha(115)
+        crate::theme::Color::from(theme.color_scales.qualitative().colors()[1]).with_alpha(115)
     );
     assert_eq!(stages[..2], STAGES.with(std::cell::Cell::get)[..2]);
 }

@@ -195,10 +195,16 @@ impl Plot {
             format.admit_clone(data)?;
         }
         if let Some(stops) = &self.heatmap_gradient {
-            data.admit_clone_slice(stops)?;
+            match stops {
+                Ok(_) => data.claim_source_visits(1)?,
+                Err(error) => data.admit_clone_str(error)?,
+            }
         }
         if let Some(stops) = &self.beeswarm_gradient {
-            data.admit_clone_slice(stops)?;
+            match stops {
+                Ok(_) => data.claim_source_visits(1)?,
+                Err(error) => data.admit_clone_str(error)?,
+            }
         }
         data.admit_clone_slice(&self.heatmap_null_row_annotations)?;
         for annotation in &self.heatmap_null_row_annotations {
