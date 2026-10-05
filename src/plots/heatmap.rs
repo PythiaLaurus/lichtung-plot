@@ -509,9 +509,9 @@ pub(crate) struct HeatmapIntrinsicCache {
     canvas_override: Option<crate::theme::Color>,
     backdrop: crate::theme::Color,
     missing_fill: crate::theme::Color,
-    cell_outline: crate::theme::FillOutlineAppearance,
-    highlight_outline: crate::theme::FillOutlineAppearance,
-    missing_row_outline: crate::theme::FillOutlineAppearance,
+    cell_outline: crate::theme::OutlineTheme,
+    highlight_outline: crate::theme::OutlineTheme,
+    missing_row_outline: crate::theme::OutlineTheme,
     missing_cross: LineStyle,
 }
 
@@ -683,7 +683,7 @@ fn intrinsic_cell_ink(
         ));
     }
     let quantum = 1.0 / 1024.0;
-    let cell = |style: &crate::theme::FillOutlineAppearance| -> Result<_, Error> {
+    let cell = |style: &crate::theme::OutlineTheme| -> Result<_, Error> {
         let fill = style.backend_style(crate::theme::Color::rgb(0, 0, 0));
         let (x, y) = crate::render::geometry::rectangular_fill_ink_outset(theme, &fill)?;
         Ok((x + quantum, y + quantum))

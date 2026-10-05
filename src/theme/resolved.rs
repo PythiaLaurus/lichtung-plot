@@ -10,11 +10,15 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use sha2::{Digest, Sha256};
 
+use super::{
+    DataFillTheme, DataLineTheme, DataOutlineTheme, FixedFillTheme, OutlineTheme,
+    PointOutlineTheme, PointTheme, SolidStrokeTheme, StrokeTheme,
+};
 use crate::font::canonical::{OperationGenerationResources, PreparedFontEnvironment};
 use crate::layout::{
     PhysicalTextAlignment, ResolvedTextPlan, TextLineHeight, TextPlanInput, TextPlanProvenance,
 };
-use crate::render::backend::{LineStyle, StrokePattern, TextAnchor};
+use crate::render::backend::{StrokePattern, TextAnchor};
 use crate::theme::{color_from_rgb, Color};
 use crate::{Error, SignificanceMarkStyle, TextWeight};
 
@@ -1471,151 +1475,68 @@ impl FoundationalTypography {
     }
 }
 
-/// One complete axis stroke style.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct StrokeAppearance {
-    /// Stroke paint.
-    pub(crate) paint: Color,
-    /// Finite positive stroke width in pixels.
-    pub(crate) width: f32,
-    /// Closed stroke pattern.
-    pub(crate) pattern: StrokePattern,
-}
-
-impl StrokeAppearance {
-    /// Build the private backend line style for this complete stroke.
-    pub(crate) fn backend_style(&self) -> LineStyle {
-        LineStyle {
-            color: self.paint,
-            width: self.width,
-            pattern: self.pattern,
-        }
-    }
-}
-
 /// Mark strokes are independent of structurally similar axis chrome.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct MarkAppearance {
     /// Shared primary-point paint/outline before family-specific size selection.
-    pub(crate) primary_point: PointAppearance,
+    pub(crate) primary_point: PointTheme,
     /// Ordinary bar bodies in either orientation and originating guide glyphs.
-    pub(crate) bar_body: DataFillAppearance,
-    pub(crate) line_band: DataFillAppearance,
-    pub(crate) regression_band: DataFillAppearance,
-    pub(crate) density_area: DataFillAppearance,
-    pub(crate) marginal_density: DataFillAppearance,
-    pub(crate) matrix_density: DataFillAppearance,
-    pub(crate) box_body: DataFillAppearance,
-    pub(crate) violin_body: DataFillAppearance,
-    pub(crate) raincloud_box: FixedFillAppearance,
-    pub(crate) histogram_bin: DataFillAppearance,
-    pub(crate) waterfall_bar: DataFillAppearance,
+    pub(crate) bar_body: DataFillTheme,
+    pub(crate) line_band: DataFillTheme,
+    pub(crate) regression_band: DataFillTheme,
+    pub(crate) density_area: DataFillTheme,
+    pub(crate) marginal_density: DataFillTheme,
+    pub(crate) matrix_density: DataFillTheme,
+    pub(crate) box_body: DataFillTheme,
+    pub(crate) violin_body: DataFillTheme,
+    pub(crate) raincloud_box: FixedFillTheme,
+    pub(crate) histogram_bin: DataFillTheme,
+    pub(crate) waterfall_bar: DataFillTheme,
     /// Boxplot/Violin raw observations and Raincloud strips/guide points.
-    pub(crate) raw_overlay_point: PointAppearance,
+    pub(crate) raw_overlay_point: PointTheme,
     pub(crate) raw_overlay_radius: u32,
-    pub(crate) heatmap_cell_outline: FillOutlineAppearance,
-    pub(crate) heatmap_highlight_outline: FillOutlineAppearance,
+    pub(crate) heatmap_cell_outline: OutlineTheme,
+    pub(crate) heatmap_highlight_outline: OutlineTheme,
     /// Non-data missing paint shared by Heatmap cells, merged rows and keys.
     pub(crate) heatmap_missing_fill: Color,
-    pub(crate) heatmap_missing_row_outline: FillOutlineAppearance,
-    pub(crate) heatmap_missing_key_outline: FillOutlineAppearance,
-    pub(crate) heatmap_missing_cross: StrokeAppearance,
-    pub(crate) bar_zero: StrokeAppearance,
-    pub(crate) waterfall_connector: StrokeAppearance,
-    pub(crate) waterfall_reference: StrokeAppearance,
-    pub(crate) raincloud_median: StrokeAppearance,
-    pub(crate) beeswarm_reference: StrokeAppearance,
-    pub(crate) interaction_interval: DataLineAppearance,
-    pub(crate) interaction_connector: DataLineAppearance,
+    pub(crate) heatmap_missing_row_outline: OutlineTheme,
+    pub(crate) heatmap_missing_key_outline: OutlineTheme,
+    pub(crate) heatmap_missing_cross: StrokeTheme,
+    pub(crate) bar_zero: StrokeTheme,
+    pub(crate) waterfall_connector: StrokeTheme,
+    pub(crate) waterfall_reference: StrokeTheme,
+    pub(crate) raincloud_median: StrokeTheme,
+    pub(crate) beeswarm_reference: StrokeTheme,
+    pub(crate) interaction_interval: DataLineTheme,
+    pub(crate) interaction_connector: DataLineTheme,
     /// Sizes of built-in point roles; plotted groups and their guides share these.
     pub(crate) point_sizes: PointSizeAppearance,
     /// Bar uncertainty stems/caps in either orientation.
-    pub(crate) uncertainty_stroke: StrokeAppearance,
+    pub(crate) uncertainty_stroke: StrokeTheme,
     /// Distribution summary and whisker strokes, including their guide glyphs.
-    pub(crate) summary_stroke: StrokeAppearance,
+    pub(crate) summary_stroke: StrokeTheme,
     /// A Line series' data-colored path, reused in its legend glyph.
-    pub(crate) series_line: DataLineAppearance,
+    pub(crate) series_line: DataLineTheme,
     /// A Trajectory or LinePath series' data-colored path.
-    pub(crate) path_line: DataLineAppearance,
+    pub(crate) path_line: DataLineTheme,
     /// Histogram KDE overlay independently resolved from the bin outline.
-    pub(crate) histogram_curve: StrokeAppearance,
+    pub(crate) histogram_curve: StrokeTheme,
     /// Histogram rug ticks independently resolved from the KDE overlay.
-    pub(crate) histogram_rug: StrokeAppearance,
+    pub(crate) histogram_rug: StrokeTheme,
     /// Density group curve, reused exactly by its originating guide glyph.
-    pub(crate) density_line: DataLineAppearance,
+    pub(crate) density_line: DataLineTheme,
     /// Regression fit line independently resolved from its observations/band.
-    pub(crate) regression_fit: StrokeAppearance,
+    pub(crate) regression_fit: StrokeTheme,
     /// Estimate intervals do not borrow axis or bar uncertainty strokes.
-    pub(crate) estimate_interval: StrokeAppearance,
+    pub(crate) estimate_interval: StrokeTheme,
     /// PointInterval's solid reference at an exact caller value.
-    pub(crate) point_interval_reference: StrokeAppearance,
+    pub(crate) point_interval_reference: StrokeTheme,
     /// Coefficient/Forest reference has its own fixed medium-dash grammar.
-    pub(crate) estimate_reference: StrokeAppearance,
+    pub(crate) estimate_reference: StrokeTheme,
     /// Q-Q reference is independent of the estimate-display reference role.
-    pub(crate) qq_reference: StrokeAppearance,
+    pub(crate) qq_reference: StrokeTheme,
     /// Dumbbell pairs use one neutral connecting stroke.
-    pub(crate) dumbbell_connector: StrokeAppearance,
-}
-
-/// A filled mark consumes one opaque scale color and independent fill/outline
-/// roles; neither paint inherits alpha from the other.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct DataFillAppearance {
-    pub(crate) fill_alpha: u8,
-    pub(crate) outline_paint: FillOutlinePaint,
-    pub(crate) outline_width: f32,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) enum FillOutlinePaint {
-    Fixed(Color),
-    Data,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct FixedFillAppearance {
-    pub(crate) paint: Color,
-    pub(crate) outline_paint: Color,
-    pub(crate) outline_width: f32,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct FillOutlineAppearance {
-    pub(crate) paint: Color,
-    pub(crate) width: f32,
-}
-
-impl FillOutlineAppearance {
-    pub(crate) fn backend_style(&self, fill: Color) -> crate::render::backend::FillStyle {
-        crate::render::backend::FillStyle::new(fill, self.paint, self.width)
-    }
-}
-
-impl FixedFillAppearance {
-    pub(crate) fn backend_style(&self) -> crate::render::backend::FillStyle {
-        crate::render::backend::FillStyle::new(self.paint, self.outline_paint, self.outline_width)
-    }
-}
-
-impl DataFillAppearance {
-    pub(crate) fn backend_style(&self, color: (u8, u8, u8)) -> crate::render::backend::FillStyle {
-        crate::render::backend::FillStyle::new(
-            color_from_rgb(color).with_alpha(self.fill_alpha),
-            match self.outline_paint {
-                FillOutlinePaint::Fixed(paint) => paint,
-                FillOutlinePaint::Data => color_from_rgb(color),
-            },
-            self.outline_width,
-        )
-    }
-}
-
-/// One complete default point paint and its independently painted outline.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct PointAppearance {
-    pub(crate) fill_alpha: u8,
-    pub(crate) shape: crate::PointShape,
-    pub(crate) outline: crate::render::backend::PointOutline,
+    pub(crate) dumbbell_connector: StrokeTheme,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1653,44 +1574,10 @@ impl PointSizeAppearance {
     }
 }
 
-impl PointAppearance {
-    pub(crate) fn backend_style(
-        &self,
-        color: (u8, u8, u8),
-        radius: u32,
-        outline_visible: bool,
-    ) -> crate::render::backend::PointStyle {
-        crate::render::backend::PointStyle {
-            color: color_from_rgb(color).with_alpha(self.fill_alpha),
-            radius,
-            outline: outline_visible.then(|| self.outline.clone()),
-            shape: self.shape,
-        }
-    }
-}
-
-/// One complete data-colored mark stroke; the scale supplies opaque RGB only.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct DataLineAppearance {
-    pub(crate) width: f32,
-    pub(crate) alpha: u8,
-    pub(crate) pattern: StrokePattern,
-}
-
-impl DataLineAppearance {
-    pub(crate) fn backend_style(&self, color: (u8, u8, u8)) -> LineStyle {
-        LineStyle {
-            color: color_from_rgb(color).with_alpha(self.alpha),
-            width: self.width,
-            pattern: self.pattern,
-        }
-    }
-}
-
 /// Annotation paths resolve independently of axes, marks, and label typography.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct AnnotationAppearance {
-    pub(crate) bracket_stroke: BracketStrokeAppearance,
+    pub(crate) bracket_stroke: SolidStrokeTheme,
     /// Clearance from a labeled supplemental point's painted radius.
     pub(crate) point_label_gap: f64,
     pub(crate) waterfall_shelf_padding: f64,
@@ -1700,18 +1587,11 @@ pub(crate) struct AnnotationAppearance {
     pub(crate) planning_backdrop: Color,
 }
 
-/// Bracket paths have a fixed solid topology; only their paint and width vary.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct BracketStrokeAppearance {
-    pub(crate) paint: Color,
-    pub(crate) width: f32,
-}
-
 /// Structurally present frame appearance.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct FrameAppearance {
     /// Complete frame stroke.
-    pub(crate) stroke: StrokeAppearance,
+    pub(crate) stroke: StrokeTheme,
     /// Original preset setting retained until T5a5 normalizes frame topology.
     pub(crate) source_show_top_right_spines: bool,
 }
@@ -1720,7 +1600,7 @@ pub(crate) struct FrameAppearance {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct TickAppearance {
     /// Complete tick stroke.
-    pub(crate) stroke: StrokeAppearance,
+    pub(crate) stroke: StrokeTheme,
     /// Tick length in pixels.
     pub(crate) length: u32,
 }
@@ -1750,7 +1630,7 @@ pub(crate) struct AxisAppearance {
     /// Optional complete tick style; `None` means no tick marks.
     pub(crate) ticks: Option<TickAppearance>,
     /// Optional complete grid style; `None` means no grid.
-    pub(crate) grid: Option<StrokeAppearance>,
+    pub(crate) grid: Option<StrokeTheme>,
     /// Axis-local spacing relationships.
     pub(crate) spacing: AxisSpacing,
 }
@@ -1835,11 +1715,21 @@ fn resolved_theme(
     grid_color: (u8, u8, u8),
     source_show_top_right_spines: bool,
 ) -> Result<ResolvedTheme, Error> {
-    let primary_outline = crate::render::backend::PointOutline::publication(resources)?;
-    let overlay_outline = crate::render::backend::PointOutline::publication(resources)?;
+    let primary_outline = PointOutlineTheme::publication(resources)?;
+    let overlay_outline = PointOutlineTheme::publication(resources)?;
     let stack = crate::font::canonical::builtin_font_stack();
     let foreground_paint = color_from_rgb(foreground);
     let muted_paint = color_from_rgb(MUTED_TEXT);
+    let stroke = |width, pattern| StrokeTheme::new(foreground_paint, width, pattern);
+    let filled = |alpha, width| {
+        DataFillTheme::new(
+            alpha,
+            Some(DataOutlineTheme::fixed(OutlineTheme::new(
+                foreground_paint,
+                width,
+            )?)),
+        )
+    };
     let text = |paint, font_size, line_height| {
         TextTheme::new(
             stack.clone(),
@@ -1909,18 +1799,18 @@ fn resolved_theme(
         },
         axes: AxisAppearance {
             frame: Some(FrameAppearance {
-                stroke: stroke_appearance(foreground_paint, axis_width, StrokePattern::Solid),
+                stroke: stroke(axis_width, StrokePattern::Solid)?,
                 source_show_top_right_spines,
             }),
             ticks: Some(TickAppearance {
-                stroke: stroke_appearance(foreground_paint, axis_width, StrokePattern::Solid),
+                stroke: stroke(axis_width, StrokePattern::Solid)?,
                 length: 5,
             }),
-            grid: Some(stroke_appearance(
+            grid: Some(StrokeTheme::new(
                 color_from_rgb(grid_color),
                 0.5,
                 StrokePattern::MediumDash,
-            )),
+            )?),
             spacing: AxisSpacing {
                 x_tick_label_gap: 8.0,
                 y_tick_label_gap: 6.0,
@@ -1931,169 +1821,61 @@ fn resolved_theme(
             },
         },
         marks: MarkAppearance {
-            primary_point: PointAppearance {
-                fill_alpha: 209,
-                shape: crate::PointShape::Circle,
-                outline: primary_outline,
-            },
-            bar_body: DataFillAppearance {
-                fill_alpha: 255,
-                outline_paint: FillOutlinePaint::Fixed(foreground_paint),
-                outline_width: 1.0,
-            },
-            line_band: DataFillAppearance {
-                fill_alpha: 46,
-                outline_paint: FillOutlinePaint::Data,
-                outline_width: 0.0,
-            },
-            regression_band: DataFillAppearance {
-                fill_alpha: 64,
-                outline_paint: FillOutlinePaint::Data,
-                outline_width: 0.0,
-            },
-            density_area: DataFillAppearance {
-                fill_alpha: 56,
-                outline_paint: FillOutlinePaint::Data,
-                outline_width: 0.0,
-            },
-            marginal_density: DataFillAppearance {
-                fill_alpha: 115,
-                outline_paint: FillOutlinePaint::Data,
-                outline_width: 1.0,
-            },
-            matrix_density: DataFillAppearance {
-                fill_alpha: 102,
-                outline_paint: FillOutlinePaint::Data,
-                outline_width: 1.0,
-            },
-            box_body: DataFillAppearance {
-                fill_alpha: 255,
-                outline_paint: FillOutlinePaint::Fixed(foreground_paint),
-                outline_width: 1.0,
-            },
-            violin_body: DataFillAppearance {
-                fill_alpha: 178,
-                outline_paint: FillOutlinePaint::Fixed(foreground_paint),
-                outline_width: 1.0,
-            },
-            raincloud_box: FixedFillAppearance {
-                paint: Color::rgb(255, 255, 255),
-                outline_paint: foreground_paint,
-                outline_width: 1.0,
-            },
-            histogram_bin: DataFillAppearance {
-                fill_alpha: 209,
-                outline_paint: FillOutlinePaint::Fixed(foreground_paint),
-                outline_width: 0.8,
-            },
-            waterfall_bar: DataFillAppearance {
-                fill_alpha: 255,
-                outline_paint: FillOutlinePaint::Fixed(foreground_paint),
-                outline_width: 0.8,
-            },
-            raw_overlay_point: PointAppearance {
-                fill_alpha: 209,
-                shape: crate::PointShape::Circle,
-                outline: overlay_outline,
-            },
+            primary_point: PointTheme::new(209, crate::PointShape::Circle, Some(primary_outline))?,
+            bar_body: filled(255, 1.0)?,
+            line_band: DataFillTheme::new(46, None)?,
+            regression_band: DataFillTheme::new(64, None)?,
+            density_area: DataFillTheme::new(56, None)?,
+            marginal_density: DataFillTheme::new(115, Some(DataOutlineTheme::mapped(1.0, 255)?))?,
+            matrix_density: DataFillTheme::new(102, Some(DataOutlineTheme::mapped(1.0, 255)?))?,
+            box_body: filled(255, 1.0)?,
+            violin_body: filled(178, 1.0)?,
+            raincloud_box: FixedFillTheme::new(
+                Color::rgb(255, 255, 255),
+                Some(OutlineTheme::new(foreground_paint, 1.0)?),
+            )?,
+            histogram_bin: filled(209, 0.8)?,
+            waterfall_bar: filled(255, 0.8)?,
+            raw_overlay_point: PointTheme::new(
+                209,
+                crate::PointShape::Circle,
+                Some(overlay_outline),
+            )?,
             raw_overlay_radius: 2,
-            heatmap_cell_outline: FillOutlineAppearance {
-                paint: Color::rgb(255, 255, 255),
-                width: 0.5,
-            },
-            heatmap_highlight_outline: FillOutlineAppearance {
-                paint: foreground_paint,
-                width: 2.5,
-            },
+            heatmap_cell_outline: OutlineTheme::new(Color::rgb(255, 255, 255), 0.5)?,
+            heatmap_highlight_outline: OutlineTheme::new(foreground_paint, 2.5)?,
             heatmap_missing_fill: Color::rgb(224, 224, 224),
-            heatmap_missing_row_outline: FillOutlineAppearance {
-                paint: Color::rgb(255, 255, 255),
-                width: 0.5,
-            },
-            heatmap_missing_key_outline: FillOutlineAppearance {
-                paint: Color::rgb(120, 120, 120),
-                width: 0.8,
-            },
-            heatmap_missing_cross: StrokeAppearance {
-                paint: Color::rgb(120, 120, 120),
-                width: 1.0,
-                pattern: StrokePattern::Solid,
-            },
-            bar_zero: StrokeAppearance {
-                paint: foreground_paint,
-                width: 0.8,
-                pattern: StrokePattern::Solid,
-            },
-            waterfall_connector: StrokeAppearance {
-                paint: foreground_paint,
-                width: 0.7,
-                pattern: StrokePattern::ShortDash,
-            },
-            waterfall_reference: StrokeAppearance {
-                paint: foreground_paint,
-                width: 0.7,
-                pattern: StrokePattern::MediumDash,
-            },
-            raincloud_median: StrokeAppearance {
-                paint: foreground_paint,
-                width: 1.5,
-                pattern: StrokePattern::Solid,
-            },
-            beeswarm_reference: StrokeAppearance {
-                paint: foreground_paint,
-                width: 0.8,
-                pattern: StrokePattern::Solid,
-            },
-            interaction_interval: DataLineAppearance {
-                width: 1.2,
-                alpha: 255,
-                pattern: StrokePattern::Solid,
-            },
-            interaction_connector: DataLineAppearance {
-                width: 1.8,
-                alpha: 255,
-                pattern: StrokePattern::Solid,
-            },
+            heatmap_missing_row_outline: OutlineTheme::new(Color::rgb(255, 255, 255), 0.5)?,
+            heatmap_missing_key_outline: OutlineTheme::new(Color::rgb(120, 120, 120), 0.8)?,
+            heatmap_missing_cross: StrokeTheme::new(
+                Color::rgb(120, 120, 120),
+                1.0,
+                StrokePattern::Solid,
+            )?,
+            bar_zero: stroke(0.8, StrokePattern::Solid)?,
+            waterfall_connector: stroke(0.7, StrokePattern::ShortDash)?,
+            waterfall_reference: stroke(0.7, StrokePattern::MediumDash)?,
+            raincloud_median: stroke(1.5, StrokePattern::Solid)?,
+            beeswarm_reference: stroke(0.8, StrokePattern::Solid)?,
+            interaction_interval: DataLineTheme::new(1.2, 255, StrokePattern::Solid)?,
+            interaction_connector: DataLineTheme::new(1.8, 255, StrokePattern::Solid)?,
             point_sizes: PointSizeAppearance::publication(),
-            uncertainty_stroke: stroke_appearance(
-                foreground_paint,
-                axis_width,
-                StrokePattern::Solid,
-            ),
-            summary_stroke: stroke_appearance(foreground_paint, axis_width, StrokePattern::Solid),
-            series_line: DataLineAppearance {
-                width: 1.8,
-                alpha: 255,
-                pattern: StrokePattern::Solid,
-            },
-            path_line: DataLineAppearance {
-                width: 1.4,
-                alpha: 255,
-                pattern: StrokePattern::Solid,
-            },
-            histogram_curve: stroke_appearance(foreground_paint, 1.0, StrokePattern::Solid),
-            histogram_rug: stroke_appearance(foreground_paint, 0.7, StrokePattern::Solid),
-            density_line: DataLineAppearance {
-                width: 1.6,
-                alpha: 255,
-                pattern: StrokePattern::Solid,
-            },
-            regression_fit: stroke_appearance(foreground_paint, 1.5, StrokePattern::Solid),
-            estimate_interval: stroke_appearance(foreground_paint, 1.4, StrokePattern::Solid),
-            point_interval_reference: stroke_appearance(
-                foreground_paint,
-                0.8,
-                StrokePattern::Solid,
-            ),
-            estimate_reference: stroke_appearance(foreground_paint, 1.0, StrokePattern::MediumDash),
-            qq_reference: stroke_appearance(foreground_paint, 1.2, StrokePattern::Solid),
-            dumbbell_connector: stroke_appearance(foreground_paint, 1.2, StrokePattern::Solid),
+            uncertainty_stroke: stroke(axis_width, StrokePattern::Solid)?,
+            summary_stroke: stroke(axis_width, StrokePattern::Solid)?,
+            series_line: DataLineTheme::new(1.8, 255, StrokePattern::Solid)?,
+            path_line: DataLineTheme::new(1.4, 255, StrokePattern::Solid)?,
+            histogram_curve: stroke(1.0, StrokePattern::Solid)?,
+            histogram_rug: stroke(0.7, StrokePattern::Solid)?,
+            density_line: DataLineTheme::new(1.6, 255, StrokePattern::Solid)?,
+            regression_fit: stroke(1.5, StrokePattern::Solid)?,
+            estimate_interval: stroke(1.4, StrokePattern::Solid)?,
+            point_interval_reference: stroke(0.8, StrokePattern::Solid)?,
+            estimate_reference: stroke(1.0, StrokePattern::MediumDash)?,
+            qq_reference: stroke(1.2, StrokePattern::Solid)?,
+            dumbbell_connector: stroke(1.2, StrokePattern::Solid)?,
         },
         annotations: AnnotationAppearance {
-            bracket_stroke: BracketStrokeAppearance {
-                paint: foreground_paint,
-                width: bracket_width,
-            },
+            bracket_stroke: SolidStrokeTheme::new(foreground_paint, bracket_width)?,
             point_label_gap: 2.0,
             waterfall_shelf_padding: 4.0,
             waterfall_shelf_gap: 4.0,
@@ -2121,14 +1903,6 @@ fn resolved_theme(
         font_environment: Arc::new(OnceLock::new()),
         text_queries: Arc::default(),
     })
-}
-
-fn stroke_appearance(paint: Color, width: f32, pattern: StrokePattern) -> StrokeAppearance {
-    StrokeAppearance {
-        paint,
-        width,
-        pattern,
-    }
 }
 
 fn plus_six_line_height(font_size: u32) -> f64 {
@@ -2567,7 +2341,7 @@ mod tests {
             },
             axes: AxisAppearance {
                 frame: Some(FrameAppearance {
-                    stroke: StrokeAppearance {
+                    stroke: StrokeTheme {
                         paint: foreground,
                         width: expected.axis_width,
                         pattern: StrokePattern::Solid,
@@ -2575,14 +2349,14 @@ mod tests {
                     source_show_top_right_spines: expected.top_right_spines,
                 }),
                 ticks: Some(TickAppearance {
-                    stroke: StrokeAppearance {
+                    stroke: StrokeTheme {
                         paint: foreground,
                         width: expected.axis_width,
                         pattern: StrokePattern::Solid,
                     },
                     length: 5,
                 }),
-                grid: Some(StrokeAppearance {
+                grid: Some(StrokeTheme {
                     paint: color_from_rgb(expected.grid_color),
                     width: 0.5,
                     pattern: StrokePattern::MediumDash,
@@ -2597,204 +2371,202 @@ mod tests {
                 },
             },
             marks: MarkAppearance {
-                primary_point: PointAppearance {
+                primary_point: PointTheme {
                     fill_alpha: 209,
                     shape: crate::PointShape::Circle,
-                    outline: crate::render::backend::PointOutline::publication(
-                        &OperationGenerationResources::new(),
-                    )
-                    .unwrap(),
+                    outline: Some(
+                        PointOutlineTheme::publication(&OperationGenerationResources::new())
+                            .unwrap(),
+                    ),
                 },
-                bar_body: DataFillAppearance {
-                    fill_alpha: 255,
-                    outline_paint: FillOutlinePaint::Fixed(foreground),
-                    outline_width: 1.0,
-                },
-                line_band: DataFillAppearance {
-                    fill_alpha: 46,
-                    outline_paint: FillOutlinePaint::Data,
-                    outline_width: 0.0,
-                },
-                regression_band: DataFillAppearance {
-                    fill_alpha: 64,
-                    outline_paint: FillOutlinePaint::Data,
-                    outline_width: 0.0,
-                },
-                density_area: DataFillAppearance {
-                    fill_alpha: 56,
-                    outline_paint: FillOutlinePaint::Data,
-                    outline_width: 0.0,
-                },
-                marginal_density: DataFillAppearance {
-                    fill_alpha: 115,
-                    outline_paint: FillOutlinePaint::Data,
-                    outline_width: 1.0,
-                },
-                matrix_density: DataFillAppearance {
-                    fill_alpha: 102,
-                    outline_paint: FillOutlinePaint::Data,
-                    outline_width: 1.0,
-                },
-                box_body: DataFillAppearance {
-                    fill_alpha: 255,
-                    outline_paint: FillOutlinePaint::Fixed(foreground),
-                    outline_width: 1.0,
-                },
-                violin_body: DataFillAppearance {
-                    fill_alpha: 178,
-                    outline_paint: FillOutlinePaint::Fixed(foreground),
-                    outline_width: 1.0,
-                },
-                raincloud_box: FixedFillAppearance {
-                    paint: Color::rgb(255, 255, 255),
-                    outline_paint: foreground,
-                    outline_width: 1.0,
-                },
-                histogram_bin: DataFillAppearance {
-                    fill_alpha: 209,
-                    outline_paint: FillOutlinePaint::Fixed(foreground),
-                    outline_width: 0.8,
-                },
-                waterfall_bar: DataFillAppearance {
-                    fill_alpha: 255,
-                    outline_paint: FillOutlinePaint::Fixed(foreground),
-                    outline_width: 0.8,
-                },
-                raw_overlay_point: PointAppearance {
+                bar_body: DataFillTheme::new(
+                    255,
+                    Some(DataOutlineTheme::fixed(
+                        OutlineTheme::new(foreground, 1.0).unwrap(),
+                    )),
+                )
+                .unwrap(),
+                line_band: DataFillTheme::new(46, None).unwrap(),
+                regression_band: DataFillTheme::new(64, None).unwrap(),
+                density_area: DataFillTheme::new(56, None).unwrap(),
+                marginal_density: DataFillTheme::new(
+                    115,
+                    Some(DataOutlineTheme::mapped(1.0, 255).unwrap()),
+                )
+                .unwrap(),
+                matrix_density: DataFillTheme::new(
+                    102,
+                    Some(DataOutlineTheme::mapped(1.0, 255).unwrap()),
+                )
+                .unwrap(),
+                box_body: DataFillTheme::new(
+                    255,
+                    Some(DataOutlineTheme::fixed(
+                        OutlineTheme::new(foreground, 1.0).unwrap(),
+                    )),
+                )
+                .unwrap(),
+                violin_body: DataFillTheme::new(
+                    178,
+                    Some(DataOutlineTheme::fixed(
+                        OutlineTheme::new(foreground, 1.0).unwrap(),
+                    )),
+                )
+                .unwrap(),
+                raincloud_box: FixedFillTheme::new(
+                    Color::rgb(255, 255, 255),
+                    Some(OutlineTheme::new(foreground, 1.0).unwrap()),
+                )
+                .unwrap(),
+                histogram_bin: DataFillTheme::new(
+                    209,
+                    Some(DataOutlineTheme::fixed(
+                        OutlineTheme::new(foreground, 0.8).unwrap(),
+                    )),
+                )
+                .unwrap(),
+                waterfall_bar: DataFillTheme::new(
+                    255,
+                    Some(DataOutlineTheme::fixed(
+                        OutlineTheme::new(foreground, 0.8).unwrap(),
+                    )),
+                )
+                .unwrap(),
+                raw_overlay_point: PointTheme {
                     fill_alpha: 209,
                     shape: crate::PointShape::Circle,
-                    outline: crate::render::backend::PointOutline::publication(
-                        &OperationGenerationResources::new(),
-                    )
-                    .unwrap(),
+                    outline: Some(
+                        PointOutlineTheme::publication(&OperationGenerationResources::new())
+                            .unwrap(),
+                    ),
                 },
                 raw_overlay_radius: 2,
-                heatmap_cell_outline: FillOutlineAppearance {
+                heatmap_cell_outline: OutlineTheme {
                     paint: Color::rgb(255, 255, 255),
                     width: 0.5,
                 },
-                heatmap_highlight_outline: FillOutlineAppearance {
+                heatmap_highlight_outline: OutlineTheme {
                     paint: foreground,
                     width: 2.5,
                 },
                 heatmap_missing_fill: Color::rgb(224, 224, 224),
-                heatmap_missing_row_outline: FillOutlineAppearance {
+                heatmap_missing_row_outline: OutlineTheme {
                     paint: Color::rgb(255, 255, 255),
                     width: 0.5,
                 },
-                heatmap_missing_key_outline: FillOutlineAppearance {
+                heatmap_missing_key_outline: OutlineTheme {
                     paint: Color::rgb(120, 120, 120),
                     width: 0.8,
                 },
-                heatmap_missing_cross: StrokeAppearance {
+                heatmap_missing_cross: StrokeTheme {
                     paint: Color::rgb(120, 120, 120),
                     width: 1.0,
                     pattern: StrokePattern::Solid,
                 },
-                bar_zero: StrokeAppearance {
+                bar_zero: StrokeTheme {
                     paint: foreground,
                     width: 0.8,
                     pattern: StrokePattern::Solid,
                 },
-                waterfall_connector: StrokeAppearance {
+                waterfall_connector: StrokeTheme {
                     paint: foreground,
                     width: 0.7,
                     pattern: StrokePattern::ShortDash,
                 },
-                waterfall_reference: StrokeAppearance {
+                waterfall_reference: StrokeTheme {
                     paint: foreground,
                     width: 0.7,
                     pattern: StrokePattern::MediumDash,
                 },
-                raincloud_median: StrokeAppearance {
+                raincloud_median: StrokeTheme {
                     paint: foreground,
                     width: 1.5,
                     pattern: StrokePattern::Solid,
                 },
-                beeswarm_reference: StrokeAppearance {
+                beeswarm_reference: StrokeTheme {
                     paint: foreground,
                     width: 0.8,
                     pattern: StrokePattern::Solid,
                 },
-                interaction_interval: DataLineAppearance {
+                interaction_interval: DataLineTheme {
                     width: 1.2,
                     alpha: 255,
                     pattern: StrokePattern::Solid,
                 },
-                interaction_connector: DataLineAppearance {
+                interaction_connector: DataLineTheme {
                     width: 1.8,
                     alpha: 255,
                     pattern: StrokePattern::Solid,
                 },
                 point_sizes: PointSizeAppearance::publication(),
-                uncertainty_stroke: StrokeAppearance {
+                uncertainty_stroke: StrokeTheme {
                     paint: foreground,
                     width: expected.axis_width,
                     pattern: StrokePattern::Solid,
                 },
-                summary_stroke: StrokeAppearance {
+                summary_stroke: StrokeTheme {
                     paint: foreground,
                     width: expected.axis_width,
                     pattern: StrokePattern::Solid,
                 },
-                series_line: DataLineAppearance {
+                series_line: DataLineTheme {
                     width: 1.8,
                     alpha: 255,
                     pattern: StrokePattern::Solid,
                 },
-                path_line: DataLineAppearance {
+                path_line: DataLineTheme {
                     width: 1.4,
                     alpha: 255,
                     pattern: StrokePattern::Solid,
                 },
-                histogram_curve: StrokeAppearance {
+                histogram_curve: StrokeTheme {
                     paint: foreground,
                     width: 1.0,
                     pattern: StrokePattern::Solid,
                 },
-                histogram_rug: StrokeAppearance {
+                histogram_rug: StrokeTheme {
                     paint: foreground,
                     width: 0.7,
                     pattern: StrokePattern::Solid,
                 },
-                density_line: DataLineAppearance {
+                density_line: DataLineTheme {
                     width: 1.6,
                     alpha: 255,
                     pattern: StrokePattern::Solid,
                 },
-                regression_fit: StrokeAppearance {
+                regression_fit: StrokeTheme {
                     paint: foreground,
                     width: 1.5,
                     pattern: StrokePattern::Solid,
                 },
-                estimate_interval: StrokeAppearance {
+                estimate_interval: StrokeTheme {
                     paint: foreground,
                     width: 1.4,
                     pattern: StrokePattern::Solid,
                 },
-                point_interval_reference: StrokeAppearance {
+                point_interval_reference: StrokeTheme {
                     paint: foreground,
                     width: 0.8,
                     pattern: StrokePattern::Solid,
                 },
-                estimate_reference: StrokeAppearance {
+                estimate_reference: StrokeTheme {
                     paint: foreground,
                     width: 1.0,
                     pattern: StrokePattern::MediumDash,
                 },
-                qq_reference: StrokeAppearance {
+                qq_reference: StrokeTheme {
                     paint: foreground,
                     width: 1.2,
                     pattern: StrokePattern::Solid,
                 },
-                dumbbell_connector: StrokeAppearance {
+                dumbbell_connector: StrokeTheme {
                     paint: foreground,
                     width: 1.2,
                     pattern: StrokePattern::Solid,
                 },
             },
             annotations: AnnotationAppearance {
-                bracket_stroke: BracketStrokeAppearance {
+                bracket_stroke: SolidStrokeTheme {
                     paint: foreground,
                     width: expected.bracket_width,
                 },

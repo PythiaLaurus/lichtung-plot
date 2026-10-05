@@ -850,6 +850,44 @@ fn optional_fill_style_eq(left: Option<&FillStyle>, right: Option<&FillStyle>) -
     }
 }
 
+#[test]
+fn absent_fill_outline_paints_do_not_split_shared_guide_identity() {
+    use crate::theme::{Color, FixedFillTheme, OutlineTheme};
+    let fill = Color::rgba(11, 23, 37, 53);
+    let first = FixedFillTheme::new(
+        fill,
+        Some(OutlineTheme::new(Color::rgb(41, 59, 73), 1.0).unwrap()),
+    )
+    .unwrap()
+    .with_outline(None)
+    .unwrap()
+    .backend_style();
+    let second = FixedFillTheme::new(
+        fill,
+        Some(OutlineTheme::new(Color::rgba(83, 97, 109, 127), 3.0).unwrap()),
+    )
+    .unwrap()
+    .with_outline(None)
+    .unwrap()
+    .backend_style();
+    assert!(optional_fill_style_eq(Some(&first), Some(&second)));
+    let resources = OperationGenerationResources::new();
+    let entries = merge_exact_entries(
+        [
+            LegendEntry::fill(LegendIdentity::single("group", "one"), first),
+            LegendEntry::fill(LegendIdentity::single("group", "one"), second),
+        ],
+        "shared absent outlines",
+        &resources,
+    )
+    .unwrap();
+    assert_eq!(entries.len(), 1);
+    let retained = entries[0].glyph.fill.as_ref().unwrap();
+    assert_eq!(retained.color, fill);
+    assert_eq!(retained.stroke, Color::rgba(0, 0, 0, 0));
+    assert_eq!(retained.stroke_width.to_bits(), 0);
+}
+
 // ─── Local glyph metrics ──────────────────────────────────────────────────────
 
 /// Conservative half-height around the backend's middle-aligned text anchor.
@@ -1850,7 +1888,7 @@ mod tests {
     )]
     fn local_and_shared_discrete_guides_allocate_complete_custom_glyph_and_frame_ink() {
         use crate::layout::fit::{self, FitScope};
-        use crate::render::backend::{Backend, PointOutline};
+        use crate::render::backend::Backend;
         use crate::theme::Color;
         let source = crate::Plot::scatter(
             crate::NumericValues::new("x", [0.0, 1.0]),
@@ -1868,10 +1906,13 @@ mod tests {
                 .unwrap();
             theme.marks.primary_point.shape = shape;
             theme.marks.point_sizes.scatter = 6;
-            theme.marks.primary_point.outline = PointOutline {
-                color: Color::rgb(11, 22, 33),
-                width_ratio: crate::theme::RelativeSpacing::ratio(4, 1).unwrap(),
-            };
+            theme.marks.primary_point.outline = Some(
+                crate::theme::PointOutlineTheme::new(
+                    Color::rgb(11, 22, 33),
+                    crate::theme::RelativeSpacing::ratio(4, 1).unwrap(),
+                )
+                .unwrap(),
+            );
             theme.legend.frame_stroke_width = 30.0;
             theme.legend.frame_radius = 50.0;
             let result = plot

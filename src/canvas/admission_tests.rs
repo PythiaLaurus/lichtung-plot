@@ -53,6 +53,8 @@ fn canvas_preset_construction_uses_one_prepared_ledger_for_root_and_explicit_chi
                                 .marks
                                 .primary_point
                                 .outline
+                                .as_ref()
+                                .unwrap()
                                 .width_ratio
                                 .as_f64()
                                 .to_bits(),

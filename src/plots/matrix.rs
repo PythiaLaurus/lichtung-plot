@@ -278,11 +278,17 @@ fn prepared_matrix_uses_variable_count_cell_labels_and_complete_mark_ink() {
     let label = intrinsic_body_minimum(&long, &theme).unwrap();
     assert!(label.0 > baseline.0 && label.1 > baseline.1);
     let mut styled = theme;
-    styled.marks.primary_point.outline.width_ratio =
-        crate::theme::RelativeSpacing::ratio(80, 1).unwrap();
+    styled
+        .marks
+        .primary_point
+        .outline
+        .as_mut()
+        .unwrap()
+        .width_ratio = crate::theme::RelativeSpacing::ratio(80, 1).unwrap();
     let thick_points = intrinsic_body_minimum(&first, &styled).unwrap();
     assert!(thick_points.0 > baseline.0 && thick_points.1 > baseline.1);
-    styled.marks.matrix_density.outline_width = 220.0;
+    styled.marks.matrix_density.outline =
+        Some(crate::theme::DataOutlineTheme::mapped(220.0, 255).unwrap());
     let density = intrinsic_body_minimum(&first, &styled).unwrap();
     assert!(density.0 > thick_points.0 && density.1 > thick_points.1);
 }
@@ -1773,7 +1779,8 @@ mod semantic_tests {
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        theme.marks.matrix_density.outline_width = 36.0;
+        theme.marks.matrix_density.outline =
+            Some(crate::theme::DataOutlineTheme::mapped(36.0, 255).unwrap());
         theme.marks.point_sizes.matrix = 20;
         let selected = measure(
             &chart,

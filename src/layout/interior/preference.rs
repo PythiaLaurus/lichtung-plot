@@ -494,7 +494,18 @@ mod tests {
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
         let original = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
-        theme.marks.bar_body.outline_width = 100.0;
+        theme.marks.bar_body.outline = Some(crate::theme::DataOutlineTheme::fixed(
+            theme
+                .marks
+                .bar_body
+                .outline()
+                .unwrap()
+                .fixed_stroke()
+                .unwrap()
+                .clone()
+                .with_width(100.0)
+                .unwrap(),
+        ));
         let styled = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
         assert_eq!(styled.panel_box, original.panel_box);
         assert!(categorical(&styled).hard_pitch_quanta > categorical(&original).hard_pitch_quanta);
@@ -641,7 +652,8 @@ mod tests {
         assert_eq!(styled.panel_box, original.panel_box);
 
         theme.marks.primary_point.fill_alpha = 0;
-        theme.marks.primary_point.outline.color = crate::theme::Color::rgba(255, 255, 255, 0);
+        theme.marks.primary_point.outline.as_mut().unwrap().color =
+            crate::theme::Color::rgba(255, 255, 255, 0);
         let invisible = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
         assert_eq!(standard(&invisible).primary_marks, 25);
         assert_eq!(

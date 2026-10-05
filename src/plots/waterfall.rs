@@ -1169,7 +1169,18 @@ mod tests {
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        theme.marks.waterfall_bar.outline_width = 80.0;
+        theme.marks.waterfall_bar.outline = Some(crate::theme::DataOutlineTheme::fixed(
+            theme
+                .marks
+                .waterfall_bar
+                .outline()
+                .unwrap()
+                .fixed_stroke()
+                .unwrap()
+                .clone()
+                .with_width(80.0)
+                .unwrap(),
+        ));
         theme.marks.waterfall_connector.width = 16.0;
         let resources = OperationGenerationResources::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();

@@ -465,7 +465,18 @@ mod appearance_tests {
             ))
             .unwrap();
         theme.marks.violin_body.fill_alpha = 79;
-        theme.marks.violin_body.outline_width = 2.0;
+        theme.marks.violin_body.outline = Some(crate::theme::DataOutlineTheme::fixed(
+            theme
+                .marks
+                .violin_body
+                .outline()
+                .unwrap()
+                .fixed_stroke()
+                .unwrap()
+                .clone()
+                .with_width(2.0)
+                .unwrap(),
+        ));
         let changed = chart
             .measure_selected_interior(crate::spec::PlotRenderContext::new(
                 chart.data(),

@@ -1615,7 +1615,8 @@ fn line_ribbon_full_stroke_is_retained_inside_the_final_automatic_panel() {
     .legend(LegendPolicy::Hidden)
     .erase();
     let mut theme = theme();
-    theme.marks.line_band.outline_width = 100.0;
+    theme.marks.line_band.outline =
+        Some(crate::theme::DataOutlineTheme::mapped(100.0, 255).unwrap());
     let resources = theme
         .prepared_font_environment()
         .unwrap()
@@ -1745,7 +1746,8 @@ fn regression_observation_ink_remeasures_under_root_feedback_without_changing_ol
     .erase();
     let mut theme = theme();
     theme.marks.point_sizes.regression = 54;
-    theme.marks.regression_band.outline_width = 32.0;
+    theme.marks.regression_band.outline =
+        Some(crate::theme::DataOutlineTheme::mapped(32.0, 255).unwrap());
     let resources = theme
         .prepared_font_environment()
         .unwrap()
@@ -1861,7 +1863,18 @@ fn bar_orientations_clear_the_painted_zero_edge_through_one_numeric_feedback_own
         }
     };
     let mut theme = theme();
-    theme.marks.bar_body.outline_width = 24.0;
+    theme.marks.bar_body.outline = Some(crate::theme::DataOutlineTheme::fixed(
+        theme
+            .marks
+            .bar_body
+            .outline()
+            .unwrap()
+            .fixed_stroke()
+            .unwrap()
+            .clone()
+            .with_width(24.0)
+            .unwrap(),
+    ));
     for horizontal in [false, true] {
         let source = source(horizontal);
         let resources = theme
@@ -1906,7 +1919,18 @@ fn boxplot_whisker_and_body_ink_clear_the_automatic_value_edge() {
     .size(800, 600)
     .erase();
     let mut theme = theme();
-    theme.marks.box_body.outline_width = 220.0;
+    theme.marks.box_body.outline = Some(crate::theme::DataOutlineTheme::fixed(
+        theme
+            .marks
+            .box_body
+            .outline()
+            .unwrap()
+            .fixed_stroke()
+            .unwrap()
+            .clone()
+            .with_width(220.0)
+            .unwrap(),
+    ));
     theme.marks.summary_stroke.width = 220.0;
     let resources = theme
         .prepared_font_environment()
@@ -2017,7 +2041,8 @@ fn density_curve_support_clears_automatic_edges_without_repreparing_kde() {
         .erase();
     let mut theme = theme();
     theme.marks.density_line.width = 28.0;
-    theme.marks.density_area.outline_width = 18.0;
+    theme.marks.density_area.outline =
+        Some(crate::theme::DataOutlineTheme::mapped(18.0, 255).unwrap());
     let resources = theme
         .prepared_font_environment()
         .unwrap()
@@ -2078,7 +2103,18 @@ fn histogram_bin_and_overlay_ink_remeasure_under_one_root_domain_owner() {
     .size(640, 480)
     .erase();
     let mut theme = theme();
-    theme.marks.histogram_bin.outline_width = 18.0;
+    theme.marks.histogram_bin.outline = Some(crate::theme::DataOutlineTheme::fixed(
+        theme
+            .marks
+            .histogram_bin
+            .outline()
+            .unwrap()
+            .fixed_stroke()
+            .unwrap()
+            .clone()
+            .with_width(18.0)
+            .unwrap(),
+    ));
     theme.marks.histogram_curve.width = 12.0;
     let resources = theme
         .prepared_font_environment()

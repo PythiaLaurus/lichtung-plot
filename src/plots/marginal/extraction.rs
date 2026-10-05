@@ -75,7 +75,8 @@ fn complete_large_point_and_density_ink_survives_feedback_per_automatic_dimensio
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
         theme.marks.point_sizes.marginal = 80;
-        theme.marks.marginal_density.outline_width = 32.0;
+        theme.marks.marginal_density.outline =
+            Some(crate::theme::DataOutlineTheme::mapped(32.0, 255).unwrap());
         let selected = crate::decorations::plan::plan_panel_for_test(
             &chart,
             crate::PlotKind::Marginal,

@@ -625,8 +625,8 @@ impl BarPayload {
             for bracket in &significance.brackets {
                 let label = &bracket.label.plan;
                 let style = crate::render::backend::BracketStyle {
-                    color: context.theme.annotations.bracket_stroke.paint,
-                    width: context.theme.annotations.bracket_stroke.width,
+                    color: context.theme.annotations.bracket_stroke.color(),
+                    width: context.theme.annotations.bracket_stroke.width(),
                     label_color: label.style.paint,
                     font_family: data.copy_font_stack(&label.style.stack)?,
                     font_size: label.style.font_size,
@@ -2283,7 +2283,18 @@ mod tests {
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
         let mut styled = plain.clone();
-        styled.marks.bar_body.outline_width = 100.0;
+        styled.marks.bar_body.outline = Some(crate::theme::DataOutlineTheme::fixed(
+            styled
+                .marks
+                .bar_body
+                .outline()
+                .unwrap()
+                .fixed_stroke()
+                .unwrap()
+                .clone()
+                .with_width(100.0)
+                .unwrap(),
+        ));
         for horizontal in [false, true] {
             let default = intrinsic(source(horizontal, true, false), &plain);
             let single = intrinsic(source(horizontal, false, false), &styled);
@@ -2378,9 +2389,9 @@ mod tests {
             ))
             .unwrap();
         theme.marks.bar_body.fill_alpha = 128;
-        theme.marks.bar_body.outline_paint =
-            crate::theme::FillOutlinePaint::Fixed(crate::theme::Color::rgba(1, 3, 5, 64));
-        theme.marks.bar_body.outline_width = 2.0;
+        theme.marks.bar_body.outline = Some(crate::theme::DataOutlineTheme::fixed(
+            crate::theme::OutlineTheme::new(crate::theme::Color::rgba(1, 3, 5, 64), 2.0).unwrap(),
+        ));
         theme.marks.bar_zero.paint = crate::theme::Color::rgba(2, 4, 6, 188);
         theme.marks.bar_zero.width = 1.25;
         let selected = chart

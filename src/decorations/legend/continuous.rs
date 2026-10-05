@@ -632,7 +632,7 @@ mod tests {
             center: Some(0.0),
             missing: Some(MissingKey {
                 fill: crate::theme::Color::rgb(224, 224, 224),
-                outline: crate::theme::FillOutlineAppearance {
+                outline: crate::theme::OutlineTheme {
                     paint: crate::theme::Color::rgb(120, 120, 120),
                     width: 1.0,
                 },

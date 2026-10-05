@@ -959,12 +959,24 @@ mod tests {
         theme.marks.histogram_curve.width = 140.0;
         theme.marks.histogram_rug.width = 140.0;
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), baseline);
-        theme.marks.histogram_bin.outline_width = 140.0;
+        theme.marks.histogram_bin.outline = Some(crate::theme::DataOutlineTheme::fixed(
+            theme
+                .marks
+                .histogram_bin
+                .outline()
+                .unwrap()
+                .fixed_stroke()
+                .unwrap()
+                .clone()
+                .with_width(140.0)
+                .unwrap(),
+        ));
         let styled = chart.intrinsic_body_minimum(&theme).unwrap();
         assert_eq!(styled.0.to_bits(), baseline.0.to_bits());
         assert!(styled.1 > 140.0);
-        theme.marks.histogram_bin.outline_paint =
-            crate::theme::FillOutlinePaint::Fixed(crate::theme::Color::rgba(1, 2, 3, 0));
+        theme.marks.histogram_bin.outline = Some(crate::theme::DataOutlineTheme::fixed(
+            crate::theme::OutlineTheme::new(crate::theme::Color::rgba(1, 2, 3, 0), 140.0).unwrap(),
+        ));
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), baseline);
 
         let source = sample()

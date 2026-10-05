@@ -531,7 +531,8 @@ mod tests {
         ));
 
         theme.marks.primary_point.fill_alpha = 0;
-        theme.marks.primary_point.outline.color = crate::theme::Color::rgba(255, 255, 255, 0);
+        theme.marks.primary_point.outline.as_mut().unwrap().color =
+            crate::theme::Color::rgba(255, 255, 255, 0);
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), coordinate);
 
         let source = Plot::scatter(
@@ -544,7 +545,8 @@ mod tests {
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
         let chart = inputs.attach(source).unwrap();
         theme.marks.primary_point.fill_alpha = 255;
-        theme.marks.primary_point.outline.color = crate::theme::Color::rgb(255, 255, 255);
+        theme.marks.primary_point.outline.as_mut().unwrap().color =
+            crate::theme::Color::rgb(255, 255, 255);
         let coordinate = crate::layout::interior::coordinate::Intrinsics::prepared(&chart, &theme)
             .unwrap()
             .minimum(&chart);
@@ -684,7 +686,8 @@ mod tests {
             .unwrap();
         theme.marks.primary_point.fill_alpha = 128;
         theme.marks.primary_point.shape = crate::PointShape::TriangleUp;
-        theme.marks.primary_point.outline.color = crate::theme::Color::rgba(3, 5, 7, 64);
+        theme.marks.primary_point.outline.as_mut().unwrap().color =
+            crate::theme::Color::rgba(3, 5, 7, 64);
         theme.marks.point_sizes.scatter = 5;
         let selected = prepared
             .project(

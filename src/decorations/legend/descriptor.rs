@@ -21,7 +21,7 @@ pub(crate) enum PreparedGuideDescriptor {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct MissingKey {
     pub fill: Color,
-    pub outline: crate::theme::FillOutlineAppearance,
+    pub outline: crate::theme::OutlineTheme,
     pub label: String,
 }
 
@@ -463,7 +463,7 @@ mod tests {
         let mut missing = contributor((0.0, 1.0));
         missing.missing = Some(MissingKey {
             fill: Color::rgb(200, 200, 200),
-            outline: crate::theme::FillOutlineAppearance {
+            outline: crate::theme::OutlineTheme {
                 paint: Color::rgb(50, 50, 50),
                 width: 1.0,
             },

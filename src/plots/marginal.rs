@@ -218,15 +218,27 @@ fn prepared_marginal_points_and_density_strokes_enlarge_linked_tracks() {
     );
     let mut styled = theme.clone();
     styled.marks.point_sizes.marginal = 24;
-    styled.marks.marginal_density.outline_width = 120.0;
+    styled.marks.marginal_density.outline =
+        Some(crate::theme::DataOutlineTheme::mapped(120.0, 255).unwrap());
     let expanded = intrinsic_body_minimum(&chart, &styled).unwrap();
     assert!(expanded.0 > baseline.0);
     assert!(expanded.1 > baseline.1);
     let mut point_only = theme;
-    point_only.marks.primary_point.outline.width_ratio =
-        crate::theme::RelativeSpacing::ratio(15, 1).unwrap();
+    point_only
+        .marks
+        .primary_point
+        .outline
+        .as_mut()
+        .unwrap()
+        .width_ratio = crate::theme::RelativeSpacing::ratio(15, 1).unwrap();
     let shown = intrinsic_body_minimum(&chart, &point_only).unwrap().0;
-    point_only.marks.primary_point.outline.color = crate::theme::Color::rgba(0, 0, 0, 0);
+    point_only
+        .marks
+        .primary_point
+        .outline
+        .as_mut()
+        .unwrap()
+        .color = crate::theme::Color::rgba(0, 0, 0, 0);
     assert!(shown > intrinsic_body_minimum(&chart, &point_only).unwrap().0);
 }
 

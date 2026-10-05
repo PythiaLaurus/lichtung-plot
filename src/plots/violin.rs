@@ -765,14 +765,36 @@ mod tests {
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
         let mut styled = plain.clone();
-        styled.marks.violin_body.outline_width = 100.0;
+        styled.marks.violin_body.outline = Some(crate::theme::DataOutlineTheme::fixed(
+            styled
+                .marks
+                .violin_body
+                .outline()
+                .unwrap()
+                .fixed_stroke()
+                .unwrap()
+                .clone()
+                .with_width(100.0)
+                .unwrap(),
+        ));
         for grouped in [false, true] {
             assert!(
                 intrinsic(source(false, grouped), &styled).0
                     > intrinsic(source(false, grouped), &plain).0
             );
         }
-        styled.marks.violin_body.outline_width = 1.0;
+        styled.marks.violin_body.outline = Some(crate::theme::DataOutlineTheme::fixed(
+            styled
+                .marks
+                .violin_body
+                .outline()
+                .unwrap()
+                .fixed_stroke()
+                .unwrap()
+                .clone()
+                .with_width(1.0)
+                .unwrap(),
+        ));
         styled.marks.raw_overlay_radius = 50;
         let full = intrinsic(source(true, false), &styled);
         let baseline = intrinsic(source(true, false), &plain);
@@ -789,7 +811,18 @@ mod tests {
             let mut theme = crate::Theme::Publication
                 .resolve(&crate::font::canonical::OperationGenerationResources::new())
                 .unwrap();
-            theme.marks.violin_body.outline_width = 100.0;
+            theme.marks.violin_body.outline = Some(crate::theme::DataOutlineTheme::fixed(
+                theme
+                    .marks
+                    .violin_body
+                    .outline()
+                    .unwrap()
+                    .fixed_stroke()
+                    .unwrap()
+                    .clone()
+                    .with_width(100.0)
+                    .unwrap(),
+            ));
             theme.marks.raw_overlay_radius = 12;
             theme
         };

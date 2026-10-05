@@ -571,7 +571,8 @@ mod tests {
         assert_eq!(sized.0.to_bits(), before.0.to_bits());
         assert_eq!(sized.1.to_bits(), (108.0_f64 + 5530.0 / 1024.0).to_bits());
         theme.marks.primary_point.fill_alpha = 0;
-        theme.marks.primary_point.outline.color = crate::theme::Color::rgba(255, 255, 255, 0);
+        theme.marks.primary_point.outline.as_mut().unwrap().color =
+            crate::theme::Color::rgba(255, 255, 255, 0);
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), before);
         theme.marks.qq_reference.width = 140.0;
         let reference = chart.intrinsic_body_minimum(&theme).unwrap();

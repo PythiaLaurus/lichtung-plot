@@ -127,13 +127,11 @@ pub(crate) struct PointOutline {
 
 impl PointOutline {
     /// Construct the publication outline on the caller's operation ledger.
+    #[cfg(test)]
     pub(crate) fn publication(
         resources: &crate::font::canonical::OperationGenerationResources,
     ) -> Result<Self, Error> {
-        Ok(Self {
-            color: Color::rgb(255, 255, 255),
-            width_ratio: crate::theme::RelativeSpacing::new_in(0.1, resources)?,
-        })
+        Ok(crate::theme::PointOutlineTheme::publication(resources)?.backend_style())
     }
 
     /// Resolve the outline stroke width for the given point radius.
@@ -354,6 +352,15 @@ pub(crate) struct FillStyle {
 
 impl FillStyle {
     pub(crate) const fn new(color: Color, stroke: Color, stroke_width: f32) -> Self {
+        // Width zero is the operational encoding of structural absence. Its
+        // unused paint cannot become guide/cache/feedback identity.
+        if stroke_width == 0.0 {
+            return Self {
+                color,
+                stroke: Color::rgba(0, 0, 0, 0),
+                stroke_width: 0.0,
+            };
+        }
         Self {
             color,
             stroke,

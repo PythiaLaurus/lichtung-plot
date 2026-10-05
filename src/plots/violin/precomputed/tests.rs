@@ -55,7 +55,18 @@ fn supplied_raincloud_cloud_and_strip_ink_fit_automatic_y_at_root() {
     let mut theme = crate::Theme::Publication
         .resolve(&crate::font::canonical::OperationGenerationResources::new())
         .unwrap();
-    theme.marks.violin_body.outline_width = 120.0;
+    theme.marks.violin_body.outline = Some(crate::theme::DataOutlineTheme::fixed(
+        theme
+            .marks
+            .violin_body
+            .outline()
+            .unwrap()
+            .fixed_stroke()
+            .unwrap()
+            .clone()
+            .with_width(120.0)
+            .unwrap(),
+    ));
     theme.marks.raw_overlay_radius = 50;
     let resources = theme
         .prepared_font_environment()

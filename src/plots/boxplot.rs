@@ -502,11 +502,33 @@ mod tests {
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        theme.marks.box_body.outline_width = 100.0;
+        theme.marks.box_body.outline = Some(crate::theme::DataOutlineTheme::fixed(
+            theme
+                .marks
+                .box_body
+                .outline()
+                .unwrap()
+                .fixed_stroke()
+                .unwrap()
+                .clone()
+                .with_width(100.0)
+                .unwrap(),
+        ));
         let grouped_body = intrinsic(grouped.clone(), &theme);
         let single_body = intrinsic(single.clone(), &theme);
         assert!(grouped_body.0 > single_body.0);
-        theme.marks.box_body.outline_width = 1.0;
+        theme.marks.box_body.outline = Some(crate::theme::DataOutlineTheme::fixed(
+            theme
+                .marks
+                .box_body
+                .outline()
+                .unwrap()
+                .fixed_stroke()
+                .unwrap()
+                .clone()
+                .with_width(1.0)
+                .unwrap(),
+        ));
         theme.marks.point_sizes.box_flier = 80;
         let flier = intrinsic(grouped.clone(), &theme);
         assert!(

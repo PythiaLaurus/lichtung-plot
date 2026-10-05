@@ -76,6 +76,8 @@ fn plot_preset_construction_refuses_on_its_prepared_ledger_before_fonts_or_backe
                             .marks
                             .primary_point
                             .outline
+                            .as_ref()
+                            .unwrap()
                             .width_ratio
                             .as_f64()
                             .to_bits(),

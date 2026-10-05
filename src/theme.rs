@@ -2,6 +2,7 @@
 
 mod color;
 mod contrast;
+mod mark_paint;
 mod paint;
 mod resolved;
 mod scale;
@@ -12,14 +13,14 @@ pub(crate) use scale::{
     BEESWARM_SEQUENTIAL_STOPS, HEATMAP_DIVERGING_STOPS, HEATMAP_SEQUENTIAL_STOPS,
 };
 
-#[cfg(test)]
-pub(crate) use resolved::FillOutlinePaint;
+pub(crate) use mark_paint::{
+    DataFillTheme, DataLineTheme, DataOutlineTheme, FixedFillTheme, OutlineTheme,
+    PointOutlineTheme, PointTheme, SolidStrokeTheme, StrokeTheme,
+};
 pub use resolved::Theme;
 #[cfg(test)]
 pub(crate) use resolved::THEME_RESOLUTION_CALLS;
-pub(crate) use resolved::{
-    FillOutlineAppearance, ResolvedTheme, SurfaceTheme, TextTheme, TitleAlignment,
-};
+pub(crate) use resolved::{ResolvedTheme, SurfaceTheme, TextTheme, TitleAlignment};
 
 pub(crate) use paint::{Color, OpaqueColor};
 pub(crate) use spacing::{LocalMetric, RelativeSpacing};
