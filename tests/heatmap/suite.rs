@@ -390,6 +390,33 @@ fn canvas_heatmap_aliases_disambiguate_both_category_axes() {
 }
 
 #[test]
+fn legacy_signed_zero_diverging_centers_render_identically_for_automatic_and_exact_domains() {
+    let data = HeatmapData::new(
+        CategoryValues::new("column", ["low", "neutral", "high"]).unwrap(),
+        CategoryValues::new("row", ["one"; 3]).unwrap(),
+        NumericValues::new("value", [-1.0, -0.0, 1.0]),
+    );
+    for explicit in [None, Some((-2.0, 3.0))] {
+        let render_center = |center| {
+            render(&data, |chart| {
+                let chart = chart.scale(HeatmapScale::Diverging { center });
+                if let Some((minimum, maximum)) = explicit {
+                    chart.color_limits(minimum, maximum)
+                } else {
+                    chart
+                }
+            })
+            .unwrap()
+        };
+        let negative = render_center(-0.0);
+        let positive = render_center(0.0);
+        assert_eq!(negative, positive);
+        assert!(clipped_marks(&negative).contains("fill=\"#F7F7F7\""));
+        assert_eq!(clipped_marks(&negative).matches("<polygon ").count(), 3);
+    }
+}
+
+#[test]
 fn heatmap_sequential_and_diverging_scales_use_pinned_endpoint_colors() {
     let sequential_data = HeatmapData::new(
         CategoryValues::new("column", ["low", "high"]).unwrap(),
