@@ -512,7 +512,7 @@ impl NumericTickPlan {
         let probe = if legacy {
             theme.measure_legacy_appearance_text(
                 "0",
-                &theme.typography.tick_label,
+                &theme.typography.axes.tick_label,
                 PhysicalTextAlignment::Center,
                 "numeric tick pitch",
                 false,
@@ -520,7 +520,7 @@ impl NumericTickPlan {
         } else {
             theme.measure_text(
                 "0",
-                &theme.typography.tick_label,
+                &theme.typography.axes.tick_label,
                 PhysicalTextAlignment::Center,
                 "numeric tick pitch",
                 false,
@@ -771,7 +771,7 @@ pub(super) fn labels_fit(
         };
         let plan = match theme.plan_text_quanta_with_policy(
             &tick.label,
-            &theme.typography.tick_label,
+            &theme.typography.axes.tick_label,
             width,
             alignment,
             role,

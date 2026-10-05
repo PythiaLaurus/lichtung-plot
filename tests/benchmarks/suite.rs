@@ -674,7 +674,7 @@ fn publication_efficiency_measurements() {
             theme
                 .plan_text(
                     text,
-                    &theme.typography.caption,
+                    &theme.typography.root.caption,
                     768.0,
                     crate::layout::PhysicalTextAlignment::Start,
                     "baseline font probe",

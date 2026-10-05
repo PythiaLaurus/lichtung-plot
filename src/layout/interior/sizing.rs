@@ -83,7 +83,11 @@ pub(crate) fn continuous_width(
 ) -> Result<f64, Error> {
     let (metrics, frame_minimum) =
         crate::decorations::legend::MeasuredContinuousGuide::allocation_metrics(descriptor, theme)?;
-    let mut width = text_width(theme, &descriptor.title, &theme.typography.legend_title)?;
+    let mut width = text_width(
+        theme,
+        &descriptor.title,
+        &theme.typography.guides.legend_title,
+    )?;
     for label in descriptor
         .labels
         .iter()
@@ -96,7 +100,7 @@ pub(crate) fn continuous_width(
             .map_err(|error| Error::Render(format!("continuous preference value: {error:?}")))?;
         let plan = theme.measure_text(
             label,
-            &theme.typography.legend_label,
+            &theme.typography.guides.legend_label,
             PhysicalTextAlignment::Start,
             "continuous preference value",
             false,
@@ -398,7 +402,7 @@ pub(crate) fn body_preference(
             let ch = theme
                 .measure_text(
                     "0",
-                    &theme.typography.tick_label,
+                    &theme.typography.axes.tick_label,
                     PhysicalTextAlignment::Start,
                     "specialized numeric 66ch",
                     false,
@@ -411,9 +415,9 @@ pub(crate) fn body_preference(
             let count = u32::try_from(count).map_err(|_| {
                 Error::Render("specialized category preference count overflow".into())
             })?;
-            let height = hard
-                .1
-                .max(2.0 * f64::from(theme.typography.tick_label.font_size) * f64::from(count));
+            let height = hard.1.max(
+                2.0 * f64::from(theme.typography.axes.tick_label.font_size) * f64::from(count),
+            );
             let width = hard.0.max(66.0 * ch).max(4.0 * height / 3.0);
             Ok((width, height.max(3.0 * width / 4.0)))
         }
@@ -451,7 +455,7 @@ pub(crate) fn plot_size(
         .frame
         .as_ref()
         .map_or(0.0, |frame| f64::from(frame.stroke.width) / 2.0);
-    let chrome = theme.typography.axis_title.line_pitch_pixels()
+    let chrome = theme.typography.axes.axis_title.line_pitch_pixels()
         + theme.axes.spacing.y_tick_label_gap
         + theme.axes.spacing.y_title_tick_label_gap
         + theme.axes.spacing.y_title_edge_padding
@@ -466,7 +470,7 @@ pub(crate) fn plot_size(
                     theme
                         .measure_text(
                             label,
-                            &theme.typography.tick_label,
+                            &theme.typography.axes.tick_label,
                             PhysicalTextAlignment::End,
                             "natural category gutter",
                             false,
@@ -486,7 +490,7 @@ pub(crate) fn plot_size(
                     theme
                         .measure_text(
                             &label,
-                            &theme.typography.tick_label,
+                            &theme.typography.axes.tick_label,
                             PhysicalTextAlignment::End,
                             "natural numeric gutter",
                             false,
@@ -519,9 +523,9 @@ pub(crate) fn plot_size(
     for (source, role) in [plot.title_text(), plot.subtitle_text(), plot.caption_text()]
         .into_iter()
         .zip([
-            &theme.typography.title,
-            &theme.typography.subtitle,
-            &theme.typography.caption,
+            &theme.typography.root.title,
+            &theme.typography.root.subtitle,
+            &theme.typography.root.caption,
         ])
     {
         if let Some(source) = source {
@@ -562,8 +566,8 @@ pub(crate) fn plot_size(
     let bottom = if gutters[2] > 0.0 {
         gutters[2]
     } else {
-        theme.typography.tick_label.line_pitch_pixels()
-            + theme.typography.axis_title.line_pitch_pixels()
+        theme.typography.axes.tick_label.line_pitch_pixels()
+            + theme.typography.axes.axis_title.line_pitch_pixels()
             + theme.axes.spacing.x_tick_label_gap
             + theme.axes.spacing.x_title_tick_label_gap
             + outward

@@ -288,7 +288,7 @@ fn native_vertical_category_intrinsics_use_mandatory_lines_and_keep_fit_scope() 
         let label = theme
             .measure_text(
                 "First line\nSecond line\nThird line",
-                &theme.typography.tick_label,
+                &theme.typography.axes.tick_label,
                 crate::layout::PhysicalTextAlignment::Center,
                 "category intrinsic test",
                 false,
@@ -306,7 +306,7 @@ fn native_vertical_category_intrinsics_use_mandatory_lines_and_keep_fit_scope() 
         let tick = theme
             .measure_text(
                 &source,
-                &theme.typography.tick_label,
+                &theme.typography.axes.tick_label,
                 crate::layout::PhysicalTextAlignment::Center,
                 "numeric midpoint intrinsic test",
                 false,

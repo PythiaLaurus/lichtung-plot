@@ -498,7 +498,7 @@ fn invalid_sources_win_over_unavailable_fonts_in_the_exact_root() {
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        theme.typography.tick_label.stack =
+        theme.typography.axes.tick_label.stack =
             crate::font::canonical::named_stack(&["T5a6a4d unavailable font 91f7"]);
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
         STAGES.with(|counts| counts.set([0; 3]));

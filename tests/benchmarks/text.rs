@@ -262,7 +262,7 @@ fn paragraph_case(multiline: bool) -> [Duration; 2] {
         let plan = theme
             .plan_text(
                 &source,
-                &theme.typography.caption,
+                &theme.typography.root.caption,
                 320.0,
                 crate::layout::PhysicalTextAlignment::Start,
                 "benchmark paragraph",

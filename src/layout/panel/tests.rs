@@ -238,7 +238,7 @@ fn exact_axis_sources_bypass_automatic_measurement_in_both_constructors() {
         .unwrap();
     // Automatic measurement would fail immediately with this role. Exact source
     // selection must not measure any generated label before the axis text pass.
-    theme.typography.tick_label.font_size = 0;
+    theme.typography.axes.tick_label.font_size = 0;
     let mut x = AxisSpec::default().limits(0.0, 1.0);
     x.exact_ticks = Some(vec![
         AxisTick::new(0.25, "left exact"),
@@ -296,7 +296,7 @@ fn automatic_tick_fit_never_swallows_fatal_text_errors() {
     let mut theme = crate::Theme::Publication
         .resolve(&OperationGenerationResources::new())
         .unwrap();
-    theme.typography.tick_label.font_size = 0;
+    theme.typography.axes.tick_label.font_size = 0;
     let projection = Projection::new((0.0, 10.0), (0.0, 1.0), (0.0, 400.0, 0.0, 200.0));
     let error =
         automatic_numeric_ticks((0.0, 10.0), &projection, AxisSide::Bottom, &theme).unwrap_err();
@@ -501,7 +501,7 @@ fn resolved_tick_label_size_controls_automatic_tick_measurement_and_drawing() {
     )
     .unwrap();
     let mut large_tick_theme = default_theme.clone();
-    large_tick_theme.typography.tick_label.font_size = 96;
+    large_tick_theme.typography.axes.tick_label.font_size = 96;
     let large_tick_layout = Layout::new_with_axis_specs_in_panel_box(
         (0.0, 100.0),
         (0.0, 100.0),

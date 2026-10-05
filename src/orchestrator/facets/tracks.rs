@@ -138,7 +138,7 @@ pub(super) fn allocate(
                 preference.0
             };
             let label = super::rendering::facet_label(&plot, &panel.cell, data)?;
-            let appearance = &theme.typography.facet_header;
+            let appearance = &theme.typography.composition.facet_header;
             preferred
                 .max(crate::layout::interior::sizing::text_width(theme, &label, appearance)? + 16.0)
         } else {
@@ -279,7 +279,7 @@ pub(super) fn allocate(
             };
             if row_insets[panel.row][1] == 0 {
                 let label = super::rendering::facet_label(&plot, &panel.cell, data)?;
-                let appearance = &theme.typography.facet_header;
+                let appearance = &theme.typography.composition.facet_header;
                 let strip = crate::layout::fit::measured(crate::layout::fit::text(
                     theme,
                     &label,

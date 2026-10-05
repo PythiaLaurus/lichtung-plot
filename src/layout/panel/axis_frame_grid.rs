@@ -422,7 +422,7 @@ impl Axis {
             for tick in self.ticks.iter().filter(|tick| !tick.label.is_empty()) {
                 let plan = theme.measure_text(
                     &tick.label,
-                    &theme.typography.tick_label,
+                    &theme.typography.axes.tick_label,
                     PhysicalTextAlignment::End,
                     "y-axis exact tick label",
                     false,

@@ -53,16 +53,16 @@ impl PreparedTextRequirement {
         stage: &mut crate::layout::kernel::PreparedStage<'_>,
     ) -> Result<(), Error> {
         for (index, appearance) in [
-            &theme.typography.title,
-            &theme.typography.subtitle,
-            &theme.typography.caption,
-            &theme.typography.tick_label,
-            &theme.typography.legend_title,
-            &theme.typography.legend_label,
-            &theme.typography.composition_header,
-            &theme.typography.text_panel_title,
-            &theme.typography.facet_header,
-            &theme.typography.body,
+            &theme.typography.root.title,
+            &theme.typography.root.subtitle,
+            &theme.typography.root.caption,
+            &theme.typography.axes.tick_label,
+            &theme.typography.guides.legend_title,
+            &theme.typography.guides.legend_label,
+            &theme.typography.composition.composition_header,
+            &theme.typography.composition.text_panel_title,
+            &theme.typography.composition.facet_header,
+            &theme.typography.composition.body,
         ]
         .into_iter()
         .enumerate()
@@ -870,7 +870,7 @@ impl PreparedTextRequirement {
             title_address,
             PreparedTextRole::Title,
             plot.title_text(),
-            &theme.typography.title,
+            &theme.typography.root.title,
             prepared_stage.as_deref_mut(),
         )?;
         let subtitle_address = prepared_address_child(
@@ -884,7 +884,7 @@ impl PreparedTextRequirement {
             subtitle_address,
             PreparedTextRole::Subtitle,
             plot.subtitle_text(),
-            &theme.typography.subtitle,
+            &theme.typography.root.subtitle,
             prepared_stage.as_deref_mut(),
         )?;
         if kind != PlotKind::Matrix {
@@ -910,7 +910,7 @@ impl PreparedTextRequirement {
                     0,
                     x_title,
                     &[],
-                    &theme.typography.axis_title,
+                    &theme.typography.axes.axis_title,
                     prepared_stage.as_deref_mut(),
                 )?;
             }
@@ -923,7 +923,7 @@ impl PreparedTextRequirement {
                     0,
                     y_title,
                     &[],
-                    &theme.typography.axis_title,
+                    &theme.typography.axes.axis_title,
                     prepared_stage.as_deref_mut(),
                 )?;
             }
@@ -935,7 +935,7 @@ impl PreparedTextRequirement {
                 (kind == PlotKind::Heatmap
                     && plot.heatmap_label_fit_spec() == crate::HeatmapLabelFit::Elide)
                     .then_some(HEATMAP_ELISION_ALPHABET),
-                &theme.typography.tick_label,
+                &theme.typography.axes.tick_label,
                 prepared_stage.as_deref_mut(),
             )?;
             push_axis_ticks(
@@ -946,7 +946,7 @@ impl PreparedTextRequirement {
                 (kind == PlotKind::Heatmap
                     && plot.heatmap_label_fit_spec() == crate::HeatmapLabelFit::Elide)
                     .then_some(HEATMAP_ELISION_ALPHABET),
-                &theme.typography.tick_label,
+                &theme.typography.axes.tick_label,
                 prepared_stage.as_deref_mut(),
             )?;
             if matches!(
@@ -966,7 +966,7 @@ impl PreparedTextRequirement {
                     0,
                     "0",
                     &[],
-                    &theme.typography.tick_label,
+                    &theme.typography.axes.tick_label,
                     prepared_stage.as_deref_mut(),
                 )?;
                 let address = prepared_address_child(
@@ -982,7 +982,7 @@ impl PreparedTextRequirement {
                     0,
                     "0.5",
                     &[],
-                    &theme.typography.tick_label,
+                    &theme.typography.axes.tick_label,
                     prepared_stage.as_deref_mut(),
                 )?;
             }
@@ -1039,7 +1039,7 @@ impl PreparedTextRequirement {
                 caption_address,
                 PreparedTextRole::Caption,
                 plot.caption_text(),
-                &theme.typography.caption,
+                &theme.typography.root.caption,
                 prepared_stage,
             )?;
         }
@@ -1082,7 +1082,7 @@ fn push_deferred_plot_requirements(
             &mut body_index,
             annotation.text(),
             &[],
-            &theme.typography.panel_text,
+            &theme.typography.annotations.panel_text,
             prepared_stage.as_deref_mut(),
         )?;
     }
@@ -1094,7 +1094,7 @@ fn push_deferred_plot_requirements(
                 &mut body_index,
                 label,
                 &[],
-                &theme.typography.facet_header,
+                &theme.typography.composition.facet_header,
                 prepared_stage.as_deref_mut(),
             )
         })?;
@@ -1118,7 +1118,7 @@ fn push_deferred_plot_requirements(
                         &mut body_index,
                         label,
                         &[],
-                        &theme.typography.point_layer_label,
+                        &theme.typography.annotations.point_layer_label,
                         prepared_stage.as_deref_mut(),
                     )?;
                 }
@@ -1135,7 +1135,7 @@ fn push_deferred_plot_requirements(
                     &mut body_index,
                     label,
                     &[],
-                    &theme.typography.legend_label,
+                    &theme.typography.guides.legend_label,
                     prepared_stage.as_deref_mut(),
                 )?;
             }
@@ -1150,7 +1150,7 @@ fn push_deferred_plot_requirements(
                 &mut body_index,
                 source,
                 &[],
-                &theme.typography.legend_title,
+                &theme.typography.guides.legend_title,
                 prepared_stage.as_deref_mut(),
             )?;
         }
@@ -1177,7 +1177,7 @@ fn push_deferred_plot_requirements(
                             "Nondecreasing"
                         },
                         &[],
-                        &theme.typography.legend_label,
+                        &theme.typography.guides.legend_label,
                         prepared_stage.as_deref_mut(),
                     )?;
                 }
@@ -1197,7 +1197,7 @@ fn push_deferred_plot_requirements(
                     &mut body_index,
                     plot.resolve_label(values.name()),
                     &[],
-                    &theme.typography.legend_title,
+                    &theme.typography.guides.legend_title,
                     prepared_stage.as_deref_mut(),
                 )?;
                 let levels = if matches!(kind, PlotKind::Scatter | PlotKind::Marginal)
@@ -1244,7 +1244,7 @@ fn push_deferred_plot_requirements(
                         &mut body_index,
                         plot.resolve_label(value),
                         &[],
-                        &theme.typography.legend_label,
+                        &theme.typography.guides.legend_label,
                         prepared_stage.as_deref_mut(),
                     )?;
                 }
@@ -1257,7 +1257,7 @@ fn push_deferred_plot_requirements(
                 &mut body_index,
                 " × , ",
                 &[],
-                &theme.typography.legend_label,
+                &theme.typography.guides.legend_label,
                 prepared_stage.as_deref_mut(),
             )?;
         }
@@ -1271,7 +1271,7 @@ fn push_deferred_plot_requirements(
                     &mut body_index,
                     source,
                     &[],
-                    &theme.typography.legend_label,
+                    &theme.typography.guides.legend_label,
                     prepared_stage.as_deref_mut(),
                 )?;
             }
@@ -1284,7 +1284,7 @@ fn push_deferred_plot_requirements(
                     &mut body_index,
                     source,
                     &[],
-                    &theme.typography.legend_label,
+                    &theme.typography.guides.legend_label,
                     prepared_stage.as_deref_mut(),
                 )?;
             }
@@ -1300,7 +1300,7 @@ fn push_deferred_plot_requirements(
                         &mut body_index,
                         plot.resolve_label(hue),
                         &[],
-                        &theme.typography.legend_label,
+                        &theme.typography.guides.legend_label,
                         prepared_stage.as_deref_mut(),
                     )?;
                 }
@@ -1319,7 +1319,7 @@ fn push_deferred_plot_requirements(
                     body_index,
                     plot.resolve_label(variable),
                     &[],
-                    &theme.typography.axis_title,
+                    &theme.typography.axes.axis_title,
                     prepared_stage.as_deref_mut(),
                 )?;
                 body_index = body_index
@@ -1334,7 +1334,7 @@ fn push_deferred_plot_requirements(
             body_index,
             String::new(),
             AUTOMATIC_NUMERIC_ALPHABET,
-            &theme.typography.tick_label,
+            &theme.typography.axes.tick_label,
             prepared_stage,
         )?;
     } else if kind == PlotKind::Waterfall {
@@ -1357,7 +1357,7 @@ fn push_deferred_plot_requirements(
                     &mut body_index,
                     label.as_str(),
                     &[],
-                    &theme.typography.waterfall_total,
+                    &theme.typography.annotations.waterfall_total,
                     prepared_stage.as_deref_mut(),
                 )?;
             }
@@ -1392,7 +1392,7 @@ fn push_deferred_plot_requirements(
                 0,
                 marks.color_label.as_str(),
                 &[],
-                &theme.typography.legend_title,
+                &theme.typography.guides.legend_title,
                 prepared_stage.as_deref_mut(),
             )?;
             for (index, label) in marks.guide_labels().enumerate() {
@@ -1405,7 +1405,7 @@ fn push_deferred_plot_requirements(
                     })?,
                     label,
                     &[],
-                    &theme.typography.legend_label,
+                    &theme.typography.guides.legend_label,
                     prepared_stage.as_deref_mut(),
                 )?;
             }
@@ -1440,7 +1440,7 @@ fn push_deferred_plot_requirements(
                     0,
                     marks.color_label.as_str(),
                     &[],
-                    &theme.typography.legend_title,
+                    &theme.typography.guides.legend_title,
                     prepared_stage.as_deref_mut(),
                 )?;
                 for (index, label) in marks.guide_labels().enumerate() {
@@ -1453,7 +1453,7 @@ fn push_deferred_plot_requirements(
                         })?,
                         label,
                         &[],
-                        &theme.typography.legend_label,
+                        &theme.typography.guides.legend_label,
                         prepared_stage.as_deref_mut(),
                     )?;
                 }
@@ -1480,7 +1480,7 @@ fn push_deferred_plot_requirements(
                     })?,
                     label,
                     &[],
-                    &theme.typography.legend_label,
+                    &theme.typography.guides.legend_label,
                     prepared_stage.as_deref_mut(),
                 )?;
             }
@@ -1522,7 +1522,7 @@ fn push_deferred_plot_requirements(
                         &mut body_index,
                         source,
                         &[],
-                        &theme.typography.estimate_detail,
+                        &theme.typography.annotations.estimate_detail,
                         prepared_stage.as_deref_mut(),
                     )
                 },
@@ -1545,9 +1545,9 @@ fn push_deferred_plot_requirements(
                         kind,
                         PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest
                     ) {
-                        &theme.typography.estimate_detail
+                        &theme.typography.annotations.estimate_detail
                     } else {
-                        &theme.typography.waterfall_total
+                        &theme.typography.annotations.waterfall_total
                     },
                     prepared_stage.as_deref_mut(),
                 )
@@ -2748,11 +2748,12 @@ mod tests {
             let mut theme = crate::Theme::Publication
                 .resolve(&canonical::OperationGenerationResources::new())
                 .unwrap();
-            theme.typography.contrast_light.stack =
+            theme.typography.annotations.contrast.light.stack =
                 canonical::named_stack(&["Light contrast font"]);
-            theme.typography.contrast_dark.stack = canonical::named_stack(&["Dark contrast font"]);
-            theme.typography.contrast_light.font_size = 19;
-            theme.typography.contrast_dark.font_size = 9;
+            theme.typography.annotations.contrast.dark.stack =
+                canonical::named_stack(&["Dark contrast font"]);
+            theme.typography.annotations.contrast.light.font_size = 19;
+            theme.typography.annotations.contrast.dark.font_size = 9;
             let requirements = with_prepared_stage(|stage| {
                 foundational_plot_requirements(
                     Some(&inputs),
@@ -2806,10 +2807,12 @@ mod tests {
         theme.surfaces.plot_panel = Color::rgba(0, 0, 0, 0);
         theme.surfaces.canvas_root = Color::rgba(0, 0, 0, 0);
         theme.marks.heatmap_missing_fill = Color::rgba(20, 40, 60, 0);
-        theme.typography.contrast_light.stack = canonical::named_stack(&["Light missing row"]);
-        theme.typography.contrast_dark.stack = canonical::named_stack(&["Dark missing row"]);
-        theme.typography.contrast_light.font_size = 39;
-        theme.typography.contrast_dark.font_size = 9;
+        theme.typography.annotations.contrast.light.stack =
+            canonical::named_stack(&["Light missing row"]);
+        theme.typography.annotations.contrast.dark.stack =
+            canonical::named_stack(&["Dark missing row"]);
+        theme.typography.annotations.contrast.light.font_size = 39;
+        theme.typography.annotations.contrast.dark.font_size = 9;
         for (backdrop, expected) in [
             (Color::rgb(0, 0, 0), "Light missing row"),
             (Color::rgb(255, 255, 255), "Dark missing row"),
@@ -2870,11 +2873,12 @@ mod tests {
         let mut theme = crate::Theme::Publication
             .resolve(&canonical::OperationGenerationResources::new())
             .unwrap();
-        theme.typography.contrast_light.stack =
+        theme.typography.annotations.contrast.light.stack =
             canonical::named_stack(&["Selected light contrast"]);
-        theme.typography.contrast_dark.stack = canonical::named_stack(&["Selected dark contrast"]);
-        theme.typography.contrast_light.font_size = 39;
-        theme.typography.contrast_dark.font_size = 9;
+        theme.typography.annotations.contrast.dark.stack =
+            canonical::named_stack(&["Selected dark contrast"]);
+        theme.typography.annotations.contrast.light.font_size = 39;
+        theme.typography.annotations.contrast.dark.font_size = 9;
         let selected_stack = |inputs: &crate::layout::interior::PreparedInteriorInputs| {
             let requirements = with_prepared_stage(|stage| {
                 foundational_plot_requirements(
@@ -2961,9 +2965,10 @@ mod tests {
         let mut theme = crate::Theme::Publication
             .resolve(&canonical::OperationGenerationResources::new())
             .unwrap();
-        theme.typography.estimate_detail.stack = canonical::named_stack(&["Estimate detail only"]);
-        theme.typography.estimate_detail.font_size = 20;
-        theme.typography.estimate_detail.paint = crate::theme::Color::rgb(5, 7, 9);
+        theme.typography.annotations.estimate_detail.stack =
+            canonical::named_stack(&["Estimate detail only"]);
+        theme.typography.annotations.estimate_detail.font_size = 20;
+        theme.typography.annotations.estimate_detail.paint = crate::theme::Color::rgb(5, 7, 9);
         let requirements = with_prepared_stage(|stage| {
             foundational_plot_requirements(
                 Some(&inputs),
@@ -3009,16 +3014,19 @@ mod tests {
             let mut theme = crate::Theme::Publication
                 .resolve(&canonical::OperationGenerationResources::new())
                 .unwrap();
-            let available = theme.typography.contrast_light.stack.clone();
+            let available = theme.typography.annotations.contrast.light.stack.clone();
             let missing = canonical::named_stack(&["No Such Contrast Face In This Operation"]);
-            theme.typography.contrast_light.stack = if light_selected {
+            theme.typography.annotations.contrast.light.stack = if light_selected {
                 available.clone()
             } else {
                 missing.clone()
             };
-            theme.typography.contrast_dark.stack = if light_selected { missing } else { available };
-            theme.typography.contrast_light.font_size = if light_selected { 64 } else { 7 };
-            theme.typography.contrast_dark.font_size = if light_selected { 7 } else { 64 };
+            theme.typography.annotations.contrast.dark.stack =
+                if light_selected { missing } else { available };
+            theme.typography.annotations.contrast.light.font_size =
+                if light_selected { 64 } else { 7 };
+            theme.typography.annotations.contrast.dark.font_size =
+                if light_selected { 7 } else { 64 };
             crate::layout::plan_exact_root(
                 800,
                 600,

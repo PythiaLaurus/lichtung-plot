@@ -547,7 +547,7 @@ mod intrinsic_tests {
                 .resolve(&crate::font::canonical::OperationGenerationResources::new())
                 .unwrap();
             if tight_lines {
-                theme.typography.tick_label.line_height_multiplier = 0.1;
+                theme.typography.axes.tick_label.line_height_multiplier = 0.1;
             }
             let minimum = Intrinsics::prepared(&chart, &theme)
                 .unwrap()
@@ -605,7 +605,7 @@ mod intrinsic_tests {
             let measured = theme
                 .measure_text(
                     &label,
-                    &theme.typography.tick_label,
+                    &theme.typography.axes.tick_label,
                     crate::layout::PhysicalTextAlignment::Center,
                     "independent numeric terminal source",
                     false,

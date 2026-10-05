@@ -4393,19 +4393,19 @@ impl Canvas {
                 self.title.as_deref(),
                 crate::layout::PreparedTextRole::Title,
                 crate::layout::AddressRole::RootTitle,
-                &themes.root().typography.title,
+                &themes.root().typography.root.title,
             ),
             (
                 self.subtitle.as_deref(),
                 crate::layout::PreparedTextRole::Subtitle,
                 crate::layout::AddressRole::RootSubtitle,
-                &themes.root().typography.subtitle,
+                &themes.root().typography.root.subtitle,
             ),
             (
                 self.caption.as_deref(),
                 crate::layout::PreparedTextRole::Caption,
                 crate::layout::AddressRole::RootCaption,
-                &themes.root().typography.caption,
+                &themes.root().typography.root.caption,
             ),
         ] {
             if let Some(source) = source.filter(|source| !source.is_empty()) {
@@ -4429,8 +4429,8 @@ impl Canvas {
                 0,
                 &prepared_stage.generation_resources(),
             )?;
-            let title_appearance = &themes.root().typography.legend_title;
-            let label_appearance = &themes.root().typography.legend_label;
+            let title_appearance = &themes.root().typography.guides.legend_title;
+            let label_appearance = &themes.root().typography.guides.legend_label;
             let title = match guide {
                 PreparedGuideDescriptor::Discrete((title, _)) => title.as_str(),
                 PreparedGuideDescriptor::Continuous(guide) => guide.title.as_str(),
@@ -4520,9 +4520,9 @@ impl Canvas {
             }
         }
 
-        let composition_title = &themes.root().typography.composition_header;
-        let text_panel_title = &themes.root().typography.text_panel_title;
-        let body = &themes.root().typography.body;
+        let composition_title = &themes.root().typography.composition.composition_header;
+        let text_panel_title = &themes.root().typography.composition.text_panel_title;
+        let body = &themes.root().typography.composition.body;
         for (index, header) in self.column_headers.iter().enumerate() {
             let address = root.child(
                 crate::layout::AddressRole::CanvasHeader,

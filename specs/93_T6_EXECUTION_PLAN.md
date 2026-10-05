@@ -70,7 +70,11 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6B1d1 | COMPLETE | T6B1c | Replace live text/surface appearances with validated TextTheme/SurfaceTheme; `refactor(theme): validate text and surface values` |
 | T6B1d2 | COMPLETE | T6B1d1 | Replace live compound stroke/point/fill inputs with validated values and structural absence; `refactor(theme): validate complete mark paints` |
 | T6B1d3 | COMPLETE | T6B1d2 | Retain validated opaque palettes/maps/gradients and domain selection; `refactor(scales): retain validated complete scale values` |
-| T6B1d4 | PENDING | T6B1d3 | Assemble validated complete role/chrome/annotation groups with actual consumer mappings; `refactor(theme): assemble complete validated components` |
+| T6B1d4 | IN PROGRESS | T6B1d3 | Assemble validated complete role/chrome/annotation groups with actual consumer mappings; `refactor(theme): assemble complete validated components` |
+| T6B1d4a | COMPLETE | T6B1d3 | Complete nested typography with all eighteen live roles; `refactor(theme): assemble complete typography roles` |
+| T6B1d4b | PENDING | T6B1d4a | Complete axis chrome and exact role-local spacing; `refactor(axes): retain validated local chrome` |
+| T6B1d4c | PENDING | T6B1d4b | Complete guide and composition chrome; `refactor(theme): retain validated composition chrome` |
+| T6B1d4d | PENDING | T6B1d4c | Complete mark groups and admitted annotation geometry; `refactor(theme): assemble mark and annotation roles` |
 | T6B2 | PENDING | T6B1 | Complete Theme construction/customization and owner resolution using those values; `refactor(theme): construct immutable complete themes` |
 | T6B3 | PENDING | T6B2 | Exact element Color/alpha replacement and repository caller migration; `feat(styles): expose complete RGBA element paints` |
 | T6B4 | PENDING | T6B3 | Public complete Theme/components/fonts/scales, built-in constructors and palette/map/gradient attachments; remove closed selectors and old scale representations; `feat(theme): expose immutable theme and scale foundations` |
@@ -164,6 +168,14 @@ formatting and source/identity review pass. Two inspected Density/Regression
 snapshots change only five zero-width stroke attribute sets; an independent
 raster fixture proves identical PNG bytes and nonempty alpha-56 paint. Complete
 group assembly and public exposure remain with subsequent owning leaves.
+
+T6B1d4a evidence: `docs/typography-values.md` records seven complete validated
+groups with eighteen live roles and removal of the flat typography aggregate.
+Opaque contrast candidates, recursive sibling validation, original source/leading
+bits and exact twenty-two-handle appearance-copy admission are preserved.
+Seventy-two focused tests, unchanged snapshots, formatting and strict Clippy pass.
+Axis, guide/composition and mark/annotation groups remain separately committed
+units; the umbrella is not complete until every such owner is migrated.
 
 T6B1d3 evidence: `docs/scale-values.md` records immutable validated opaque
 palettes, gradients/domains and selection values, actual prepared transport and

@@ -492,11 +492,11 @@ mod tests {
                 let resources = theme.prepared_font_environment()?.generation_resources();
                 let mut changed =
                     theme.admitted_clone(source.data().with_axis_resources(&resources))?;
-                changed.typography.tick_label.stack = crate::font::canonical::FontStack::new(
+                changed.typography.axes.tick_label.stack = crate::font::canonical::FontStack::new(
                     [crate::font::canonical::FontFamily::named("Noto Sand")?]
                         .into_iter()
                         .chain(
-                            theme.typography.tick_label.stack.families()[1..]
+                            theme.typography.axes.tick_label.stack.families()[1..]
                                 .iter()
                                 .cloned(),
                         ),
@@ -506,11 +506,12 @@ mod tests {
                 let before = resources.usage().unwrap().1;
                 assert!(!key.matches(&source, changed_context, &owner, round)?);
                 let work = resources.usage().unwrap().1 - before;
-                // Four shared immutable role stacks (one each), then the changed
-                // tick role's first name through its ninth/terminating byte (12).
+                // Four scale/accent witnesses, four shared immutable role stacks
+                // (one each), then the changed tick role's first name through its
+                // ninth/terminating byte (12). Group nesting adds no extra visit.
                 assert_eq!(
                     work,
-                    4 + 12,
+                    4 + 4 + 12,
                     "later role names and feedback tails remain unexamined"
                 );
                 for remaining in [0, work - 1, work] {
@@ -534,7 +535,7 @@ mod tests {
     }
 
     #[test]
-    fn complete_theme_clone_admits_exact_owned_bytes_and_records_before_copy() {
+    fn complete_theme_clone_shares_twenty_two_handles_without_payload_storage() {
         let source = Plot::scatter(
             crate::NumericValues::new("x", [0.0, 1.0]),
             crate::NumericValues::new("y", [0.0, 1.0]),
@@ -544,78 +545,84 @@ mod tests {
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
         for (index, stack) in [
-            &mut theme.typography.title.stack,
-            &mut theme.typography.subtitle.stack,
-            &mut theme.typography.caption.stack,
-            &mut theme.typography.axis_title.stack,
-            &mut theme.typography.tick_label.stack,
-            &mut theme.typography.significance_label.stack,
-            &mut theme.typography.estimate_detail.stack,
-            &mut theme.typography.waterfall_total.stack,
-            &mut theme.typography.point_layer_label.stack,
-            &mut theme.typography.panel_text.stack,
-            &mut theme.typography.contrast_light.stack,
-            &mut theme.typography.contrast_dark.stack,
-            &mut theme.typography.legend_title.stack,
-            &mut theme.typography.legend_label.stack,
-            &mut theme.typography.facet_header.stack,
-            &mut theme.typography.composition_header.stack,
-            &mut theme.typography.text_panel_title.stack,
-            &mut theme.typography.body.stack,
+            &mut theme.typography.root.title.stack,
+            &mut theme.typography.root.subtitle.stack,
+            &mut theme.typography.root.caption.stack,
+            &mut theme.typography.axes.axis_title.stack,
+            &mut theme.typography.axes.tick_label.stack,
+            &mut theme.typography.annotations.significance_label.stack,
+            &mut theme.typography.annotations.estimate_detail.stack,
+            &mut theme.typography.annotations.waterfall_total.stack,
+            &mut theme.typography.annotations.point_layer_label.stack,
+            &mut theme.typography.annotations.panel_text.stack,
+            &mut theme.typography.annotations.contrast.light.stack,
+            &mut theme.typography.annotations.contrast.dark.stack,
+            &mut theme.typography.guides.legend_title.stack,
+            &mut theme.typography.guides.legend_label.stack,
+            &mut theme.typography.composition.facet_header.stack,
+            &mut theme.typography.composition.composition_header.stack,
+            &mut theme.typography.composition.text_panel_title.stack,
+            &mut theme.typography.composition.body.stack,
         ]
         .into_iter()
         .enumerate()
         {
             *stack = crate::font::canonical::named_stack(&[&"s".repeat(index + 1)]);
         }
-        let bytes = 24; // eight retained RGB triples; font and spacing payloads are shared
-        let records = 8; // only the copied color entries consume record admission
-        let work = 18; // one immutable handle operation for each complete text role
-        let resources = crate::font::canonical::OperationGenerationResources::new();
-        resources.set_test_limits(work, bytes);
-        resources.claim_slots(1_000_000 - records).unwrap();
-        let copy = theme
-            .admitted_clone(source.data().with_axis_resources(&resources))
-            .unwrap();
-        assert_eq!(resources.byte_usage().unwrap(), bytes);
-        assert_eq!(resources.usage().unwrap().0, 1_000_000);
-        assert_eq!(resources.usage().unwrap().1, work);
-        for (original, retained) in theme
-            .typography
-            .roles()
-            .into_iter()
-            .zip(copy.typography.roles())
-        {
-            assert_eq!(
-                original.stack.families().as_ptr(),
-                retained.stack.families().as_ptr()
+        // Eighteen font handles plus qualitative, sequential, diverging and
+        // accent handles. Inline group structure adds no separately shared node.
+        let work = 22;
+        for remaining in [0, work - 1, work] {
+            let resources = crate::font::canonical::OperationGenerationResources::with_test_limits(
+                remaining, 0,
             );
-        }
-
-        for refuse_bytes in [false, true] {
-            let resources = crate::font::canonical::OperationGenerationResources::new();
-            resources.set_test_limits(u128::MAX, bytes - u64::from(refuse_bytes));
-            let admitted_prefix = 1_000_000 - records + u128::from(!refuse_bytes);
-            resources.claim_slots(admitted_prefix).unwrap();
-            let error = theme
-                .admitted_clone(source.data().with_axis_resources(&resources))
-                .unwrap_err();
-            assert!(error.to_string().contains(if refuse_bytes {
-                "system-font bytes"
-            } else {
-                "retained planning records"
-            }));
-            // Color admission refuses before any payload copy or immutable handle work.
+            resources.claim_slots(1_000_000).unwrap();
+            let copy = theme.admitted_clone(source.data().with_axis_resources(&resources));
             assert_eq!(resources.byte_usage().unwrap(), 0);
+            assert_eq!(resources.usage().unwrap().0, 1_000_000);
+            if remaining < work {
+                assert!(copy
+                    .unwrap_err()
+                    .to_string()
+                    .contains("root processing visits"));
+                // The complete handle claim refuses atomically before cloning.
+                assert_eq!(resources.usage().unwrap().1, 0);
+                continue;
+            }
+            let copy = copy.unwrap();
+            assert_eq!(copy, theme);
+            assert_eq!(resources.usage().unwrap().1, work);
+            for (original, retained) in theme
+                .typography
+                .roles()
+                .into_iter()
+                .zip(copy.typography.roles())
+            {
+                assert_eq!(
+                    original.stack.families().as_ptr(),
+                    retained.stack.families().as_ptr()
+                );
+                assert_eq!(
+                    original.stack.families()[0].name().unwrap().as_ptr(),
+                    retained.stack.families()[0].name().unwrap().as_ptr()
+                );
+            }
             assert_eq!(
-                resources.usage().unwrap().0,
-                if refuse_bytes {
-                    1_000_000
-                } else {
-                    admitted_prefix
-                }
+                theme.color_scales.qualitative().colors().as_ptr(),
+                copy.color_scales.qualitative().colors().as_ptr()
             );
-            assert_eq!(resources.usage().unwrap().1, 0);
+            assert_eq!(
+                theme.color_scales.sequential().stops().as_ptr(),
+                copy.color_scales.sequential().stops().as_ptr()
+            );
+            assert_eq!(
+                theme.color_scales.diverging().stops().as_ptr(),
+                copy.color_scales.diverging().stops().as_ptr()
+            );
+            assert_eq!(
+                theme.marks.accents.seeds().as_ptr(),
+                copy.marks.accents.seeds().as_ptr()
+            );
         }
     }
 
@@ -982,7 +989,7 @@ mod tests {
                     assert!(!key.matches(&plot, context, &owner, round)?);
                 }
                 let mut appearance = theme.clone();
-                appearance.typography.tick_label.font_size += 1;
+                appearance.typography.axes.tick_label.font_size += 1;
                 assert!(!key.matches(
                     &source,
                     PlotRenderContext::new(source.data(), panel, &appearance),

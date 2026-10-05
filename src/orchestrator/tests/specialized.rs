@@ -57,9 +57,9 @@ fn specialized_renderers_clip_resolved_marks_without_clipping_decorations() {
         .resolve(&crate::font::canonical::OperationGenerationResources::new())
         .unwrap();
     for (label, appearance) in [
-        ("Color", &theme.typography.legend_title),
-        ("0.1", &theme.typography.legend_label),
-        ("1", &theme.typography.legend_label),
+        ("Color", &theme.typography.guides.legend_title),
+        ("0.1", &theme.typography.guides.legend_label),
+        ("1", &theme.typography.guides.legend_label),
     ] {
         let draws = beeswarm_backend
             .text_draws

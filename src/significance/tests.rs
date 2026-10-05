@@ -65,7 +65,7 @@ fn centered_label_ink_prevents_disjoint_spans_from_sharing_a_shelf() {
         .resolve(&crate::font::canonical::OperationGenerationResources::new())
         .unwrap();
     for (size, shared) in [(16, true), (140, false)] {
-        let mut appearance = theme.typography.significance_label.clone();
+        let mut appearance = theme.typography.annotations.significance_label.clone();
         appearance.font_size = size;
         let selected = plan_comparisons_at_with_label(
             &comparisons,
@@ -100,7 +100,7 @@ fn complete_bracket_stroke_cannot_escape_the_category_panel_even_with_exact_limi
         .resolve(&crate::font::canonical::OperationGenerationResources::new())
         .unwrap();
     theme.annotations.bracket_stroke.width = 200.0;
-    let label = theme.typography.significance_label.clone();
+    let label = theme.typography.annotations.significance_label.clone();
     for limits in [None, Some((0.0, 10.0))] {
         let result = plan_comparisons_at_with_label(
             &[comparison("a", "b", 0.01)],
@@ -136,7 +136,7 @@ fn thick_bracket_stroke_expands_only_an_automatic_numeric_window() {
         .resolve(&crate::font::canonical::OperationGenerationResources::new())
         .unwrap();
     theme.annotations.bracket_stroke.width = 24.0;
-    let label = theme.typography.significance_label.clone();
+    let label = theme.typography.annotations.significance_label.clone();
     let select = |limits| {
         plan_comparisons_at_with_label(
             &[comparison("a", "b", 0.01)],

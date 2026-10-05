@@ -107,7 +107,7 @@ fn marginal_auto_recovers_from_scoped_terminal_tick_miss() {
     let mut theme = crate::Theme::Publication
         .resolve(&crate::font::canonical::OperationGenerationResources::new())
         .unwrap();
-    theme.typography.tick_label.font_size = 48;
+    theme.typography.axes.tick_label.font_size = 48;
     let resources = theme
         .prepared_font_environment()
         .unwrap()
@@ -244,7 +244,7 @@ fn automatic_guide_recovers_from_terminal_numeric_tick_miss() {
     let mut theme = crate::Theme::Publication
         .resolve(&crate::font::canonical::OperationGenerationResources::new())
         .unwrap();
-    theme.typography.tick_label.font_size = 40;
+    theme.typography.axes.tick_label.font_size = 40;
     let resources = theme
         .prepared_font_environment()
         .unwrap()
@@ -853,7 +853,7 @@ fn annotation_conflict_links_only_to_a_resolving_assignment() {
     let note_width = theme
         .measure_legacy_appearance_text(
             note,
-            &theme.typography.panel_text,
+            &theme.typography.annotations.panel_text,
             crate::layout::PhysicalTextAlignment::Start,
             "panel text annotation",
             false,
@@ -972,7 +972,7 @@ fn automatic_outside_guides_avoid_annotations_at_all_inside_corners() {
                 let note_width = theme
                     .measure_legacy_appearance_text(
                         note,
-                        &theme.typography.panel_text,
+                        &theme.typography.annotations.panel_text,
                         crate::layout::PhysicalTextAlignment::Start,
                         "panel text annotation",
                         false,
@@ -1350,7 +1350,7 @@ fn outside_legend_remeasures_and_reserves_newly_wrapped_axis_title() {
                 resolved
                     .plan_text(
                         label,
-                        &resolved.typography.axis_title,
+                        &resolved.typography.axes.axis_title,
                         cell.width(),
                         crate::layout::PhysicalTextAlignment::Center,
                         "x-axis title",
@@ -1365,7 +1365,7 @@ fn outside_legend_remeasures_and_reserves_newly_wrapped_axis_title() {
                     resolved
                         .plan_text(
                             label,
-                            &resolved.typography.axis_title,
+                            &resolved.typography.axes.axis_title,
                             initial.panel_box.width(),
                             crate::layout::PhysicalTextAlignment::Center,
                             "x-axis title",

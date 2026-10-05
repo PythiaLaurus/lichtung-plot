@@ -439,7 +439,7 @@ fn native_narrow_root_selects_actual_ticks_and_automatic_painted_domains() {
         let endpoint = fit::intrinsic_widths(
             &theme,
             "1.00e-3",
-            &theme.typography.tick_label,
+            &theme.typography.axes.tick_label,
             "endpoint estimate",
         )
         .unwrap()
@@ -588,9 +588,9 @@ fn native_hard_title_spans_and_category_slots_come_from_shaped_text() {
             &theme,
             &word,
             if is_category {
-                &theme.typography.tick_label
+                &theme.typography.axes.tick_label
             } else {
-                &theme.typography.axis_title
+                &theme.typography.axes.axis_title
             },
             "hard span",
         )
@@ -621,11 +621,11 @@ fn native_hard_title_spans_and_category_slots_come_from_shaped_text() {
         );
         assert_eq!(Projection::test_projection_calls(), before);
         let tick_span = 4.0_f64
-            * theme.typography.tick_label.line_pitch_pixels().max(
+            * theme.typography.axes.tick_label.line_pitch_pixels().max(
                 fit::intrinsic_widths(
                     &theme,
                     "1.00e-3",
-                    &theme.typography.tick_label,
+                    &theme.typography.axes.tick_label,
                     "native tick capacity test",
                 )
                 .unwrap()

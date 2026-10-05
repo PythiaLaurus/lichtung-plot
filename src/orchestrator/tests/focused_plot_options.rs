@@ -513,11 +513,11 @@ fn detail_and_guide_text_use_publication_roles() {
 
     assert_eq!(
         text_style(&beeswarm_backend, "Beeswarm detail").font_size,
-        theme.typography.legend_title.font_size
+        theme.typography.guides.legend_title.font_size
     );
     assert_eq!(
         text_style(&heatmap_backend, "Heatmap detail").font_size,
-        theme.typography.legend_title.font_size
+        theme.typography.guides.legend_title.font_size
     );
     for (backend, label) in [
         (&beeswarm_backend, "0"),
@@ -528,19 +528,19 @@ fn detail_and_guide_text_use_publication_roles() {
     ] {
         assert_eq!(
             text_style(backend, label).font_size,
-            theme.typography.legend_label.font_size
+            theme.typography.guides.legend_label.font_size
         );
         assert_eq!(
             text_style(backend, label).weight,
-            theme.typography.legend_label.weight
+            theme.typography.guides.legend_label.weight
         );
         assert_eq!(
             text_style(backend, label).font_family,
-            theme.typography.legend_label.stack
+            theme.typography.guides.legend_label.stack
         );
         assert_eq!(
             text_style(backend, label).color,
-            theme.typography.legend_label.paint
+            theme.typography.guides.legend_label.paint
         );
     }
     assert_eq!(
@@ -568,7 +568,7 @@ fn text_bounds(backend: &RecordingBackend, text: &str) -> PanelBox {
     let theme = crate::Theme::Publication
         .resolve(&crate::font::canonical::OperationGenerationResources::new())
         .unwrap();
-    let mut appearance = theme.typography.panel_text.clone();
+    let mut appearance = theme.typography.annotations.panel_text.clone();
     appearance.font_size = style.font_size;
     appearance.weight = style.weight;
     appearance.stack.clone_from(&style.font_family);

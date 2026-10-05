@@ -81,7 +81,7 @@ impl PanelRequirements {
             let plan = crate::layout::fit::measured(crate::layout::fit::text(
                 theme,
                 text,
-                &theme.typography.facet_header,
+                &theme.typography.composition.facet_header,
                 (available_panel.width() - 16.0).max(1.0),
                 PhysicalTextAlignment::Center,
                 "facet strip",
@@ -122,7 +122,7 @@ impl PanelRequirements {
                 fit::measured(fit::text(
                     theme,
                     text,
-                    &theme.typography.title,
+                    &theme.typography.root.title,
                     maximum_width,
                     PhysicalTextAlignment::Start,
                     "panel title",
@@ -141,7 +141,7 @@ impl PanelRequirements {
                 fit::measured(fit::text(
                     theme,
                     text,
-                    &theme.typography.subtitle,
+                    &theme.typography.root.subtitle,
                     maximum_width,
                     PhysicalTextAlignment::Start,
                     "panel subtitle",
@@ -163,8 +163,8 @@ impl PanelRequirements {
         let top = if title_lines == 0 && subtitle_lines == 0 {
             4.0
         } else {
-            title_lines as f64 * theme.typography.title.line_pitch_pixels()
-                + subtitle_lines as f64 * theme.typography.subtitle.line_pitch_pixels()
+            title_lines as f64 * theme.typography.root.title.line_pitch_pixels()
+                + subtitle_lines as f64 * theme.typography.root.subtitle.line_pitch_pixels()
                 + header_gap
                 + 8.0
         };
@@ -371,12 +371,12 @@ mod tests {
             (MINIMUM_PANEL_SPAN, MINIMUM_PANEL_SPAN),
         )
         .unwrap();
-        let lines = wrap_text(&theme, caption, &theme.typography.caption, 328.0);
+        let lines = wrap_text(&theme, caption, &theme.typography.root.caption, 328.0);
 
         assert!(lines.len() > 1);
         assert_eq!(lines.concat(), caption);
         let plan = &layout.root_text;
-        assert!(plan.bottom_reserve > theme.typography.caption.line_pitch_pixels());
+        assert!(plan.bottom_reserve > theme.typography.root.caption.line_pitch_pixels());
         assert!(RootFramePlan::measure(
             (160, 120),
             &theme,
@@ -424,7 +424,7 @@ mod tests {
         let mut theme = Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        theme.typography.subtitle.font_size = 7;
+        theme.typography.root.subtitle.font_size = 7;
         theme.facet_header_font_size = 32;
         let panel = PanelBox::new(20.0, 420.0, 20.0, 320.0);
         let layout = Layout {
@@ -464,7 +464,7 @@ mod tests {
         let theme = Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        let mut appearance = theme.typography.panel_text.clone();
+        let mut appearance = theme.typography.annotations.panel_text.clone();
         appearance.font_size = 12;
 
         let explicit = wrap_text(&theme, "first line\nsecond line\n", &appearance, 200.0);

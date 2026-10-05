@@ -459,7 +459,7 @@ fn invalid_statistics_and_exact_sources_reject_before_unavailable_fonts() {
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        theme.typography.tick_label.stack =
+        theme.typography.axes.tick_label.stack =
             crate::font::canonical::named_stack(&["Lichtung unavailable T5a6a3b 901e"]);
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
         let result = crate::layout::plan_exact_root(

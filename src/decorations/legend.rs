@@ -924,10 +924,12 @@ pub(crate) struct LegendMetrics {
 impl LegendMetrics {
     /// Complete role-local metrics do not depend on the outer root dimensions.
     pub(crate) fn from_theme(theme: &crate::theme::ResolvedTheme) -> Self {
-        let font_size = f64::from(theme.typography.legend_label.font_size);
+        let font_size = f64::from(theme.typography.guides.legend_label.font_size);
         let pad = theme.legend.padding;
-        let entry_h = theme.typography.legend_label.line_pitch_pixels() + theme.legend.row_gap;
-        let title_h = theme.typography.legend_title.line_pitch_pixels() + theme.legend.title_gap;
+        let entry_h =
+            theme.typography.guides.legend_label.line_pitch_pixels() + theme.legend.row_gap;
+        let title_h =
+            theme.typography.guides.legend_title.line_pitch_pixels() + theme.legend.title_gap;
         let handle_w = theme.legend.key_width;
         let handle_text = theme.legend.key_label_gap;
         Self {
@@ -1022,7 +1024,7 @@ fn discrete_guide_intrinsics(
         let (hard, natural) = crate::layout::fit::intrinsic_widths(
             theme,
             &entry.label,
-            &theme.typography.legend_label,
+            &theme.typography.guides.legend_label,
             "legend entry intrinsic",
         )?;
         let ink = entry.glyph_ink(metrics, theme)?;
@@ -1213,21 +1215,21 @@ impl Legend {
         let mut width = crate::layout::interior::sizing::text_width(
             theme,
             title,
-            &theme.typography.legend_title,
+            &theme.typography.guides.legend_title,
         )?;
         for (entry, requirement) in entries.iter().zip(&intrinsic.entries) {
             width = width.max(
                 crate::layout::interior::sizing::text_width(
                     theme,
                     &entry.label,
-                    &theme.typography.legend_label,
+                    &theme.typography.guides.legend_label,
                 )? + requirement.chrome,
             );
         }
         let title_plan = crate::layout::fit::measured(crate::layout::fit::text(
             theme,
             title,
-            &theme.typography.legend_title,
+            &theme.typography.guides.legend_title,
             width,
             crate::layout::PhysicalTextAlignment::Start,
             "natural legend title",
@@ -1247,7 +1249,7 @@ impl Legend {
             let plan = crate::layout::fit::measured(crate::layout::fit::text(
                 theme,
                 &entry.label,
-                &theme.typography.legend_label,
+                &theme.typography.guides.legend_label,
                 width - intrinsic.entries[index].chrome,
                 crate::layout::PhysicalTextAlignment::Start,
                 "natural legend entry",
@@ -1326,8 +1328,8 @@ impl Legend {
                 "outside guide has no positive content extent",
             )));
         }
-        let title_appearance = &theme.typography.legend_title;
-        let appearance = &theme.typography.legend_label;
+        let title_appearance = &theme.typography.guides.legend_title;
+        let appearance = &theme.typography.guides.legend_label;
         let title_plan = match fit::text(
             theme,
             title,
@@ -1494,6 +1496,7 @@ impl Legend {
             entry_blocks,
             font_family: theme
                 .typography
+                .guides
                 .legend_label
                 .stack
                 .copy_with_stage(
@@ -1861,8 +1864,8 @@ mod tests {
         let mut theme = crate::Theme::Publication
             .resolve(&OperationGenerationResources::new())
             .unwrap();
-        theme.typography.legend_title.font_size = 2;
-        theme.typography.legend_label.font_size = 2;
+        theme.typography.guides.legend_title.font_size = 2;
+        theme.typography.guides.legend_label.font_size = 2;
         theme.legend.padding = 0.0;
         theme.legend.key_width = 1.0;
         theme.legend.key_label_gap = 0.0;
@@ -2608,13 +2611,13 @@ mod tests {
         assert_eq!(smaller.metrics.pad.to_bits(), larger.metrics.pad.to_bits());
         assert_eq!(
             smaller.title_block.plan().style.font_size,
-            theme.typography.legend_title.font_size
+            theme.typography.guides.legend_title.font_size
         );
         assert!(smaller.entry_blocks.iter().all(|entry| {
-            entry.plan().style.font_size == theme.typography.legend_label.font_size
+            entry.plan().style.font_size == theme.typography.guides.legend_label.font_size
         }));
         assert!(larger.entry_blocks.iter().all(|entry| {
-            entry.plan().style.font_size == theme.typography.legend_label.font_size
+            entry.plan().style.font_size == theme.typography.guides.legend_label.font_size
         }));
     }
 

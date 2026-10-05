@@ -315,7 +315,7 @@ pub(crate) fn natural_body_height(
     )?;
     let hard = intrinsic_body_minimum(chart, theme)?;
     let height = quanta_pixels(packed.hard_pitch)
-        .max(2.0 * f64::from(theme.typography.tick_label.font_size))
+        .max(2.0 * f64::from(theme.typography.axes.tick_label.font_size))
         * marks.levels.len() as f64;
     Ok(height.max(hard.1).max(3.0 * width / 4.0))
 }
@@ -405,7 +405,7 @@ pub(crate) fn measure(
             let plan = crate::layout::fit::measured(crate::layout::fit::text(
                 theme,
                 label,
-                &theme.typography.tick_label,
+                &theme.typography.axes.tick_label,
                 width,
                 PhysicalTextAlignment::End,
                 "y-axis tick label",
@@ -421,7 +421,7 @@ pub(crate) fn measure(
         }
     }
     let preferred = hard_pitch.max(crate::layout::kernel::ceil_spatial_quanta(
-        2.0 * f64::from(theme.typography.tick_label.font_size),
+        2.0 * f64::from(theme.typography.axes.tick_label.font_size),
     )?);
     let tracks = data.collect_source(prepared.levels.iter().map(|_| {
         Ok(crate::layout::kernel::TrackSpec {
@@ -854,7 +854,7 @@ mod fit_tests {
         let mut invalid = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        invalid.typography.legend_title.font_size = 0;
+        invalid.typography.guides.legend_title.font_size = 0;
         invalid.prepare_font_environment().unwrap();
         assert!(plot
             .preflight_measurement(

@@ -166,7 +166,7 @@ pub(crate) fn measure_plans(
             };
             let text_plan = theme.measure_legacy_appearance_text(
                 annotation.text(),
-                &theme.typography.panel_text,
+                &theme.typography.annotations.panel_text,
                 alignment,
                 "panel text annotation",
                 false,
@@ -373,14 +373,14 @@ fn panel_text_uses_complete_private_role_and_unclipped_canonical_bounds() {
         .unwrap();
     let original = plans(&plot, &layout, &theme).unwrap();
     theme.detail_font_size = 0;
-    theme.typography.panel_text.font_size = 32;
-    theme.typography.panel_text.paint = crate::theme::Color::rgb(18, 34, 56);
+    theme.typography.annotations.panel_text.font_size = 32;
+    theme.typography.annotations.panel_text.paint = crate::theme::Color::rgb(18, 34, 56);
     let selected = plans(&plot, &layout, &theme).unwrap();
     assert!(selected[0].bounds.width() > original[0].bounds.width());
     assert_eq!(selected[0].text_plan.style.font_size, 32);
     assert_eq!(
         selected[0].text_plan.style.paint,
-        theme.typography.panel_text.paint
+        theme.typography.annotations.panel_text.paint
     );
     let mut ink = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
     let text = selected[0].retained_placement();

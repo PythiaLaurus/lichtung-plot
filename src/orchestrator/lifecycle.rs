@@ -148,11 +148,11 @@ mod soft_hyphen_tests {
             let mut theme = crate::Theme::Publication
                 .resolve(&crate::font::canonical::OperationGenerationResources::new())
                 .unwrap();
-            theme.typography.title.font_size = 240;
-            theme.typography.title.weight = crate::TextWeight::Bold;
+            theme.typography.root.title.font_size = 240;
+            theme.typography.root.title.weight = crate::TextWeight::Bold;
             assert_ne!(
-                theme.typography.title.weight,
-                theme.typography.tick_label.weight
+                theme.typography.root.title.weight,
+                theme.typography.axes.tick_label.weight
             );
             let plan = PlotPlan::new_with_resolved_theme(&plot, PlotKind::Scatter, theme)
                 .unwrap_or_else(|error| panic!("width {width}: {error}"));
@@ -368,7 +368,7 @@ mod natural_sizing_tests {
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        theme.typography.title.weight = crate::TextWeight::Bold;
+        theme.typography.root.title.weight = crate::TextWeight::Bold;
         let plan = PlotPlan::new_with_theme_factory(&plot, plot.kind(), (None, None), |_| {
             Ok(Box::new(theme))
         })

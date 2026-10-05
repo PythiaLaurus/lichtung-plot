@@ -196,9 +196,9 @@ pub(in crate::orchestrator) fn natural_size(
     ];
     if requested_width.is_none() {
         for (text, appearance) in sources.into_iter().zip([
-            &theme.typography.title,
-            &theme.typography.subtitle,
-            &theme.typography.caption,
+            &theme.typography.root.title,
+            &theme.typography.root.subtitle,
+            &theme.typography.root.caption,
         ]) {
             if let Some(text) = text {
                 preferred = preferred.max(text_width(theme, text, appearance)? + 32.0);

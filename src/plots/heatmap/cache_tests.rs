@@ -19,10 +19,10 @@ fn theme() -> ResolvedTheme {
         .unwrap();
     let stack = FontStack::new([FontFamily::generic(GenericFontFamily::SansSerif)]).unwrap();
     for role in [
-        &mut theme.typography.contrast_light,
-        &mut theme.typography.contrast_dark,
-        &mut theme.typography.tick_label,
-        &mut theme.typography.axis_title,
+        &mut theme.typography.annotations.contrast.light,
+        &mut theme.typography.annotations.contrast.dark,
+        &mut theme.typography.axes.tick_label,
+        &mut theme.typography.axes.axis_title,
     ] {
         role.stack = stack.clone();
     }

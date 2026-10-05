@@ -121,7 +121,7 @@ pub(super) fn plan_facet_strip(
     let plan = crate::layout::fit::measured(crate::layout::fit::text(
         theme,
         &label,
-        &theme.typography.facet_header,
+        &theme.typography.composition.facet_header,
         facet.panel.width() - 16.0,
         PhysicalTextAlignment::Center,
         "facet strip",
@@ -175,7 +175,7 @@ pub(super) fn plan_shared_facet_axis_labels(
         let plan = crate::layout::fit::measured(crate::layout::fit::text(
             theme,
             label,
-            &theme.typography.axis_title,
+            &theme.typography.axes.axis_title,
             grid.width(),
             PhysicalTextAlignment::Center,
             "shared facet x-axis title",
@@ -199,7 +199,7 @@ pub(super) fn plan_shared_facet_axis_labels(
         let plan = crate::layout::fit::measured(crate::layout::fit::text(
             theme,
             label,
-            &theme.typography.axis_title,
+            &theme.typography.axes.axis_title,
             grid.height(),
             PhysicalTextAlignment::Center,
             "shared facet y-axis title",
@@ -344,7 +344,7 @@ mod tests {
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
         theme.facet_header_font_size = 17;
-        theme.typography.axis_title.line_height_multiplier = 1.25;
+        theme.typography.axes.axis_title.line_height_multiplier = 1.25;
         let grid = PanelBox::new(71.25, 372.75, 83.25, 304.75);
         let facet = FacetPanel {
             panel_index: 0,

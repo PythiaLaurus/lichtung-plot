@@ -143,9 +143,9 @@ impl RootTitleBlockPlan {
         for ((source, appearance), widths) in sources
             .into_iter()
             .zip([
-                &theme.typography.title,
-                &theme.typography.subtitle,
-                &theme.typography.caption,
+                &theme.typography.root.title,
+                &theme.typography.root.subtitle,
+                &theme.typography.root.caption,
             ])
             .zip(&mut roles)
         {
@@ -277,9 +277,9 @@ impl RootTitleBlockPlan {
         scope: &FitScope,
     ) -> Result<(Vec<Option<ResolvedTextPlan>>, f64, f64), PlanError> {
         let appearances = [
-            &theme.typography.title,
-            &theme.typography.subtitle,
-            &theme.typography.caption,
+            &theme.typography.root.title,
+            &theme.typography.root.subtitle,
+            &theme.typography.root.caption,
         ];
         let align = [alignments.title, alignments.subtitle, alignments.caption];
         let addresses = [

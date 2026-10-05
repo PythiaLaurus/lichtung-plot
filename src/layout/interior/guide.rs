@@ -34,7 +34,7 @@ pub(crate) fn continuous_right(
     let (hard_title, natural_title) = fit::intrinsic_widths(
         theme,
         &descriptor.title,
-        &theme.typography.legend_title,
+        &theme.typography.guides.legend_title,
         "continuous guide title",
     )?;
     let mut hard = hard_title;
@@ -47,7 +47,7 @@ pub(crate) fn continuous_right(
         data.claim_source_visits(1)?;
         let plan = theme.measure_text(
             label,
-            &theme.typography.legend_label,
+            &theme.typography.guides.legend_label,
             crate::layout::PhysicalTextAlignment::Start,
             "continuous guide value",
             false,
@@ -74,7 +74,7 @@ pub(crate) fn continuous_right(
             .min(crate::layout::interior::sizing::text_width(
                 theme,
                 &descriptor.title,
-                &theme.typography.legend_title,
+                &theme.typography.guides.legend_title,
             )?)
             .max(hard)
             + 2.0 * metrics.pad

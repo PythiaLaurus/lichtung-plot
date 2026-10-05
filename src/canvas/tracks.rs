@@ -84,7 +84,7 @@ pub(super) fn allocate(
     let resources = theme.prepared_font_environment()?.generation_resources();
     let gap = required(theme.composition.canvas_grid_gap)?;
     let em = required(f64::from(theme.composition_title_font_size))?;
-    let appearance = &theme.typography.composition_header;
+    let appearance = theme.typography.composition().composition_header();
     let mut row_header_plans = Vec::new();
     crate::layout::fit::reserve(
         theme,
@@ -195,9 +195,10 @@ pub(super) fn allocate(
             };
             let spacing = &child_theme.composition.root_title_block;
             let top = if present[0] || present[1] {
-                f64::from(u32::from(present[0])) * child_theme.typography.title.line_pitch_pixels()
+                f64::from(u32::from(present[0]))
+                    * child_theme.typography.root.title.line_pitch_pixels()
                     + f64::from(u32::from(present[1]))
-                        * child_theme.typography.subtitle.line_pitch_pixels()
+                        * child_theme.typography.root.subtitle.line_pitch_pixels()
                     + if present[0] && present[1] {
                         spacing.title_subtitle_gap
                     } else {
@@ -208,7 +209,7 @@ pub(super) fn allocate(
                 0.0
             };
             let bottom = if present[2] {
-                child_theme.typography.caption.line_pitch_pixels()
+                child_theme.typography.root.caption.line_pitch_pixels()
                     + spacing.caption_to_content_clearance
             } else {
                 0.0
@@ -244,9 +245,9 @@ pub(super) fn allocate(
                     [plot.title_text(), plot.subtitle_text(), plot.caption_text()]
                         .into_iter()
                         .zip([
-                            &child_theme.typography.title,
-                            &child_theme.typography.subtitle,
-                            &child_theme.typography.caption,
+                            &child_theme.typography.root.title,
+                            &child_theme.typography.root.subtitle,
+                            &child_theme.typography.root.caption,
                         ])
                 {
                     if let Some(source) = source {
@@ -832,7 +833,7 @@ mod tests {
             span: 2,
             text: "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM".into(),
         };
-        let appearance = &themes.root().typography.composition_header;
+        let appearance = &themes.root().typography.composition.composition_header;
         let (hard, _) = crate::layout::fit::intrinsic_widths(
             themes.root(),
             &header.text,

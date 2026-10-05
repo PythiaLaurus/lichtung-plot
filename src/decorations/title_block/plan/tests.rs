@@ -151,18 +151,18 @@ fn root_role_presence_keeps_blank_lines_whitespace_and_exact_baselines() {
                     assert_eq!(
                         role.text.style.font_size,
                         [
-                            &theme.typography.title,
-                            &theme.typography.subtitle,
-                            &theme.typography.caption
+                            &theme.typography.root.title,
+                            &theme.typography.root.subtitle,
+                            &theme.typography.root.caption
                         ][index]
                             .font_size
                     );
                     assert_eq!(
                         role.text.style.paint,
                         [
-                            &theme.typography.title,
-                            &theme.typography.subtitle,
-                            &theme.typography.caption
+                            &theme.typography.root.title,
+                            &theme.typography.root.subtitle,
+                            &theme.typography.root.caption
                         ][index]
                             .paint
                     );

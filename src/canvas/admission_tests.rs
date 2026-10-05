@@ -215,8 +215,8 @@ fn post_font_canvas_intrinsics_are_scoped_once_before_allocation_and_rebuilt_for
                 .find(|(_, plan)| plan.source == label)
                 .unwrap()
                 .1;
-            assert_eq!(plan.style.paint, theme.typography.axis_title.paint);
-            assert_eq!(plan.style.stack, theme.typography.axis_title.stack);
+            assert_eq!(plan.style.paint, theme.typography.axes.axis_title.paint);
+            assert_eq!(plan.style.stack, theme.typography.axes.axis_title.stack);
         }
         let reference = preset
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
@@ -224,7 +224,7 @@ fn post_font_canvas_intrinsics_are_scoped_once_before_allocation_and_rebuilt_for
         let widths = crate::layout::fit::intrinsic_widths(
             &reference,
             title,
-            &reference.typography.title,
+            &reference.typography.root.title,
             "root title reference",
         )
         .unwrap();

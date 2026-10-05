@@ -11,8 +11,9 @@ use std::sync::{Arc, Mutex, OnceLock};
 use sha2::{Digest, Sha256};
 
 use super::{
-    DataFillTheme, DataLineTheme, DataOutlineTheme, FixedFillTheme, OutlineTheme,
-    PointOutlineTheme, PointTheme, SolidStrokeTheme, StrokeTheme,
+    AnnotationTextRoles, AxisTextRoles, CompositionTextRoles, ContrastTextRoles, DataFillTheme,
+    DataLineTheme, DataOutlineTheme, FixedFillTheme, GuideTextRoles, OutlineTheme,
+    PointOutlineTheme, PointTheme, RootTextRoles, SolidStrokeTheme, StrokeTheme, TypographyTheme,
 };
 use crate::font::canonical::{OperationGenerationResources, PreparedFontEnvironment};
 use crate::layout::{
@@ -24,7 +25,7 @@ use crate::theme::{
     AccentPalette, ColorScales, DivergingGradient, OpaqueColor, QualitativePalette,
     SequentialGradient,
 };
-use crate::{Error, SignificanceMarkStyle, TextWeight};
+use crate::{Error, TextWeight};
 
 /// Built-in axis tick-label font size in actual CSS pixels.
 const TICK_FONT_SIZE: u32 = 16;
@@ -93,8 +94,8 @@ pub(crate) struct ResolvedTheme {
     pub(crate) surfaces: super::SurfaceTheme,
     /// An explicit Plot inside Canvas composes over the Canvas owner's surface.
     pub(crate) canvas_surface_override: Option<Color>,
-    /// Complete foundational text roles.
-    pub(crate) typography: FoundationalTypography,
+    /// Complete nested semantic text roles.
+    pub(crate) typography: TypographyTheme,
     /// Legend typography-adjacent chrome with owner-local lengths.
     pub(crate) legend: LegendAppearance,
     /// Nonsemantic axis chrome and its local spacing.
@@ -655,7 +656,7 @@ impl ResolvedTheme {
         environment
             .claim_measurement_call()
             .map_err(|error| Error::Render(format!("axis intrinsic call admission: {error:?}")))?;
-        let appearance = &self.typography.tick_label;
+        let appearance = self.typography.axes().tick_label();
         let height = crate::layout::maximum_width_quanta(available_height)
             .map_err(|error| crate::Error::Render(format!("axis row height: {error}")))?;
         let count = i64::try_from(labels.len().max(1))
@@ -774,8 +775,8 @@ impl ResolvedTheme {
             self.canvas_surface_override
                 .unwrap_or(self.surfaces.canvas_root()),
             self.annotations.planning_backdrop,
-            &self.typography.contrast_light,
-            &self.typography.contrast_dark,
+            self.typography.annotations().contrast().light(),
+            self.typography.annotations().contrast().dark(),
         )
     }
 
@@ -1249,23 +1250,29 @@ impl TextTheme {
         weight: TextWeight,
         line_height: f64,
     ) -> Result<Self, Error> {
-        if font_size == 0 {
-            return Err(Error::Data(
-                "text font size must be positive CSS pixels".into(),
-            ));
-        }
-        if !line_height.is_finite() || line_height <= 0.0 {
-            return Err(Error::Data(
-                "text line height must be a finite positive multiplier".into(),
-            ));
-        }
-        Ok(Self {
+        let value = Self {
             stack,
             paint: color,
             font_size,
             weight,
             line_height_multiplier: line_height,
-        })
+        };
+        value.validate()?;
+        Ok(value)
+    }
+
+    pub(crate) fn validate(&self) -> Result<(), Error> {
+        if self.font_size == 0 {
+            return Err(Error::Data(
+                "text font size must be positive CSS pixels".into(),
+            ));
+        }
+        if !self.line_height_multiplier.is_finite() || self.line_height_multiplier <= 0.0 {
+            return Err(Error::Data(
+                "text line height must be a finite positive multiplier".into(),
+            ));
+        }
+        Ok(())
     }
 
     pub(crate) fn stack(&self) -> &crate::font::canonical::FontStack {
@@ -1391,40 +1398,6 @@ impl TextTheme {
     }
 }
 
-/// Foundational role-based typography resolved before measurement.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct FoundationalTypography {
-    /// Root and panel title role.
-    pub(crate) title: TextTheme,
-    /// Root and panel subtitle role.
-    pub(crate) subtitle: TextTheme,
-    /// Root caption role.
-    pub(crate) caption: TextTheme,
-    /// X- and y-axis title role.
-    pub(crate) axis_title: TextTheme,
-    /// X- and y-axis tick-label role.
-    pub(crate) tick_label: TextTheme,
-    /// Significance-label default before an exact caller override.
-    pub(crate) significance_label: TextTheme,
-    /// Estimate value labels and the required not-estimable marker.
-    pub(crate) estimate_detail: TextTheme,
-    /// Required Waterfall start/end total labels.
-    pub(crate) waterfall_total: TextTheme,
-    /// Supplemental line point labels; exact layer paint overrides only color.
-    pub(crate) point_layer_label: TextTheme,
-    /// Caller-owned text inside one plot panel.
-    pub(crate) panel_text: TextTheme,
-    /// Complete candidates selected over a variable fill before font discovery.
-    pub(crate) contrast_light: TextTheme,
-    pub(crate) contrast_dark: TextTheme,
-    pub(crate) legend_title: TextTheme,
-    pub(crate) legend_label: TextTheme,
-    pub(crate) facet_header: TextTheme,
-    pub(crate) composition_header: TextTheme,
-    pub(crate) text_panel_title: TextTheme,
-    pub(crate) body: TextTheme,
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct LegendAppearance {
     pub(crate) padding: f64,
@@ -1441,46 +1414,6 @@ pub(crate) struct LegendAppearance {
     pub(crate) frame_outline: Color,
     pub(crate) frame_stroke_width: f32,
     pub(crate) frame_radius: f64,
-}
-
-impl FoundationalTypography {
-    pub(crate) fn roles(&self) -> [&TextTheme; 18] {
-        [
-            &self.title,
-            &self.subtitle,
-            &self.caption,
-            &self.axis_title,
-            &self.tick_label,
-            &self.significance_label,
-            &self.estimate_detail,
-            &self.waterfall_total,
-            &self.point_layer_label,
-            &self.panel_text,
-            &self.contrast_light,
-            &self.contrast_dark,
-            &self.legend_title,
-            &self.legend_label,
-            &self.facet_header,
-            &self.composition_header,
-            &self.text_panel_title,
-            &self.body,
-        ]
-    }
-    /// Resolve the effective significance-label typography while preserving an
-    /// exact caller size and weight over the theme defaults.
-    pub(crate) fn effective_significance_label(
-        &self,
-        exact: Option<SignificanceMarkStyle>,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<TextTheme, Error> {
-        let mut effective = self.significance_label.copy_with_generation(resources)?;
-        if let Some(exact) = exact {
-            effective = effective
-                .with_font_size(exact.font_size_spec())?
-                .with_weight(exact.weight_spec())?;
-        }
-        Ok(effective)
-    }
 }
 
 /// Mark strokes are independent of structurally similar axis chrome.
@@ -1766,38 +1699,50 @@ fn resolved_theme(
         facet_header_font_size: subtitle_font_size,
         surfaces: SurfaceTheme::new(Color::rgb(255, 255, 255), Color::rgb(255, 255, 255))?,
         canvas_surface_override: None,
-        typography: FoundationalTypography {
-            title: text(
-                foreground_paint,
-                title_font_size,
-                plus_six_line_height(title_font_size),
+        typography: TypographyTheme::new(
+            RootTextRoles::new(
+                text(
+                    foreground_paint,
+                    title_font_size,
+                    plus_six_line_height(title_font_size),
+                )?,
+                text(
+                    muted_paint,
+                    subtitle_font_size,
+                    plus_six_line_height(subtitle_font_size),
+                )?,
+                text(
+                    muted_paint,
+                    caption_font_size,
+                    plus_six_line_height(caption_font_size),
+                )?,
             )?,
-            subtitle: text(
-                muted_paint,
-                subtitle_font_size,
-                plus_six_line_height(subtitle_font_size),
+            AxisTextRoles::new(
+                text(foreground_paint, axis_title_font_size, 1.2)?,
+                text(foreground_paint, TICK_FONT_SIZE, 1.2)?,
             )?,
-            caption: text(
-                muted_paint,
-                caption_font_size,
-                plus_six_line_height(caption_font_size),
+            GuideTextRoles::new(
+                text(Color::rgb(60, 60, 60), 12, 1.2)?,
+                text(Color::rgb(40, 40, 40), 11, 1.2)?,
             )?,
-            axis_title: text(foreground_paint, axis_title_font_size, 1.2)?,
-            tick_label: text(foreground_paint, TICK_FONT_SIZE, 1.2)?,
-            significance_label: text(foreground_paint, SIGNIFICANCE_FONT_SIZE, 1.2)?,
-            estimate_detail: text(foreground_paint, 14, 1.2)?,
-            waterfall_total: text(foreground_paint, 14, 1.2)?,
-            point_layer_label: text(foreground_paint, 10, 1.2)?,
-            panel_text: text(foreground_paint, 14, 1.2)?,
-            contrast_light: text(Color::rgb(255, 255, 255), 11, 1.2)?,
-            contrast_dark: text(Color::rgb(0, 0, 0), 11, 1.2)?,
-            legend_title: text(Color::rgb(60, 60, 60), 12, 1.2)?,
-            legend_label: text(Color::rgb(40, 40, 40), 11, 1.2)?,
-            facet_header: text(foreground_paint, subtitle_font_size, 1.2)?,
-            composition_header: text(foreground_paint, title_font_size, 1.2)?,
-            text_panel_title: text(foreground_paint, title_font_size, 1.2)?,
-            body: text(foreground_paint, axis_title_font_size, 1.2)?,
-        },
+            CompositionTextRoles::new(
+                text(foreground_paint, subtitle_font_size, 1.2)?,
+                text(foreground_paint, title_font_size, 1.2)?,
+                text(foreground_paint, title_font_size, 1.2)?,
+                text(foreground_paint, axis_title_font_size, 1.2)?,
+            )?,
+            AnnotationTextRoles::new(
+                text(foreground_paint, SIGNIFICANCE_FONT_SIZE, 1.2)?,
+                text(foreground_paint, 14, 1.2)?,
+                text(foreground_paint, 14, 1.2)?,
+                text(foreground_paint, 10, 1.2)?,
+                text(foreground_paint, 14, 1.2)?,
+                ContrastTextRoles::new(
+                    text(Color::rgb(255, 255, 255), 11, 1.2)?,
+                    text(Color::rgb(0, 0, 0), 11, 1.2)?,
+                )?,
+            )?,
+        )?,
         legend: LegendAppearance {
             padding: 8.8,
             key_width: 11.0,
@@ -2022,6 +1967,7 @@ fn chi_theme(resources: &OperationGenerationResources) -> Result<ResolvedTheme, 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::SignificanceMarkStyle;
 
     #[test]
     fn text_theme_construction_and_edits_preserve_complete_independent_inputs() {
@@ -2317,38 +2263,58 @@ mod tests {
             )
             .unwrap(),
             canvas_surface_override: None,
-            typography: FoundationalTypography {
-                title: text(
-                    foreground,
-                    expected.title_size,
-                    (f64::from(expected.title_size) + 6.0) / f64::from(expected.title_size),
-                ),
-                subtitle: text(
-                    Color::rgb(80, 80, 80),
-                    expected.subtitle_size,
-                    (f64::from(expected.subtitle_size) + 6.0) / f64::from(expected.subtitle_size),
-                ),
-                caption: text(
-                    Color::rgb(80, 80, 80),
-                    expected.caption_size,
-                    (f64::from(expected.caption_size) + 6.0) / f64::from(expected.caption_size),
-                ),
-                axis_title: text(foreground, expected.axis_title_size, 1.2),
-                tick_label: text(foreground, 16, 1.2),
-                significance_label: text(foreground, 16, 1.2),
-                estimate_detail: text(foreground, 14, 1.2),
-                waterfall_total: text(foreground, 14, 1.2),
-                point_layer_label: text(foreground, 10, 1.2),
-                panel_text: text(foreground, 14, 1.2),
-                contrast_light: text(Color::rgb(255, 255, 255), 11, 1.2),
-                contrast_dark: text(Color::rgb(0, 0, 0), 11, 1.2),
-                legend_title: text(Color::rgb(60, 60, 60), 12, 1.2),
-                legend_label: text(Color::rgb(40, 40, 40), 11, 1.2),
-                facet_header: text(foreground, expected.subtitle_size, 1.2),
-                composition_header: text(foreground, expected.title_size, 1.2),
-                text_panel_title: text(foreground, expected.title_size, 1.2),
-                body: text(foreground, expected.axis_title_size, 1.2),
-            },
+            typography: TypographyTheme::new(
+                RootTextRoles::new(
+                    text(
+                        foreground,
+                        expected.title_size,
+                        (f64::from(expected.title_size) + 6.0) / f64::from(expected.title_size),
+                    ),
+                    text(
+                        Color::rgb(80, 80, 80),
+                        expected.subtitle_size,
+                        (f64::from(expected.subtitle_size) + 6.0)
+                            / f64::from(expected.subtitle_size),
+                    ),
+                    text(
+                        Color::rgb(80, 80, 80),
+                        expected.caption_size,
+                        (f64::from(expected.caption_size) + 6.0) / f64::from(expected.caption_size),
+                    ),
+                )
+                .unwrap(),
+                AxisTextRoles::new(
+                    text(foreground, expected.axis_title_size, 1.2),
+                    text(foreground, 16, 1.2),
+                )
+                .unwrap(),
+                GuideTextRoles::new(
+                    text(Color::rgb(60, 60, 60), 12, 1.2),
+                    text(Color::rgb(40, 40, 40), 11, 1.2),
+                )
+                .unwrap(),
+                CompositionTextRoles::new(
+                    text(foreground, expected.subtitle_size, 1.2),
+                    text(foreground, expected.title_size, 1.2),
+                    text(foreground, expected.title_size, 1.2),
+                    text(foreground, expected.axis_title_size, 1.2),
+                )
+                .unwrap(),
+                AnnotationTextRoles::new(
+                    text(foreground, 16, 1.2),
+                    text(foreground, 14, 1.2),
+                    text(foreground, 14, 1.2),
+                    text(foreground, 10, 1.2),
+                    text(foreground, 14, 1.2),
+                    ContrastTextRoles::new(
+                        text(Color::rgb(255, 255, 255), 11, 1.2),
+                        text(Color::rgb(0, 0, 0), 11, 1.2),
+                    )
+                    .unwrap(),
+                )
+                .unwrap(),
+            )
+            .unwrap(),
             legend: LegendAppearance {
                 padding: 8.8,
                 key_width: 11.0,
@@ -2645,24 +2611,24 @@ mod tests {
         for theme in BUILT_IN_THEMES {
             let resolved = theme.resolve(&OperationGenerationResources::new()).unwrap();
             let text_roles = [
-                &resolved.typography.title,
-                &resolved.typography.subtitle,
-                &resolved.typography.caption,
-                &resolved.typography.axis_title,
-                &resolved.typography.tick_label,
-                &resolved.typography.significance_label,
-                &resolved.typography.estimate_detail,
-                &resolved.typography.waterfall_total,
-                &resolved.typography.point_layer_label,
-                &resolved.typography.panel_text,
-                &resolved.typography.contrast_light,
-                &resolved.typography.contrast_dark,
-                &resolved.typography.legend_title,
-                &resolved.typography.legend_label,
-                &resolved.typography.facet_header,
-                &resolved.typography.composition_header,
-                &resolved.typography.text_panel_title,
-                &resolved.typography.body,
+                &resolved.typography.root.title,
+                &resolved.typography.root.subtitle,
+                &resolved.typography.root.caption,
+                &resolved.typography.axes.axis_title,
+                &resolved.typography.axes.tick_label,
+                &resolved.typography.annotations.significance_label,
+                &resolved.typography.annotations.estimate_detail,
+                &resolved.typography.annotations.waterfall_total,
+                &resolved.typography.annotations.point_layer_label,
+                &resolved.typography.annotations.panel_text,
+                &resolved.typography.annotations.contrast.light,
+                &resolved.typography.annotations.contrast.dark,
+                &resolved.typography.guides.legend_title,
+                &resolved.typography.guides.legend_label,
+                &resolved.typography.composition.facet_header,
+                &resolved.typography.composition.composition_header,
+                &resolved.typography.composition.text_panel_title,
+                &resolved.typography.composition.body,
             ];
 
             assert!(
@@ -2711,12 +2677,21 @@ mod tests {
                 resolved.surfaces.plot_panel,
                 Color::rgba(255, 255, 255, 255)
             );
-            assert_eq!(resolved.typography.title.paint, foreground);
-            assert_eq!(resolved.typography.subtitle.paint, Color::rgb(80, 80, 80));
-            assert_eq!(resolved.typography.caption.paint, Color::rgb(80, 80, 80));
-            assert_eq!(resolved.typography.axis_title.paint, foreground);
-            assert_eq!(resolved.typography.tick_label.paint, foreground);
-            assert_eq!(resolved.typography.significance_label.paint, foreground);
+            assert_eq!(resolved.typography.root.title.paint, foreground);
+            assert_eq!(
+                resolved.typography.root.subtitle.paint,
+                Color::rgb(80, 80, 80)
+            );
+            assert_eq!(
+                resolved.typography.root.caption.paint,
+                Color::rgb(80, 80, 80)
+            );
+            assert_eq!(resolved.typography.axes.axis_title.paint, foreground);
+            assert_eq!(resolved.typography.axes.tick_label.paint, foreground);
+            assert_eq!(
+                resolved.typography.annotations.significance_label.paint,
+                foreground
+            );
         }
     }
 
@@ -2762,8 +2737,8 @@ mod tests {
             2.25_f32.to_bits()
         );
         assert_eq!(
-            theme.typography.significance_label,
-            original.typography.significance_label
+            theme.typography.annotations.significance_label,
+            original.typography.annotations.significance_label
         );
         assert_eq!(theme.axes, original.axes);
         assert_eq!(theme.marks, original.marks);
@@ -2797,12 +2772,12 @@ mod tests {
         let fill = Color::rgba(0, 0, 0, 0);
         assert_eq!(
             theme.contrasting_text(fill).unwrap(),
-            &theme.typography.contrast_light
+            &theme.typography.annotations.contrast.light
         );
         theme.canvas_surface_override = Some(Color::rgb(255, 255, 255));
         assert_eq!(
             theme.contrasting_text(fill).unwrap(),
-            &theme.typography.contrast_dark
+            &theme.typography.annotations.contrast.dark
         );
     }
 
@@ -2872,15 +2847,19 @@ mod tests {
                 .resolve(&OperationGenerationResources::new())
                 .unwrap()
                 .typography;
-            for role in [&typography.title, &typography.subtitle, &typography.caption] {
+            for role in [
+                &typography.root.title,
+                &typography.root.subtitle,
+                &typography.root.caption,
+            ] {
                 let pitch = role.line_height_multiplier * f64::from(role.font_size);
                 let expected = f64::from(role.font_size) + 6.0;
                 assert!((pitch - expected).abs() < 1.0e-12, "{theme:?}");
             }
             for role in [
-                &typography.axis_title,
-                &typography.tick_label,
-                &typography.significance_label,
+                &typography.axes.axis_title,
+                &typography.axes.tick_label,
+                &typography.annotations.significance_label,
             ] {
                 assert!(
                     (role.line_height_multiplier - 1.2).abs() < f64::EPSILON,
@@ -3058,13 +3037,13 @@ mod tests {
         let normal = theme
             .measure_text(
                 "Minimum WWW maximum",
-                &theme.typography.title,
+                &theme.typography.root.title,
                 PhysicalTextAlignment::Center,
                 "title",
                 false,
             )
             .unwrap();
-        let mut bold_role = theme.typography.title.clone();
+        let mut bold_role = theme.typography.root.title.clone();
         bold_role.weight = TextWeight::Bold;
         let bold = theme
             .measure_text(
@@ -3102,7 +3081,7 @@ mod tests {
         let plan = theme
             .plan_text(
                 "planned text",
-                &theme.typography.title,
+                &theme.typography.root.title,
                 300.0,
                 PhysicalTextAlignment::Center,
                 "title",
@@ -3115,7 +3094,7 @@ mod tests {
         assert!(theme
             .plan_text(
                 "indivisible",
-                &theme.typography.title,
+                &theme.typography.root.title,
                 1.0,
                 PhysicalTextAlignment::Center,
                 "title",
@@ -3134,7 +3113,7 @@ mod tests {
             .resolve(&OperationGenerationResources::new())
             .unwrap();
         child.share_font_environment_from(&root);
-        let appearance = &root.typography.title;
+        let appearance = &root.typography.root.title;
         let first = root
             .plan_text(
                 "Measured responses",
@@ -3209,7 +3188,7 @@ mod tests {
         root.font_environment
             .set(Ok(PreparedFontEnvironment::synthetic()))
             .unwrap();
-        let mut appearance = root.typography.caption.clone();
+        let mut appearance = root.typography.root.caption.clone();
         appearance.stack = crate::font::canonical::named_stack(&["Test Sans"]);
         appearance.font_size = 10;
         let first = root
@@ -3322,7 +3301,7 @@ mod tests {
         let environment = root.prepared_font_environment().unwrap();
         let resources = environment.generation_resources();
         environment.share_generation_resources(&resources).unwrap();
-        let mut appearance = root.typography.caption.clone();
+        let mut appearance = root.typography.root.caption.clone();
         appearance.stack = crate::font::canonical::named_stack(&["Test Sans"]);
         appearance.font_size = 10;
         let mut first = None;
@@ -3473,6 +3452,7 @@ mod tests {
             .resolve(&OperationGenerationResources::new())
             .unwrap()
             .typography
+            .root
             .caption;
         let input = indexed_query_input("A", &appearance, "owner");
         let resources = crate::font::canonical::OperationGenerationResources::new();
@@ -3531,6 +3511,7 @@ mod tests {
                 .resolve(&OperationGenerationResources::new())
                 .unwrap()
                 .typography
+                .root
                 .caption
         };
         let input = indexed_query_input("A", &appearance, "owner");
@@ -3560,7 +3541,7 @@ mod tests {
         let appearance = TextTheme {
             stack: named_stack(&["Test Sans"]),
             font_size: 10,
-            ..theme.typography.caption.clone()
+            ..theme.typography.root.caption.clone()
         };
         let first = theme
             .plan_text(
@@ -3669,7 +3650,7 @@ mod tests {
         let mut appearance = TextTheme {
             stack: named_stack(&["A, B"]),
             font_size: 10,
-            ..theme.typography.caption.clone()
+            ..theme.typography.root.caption.clone()
         };
         let source = "A ".repeat(128);
         let environment = theme.prepared_font_environment().unwrap();
@@ -3768,7 +3749,7 @@ mod tests {
         let appearance = TextTheme {
             stack: crate::font::canonical::named_stack(&["Literal"]),
             font_size: 10,
-            ..theme.typography.caption.clone()
+            ..theme.typography.root.caption.clone()
         };
         let mut source = String::with_capacity(16);
         source.push('A');
@@ -3806,7 +3787,7 @@ mod tests {
         let mut theme = Theme::Publication
             .resolve(&OperationGenerationResources::new())
             .unwrap();
-        theme.typography.significance_label.stack = named_stack(&["αX", "A, B"]);
+        theme.typography.annotations.significance_label.stack = named_stack(&["αX", "A, B"]);
         let bytes = 2 * size_of::<FontFamily>()
             + 3
             + 4
@@ -3826,7 +3807,10 @@ mod tests {
                 .effective_significance_label(Some(exact), &resources);
             if visits == work && limit == bytes {
                 let result = result.unwrap();
-                assert_eq!(result.stack, theme.typography.significance_label.stack);
+                assert_eq!(
+                    result.stack,
+                    theme.typography.annotations.significance_label.stack
+                );
                 assert_eq!(result.font_size, 23);
                 assert_eq!(result.weight, TextWeight::Bold);
                 assert_eq!(resources.byte_usage().unwrap(), bytes as u64);
@@ -3853,7 +3837,7 @@ mod tests {
         let mut theme = Theme::Publication
             .resolve(&OperationGenerationResources::new())
             .unwrap();
-        theme.typography.title.stack = named_stack(&["αX", "A, B"]);
+        theme.typography.root.title.stack = named_stack(&["αX", "A, B"]);
         let roles = theme.typography.roles();
         assert_eq!(roles.len(), 18);
         let bytes = 0_u64; // all palette/gradient payloads and font entries are immutable shares
@@ -3907,7 +3891,7 @@ mod tests {
             assert_eq!(resources.usage().unwrap().1, remaining as u128);
             assert_eq!(resources.byte_usage().unwrap(), 0);
         }
-        retained.typography.title.stack = named_stack(&["A, B"]);
+        retained.typography.root.title.stack = named_stack(&["A, B"]);
         let resources = OperationGenerationResources::with_test_limits(5, 0);
         assert!(!retained.same(&theme, &resources).unwrap());
         assert_eq!(resources.usage().unwrap().1, 5); // four scale handles, then differing font entry count
@@ -3922,7 +3906,8 @@ mod tests {
             root.font_environment
                 .set(Ok(PreparedFontEnvironment::synthetic()))
                 .unwrap();
-            root.typography.tick_label.stack = crate::font::canonical::named_stack(&["Test Sans"]);
+            root.typography.axes.tick_label.stack =
+                crate::font::canonical::named_stack(&["Test Sans"]);
             let query = || {
                 if intrinsic {
                     root.intrinsic_tick_label_width(["A"].into_iter(), 100.0)
@@ -3930,7 +3915,7 @@ mod tests {
                 } else {
                     root.measure_text(
                         "A",
-                        &root.typography.tick_label,
+                        &root.typography.axes.tick_label,
                         PhysicalTextAlignment::Start,
                         "call boundary",
                         false,
@@ -3974,7 +3959,7 @@ mod tests {
         root.font_environment
             .set(Ok(PreparedFontEnvironment::synthetic()))
             .unwrap();
-        let mut appearance = root.typography.caption.clone();
+        let mut appearance = root.typography.root.caption.clone();
         appearance.stack = crate::font::canonical::named_stack(&["Test Sans"]);
         let first = root
             .measure_text(

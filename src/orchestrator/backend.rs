@@ -1627,7 +1627,7 @@ mod tests {
     }
 
     fn replay_text_style(theme: &crate::theme::ResolvedTheme) -> TextStyle {
-        let title = &theme.typography.title;
+        let title = &theme.typography.root.title;
         TextStyle {
             color: title.paint,
             font_family: title.stack.clone(),
@@ -1760,7 +1760,7 @@ mod tests {
             ] {
                 let plan = theme.measure_text(
                     source,
-                    &theme.typography.title,
+                    &theme.typography.root.title,
                     alignment,
                     "canonical text",
                     false,
@@ -1795,7 +1795,7 @@ mod tests {
                         color: Color::rgb(1, 2, 3),
                         label_color: Color::rgb(4, 5, 6),
                         width: 0.8,
-                        font_family: theme.typography.title.stack.clone(),
+                        font_family: theme.typography.root.title.stack.clone(),
                         font_size: 12,
                         line_height: 14.4,
                         weight: crate::TextWeight::Normal,
@@ -1848,7 +1848,7 @@ mod tests {
         let plan = theme
             .measure_text(
                 "A",
-                &theme.typography.title,
+                &theme.typography.root.title,
                 PhysicalTextAlignment::Start,
                 "absolute text",
                 false,
@@ -1907,7 +1907,7 @@ mod tests {
         let plan = theme
             .measure_text(
                 "A",
-                &theme.typography.title,
+                &theme.typography.root.title,
                 PhysicalTextAlignment::Start,
                 "text admission",
                 false,
@@ -2095,7 +2095,7 @@ mod tests {
                 color: Color::rgb(1, 2, 3),
                 label_color: Color::rgb(3, 2, 1),
                 width: 0.8,
-                font_family: theme.typography.title.stack.clone(),
+                font_family: theme.typography.root.title.stack.clone(),
                 font_size: 12,
                 line_height: 14.4,
                 weight: crate::TextWeight::Normal,
@@ -2730,7 +2730,7 @@ mod tests {
         let resolved = theme
             .measure_text(
                 "**",
-                &theme.typography.significance_label,
+                &theme.typography.annotations.significance_label,
                 PhysicalTextAlignment::Center,
                 "test significance label",
                 true,
@@ -2789,7 +2789,7 @@ mod tests {
         let resolved = theme
             .measure_text(
                 "A",
-                &theme.typography.significance_label,
+                &theme.typography.annotations.significance_label,
                 PhysicalTextAlignment::Center,
                 "bracket overflow",
                 true,
@@ -2850,7 +2850,7 @@ mod tests {
             color: Color::rgb(0, 0, 0),
             label_color: Color::rgb(1, 2, 3),
             width: 1.0,
-            font_family: theme.typography.title.stack.clone(),
+            font_family: theme.typography.root.title.stack.clone(),
             font_size: 12,
             line_height: 14.4,
             weight: crate::TextWeight::Semibold,

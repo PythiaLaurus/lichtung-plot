@@ -569,7 +569,7 @@ fn canonical_label_fit_accepts_touching_ink_and_rejects_one_quantum_beyond() {
         let text = theme
             .measure_text(
                 "1",
-                &theme.typography.tick_label,
+                &theme.typography.axes.tick_label,
                 PhysicalTextAlignment::Center,
                 "boundary label",
                 false,
@@ -699,7 +699,7 @@ fn automatic_selection_and_frozen_axis_agree_at_quantum_fit_boundary() {
                 let candidate = theme
                     .measure_text(
                         &text.source,
-                        &theme.typography.tick_label,
+                        &theme.typography.axes.tick_label,
                         match side {
                             AxisSide::Bottom => PhysicalTextAlignment::Center,
                             AxisSide::Left => PhysicalTextAlignment::End,

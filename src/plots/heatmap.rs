@@ -174,7 +174,7 @@ fn assigned_columns(
         hard[index % count] = hard[index % count].max(widths.0 + 6.0);
     }
     let preferred = crate::layout::kernel::ceil_spatial_quanta(
-        2.0 * f64::from(theme.typography.tick_label.font_size),
+        2.0 * f64::from(theme.typography.axes.tick_label.font_size),
     )?;
     let base = data.collect_source(hard.into_iter().map(|width| {
         let min = crate::layout::kernel::ceil_spatial_quanta(width)?;
@@ -251,7 +251,7 @@ fn assigned_rows(
         let text = crate::layout::fit::measured(crate::layout::fit::text(
             theme,
             label,
-            &theme.typography.tick_label,
+            &theme.typography.axes.tick_label,
             tick_width,
             PhysicalTextAlignment::End,
             "y-axis tick label",
@@ -281,7 +281,7 @@ fn assigned_rows(
         .map(|pair| pair[1] - pair[0])
         .fold(0.0_f64, f64::max);
     let preferred = crate::layout::kernel::ceil_spatial_quanta(
-        square.max(2.0 * f64::from(theme.typography.tick_label.font_size)),
+        square.max(2.0 * f64::from(theme.typography.axes.tick_label.font_size)),
     )?;
     let base = data.collect_source(hard.into_iter().map(|height| {
         let min = crate::layout::kernel::ceil_spatial_quanta(height)?;
@@ -548,16 +548,16 @@ impl HeatmapIntrinsicCache {
         Ok(self.color_scale.same(&prepared.color.scale, resources)?
             && self
                 .contrast_light
-                .same(&theme.typography.contrast_light, resources)?
+                .same(&theme.typography.annotations.contrast.light, resources)?
             && self
                 .contrast_dark
-                .same(&theme.typography.contrast_dark, resources)?
+                .same(&theme.typography.annotations.contrast.dark, resources)?
             && self
                 .tick_label
-                .same(&theme.typography.tick_label, resources)?
+                .same(&theme.typography.axes.tick_label, resources)?
             && self
                 .axis_title
-                .same(&theme.typography.axis_title, resources)?
+                .same(&theme.typography.axes.axis_title, resources)?
             && self.plot_panel == theme.surfaces.plot_panel
             && self.canvas_root == theme.surfaces.canvas_root
             && self.canvas_override == theme.canvas_surface_override
@@ -594,10 +594,10 @@ impl HeatmapIntrinsicCache {
             minimum,
             without_y_labels,
             color_scale,
-            contrast_light: text(&theme.typography.contrast_light)?,
-            contrast_dark: text(&theme.typography.contrast_dark)?,
-            tick_label: text(&theme.typography.tick_label)?,
-            axis_title: text(&theme.typography.axis_title)?,
+            contrast_light: text(&theme.typography.annotations.contrast.light)?,
+            contrast_dark: text(&theme.typography.annotations.contrast.dark)?,
+            tick_label: text(&theme.typography.axes.tick_label)?,
+            axis_title: text(&theme.typography.axes.axis_title)?,
             plot_panel: theme.surfaces.plot_panel,
             canvas_root: theme.surfaces.canvas_root,
             canvas_override: theme.canvas_surface_override,
@@ -640,7 +640,7 @@ pub(crate) fn natural_body_preference(
 ) -> Result<(f64, f64), Error> {
     let marks = retained_in(chart, theme)?;
     let hard = intrinsic_body_minimum(chart, theme)?;
-    let pitch = 2.0 * f64::from(theme.typography.tick_label.font_size);
+    let pitch = 2.0 * f64::from(theme.typography.axes.tick_label.font_size);
     Ok((
         hard.0.max(pitch * marks.x_levels.len() as f64),
         hard.1.max(pitch * marks.y_levels.len() as f64),
@@ -682,7 +682,7 @@ pub(crate) fn natural_body_height(
     )
     .map_err(crate::layout::fit::PlanError::into_error)?;
     let preferred = columns.windows(2).map(|edge| edge[1] - edge[0]).fold(
-        2.0 * f64::from(theme.typography.tick_label.font_size),
+        2.0 * f64::from(theme.typography.axes.tick_label.font_size),
         f64::max,
     );
     let mut heights = data.collect_source(marks.y_levels.iter().map(|_| Ok(preferred)))?;
@@ -813,21 +813,21 @@ fn column_label_hard(
         crate::layout::fit::intrinsic_widths(
             theme,
             label,
-            &theme.typography.tick_label,
+            &theme.typography.axes.tick_label,
             "Heatmap category intrinsic",
         )?
         .0
     } else {
         let full = theme.measure_text(
             label,
-            &theme.typography.tick_label,
+            &theme.typography.axes.tick_label,
             PhysicalTextAlignment::Center,
             "Heatmap category intrinsic",
             false,
         )?;
         let ellipsis = theme.measure_text(
             "...",
-            &theme.typography.tick_label,
+            &theme.typography.axes.tick_label,
             PhysicalTextAlignment::Center,
             "Heatmap ellipsis intrinsic",
             false,
@@ -901,7 +901,7 @@ fn analyze_intrinsics(
         data.claim_source_visits(1)?;
         let plan = theme.measure_text(
             label,
-            &theme.typography.tick_label,
+            &theme.typography.axes.tick_label,
             PhysicalTextAlignment::End,
             "Heatmap row intrinsic",
             false,
@@ -981,7 +981,7 @@ fn analyze_intrinsics(
         let hard = crate::layout::fit::intrinsic_widths(
             theme,
             title,
-            &theme.typography.axis_title,
+            &theme.typography.axes.axis_title,
             "Heatmap axis title intrinsic",
         )?
         .0;
@@ -1095,7 +1095,7 @@ pub(crate) fn measure(
         for label in &y_labels {
             let plan = theme.measure_text(
                 label,
-                &theme.typography.tick_label,
+                &theme.typography.axes.tick_label,
                 PhysicalTextAlignment::End,
                 "y-axis category label",
                 false,
@@ -2048,7 +2048,7 @@ fn required_heatmap_cell_text_must_fit_its_unclipped_cell() {
     let text = theme
         .measure_legacy_appearance_text(
             "Required",
-            &theme.typography.contrast_dark,
+            &theme.typography.annotations.contrast.dark,
             crate::layout::PhysicalTextAlignment::Center,
             "heatmap cell annotation",
             false,
@@ -2406,7 +2406,7 @@ fn fitted_label(
         theme
             .measure_text(
                 text,
-                &theme.typography.tick_label,
+                &theme.typography.axes.tick_label,
                 PhysicalTextAlignment::End,
                 "heatmap category label",
                 false,

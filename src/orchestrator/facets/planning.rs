@@ -112,7 +112,7 @@ pub(super) fn shared_axis_requirements(
             let plan = crate::layout::fit::measured(crate::layout::fit::text(
                 theme,
                 source,
-                &theme.typography.axis_title,
+                &theme.typography.axes.axis_title,
                 span,
                 PhysicalTextAlignment::Center,
                 "shared facet axis title",
@@ -304,7 +304,7 @@ pub(super) fn native_parent(
                 fit::FitFailure::retain_least(&mut child_miss, reason);
             }
             let label = facet_label(&panel_plot, &facet.cell, data)?;
-            let appearance = &theme.typography.facet_header;
+            let appearance = &theme.typography.composition.facet_header;
             let strip_scope = scope
                 .child(AddressRole::FacetCell, index, &resources)?
                 .child(AddressRole::FacetHeader, 0, &resources)?;

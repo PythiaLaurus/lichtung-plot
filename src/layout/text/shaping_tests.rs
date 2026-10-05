@@ -31,7 +31,7 @@ fn typography_performance_evidence_and_root_cache_budgets() {
             "{name} setup_us={} initial={:?} stack={:?}",
             setup.elapsed().as_micros(),
             environment.resource_usage().unwrap(),
-            theme.typography.caption.stack
+            theme.typography.root.caption.stack
         );
         let mut first: Option<ResolvedTextPlan> = None;
         let mut cold_work = 0;
@@ -49,7 +49,7 @@ fn typography_performance_evidence_and_root_cache_budgets() {
             let start = std::time::Instant::now();
             let result = theme.plan_text(
                 &source,
-                &theme.typography.caption,
+                &theme.typography.root.caption,
                 width,
                 PhysicalTextAlignment::Start,
                 "performance caption",

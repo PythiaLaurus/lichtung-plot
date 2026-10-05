@@ -474,7 +474,7 @@ fn final_guides_ticks_and_invalid_tuples_precede_unavailable_fonts() {
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        theme.typography.tick_label.stack =
+        theme.typography.axes.tick_label.stack =
             crate::font::canonical::named_stack(&["T5a6a3c unavailable font 91f7"]);
         crate::layout::plan_exact_root(
             640,

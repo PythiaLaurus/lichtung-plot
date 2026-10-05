@@ -578,7 +578,7 @@ fn numeric_source_resource_and_font_failures_remain_fatal() {
     let mut theme = crate::Theme::Publication
         .resolve(&OperationGenerationResources::new())
         .unwrap();
-    theme.typography.tick_label.font_size = 0;
+    theme.typography.axes.tick_label.font_size = 0;
     assert!(matches!(
         numeric_tick_plan(
             (1.1, 1.2),

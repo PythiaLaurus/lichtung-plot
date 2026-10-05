@@ -156,7 +156,7 @@ pub(crate) fn intrinsic_body_minimum(
         }
         let plan = theme.measure_text(
             text,
-            &theme.typography.waterfall_total,
+            &theme.typography.annotations.waterfall_total,
             PhysicalTextAlignment::Center,
             "Waterfall total shelf intrinsic",
             false,
@@ -210,7 +210,9 @@ pub(crate) fn natural_body_height(
             .1,
     );
     Ok(hard
-        .max(2.0 * f64::from(theme.typography.tick_label.font_size) * marks.labels.len() as f64)
+        .max(
+            2.0 * f64::from(theme.typography.axes.tick_label.font_size) * marks.labels.len() as f64,
+        )
         .max(3.0 * width / 4.0)
         + plan.height)
 }
@@ -368,7 +370,7 @@ pub(crate) fn measure(
             let plan = crate::layout::fit::measured(crate::layout::fit::text(
                 theme,
                 label,
-                &theme.typography.tick_label,
+                &theme.typography.axes.tick_label,
                 width,
                 PhysicalTextAlignment::End,
                 "y-axis tick label",
@@ -381,7 +383,7 @@ pub(crate) fn measure(
     }
     let min = crate::layout::kernel::ceil_spatial_quanta(pitch)?;
     let preferred = min.max(crate::layout::kernel::ceil_spatial_quanta(
-        2.0 * f64::from(theme.typography.tick_label.font_size),
+        2.0 * f64::from(theme.typography.axes.tick_label.font_size),
     )?);
     let specs = data.collect_source(labels.iter().map(|_| {
         Ok(crate::layout::kernel::TrackSpec {
@@ -803,7 +805,7 @@ fn plan_annotations(
         let text_plan = producer.plan(text, "waterfall total annotation", || {
             Ok(theme.measure_text(
                 text,
-                &theme.typography.waterfall_total,
+                &theme.typography.annotations.waterfall_total,
                 PhysicalTextAlignment::Center,
                 "waterfall total annotation",
                 false,
@@ -1119,7 +1121,7 @@ mod tests {
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        theme.typography.waterfall_total.font_size = 48;
+        theme.typography.annotations.waterfall_total.font_size = 48;
         for exact in [false, true] {
             let chart = source(exact);
             let inputs = crate::plots::shared_x::prepare_plot(
@@ -1248,8 +1250,8 @@ mod tests {
         let old = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
             .unwrap();
-        theme.typography.waterfall_total.font_size = 18;
-        theme.typography.waterfall_total.paint = crate::theme::Color::rgb(3, 5, 7);
+        theme.typography.annotations.waterfall_total.font_size = 18;
+        theme.typography.annotations.waterfall_total.paint = crate::theme::Color::rgb(3, 5, 7);
         let selected = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
             .unwrap();

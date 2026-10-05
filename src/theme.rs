@@ -8,6 +8,12 @@ mod resolved;
 mod scale;
 pub(crate) mod scale_values;
 mod spacing;
+mod typography;
+
+pub(crate) use typography::{
+    AnnotationTextRoles, AxisTextRoles, CompositionTextRoles, ContrastTextRoles, GuideTextRoles,
+    RootTextRoles, TypographyTheme,
+};
 
 pub(crate) use scale::{AccentColors, CategoryColors, ContinuousColors, PaletteCache};
 pub(crate) use scale_values::{

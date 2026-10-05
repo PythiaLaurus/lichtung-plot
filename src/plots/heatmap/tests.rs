@@ -222,8 +222,8 @@ fn heatmap_intrinsic_cache_rechecks_contrast_role_metrics_after_theme_change() {
     let original = intrinsic_body_minimum(&chart, &theme).unwrap();
     assert_eq!(intrinsic_body_minimum(&chart, &theme).unwrap(), original);
     let mut custom = theme.clone();
-    custom.typography.contrast_light.font_size = 40;
-    custom.typography.contrast_dark.font_size = 40;
+    custom.typography.annotations.contrast.light.font_size = 40;
+    custom.typography.annotations.contrast.dark.font_size = 40;
     let changed = intrinsic_body_minimum(&chart, &custom).unwrap();
     assert!(
         changed.0 > original.0 && changed.1 >= original.1,
@@ -346,8 +346,8 @@ fn missing_fill_and_backdrop_invalidate_cached_intrinsics_with_unequal_contrast_
     theme.surfaces.canvas_root = Color::rgba(0, 0, 0, 0);
     theme.marks.heatmap_missing_fill = Color::rgba(20, 40, 60, 0);
     theme.annotations.planning_backdrop = Color::rgb(0, 0, 0);
-    theme.typography.contrast_light.font_size = 40;
-    theme.typography.contrast_dark.font_size = 9;
+    theme.typography.annotations.contrast.light.font_size = 40;
+    theme.typography.annotations.contrast.dark.font_size = 9;
     let large = prepare_intrinsics(marks, axes, source.data(), &theme, None).unwrap();
     assert_eq!(
         theme
@@ -542,8 +542,8 @@ fn heatmap_intrinsic_cache_rechecks_the_final_shared_color_domain() {
     let mut theme = crate::Theme::Publication
         .resolve(&crate::font::canonical::OperationGenerationResources::new())
         .unwrap();
-    theme.typography.contrast_light.font_size = 40;
-    theme.typography.contrast_dark.font_size = 9;
+    theme.typography.annotations.contrast.light.font_size = 40;
+    theme.typography.annotations.contrast.dark.font_size = 9;
     let axes = &inputs.axes[0].1;
     let prepared = &inputs.heatmap.as_ref().unwrap().panels[0].1;
     let initial = prepare_intrinsics(prepared, axes, source.data(), &theme, None).unwrap();
@@ -597,8 +597,8 @@ fn a_custom_gradient_invalidates_the_cached_contrast_role_at_the_same_numeric_do
     let mut theme = crate::Theme::Publication
         .resolve(&crate::font::canonical::OperationGenerationResources::new())
         .unwrap();
-    theme.typography.contrast_light.font_size = 40;
-    theme.typography.contrast_dark.font_size = 9;
+    theme.typography.annotations.contrast.light.font_size = 40;
+    theme.typography.annotations.contrast.dark.font_size = 9;
     let initial = prepare_intrinsics(
         &inputs.heatmap.as_ref().unwrap().panels[0].1,
         axes,
@@ -1559,7 +1559,7 @@ fn fitted_label_elides_only_at_extended_grapheme_boundaries() {
     let maximum_width = theme
         .measure_text(
             expected,
-            &theme.typography.tick_label,
+            &theme.typography.axes.tick_label,
             PhysicalTextAlignment::End,
             "heatmap category label",
             false,
@@ -1585,7 +1585,7 @@ fn fitted_label_elides_only_at_extended_grapheme_boundaries() {
         theme
             .measure_text(
                 &fitted,
-                &theme.typography.tick_label,
+                &theme.typography.axes.tick_label,
                 PhysicalTextAlignment::End,
                 "heatmap category label",
                 false,

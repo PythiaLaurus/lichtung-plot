@@ -106,7 +106,7 @@ impl MeasuredContinuousGuide {
         let title = match fit::text(
             theme,
             &descriptor.title,
-            &theme.typography.legend_title,
+            &theme.typography.guides.legend_title,
             inner_width,
             PhysicalTextAlignment::Start,
             "continuous guide title",
@@ -135,7 +135,7 @@ impl MeasuredContinuousGuide {
         for (index, label) in descriptor.labels.iter().enumerate() {
             let plan = theme.measure_legacy_appearance_text(
                 label,
-                &theme.typography.legend_label,
+                &theme.typography.guides.legend_label,
                 PhysicalTextAlignment::Center,
                 "continuous guide value",
                 false,
@@ -167,7 +167,7 @@ impl MeasuredContinuousGuide {
             .map(|key| {
                 theme.measure_legacy_appearance_text(
                     &key.label,
-                    &theme.typography.legend_label,
+                    &theme.typography.guides.legend_label,
                     PhysicalTextAlignment::Start,
                     "continuous guide missing key",
                     false,
@@ -771,8 +771,8 @@ mod tests {
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        theme.typography.legend_label.font_size = 96;
-        theme.typography.legend_label.weight = crate::TextWeight::Bold;
+        theme.typography.guides.legend_label.font_size = 96;
+        theme.typography.guides.legend_label.weight = crate::TextWeight::Bold;
         theme.legend.row_gap = 5.0;
         theme.legend.gradient_preferred_length = 512.0;
         let resources = theme
@@ -1133,8 +1133,8 @@ mod tests {
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        theme.typography.legend_title.font_size = 40;
-        theme.typography.legend_title.weight = crate::TextWeight::Bold;
+        theme.typography.guides.legend_title.font_size = 40;
+        theme.typography.guides.legend_title.weight = crate::TextWeight::Bold;
         let mut measured = fit::measured(MeasuredContinuousGuide::measure(
             &descriptor(),
             (300.0, 300.0),

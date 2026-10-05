@@ -2271,7 +2271,11 @@ mod tests {
             state(&plot.with_planned_x_limits((0.0, 1.0)), &standard)
         );
         let mut changed_theme = theme.clone();
-        changed_theme.typography.tick_label.line_height_multiplier += 0.25;
+        changed_theme
+            .typography
+            .axes
+            .tick_label
+            .line_height_multiplier += 0.25;
         let changed = crate::layout::StandardPanelInputs::new(&changed_theme).unwrap();
         assert_ne!(state(&shared, &standard), state(&shared, &changed));
     }

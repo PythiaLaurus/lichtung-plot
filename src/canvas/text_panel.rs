@@ -19,7 +19,10 @@ fn pixels(quanta: i64) -> f64 {
 }
 
 fn text_appearance(theme: &ResolvedTheme) -> [&TextTheme; 2] {
-    [&theme.typography.text_panel_title, &theme.typography.body]
+    [
+        theme.typography.composition().text_panel_title(),
+        theme.typography.composition().body(),
+    ]
 }
 
 #[derive(Clone, Copy)]

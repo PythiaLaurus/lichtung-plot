@@ -965,7 +965,7 @@ fn project(
                 .expect("bounded layer index");
                 let length = usize::try_from(cursor.position()).expect("bounded layer index");
                 let owner = std::str::from_utf8(&buffer[..length]).expect("ASCII layer index");
-                let label_role = &theme.typography.point_layer_label;
+                let label_role = &theme.typography.annotations.point_layer_label;
                 let appearance = crate::theme::TextTheme::new(
                     data.copy_font_stack(label_role.stack())?,
                     label_role.color(),

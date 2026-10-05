@@ -124,8 +124,8 @@ impl StandardPanelInputs {
             )
         };
         Ok(Self {
-            tick_label: retain(&theme.typography.tick_label)?,
-            axis_title: retain(&theme.typography.axis_title)?,
+            tick_label: retain(&theme.typography.axes.tick_label)?,
+            axis_title: retain(&theme.typography.axes.axis_title)?,
             preferred_aspect: [4, 3],
         })
     }
@@ -137,10 +137,10 @@ impl StandardPanelInputs {
     ) -> Result<bool, crate::Error> {
         Ok(self
             .tick_label
-            .same(&theme.typography.tick_label, resources)?
+            .same(&theme.typography.axes.tick_label, resources)?
             && self
                 .axis_title
-                .same(&theme.typography.axis_title, resources)?)
+                .same(&theme.typography.axes.axis_title, resources)?)
     }
 
     pub(crate) fn observe_feedback(
@@ -184,13 +184,14 @@ mod tests {
             .generation_resources();
         assert_eq!(standard.preferred_aspect, [4, 3]);
         assert!(standard.matches(&theme, &resources).unwrap());
-        theme.typography.tick_label.line_height_multiplier += 0.25;
+        theme.typography.axes.tick_label.line_height_multiplier += 0.25;
         assert!(!standard.matches(&theme, &resources).unwrap());
-        theme.typography.tick_label = standard.tick_label.clone();
-        theme.typography.axis_title.weight = crate::TextWeight::Bold;
-        theme.typography.axis_title.stack = crate::font::canonical::FontStack::new(
+        theme.typography.axes.tick_label = standard.tick_label.clone();
+        theme.typography.axes.axis_title.weight = crate::TextWeight::Bold;
+        theme.typography.axes.axis_title.stack = crate::font::canonical::FontStack::new(
             theme
                 .typography
+                .axes
                 .axis_title
                 .stack
                 .families()
@@ -202,7 +203,10 @@ mod tests {
         )
         .unwrap();
         assert!(!standard.matches(&theme, &resources).unwrap());
-        assert_ne!(standard.axis_title.stack, theme.typography.axis_title.stack);
+        assert_ne!(
+            standard.axis_title.stack,
+            theme.typography.axes.axis_title.stack
+        );
     }
 
     #[test]
@@ -211,9 +215,9 @@ mod tests {
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        theme.typography.tick_label.stack = named_stack(&["αZ"]);
+        theme.typography.axes.tick_label.stack = named_stack(&["αZ"]);
         let standard = StandardPanelInputs::new(&theme).unwrap();
-        theme.typography.tick_label.stack = named_stack(&["αY"]);
+        theme.typography.axes.tick_label.stack = named_stack(&["αY"]);
         for remaining in [0, 5, 6] {
             let resources = OperationGenerationResources::with_test_limits(remaining, 0);
             let result = standard.matches(&theme, &resources);

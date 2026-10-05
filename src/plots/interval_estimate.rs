@@ -99,7 +99,7 @@ impl PreparedEstimate {
         if unavailable {
             let text = theme.measure_text(
                 NOT_ESTIMABLE_TEXT,
-                &theme.typography.estimate_detail,
+                &theme.typography.annotations.estimate_detail,
                 PhysicalTextAlignment::Center,
                 "estimate unavailable category intrinsic",
                 false,
@@ -123,7 +123,7 @@ impl PreparedEstimate {
             let appearance = if adjacent.1 {
                 &significance
             } else {
-                &theme.typography.estimate_detail
+                &theme.typography.annotations.estimate_detail
             };
             pitch = pitch.max(
                 theme
@@ -779,7 +779,7 @@ fn project(
         .reference
         .filter(|value| *value >= x_range.0 && *value <= x_range.1)
         .map(|value| layout.projection.project(value, 0.0).0);
-    let base = &theme.typography.significance_label;
+    let base = &theme.typography.annotations.significance_label;
     let exact = chart.significance_mark_style_override();
     let significance_label = crate::theme::TextTheme::new(
         data.copy_font_stack(base.stack())?,
@@ -791,7 +791,7 @@ fn project(
         exact.map_or(base.weight(), crate::SignificanceMarkStyle::weight_spec),
         base.line_height(),
     )?;
-    let detail_role = &theme.typography.estimate_detail;
+    let detail_role = &theme.typography.annotations.estimate_detail;
     let detail_label = crate::theme::TextTheme::new(
         data.copy_font_stack(detail_role.stack())?,
         detail_role.color(),
@@ -1166,7 +1166,7 @@ mod tests {
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
         let base = chart.intrinsic_body_minimum(&theme).unwrap();
-        theme.typography.estimate_detail.font_size = 48;
+        theme.typography.annotations.estimate_detail.font_size = 48;
         let text = chart.intrinsic_body_minimum(&theme).unwrap();
         assert_eq!(text.0.to_bits(), base.0.to_bits());
         assert!(text.1 > base.1);
@@ -1202,7 +1202,7 @@ mod tests {
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        theme.typography.estimate_detail.font_size = 48;
+        theme.typography.annotations.estimate_detail.font_size = 48;
         let without = intrinsic(source(false), &theme);
         let with = intrinsic(source(true), &theme);
         assert!(with.1 > without.1);
@@ -1235,8 +1235,8 @@ mod tests {
         let old = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
             .unwrap();
-        theme.typography.estimate_detail.font_size = 18;
-        theme.typography.estimate_detail.paint = crate::theme::Color::rgb(5, 7, 9);
+        theme.typography.annotations.estimate_detail.font_size = 18;
+        theme.typography.annotations.estimate_detail.paint = crate::theme::Color::rgb(5, 7, 9);
         let selected = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
             .unwrap();

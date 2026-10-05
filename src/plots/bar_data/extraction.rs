@@ -143,7 +143,7 @@ fn attached_bar_glyphs_cannot_escape_categorical_frame_under_numeric_feedback() 
     let mut theme = crate::Theme::Publication
         .resolve(&crate::font::canonical::OperationGenerationResources::new())
         .unwrap();
-    theme.typography.significance_label.font_size = 1000;
+    theme.typography.annotations.significance_label.font_size = 1000;
     for plot in plots {
         let inputs =
             crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new(), None)

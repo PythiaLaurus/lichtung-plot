@@ -155,7 +155,7 @@ pub(crate) fn intrinsic_body_minimum(
         let hard = crate::layout::fit::intrinsic_widths(
             theme,
             label,
-            &theme.typography.axis_title,
+            &theme.typography.axes.axis_title,
             "matrix variable label",
         )?
         .0;
@@ -188,7 +188,7 @@ pub(crate) fn natural_body_preference(
         let width = layout::fit::intrinsic_widths(
             theme,
             label,
-            &theme.typography.axis_title,
+            &theme.typography.axes.axis_title,
             "Matrix natural variable",
         )?
         .0;
@@ -197,7 +197,7 @@ pub(crate) fn natural_body_preference(
             .max(point.1)
             .max(2.0 * ink.0)
             .max(2.0 * ink.1)
-            .max(12.0 * f64::from(theme.typography.tick_label.font_size));
+            .max(12.0 * f64::from(theme.typography.axes.tick_label.font_size));
     }
     Ok((side.max(hard.0), side.max(hard.1)))
 }
@@ -595,7 +595,7 @@ fn matrix_dispatch_preserves_scoped_tick_fit_miss() {
     let mut theme = crate::Theme::Publication
         .resolve(&crate::font::canonical::OperationGenerationResources::new())
         .unwrap();
-    theme.typography.tick_label.font_size = 48;
+    theme.typography.axes.tick_label.font_size = 48;
     let resources = theme
         .prepared_font_environment()
         .unwrap()
@@ -661,7 +661,7 @@ fn tick_planner_failure_is_not_reported_as_small_matrix_cells() {
         .resolve(&crate::font::canonical::OperationGenerationResources::new())
         .unwrap();
     theme.prepare_font_environment().unwrap();
-    theme.typography.tick_label.font_size = 0;
+    theme.typography.axes.tick_label.font_size = 0;
     let context =
         PlotRenderContext::new(plot.data(), PanelBox::new(80.0, 600.0, 60.0, 440.0), &theme);
     let error = plot.measure_panel(plot.kind(), context).err().unwrap();
@@ -740,7 +740,7 @@ pub(crate) fn measure(
         let hard = layout::fit::intrinsic_widths(
             theme,
             label,
-            &theme.typography.axis_title,
+            &theme.typography.axes.axis_title,
             "matrix variable label",
         )?
         .0;
@@ -751,7 +751,7 @@ pub(crate) fn measure(
             hard.max(point.1).max(2.0 * ink.1).max(1.0 / 1024.0),
         )?;
         let preferred = layout::kernel::ceil_spatial_quanta(
-            12.0 * f64::from(theme.typography.tick_label.font_size),
+            12.0 * f64::from(theme.typography.axes.tick_label.font_size),
         )?
         .max(x)
         .max(y);

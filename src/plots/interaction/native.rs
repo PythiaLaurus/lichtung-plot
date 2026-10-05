@@ -232,7 +232,7 @@ fn native_condition_hard_intrinsics_and_exact_numeric_labels_reject_before_marks
     let hard = crate::layout::fit::intrinsic_widths(
         &theme,
         &word,
-        &theme.typography.tick_label,
+        &theme.typography.axes.tick_label,
         "condition intrinsic",
     )
     .unwrap()
