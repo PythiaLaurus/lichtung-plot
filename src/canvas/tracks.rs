@@ -195,9 +195,9 @@ pub(super) fn allocate(
             };
             let spacing = &child_theme.composition.root_title_block;
             let top = if present[0] || present[1] {
-                f64::from(u32::from(present[0])) * child_theme.typography.title.line_height()
+                f64::from(u32::from(present[0])) * child_theme.typography.title.line_pitch_pixels()
                     + f64::from(u32::from(present[1]))
-                        * child_theme.typography.subtitle.line_height()
+                        * child_theme.typography.subtitle.line_pitch_pixels()
                     + if present[0] && present[1] {
                         spacing.title_subtitle_gap
                     } else {
@@ -208,7 +208,8 @@ pub(super) fn allocate(
                 0.0
             };
             let bottom = if present[2] {
-                child_theme.typography.caption.line_height() + spacing.caption_to_content_clearance
+                child_theme.typography.caption.line_pitch_pixels()
+                    + spacing.caption_to_content_clearance
             } else {
                 0.0
             };

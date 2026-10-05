@@ -103,19 +103,25 @@ impl crate::Plot {
 /// T5a supplies typography and preferred aspect; mark/density inputs belong to T5c.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct StandardPanelInputs {
-    pub(crate) tick_label: crate::theme::TextAppearance,
-    pub(crate) axis_title: crate::theme::TextAppearance,
+    pub(crate) tick_label: crate::theme::TextTheme,
+    pub(crate) axis_title: crate::theme::TextTheme,
     preferred_aspect: [u8; 2],
 }
 
 impl StandardPanelInputs {
     pub(crate) fn new(theme: &crate::theme::ResolvedTheme) -> Result<Self, crate::Error> {
-        let retain = |source: &crate::theme::TextAppearance| -> Result<_, crate::Error> {
+        let retain = |source: &crate::theme::TextTheme| -> Result<_, crate::Error> {
             let stack = source
                 .stack
                 .copy_with_generation(&theme.prepared_font_environment()?.generation_resources())
                 .map_err(|error| crate::Error::Render(error.to_string()))?;
-            Ok(crate::theme::TextAppearance { stack, ..*source })
+            crate::theme::TextTheme::new(
+                stack,
+                source.color(),
+                source.font_size(),
+                source.weight(),
+                source.line_height(),
+            )
         };
         Ok(Self {
             tick_label: retain(&theme.typography.tick_label)?,

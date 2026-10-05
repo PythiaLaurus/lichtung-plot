@@ -7,7 +7,7 @@ use crate::layout::kernel::{
 };
 use crate::layout::{AddressRole, PanelBox, PhysicalTextAlignment, TextBlock};
 use crate::render::backend::{PlannedTextPlacement, Point2D, TextAnchor};
-use crate::theme::{ResolvedTheme, TextAppearance};
+use crate::theme::{ResolvedTheme, TextTheme};
 use crate::Error;
 
 #[expect(
@@ -18,7 +18,7 @@ fn pixels(quanta: i64) -> f64 {
     quanta as f64 / 1024.0
 }
 
-fn text_appearance(theme: &ResolvedTheme) -> [&TextAppearance; 2] {
+fn text_appearance(theme: &ResolvedTheme) -> [&TextTheme; 2] {
     [&theme.typography.text_panel_title, &theme.typography.body]
 }
 
@@ -69,8 +69,8 @@ impl TextPanelIntrinsics {
             body,
             minimum: (
                 title.0.max(body.0) + 2.0 * inset,
-                title_style.line_height()
-                    + body_style.line_height()
+                title_style.line_pitch_pixels()
+                    + body_style.line_pitch_pixels()
                     + theme.composition.text_panel_gap
                     + 2.0 * inset,
             ),

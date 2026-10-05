@@ -888,8 +888,8 @@ impl LegendMetrics {
     pub(crate) fn from_theme(theme: &crate::theme::ResolvedTheme) -> Self {
         let font_size = f64::from(theme.typography.legend_label.font_size);
         let pad = theme.legend.padding;
-        let entry_h = theme.typography.legend_label.line_height() + theme.legend.row_gap;
-        let title_h = theme.typography.legend_title.line_height() + theme.legend.title_gap;
+        let entry_h = theme.typography.legend_label.line_pitch_pixels() + theme.legend.row_gap;
+        let title_h = theme.typography.legend_title.line_pitch_pixels() + theme.legend.title_gap;
         let handle_w = theme.legend.key_width;
         let handle_text = theme.legend.key_label_gap;
         Self {

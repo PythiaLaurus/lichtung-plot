@@ -728,7 +728,7 @@ pub(crate) fn domain_expansion(
 pub(crate) fn attached_significance_text_plans(
     context: crate::spec::PlotRenderContext<'_>,
     marks: &[PreparedBarSignificance],
-    appearance: &crate::theme::TextAppearance,
+    appearance: &crate::theme::TextTheme,
     alignment: impl Fn(&PreparedBarSignificance) -> crate::layout::PhysicalTextAlignment,
     owner: &str,
     exact_override: bool,

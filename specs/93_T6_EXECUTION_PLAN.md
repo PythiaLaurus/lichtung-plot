@@ -66,7 +66,11 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6B1a | COMPLETE | T6A | One Color/OpaqueColor paint representation and private channel/hex validation; `refactor(color): retain validated foundational paint values` |
 | T6B1b | COMPLETE | T6B1a | Typed font preferences and complete role-stack inputs; `refactor(font): retain validated role font stacks` |
 | T6B1c | COMPLETE | T6B1b | Exact relative spacing and bounded local metric operands; `feat(theme): retain exact relative spacing values` |
-| T6B1d | PENDING | T6B1c | Complete component/role/scale inputs and structural validation; `refactor(theme): retain complete validated components` |
+| T6B1d | IN PROGRESS | T6B1c | Complete component/role/scale inputs and structural validation; `refactor(theme): retain complete validated components` |
+| T6B1d1 | COMPLETE | T6B1c | Replace live text/surface appearances with validated TextTheme/SurfaceTheme; `refactor(theme): validate text and surface values` |
+| T6B1d2 | PENDING | T6B1d1 | Replace live compound stroke/point/fill inputs with validated values and structural absence; `refactor(theme): validate complete mark paints` |
+| T6B1d3 | PENDING | T6B1d2 | Retain validated opaque palettes/maps/gradients and domain selection; `refactor(scales): retain validated complete scale values` |
+| T6B1d4 | PENDING | T6B1d3 | Assemble validated complete role/chrome/annotation groups with actual consumer mappings; `refactor(theme): assemble complete validated components` |
 | T6B2 | PENDING | T6B1 | Complete Theme construction/customization and owner resolution using those values; `refactor(theme): construct immutable complete themes` |
 | T6B3 | PENDING | T6B2 | Exact element Color/alpha replacement and repository caller migration; `feat(styles): expose complete RGBA element paints` |
 | T6B4 | PENDING | T6B3 | Public complete Theme/components/fonts/scales, built-in constructors and palette/map/gradient attachments; remove closed selectors and old scale representations; `feat(theme): expose immutable theme and scale foundations` |
@@ -143,6 +147,14 @@ identity and measured-flow rules. Source-backed and independent mathematical
 reviews are documentation evidence, not successful execution of the future code.
 Implementation-time source refreshes below check their mapping to changed
 foundations; they do not leave public signatures or product choices unplanned.
+
+T6B1d1 evidence: `docs/text-surface-values.md` records the live validated
+TextTheme/SurfaceTheme replacement, scalar validation, readonly inspection and
+consuming edits with preserved source/default bits. All eighteen actual roles and
+operation-admitted copies use the new constructor. Eighty-five distinct focused
+tests and seven unchanged SVG snapshots pass, as do strict all-target Clippy,
+formatting and whitespace checks. Complete compound and aggregate construction
+continues in the following private leaves; no early root export was added.
 
 T6A2 evidence: `94_T6_FOUNDATION_CONSTRUCTION.md` pins complete fields, typed
 construction/accessors/consuming edits, actual CSS units, exact local metrics,

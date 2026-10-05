@@ -500,10 +500,10 @@ pub(crate) struct HeatmapIntrinsicCache {
     minimum: (f64, f64),
     without_y_labels: (f64, f64),
     color_scale: crate::theme::ContinuousColors,
-    contrast_light: crate::theme::TextAppearance,
-    contrast_dark: crate::theme::TextAppearance,
-    tick_label: crate::theme::TextAppearance,
-    axis_title: crate::theme::TextAppearance,
+    contrast_light: crate::theme::TextTheme,
+    contrast_dark: crate::theme::TextTheme,
+    tick_label: crate::theme::TextTheme,
+    axis_title: crate::theme::TextTheme,
     plot_panel: crate::theme::Color,
     canvas_root: crate::theme::Color,
     canvas_override: Option<crate::theme::Color>,
@@ -542,14 +542,14 @@ impl HeatmapIntrinsicCache {
     ) -> Result<Self, Error> {
         data.claim_source_bytes(std::mem::size_of::<Self>())?;
         data.admit_clone_slice(prepared.color.scale.stops())?;
-        let text = |role: &crate::theme::TextAppearance| -> Result<_, Error> {
-            Ok(crate::theme::TextAppearance {
-                stack: data.copy_font_stack(&role.stack)?,
-                paint: role.paint,
-                font_size: role.font_size,
-                weight: role.weight,
-                line_height_multiplier: role.line_height_multiplier,
-            })
+        let text = |role: &crate::theme::TextTheme| -> Result<_, Error> {
+            crate::theme::TextTheme::new(
+                data.copy_font_stack(role.stack())?,
+                role.color(),
+                role.font_size(),
+                role.weight(),
+                role.line_height(),
+            )
         };
         Ok(Self {
             minimum,

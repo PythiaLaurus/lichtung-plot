@@ -966,13 +966,14 @@ fn project(
                 let length = usize::try_from(cursor.position()).expect("bounded layer index");
                 let owner = std::str::from_utf8(&buffer[..length]).expect("ASCII layer index");
                 let label_role = &theme.typography.point_layer_label;
-                let appearance = crate::theme::TextAppearance {
-                    stack: data.copy_font_stack(&label_role.stack)?,
-                    paint: style.color,
-                    font_size: label_role.font_size,
-                    weight: label_role.weight,
-                    line_height_multiplier: label_role.line_height_multiplier,
-                };
+                let appearance = crate::theme::TextTheme::new(
+                    data.copy_font_stack(label_role.stack())?,
+                    label_role.color(),
+                    label_role.font_size(),
+                    label_role.weight(),
+                    label_role.line_height(),
+                )?
+                .with_color(style.color)?;
                 let plan = theme.measure_legacy_appearance_text(
                     label,
                     &appearance,

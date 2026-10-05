@@ -9,7 +9,7 @@ use crate::layout::Layout;
 use crate::layout::{PanelAxisPlan, PhysicalTextAlignment};
 use crate::theme::ResolvedTheme;
 #[cfg(test)]
-use crate::theme::TextAppearance;
+use crate::theme::TextTheme;
 #[cfg(test)]
 use crate::Error;
 
@@ -163,8 +163,8 @@ impl PanelRequirements {
         let top = if title_lines == 0 && subtitle_lines == 0 {
             4.0
         } else {
-            title_lines as f64 * theme.typography.title.line_height()
-                + subtitle_lines as f64 * theme.typography.subtitle.line_height()
+            title_lines as f64 * theme.typography.title.line_pitch_pixels()
+                + subtitle_lines as f64 * theme.typography.subtitle.line_pitch_pixels()
                 + header_gap
                 + 8.0
         };
@@ -262,7 +262,7 @@ impl RootFramePlan {
 fn try_wrap_text(
     theme: &ResolvedTheme,
     text: &str,
-    appearance: &TextAppearance,
+    appearance: &TextTheme,
     maximum_width: f64,
     alignment: PhysicalTextAlignment,
     role: &str,
@@ -279,7 +279,7 @@ fn try_wrap_text(
 fn wrap_text(
     theme: &ResolvedTheme,
     text: &str,
-    appearance: &TextAppearance,
+    appearance: &TextTheme,
     maximum_width: f64,
 ) -> Vec<String> {
     try_wrap_text(
@@ -376,7 +376,7 @@ mod tests {
         assert!(lines.len() > 1);
         assert_eq!(lines.concat(), caption);
         let plan = &layout.root_text;
-        assert!(plan.bottom_reserve > theme.typography.caption.line_height());
+        assert!(plan.bottom_reserve > theme.typography.caption.line_pitch_pixels());
         assert!(RootFramePlan::measure(
             (160, 120),
             &theme,

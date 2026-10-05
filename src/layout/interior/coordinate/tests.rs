@@ -604,7 +604,7 @@ fn native_hard_title_spans_and_category_slots_come_from_shaped_text() {
         );
         assert_eq!(Projection::test_projection_calls(), before);
         let tick_span = 4.0_f64
-            * theme.typography.tick_label.line_height().max(
+            * theme.typography.tick_label.line_pitch_pixels().max(
                 fit::intrinsic_widths(
                     &theme,
                     "1.00e-3",

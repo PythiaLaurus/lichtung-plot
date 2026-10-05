@@ -18,7 +18,7 @@ use crate::render::backend::{LineStyle, StrokePattern, TextAnchor};
 use crate::theme::{color_from_rgb, Color};
 use crate::{Error, SignificanceMarkStyle, TextWeight};
 
-/// Built-in axis tick-label font size in points.
+/// Built-in axis tick-label font size in actual CSS pixels.
 const TICK_FONT_SIZE: u32 = 16;
 
 const MUTED_TEXT: (u8, u8, u8) = (80, 80, 80);
@@ -82,7 +82,7 @@ pub(crate) struct ResolvedTheme {
     /// Legacy facet-header size source retained until T5b composition migration.
     pub(crate) facet_header_font_size: u32,
     /// Canvas-root and Plot-panel paints.
-    pub(crate) surfaces: SurfaceAppearance,
+    pub(crate) surfaces: super::SurfaceTheme,
     /// An explicit Plot inside Canvas composes over the Canvas owner's surface.
     pub(crate) canvas_surface_override: Option<Color>,
     /// Complete foundational text roles.
@@ -371,7 +371,7 @@ struct CachedTextQuery {
     shaping_entry: usize,
     shaping_state: Sha256,
     source: Arc<String>,
-    appearance: TextAppearance,
+    appearance: TextTheme,
     alignment: PhysicalTextAlignment,
     owner: String,
     pair_ordinal: u32,
@@ -605,7 +605,7 @@ impl ResolvedTheme {
     pub(crate) fn plan_text(
         &self,
         source: &str,
-        appearance: &TextAppearance,
+        appearance: &TextTheme,
         maximum_width: f64,
         alignment: PhysicalTextAlignment,
         owner: &str,
@@ -648,7 +648,7 @@ impl ResolvedTheme {
             .map_err(|error| crate::Error::Render(format!("axis row height: {error}")))?;
         let count = i64::try_from(labels.len().max(1))
             .map_err(|_| crate::Error::Render("axis row count overflowed".into()))?;
-        let pitch = crate::layout::maximum_width_quanta(appearance.line_height())
+        let pitch = crate::layout::maximum_width_quanta(appearance.line_pitch_pixels())
             .map_err(|error| crate::Error::Render(format!("axis row pitch: {error}")))?;
         if height < 0 || pitch <= 0 {
             return Err(crate::Error::Render(
@@ -738,7 +738,7 @@ impl ResolvedTheme {
     pub(crate) fn measure_text(
         &self,
         source: &str,
-        appearance: &TextAppearance,
+        appearance: &TextTheme,
         alignment: PhysicalTextAlignment,
         owner: &str,
         exact_override: bool,
@@ -755,12 +755,12 @@ impl ResolvedTheme {
 
     /// Select a complete text role over one final variable-fill paint before
     /// font preparation, using owner-local panel/root surfaces and backdrop.
-    pub(crate) fn contrasting_text(&self, fill: Color) -> Result<&TextAppearance, Error> {
+    pub(crate) fn contrasting_text(&self, fill: Color) -> Result<&TextTheme, Error> {
         super::contrast::select(
             fill,
-            self.surfaces.plot_panel,
+            self.surfaces.plot_panel(),
             self.canvas_surface_override
-                .unwrap_or(self.surfaces.canvas_root),
+                .unwrap_or(self.surfaces.canvas_root()),
             self.annotations.planning_backdrop,
             &self.typography.contrast_light,
             &self.typography.contrast_dark,
@@ -770,7 +770,7 @@ impl ResolvedTheme {
     pub(crate) fn measure_legacy_appearance_text(
         &self,
         source: &str,
-        appearance: &TextAppearance,
+        appearance: &TextTheme,
         alignment: PhysicalTextAlignment,
         owner: &str,
         exact_override: bool,
@@ -791,7 +791,7 @@ impl ResolvedTheme {
     fn plan_text_quanta(
         &self,
         source: &str,
-        appearance: &TextAppearance,
+        appearance: &TextTheme,
         maximum_width_quanta: i64,
         alignment: PhysicalTextAlignment,
         owner: &str,
@@ -817,7 +817,7 @@ impl ResolvedTheme {
     pub(crate) fn plan_text_quanta_with_policy(
         &self,
         source: &str,
-        appearance: &TextAppearance,
+        appearance: &TextTheme,
         maximum_width_quanta: i64,
         alignment: PhysicalTextAlignment,
         owner: &str,
@@ -827,15 +827,15 @@ impl ResolvedTheme {
     ) -> Result<ResolvedTextPlan, crate::layout::fit::PlanError> {
         let input = TextPlanInput {
             source,
-            stack: &appearance.stack,
-            weight: appearance.weight,
-            font_size: appearance.font_size,
-            line_height: TextLineHeight::Multiplier(appearance.line_height_multiplier),
+            stack: appearance.stack(),
+            weight: appearance.weight(),
+            font_size: appearance.font_size(),
+            line_height: TextLineHeight::Multiplier(appearance.line_height()),
             maximum_width_quanta,
             alignment,
-            paint: appearance.paint,
+            paint: appearance.color(),
             provenance: TextPlanProvenance {
-                pair_ordinal: pair_ordinal(appearance.weight),
+                pair_ordinal: pair_ordinal(appearance.weight()),
                 owner: owner.to_owned(),
             },
             exact_override,
@@ -966,7 +966,7 @@ impl ResolvedTheme {
     fn cache_text_query(
         &self,
         input: &TextPlanInput<'_>,
-        appearance: &TextAppearance,
+        appearance: &TextTheme,
         preferred_lines: Option<usize>,
         prepared_only: bool,
         result: CachedTextResult,
@@ -1073,13 +1073,16 @@ impl ResolvedTheme {
             owned.push_str(text);
             Ok(owned)
         };
-        let appearance = TextAppearance {
-            stack: appearance
-                .stack
+        let appearance = TextTheme::new(
+            appearance
+                .stack()
                 .share(&resources)
                 .map_err(|error| Error::Render(error.to_string()))?,
-            ..*appearance
-        };
+            appearance.color(),
+            appearance.font_size(),
+            appearance.weight(),
+            appearance.line_height(),
+        )?;
         let source = if let Some(index) = query_key.shaping_entry {
             resources
                 .claim_visits(1)
@@ -1159,16 +1162,60 @@ const fn pair_ordinal(weight: TextWeight) -> u32 {
 
 /// Paints applied to renderer-owned drawing surfaces.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct SurfaceAppearance {
+pub(crate) struct SurfaceTheme {
     /// Canvas root paint.
     pub(crate) canvas_root: Color,
     /// Plot panel paint.
     pub(crate) plot_panel: Color,
 }
 
+impl SurfaceTheme {
+    /// Construct complete surface paints; transparent paints are valid.
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "complete component construction uniformly returns Result; Color already validates every surface operand"
+    )]
+    pub(crate) fn new(canvas_root: Color, plot_panel: Color) -> Result<Self, Error> {
+        Ok(Self {
+            canvas_root,
+            plot_panel,
+        })
+    }
+
+    pub(crate) fn canvas_root(&self) -> Color {
+        self.canvas_root
+    }
+
+    pub(crate) fn plot_panel(&self) -> Color {
+        self.plot_panel
+    }
+
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "construction-only surface edits await complete theme customization"
+        )
+    )]
+    pub(crate) fn with_canvas_root(self, canvas_root: Color) -> Result<Self, Error> {
+        Self::new(canvas_root, self.plot_panel)
+    }
+
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "construction-only surface edits await complete theme customization"
+        )
+    )]
+    pub(crate) fn with_plot_panel(self, plot_panel: Color) -> Result<Self, Error> {
+        Self::new(self.canvas_root, plot_panel)
+    }
+}
+
 /// Complete text appearance for one semantic typography role.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct TextAppearance {
+pub(crate) struct TextTheme {
     /// Ordered literal named and host-generic family preferences.
     pub(crate) stack: crate::font::canonical::FontStack,
     /// Text paint.
@@ -1181,7 +1228,122 @@ pub(crate) struct TextAppearance {
     pub(crate) line_height_multiplier: f64,
 }
 
-impl TextAppearance {
+impl TextTheme {
+    /// Construct one complete text role, using actual CSS pixels and a multiplier.
+    pub(crate) fn new(
+        stack: crate::font::canonical::FontStack,
+        color: Color,
+        font_size: u32,
+        weight: TextWeight,
+        line_height: f64,
+    ) -> Result<Self, Error> {
+        if font_size == 0 {
+            return Err(Error::Data(
+                "text font size must be positive CSS pixels".into(),
+            ));
+        }
+        if !line_height.is_finite() || line_height <= 0.0 {
+            return Err(Error::Data(
+                "text line height must be a finite positive multiplier".into(),
+            ));
+        }
+        Ok(Self {
+            stack,
+            paint: color,
+            font_size,
+            weight,
+            line_height_multiplier: line_height,
+        })
+    }
+
+    pub(crate) fn stack(&self) -> &crate::font::canonical::FontStack {
+        &self.stack
+    }
+
+    pub(crate) fn color(&self) -> Color {
+        self.paint
+    }
+
+    pub(crate) fn font_size(&self) -> u32 {
+        self.font_size
+    }
+
+    pub(crate) fn weight(&self) -> TextWeight {
+        self.weight
+    }
+
+    /// Inspect the retained multiplier, without multiplying by the font size.
+    pub(crate) fn line_height(&self) -> f64 {
+        self.line_height_multiplier
+    }
+
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "construction-only stack replacement awaits complete theme customization; operation copies retain their admitted stack path"
+        )
+    )]
+    pub(crate) fn with_stack(
+        self,
+        stack: crate::font::canonical::FontStack,
+    ) -> Result<Self, Error> {
+        Self::new(
+            stack,
+            self.paint,
+            self.font_size,
+            self.weight,
+            self.line_height_multiplier,
+        )
+    }
+
+    pub(crate) fn with_color(self, color: Color) -> Result<Self, Error> {
+        Self::new(
+            self.stack,
+            color,
+            self.font_size,
+            self.weight,
+            self.line_height_multiplier,
+        )
+    }
+
+    pub(crate) fn with_font_size(self, font_size: u32) -> Result<Self, Error> {
+        Self::new(
+            self.stack,
+            self.paint,
+            font_size,
+            self.weight,
+            self.line_height_multiplier,
+        )
+    }
+
+    pub(crate) fn with_weight(self, weight: TextWeight) -> Result<Self, Error> {
+        Self::new(
+            self.stack,
+            self.paint,
+            self.font_size,
+            weight,
+            self.line_height_multiplier,
+        )
+    }
+
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "construction-only leading edits await complete theme customization"
+        )
+    )]
+    pub(crate) fn with_line_height(self, line_height: f64) -> Result<Self, Error> {
+        Self::new(
+            self.stack,
+            self.paint,
+            self.font_size,
+            self.weight,
+            line_height,
+        )
+    }
+
     pub(crate) fn same(
         &self,
         other: &Self,
@@ -1201,16 +1363,18 @@ impl TextAppearance {
         &self,
         resources: &crate::font::canonical::OperationGenerationResources,
     ) -> Result<Self, Error> {
-        Ok(Self {
-            stack: self
-                .stack
+        Self::new(
+            self.stack
                 .copy_with_generation(resources)
                 .map_err(|error| Error::Render(error.to_string()))?,
-            ..*self
-        })
+            self.color(),
+            self.font_size(),
+            self.weight(),
+            self.line_height(),
+        )
     }
     /// Resolve this role's current line pitch in pixels.
-    pub(crate) fn line_height(&self) -> f64 {
+    pub(crate) fn line_pitch_pixels(&self) -> f64 {
         f64::from(self.font_size) * self.line_height_multiplier
     }
 }
@@ -1219,34 +1383,34 @@ impl TextAppearance {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct FoundationalTypography {
     /// Root and panel title role.
-    pub(crate) title: TextAppearance,
+    pub(crate) title: TextTheme,
     /// Root and panel subtitle role.
-    pub(crate) subtitle: TextAppearance,
+    pub(crate) subtitle: TextTheme,
     /// Root caption role.
-    pub(crate) caption: TextAppearance,
+    pub(crate) caption: TextTheme,
     /// X- and y-axis title role.
-    pub(crate) axis_title: TextAppearance,
+    pub(crate) axis_title: TextTheme,
     /// X- and y-axis tick-label role.
-    pub(crate) tick_label: TextAppearance,
+    pub(crate) tick_label: TextTheme,
     /// Significance-label default before an exact caller override.
-    pub(crate) significance_label: TextAppearance,
+    pub(crate) significance_label: TextTheme,
     /// Estimate value labels and the required not-estimable marker.
-    pub(crate) estimate_detail: TextAppearance,
+    pub(crate) estimate_detail: TextTheme,
     /// Required Waterfall start/end total labels.
-    pub(crate) waterfall_total: TextAppearance,
+    pub(crate) waterfall_total: TextTheme,
     /// Supplemental line point labels; exact layer paint overrides only color.
-    pub(crate) point_layer_label: TextAppearance,
+    pub(crate) point_layer_label: TextTheme,
     /// Caller-owned text inside one plot panel.
-    pub(crate) panel_text: TextAppearance,
+    pub(crate) panel_text: TextTheme,
     /// Complete candidates selected over a variable fill before font discovery.
-    pub(crate) contrast_light: TextAppearance,
-    pub(crate) contrast_dark: TextAppearance,
-    pub(crate) legend_title: TextAppearance,
-    pub(crate) legend_label: TextAppearance,
-    pub(crate) facet_header: TextAppearance,
-    pub(crate) composition_header: TextAppearance,
-    pub(crate) text_panel_title: TextAppearance,
-    pub(crate) body: TextAppearance,
+    pub(crate) contrast_light: TextTheme,
+    pub(crate) contrast_dark: TextTheme,
+    pub(crate) legend_title: TextTheme,
+    pub(crate) legend_label: TextTheme,
+    pub(crate) facet_header: TextTheme,
+    pub(crate) composition_header: TextTheme,
+    pub(crate) text_panel_title: TextTheme,
+    pub(crate) body: TextTheme,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1268,7 +1432,7 @@ pub(crate) struct LegendAppearance {
 }
 
 impl FoundationalTypography {
-    pub(crate) fn roles(&self) -> [&TextAppearance; 18] {
+    pub(crate) fn roles(&self) -> [&TextTheme; 18] {
         [
             &self.title,
             &self.subtitle,
@@ -1296,11 +1460,12 @@ impl FoundationalTypography {
         &self,
         exact: Option<SignificanceMarkStyle>,
         resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<TextAppearance, Error> {
+    ) -> Result<TextTheme, Error> {
         let mut effective = self.significance_label.copy_with_generation(resources)?;
         if let Some(exact) = exact {
-            effective.font_size = exact.font_size_spec();
-            effective.weight = exact.weight_spec();
+            effective = effective
+                .with_font_size(exact.font_size_spec())?
+                .with_weight(exact.weight_spec())?;
         }
         Ok(effective)
     }
@@ -1675,6 +1840,15 @@ fn resolved_theme(
     let stack = crate::font::canonical::builtin_font_stack();
     let foreground_paint = color_from_rgb(foreground);
     let muted_paint = color_from_rgb(MUTED_TEXT);
+    let text = |paint, font_size, line_height| {
+        TextTheme::new(
+            stack.clone(),
+            paint,
+            font_size,
+            TextWeight::Normal,
+            line_height,
+        )
+    };
 
     Ok(ResolvedTheme {
         colors,
@@ -1683,50 +1857,39 @@ fn resolved_theme(
         label_font_size: axis_title_font_size,
         composition_title_font_size: title_font_size,
         facet_header_font_size: subtitle_font_size,
-        surfaces: SurfaceAppearance {
-            canvas_root: Color::rgb(255, 255, 255),
-            plot_panel: Color::rgb(255, 255, 255),
-        },
+        surfaces: SurfaceTheme::new(Color::rgb(255, 255, 255), Color::rgb(255, 255, 255))?,
         canvas_surface_override: None,
         typography: FoundationalTypography {
-            title: text_appearance(
-                &stack,
+            title: text(
                 foreground_paint,
                 title_font_size,
                 plus_six_line_height(title_font_size),
-            ),
-            subtitle: text_appearance(
-                &stack,
+            )?,
+            subtitle: text(
                 muted_paint,
                 subtitle_font_size,
                 plus_six_line_height(subtitle_font_size),
-            ),
-            caption: text_appearance(
-                &stack,
+            )?,
+            caption: text(
                 muted_paint,
                 caption_font_size,
                 plus_six_line_height(caption_font_size),
-            ),
-            axis_title: text_appearance(&stack, foreground_paint, axis_title_font_size, 1.2),
-            tick_label: text_appearance(&stack, foreground_paint, TICK_FONT_SIZE, 1.2),
-            significance_label: text_appearance(
-                &stack,
-                foreground_paint,
-                SIGNIFICANCE_FONT_SIZE,
-                1.2,
-            ),
-            estimate_detail: text_appearance(&stack, foreground_paint, 14, 1.2),
-            waterfall_total: text_appearance(&stack, foreground_paint, 14, 1.2),
-            point_layer_label: text_appearance(&stack, foreground_paint, 10, 1.2),
-            panel_text: text_appearance(&stack, foreground_paint, 14, 1.2),
-            contrast_light: text_appearance(&stack, Color::rgb(255, 255, 255), 11, 1.2),
-            contrast_dark: text_appearance(&stack, Color::rgb(0, 0, 0), 11, 1.2),
-            legend_title: text_appearance(&stack, Color::rgb(60, 60, 60), 12, 1.2),
-            legend_label: text_appearance(&stack, Color::rgb(40, 40, 40), 11, 1.2),
-            facet_header: text_appearance(&stack, foreground_paint, subtitle_font_size, 1.2),
-            composition_header: text_appearance(&stack, foreground_paint, title_font_size, 1.2),
-            text_panel_title: text_appearance(&stack, foreground_paint, title_font_size, 1.2),
-            body: text_appearance(&stack, foreground_paint, axis_title_font_size, 1.2),
+            )?,
+            axis_title: text(foreground_paint, axis_title_font_size, 1.2)?,
+            tick_label: text(foreground_paint, TICK_FONT_SIZE, 1.2)?,
+            significance_label: text(foreground_paint, SIGNIFICANCE_FONT_SIZE, 1.2)?,
+            estimate_detail: text(foreground_paint, 14, 1.2)?,
+            waterfall_total: text(foreground_paint, 14, 1.2)?,
+            point_layer_label: text(foreground_paint, 10, 1.2)?,
+            panel_text: text(foreground_paint, 14, 1.2)?,
+            contrast_light: text(Color::rgb(255, 255, 255), 11, 1.2)?,
+            contrast_dark: text(Color::rgb(0, 0, 0), 11, 1.2)?,
+            legend_title: text(Color::rgb(60, 60, 60), 12, 1.2)?,
+            legend_label: text(Color::rgb(40, 40, 40), 11, 1.2)?,
+            facet_header: text(foreground_paint, subtitle_font_size, 1.2)?,
+            composition_header: text(foreground_paint, title_font_size, 1.2)?,
+            text_panel_title: text(foreground_paint, title_font_size, 1.2)?,
+            body: text(foreground_paint, axis_title_font_size, 1.2)?,
         },
         legend: LegendAppearance {
             padding: 8.8,
@@ -1960,21 +2123,6 @@ fn resolved_theme(
     })
 }
 
-fn text_appearance(
-    stack: &crate::font::canonical::FontStack,
-    paint: Color,
-    font_size: u32,
-    line_height_multiplier: f64,
-) -> TextAppearance {
-    TextAppearance {
-        stack: stack.clone(),
-        paint,
-        font_size,
-        weight: TextWeight::Normal,
-        line_height_multiplier,
-    }
-}
-
 fn stroke_appearance(paint: Color, width: f32, pattern: StrokePattern) -> StrokeAppearance {
     StrokeAppearance {
         paint,
@@ -2082,6 +2230,152 @@ fn chi_theme(resources: &OperationGenerationResources) -> Result<ResolvedTheme, 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn text_theme_construction_and_edits_preserve_complete_independent_inputs() {
+        let stack = crate::font::canonical::named_stack(&["Literal, Sans", "serif"]);
+        let source = TextTheme::new(
+            stack.clone(),
+            Color::rgba(13, 29, 47, 61),
+            23,
+            TextWeight::Semibold,
+            1.75,
+        )
+        .unwrap();
+        assert_eq!(source.stack(), &stack);
+        assert_eq!(source.color(), Color::rgba(13, 29, 47, 61));
+        assert_eq!(source.font_size(), 23);
+        assert_eq!(source.weight(), TextWeight::Semibold);
+        assert_eq!(source.line_height().to_bits(), 1.75_f64.to_bits());
+        assert_eq!(source.line_pitch_pixels().to_bits(), 40.25_f64.to_bits());
+
+        let replacement = crate::font::canonical::named_stack(&["Other face"]);
+        let cases = [
+            (
+                source.clone().with_stack(replacement.clone()).unwrap(),
+                TextTheme {
+                    stack: replacement,
+                    ..source.clone()
+                },
+            ),
+            (
+                source
+                    .clone()
+                    .with_color(Color::rgba(71, 83, 97, 0))
+                    .unwrap(),
+                TextTheme {
+                    paint: Color::rgba(71, 83, 97, 0),
+                    ..source.clone()
+                },
+            ),
+            (
+                source.clone().with_font_size(31).unwrap(),
+                TextTheme {
+                    font_size: 31,
+                    ..source.clone()
+                },
+            ),
+            (
+                source.clone().with_weight(TextWeight::Bold).unwrap(),
+                TextTheme {
+                    weight: TextWeight::Bold,
+                    ..source.clone()
+                },
+            ),
+            (
+                source.clone().with_line_height(2.125).unwrap(),
+                TextTheme {
+                    line_height_multiplier: 2.125,
+                    ..source.clone()
+                },
+            ),
+        ];
+        for (edited, expected) in cases {
+            assert_eq!(edited, expected);
+            assert_ne!(edited, source);
+        }
+        let repeated = source
+            .clone()
+            .with_font_size(31)
+            .unwrap()
+            .with_font_size(7)
+            .unwrap();
+        assert_eq!(repeated.font_size(), 7);
+        assert_eq!(repeated.line_height().to_bits(), 1.75_f64.to_bits());
+        assert_eq!(source.font_size(), 23);
+        assert_eq!(source.stack(), &stack);
+    }
+
+    #[test]
+    fn text_theme_refuses_invalid_size_and_leading_without_shrinking_valid_extremes() {
+        let stack = crate::font::canonical::named_stack(&["Caller literal"]);
+        let source = TextTheme::new(
+            stack.clone(),
+            Color::rgba(3, 5, 7, 0),
+            19,
+            TextWeight::Normal,
+            1.3,
+        )
+        .unwrap();
+        assert!(TextTheme::new(stack.clone(), source.color(), 0, source.weight(), 1.3).is_err());
+        assert!(source.clone().with_font_size(0).is_err());
+        for leading in [0.0, -0.0, -1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(
+                TextTheme::new(stack.clone(), source.color(), 19, source.weight(), leading)
+                    .is_err()
+            );
+            assert!(source.clone().with_line_height(leading).is_err());
+        }
+        for leading in [f64::from_bits(1), f64::MAX] {
+            let extreme = TextTheme::new(
+                stack.clone(),
+                source.color(),
+                u32::MAX,
+                TextWeight::Bold,
+                leading,
+            )
+            .unwrap();
+            assert_eq!(extreme.font_size(), u32::MAX);
+            assert_eq!(extreme.line_height().to_bits(), leading.to_bits());
+        }
+        // Internal negative fixtures may still poison a field. Every construction
+        // edit validates the complete result, rather than accepting a bad sibling.
+        let poisoned = TextTheme {
+            line_height_multiplier: f64::NAN,
+            ..source.clone()
+        };
+        assert!(poisoned.clone().with_stack(stack).is_err());
+        assert!(poisoned.clone().with_color(Color::rgb(0, 0, 0)).is_err());
+        assert!(poisoned.clone().with_font_size(11).is_err());
+        assert!(poisoned.with_weight(TextWeight::Bold).is_err());
+        assert_eq!(source.font_size(), 19);
+        assert_eq!(source.line_height().to_bits(), 1.3_f64.to_bits());
+    }
+
+    #[test]
+    fn surface_theme_retains_transparency_and_independent_root_and_panel_edits() {
+        let source =
+            SurfaceTheme::new(Color::rgba(11, 23, 37, 0), Color::rgba(41, 59, 73, 127)).unwrap();
+        assert_eq!(source.canvas_root(), Color::rgba(11, 23, 37, 0));
+        assert_eq!(source.plot_panel(), Color::rgba(41, 59, 73, 127));
+        let root = source
+            .clone()
+            .with_canvas_root(Color::rgb(83, 97, 109))
+            .unwrap();
+        assert_eq!(root.canvas_root(), Color::rgb(83, 97, 109));
+        assert_eq!(root.plot_panel(), source.plot_panel());
+        let panel = source
+            .clone()
+            .with_plot_panel(Color::rgba(113, 131, 149, 255))
+            .unwrap();
+        assert_eq!(panel.canvas_root(), source.canvas_root());
+        assert_eq!(panel.plot_panel(), Color::rgb(113, 131, 149));
+        let repeated = panel
+            .with_plot_panel(Color::rgba(151, 163, 179, 0))
+            .unwrap();
+        assert_eq!(repeated.plot_panel(), Color::rgba(151, 163, 179, 0));
+        assert_eq!(source.plot_panel(), Color::rgba(41, 59, 73, 127));
+    }
 
     const BUILT_IN_THEMES: [Theme; 4] = [
         Theme::Publication,
@@ -2199,12 +2493,15 @@ mod tests {
         let (colors, expected) = expected_preset(theme);
         let stack = crate::font::canonical::builtin_font_stack();
         let foreground = color_from_rgb(expected.foreground);
-        let text = |paint, font_size, line_height_multiplier| TextAppearance {
-            stack: stack.clone(),
-            paint,
-            font_size,
-            weight: TextWeight::Normal,
-            line_height_multiplier,
+        let text = |paint, font_size, line_height_multiplier| {
+            TextTheme::new(
+                stack.clone(),
+                paint,
+                font_size,
+                TextWeight::Normal,
+                line_height_multiplier,
+            )
+            .unwrap()
         };
 
         ResolvedTheme {
@@ -2214,10 +2511,11 @@ mod tests {
             label_font_size: expected.axis_title_size,
             composition_title_font_size: expected.title_size,
             facet_header_font_size: expected.subtitle_size,
-            surfaces: SurfaceAppearance {
-                canvas_root: Color::rgba(255, 255, 255, 255),
-                plot_panel: Color::rgba(255, 255, 255, 255),
-            },
+            surfaces: SurfaceTheme::new(
+                Color::rgba(255, 255, 255, 255),
+                Color::rgba(255, 255, 255, 255),
+            )
+            .unwrap(),
             canvas_surface_override: None,
             typography: FoundationalTypography {
                 title: text(
@@ -3184,7 +3482,7 @@ mod tests {
 
     fn indexed_query_input<'a>(
         source: &'a str,
-        appearance: &'a TextAppearance,
+        appearance: &'a TextTheme,
         owner: &str,
     ) -> TextPlanInput<'a> {
         TextPlanInput {
@@ -3422,7 +3720,7 @@ mod tests {
     #[test]
     fn query_hashing_admits_every_font_byte_before_the_complete_hash_pass() {
         use crate::font::canonical::{named_stack, OperationGenerationResources};
-        let appearance = TextAppearance {
+        let appearance = TextTheme {
             stack: named_stack(&["α, A"]),
             ..Theme::Publication
                 .resolve(&OperationGenerationResources::new())
@@ -3454,7 +3752,7 @@ mod tests {
             .font_environment
             .set(Ok(PreparedFontEnvironment::synthetic()))
             .unwrap();
-        let appearance = TextAppearance {
+        let appearance = TextTheme {
             stack: named_stack(&["Test Sans"]),
             font_size: 10,
             ..theme.typography.caption.clone()
@@ -3563,7 +3861,7 @@ mod tests {
                 ("B", &['A', ' ']),
             ])))
             .unwrap();
-        let mut appearance = TextAppearance {
+        let mut appearance = TextTheme {
             stack: named_stack(&["A, B"]),
             font_size: 10,
             ..theme.typography.caption.clone()
@@ -3662,7 +3960,7 @@ mod tests {
                 &['A', 'X'],
             )])))
             .unwrap();
-        let appearance = TextAppearance {
+        let appearance = TextTheme {
             stack: crate::font::canonical::named_stack(&["Literal"]),
             font_size: 10,
             ..theme.typography.caption.clone()

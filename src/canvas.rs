@@ -2947,7 +2947,7 @@ fn push_text_requirement(
     role: crate::layout::PreparedTextRole,
     local_index: u32,
     source: &str,
-    appearance: &crate::theme::TextAppearance,
+    appearance: &crate::theme::TextTheme,
     prepared_stage: &mut crate::layout::kernel::PreparedStage<'_>,
 ) -> Result<(), Error> {
     crate::layout::PreparedTextRequirement::push_into(

@@ -432,7 +432,7 @@ pub(crate) fn estimate_data_range<'a>(
 
 pub(crate) fn plan_not_estimable(
     theme: &ResolvedTheme,
-    appearance: &crate::theme::TextAppearance,
+    appearance: &crate::theme::TextTheme,
     layout: &Layout,
     vertical_guide_x: Option<f64>,
     scope: &crate::layout::fit::FitScope,
@@ -781,21 +781,24 @@ fn project(
         .map(|value| layout.projection.project(value, 0.0).0);
     let base = &theme.typography.significance_label;
     let exact = chart.significance_mark_style_override();
-    let significance_label = crate::theme::TextAppearance {
-        stack: data.copy_font_stack(&base.stack)?,
-        paint: base.paint,
-        font_size: exact.map_or(base.font_size, crate::SignificanceMarkStyle::font_size_spec),
-        weight: exact.map_or(base.weight, crate::SignificanceMarkStyle::weight_spec),
-        line_height_multiplier: base.line_height_multiplier,
-    };
+    let significance_label = crate::theme::TextTheme::new(
+        data.copy_font_stack(base.stack())?,
+        base.color(),
+        exact.map_or(
+            base.font_size(),
+            crate::SignificanceMarkStyle::font_size_spec,
+        ),
+        exact.map_or(base.weight(), crate::SignificanceMarkStyle::weight_spec),
+        base.line_height(),
+    )?;
     let detail_role = &theme.typography.estimate_detail;
-    let detail_label = crate::theme::TextAppearance {
-        stack: data.copy_font_stack(&detail_role.stack)?,
-        paint: detail_role.paint,
-        font_size: detail_role.font_size,
-        weight: detail_role.weight,
-        line_height_multiplier: detail_role.line_height_multiplier,
-    };
+    let detail_label = crate::theme::TextTheme::new(
+        data.copy_font_stack(detail_role.stack())?,
+        detail_role.color(),
+        detail_role.font_size(),
+        detail_role.weight(),
+        detail_role.line_height(),
+    )?;
     data.claim_source_visits(estimates.len())?;
     let not_estimable_plan = estimates
         .iter()

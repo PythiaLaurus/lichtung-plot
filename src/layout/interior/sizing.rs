@@ -327,7 +327,7 @@ fn pixels(value: i64) -> f64 {
 pub(crate) fn text_width(
     theme: &ResolvedTheme,
     source: &str,
-    role: &crate::theme::TextAppearance,
+    role: &crate::theme::TextTheme,
 ) -> Result<f64, Error> {
     let (hard, natural) =
         fit::intrinsic_widths(theme, source, role, "natural root text preference")?;
@@ -433,7 +433,7 @@ pub(crate) fn plot_size(
         .frame
         .as_ref()
         .map_or(0.0, |frame| f64::from(frame.stroke.width) / 2.0);
-    let chrome = theme.typography.axis_title.line_height()
+    let chrome = theme.typography.axis_title.line_pitch_pixels()
         + theme.axes.spacing.y_tick_label_gap
         + theme.axes.spacing.y_title_tick_label_gap
         + theme.axes.spacing.y_title_edge_padding
@@ -544,8 +544,8 @@ pub(crate) fn plot_size(
     let bottom = if gutters[2] > 0.0 {
         gutters[2]
     } else {
-        theme.typography.tick_label.line_height()
-            + theme.typography.axis_title.line_height()
+        theme.typography.tick_label.line_pitch_pixels()
+            + theme.typography.axis_title.line_pitch_pixels()
             + theme.axes.spacing.x_tick_label_gap
             + theme.axes.spacing.x_title_tick_label_gap
             + outward

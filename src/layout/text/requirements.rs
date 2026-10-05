@@ -7,7 +7,7 @@ use crate::font::canonical::{
     RequestedWeight,
 };
 use crate::layout::kernel::ComponentAddress;
-use crate::theme::TextAppearance;
+use crate::theme::TextTheme;
 use crate::{Error, Plot, PlotKind, TextWeight};
 
 const SCALAR_MAP_WORDS: usize = 0x11_0000 / u64::BITS as usize;
@@ -120,7 +120,7 @@ impl PreparedTextRequirement {
         local_index: u32,
         source: impl Into<CensusSource<'a>>,
         generated_alphabet: &[char],
-        appearance: &TextAppearance,
+        appearance: &TextTheme,
         mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
     ) -> Result<(), PreparedTextCensusError> {
         #[cfg(not(test))]
@@ -167,7 +167,7 @@ impl PreparedTextRequirement {
         local_index: u32,
         source: impl Into<CensusSource<'a>>,
         generated_alphabet: &[char],
-        appearance: &TextAppearance,
+        appearance: &TextTheme,
     ) -> Result<Self, PreparedTextCensusError> {
         Self::new_with_stage(
             component_address,
@@ -186,7 +186,7 @@ impl PreparedTextRequirement {
         local_index: u32,
         source: impl Into<CensusSource<'a>>,
         generated_alphabet: &[char],
-        appearance: &TextAppearance,
+        appearance: &TextTheme,
         mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
     ) -> Result<Self, PreparedTextCensusError> {
         if generated_alphabet.windows(2).any(|pair| pair[0] >= pair[1]) {
@@ -1564,7 +1564,7 @@ fn push_deferred_body<'a>(
     body_index: &mut u32,
     source: impl Into<CensusSource<'a>>,
     generated: &[char],
-    appearance: &TextAppearance,
+    appearance: &TextTheme,
     prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), Error> {
     let address = body_address.clone();
@@ -1777,7 +1777,7 @@ fn push_present(
     address: ComponentAddress,
     role: PreparedTextRole,
     source: Option<&str>,
-    appearance: &TextAppearance,
+    appearance: &TextTheme,
     prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), Error> {
     if let Some(source) = source.filter(|source| !source.is_empty()) {
@@ -1801,7 +1801,7 @@ fn push_axis_ticks(
     exact: Option<&[crate::layout::AxisTick]>,
     automatic_categories: Option<Vec<String>>,
     category_generated_alphabet: Option<&[char]>,
-    appearance: &TextAppearance,
+    appearance: &TextTheme,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), Error> {
     if let Some(ticks) = exact {
@@ -1910,7 +1910,7 @@ fn push_owned<'a>(
     local_index: u32,
     source: impl Into<CensusSource<'a>>,
     generated_alphabet: &[char],
-    appearance: &TextAppearance,
+    appearance: &TextTheme,
     prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), Error> {
     PreparedTextRequirement::push_into(
@@ -2423,14 +2423,15 @@ mod tests {
         .unwrap();
     }
 
-    fn appearance(stack: &str, weight: TextWeight) -> TextAppearance {
-        TextAppearance {
-            stack: canonical::named_stack(&[stack]),
-            paint: Color::rgb(0, 0, 0),
-            font_size: 12,
+    fn appearance(stack: &str, weight: TextWeight) -> TextTheme {
+        TextTheme::new(
+            canonical::named_stack(&[stack]),
+            Color::rgb(0, 0, 0),
+            12,
             weight,
-            line_height_multiplier: 1.2,
-        }
+            1.2,
+        )
+        .unwrap()
     }
 
     fn requirement(
@@ -2439,7 +2440,7 @@ mod tests {
         index: u32,
         source: &str,
         generated: &[char],
-        appearance: &TextAppearance,
+        appearance: &TextTheme,
     ) -> PreparedTextRequirement {
         PreparedTextRequirement::new(address, role, index, source, generated, appearance).unwrap()
     }
@@ -2461,7 +2462,7 @@ mod tests {
         ])
         .unwrap();
         let same_normal = normal.clone();
-        let bold = TextAppearance {
+        let bold = TextTheme {
             weight: TextWeight::Bold,
             ..normal.clone()
         };
@@ -2539,7 +2540,7 @@ mod tests {
             .iter()
             .enumerate()
             .map(|(index, stack)| {
-                let appearance = TextAppearance {
+                let appearance = TextTheme {
                     stack: stack.clone(),
                     ..appearance("A", TextWeight::Normal)
                 };

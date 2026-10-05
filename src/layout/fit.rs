@@ -2,7 +2,7 @@
 
 use crate::layout::{AddressRole, ComponentAddress};
 use crate::layout::{PhysicalTextAlignment, ResolvedTextPlan};
-use crate::theme::{ResolvedTheme, TextAppearance};
+use crate::theme::{ResolvedTheme, TextTheme};
 use crate::Error;
 
 #[allow(
@@ -149,7 +149,7 @@ pub(crate) fn measured<T>(result: Result<FitOutcome<T>, Error>) -> Result<T, Pla
 pub(crate) fn text(
     theme: &ResolvedTheme,
     source: &str,
-    appearance: &TextAppearance,
+    appearance: &TextTheme,
     width: f64,
     alignment: PhysicalTextAlignment,
     owner: &str,
@@ -229,7 +229,7 @@ pub(crate) fn collect<T>(
 pub(crate) fn intrinsic_widths(
     theme: &ResolvedTheme,
     source: &str,
-    appearance: &TextAppearance,
+    appearance: &TextTheme,
     owner: &str,
 ) -> Result<(f64, f64), Error> {
     let requirements = theme

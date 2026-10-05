@@ -502,7 +502,7 @@ fn planner_retains_the_exact_effective_significance_label() {
     assert_eq!(planned_label.plan.style.paint, label.paint);
     assert_eq!(planned_label.plan.style.font_size, label.font_size);
     assert_eq!(planned_label.plan.style.weight, label.weight);
-    assert!((planned_label.plan.line_height() - label.line_height()).abs() < 0.001);
+    assert!((planned_label.plan.line_height() - label.line_pitch_pixels()).abs() < 0.001);
     assert!(planned_label.exact_override && planned_label.plan.style.exact_override);
     assert_eq!(
         planned_label.plan.style.provenance.owner,

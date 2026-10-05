@@ -4,7 +4,7 @@
 use crate::theme::Color;
 use crate::Error;
 
-use super::resolved::TextAppearance;
+use super::resolved::TextTheme;
 
 // Generated from the specified binary64 preprocessing order and independently
 // compared at 120, 240 and 480 decimal digits of precision. The complete
@@ -306,9 +306,9 @@ pub(super) fn select<'a>(
     panel: Color,
     canvas: Color,
     backdrop: Color,
-    light: &'a TextAppearance,
-    dark: &'a TextAppearance,
-) -> Result<&'a TextAppearance, Error> {
+    light: &'a TextTheme,
+    dark: &'a TextTheme,
+) -> Result<&'a TextTheme, Error> {
     if backdrop.alpha() != 255 || light.paint.alpha() != 255 || dark.paint.alpha() != 255 {
         return Err(Error::Render(
             "contrast backdrop and candidate text must be opaque".into(),
@@ -347,14 +347,15 @@ mod tests {
     use super::*;
     use sha2::{Digest, Sha256};
 
-    fn text(stack: &str, paint: Color, font_size: u32) -> TextAppearance {
-        TextAppearance {
-            stack: crate::font::canonical::named_stack(&[stack]),
+    fn text(stack: &str, paint: Color, font_size: u32) -> TextTheme {
+        TextTheme::new(
+            crate::font::canonical::named_stack(&[stack]),
             paint,
             font_size,
-            weight: crate::TextWeight::Normal,
-            line_height_multiplier: 1.2,
-        }
+            crate::TextWeight::Normal,
+            1.2,
+        )
+        .unwrap()
     }
 
     #[test]
@@ -421,8 +422,12 @@ mod tests {
                 .stack,
             crate::font::canonical::named_stack(&["Second role"])
         );
-        let mut invalid = light.clone();
-        invalid.paint = Color::rgba(255, 255, 255, 254);
+        // General text construction accepts translucent paint. Only selection of
+        // automatic contrast candidates imposes the cross-role opaque invariant.
+        let invalid = light
+            .clone()
+            .with_color(Color::rgba(255, 255, 255, 254))
+            .unwrap();
         assert!(select(opaque, opaque, opaque, opaque, &invalid, &dark).is_err());
         assert!(select(opaque, opaque, opaque, transparent, &light, &dark).is_err());
     }

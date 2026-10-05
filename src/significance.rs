@@ -12,7 +12,7 @@ use crate::render::backend::{
     Backend, BracketOrientation, BracketStyle, PlannedSignificanceCall, SignificanceBracket,
     SIGNIFICANCE_BRACKET_GEOMETRY,
 };
-use crate::theme::TextAppearance;
+use crate::theme::TextTheme;
 use crate::{Plot, SignificanceMarkStyle};
 
 #[derive(Debug)]
@@ -145,7 +145,7 @@ fn plan_comparisons_with_label(
     panel: PanelBox,
     legend_constraint: LegendAnnotationConstraint,
     mark_style: SignificanceMarkStyle,
-    label: &TextAppearance,
+    label: &TextTheme,
     theme: &crate::theme::ResolvedTheme,
     exact_override: bool,
     scope: &crate::layout::fit::FitScope,
@@ -235,7 +235,7 @@ fn plan_comparisons_at_with_label(
     legend_constraint: LegendAnnotationConstraint,
     horizontal: bool,
     mark_style: SignificanceMarkStyle,
-    label: &TextAppearance,
+    label: &TextTheme,
     theme: &crate::theme::ResolvedTheme,
     exact_override: bool,
     scope: &crate::layout::fit::FitScope,
