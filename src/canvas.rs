@@ -5242,8 +5242,11 @@ impl Canvas {
                 edge,
                 crate::LegendPosition::OutsideTop | crate::LegendPosition::OutsideBottom
             );
-            let metrics = crate::decorations::legend::LegendMetrics::from_theme(themes.root());
-            let gap = self.shared_legend_gap.unwrap_or(metrics.shared_gap);
+            let gap = if let Some(gap) = self.shared_legend_gap {
+                gap
+            } else {
+                themes.root().legend_shared_gap()?
+            };
             let grid_gap = themes.root().composition.canvas_grid_gap;
             let positive_span = crate::layout::canvas::MINIMUM_PANEL_SPAN;
             let mut columns = Vec::new();

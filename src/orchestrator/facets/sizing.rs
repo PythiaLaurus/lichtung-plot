@@ -145,7 +145,7 @@ pub(in crate::orchestrator) fn natural_size(
         crate::decorations::legend::Legend::natural_preference(&guide.title, &guide.entries, theme)?
     };
     let guide_gap = if guide_size.0 > 0.0 {
-        theme.legend.outside_gap
+        theme.legend_outside_gap()?
     } else {
         0.0
     };

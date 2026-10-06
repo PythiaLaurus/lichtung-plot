@@ -237,7 +237,7 @@ pub(super) fn allocate(
                         width = if guide.horizontal() {
                             width.max(size.0)
                         } else {
-                            width + size.0 + child_theme.legend.outside_gap
+                            width + size.0 + child_theme.legend_outside_gap()?
                         };
                     }
                 }

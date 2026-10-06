@@ -452,8 +452,7 @@ pub(crate) fn plan_panel_with_context(
             guide_scope.ordinal = scope.ordinal;
             let gutters = round.insets(address, FeedbackKind::AxisGutter)?;
             let ink = round.insets(address, FeedbackKind::OwnedInk)?;
-            let metrics = crate::decorations::legend::LegendMetrics::from_theme(context.theme);
-            let gap = metrics.outside_gap;
+            let gap = context.theme.legend_outside_gap()?;
             let frame = AssignedGuideFrame::new(edge, minimum, gap);
             let available = frame.available(
                 context.panel,

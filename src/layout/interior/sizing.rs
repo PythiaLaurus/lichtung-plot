@@ -81,35 +81,9 @@ pub(crate) fn continuous_width(
     descriptor: &ContinuousDescriptor,
     theme: &ResolvedTheme,
 ) -> Result<f64, Error> {
-    let (metrics, frame_minimum) =
-        crate::decorations::legend::MeasuredContinuousGuide::allocation_metrics(descriptor, theme)?;
-    let mut width = text_width(
-        theme,
-        &descriptor.title,
-        &theme.typography.guides.legend_title,
-    )?;
-    for label in descriptor
-        .labels
-        .iter()
-        .map(String::as_str)
-        .chain(descriptor.missing.iter().map(|key| key.label.as_str()))
-    {
-        theme
-            .prepared_font_environment()?
-            .claim_processing_visits(1)
-            .map_err(|error| Error::Render(format!("continuous preference value: {error:?}")))?;
-        let plan = theme.measure_text(
-            label,
-            &theme.typography.guides.legend_label,
-            PhysicalTextAlignment::Start,
-            "continuous preference value",
-            false,
-        )?;
-        width =
-            width.max(metrics.handle_w + metrics.handle_text + plan.width().max(plan.fit_width()));
-    }
-    crate::layout::kernel::required_length(
-        (width + 2.0 * metrics.pad + 1.0 / 1024.0).max(frame_minimum),
+    Ok(
+        crate::decorations::legend::MeasuredContinuousGuide::vertical_widths(descriptor, theme)?
+            .preferred,
     )
 }
 
@@ -290,9 +264,9 @@ pub(crate) fn guided_body_height(
         let measured = guide.at_width(width, theme, scope)?;
         return Ok(plot.natural_body_height(theme, width, preference.1)?
             + measured.1
-            + theme.legend.outside_gap);
+            + theme.legend_outside_gap()?);
     }
-    let available = width - hard.0 - theme.legend.outside_gap;
+    let available = width - hard.0 - theme.legend_outside_gap()?;
     if available <= 0.0
         || (available < natural.0
             && matches!(guide.descriptor, PreparedGuideDescriptor::Discrete(_)))
@@ -319,7 +293,7 @@ pub(crate) fn guided_body_height(
     Ok(plot
         .natural_body_height(
             theme,
-            width - measured.0 - theme.legend.outside_gap,
+            width - measured.0 - theme.legend_outside_gap()?,
             preference.1,
         )?
         .max(measured.1))
@@ -523,7 +497,7 @@ pub(crate) fn plot_size(
     };
     let guide_width = guide_width
         + if guide_width > 0.0 {
-            theme.legend.outside_gap
+            theme.legend_outside_gap()?
         } else {
             0.0
         };
@@ -648,12 +622,141 @@ impl Plot {
 #[cfg(test)]
 mod tests {
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one independent width boundary verifies natural, measured and native-right owners with retained source labels"
+    )]
+    fn continuous_natural_and_native_right_width_keep_half_quantum_reserves_exact() {
+        use crate::decorations::legend::{
+            descriptor::ContinuousDescriptor, MeasuredContinuousGuide,
+        };
+        use crate::layout::{
+            fit::{FitOutcome, FitScope},
+            PanelBox,
+        };
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
+        let half = crate::theme::RelativeSpacing::ratio(1, 22_528).unwrap();
+        let spacing = theme
+            .legend
+            .spacing()
+            .clone()
+            .with_padding(half.clone())
+            .unwrap()
+            .with_key_label_gap(half)
+            .unwrap();
+        theme.legend = theme
+            .legend
+            .clone()
+            .with_spacing(spacing)
+            .unwrap()
+            .with_frame(None)
+            .unwrap();
+        let descriptor = ContinuousDescriptor {
+            field: "Value".into(),
+            title: "Value".into(),
+            selection: crate::theme::ContinuousColorScale::sequential(None, None).unwrap(),
+            domain: (0.0, 1.0),
+            center: None,
+            exact: true,
+            missing: None,
+            stops: vec![
+                crate::render::backend::GradientStop::new(0.0, (0, 0, 0)),
+                crate::render::backend::GradientStop::new(1.0, (255, 255, 255)),
+            ],
+            labels: vec!["0.000000000012345".into(), "0.000000000098765".into()],
+        };
+        let label_width = descriptor
+            .labels
+            .iter()
+            .map(|label| {
+                let plan = theme
+                    .measure_text(
+                        label,
+                        &theme.typography.guides.legend_label,
+                        crate::layout::PhysicalTextAlignment::Start,
+                        "fractional continuous width fixture",
+                        false,
+                    )
+                    .unwrap();
+                plan.width().max(plan.fit_width())
+            })
+            .fold(0.0_f64, f64::max);
+        let base = crate::layout::kernel::ceil_spatial_quanta(11.0 + label_width).unwrap();
+        let full = f64::from(u32::try_from(base + 2).unwrap()) / 1024.0;
+        let below = f64::from(u32::try_from(base + 1).unwrap()) / 1024.0;
+        let scope = FitScope::root();
+        let (width, _) = super::continuous_preference(&descriptor, &theme, &scope).unwrap();
+        assert_eq!(width.to_bits(), full.to_bits());
+        assert!(matches!(
+            MeasuredContinuousGuide::measure(
+                &descriptor,
+                (below, 500.0),
+                false,
+                false,
+                &theme,
+                &mut false,
+                &scope
+            )
+            .unwrap(),
+            FitOutcome::Miss(_)
+        ));
+        let source = crate::Plot::heatmap(
+            crate::CategoryValues::new("x", ["a", "b"]).unwrap(),
+            crate::CategoryValues::new("y", ["a", "a"]).unwrap(),
+            crate::NumericValues::new("Value", [0.0, 1.0]),
+        )
+        .erase();
+        let resources = theme
+            .prepared_font_environment()
+            .unwrap()
+            .generation_resources();
+        let data = source.data().with_axis_resources(&resources);
+        let gap = theme.legend_outside_gap().unwrap();
+        let (_, guide) = crate::layout::interior::guide::continuous_right(
+            &descriptor,
+            PanelBox::new(0.0, 64.0 + gap + full + 128.0, 0.0, 500.0),
+            64.0,
+            &theme,
+            &scope,
+            data,
+            None,
+        )
+        .unwrap();
+        assert_eq!(guide.width.to_bits(), full.to_bits());
+        assert!(matches!(
+            crate::layout::interior::guide::continuous_right(
+                &descriptor,
+                PanelBox::new(0.0, 64.0 + gap + below, 0.0, 500.0),
+                64.0,
+                &theme,
+                &scope,
+                data,
+                None
+            ),
+            Err(crate::layout::fit::PlanError::Fit(_))
+        ));
+    }
+
+    #[test]
     fn continuous_intrinsic_width_admits_broad_frame_and_missing_key_chrome() {
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        theme.legend.frame_stroke_width = 30.0;
-        theme.legend.frame_radius = 50.0;
+        let frame = crate::theme::LegendFrameTheme::new(
+            theme.legend.frame().unwrap().fill(),
+            Some(
+                crate::theme::OutlineTheme::new(
+                    theme.legend.frame().unwrap().outline().unwrap().color(),
+                    30.0,
+                )
+                .unwrap(),
+            ),
+            crate::theme::RelativeSpacing::from_pixels(50.0, 11).unwrap(),
+        )
+        .unwrap();
+        theme.legend = theme.legend.clone().with_frame(Some(frame)).unwrap();
         let descriptor = crate::decorations::legend::descriptor::ContinuousDescriptor {
             selection: crate::theme::ContinuousColorScale::sequential(
                 Some(

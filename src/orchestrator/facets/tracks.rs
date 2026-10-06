@@ -132,7 +132,7 @@ pub(super) fn allocate(
                 if guide.horizontal() {
                     preference.0.max(size.0)
                 } else {
-                    preference.0 + size.0 + theme.legend.outside_gap
+                    preference.0 + size.0 + theme.legend_outside_gap()?
                 }
             } else {
                 preference.0

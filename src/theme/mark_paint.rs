@@ -33,7 +33,7 @@ macro_rules! solid_paint {
                 Ok(value)
             }
 
-            fn validate(&self) -> Result<()> { validate_width(self.width()) }
+            pub(crate) fn validate(&self) -> Result<()> { validate_width(self.width()) }
 
             pub(crate) fn color(&self) -> Color { self.paint }
             pub(crate) fn width(&self) -> f32 { self.width }

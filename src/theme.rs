@@ -3,6 +3,7 @@
 pub(crate) mod axis;
 mod color;
 mod contrast;
+pub(crate) mod guide;
 mod mark_paint;
 mod paint;
 mod resolved;
@@ -12,6 +13,9 @@ pub(crate) mod spacing;
 mod typography;
 
 pub(crate) use axis::{AxisLengths, AxisSpacing, AxisTheme, FrameSides, FrameTheme, TickTheme};
+pub(crate) use guide::LegendTheme;
+#[cfg(test)]
+pub(crate) use guide::{GradientLengths, LegendFrameTheme, LegendSpacing};
 pub(crate) use typography::{
     AnnotationTextRoles, AxisTextRoles, CompositionTextRoles, ContrastTextRoles, GuideTextRoles,
     RootTextRoles, TypographyTheme,

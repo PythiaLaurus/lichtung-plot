@@ -723,9 +723,11 @@ pub(crate) fn measure(
     };
 
     let mut outer = context.panel;
-    let legend_reserve = legend.as_ref().map_or(0.0, |legend| {
-        legend.compute_box_width() + theme.legend.outside_gap
-    });
+    let legend_reserve = if let Some(legend) = &legend {
+        legend.compute_box_width() + theme.legend_outside_gap()?
+    } else {
+        0.0
+    };
     if context.content_height {
         let hard = intrinsic_body_minimum(chart, theme)?;
         let height = (outer.width() - legend_reserve).max(hard.1).max(

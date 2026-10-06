@@ -205,7 +205,7 @@ pub(super) fn measured_preference(
         let panel = plan.panel_box;
         if guide.bounds.bottom >= panel.y1 || guide.bounds.top <= panel.y0 {
             height += crate::layout::kernel::required_length(
-                guide.legend.compute_box_height() + theme.legend.outside_gap,
+                guide.legend.compute_box_height() + theme.legend_outside_gap()?,
             )?;
         } else if guide.bounds.left >= panel.x1 || guide.bounds.right <= panel.x0 {
             height = height.max(crate::layout::kernel::required_length(
@@ -488,7 +488,11 @@ pub(super) fn measure(
         )?;
     }
     let guide_gap = if guide.0 > 0.0 {
-        source.shared_legend_gap.unwrap_or(theme.legend.shared_gap)
+        if let Some(gap) = source.shared_legend_gap {
+            gap
+        } else {
+            theme.legend_shared_gap()?
+        }
     } else {
         0.0
     };

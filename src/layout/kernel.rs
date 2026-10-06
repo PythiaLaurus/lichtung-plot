@@ -743,23 +743,6 @@ pub(crate) use feedback::{
 };
 pub(crate) use tracks::{allocate_grid_axis, GridRequirement, TrackSpec};
 
-pub(crate) fn compact_half_width(width: f64, gap: f64) -> Result<Option<f64>, Error> {
-    let width = LayoutScalar::from_css_pixels(width, SpatialRounding::Floor)?.0;
-    let gap = LayoutScalar::from_css_pixels(gap, SpatialRounding::NearestEven)?.0;
-    let remainder = i128::from(width) - i128::from(gap);
-    if remainder <= 0 {
-        return Ok(None);
-    }
-    let half = i64::try_from(remainder / 2)
-        .map_err(|_| Error::Render("compact guide width overflowed".into()))?;
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "assigned guide widths are bounded by exact u32 root dimensions"
-    )]
-    let pixels = half as f64 / 1024.0;
-    Ok(Some(pixels))
-}
-
 pub(crate) fn required_length(value: f64) -> Result<f64, Error> {
     let length = LayoutScalar::from_css_pixels(value, SpatialRounding::Ceil)?;
     if !length.is_nonnegative() {

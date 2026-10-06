@@ -13,8 +13,8 @@ use sha2::{Digest, Sha256};
 use super::{
     AnnotationTextRoles, AxisSpacing, AxisTextRoles, AxisTheme, CompositionTextRoles,
     ContrastTextRoles, DataFillTheme, DataLineTheme, DataOutlineTheme, FixedFillTheme, FrameSides,
-    FrameTheme, GuideTextRoles, OutlineTheme, PointOutlineTheme, PointTheme, RootTextRoles,
-    SolidStrokeTheme, StrokeTheme, TickTheme, TypographyTheme,
+    FrameTheme, GuideTextRoles, LegendTheme, OutlineTheme, PointOutlineTheme, PointTheme,
+    RootTextRoles, SolidStrokeTheme, StrokeTheme, TickTheme, TypographyTheme,
 };
 use crate::font::canonical::{OperationGenerationResources, PreparedFontEnvironment};
 use crate::layout::{
@@ -98,7 +98,7 @@ pub(crate) struct ResolvedTheme {
     /// Complete nested semantic text roles.
     pub(crate) typography: TypographyTheme,
     /// Legend typography-adjacent chrome with owner-local lengths.
-    pub(crate) legend: LegendAppearance,
+    pub(crate) legend: LegendTheme,
     /// Nonsemantic axis chrome and its local spacing.
     pub(crate) axes: AxisTheme,
     /// Complete stroke roles for currently migrated marks.
@@ -531,6 +531,7 @@ impl PartialEq for ResolvedTheme {
     fn eq(&self, other: &Self) -> bool {
         self.non_text_eq(other)
             && self.axes == other.axes
+            && self.legend == other.legend
             && self.marks.primary_point == other.marks.primary_point
             && self.marks.raw_overlay_point == other.marks.raw_overlay_point
             && self.typography == other.typography
@@ -547,7 +548,6 @@ impl ResolvedTheme {
             && self.facet_header_font_size == other.facet_header_font_size
             && self.surfaces == other.surfaces
             && self.canvas_surface_override == other.canvas_surface_override
-            && self.legend == other.legend
             && self.marks.non_point_eq(&other.marks)
             && self.annotations == other.annotations
             && self.composition == other.composition
@@ -555,6 +555,18 @@ impl ResolvedTheme {
 }
 
 impl ResolvedTheme {
+    pub(crate) fn legend_outside_gap(&self) -> Result<f64, Error> {
+        self.legend.outside_gap_pixels(
+            self.typography.guides.legend_label.font_size(),
+            &self.prepared_font_environment()?.generation_resources(),
+        )
+    }
+    pub(crate) fn legend_shared_gap(&self) -> Result<f64, Error> {
+        self.legend.shared_gap_pixels(
+            self.typography.guides.legend_label.font_size(),
+            &self.prepared_font_environment()?.generation_resources(),
+        )
+    }
     pub(crate) fn same(
         &self,
         other: &Self,
@@ -566,6 +578,9 @@ impl ResolvedTheme {
             .accents
             .admit_comparison(&other.marks.accents, resources)?;
         if !self.axes.same(&other.axes, resources)? {
+            return Ok(false);
+        }
+        if !self.legend.same(&other.legend, resources)? {
             return Ok(false);
         }
         if !self
@@ -599,7 +614,9 @@ impl ResolvedTheme {
         data.require_source_resources()?;
         let point_ratios = usize::from(self.marks.primary_point.outline.is_some())
             + usize::from(self.marks.raw_overlay_point.outline.is_some());
-        data.claim_source_visits(self.typography.roles().len() + 4 + 6 + point_ratios)?;
+        data.claim_source_visits(
+            self.typography.roles().len() + 4 + 6 + point_ratios + self.legend.relationship_count(),
+        )?;
         // All fonts, four scale/accent payloads, six axis relationships and each
         // structurally present point-outline relationship are shared once.
         Ok(self.clone())
@@ -1419,24 +1436,6 @@ impl TextTheme {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct LegendAppearance {
-    pub(crate) padding: f64,
-    pub(crate) key_width: f64,
-    pub(crate) key_label_gap: f64,
-    pub(crate) outside_gap: f64,
-    pub(crate) shared_gap: f64,
-    pub(crate) gradient_min_length: f64,
-    pub(crate) gradient_preferred_length: f64,
-    pub(crate) row_gap: f64,
-    pub(crate) column_gap: f64,
-    pub(crate) title_gap: f64,
-    pub(crate) frame_fill: Color,
-    pub(crate) frame_outline: Color,
-    pub(crate) frame_stroke_width: f32,
-    pub(crate) frame_radius: f64,
-}
-
 /// Mark strokes are independent of structurally similar axis chrome.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct MarkAppearance {
@@ -1770,22 +1769,7 @@ fn resolved_theme(
                 )?,
             )?,
         )?,
-        legend: LegendAppearance {
-            padding: 8.8,
-            key_width: 11.0,
-            key_label_gap: 8.8,
-            outside_gap: 8.8,
-            shared_gap: 17.6,
-            gradient_min_length: 40.0,
-            gradient_preferred_length: 160.0,
-            row_gap: 3.3,
-            column_gap: 13.2,
-            title_gap: 7.8,
-            frame_fill: Color::rgba(255, 255, 255, 204),
-            frame_outline: Color::rgb(200, 200, 200),
-            frame_stroke_width: 1.0,
-            frame_radius: 2.0,
-        },
+        legend: LegendTheme::builtin(resources)?,
         axes: AxisTheme::new(
             Some(FrameTheme::new(
                 FrameSides::new(true, true, true, true)?,
@@ -2337,21 +2321,38 @@ mod tests {
                 .unwrap(),
             )
             .unwrap(),
-            legend: LegendAppearance {
-                padding: 8.8,
-                key_width: 11.0,
-                key_label_gap: 8.8,
-                outside_gap: 8.8,
-                shared_gap: 17.6,
-                gradient_min_length: 40.0,
-                gradient_preferred_length: 160.0,
-                row_gap: 3.3,
-                column_gap: 13.2,
-                title_gap: 7.8,
-                frame_fill: Color::rgba(255, 255, 255, 204),
-                frame_outline: Color::rgb(200, 200, 200),
-                frame_stroke_width: 1.0,
-                frame_radius: 2.0,
+            legend: {
+                use crate::theme::{
+                    GradientLengths, LegendFrameTheme, LegendSpacing, RelativeSpacing,
+                };
+                LegendTheme::new(
+                    LegendSpacing::new(
+                        RelativeSpacing::from_pixels(8.8, 11).unwrap(),
+                        RelativeSpacing::ratio(1, 1).unwrap(),
+                        RelativeSpacing::from_pixels(8.8, 11).unwrap(),
+                        RelativeSpacing::from_pixels(8.8, 11).unwrap(),
+                        RelativeSpacing::from_pixels(17.6, 11).unwrap(),
+                        RelativeSpacing::from_pixels(3.3, 11).unwrap(),
+                        RelativeSpacing::from_pixels(13.2, 11).unwrap(),
+                        RelativeSpacing::from_pixels(7.8, 12).unwrap(),
+                        RelativeSpacing::new(0.2).unwrap(),
+                    )
+                    .unwrap(),
+                    GradientLengths::new(
+                        RelativeSpacing::ratio(40, 11).unwrap(),
+                        RelativeSpacing::ratio(160, 11).unwrap(),
+                    )
+                    .unwrap(),
+                    Some(
+                        LegendFrameTheme::new(
+                            Color::rgba(255, 255, 255, 204),
+                            Some(OutlineTheme::new(Color::rgb(200, 200, 200), 1.0).unwrap()),
+                            RelativeSpacing::ratio(2, 11).unwrap(),
+                        )
+                        .unwrap(),
+                    ),
+                )
+                .unwrap()
             },
             axes: AxisTheme::new(
                 Some(
@@ -3885,7 +3886,7 @@ mod tests {
         let roles = theme.typography.roles();
         assert_eq!(roles.len(), 18);
         let bytes = 0_u64; // all palette/gradient payloads and font entries are immutable shares
-        let work = 30; // eighteen fonts, four scales/accents and eight exact relationships
+        let work = 42; // eighteen fonts, four scales/accents, eight mark/axis and twelve guide relationships
         let discoveries = FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
         for (visits, limit) in [(0, bytes), (work - 1, bytes), (work, bytes)] {
             let resources = OperationGenerationResources::with_test_limits(visits, limit);
@@ -3927,7 +3928,7 @@ mod tests {
             .resolve(&OperationGenerationResources::new())
             .unwrap();
         let mut retained = theme.clone();
-        let work: usize = 31; // thirty shared payloads plus one axis metadata witness
+        let work: usize = 44; // forty-two payloads plus axis and guide metadata witnesses
         for remaining in [0, work - 1, work] {
             let resources = OperationGenerationResources::with_test_limits(remaining as u128, 0);
             let result = retained.same(&theme, &resources);
@@ -3936,9 +3937,9 @@ mod tests {
             assert_eq!(resources.byte_usage().unwrap(), 0);
         }
         retained.typography.root.title.stack = named_stack(&["A, B"]);
-        let resources = OperationGenerationResources::with_test_limits(14, 0);
+        let resources = OperationGenerationResources::with_test_limits(27, 0);
         assert!(!retained.same(&theme, &resources).unwrap());
-        assert_eq!(resources.usage().unwrap().1, 14); // thirteen payload/axis witnesses, then differing font entry count
+        assert_eq!(resources.usage().unwrap().1, 27); // twenty-six witnesses, then differing font entry count
     }
 
     #[test]

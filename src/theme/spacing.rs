@@ -34,6 +34,24 @@ impl Eq for SpacingPayload {}
 pub(crate) struct RelativeSpacing(Arc<SpacingPayload>);
 
 impl RelativeSpacing {
+    pub(crate) fn compare(
+        &self,
+        other: &Self,
+        resources: &OperationGenerationResources,
+    ) -> Result<Ordering> {
+        if Arc::ptr_eq(&self.0, &other.0) {
+            admit(resources, 1, 0)?;
+            return Ok(Ordering::Equal);
+        }
+        let left = &self.0.rational;
+        let right = &other.0.rational;
+        let bits = sum_bits(
+            left.numerator.bits().max(left.denominator.bits()),
+            right.numerator.bits().max(right.denominator.bits()),
+        )?;
+        admit_math(resources, bits, 2)?;
+        Ok((&left.numerator * &right.denominator).cmp(&(&right.numerator * &left.denominator)))
+    }
     pub(crate) fn same(
         &self,
         other: &Self,
@@ -238,6 +256,70 @@ impl LocalMetric {
 pub(crate) struct ExactLength(Rational);
 
 impl ExactLength {
+    /// Checked unrounded remainder. Admission precedes cross-products and
+    /// subtraction; a negative remainder is unavailable capacity, not zero.
+    pub(crate) fn subtract(
+        &self,
+        other: &Self,
+        resources: &OperationGenerationResources,
+    ) -> Result<Option<Self>> {
+        let bits = sum_bits(
+            self.0.numerator.bits().max(self.0.denominator.bits()),
+            other.0.numerator.bits().max(other.0.denominator.bits()),
+        )?;
+        admit_math(resources, sum_bits(bits, 1)?, 6)?;
+        let left = &self.0.numerator * &other.0.denominator;
+        let right = &other.0.numerator * &self.0.denominator;
+        if left < right {
+            return Ok(None);
+        }
+        Ok(Some(Self(Rational {
+            numerator: left - right,
+            denominator: &self.0.denominator * &other.0.denominator,
+        })))
+    }
+    pub(crate) fn before_pixels(
+        &self,
+        anchor: f64,
+        resources: &OperationGenerationResources,
+    ) -> Result<f64> {
+        scalar_pixels(self.before(anchor, resources)?)
+    }
+    pub(crate) fn after_pixels(
+        &self,
+        anchor: f64,
+        resources: &OperationGenerationResources,
+    ) -> Result<f64> {
+        let value = self.before_pixels(-anchor, resources)?;
+        Ok(if value == 0.0 { 0.0 } else { -value })
+    }
+    pub(crate) fn divided_by(
+        &self,
+        value: f64,
+        resources: &OperationGenerationResources,
+    ) -> Result<Self> {
+        if !value.is_finite() || value <= 0.0 {
+            return Err(invalid("length divisor must be finite and positive"));
+        }
+        let divisor = dyadic(value, resources)?;
+        let bits = sum_bits(
+            self.0.numerator.bits().max(self.0.denominator.bits()),
+            divisor.numerator.bits().max(divisor.denominator.bits()),
+        )?;
+        admit_math(resources, bits, 2)?;
+        Ok(Self(Rational {
+            numerator: &self.0.numerator * divisor.denominator,
+            denominator: &self.0.denominator * divisor.numerator,
+        }))
+    }
+
+    pub(crate) fn pixels_rounded(
+        &self,
+        rounding: SpatialRounding,
+        resources: &OperationGenerationResources,
+    ) -> Result<f64> {
+        scalar_pixels(self.round(rounding, resources)?)
+    }
     /// Resolve a whole position, retaining anchor parity through half-quantum
     /// ties instead of independently rounding the offset before subtraction.
     pub(crate) fn before(
@@ -309,13 +391,6 @@ impl ExactLength {
         Ok(Self(reduce(numerator, denominator, resources)?))
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "complete repeated gap sums are wired with the complete-role cutover"
-        )
-    )]
     pub(crate) fn times(
         &self,
         count: u32,
@@ -362,13 +437,6 @@ impl ExactLength {
         }))
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "exact preferred/minimum comparisons follow complete role construction"
-        )
-    )]
     pub(crate) fn compare(
         &self,
         other: &Self,
@@ -414,6 +482,17 @@ impl ExactLength {
             .map(LayoutScalar::from_quanta)
             .ok_or_else(|| invalid("rounded length exceeds layout quanta"))
     }
+}
+
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "the checked quanta bound guarantees exact integer conversion"
+)]
+fn scalar_pixels(value: LayoutScalar) -> Result<f64> {
+    if value.quanta().unsigned_abs() > (1_u64 << 53) {
+        return Err(invalid("length cannot retain exact CSS quanta"));
+    }
+    Ok(value.quanta() as f64 / 1024.0)
 }
 
 fn validate(value: f64) -> Result<()> {

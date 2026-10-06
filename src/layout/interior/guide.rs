@@ -8,10 +8,6 @@ use crate::theme::ResolvedTheme;
 use crate::{Error, Plot, PlotKind};
 
 /// One measured mandatory right guide beside the flexible scientific body.
-#[expect(
-    clippy::too_many_lines,
-    reason = "one common constrained guide and its adjacent Grid track retain the same owner"
-)]
 pub(crate) fn continuous_right(
     descriptor: &crate::decorations::legend::descriptor::ContinuousDescriptor,
     panel: crate::layout::PanelBox,
@@ -29,34 +25,10 @@ pub(crate) fn continuous_right(
 > {
     use crate::layout::fit::{self, FitKind};
     use crate::layout::kernel::{allocate_grid_axis, GridRequirement, TrackSpec};
-    let (metrics, frame_minimum) =
-        crate::decorations::legend::MeasuredContinuousGuide::allocation_metrics(descriptor, theme)?;
-    let (hard_title, natural_title) = fit::intrinsic_widths(
-        theme,
-        &descriptor.title,
-        &theme.typography.guides.legend_title,
-        "continuous guide title",
-    )?;
-    let mut hard = hard_title;
-    for label in descriptor
-        .labels
-        .iter()
-        .map(String::as_str)
-        .chain(descriptor.missing.iter().map(|key| key.label.as_str()))
-    {
-        data.claim_source_visits(1)?;
-        let plan = theme.measure_text(
-            label,
-            &theme.typography.guides.legend_label,
-            crate::layout::PhysicalTextAlignment::Start,
-            "continuous guide value",
-            false,
-        )?;
-        hard =
-            hard.max(metrics.handle_w + metrics.handle_text + plan.width().max(plan.fit_width()));
-    }
-    let available = panel.width() - minimum - metrics.outside_gap;
-    if hard_title + 2.0 * metrics.pad > available {
+    let widths =
+        crate::decorations::legend::MeasuredContinuousGuide::vertical_widths(descriptor, theme)?;
+    let available = panel.width() - minimum - widths.outside_gap;
+    if widths.title_minimum > available {
         return Err(scope
             .child(
                 crate::layout::AddressRole::GuideTitle,
@@ -69,20 +41,8 @@ pub(crate) fn continuous_right(
             )
             .into());
     }
-    let width = crate::layout::kernel::required_length(
-        natural_title
-            .min(crate::layout::interior::sizing::text_width(
-                theme,
-                &descriptor.title,
-                &theme.typography.guides.legend_title,
-            )?)
-            .max(hard)
-            + 2.0 * metrics.pad
-            + 1.0 / 1024.0,
-    )?
-    .max(frame_minimum)
-    .min(available);
-    if width < hard + 2.0 * metrics.pad {
+    let width = widths.preferred.min(available);
+    if width < widths.minimum {
         return Err(scope
             .failure(
                 FitKind::LegendOrGuide,
@@ -128,7 +88,7 @@ pub(crate) fn continuous_right(
         &children,
         span,
         [0, 0],
-        crate::layout::kernel::ceil_spatial_quanta(metrics.outside_gap)?,
+        crate::layout::kernel::ceil_spatial_quanta(widths.outside_gap)?,
         None,
         true,
         data.source_resources()?,

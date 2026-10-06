@@ -29,6 +29,10 @@ enum PlotLayoutPlan {
 
 #[cfg(test)]
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one independent complete-preset fixture retains exact construction and refusal boundaries before fonts or backend begin"
+)]
 fn plot_preset_construction_refuses_on_its_prepared_ledger_before_fonts_or_backend() {
     use crate::font::canonical::{OperationGenerationResources, FONT_DISCOVERY_CALLS};
     let plot = Plot::scatter(
@@ -61,7 +65,9 @@ fn plot_preset_construction_refuses_on_its_prepared_ledger_before_fonts_or_backe
             + std::mem::size_of::<f64>()
             + 2 * std::mem::size_of::<usize>()) as u64
             + 2 * (16 + std::mem::size_of::<num_bigint::BigUint>() as u64);
-        let bytes = 2 * outline_bytes
+        let (guide_work, guide_bytes) = crate::theme::guide::builtin_resource_oracle();
+        let bytes = guide_bytes
+            + 2 * outline_bytes
             + 6 * ratio_bytes
             + 4 * (std::mem::size_of::<Vec<crate::theme::OpaqueColor>>()
                 + 2 * std::mem::size_of::<usize>()) as u64
@@ -74,7 +80,7 @@ fn plot_preset_construction_refuses_on_its_prepared_ledger_before_fonts_or_backe
         } else {
             38
         };
-        let work = 31_u128 + 2 * u128::from(seeds) + axis_work;
+        let work = 31_u128 + 2 * u128::from(seeds) + axis_work + guide_work;
         let source = plot.clone().theme(preset);
         for (visits, byte_limit) in [
             (0, bytes),

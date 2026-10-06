@@ -73,7 +73,9 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6B1d4 | IN PROGRESS | T6B1d3 | Assemble validated complete role/chrome/annotation groups with actual consumer mappings; `refactor(theme): assemble complete validated components` |
 | T6B1d4a | COMPLETE | T6B1d3 | Complete nested typography with all eighteen live roles; `refactor(theme): assemble complete typography roles` |
 | T6B1d4b | COMPLETE | T6B1d4a | Complete axis chrome and exact role-local spacing; `refactor(axes): retain validated local chrome` |
-| T6B1d4c | PENDING | T6B1d4b | Complete guide and composition chrome; `refactor(theme): retain validated composition chrome` |
+| T6B1d4c | IN PROGRESS | T6B1d4b | Complete guide and composition chrome; `refactor(theme): retain validated composition chrome` |
+| T6B1d4c1 | COMPLETE | T6B1d4b | Complete measured guide chrome and exact admission; `refactor(legend): retain exact validated guide chrome` |
+| T6B1d4c2 | PENDING | T6B1d4c1 | Complete root/embedded composition chrome; `refactor(composition): retain validated local relationships` |
 | T6B1d4d | PENDING | T6B1d4c | Complete mark groups and admitted annotation geometry; `refactor(theme): assemble mark and annotation roles` |
 | T6B2 | PENDING | T6B1 | Complete Theme construction/customization and owner resolution using those values; `refactor(theme): construct immutable complete themes` |
 | T6B3 | PENDING | T6B2 | Exact element Color/alpha replacement and repository caller migration; `feat(styles): expose complete RGBA element paints` |
@@ -185,6 +187,17 @@ for all four presets, with pinned hashes and semantic topology checks. Review
 closed natural Matrix's unused ordinary-frame dependency; automatic/width-only
 output is invariant under unrelated frame edits, while actual cell ink remains
 measured. Focused constructor/cache/frame/facet/root tests and strict Clippy pass.
+
+T6B1d4c1 evidence: `docs/guide-values.md` records the sole validated guide
+component and replacement of raw pixel/glyph-comfort sources. Discrete and
+continuous widths now use complete exact reserves; fractional capacity tests
+close early double-ceiling and scalar-reconstruction gaps. Review restored
+uniform compact vertical columns and rejection above the assigned cap, with
+actual preceding-column advancement and zero-overlap ink evidence. Five inspected
+snapshots change only documented quantum-level normalization consequences,
+preserving content, paint and topology. Focused tests, replay/budget checks,
+formatting and strict Clippy pass. Current public Shared-gap override stays
+until its scheduled public cutover; composition chrome remains the next unit.
 
 T6B1d3 evidence: `docs/scale-values.md` records immutable validated opaque
 palettes, gradients/domains and selection values, actual prepared transport and

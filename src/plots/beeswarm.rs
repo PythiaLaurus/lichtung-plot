@@ -657,7 +657,7 @@ fn select_colorbar(
     data: crate::data::PlotData<'_>,
 ) -> Result<crate::decorations::legend::LegendDrawPlan, Error> {
     guide.select(
-        panel.x1 + theme.legend.outside_gap,
+        panel.x1 + theme.legend_outside_gap()?,
         panel.y0 + (panel.height() - guide.height) / 2.0,
         data,
     )

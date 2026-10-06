@@ -512,7 +512,7 @@ mod tests {
                 // ninth/terminating byte (12). Group nesting adds no extra visit.
                 assert_eq!(
                     work,
-                    4 + 7 + 2 + 4 + 12,
+                    4 + 7 + 13 + 2 + 4 + 12,
                     "later role names and feedback tails remain unexamined"
                 );
                 for remaining in [0, work - 1, work] {
@@ -577,7 +577,7 @@ mod tests {
         // Eighteen font handles plus qualitative, sequential, diverging and
         // accent handles, six axis ratios and two point-outline ratios.
         // Inline group structure adds no separately shared node.
-        let work = 30;
+        let work = 42;
         for remaining in [0, work - 1, work] {
             let resources = crate::font::canonical::OperationGenerationResources::with_test_limits(
                 remaining, 0,
@@ -598,6 +598,13 @@ mod tests {
             let copy = copy.unwrap();
             assert_eq!(copy, theme);
             assert_eq!(resources.usage().unwrap().1, work);
+            for (left, right) in theme
+                .legend
+                .retained_relationships()
+                .zip(copy.legend.retained_relationships())
+            {
+                assert!(left.shares_payload_with(right));
+            }
             for (left, right) in theme
                 .axes
                 .spacing()
@@ -706,9 +713,24 @@ mod tests {
                 .map_err(crate::layout::fit::PlanError::into_error)?;
                 assert!(Arc::ptr_eq(&first, &hit));
                 let mut paint = theme.clone();
-                paint.legend.frame_fill = crate::theme::Color::rgba(1, 2, 3, 120);
+                let frame = paint
+                    .legend
+                    .frame()
+                    .unwrap()
+                    .clone()
+                    .with_fill(crate::theme::Color::rgba(1, 2, 3, 120))?;
+                paint.legend = paint.legend.clone().with_frame(Some(frame))?;
                 let mut geometry = paint.clone();
-                geometry.legend.frame_stroke_width = 7.0;
+                let frame = geometry.legend.frame().unwrap();
+                let changed = crate::theme::LegendFrameTheme::new(
+                    frame.fill(),
+                    Some(crate::theme::OutlineTheme::new(
+                        frame.outline().unwrap().color(),
+                        7.0,
+                    )?),
+                    frame.radius().clone(),
+                )?;
+                geometry.legend = geometry.legend.clone().with_frame(Some(changed))?;
                 for custom in [&paint, &geometry] {
                     let changed = crate::layout::fit::measured(children.measure(
                         &source,

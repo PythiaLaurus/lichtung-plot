@@ -369,12 +369,9 @@ impl FacetPlan {
                             | LegendPosition::OutsideBottom
                             | LegendPosition::OutsideBottomRight
                     );
-                    let metrics = crate::decorations::legend::LegendMetrics::from_theme(theme);
-                    let frame = crate::decorations::plan::AssignedGuideFrame::new(
-                        edge,
-                        minimum,
-                        metrics.outside_gap,
-                    );
+                    let gap = theme.legend_outside_gap()?;
+                    let frame =
+                        crate::decorations::plan::AssignedGuideFrame::new(edge, minimum, gap);
                     let available = frame.available(canvas_layout.panel_box, [0.0; 4]);
                     let guide = match crate::decorations::legend::Legend::measure_assigned(
                         title,
@@ -405,7 +402,7 @@ impl FacetPlan {
                             - if horizontal {
                                 0.0
                             } else {
-                                guide.compute_box_width() + metrics.outside_gap
+                                guide.compute_box_width() + gap
                             };
                         let height = match sizing::grid_height(
                             &shared_plot,
@@ -424,7 +421,7 @@ impl FacetPlan {
                             }
                         };
                         let height = if horizontal {
-                            height + guide.compute_box_height() + metrics.outside_gap
+                            height + guide.compute_box_height() + gap
                         } else {
                             height.max(guide.compute_box_height())
                         };

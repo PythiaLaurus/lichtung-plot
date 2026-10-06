@@ -63,7 +63,7 @@ pub(super) fn select(
     data: crate::data::PlotData<'_>,
 ) -> Result<LegendDrawPlan, Error> {
     guide.select(
-        body.x1 + theme.legend.outside_gap,
+        body.x1 + theme.legend_outside_gap()?,
         body.y0 + (body.height() - guide.height) / 2.0,
         data,
     )
