@@ -152,6 +152,9 @@ The component taxonomy is role-based rather than plot-family-based:
 - `AxisTheme` owns nonsemantic axis chrome. Frame sides, grid lines, and tick
   marks may be absent. It does not decide whether caller-provided titles, exact
   ticks, tick labels, or axis labels exist.
+  Ordinary panel `frame` and variable-grid `cell_frame` are independent complete
+  roles in the same component. Built-ins preserve their existing four-side and
+  bottom/left defaults respectively; custom cell sides are not masked by Matrix.
 - `LegendTheme` owns appearance and measured geometry of discrete legends and
   continuous color guides. Legend policies continue to own visibility,
   placement and combined/separate semantic composition. Numeric presentation

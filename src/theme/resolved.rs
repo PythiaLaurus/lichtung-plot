@@ -11,9 +11,10 @@ use std::sync::{Arc, Mutex, OnceLock};
 use sha2::{Digest, Sha256};
 
 use super::{
-    AnnotationTextRoles, AxisTextRoles, CompositionTextRoles, ContrastTextRoles, DataFillTheme,
-    DataLineTheme, DataOutlineTheme, FixedFillTheme, GuideTextRoles, OutlineTheme,
-    PointOutlineTheme, PointTheme, RootTextRoles, SolidStrokeTheme, StrokeTheme, TypographyTheme,
+    AnnotationTextRoles, AxisSpacing, AxisTextRoles, AxisTheme, CompositionTextRoles,
+    ContrastTextRoles, DataFillTheme, DataLineTheme, DataOutlineTheme, FixedFillTheme, FrameSides,
+    FrameTheme, GuideTextRoles, OutlineTheme, PointOutlineTheme, PointTheme, RootTextRoles,
+    SolidStrokeTheme, StrokeTheme, TickTheme, TypographyTheme,
 };
 use crate::font::canonical::{OperationGenerationResources, PreparedFontEnvironment};
 use crate::layout::{
@@ -99,7 +100,7 @@ pub(crate) struct ResolvedTheme {
     /// Legend typography-adjacent chrome with owner-local lengths.
     pub(crate) legend: LegendAppearance,
     /// Nonsemantic axis chrome and its local spacing.
-    pub(crate) axes: AxisAppearance,
+    pub(crate) axes: AxisTheme,
     /// Complete stroke roles for currently migrated marks.
     pub(crate) marks: MarkAppearance,
     /// Resolved non-text annotation appearance.
@@ -528,7 +529,11 @@ impl CachedTextQuery {
 
 impl PartialEq for ResolvedTheme {
     fn eq(&self, other: &Self) -> bool {
-        self.non_text_eq(other) && self.typography == other.typography
+        self.non_text_eq(other)
+            && self.axes == other.axes
+            && self.marks.primary_point == other.marks.primary_point
+            && self.marks.raw_overlay_point == other.marks.raw_overlay_point
+            && self.typography == other.typography
     }
 }
 
@@ -543,8 +548,7 @@ impl ResolvedTheme {
             && self.surfaces == other.surfaces
             && self.canvas_surface_override == other.canvas_surface_override
             && self.legend == other.legend
-            && self.axes == other.axes
-            && self.marks == other.marks
+            && self.marks.non_point_eq(&other.marks)
             && self.annotations == other.annotations
             && self.composition == other.composition
     }
@@ -561,6 +565,20 @@ impl ResolvedTheme {
         self.marks
             .accents
             .admit_comparison(&other.marks.accents, resources)?;
+        if !self.axes.same(&other.axes, resources)? {
+            return Ok(false);
+        }
+        if !self
+            .marks
+            .primary_point
+            .same(&other.marks.primary_point, resources)?
+            || !self
+                .marks
+                .raw_overlay_point
+                .same(&other.marks.raw_overlay_point, resources)?
+        {
+            return Ok(false);
+        }
         if !self.non_text_eq(other) {
             return Ok(false);
         }
@@ -579,8 +597,11 @@ impl ResolvedTheme {
 
     pub(crate) fn admitted_clone(&self, data: crate::data::PlotData<'_>) -> Result<Self, Error> {
         data.require_source_resources()?;
-        data.claim_source_visits(self.typography.roles().len() + 4)?;
-        // Three scale payload handles, one accent handle and all font handles.
+        let point_ratios = usize::from(self.marks.primary_point.outline.is_some())
+            + usize::from(self.marks.raw_overlay_point.outline.is_some());
+        data.claim_source_visits(self.typography.roles().len() + 4 + 6 + point_ratios)?;
+        // All fonts, four scale/accent payloads, six axis relationships and each
+        // structurally present point-outline relationship are shared once.
         Ok(self.clone())
     }
     /// Initialize this operation's canonical system-font environment.
@@ -1482,6 +1503,61 @@ pub(crate) struct MarkAppearance {
     pub(crate) dumbbell_connector: StrokeTheme,
 }
 
+impl MarkAppearance {
+    // The two point relationships have their own admitted comparison. Exhaustive
+    // destructuring prevents any retained field escaping theme identity.
+    fn non_point_eq(&self, other: &Self) -> bool {
+        macro_rules! fields {
+            ($($field:ident),+ $(,)?) => {{
+                let Self { primary_point: _, raw_overlay_point: _, $($field),+ } = self;
+                true $(&& *$field == other.$field)+
+            }};
+        }
+        fields!(
+            accents,
+            bar_body,
+            line_band,
+            regression_band,
+            density_area,
+            marginal_density,
+            matrix_density,
+            box_body,
+            violin_body,
+            raincloud_box,
+            histogram_bin,
+            waterfall_bar,
+            raw_overlay_radius,
+            heatmap_cell_outline,
+            heatmap_highlight_outline,
+            heatmap_missing_fill,
+            heatmap_missing_row_outline,
+            heatmap_missing_key_outline,
+            heatmap_missing_cross,
+            bar_zero,
+            waterfall_connector,
+            waterfall_reference,
+            raincloud_median,
+            beeswarm_reference,
+            interaction_interval,
+            interaction_connector,
+            point_sizes,
+            uncertainty_stroke,
+            summary_stroke,
+            series_line,
+            path_line,
+            histogram_curve,
+            histogram_rug,
+            density_line,
+            regression_fit,
+            estimate_interval,
+            point_interval_reference,
+            estimate_reference,
+            qq_reference,
+            dumbbell_connector
+        )
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PointSizeAppearance {
     pub(crate) scatter: u32,
@@ -1528,54 +1604,6 @@ pub(crate) struct AnnotationAppearance {
     pub(crate) waterfall_shelf_row_gap: f64,
     /// Opaque calculation-only backdrop when output surfaces are translucent.
     pub(crate) planning_backdrop: Color,
-}
-
-/// Structurally present frame appearance.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct FrameAppearance {
-    /// Complete frame stroke.
-    pub(crate) stroke: StrokeTheme,
-    /// Original preset setting retained until T5a5 normalizes frame topology.
-    pub(crate) source_show_top_right_spines: bool,
-}
-
-/// Structurally present tick-mark appearance.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct TickAppearance {
-    /// Complete tick stroke.
-    pub(crate) stroke: StrokeTheme,
-    /// Tick length in pixels.
-    pub(crate) length: u32,
-}
-
-/// Role-local axis spacing in pixels.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct AxisSpacing {
-    /// X tick-mark to tick-label gap.
-    pub(crate) x_tick_label_gap: f64,
-    /// Y tick-mark to tick-label gap.
-    pub(crate) y_tick_label_gap: f64,
-    /// X tick-label to axis-title gap.
-    pub(crate) x_title_tick_label_gap: f64,
-    /// X tick-mark to axis-title gap when labels are absent.
-    pub(crate) x_title_without_tick_labels_gap: f64,
-    /// Y tick-label to axis-title gap.
-    pub(crate) y_title_tick_label_gap: f64,
-    /// Minimum y-axis title clearance from the canvas edge.
-    pub(crate) y_title_edge_padding: f64,
-}
-
-/// Structurally resolved axis, frame, tick, and grid appearance.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct AxisAppearance {
-    /// Optional complete frame style; `None` means no frame.
-    pub(crate) frame: Option<FrameAppearance>,
-    /// Optional complete tick style; `None` means no tick marks.
-    pub(crate) ticks: Option<TickAppearance>,
-    /// Optional complete grid style; `None` means no grid.
-    pub(crate) grid: Option<StrokeTheme>,
-    /// Axis-local spacing relationships.
-    pub(crate) spacing: AxisSpacing,
 }
 
 /// Physical horizontal alignment of a root text role.
@@ -1656,7 +1684,6 @@ fn resolved_theme(
     caption_font_size: u32,
     axis_title_font_size: u32,
     grid_color: (u8, u8, u8),
-    source_show_top_right_spines: bool,
 ) -> Result<ResolvedTheme, Error> {
     let primary_outline = PointOutlineTheme::publication(resources)?;
     let overlay_outline = PointOutlineTheme::publication(resources)?;
@@ -1759,29 +1786,33 @@ fn resolved_theme(
             frame_stroke_width: 1.0,
             frame_radius: 2.0,
         },
-        axes: AxisAppearance {
-            frame: Some(FrameAppearance {
-                stroke: stroke(axis_width, StrokePattern::Solid)?,
-                source_show_top_right_spines,
-            }),
-            ticks: Some(TickAppearance {
-                stroke: stroke(axis_width, StrokePattern::Solid)?,
-                length: 5,
-            }),
-            grid: Some(StrokeTheme::new(
+        axes: AxisTheme::new(
+            Some(FrameTheme::new(
+                FrameSides::new(true, true, true, true)?,
+                stroke(axis_width, StrokePattern::Solid)?,
+            )?),
+            Some(FrameTheme::new(
+                FrameSides::new(false, false, true, true)?,
+                stroke(axis_width, StrokePattern::Solid)?,
+            )?),
+            Some(TickTheme::new(
+                stroke(axis_width, StrokePattern::Solid)?,
+                5,
+            )?),
+            Some(StrokeTheme::new(
                 color_from_rgb(grid_color),
                 0.5,
                 StrokePattern::MediumDash,
             )?),
-            spacing: AxisSpacing {
-                x_tick_label_gap: 8.0,
-                y_tick_label_gap: 6.0,
-                x_title_tick_label_gap: 8.0,
-                x_title_without_tick_labels_gap: 16.0,
-                y_title_tick_label_gap: 16.0,
-                y_title_edge_padding: 12.0,
-            },
-        },
+            AxisSpacing::new(
+                super::RelativeSpacing::ratio_in(8, 16, resources)?,
+                super::RelativeSpacing::ratio_in(6, 16, resources)?,
+                super::RelativeSpacing::ratio_in(8, axis_title_font_size, resources)?,
+                super::RelativeSpacing::ratio_in(16, axis_title_font_size, resources)?,
+                super::RelativeSpacing::ratio_in(16, axis_title_font_size, resources)?,
+                super::RelativeSpacing::ratio_in(12, axis_title_font_size, resources)?,
+            )?,
+        )?,
         marks: MarkAppearance {
             accents,
             primary_point: PointTheme::new(209, crate::PointShape::Circle, Some(primary_outline))?,
@@ -1894,7 +1925,6 @@ fn publication_theme(resources: &OperationGenerationResources) -> Result<Resolve
         15,
         17,
         (220, 220, 220),
-        false,
     )
 }
 
@@ -1916,7 +1946,6 @@ fn nature_theme(resources: &OperationGenerationResources) -> Result<ResolvedThem
         14,
         16,
         (230, 230, 230),
-        false,
     )
 }
 
@@ -1938,7 +1967,6 @@ fn science_theme(resources: &OperationGenerationResources) -> Result<ResolvedThe
         15,
         17,
         (200, 200, 200),
-        true,
     )
 }
 
@@ -1960,7 +1988,6 @@ fn chi_theme(resources: &OperationGenerationResources) -> Result<ResolvedTheme, 
         15,
         17,
         (220, 220, 220),
-        false,
     )
 }
 
@@ -2132,7 +2159,6 @@ mod tests {
         caption_size: u32,
         axis_title_size: u32,
         grid_color: (u8, u8, u8),
-        top_right_spines: bool,
     }
 
     fn expected_preset(theme: Theme) -> (Vec<(u8, u8, u8)>, ExpectedPreset) {
@@ -2157,7 +2183,6 @@ mod tests {
                     caption_size: 15,
                     axis_title_size: 17,
                     grid_color: (220, 220, 220),
-                    top_right_spines: false,
                 },
             ),
             Theme::Nature => (
@@ -2177,7 +2202,6 @@ mod tests {
                     caption_size: 14,
                     axis_title_size: 16,
                     grid_color: (230, 230, 230),
-                    top_right_spines: false,
                 },
             ),
             Theme::Science => (
@@ -2197,7 +2221,6 @@ mod tests {
                     caption_size: 15,
                     axis_title_size: 17,
                     grid_color: (200, 200, 200),
-                    top_right_spines: true,
                 },
             ),
             Theme::CHI => (
@@ -2217,7 +2240,6 @@ mod tests {
                     caption_size: 15,
                     axis_title_size: 17,
                     grid_color: (220, 220, 220),
-                    top_right_spines: false,
                 },
             ),
         }
@@ -2331,37 +2353,56 @@ mod tests {
                 frame_stroke_width: 1.0,
                 frame_radius: 2.0,
             },
-            axes: AxisAppearance {
-                frame: Some(FrameAppearance {
-                    stroke: StrokeTheme {
-                        paint: foreground,
-                        width: expected.axis_width,
-                        pattern: StrokePattern::Solid,
-                    },
-                    source_show_top_right_spines: expected.top_right_spines,
-                }),
-                ticks: Some(TickAppearance {
-                    stroke: StrokeTheme {
-                        paint: foreground,
-                        width: expected.axis_width,
-                        pattern: StrokePattern::Solid,
-                    },
-                    length: 5,
-                }),
-                grid: Some(StrokeTheme {
+            axes: AxisTheme::new(
+                Some(
+                    FrameTheme::new(
+                        FrameSides::new(true, true, true, true).unwrap(),
+                        StrokeTheme {
+                            paint: foreground,
+                            width: expected.axis_width,
+                            pattern: StrokePattern::Solid,
+                        },
+                    )
+                    .unwrap(),
+                ),
+                Some(
+                    FrameTheme::new(
+                        FrameSides::new(false, false, true, true).unwrap(),
+                        StrokeTheme {
+                            paint: foreground,
+                            width: expected.axis_width,
+                            pattern: StrokePattern::Solid,
+                        },
+                    )
+                    .unwrap(),
+                ),
+                Some(
+                    TickTheme::new(
+                        StrokeTheme {
+                            paint: foreground,
+                            width: expected.axis_width,
+                            pattern: StrokePattern::Solid,
+                        },
+                        5,
+                    )
+                    .unwrap(),
+                ),
+                Some(StrokeTheme {
                     paint: color_from_rgb(expected.grid_color),
                     width: 0.5,
                     pattern: StrokePattern::MediumDash,
                 }),
-                spacing: AxisSpacing {
-                    x_tick_label_gap: 8.0,
-                    y_tick_label_gap: 6.0,
-                    x_title_tick_label_gap: 8.0,
-                    x_title_without_tick_labels_gap: 16.0,
-                    y_title_tick_label_gap: 16.0,
-                    y_title_edge_padding: 12.0,
-                },
-            },
+                AxisSpacing::new(
+                    super::super::RelativeSpacing::ratio(8, 16).unwrap(),
+                    super::super::RelativeSpacing::ratio(6, 16).unwrap(),
+                    super::super::RelativeSpacing::ratio(8, expected.axis_title_size).unwrap(),
+                    super::super::RelativeSpacing::ratio(16, expected.axis_title_size).unwrap(),
+                    super::super::RelativeSpacing::ratio(16, expected.axis_title_size).unwrap(),
+                    super::super::RelativeSpacing::ratio(12, expected.axis_title_size).unwrap(),
+                )
+                .unwrap(),
+            )
+            .unwrap(),
             marks: MarkAppearance {
                 accents: AccentPalette::new(
                     colors.iter().map(|&(r, g, b)| OpaqueColor::rgb(r, g, b)),
@@ -2906,17 +2947,20 @@ mod tests {
         for theme in BUILT_IN_THEMES {
             let resolved = theme.resolve(&OperationGenerationResources::new()).unwrap();
             let (_, expected) = expected_preset(theme);
-            let frame = resolved.axes.frame.expect("built-in frame");
-            let ticks = resolved.axes.ticks.expect("built-in ticks");
-            let grid = resolved.axes.grid.expect("built-in grid");
+            let frame = resolved.axes.frame().expect("built-in frame");
+            let ticks = resolved.axes.ticks().expect("built-in ticks");
+            let grid = resolved.axes.grid().expect("built-in grid");
 
             assert_eq!(frame.stroke.paint, color_from_rgb(expected.foreground));
             assert!((frame.stroke.width - expected.axis_width).abs() < f32::EPSILON);
             assert_eq!(frame.stroke.pattern, StrokePattern::Solid);
+            assert_eq!(frame.sides().drawing_order(), [true; 4]);
+            let cell_frame = resolved.axes.cell_frame().expect("built-in cell frame");
             assert_eq!(
-                frame.source_show_top_right_spines,
-                expected.top_right_spines
+                cell_frame.sides().drawing_order(),
+                [true, false, false, true]
             );
+            assert_eq!(cell_frame.stroke(), &frame.stroke);
             assert_eq!(ticks.stroke, frame.stroke);
             assert_eq!(ticks.length, 5);
             assert_eq!(grid.paint, color_from_rgb(expected.grid_color));
@@ -3841,7 +3885,7 @@ mod tests {
         let roles = theme.typography.roles();
         assert_eq!(roles.len(), 18);
         let bytes = 0_u64; // all palette/gradient payloads and font entries are immutable shares
-        let work = 22; // eighteen font handles, three scale handles and one accent handle
+        let work = 30; // eighteen fonts, four scales/accents and eight exact relationships
         let discoveries = FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
         for (visits, limit) in [(0, bytes), (work - 1, bytes), (work, bytes)] {
             let resources = OperationGenerationResources::with_test_limits(visits, limit);
@@ -3883,7 +3927,7 @@ mod tests {
             .resolve(&OperationGenerationResources::new())
             .unwrap();
         let mut retained = theme.clone();
-        let work: usize = 22; // four scale/accent handles plus eighteen font handles
+        let work: usize = 31; // thirty shared payloads plus one axis metadata witness
         for remaining in [0, work - 1, work] {
             let resources = OperationGenerationResources::with_test_limits(remaining as u128, 0);
             let result = retained.same(&theme, &resources);
@@ -3892,9 +3936,9 @@ mod tests {
             assert_eq!(resources.byte_usage().unwrap(), 0);
         }
         retained.typography.root.title.stack = named_stack(&["A, B"]);
-        let resources = OperationGenerationResources::with_test_limits(5, 0);
+        let resources = OperationGenerationResources::with_test_limits(14, 0);
         assert!(!retained.same(&theme, &resources).unwrap());
-        assert_eq!(resources.usage().unwrap().1, 5); // four scale handles, then differing font entry count
+        assert_eq!(resources.usage().unwrap().1, 14); // thirteen payload/axis witnesses, then differing font entry count
     }
 
     #[test]

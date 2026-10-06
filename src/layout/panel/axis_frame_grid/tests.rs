@@ -472,14 +472,8 @@ fn frozen_requirements_contain_drawn_ink_and_tick_strokes_with_or_without_frame(
                 )
                 .unwrap();
                 let (actual, required) = match side {
-                    AxisSide::Bottom => (
-                        tick.segment[1].y - half_stroke - ink.top,
-                        theme.axes.spacing.x_tick_label_gap,
-                    ),
-                    AxisSide::Left => (
-                        tick.segment[1].x - half_stroke - ink.right,
-                        theme.axes.spacing.y_tick_label_gap,
-                    ),
+                    AxisSide::Bottom => (tick.segment[1].y - half_stroke - ink.top, 8.0),
+                    AxisSide::Left => (tick.segment[1].x - half_stroke - ink.right, 6.0),
                 };
                 assert!(actual >= required - 1.0 / 1024.0);
             }

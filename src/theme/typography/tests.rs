@@ -283,10 +283,11 @@ fn retained_theme_matching_visits_each_nested_role_once_and_refuses_before_skipp
             retained.typography.$($path).+ = retained.typography.$($path).+.clone()
                 .with_line_height(1.75).unwrap();
             assert_ne!(retained, source);
-            // Four scale/accent handles, then one font witness per unchanged
+            // Four scale/accent, seven axis and two point-ratio witnesses,
+            // then one font witness per unchanged
             // preceding role. The differing scalar refuses equality before
             // examining that role's font payload.
-            let work = 4 + $index;
+            let work = 13 + $index;
             for remaining in [work - 1, work] {
                 let resources = OperationGenerationResources::with_test_limits(remaining, 0);
                 let result = retained.same(&source, &resources);

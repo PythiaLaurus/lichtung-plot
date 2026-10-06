@@ -389,7 +389,7 @@ impl MatrixPrimitive {
 struct MatrixCellPayload {
     address: layout::ComponentAddress,
     clip: PanelBox,
-    frame: [[Point2D; 2]; 2],
+    frame: [Option<[Point2D; 2]>; 4],
     marks: Vec<MatrixPrimitive>,
     axes: layout::PanelAxisPlan,
 }
@@ -429,6 +429,11 @@ impl MatrixPayload {
             resources
                 .claim_visits(1)
                 .map_err(|error| Error::Render(format!("Matrix axis geometry: {error:?}")))?;
+            if let Some(style) = &self.frame_style {
+                for line in cell.frame.iter().flatten() {
+                    geometry.line(line, style, None)?;
+                }
+            }
             geometry.append(&cell.axes.geometry_snapshot(theme)?)?;
         }
         Ok(geometry)
@@ -437,7 +442,7 @@ impl MatrixPayload {
     pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
         for cell in &self.cells {
             if let Some(style) = &self.frame_style {
-                for line in &cell.frame {
+                for line in cell.frame.iter().flatten() {
                     backend.draw_line(line, style)?;
                 }
             }
@@ -462,7 +467,7 @@ impl MatrixPayload {
         let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
         for cell in &self.cells {
             if let Some(style) = &self.frame_style {
-                for line in &cell.frame {
+                for line in cell.frame.iter().flatten() {
                     geometry.line(line, style, None)?;
                 }
             }
@@ -803,14 +808,18 @@ pub(crate) fn measure(
     // --- Styles ---
     let frame_style = theme
         .axes
-        .frame
-        .as_ref()
-        .map(|appearance| appearance.stroke.backend_style());
-    // Matrix owns its two-spine cell topology. Common plans own
-    // ticks and outer text, without introducing a four-sided frame or grid.
+        .cell_frame()
+        .map(|frame| crate::theme::axis::stroke_style(frame.stroke()))
+        .transpose()?;
+    // Each cell freezes the selected sides once. Common plans own ticks and
+    // outer text without painting a duplicate frame or grid.
+    let common_chrome = theme.axes.cell_axis_chrome();
     let mut axis_theme = theme.admitted_clone(data)?;
-    axis_theme.axes.frame = None;
-    axis_theme.axes.grid = None;
+    axis_theme.axes = axis_theme
+        .axes
+        .with_frame(common_chrome.frame.cloned())?
+        .with_cell_frame(None)?
+        .with_grid(common_chrome.grid.cloned())?;
 
     // X selection depends only on a column's range and X coordinates; Y
     // selection depends only on a row's range and Y coordinates. Retain the
@@ -821,7 +830,7 @@ pub(crate) fn measure(
         .checked_mul(2)
         .ok_or_else(|| Error::Render("matrix tick cache count overflow".into()))?;
     let cache_bytes = cache_records
-        .checked_mul(size_of::<Option<layout::NumericTickPlan>>())
+        .checked_mul(size_of::<Option<MatrixTickCache>>())
         .ok_or_else(|| Error::Render("matrix tick cache bytes overflow".into()))?;
     environment
         .claim_text_generation_slots(cache_records as u128)
@@ -946,16 +955,33 @@ pub(crate) fn measure(
             let mut cell = MatrixCellPayload {
                 address: scope.address,
                 clip: cell_panel,
-                frame: [
+                frame: {
+                    let sides = theme.axes.cell_frame().map(|frame| frame.sides());
                     [
-                        Point2D::new(mark_panel.x0, mark_panel.y0),
-                        Point2D::new(mark_panel.x1, mark_panel.y0),
-                    ],
-                    [
-                        Point2D::new(mark_panel.x0, mark_panel.y0),
-                        Point2D::new(mark_panel.x0, mark_panel.y1),
-                    ],
-                ],
+                        sides
+                            .is_some_and(crate::theme::FrameSides::bottom)
+                            .then_some([
+                                Point2D::new(mark_panel.x0, mark_panel.y0),
+                                Point2D::new(mark_panel.x1, mark_panel.y0),
+                            ]),
+                        sides
+                            .is_some_and(crate::theme::FrameSides::left)
+                            .then_some([
+                                Point2D::new(mark_panel.x0, mark_panel.y0),
+                                Point2D::new(mark_panel.x0, mark_panel.y1),
+                            ]),
+                        sides.is_some_and(crate::theme::FrameSides::top).then_some([
+                            Point2D::new(mark_panel.x0, mark_panel.y1),
+                            Point2D::new(mark_panel.x1, mark_panel.y1),
+                        ]),
+                        sides
+                            .is_some_and(crate::theme::FrameSides::right)
+                            .then_some([
+                                Point2D::new(mark_panel.x1, mark_panel.y0),
+                                Point2D::new(mark_panel.x1, mark_panel.y1),
+                            ]),
+                    ]
+                },
                 marks: Vec::new(),
                 axes: cell_axes,
             };
@@ -1071,12 +1097,22 @@ pub(crate) struct MatrixAxisPlan {
     ranges: Vec<(f64, f64)>,
     columns: Vec<(f64, f64)>,
     rows: Vec<(f64, f64)>,
-    x_ticks: Vec<Option<layout::NumericTickPlan>>,
-    y_ticks: Vec<Option<layout::NumericTickPlan>>,
+    x_ticks: Vec<Option<MatrixTickCache>>,
+    y_ticks: Vec<Option<MatrixTickCache>>,
+}
+
+#[derive(Debug)]
+struct MatrixTickCache {
+    plan: layout::NumericTickPlan,
+    standard: layout::StandardPanelInputs,
+    range: [u64; 2],
+    span: [u64; 2],
+    side: layout::AxisSide,
+    operation: crate::font::canonical::OperationGenerationResources,
 }
 
 fn matrix_ticks<'a>(
-    cached: &'a mut Option<layout::NumericTickPlan>,
+    cached: &'a mut Option<MatrixTickCache>,
     range: (f64, f64),
     projection: &layout::Projection,
     side: layout::AxisSide,
@@ -1090,17 +1126,44 @@ fn matrix_ticks<'a>(
     environment
         .claim_processing_visits(1)
         .map_err(|error| Error::Render(format!("matrix tick lookup: {error:?}")))?;
-    if cached.is_none() {
+    let range_bits = [range.0.to_bits(), range.1.to_bits()];
+    let panel = projection.panel_box();
+    let span = match side {
+        layout::AxisSide::Bottom => [panel.x0.to_bits(), panel.x1.to_bits()],
+        layout::AxisSide::Left => [panel.y0.to_bits(), panel.y1.to_bits()],
+    };
+    let matches = if let Some(cached) = cached.as_ref() {
+        cached
+            .operation
+            .same_operation(&environment.generation_resources())
+            && cached.range == range_bits
+            && cached.span == span
+            && cached.side == side
+            && cached
+                .standard
+                .matches(theme, &environment.generation_resources())?
+    } else {
+        false
+    };
+    if !matches {
         let plan = layout::NumericTickPlan::measure_in_call(
             range, None, false, projection, side, theme, false, scope, &admission,
         )?;
         environment
             .claim_cache_entries(1)
             .map_err(|error| Error::Render(format!("matrix tick cache admission: {error:?}")))?;
-        *cached = Some(plan);
+        *cached = Some(MatrixTickCache {
+            plan,
+            standard: layout::StandardPanelInputs::new(theme)?,
+            range: range_bits,
+            span,
+            side,
+            operation: environment.generation_resources(),
+        });
     }
     cached
         .as_ref()
+        .map(|cached| &cached.plan)
         .ok_or_else(|| Error::Render("matrix tick selection is missing".into()).into())
 }
 
@@ -1159,9 +1222,9 @@ fn matrix_tick_selection_is_shared_only_along_the_orthogonal_axis() {
         )
         .unwrap();
         assert_eq!(reused.ticks, expected);
-        assert_eq!(resources.usage().unwrap(), (before.0, before.1 + 1));
+        assert_eq!(resources.usage().unwrap(), (before.0, before.1 + 144));
         assert_eq!(environment.resource_usage().unwrap().font_bytes, bytes);
-        assert!(cached.as_ref().unwrap().source.cap > 1);
+        assert!(cached.as_ref().unwrap().plan.source.cap > 1);
     }
 }
 
@@ -1666,7 +1729,7 @@ mod semantic_tests {
                 cells: vec![MatrixCellPayload {
                     address: scope.address.clone(),
                     clip: PanelBox::new(10.0, 200.0, 10.0, 200.0),
-                    frame: [[Point2D::new(10.0, 10.0), Point2D::new(200.0, 10.0)]; 2],
+                    frame: [None; 4],
                     marks: Vec::new(),
                     axes: original,
                 }],

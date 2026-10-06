@@ -1,5 +1,6 @@
 //! Built-in publication themes and private appearance resolution.
 
+pub(crate) mod axis;
 mod color;
 mod contrast;
 mod mark_paint;
@@ -7,9 +8,10 @@ mod paint;
 mod resolved;
 mod scale;
 pub(crate) mod scale_values;
-mod spacing;
+pub(crate) mod spacing;
 mod typography;
 
+pub(crate) use axis::{AxisLengths, AxisSpacing, AxisTheme, FrameSides, FrameTheme, TickTheme};
 pub(crate) use typography::{
     AnnotationTextRoles, AxisTextRoles, CompositionTextRoles, ContrastTextRoles, GuideTextRoles,
     RootTextRoles, TypographyTheme,

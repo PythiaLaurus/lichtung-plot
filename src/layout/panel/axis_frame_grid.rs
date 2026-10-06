@@ -6,8 +6,11 @@ use crate::layout::canvas::PanelRequirements;
 use crate::layout::fit::{self, FitKind, FitScope, PlanError};
 use crate::layout::{PhysicalTextAlignment, ResolvedTextPlan};
 use crate::render::backend::{Backend, LineStyle, PlannedTextPlacement, Point2D, TextAnchor};
-use crate::theme::ResolvedTheme;
+use crate::theme::spacing::ExactLength;
+use crate::theme::{AxisLengths, ResolvedTheme};
 
+#[cfg(test)]
+mod appearance_tests;
 #[cfg(test)]
 mod tests;
 
@@ -71,8 +74,56 @@ pub(crate) struct PanelAxisPlan {
 
 #[derive(Debug, Clone)]
 struct FramePlan {
-    sides: [[Point2D; 2]; 4],
+    sides: [Option<[Point2D; 2]>; 4],
     style: LineStyle,
+}
+
+impl FramePlan {
+    fn new(
+        panel: crate::layout::PanelBox,
+        frame: &crate::theme::FrameTheme,
+    ) -> Result<Self, Error> {
+        let selected = frame.sides().drawing_order();
+        let segments = [
+            [
+                Point2D::new(panel.x0, panel.y0),
+                Point2D::new(panel.x1, panel.y0),
+            ],
+            [
+                Point2D::new(panel.x1, panel.y0),
+                Point2D::new(panel.x1, panel.y1),
+            ],
+            [
+                Point2D::new(panel.x1, panel.y1),
+                Point2D::new(panel.x0, panel.y1),
+            ],
+            [
+                Point2D::new(panel.x0, panel.y1),
+                Point2D::new(panel.x0, panel.y0),
+            ],
+        ];
+        Ok(Self {
+            sides: std::array::from_fn(|index| selected[index].then_some(segments[index])),
+            style: crate::theme::axis::stroke_style(frame.stroke())?,
+        })
+    }
+
+    fn outward_edges(&self) -> [f64; 4] {
+        let [bottom, right, top, left] = self.sides.each_ref().map(Option::is_some);
+        [
+            left || bottom || top,
+            right || bottom || top,
+            bottom || left || right,
+            top || left || right,
+        ]
+        .map(|present| {
+            if present {
+                f64::from(self.style.width) / 2.0
+            } else {
+                0.0
+            }
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -107,7 +158,7 @@ impl PanelAxisPlan {
     ) -> Result<crate::render::geometry::GeometrySnapshot, Error> {
         let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
         if let Some(frame) = &self.frame {
-            for side in &frame.sides {
+            for side in frame.sides.iter().flatten() {
                 geometry.line(side, &frame.style, None)?;
             }
         }
@@ -148,7 +199,7 @@ impl PanelAxisPlan {
 
     pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
         if let Some(frame) = &self.frame {
-            for side in &frame.sides {
+            for side in frame.sides.iter().flatten() {
                 backend.draw_line(side, &frame.style)?;
             }
         }
@@ -293,19 +344,12 @@ impl Layout {
             (Ok(x), Ok(y)) => (x, y),
         };
         let (x0, x1, y0, y1) = self.projection.pixel_box();
-        let frame = theme.axes.frame.as_ref().map(|frame| FramePlan {
-            sides: [
-                [Point2D::new(x0, y0), Point2D::new(x1, y0)],
-                [Point2D::new(x1, y0), Point2D::new(x1, y1)],
-                [Point2D::new(x1, y1), Point2D::new(x0, y1)],
-                [Point2D::new(x0, y1), Point2D::new(x0, y0)],
-            ],
-            style: frame.stroke.backend_style(),
-        });
-        let half_stroke = frame
-            .as_ref()
-            .map_or(0.0, |frame| f64::from(frame.style.width) / 2.0);
-        let grid = if let Some(grid) = &theme.axes.grid {
+        let frame = standard
+            .axes
+            .frame()
+            .map(|frame| FramePlan::new(self.projection.panel_box(), frame))
+            .transpose()?;
+        let grid = if let Some(grid) = standard.axes.grid() {
             let mut lines = Vec::new();
             let count = x_axis
                 .ticks
@@ -327,16 +371,17 @@ impl Layout {
             }
             Some(GridPlan {
                 lines,
-                style: grid.backend_style(),
+                style: crate::theme::axis::stroke_style(grid)?,
             })
         } else {
             None
         };
+        let edges = frame.as_ref().map_or([0.0; 4], FramePlan::outward_edges);
         let mut requirements = PanelRequirements {
-            left: y_axis.gutter.max(x_axis.start_overhang).max(half_stroke),
-            right: x_axis.end_overhang.max(half_stroke),
-            bottom: x_axis.gutter.max(y_axis.start_overhang).max(half_stroke),
-            top: y_axis.end_overhang.max(half_stroke),
+            left: y_axis.gutter.max(x_axis.start_overhang).max(edges[0]),
+            right: x_axis.end_overhang.max(edges[1]),
+            bottom: x_axis.gutter.max(y_axis.start_overhang).max(edges[2]),
+            top: y_axis.end_overhang.max(edges[3]),
         };
         for extent in [
             &mut requirements.left,
@@ -467,31 +512,53 @@ impl Axis {
         } else {
             0.0
         };
-        let frame_half = theme.axes.frame.as_ref().map_or(0.0, |frame| {
-            f64::from(frame.stroke.backend_style().width) / 2.0
-        });
-        let tick_appearance = theme.axes.ticks.as_ref().filter(|_| !self.ticks.is_empty());
-        let tick_style = tick_appearance.map(|ticks| ticks.stroke.backend_style());
-        let tick_length = tick_appearance.map_or(0.0, |ticks| f64::from(ticks.length));
-        let outward = frame_half
-            + tick_length
-            + tick_style
+        let resources = theme.prepared_font_environment()?.generation_resources();
+        let lengths = standard.axes.spacing().lengths(
+            standard.tick_label.font_size(),
+            standard.axis_title.font_size(),
+            &resources,
+        )?;
+        let frame_half = standard
+            .axes
+            .frame()
+            .filter(|frame| match side {
+                AxisSide::Bottom => frame.sides().bottom(),
+                AxisSide::Left => frame.sides().left(),
+            })
+            .map_or(0.0, |frame| f64::from(frame.stroke().width()) / 2.0);
+        let tick_appearance = standard.axes.ticks().filter(|_| !self.ticks.is_empty());
+        let tick_style = tick_appearance
+            .map(|ticks| crate::theme::axis::stroke_style(ticks.stroke()))
+            .transpose()?;
+        let tick_length = tick_appearance.map_or(0.0, |ticks| f64::from(ticks.length()));
+        let frame_offset = ExactLength::pixels(frame_half, &resources)?;
+        let tick_end = frame_offset.add_pixels(tick_length, &resources)?;
+        let outward = tick_end.add_pixels(
+            tick_style
                 .as_ref()
-                .map_or(0.0, |style| f64::from(style.width) / 2.0);
+                .map_or(0.0, |style| f64::from(style.width) / 2.0),
+            &resources,
+        )?;
+        let anchor = match side {
+            AxisSide::Bottom => panel.y0,
+            AxisSide::Left => panel.x0,
+        };
+        let segment_start = AxisLengths::before(&frame_offset, anchor, &resources)?;
+        let segment_end = AxisLengths::before(&tick_end, anchor, &resources)?;
         let mut ticks = Vec::new();
         fit::reserve(theme, &mut ticks, self.ticks.len(), "frozen axis ticks")?;
         let mut label_extent = 0.0_f64;
         let (gap, title_gap, title_width, tick_role, title_role) = match side {
             AxisSide::Bottom => (
-                theme.axes.spacing.x_tick_label_gap,
-                theme.axes.spacing.x_title_tick_label_gap,
+                &lengths.x_tick_label_gap,
+                &lengths.x_title_tick_label_gap,
                 panel.width(),
                 "x-axis tick label",
                 "x-axis title",
             ),
             AxisSide::Left => (
-                theme.axes.spacing.y_tick_label_gap,
-                theme.axes.spacing.y_title_tick_label_gap,
+                &lengths.y_tick_label_gap,
+                &lengths.y_title_tick_label_gap,
                 panel.height(),
                 "y-axis tick label",
                 "y-axis title",
@@ -500,12 +567,12 @@ impl Axis {
         for (tick, cell) in self.ticks.iter().zip(cells) {
             let segment = match side {
                 AxisSide::Bottom => [
-                    Point2D::new(cell.center, panel.y0 - frame_half),
-                    Point2D::new(cell.center, panel.y0 - frame_half - tick_length),
+                    Point2D::new(cell.center, segment_start),
+                    Point2D::new(cell.center, segment_end),
                 ],
                 AxisSide::Left => [
-                    Point2D::new(panel.x0 - frame_half, cell.center),
-                    Point2D::new(panel.x0 - frame_half - tick_length, cell.center),
+                    Point2D::new(segment_start, cell.center),
+                    Point2D::new(segment_end, cell.center),
                 ],
             };
             let label = if tick.label.is_empty() {
@@ -524,9 +591,14 @@ impl Axis {
                     tick_role,
                     scope,
                 ))?;
+                let offset = outward.add(gap, &resources)?;
                 let perpendicular = match side {
-                    AxisSide::Bottom => panel.y0 - outward - gap - plan.height() / 2.0,
-                    AxisSide::Left => panel.x0 - outward - gap,
+                    AxisSide::Bottom => AxisLengths::before(
+                        &offset.add_pixels(plan.height() / 2.0, &resources)?,
+                        panel.y0,
+                        &resources,
+                    )?,
+                    AxisSide::Left => AxisLengths::before(&offset, panel.x0, &resources)?,
                 };
                 let placement = cell.placement(&plan, side, perpendicular)?.ok_or_else(|| {
                     scope.failure(
@@ -566,7 +638,9 @@ impl Axis {
         }
         let mut gutter = outward;
         if label_extent > 0.0 {
-            gutter += gap + label_extent;
+            gutter = gutter
+                .add(gap, &resources)?
+                .add_pixels(label_extent, &resources)?;
         }
         let title = if self.label.is_empty() {
             None
@@ -580,28 +654,28 @@ impl Axis {
                 title_role,
                 scope,
             ))?;
-            gutter += if label_extent > 0.0 {
+            let separation = if label_extent > 0.0 {
                 title_gap
             } else {
                 match side {
-                    AxisSide::Bottom => theme.axes.spacing.x_title_without_tick_labels_gap,
+                    AxisSide::Bottom => &lengths.x_title_without_tick_labels_gap,
                     AxisSide::Left => title_gap,
                 }
             };
+            gutter = gutter.add(separation, &resources)?;
+            let position = AxisLengths::before(
+                &gutter.add_pixels(plan.height() / 2.0, &resources)?,
+                anchor,
+                &resources,
+            )?;
             let mut placement = match side {
                 AxisSide::Bottom => PlannedTextPlacement::middle(
-                    Point2D::new(
-                        f64::midpoint(panel.x0, panel.x1),
-                        panel.y0 - gutter - plan.height() / 2.0,
-                    ),
+                    Point2D::new(f64::midpoint(panel.x0, panel.x1), position),
                     TextAnchor::Middle,
                     0.0,
                 ),
                 AxisSide::Left => PlannedTextPlacement::middle(
-                    Point2D::new(
-                        panel.x0 - gutter - plan.height() / 2.0,
-                        f64::midpoint(panel.y0, panel.y1),
-                    ),
+                    Point2D::new(position, f64::midpoint(panel.y0, panel.y1)),
                     TextAnchor::Middle,
                     -90.0,
                 ),
@@ -626,11 +700,11 @@ impl Axis {
                     AxisSide::Left => plan.height() / 2.0 - ink.left,
                 });
             }
-            gutter += thickness;
+            gutter = gutter.add_pixels(thickness, &resources)?;
             Some((plan, placement))
         };
         if side == AxisSide::Left && title.is_some() {
-            gutter += theme.axes.spacing.y_title_edge_padding;
+            gutter = gutter.add(&lengths.y_title_edge_padding, &resources)?;
         }
         let (start, end) = match side {
             AxisSide::Bottom => (panel.x0, panel.x1),
@@ -652,7 +726,7 @@ impl Axis {
             ticks,
             title,
             tick_style,
-            gutter,
+            gutter: AxisLengths::hard(&gutter, &resources)?,
             start_overhang,
             end_overhang,
         })

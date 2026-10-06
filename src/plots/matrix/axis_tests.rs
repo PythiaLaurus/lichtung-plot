@@ -13,7 +13,7 @@ fn cache_hit_admits_the_last_call_even_with_no_cache_entries_left() {
         .generation_resources();
     let projection = layout::Projection::new((0.0, 3.0), (0.0, 3.0), (0.1, 300.1, 0.1, 300.1));
     let mut cached = None;
-    let lookup = |cached: &mut Option<layout::NumericTickPlan>| {
+    let lookup = |cached: &mut Option<MatrixTickCache>| {
         matrix_ticks(
             cached,
             (0.0, 3.0),
@@ -32,7 +32,12 @@ fn cache_hit_admits_the_last_call_even_with_no_cache_entries_left() {
     let bytes = resources.byte_usage().unwrap();
     assert_eq!(lookup(&mut cached).unwrap(), source);
     assert_eq!(resources.call_cache_usage(), (1_000_000, 1_000_000));
-    assert_eq!(resources.usage().unwrap(), (before.0, before.1 + 1));
+    // One key, seven axis witnesses, two complete font comparisons each:
+    // stack length (1), six entries, five name lengths and 56 actual UTF-8 bytes.
+    assert_eq!(
+        resources.usage().unwrap(),
+        (before.0, before.1 + 8 + 2 * 68)
+    );
     assert_eq!(resources.byte_usage().unwrap(), bytes);
     let before = resources.usage().unwrap();
     for slot in [&mut cached, &mut None] {
@@ -45,7 +50,7 @@ fn cache_hit_admits_the_last_call_even_with_no_cache_entries_left() {
         assert_eq!(resources.usage().unwrap(), before);
         assert_eq!(resources.byte_usage().unwrap(), bytes);
     }
-    assert_eq!(cached.unwrap().source, source);
+    assert_eq!(cached.unwrap().plan.source, source);
 }
 
 #[test]
@@ -105,6 +110,270 @@ fn cache_miss_reuses_its_call_ticket_and_admits_insertion_independently() {
             assert_eq!(actual.ticks, expected.ticks);
         }
         assert_eq!(resources.call_cache_usage(), (1_000_000, 1_000_000));
+    }
+}
+
+#[test]
+fn matrix_selection_cache_cannot_cross_operation_or_selected_span() {
+    let projection = layout::Projection::new((0.0, 3.0), (0.0, 3.0), (0.0, 300.0, 0.0, 300.0));
+    let first = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
+    let second = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
+    let mut cached = None;
+    matrix_ticks(
+        &mut cached,
+        (0.0, 3.0),
+        &projection,
+        layout::AxisSide::Bottom,
+        &first,
+        &ROOT_SCOPE,
+    )
+    .unwrap();
+    let address = cached.as_ref().unwrap().plan.ticks.as_ptr();
+    matrix_ticks(
+        &mut cached,
+        (0.0, 3.0),
+        &projection,
+        layout::AxisSide::Bottom,
+        &second,
+        &ROOT_SCOPE,
+    )
+    .unwrap();
+    assert_ne!(cached.as_ref().unwrap().plan.ticks.as_ptr(), address);
+    assert!(cached.as_ref().unwrap().operation.same_operation(
+        &second
+            .prepared_font_environment()
+            .unwrap()
+            .generation_resources()
+    ));
+    let address = cached.as_ref().unwrap().plan.ticks.as_ptr();
+    let smaller = layout::Projection::new((0.0, 3.0), (0.0, 3.0), (0.0, 200.0, 0.0, 300.0));
+    matrix_ticks(
+        &mut cached,
+        (0.0, 3.0),
+        &smaller,
+        layout::AxisSide::Bottom,
+        &second,
+        &ROOT_SCOPE,
+    )
+    .unwrap();
+    assert_ne!(cached.as_ref().unwrap().plan.ticks.as_ptr(), address);
+}
+
+#[test]
+fn cell_frame_identity_is_in_the_cached_axis_descriptor_and_refusal_does_not_reanalyze() {
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let projection = layout::Projection::new((0.0, 3.0), (0.0, 3.0), (0.0, 300.0, 0.0, 300.0));
+    let mut cached = None;
+    matrix_ticks(
+        &mut cached,
+        (0.0, 3.0),
+        &projection,
+        layout::AxisSide::Bottom,
+        &theme,
+        &ROOT_SCOPE,
+    )
+    .unwrap();
+    let address = cached.as_ref().unwrap().plan.ticks.as_ptr();
+    let ordinary = theme.axes.frame().cloned();
+    theme.axes = theme.axes.clone().with_cell_frame(None).unwrap();
+    assert_eq!(theme.axes.frame(), ordinary.as_ref());
+    let before = resources.usage().unwrap();
+    let bytes = resources.byte_usage().unwrap();
+    let entries = resources.call_cache_usage().1;
+    // The one lookup witness fits, but the complete axis descriptor does not.
+    resources.set_test_limits(before.1 + 1, bytes);
+    assert!(matches!(
+        matrix_ticks(
+            &mut cached,
+            (0.0, 3.0),
+            &projection,
+            layout::AxisSide::Bottom,
+            &theme,
+            &ROOT_SCOPE
+        ),
+        Err(layout::fit::PlanError::Fatal(_))
+    ));
+    assert_eq!(cached.as_ref().unwrap().plan.ticks.as_ptr(), address);
+    assert_eq!(resources.usage().unwrap(), (before.0, before.1 + 1));
+    assert_eq!(resources.byte_usage().unwrap(), bytes);
+    assert_eq!(resources.call_cache_usage().1, entries);
+    resources.set_test_limits(u128::MAX, u64::MAX);
+    matrix_ticks(
+        &mut cached,
+        (0.0, 3.0),
+        &projection,
+        layout::AxisSide::Bottom,
+        &theme,
+        &ROOT_SCOPE,
+    )
+    .unwrap();
+    assert_ne!(cached.as_ref().unwrap().plan.ticks.as_ptr(), address);
+    assert!(cached
+        .as_ref()
+        .unwrap()
+        .standard
+        .axes
+        .cell_frame()
+        .is_none());
+    assert_eq!(resources.call_cache_usage().1, entries + 1);
+}
+
+#[test]
+fn cached_matrix_selection_rechecks_axis_relationships_and_propagates_matching_refusal() {
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let projection = layout::Projection::new((0.0, 3.0), (0.0, 3.0), (0.0, 300.0, 0.0, 300.0));
+    let mut cached = None;
+    matrix_ticks(
+        &mut cached,
+        (0.0, 3.0),
+        &projection,
+        layout::AxisSide::Bottom,
+        &theme,
+        &ROOT_SCOPE,
+    )
+    .unwrap();
+    let address = cached.as_ref().unwrap().plan.ticks.as_ptr();
+    let entries = resources.call_cache_usage().1;
+    theme.axes = theme
+        .axes
+        .clone()
+        .with_spacing(
+            theme
+                .axes
+                .spacing()
+                .clone()
+                .with_y_title_edge_padding(crate::theme::RelativeSpacing::ratio(1, 1).unwrap())
+                .unwrap(),
+        )
+        .unwrap();
+    let before = resources.usage().unwrap();
+    let bytes = resources.byte_usage().unwrap();
+    // Key (1), axis metadata (1), five shares, then changed numerator's
+    // handle/length/digit (3). Nine visits cannot finish the comparison.
+    resources.set_test_limits(before.1 + 9, bytes);
+    let result = matrix_ticks(
+        &mut cached,
+        (0.0, 3.0),
+        &projection,
+        layout::AxisSide::Bottom,
+        &theme,
+        &ROOT_SCOPE,
+    );
+    assert!(matches!(result, Err(layout::fit::PlanError::Fatal(_))));
+    assert_eq!(cached.as_ref().unwrap().plan.ticks.as_ptr(), address);
+    assert_eq!(resources.call_cache_usage().1, entries);
+    assert_eq!(resources.usage().unwrap(), (before.0, before.1 + 9));
+    assert_eq!(resources.byte_usage().unwrap(), bytes);
+    resources.set_test_limits(u128::MAX, u64::MAX);
+    matrix_ticks(
+        &mut cached,
+        (0.0, 3.0),
+        &projection,
+        layout::AxisSide::Bottom,
+        &theme,
+        &ROOT_SCOPE,
+    )
+    .unwrap();
+    assert_ne!(cached.as_ref().unwrap().plan.ticks.as_ptr(), address);
+    assert_eq!(resources.call_cache_usage().1, entries + 1);
+}
+
+#[test]
+fn matrix_cells_freeze_selected_frame_sides_once_and_keep_scientific_marks_and_axis_text() {
+    let plot = Plot::matrix(vec![
+        crate::NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+        crate::NumericValues::new("y", [4.0, 3.0, 2.0, 1.0]),
+    ])
+    .erase();
+    let plot = crate::plots::shared_x::prepare_plot(
+        &plot,
+        &crate::font::canonical::OperationGenerationResources::new(),
+        None,
+    )
+    .unwrap()
+    .attach(plot)
+    .unwrap();
+    for (sides, expected) in [
+        (
+            Some(crate::theme::FrameSides::new(true, true, true, true).unwrap()),
+            4,
+        ),
+        (
+            Some(crate::theme::FrameSides::new(false, false, false, true).unwrap()),
+            1,
+        ),
+        (None, 0),
+    ] {
+        let mut theme = crate::Theme::Publication
+            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .unwrap();
+        let stroke = crate::theme::StrokeTheme::new(
+            crate::theme::Color::rgb(1, 2, 3),
+            theme.axes.cell_frame().unwrap().stroke().width(),
+            StrokePattern::Solid,
+        )
+        .unwrap();
+        theme.axes = theme
+            .axes
+            .with_cell_frame(
+                sides.map(|sides| crate::theme::FrameTheme::new(sides, stroke).unwrap()),
+            )
+            .unwrap()
+            .with_frame(None)
+            .unwrap();
+        let selected = measure(
+            &plot,
+            PlotRenderContext::new(
+                plot.data(),
+                PanelBox::new(100.0, 700.0, 100.0, 700.0),
+                &theme,
+            ),
+        )
+        .unwrap();
+        let crate::layout::interior::MarkPayload::Matrix(payload) =
+            &selected.marks.as_ref().unwrap().payload
+        else {
+            panic!("Matrix payload");
+        };
+        assert_eq!(payload.cells.len(), 4);
+        let mut points = 0;
+        for cell in &payload.cells {
+            assert_eq!(cell.frame.iter().flatten().count(), expected);
+            for mark in &cell.marks {
+                if let MatrixPrimitive::Scatter(values, _, _) = mark {
+                    points += values.len();
+                }
+            }
+        }
+        assert_eq!(points, 8);
+        let mut backend = crate::render::svg_backend::SvgBackend::in_memory_with_fonts(
+            800,
+            800,
+            theme.prepared_font_environment().unwrap().clone(),
+        );
+        backend.begin(800, 800).unwrap();
+        payload.draw(&mut backend).unwrap();
+        backend.end().unwrap();
+        let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+        assert_eq!(svg.matches("stroke=\"#010203\"").count(), 4 * expected);
+        assert!(svg.contains("<text ") && svg.contains("<circle "));
+        assert_eq!(payload.frame_style.is_some(), expected != 0);
     }
 }
 
@@ -224,17 +493,17 @@ fn matrix_marks_ticks_and_reference_grid_share_large_fractional_cell_coordinates
                     axes.ranges[col],
                     axes.ranges[row],
                     (
-                        cell.frame[0][0].x,
-                        cell.frame[0][1].x,
-                        cell.frame[1][0].y,
-                        cell.frame[1][1].y,
+                        cell.frame[0].unwrap()[0].x,
+                        cell.frame[0].unwrap()[1].x,
+                        cell.frame[1].unwrap()[0].y,
+                        cell.frame[1].unwrap()[1].y,
                     ),
                 );
                 let mut actual = AxisRecorder::default();
                 cell.axes.draw(&mut actual).unwrap();
                 cell.axes.draw_grid(&mut actual).unwrap();
-                let x_ticks = &axes.x_ticks[col].as_ref().unwrap().ticks;
-                let y_ticks = &axes.y_ticks[row].as_ref().unwrap().ticks;
+                let x_ticks = &axes.x_ticks[col].as_ref().unwrap().plan.ticks;
+                let y_ticks = &axes.y_ticks[row].as_ref().unwrap().plan.ticks;
                 assert_eq!(actual.lines.len(), x_ticks.len() + y_ticks.len());
                 assert_eq!(
                     actual.text.len(),
@@ -261,8 +530,8 @@ fn matrix_marks_ticks_and_reference_grid_share_large_fractional_cell_coordinates
                 reference.projection = projection.clone();
                 reference.x_axis.ticks = x_ticks.clone();
                 reference.y_axis.ticks = y_ticks.clone();
-                reference.x_axis.source = axes.x_ticks[col].as_ref().unwrap().source;
-                reference.y_axis.source = axes.y_ticks[row].as_ref().unwrap().source;
+                reference.x_axis.source = axes.x_ticks[col].as_ref().unwrap().plan.source;
+                reference.y_axis.source = axes.y_ticks[row].as_ref().unwrap().plan.source;
                 let reference = reference.plan_axes(&theme).unwrap();
                 let mut grid = AxisRecorder::default();
                 reference.draw_grid(&mut grid).unwrap();

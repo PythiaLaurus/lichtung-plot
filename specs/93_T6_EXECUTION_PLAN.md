@@ -72,7 +72,7 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6B1d3 | COMPLETE | T6B1d2 | Retain validated opaque palettes/maps/gradients and domain selection; `refactor(scales): retain validated complete scale values` |
 | T6B1d4 | IN PROGRESS | T6B1d3 | Assemble validated complete role/chrome/annotation groups with actual consumer mappings; `refactor(theme): assemble complete validated components` |
 | T6B1d4a | COMPLETE | T6B1d3 | Complete nested typography with all eighteen live roles; `refactor(theme): assemble complete typography roles` |
-| T6B1d4b | PENDING | T6B1d4a | Complete axis chrome and exact role-local spacing; `refactor(axes): retain validated local chrome` |
+| T6B1d4b | COMPLETE | T6B1d4a | Complete axis chrome and exact role-local spacing; `refactor(axes): retain validated local chrome` |
 | T6B1d4c | PENDING | T6B1d4b | Complete guide and composition chrome; `refactor(theme): retain validated composition chrome` |
 | T6B1d4d | PENDING | T6B1d4c | Complete mark groups and admitted annotation geometry; `refactor(theme): assemble mark and annotation roles` |
 | T6B2 | PENDING | T6B1 | Complete Theme construction/customization and owner resolution using those values; `refactor(theme): construct immutable complete themes` |
@@ -176,6 +176,15 @@ bits and exact twenty-two-handle appearance-copy admission are preserved.
 Seventy-two focused tests, unchanged snapshots, formatting and strict Clippy pass.
 Axis, guide/composition and mark/annotation groups remain separately committed
 units; the umbrella is not complete until every such owner is migrated.
+
+T6B1d4b evidence: `docs/axis-values.md` records complete axis constructors,
+exact selected-role spacing, structural absence, frozen side replay and admitted
+identity. Ordinary frame and variable-grid cell-frame roles retain four-side and
+bottom/left defaults independently. Actual full Matrix SVG bytes match `633c8e0`
+for all four presets, with pinned hashes and semantic topology checks. Review
+closed natural Matrix's unused ordinary-frame dependency; automatic/width-only
+output is invariant under unrelated frame edits, while actual cell ink remains
+measured. Focused constructor/cache/frame/facet/root tests and strict Clippy pass.
 
 T6B1d3 evidence: `docs/scale-values.md` records immutable validated opaque
 palettes, gradients/domains and selection values, actual prepared transport and

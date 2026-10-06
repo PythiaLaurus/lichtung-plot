@@ -444,7 +444,7 @@ fn native_narrow_root_selects_actual_ticks_and_automatic_painted_domains() {
         )
         .unwrap()
         .1;
-        assert!(175.0 - 40.0 - endpoint - theme.axes.spacing.y_tick_label_gap - 5.0 > 0.0);
+        assert!(175.0 - 40.0 - endpoint - 6.0 - 5.0 > 0.0);
         let plan = plan_panel_for_test(
             &plot,
             plot.kind(),

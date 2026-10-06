@@ -34,6 +34,50 @@ impl Eq for SpacingPayload {}
 pub(crate) struct RelativeSpacing(Arc<SpacingPayload>);
 
 impl RelativeSpacing {
+    pub(crate) fn same(
+        &self,
+        other: &Self,
+        resources: &OperationGenerationResources,
+    ) -> Result<bool> {
+        admit(resources, 1, 0)?;
+        if Arc::ptr_eq(&self.0, &other.0) {
+            return Ok(true);
+        }
+        for (left, right) in [
+            (&self.0.rational.numerator, &other.0.rational.numerator),
+            (&self.0.rational.denominator, &other.0.rational.denominator),
+        ] {
+            admit(resources, 1, 0)?;
+            if left.iter_u64_digits().len() != right.iter_u64_digits().len() {
+                return Ok(false);
+            }
+            let (mut left, mut right) = (left.iter_u64_digits(), right.iter_u64_digits());
+            while left.len() != 0 {
+                admit(resources, 1, 0)?;
+                if left.next() != right.next() {
+                    return Ok(false);
+                }
+            }
+        }
+        Ok(true)
+    }
+
+    pub(crate) fn observe_feedback(
+        &self,
+        round: &mut crate::layout::kernel::FeedbackRound,
+    ) -> Result<()> {
+        for value in [&self.0.rational.numerator, &self.0.rational.denominator] {
+            let mut digits = value.iter_u64_digits();
+            round.observe_count(digits.len())?;
+            while digits.len() != 0 {
+                admit(round.resources(), 1, 0)?;
+                let digit = digits.next().expect("remaining normalized rational digit");
+                round.observe_count((digit >> 32) as usize)?;
+                round.observe_count((digit & 0xffff_ffff) as usize)?;
+            }
+        }
+        Ok(())
+    }
     #[cfg_attr(
         not(test),
         expect(
@@ -194,13 +238,61 @@ impl LocalMetric {
 pub(crate) struct ExactLength(Rational);
 
 impl ExactLength {
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "complete hard sums are wired with the complete-role cutover"
-        )
-    )]
+    /// Resolve a whole position, retaining anchor parity through half-quantum
+    /// ties instead of independently rounding the offset before subtraction.
+    pub(crate) fn before(
+        &self,
+        anchor: f64,
+        resources: &OperationGenerationResources,
+    ) -> Result<LayoutScalar> {
+        let origin = Self::pixels(anchor.abs(), resources)?;
+        let bits = sum_bits(
+            origin.0.numerator.bits().max(origin.0.denominator.bits()),
+            self.0.numerator.bits().max(self.0.denominator.bits()),
+        )?;
+        admit_math(resources, sum_bits(bits, 1)?, 6)?;
+        let left = &origin.0.numerator * &self.0.denominator;
+        let right = &self.0.numerator * &origin.0.denominator;
+        let (negative, numerator) = if anchor.is_sign_negative() {
+            (true, left + right)
+        } else if left < right {
+            (true, right - left)
+        } else {
+            (false, left - right)
+        };
+        let value = Self(Rational {
+            numerator,
+            denominator: &origin.0.denominator * &self.0.denominator,
+        })
+        .round(SpatialRounding::NearestEven, resources)?;
+        let quanta = if negative {
+            value
+                .quanta()
+                .checked_neg()
+                .ok_or_else(|| invalid("axis position overflow"))?
+        } else {
+            value.quanta()
+        };
+        Ok(LayoutScalar::from_quanta(quanta))
+    }
+    /// Exact nonnegative represented pixel ink/occupancy, on the active ledger.
+    pub(crate) fn pixels(value: f64, resources: &OperationGenerationResources) -> Result<Self> {
+        validate(value)?;
+        let rational = dyadic(value, resources)?;
+        admit_math(resources, sum_bits(rational.numerator.bits(), 10)?, 2)?;
+        Ok(Self(Rational {
+            numerator: rational.numerator << 10_usize,
+            denominator: rational.denominator,
+        }))
+    }
+
+    pub(crate) fn add_pixels(
+        &self,
+        value: f64,
+        resources: &OperationGenerationResources,
+    ) -> Result<Self> {
+        self.add(&Self::pixels(value, resources)?, resources)
+    }
     pub(crate) fn add(
         &self,
         other: &Self,
@@ -454,6 +546,28 @@ mod tests {
             .round(rounding, &resources)
             .unwrap()
             .quanta()
+    }
+
+    #[test]
+    fn rational_matching_admits_each_examined_limb_and_stops_at_the_terminating_digit() {
+        let source = RelativeSpacing::new(f64::from_bits(1)).unwrap();
+        let equal = RelativeSpacing::new(f64::from_bits(1)).unwrap();
+        let different = RelativeSpacing::new(f64::from_bits(2)).unwrap();
+        // Handle, numerator length/digit, denominator length, seventeen actual
+        // denominator digits. The differing bit is in the final digit.
+        for (other, expected) in [(&equal, true), (&different, false)] {
+            for remaining in [0, 20, 21] {
+                let resources = OperationGenerationResources::with_test_limits(remaining, 0);
+                let result = source.same(other, &resources);
+                if remaining == 21 {
+                    assert_eq!(result.unwrap(), expected);
+                } else {
+                    assert!(result.is_err());
+                }
+                assert_eq!(resources.usage().unwrap(), (0, remaining));
+                assert_eq!(resources.byte_usage().unwrap(), 0);
+            }
+        }
     }
 
     #[test]

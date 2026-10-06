@@ -23,12 +23,19 @@ fn canvas_preset_construction_uses_one_prepared_ledger_for_root_and_explicit_chi
     ] {
         let seeds = if preset == Theme::Publication { 8 } else { 5 };
         let total_seeds = seeds + 5; // explicit Science child; inherited child shares the root
+        let ratio_bytes = (std::mem::size_of::<crate::theme::RelativeSpacing>()
+            + 2 * std::mem::size_of::<num_bigint::BigUint>()
+            + std::mem::size_of::<f64>()
+            + 2 * std::mem::size_of::<usize>()) as u64
+            + 2 * (16 + std::mem::size_of::<num_bigint::BigUint>() as u64);
         let bytes = 4 * outline_bytes
+            + 12 * ratio_bytes
             + 8 * (std::mem::size_of::<Vec<crate::theme::OpaqueColor>>()
                 + 2 * std::mem::size_of::<usize>()) as u64
             + 2 * total_seeds * std::mem::size_of::<crate::theme::OpaqueColor>() as u64
             + 10 * std::mem::size_of::<crate::theme::ColorStop>() as u64;
-        let work = 62_u128 + 2 * u128::from(total_seeds);
+        let root_axis_work = if preset == Theme::Nature { 31 } else { 38 };
+        let work = 62_u128 + 2 * u128::from(total_seeds) + root_axis_work + 38;
         for (visits, byte_limit) in [
             (0, bytes),
             (work, 0),

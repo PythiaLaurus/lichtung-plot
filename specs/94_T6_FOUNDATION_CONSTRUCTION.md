@@ -839,18 +839,30 @@ impl AxisSpacing {
            y_title_edge_padding: RelativeSpacing) -> Result<Self>;
 }
 impl AxisTheme {
-    fn new(frame: Option<FrameTheme>, ticks: Option<TickTheme>,
-           grid: Option<StrokeTheme>, spacing: AxisSpacing) -> Result<Self>;
+    fn new(frame: Option<FrameTheme>, cell_frame: Option<FrameTheme>, ticks: Option<TickTheme>,
+            grid: Option<StrokeTheme>, spacing: AxisSpacing) -> Result<Self>;
 }
 ```
 
 FrameSides requires at least one side; all-absent frame is `None`. Tick length is
 positive integral CSS pixels; tick absence is `None`. No x/y label/title content
-flag exists in AxisTheme. Standard and Matrix frames emit precisely the selected
-side segments once. Current `source_show_top_right_spines` is dead preset metadata
+flag exists in AxisTheme. `frame` owns the ordinary coordinate-panel outline;
+`cell_frame` owns the variable-grid cell outline already identified by the ledger's
+`axes.matrix.cell-frame-final-style`. These are separate visual roles in one
+AxisTheme, not separate plot-family themes or an inherited fallback. Each has
+independent getters and validated `with_field` construction edits. Standard
+panels consume `frame`; Matrix cells consume `cell_frame`, each emitting precisely
+its selected side segments once. Current `source_show_top_right_spines` is dead preset metadata
 in the current standard full-four-side planner and is deleted, not exposed under
 its misleading historical name. All four built-ins preserve the current four-side
-frame, ticks length 5 with F/preset width/Solid, and grid preset RGB/0.5/MediumDash.
+ordinary frame and bottom/left-only cell frame, each with F/preset-width/Solid.
+Ticks retain length 5 with F/preset width/Solid, and grid preset RGB/0.5/MediumDash.
+This corrects the earlier construction summary that incorrectly generalized the
+ordinary default to Matrix. Adding explicit side selection must not silently
+change the existing default cell topology. There is no selector testing whether
+a theme is built-in/custom, no optional instruction layered over frame defaults,
+and no renderer-imposed mask: a custom cell_frame may select any nonempty subset,
+or None, independently of the ordinary frame.
 
 Let `E(role)` mean positive integral CSS font-size quanta of that complete role.
 Ratios in this table are exact; `A` is the preset axis-title size from §4.

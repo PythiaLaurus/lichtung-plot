@@ -65,6 +65,9 @@ pub(crate) struct StrokeTheme {
 }
 
 impl StrokeTheme {
+    pub(crate) fn validate(&self) -> Result<()> {
+        validate_width(self.width())
+    }
     pub(crate) fn new(color: Color, width: f32, pattern: StrokePattern) -> Result<Self> {
         validate_width(width)?;
         Ok(Self {
@@ -380,6 +383,21 @@ pub(crate) struct PointTheme {
 }
 
 impl PointTheme {
+    pub(crate) fn same(
+        &self,
+        other: &Self,
+        resources: &OperationGenerationResources,
+    ) -> Result<bool> {
+        if self.fill_alpha() != other.fill_alpha() || self.shape() != other.shape() {
+            return Ok(false);
+        }
+        match (self.outline(), other.outline()) {
+            (None, None) => Ok(true),
+            (Some(left), Some(right)) => Ok(left.color() == right.color()
+                && left.width_ratio().same(right.width_ratio(), resources)?),
+            _ => Ok(false),
+        }
+    }
     pub(crate) fn new(
         fill_alpha: u8,
         shape: PointShape,

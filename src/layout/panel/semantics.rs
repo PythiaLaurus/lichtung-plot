@@ -103,6 +103,7 @@ impl crate::Plot {
 /// T5a supplies typography and preferred aspect; mark/density inputs belong to T5c.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct StandardPanelInputs {
+    pub(crate) axes: crate::theme::AxisTheme,
     pub(crate) tick_label: crate::theme::TextTheme,
     pub(crate) axis_title: crate::theme::TextTheme,
     preferred_aspect: [u8; 2],
@@ -124,6 +125,9 @@ impl StandardPanelInputs {
             )
         };
         Ok(Self {
+            axes: theme
+                .axes
+                .share(&theme.prepared_font_environment()?.generation_resources())?,
             tick_label: retain(&theme.typography.axes.tick_label)?,
             axis_title: retain(&theme.typography.axes.axis_title)?,
             preferred_aspect: [4, 3],
@@ -135,9 +139,10 @@ impl StandardPanelInputs {
         theme: &crate::theme::ResolvedTheme,
         resources: &crate::font::canonical::OperationGenerationResources,
     ) -> Result<bool, crate::Error> {
-        Ok(self
-            .tick_label
-            .same(&theme.typography.axes.tick_label, resources)?
+        Ok(self.axes.same(&theme.axes, resources)?
+            && self
+                .tick_label
+                .same(&theme.typography.axes.tick_label, resources)?
             && self
                 .axis_title
                 .same(&theme.typography.axes.axis_title, resources)?)
@@ -147,6 +152,7 @@ impl StandardPanelInputs {
         &self,
         round: &mut crate::layout::kernel::FeedbackRound,
     ) -> Result<(), crate::Error> {
+        self.axes.observe_feedback(round)?;
         for text in [&self.tick_label, &self.axis_title] {
             round.observe_font_stack(&text.stack)?;
             round.observe_count(text.font_size as usize)?;
@@ -218,10 +224,10 @@ mod tests {
         theme.typography.axes.tick_label.stack = named_stack(&["αZ"]);
         let standard = StandardPanelInputs::new(&theme).unwrap();
         theme.typography.axes.tick_label.stack = named_stack(&["αY"]);
-        for remaining in [0, 5, 6] {
+        for remaining in [0, 12, 13] {
             let resources = OperationGenerationResources::with_test_limits(remaining, 0);
             let result = standard.matches(&theme, &resources);
-            if remaining == 6 {
+            if remaining == 13 {
                 assert!(!result.unwrap());
             } else {
                 assert!(result.is_err());

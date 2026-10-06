@@ -56,12 +56,25 @@ fn plot_preset_construction_refuses_on_its_prepared_ledger_before_fonts_or_backe
         };
         // Two opaque seed payloads, two stop payloads, four Vec/Arc headers;
         // element retention plus endpoint/order/neutral validation is admitted.
+        let ratio_bytes = (std::mem::size_of::<crate::theme::RelativeSpacing>()
+            + 2 * std::mem::size_of::<num_bigint::BigUint>()
+            + std::mem::size_of::<f64>()
+            + 2 * std::mem::size_of::<usize>()) as u64
+            + 2 * (16 + std::mem::size_of::<num_bigint::BigUint>() as u64);
         let bytes = 2 * outline_bytes
+            + 6 * ratio_bytes
             + 4 * (std::mem::size_of::<Vec<crate::theme::OpaqueColor>>()
                 + 2 * std::mem::size_of::<usize>()) as u64
             + 2 * seeds * std::mem::size_of::<crate::theme::OpaqueColor>() as u64
             + 5 * std::mem::size_of::<crate::theme::ColorStop>() as u64;
-        let work = 31_u128 + 2 * u128::from(seeds);
+        // Six header/limb pairs plus bounded Euclidean steps: 31 for A=16,
+        // 38 for A=17. Existing outline/palette/stop work remains 31 + 2*n.
+        let axis_work = if preset == crate::Theme::Nature {
+            31
+        } else {
+            38
+        };
+        let work = 31_u128 + 2 * u128::from(seeds) + axis_work;
         let source = plot.clone().theme(preset);
         for (visits, byte_limit) in [
             (0, bytes),
@@ -242,6 +255,149 @@ struct UnfacetedPlotPlan {
 #[cfg(test)]
 mod natural_sizing_tests {
     use super::*;
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct NaturalScene {
+        dimensions: (u32, u32),
+        svg: Vec<u8>,
+    }
+
+    fn natural_scene_with_theme_edit(
+        source: &Plot,
+        width: Option<u32>,
+        edit: impl FnOnce(&mut ResolvedTheme) -> Result<(), Error>,
+    ) -> Result<NaturalScene, Error> {
+        let plan =
+            PlotPlan::new_with_theme_factory(source, source.kind(), (width, None), |resources| {
+                let mut theme = crate::Theme::Publication.resolve(resources)?;
+                edit(&mut theme)?;
+                Ok(Box::new(theme))
+            })?;
+        let dimensions = plan.dimensions();
+        let mut backend = plan.take_svg_backend()?;
+        plan.render(&mut backend)?;
+        Ok(NaturalScene {
+            dimensions,
+            svg: backend.into_bytes()?,
+        })
+    }
+
+    fn ordinary_width(theme: &mut ResolvedTheme, width: f32) -> Result<(), Error> {
+        let frame = theme.axes.frame().expect("preset ordinary frame");
+        let changed = crate::theme::FrameTheme::new(
+            frame.sides().clone(),
+            frame.stroke().clone().with_width(width)?,
+        )?;
+        theme.axes = theme.axes.clone().with_frame(Some(changed))?;
+        Ok(())
+    }
+
+    #[test]
+    fn matrix_natural_roots_ignore_unused_ordinary_frame_in_dimensions_and_full_svg() {
+        let source = Plot::matrix(vec![
+            crate::NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+            crate::NumericValues::new("y", [4.0, 3.0, 2.0, 1.0]),
+        ])
+        .erase();
+        for width in [None, Some(800)] {
+            let baseline = natural_scene_with_theme_edit(&source, width, |_| Ok(())).unwrap();
+            for ordinary in [64.0, f32::MAX] {
+                let edited = natural_scene_with_theme_edit(&source, width, |theme| {
+                    ordinary_width(theme, ordinary)
+                })
+                .unwrap();
+                assert_eq!(
+                    edited, baseline,
+                    "width {width:?}, unused ordinary stroke {ordinary}"
+                );
+            }
+            let absent = natural_scene_with_theme_edit(&source, width, |theme| {
+                theme.axes = theme.axes.clone().with_frame(None)?;
+                Ok(())
+            })
+            .unwrap();
+            assert_eq!(absent, baseline, "width {width:?}, absent ordinary frame");
+            for sides in [
+                crate::theme::FrameSides::new(false, false, false, true).unwrap(),
+                crate::theme::FrameSides::new(true, true, false, false).unwrap(),
+            ] {
+                let edited = natural_scene_with_theme_edit(&source, width, |theme| {
+                    let frame = theme.axes.frame().unwrap().clone().with_sides(sides)?;
+                    theme.axes = theme.axes.clone().with_frame(Some(frame))?;
+                    Ok(())
+                })
+                .unwrap();
+                assert_eq!(
+                    edited, baseline,
+                    "width {width:?}, unused ordinary side selection"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn scatter_natural_roots_consume_the_selected_ordinary_frame() {
+        let source = Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0, 2.0]),
+            crate::NumericValues::new("y", [0.0, 1.0, 2.0]),
+        )
+        .erase();
+        for width in [None, Some(800)] {
+            let baseline = natural_scene_with_theme_edit(&source, width, |_| Ok(())).unwrap();
+            let wide =
+                natural_scene_with_theme_edit(&source, width, |theme| ordinary_width(theme, 64.0))
+                    .unwrap();
+            assert_ne!(wide.dimensions, baseline.dimensions);
+            assert_ne!(wide.svg, baseline.svg);
+            assert!(
+                natural_scene_with_theme_edit(&source, width, |theme| ordinary_width(
+                    theme,
+                    f32::MAX
+                ))
+                .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn matrix_natural_roots_keep_selected_cell_frame_paint_and_measured_ink() {
+        let source = Plot::matrix(vec![
+            crate::NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+            crate::NumericValues::new("y", [4.0, 3.0, 2.0, 1.0]),
+        ])
+        .erase();
+        for width in [None, Some(800)] {
+            let baseline = natural_scene_with_theme_edit(&source, width, |_| Ok(())).unwrap();
+            let wide = natural_scene_with_theme_edit(&source, width, |theme| {
+                let frame = theme.axes.cell_frame().unwrap();
+                let changed = crate::theme::FrameTheme::new(
+                    frame.sides().clone(),
+                    frame.stroke().clone().with_width(64.0)?,
+                )?;
+                theme.axes = theme.axes.clone().with_cell_frame(Some(changed))?;
+                Ok(())
+            })
+            .unwrap();
+            assert_ne!(wide.svg, baseline.svg);
+            assert!(std::str::from_utf8(&wide.svg)
+                .unwrap()
+                .contains("stroke-width=\"64\""));
+            assert_ne!(
+                wide.dimensions, baseline.dimensions,
+                "selected cell ink must reach containing root requirements"
+            );
+            assert!(natural_scene_with_theme_edit(&source, width, |theme| {
+                let frame = theme.axes.cell_frame().unwrap();
+                let changed = crate::theme::FrameTheme::new(
+                    frame.sides().clone(),
+                    frame.stroke().clone().with_width(f32::MAX)?,
+                )?;
+                theme.axes = theme.axes.clone().with_cell_frame(Some(changed))?;
+                Ok(())
+            })
+            .is_err());
+        }
+    }
 
     #[test]
     fn private_facet_gap_participates_in_containing_guide_recovery() {

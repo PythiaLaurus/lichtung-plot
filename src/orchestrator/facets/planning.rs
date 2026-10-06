@@ -92,19 +92,25 @@ pub(super) fn shared_axis_requirements(
     panel: PanelBox,
 ) -> Result<[f64; 4], crate::layout::fit::PlanError> {
     let mut insets = [0.0; 4];
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let lengths = theme.axes.spacing().lengths(
+        theme.typography.axes.tick_label.font_size(),
+        theme.typography.axes.axis_title.font_size(),
+        &resources,
+    )?;
     for (source, span, index, gap, role) in [
         (
             horizontal,
             panel.width(),
             2,
-            theme.axes.spacing.x_title_without_tick_labels_gap,
+            &lengths.x_title_without_tick_labels_gap,
             AddressRole::AxisBottom,
         ),
         (
             vertical,
             panel.height(),
             0,
-            theme.axes.spacing.y_title_edge_padding,
+            &lengths.y_title_edge_padding,
             AddressRole::AxisLeft,
         ),
     ] {
@@ -122,7 +128,10 @@ pub(super) fn shared_axis_requirements(
                     &theme.prepared_font_environment()?.generation_resources(),
                 )?,
             ))?;
-            insets[index] = crate::layout::kernel::required_length(plan.height() + gap)?;
+            insets[index] = crate::theme::AxisLengths::hard(
+                &gap.add_pixels(plan.height(), &resources)?,
+                &resources,
+            )?;
         }
     }
     Ok(insets)

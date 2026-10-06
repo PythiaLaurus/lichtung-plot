@@ -448,19 +448,32 @@ pub(crate) fn plot_size(
     let hard = plot.intrinsic_body_minimum(theme)?;
     let preference = body_preference(plot, theme, hard)?;
     let axes = plot.prepared_axis_inputs();
-    let outward = theme.axes.ticks.as_ref().map_or(0.0, |ticks| {
-        f64::from(ticks.length) + f64::from(ticks.stroke.width) / 2.0
-    }) + theme
-        .axes
-        .frame
-        .as_ref()
-        .map_or(0.0, |frame| f64::from(frame.stroke.width) / 2.0);
-    let chrome = theme.typography.axes.axis_title.line_pitch_pixels()
-        + theme.axes.spacing.y_tick_label_gap
-        + theme.axes.spacing.y_title_tick_label_gap
-        + theme.axes.spacing.y_title_edge_padding
-        + outward
-        + 4.0;
+    let lengths = theme.axes.spacing().lengths(
+        theme.typography.axes.tick_label.font_size(),
+        theme.typography.axes.axis_title.font_size(),
+        &resources,
+    )?;
+    let common_chrome = if plot.kind() == PlotKind::Matrix {
+        theme.axes.cell_axis_chrome()
+    } else {
+        theme.axes.coordinate_chrome()
+    };
+    let left_outward = common_chrome.outward(crate::layout::AxisSide::Left, true, &resources)?;
+    let bottom_outward =
+        common_chrome.outward(crate::layout::AxisSide::Bottom, true, &resources)?;
+    let chrome = crate::theme::AxisLengths::hard(
+        &lengths
+            .y_tick_label_gap
+            .add(&lengths.y_title_tick_label_gap, &resources)?
+            .add(&lengths.y_title_edge_padding, &resources)?
+            .add_pixels(
+                theme.typography.axes.axis_title.line_pitch_pixels(),
+                &resources,
+            )?
+            .add(&left_outward, &resources)?
+            .add_pixels(4.0, &resources)?,
+        &resources,
+    )?;
     let mut y_width = 0.0_f64;
     if let Some(axes) = axes {
         if let Some(labels) = &axes.display_categories[1] {
@@ -566,12 +579,22 @@ pub(crate) fn plot_size(
     let bottom = if gutters[2] > 0.0 {
         gutters[2]
     } else {
-        theme.typography.axes.tick_label.line_pitch_pixels()
-            + theme.typography.axes.axis_title.line_pitch_pixels()
-            + theme.axes.spacing.x_tick_label_gap
-            + theme.axes.spacing.x_title_tick_label_gap
-            + outward
-            + 4.0
+        crate::theme::AxisLengths::hard(
+            &lengths
+                .x_tick_label_gap
+                .add(&lengths.x_title_tick_label_gap, &resources)?
+                .add_pixels(
+                    theme.typography.axes.tick_label.line_pitch_pixels(),
+                    &resources,
+                )?
+                .add_pixels(
+                    theme.typography.axes.axis_title.line_pitch_pixels(),
+                    &resources,
+                )?
+                .add(&bottom_outward, &resources)?
+                .add_pixels(4.0, &resources)?,
+            &resources,
+        )?
     };
     let height = integral(
         top + caption

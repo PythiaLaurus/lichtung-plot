@@ -166,6 +166,12 @@ pub(super) fn plan_shared_facet_axis_labels(
     theme: &ResolvedTheme,
 ) -> Result<Vec<PlacedText>, crate::layout::fit::PlanError> {
     let mut plans = Vec::new();
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let lengths = theme.axes.spacing().lengths(
+        theme.typography.axes.tick_label.font_size(),
+        theme.typography.axes.axis_title.font_size(),
+        &resources,
+    )?;
     crate::render::backend::reserve_text_records(
         &mut plans,
         usize::from(horizontal_label.is_some()) + usize::from(vertical_label.is_some()),
@@ -185,9 +191,13 @@ pub(super) fn plan_shared_facet_axis_labels(
                 &theme.prepared_font_environment()?.generation_resources(),
             )?,
         ))?;
-        let middle_y = axis_origin.1
-            - theme.axes.spacing.x_title_without_tick_labels_gap
-            - plan.height() / 2.0;
+        let middle_y = crate::theme::AxisLengths::before(
+            &lengths
+                .x_title_without_tick_labels_gap
+                .add_pixels(plan.height() / 2.0, &resources)?,
+            axis_origin.1,
+            &resources,
+        )?;
         plans.push(PlacedText::middle(
             plan,
             Point2D::new(f64::midpoint(grid.x0, grid.x1), middle_y),
@@ -209,8 +219,13 @@ pub(super) fn plan_shared_facet_axis_labels(
                 &theme.prepared_font_environment()?.generation_resources(),
             )?,
         ))?;
-        let middle_x =
-            axis_origin.0 - theme.axes.spacing.y_title_edge_padding - plan.height() / 2.0;
+        let middle_x = crate::theme::AxisLengths::before(
+            &lengths
+                .y_title_edge_padding
+                .add_pixels(plan.height() / 2.0, &resources)?,
+            axis_origin.0,
+            &resources,
+        )?;
         plans.push(
             PlacedText::middle(
                 plan,
@@ -383,7 +398,7 @@ mod tests {
         assert!(horizontal
             .bounds()
             .iter()
-            .all(|ink| ink.top <= origin.1 - theme.axes.spacing.x_title_without_tick_labels_gap));
+            .all(|ink| ink.top <= origin.1 - 16.0));
         let mut vertical = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
         vertical
             .text(axes[1].placement, &axes[1].plan, None)
@@ -391,7 +406,7 @@ mod tests {
         assert!(vertical
             .bounds()
             .iter()
-            .all(|ink| ink.right <= origin.0 - theme.axes.spacing.y_title_edge_padding));
+            .all(|ink| ink.right <= origin.0 - 12.0));
         assert!(axes[1].placement.reverse_lines);
     }
 }

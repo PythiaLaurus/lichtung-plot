@@ -506,12 +506,13 @@ mod tests {
                 let before = resources.usage().unwrap().1;
                 assert!(!key.matches(&source, changed_context, &owner, round)?);
                 let work = resources.usage().unwrap().1 - before;
-                // Four scale/accent witnesses, four shared immutable role stacks
+                // Four scale/accent, seven axis and two point-ratio witnesses,
+                // then four shared immutable role stacks
                 // (one each), then the changed tick role's first name through its
                 // ninth/terminating byte (12). Group nesting adds no extra visit.
                 assert_eq!(
                     work,
-                    4 + 4 + 12,
+                    4 + 7 + 2 + 4 + 12,
                     "later role names and feedback tails remain unexamined"
                 );
                 for remaining in [0, work - 1, work] {
@@ -535,7 +536,11 @@ mod tests {
     }
 
     #[test]
-    fn complete_theme_clone_shares_twenty_two_handles_without_payload_storage() {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one exact copy boundary verifies all retained font, scale and relative payload addresses"
+    )]
+    fn complete_theme_clone_shares_all_handles_without_payload_storage() {
         let source = Plot::scatter(
             crate::NumericValues::new("x", [0.0, 1.0]),
             crate::NumericValues::new("y", [0.0, 1.0]),
@@ -570,8 +575,9 @@ mod tests {
             *stack = crate::font::canonical::named_stack(&[&"s".repeat(index + 1)]);
         }
         // Eighteen font handles plus qualitative, sequential, diverging and
-        // accent handles. Inline group structure adds no separately shared node.
-        let work = 22;
+        // accent handles, six axis ratios and two point-outline ratios.
+        // Inline group structure adds no separately shared node.
+        let work = 30;
         for remaining in [0, work - 1, work] {
             let resources = crate::font::canonical::OperationGenerationResources::with_test_limits(
                 remaining, 0,
@@ -592,6 +598,27 @@ mod tests {
             let copy = copy.unwrap();
             assert_eq!(copy, theme);
             assert_eq!(resources.usage().unwrap().1, work);
+            for (left, right) in theme
+                .axes
+                .spacing()
+                .relationships()
+                .into_iter()
+                .zip(copy.axes.spacing().relationships())
+            {
+                assert!(left.shares_payload_with(right));
+            }
+            for (left, right) in [
+                (
+                    theme.marks.primary_point.outline.as_ref().unwrap(),
+                    copy.marks.primary_point.outline.as_ref().unwrap(),
+                ),
+                (
+                    theme.marks.raw_overlay_point.outline.as_ref().unwrap(),
+                    copy.marks.raw_overlay_point.outline.as_ref().unwrap(),
+                ),
+            ] {
+                assert!(left.width_ratio().shares_payload_with(right.width_ratio()));
+            }
             for (original, retained) in theme
                 .typography
                 .roles()

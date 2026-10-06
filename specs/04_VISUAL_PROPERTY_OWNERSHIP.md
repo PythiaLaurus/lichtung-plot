@@ -8771,6 +8771,15 @@ contract derived from the actual post-T5e owners in
 conflicting historical target wording without rewriting source provenance or
 changing the 1883-key materialized count by implication.
 
+The subsequent axis implementation review corrects the constructor summary for
+the existing `axes.matrix.cell-frame-final-style` owner: AxisTheme retains
+independent ordinary `frame` and variable-grid `cell_frame` roles. The former
+defaults to four sides, the latter to bottom/left, preserving actual source output.
+The existing resolved-side application/open-topology successors consume the
+selected cell role without a mask, preset test or fallback; a custom cell frame
+can select any nonempty side subset or structural absence. This role split uses
+the existing ledger identities and adds no unrelated plot-family component.
+
 - `canvas.legend.shared-gap` and `canvas.legend.shared-gap-current-fallback`
   have one Theme-component successor, `LegendTheme` shared spacing. The user
   explicitly selected removal of `Canvas::shared_legend_gap`, its override field
