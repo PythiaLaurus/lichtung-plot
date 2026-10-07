@@ -15,12 +15,7 @@ fn decode(value: &str) -> String {
 }
 
 fn normalize(value: &str) -> String {
-    let resources = crate::font::canonical::OperationFontResources::new();
-    super::nfc::normalize(value, &mut |bytes, work| {
-        resources.claim_bytes(bytes)?;
-        resources.claim_visits(work)
-    })
-    .unwrap()
+    super::nfc::normalize(value).unwrap()
 }
 
 #[test]

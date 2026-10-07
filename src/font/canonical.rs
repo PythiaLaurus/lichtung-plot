@@ -2739,7 +2739,7 @@ fn decode_family_names(
             continue;
         };
         occurrences.push(NameOccurrence {
-            folded: fold_family_name(&value, budget)?,
+            folded: fold_family_name(&value)?,
             value,
             rank,
             record_ordinal: u16::try_from(record_ordinal)
@@ -2876,7 +2876,7 @@ fn resolve_stack_names_into(
                 (database.family_name(&Family::Monospace), true)
             }
         };
-        resolved_names.push((fold_family_name(name, budget)?, generic));
+        resolved_names.push((fold_family_name(name)?, generic));
     }
     if resolved_names.len() != stack.len() {
         return Err(FontError::Arithmetic(
@@ -2914,13 +2914,10 @@ fn resolve_stack_names_into(
     Ok(())
 }
 
-fn fold_family_name(value: &str, budget: &mut FontBudget) -> Result<String, FontError> {
+fn fold_family_name(value: &str) -> Result<String, FontError> {
     #[cfg(test)]
     FONT_NORMALIZATION_CALLS.with(|calls| calls.set(calls.get() + 1));
-    super::unicode16::nfkc_casefold(value, &mut |bytes, work| {
-        budget.claim_bytes(bytes)?;
-        budget.claim_visits(work)
-    })
+    super::unicode16::nfkc_casefold(value)
 }
 
 fn reserve_cached<T>(
@@ -5517,31 +5514,6 @@ mod tests {
         assert!(matches!(
             environment.resolve_pair(0, &stack, RequestedWeight::Normal, &['A']),
             Err(FontError::PreparedPairAfterSeal { .. })
-        ));
-    }
-
-    #[test]
-    fn family_normalization_propagates_shared_root_refusals() {
-        let resources = OperationFontResources::new();
-        let mut budget = FontBudget::from_resources(resources.clone());
-        resources.claim_visits(PROCESSING_VISIT_LIMIT).unwrap();
-        assert!(matches!(
-            fold_family_name("Test Sans", &mut budget),
-            Err(FontError::Limit {
-                resource: "root processing visits",
-                ..
-            })
-        ));
-
-        let resources = OperationFontResources::new();
-        let mut budget = FontBudget::from_resources(resources.clone());
-        resources.claim_bytes(FONT_BYTE_LIMIT).unwrap();
-        assert!(matches!(
-            fold_family_name("Test Sans", &mut budget),
-            Err(FontError::Limit {
-                resource: "system-font bytes",
-                ..
-            })
         ));
     }
 

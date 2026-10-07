@@ -3,8 +3,6 @@
 use super::canonical::FontError;
 use std::cmp::Ordering;
 
-#[cfg(test)]
-mod admission;
 mod casefold_data;
 #[cfg(test)]
 mod conformance;
@@ -15,12 +13,8 @@ mod regeneration;
 
 use casefold_data::NFKC_CASEFOLD;
 
-pub(super) fn nfkc_casefold(
-    value: &str,
-    claim: &mut impl FnMut(u64, u64) -> Result<(), FontError>,
-) -> Result<String, FontError> {
+pub(super) fn nfkc_casefold(value: &str) -> Result<String, FontError> {
     u32::try_from(value.len()).map_err(|_| FontError::Arithmetic("Unicode input length"))?;
-    claim(0, value.chars().count() as u64)?;
     let mut mapped = String::new();
     for scalar in value.chars() {
         let codepoint = scalar as u32;
@@ -34,12 +28,12 @@ pub(super) fn nfkc_casefold(
             }
         });
         if let Ok(index) = replacement {
-            append(&mut mapped, NFKC_CASEFOLD[index].2, claim)?;
+            append(&mut mapped, NFKC_CASEFOLD[index].2)?;
         } else {
-            append(&mut mapped, scalar.encode_utf8(&mut [0; 4]), claim)?;
+            append(&mut mapped, scalar.encode_utf8(&mut [0; 4]))?;
         }
     }
-    nfc::normalize(&mapped, claim)
+    nfc::normalize(&mapped)
 }
 
 fn search<T>(table: &[T], mut compare: impl FnMut(&T) -> Ordering) -> Result<usize, usize> {
@@ -55,11 +49,7 @@ fn search<T>(table: &[T], mut compare: impl FnMut(&T) -> Ordering) -> Result<usi
     Err(low)
 }
 
-fn reserve<T>(
-    values: &mut Vec<T>,
-    additional: usize,
-    claim: &mut impl FnMut(u64, u64) -> Result<(), FontError>,
-) -> Result<(), FontError> {
+fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), FontError> {
     let required = values
         .len()
         .checked_add(additional)
@@ -72,14 +62,9 @@ fn reserve<T>(
                 .checked_mul(2)
                 .ok_or(FontError::Arithmetic("Unicode vector capacity"))?,
         );
-        let bytes = target
+        target
             .checked_mul(std::mem::size_of::<T>())
             .ok_or(FontError::Arithmetic("Unicode vector bytes"))?;
-        // Admit the complete replacement allocation, including coexistence.
-        claim(
-            u64::try_from(bytes).map_err(|_| FontError::Arithmetic("Unicode vector bytes"))?,
-            0,
-        )?;
         values
             .try_reserve_exact(target - values.len())
             .map_err(|_| FontError::Allocation("Unicode vector"))?;
@@ -87,11 +72,7 @@ fn reserve<T>(
     Ok(())
 }
 
-fn append(
-    output: &mut String,
-    value: &str,
-    claim: &mut impl FnMut(u64, u64) -> Result<(), FontError>,
-) -> Result<(), FontError> {
+fn append(output: &mut String, value: &str) -> Result<(), FontError> {
     let required = output
         .len()
         .checked_add(value.len())
@@ -104,7 +85,6 @@ fn append(
                 .checked_mul(2)
                 .ok_or(FontError::Arithmetic("Unicode string capacity"))?,
         );
-        claim(target as u64, 0)?;
         output
             .try_reserve_exact(target - output.len())
             .map_err(|_| FontError::Allocation("Unicode string"))?;
@@ -115,12 +95,7 @@ fn append(
 
 #[cfg(test)]
 pub(super) fn folded_for_test(value: &str) -> String {
-    let resources = super::canonical::OperationFontResources::new();
-    nfkc_casefold(value, &mut |bytes, work| {
-        resources.claim_bytes(bytes)?;
-        resources.claim_visits(work)
-    })
-    .unwrap()
+    nfkc_casefold(value).unwrap()
 }
 
 #[cfg(test)]
@@ -135,6 +110,16 @@ mod tests {
 
     fn hash_len(digest: &mut Sha256, len: usize) {
         digest.update(u64::try_from(len).unwrap().to_be_bytes());
+    }
+
+    #[test]
+    fn checked_unicode_lengths_refuse_without_reservation() {
+        let mut scalars = Vec::<char>::new();
+        assert!(matches!(
+            super::reserve(&mut scalars, usize::MAX),
+            Err(super::FontError::Arithmetic(_))
+        ));
+        assert_eq!(scalars.capacity(), 0);
     }
 
     #[test]

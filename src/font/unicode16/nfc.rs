@@ -13,43 +13,26 @@ const T_COUNT: u32 = 28;
 const N_COUNT: u32 = V_COUNT * T_COUNT;
 const S_COUNT: u32 = L_COUNT * N_COUNT;
 
-pub(super) fn normalize(
-    value: &str,
-    claim: &mut impl FnMut(u64, u64) -> Result<(), FontError>,
-) -> Result<String, FontError> {
+pub(super) fn normalize(value: &str) -> Result<String, FontError> {
     u32::try_from(value.len()).map_err(|_| FontError::Arithmetic("NFC input length"))?;
-    claim(0, value.chars().count() as u64)?;
     let mut decomposed = Vec::new();
     for scalar in value.chars() {
-        decompose(scalar, &mut decomposed, claim)?;
+        decompose(scalar, &mut decomposed)?;
     }
-    canonical_order(&mut decomposed, claim)?;
-    recompose(&mut decomposed, claim)?;
+    canonical_order(&mut decomposed);
+    recompose(&mut decomposed);
     let mut output = String::new();
     for scalar in decomposed {
-        append(&mut output, scalar.encode_utf8(&mut [0; 4]), claim)?;
+        append(&mut output, scalar.encode_utf8(&mut [0; 4]))?;
     }
     Ok(output)
 }
 
-fn decompose(
-    scalar: char,
-    output: &mut Vec<char>,
-    claim: &mut impl FnMut(u64, u64) -> Result<(), FontError>,
-) -> Result<(), FontError> {
-    claim(0, 1)?;
+fn decompose(scalar: char, output: &mut Vec<char>) -> Result<(), FontError> {
     let codepoint = scalar as u32;
     if (S_BASE..S_BASE + S_COUNT).contains(&codepoint) {
         let syllable = codepoint - S_BASE;
-        claim(
-            0,
-            if syllable.is_multiple_of(T_COUNT) {
-                2
-            } else {
-                3
-            },
-        )?;
-        reserve(output, 3, claim)?;
+        reserve(output, 3)?;
         output.push(char::from_u32(L_BASE + syllable / N_COUNT).expect("valid Hangul jamo"));
         output.push(
             char::from_u32(V_BASE + (syllable % N_COUNT) / T_COUNT).expect("valid Hangul jamo"),
@@ -65,21 +48,17 @@ fn decompose(
         candidate.cmp(&codepoint)
     }) {
         for part in CANONICAL_DECOMPOSITION[index].1.chars() {
-            decompose(part, output, claim)?;
+            decompose(part, output)?;
         }
     } else {
-        reserve(output, 1, claim)?;
+        reserve(output, 1)?;
         output.push(scalar);
     }
     Ok(())
 }
 
-fn canonical_order(
-    scalars: &mut [char],
-    claim: &mut impl FnMut(u64, u64) -> Result<(), FontError>,
-) -> Result<(), FontError> {
+fn canonical_order(scalars: &mut [char]) {
     for index in 1..scalars.len() {
-        claim(0, 1)?;
         let class = canonical_combining_class(scalars[index]);
         if class == 0 {
             continue;
@@ -87,7 +66,6 @@ fn canonical_order(
 
         let mut insertion = index;
         while insertion > 0 {
-            claim(0, 1)?;
             let preceding_class = canonical_combining_class(scalars[insertion - 1]);
             if preceding_class == 0 || preceding_class <= class {
                 break;
@@ -96,19 +74,14 @@ fn canonical_order(
             insertion -= 1;
         }
     }
-    Ok(())
 }
 
-fn recompose(
-    decomposed: &mut Vec<char>,
-    claim: &mut impl FnMut(u64, u64) -> Result<(), FontError>,
-) -> Result<(), FontError> {
+fn recompose(decomposed: &mut Vec<char>) {
     let mut written = 0;
     let mut starter = None;
     let mut last_class = 0;
 
     for index in 0..decomposed.len() {
-        claim(0, 1)?;
         let scalar = decomposed[index];
         let class = canonical_combining_class(scalar);
         if let Some(starter_index) = starter {
@@ -129,7 +102,6 @@ fn recompose(
     }
 
     decomposed.truncate(written);
-    Ok(())
 }
 
 fn canonical_combining_class(scalar: char) -> u8 {
@@ -178,38 +150,14 @@ fn compose_hangul(first: char, second: char) -> Option<char> {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn ordering_charges_actual_preceding_comparisons_without_swap_prices() {
-        for limit in [4, 5] {
-            let mut scalars = ['\u{0315}', '\u{0300}', '\u{0300}'];
-            let mut visits = 0;
-            let result = super::canonical_order(&mut scalars, &mut |bytes, count| {
-                assert_eq!(bytes, 0);
-                if visits + count > limit {
-                    return Err(super::FontError::Limit {
-                        resource: "ordering visits",
-                        limit,
-                    });
-                }
-                visits += count;
-                Ok(())
-            });
-            if limit == 5 {
-                result.unwrap();
-                assert_eq!(scalars, ['\u{0300}', '\u{0300}', '\u{0315}']);
-            } else {
-                assert!(result.is_err());
-            }
-            assert_eq!(visits, limit);
-        }
+    fn ordering_preserves_equal_class_marks() {
+        let mut scalars = ['\u{0315}', '\u{0300}', '\u{0300}'];
+        super::canonical_order(&mut scalars);
+        assert_eq!(scalars, ['\u{0300}', '\u{0300}', '\u{0315}']);
     }
 
     fn normalize(value: &str) -> String {
-        let resources = crate::font::canonical::OperationFontResources::new();
-        super::normalize(value, &mut |bytes, work| {
-            resources.claim_bytes(bytes)?;
-            resources.claim_visits(work)
-        })
-        .unwrap()
+        super::normalize(value).unwrap()
     }
 
     #[test]

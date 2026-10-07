@@ -1316,13 +1316,14 @@ started ledger; it must never reset or discard consumption. Nested replay owns
 its independent record budget; copying child-cache values does not create a new
 root quota. Claims are synchronized, not computed from racy usage snapshots.
 
-Fixed Unicode-table binary-search comparisons and fixed `64`/`8`/`256` per-rule
-allowances have no processing charge. Unicode's private callback stays a simple
-`(bytes, visits)` admission interface; fixed searches need no callback, while
-variable normalization ordering retains its actual-comparison guard. Reservations,
-cache keys, producer capture, feedback, and glyph output claim actual records and
-bytes, not a second processing price. Equality-based cache fallback remains valid;
-pointer identity alone is not sufficient.
+Font-family Unicode normalization no longer takes a resource callback or charges
+input scans, decomposition, ordering, recomposition or scratch storage. NFC and
+NFKC casefold retain their Unicode 16 tables, actual algorithms, checked lengths
+and fallible buffer growth. The ordering and recomposition passes have no remaining
+failure source and return directly; allocation and representation failures still
+propagate from normalization. The separate text line-break callback has not yet
+been migrated. Equality-based cache fallback remains valid; pointer identity
+alone is not sufficient.
 
 Shaping input is admitted at the canonical Rustybuzz call boundary, before buffer
 construction and shaping, counting actual input plus at most five trailing
