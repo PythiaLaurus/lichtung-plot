@@ -311,6 +311,7 @@ impl OperationFontResources {
                 discovery_entries: 0,
             })),
             generation: OperationGenerationResources {
+                identity: Arc::new(()),
                 palette_cache: Arc::default(),
                 counters: Arc::new(Mutex::new(GenerationResourceCounters {
                     slots: 0,
@@ -1305,6 +1306,8 @@ struct GenerationResourceCounters {
 
 #[derive(Debug, Clone)]
 pub(crate) struct OperationGenerationResources {
+    // Shared by clones independently of accounting and mutable cache contents.
+    identity: Arc<()>,
     counters: Arc<Mutex<GenerationResourceCounters>>,
     pub(crate) palette_cache: Arc<Mutex<crate::theme::PaletteCache>>,
 }
@@ -1314,7 +1317,7 @@ pub(crate) struct MeasurementCall(());
 
 impl OperationGenerationResources {
     pub(crate) fn same_operation(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.counters, &other.counters)
+        Arc::ptr_eq(&self.identity, &other.identity)
     }
 
     #[cfg(test)]
@@ -1327,6 +1330,7 @@ impl OperationGenerationResources {
     #[cfg(test)]
     pub(crate) fn with_test_limits(visits: u128, bytes: u64) -> Self {
         Self {
+            identity: Arc::new(()),
             palette_cache: Arc::default(),
             counters: Arc::new(Mutex::new(GenerationResourceCounters {
                 slots: 0,
@@ -1343,6 +1347,7 @@ impl OperationGenerationResources {
 
     pub(crate) fn new() -> Self {
         Self {
+            identity: Arc::new(()),
             palette_cache: Arc::default(),
             counters: Arc::new(Mutex::new(GenerationResourceCounters {
                 slots: 0,

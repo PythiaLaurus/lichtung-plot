@@ -1285,6 +1285,12 @@ now, without a new fault-injection framework or test migration. Those old refusa
 expectations do not describe the disabled policy. The audit documents describe
 the historical baseline and its limitations, not complete actual-resource coverage.
 
+The user-approved simplification in `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md`
+is now being implemented. Operation identity is an independent shared identity,
+not the address of the accounting counters. Clones retain it and new operations
+receive distinct identities; source tickets and operation-local caches continue
+to use it. Subsequent accounting deletion must preserve this lifetime contract.
+
 PF4's accepted replacement contract below is implemented. Final primary
 `just verify`, independent byte/variable-visit recheck, and all 27 baseline output
 hash comparisons passed; evidence is in `docs/resource-admission.md` and T5a3p4
