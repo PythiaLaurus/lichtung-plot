@@ -8,9 +8,9 @@ complete through guide/composition chrome. Subsequent mark/annotation and public
 cutovers are paused for user review of
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md`. Seven ledger quota refusals are
 already disabled by `3ae46a1`; production accounting itself is still present.
-The simplification is proposed, not approved. See `../CURRENT_STATUS.md` for the
-current source/status handoff; historical admission evidence below is not a claim
-that the disabled quotas remain enforced or that their tests have been migrated.
+The simplification is proposed, not approved. Historical admission evidence below
+is not a claim that the disabled quotas remain enforced or that their tests have
+been migrated.
 
 ## Authority And Entry Decisions
 

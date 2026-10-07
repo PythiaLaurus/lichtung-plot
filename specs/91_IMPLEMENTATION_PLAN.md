@@ -8,8 +8,7 @@
 simplification proposal after disabling quota rejection. The removal/retention/
 modification inventory in `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` is
 PENDING USER REVIEW, not implementation authorization. Further public-foundation
-feature work is paused at this checkpoint. `../CURRENT_STATUS.md` records the
-completed work, current implementation and proposed next steps.
+feature work is paused at this checkpoint.
 
 This document records the active theme-system design and implementation
 sequence. The completed API-boundary and output-contract remediation remains
