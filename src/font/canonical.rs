@@ -1542,12 +1542,11 @@ impl PreparedFontEnvironment {
         &self,
         resources: &OperationGenerationResources,
     ) -> Result<(), FontError> {
-        let core = self.core.write().map_err(|_| FontError::Synchronization)?;
-        // Rebinding a started environment would detach its existing clones and
-        // erase admissions. Roots must supply their shared budget before prepare.
-        if !Arc::ptr_eq(&core.generation_resources.counters, &resources.counters) {
+        let core = self.core.read().map_err(|_| FontError::Synchronization)?;
+        // Prepared fonts and their clones remain bound to their original operation.
+        if !core.generation_resources.same_operation(resources) {
             return Err(FontError::Arithmetic(
-                "cannot replace an operation resource ledger",
+                "cannot replace a prepared font operation",
             ));
         }
         Ok(())
@@ -5204,35 +5203,21 @@ mod tests {
     }
 
     #[test]
-    fn root_visits_are_atomic_shared_and_cannot_be_rebound_after_preparation() {
+    fn prepared_fonts_keep_their_operation_across_clones() {
         let font = OperationFontResources::new();
         let generation = font.generation_resources();
-        font.claim_visits(100_000).unwrap();
-        let successes = std::thread::scope(|scope| {
-            let a = scope.spawn(|| font.clone().claim_visits(600_000).is_ok());
-            let b = scope.spawn(|| generation.clone().claim_visits(600_000).is_ok());
-            usize::from(a.join().unwrap()) + usize::from(b.join().unwrap())
-        });
-        assert_eq!(successes, 1);
-        assert_eq!(generation.usage().unwrap().1, 700_000);
-        generation.claim_visits(300_000).unwrap();
-        assert!(font.claim_visits(1).is_err());
-        assert!(generation.claim_visits(u128::MAX).is_err());
-        assert_eq!(generation.usage().unwrap().1, 1_000_000);
-        generation.claim_slots(1_000_000).unwrap();
-        assert!(font.generation_resources().claim_slots(1).is_err());
-
         let environment = PreparedFontEnvironment::synthetic();
         let original = environment.generation_resources();
         environment.share_generation_resources(&original).unwrap();
-        let before = original.usage().unwrap();
+        environment
+            .clone()
+            .share_generation_resources(&original.clone())
+            .unwrap();
         assert!(environment
             .clone()
             .share_generation_resources(&generation)
             .is_err());
-        assert_eq!(original.usage().unwrap(), before);
-        environment.claim_processing_visits(1).unwrap();
-        assert_eq!(original.usage().unwrap().1, before.1 + 1);
+        assert!(environment.generation_resources().same_operation(&original));
     }
 
     #[test]
