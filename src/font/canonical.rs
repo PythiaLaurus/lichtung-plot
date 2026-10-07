@@ -30,6 +30,9 @@ const DISCOVERY_ENTRY_LIMIT: u64 = 1_000_000;
 const FONT_BYTE_LIMIT: u64 = 536_870_912;
 const PROCESSING_VISIT_LIMIT: u64 = 1_000_000;
 const TEXT_GENERATION_LIMIT: u128 = 1_000_000;
+// Record existing logical units, but do not reject a render on their quotas.
+// This does not disable arithmetic, allocation, font, layout, or PNG checks.
+const ENFORCE_RESOURCE_QUOTAS: bool = false;
 const SCALAR_MAP_WORDS: usize = 0x11_0000 / u64::BITS as usize;
 
 /// Census producers can lend text or defer formatting until root admission.
@@ -393,7 +396,7 @@ fn claim_font_resource(
     let total = used
         .checked_add(amount)
         .ok_or(FontError::Arithmetic(resource))?;
-    if total > limit {
+    if ENFORCE_RESOURCE_QUOTAS && total > limit {
         return Err(FontError::Limit { resource, limit });
     }
     *used = total;
@@ -1432,7 +1435,7 @@ impl OperationGenerationResources {
                 .ok_or(TextGenerationClaimError::Arithmetic(
                     "root processing visits",
                 ))?;
-        if next > counters.visit_limit {
+        if ENFORCE_RESOURCE_QUOTAS && next > counters.visit_limit {
             return Err(TextGenerationClaimError::Limit {
                 resource: "root processing visits",
                 limit: counters.visit_limit,
@@ -2641,7 +2644,7 @@ fn claim_text_generation_resource(
     let cumulative_claim = consumed
         .checked_add(amount)
         .ok_or(TextGenerationClaimError::Arithmetic(resource))?;
-    if cumulative_claim > TEXT_GENERATION_LIMIT {
+    if ENFORCE_RESOURCE_QUOTAS && cumulative_claim > TEXT_GENERATION_LIMIT {
         return Err(TextGenerationClaimError::Limit {
             resource,
             limit: TEXT_GENERATION_LIMIT,

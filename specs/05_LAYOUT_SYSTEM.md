@@ -1273,6 +1273,18 @@ derived from Rust traits or an unchanged request list.
 
 ## Resources And Lifecycle
 
+**Current user-directed override:** resource-accounting quota refusal is disabled
+by `ENFORCE_RESOURCE_QUOTAS = false` in `src/font/canonical.rs`. The same switch
+gates all three central quota predicates, covering processing visits, records,
+topology, calls, cache entries, font discovery and cumulative byte claims.
+Counters and their checked arithmetic continue operating. This supersedes the
+seven ledger limits below as production refusal conditions; it does not change
+allocation/representability, data/font validation, root/guide coordination or PNG
+policies. The configuration fields and old quota-oriented tests are retained for
+now, without a new fault-injection framework or test migration. Those old refusal
+expectations do not describe the disabled policy. The audit documents describe
+the historical baseline and its limitations, not complete actual-resource coverage.
+
 PF4's accepted replacement contract below is implemented. Final primary
 `just verify`, independent byte/variable-visit recheck, and all 27 baseline output
 hash comparisons passed; evidence is in `docs/resource-admission.md` and T5a3p4
