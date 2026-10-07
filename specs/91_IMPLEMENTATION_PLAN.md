@@ -4,11 +4,11 @@
 
 ## Purpose
 
-**Current review checkpoint:** the user requested a resource-accounting
-simplification proposal after disabling quota rejection. The removal/retention/
-modification inventory in `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` is
-PENDING USER REVIEW, not implementation authorization. Further public-foundation
-feature work is paused at this checkpoint.
+**Current execution checkpoint:** the user approved resource-accounting
+simplification after reviewing the proposal and its assessment. The removal/
+retention/modification inventory and progress are recorded in
+`95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md`. Further public-foundation
+feature work remains paused while this simplification proceeds.
 
 This document records the active theme-system design and implementation
 sequence. The completed API-boundary and output-contract remediation remains

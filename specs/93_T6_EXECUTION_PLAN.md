@@ -1,16 +1,16 @@
 # T6 — Public Foundations And Scientific Presentation
 
 **Status**: IN PROGRESS — planning complete; private implementation partially complete;
-further feature work paused at the resource-accounting review checkpoint below.
+further feature work paused during resource-accounting simplification below.
 
 **Current execution checkpoint:** private foundation implementation is partially
 complete through guide/composition chrome. Subsequent mark/annotation and public
-cutovers are paused for user review of
+cutovers are paused during the user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md`. Seven ledger quota refusals are
 already disabled by `3ae46a1`; production accounting itself is still present.
-The simplification is proposed, not approved. Historical admission evidence below
-is not a claim that the disabled quotas remain enforced or that their tests have
-been migrated.
+The simplification is now in progress. Historical admission evidence below is
+not a claim that disabled quotas remain enforced or that all their tests have
+been migrated; the simplification plan records completed migrations.
 
 ## Authority And Entry Decisions
 
