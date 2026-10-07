@@ -359,13 +359,6 @@ impl OperationFontResources {
             })
     }
 
-    fn limits(&self) -> Result<ResourceLimits, FontError> {
-        self.counters
-            .lock()
-            .map(|counters| counters.limits)
-            .map_err(|_| FontError::Synchronization)
-    }
-
     pub(crate) fn usage(&self) -> Result<FontResourceUsage, FontError> {
         let counters = self
             .counters
@@ -1136,10 +1129,6 @@ struct DiscoveryRecord {
     admit_file: bool,
 }
 
-pub(crate) struct ReservedDiscoveryRecords {
-    records: Vec<DiscoveryRecord>,
-}
-
 struct DiscoveryFontHandle {
     file: File,
 }
@@ -1488,7 +1477,6 @@ impl PreparedFontEnvironment {
                     FontBudget::new(ResourceLimits::PRODUCTION),
                     scalar_presence,
                     None,
-                    None,
                 )?,
             )),
         })
@@ -1497,7 +1485,6 @@ impl PreparedFontEnvironment {
     pub(crate) fn discover_system_with_prepared_resources(
         scalar_presence: Vec<u64>,
         font_resources: OperationFontResources,
-        discovery: ReservedDiscoveryRecords,
         prepared_stage: &mut crate::layout::kernel::PreparedStage<'_>,
     ) -> Result<Self, FontError> {
         #[cfg(test)]
@@ -1508,26 +1495,10 @@ impl PreparedFontEnvironment {
                 CanonicalFontCore::discover_system_with_resources(
                     budget,
                     scalar_presence,
-                    Some(discovery),
                     Some(prepared_stage),
                 )?,
             )),
         })
-    }
-
-    pub(crate) fn reserve_system_discovery(
-        prepared_stage: &mut crate::layout::kernel::PreparedStage<'_>,
-    ) -> Result<ReservedDiscoveryRecords, FontError> {
-        let mut records = Vec::new();
-        prepared_stage
-            .reserve_prepared(
-                &mut records,
-                usize::try_from(DISCOVERY_ENTRY_LIMIT)
-                    .map_err(|_| FontError::Arithmetic("discovery reservation"))?,
-                "canonical font discovery records",
-            )
-            .map_err(|error| FontError::Reservation(error.to_string()))?;
-        Ok(ReservedDiscoveryRecords { records })
     }
 
     pub(crate) fn resolve_pair(
@@ -1974,23 +1945,16 @@ impl CanonicalFontCore {
             FontBudget::new(ResourceLimits::PRODUCTION),
             scalar_presence_map()?,
             None,
-            None,
         )
     }
 
     fn discover_system_with_resources(
         mut budget: FontBudget,
         scalar_presence: Vec<u64>,
-        discovery: Option<ReservedDiscoveryRecords>,
         mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
     ) -> Result<Self, FontError> {
         let sources = platform_sources(&mut budget, prepared_stage.as_deref_mut())?;
-        let files = discover_retained_files_with_stage(
-            &sources.roots,
-            &mut budget,
-            discovery,
-            prepared_stage.as_deref_mut(),
-        )?;
+        let files = discover_retained_files(&sources.roots, prepared_stage.as_deref_mut())?;
         Self::from_retained_with_stage(
             files,
             &sources.generics,
@@ -3528,39 +3492,19 @@ fn shape_retained_run(
     })
 }
 
-#[allow(clippy::too_many_lines)]
-fn discover_retained_files(
-    roots: &[SourceRoot],
-    budget: &mut FontBudget,
-) -> Result<Vec<RetainedFontFile>, FontError> {
-    discover_retained_files_with_stage(roots, budget, None, None)
-}
-
 #[allow(
     clippy::too_many_lines,
-    reason = "bounded discovery keeps admission, retention, and mutation checks in one auditable path"
+    reason = "discovery keeps traversal, retention, and mutation checks in one auditable path"
 )]
-fn discover_retained_files_with_stage(
+fn discover_retained_files(
     roots: &[SourceRoot],
-    budget: &mut FontBudget,
-    discovery: Option<ReservedDiscoveryRecords>,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<Vec<RetainedFontFile>, FontError> {
-    let capacity = usize::try_from(budget.resources.limits()?.discovery_entries)
-        .map_err(|_| FontError::Arithmetic("discovery reservation"))?;
-    let mut discovered = discovery.map_or_else(Vec::new, |reserved| reserved.records);
-    if discovered.capacity() < capacity {
-        reserve_prepared_or_local(
-            &mut discovered,
-            capacity,
-            "discovery records",
-            prepared_stage.as_deref_mut(),
-        )?;
-    }
+    let mut discovered = Vec::new();
     for root in roots {
         match fs::symlink_metadata(&root.path) {
             Ok(_) => {
-                budget.claim_discovery(1)?;
+                reserve_discovery_record(&mut discovered, prepared_stage.as_deref_mut())?;
                 discovered.push(DiscoveryRecord {
                     root_ordinal: root.ordinal,
                     path: root.path.clone(),
@@ -3619,12 +3563,12 @@ fn discover_retained_files_with_stage(
                     path: path.clone(),
                     source,
                 })?;
-                budget.claim_discovery(1)?;
                 if entry_prefix
                     .is_some_and(|prefix| !entry.file_name().to_string_lossy().starts_with(prefix))
                 {
                     continue;
                 }
+                reserve_discovery_record(&mut discovered, prepared_stage.as_deref_mut())?;
                 discovered.push(DiscoveryRecord {
                     root_ordinal,
                     path: entry.path(),
@@ -3660,23 +3604,11 @@ fn discover_retained_files_with_stage(
         record.path = canonical_path;
     }
     discovered.retain(|record| record.admit_file);
-    budget.claim_visits(
-        u64::try_from(discovered.len())
-            .map_err(|_| FontError::Arithmetic("discovery path sort"))?,
-    )?;
     discovered.sort_unstable_by(|left, right| {
         native_path_cmp(&left.path, &right.path)
             .then_with(|| left.root_ordinal.cmp(&right.root_ordinal))
     });
-    budget.claim_visits(
-        u64::try_from(discovered.len())
-            .map_err(|_| FontError::Arithmetic("discovery path deduplication"))?,
-    )?;
     discovered.dedup_by(|right, left| right.path == left.path);
-    budget.claim_visits(
-        u64::try_from(discovered.len())
-            .map_err(|_| FontError::Arithmetic("discovery root sort"))?,
-    )?;
     discovered.sort_unstable_by(|left, right| {
         left.root_ordinal
             .cmp(&right.root_ordinal)
@@ -3716,7 +3648,6 @@ fn discover_retained_files_with_stage(
         }
         let length = metadata_before.len();
         let modified_before = metadata_before.modified().ok();
-        budget.claim_bytes(length)?;
         let length =
             usize::try_from(length).map_err(|_| FontError::Arithmetic("font file length"))?;
         let mut bytes = Vec::new();
@@ -3769,6 +3700,34 @@ fn discover_retained_files_with_stage(
         drop(handle);
     }
     Ok(retained)
+}
+
+fn reserve_discovery_record(
+    records: &mut Vec<DiscoveryRecord>,
+    prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
+) -> Result<(), FontError> {
+    let required = records
+        .len()
+        .checked_add(1)
+        .ok_or(FontError::Arithmetic("discovery record length"))?;
+    if required > records.capacity() {
+        let target = required.max(
+            records
+                .capacity()
+                .checked_mul(2)
+                .ok_or(FontError::Arithmetic("discovery record capacity"))?,
+        );
+        target
+            .checked_mul(std::mem::size_of::<DiscoveryRecord>())
+            .ok_or(FontError::Arithmetic("discovery record bytes"))?;
+        reserve_prepared_or_local(
+            records,
+            target - records.len(),
+            "discovery records",
+            prepared_stage,
+        )?;
+    }
+    Ok(())
 }
 
 fn read_exact_font_bytes(
@@ -5810,7 +5769,7 @@ mod tests {
     }
 
     #[test]
-    fn discovery_retains_one_handle_at_a_time_and_closes_on_byte_refusal() {
+    fn discovery_retains_one_handle_at_a_time_and_preserves_file_bytes() {
         let root = tempfile::tempdir().unwrap();
         for (name, bytes) in [
             ("a.ttf", b"first".as_slice()),
@@ -5819,13 +5778,8 @@ mod tests {
             fs::write(root.path().join(name), bytes).unwrap();
         }
         let roots = ordinal_roots(vec![root.path().to_path_buf()], None).unwrap();
-        let limits = ResourceLimits {
-            discovery_entries: 8,
-            font_bytes: 11,
-            processing_visits: 32,
-        };
         DISCOVERY_HANDLES.with(|state| state.set([0; 5]));
-        let files = discover_retained_files(&roots, &mut FontBudget::new(limits)).unwrap();
+        let files = discover_retained_files(&roots, None).unwrap();
         DISCOVERY_HANDLES.with(|state| assert_eq!(state.get(), [0, 1, 2, 2, 2]));
         for (file, source) in files
             .iter()
@@ -5834,17 +5788,6 @@ mod tests {
             assert_eq!(file.bytes.as_slice(), source);
             assert_eq!(file.sha256, <[u8; 32]>::from(Sha256::digest(source)));
         }
-        DISCOVERY_HANDLES.with(|state| state.set([0; 5]));
-        let mut budget = FontBudget::new(ResourceLimits {
-            font_bytes: 5,
-            ..limits
-        });
-        assert!(matches!(
-            discover_retained_files(&roots, &mut budget),
-            Err(FontError::Limit { .. })
-        ));
-        DISCOVERY_HANDLES.with(|state| assert_eq!(state.get(), [0, 1, 2, 1, 1]));
-        assert_eq!(budget.resources.usage().unwrap().font_bytes, 5);
     }
 
     #[test]
@@ -5853,11 +5796,6 @@ mod tests {
         let path = root.path().join("a.ttf");
         fs::write(root.path().join("b.ttf"), b"unopened").unwrap();
         let roots = ordinal_roots(vec![root.path().to_path_buf()], None).unwrap();
-        let limits = ResourceLimits {
-            discovery_entries: 8,
-            font_bytes: 32,
-            processing_visits: 32,
-        };
         for hook in [
             (|path: &Path| fs::write(path, b"x").unwrap()) as fn(&Path),
             (|path: &Path| fs::write(path, b"longer than admitted").unwrap()) as fn(&Path),
@@ -5865,10 +5803,8 @@ mod tests {
             fs::write(&path, b"original").unwrap();
             DISCOVERY_HANDLES.with(|state| state.set([0; 5]));
             DISCOVERY_AFTER_ADMISSION.with(|state| state.set(Some(hook)));
-            assert!(
-                matches!(discover_retained_files(&roots, &mut FontBudget::new(limits)),
-                Err(FontError::ChangedFile(changed)) if changed == fs::canonicalize(&path).unwrap())
-            );
+            assert!(matches!(discover_retained_files(&roots, None),
+                Err(FontError::ChangedFile(changed)) if changed == fs::canonicalize(&path).unwrap()));
             DISCOVERY_HANDLES.with(|state| assert_eq!(state.get(), [0, 1, 1, 1, 0]));
         }
     }
@@ -5925,16 +5861,13 @@ mod tests {
     #[test]
     fn discovery_distinguishes_missing_roots_from_entry_io_failures() {
         let root = tempfile::tempdir().unwrap();
-        let mut budget = FontBudget::new(ResourceLimits::PRODUCTION);
         let roots = ordinal_roots(vec![root.path().join("missing")], None).unwrap();
-        assert!(discover_retained_files(&roots, &mut budget)
-            .unwrap()
-            .is_empty());
+        assert!(discover_retained_files(&roots, None).unwrap().is_empty());
         std::os::unix::fs::symlink(root.path().join("absent"), root.path().join("broken.ttf"))
             .unwrap();
         let roots = ordinal_roots(vec![root.path().to_path_buf()], None).unwrap();
         assert!(matches!(
-            discover_retained_files(&roots, &mut budget),
+            discover_retained_files(&roots, None),
             Err(FontError::Io { .. })
         ));
     }
@@ -6034,53 +5967,6 @@ mod tests {
     }
 
     #[test]
-    fn discovery_enforces_injected_entry_and_byte_boundaries() {
-        let root = tempfile::tempdir().unwrap();
-        fs::write(root.path().join("one.ttf"), [1_u8, 2]).unwrap();
-        let roots = [SourceRoot {
-            ordinal: 0,
-            path: root.path().to_path_buf(),
-            entry_prefix: None,
-        }];
-        let equal_limits = ResourceLimits {
-            discovery_entries: 2,
-            font_bytes: 2,
-            processing_visits: 5,
-        };
-        assert_eq!(
-            discover_retained_files(&roots, &mut FontBudget::new(equal_limits))
-                .unwrap()
-                .len(),
-            1
-        );
-
-        let entry_plus_one = ResourceLimits {
-            discovery_entries: 1,
-            ..equal_limits
-        };
-        assert!(matches!(
-            discover_retained_files(&roots, &mut FontBudget::new(entry_plus_one)),
-            Err(FontError::Limit { .. })
-        ));
-        let byte_plus_one = ResourceLimits {
-            font_bytes: 1,
-            ..equal_limits
-        };
-        assert!(matches!(
-            discover_retained_files(&roots, &mut FontBudget::new(byte_plus_one)),
-            Err(FontError::Limit { .. })
-        ));
-        let work_plus_one = ResourceLimits {
-            processing_visits: 4,
-            ..equal_limits
-        };
-        assert!(matches!(
-            discover_retained_files(&roots, &mut FontBudget::new(work_plus_one)),
-            Err(FontError::Limit { .. })
-        ));
-    }
-
-    #[test]
     fn retained_discovery_sorts_by_root_then_native_path_and_deduplicates() {
         let first = tempfile::tempdir().unwrap();
         let second = tempfile::tempdir().unwrap();
@@ -6105,12 +5991,7 @@ mod tests {
                 entry_prefix: None,
             },
         ];
-        let limits = ResourceLimits {
-            discovery_entries: 32,
-            font_bytes: 32,
-            processing_visits: 32,
-        };
-        let files = discover_retained_files(&roots, &mut FontBudget::new(limits)).unwrap();
+        let files = discover_retained_files(&roots, None).unwrap();
         let names: Vec<_> = files
             .iter()
             .map(|file| {
@@ -6135,7 +6016,7 @@ mod tests {
     }
 
     #[test]
-    fn direct_file_discovery_root_is_counted_but_not_admitted() {
+    fn direct_file_discovery_root_is_not_retained() {
         let directory = tempfile::tempdir().unwrap();
         let font = directory.path().join("direct.ttf");
         fs::write(&font, [1_u8, 2]).unwrap();
@@ -6144,24 +6025,9 @@ mod tests {
             path: font,
             entry_prefix: None,
         }];
-        let limits = ResourceLimits {
-            discovery_entries: 1,
-            font_bytes: 0,
-            processing_visits: 1,
-        };
-        let mut budget = FontBudget::new(limits);
-
-        let files = discover_retained_files(&roots, &mut budget).unwrap();
+        let files = discover_retained_files(&roots, None).unwrap();
 
         assert!(files.is_empty());
-        assert_eq!(
-            budget.resources.usage().unwrap(),
-            FontResourceUsage {
-                discovery_entries: 1,
-                font_bytes: 0,
-                processing_visits: 1,
-            }
-        );
     }
 
     #[test]
@@ -6213,12 +6079,7 @@ mod tests {
                 path: root.path().to_path_buf(),
                 entry_prefix: None,
             }];
-            let limits = ResourceLimits {
-                discovery_entries: 8,
-                font_bytes: 8,
-                processing_visits: 8,
-            };
-            let files = discover_retained_files(&roots, &mut FontBudget::new(limits)).unwrap();
+            let files = discover_retained_files(&roots, None).unwrap();
             assert!(files.is_empty());
         }
     }

@@ -1291,6 +1291,15 @@ not the address of the accounting counters. Clones retain it and new operations
 receive distinct identities; source tickets and operation-local caches continue
 to use it. Subsequent accounting deletion must preserve this lifetime contract.
 
+Filesystem font discovery now grows its record vector fallibly from actual
+encountered entries, with checked amortized capacity growth. It no longer reserves
+one million records or accepts an accounting budget. Directory traversal, native
+path ordering/deduplication, retained-byte hashing, one-open-file-at-a-time behavior
+and file-change detection remain. Prepared-stage reservation errors still propagate.
+Fontconfig configuration traversal and the remaining font preparation paths retain
+their old counters until their own migration; historical usage totals below do
+not describe current normalization or filesystem discovery.
+
 PF4's accepted replacement contract below is implemented. Final primary
 `just verify`, independent byte/variable-visit recheck, and all 27 baseline output
 hash comparisons passed; evidence is in `docs/resource-admission.md` and T5a3p4

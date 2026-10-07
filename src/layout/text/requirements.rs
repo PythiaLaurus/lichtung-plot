@@ -496,7 +496,6 @@ impl PreparedTextCensus {
         mut presence: Vec<u64>,
         prepared_stage: &mut crate::layout::kernel::PreparedStage<'_>,
     ) -> Result<PreparedFontEnvironment, PreparedTextCensusError> {
-        let discovery = PreparedFontEnvironment::reserve_system_discovery(prepared_stage)?;
         for requirement in &self.requirements {
             if !requirement.source_work_admitted {
                 prepared_stage
@@ -508,7 +507,6 @@ impl PreparedTextCensus {
         let environment = PreparedFontEnvironment::discover_system_with_prepared_resources(
             presence,
             prepared_stage.font_resources(),
-            discovery,
             prepared_stage,
         )?;
         self.prepare_pairs_in(&environment, Some(prepared_stage))?;
