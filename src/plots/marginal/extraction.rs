@@ -367,11 +367,11 @@ fn marginal_selected_geometry_and_poisoned_capture_share_operands() {
     );
     assert_eq!(
         (top.y0 - central.y1).to_bits(),
-        theme.composition.canvas_grid_gap.to_bits()
+        theme.composition_grid_gap().unwrap().to_bits()
     );
     assert_eq!(
         (right.x0 - central.x1).to_bits(),
-        theme.composition.canvas_grid_gap.to_bits()
+        theme.composition_grid_gap().unwrap().to_bits()
     );
     assert_eq!(payload.groups.len(), 2);
     assert_eq!(payload.groups[0].top.len(), 82);

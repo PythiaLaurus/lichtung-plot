@@ -255,7 +255,30 @@ impl LocalMetric {
 #[derive(Debug)]
 pub(crate) struct ExactLength(Rational);
 
+// Test oracles may compare independently measured exact consequences. Runtime
+// matching uses the operation-admitted compare method, not this trait.
+#[cfg(test)]
+impl PartialEq for ExactLength {
+    fn eq(&self, other: &Self) -> bool {
+        &self.0.numerator * &other.0.denominator == &other.0.numerator * &self.0.denominator
+    }
+}
+
 impl ExactLength {
+    /// Retained canonical layout/text quanta are already exact integers. Admit
+    /// their two rational operands directly, without decoding a pixel projection.
+    pub(crate) fn quanta(
+        value: LayoutScalar,
+        resources: &OperationGenerationResources,
+    ) -> Result<Self> {
+        let value =
+            u64::try_from(value.quanta()).map_err(|_| invalid("length must be nonnegative"))?;
+        admit_math(resources, integer_bits(value).max(1), 2)?;
+        Ok(Self(Rational {
+            numerator: BigUint::from(value),
+            denominator: BigUint::from(1_u8),
+        }))
+    }
     /// Checked unrounded remainder. Admission precedes cross-products and
     /// subtraction; a negative remainder is unavailable capacity, not zero.
     pub(crate) fn subtract(
@@ -408,13 +431,6 @@ impl ExactLength {
         }))
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "complete hard sums include canonical integral ink at the role cutover"
-        )
-    )]
     pub(crate) fn add_quanta(
         &self,
         value: LayoutScalar,

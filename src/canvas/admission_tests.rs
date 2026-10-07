@@ -33,7 +33,13 @@ fn canvas_preset_construction_uses_one_prepared_ledger_for_root_and_explicit_chi
             + 2 * std::mem::size_of::<usize>()) as u64
             + 2 * (16 + std::mem::size_of::<num_bigint::BigUint>() as u64);
         let (guide_work, guide_bytes) = crate::theme::guide::builtin_resource_oracle();
-        let bytes = 2 * guide_bytes
+        let (composition_work, composition_bytes) =
+            crate::theme::composition::preset_resource_oracle(preset);
+        let (child_composition_work, child_composition_bytes) =
+            crate::theme::composition::preset_resource_oracle(Theme::Science);
+        let bytes = composition_bytes
+            + child_composition_bytes
+            + 2 * guide_bytes
             + 4 * outline_bytes
             + 12 * ratio_bytes
             + 8 * (std::mem::size_of::<Vec<crate::theme::OpaqueColor>>()
@@ -41,7 +47,13 @@ fn canvas_preset_construction_uses_one_prepared_ledger_for_root_and_explicit_chi
             + 2 * total_seeds * std::mem::size_of::<crate::theme::OpaqueColor>() as u64
             + 10 * std::mem::size_of::<crate::theme::ColorStop>() as u64;
         let root_axis_work = if preset == Theme::Nature { 31 } else { 38 };
-        let work = 62_u128 + 2 * u128::from(total_seeds) + root_axis_work + 38 + 2 * guide_work;
+        let work = composition_work
+            + child_composition_work
+            + 62_u128
+            + 2 * u128::from(total_seeds)
+            + root_axis_work
+            + 38
+            + 2 * guide_work;
         for (visits, byte_limit) in [
             (0, bytes),
             (work, 0),

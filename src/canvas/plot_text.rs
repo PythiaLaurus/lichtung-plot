@@ -15,6 +15,9 @@ pub(super) struct PlotLocalTextPlan {
     pub(super) body: PanelBox,
 }
 
+#[cfg(test)]
+mod tests;
+
 impl PlotLocalTextPlan {
     pub(super) fn measure(
         plot: &Plot,
@@ -28,15 +31,17 @@ impl PlotLocalTextPlan {
         let present = sources
             .iter()
             .any(|source| source.is_some_and(|text| !text.is_empty()));
-        let span = if present {
-            PanelBox::new(
-                cell.x0 + 16.0,
-                cell.x1 - 16.0,
-                cell.y0 + 8.0,
-                cell.y1 - 12.0,
-            )
+        let resources = theme.prepared_font_environment()?.generation_resources();
+        let padding = if present {
+            theme.root_padding_lengths()?
         } else {
-            cell
+            crate::theme::composition::RootPaddingLengths::zero(&resources)?
+        };
+        let span = padding.inset(cell, &resources)?;
+        let maximum_width = if present {
+            theme.root_inner_width(cell.width())?
+        } else {
+            cell.width()
         };
         if span.width() <= 0.0 || span.height() <= 0.0 {
             return Ok(FitOutcome::Miss(
@@ -53,7 +58,7 @@ impl PlotLocalTextPlan {
             ));
         }
         if let FitOutcome::Miss(reason) = fit::outcome(intrinsics.check_width(
-            span.width(),
+            maximum_width.min(span.width()),
             scope,
             &theme.prepared_font_environment()?.generation_resources(),
         ))? {
@@ -66,17 +71,20 @@ impl PlotLocalTextPlan {
             panel_alignments,
         );
         let text = match fit::outcome(RootTitleBlockPlan::measure(
-            theme, sources, span, alignments, minimum.1, scope,
+            theme,
+            sources,
+            cell,
+            &padding,
+            maximum_width,
+            alignments,
+            minimum.1,
+            scope,
         ))? {
             FitOutcome::Measured(text) => text,
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
         };
-        let body = PanelBox::new(
-            cell.x0,
-            cell.x1,
-            span.y0 + text.bottom_reserve,
-            span.y1 - text.top_reserve,
-        );
+        let reserved = text.reserves.body(cell, &padding, &resources)?;
+        let body = PanelBox::new(cell.x0, cell.x1, reserved.y0, reserved.y1);
         if body.width() < minimum.0 || body.height() < minimum.1 {
             return Ok(FitOutcome::Miss(
                 scope

@@ -317,7 +317,12 @@ pub(super) fn native_parent(
             let strip_scope = scope
                 .child(AddressRole::FacetCell, index, &resources)?
                 .child(AddressRole::FacetHeader, 0, &resources)?;
-            if cell.width() <= 16.0 {
+            let text_width = crate::theme::composition::capacity(
+                cell.width(),
+                &theme.facet_strip_lengths()?.horizontal_inset,
+                &resources,
+            )?;
+            if text_width <= 0.0 {
                 fit::FitFailure::retain_least(
                     &mut child_miss,
                     strip_scope.failure(FitKind::Text, "facet strip has no assigned text width"),
@@ -326,7 +331,7 @@ pub(super) fn native_parent(
                 theme,
                 &label,
                 appearance,
-                cell.width() - 16.0,
+                text_width,
                 PhysicalTextAlignment::Center,
                 "facet strip",
                 &strip_scope,

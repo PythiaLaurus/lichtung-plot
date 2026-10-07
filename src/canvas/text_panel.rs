@@ -18,6 +18,9 @@ fn pixels(quanta: i64) -> f64 {
     quanta as f64 / 1024.0
 }
 
+#[cfg(test)]
+mod tests;
+
 fn text_appearance(theme: &ResolvedTheme) -> [&TextTheme; 2] {
     [
         theme.typography.composition().text_panel_title(),
@@ -48,7 +51,9 @@ impl TextPanelIntrinsics {
             body_style,
             "text panel body intrinsics",
         )?;
-        let inset = theme.composition.text_panel_inset;
+        let lengths = theme.text_panel_lengths()?;
+        let resources = theme.prepared_font_environment()?.generation_resources();
+        let edges = lengths.inset.times(2, &resources)?;
         let title_ch = theme
             .measure_text(
                 "0",
@@ -71,17 +76,28 @@ impl TextPanelIntrinsics {
             title,
             body,
             minimum: (
-                title.0.max(body.0) + 2.0 * inset,
-                title_style.line_pitch_pixels()
-                    + body_style.line_pitch_pixels()
-                    + theme.composition.text_panel_gap
-                    + 2.0 * inset,
+                crate::theme::composition::hard(
+                    &edges.add_pixels(title.0.max(body.0), &resources)?,
+                    &resources,
+                )?,
+                crate::theme::composition::hard(
+                    &edges
+                        .add(&lengths.gap, &resources)?
+                        .add(&title_style.line_pitch_exact(&resources)?, &resources)?
+                        .add(&body_style.line_pitch_exact(&resources)?, &resources)?,
+                    &resources,
+                )?,
             ),
-            preferred_width: title
-                .0
-                .max(title.1.min(66.0 * title_ch))
-                .max(body.0.max(body.1.min(66.0 * body_ch)))
-                + 2.0 * inset,
+            preferred_width: crate::theme::composition::hard(
+                &edges.add_pixels(
+                    title
+                        .0
+                        .max(title.1.min(66.0 * title_ch))
+                        .max(body.0.max(body.1.min(66.0 * body_ch))),
+                    &resources,
+                )?,
+                &resources,
+            )?,
         })
     }
 }
@@ -92,7 +108,13 @@ pub(super) fn natural_height(
     theme: &ResolvedTheme,
 ) -> Result<f64, Error> {
     let [title, body] = text_appearance(theme);
-    let available = width - 2.0 * theme.composition.text_panel_inset;
+    let lengths = theme.text_panel_lengths()?;
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let available = crate::theme::composition::capacity(
+        width,
+        &lengths.inset.times(2, &resources)?,
+        &resources,
+    )?;
     let title = fit::measured(fit::text(
         theme,
         source.title(),
@@ -113,10 +135,15 @@ pub(super) fn natural_height(
         &FitScope::root(),
     ))
     .map_err(crate::layout::fit::PlanError::into_error)?;
-    Ok(title.height()
-        + body.height()
-        + theme.composition.text_panel_gap
-        + 2.0 * theme.composition.text_panel_inset)
+    crate::theme::composition::hard(
+        &lengths
+            .inset
+            .times(2, &resources)?
+            .add(&lengths.gap, &resources)?
+            .add_pixels(title.height(), &resources)?
+            .add_pixels(body.height(), &resources)?,
+        &resources,
+    )
 }
 
 impl TextPanelPlan {
@@ -154,12 +181,6 @@ impl TextPanelPlan {
         let x1 = nearest_spatial_quanta(cell.x1)?;
         let y0 = nearest_spatial_quanta(cell.y0)?;
         let y1 = nearest_spatial_quanta(cell.y1)?;
-        let inset = nearest_spatial_quanta(crate::layout::kernel::required_length(
-            theme.composition.text_panel_inset,
-        )?)?;
-        let gap = nearest_spatial_quanta(crate::layout::kernel::required_length(
-            theme.composition.text_panel_gap,
-        )?)?;
         let width = x1
             .checked_sub(x0)
             .ok_or_else(|| Error::Render("TextPanel width overflowed".into()))?;
@@ -167,6 +188,11 @@ impl TextPanelPlan {
             .checked_sub(y0)
             .ok_or_else(|| Error::Render("TextPanel height overflowed".into()))?;
         let resources = theme.prepared_font_environment()?.generation_resources();
+        let lengths = theme.text_panel_lengths()?;
+        let edges = lengths.inset.times(2, &resources)?;
+        let content_width = nearest_spatial_quanta(
+            crate::theme::composition::capacity(pixels(width), &edges, &resources)?.max(0.0),
+        )?;
         let hard = nearest_spatial_quanta(crate::layout::kernel::required_length(
             title_hard.max(body_hard),
         )?)?;
@@ -201,8 +227,8 @@ impl TextPanelPlan {
         let assigned = match allocate_grid_axis(
             &[column],
             &widths,
-            width,
-            [inset, inset],
+            content_width,
+            [0, 0],
             0,
             None,
             true,
@@ -210,7 +236,7 @@ impl TextPanelPlan {
             &owner,
         )? {
             FitOutcome::Measured(assigned) => assigned.sizes[0],
-            FitOutcome::Miss(_) if i128::from(width) - 2 * i128::from(inset) < i128::from(hard) => {
+            FitOutcome::Miss(_) if content_width < hard => {
                 let role = if title_hard >= body_hard {
                     AddressRole::TextPanelTitle
                 } else {
@@ -281,12 +307,17 @@ impl TextPanelPlan {
                 address: &body_scope.address,
             },
         ];
+        let vertical_reserve = edges.add(&lengths.gap, &resources)?;
+        let content_height = nearest_spatial_quanta(
+            crate::theme::composition::capacity(pixels(height), &vertical_reserve, &resources)?
+                .max(0.0),
+        )?;
         let allocation = match allocate_grid_axis(
             &rows,
             &row_children,
-            height,
-            [inset, inset],
-            gap,
+            content_height,
+            [0, 0],
+            0,
             None,
             false,
             &resources,
@@ -295,15 +326,20 @@ impl TextPanelPlan {
             FitOutcome::Measured(value) => value,
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
         };
-        let x = pixels(x0 + inset);
-        let title_top = y1 - inset;
-        let body_top = title_top - allocation.sizes[0] - gap;
-        let trailing_start = y0 + inset + allocation.trailing_slack;
-        if body_top - allocation.sizes[1] != trailing_start {
+        let x = lengths.inset.after_pixels(pixels(x0), &resources)?;
+        if i128::from(allocation.sizes[0])
+            + i128::from(allocation.sizes[1])
+            + i128::from(allocation.trailing_slack)
+            != i128::from(content_height)
+        {
             return Err(Error::Render(
-                "TextPanel sequence left an inconsistent trailing slack".into(),
+                "TextPanel sequence left inconsistent content slack".into(),
             ));
         }
+        let body_offset = lengths
+            .inset
+            .add_pixels(pixels(allocation.sizes[0]), &resources)?
+            .add(&lengths.gap, &resources)?;
         let title_baseline = title.plan().first_baseline_quanta.unwrap_or(0);
         let body_baseline = body.plan().first_baseline_quanta.unwrap_or(0);
         resources
@@ -313,12 +349,23 @@ impl TextPanelPlan {
             layer: format!("canvas-text-panel-{index}"),
             cell,
             title_placement: PlannedTextPlacement::baseline(
-                Point2D::new(x, pixels(title_top - title_baseline)),
+                Point2D::new(
+                    x,
+                    lengths
+                        .inset
+                        .add_pixels(pixels(title_baseline), &resources)?
+                        .before_pixels(pixels(y1), &resources)?,
+                ),
                 TextAnchor::Start,
                 0.0,
             ),
             body_placement: PlannedTextPlacement::baseline(
-                Point2D::new(x, pixels(body_top - body_baseline)),
+                Point2D::new(
+                    x,
+                    body_offset
+                        .add_pixels(pixels(body_baseline), &resources)?
+                        .before_pixels(pixels(y1), &resources)?,
+                ),
                 TextAnchor::Start,
                 0.0,
             ),

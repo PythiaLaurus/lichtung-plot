@@ -20,11 +20,129 @@ struct PreparedPlotInputs {
     theme: Box<ResolvedTheme>,
     text_census: crate::layout::PreparedTextCensus,
     root_text: crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
+    root_frame: std::cell::RefCell<Option<CachedRootFrame>>,
+}
+
+struct CachedRootFrame {
+    dimensions: (u32, u32),
+    minimum: [u64; 2],
+    frame: std::sync::Arc<crate::layout::RootFramePlan>,
+}
+
+impl PreparedPlotInputs {
+    /// This prepared owner freezes its source, theme, fonts and instructions for
+    /// one operation. Only root constraints and traced body minima can change.
+    fn root_frame(
+        &self,
+        source: &Plot,
+    ) -> Result<std::sync::Arc<crate::layout::RootFramePlan>, Error> {
+        let resources = self
+            .theme
+            .prepared_font_environment()?
+            .generation_resources();
+        resources
+            .claim_calls(1)
+            .map_err(|error| Error::Render(format!("root frame measurement call: {error:?}")))?;
+        let dimensions = (source.width(), source.height());
+        let minimum = source.intrinsic_body_minimum(&self.theme)?;
+        let minimum = [minimum.0.to_bits(), minimum.1.to_bits()];
+        resources
+            .claim_visits(1)
+            .map_err(|error| Error::Render(format!("root frame input witness: {error:?}")))?;
+        if let Some(cached) = self.root_frame.borrow().as_ref() {
+            if cached.dimensions == dimensions && cached.minimum == minimum {
+                resources
+                    .claim_visits(1)
+                    .map_err(|error| Error::Render(format!("root frame sharing: {error:?}")))?;
+                return Ok(std::sync::Arc::clone(&cached.frame));
+            }
+        }
+        let frame = source.measured_canvas_layout(&self.theme)?;
+        resources
+            .claim_cache_entries(1)
+            .map_err(|error| Error::Render(format!("root frame cache entry: {error:?}")))?;
+        resources
+            .claim_slots(1)
+            .map_err(|error| Error::Render(format!("root frame cache record: {error:?}")))?;
+        resources
+            .claim_bytes(size_of::<CachedRootFrame>() as u64)
+            .map_err(|error| Error::Render(format!("root frame cache storage: {error:?}")))?;
+        resources
+            .claim_visits(1)
+            .map_err(|error| Error::Render(format!("root frame retention: {error:?}")))?;
+        let frame = frame.into_shared(&resources)?;
+        *self.root_frame.borrow_mut() = Some(CachedRootFrame {
+            dimensions,
+            minimum,
+            frame: std::sync::Arc::clone(&frame),
+        });
+        Ok(frame)
+    }
 }
 
 enum PlotLayoutPlan {
     Unfaceted(Box<UnfacetedPlotPlan>),
     Faceted(Box<super::facets::FacetPlan>),
+}
+
+#[cfg(test)]
+#[test]
+fn prepared_root_frame_reuses_complete_prose_only_with_identical_constraints_on_its_operation() {
+    let source = Plot::scatter(
+        crate::NumericValues::new("x", [0.0, 1.0]),
+        crate::NumericValues::new("y", [1.0, 0.0]),
+    )
+    .title("Root title")
+    .subtitle("Independent subtitle")
+    .caption("Immutable caption")
+    .size(640, 480)
+    .erase();
+    let plan = PlotPlan::new(&source, source.kind()).unwrap();
+    let prepared = plan.root.prepared();
+    let source = prepared.axes.attach(source).unwrap();
+    let resources = prepared
+        .theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    prepared.root_frame.borrow_mut().take();
+    let original = prepared.root_frame(&source).unwrap();
+    let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
+    let entries = resources.call_cache_usage().1;
+    let repeated = prepared.root_frame(&source).unwrap();
+    assert_eq!(original, repeated);
+    assert_eq!(resources.call_cache_usage().1, entries);
+    assert_eq!(
+        crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
+        shapes
+    );
+    for ((_, left), (_, right)) in original
+        .root_text
+        .placed_text()
+        .zip(repeated.root_text.placed_text())
+    {
+        assert!(left.shares_payload(right));
+    }
+    let changed = prepared
+        .root_frame(&source.clone().with_canvas_size(641, 480))
+        .unwrap();
+    assert_ne!(changed.panel_box, repeated.panel_box);
+    assert!(resources.call_cache_usage().1 > entries);
+    assert_eq!(
+        changed
+            .root_text
+            .placed_text()
+            .map(|(_, text)| text.source.as_str())
+            .collect::<Vec<_>>(),
+        ["Root title", "Independent subtitle", "Immutable caption"]
+    );
+    let visits = resources.usage().unwrap().1;
+    resources.set_test_limits(visits, resources.byte_usage().unwrap());
+    assert!(prepared
+        .root_frame(&source.with_canvas_size(641, 480))
+        .unwrap_err()
+        .to_string()
+        .contains("root processing visits"));
 }
 
 #[cfg(test)]
@@ -66,7 +184,10 @@ fn plot_preset_construction_refuses_on_its_prepared_ledger_before_fonts_or_backe
             + 2 * std::mem::size_of::<usize>()) as u64
             + 2 * (16 + std::mem::size_of::<num_bigint::BigUint>() as u64);
         let (guide_work, guide_bytes) = crate::theme::guide::builtin_resource_oracle();
-        let bytes = guide_bytes
+        let (composition_work, composition_bytes) =
+            crate::theme::composition::preset_resource_oracle(preset);
+        let bytes = composition_bytes
+            + guide_bytes
             + 2 * outline_bytes
             + 6 * ratio_bytes
             + 4 * (std::mem::size_of::<Vec<crate::theme::OpaqueColor>>()
@@ -80,7 +201,7 @@ fn plot_preset_construction_refuses_on_its_prepared_ledger_before_fonts_or_backe
         } else {
             38
         };
-        let work = 31_u128 + 2 * u128::from(seeds) + axis_work + guide_work;
+        let work = composition_work + 31_u128 + 2 * u128::from(seeds) + axis_work + guide_work;
         let source = plot.clone().theme(preset);
         for (visits, byte_limit) in [
             (0, bytes),
@@ -254,7 +375,7 @@ mod soft_hyphen_tests {
 struct UnfacetedPlotPlan {
     plot: Plot,
     panel_plan: PanelPlan,
-    canvas_layout: crate::layout::RootFramePlan,
+    canvas_layout: std::sync::Arc<crate::layout::RootFramePlan>,
     legend: Option<(String, crate::decorations::legend::LegendDrawPlan)>,
 }
 
@@ -428,7 +549,11 @@ mod natural_sizing_tests {
             let mut theme = crate::Theme::Publication
                 .resolve(&crate::font::canonical::OperationGenerationResources::new())
                 .unwrap();
-            theme.composition.facet_gap = gap;
+            theme.composition = theme
+                .composition
+                .clone()
+                .with_facet_gap(crate::theme::RelativeSpacing::from_pixels(gap, 15).unwrap())
+                .unwrap();
             crate::orchestrator::measurements::start();
             let result =
                 PlotPlan::new_with_theme_factory(&source, source.kind(), (Some(550), None), |_| {
@@ -962,6 +1087,7 @@ impl PlotPlan {
                     theme,
                     text_census: census,
                     root_text,
+                    root_frame: std::cell::RefCell::new(None),
                 })
             },
             |prepared, assigned, round| {
@@ -998,7 +1124,7 @@ impl PlotPlan {
                 prepared
                     .root_text
                     .check_width(
-                        f64::from(width) - 32.0,
+                        prepared.theme.root_inner_width(f64::from(width))?,
                         &crate::layout::fit::FitScope::root(),
                         round.resources(),
                     )
@@ -1033,6 +1159,7 @@ impl PlotPlan {
                         &source,
                         kind,
                         &prepared.theme,
+                        prepared.root_frame(&source)?,
                         round,
                         sizing.1.is_none(),
                     )?))
@@ -1120,11 +1247,10 @@ impl UnfacetedPlotPlan {
         source: &Plot,
         kind: PlotKind,
         theme: &ResolvedTheme,
+        mut canvas_layout: std::sync::Arc<crate::layout::RootFramePlan>,
         round: &mut crate::layout::kernel::FeedbackRound,
         content_height: bool,
     ) -> Result<Self, Error> {
-        source.intrinsic_body_minimum(theme)?;
-        let mut canvas_layout = source.measured_canvas_layout(theme)?;
         let cell = canvas_layout.panel_box;
         let mut context = source.configured_source_rows()?.map_or_else(
             || PlotRenderContext::new(source.data(), cell, theme),
@@ -1153,11 +1279,12 @@ impl UnfacetedPlotPlan {
         let mut plot = panel_plan.plot_with_planned_limits(source, data)?;
         if content_height {
             let height = crate::layout::interior::sizing::integral(
-                panel_plan.frame_box.y1 + canvas_layout.insets.top,
+                canvas_layout.height_for_body(panel_plan.frame_box.height(), theme)?,
             )?;
             plot = plot.with_canvas_size(source.width(), height);
-            canvas_layout = plot.measured_canvas_layout(theme)?;
-            canvas_layout.panel_box = panel_plan.frame_box;
+            let mut resized = plot.measured_canvas_layout(theme)?;
+            resized.panel_box = panel_plan.frame_box;
+            canvas_layout = resized.into_shared(&resources)?;
         }
         round.observe_canvas(&canvas_layout)?;
         let legend = panel_plan
@@ -1376,7 +1503,16 @@ mod root_title_tests {
                 },
                 |inputs, assigned, round| {
                     let plot = inputs.attach(source.clone())?;
-                    let plan = UnfacetedPlotPlan::new(&plot, plot.kind(), &theme, round, false)?;
+                    let plan = UnfacetedPlotPlan::new(
+                        &plot,
+                        plot.kind(),
+                        &theme,
+                        plot.measured_canvas_layout(&theme)?.into_shared(
+                            &theme.prepared_font_environment()?.generation_resources(),
+                        )?,
+                        round,
+                        false,
+                    )?;
                     Ok(crate::layout::MeasuredLayout::new(assigned, plan))
                 },
                 |_, _, plan, _| Ok(plan),
@@ -1395,11 +1531,25 @@ mod root_title_tests {
             let caption_top = if caption.is_empty() {
                 0.0
             } else {
-                8.0 + plan.canvas_layout.root_text.bottom_reserve
-                    - theme
-                        .composition
-                        .root_title_block
-                        .caption_to_content_clearance
+                8.0 + crate::theme::composition::hard(
+                    &plan.canvas_layout.root_text.reserves.bottom,
+                    &theme
+                        .prepared_font_environment()
+                        .unwrap()
+                        .generation_resources(),
+                )
+                .unwrap()
+                    - crate::theme::composition::hard(
+                        &theme
+                            .root_title_lengths()
+                            .unwrap()
+                            .caption_to_content_clearance,
+                        &theme
+                            .prepared_font_environment()
+                            .unwrap()
+                            .generation_resources(),
+                    )
+                    .unwrap()
             };
             assert!(axis_ink_bottom >= caption_top, "caption={caption:?}, body={body:?}, panel={panel:?}, required={required:?}, caption_top={caption_top}, axis_bottom={axis_ink_bottom}");
         }
@@ -1407,6 +1557,10 @@ mod root_title_tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one fixture covers actual Matrix root roles and independent alignments under both presets"
+    )]
     fn matrix_root_uses_one_title_producer_with_independent_odd_size_alignments() {
         for preset in [crate::Theme::Publication, crate::Theme::Science] {
             for explicit in [false, true] {
@@ -1426,9 +1580,9 @@ mod root_title_tests {
                 let theme = preset
                     .resolve(&crate::font::canonical::OperationGenerationResources::new())
                     .unwrap();
-                assert_eq!(theme.composition.root_title_alignment, Center);
-                assert_eq!(theme.composition.root_subtitle_alignment, None);
-                assert_eq!(theme.composition.root_caption_alignment, Start);
+                assert_eq!(theme.composition.root_title_alignment(), Center);
+                assert_eq!(theme.composition.root_subtitle_alignment(), None);
+                assert_eq!(theme.composition.root_caption_alignment(), Start);
                 let prepared = crate::plots::shared_x::prepare_plot(
                     &plot,
                     &crate::font::canonical::OperationGenerationResources::new(),
@@ -1438,8 +1592,28 @@ mod root_title_tests {
                 .attach(plot.clone())
                 .unwrap();
                 let canvas = prepared.measured_canvas_layout(&theme).unwrap();
-                assert!(canvas.root_text.top_reserve > 0.0);
-                assert!(canvas.root_text.bottom_reserve > 0.0);
+                assert!(
+                    crate::theme::composition::hard(
+                        &canvas.root_text.reserves.top,
+                        &theme
+                            .prepared_font_environment()
+                            .unwrap()
+                            .generation_resources()
+                    )
+                    .unwrap()
+                        > 0.0
+                );
+                assert!(
+                    crate::theme::composition::hard(
+                        &canvas.root_text.reserves.bottom,
+                        &theme
+                            .prepared_font_environment()
+                            .unwrap()
+                            .generation_resources()
+                    )
+                    .unwrap()
+                        > 0.0
+                );
                 let plan =
                     PlotPlan::new_with_resolved_theme(&plot, PlotKind::Matrix, theme).unwrap();
                 let retained = plan.root.plan().retained_text();
@@ -1518,7 +1692,11 @@ mod root_title_tests {
             let mut theme = preset
                 .resolve(&crate::font::canonical::OperationGenerationResources::new())
                 .unwrap();
-            theme.composition.root_caption_alignment = Center;
+            theme.composition = theme
+                .composition
+                .clone()
+                .with_root_caption_alignment(Center)
+                .unwrap();
             let plan = PlotPlan::new_with_resolved_theme(&plot, PlotKind::Scatter, theme).unwrap();
             let retained = plan.root.plan().retained_text();
             for (source, alignment) in [
@@ -1582,7 +1760,16 @@ mod retained_legend_tests {
                 let plot = inputs.attach(source.clone())?;
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned,
-                    UnfacetedPlotPlan::new(&plot, plot.kind(), &theme, round, false)?,
+                    UnfacetedPlotPlan::new(
+                        &plot,
+                        plot.kind(),
+                        &theme,
+                        plot.measured_canvas_layout(&theme)?.into_shared(
+                            &theme.prepared_font_environment()?.generation_resources(),
+                        )?,
+                        round,
+                        false,
+                    )?,
                 ))
             },
             |_, _, mut plan, stage| {

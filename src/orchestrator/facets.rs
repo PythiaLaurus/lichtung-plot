@@ -291,9 +291,9 @@ impl FacetPlan {
         }
         let mut minimum = (
             columns.iter().sum::<f64>()
-                + selectors.columns.saturating_sub(1) as f64 * theme.composition.facet_gap,
+                + selectors.columns.saturating_sub(1) as f64 * theme.composition_facet_gap()?,
             rows.iter().sum::<f64>()
-                + selectors.rows.saturating_sub(1) as f64 * theme.composition.facet_gap,
+                + selectors.rows.saturating_sub(1) as f64 * theme.composition_facet_gap()?,
         );
         if !minimum.0.is_finite() || !minimum.1.is_finite() {
             return Err(Error::Render("facet intrinsic grid span overflowed".into()).into());
@@ -426,7 +426,7 @@ impl FacetPlan {
                             height.max(guide.compute_box_height())
                         };
                         let height = crate::layout::interior::sizing::integral(
-                            height + canvas_layout.insets.bottom + canvas_layout.insets.top,
+                            canvas_layout.height_for_body(height, theme)?,
                         )?;
                         let owner = source
                             .admitted_clone(data)?
@@ -469,7 +469,7 @@ impl FacetPlan {
                             inputs.expect("content facet root retains prepared inputs"),
                         ))?;
                         let height = crate::layout::interior::sizing::integral(
-                            height + canvas_layout.insets.bottom + canvas_layout.insets.top,
+                            canvas_layout.height_for_body(height, theme)?,
                         )?;
                         let owner = source
                             .admitted_clone(data)?

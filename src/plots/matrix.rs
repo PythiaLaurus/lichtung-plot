@@ -162,7 +162,7 @@ pub(crate) fn intrinsic_body_minimum(
         width += cell.0.max(hard);
         height += cell.1.max(hard);
     }
-    let gaps = theme.composition.canvas_grid_gap * n.saturating_sub(1) as f64;
+    let gaps = theme.composition_grid_gap()? * n.saturating_sub(1) as f64;
     Ok((width + gaps, height + gaps))
 }
 
@@ -180,7 +180,7 @@ pub(crate) fn natural_body_preference(
     let point = crate::render::geometry::point_ink_dimensions(theme, &point)?;
     let density = theme.marks.matrix_density.backend_style((0, 0, 0));
     let ink = crate::render::geometry::rectangular_fill_ink_outset(theme, &density)?;
-    let mut side = theme.composition.canvas_grid_gap * marks.labels.len().saturating_sub(1) as f64;
+    let mut side = theme.composition_grid_gap()? * marks.labels.len().saturating_sub(1) as f64;
     for label in &marks.labels {
         resources
             .claim_visits(1)
@@ -737,7 +737,7 @@ pub(crate) fn measure(
         );
         outer.y1 = outer.y0 + height;
     }
-    let gap = theme.composition.canvas_grid_gap;
+    let gap = theme.composition_grid_gap()?;
     let density = theme.marks.matrix_density.backend_style((0, 0, 0));
     let ink = crate::render::geometry::rectangular_fill_ink_outset(theme, &density)?;
     let point = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.matrix);

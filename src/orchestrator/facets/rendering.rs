@@ -113,6 +113,7 @@ pub(super) fn plan_facet_strip(
     theme: &ResolvedTheme,
 ) -> Result<PlacedText, crate::layout::fit::PlanError> {
     let resources = theme.prepared_font_environment()?.generation_resources();
+    let spacing = theme.facet_strip_lengths()?;
     let label = facet_label(
         plot,
         &facet.cell,
@@ -122,7 +123,11 @@ pub(super) fn plan_facet_strip(
         theme,
         &label,
         &theme.typography.composition.facet_header,
-        facet.panel.width() - 16.0,
+        crate::theme::composition::capacity(
+            facet.panel.width(),
+            &spacing.horizontal_inset,
+            &resources,
+        )?,
         PhysicalTextAlignment::Center,
         "facet strip",
         &crate::layout::fit::FitScope::root()
@@ -137,17 +142,27 @@ pub(super) fn plan_facet_strip(
                 &theme.prepared_font_environment()?.generation_resources(),
             )?,
     ))?;
-    let first_y =
-        facet.panel.y1 + 14.0 + plan.lines.len().saturating_sub(1) as f64 * plan.line_height();
-    Ok(PlacedText::from_deferred_first_line(
+    let top = spacing
+        .content_clearance
+        .add_pixels(plan.height(), &resources)?;
+    let first = plan
+        .first_baseline_quanta
+        .ok_or_else(|| Error::Render("facet strip has no retained baseline".into()))?;
+    let first_y = top
+        .subtract(
+            &crate::theme::spacing::ExactLength::pixels(first as f64 / 1024.0, &resources)?,
+            &resources,
+        )?
+        .ok_or_else(|| Error::Render("facet strip baseline exceeds its complete extent".into()))?
+        .after_pixels(facet.panel.y1, &resources)?;
+    Ok(PlacedText {
         plan,
-        Point2D::new(
-            f64::midpoint(facet.panel.x0, facet.panel.x1).round(),
-            first_y.round(),
+        placement: crate::render::backend::PlannedTextPlacement::baseline(
+            Point2D::new(f64::midpoint(facet.panel.x0, facet.panel.x1), first_y),
+            TextAnchor::Middle,
+            0.0,
         ),
-        TextAnchor::Middle,
-        0.0,
-    ))
+    })
 }
 
 fn draw_facet_strip(
@@ -358,7 +373,13 @@ mod tests {
         let mut theme = crate::Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        theme.facet_header_font_size = 17;
+        theme.typography.composition.facet_header = theme
+            .typography
+            .composition
+            .facet_header
+            .clone()
+            .with_font_size(17)
+            .unwrap();
         theme.typography.axes.axis_title.line_height_multiplier = 1.25;
         let grid = PanelBox::new(71.25, 372.75, 83.25, 304.75);
         let facet = FacetPanel {
@@ -389,8 +410,33 @@ mod tests {
         }
         assert_eq!(
             strip.placement.position.x.to_bits(),
-            f64::midpoint(grid.x0, grid.x1).round().to_bits()
+            f64::midpoint(grid.x0, grid.x1).to_bits()
         );
+        assert_eq!(strip.plan.source, "Group = First\nSecond");
+        let resources = theme
+            .prepared_font_environment()
+            .unwrap()
+            .generation_resources();
+        let reserve = crate::theme::composition::hard(
+            &theme
+                .facet_strip_lengths()
+                .unwrap()
+                .content_clearance
+                .add_quanta(
+                    crate::layout::kernel::LayoutScalar::from_quanta(strip.plan.height_quanta),
+                    &resources,
+                )
+                .unwrap(),
+            &resources,
+        )
+        .unwrap();
+        let mut strip_ink = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+        strip_ink.text(strip.placement, &strip.plan, None).unwrap();
+        assert!(!strip_ink.bounds().is_empty());
+        assert!(strip_ink.bounds().iter().all(|ink| ink.bottom >= grid.y1
+            && ink.top <= grid.y1 + reserve
+            && ink.left >= grid.x0
+            && ink.right <= grid.x1));
         let mut horizontal = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
         horizontal
             .text(axes[0].placement, &axes[0].plan, None)

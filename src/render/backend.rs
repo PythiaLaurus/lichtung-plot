@@ -562,33 +562,6 @@ impl PlacedText {
             placement: PlannedTextPlacement::middle(position, anchor, rotation),
         }
     }
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "line counts are bounded by text admission"
-    )]
-    /// Deferred producers retain their whole-pixel block placement until migration.
-    /// Snap after the multiline offset, using the former canonical nearest-even rule.
-    pub(crate) fn from_deferred_first_line(
-        plan: ResolvedTextPlan,
-        first: Point2D,
-        anchor: TextAnchor,
-        rotation: f64,
-    ) -> Self {
-        let offset = plan.lines.len().saturating_sub(1) as f64 * plan.line_height() / 2.0;
-        let angle = rotation.to_radians();
-        Self {
-            plan,
-            placement: PlannedTextPlacement::middle(
-                Point2D::new(
-                    (first.x - offset * angle.sin()).round_ties_even(),
-                    (first.y - offset * angle.cos()).round_ties_even(),
-                ),
-                anchor,
-                rotation,
-            ),
-        }
-    }
-
     pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
         backend.draw_planned_text(self.placement, &self.plan)
     }
@@ -1367,57 +1340,6 @@ mod tests {
         assert_eq!(nearest_even_text_half(3), Some(2));
         assert_eq!(nearest_even_text_half(5), Some(2));
         assert_eq!(nearest_even_text_half(7), Some(4));
-    }
-
-    #[test]
-    fn deferred_first_line_snaps_final_half_pixel_offsets_like_old_canonical_text() {
-        let environment = crate::font::canonical::PreparedFontEnvironment::synthetic();
-        let plan = environment
-            .plan_text(crate::layout::TextPlanInput {
-                source: "A\nAA",
-                stack: crate::font::canonical::test_sans_stack(),
-                weight: crate::TextWeight::Normal,
-                font_size: 10,
-                line_height: crate::layout::TextLineHeight::ResolvedQuanta(17 * 1024),
-                maximum_width_quanta: i64::MAX,
-                alignment: PhysicalTextAlignment::Center,
-                paint: Color::rgb(0, 0, 0),
-                provenance: crate::layout::TextPlanProvenance {
-                    pair_ordinal: 0,
-                    owner: "deferred placement".into(),
-                },
-                exact_override: false,
-            })
-            .unwrap();
-        for first in [
-            Point2D::new(34.0, 50.0),
-            Point2D::new(35.0, 49.0),
-            Point2D::new(-34.0, -50.0),
-        ] {
-            for rotation in [0.0_f64, -90.0] {
-                let angle = rotation.to_radians();
-                let old = coordinates::canonical_text(
-                    Point2D::new(first.x - 8.5 * angle.sin(), first.y - 8.5 * angle.cos()),
-                    rotation,
-                    coordinates::CoordinatePrecision::Integer,
-                )
-                .unwrap();
-                let placed = PlacedText::from_deferred_first_line(
-                    plan.clone(),
-                    first,
-                    TextAnchor::Middle,
-                    rotation,
-                );
-                assert_eq!(placed.placement.position, old.position.value());
-                assert_eq!(
-                    validate_planned_text(placed.placement, &plan)
-                        .unwrap()
-                        .position
-                        .value(),
-                    old.position.value()
-                );
-            }
-        }
     }
 
     #[test]

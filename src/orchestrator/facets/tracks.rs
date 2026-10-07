@@ -68,14 +68,17 @@ pub(super) fn allocate(
         .ok_or_else(|| Error::Render("facet Grid topology overflowed".into()))?;
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = data.with_axis_resources(&resources);
-    let gap = required(theme.composition.facet_gap)?;
-    let em = required(f64::from(theme.facet_header_font_size))?;
     let mut column_insets = Vec::new();
     let mut row_insets = Vec::new();
     data.reserve_source(&mut column_insets, columns)?;
     data.reserve_source(&mut row_insets, rows)?;
     column_insets.resize(columns, [0_i64; 2]);
     row_insets.resize(rows, [0_i64; 2]);
+    let gap = required(theme.composition_facet_gap()?)?;
+    let em = required(f64::from(
+        theme.typography.composition.facet_header.font_size(),
+    ))?;
+    let strip_lengths = theme.facet_strip_lengths()?;
     for &(row, column, req) in gutters {
         if row >= rows || column >= columns {
             return Err(Error::Render(
@@ -139,8 +142,13 @@ pub(super) fn allocate(
             };
             let label = super::rendering::facet_label(&plot, &panel.cell, data)?;
             let appearance = &theme.typography.composition.facet_header;
-            preferred
-                .max(crate::layout::interior::sizing::text_width(theme, &label, appearance)? + 16.0)
+            preferred.max(crate::theme::composition::hard(
+                &strip_lengths.horizontal_inset.add_pixels(
+                    crate::layout::interior::sizing::text_width(theme, &label, appearance)?,
+                    &resources,
+                )?,
+                &resources,
+            )?)
         } else {
             minimum.0
         };
@@ -284,15 +292,23 @@ pub(super) fn allocate(
                     theme,
                     &label,
                     appearance,
-                    width - 16.0,
+                    crate::theme::composition::capacity(
+                        width,
+                        &strip_lengths.horizontal_inset,
+                        &resources,
+                    )?,
                     crate::layout::PhysicalTextAlignment::Center,
                     "natural facet strip",
                     scope,
                 ))
                 .map_err(crate::layout::fit::PlanError::into_error)?;
-                height += strip.lines.iter().fold(8.0, |height, _| {
-                    height + f64::from(theme.facet_header_font_size) + 6.0
-                });
+                height = crate::theme::composition::hard(
+                    &strip_lengths
+                        .content_clearance
+                        .add_pixels(strip.height(), &resources)?
+                        .add_pixels(height, &resources)?,
+                    &resources,
+                )?;
             }
             child.preferred = required(height)?.max(child.hard);
         }
@@ -379,6 +395,96 @@ pub(super) fn allocate(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn declared_empty_facet_tracks_use_only_facet_header_em_and_shrink_to_one_quantum() {
+        let plot = crate::Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0]),
+            crate::NumericValues::new("y", [1.0, 0.0]),
+        )
+        .erase();
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources, None).unwrap();
+        let mut theme = crate::Theme::Publication.resolve(&resources).unwrap();
+        theme.composition = theme
+            .composition
+            .clone()
+            .with_facet_gap(crate::theme::RelativeSpacing::ratio(0, 1).unwrap())
+            .unwrap();
+        theme.typography.composition.body = theme
+            .typography
+            .composition
+            .body
+            .clone()
+            .with_font_size(34)
+            .unwrap();
+        theme.typography.composition.composition_header = theme
+            .typography
+            .composition
+            .composition_header
+            .clone()
+            .with_font_size(40)
+            .unwrap();
+        for em in [15, 30] {
+            theme.typography.composition.facet_header = theme
+                .typography
+                .composition
+                .facet_header
+                .clone()
+                .with_font_size(em)
+                .unwrap();
+            crate::layout::plan_exact_root(
+                1,
+                1,
+                |_| Ok(()),
+                |(), assigned, round| {
+                    let FitOutcome::Measured(grid) = allocate(
+                        plot.data(),
+                        PanelBox::new(0.0, 0.0, 0.0, 0.0),
+                        (1, 2),
+                        &[],
+                        &[],
+                        &[],
+                        &theme,
+                        &FitScope::root(),
+                        Some(&ContentSizing {
+                            plot: &plot,
+                            inputs: &inputs,
+                            round,
+                            natural_width: true,
+                            natural_height: true,
+                        }),
+                    )?
+                    else {
+                        panic!("declared facet tracks must retain their natural preference");
+                    };
+                    assert_eq!(grid.size.0.to_bits(), (2.0 * f64::from(em)).to_bits());
+                    assert_eq!(grid.size.1.to_bits(), f64::from(em).to_bits());
+                    let FitOutcome::Measured(exact) = allocate(
+                        plot.data(),
+                        PanelBox::new(0.0, 2.0 / 1024.0, 0.0, 1.0 / 1024.0),
+                        (1, 2),
+                        &[],
+                        &[],
+                        &[],
+                        &theme,
+                        &FitScope::root(),
+                        None,
+                    )?
+                    else {
+                        panic!("declared em is a preference, not a minimum");
+                    };
+                    assert!(exact
+                        .cells
+                        .iter()
+                        .all(|cell| cell.width().to_bits() == (1.0_f64 / 1024.0).to_bits()));
+                    Ok(crate::layout::MeasuredLayout::new(assigned, ()))
+                },
+                |(), _, (), _| Ok(()),
+            )
+            .unwrap();
+        }
+    }
 
     #[test]
     fn incoming_scoped_data_is_bound_before_first_grid_storage_or_source_work() {

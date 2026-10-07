@@ -432,6 +432,7 @@ pub(crate) fn plot_size(
     } else {
         theme.axes.coordinate_chrome()
     };
+    let panel_edge = theme.panel_edge_length()?;
     let left_outward = common_chrome.outward(crate::layout::AxisSide::Left, true, &resources)?;
     let bottom_outward =
         common_chrome.outward(crate::layout::AxisSide::Bottom, true, &resources)?;
@@ -445,7 +446,7 @@ pub(crate) fn plot_size(
                 &resources,
             )?
             .add(&left_outward, &resources)?
-            .add_pixels(4.0, &resources)?,
+            .add(&panel_edge, &resources)?,
         &resources,
     )?;
     let mut y_width = 0.0_f64;
@@ -502,10 +503,11 @@ pub(crate) fn plot_size(
             0.0
         };
     let horizontal = guide.as_ref().is_some_and(GuidedPreference::horizontal);
-    let mut outer_width =
-        preference.0 + y_width + chrome + 32.0 + if horizontal { 0.0 } else { guide_width };
+    let mut outer_width = theme.root_outer_width(
+        preference.0 + y_width + chrome + if horizontal { 0.0 } else { guide_width },
+    )?;
     if horizontal {
-        outer_width = outer_width.max(guide_width + 32.0);
+        outer_width = outer_width.max(theme.root_outer_width(guide_width)?);
     }
     for (source, role) in [plot.title_text(), plot.subtitle_text(), plot.caption_text()]
         .into_iter()
@@ -516,7 +518,8 @@ pub(crate) fn plot_size(
         ])
     {
         if let Some(source) = source {
-            outer_width = outer_width.max(text_width(theme, source, role)? + 32.0);
+            outer_width =
+                outer_width.max(theme.root_outer_width(text_width(theme, source, role)?)?);
         }
     }
     let width = requested_width.map_or_else(|| integral(outer_width), Ok)?;
@@ -534,22 +537,23 @@ pub(crate) fn plot_size(
     };
     // This initial content proposal is not a guide placement. The owning panel
     // trial derives its height from the selected guide edge at this fixed width.
-    let body_width = (f64::from(width) - 32.0 - left - gutters[1] - ink[0] - ink[1]).max(hard.0);
+    let body_width =
+        (theme.root_inner_width(f64::from(width))? - left - gutters[1] - ink[0] - ink[1])
+            .max(hard.0);
     let body_height = plot.natural_body_height(theme, body_width, preference.1)?;
     let sources = [plot.title_text(), plot.subtitle_text(), plot.caption_text()];
-    let (top, caption) =
-        crate::decorations::title_block::plan::RootTitleBlockPlan::content_reserves(
+    let prose = crate::decorations::title_block::plan::RootTitleBlockPlan::content_reserves(
+        theme,
+        sources,
+        theme.root_inner_width(f64::from(width))?,
+        crate::decorations::title_block::plan::RootAlignments::resolve(
             theme,
-            sources,
-            f64::from(width) - 32.0,
-            crate::decorations::title_block::plan::RootAlignments::resolve(
-                theme,
-                [plot.title_alignment, plot.subtitle_alignment],
-                [None; 2],
-            ),
-            &FitScope::root(),
-        )
-        .map_err(fit::PlanError::into_error)?;
+            [plot.title_alignment, plot.subtitle_alignment],
+            [None; 2],
+        ),
+        &FitScope::root(),
+    )
+    .map_err(fit::PlanError::into_error)?;
     let bottom = if gutters[2] > 0.0 {
         gutters[2]
     } else {
@@ -566,19 +570,14 @@ pub(crate) fn plot_size(
                     &resources,
                 )?
                 .add(&bottom_outward, &resources)?
-                .add_pixels(4.0, &resources)?,
+                .add(&panel_edge, &resources)?,
             &resources,
         )?
     };
-    let height = integral(
-        top + caption
-            + body_height.max(guide_height)
-            + bottom
-            + gutters[3]
-            + ink[2]
-            + ink[3]
-            + 20.0,
-    )?;
+    let height = integral(theme.root_outer_height(&prose.height_with_body(
+        body_height.max(guide_height) + bottom + gutters[3] + ink[2] + ink[3],
+        &resources,
+    )?)?)?;
     Ok(RootSize::new(width, height))
 }
 

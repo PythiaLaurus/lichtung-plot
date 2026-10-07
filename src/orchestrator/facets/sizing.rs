@@ -149,7 +149,6 @@ pub(in crate::orchestrator) fn natural_size(
     } else {
         0.0
     };
-    let insets = crate::layout::canvas::ROOT_PADDING;
     let allocate = |width: Option<f64>, gutters: &[(usize, usize, PanelRequirements)]| {
         fit::measured(tracks::allocate(
             data,
@@ -180,9 +179,9 @@ pub(in crate::orchestrator) fn natural_size(
             PanelBox::new(0.0, natural.size.0, 0.0, natural.size.1),
         )
         .map_err(fit::PlanError::into_error)?;
-        let body = natural.size.0 + insets.left + insets.right + axes[0];
+        let body = theme.root_outer_width(natural.size.0 + axes[0])?;
         if horizontal {
-            body.max(guide_size.0 + insets.left + insets.right)
+            body.max(theme.root_outer_width(guide_size.0)?)
         } else {
             body + guide_size.0 + guide_gap
         }
@@ -201,7 +200,8 @@ pub(in crate::orchestrator) fn natural_size(
             &theme.typography.root.caption,
         ]) {
             if let Some(text) = text {
-                preferred = preferred.max(text_width(theme, text, appearance)? + 32.0);
+                preferred =
+                    preferred.max(theme.root_outer_width(text_width(theme, text, appearance)?)?);
             }
         }
     }
@@ -212,7 +212,7 @@ pub(in crate::orchestrator) fn natural_size(
     )?;
     let grid_gutters = round.insets(&grid_owner, FeedbackKind::AxisGutter)?;
     let grid = allocate(
-        Some(f64::from(width) - insets.left - insets.right - root_gutters[0] - grid_gutters[0]),
+        Some(theme.root_inner_width(f64::from(width))? - root_gutters[0] - grid_gutters[0]),
         &gutters,
     )?;
     let axes = super::planning::shared_axis_requirements(
@@ -222,10 +222,10 @@ pub(in crate::orchestrator) fn natural_size(
         PanelBox::new(0.0, grid.size.0, 0.0, grid.size.1),
     )
     .map_err(fit::PlanError::into_error)?;
-    let (top, bottom) = RootTitleBlockPlan::content_reserves(
+    let prose = RootTitleBlockPlan::content_reserves(
         theme,
         sources,
-        f64::from(width) - 32.0,
+        theme.root_inner_width(f64::from(width))?,
         RootAlignments::resolve(
             theme,
             [source.title_alignment, source.subtitle_alignment],
@@ -234,14 +234,9 @@ pub(in crate::orchestrator) fn natural_size(
         &FitScope::root(),
     )
     .map_err(fit::PlanError::into_error)?;
-    let height = integral(
-        grid.size.1.max(guide_size.1)
-            + insets.top
-            + top
-            + insets.bottom
-            + bottom
-            + root_gutters[2].max(axes[2])
-            + grid_gutters[2],
-    )?;
+    let height = integral(theme.root_outer_height(&prose.height_with_body(
+        grid.size.1.max(guide_size.1) + root_gutters[2].max(axes[2]) + grid_gutters[2],
+        &resources,
+    )?)?)?;
     Ok(RootSize::new(width, height))
 }

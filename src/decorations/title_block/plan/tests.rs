@@ -10,6 +10,27 @@ const PRESETS: [crate::Theme; 4] = [
     crate::Theme::CHI,
 ];
 
+fn no_padding(theme: &ResolvedTheme) -> crate::theme::composition::RootPaddingLengths {
+    crate::theme::composition::RootPaddingLengths::zero(
+        &theme
+            .prepared_font_environment()
+            .unwrap()
+            .generation_resources(),
+    )
+    .unwrap()
+}
+
+fn heights(plan: &RootTitleBlockPlan, theme: &ResolvedTheme) -> (f64, f64) {
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    (
+        crate::theme::composition::hard(&plan.reserves.top, &resources).unwrap(),
+        crate::theme::composition::hard(&plan.reserves.bottom, &resources).unwrap(),
+    )
+}
+
 fn measure(
     theme: &ResolvedTheme,
     sources: [Option<&str>; 3],
@@ -19,6 +40,8 @@ fn measure(
         theme,
         sources,
         PanelBox::new(16.0, 317.0, 8.0, 468.0),
+        &no_padding(theme),
+        301.0,
         align,
         60.0,
         &FitScope::root(),
@@ -41,7 +64,7 @@ fn root_alignment_precedence_preserves_independent_optional_instructions() {
                 caption: Start
             }
         );
-        assert_eq!(theme.composition.root_subtitle_alignment, None);
+        assert_eq!(theme.composition.root_subtitle_alignment(), None);
         let panel = [Some(Start), None];
         assert_eq!(
             RootAlignments::resolve(&theme, [None; 2], panel).title,
@@ -58,7 +81,11 @@ fn root_alignment_precedence_preserves_independent_optional_instructions() {
             RootAlignments::resolve(&theme, [Some(End), Some(Start)], panel).subtitle,
             Start
         );
-        theme.composition.root_subtitle_alignment = Some(End);
+        theme.composition = theme
+            .composition
+            .clone()
+            .with_root_subtitle_alignment(Some(End))
+            .unwrap();
         assert_eq!(
             RootAlignments::resolve(&theme, [Some(Start), None], [None; 2]).subtitle,
             End
@@ -67,7 +94,11 @@ fn root_alignment_precedence_preserves_independent_optional_instructions() {
             RootAlignments::resolve(&theme, plot, panel).subtitle,
             Center
         );
-        theme.composition.root_caption_alignment = End;
+        theme.composition = theme
+            .composition
+            .clone()
+            .with_root_caption_alignment(End)
+            .unwrap();
         assert_eq!(
             RootAlignments::resolve(&theme, plot, panel),
             RootAlignments {
@@ -81,6 +112,58 @@ fn root_alignment_precedence_preserves_independent_optional_instructions() {
             RootAlignments::resolve(&theme, [None; 2], [None; 2]).title,
             Center
         );
+    }
+}
+
+#[test]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "fixture baselines are bounded by the small assigned root"
+)]
+fn fractional_title_gap_and_center_use_final_parent_parity_without_rounding_offsets_separately() {
+    let mut theme = crate::Theme::Publication
+        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .unwrap();
+    let spacing = theme
+        .composition
+        .root_title_block()
+        .clone()
+        .with_title_subtitle_gap(crate::theme::RelativeSpacing::ratio(1, 20 * 2048).unwrap())
+        .unwrap();
+    theme.composition = theme
+        .composition
+        .clone()
+        .with_root_title_block(spacing)
+        .unwrap();
+    for parity in [0, 1] {
+        let top = 468.0 + f64::from(parity) / 1024.0;
+        let span = PanelBox::new(1.0 / 1024.0, 301.0 + 1.0 / 1024.0, 0.0, top);
+        let plan = RootTitleBlockPlan::measure(
+            &theme,
+            [Some("Title"), Some("Subtitle"), None],
+            span,
+            &no_padding(&theme),
+            301.0,
+            RootAlignments::resolve(&theme, [None; 2], [None; 2]),
+            60.0,
+            &FitScope::root(),
+        )
+        .unwrap();
+        let title = plan.roles[0].as_ref().unwrap();
+        let subtitle = plan.roles[1].as_ref().unwrap();
+        let expected_y = (top * 1024.0
+            - title.text.height() * 1024.0
+            - 0.5
+            - subtitle.text.first_baseline_quanta.unwrap() as f64)
+            .round_ties_even()
+            / 1024.0;
+        assert_eq!(subtitle.placement.position.y, expected_y);
+        let expected_left = (span.x0 * 1024.0 + (span.width() - subtitle.text.width()) * 512.0)
+            .round_ties_even()
+            / 1024.0;
+        assert_eq!(subtitle.bounds.x0, expected_left);
+        assert_eq!(title.text.source, "Title");
+        assert_eq!(subtitle.text.source, "Subtitle");
     }
 }
 
@@ -169,10 +252,10 @@ fn root_role_presence_keeps_blank_lines_whitespace_and_exact_baselines() {
                 }
             }
             assert_eq!(
-                plan.top_reserve == 0.0,
+                heights(&plan, &theme).0 == 0.0,
                 sources[0].is_none() && sources[1].is_none()
             );
-            assert_eq!(plan.bottom_reserve == 0.0, mask & 4 == 0);
+            assert_eq!(heights(&plan, &theme).1 == 0.0, mask & 4 == 0);
         }
         let empty = measure(
             &theme,
@@ -225,8 +308,8 @@ fn independent_physical_alignment_does_not_change_wrapping_or_fit() {
                         },
                     );
                     assert_eq!(
-                        (plan.top_reserve, plan.bottom_reserve),
-                        (base.top_reserve, base.bottom_reserve)
+                        heights(&plan, &theme),
+                        heights(&base, &theme)
                     );
                     for (index, alignment) in [title, subtitle, caption].into_iter().enumerate() {
                         let role = plan.roles[index].as_ref().unwrap();
@@ -278,6 +361,8 @@ fn root_intrinsic_width_miss_and_storage_refusal_precede_materialization() {
         &theme,
         sources,
         PanelBox::new(0.0, hard - 1.0 / 1024.0, 0.0, 480.0),
+        &no_padding(&theme),
+        hard - 1.0 / 1024.0,
         align,
         60.0,
         &FitScope::root(),
@@ -306,6 +391,8 @@ fn root_intrinsic_width_miss_and_storage_refusal_precede_materialization() {
         &theme,
         sources,
         PanelBox::new(0.0, 640.0, 0.0, 480.0),
+        &no_padding(&theme),
+        640.0,
         align,
         60.0,
         &FitScope::root(),
@@ -351,6 +438,8 @@ fn intrinsic_summary_and_constrained_title_share_glyph_analysis() {
             &theme,
             sources,
             PanelBox::new(0.0, width, 0.0, 480.0),
+            &no_padding(&theme),
+            width,
             alignments,
             60.0,
             &FitScope::root(),
@@ -376,6 +465,8 @@ fn intrinsic_summary_and_constrained_title_share_glyph_analysis() {
         &theme,
         sources,
         PanelBox::new(0.0, 800.0, 0.0, 480.0),
+        &no_padding(&theme),
+        800.0,
         alignments,
         60.0,
         &FitScope::root(),
@@ -398,11 +489,13 @@ fn root_exact_height_refusal_is_typed_and_source_checks_remain_strict() {
     let sources = [None, Some("Subtitle only\nsecond line"), Some("Caption")];
     let plan = measure(&theme, sources, align);
     assert_eq!(plan.alignments.subtitle, End);
-    let height = plan.top_reserve + plan.bottom_reserve + 60.0;
+    let height = heights(&plan, &theme).0 + heights(&plan, &theme).1 + 60.0;
     RootTitleBlockPlan::measure(
         &theme,
         sources,
         PanelBox::new(16.0, 317.0, 0.0, height),
+        &no_padding(&theme),
+        301.0,
         align,
         60.0,
         &FitScope::root(),
@@ -412,6 +505,8 @@ fn root_exact_height_refusal_is_typed_and_source_checks_remain_strict() {
         &theme,
         sources,
         PanelBox::new(16.0, 317.0, 0.0, height - 1.0 / 1024.0),
+        &no_padding(&theme),
+        301.0,
         align,
         60.0,
         &FitScope::root(),

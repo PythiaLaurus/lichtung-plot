@@ -996,8 +996,29 @@ fn plan_panel_attempt(
             // The root cell excludes only root-owned padding/title/caption.
             // Replace the entire axis reserve, allowing contraction as well as
             // growth without spending another component's reserved space.
-            gutters = [required.left, required.right, required.bottom, required.top]
-                .map(|value| (value + 4.0).ceil());
+            let resources = context
+                .theme
+                .prepared_font_environment()?
+                .generation_resources();
+            let clearance = context.theme.panel_edge_length()?;
+            for (gutter, value) in gutters.iter_mut().zip([
+                required.left,
+                required.right,
+                required.bottom,
+                required.top,
+            ]) {
+                let quanta = crate::layout::kernel::LayoutScalar::from_css_pixels(
+                    value,
+                    crate::layout::kernel::SpatialRounding::Ceil,
+                )?;
+                // Retain the renderer's whole-pixel outward envelope after the
+                // complete exact comfort+canonical-axis requirement.
+                *gutter = crate::theme::composition::hard(
+                    &clearance.add_quanta(quanta, &resources)?,
+                    &resources,
+                )?
+                .ceil();
+            }
         }
     }
     if let Some(chrome) = &chrome {

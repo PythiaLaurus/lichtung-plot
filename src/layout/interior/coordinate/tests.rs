@@ -373,18 +373,32 @@ fn native_multiline_axis_gutters_cannot_consume_root_caption_or_title_reserves()
             assert!(
                 ink.bottom
                     >= caption.top
-                        + theme
-                            .composition
-                            .root_title_block
-                            .caption_to_content_clearance
+                        + crate::theme::composition::hard(
+                            &theme
+                                .root_title_lengths()
+                                .unwrap()
+                                .caption_to_content_clearance,
+                            &theme
+                                .prepared_font_environment()
+                                .unwrap()
+                                .generation_resources()
+                        )
+                        .unwrap()
             );
             assert!(
                 ink.top
                     <= title.bottom
-                        - theme
-                            .composition
-                            .root_title_block
-                            .title_block_to_content_clearance
+                        - crate::theme::composition::hard(
+                            &theme
+                                .root_title_lengths()
+                                .unwrap()
+                                .title_block_to_content_clearance,
+                            &theme
+                                .prepared_font_environment()
+                                .unwrap()
+                                .generation_resources()
+                        )
+                        .unwrap()
             );
         }
         let mut final_output = crate::render::svg_backend::SvgBackend::in_memory(401, 401);

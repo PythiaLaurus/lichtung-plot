@@ -512,7 +512,7 @@ mod tests {
                 // ninth/terminating byte (12). Group nesting adds no extra visit.
                 assert_eq!(
                     work,
-                    4 + 7 + 13 + 2 + 4 + 12,
+                    4 + 7 + 13 + 19 + 2 + 4 + 12,
                     "later role names and feedback tails remain unexamined"
                 );
                 for remaining in [0, work - 1, work] {
@@ -577,7 +577,7 @@ mod tests {
         // Eighteen font handles plus qualitative, sequential, diverging and
         // accent handles, six axis ratios and two point-outline ratios.
         // Inline group structure adds no separately shared node.
-        let work = 42;
+        let work = 60;
         for remaining in [0, work - 1, work] {
             let resources = crate::font::canonical::OperationGenerationResources::with_test_limits(
                 remaining, 0,
@@ -598,6 +598,13 @@ mod tests {
             let copy = copy.unwrap();
             assert_eq!(copy, theme);
             assert_eq!(resources.usage().unwrap().1, work);
+            for (left, right) in theme
+                .composition
+                .retained_relationships()
+                .zip(copy.composition.retained_relationships())
+            {
+                assert!(left.shares_payload_with(right));
+            }
             for (left, right) in theme
                 .legend
                 .retained_relationships()

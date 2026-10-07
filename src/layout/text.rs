@@ -266,6 +266,9 @@ impl std::ops::Deref for ResolvedTextPlan {
 }
 
 impl ResolvedTextPlan {
+    pub(crate) fn retained_handle_count(&self) -> usize {
+        1 + usize::from(self.1.is_some())
+    }
     /// Lend the immutable original profile after the cache has verified the caller's complete input.
     pub(crate) fn analysis_profile(&self) -> Result<(&str, &FontStack), TextPlanError> {
         let original = &self

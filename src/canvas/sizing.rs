@@ -241,10 +241,14 @@ pub(super) fn cell_height(
     let present = sources
         .iter()
         .any(|source| source.is_some_and(|text| !text.is_empty()));
-    let (top, bottom) = RootTitleBlockPlan::content_reserves(
+    let prose = RootTitleBlockPlan::content_reserves(
         theme,
         sources,
-        width - if present { 32.0 } else { 0.0 },
+        if present {
+            theme.root_inner_width(width)?
+        } else {
+            width
+        },
         RootAlignments::resolve(
             theme,
             [plot.title_alignment, plot.subtitle_alignment],
@@ -289,7 +293,13 @@ pub(super) fn cell_height(
     } else {
         plot.natural_body_height(theme, body_width, preference.1)?
     };
-    Ok(height + local[2] + local[3] + top + bottom + if present { 20.0 } else { 0.0 })
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let height = prose.height_with_body(height + local[2] + local[3], &resources)?;
+    if present {
+        theme.root_outer_height(&height)
+    } else {
+        crate::theme::composition::hard(&height, &resources)
+    }
 }
 
 pub(super) fn grid_gutters(
@@ -361,16 +371,18 @@ pub(super) fn content_frame(
         [source.title_alignment, source.subtitle_alignment],
         [None; 2],
     );
-    let (top, bottom) = RootTitleBlockPlan::content_reserves(
+    let prose = RootTitleBlockPlan::content_reserves(
         theme,
         sources,
-        f64::from(width) - 32.0,
+        theme.root_inner_width(f64::from(width))?,
         alignments,
         &FitScope::root(),
     )
     .map_err(fit::PlanError::into_error)?;
-    let padding = crate::layout::canvas::ROOT_PADDING;
-    let height = integral(height + padding.top + top + padding.bottom + bottom)?;
+    let height = integral(theme.root_outer_height(&prose.height_with_body(
+        height,
+        &theme.prepared_font_environment()?.generation_resources(),
+    )?)?)?;
     crate::layout::RootFramePlan::measure(
         (width, height),
         theme,
@@ -523,7 +535,7 @@ pub(super) fn measure(
     // Initial selection excludes feedback. Empty/trailing tracks and spanning text
     // use precisely the rendering allocator's declared topology.
     let mut preferred_width = if requested_width.is_none() {
-        allocate(None, &[])?.size.0 + guide.0 + guide_gap + 32.0
+        theme.root_outer_width(allocate(None, &[])?.size.0 + guide.0 + guide_gap)?
     } else {
         0.0
     };
@@ -539,16 +551,17 @@ pub(super) fn measure(
             &theme.typography.root.caption,
         ]) {
             if let Some(text) = text {
-                preferred_width = preferred_width.max(text_width(theme, text, appearance)? + 32.0);
+                preferred_width = preferred_width
+                    .max(theme.root_outer_width(text_width(theme, text, appearance)?)?);
             }
         }
     }
     let width = requested_width.map_or_else(|| integral(preferred_width), Ok)?;
-    let grid = allocate(Some(f64::from(width) - 32.0), &gutters)?;
-    let (top, bottom) = RootTitleBlockPlan::content_reserves(
+    let grid = allocate(Some(theme.root_inner_width(f64::from(width))?), &gutters)?;
+    let prose = RootTitleBlockPlan::content_reserves(
         theme,
         sources,
-        f64::from(width) - 32.0,
+        theme.root_inner_width(f64::from(width))?,
         RootAlignments::resolve(
             theme,
             [source.title_alignment, source.subtitle_alignment],
@@ -557,8 +570,9 @@ pub(super) fn measure(
         &FitScope::root(),
     )
     .map_err(fit::PlanError::into_error)?;
-    let padding = crate::layout::canvas::ROOT_PADDING;
-    let height = integral(grid.size.1.max(guide.1) + padding.top + top + padding.bottom + bottom)?;
+    let height = integral(
+        theme.root_outer_height(&prose.height_with_body(grid.size.1.max(guide.1), &resources)?)?,
+    )?;
     Ok(RootSize::new(width, height))
 }
 

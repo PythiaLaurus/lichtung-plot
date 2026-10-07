@@ -16,7 +16,6 @@ use crate::Error;
 /// The smallest positive canonical span when a real child supplies no larger
 /// intrinsic. It represents one spatial quantum, never a compatibility floor.
 pub(crate) const MINIMUM_PANEL_SPAN: f64 = 1.0 / 1024.0;
-pub(crate) const PANEL_HEADER_GAP: f64 = 4.0;
 
 /// A plot panel rectangle in math-style pixel coordinates.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -75,14 +74,19 @@ impl PanelRequirements {
         available_panel: PanelBox,
         scope: &crate::layout::fit::FitScope,
     ) -> Result<Self, crate::layout::fit::PlanError> {
-        let mut requirements =
-            Self::measure_header(axes, theme, None, None, available_panel, scope)?;
+        let mut requirements = Self::measure_header(axes, theme)?;
         if let Some(text) = top_text {
+            let resources = theme.prepared_font_environment()?.generation_resources();
+            let strip = theme.facet_strip_lengths()?;
             let plan = crate::layout::fit::measured(crate::layout::fit::text(
                 theme,
                 text,
                 &theme.typography.composition.facet_header,
-                (available_panel.width() - 16.0).max(1.0),
+                crate::theme::composition::capacity(
+                    available_panel.width(),
+                    &strip.horizontal_inset,
+                    &resources,
+                )?,
                 PhysicalTextAlignment::Center,
                 "facet strip",
                 &scope.child(
@@ -91,89 +95,32 @@ impl PanelRequirements {
                     &theme.prepared_font_environment()?.generation_resources(),
                 )?,
             ))?;
-            let line_height = f64::from(theme.facet_header_font_size) + 6.0;
-            let facet_top = plan
-                .lines
-                .iter()
-                .fold(8.0, |height, _| height + line_height);
+            let facet_top = crate::theme::composition::hard(
+                &strip
+                    .content_clearance
+                    .add_pixels(plan.height(), &resources)?,
+                &resources,
+            )?;
             requirements.top = requirements.top.max(facet_top);
         }
         Ok(requirements)
     }
 
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "wrapped line counts are bounded by the finite panel dimensions"
-    )]
     pub(crate) fn measure_header(
         axes: &PanelAxisPlan,
         theme: &ResolvedTheme,
-        top_title: Option<&str>,
-        top_subtitle: Option<&str>,
-        available_panel: PanelBox,
-        scope: &crate::layout::fit::FitScope,
     ) -> Result<Self, crate::layout::fit::PlanError> {
-        use crate::layout::fit;
         let required = axes.requirements();
-
-        let maximum_width = (available_panel.width() - 16.0).max(1.0);
-        let title_lines = top_title.map_or(Ok(0), |text| {
-            Ok::<_, fit::PlanError>(
-                fit::measured(fit::text(
-                    theme,
-                    text,
-                    &theme.typography.root.title,
-                    maximum_width,
-                    PhysicalTextAlignment::Start,
-                    "panel title",
-                    &scope.child(
-                        crate::layout::AddressRole::RootTitle,
-                        0,
-                        &theme.prepared_font_environment()?.generation_resources(),
-                    )?,
-                ))?
-                .lines
-                .len(),
-            )
-        })?;
-        let subtitle_lines = top_subtitle.map_or(Ok(0), |text| {
-            Ok::<_, fit::PlanError>(
-                fit::measured(fit::text(
-                    theme,
-                    text,
-                    &theme.typography.root.subtitle,
-                    maximum_width,
-                    PhysicalTextAlignment::Start,
-                    "panel subtitle",
-                    &scope.child(
-                        crate::layout::AddressRole::RootSubtitle,
-                        0,
-                        &theme.prepared_font_environment()?.generation_resources(),
-                    )?,
-                ))?
-                .lines
-                .len(),
-            )
-        })?;
-        let header_gap = if title_lines > 0 && subtitle_lines > 0 {
-            PANEL_HEADER_GAP
-        } else {
-            0.0
+        let resources = theme.prepared_font_environment()?.generation_resources();
+        let clearance = theme.panel_edge_length()?;
+        let edge = |value| {
+            crate::theme::composition::hard(&clearance.add_pixels(value, &resources)?, &resources)
         };
-        let top = if title_lines == 0 && subtitle_lines == 0 {
-            4.0
-        } else {
-            title_lines as f64 * theme.typography.root.title.line_pitch_pixels()
-                + subtitle_lines as f64 * theme.typography.root.subtitle.line_pitch_pixels()
-                + header_gap
-                + 8.0
-        };
-
         Ok(Self {
-            left: required.left + 4.0,
-            right: required.right + 4.0,
-            bottom: required.bottom + 4.0,
-            top: top.max(required.top + 4.0),
+            left: edge(required.left)?,
+            right: edge(required.right)?,
+            bottom: edge(required.bottom)?,
+            top: edge(required.top)?,
         })
     }
 }
@@ -191,15 +138,9 @@ pub struct CanvasInsets {
     pub top: f64,
 }
 
-pub(crate) const ROOT_PADDING: CanvasInsets = CanvasInsets {
-    left: 16.0,
-    right: 16.0,
-    bottom: 8.0,
-    top: 12.0,
-};
-
 /// A resolved canvas layout for one chart canvas.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
+#[cfg_attr(test, derive(PartialEq))]
 pub(crate) struct RootFramePlan {
     pub(crate) root_text: crate::decorations::title_block::plan::RootTitleBlockPlan,
     /// Plot panel available for data marks, axes, grid, and frame.
@@ -211,6 +152,61 @@ pub(crate) struct RootFramePlan {
 }
 
 impl RootFramePlan {
+    /// Recompose a selected scientific body with the same exact root chrome.
+    /// Any added shared-axis bands are already canonical measured consequences.
+    pub(crate) fn height_for_body(
+        &self,
+        body: f64,
+        theme: &ResolvedTheme,
+    ) -> Result<f64, crate::Error> {
+        let resources = theme.prepared_font_environment()?.generation_resources();
+        let padding = theme.root_padding_lengths()?;
+        let bottom = self
+            .root_text
+            .reserves
+            .bottom
+            .add(&padding.bottom, &resources)?
+            .after_pixels(0.0, &resources)?;
+        let top = self
+            .root_text
+            .reserves
+            .top
+            .add(&padding.top, &resources)?
+            .pixels_rounded(
+                crate::layout::kernel::SpatialRounding::NearestEven,
+                &resources,
+            )?;
+        let additional = (self.insets.bottom - bottom) + (self.insets.top - top);
+        crate::theme::composition::hard(
+            &self
+                .root_text
+                .reserves
+                .height_with_body(body + additional, &resources)?
+                .add(&padding.vertical(&resources)?, &resources)?,
+            &resources,
+        )
+    }
+    pub(crate) fn admitted_clone(
+        &self,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<Self, crate::Error> {
+        resources
+            .claim_visits(1 + self.root_text.retained_handle_count() as u128)
+            .map_err(|error| crate::Error::Render(format!("root frame sharing: {error:?}")))?;
+        Ok(self.clone())
+    }
+    pub(crate) fn into_shared(
+        self,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<std::sync::Arc<Self>, crate::Error> {
+        resources
+            .claim_slots(1)
+            .map_err(|error| crate::Error::Render(format!("root frame retention: {error:?}")))?;
+        resources
+            .claim_bytes((size_of::<Self>() + 2 * size_of::<usize>()) as u64)
+            .map_err(|error| crate::Error::Render(format!("root frame storage: {error:?}")))?;
+        Ok(std::sync::Arc::new(self))
+    }
     pub(crate) fn measure(
         canvas_size: (u32, u32),
         theme: &ResolvedTheme,
@@ -219,29 +215,34 @@ impl RootFramePlan {
         minimum_body: (f64, f64),
     ) -> Result<Self, crate::layout::fit::PlanError> {
         let (canvas_width, canvas_height) = canvas_size;
-        let mut insets = ROOT_PADDING;
-        let span = PanelBox::new(
-            insets.left,
-            f64::from(canvas_width) - insets.right,
-            insets.bottom,
-            f64::from(canvas_height) - insets.top,
-        );
+        let resources = theme.prepared_font_environment()?.generation_resources();
+        let outer = PanelBox::new(0.0, f64::from(canvas_width), 0.0, f64::from(canvas_height));
+        let padding = theme.root_padding_lengths()?;
         let plan = crate::decorations::title_block::plan::RootTitleBlockPlan::measure(
             theme,
             text,
-            span,
+            outer,
+            &padding,
+            theme.root_inner_width(f64::from(canvas_width))?,
             alignments,
             minimum_body.1,
             &crate::layout::fit::FitScope::root(),
         )?;
-        insets.top += plan.top_reserve;
-        insets.bottom += plan.bottom_reserve;
-        let panel_box = PanelBox::new(
-            insets.left,
-            f64::from(canvas_width) - insets.right,
-            insets.bottom,
-            f64::from(canvas_height) - insets.top,
-        );
+        if theme.root_outer_width(minimum_body.0)? > f64::from(canvas_width) {
+            return Err(crate::layout::fit::FitScope::root()
+                .failure(
+                    crate::layout::kernel::FitKind::TrackOrResidual,
+                    "root padding and complete content exceed the assigned root",
+                )
+                .into());
+        }
+        let panel_box = plan.reserves.body(outer, &padding, &resources)?;
+        let insets = CanvasInsets {
+            left: panel_box.x0,
+            right: outer.x1 - panel_box.x1,
+            bottom: panel_box.y0,
+            top: outer.y1 - panel_box.y1,
+        };
         crate::layout::fit::measured(
             crate::layout::kernel::FrameRequirements {
                 minimum_body,
@@ -313,7 +314,15 @@ mod tests {
             (MINIMUM_PANEL_SPAN, MINIMUM_PANEL_SPAN),
         )
         .unwrap();
-        assert_eq!(frame.insets, ROOT_PADDING);
+        assert_eq!(
+            frame.insets,
+            CanvasInsets {
+                left: 16.0,
+                right: 16.0,
+                bottom: 8.0,
+                top: 12.0
+            }
+        );
         assert_eq!(frame.panel_box, PanelBox::new(16.0, 84.0, 8.0, 68.0));
     }
 
@@ -327,7 +336,12 @@ mod tests {
         let theme = Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
-        let insets = ROOT_PADDING;
+        let insets = CanvasInsets {
+            left: 16.0,
+            right: 16.0,
+            bottom: 8.0,
+            top: 12.0,
+        };
         let child_minimum = (13.0, 9.0);
         let width = (insets.left + insets.right + child_minimum.0).ceil() as u32;
         let height = (insets.bottom + insets.top + child_minimum.1).ceil() as u32;
@@ -376,7 +390,17 @@ mod tests {
         assert!(lines.len() > 1);
         assert_eq!(lines.concat(), caption);
         let plan = &layout.root_text;
-        assert!(plan.bottom_reserve > theme.typography.root.caption.line_pitch_pixels());
+        assert!(
+            crate::theme::composition::hard(
+                &plan.reserves.bottom,
+                &theme
+                    .prepared_font_environment()
+                    .unwrap()
+                    .generation_resources()
+            )
+            .unwrap()
+                > theme.typography.root.caption.line_pitch_pixels()
+        );
         assert!(RootFramePlan::measure(
             (160, 120),
             &theme,
@@ -393,7 +417,18 @@ mod tests {
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
         let mut spaced = base.clone();
-        spaced.composition.root_title_block.title_subtitle_gap = 9.0;
+        spaced.composition = spaced
+            .composition
+            .clone()
+            .with_root_title_block(
+                spaced
+                    .composition
+                    .root_title_block()
+                    .clone()
+                    .with_title_subtitle_gap(crate::theme::RelativeSpacing::ratio(9, 20).unwrap())
+                    .unwrap(),
+            )
+            .unwrap();
         let content = [Some("title"), Some("subtitle"), None];
         let alignments = crate::decorations::title_block::plan::RootAlignments::resolve(
             &base, [None; 2], [None; 2],
@@ -420,12 +455,18 @@ mod tests {
     }
 
     #[test]
-    fn facet_measurement_uses_the_same_legacy_metrics_as_facet_drawing() {
+    fn facet_measurement_uses_the_complete_selected_role_occupancy() {
         let mut theme = Theme::Publication
             .resolve(&crate::font::canonical::OperationGenerationResources::new())
             .unwrap();
         theme.typography.root.subtitle.font_size = 7;
-        theme.facet_header_font_size = 32;
+        theme.typography.composition.facet_header = theme
+            .typography
+            .composition
+            .facet_header
+            .clone()
+            .with_font_size(32)
+            .unwrap();
         let panel = PanelBox::new(20.0, 420.0, 20.0, 320.0);
         let layout = Layout {
             projection: crate::layout::Projection::new((0.0, 1.0), (0.0, 1.0), panel.as_tuple()),
@@ -456,7 +497,38 @@ mod tests {
         )
         .unwrap();
 
-        assert!((requirements.top - 46.0).abs() < f64::EPSILON);
+        let resources = theme
+            .prepared_font_environment()
+            .unwrap()
+            .generation_resources();
+        let strip = theme.facet_strip_lengths().unwrap();
+        let plan = theme
+            .plan_text(
+                "facet",
+                &theme.typography.composition.facet_header,
+                crate::theme::composition::capacity(
+                    panel.width(),
+                    &strip.horizontal_inset,
+                    &resources,
+                )
+                .unwrap(),
+                PhysicalTextAlignment::Center,
+                "facet strip",
+                false,
+            )
+            .unwrap();
+        assert_eq!(
+            requirements.top.to_bits(),
+            crate::theme::composition::hard(
+                &strip
+                    .content_clearance
+                    .add_pixels(plan.height(), &resources)
+                    .unwrap(),
+                &resources
+            )
+            .unwrap()
+            .to_bits()
+        );
     }
 
     #[test]

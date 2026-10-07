@@ -22,6 +22,20 @@ fn pixels(quanta: i64) -> f64 {
     quanta as f64 / 1024.0
 }
 
+fn position(value: f64) -> Result<f64, Error> {
+    Ok(pixels(nearest_spatial_quanta(value)?))
+}
+
+fn centered_x(left: f64, right: f64, plan: &crate::layout::ResolvedTextPlan) -> Result<f64, Error> {
+    // Freeze the whole block origin with its parent's parity, then use the
+    // renderer's canonical text half exactly once. Rounding the span midpoint
+    // and the odd-width text half independently can leak one quantum of ink.
+    let origin = position(left + (right - left - plan.width()) / 2.0)?;
+    let half = crate::render::backend::nearest_even_text_half(plan.width_quanta)
+        .ok_or_else(|| Error::Render("Canvas header text anchor overflowed".into()))?;
+    Ok(origin + pixels(half))
+}
+
 fn required(value: f64) -> Result<i64, Error> {
     nearest_spatial_quanta(crate::layout::kernel::required_length(value)?)
 }
@@ -82,8 +96,11 @@ pub(super) fn allocate(
     }
     let theme = themes.root();
     let resources = theme.prepared_font_environment()?.generation_resources();
-    let gap = required(theme.composition.canvas_grid_gap)?;
-    let em = required(f64::from(theme.composition_title_font_size))?;
+    let gap = required(theme.composition_grid_gap()?)?;
+    let em = required(f64::from(
+        theme.typography.composition.composition_header.font_size(),
+    ))?;
+    let header_lengths = theme.header_lengths()?;
     let appearance = theme.typography.composition().composition_header();
     let mut row_header_plans = Vec::new();
     crate::layout::fit::reserve(
@@ -115,7 +132,12 @@ pub(super) fn allocate(
         row_header_plans.push(plan);
     }
     if !row_headers.is_empty() {
-        row_header_width += theme.composition.row_header_padding;
+        row_header_width = crate::theme::composition::hard(
+            &header_lengths
+                .row_header_padding
+                .add_pixels(row_header_width, &resources)?,
+            &resources,
+        )?;
     }
     let header_outer = outer;
     let outer = PanelBox::new(outer.x0 + row_header_width, outer.x1, outer.y0, outer.y1);
@@ -188,34 +210,12 @@ pub(super) fn allocate(
                 .widths();
             let present = [plot.title_text(), plot.subtitle_text(), plot.caption_text()]
                 .map(|value| value.is_some_and(|text| !text.is_empty()));
-            let text_insets = if present.into_iter().any(|value| value) {
-                32.0
+            hard.1 = child_theme.embedded_minimum_height(present, hard.1)?;
+            hard.0 = hard.0.max(if present.into_iter().any(|value| value) {
+                child_theme.root_outer_width(title.0)?
             } else {
-                0.0
-            };
-            let spacing = &child_theme.composition.root_title_block;
-            let top = if present[0] || present[1] {
-                f64::from(u32::from(present[0]))
-                    * child_theme.typography.root.title.line_pitch_pixels()
-                    + f64::from(u32::from(present[1]))
-                        * child_theme.typography.root.subtitle.line_pitch_pixels()
-                    + if present[0] && present[1] {
-                        spacing.title_subtitle_gap
-                    } else {
-                        0.0
-                    }
-                    + spacing.title_block_to_content_clearance
-            } else {
-                0.0
-            };
-            let bottom = if present[2] {
-                child_theme.typography.root.caption.line_pitch_pixels()
-                    + spacing.caption_to_content_clearance
-            } else {
-                0.0
-            };
-            hard.1 += top + bottom + if text_insets > 0.0 { 20.0 } else { 0.0 };
-            hard.0 = hard.0.max(title.0 + text_insets);
+                title.0
+            });
             let preferred = if content.is_some() {
                 let body = crate::layout::interior::sizing::body_preference(
                     plot,
@@ -251,18 +251,20 @@ pub(super) fn allocate(
                         ])
                 {
                     if let Some(source) = source {
-                        width = width.max(
+                        width = width.max(child_theme.root_outer_width(
                             crate::layout::interior::sizing::text_width(
                                 child_theme,
                                 source,
                                 appearance,
-                            )? + text_insets,
-                        );
+                            )?,
+                        )?);
                     }
                 }
                 width
+            } else if present.into_iter().any(|value| value) {
+                child_theme.root_outer_width(title.1)?
             } else {
-                title.1 + text_insets
+                title.1
             };
             Some((hard, hard.0.max(preferred)))
         } else {
@@ -389,12 +391,18 @@ pub(super) fn allocate(
     for (title, owner) in row_titles.iter().zip(&row_title_owners) {
         let (hard, preferred) =
             fit::intrinsic_widths(theme, &title.text, appearance, "Canvas row title intrinsic")?;
-        let padding = theme.composition.row_title_horizontal_padding;
+        let padding = &header_lengths.row_title_horizontal_padding;
         widths.push(GridRequirement {
             start: 0,
             span: columns,
-            hard: required(hard + padding)?,
-            preferred: required(preferred.max(hard) + padding)?,
+            hard: required(crate::theme::composition::hard(
+                &padding.add_pixels(hard, &resources)?,
+                &resources,
+            )?)?,
+            preferred: required(crate::theme::composition::hard(
+                &padding.add_pixels(preferred.max(hard), &resources)?,
+                &resources,
+            )?)?,
             fill: false,
             address: owner,
         });
@@ -493,7 +501,12 @@ pub(super) fn allocate(
             FitOutcome::Measured(plan) => plan,
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
         };
-        header_height = header_height.max(plan.height() + theme.composition.column_header_padding);
+        header_height = header_height.max(crate::theme::composition::hard(
+            &header_lengths
+                .column_header_padding
+                .add_pixels(plan.height(), &resources)?,
+            &resources,
+        )?);
         column_plans.push((plan, left, right));
     }
     let mut row_title_plans = Vec::new();
@@ -521,7 +534,11 @@ pub(super) fn allocate(
             theme,
             &title.text,
             appearance,
-            title_right - title_left - theme.composition.row_title_horizontal_padding,
+            crate::theme::composition::capacity(
+                title_right - title_left,
+                &header_lengths.row_title_horizontal_padding,
+                &resources,
+            )?,
             PhysicalTextAlignment::Center,
             "Canvas row title",
             &FitScope::new(&row_title_owners[index], 0),
@@ -529,7 +546,12 @@ pub(super) fn allocate(
             FitOutcome::Measured(plan) => plan,
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
         };
-        let reserve = required(plan.height() + theme.composition.row_title_vertical_padding)?;
+        let reserve = required(crate::theme::composition::hard(
+            &header_lengths
+                .row_title_vertical_padding
+                .add_pixels(plan.height(), &resources)?,
+            &resources,
+        )?)?;
         row_title_heights[title.start] = reserve;
         row_title_plans.push(plan);
     }
@@ -680,13 +702,11 @@ pub(super) fn allocate(
         theme.prepared_font_environment()?,
     )?;
     for (plan, left, right) in column_plans {
+        let x = centered_x(left, right, &plan)?;
         headers.push(CanvasHeaderPlan {
             text: PlacedText::middle(
                 plan,
-                Point2D::new(
-                    f64::midpoint(left, right).round(),
-                    (header_outer.y1 - pixels(header_quanta) / 2.0).round(),
-                ),
+                Point2D::new(x, position(header_outer.y1 - pixels(header_quanta) / 2.0)?),
                 TextAnchor::Middle,
                 0.0,
             ),
@@ -695,13 +715,11 @@ pub(super) fn allocate(
     for (header, plan) in row_headers.iter().zip(row_header_plans) {
         let top = cells[header.start * columns.len()].y1;
         let bottom = cells[(header.start + header.span - 1) * columns.len()].y0;
+        let x = centered_x(header_outer.x0, header_outer.x0 + row_header_width, &plan)?;
         headers.push(CanvasHeaderPlan {
             text: PlacedText::middle(
                 plan,
-                Point2D::new(
-                    (header_outer.x0 + row_header_width / 2.0).round(),
-                    f64::midpoint(bottom, top).round(),
-                ),
+                Point2D::new(x, position(f64::midpoint(bottom, top))?),
                 TextAnchor::Middle,
                 0.0,
             ),
@@ -715,15 +733,17 @@ pub(super) fn allocate(
     )?;
     for (title, plan) in row_titles.iter().zip(row_title_plans) {
         let row = title.start;
+        let x = centered_x(title_left, title_right, &plan)?;
         measured_row_titles.push(CanvasHeaderPlan {
             text: PlacedText::middle(
                 plan,
                 Point2D::new(
-                    f64::midpoint(title_left, title_right).round(),
-                    (cells[row * columns.len()].y1
-                        + pixels(axis_row_tops[row])
-                        + pixels(row_title_heights[row]) / 2.0)
-                        .round(),
+                    x,
+                    position(
+                        cells[row * columns.len()].y1
+                            + pixels(axis_row_tops[row])
+                            + pixels(row_title_heights[row]) / 2.0,
+                    )?,
                 ),
                 TextAnchor::Middle,
                 0.0,
@@ -742,6 +762,234 @@ pub(super) fn allocate(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn one_pixel_headers_freeze_subpixel_centers_inside_their_actual_unpadded_bands() {
+        let plots = [None];
+        let mut themes = ResolvedCanvasThemes::new(
+            crate::Theme::Publication,
+            &plots,
+            &crate::font::canonical::OperationGenerationResources::new(),
+        )
+        .unwrap();
+        themes.root.typography.composition.composition_header = themes
+            .root
+            .typography
+            .composition
+            .composition_header
+            .clone()
+            .with_font_size(1)
+            .unwrap();
+        let zero = crate::theme::RelativeSpacing::ratio(0, 1).unwrap();
+        let headers = crate::theme::composition::HeaderSpacing::new(
+            zero.clone(),
+            zero.clone(),
+            zero.clone(),
+            zero,
+        )
+        .unwrap();
+        themes.root.composition = themes
+            .root
+            .composition
+            .clone()
+            .with_headers(headers)
+            .unwrap();
+        let header = CanvasHeader {
+            start: 0,
+            span: 1,
+            text: "0".into(),
+        };
+        for parity in [0, 1] {
+            let left = f64::from(parity) / 1024.0;
+            let outer = PanelBox::new(left, 4.0 + left, 0.0, 4.0);
+            let FitOutcome::Measured(grid) = allocate(
+                outer,
+                (1, 1),
+                &plots,
+                &[None],
+                &[None],
+                std::slice::from_ref(&header),
+                std::slice::from_ref(&header),
+                std::slice::from_ref(&header),
+                &[],
+                &themes,
+                &FitScope::root(),
+                None,
+            )
+            .unwrap() else {
+                panic!("positive one-pixel-role header bands must fit without a padding floor");
+            };
+            let cell = grid.cells[0];
+            let column = &grid.headers[0].text;
+            let row = &grid.headers[1].text;
+            let title = &grid.row_titles[0].text;
+            assert!(row.plan.width() > 0.0 && row.plan.width() < 1.0);
+            let bands = [
+                (
+                    column,
+                    PanelBox::new(cell.x0, cell.x1, outer.y1 - column.plan.height(), outer.y1),
+                ),
+                (row, PanelBox::new(outer.x0, cell.x0, cell.y0, cell.y1)),
+                (
+                    title,
+                    PanelBox::new(cell.x0, cell.x1, cell.y1, cell.y1 + title.plan.height()),
+                ),
+            ];
+            for (text, band) in bands {
+                assert_eq!(text.plan.source, "0");
+                assert_eq!(text.plan.style.font_size, 1);
+                let mut ink =
+                    crate::render::geometry::GeometrySnapshot::new(themes.root()).unwrap();
+                ink.text(text.placement, &text.plan, None).unwrap();
+                assert!(!ink.bounds().is_empty());
+                assert!(
+                    ink.bounds().iter().all(|bounds| bounds.left >= band.x0
+                        && bounds.right <= band.x1
+                        && bounds.bottom >= band.y0
+                        && bounds.top <= band.y1),
+                    "complete header ink must stay in its actual band: band={band:?}, ink={:?}",
+                    ink.bounds()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn unicode_spanning_headers_retain_complete_rtl_sources_and_unclipped_ink() {
+        let plots = [None, None, None, None];
+        let themes = ResolvedCanvasThemes::new(
+            crate::Theme::Publication,
+            &plots,
+            &crate::font::canonical::OperationGenerationResources::new(),
+        )
+        .unwrap();
+        let source = "مرحبا بالعالم\nעברית ושמות";
+        let header = CanvasHeader {
+            start: 0,
+            span: 2,
+            text: source.into(),
+        };
+        let title = CanvasHeader {
+            start: 0,
+            span: 1,
+            text: source.into(),
+        };
+        let outer = PanelBox::new(1.0 / 1024.0, 601.0 / 1024.0 + 600.0, 0.0, 400.0);
+        let FitOutcome::Measured(grid) = allocate(
+            outer,
+            (2, 2),
+            &plots,
+            &[None; 4],
+            &[None; 4],
+            std::slice::from_ref(&header),
+            std::slice::from_ref(&header),
+            std::slice::from_ref(&title),
+            &[],
+            &themes,
+            &FitScope::root(),
+            None,
+        )
+        .unwrap() else {
+            panic!("complete RTL header spans must fit");
+        };
+        for text in grid
+            .headers
+            .iter()
+            .map(|header| &header.text)
+            .chain(grid.row_titles.iter().map(|header| &header.text))
+        {
+            assert_eq!(text.plan.source, source);
+            assert_eq!(text.plan.lines.len(), 2);
+            let mut ink = crate::render::geometry::GeometrySnapshot::new(themes.root()).unwrap();
+            ink.text(text.placement, &text.plan, None).unwrap();
+            assert!(!ink.bounds().is_empty());
+            assert!(ink.bounds().iter().all(|bounds| bounds.left >= outer.x0
+                && bounds.right <= outer.x1
+                && bounds.bottom >= outer.y0
+                && bounds.top <= outer.y1));
+        }
+    }
+
+    #[test]
+    fn declared_empty_tracks_use_header_em_independently_of_body_and_text_panel_title() {
+        let plots = [None, None];
+        let mut themes = ResolvedCanvasThemes::new(
+            crate::Theme::Publication,
+            &plots,
+            &crate::font::canonical::OperationGenerationResources::new(),
+        )
+        .unwrap();
+        themes.root.composition = themes
+            .root
+            .composition
+            .clone()
+            .with_canvas_grid_gap(crate::theme::RelativeSpacing::ratio(0, 1).unwrap())
+            .unwrap();
+        let source = crate::Canvas::grid(1, 2).unwrap();
+        for (header, body, title) in [(20, 17, 20), (20, 34, 40), (31, 34, 40)] {
+            themes.root.typography.composition.composition_header = themes
+                .root
+                .typography
+                .composition
+                .composition_header
+                .clone()
+                .with_font_size(header)
+                .unwrap();
+            themes.root.typography.composition.body = themes
+                .root
+                .typography
+                .composition
+                .body
+                .clone()
+                .with_font_size(body)
+                .unwrap();
+            themes.root.typography.composition.text_panel_title = themes
+                .root
+                .typography
+                .composition
+                .text_panel_title
+                .clone()
+                .with_font_size(title)
+                .unwrap();
+            crate::layout::plan_exact_root(
+                1,
+                1,
+                |_| Ok(()),
+                |(), assigned, round| {
+                    let FitOutcome::Measured(grid) = allocate(
+                        PanelBox::new(0.0, 0.0, 0.0, 0.0),
+                        (1, 2),
+                        &plots,
+                        &[None; 2],
+                        &[None; 2],
+                        &[],
+                        &[],
+                        &[],
+                        &[],
+                        &themes,
+                        &FitScope::root(),
+                        Some(&ContentSizing {
+                            source: &source,
+                            interiors: &[None, None],
+                            round,
+                            measurements: None,
+                            natural_width: true,
+                            natural_height: true,
+                        }),
+                    )?
+                    else {
+                        panic!("declared tracks must have a natural preference");
+                    };
+                    assert_eq!(grid.size.0.to_bits(), (2.0 * f64::from(header)).to_bits());
+                    assert_eq!(grid.size.1.to_bits(), f64::from(header).to_bits());
+                    assert_eq!(grid.cells.len(), 2);
+                    Ok(crate::layout::MeasuredLayout::new(assigned, ()))
+                },
+                |(), _, (), _| Ok(()),
+            )
+            .unwrap();
+        }
+    }
 
     #[test]
     fn sparse_mixed_grid_keeps_declared_gaps_and_trailing_cells() {

@@ -287,7 +287,7 @@ fn retained_theme_matching_visits_each_nested_role_once_and_refuses_before_skipp
             // then one font witness per unchanged
             // preceding role. The differing scalar refuses equality before
             // examining that role's font payload.
-            let work = 26 + $index;
+            let work = 45 + $index;
             for remaining in [work - 1, work] {
                 let resources = OperationGenerationResources::with_test_limits(remaining, 0);
                 let result = retained.same(&source, &resources);

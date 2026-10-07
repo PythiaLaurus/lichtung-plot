@@ -5125,22 +5125,12 @@ impl Canvas {
                 MeasurementPhase::Probe,
                 round,
             )?;
-            let resources = theme.prepared_font_environment()?.generation_resources();
-            let scope = FitScope::root().child(
-                crate::layout::AddressRole::CanvasCell,
-                index,
-                &resources,
-            )?;
             let measured = PanelRequirements::measure_header(
                 probe
                     .axes
                     .as_ref()
                     .ok_or_else(|| Error::Render("Canvas probe is missing measured axes".into()))?,
                 theme,
-                None,
-                None,
-                cells[index],
-                &scope,
             )
             .map_err(crate::layout::fit::PlanError::into_error)?;
             let target = &mut requirements[index].2;
@@ -5176,7 +5166,12 @@ impl Canvas {
         let scope = FitScope::new(&root_address, round.attempt_ordinal(&guide_owner)?);
         let guide_scope = FitScope::new(&guide_owner, scope.ordinal);
         let themes = Arc::clone(&prepared.themes);
-        let mut canvas_layout = prepared.canvas_layout.clone();
+        let mut canvas_layout = prepared.canvas_layout.admitted_clone(
+            &themes
+                .root()
+                .prepared_font_environment()?
+                .generation_resources(),
+        )?;
         let mut full_outer = canvas_layout.panel_box;
         let resources = themes
             .root()
@@ -5247,7 +5242,7 @@ impl Canvas {
             } else {
                 themes.root().legend_shared_gap()?
             };
-            let grid_gap = themes.root().composition.canvas_grid_gap;
+            let grid_gap = themes.root().composition_grid_gap()?;
             let positive_span = crate::layout::canvas::MINIMUM_PANEL_SPAN;
             let mut columns = Vec::new();
             let mut rows = Vec::new();
@@ -5759,17 +5754,6 @@ impl Canvas {
                     Error::Render("composed panel is missing its measured axes".into())
                 })?,
                 theme,
-                None,
-                None,
-                local.body,
-                &scope.child(
-                    crate::layout::AddressRole::CanvasCell,
-                    index,
-                    &themes
-                        .root()
-                        .prepared_font_environment()?
-                        .generation_resources(),
-                )?,
             ))? {
                 FitOutcome::Measured(requirement) => requirement,
                 FitOutcome::Miss(failure) => {

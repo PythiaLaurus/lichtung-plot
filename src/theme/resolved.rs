@@ -106,7 +106,7 @@ pub(crate) struct ResolvedTheme {
     /// Resolved non-text annotation appearance.
     pub(crate) annotations: AnnotationAppearance,
     /// Root and panel composition relationships.
-    pub(crate) composition: CompositionAppearance,
+    pub(crate) composition: super::CompositionTheme,
     font_environment: Arc<OnceLock<Result<PreparedFontEnvironment, String>>>,
     text_queries: Arc<Mutex<TextQueryCache>>,
 }
@@ -532,6 +532,7 @@ impl PartialEq for ResolvedTheme {
         self.non_text_eq(other)
             && self.axes == other.axes
             && self.legend == other.legend
+            && self.composition == other.composition
             && self.marks.primary_point == other.marks.primary_point
             && self.marks.raw_overlay_point == other.marks.raw_overlay_point
             && self.typography == other.typography
@@ -550,7 +551,6 @@ impl ResolvedTheme {
             && self.canvas_surface_override == other.canvas_surface_override
             && self.marks.non_point_eq(&other.marks)
             && self.annotations == other.annotations
-            && self.composition == other.composition
     }
 }
 
@@ -581,6 +581,9 @@ impl ResolvedTheme {
             return Ok(false);
         }
         if !self.legend.same(&other.legend, resources)? {
+            return Ok(false);
+        }
+        if !self.composition.same(&other.composition, resources)? {
             return Ok(false);
         }
         if !self
@@ -615,7 +618,12 @@ impl ResolvedTheme {
         let point_ratios = usize::from(self.marks.primary_point.outline.is_some())
             + usize::from(self.marks.raw_overlay_point.outline.is_some());
         data.claim_source_visits(
-            self.typography.roles().len() + 4 + 6 + point_ratios + self.legend.relationship_count(),
+            self.typography.roles().len()
+                + 4
+                + 6
+                + point_ratios
+                + self.legend.relationship_count()
+                + 18,
         )?;
         // All fonts, four scale/accent payloads, six axis relationships and each
         // structurally present point-outline relationship are shared once.
@@ -1638,35 +1646,6 @@ impl TitleAlignment {
     }
 }
 
-/// Root title-block appearance and local spacing.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct RootTitleBlockAppearance {
-    /// Gap between adjacent title and subtitle line boxes.
-    pub(crate) title_subtitle_gap: f64,
-    /// Clearance between the top title block and root content.
-    pub(crate) title_block_to_content_clearance: f64,
-    /// Clearance between root content and the caption.
-    pub(crate) caption_to_content_clearance: f64,
-}
-
-/// Root and TextPanel composition appearance.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct CompositionAppearance {
-    pub(crate) root_title_alignment: TitleAlignment,
-    pub(crate) root_subtitle_alignment: Option<TitleAlignment>,
-    pub(crate) root_caption_alignment: TitleAlignment,
-    /// Plot or Canvas root title block.
-    pub(crate) root_title_block: RootTitleBlockAppearance,
-    pub(crate) text_panel_inset: f64,
-    pub(crate) text_panel_gap: f64,
-    pub(crate) facet_gap: f64,
-    pub(crate) canvas_grid_gap: f64,
-    pub(crate) column_header_padding: f64,
-    pub(crate) row_header_padding: f64,
-    pub(crate) row_title_horizontal_padding: f64,
-    pub(crate) row_title_vertical_padding: f64,
-}
-
 #[allow(
     clippy::too_many_arguments,
     clippy::too_many_lines,
@@ -1860,24 +1839,13 @@ fn resolved_theme(
             waterfall_shelf_row_gap: 4.0,
             planning_backdrop: Color::rgb(255, 255, 255),
         },
-        composition: CompositionAppearance {
-            root_title_alignment: TitleAlignment::Center,
-            root_subtitle_alignment: None,
-            root_caption_alignment: TitleAlignment::Start,
-            root_title_block: RootTitleBlockAppearance {
-                title_subtitle_gap: 0.0,
-                title_block_to_content_clearance: 14.0,
-                caption_to_content_clearance: 12.0,
-            },
-            text_panel_inset: 16.0,
-            text_panel_gap: 12.0,
-            facet_gap: 12.0,
-            canvas_grid_gap: 12.0,
-            column_header_padding: 16.0,
-            row_header_padding: 20.0,
-            row_title_horizontal_padding: 16.0,
-            row_title_vertical_padding: 8.0,
-        },
+        composition: super::CompositionTheme::builtin(
+            title_font_size,
+            subtitle_font_size,
+            caption_font_size,
+            axis_title_font_size,
+            resources,
+        )?,
         font_environment: Arc::new(OnceLock::new()),
         text_queries: Arc::default(),
     })
@@ -2614,24 +2582,14 @@ mod tests {
                 waterfall_shelf_row_gap: 4.0,
                 planning_backdrop: Color::rgb(255, 255, 255),
             },
-            composition: CompositionAppearance {
-                root_title_alignment: TitleAlignment::Center,
-                root_subtitle_alignment: None,
-                root_caption_alignment: TitleAlignment::Start,
-                root_title_block: RootTitleBlockAppearance {
-                    title_subtitle_gap: 0.0,
-                    title_block_to_content_clearance: 14.0,
-                    caption_to_content_clearance: 12.0,
-                },
-                text_panel_inset: 16.0,
-                text_panel_gap: 12.0,
-                facet_gap: 12.0,
-                canvas_grid_gap: 12.0,
-                column_header_padding: 16.0,
-                row_header_padding: 20.0,
-                row_title_horizontal_padding: 16.0,
-                row_title_vertical_padding: 8.0,
-            },
+            composition: crate::theme::CompositionTheme::builtin(
+                expected.title_size,
+                expected.subtitle_size,
+                expected.caption_size,
+                expected.axis_title_size,
+                &OperationGenerationResources::new(),
+            )
+            .unwrap(),
             font_environment: Arc::new(OnceLock::new()),
             text_queries: Arc::default(),
         }
@@ -2919,7 +2877,7 @@ mod tests {
                     .resolve(&OperationGenerationResources::new())
                     .unwrap()
                     .composition
-                    .root_title_alignment,
+                    .root_title_alignment(),
                 TitleAlignment::Center,
                 "{theme:?}"
             );
@@ -3007,22 +2965,32 @@ mod tests {
     #[test]
     fn composition_spacing_preserves_active_values() {
         for theme in BUILT_IN_THEMES {
-            let composition = theme
-                .resolve(&OperationGenerationResources::new())
+            let resolved = theme.resolve(&OperationGenerationResources::new()).unwrap();
+            let lengths = resolved.root_title_lengths().unwrap();
+            let resources = resolved
+                .prepared_font_environment()
                 .unwrap()
-                .composition;
-            assert!(composition.root_title_block.title_subtitle_gap.abs() < f64::EPSILON);
-            assert!(
-                (composition
-                    .root_title_block
-                    .title_block_to_content_clearance
-                    - 14.0)
-                    .abs()
-                    < f64::EPSILON
+                .generation_resources();
+            assert_eq!(
+                crate::theme::composition::hard(&lengths.title_subtitle_gap, &resources)
+                    .unwrap()
+                    .to_bits(),
+                0.0_f64.to_bits()
             );
-            assert!(
-                (composition.root_title_block.caption_to_content_clearance - 12.0).abs()
-                    < f64::EPSILON
+            assert_eq!(
+                crate::theme::composition::hard(
+                    &lengths.title_block_to_content_clearance,
+                    &resources
+                )
+                .unwrap()
+                .to_bits(),
+                14.0_f64.to_bits()
+            );
+            assert_eq!(
+                crate::theme::composition::hard(&lengths.caption_to_content_clearance, &resources)
+                    .unwrap()
+                    .to_bits(),
+                12.0_f64.to_bits()
             );
         }
     }
@@ -3886,7 +3854,7 @@ mod tests {
         let roles = theme.typography.roles();
         assert_eq!(roles.len(), 18);
         let bytes = 0_u64; // all palette/gradient payloads and font entries are immutable shares
-        let work = 42; // eighteen fonts, four scales/accents, eight mark/axis and twelve guide relationships
+        let work = 60; // prior forty-two handles plus eighteen composition relationships
         let discoveries = FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
         for (visits, limit) in [(0, bytes), (work - 1, bytes), (work, bytes)] {
             let resources = OperationGenerationResources::with_test_limits(visits, limit);
@@ -3928,7 +3896,7 @@ mod tests {
             .resolve(&OperationGenerationResources::new())
             .unwrap();
         let mut retained = theme.clone();
-        let work: usize = 44; // forty-two payloads plus axis and guide metadata witnesses
+        let work: usize = 63; // sixty payloads plus axis, guide and composition metadata witnesses
         for remaining in [0, work - 1, work] {
             let resources = OperationGenerationResources::with_test_limits(remaining as u128, 0);
             let result = retained.same(&theme, &resources);
@@ -3937,9 +3905,9 @@ mod tests {
             assert_eq!(resources.byte_usage().unwrap(), 0);
         }
         retained.typography.root.title.stack = named_stack(&["A, B"]);
-        let resources = OperationGenerationResources::with_test_limits(27, 0);
+        let resources = OperationGenerationResources::with_test_limits(46, 0);
         assert!(!retained.same(&theme, &resources).unwrap());
-        assert_eq!(resources.usage().unwrap().1, 27); // twenty-six witnesses, then differing font entry count
+        assert_eq!(resources.usage().unwrap().1, 46); // forty-five witnesses, then differing font entry count
     }
 
     #[test]

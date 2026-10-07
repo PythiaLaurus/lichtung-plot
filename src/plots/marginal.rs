@@ -190,8 +190,8 @@ pub(crate) fn intrinsic_body_minimum(
     // transparent. Its stroke is measured by the same canonical geometry as
     // selection, not inferred from the nominal line width.
     Ok((
-        central.0 + theme.composition.canvas_grid_gap + (1.0 / 1024.0_f64).max(2.0 * out_x),
-        central.1 + theme.composition.canvas_grid_gap + (1.0 / 1024.0_f64).max(2.0 * out_y),
+        central.0 + theme.composition_grid_gap()? + (1.0 / 1024.0_f64).max(2.0 * out_x),
+        central.1 + theme.composition_grid_gap()? + (1.0 / 1024.0_f64).max(2.0 * out_y),
     ))
 }
 
@@ -503,7 +503,7 @@ pub(crate) fn natural_body_preference(
     theme: &crate::theme::ResolvedTheme,
 ) -> Result<(f64, f64), Error> {
     let hard = intrinsic_body_minimum(chart, theme)?;
-    let gap = theme.composition.canvas_grid_gap;
+    let gap = theme.composition_grid_gap()?;
     let density = theme.marks.marginal_density.backend_style((0, 0, 0));
     let ink = crate::render::geometry::rectangular_fill_ink_outset(theme, &density)?;
     let axes = layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
@@ -530,7 +530,7 @@ pub(crate) fn natural_body_height(
     theme: &crate::theme::ResolvedTheme,
     width: f64,
 ) -> Result<f64, Error> {
-    let gap = theme.composition.canvas_grid_gap;
+    let gap = theme.composition_grid_gap()?;
     let hard = intrinsic_body_minimum(chart, theme)?;
     let density = theme.marks.marginal_density.backend_style((0, 0, 0));
     let ink = crate::render::geometry::rectangular_fill_ink_outset(theme, &density)?;
@@ -595,7 +595,7 @@ pub(crate) fn measure(
 
     // --- Layout geometry ---
     let outer = context.panel;
-    let gap = theme.composition.canvas_grid_gap;
+    let gap = theme.composition_grid_gap()?;
     let hard = intrinsic_body_minimum(chart, theme)?;
     if outer.width() < hard.0 || outer.height() < hard.1 {
         return Err(context.fit_scope().failure(

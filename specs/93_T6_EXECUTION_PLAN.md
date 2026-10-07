@@ -73,9 +73,9 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6B1d4 | IN PROGRESS | T6B1d3 | Assemble validated complete role/chrome/annotation groups with actual consumer mappings; `refactor(theme): assemble complete validated components` |
 | T6B1d4a | COMPLETE | T6B1d3 | Complete nested typography with all eighteen live roles; `refactor(theme): assemble complete typography roles` |
 | T6B1d4b | COMPLETE | T6B1d4a | Complete axis chrome and exact role-local spacing; `refactor(axes): retain validated local chrome` |
-| T6B1d4c | IN PROGRESS | T6B1d4b | Complete guide and composition chrome; `refactor(theme): retain validated composition chrome` |
+| T6B1d4c | COMPLETE | T6B1d4b | Complete guide and composition chrome; `refactor(theme): retain validated composition chrome` |
 | T6B1d4c1 | COMPLETE | T6B1d4b | Complete measured guide chrome and exact admission; `refactor(legend): retain exact validated guide chrome` |
-| T6B1d4c2 | PENDING | T6B1d4c1 | Complete root/embedded composition chrome; `refactor(composition): retain validated local relationships` |
+| T6B1d4c2 | COMPLETE | T6B1d4c1 | Complete root/embedded composition chrome; `refactor(composition): retain validated local relationships` |
 | T6B1d4d | PENDING | T6B1d4c | Complete mark groups and admitted annotation geometry; `refactor(theme): assemble mark and annotation roles` |
 | T6B2 | PENDING | T6B1 | Complete Theme construction/customization and owner resolution using those values; `refactor(theme): construct immutable complete themes` |
 | T6B3 | PENDING | T6B2 | Exact element Color/alpha replacement and repository caller migration; `feat(styles): expose complete RGBA element paints` |
@@ -198,6 +198,17 @@ snapshots change only documented quantum-level normalization consequences,
 preserving content, paint and topology. Focused tests, replay/budget checks,
 formatting and strict Clippy pass. Current public Shared-gap override stays
 until its scheduled public cutover; composition chrome remains the next unit.
+
+T6B1d4c2 evidence: `docs/composition-values.md` records eighteen exact local
+relationships, complete owner-local root/embedded/TextPanel/header/facet consumers
+and immutable operation-scoped frame reuse. Final review closed separately
+rounded prose reserves and whole-pixel header placement; six real-owner boundary,
+RTL, natural-height and cache regressions pass with strict Clippy and formatting.
+Four-preset Matrix full-byte parity and selected unchanged snapshots are recorded
+in that evidence. The caption's logical-budget count is not a CPU/time/memory
+measurement or proof of efficiency. At the user's request, subsequent feature
+implementation is paused for a comprehensive resource-accounting analysis after
+this completed component commit; budget thresholds are not optimization targets.
 
 T6B1d3 evidence: `docs/scale-values.md` records immutable validated opaque
 palettes, gradients/domains and selection values, actual prepared transport and
