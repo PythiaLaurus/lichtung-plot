@@ -26,7 +26,6 @@ thread_local! {
     pub(crate) static FONT_OUTLINE_GLYPHS: std::cell::RefCell<Vec<(FaceIdentity, u16)>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
-const DISCOVERY_ENTRY_LIMIT: u64 = 1_000_000;
 const FONT_BYTE_LIMIT: u64 = 536_870_912;
 const PROCESSING_VISIT_LIMIT: u64 = 1_000_000;
 const TEXT_GENERATION_LIMIT: u128 = 1_000_000;
@@ -233,14 +232,12 @@ pub(crate) enum FontError {
 
 #[derive(Debug, Clone, Copy)]
 struct ResourceLimits {
-    discovery_entries: u64,
     font_bytes: u64,
     processing_visits: u64,
 }
 
 impl ResourceLimits {
     const PRODUCTION: Self = Self {
-        discovery_entries: DISCOVERY_ENTRY_LIMIT,
         font_bytes: FONT_BYTE_LIMIT,
         processing_visits: PROCESSING_VISIT_LIMIT,
     };
@@ -273,11 +270,6 @@ impl FontBudget {
         }
     }
 
-    fn claim_discovery(&mut self, amount: u64) -> Result<(), FontError> {
-        self.resources.claim_discovery(amount)?;
-        self.claim_visits(amount)
-    }
-
     fn claim_bytes(&mut self, amount: u64) -> Result<(), FontError> {
         self.resources.claim_bytes(amount)
     }
@@ -287,15 +279,8 @@ impl FontBudget {
     }
 }
 
-#[derive(Debug)]
-struct FontResourceCounters {
-    limits: ResourceLimits,
-    discovery_entries: u64,
-}
-
 #[derive(Debug, Clone)]
 pub(crate) struct OperationFontResources {
-    counters: Arc<Mutex<FontResourceCounters>>,
     generation: OperationGenerationResources,
 }
 
@@ -306,10 +291,6 @@ impl OperationFontResources {
 
     fn with_limits(limits: ResourceLimits) -> Self {
         Self {
-            counters: Arc::new(Mutex::new(FontResourceCounters {
-                limits,
-                discovery_entries: 0,
-            })),
             generation: OperationGenerationResources {
                 identity: Arc::new(()),
                 palette_cache: Arc::default(),
@@ -325,20 +306,6 @@ impl OperationFontResources {
                 })),
             },
         }
-    }
-
-    pub(crate) fn claim_discovery(&self, amount: u64) -> Result<(), FontError> {
-        let mut counters = self
-            .counters
-            .lock()
-            .map_err(|_| FontError::Synchronization)?;
-        let limit = counters.limits.discovery_entries;
-        claim_font_resource(
-            &mut counters.discovery_entries,
-            amount,
-            limit,
-            "canonical system-font discovery entries",
-        )
     }
 
     pub(crate) fn claim_bytes(&self, amount: u64) -> Result<(), FontError> {
@@ -360,17 +327,12 @@ impl OperationFontResources {
     }
 
     pub(crate) fn usage(&self) -> Result<FontResourceUsage, FontError> {
-        let counters = self
-            .counters
-            .lock()
-            .map_err(|_| FontError::Synchronization)?;
         let generation = self
             .generation
             .counters
             .lock()
             .map_err(|_| FontError::Synchronization)?;
         Ok(FontResourceUsage {
-            discovery_entries: u128::from(counters.discovery_entries),
             font_bytes: u128::from(generation.bytes),
             processing_visits: generation.visits,
         })
@@ -1266,7 +1228,6 @@ pub(crate) struct PreparedFontEnvironment {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct FontResourceUsage {
-    pub(crate) discovery_entries: u128,
     pub(crate) font_bytes: u128,
     pub(crate) processing_visits: u128,
 }
@@ -1949,11 +1910,11 @@ impl CanonicalFontCore {
     }
 
     fn discover_system_with_resources(
-        mut budget: FontBudget,
+        budget: FontBudget,
         scalar_presence: Vec<u64>,
         mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
     ) -> Result<Self, FontError> {
-        let sources = platform_sources(&mut budget, prepared_stage.as_deref_mut())?;
+        let sources = platform_sources(prepared_stage.as_deref_mut())?;
         let files = discover_retained_files(&sources.roots, prepared_stage.as_deref_mut())?;
         Self::from_retained_with_stage(
             files,
@@ -3947,7 +3908,6 @@ enum FontConfigTask {
     },
     Merge {
         path: PathBuf,
-        admitted: bool,
     },
     Include(PathBuf),
 }
@@ -3979,23 +3939,13 @@ enum FontConfigDirective {
     unix,
     not(any(target_os = "macos", target_os = "android", target_os = "redox"))
 ))]
-#[expect(
-    clippy::too_many_lines,
-    reason = "the iterative fontconfig traversal keeps include and directive order explicit"
-)]
 fn merge_fontconfig_root(
     config: &mut BoundedFontConfig,
     config_path: &Path,
-    budget: &mut FontBudget,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<bool, FontError> {
-    let FontConfigRead::Loaded { parts, complete } = read_bounded_fontconfig(
-        config,
-        config_path,
-        false,
-        budget,
-        prepared_stage.as_deref_mut(),
-    )?
+    let FontConfigRead::Loaded { parts, complete } =
+        read_bounded_fontconfig(config, config_path, false, prepared_stage.as_deref_mut())?
     else {
         return Ok(false);
     };
@@ -4065,15 +4015,11 @@ fn merge_fontconfig_root(
                     FontConfigDirective::ResetDirs => config.dirs.clear(),
                 }
             }
-            FontConfigTask::Merge { path, admitted } => {
+            FontConfigTask::Merge { path } => {
                 // Upstream ignores included syntax failures, but keeps their valid prefix.
-                if let FontConfigRead::Loaded { parts, .. } = read_bounded_fontconfig(
-                    config,
-                    &path,
-                    admitted,
-                    budget,
-                    prepared_stage.as_deref_mut(),
-                )? {
+                if let FontConfigRead::Loaded { parts, .. } =
+                    read_bounded_fontconfig(config, &path, true, prepared_stage.as_deref_mut())?
+                {
                     reserve_prepared_or_local(
                         &mut tasks,
                         1,
@@ -4087,12 +4033,7 @@ fn merge_fontconfig_root(
                 }
             }
             FontConfigTask::Include(path) => {
-                push_bounded_fontconfig_include(
-                    &mut tasks,
-                    &path,
-                    budget,
-                    prepared_stage.as_deref_mut(),
-                )?;
+                push_bounded_fontconfig_include(&mut tasks, &path, prepared_stage.as_deref_mut())?;
             }
         }
     }
@@ -4106,13 +4047,12 @@ fn merge_fontconfig_root(
 fn read_bounded_fontconfig(
     config: &mut BoundedFontConfig,
     config_path: &Path,
-    admitted: bool,
-    budget: &mut FontBudget,
+    must_exist: bool,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<FontConfigRead, FontError> {
     let canonical_path = match fs::canonicalize(config_path) {
         Ok(path) => path,
-        Err(source) if !admitted && source.kind() == std::io::ErrorKind::NotFound => {
+        Err(source) if !must_exist && source.kind() == std::io::ErrorKind::NotFound => {
             return Ok(FontConfigRead::Ignored);
         }
         Err(source) => {
@@ -4123,11 +4063,7 @@ fn read_bounded_fontconfig(
             });
         }
     };
-    if !admitted {
-        budget.claim_discovery(1)?;
-    }
     for path in &config.files {
-        budget.claim_visits(1)?;
         if path == &canonical_path {
             return Ok(FontConfigRead::Loaded {
                 parts: Vec::new(),
@@ -4143,12 +4079,12 @@ fn read_bounded_fontconfig(
     )?;
     config.files.push(canonical_path.clone());
     let mut file = File::open(&canonical_path).map_err(|source| FontError::Io {
-        operation: "open admitted fontconfig file",
+        operation: "open fontconfig file",
         path: canonical_path.clone(),
         source,
     })?;
     let metadata_before = file.metadata().map_err(|source| FontError::Io {
-        operation: "inspect admitted fontconfig file",
+        operation: "inspect fontconfig file",
         path: canonical_path.clone(),
         source,
     })?;
@@ -4157,7 +4093,6 @@ fn read_bounded_fontconfig(
     }
     let length = metadata_before.len();
     let modified_before = metadata_before.modified().ok();
-    budget.claim_bytes(length)?;
     let length =
         usize::try_from(length).map_err(|_| FontError::Arithmetic("fontconfig file length"))?;
 
@@ -4195,7 +4130,7 @@ fn read_bounded_fontconfig(
     }
 
     drop(file);
-    match parse_bounded_fontconfig(&source, config_path, budget, prepared_stage) {
+    match parse_bounded_fontconfig(&source, config_path, prepared_stage) {
         Ok((parts, complete)) => Ok(FontConfigRead::Loaded { parts, complete }),
         Err(FontError::ParseFontConfig { .. }) => Ok(FontConfigRead::Ignored),
         Err(error) => Err(error),
@@ -4209,7 +4144,6 @@ fn read_bounded_fontconfig(
 fn parse_bounded_fontconfig(
     source: &str,
     config_path: &Path,
-    budget: &mut FontBudget,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(Vec<FontConfigDirective>, bool), FontError> {
     if source.contains("<!ENTITY") {
@@ -4224,7 +4158,6 @@ fn parse_bounded_fontconfig(
         .checked_mul(2)
         .and_then(|capacity| capacity.checked_add(1))
         .ok_or(FontError::Arithmetic("fontconfig XML node capacity"))?;
-    budget.claim_visits(source.chars().count() as u64)?;
     let nodes_limit = u32::try_from(node_capacity)
         .map_err(|_| FontError::Arithmetic("fontconfig XML node capacity"))?;
     let document = roxmltree::Document::parse_with_options(
@@ -4252,10 +4185,6 @@ fn parse_bounded_fontconfig(
                 )
         })
         .count();
-    budget.claim_discovery(
-        u64::try_from(directive_count)
-            .map_err(|_| FontError::Arithmetic("fontconfig directives"))?,
-    )?;
     let mut directives = Vec::new();
     reserve_prepared_or_local(
         &mut directives,
@@ -4455,7 +4384,6 @@ fn fontconfig_parse_error(config_path: &Path, reason: impl Into<String>) -> Font
 fn push_bounded_fontconfig_include(
     tasks: &mut Vec<FontConfigTask>,
     include_path: &Path,
-    budget: &mut FontBudget,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), FontError> {
     let metadata = match fs::metadata(include_path) {
@@ -4470,18 +4398,15 @@ fn push_bounded_fontconfig_include(
         }
     };
     if metadata.is_file() {
-        budget.claim_discovery(1)?;
         reserve_prepared_or_local(tasks, 1, "fontconfig traversal", prepared_stage)?;
         tasks.push(FontConfigTask::Merge {
             path: include_path.to_path_buf(),
-            admitted: true,
         });
         return Ok(());
     }
     if !metadata.is_dir() {
         return Ok(());
     }
-    budget.claim_discovery(1)?;
     let entries = fs::read_dir(include_path).map_err(|source| FontError::Io {
         operation: "read fontconfig include directory",
         path: include_path.to_path_buf(),
@@ -4494,7 +4419,6 @@ fn push_bounded_fontconfig_include(
             path: include_path.to_path_buf(),
             source,
         })?;
-        budget.claim_discovery(1)?;
         let file_type = entry.file_type().map_err(|source| FontError::Io {
             operation: "inspect fontconfig include entry",
             path: entry.path(),
@@ -4511,17 +4435,10 @@ fn push_bounded_fontconfig_include(
         )?;
         paths.push(entry.path());
     }
-    budget.claim_visits(
-        u64::try_from(paths.len())
-            .map_err(|_| FontError::Arithmetic("fontconfig include path sort"))?,
-    )?;
     paths.sort_unstable_by(|left, right| native_path_cmp(left, right));
     reserve_prepared_or_local(tasks, paths.len(), "fontconfig traversal", prepared_stage)?;
     for path in paths.into_iter().rev() {
-        tasks.push(FontConfigTask::Merge {
-            path,
-            admitted: true,
-        });
+        tasks.push(FontConfigTask::Merge { path });
     }
     Ok(())
 }
@@ -4532,7 +4449,6 @@ fn push_bounded_fontconfig_include(
     reason = "platform source ordering and generic-family extraction form one locked fontdb contract"
 )]
 fn platform_sources(
-    _budget: &mut FontBudget,
     prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<HostSources, FontError> {
     let mut paths = Vec::new();
@@ -4554,7 +4470,6 @@ fn platform_sources(
 
 #[cfg(target_os = "macos")]
 fn platform_sources(
-    _budget: &mut FontBudget,
     _prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<HostSources, FontError> {
     let mut roots = vec![
@@ -4594,7 +4509,6 @@ fn platform_sources(
 
 #[cfg(target_os = "redox")]
 fn platform_sources(
-    _budget: &mut FontBudget,
     prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<HostSources, FontError> {
     Ok(HostSources {
@@ -4607,12 +4521,7 @@ fn platform_sources(
     unix,
     not(any(target_os = "macos", target_os = "android", target_os = "redox"))
 ))]
-#[expect(
-    clippy::too_many_lines,
-    reason = "platform source ordering and generic-family extraction form one locked fontdb contract"
-)]
 fn platform_sources(
-    budget: &mut FontBudget,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<HostSources, FontError> {
     let home = std::env::var("HOME").ok();
@@ -4621,7 +4530,6 @@ fn platform_sources(
         merge_fontconfig_root(
             &mut config,
             Path::new(&config_file),
-            budget,
             prepared_stage.as_deref_mut(),
         )?;
     } else {
@@ -4633,7 +4541,6 @@ fn platform_sources(
             !merge_fontconfig_root(
                 &mut config,
                 &path.join("fontconfig/fonts.conf"),
-                budget,
                 prepared_stage.as_deref_mut(),
             )?
         } else {
@@ -4643,14 +4550,12 @@ fn platform_sources(
             merge_fontconfig_root(
                 &mut config,
                 Path::new("/etc/fonts/local.conf"),
-                budget,
                 prepared_stage.as_deref_mut(),
             )?;
         }
         merge_fontconfig_root(
             &mut config,
             Path::new("/etc/fonts/fonts.conf"),
-            budget,
             prepared_stage.as_deref_mut(),
         )?;
     }
@@ -4727,7 +4632,6 @@ fn platform_sources(
     all(unix, not(target_os = "android"))
 )))]
 fn platform_sources(
-    _budget: &mut FontBudget,
     _prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<HostSources, FontError> {
     Ok(HostSources {
@@ -5237,8 +5141,6 @@ mod tests {
             {
                 assert_eq!(used, if index == resource { 1_000_000 } else { 0 });
             }
-            font.claim_discovery(1_000_000).unwrap();
-            assert!(font.claim_discovery(1).is_err());
             font.claim_bytes(FONT_BYTE_LIMIT).unwrap();
             assert!(font.claim_bytes(1).is_err());
             assert_eq!(generation.usage().unwrap(), (records, visits));
@@ -5496,31 +5398,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn resource_limits_accept_equal_and_reject_plus_one() {
-        let limits = ResourceLimits {
-            discovery_entries: 2,
-            font_bytes: 2,
-            processing_visits: 4,
-        };
-        let mut budget = FontBudget::new(limits);
-        budget.claim_discovery(2).unwrap();
-        budget.claim_bytes(2).unwrap();
-        budget.claim_visits(2).unwrap();
-        assert!(matches!(
-            budget.claim_discovery(1),
-            Err(FontError::Limit { .. })
-        ));
-        assert!(matches!(
-            budget.claim_bytes(1),
-            Err(FontError::Limit { .. })
-        ));
-        assert!(matches!(
-            budget.claim_visits(1),
-            Err(FontError::Limit { .. })
-        ));
-    }
-
     #[cfg(all(
         unix,
         not(any(target_os = "macos", target_os = "android", target_os = "redox"))
@@ -5548,8 +5425,7 @@ mod tests {
         .unwrap();
 
         let mut config = BoundedFontConfig::default();
-        let mut budget = FontBudget::new(ResourceLimits::PRODUCTION);
-        assert!(merge_fontconfig_root(&mut config, &config_path, &mut budget, None).unwrap());
+        assert!(merge_fontconfig_root(&mut config, &config_path, None).unwrap());
         assert_eq!(
             config
                 .dirs
@@ -5587,13 +5463,7 @@ mod tests {
         .unwrap();
 
         let mut config = BoundedFontConfig::default();
-        assert!(!merge_fontconfig_root(
-            &mut config,
-            &config_path,
-            &mut FontBudget::new(ResourceLimits::PRODUCTION),
-            None,
-        )
-        .unwrap());
+        assert!(!merge_fontconfig_root(&mut config, &config_path, None).unwrap());
 
         assert_eq!(config.dirs.len(), 1);
         assert_eq!(config.dirs[0].path, Path::new("/first"));
@@ -5629,25 +5499,24 @@ mod tests {
                 fs::write(&user, source).unwrap();
             }
             let mut config = BoundedFontConfig::default();
-            let mut budget = FontBudget::new(ResourceLimits::PRODUCTION);
             let mut upstream = fontconfig_parser::FontConfig::default();
-            let complete = merge_fontconfig_root(&mut config, &user, &mut budget, None).unwrap();
+            let complete = merge_fontconfig_root(&mut config, &user, None).unwrap();
             let upstream_complete = upstream.merge_config(&user).is_ok();
             assert_eq!(complete, upstream_complete, "{source:?}");
             assert_eq!(config.dirs, upstream.dirs, "{source:?}");
             if !complete {
-                assert!(merge_fontconfig_root(&mut config, &local, &mut budget, None).unwrap());
+                assert!(merge_fontconfig_root(&mut config, &local, None).unwrap());
             }
             if !upstream_complete {
                 upstream.merge_config(&local).unwrap();
             }
-            assert!(merge_fontconfig_root(&mut config, &default, &mut budget, None).unwrap());
+            assert!(merge_fontconfig_root(&mut config, &default, None).unwrap());
             upstream.merge_config(&default).unwrap();
             assert_eq!(config.dirs, upstream.dirs, "{source:?}");
             assert_eq!(config.aliases, upstream.aliases, "{source:?}");
             if source.is_some() {
                 // Canonical deduplication is successful even after the first parse failed.
-                assert!(merge_fontconfig_root(&mut config, &user, &mut budget, None).unwrap());
+                assert!(merge_fontconfig_root(&mut config, &user, None).unwrap());
                 upstream.merge_config(&user).unwrap();
                 fs::remove_file(&user).unwrap();
             }
@@ -5689,13 +5558,7 @@ mod tests {
                 "<fontconfig><include prefix=\"relative\">{include}</include><dir>/parent</dir></fontconfig>"
             )).unwrap();
             let mut config = BoundedFontConfig::default();
-            assert!(merge_fontconfig_root(
-                &mut config,
-                &path,
-                &mut FontBudget::new(ResourceLimits::PRODUCTION),
-                None
-            )
-            .unwrap());
+            assert!(merge_fontconfig_root(&mut config, &path, None).unwrap());
             let mut upstream = fontconfig_parser::FontConfig::default();
             upstream.merge_config(&path).unwrap();
             assert_eq!(config.dirs, upstream.dirs, "{include}");
@@ -5714,13 +5577,7 @@ mod tests {
             "<fontconfig><alias><family>serif</family><prefer><family/><family>Preferred</family></prefer><accept><family/><family>Accepted</family></accept><default><family/><family>Default</family></default></alias><dir>/after</dir></fontconfig>"
         ).unwrap();
         let mut config = BoundedFontConfig::default();
-        assert!(merge_fontconfig_root(
-            &mut config,
-            &path,
-            &mut FontBudget::new(ResourceLimits::PRODUCTION),
-            None
-        )
-        .unwrap());
+        assert!(merge_fontconfig_root(&mut config, &path, None).unwrap());
         let mut upstream = fontconfig_parser::FontConfig::default();
         upstream.merge_config(&path).unwrap();
         assert_eq!(config.aliases, upstream.aliases);
@@ -5737,18 +5594,17 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let path = root.path().join("absent.conf");
         let mut config = BoundedFontConfig::default();
-        let mut budget = FontBudget::new(ResourceLimits::PRODUCTION);
         assert!(matches!(
-            read_bounded_fontconfig(&mut config, &path, false, &mut budget, None),
+            read_bounded_fontconfig(&mut config, &path, false, None),
             Ok(FontConfigRead::Ignored)
         ));
         assert!(matches!(
-            read_bounded_fontconfig(&mut config, &path, true, &mut budget, None),
+            read_bounded_fontconfig(&mut config, &path, true, None),
             Err(FontError::Io { .. })
         ));
         fs::write(&path, [0xff]).unwrap();
         assert!(matches!(
-            merge_fontconfig_root(&mut config, &path, &mut budget, None),
+            merge_fontconfig_root(&mut config, &path, None),
             Err(FontError::Io { .. })
         ));
 
@@ -5763,7 +5619,7 @@ mod tests {
         )
         .unwrap();
         assert!(matches!(
-            merge_fontconfig_root(&mut config, &parent, &mut budget, None),
+            merge_fontconfig_root(&mut config, &parent, None),
             Err(FontError::Io { .. })
         ));
     }
@@ -5817,40 +5673,13 @@ mod tests {
     fn bounded_fontconfig_parser_capacity_and_entity_rejection_are_explicit() {
         let path = Path::new("fixture.conf");
         let source = "<fontconfig><dir salt=\"s\">/fonts</dir></fontconfig>";
-        let inputs = source.chars().count();
-        let limits = ResourceLimits {
-            discovery_entries: 1,
-            font_bytes: 0,
-            processing_visits: inputs as u64 + 1,
-        };
-        let mut budget = FontBudget::new(limits);
-        let (parts, complete) = parse_bounded_fontconfig(source, path, &mut budget, None).unwrap();
+        let (parts, complete) = parse_bounded_fontconfig(source, path, None).unwrap();
         assert!(complete);
         assert_eq!(parts.len(), 1);
-        assert_eq!(
-            budget.resources.usage().unwrap().processing_visits,
-            inputs as u128 + 1
-        );
-        assert!(matches!(
-            parse_bounded_fontconfig(
-                source,
-                path,
-                &mut FontBudget::new(ResourceLimits {
-                    processing_visits: inputs as u64 - 1,
-                    ..limits
-                }),
-                None
-            ),
-            Err(FontError::Limit {
-                resource: "root processing visits",
-                ..
-            })
-        ));
         assert!(matches!(
             parse_bounded_fontconfig(
                 "<!DOCTYPE fontconfig [<!ENTITY path '/fonts'>]><fontconfig><dir>&path;</dir></fontconfig>",
                 path,
-                &mut FontBudget::new(ResourceLimits::PRODUCTION),
                 None
             ),
             Err(FontError::ParseFontConfig { .. })
@@ -5877,51 +5706,11 @@ mod tests {
         not(any(target_os = "macos", target_os = "android", target_os = "redox"))
     ))]
     #[test]
-    fn bounded_fontconfig_rejects_bytes_before_reading_past_the_limit() {
-        let root = tempfile::tempdir().unwrap();
-        let config_path = root.path().join("fonts.conf");
-        let source = "<fontconfig><dir>/fonts</dir></fontconfig>";
-        fs::write(&config_path, source).unwrap();
-        let equal_limits = ResourceLimits {
-            discovery_entries: 2,
-            font_bytes: source.len() as u64,
-            processing_visits: 1_024,
-        };
-        assert!(merge_fontconfig_root(
-            &mut BoundedFontConfig::default(),
-            &config_path,
-            &mut FontBudget::new(equal_limits),
-            None,
-        )
-        .unwrap());
-        let plus_one = ResourceLimits {
-            font_bytes: source.len() as u64 - 1,
-            ..equal_limits
-        };
-        assert!(matches!(
-            merge_fontconfig_root(
-                &mut BoundedFontConfig::default(),
-                &config_path,
-                &mut FontBudget::new(plus_one),
-                None,
-            ),
-            Err(FontError::Limit {
-                resource: "system-font bytes",
-                ..
-            })
-        ));
-    }
-
-    #[cfg(all(
-        unix,
-        not(any(target_os = "macos", target_os = "android", target_os = "redox"))
-    ))]
-    #[test]
-    fn bounded_fontconfig_include_entries_share_the_discovery_limit() {
+    fn bounded_fontconfig_include_entries_skip_subdirectories() {
         let root = tempfile::tempdir().unwrap();
         let includes = root.path().join("conf.d");
         fs::create_dir(&includes).unwrap();
-        // Even an entry that is not a configuration file consumes admission.
+        // Include directories supply files, not a recursive directory traversal.
         fs::create_dir(includes.join("ignored-directory")).unwrap();
         for name in ["10.conf", "20.conf"] {
             fs::write(
@@ -5936,34 +5725,14 @@ mod tests {
             "<fontconfig><include prefix=\"relative\">conf.d</include></fontconfig>",
         )
         .unwrap();
-        let limits = ResourceLimits {
-            discovery_entries: 7,
-            font_bytes: 1_024,
-            processing_visits: 1_024,
-        };
-        assert!(matches!(
-            merge_fontconfig_root(
-                &mut BoundedFontConfig::default(),
-                &config_path,
-                &mut FontBudget::new(limits),
-                None,
-            ),
-            Err(FontError::Limit {
-                resource: "canonical system-font discovery entries",
-                ..
-            })
-        ));
-        let exact = ResourceLimits {
-            discovery_entries: 8,
-            ..limits
-        };
-        assert!(merge_fontconfig_root(
-            &mut BoundedFontConfig::default(),
-            &config_path,
-            &mut FontBudget::new(exact),
-            None,
-        )
-        .unwrap());
+        let mut config = BoundedFontConfig::default();
+        assert!(merge_fontconfig_root(&mut config, &config_path, None).unwrap());
+        assert_eq!(config.files.len(), 3);
+        assert_eq!(config.dirs.len(), 2);
+        assert!(config
+            .dirs
+            .iter()
+            .all(|dir| dir.path == Path::new("/fonts")));
     }
 
     #[test]

@@ -1277,7 +1277,8 @@ derived from Rust traits or an unchanged request list.
 by `ENFORCE_RESOURCE_QUOTAS = false` in `src/font/canonical.rs`. The same switch
 gates all three central quota predicates, covering processing visits, records,
 topology, calls, cache entries, font discovery and cumulative byte claims.
-Counters and their checked arithmetic continue operating. This supersedes the
+The discovery counter has since been removed; the remaining counters and their
+checked arithmetic continue operating outside the migrated paths below. This supersedes the
 seven ledger limits below as production refusal conditions; it does not change
 allocation/representability, data/font validation, root/guide coordination or PNG
 policies. The configuration fields and old quota-oriented tests are retained for
@@ -1296,9 +1297,13 @@ encountered entries, with checked amortized capacity growth. It no longer reserv
 one million records or accepts an accounting budget. Directory traversal, native
 path ordering/deduplication, retained-byte hashing, one-open-file-at-a-time behavior
 and file-change detection remain. Prepared-stage reservation errors still propagate.
-Fontconfig configuration traversal and the remaining font preparation paths retain
-their old counters until their own migration; historical usage totals below do
-not describe current normalization or filesystem discovery.
+Fontconfig configuration traversal likewise has no accounting dependency. Its
+canonical-file deduplication, iterative include ordering, input-derived XML node
+capacity, entity handling, optional missing-path behavior, actual read extent and
+file-change checks remain. A previously discovered include that disappears still
+returns an I/O error. The discovery counter, limit and dedicated mutex are deleted.
+Remaining font preparation retains other counters until its own migration;
+historical usage totals below do not describe current normalization or discovery.
 
 PF4's accepted replacement contract below is implemented. Final primary
 `just verify`, independent byte/variable-visit recheck, and all 27 baseline output
