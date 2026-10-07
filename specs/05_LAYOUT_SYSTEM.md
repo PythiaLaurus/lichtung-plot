@@ -1335,9 +1335,12 @@ input scans, decomposition, ordering, recomposition or scratch storage. NFC and
 NFKC casefold retain their Unicode 16 tables, actual algorithms, checked lengths
 and fallible buffer growth. The ordering and recomposition passes have no remaining
 failure source and return directly; allocation and representation failures still
-propagate from normalization. The separate text line-break callback has not yet
-been migrated. Equality-based cache fallback remains valid; pointer identity
-alone is not sufficient.
+propagate from normalization. Text line breaking likewise has no resource callback:
+UAX #14 analysis, ASCII-run contraction/source mapping and UAX #29 boundary
+intersection retain their algorithms and fallible storage. The shared text-vector
+reservation helper retains checked lengths and growth without charging bytes.
+Other text planning/shaping/cache accounting remains pending. Equality-based cache
+fallback remains valid; pointer identity alone is not sufficient.
 
 Shaping input is admitted at the canonical Rustybuzz call boundary, before buffer
 construction and shaping, counting actual input plus at most five trailing

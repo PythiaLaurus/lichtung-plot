@@ -506,11 +506,7 @@ impl ResolvedTextPlan {
         let mut candidates = Vec::new();
         let provenance = &original.pair_provenance;
         claim_collection_count(environment, provenance.candidates.len() as u128)?;
-        super::unicode16::reserve(
-            &mut candidates,
-            provenance.candidates.len(),
-            &mut |bytes, work| claim_unicode(environment, bytes, work),
-        )?;
+        super::unicode16::reserve(&mut candidates, provenance.candidates.len())?;
         candidates.extend_from_slice(&provenance.candidates);
         input.provenance.pair_ordinal = provenance.pair_ordinal;
         let stack = input.stack;
@@ -641,9 +637,7 @@ impl ResolvedTextPlan {
     ) -> Result<Vec<String>, TextPlanError> {
         let mut lines = Vec::new();
         claim_collection_count(environment, self.lines.len() as u128)?;
-        super::unicode16::reserve(&mut lines, self.lines.len(), &mut |bytes, work| {
-            claim_unicode(environment, bytes, work)
-        })?;
+        super::unicode16::reserve(&mut lines, self.lines.len())?;
         for line in &self.lines {
             let text = &self.source[line.source_span.range()];
             let length = text.len() - usize::from(line.selected_soft_hyphen.is_some());
@@ -693,15 +687,10 @@ impl AnalyzedParagraph {
         font_size: u32,
     ) -> Result<&ParagraphWrapping, TextPlanError> {
         if self.wrapping.get().is_none() {
-            let mut boundaries = legal_line_breaks_at_graphemes(
-                &source[self.span.range()],
-                &self.grapheme_ends,
-                environment,
-            )?;
+            let mut boundaries =
+                legal_line_breaks_at_graphemes(&source[self.span.range()], &self.grapheme_ends)?;
             claim_collection_count(environment, 1)?;
-            super::unicode16::reserve(&mut boundaries, 1, &mut |bytes, work| {
-                claim_unicode(environment, bytes, work)
-            })?;
+            super::unicode16::reserve(&mut boundaries, 1)?;
             boundaries.insert(0, 0);
             let prefixes = proposal_prefixes(environment, whole, &boundaries, font_size)?;
             environment
@@ -727,15 +716,11 @@ fn copy_line(
 ) -> Result<BuiltLine, TextPlanError> {
     let mut runs = Vec::new();
     claim_collection_count(environment, line.runs.len() as u128)?;
-    super::unicode16::reserve(&mut runs, line.runs.len(), &mut |bytes, work| {
-        claim_unicode(environment, bytes, work)
-    })?;
+    super::unicode16::reserve(&mut runs, line.runs.len())?;
     for run in &line.runs {
         let mut glyphs = Vec::new();
         claim_collection_count(environment, run.glyphs.len() as u128)?;
-        super::unicode16::reserve(&mut glyphs, run.glyphs.len(), &mut |bytes, work| {
-            claim_unicode(environment, bytes, work)
-        })?;
+        super::unicode16::reserve(&mut glyphs, run.glyphs.len())?;
         glyphs.extend_from_slice(&run.glyphs);
         runs.push(ShapedTextRun { glyphs, ..*run });
     }
@@ -922,11 +907,7 @@ fn measure_text(
     claim_processing_visits(environment, input.source.chars().count() as u128)?;
     let scalar_count = input.source.chars().count();
     let mut required_scalars = Vec::new();
-    super::unicode16::reserve(
-        &mut required_scalars,
-        scalar_count + 1,
-        &mut |bytes, work| claim_unicode(environment, bytes, work),
-    )?;
+    super::unicode16::reserve(&mut required_scalars, scalar_count + 1)?;
     required_scalars.extend(input.source.chars());
     if input.source.contains('\u{ad}') {
         required_scalars.push('-');
@@ -978,7 +959,7 @@ fn measure_text(
     let source_scalar_count = u128::try_from(required_scalars.len())
         .map_err(|_| TextPlanError::Arithmetic("text scalar count"))?;
     claim_processing_visits(environment, source_scalar_count)?;
-    let paragraph_seeds = mandatory_paragraph_seeds(environment, input.source)?;
+    let paragraph_seeds = mandatory_paragraph_seeds(input.source)?;
     let mut built_lines = Vec::new();
     let mut analyzed_paragraphs = Vec::new();
     let mut requirements = TextIntrinsicRequirements {
@@ -998,9 +979,7 @@ fn measure_text(
         let mut grapheme_ends = Vec::new();
         for (start, grapheme) in paragraph.grapheme_indices(true) {
             claim_collection_count(environment, 1)?;
-            super::unicode16::reserve(&mut grapheme_ends, 1, &mut |bytes, work| {
-                claim_unicode(environment, bytes, work)
-            })?;
+            super::unicode16::reserve(&mut grapheme_ends, 1)?;
             grapheme_ends.push(start + grapheme.len());
         }
         let next_grapheme = grapheme_start
@@ -1090,12 +1069,9 @@ fn measure_text(
             grapheme_start = next_grapheme;
             continue;
         }
-        let mut boundaries =
-            legal_line_breaks_at_graphemes(paragraph, &grapheme_ends, environment)?;
+        let mut boundaries = legal_line_breaks_at_graphemes(paragraph, &grapheme_ends)?;
         claim_collection_count(environment, 1)?;
-        super::unicode16::reserve(&mut boundaries, 1, &mut |bytes, work| {
-            claim_unicode(environment, bytes, work)
-        })?;
+        super::unicode16::reserve(&mut boundaries, 1)?;
         boundaries.insert(0, 0);
         let prefixes = proposal_prefixes(environment, &whole.plan, &boundaries, input.font_size)?;
         let last = boundaries.len() - 1;
@@ -1216,9 +1192,7 @@ fn retain_paragraph(
     paragraph: AnalyzedParagraph,
 ) -> Result<(), TextPlanError> {
     claim_collection_count(environment, 1)?;
-    super::unicode16::reserve(paragraphs, 1, &mut |bytes, work| {
-        claim_unicode(environment, bytes, work)
-    })?;
+    super::unicode16::reserve(paragraphs, 1)?;
     paragraphs.push(paragraph);
     Ok(())
 }
@@ -1305,9 +1279,7 @@ fn retain_line(
     line: BuiltLine,
 ) -> Result<(), TextPlanError> {
     claim_collection_count(environment, 2)?;
-    super::unicode16::reserve(lines, 1, &mut |bytes, work| {
-        claim_unicode(environment, bytes, work)
-    })?;
+    super::unicode16::reserve(lines, 1)?;
     lines.push(line);
     Ok(())
 }
@@ -1362,9 +1334,7 @@ fn proposal_prefixes(
 ) -> Result<Vec<ExactRational>, TextPlanError> {
     claim_collection_count(environment, boundaries.len() as u128)?;
     let mut prefixes = Vec::new();
-    super::unicode16::reserve(&mut prefixes, boundaries.len(), &mut |bytes, visits| {
-        claim_unicode(environment, bytes, visits)
-    })?;
+    super::unicode16::reserve(&mut prefixes, boundaries.len())?;
     prefixes.resize(boundaries.len(), ExactRational::ZERO);
     // Rustybuzz clusters are monotone within each directional run. Traverse in
     // logical order, and defer the entire cluster to its first legal endpoint.
@@ -1413,9 +1383,7 @@ fn proposal_prefixes(
                 .checked_abs()
                 .ok_or(TextPlanError::Arithmetic("cluster magnitude"))?;
             claim_collection_count(environment, 1)?;
-            super::unicode16::reserve(&mut clusters, 1, &mut |bytes, visits| {
-                claim_unicode(environment, bytes, visits)
-            })?;
+            super::unicode16::reserve(&mut clusters, 1)?;
             clusters.push((
                 end,
                 run_order,
@@ -1499,10 +1467,7 @@ fn requested_weight(weight: TextWeight) -> RequestedWeight {
     }
 }
 
-fn mandatory_paragraph_seeds(
-    environment: &PreparedFontEnvironment,
-    source: &str,
-) -> Result<Vec<ParagraphSeed>, TextPlanError> {
+fn mandatory_paragraph_seeds(source: &str) -> Result<Vec<ParagraphSeed>, TextPlanError> {
     let mut paragraphs = Vec::new();
     let mut start = 0_usize;
     let mut scalar_count = 0_u128;
@@ -1514,9 +1479,7 @@ fn mandatory_paragraph_seeds(
                 .ok_or(TextPlanError::Arithmetic("paragraph scalar count"))?;
             continue;
         }
-        super::unicode16::reserve(&mut paragraphs, 1, &mut |bytes, work| {
-            claim_unicode(environment, bytes, work)
-        })?;
+        super::unicode16::reserve(&mut paragraphs, 1)?;
         paragraphs.push(ParagraphSeed {
             span: TextSourceSpan::new(start, index)?,
             scalar_count,
@@ -1531,32 +1494,12 @@ fn mandatory_paragraph_seeds(
         start = break_end;
         scalar_count = 0;
     }
-    super::unicode16::reserve(&mut paragraphs, 1, &mut |bytes, work| {
-        claim_unicode(environment, bytes, work)
-    })?;
+    super::unicode16::reserve(&mut paragraphs, 1)?;
     paragraphs.push(ParagraphSeed {
         span: TextSourceSpan::new(start, source.len())?,
         scalar_count,
     });
     Ok(paragraphs)
-}
-
-/// Exact Unicode 16 UAX #14 opportunities, restricted to Unicode 16 UAX #29
-/// grapheme boundaries before contextual line trials.
-fn legal_line_breaks(
-    paragraph: &str,
-    environment: &PreparedFontEnvironment,
-) -> Result<Vec<usize>, TextPlanError> {
-    u32::try_from(paragraph.len()).map_err(|_| TextPlanError::SourceTooLong)?;
-    claim_unicode(environment, 0, paragraph.chars().count() as u64)?;
-    let mut grapheme_ends = Vec::new();
-    for (start, grapheme) in paragraph.grapheme_indices(true) {
-        super::unicode16::reserve(&mut grapheme_ends, 1, &mut |bytes, work| {
-            claim_unicode(environment, bytes, work)
-        })?;
-        grapheme_ends.push(start + grapheme.len());
-    }
-    legal_line_breaks_at_graphemes(paragraph, &grapheme_ends, environment)
 }
 
 fn claim_unicode(
@@ -1575,7 +1518,6 @@ fn claim_unicode(
 
 fn paragraph_linebreaks(
     paragraph: &str,
-    claim: &mut impl FnMut(u64, u64) -> Result<(), TextPlanError>,
 ) -> Result<Vec<(usize, super::unicode16::BreakOpportunity)>, TextPlanError> {
     if paragraph.is_empty() {
         return Ok(Vec::new());
@@ -1584,9 +1526,7 @@ fn paragraph_linebreaks(
     // LB28 forbids every internal AL/AL boundary, and no other rule counts
     // consecutive AL characters. Evaluate each run once, retaining its source
     // start and the following boundary; shaping always uses the original text.
-    claim(0, paragraph.chars().count() as u64)?;
     let mut reduced = String::new();
-    claim(paragraph.len() as u64, 0)?;
     reduced
         .try_reserve_exact(paragraph.len())
         .map_err(|_| TextPlanError::Allocation("line-break analysis source"))?;
@@ -1595,19 +1535,18 @@ fn paragraph_linebreaks(
     for (offset, scalar) in paragraph.char_indices() {
         let next_alphabetic = scalar.is_ascii_alphabetic();
         if !alphabetic || !next_alphabetic {
-            super::unicode16::reserve(&mut offsets, 1, claim)?;
+            super::unicode16::reserve(&mut offsets, 1)?;
             offsets.push((reduced.len(), offset));
             reduced.push(scalar);
         }
         alphabetic = next_alphabetic;
     }
-    super::unicode16::reserve(&mut offsets, 1, claim)?;
+    super::unicode16::reserve(&mut offsets, 1)?;
     offsets.push((reduced.len(), paragraph.len()));
-    let mut opportunities = super::unicode16::linebreaks(&reduced, claim)?;
+    let mut opportunities = super::unicode16::linebreaks(&reduced)?;
     let mut mapped = 0;
     for (index, _) in &mut opportunities {
         loop {
-            claim(0, 1)?;
             if offsets[mapped].0 >= *index {
                 break;
             }
@@ -1618,65 +1557,28 @@ fn paragraph_linebreaks(
     Ok(opportunities)
 }
 
+/// Unicode 16 UAX #14 opportunities restricted to UAX #29 grapheme boundaries.
 fn legal_line_breaks_at_graphemes(
     paragraph: &str,
     grapheme_ends: &[usize],
-    environment: &PreparedFontEnvironment,
 ) -> Result<Vec<usize>, TextPlanError> {
-    let mut claim = |bytes, work| claim_unicode(environment, bytes, work);
-    let opportunities = paragraph_linebreaks(paragraph, &mut claim)?;
+    let opportunities = paragraph_linebreaks(paragraph)?;
     let mut breaks = Vec::new();
     let mut grapheme = 0;
-    // Both inputs are sorted and unique. Intersect without sorting or another
-    // unbounded binary-search pass, charging before every context comparison.
+    // Both inputs are sorted and unique. Intersect with one forward pass.
     for (index, _) in opportunities {
         while grapheme < grapheme_ends.len() {
-            claim(0, 1)?;
             if grapheme_ends[grapheme] >= index {
                 break;
             }
             grapheme += 1;
         }
-        claim(0, 1)?;
         if index > 0 && grapheme_ends.get(grapheme) == Some(&index) {
-            claim_collection_count(environment, 1)?;
-            super::unicode16::reserve(&mut breaks, 1, &mut claim)?;
+            super::unicode16::reserve(&mut breaks, 1)?;
             breaks.push(index);
         }
     }
     Ok(breaks)
-}
-
-#[test]
-fn legal_line_breaks_share_root_work_and_byte_refusals() {
-    let environment = PreparedFontEnvironment::synthetic();
-    let clone = environment.clone();
-    environment
-        .claim_processing_visits(
-            1_000_000 - environment.resource_usage().unwrap().processing_visits,
-        )
-        .unwrap();
-    assert!(matches!(
-        legal_line_breaks("A A", &clone),
-        Err(TextPlanError::Limit {
-            resource: "root processing visits",
-            limit: 1_000_000,
-            ..
-        })
-    ));
-
-    let environment = PreparedFontEnvironment::synthetic();
-    let used = environment.resource_usage().unwrap().font_bytes;
-    environment
-        .claim_unicode_bytes(u64::try_from(536_870_912 - used).unwrap())
-        .unwrap();
-    assert!(matches!(
-        legal_line_breaks("A A", &environment.clone()),
-        Err(TextPlanError::Font(FontError::Limit {
-            resource: "system-font bytes",
-            ..
-        }))
-    ));
 }
 
 fn ending_grapheme_index(
@@ -1818,9 +1720,7 @@ fn prepare_line(
                     if groups[index].span.start_byte == soft.start_byte {
                         groups[index] = hyphen;
                     } else {
-                        super::unicode16::reserve(&mut groups, 1, &mut |bytes, work| {
-                            claim_unicode(environment, bytes, work)
-                        })?;
+                        super::unicode16::reserve(&mut groups, 1)?;
                         groups[index].span.end_byte = soft.start_byte;
                         groups.insert(index + 1, hyphen);
                     }
@@ -1866,9 +1766,7 @@ fn prepare_line(
                 });
             });
             claim_collection_count(environment, 1)?;
-            super::unicode16::reserve(&mut runs, 1, &mut |bytes, work| {
-                claim_unicode(environment, bytes, work)
-            })?;
+            super::unicode16::reserve(&mut runs, 1)?;
             let built = scale_run(
                 environment,
                 shaped,
@@ -2038,9 +1936,7 @@ fn paragraph_items(
     let mut segment_start = 0;
     let mut segment_script = None;
     for (start, scalar) in paragraph.char_indices() {
-        super::unicode16::reserve(&mut items, 1, &mut |bytes, work| {
-            claim_unicode(environment, bytes, work)
-        })?;
+        super::unicode16::reserve(&mut items, 1)?;
         claim_processing_visits(environment, 1)?;
         let next = extensions.intersection(scalar.script_extension());
         if next.is_empty() {
@@ -2104,19 +2000,13 @@ fn paragraph_items(
             let key = if let Some(key) = key {
                 key
             } else {
-                super::unicode16::reserve(&mut openings, 1, &mut |bytes, work| {
-                    claim_unicode(environment, bytes, work)
-                })?;
+                super::unicode16::reserve(&mut openings, 1)?;
                 openings.push((bracket.opening, Vec::new()));
                 openings.len() - 1
             };
             let indices = &mut openings[key].1;
-            super::unicode16::reserve(indices, 1, &mut |bytes, work| {
-                claim_unicode(environment, bytes, work)
-            })?;
-            super::unicode16::reserve(&mut stack, 1, &mut |bytes, work| {
-                claim_unicode(environment, bytes, work)
-            })?;
+            super::unicode16::reserve(indices, 1)?;
+            super::unicode16::reserve(&mut stack, 1)?;
             indices.push(stack.len());
             stack.push((key, index));
         } else if let Some(position) = key.and_then(|key| openings[key].1.last()).copied() {
@@ -2170,9 +2060,7 @@ fn itemize_bidi_run(
                 continue;
             }
         }
-        super::unicode16::reserve(&mut groups, 1, &mut |bytes, work| {
-            claim_unicode(environment, bytes, work)
-        })?;
+        super::unicode16::reserve(&mut groups, 1)?;
         groups.push(ItemGroup {
             span: TextSourceSpan::new(absolute_start, absolute_end)?,
             face: item.face,
@@ -2237,9 +2125,7 @@ fn scale_run(
 ) -> Result<BuiltRun, TextPlanError> {
     let mut glyphs = Vec::new();
     claim_collection_count(environment, shaped.glyphs.len() as u128)?;
-    super::unicode16::reserve(&mut glyphs, shaped.glyphs.len(), &mut |bytes, work| {
-        claim_unicode(environment, bytes, work)
-    })?;
+    super::unicode16::reserve(&mut glyphs, shaped.glyphs.len())?;
     let mut pen_x = ExactRational::ZERO;
     let mut pen_y = ExactRational::ZERO;
     let mut exact_ink: Option<ExactInk> = None;
@@ -2507,9 +2393,7 @@ fn finalize_plan(
     source
         .try_reserve_exact(input.source.len())
         .map_err(|_| TextPlanError::Allocation("text source"))?;
-    super::unicode16::reserve(&mut lines, built_lines.len(), &mut |bytes, work| {
-        claim_unicode(environment, bytes, work)
-    })?;
+    super::unicode16::reserve(&mut lines, built_lines.len())?;
     source.push_str(input.source);
     lines.extend(built_lines.into_iter().map(|line| line.plan));
     Ok(ResolvedTextPlan(

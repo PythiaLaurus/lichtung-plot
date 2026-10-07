@@ -4,8 +4,6 @@ use super::text::TextPlanError;
 use std::cmp::Ordering;
 
 #[cfg(test)]
-mod admission;
-#[cfg(test)]
 mod conformance;
 mod data;
 
@@ -88,12 +86,8 @@ struct Scalar {
     odd_regional_run: bool,
 }
 
-pub(super) fn linebreaks(
-    value: &str,
-    claim: &mut impl FnMut(u64, u64) -> Result<(), TextPlanError>,
-) -> Result<Vec<(usize, BreakOpportunity)>, TextPlanError> {
+pub(super) fn linebreaks(value: &str) -> Result<Vec<(usize, BreakOpportunity)>, TextPlanError> {
     u32::try_from(value.len()).map_err(|_| TextPlanError::Arithmetic("Unicode input length"))?;
-    claim(0, value.chars().count() as u64)?;
     let mut scalars: Vec<Scalar> = Vec::new();
     for (offset, scalar) in value.char_indices() {
         let codepoint = scalar as u32;
@@ -139,7 +133,7 @@ pub(super) fn linebreaks(
                 Class::BK | Class::CR | Class::LF | Class::NL | Class::SP | Class::ZW
             );
         }
-        reserve(&mut scalars, 1, claim)?;
+        reserve(&mut scalars, 1)?;
         scalars.push(scalar);
     }
 
@@ -147,7 +141,6 @@ pub(super) fn linebreaks(
     let mut non_space = None;
     let mut numeric = false;
     let mut odd_regional_run = false;
-    claim(0, scalars.len() as u64)?;
     for (index, scalar) in scalars.iter_mut().enumerate() {
         if scalar.class != Class::SP {
             non_space = Some(index);
@@ -161,23 +154,18 @@ pub(super) fn linebreaks(
     }
 
     let mut breaks = Vec::new();
-    claim(0, scalars.len().saturating_sub(1) as u64)?;
     for boundary in 1..scalars.len() {
         if let Some(opportunity) = opportunity_at(&scalars, boundary) {
-            reserve(&mut breaks, 1, claim)?;
+            reserve(&mut breaks, 1)?;
             breaks.push((scalars[boundary].offset, opportunity));
         }
     }
-    reserve(&mut breaks, 1, claim)?;
+    reserve(&mut breaks, 1)?;
     breaks.push((value.len(), BreakOpportunity::Mandatory));
     Ok(breaks)
 }
 
-pub(super) fn reserve<T>(
-    values: &mut Vec<T>,
-    additional: usize,
-    claim: &mut impl FnMut(u64, u64) -> Result<(), TextPlanError>,
-) -> Result<(), TextPlanError> {
+pub(super) fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), TextPlanError> {
     let required = values
         .len()
         .checked_add(additional)
@@ -190,13 +178,9 @@ pub(super) fn reserve<T>(
                 .checked_mul(2)
                 .ok_or(TextPlanError::Arithmetic("Unicode vector capacity"))?,
         );
-        let bytes = target
+        target
             .checked_mul(std::mem::size_of::<T>())
             .ok_or(TextPlanError::Arithmetic("Unicode vector bytes"))?;
-        claim(
-            u64::try_from(bytes).map_err(|_| TextPlanError::Arithmetic("Unicode vector bytes"))?,
-            0,
-        )?;
         values
             .try_reserve_exact(target - values.len())
             .map_err(|_| TextPlanError::Allocation("Unicode vector"))?;
@@ -206,13 +190,7 @@ pub(super) fn reserve<T>(
 
 #[cfg(test)]
 fn breaks_for_test(value: &str) -> Vec<(usize, BreakOpportunity)> {
-    let resources = crate::font::canonical::OperationFontResources::new();
-    linebreaks(value, &mut |bytes, work| {
-        resources.claim_bytes(bytes)?;
-        resources.claim_visits(work)?;
-        Ok(())
-    })
-    .unwrap()
+    linebreaks(value).unwrap()
 }
 
 #[expect(
@@ -542,6 +520,17 @@ fn compare_range(start: u32, end: u32, codepoint: u32) -> Ordering {
 #[cfg(test)]
 mod tests {
     use super::{breaks_for_test as linebreaks, line_break_class, BreakOpportunity, Class};
+
+    #[test]
+    fn checked_unicode_lengths_refuse_without_reservation() {
+        let mut values = Vec::<usize>::new();
+        assert!(matches!(
+            super::reserve(&mut values, usize::MAX),
+            Err(super::TextPlanError::Arithmetic(_))
+        ));
+        assert_eq!(values.capacity(), 0);
+        assert!(values.is_empty());
+    }
 
     fn allowed_offsets(value: &str) -> Vec<usize> {
         linebreaks(value)

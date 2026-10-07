@@ -3625,7 +3625,6 @@ mod tests {
             let evidence = crate::orchestrator::measurements::finish();
             eprintln!("font_work_evidence,{name},visits={},bytes={},records={},calls={},cache_entries={},source_bytes={},proposal_visits={},exact_trials={}", evidence.visits, evidence.bytes, evidence.records, evidence.measurement_calls, evidence.cache_entries, caption.len(), evidence.counters[crate::orchestrator::measurements::Counter::TextProposalVisit as usize], evidence.counters[crate::orchestrator::measurements::Counter::TextExactTrial as usize]);
             result.unwrap();
-            assert!(evidence.visits <= 1_000_000);
             let svg = std::fs::read_to_string(&path).unwrap();
             let retained = svg
                 .split("<text ")

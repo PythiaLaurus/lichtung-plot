@@ -161,20 +161,14 @@ fn contracted_line_break_analysis_matches_every_official_case_and_expanded_ascii
                     }
                 }
             }
-            let bytes = canonical::OperationFontResources::new();
-            let work = canonical::OperationGenerationResources::new();
-            let mut claim = |count, steps| {
-                bytes.claim_bytes(count)?;
-                claim_text_generation(work.claim_visits(u128::from(steps)))
-            };
-            let actual = paragraph_linebreaks(&text, &mut claim).unwrap();
+            let actual = paragraph_linebreaks(&text).unwrap();
             assert_eq!(
                 actual.iter().map(|&(offset, _)| offset).collect::<Vec<_>>(),
                 expected,
                 "row {} expansion {expansion}: {source}",
                 row + 1
             );
-            let reference = crate::layout::unicode16::linebreaks(&text, &mut claim).unwrap();
+            let reference = crate::layout::unicode16::linebreaks(&text).unwrap();
             assert_eq!(actual, reference, "row {} expansion {expansion}", row + 1);
         }
         cases += 1;
@@ -198,13 +192,7 @@ fn contracted_line_break_analysis_has_independent_ascii_expectations() {
             vec![(6, Allowed), (8, Allowed), (10, Allowed), (14, Mandatory)],
         ),
     ] {
-        let bytes = canonical::OperationFontResources::new();
-        let work = canonical::OperationGenerationResources::new();
-        let actual = paragraph_linebreaks(text, &mut |count, steps| {
-            bytes.claim_bytes(count)?;
-            claim_text_generation(work.claim_visits(u128::from(steps)))
-        })
-        .unwrap();
+        let actual = paragraph_linebreaks(text).unwrap();
         assert_eq!(actual, expected, "{text:?}");
     }
 }
