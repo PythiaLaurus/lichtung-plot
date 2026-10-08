@@ -17,6 +17,8 @@ quota-rejecting revision used in the October 7 experimental study.
 
 * Formatting and strict `cargo clippy --locked --offline --all-targets --
   -D warnings` passed.
+* `just docs` passed with rustdoc warnings denied; `just package` built and
+  verified the unpacked package successfully.
 * Focused font, Unicode/text, exact arithmetic, source identity, palette/text
   cache, geometry, parent feedback, caption and output checks were run during
   migration. Later focused groups included 28 plot/cache/geometry checks and
@@ -75,5 +77,87 @@ project assets.
 
 ## Release output, elapsed time and RSS
 
-The final same-source release comparison is pending. Historical October 7
-measurements remain historical and are not results of this implementation.
+**Measured 2026-10-08:** `8c6e011` versus `75003b2` plus removal of the unused
+benchmark admission CSV header. No renderer switch or experimental production
+mode was introduced. Both use the same locked dependencies, local fonts and
+existing `publication_efficiency_measurements` fixture in
+`tests/benchmarks/suite.rs`. Host: Linux/WSL2
+`6.18.33.2-microsoft-standard-WSL2`, x86_64; Rust 1.96.0
+(`ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96`), LLVM 22.1.2.
+
+Four fresh processes ran sequentially in baseline-A, cleanup-A, cleanup-B,
+baseline-B order, with compilation completed beforehand. Each process runs the
+unchanged nine cases three times with no warmup: six samples per case/version.
+These are optimized **test-build** measurements with existing semantic
+observations enabled. Timing includes construction, real root preparation/font
+discovery, layout, capture, outlined-SVG file publication and balanced source-size
+PNG publication. File reads, SHA-256, PNG decoding and final Output destruction
+are outside timing. The two ten-terminal cases retain their existing distinct
+fresh-root versus reused-Output behavior.
+
+All four runs passed their internal output/work stability checks. Across
+versions, **all 27 hashes match**: outlined SVG, encoded PNG and decoded RGBA for
+each of nine cases. Dimensions and byte lengths also match. The common hashes
+are retained in [the output table](resource-accounting-cleanup-outputs.csv).
+
+### End-to-end time
+
+Each cell shows the range of the two **per-process three-sample medians**, in ms;
+it is not a confidence interval or a pooled six-sample median. Exact session
+minima/medians are in [the session table](resource-accounting-cleanup-sessions.csv).
+
+| Existing case | Baseline median range | Cleanup median range |
+| --- | ---: | ---: |
+| scatter100 | 49.91–51.80 | 49.07–49.63 |
+| long_label_bar | 39.52–39.55 | 38.57–38.71 |
+| caption200_1para | 90.77–92.90 | 91.14–91.26 |
+| caption200_3para | 91.75–91.84 | 89.35–91.00 |
+| facets2x2 | 50.59–52.21 | 48.78–50.71 |
+| mixed_canvas | 51.18–51.65 | 51.35–51.39 |
+| matrix4 | 76.68–78.23 | 75.32–76.39 |
+| separate10 | 381.07–424.63 | 373.93–416.74 |
+| reuse10 | 176.17–178.43 | 175.76–177.99 |
+
+Several cases show small lower times, while others overlap or are noisy. These
+measurements do not establish a universal speedup, an isolated mutex cost or a
+new 2,048-word caption percentage. The complete long-caption semantic fixture
+passed in the library checks; the release table here measures the two existing
+200-word publication cases. The October 7 experiment remains separate evidence.
+
+### Peak RSS
+
+GNU `/usr/bin/time` measured the entire nine-case process, not individual cases
+or live renderer allocations:
+
+| Process | Peak RSS (KiB) | Process elapsed (s) |
+| --- | ---: | ---: |
+| baseline-A | 70,668 | 3.38 |
+| cleanup-A | 70,168 | 3.32 |
+| cleanup-B | 70,844 | 3.22 |
+| baseline-B | 71,792 | 3.25 |
+
+The ranges overlap. There is no demonstrated material RSS reduction in this
+workload; removing cumulative byte claims is not a memory-usage measurement.
+OS caches, allocator state and scheduling were uncontrolled. No CPU sampling or
+allocator profile was performed.
+
+### Reproduction
+
+In each checkout, compile the existing test executable with:
+
+```sh
+cargo test --locked --offline --release --lib publication_efficiency_measurements --no-run
+```
+
+Run the reported executable under `/usr/bin/time -f
+'peak_rss_kib,%M\nelapsed_seconds,%e'`, passing:
+
+```text
+--exact orchestrator::tests::benchmarks::publication_efficiency_measurements --ignored --nocapture --test-threads=1
+```
+
+Only that existing release benchmark is explicitly enabled; Unicode corpus tests
+remain ignored. Raw samples, lifecycle observations and hashes are preserved in
+`/tmp/opencode/accounting-release-{baseline,cleanup}-{a,b}.log`; matching `.rss`
+files contain process measurements. The session CSV reports summaries, not raw
+per-render observations.

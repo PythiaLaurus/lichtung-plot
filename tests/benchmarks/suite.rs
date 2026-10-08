@@ -554,7 +554,6 @@ fn publication_efficiency_measurements() {
     println!("calls_header,case,run,roots,root_rounds,captures,null_validations,publications,svg_conversions,png_conversions,svg_replays,producer_invocations,font_shape_calls");
     println!("hash_header,case,svg_sha256,png_sha256,decoded_sha256,svg_bytes,png_bytes,width,height,color,depth");
     println!("summary_header,case,stage,min_ms,median_ms");
-    println!("admission_header,case,run,records,processing_visits,font_source_scratch_bytes");
     // Scatter is first within this control, not necessarily within the test process.
     measure("scatter100", scatter, publish_plot, false);
     measure("long_label_bar", bar, publish_plot, false);

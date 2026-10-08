@@ -4,11 +4,12 @@
 
 ## Purpose
 
-**Current execution checkpoint:** the user approved resource-accounting
-simplification after reviewing the proposal and its assessment. The removal/
-retention/modification inventory and progress are recorded in
-`95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md`. Further public-foundation
-feature work remains paused while this simplification proceeds.
+**Current execution checkpoint:** the user-approved resource-accounting cleanup
+is complete. `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` records the retained
+correctness boundaries; `../docs/resource-accounting-cleanup.md` records focused
+and broad verification, nine pre-existing integration failures, and same-source
+release output/time/RSS comparisons. Further public-foundation feature work has
+not resumed.
 
 Accounting requirements and quota-specific tests in completed historical entries
 below describe their recorded revisions. Spec95 and the current resource/lifecycle
