@@ -31,20 +31,11 @@ pub(crate) struct PreparedEstimateInputs {
 }
 
 impl PreparedEstimate {
-    pub(crate) fn primary_mark_count(
-        &self,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<u128, Error> {
-        resources
-            .claim_visits(self.estimates.len() as u128)
-            .map_err(|error| {
-                Error::Render(format!("estimate primary-mark count admission: {error:?}"))
-            })?;
-        Ok(self
-            .estimates
+    pub(crate) fn primary_mark_count(&self) -> u128 {
+        self.estimates
             .iter()
             .filter(|estimate| estimate.is_some())
-            .count() as u128)
+            .count() as u128
     }
 
     /// The category axis retains unavailable rows but does not fabricate a
@@ -59,12 +50,7 @@ impl PreparedEstimate {
                 "estimate categories and prepared rows differ".into(),
             ));
         }
-        let resources = theme.prepared_font_environment()?.generation_resources();
-        resources
-            .claim_visits(self.estimates.len() as u128)
-            .map_err(|error| {
-                Error::Render(format!("estimate slot intrinsic admission: {error:?}"))
-            })?;
+
         let mut available = false;
         let mut unavailable = false;
         let mut interval = false;
@@ -81,13 +67,12 @@ impl PreparedEstimate {
         if available {
             let point =
                 chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.interval_estimate);
-            let (width, height) = crate::render::geometry::point_ink_dimensions(theme, &point)?;
+            let (width, height) = crate::render::geometry::point_ink_dimensions(&point)?;
             numeric = numeric.max(width);
             pitch = pitch.max(height);
         }
         if interval {
             let stroke = crate::render::geometry::line_ink_width(
-                theme,
                 &theme.marks.estimate_interval.backend_style(),
             )?;
             numeric = numeric.max(stroke);
@@ -111,14 +96,10 @@ impl PreparedEstimate {
                 "estimate adjacent labels and rows differ".into(),
             ));
         }
-        resources
-            .claim_visits(self.adjacent.len() as u128)
-            .map_err(|error| {
-                Error::Render(format!("estimate adjacent-height admission: {error:?}"))
-            })?;
+
         let significance = theme
             .typography
-            .effective_significance_label(chart.significance_mark_style_override(), &resources)?;
+            .effective_significance_label(chart.significance_mark_style_override())?;
         for adjacent in self.adjacent.iter().flatten() {
             let appearance = if adjacent.1 {
                 &significance
@@ -161,7 +142,7 @@ impl PreparedEstimate {
         data: crate::data::PlotData<'_>,
         annotations: impl IntoIterator<Item = &'a crate::significance::SignificanceAnnotation>,
     ) -> Result<Self, Error> {
-        data.claim_mark_rows()?;
+        data.validate_row_source()?;
         #[cfg(test)]
         count(chart.kind(), 0);
         if chart.kind() != crate::PlotKind::PointInterval {
@@ -169,21 +150,20 @@ impl PreparedEstimate {
                 .map_err(crate::layout::fit::PlanError::into_error);
         }
         let rows = crate::plots::point_interval::prepare(chart, data)?;
-        data.claim_source_visits(rows.len())?;
+
         let range = estimate_data_range(rows.iter().map(|row| &row.estimate));
         let range = match (chart.x_axis_spec().limits, range) {
             (Some(limits), _) => Some(limits),
             (_, Some(range)) => Some(crate::plots::point_interval::point_interval_display_range(
                 range,
                 chart.x_axis_spec(),
-                data.source_resources()?,
             )?),
             _ => None,
         };
         let mut labels = Vec::new();
         let mut estimates = Vec::new();
-        data.reserve_source(&mut labels, rows.len())?;
-        data.reserve_source(&mut estimates, rows.len())?;
+        crate::data::source::reserve_source(&mut labels, rows.len())?;
+        crate::data::source::reserve_source(&mut estimates, rows.len())?;
         for row in rows {
             labels.push(row.label);
             estimates.push(row.estimate);
@@ -302,6 +282,7 @@ pub(crate) fn prepare_estimate_tuples(
     family: &str,
     require_intervals: bool,
 ) -> Result<Vec<Option<EstimateTuple>>, Error> {
+    use crate::data::source::collect_source;
     let estimate_col = chart
         .x_col()
         .ok_or_else(|| Error::Data(format!("{family}: estimate column not set")))?;
@@ -331,7 +312,7 @@ pub(crate) fn prepare_estimate_tuples(
                 "{family}: estimate and interval columns must have equal lengths"
             )));
         }
-        return data.collect_source(estimates.into_iter().enumerate().map(|(index, estimate)| {
+        return collect_source(estimates.into_iter().enumerate().map(|(index, estimate)| {
             let (lower, upper) = intervals.as_ref().map_or((None, None), |(lower, upper)| {
                 (lower.get(index).copied(), upper.get(index).copied())
             });
@@ -363,11 +344,11 @@ pub(crate) fn prepare_estimate_tuples(
         )));
     }
 
-    data.collect_source(statuses
+    collect_source(statuses
         .into_iter()
         .enumerate()
         .map(|(index, status)| {
-            data.claim_source_visits(1)?;
+
             let estimate = estimates[index];
             let (lower, upper) = intervals.as_ref().map_or((None, None), |(lower, upper)| {
                 (lower[index], upper[index])
@@ -499,7 +480,6 @@ pub(crate) fn axis_categories(
         .ok_or_else(|| Error::Data(format!("{family}: term/label column not set")))?;
     let labels = crate::data::strict_strings(data, column, family)?;
     for (index, label) in labels.iter().enumerate() {
-        data.claim_source_visits(index)?;
         if labels[..index].contains(label) {
             return Err(Error::Data(format!(
                 "{family}: term/label values must be unique"
@@ -527,7 +507,7 @@ pub(crate) fn shared_x_domain(
         }
         match chart.axis_scale_spec() {
             AxisScale::Linear => Ok(value),
-            AxisScale::Log10 if value > 0.0 => crate::numeric::log10(value, data.source_resources()?),
+            AxisScale::Log10 if value > 0.0 => crate::numeric::log10(value),
             AxisScale::Log10 => Err(Error::Data(format!("{family}: logarithmic scale requires strictly positive estimates, bounds, and reference values"))),
         }
     };
@@ -559,7 +539,6 @@ pub(crate) fn shared_x_domain(
     crate::layout::continuous_auto_range(
         (range.0.min(reference), range.1.max(reference)),
         &AxisSpec::default(),
-        data.source_resources()?,
     )
 }
 
@@ -597,9 +576,9 @@ fn prepare_model<'a>(
             "{family}: numeric estimate labels are supported only for point-only displays without intervals"
         )).into());
     }
-    let mut coefficient_significance = data.collect_source((0..labels.len()).map(|_| Ok(None)))?;
+    let mut coefficient_significance =
+        crate::data::source::collect_source((0..labels.len()).map(|_| Ok(None)))?;
     for annotation in annotations {
-        data.claim_source_visits(labels.len())?;
         let Some(target) = annotation.at_target() else {
             return Err(Error::Data(
                 "coefficient: only attached significance annotations are supported".into(),
@@ -629,8 +608,9 @@ fn prepare_model<'a>(
             ))
             .into());
         }
-        coefficient_significance[index] =
-            Some(data.copy_source_string(annotation.mark().glyph()?)?);
+        coefficient_significance[index] = Some(crate::data::source::copy_source_string(
+            annotation.mark().glyph()?,
+        )?);
     }
     if !reference.is_finite() {
         return Err(Error::Data(format!(
@@ -645,7 +625,6 @@ fn prepare_model<'a>(
         .into());
     }
     for (index, estimate) in estimates.iter().enumerate() {
-        data.claim_source_visits(1)?;
         if estimate.is_some_and(|tuple| {
             tuple
                 .lower
@@ -670,26 +649,27 @@ fn prepare_model<'a>(
     let transform = |value: f64| -> Result<f64, Error> {
         match scale {
             AxisScale::Linear => Ok(value),
-            AxisScale::Log10 if value > 0.0 => crate::numeric::log10(value, data.source_resources()?),
+            AxisScale::Log10 if value > 0.0 => crate::numeric::log10(value),
             AxisScale::Log10 => Err(Error::Data(format!(
                 "{family}: logarithmic scale requires strictly positive estimates, bounds, and reference values"
             ))),
         }
     };
-    let transformed_estimates = data.collect_source(estimates.iter().map(|estimate| {
-        estimate
-            .map(|tuple| {
-                Ok::<_, Error>(EstimateTuple {
-                    estimate: transform(tuple.estimate)?,
-                    lower: tuple.lower.map(transform).transpose()?,
-                    upper: tuple.upper.map(transform).transpose()?,
-                    nonzero_interval: tuple.nonzero_interval,
+    let transformed_estimates =
+        crate::data::source::collect_source(estimates.iter().map(|estimate| {
+            estimate
+                .map(|tuple| {
+                    Ok::<_, Error>(EstimateTuple {
+                        estimate: transform(tuple.estimate)?,
+                        lower: tuple.lower.map(transform).transpose()?,
+                        upper: tuple.upper.map(transform).transpose()?,
+                        nonzero_interval: tuple.nonzero_interval,
+                    })
                 })
-            })
-            .transpose()
-    }))?;
+                .transpose()
+        }))?;
     let transformed_reference = transform(reference)?;
-    data.claim_source_visits(transformed_estimates.len())?;
+
     let range = if let Some((lower, upper)) = chart.x_axis_spec().limits {
         let limits = (transform(lower)?, transform(upper)?);
         if limits.0 >= limits.1 {
@@ -705,20 +685,20 @@ fn prepare_model<'a>(
                         upper.max(transformed_reference),
                     ),
                     &AxisSpec::default(),
-                    data.source_resources()?,
                 )
             })
             .transpose()?
     };
-    let adjacent = data.collect_source(estimates.iter().zip(coefficient_significance).map(
-        |(estimate, mark)| {
-            if let (Some(tuple), Some(format)) = (estimate, chart.estimate_labels_spec()) {
-                Ok(Some((format.format_source(tuple.estimate, data)?, false)))
-            } else {
-                Ok(mark.map(|mark| (mark, true)))
-            }
-        },
-    ))?;
+    let adjacent =
+        crate::data::source::collect_source(estimates.iter().zip(coefficient_significance).map(
+            |(estimate, mark)| {
+                if let (Some(tuple), Some(format)) = (estimate, chart.estimate_labels_spec()) {
+                    Ok(Some((format.format_source(tuple.estimate)?, false)))
+                } else {
+                    Ok(mark.map(|mark| (mark, true)))
+                }
+            },
+        ))?;
     Ok(PreparedEstimate {
         kind: chart.kind(),
         labels,
@@ -751,10 +731,8 @@ pub(crate) fn measure_marks(
         .ok_or_else(|| {
             Error::Render("estimate measurement requires root-prepared semantics".into())
         })?;
-    let theme = context.theme;
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = context.data.with_axis_resources(&resources);
-    project(chart, prepared, layout, context, data)
+
+    project(chart, prepared, layout, context)
 }
 
 #[expect(
@@ -767,7 +745,6 @@ fn project(
     prepared: &PreparedEstimate,
     layout: Layout,
     context: PlotRenderContext<'_>,
-    data: crate::data::PlotData<'_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
     let labels = &prepared.labels;
@@ -782,7 +759,7 @@ fn project(
     let base = &theme.typography.annotations.significance_label;
     let exact = chart.significance_mark_style_override();
     let significance_label = crate::theme::TextTheme::new(
-        data.copy_font_stack(base.stack())?,
+        crate::data::source::copy_font_stack(base.stack())?,
         base.color(),
         exact.map_or(
             base.font_size(),
@@ -793,13 +770,13 @@ fn project(
     )?;
     let detail_role = &theme.typography.annotations.estimate_detail;
     let detail_label = crate::theme::TextTheme::new(
-        data.copy_font_stack(detail_role.stack())?,
+        crate::data::source::copy_font_stack(detail_role.stack())?,
         detail_role.color(),
         detail_role.font_size(),
         detail_role.weight(),
         detail_role.line_height(),
     )?;
-    data.claim_source_visits(estimates.len())?;
+
     let not_estimable_plan = estimates
         .iter()
         .position(Option::is_none)
@@ -809,15 +786,13 @@ fn project(
                 &detail_label,
                 &layout,
                 reference_line_x,
-                &context.fit_scope().child(
-                    crate::layout::AddressRole::CategoricalValueLabel,
-                    index,
-                    &theme.prepared_font_environment()?.generation_resources(),
-                )?,
+                &context
+                    .fit_scope()
+                    .child(crate::layout::AddressRole::CategoricalValueLabel, index)?,
             )
         })
         .transpose()?;
-    let adjacent_label_plans = crate::layout::fit::collect(theme, "estimate adjacent labels", (0..labels.len())
+    let adjacent_label_plans = crate::layout::fit::collect( "estimate adjacent labels", (0..labels.len())
         .map(|index| {
             let Some(tuple) = estimates[index] else {
                 return Ok(None);
@@ -826,7 +801,7 @@ fn project(
                 return Ok(None);
             };
             let is_significance = *is_significance;
-            let scope = context.fit_scope().child(if is_significance { crate::layout::AddressRole::Annotation } else { crate::layout::AddressRole::CategoricalValueLabel }, index, &theme.prepared_font_environment()?.generation_resources())?;
+            let scope = context.fit_scope().child(if is_significance { crate::layout::AddressRole::Annotation } else { crate::layout::AddressRole::CategoricalValueLabel }, index)?;
             let (x, y) = layout
                 .projection
                 .project(tuple.estimate, row_count - index as f64 - 0.5);
@@ -920,18 +895,16 @@ fn project(
         interval_style: theme.marks.estimate_interval.backend_style(),
         point_style: chart.point_style(
             theme,
-            crate::theme::AccentColors::resolve(&theme.marks.accents, 1, data.source_resources()?)?
-                .color(0)?,
+            crate::theme::AccentColors::resolve(&theme.marks.accents, 1)?.color(0)?,
             theme.marks.point_sizes.interval_estimate,
         ),
         rows: Vec::new(),
         #[cfg(test)]
         kind: chart.kind(),
     };
-    data.reserve_source(&mut payload.rows, estimates.len())?;
+    crate::data::source::reserve_source(&mut payload.rows, estimates.len())?;
     let mut deferred_annotation_text = Vec::new();
     for (index, adjacent) in adjacent_label_plans.into_iter().enumerate() {
-        data.claim_source_visits(1)?;
         let y = row_count - index as f64 - 0.5;
         let mut row = EstimateRowPayload {
             interval: None,
@@ -980,7 +953,7 @@ fn project(
             }
             if let Some(adjacent) = adjacent {
                 if adjacent.deferred_annotation {
-                    data.reserve_source(&mut deferred_annotation_text, 1)?;
+                    crate::data::source::reserve_source(&mut deferred_annotation_text, 1)?;
                     deferred_annotation_text.push(
                         crate::layout::DeferredAnnotationTextPlan::from_resolved(
                             adjacent.plan.clone(),
@@ -1009,22 +982,18 @@ fn project(
         payload.rows.push(row);
     }
     let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
-    let mut label_ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    let mut label_ink = crate::render::geometry::GeometrySnapshot::new();
     let mut label_source: Option<(f64, f64)> = None;
-    data.claim_source_visits(payload.rows.len())?;
+
     for (index, row) in payload.rows.iter().enumerate() {
         let Some(text) = &row.text else { continue };
-        let mut ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
+        let mut ink = crate::render::geometry::GeometrySnapshot::new();
         ink.text(text.placement, &text.plan, None)?;
         for bounds in ink.bounds() {
             if bounds.bottom < clip.y0 || bounds.top > clip.y1 {
                 return Err(context
                     .fit_scope()
-                    .child(
-                        crate::layout::AddressRole::CategoricalValueLabel,
-                        index,
-                        &theme.prepared_font_environment()?.generation_resources(),
-                    )?
+                    .child(crate::layout::AddressRole::CategoricalValueLabel, index)?
                     .failure(
                         crate::layout::fit::FitKind::Text,
                         "required Estimate text exceeds its categorical row",
@@ -1036,11 +1005,7 @@ fn project(
             {
                 return Err(context
                     .fit_scope()
-                    .child(
-                        crate::layout::AddressRole::CategoricalValueLabel,
-                        index,
-                        &theme.prepared_font_environment()?.generation_resources(),
-                    )?
+                    .child(crate::layout::AddressRole::CategoricalValueLabel, index)?
                     .failure(
                         crate::layout::fit::FitKind::OverlayCollision,
                         "required Estimate text exceeds its numeric panel",
@@ -1069,12 +1034,11 @@ fn project(
                 &layout.projection,
                 bounds,
                 [true, false],
-                data,
                 context.fit_scope(),
             )?;
         }
     }
-    let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    let mut geometry = crate::render::geometry::GeometrySnapshot::new();
     if let Some(line) = &payload.reference {
         geometry.line(line, &payload.reference_style, Some(clip))?;
     }
@@ -1097,10 +1061,12 @@ fn project(
     let mut result = PlotRenderResult::new(layout, Vec::new())
         .with_deferred_annotation_text(deferred_annotation_text);
     result.y_domain = crate::spec::AxisDomain::Categorical;
-    result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
-        payload: crate::layout::interior::MarkPayload::Estimate(payload),
-        geometry,
-    })?);
+    result.marks = Some(crate::data::source::source_arc(
+        crate::layout::interior::SelectedMarkPlan {
+            payload: crate::layout::interior::MarkPayload::Estimate(payload),
+            geometry,
+        },
+    )?);
     Ok(result)
 }
 
@@ -1159,12 +1125,10 @@ mod tests {
         ])
         .x_limits(0.0, 2.0)
         .erase();
-        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let resources = crate::font::canonical::OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let base = chart.intrinsic_body_minimum(&theme).unwrap();
         theme.typography.annotations.estimate_detail.font_size = 48;
         let text = chart.intrinsic_body_minimum(&theme).unwrap();
@@ -1191,7 +1155,7 @@ mod tests {
             }
         };
         let intrinsic = |source: Plot, theme: &ResolvedTheme| {
-            let resources = crate::font::canonical::OperationGenerationResources::new();
+            let resources = crate::font::canonical::OperationContext::new();
             let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
             inputs
                 .attach(source)
@@ -1199,9 +1163,7 @@ mod tests {
                 .intrinsic_body_minimum(theme)
                 .unwrap()
         };
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         theme.typography.annotations.estimate_detail.font_size = 48;
         let without = intrinsic(source(false), &theme);
         let with = intrinsic(source(true), &theme);
@@ -1225,13 +1187,11 @@ mod tests {
         ])
         .size(1200, 800)
         .erase();
-        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let resources = crate::font::canonical::OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let panel = crate::layout::PanelBox::new(100.0, 900.0, 60.0, 600.0);
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let old = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
             .unwrap();
@@ -1258,9 +1218,7 @@ mod tests {
     }
 
     fn tick_theme() -> ResolvedTheme {
-        crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap()
+        crate::Theme::Publication.resolve().unwrap()
     }
 
     #[test]
@@ -1319,17 +1277,7 @@ mod tests {
     fn upper_extreme_log_ticks_have_unique_expression_labels() {
         let theme = tick_theme();
         let ticks = log_ticks(
-            (
-                308.0,
-                crate::numeric::log10(
-                    f64::MAX,
-                    &theme
-                        .prepared_font_environment()
-                        .unwrap()
-                        .generation_resources(),
-                )
-                .unwrap(),
-            ),
+            (308.0, crate::numeric::log10(f64::MAX).unwrap()),
             crate::layout::PanelBox::new(0.0, 2_000.0, 0.0, 100.0),
             &theme,
         )
@@ -1348,11 +1296,7 @@ mod tests {
 
     #[test]
     fn lower_subnormal_log_ticks_omit_duplicate_rounded_values() {
-        let lower = crate::numeric::log10(
-            f64::from_bits(1),
-            &crate::font::canonical::OperationGenerationResources::new(),
-        )
-        .unwrap();
+        let lower = crate::numeric::log10(f64::from_bits(1)).unwrap();
         let theme = tick_theme();
         let ticks = log_ticks(
             (lower, -323.0),

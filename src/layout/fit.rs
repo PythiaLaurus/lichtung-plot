@@ -71,16 +71,11 @@ impl FitScope {
     pub(crate) fn root() -> Self {
         Self::new(&ComponentAddress::root(), 0)
     }
-    pub(crate) fn child(
-        &self,
-        role: AddressRole,
-        index: usize,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<Self, Error> {
+    pub(crate) fn child(&self, role: AddressRole, index: usize) -> Result<Self, Error> {
         let index = u32::try_from(index)
             .map_err(|_| Error::Render("fit address index overflowed".into()))?;
         Ok(Self {
-            address: self.address.child(role, index, resources)?,
+            address: self.address.child(role, index)?,
             ordinal: 0,
         })
     }
@@ -169,27 +164,7 @@ pub(crate) fn text(
     ))
 }
 
-pub(crate) fn reserve<T>(
-    theme: &ResolvedTheme,
-    values: &mut Vec<T>,
-    count: usize,
-    owner: &str,
-) -> Result<(), Error> {
-    let environment = theme.prepared_font_environment()?;
-    environment
-        .claim_text_generation_slots(count as u128)
-        .map_err(|error| Error::Render(format!("{owner}: {error:?}")))?;
-    if count > values.capacity() - values.len() {
-        let bytes = values
-            .len()
-            .checked_add(count)
-            .and_then(|length| length.checked_mul(std::mem::size_of::<T>()))
-            .and_then(|bytes| u64::try_from(bytes).ok())
-            .ok_or_else(|| Error::Render(format!("{owner}: storage overflow")))?;
-        environment
-            .claim_unicode_bytes(bytes)
-            .map_err(|error| Error::Render(format!("{owner}: {error}")))?;
-    }
+pub(crate) fn reserve<T>(values: &mut Vec<T>, count: usize, owner: &str) -> Result<(), Error> {
     values
         .try_reserve_exact(count)
         .map_err(|error| Error::Render(format!("{owner} allocation: {error}")))
@@ -197,7 +172,6 @@ pub(crate) fn reserve<T>(
 
 /// Complete constructible siblings before choosing their least recoverable miss.
 pub(crate) fn collect<T>(
-    theme: &ResolvedTheme,
     owner: &str,
     values: impl Iterator<Item = Result<T, PlanError>>,
 ) -> Result<Vec<T>, PlanError> {
@@ -207,7 +181,7 @@ pub(crate) fn collect<T>(
             "{owner}: sibling collection has no finite admission bound"
         ))
     })?;
-    reserve(theme, &mut output, count, owner)?;
+    reserve(&mut output, count, owner)?;
     let mut miss = None;
     for value in values {
         match value {
@@ -257,19 +231,10 @@ mod tests {
 
     #[test]
     fn sibling_collection_preserves_later_fatal_and_canonical_child_identity() {
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         theme.prepare_font_environment().unwrap();
-        let first = FitScope::root()
-            .child(
-                AddressRole::CanvasCell,
-                0,
-                &crate::font::canonical::OperationGenerationResources::new(),
-            )
-            .unwrap();
+        let first = FitScope::root().child(AddressRole::CanvasCell, 0).unwrap();
         let result = collect::<()>(
-            &theme,
             "fit siblings",
             [
                 Err(first.failure(FitKind::Text, "earlier fit").into()),
@@ -283,15 +248,10 @@ mod tests {
         assert_eq!(message, "later fatal");
         let expected = first.failure(FitKind::Text, "first child");
         let result = collect::<()>(
-            &theme,
             "fit siblings",
             [
                 Err(FitScope::root()
-                    .child(
-                        AddressRole::CanvasCell,
-                        1,
-                        &crate::font::canonical::OperationGenerationResources::new(),
-                    )
+                    .child(AddressRole::CanvasCell, 1)
                     .unwrap()
                     .failure(FitKind::Text, "second child")
                     .into()),
@@ -308,24 +268,11 @@ mod tests {
     #[test]
     fn inline_child_calls_do_not_inherit_the_parent_guide_attempt() {
         let parent = FitScope::new(&ComponentAddress::root(), 7);
-        let child = parent
-            .child(
-                AddressRole::AxisLeft,
-                0,
-                &crate::font::canonical::OperationGenerationResources::new(),
-            )
-            .unwrap();
+        let child = parent.child(AddressRole::AxisLeft, 0).unwrap();
         assert_eq!(child.ordinal, 0);
         assert_eq!(
             child.address,
-            parent
-                .address
-                .child(
-                    AddressRole::AxisLeft,
-                    0,
-                    &crate::font::canonical::OperationGenerationResources::new()
-                )
-                .unwrap()
+            parent.address.child(AddressRole::AxisLeft, 0).unwrap()
         );
     }
 
@@ -342,20 +289,8 @@ mod tests {
             FitKind::AssignedChild,
         ];
         assert!(kinds.windows(2).all(|pair| pair[0] < pair[1]));
-        let first = FitScope::root()
-            .child(
-                AddressRole::CanvasCell,
-                0,
-                &crate::font::canonical::OperationGenerationResources::new(),
-            )
-            .unwrap();
-        let second = FitScope::root()
-            .child(
-                AddressRole::CanvasCell,
-                1,
-                &crate::font::canonical::OperationGenerationResources::new(),
-            )
-            .unwrap();
+        let first = FitScope::root().child(AddressRole::CanvasCell, 0).unwrap();
+        let second = FitScope::root().child(AddressRole::CanvasCell, 1).unwrap();
         let later_attempt = FitScope::new(&first.address, 1);
         let expected = first.failure(FitKind::Text, "last diagnostic alphabetically");
         let mut least = None;
@@ -372,13 +307,7 @@ mod tests {
 
     #[test]
     fn typed_propagation_preserves_the_original_child_reason() {
-        let child = FitScope::root()
-            .child(
-                AddressRole::FacetCell,
-                2,
-                &crate::font::canonical::OperationGenerationResources::new(),
-            )
-            .unwrap();
+        let child = FitScope::root().child(AddressRole::FacetCell, 2).unwrap();
         let scope = FitScope::new(&child.address, 3);
         let failure = scope.failure(FitKind::LegendOrGuide, "guide does not fit");
         let expected = failure.reason.clone();

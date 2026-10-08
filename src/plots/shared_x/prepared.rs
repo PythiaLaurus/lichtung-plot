@@ -112,18 +112,14 @@ impl PreparedReference {
         clippy::cast_precision_loss,
         reason = "category counts are admitted source rows"
     )]
-    pub(crate) fn x_range(&self, source: &Plot, data: PlotData<'_>) -> Result<(f64, f64), Error> {
+    pub(crate) fn x_range(&self, source: &Plot) -> Result<(f64, f64), Error> {
         Ok(match self {
-            Self::Waterfall(marks) => crate::layout::continuous_auto_range(
-                marks.range,
-                source.x_axis_spec(),
-                data.source_resources()?,
-            )?,
-            Self::Beeswarm(marks) => crate::layout::continuous_auto_range(
-                marks.x_data,
-                source.x_axis_spec(),
-                data.source_resources()?,
-            )?,
+            Self::Waterfall(marks) => {
+                crate::layout::continuous_auto_range(marks.range, source.x_axis_spec())?
+            }
+            Self::Beeswarm(marks) => {
+                crate::layout::continuous_auto_range(marks.x_data, source.x_axis_spec())?
+            }
             Self::Marginal(marks) => marks.ranges[0],
             Self::Heatmap(marks) => (0.0, marks.x_levels.len() as f64),
             Self::Interaction(marks) => (0.0, marks.conditions.len() as f64),
@@ -137,21 +133,18 @@ impl PreparedReference {
                         marks.value_range,
                         source.x_axis_spec(),
                         0.0,
-                        data.source_resources()?,
                     )?
                 } else {
                     (0.0, marks.categories.len() as f64)
                 }
             }
             Self::Estimate(marks) => marks.x_range()?,
-            Self::Dumbbell(marks) => crate::layout::continuous_auto_range(
-                marks.range,
-                source.x_axis_spec(),
-                data.source_resources()?,
-            )?,
+            Self::Dumbbell(marks) => {
+                crate::layout::continuous_auto_range(marks.range, source.x_axis_spec())?
+            }
             Self::Histogram(marks) => marks.ranges[0],
-            Self::Density(marks) => marks.ranges(source, data)?[0],
-            Self::Qq(marks) => marks.ranges(source, data)?[0],
+            Self::Density(marks) => marks.ranges(source)?[0],
+            Self::Qq(marks) => marks.ranges(source)?[0],
             Self::Regression(marks) => marks.ranges[0],
         })
     }
@@ -179,16 +172,12 @@ struct ReferenceAxisConfig<'a> {
 )]
 pub(crate) fn prepare_reference_plot(
     source: &Plot,
-    resources: &crate::font::canonical::OperationGenerationResources,
+
     marks: PreparedReference,
     scope: Option<&str>,
     x_limits: Option<(f64, f64)>,
     labels: Option<&crate::Labels>,
 ) -> Result<PreparedInteriorInputs, Error> {
-    let data = source
-        .configured_source_rows()?
-        .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
-        .with_axis_resources(resources);
     let mut bins = None;
     let mut beeswarm = None;
     let mut waterfall = None;
@@ -209,18 +198,18 @@ pub(crate) fn prepare_reference_plot(
         }
         PreparedReference::Beeswarm(mut marks) => {
             if labels.is_some() {
-                marks.color_label = source.prepare_color_label(data, labels)?;
+                marks.color_label = source.prepare_color_label(labels)?;
             }
             beeswarm = Some(marks);
             PlotKind::Beeswarm
         }
         PreparedReference::Marginal(marks) => {
-            marginal = Some(crate::plots::marginal::finish(marks, x_limits, data)?);
+            marginal = Some(crate::plots::marginal::finish(marks, x_limits)?);
             PlotKind::Marginal
         }
         PreparedReference::Heatmap(mut marks) => {
             if labels.is_some() {
-                marks.color_label = source.prepare_color_label(data, labels)?;
+                marks.color_label = source.prepare_color_label(labels)?;
             }
             heatmap = Some(marks);
             PlotKind::Heatmap
@@ -267,7 +256,6 @@ pub(crate) fn prepare_reference_plot(
     route.validate(source)?;
     let axes = prepare(
         source,
-        data,
         None,
         None,
         None,
@@ -291,53 +279,65 @@ pub(crate) fn prepare_reference_plot(
         }),
     )?;
     if let Some(quantiles) = &quantiles {
-        quantiles.validate_ranges(axes.ranges, data)?;
+        quantiles.validate_ranges(axes.ranges)?;
     }
-    crate::orchestrator::layers::GuideSnapshot::validate_sources(source, axes.ranges, data)?;
-    let scope = || scope.map(|s| data.copy_source_string(s)).transpose();
+    crate::orchestrator::layers::GuideSnapshot::validate_sources(source, axes.ranges)?;
+    let scope = || {
+        scope
+            .map(crate::data::source::copy_source_string)
+            .transpose()
+    };
     let mut retained = Vec::new();
-    data.reserve_source(&mut retained, 1)?;
+    crate::data::source::reserve_source(&mut retained, 1)?;
     retained.push((scope()?, axes));
     Ok(PreparedInteriorInputs {
         waterfall: waterfall
             .map(|marks| {
                 let mut panels = Vec::new();
-                data.reserve_source(&mut panels, 1)?;
+                crate::data::source::reserve_source(&mut panels, 1)?;
                 panels.push((scope()?, marks));
-                data.source_arc(crate::plots::waterfall::PreparedWaterfallInputs { panels })
+                crate::data::source::source_arc(crate::plots::waterfall::PreparedWaterfallInputs {
+                    panels,
+                })
             })
             .transpose()?,
         beeswarm: beeswarm
             .map(|marks| {
                 let mut panels = Vec::new();
-                data.reserve_source(&mut panels, 1)?;
+                crate::data::source::reserve_source(&mut panels, 1)?;
                 panels.push((scope()?, marks));
-                data.source_arc(crate::plots::beeswarm::PreparedBeeswarmInputs { panels })
+                crate::data::source::source_arc(crate::plots::beeswarm::PreparedBeeswarmInputs {
+                    panels,
+                })
             })
             .transpose()?,
-        marginal: marginal.map(|marks| data.source_arc(marks)).transpose()?,
+        marginal: marginal.map(crate::data::source::source_arc).transpose()?,
         heatmap: heatmap
             .map(|marks| {
                 let mut panels = Vec::new();
-                data.reserve_source(&mut panels, 1)?;
+                crate::data::source::reserve_source(&mut panels, 1)?;
                 panels.push((scope()?, marks));
-                data.source_arc(crate::plots::heatmap::PreparedHeatmapInputs { panels })
+                crate::data::source::source_arc(crate::plots::heatmap::PreparedHeatmapInputs {
+                    panels,
+                })
             })
             .transpose()?,
         interaction: interaction
             .map(|marks| {
                 let mut panels = Vec::new();
-                data.reserve_source(&mut panels, 1)?;
+                crate::data::source::reserve_source(&mut panels, 1)?;
                 panels.push((scope()?, marks));
-                data.source_arc(crate::plots::interaction::PreparedInteractionInputs { panels })
+                crate::data::source::source_arc(
+                    crate::plots::interaction::PreparedInteractionInputs { panels },
+                )
             })
             .transpose()?,
         distributions: distribution
             .map(|marks| {
                 let mut panels = Vec::new();
-                data.reserve_source(&mut panels, 1)?;
+                crate::data::source::reserve_source(&mut panels, 1)?;
                 panels.push((scope()?, marks));
-                data.source_arc(
+                crate::data::source::source_arc(
                     crate::plots::categorical_distribution::PreparedDistributionInputs { panels },
                 )
             })
@@ -345,62 +345,74 @@ pub(crate) fn prepare_reference_plot(
         bars: bars
             .map(|marks| {
                 let mut panels = Vec::new();
-                data.reserve_source(&mut panels, 1)?;
+                crate::data::source::reserve_source(&mut panels, 1)?;
                 panels.push((scope()?, marks));
-                data.source_arc(crate::plots::bar_data::PreparedBarInputs { panels })
+                crate::data::source::source_arc(crate::plots::bar_data::PreparedBarInputs {
+                    panels,
+                })
             })
             .transpose()?,
         estimate: estimate
             .map(|marks| {
                 let mut panels = Vec::new();
-                data.reserve_source(&mut panels, 1)?;
+                crate::data::source::reserve_source(&mut panels, 1)?;
                 panels.push((scope()?, marks));
-                data.source_arc(crate::plots::interval_estimate::PreparedEstimateInputs { panels })
+                crate::data::source::source_arc(
+                    crate::plots::interval_estimate::PreparedEstimateInputs { panels },
+                )
             })
             .transpose()?,
         dumbbell: dumbbell
             .map(|marks| {
                 let mut panels = Vec::new();
-                data.reserve_source(&mut panels, 1)?;
+                crate::data::source::reserve_source(&mut panels, 1)?;
                 panels.push((scope()?, marks));
-                data.source_arc(crate::plots::dumbbell::PreparedDumbbellInputs { panels })
+                crate::data::source::source_arc(crate::plots::dumbbell::PreparedDumbbellInputs {
+                    panels,
+                })
             })
             .transpose()?,
         route,
-        axes: data.source_arc(retained)?,
+        axes: crate::data::source::source_arc(retained)?,
         matrix: None,
         scatter: None,
         line: None,
         histogram: bins
             .map(|marks| {
                 let mut panels = Vec::new();
-                data.reserve_source(&mut panels, 1)?;
+                crate::data::source::reserve_source(&mut panels, 1)?;
                 panels.push((scope()?, marks));
-                data.source_arc(crate::plots::histogram::PreparedHistogramInputs { panels })
+                crate::data::source::source_arc(crate::plots::histogram::PreparedHistogramInputs {
+                    panels,
+                })
             })
             .transpose()?,
         density: curves
             .map(|marks| {
                 let mut panels = Vec::new();
-                data.reserve_source(&mut panels, 1)?;
+                crate::data::source::reserve_source(&mut panels, 1)?;
                 panels.push((scope()?, marks));
-                data.source_arc(crate::plots::density::PreparedDensityInputs { panels })
+                crate::data::source::source_arc(crate::plots::density::PreparedDensityInputs {
+                    panels,
+                })
             })
             .transpose()?,
         qq: quantiles
             .map(|marks| {
                 let mut panels = Vec::new();
-                data.reserve_source(&mut panels, 1)?;
+                crate::data::source::reserve_source(&mut panels, 1)?;
                 panels.push((scope()?, marks));
-                data.source_arc(crate::plots::qq::PreparedQqInputs { panels })
+                crate::data::source::source_arc(crate::plots::qq::PreparedQqInputs { panels })
             })
             .transpose()?,
         regression: fit
             .map(|marks| {
                 let mut panels = Vec::new();
-                data.reserve_source(&mut panels, 1)?;
+                crate::data::source::reserve_source(&mut panels, 1)?;
                 panels.push((scope()?, marks));
-                data.source_arc(crate::plots::regression::PreparedRegressionInputs { panels })
+                crate::data::source::source_arc(
+                    crate::plots::regression::PreparedRegressionInputs { panels },
+                )
             })
             .transpose()?,
     })
@@ -412,7 +424,7 @@ pub(crate) fn prepare_reference_plot(
 )]
 pub(crate) fn prepare_plot(
     source: &Plot,
-    resources: &crate::font::canonical::OperationGenerationResources,
+    resources: &crate::font::canonical::OperationContext,
     color_scales: Option<&crate::theme::ColorScales>,
 ) -> Result<PreparedInteriorInputs, Error> {
     let mut matrix = None;
@@ -434,7 +446,7 @@ pub(crate) fn prepare_plot(
     let source_data = source
         .configured_source_rows()?
         .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
-        .with_axis_resources(resources);
+        .with_operation(resources);
     if matches!(
         source.kind(),
         PlotKind::Histogram
@@ -461,7 +473,6 @@ pub(crate) fn prepare_plot(
     {
         return prepare_reference_plot(
             source,
-            resources,
             PreparedReference::new(source, source_data, color_scales)?,
             source.axis_scope(),
             None,
@@ -471,7 +482,6 @@ pub(crate) fn prepare_plot(
     if source.kind() == PlotKind::Scatter && !source.has_facets() {
         return prepare_scatter_plot(
             source,
-            resources,
             crate::plots::scatter::PreparedScatter::new(source, source_data)?,
         );
     }
@@ -482,7 +492,6 @@ pub(crate) fn prepare_plot(
     {
         return prepare_line_plot(
             source,
-            resources,
             crate::plots::line::PreparedLine::new(source, source_data, None)?,
         );
     }
@@ -492,7 +501,7 @@ pub(crate) fn prepare_plot(
                 source.kind(),
                 PlotKind::Heatmap | PlotKind::Beeswarm | PlotKind::Waterfall
             ))
-        .then(|| source_data.admit_row_topology())
+        .then(|| source_data.bind_row_source())
         .transpose()?;
         let panels = crate::orchestrator::text_census_panels(source, source_data)?;
         let interaction_parent = (source.kind() == PlotKind::Interaction)
@@ -512,14 +521,14 @@ pub(crate) fn prepare_plot(
             source.kind(),
             PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest
         ) {
-            source_data.collect_source(panels.iter().map(|panel| {
+            crate::data::source::collect_source(panels.iter().map(|panel| {
                 crate::plots::interval_estimate::PreparedEstimate::new(
                     source,
                     panel
                         .data()
-                        .with_axis_resources(resources)
-                        .with_row_topology(row_topology.as_ref()),
-                    panel.significance_annotations(source_data)?,
+                        .with_operation(resources)
+                        .with_row_source(row_topology.as_ref()),
+                    panel.significance_annotations(),
                 )
                 .map(Some)
             }))?
@@ -532,7 +541,6 @@ pub(crate) fn prepare_plot(
             FacetScales::Fixed | FacetScales::FreeY
         ) {
             for marks in estimate_panels.iter().flatten() {
-                source_data.claim_source_visits(1)?;
                 if let Some(range) = marks.range {
                     estimate_fallback = Some(
                         estimate_fallback
@@ -556,7 +564,7 @@ pub(crate) fn prepare_plot(
                 )
             })
             .map(|column| {
-                source_data.source_levels(&crate::data::strict_strings(
+                crate::data::source::source_levels(&crate::data::strict_strings(
                     source_data,
                     column,
                     "facet graphical group",
@@ -574,14 +582,14 @@ pub(crate) fn prepare_plot(
                 .transpose()?
                 .unwrap_or(false)
         {
-            Some(
-                source_data.source_levels(&crate::data::strict_normalized_strings(
+            Some(crate::data::source::source_levels(
+                &crate::data::strict_normalized_strings(
                     source_data,
                     source.x_col().expect("categorical x"),
                     "trajectory",
                     "condition",
-                )?)?,
-            )
+                )?,
+            )?)
         } else {
             None
         };
@@ -600,19 +608,19 @@ pub(crate) fn prepare_plot(
                 )
             })
             .map(|column| {
-                source_data.source_levels(&crate::data::strict_strings(
+                crate::data::source::source_levels(&crate::data::strict_strings(
                     source_data,
                     column,
                     "facet hue",
                 )?)
             })
             .transpose()?;
-        source_data.reserve_source(&mut retained, panels.len())?;
+        crate::data::source::reserve_source(&mut retained, panels.len())?;
         for (index, panel) in panels.into_iter().enumerate() {
             let data = panel
                 .data()
-                .with_axis_resources(resources)
-                .with_row_topology(row_topology.as_ref());
+                .with_operation(resources)
+                .with_row_source(row_topology.as_ref());
             let facet = crate::data::FacetAxisSources {
                 hues: hues.as_deref(),
                 groups: groups.as_deref(),
@@ -700,13 +708,12 @@ pub(crate) fn prepare_plot(
                     data,
                     crate::plots::bar_data::mode(source),
                     Some(facet),
-                    panel.significance_annotations(source_data)?,
+                    panel.significance_annotations(),
                 )
             })
             .transpose()?;
             let axes = prepare(
                 source,
-                data,
                 Some(facet),
                 marks.as_ref(),
                 paths.as_ref(),
@@ -728,62 +735,98 @@ pub(crate) fn prepare_plot(
                     ..ReferenceAxisConfig::default()
                 }),
             )?;
-            let scope = panel.scope(source_data)?;
+            let scope = panel.scope()?;
             if let Some(marks) = waterfall_marks {
-                source_data.reserve_source(&mut waterfall, 1)?;
-                waterfall.push((Some(source_data.copy_source_string(&scope)?), marks));
+                crate::data::source::reserve_source(&mut waterfall, 1)?;
+                waterfall.push((
+                    Some(crate::data::source::copy_source_string(&scope)?),
+                    marks,
+                ));
             }
             if let Some(marks) = beeswarm_marks {
-                source_data.reserve_source(&mut beeswarm, 1)?;
-                beeswarm.push((Some(source_data.copy_source_string(&scope)?), marks));
+                crate::data::source::reserve_source(&mut beeswarm, 1)?;
+                beeswarm.push((
+                    Some(crate::data::source::copy_source_string(&scope)?),
+                    marks,
+                ));
             }
             if let Some(marks) = heatmap_marks {
-                source_data.reserve_source(&mut heatmap, 1)?;
-                heatmap.push((Some(source_data.copy_source_string(&scope)?), marks));
+                crate::data::source::reserve_source(&mut heatmap, 1)?;
+                heatmap.push((
+                    Some(crate::data::source::copy_source_string(&scope)?),
+                    marks,
+                ));
             }
             if let Some(marks) = interaction_marks {
-                source_data.reserve_source(&mut interaction, 1)?;
-                interaction.push((Some(source_data.copy_source_string(&scope)?), marks));
+                crate::data::source::reserve_source(&mut interaction, 1)?;
+                interaction.push((
+                    Some(crate::data::source::copy_source_string(&scope)?),
+                    marks,
+                ));
             }
             if let Some(marks) = distribution_marks {
-                source_data.reserve_source(&mut distributions, 1)?;
-                distributions.push((Some(source_data.copy_source_string(&scope)?), marks));
+                crate::data::source::reserve_source(&mut distributions, 1)?;
+                distributions.push((
+                    Some(crate::data::source::copy_source_string(&scope)?),
+                    marks,
+                ));
             }
             if let Some(marks) = bar_marks {
-                source_data.reserve_source(&mut bars, 1)?;
-                bars.push((Some(source_data.copy_source_string(&scope)?), marks));
+                crate::data::source::reserve_source(&mut bars, 1)?;
+                bars.push((
+                    Some(crate::data::source::copy_source_string(&scope)?),
+                    marks,
+                ));
             }
             if let Some(estimates) = estimates {
-                source_data.reserve_source(&mut estimate, 1)?;
-                estimate.push((Some(source_data.copy_source_string(&scope)?), estimates));
+                crate::data::source::reserve_source(&mut estimate, 1)?;
+                estimate.push((
+                    Some(crate::data::source::copy_source_string(&scope)?),
+                    estimates,
+                ));
             }
             if let Some(pairs) = pairs {
-                source_data.reserve_source(&mut dumbbell, 1)?;
-                dumbbell.push((Some(source_data.copy_source_string(&scope)?), pairs));
+                crate::data::source::reserve_source(&mut dumbbell, 1)?;
+                dumbbell.push((
+                    Some(crate::data::source::copy_source_string(&scope)?),
+                    pairs,
+                ));
             }
             if let Some(quantiles) = quantiles {
-                source_data.reserve_source(&mut qq, 1)?;
-                qq.push((Some(source_data.copy_source_string(&scope)?), quantiles));
+                crate::data::source::reserve_source(&mut qq, 1)?;
+                qq.push((
+                    Some(crate::data::source::copy_source_string(&scope)?),
+                    quantiles,
+                ));
             }
             if let Some(fit) = fit {
-                source_data.reserve_source(&mut regression, 1)?;
-                regression.push((Some(source_data.copy_source_string(&scope)?), fit));
+                crate::data::source::reserve_source(&mut regression, 1)?;
+                regression.push((Some(crate::data::source::copy_source_string(&scope)?), fit));
             }
             if let Some(bins) = bins {
-                source_data.reserve_source(&mut histogram, 1)?;
-                histogram.push((Some(source_data.copy_source_string(&scope)?), bins));
+                crate::data::source::reserve_source(&mut histogram, 1)?;
+                histogram.push((Some(crate::data::source::copy_source_string(&scope)?), bins));
             }
             if let Some(curves) = curves {
-                source_data.reserve_source(&mut density, 1)?;
-                density.push((Some(source_data.copy_source_string(&scope)?), curves));
+                crate::data::source::reserve_source(&mut density, 1)?;
+                density.push((
+                    Some(crate::data::source::copy_source_string(&scope)?),
+                    curves,
+                ));
             }
             if let Some(paths) = paths {
-                source_data.reserve_source(&mut line, 1)?;
-                line.push((Some(source_data.copy_source_string(&scope)?), paths));
+                crate::data::source::reserve_source(&mut line, 1)?;
+                line.push((
+                    Some(crate::data::source::copy_source_string(&scope)?),
+                    paths,
+                ));
             }
             if let Some(marks) = marks {
-                source_data.reserve_source(&mut scatter, 1)?;
-                scatter.push((Some(source_data.copy_source_string(&scope)?), marks));
+                crate::data::source::reserve_source(&mut scatter, 1)?;
+                scatter.push((
+                    Some(crate::data::source::copy_source_string(&scope)?),
+                    marks,
+                ));
             }
             retained.push((Some(scope), axes));
         }
@@ -803,10 +846,10 @@ pub(crate) fn prepare_plot(
             if !fixed {
                 continue;
             }
-            reconcile_facet_axis(&mut retained, side, source_data)?;
+            reconcile_facet_axis(&mut retained, side)?;
         }
         for ((_, quantiles), (_, axes)) in qq.iter().zip(&retained) {
-            quantiles.validate_ranges(axes.ranges, source_data)?;
+            quantiles.validate_ranges(axes.ranges)?;
         }
         for (_, axes) in &retained {
             if matches!(
@@ -818,7 +861,6 @@ pub(crate) fn prepare_plot(
             ) {
                 for side in 0..2 {
                     if let Some(ticks) = &axes.specs[side].exact_ticks {
-                        source_data.claim_source_visits(ticks.len())?;
                         crate::layout::Axis::validate_ticks(
                             ticks,
                             axes.ranges[side],
@@ -827,33 +869,19 @@ pub(crate) fn prepare_plot(
                     }
                 }
             }
-            crate::orchestrator::layers::GuideSnapshot::validate_sources(
-                source,
-                axes.ranges,
-                source_data,
-            )?;
+            crate::orchestrator::layers::GuideSnapshot::validate_sources(source, axes.ranges)?;
         }
     } else if source.kind() == PlotKind::Matrix {
-        matrix =
-            Some(source_data.source_arc(crate::plots::matrix::prepare_axes(source, source_data)?)?);
+        matrix = Some(crate::data::source::source_arc(
+            crate::plots::matrix::prepare_axes(source, source_data)?,
+        )?);
     } else {
-        let axes = prepare(
-            source,
-            source_data,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )?;
-        source_data.reserve_source(&mut retained, 1)?;
+        let axes = prepare(source, None, None, None, None, None, None, None, None)?;
+        crate::data::source::reserve_source(&mut retained, 1)?;
         retained.push((
             source
                 .axis_scope()
-                .map(|scope| source_data.copy_source_string(scope))
+                .map(crate::data::source::copy_source_string)
                 .transpose()?,
             axes,
         ));
@@ -861,37 +889,32 @@ pub(crate) fn prepare_plot(
     Ok(PreparedInteriorInputs {
         marginal: None,
         waterfall: if source.kind() == PlotKind::Waterfall {
-            Some(
-                source_data.source_arc(crate::plots::waterfall::PreparedWaterfallInputs {
-                    panels: waterfall,
-                })?,
-            )
+            Some(crate::data::source::source_arc(
+                crate::plots::waterfall::PreparedWaterfallInputs { panels: waterfall },
+            )?)
         } else {
             None
         },
         beeswarm: if source.kind() == PlotKind::Beeswarm {
-            Some(
-                source_data.source_arc(crate::plots::beeswarm::PreparedBeeswarmInputs {
-                    panels: beeswarm,
-                })?,
-            )
+            Some(crate::data::source::source_arc(
+                crate::plots::beeswarm::PreparedBeeswarmInputs { panels: beeswarm },
+            )?)
         } else {
             None
         },
         heatmap: if source.kind() == PlotKind::Heatmap {
-            Some(
-                source_data
-                    .source_arc(crate::plots::heatmap::PreparedHeatmapInputs { panels: heatmap })?,
-            )
+            Some(crate::data::source::source_arc(
+                crate::plots::heatmap::PreparedHeatmapInputs { panels: heatmap },
+            )?)
         } else {
             None
         },
         interaction: if source.kind() == PlotKind::Interaction {
-            Some(
-                source_data.source_arc(crate::plots::interaction::PreparedInteractionInputs {
+            Some(crate::data::source::source_arc(
+                crate::plots::interaction::PreparedInteractionInputs {
                     panels: interaction,
-                })?,
-            )
+                },
+            )?)
         } else {
             None
         },
@@ -899,7 +922,7 @@ pub(crate) fn prepare_plot(
             source.kind(),
             PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud
         ) {
-            Some(source_data.source_arc(
+            Some(crate::data::source::source_arc(
                 crate::plots::categorical_distribution::PreparedDistributionInputs {
                     panels: distributions,
                 },
@@ -914,10 +937,9 @@ pub(crate) fn prepare_plot(
                 | PlotKind::StackedBar
                 | PlotKind::StackedHorizontalBar
         ) {
-            Some(
-                source_data
-                    .source_arc(crate::plots::bar_data::PreparedBarInputs { panels: bars })?,
-            )
+            Some(crate::data::source::source_arc(
+                crate::plots::bar_data::PreparedBarInputs { panels: bars },
+            )?)
         } else {
             None
         },
@@ -925,68 +947,64 @@ pub(crate) fn prepare_plot(
             source.kind(),
             PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest
         ) {
-            Some(source_data.source_arc(
+            Some(crate::data::source::source_arc(
                 crate::plots::interval_estimate::PreparedEstimateInputs { panels: estimate },
             )?)
         } else {
             None
         },
         dumbbell: if source.kind() == PlotKind::Dumbbell {
-            Some(
-                source_data.source_arc(crate::plots::dumbbell::PreparedDumbbellInputs {
-                    panels: dumbbell,
-                })?,
-            )
+            Some(crate::data::source::source_arc(
+                crate::plots::dumbbell::PreparedDumbbellInputs { panels: dumbbell },
+            )?)
         } else {
             None
         },
         qq: if source.kind() == PlotKind::Qq {
-            Some(source_data.source_arc(crate::plots::qq::PreparedQqInputs { panels: qq })?)
+            Some(crate::data::source::source_arc(
+                crate::plots::qq::PreparedQqInputs { panels: qq },
+            )?)
         } else {
             None
         },
         regression: if source.kind() == PlotKind::Regression {
-            Some(
-                source_data.source_arc(crate::plots::regression::PreparedRegressionInputs {
-                    panels: regression,
-                })?,
-            )
+            Some(crate::data::source::source_arc(
+                crate::plots::regression::PreparedRegressionInputs { panels: regression },
+            )?)
         } else {
             None
         },
         histogram: if source.kind() == PlotKind::Histogram {
-            Some(
-                source_data.source_arc(crate::plots::histogram::PreparedHistogramInputs {
-                    panels: histogram,
-                })?,
-            )
+            Some(crate::data::source::source_arc(
+                crate::plots::histogram::PreparedHistogramInputs { panels: histogram },
+            )?)
         } else {
             None
         },
         density: if source.kind() == PlotKind::Density {
-            Some(
-                source_data
-                    .source_arc(crate::plots::density::PreparedDensityInputs { panels: density })?,
-            )
+            Some(crate::data::source::source_arc(
+                crate::plots::density::PreparedDensityInputs { panels: density },
+            )?)
         } else {
             None
         },
         route: InteriorRoute::classify(source.kind()),
-        axes: source_data.source_arc(retained)?,
+        axes: crate::data::source::source_arc(retained)?,
         matrix,
         line: if matches!(
             source.kind(),
             PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
         ) {
-            Some(source_data.source_arc(crate::plots::line::PreparedLineInputs { panels: line })?)
+            Some(crate::data::source::source_arc(
+                crate::plots::line::PreparedLineInputs { panels: line },
+            )?)
         } else {
             None
         },
         scatter: if source.kind() == PlotKind::Scatter {
-            Some(
-                source_data
-                    .source_arc(crate::plots::scatter::PreparedScatterInputs { panels: scatter })?,
-            )
+            Some(crate::data::source::source_arc(
+                crate::plots::scatter::PreparedScatterInputs { panels: scatter },
+            )?)
         } else {
             None
         },
@@ -996,17 +1014,13 @@ pub(crate) fn prepare_plot(
 /// Complete one already prepared Scatter component after root range coordination.
 pub(crate) fn prepare_scatter_plot(
     source: &Plot,
-    resources: &crate::font::canonical::OperationGenerationResources,
+
     marks: crate::plots::scatter::PreparedScatter,
 ) -> Result<PreparedInteriorInputs, Error> {
     InteriorRoute::classify(PlotKind::Scatter).validate(source)?;
-    let data = source
-        .configured_source_rows()?
-        .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
-        .with_axis_resources(resources);
+
     let axes = prepare(
         source,
-        data,
         None,
         Some(&marks),
         None,
@@ -1016,18 +1030,18 @@ pub(crate) fn prepare_scatter_plot(
         None,
         None,
     )?;
-    crate::orchestrator::layers::GuideSnapshot::validate_sources(source, axes.ranges, data)?;
+    crate::orchestrator::layers::GuideSnapshot::validate_sources(source, axes.ranges)?;
     let scope = || {
         source
             .axis_scope()
-            .map(|scope| data.copy_source_string(scope))
+            .map(crate::data::source::copy_source_string)
             .transpose()
     };
     let mut retained_axes = Vec::new();
-    data.reserve_source(&mut retained_axes, 1)?;
+    crate::data::source::reserve_source(&mut retained_axes, 1)?;
     retained_axes.push((scope()?, axes));
     let mut panels = Vec::new();
-    data.reserve_source(&mut panels, 1)?;
+    crate::data::source::reserve_source(&mut panels, 1)?;
     panels.push((scope()?, marks));
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::classify(PlotKind::Scatter),
@@ -1044,26 +1058,23 @@ pub(crate) fn prepare_scatter_plot(
         regression: None,
         histogram: None,
         density: None,
-        axes: data.source_arc(retained_axes)?,
+        axes: crate::data::source::source_arc(retained_axes)?,
         matrix: None,
         line: None,
-        scatter: Some(data.source_arc(crate::plots::scatter::PreparedScatterInputs { panels })?),
+        scatter: Some(crate::data::source::source_arc(
+            crate::plots::scatter::PreparedScatterInputs { panels },
+        )?),
     })
 }
 
 /// Complete one retained line component after the parent's range coordination.
 pub(crate) fn prepare_line_plot(
     source: &Plot,
-    resources: &crate::font::canonical::OperationGenerationResources,
+
     marks: crate::plots::line::PreparedLine,
 ) -> Result<PreparedInteriorInputs, Error> {
-    let data = source
-        .configured_source_rows()?
-        .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
-        .with_axis_resources(resources);
     let axes = prepare(
         source,
-        data,
         None,
         None,
         Some(&marks),
@@ -1073,18 +1084,18 @@ pub(crate) fn prepare_line_plot(
         None,
         None,
     )?;
-    crate::orchestrator::layers::GuideSnapshot::validate_sources(source, axes.ranges, data)?;
+    crate::orchestrator::layers::GuideSnapshot::validate_sources(source, axes.ranges)?;
     let scope = || {
         source
             .axis_scope()
-            .map(|scope| data.copy_source_string(scope))
+            .map(crate::data::source::copy_source_string)
             .transpose()
     };
     let mut retained_axes = Vec::new();
-    data.reserve_source(&mut retained_axes, 1)?;
+    crate::data::source::reserve_source(&mut retained_axes, 1)?;
     retained_axes.push((scope()?, axes));
     let mut panels = Vec::new();
-    data.reserve_source(&mut panels, 1)?;
+    crate::data::source::reserve_source(&mut panels, 1)?;
     panels.push((scope()?, marks));
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::classify(source.kind()),
@@ -1097,39 +1108,32 @@ pub(crate) fn prepare_line_plot(
         distributions: None,
         estimate: None,
         dumbbell: None,
-        axes: data.source_arc(retained_axes)?,
+        axes: crate::data::source::source_arc(retained_axes)?,
         histogram: None,
         qq: None,
         regression: None,
         density: None,
         matrix: None,
         scatter: None,
-        line: Some(data.source_arc(crate::plots::line::PreparedLineInputs { panels })?),
+        line: Some(crate::data::source::source_arc(
+            crate::plots::line::PreparedLineInputs { panels },
+        )?),
     })
 }
 
 fn reconcile_facet_axis(
     retained: &mut [(Option<String>, PreparedAxes)],
     side: usize,
-    data: PlotData<'_>,
 ) -> Result<(), Error> {
     let Some((_, first)) = retained.first() else {
         return Ok(());
     };
     for (_, axes) in retained.iter() {
-        data.claim_source_visits(1)?;
-        if let (Some(a), Some(b)) = (&axes.categories[side], &first.categories[side]) {
-            for (a, b) in a.iter().zip(b) {
-                data.claim_source_visits(1)?;
-                data.claim_source_visits(a.label.len().min(b.label.len()))?;
-            }
-        }
         if axes.categories[side] != first.categories[side] {
             return Err(Error::Render(format!("fixed facet {} axis requires identical categorical levels and ordering in every panel; use a free scale or provide complete panel data", if side == 0 { "x" } else { "y" })));
         }
     }
     if first.categories[side].is_none() {
-        data.claim_source_visits(retained.len())?;
         let union = retained
             .iter()
             .map(|(_, axes)| axes.ranges[side])
@@ -1137,7 +1141,7 @@ fn reconcile_facet_axis(
                 (a.0.min(b.0), a.1.max(b.1))
             });
         validate_range(union)?;
-        data.claim_source_visits(retained.len())?;
+
         for (_, axes) in retained {
             axes.ranges[side] = union;
         }
@@ -1162,7 +1166,7 @@ fn validate_range(range: (f64, f64)) -> Result<(), Error> {
 )]
 fn prepare(
     chart: &Plot,
-    data: PlotData<'_>,
+
     facet: Option<crate::data::FacetAxisSources<'_>>,
     scatter: Option<&crate::plots::scatter::PreparedScatter>,
     line: Option<&crate::plots::line::PreparedLine>,
@@ -1173,7 +1177,7 @@ fn prepare(
     reference_config: Option<ReferenceAxisConfig<'_>>,
 ) -> Result<PreparedAxes, Error> {
     // Two scalar domain results and their fixed five-sample nice-range seeds.
-    data.claim_source_visits(12)?;
+
     #[cfg(test)]
     super::AXIS_PREPARATIONS.with(|count| count.set(count.get() + 1));
     let mut categories: [Option<Vec<String>>; 2] = [None, None];
@@ -1194,16 +1198,8 @@ fn prepare(
                 })?
                 .ranges;
             [
-                crate::layout::continuous_auto_range(
-                    ranges[0],
-                    chart.x_axis_spec(),
-                    data.source_resources()?,
-                )?,
-                crate::layout::continuous_auto_range(
-                    ranges[1],
-                    chart.y_axis_spec(),
-                    data.source_resources()?,
-                )?,
+                crate::layout::continuous_auto_range(ranges[0], chart.x_axis_spec())?,
+                crate::layout::continuous_auto_range(ranges[1], chart.y_axis_spec())?,
             ]
         }
         PlotKind::Histogram => {
@@ -1217,10 +1213,10 @@ fn prepare(
         }
         PlotKind::Density => density
             .ok_or_else(|| Error::Render("Density axes require prepared semantics".into()))?
-            .ranges(chart, data)?,
+            .ranges(chart)?,
         PlotKind::Qq => qq
             .ok_or_else(|| Error::Render("Qq axes require prepared semantics".into()))?
-            .ranges(chart, data)?,
+            .ranges(chart)?,
         PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
             let line = line.ok_or_else(|| {
                 Error::Render("line axis inputs require prepared semantics".into())
@@ -1229,7 +1225,11 @@ fn prepare(
                 .conditions
                 .as_ref()
                 .map(|levels| {
-                    data.collect_source(levels.iter().map(|label| data.copy_source_string(label)))
+                    crate::data::source::collect_source(
+                        levels
+                            .iter()
+                            .map(|label| crate::data::source::copy_source_string(label)),
+                    )
                 })
                 .transpose()?;
             [
@@ -1252,11 +1252,11 @@ fn prepare(
                 .as_ref()
                 .and_then(|config| config.bars)
                 .ok_or_else(|| Error::Render("bar axes require prepared semantics".into()))?;
-            let levels = data.collect_source(
+            let levels = crate::data::source::collect_source(
                 marks
                     .categories
                     .iter()
-                    .map(|label| data.copy_source_string(label)),
+                    .map(|label| crate::data::source::copy_source_string(label)),
             )?;
             let range = marks.value_range;
             let horizontal = matches!(
@@ -1273,7 +1273,6 @@ fn prepare(
                     chart.y_axis_spec()
                 },
                 0.0,
-                data.source_resources()?,
             )?;
             if horizontal {
                 [values, slots]
@@ -1288,22 +1287,18 @@ fn prepare(
                 .ok_or_else(|| {
                     Error::Render("categorical distribution axes require retained semantics".into())
                 })?;
-            let levels = data.collect_source(
+            let levels = crate::data::source::collect_source(
                 marks
                     .categories()
                     .iter()
-                    .map(|label| data.copy_source_string(label)),
+                    .map(|label| crate::data::source::copy_source_string(label)),
             )?;
             let values = marks.range();
             let slots = (0.0, levels.len() as f64);
             categories[0] = Some(levels);
             [
                 slots,
-                crate::layout::continuous_auto_range(
-                    values,
-                    chart.y_axis_spec(),
-                    data.source_resources()?,
-                )?,
+                crate::layout::continuous_auto_range(values, chart.y_axis_spec())?,
             ]
         }
         PlotKind::Dumbbell => {
@@ -1311,20 +1306,14 @@ fn prepare(
                 .as_ref()
                 .and_then(|config| config.dumbbell)
                 .ok_or_else(|| Error::Render("Dumbbell axes require prepared semantics".into()))?;
-            categories[1] = Some(
-                data.collect_source(
-                    marks
-                        .categories
-                        .iter()
-                        .map(|label| data.copy_source_string(label)),
-                )?,
-            );
+            categories[1] = Some(crate::data::source::collect_source(
+                marks
+                    .categories
+                    .iter()
+                    .map(|label| crate::data::source::copy_source_string(label)),
+            )?);
             [
-                crate::layout::continuous_auto_range(
-                    marks.range,
-                    chart.x_axis_spec(),
-                    data.source_resources()?,
-                )?,
+                crate::layout::continuous_auto_range(marks.range, chart.x_axis_spec())?,
                 (0.0, marks.categories.len() as f64),
             ]
         }
@@ -1335,14 +1324,12 @@ fn prepare(
             let marks = config
                 .estimate
                 .ok_or_else(|| Error::Render("estimate axes require retained rows".into()))?;
-            categories[1] = Some(
-                data.collect_source(
-                    marks
-                        .labels
-                        .iter()
-                        .map(|label| data.copy_source_string(label)),
-                )?,
-            );
+            categories[1] = Some(crate::data::source::collect_source(
+                marks
+                    .labels
+                    .iter()
+                    .map(|label| crate::data::source::copy_source_string(label)),
+            )?);
             let range = marks
                 .range
                 .or(config.estimate_fallback)
@@ -1356,21 +1343,17 @@ fn prepare(
                 .ok_or_else(|| {
                     Error::Render("interaction axes require retained semantics".into())
                 })?;
-            let levels = data.collect_source(
+            let levels = crate::data::source::collect_source(
                 marks
                     .conditions
                     .iter()
-                    .map(|level| data.copy_source_string(level)),
+                    .map(|level| crate::data::source::copy_source_string(level)),
             )?;
             let slots = (0.0, levels.len() as f64);
             categories[0] = Some(levels);
             [
                 slots,
-                crate::layout::continuous_auto_range(
-                    marks.range,
-                    chart.y_axis_spec(),
-                    data.source_resources()?,
-                )?,
+                crate::layout::continuous_auto_range(marks.range, chart.y_axis_spec())?,
             ]
         }
         PlotKind::Beeswarm => {
@@ -1378,11 +1361,11 @@ fn prepare(
                 .as_ref()
                 .and_then(|config| config.beeswarm)
                 .ok_or_else(|| Error::Render("beeswarm axes require retained semantics".into()))?;
-            let levels = data.collect_source(
+            let levels = crate::data::source::collect_source(
                 marks
                     .levels
                     .iter()
-                    .map(|level| data.copy_source_string(level)),
+                    .map(|level| crate::data::source::copy_source_string(level)),
             )?;
             let slots = chart
                 .y_axis_spec()
@@ -1390,11 +1373,7 @@ fn prepare(
                 .unwrap_or((0.0, levels.len() as f64));
             categories[1] = Some(levels);
             [
-                crate::layout::continuous_auto_range(
-                    marks.x_data,
-                    chart.x_axis_spec(),
-                    data.source_resources()?,
-                )?,
+                crate::layout::continuous_auto_range(marks.x_data, chart.x_axis_spec())?,
                 slots,
             ]
         }
@@ -1403,11 +1382,11 @@ fn prepare(
                 .as_ref()
                 .and_then(|config| config.waterfall)
                 .ok_or_else(|| Error::Render("waterfall axes require retained semantics".into()))?;
-            let levels = data.collect_source(
+            let levels = crate::data::source::collect_source(
                 marks
                     .labels
                     .iter()
-                    .map(|label| data.copy_source_string(label)),
+                    .map(|label| crate::data::source::copy_source_string(label)),
             )?;
             let slots = chart
                 .y_axis_spec()
@@ -1415,11 +1394,7 @@ fn prepare(
                 .unwrap_or((0.0, levels.len() as f64));
             categories[1] = Some(levels);
             [
-                crate::layout::continuous_auto_range(
-                    marks.range,
-                    chart.x_axis_spec(),
-                    data.source_resources()?,
-                )?,
+                crate::layout::continuous_auto_range(marks.range, chart.x_axis_spec())?,
                 slots,
             ]
         }
@@ -1428,10 +1403,18 @@ fn prepare(
                 .as_ref()
                 .and_then(|config| config.heatmap)
                 .ok_or_else(|| Error::Render("heatmap axes require retained semantics".into()))?;
-            let x =
-                data.collect_source(marks.x_levels.iter().map(|s| data.copy_source_string(s)))?;
-            let y =
-                data.collect_source(marks.y_levels.iter().map(|s| data.copy_source_string(s)))?;
+            let x = crate::data::source::collect_source(
+                marks
+                    .x_levels
+                    .iter()
+                    .map(|s| crate::data::source::copy_source_string(s)),
+            )?;
+            let y = crate::data::source::collect_source(
+                marks
+                    .y_levels
+                    .iter()
+                    .map(|s| crate::data::source::copy_source_string(s)),
+            )?;
             let ranges = [(0.0, x.len() as f64), (0.0, y.len() as f64)];
             categories = [Some(x), Some(y)];
             ranges
@@ -1467,16 +1450,16 @@ fn prepare(
             },
             interval: source.interval,
             exact_ticks: if logarithmic && side == 0 {
-                chart.projected_explicit_x_ticks(data)?
+                chart.projected_explicit_x_ticks()?
             } else {
                 source
                     .exact_ticks
                     .as_ref()
                     .map(|ticks| {
-                        data.collect_source(ticks.iter().map(|tick| {
+                        crate::data::source::collect_source(ticks.iter().map(|tick| {
                             Ok(AxisTick::new(
                                 tick.position,
-                                data.copy_source_string(&tick.label)?,
+                                crate::data::source::copy_source_string(&tick.label)?,
                             ))
                         }))
                     })
@@ -1500,9 +1483,9 @@ fn prepare(
             };
             let raw_labels = levels.iter().map(String::as_str);
             display_categories[side] = Some(if let Some(policy) = labels {
-                policy.resolve_domain_source(domain, raw_labels, Some(data))?
+                policy.resolve_domain(domain, raw_labels)?
             } else {
-                chart.resolve_axis_label_domain(domain, raw_labels, data)?
+                chart.resolve_axis_label_domain(domain, raw_labels)?
             });
             let reverse = side == 1
                 && matches!(
@@ -1515,7 +1498,7 @@ fn prepare(
                 );
             let count = levels.len() as f64;
             let mut retained = Vec::new();
-            data.reserve_source(&mut retained, levels.len())?;
+            crate::data::source::reserve_source(&mut retained, levels.len())?;
             for (index, label) in levels.into_iter().enumerate() {
                 retained.push(AxisTick::new(
                     if reverse {
@@ -1541,7 +1524,7 @@ fn prepare(
             {
                 continue;
             }
-            data.claim_source_visits(exact.len())?;
+
             crate::layout::Axis::validate_ticks(
                 exact,
                 ranges[side],
@@ -1552,7 +1535,7 @@ fn prepare(
     let labels = if facet.is_some() {
         [String::new(), String::new()]
     } else {
-        chart.prepare_axis_labels(data, labels)?
+        chart.prepare_axis_labels(labels)?
     };
     Ok(PreparedAxes {
         intrinsics: std::sync::OnceLock::new(),
@@ -1605,9 +1588,7 @@ mod tests {
             ]
         }
         fn prepare_with_unavailable_fonts(plot: &Plot) -> Result<(), Error> {
-            let mut theme = crate::Theme::Publication
-                .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                .unwrap();
+            let mut theme = crate::Theme::Publication.resolve().unwrap();
             theme.typography.axes.tick_label.stack =
                 crate::font::canonical::named_stack(&["Lichtung T5a6a3a Unavailable Font 8c42e1"]);
             crate::layout::plan_exact_root(
@@ -1618,7 +1599,7 @@ mod tests {
                     // restriction on combining supplemental guides with faceting.
                     prepare_plot(
                         plot,
-                        &stage.generation_resources(),
+                        &stage.operation(),
                         Some(&crate::theme::scale_values::test_defaults()),
                     )?;
                     let requirements = crate::layout::foundational_plot_requirements(
@@ -1674,7 +1655,7 @@ mod tests {
                     }
                 }
                 for plot in plots(scales, guide(5.0)) {
-                    let resources = crate::font::canonical::OperationGenerationResources::new();
+                    let resources = crate::font::canonical::OperationContext::new();
                     let shared = scales == FacetScales::Fixed
                         || if vertical {
                             scales == FacetScales::FreeY
@@ -1720,23 +1701,17 @@ mod tests {
             ])
             .erase();
         let natural = natural.erase();
-        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let resources = crate::font::canonical::OperationContext::new();
         let prepared = prepare_plot(&plot, &resources, None).unwrap();
         assert_eq!(prepared.axes[0].1.ranges[0], (-100.0, 100.0));
         assert_eq!(
-            crate::plots::density::axis_ranges(
-                &natural,
-                natural.data().with_axis_resources(&resources)
-            )
-            .unwrap()[1],
+            crate::plots::density::axis_ranges(&natural, natural.data().with_operation(&resources))
+                .unwrap()[1],
             prepared.axes[0].1.ranges[1]
         );
         assert_ne!(
-            crate::plots::density::axis_ranges(
-                &natural,
-                natural.data().with_axis_resources(&resources)
-            )
-            .unwrap()[0],
+            crate::plots::density::axis_ranges(&natural, natural.data().with_operation(&resources))
+                .unwrap()[0],
             prepared.axes[0].1.ranges[0]
         );
         plot.preflight().unwrap();
@@ -1744,7 +1719,7 @@ mod tests {
 
     #[test]
     fn retention_boundaries_share_the_operation_without_retaining_a_plot_clone() {
-        use crate::font::canonical::OperationGenerationResources;
+        use crate::font::canonical::OperationContext;
         let scatter = Plot::scatter(
             NumericValues::new("x", [1.0, 2.0, 3.0]),
             NumericValues::new("y", [2.0, 1.0, 4.0]),
@@ -1766,28 +1741,20 @@ mod tests {
         for source in [scatter, facets, matrix] {
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
             let count = std::sync::Arc::strong_count(&source.prepared_axes);
-            let resources = OperationGenerationResources::new();
+            let resources = OperationContext::new();
             let retained = prepare_plot(&source, &resources, None).unwrap();
             assert_eq!(std::sync::Arc::strong_count(&source.prepared_axes), count);
-            let bytes = resources.byte_usage().unwrap();
-            let visits = resources.usage().unwrap().1;
-            for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
-                let resources = OperationGenerationResources::with_test_limits(visits, bytes);
-                assert!(matches!(
-                    prepare_plot(&source, &resources, None),
-                    Err(Error::Render(_))
-                ));
-            }
-            let resources = OperationGenerationResources::with_test_limits(visits, bytes);
+
+            let resources = OperationContext::new();
             prepare_plot(&source, &resources, None).unwrap();
-            // Unused text and policy values stay borrowed, not copied and charged.
+            // Unused text and policy values stay borrowed.
             let large = "unused".repeat(10_000);
             let decorated = source
                 .clone()
                 .title(large.clone())
                 .caption(large.clone())
                 .labels(crate::Labels::humanized().alias("unreferenced", large));
-            let resources = OperationGenerationResources::with_test_limits(u128::MAX, bytes);
+            let resources = OperationContext::new();
             prepare_plot(&decorated, &resources, None).unwrap();
             let attached = retained.attach(source).unwrap();
             assert!(std::sync::Arc::ptr_eq(
@@ -1802,13 +1769,7 @@ mod tests {
     }
 
     #[test]
-    fn fixed_facet_comparisons_and_union_refuse_before_their_work_or_mutation() {
-        use crate::font::canonical::OperationGenerationResources;
-        let source = Plot::scatter(
-            NumericValues::new("x", [1.0]),
-            NumericValues::new("y", [1.0]),
-        )
-        .erase();
+    fn fixed_facets_union_numeric_ranges_and_require_matching_categories() {
         let axes = |range, label: Option<&str>| PreparedAxes {
             intrinsics: std::sync::OnceLock::new(),
             heatmap_intrinsics: std::sync::OnceLock::new(),
@@ -1819,57 +1780,29 @@ mod tests {
             specs: [AxisSpec::default(), AxisSpec::default()],
             logarithmic: false,
         };
-        for visits in [0, 2, 4, 5] {
-            let mut retained = [
-                (None, axes((0.0, 1.0), None)),
-                (None, axes((2.0, 3.0), None)),
-            ];
-            let resources = OperationGenerationResources::with_test_limits(visits, 0);
-            assert!(reconcile_facet_axis(
-                &mut retained,
-                0,
-                source.data().with_axis_resources(&resources)
-            )
-            .is_err());
-            assert_eq!(
-                retained.map(|(_, axes)| axes.ranges[0]),
-                [(0.0, 1.0), (2.0, 3.0)]
-            );
-        }
         let mut retained = [
             (None, axes((0.0, 1.0), None)),
             (None, axes((2.0, 3.0), None)),
         ];
-        let resources = OperationGenerationResources::with_test_limits(6, 0);
-        reconcile_facet_axis(
-            &mut retained,
-            0,
-            source.data().with_axis_resources(&resources),
-        )
-        .unwrap();
+
+        reconcile_facet_axis(&mut retained, 0).unwrap();
         assert_eq!(retained.map(|(_, axes)| axes.ranges[0]), [(0.0, 3.0); 2]);
-        for (visits, expected) in [
-            (0, "work admission"),
-            (9, "work admission"),
-            (10, "identical categorical"),
-        ] {
+        {
             let mut retained = [
                 (None, axes((0.0, 1.0), Some("one"))),
                 (None, axes((0.0, 1.0), Some("two"))),
             ];
-            let resources = OperationGenerationResources::with_test_limits(visits, 0);
-            let error = reconcile_facet_axis(
-                &mut retained,
-                0,
-                source.data().with_axis_resources(&resources),
-            )
-            .unwrap_err();
-            assert!(error.to_string().contains(expected), "{error}");
+
+            let error = reconcile_facet_axis(&mut retained, 0).unwrap_err();
+            assert!(
+                error.to_string().contains("identical categorical"),
+                "{error}"
+            );
         }
     }
 
     #[test]
-    fn p2_facets_admit_original_mark_rows_before_selectors_and_preserve_source_ids() {
+    fn facets_preserve_original_source_ids_through_selectors() {
         let facet = crate::FacetSpec::column(
             CategoryValues::new("panel", ["left", "right", "left", "right"]).unwrap(),
         )
@@ -1896,11 +1829,9 @@ mod tests {
             .erase(),
         ];
         for source in sources {
-            for available in [3, 4, 5] {
-                let resources = crate::font::canonical::OperationGenerationResources::new();
-                resources
-                    .claim_topology_slots(1_000_000 - available)
-                    .unwrap();
+            {
+                let resources = crate::font::canonical::OperationContext::new();
+
                 crate::data::SOURCE_COLUMN_READS.with(|count| count.set(0));
                 crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
                 let result = prepare_plot(
@@ -1908,22 +1839,13 @@ mod tests {
                     &resources,
                     Some(&crate::theme::scale_values::test_defaults()),
                 );
-                if available < 4 {
-                    let error = result
-                        .err()
-                        .expect("topology refusal before selector preparation");
-                    assert!(error.to_string().contains("prepared topology slots"));
-                    assert_eq!(resources.usage().unwrap(), (0, 0));
-                    assert_eq!(resources.byte_usage().unwrap(), 0);
-                    assert_eq!(resources.topology_usage(), 999_997);
-                    crate::data::SOURCE_COLUMN_READS.with(|count| assert_eq!(count.get(), 0));
-                } else {
+                {
                     let prepared = result.unwrap();
                     assert_eq!(prepared.axes.len(), 2);
-                    assert_eq!(resources.topology_usage(), 1_000_000 - available + 4);
+
                     let panels = crate::orchestrator::text_census_panels(
                         &source,
-                        source.data().with_axis_resources(&resources),
+                        source.data().with_operation(&resources),
                     )
                     .unwrap();
                     assert_eq!(
@@ -1935,7 +1857,6 @@ mod tests {
                             .collect::<Vec<_>>(),
                         [vec![100, 300], vec![200, 400]]
                     );
-                    assert_eq!(resources.topology_usage(), 1_000_000 - available + 4);
                 }
                 crate::font::canonical::FONT_DISCOVERY_CALLS
                     .with(|count| assert_eq!(count.get(), 0));
@@ -1944,8 +1865,8 @@ mod tests {
     }
 
     #[test]
-    fn borrowed_facet_panels_and_scope_sources_refuse_before_materialization() {
-        use crate::font::canonical::OperationGenerationResources;
+    fn borrowed_facet_panels_preserve_source_rows_and_scope_names() {
+        use crate::font::canonical::OperationContext;
         let source = Plot::bar(
             CategoryValues::new("category", ["a", "b", "a"]).unwrap(),
             BarInput::estimates(NumericValues::new("value", [1.0, 2.0, 3.0])),
@@ -1955,18 +1876,10 @@ mod tests {
                 .scales(FacetScales::Free),
         )
         .erase();
-        for (visits, bytes) in [(0, u64::MAX), (u128::MAX, 0)] {
-            let resources = OperationGenerationResources::with_test_limits(visits, bytes);
-            assert!(crate::orchestrator::text_census_panels(
-                &source,
-                source.data().with_axis_resources(&resources)
-            )
-            .is_err());
-        }
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let panels = crate::orchestrator::text_census_panels(
             &source,
-            source.data().with_axis_resources(&resources),
+            source.data().with_operation(&resources),
         )
         .unwrap();
         assert_eq!(panels.len(), 2);
@@ -1981,22 +1894,7 @@ mod tests {
                     .collect::<Vec<_>>(),
                 rows
             );
-            assert_eq!(panel.scope(source.data()).unwrap(), scope);
-            let copied = OperationGenerationResources::with_test_limits(0, u64::MAX);
-            assert_eq!(
-                panel
-                    .scope(source.data().with_axis_resources(&copied))
-                    .unwrap(),
-                scope
-            );
-            assert_eq!(copied.usage().unwrap(), (1, 0));
-            for (records, bytes) in [(0, u64::MAX), (1, 0)] {
-                let resources = OperationGenerationResources::with_test_limits(0, bytes);
-                resources.claim_slots(1_000_000 - records).unwrap();
-                assert!(panel
-                    .scope(source.data().with_axis_resources(&resources))
-                    .is_err());
-            }
+            assert_eq!(panel.scope().unwrap(), scope);
         }
     }
 
@@ -2026,7 +1924,7 @@ mod tests {
             .scales(FacetScales::Free),
         )
         .erase();
-        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let resources = crate::font::canonical::OperationContext::new();
         let retained = prepare_plot(&source, &resources, None).unwrap();
         let panels = crate::orchestrator::text_census_panels(&source, source.data()).unwrap();
         for (panel, (scope, axes)) in panels.iter().zip(retained.axes.iter()) {
@@ -2040,19 +1938,11 @@ mod tests {
                 crate::plots::bar_data::BarMode::Grouped,
             )
             .unwrap();
-            assert_eq!(
-                scope.as_deref(),
-                Some(panel.scope(source.data()).unwrap().as_str())
-            );
+            assert_eq!(scope.as_deref(), Some(panel.scope().unwrap().as_str()));
             assert_eq!(
                 axes.ranges[1],
-                crate::layout::anchored_auto_range(
-                    expected.value_range,
-                    child.y_axis_spec(),
-                    0.0,
-                    &crate::font::canonical::OperationGenerationResources::new()
-                )
-                .unwrap()
+                crate::layout::anchored_auto_range(expected.value_range, child.y_axis_spec(), 0.0)
+                    .unwrap()
             );
             assert_eq!(
                 axes.categories[0]
@@ -2149,7 +2039,7 @@ mod tests {
 
     #[test]
     fn mixed_facet_policies_retain_actual_numeric_unions_and_local_categories() {
-        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let resources = crate::font::canonical::OperationContext::new();
         let categories = CategoryValues::new("category", ["a", "b", "a", "c"]).unwrap();
         let facets = CategoryValues::new("panel", ["left", "left", "right", "right"]).unwrap();
         let plot = Plot::bar(
@@ -2216,7 +2106,7 @@ mod tests {
                 .scales(FacetScales::FreeY),
         )
         .erase();
-        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let resources = crate::font::canonical::OperationContext::new();
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let prepared = prepare_plot(&source, &resources, None)
             .unwrap()
@@ -2228,7 +2118,7 @@ mod tests {
             .map(|panel| {
                 crate::plots::histogram::axis_ranges(
                     panel.plot(),
-                    panel.data().with_axis_resources(&resources),
+                    panel.data().with_operation(&resources),
                 )
                 .unwrap()
             })

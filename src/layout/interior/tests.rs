@@ -77,13 +77,13 @@ fn invalid_route_rejects_before_fonts_or_selected_dispatch_without_fallback() {
 
 #[test]
 fn prepared_contract_retains_sources_and_uses_the_callers_operation_limits() {
-    use crate::font::canonical::OperationGenerationResources;
+    use crate::font::canonical::OperationContext;
     let source = crate::Plot::scatter(
         crate::NumericValues::new("x", [0.0, 1.0]),
         crate::NumericValues::new("y", [1.0, 2.0]),
     )
     .erase();
-    let resources = OperationGenerationResources::new();
+    let resources = OperationContext::new();
     let prepared = crate::plots::shared_x::prepare_plot(
         &source,
         &resources,
@@ -91,8 +91,7 @@ fn prepared_contract_retains_sources_and_uses_the_callers_operation_limits() {
     )
     .unwrap();
     assert_eq!(prepared.route, InteriorRoute::classify(PlotKind::Scatter));
-    let visits = resources.usage().unwrap().1;
-    let bytes = resources.byte_usage().unwrap();
+
     let attached = prepared.attach(source.clone()).unwrap();
     let wrong_family = crate::Plot::density(crate::NumericValues::new("x", [0.0, 1.0])).erase();
     assert!(matches!(prepared.attach(wrong_family), Err(Error::Data(_))));
@@ -104,29 +103,4 @@ fn prepared_contract_retains_sources_and_uses_the_callers_operation_limits() {
         &source.prepared_axes,
         &prepared.axes
     ));
-    for (visits, bytes, succeeds) in [
-        (visits, bytes, true),
-        (visits - 1, bytes, false),
-        (visits, bytes - 1, false),
-    ] {
-        let resources = OperationGenerationResources::with_test_limits(visits, bytes);
-        assert_eq!(
-            crate::plots::shared_x::prepare_plot(
-                &source,
-                &resources,
-                Some(&crate::theme::scale_values::test_defaults())
-            )
-            .is_ok(),
-            succeeds
-        );
-        if succeeds {
-            // Another preparation cannot silently acquire a fresh budget.
-            assert!(crate::plots::shared_x::prepare_plot(
-                &source,
-                &resources,
-                Some(&crate::theme::scale_values::test_defaults())
-            )
-            .is_err());
-        }
-    }
 }

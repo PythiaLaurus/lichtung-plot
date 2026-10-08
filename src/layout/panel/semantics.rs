@@ -114,7 +114,7 @@ impl StandardPanelInputs {
         let retain = |source: &crate::theme::TextTheme| -> Result<_, crate::Error> {
             let stack = source
                 .stack
-                .copy_with_generation(&theme.prepared_font_environment()?.generation_resources())
+                .try_copy()
                 .map_err(|error| crate::Error::Render(error.to_string()))?;
             crate::theme::TextTheme::new(
                 stack,
@@ -125,9 +125,7 @@ impl StandardPanelInputs {
             )
         };
         Ok(Self {
-            axes: theme
-                .axes
-                .share(&theme.prepared_font_environment()?.generation_resources())?,
+            axes: theme.axes.clone(),
             tick_label: retain(&theme.typography.axes.tick_label)?,
             axis_title: retain(&theme.typography.axes.axis_title)?,
             preferred_aspect: [4, 3],
@@ -137,15 +135,10 @@ impl StandardPanelInputs {
     pub(crate) fn matches(
         &self,
         theme: &crate::theme::ResolvedTheme,
-        resources: &crate::font::canonical::OperationGenerationResources,
     ) -> Result<bool, crate::Error> {
-        Ok(self.axes.same(&theme.axes, resources)?
-            && self
-                .tick_label
-                .same(&theme.typography.axes.tick_label, resources)?
-            && self
-                .axis_title
-                .same(&theme.typography.axes.axis_title, resources)?)
+        Ok(self.axes.same_validated(&theme.axes)?
+            && self.tick_label.same(&theme.typography.axes.tick_label)
+            && self.axis_title.same(&theme.typography.axes.axis_title))
     }
 
     pub(crate) fn observe_feedback(
@@ -180,18 +173,13 @@ mod tests {
 
     #[test]
     fn standard_panel_owns_complete_typography_and_four_to_three_preference() {
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let standard = StandardPanelInputs::new(&theme).unwrap();
-        let resources = theme
-            .prepared_font_environment()
-            .unwrap()
-            .generation_resources();
+
         assert_eq!(standard.preferred_aspect, [4, 3]);
-        assert!(standard.matches(&theme, &resources).unwrap());
+        assert!(standard.matches(&theme).unwrap());
         theme.typography.axes.tick_label.line_height_multiplier += 0.25;
-        assert!(!standard.matches(&theme, &resources).unwrap());
+        assert!(!standard.matches(&theme).unwrap());
         theme.typography.axes.tick_label = standard.tick_label.clone();
         theme.typography.axes.axis_title.weight = crate::TextWeight::Bold;
         theme.typography.axes.axis_title.stack = crate::font::canonical::FontStack::new(
@@ -208,7 +196,7 @@ mod tests {
                 )]),
         )
         .unwrap();
-        assert!(!standard.matches(&theme, &resources).unwrap());
+        assert!(!standard.matches(&theme).unwrap());
         assert_ne!(
             standard.axis_title.stack,
             theme.typography.axes.axis_title.stack
@@ -216,25 +204,13 @@ mod tests {
     }
 
     #[test]
-    fn standard_panel_stack_mismatch_admits_its_terminating_byte() {
-        use crate::font::canonical::{named_stack, OperationGenerationResources};
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+    fn standard_panel_stack_matching_includes_the_complete_utf8_name() {
+        use crate::font::canonical::named_stack;
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         theme.typography.axes.tick_label.stack = named_stack(&["αZ"]);
         let standard = StandardPanelInputs::new(&theme).unwrap();
         theme.typography.axes.tick_label.stack = named_stack(&["αY"]);
-        for remaining in [0, 12, 13] {
-            let resources = OperationGenerationResources::with_test_limits(remaining, 0);
-            let result = standard.matches(&theme, &resources);
-            if remaining == 13 {
-                assert!(!result.unwrap());
-            } else {
-                assert!(result.is_err());
-            }
-            assert_eq!(resources.usage().unwrap().1, remaining);
-            assert_eq!(resources.byte_usage().unwrap(), 0);
-        }
+        assert!(!standard.matches(&theme).unwrap());
     }
 
     #[test]

@@ -26,15 +26,9 @@ thread_local! {
     pub(crate) static FONT_OUTLINE_GLYPHS: std::cell::RefCell<Vec<(FaceIdentity, u16)>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
-const FONT_BYTE_LIMIT: u64 = 536_870_912;
-const PROCESSING_VISIT_LIMIT: u64 = 1_000_000;
-const TEXT_GENERATION_LIMIT: u128 = 1_000_000;
-// Record existing logical units, but do not reject a render on their quotas.
-// This does not disable arithmetic, allocation, font, layout, or PNG checks.
-const ENFORCE_RESOURCE_QUOTAS: bool = false;
 const SCALAR_MAP_WORDS: usize = 0x11_0000 / u64::BITS as usize;
 
-/// Census producers can lend text or defer formatting until root admission.
+/// Census producers can lend text or defer formatting until root preparation.
 pub(crate) enum CensusSource<'a> {
     Text(Cow<'a, str>),
     Formatted(std::fmt::Arguments<'a>),
@@ -69,40 +63,11 @@ impl<'a> From<std::fmt::Arguments<'a>> for CensusSource<'a> {
 #[derive(Default)]
 struct CensusFormatCount {
     bytes: usize,
-    scalars: u64,
-    units: u64,
-    previous: Option<char>,
-    unit_has_base: bool,
-    has_soft_hyphen: bool,
 }
 
 impl std::fmt::Write for CensusFormatCount {
     fn write_str(&mut self, text: &str) -> std::fmt::Result {
         self.bytes = self.bytes.checked_add(text.len()).ok_or(std::fmt::Error)?;
-        for scalar in text.chars() {
-            self.scalars = self.scalars.checked_add(1).ok_or(std::fmt::Error)?;
-            self.has_soft_hyphen |= scalar == '\u{00AD}';
-            // Only attachment of a mark can extend a narrow selection unit.
-            // Its grapheme boundary depends on the adjacent pair (GB9/GB9a
-            // and control breaks), not RI/emoji/consonant lookbehind rules.
-            let attached = self.unit_has_base
-                && is_visible_mark(scalar)
-                && self.previous.is_some_and(|previous| {
-                    let mut pair = [0; 8];
-                    let first = previous.encode_utf8(&mut pair).len();
-                    let second = scalar.encode_utf8(&mut pair[first..]).len();
-                    std::str::from_utf8(&pair[..first + second])
-                        .expect("encoded scalars")
-                        .graphemes(true)
-                        .count()
-                        == 1
-                });
-            if !attached {
-                self.units = self.units.checked_add(1).ok_or(std::fmt::Error)?;
-                self.unit_has_base = !is_visible_mark(scalar) && !is_nonpainting_control(scalar);
-            }
-            self.previous = Some(scalar);
-        }
         Ok(())
     }
 }
@@ -134,20 +99,7 @@ pub(crate) fn format_census_source(
     count
         .write_fmt(arguments)
         .map_err(|_| FontError::Arithmetic("formatted census source count"))?;
-    let resources = prepared_stage
-        .as_ref()
-        .map_or_else(OperationFontResources::new, |stage| stage.font_resources());
-    resources.claim_visits(
-        count
-            .scalars
-            .checked_add(count.units)
-            .and_then(|work| work.checked_add(u64::from(count.has_soft_hyphen)))
-            .ok_or(FontError::Arithmetic("formatted census source work"))?,
-    )?;
-    resources.claim_bytes(
-        u64::try_from(count.bytes)
-            .map_err(|_| FontError::Arithmetic("formatted census source bytes"))?,
-    )?;
+
     let mut output = String::new();
     reserve_string_prepared_or_local(
         &mut output,
@@ -171,10 +123,6 @@ pub(crate) fn format_census_source(
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum FontError {
-    #[error("text shaping output admission failed: {0:?}")]
-    ShapeAdmission(TextGenerationClaimError),
-    #[error("{resource} limit of {limit} was exceeded")]
-    Limit { resource: &'static str, limit: u64 },
     #[error("font preflight arithmetic overflow while calculating {0}")]
     Arithmetic(&'static str),
     #[error("font preflight allocation refused for {0}")]
@@ -230,22 +178,9 @@ pub(crate) enum FontError {
     Synchronization,
 }
 
-#[derive(Debug, Clone, Copy)]
-struct ResourceLimits {
-    font_bytes: u64,
-    processing_visits: u64,
-}
-
-impl ResourceLimits {
-    const PRODUCTION: Self = Self {
-        font_bytes: FONT_BYTE_LIMIT,
-        processing_visits: PROCESSING_VISIT_LIMIT,
-    };
-}
-
 #[derive(Debug)]
-struct FontBudget {
-    resources: OperationFontResources,
+struct FontPreparation {
+    operation: OperationContext,
     normalized_stacks: Vec<NormalizedStack>,
 }
 
@@ -255,108 +190,20 @@ struct NormalizedStack {
     names: Vec<(String, bool)>,
 }
 
-impl FontBudget {
-    fn new(limits: ResourceLimits) -> Self {
+impl FontPreparation {
+    fn new() -> Self {
         Self {
-            resources: OperationFontResources::with_limits(limits),
+            operation: OperationContext::new(),
             normalized_stacks: Vec::new(),
         }
     }
 
-    fn from_resources(resources: OperationFontResources) -> Self {
+    fn for_operation(operation: OperationContext) -> Self {
         Self {
-            resources,
+            operation,
             normalized_stacks: Vec::new(),
         }
     }
-
-    fn claim_bytes(&mut self, amount: u64) -> Result<(), FontError> {
-        self.resources.claim_bytes(amount)
-    }
-
-    fn claim_visits(&mut self, amount: u64) -> Result<(), FontError> {
-        self.resources.claim_visits(amount)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct OperationFontResources {
-    generation: OperationGenerationResources,
-}
-
-impl OperationFontResources {
-    pub(crate) fn new() -> Self {
-        Self::with_limits(ResourceLimits::PRODUCTION)
-    }
-
-    fn with_limits(limits: ResourceLimits) -> Self {
-        Self {
-            generation: OperationGenerationResources {
-                identity: Arc::new(()),
-                palette_cache: Arc::default(),
-                counters: Arc::new(Mutex::new(GenerationResourceCounters {
-                    slots: 0,
-                    topology_slots: 0,
-                    visits: 0,
-                    calls: 0,
-                    cache_entries: 0,
-                    visit_limit: u128::from(limits.processing_visits),
-                    bytes: 0,
-                    byte_limit: limits.font_bytes,
-                })),
-            },
-        }
-    }
-
-    pub(crate) fn claim_bytes(&self, amount: u64) -> Result<(), FontError> {
-        self.generation.claim_bytes(amount)
-    }
-
-    pub(crate) fn claim_visits(&self, amount: u64) -> Result<(), FontError> {
-        self.generation
-            .claim_visits(u128::from(amount))
-            .map_err(|error| match error {
-                TextGenerationClaimError::Arithmetic(resource) => FontError::Arithmetic(resource),
-                TextGenerationClaimError::Limit {
-                    resource, limit, ..
-                } => FontError::Limit {
-                    resource,
-                    limit: u64::try_from(limit).expect("font visit limit originates as u64"),
-                },
-            })
-    }
-
-    pub(crate) fn usage(&self) -> Result<FontResourceUsage, FontError> {
-        let generation = self
-            .generation
-            .counters
-            .lock()
-            .map_err(|_| FontError::Synchronization)?;
-        Ok(FontResourceUsage {
-            font_bytes: u128::from(generation.bytes),
-            processing_visits: generation.visits,
-        })
-    }
-
-    pub(crate) fn generation_resources(&self) -> OperationGenerationResources {
-        self.generation.clone()
-    }
-}
-
-fn claim_font_resource(
-    used: &mut u64,
-    amount: u64,
-    limit: u64,
-    resource: &'static str,
-) -> Result<(), FontError> {
-    let total = used
-        .checked_add(amount)
-        .ok_or(FontError::Arithmetic(resource))?;
-    if ENFORCE_RESOURCE_QUOTAS && total > limit {
-        return Err(FontError::Limit { resource, limit });
-    }
-    *used = total;
-    Ok(())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -551,99 +398,45 @@ impl FontStack {
         &self.families
     }
 
-    /// One complete entry/name-byte copy pass; lengths are known without scanning names.
-    pub(crate) fn byte_work(&self) -> Result<usize, FontError> {
-        self.families
-            .iter()
-            .filter_map(FontFamily::name)
-            .try_fold(self.len(), |total, name| {
-                total
-                    .checked_add(name.len())
-                    .ok_or(FontError::Arithmetic("font stack byte work"))
-            })
-    }
-
-    pub(crate) fn same(
-        &self,
-        other: &Self,
-        resources: &OperationGenerationResources,
-    ) -> Result<bool, FontError> {
-        resources
-            .claim_visits(1)
-            .map_err(FontError::ShapeAdmission)?;
+    pub(crate) fn same(&self, other: &Self) -> bool {
         if Arc::ptr_eq(&self.families, &other.families) {
-            return Ok(true);
+            return true;
         }
         if self.len() != other.len() {
-            return Ok(false);
+            return false;
         }
         for (left, right) in self.families.iter().zip(other.families.iter()) {
-            resources
-                .claim_visits(1)
-                .map_err(FontError::ShapeAdmission)?;
             match (&left.kind, &right.kind) {
                 (FontFamilyKind::Named(left), FontFamilyKind::Named(right)) => {
-                    if !same_bytes(left, right, resources)? {
-                        return Ok(false);
+                    if !same_bytes(left, right) {
+                        return false;
                     }
                 }
                 (FontFamilyKind::Generic(left), FontFamilyKind::Generic(right))
                     if left == right => {}
-                _ => return Ok(false),
+                _ => return false,
             }
         }
-        Ok(true)
+        true
     }
 
-    pub(crate) fn hash_into(
-        &self,
-        hash: &mut Sha256,
-        resources: &OperationGenerationResources,
-    ) -> Result<(), FontError> {
-        resources
-            .claim_visits(8)
-            .map_err(FontError::ShapeAdmission)?;
+    pub(crate) fn hash_into(&self, hash: &mut Sha256) {
         hash.update((self.len() as u64).to_le_bytes());
         for family in self.families.iter() {
-            resources
-                .claim_visits(1)
-                .map_err(FontError::ShapeAdmission)?;
             match &family.kind {
                 FontFamilyKind::Named(name) => {
-                    resources
-                        .claim_visits(9 + name.len() as u128)
-                        .map_err(FontError::ShapeAdmission)?;
                     hash.update([0]);
                     hash.update((name.len() as u64).to_le_bytes());
                     hash.update(name.as_bytes());
                 }
                 FontFamilyKind::Generic(family) => {
-                    resources
-                        .claim_visits(2)
-                        .map_err(FontError::ShapeAdmission)?;
                     hash.update([1, *family as u8]);
                 }
             }
         }
-        Ok(())
     }
 
-    pub(crate) fn copy_with_generation(
-        &self,
-        resources: &OperationGenerationResources,
-    ) -> Result<Self, FontError> {
-        resources
-            .claim_visits(self.byte_work()? as u128)
-            .map_err(FontError::ShapeAdmission)?;
-        resources.claim_bytes(font_stack_arc_bytes()?)?;
-        resources
-            .claim_slots(self.len() as u128)
-            .map_err(FontError::ShapeAdmission)?;
-        resources.claim_bytes(
-            self.len()
-                .checked_mul(size_of::<FontFamily>())
-                .ok_or(FontError::Arithmetic("font stack bytes"))? as u64,
-        )?;
+    pub(crate) fn try_copy(&self) -> Result<Self, FontError> {
         let mut families = Vec::new();
         families
             .try_reserve_exact(self.len())
@@ -651,7 +444,6 @@ impl FontStack {
         for family in self {
             let kind = match &family.kind {
                 FontFamilyKind::Named(name) => {
-                    resources.claim_bytes(name.len() as u64)?;
                     let mut retained = String::new();
                     retained
                         .try_reserve_exact(name.len())
@@ -668,33 +460,12 @@ impl FontStack {
         })
     }
 
-    pub(crate) fn share(
-        &self,
-        resources: &OperationGenerationResources,
-    ) -> Result<Self, FontError> {
-        resources
-            .claim_visits(1)
-            .map_err(FontError::ShapeAdmission)?;
-        Ok(self.clone())
-    }
-
     pub(crate) fn copy_with_stage(
         &self,
-        resources: &OperationFontResources,
+
         stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
     ) -> Result<Self, FontError> {
-        copy_stack_with_stage(self, resources, stage)
-    }
-
-    pub(crate) fn admit_copy<'a>(
-        &'a self,
-        resources: &OperationFontResources,
-    ) -> Result<AdmittedFontStackCopy<'a>, FontError> {
-        resources.claim_visits(self.byte_work()? as u64)?;
-        Ok(AdmittedFontStackCopy {
-            source: self,
-            resources: resources.clone(),
-        })
+        copy_stack_with_stage(self, stage)
     }
 
     fn write_css(&self, output: &mut impl std::fmt::Write) -> std::fmt::Result {
@@ -727,17 +498,13 @@ impl FontStack {
         Ok(())
     }
 
-    pub(crate) fn css(&self, resources: &OperationFontResources) -> Result<String, FontError> {
+    pub(crate) fn css(&self) -> Result<String, FontError> {
         // Count and materialization each consume the known UTF-8 input once.
-        let work = self
-            .byte_work()?
-            .checked_mul(2)
-            .ok_or(FontError::Arithmetic("font stack CSS work"))?;
-        resources.claim_visits(work as u64)?;
+
         let mut count = CssCount(0);
         self.write_css(&mut count)
             .map_err(|_| FontError::Arithmetic("font stack CSS bytes"))?;
-        resources.claim_bytes(count.0 as u64)?;
+
         let mut output = String::new();
         output
             .try_reserve_exact(count.0)
@@ -746,30 +513,6 @@ impl FontStack {
             .map_err(|_| FontError::Arithmetic("font stack CSS"))?;
         Ok(output)
     }
-}
-
-/// Single-use proof of copy work admission; holds the immutable source and its actual operation.
-pub(crate) struct AdmittedFontStackCopy<'a> {
-    source: &'a FontStack,
-    resources: OperationFontResources,
-}
-
-impl AdmittedFontStackCopy<'_> {
-    pub(crate) fn copy_with_stage(
-        self,
-        stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
-    ) -> Result<FontStack, FontError> {
-        copy_admitted_stack_with_stage(self, stage)
-    }
-}
-
-fn font_stack_arc_bytes() -> Result<u64, FontError> {
-    let layout = std::alloc::Layout::new::<[std::sync::atomic::AtomicUsize; 2]>()
-        .extend(std::alloc::Layout::new::<Vec<FontFamily>>())
-        .map_err(|_| FontError::Arithmetic("font stack Arc layout"))?
-        .0
-        .pad_to_align();
-    u64::try_from(layout.size()).map_err(|_| FontError::Arithmetic("font stack Arc bytes"))
 }
 
 struct CssCount(usize);
@@ -835,30 +578,20 @@ impl<'a> IntoIterator for &'a FontStack {
     }
 }
 
-pub(crate) fn same_bytes(
-    left: &str,
-    right: &str,
-    resources: &OperationGenerationResources,
-) -> Result<bool, FontError> {
-    resources
-        .claim_visits(1)
-        .map_err(FontError::ShapeAdmission)?;
+pub(crate) fn same_bytes(left: &str, right: &str) -> bool {
     // Concurrent immutable borrows of this exact range already denote the same bytes.
     if std::ptr::eq(left, right) {
-        return Ok(true);
+        return true;
     }
     if left.len() != right.len() {
-        return Ok(false);
+        return false;
     }
     for index in 0..left.len() {
-        resources
-            .claim_visits(1)
-            .map_err(FontError::ShapeAdmission)?;
         if left.as_bytes()[index] != right.as_bytes()[index] {
-            return Ok(false);
+            return false;
         }
     }
-    Ok(true)
+    true
 }
 
 pub(crate) fn builtin_font_stack() -> FontStack {
@@ -1122,8 +855,8 @@ pub(crate) struct CanonicalFontCore {
     prepared_pairs: Vec<PreparedPair>,
     incremental_pairs: Vec<IncrementalPair>,
     prepared_pairs_sealed: bool,
-    generation_resources: OperationGenerationResources,
-    budget: FontBudget,
+    operation: OperationContext,
+    preparation: FontPreparation,
 }
 
 #[derive(Debug)]
@@ -1226,239 +959,54 @@ pub(crate) struct PreparedFontEnvironment {
     core: Arc<RwLock<CanonicalFontCore>>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct FontResourceUsage {
-    pub(crate) font_bytes: u128,
-    pub(crate) processing_visits: u128,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum TextGenerationClaimError {
-    Arithmetic(&'static str),
-    Limit {
-        resource: &'static str,
-        limit: u128,
-        cumulative_claim: u128,
-    },
-}
-
-#[derive(Debug)]
-struct GenerationResourceCounters {
-    slots: u128,
-    topology_slots: u128,
-    visits: u128,
-    calls: u128,
-    cache_entries: u128,
-    visit_limit: u128,
-    bytes: u64,
-    byte_limit: u64,
-}
-
 #[derive(Debug, Clone)]
-pub(crate) struct OperationGenerationResources {
+pub(crate) struct OperationContext {
     // Shared by clones independently of accounting and mutable cache contents.
     identity: Arc<()>,
-    counters: Arc<Mutex<GenerationResourceCounters>>,
     pub(crate) palette_cache: Arc<Mutex<crate::theme::PaletteCache>>,
 }
 
-/// Proof that the logical owner admitted a call before consulting its cache.
-pub(crate) struct MeasurementCall(());
-
-impl OperationGenerationResources {
+impl OperationContext {
     pub(crate) fn same_operation(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.identity, &other.identity)
-    }
-
-    #[cfg(test)]
-    pub(crate) fn set_test_limits(&self, visits: u128, bytes: u64) {
-        let mut counters = self.counters.lock().unwrap();
-        counters.visit_limit = visits;
-        counters.byte_limit = bytes;
-    }
-
-    #[cfg(test)]
-    pub(crate) fn with_test_limits(visits: u128, bytes: u64) -> Self {
-        Self {
-            identity: Arc::new(()),
-            palette_cache: Arc::default(),
-            counters: Arc::new(Mutex::new(GenerationResourceCounters {
-                slots: 0,
-                topology_slots: 0,
-                visits: 0,
-                calls: 0,
-                cache_entries: 0,
-                visit_limit: visits,
-                bytes: 0,
-                byte_limit: bytes,
-            })),
-        }
     }
 
     pub(crate) fn new() -> Self {
         Self {
             identity: Arc::new(()),
             palette_cache: Arc::default(),
-            counters: Arc::new(Mutex::new(GenerationResourceCounters {
-                slots: 0,
-                topology_slots: 0,
-                visits: 0,
-                calls: 0,
-                cache_entries: 0,
-                visit_limit: u128::from(PROCESSING_VISIT_LIMIT),
-                bytes: 0,
-                byte_limit: FONT_BYTE_LIMIT,
-            })),
         }
-    }
-
-    pub(crate) fn claim_slots(&self, amount: u128) -> Result<(), TextGenerationClaimError> {
-        let mut counters = self
-            .counters
-            .lock()
-            .map_err(|_| TextGenerationClaimError::Arithmetic("text resource synchronization"))?;
-        claim_text_generation_resource(&mut counters.slots, amount, "retained planning records")
-    }
-
-    pub(crate) fn claim_calls(&self, amount: u128) -> Result<(), TextGenerationClaimError> {
-        let mut counters = self
-            .counters
-            .lock()
-            .map_err(|_| TextGenerationClaimError::Arithmetic("text resource synchronization"))?;
-        claim_text_generation_resource(
-            &mut counters.calls,
-            amount,
-            "measurement/intrinsic call attempts",
-        )
-    }
-
-    pub(crate) fn claim_topology_slots(
-        &self,
-        amount: u128,
-    ) -> Result<(), TextGenerationClaimError> {
-        let mut counters = self.counters.lock().map_err(|_| {
-            TextGenerationClaimError::Arithmetic("topology resource synchronization")
-        })?;
-        claim_text_generation_resource(
-            &mut counters.topology_slots,
-            amount,
-            "prepared topology slots",
-        )
-    }
-
-    #[cfg(test)]
-    pub(crate) fn topology_usage(&self) -> u128 {
-        self.counters.lock().unwrap().topology_slots
-    }
-
-    pub(crate) fn claim_cache_entries(&self, amount: u128) -> Result<(), TextGenerationClaimError> {
-        let mut counters = self
-            .counters
-            .lock()
-            .map_err(|_| TextGenerationClaimError::Arithmetic("text resource synchronization"))?;
-        claim_text_generation_resource(
-            &mut counters.cache_entries,
-            amount,
-            "root-local cache entries",
-        )
-    }
-
-    #[cfg(test)]
-    pub(crate) fn call_cache_usage(&self) -> (u128, u128) {
-        let counters = self.counters.lock().unwrap();
-        (counters.calls, counters.cache_entries)
-    }
-
-    pub(crate) fn claim_bytes(&self, amount: u64) -> Result<(), FontError> {
-        let mut counters = self
-            .counters
-            .lock()
-            .map_err(|_| FontError::Synchronization)?;
-        let limit = counters.byte_limit;
-        claim_font_resource(&mut counters.bytes, amount, limit, "system-font bytes")
-    }
-
-    pub(crate) fn claim_visits(&self, amount: u128) -> Result<(), TextGenerationClaimError> {
-        let mut counters = self
-            .counters
-            .lock()
-            .map_err(|_| TextGenerationClaimError::Arithmetic("text resource synchronization"))?;
-        let next =
-            counters
-                .visits
-                .checked_add(amount)
-                .ok_or(TextGenerationClaimError::Arithmetic(
-                    "root processing visits",
-                ))?;
-        if ENFORCE_RESOURCE_QUOTAS && next > counters.visit_limit {
-            return Err(TextGenerationClaimError::Limit {
-                resource: "root processing visits",
-                limit: counters.visit_limit,
-                cumulative_claim: next,
-            });
-        }
-        counters.visits = next;
-        Ok(())
-    }
-
-    pub(crate) fn usage(&self) -> Result<(u128, u128), TextGenerationClaimError> {
-        let counters = self
-            .counters
-            .lock()
-            .map_err(|_| TextGenerationClaimError::Arithmetic("text resource synchronization"))?;
-        Ok((counters.slots, counters.visits))
-    }
-
-    #[cfg(test)]
-    pub(crate) fn byte_usage(&self) -> Result<u64, FontError> {
-        self.counters
-            .lock()
-            .map(|counters| counters.bytes)
-            .map_err(|_| FontError::Synchronization)
     }
 }
 
 impl PreparedFontEnvironment {
-    pub(crate) fn font_resources(&self) -> Result<OperationFontResources, FontError> {
-        Ok(self
-            .core
-            .read()
-            .map_err(|_| FontError::Synchronization)?
-            .budget
-            .resources
-            .clone())
-    }
     pub(crate) fn discover_system() -> Result<Self, FontError> {
         #[cfg(test)]
         FONT_DISCOVERY_CALLS.with(|calls| calls.set(calls.get() + 1));
         let scalar_presence = scalar_presence_map()?;
         Ok(Self {
-            core: Arc::new(RwLock::new(
-                CanonicalFontCore::discover_system_with_resources(
-                    FontBudget::new(ResourceLimits::PRODUCTION),
-                    scalar_presence,
-                    None,
-                )?,
-            )),
+            core: Arc::new(RwLock::new(CanonicalFontCore::discover_prepared(
+                FontPreparation::new(),
+                scalar_presence,
+                None,
+            )?)),
         })
     }
 
-    pub(crate) fn discover_system_with_prepared_resources(
+    pub(crate) fn discover_for_operation(
         scalar_presence: Vec<u64>,
-        font_resources: OperationFontResources,
+        operation: OperationContext,
         prepared_stage: &mut crate::layout::kernel::PreparedStage<'_>,
     ) -> Result<Self, FontError> {
         #[cfg(test)]
         FONT_DISCOVERY_CALLS.with(|calls| calls.set(calls.get() + 1));
-        let budget = FontBudget::from_resources(font_resources);
+        let preparation = FontPreparation::for_operation(operation);
         Ok(Self {
-            core: Arc::new(RwLock::new(
-                CanonicalFontCore::discover_system_with_resources(
-                    budget,
-                    scalar_presence,
-                    Some(prepared_stage),
-                )?,
-            )),
+            core: Arc::new(RwLock::new(CanonicalFontCore::discover_prepared(
+                preparation,
+                scalar_presence,
+                Some(prepared_stage),
+            )?)),
         })
     }
 
@@ -1473,78 +1021,13 @@ impl PreparedFontEnvironment {
         if core.prepared_pairs_sealed {
             return Err(FontError::PreparedPairAfterSeal { pair_ordinal });
         }
-        core.resolve_pair(pair_ordinal, stack, weight, required_scalars, true)
+        core.resolve_pair(pair_ordinal, stack, weight, required_scalars)
     }
 
-    pub(crate) fn claim_preflight_visits(&self, amount: u64) -> Result<(), FontError> {
-        self.core
-            .write()
-            .map_err(|_| FontError::Synchronization)?
-            .budget
-            .claim_visits(amount)
-    }
-
-    pub(crate) fn claim_unicode_bytes(&self, amount: u64) -> Result<(), FontError> {
-        self.core
-            .read()
-            .map_err(|_| FontError::Synchronization)?
-            .budget
-            .resources
-            .claim_bytes(amount)
-    }
-
-    pub(crate) fn claim_text_generation_slots(
-        &self,
-        amount: u128,
-    ) -> Result<(), TextGenerationClaimError> {
-        let resources = self
-            .core
-            .read()
-            .map_err(|_| TextGenerationClaimError::Arithmetic("text resource synchronization"))?
-            .generation_resources
-            .clone();
-        resources.claim_slots(amount)
-    }
-
-    pub(crate) fn claim_processing_visits(
-        &self,
-        amount: u128,
-    ) -> Result<(), TextGenerationClaimError> {
-        let resources = self
-            .core
-            .read()
-            .map_err(|_| TextGenerationClaimError::Arithmetic("text resource synchronization"))?
-            .generation_resources
-            .clone();
-        resources.claim_visits(amount)
-    }
-
-    pub(crate) fn claim_measurement_call(
-        &self,
-    ) -> Result<MeasurementCall, TextGenerationClaimError> {
-        self.core
-            .read()
-            .map_err(|_| TextGenerationClaimError::Arithmetic("text resource synchronization"))?
-            .generation_resources
-            .claim_calls(1)?;
-        Ok(MeasurementCall(()))
-    }
-
-    pub(crate) fn claim_cache_entries(&self, amount: u128) -> Result<(), TextGenerationClaimError> {
-        self.core
-            .read()
-            .map_err(|_| TextGenerationClaimError::Arithmetic("text resource synchronization"))?
-            .generation_resources
-            .claim_cache_entries(amount)
-    }
-
-    pub(crate) fn share_generation_resources(
-        &self,
-        resources: &OperationGenerationResources,
-    ) -> Result<(), FontError> {
+    pub(crate) fn validate_operation(&self, resources: &OperationContext) -> Result<(), FontError> {
         let core = self.core.read().map_err(|_| FontError::Synchronization)?;
         // Prepared fonts and their clones remain bound to their original operation.
-        if !core.generation_resources.same_operation(resources) {
+        if !core.operation.same_operation(resources) {
             return Err(FontError::Arithmetic(
                 "cannot replace a prepared font operation",
             ));
@@ -1552,8 +1035,8 @@ impl PreparedFontEnvironment {
         Ok(())
     }
 
-    pub(crate) fn generation_resources(&self) -> OperationGenerationResources {
-        self.core.read().unwrap().generation_resources.clone()
+    pub(crate) fn operation(&self) -> OperationContext {
+        self.core.read().unwrap().operation.clone()
     }
 
     pub(crate) fn reserve_prepared_pairs(
@@ -1594,12 +1077,8 @@ impl PreparedFontEnvironment {
             return Err(FontError::PreparedPairAfterSeal { pair_ordinal });
         }
         for prepared in &core.prepared_pairs {
-            core.generation_resources
-                .claim_visits(1)
-                .map_err(FontError::ShapeAdmission)?;
             if prepared.resolved.provenance.pair_ordinal == pair_ordinal
-                || (prepared.weight == weight
-                    && prepared.stack.same(stack, &core.generation_resources)?)
+                || (prepared.weight == weight && prepared.stack.same(stack))
             {
                 return Err(FontError::DuplicatePreparedPair { pair_ordinal });
             }
@@ -1609,10 +1088,9 @@ impl PreparedFontEnvironment {
             stack,
             weight,
             required_scalars,
-            false,
             prepared_stage.as_deref_mut(),
         )?;
-        let retained_stack = copy_stack_with_stage(stack, &core.budget.resources, prepared_stage)?;
+        let retained_stack = copy_stack_with_stage(stack, prepared_stage)?;
         core.prepared_pairs.push(PreparedPair {
             stack: retained_stack,
             weight,
@@ -1640,9 +1118,7 @@ impl PreparedFontEnvironment {
             return Err(FontError::PreparedPairAfterSeal { pair_ordinal });
         }
         // Staged requirements admitted scalar/unit traversal before their source copy.
-        if prepared_stage.is_none() {
-            core.budget.claim_visits(source.chars().count() as u64)?;
-        }
+
         let index = core
             .prepared_pairs
             .iter()
@@ -1654,7 +1130,6 @@ impl PreparedFontEnvironment {
             let pair = &core.prepared_pairs[index].resolved;
             let mut found = false;
             for entry in &pair.selected_units {
-                core.budget.resources.claim_visits(1)?;
                 if entry.source == unit {
                     found = true;
                     break;
@@ -1665,10 +1140,8 @@ impl PreparedFontEnvironment {
             }
             let mut selected = None;
             for identity in &pair.provenance.candidates {
-                core.budget.resources.claim_visits(1)?;
                 let mut metadata = None;
                 for face in &core.faces {
-                    core.budget.resources.claim_visits(1)?;
                     if face.identity == *identity {
                         metadata = Some(face);
                         break;
@@ -1688,7 +1161,6 @@ impl PreparedFontEnvironment {
                     })?;
                 let mut covered = true;
                 for scalar in unit.chars() {
-                    core.budget.resources.claim_visits(1)?;
                     #[cfg(test)]
                     FONT_SELECTION_PROBES.with(|calls| calls.set(calls.get() + 1));
                     #[cfg(test)]
@@ -1708,7 +1180,7 @@ impl PreparedFontEnvironment {
                 }
             }
             let mut retained = String::new();
-            core.budget.claim_bytes(unit.len() as u64)?;
+
             if let Some(stage) = prepared_stage.as_deref_mut() {
                 stage
                     .reserve_prepared_string(&mut retained, unit.len(), "font unit source")
@@ -1718,11 +1190,10 @@ impl PreparedFontEnvironment {
                     .try_reserve_exact(unit.len())
                     .map_err(|_| FontError::Allocation("font unit source"))?;
             }
-            let resources = core.budget.resources.clone();
+
             reserve_cached_with_stage(
                 &mut core.prepared_pairs[index].resolved.selected_units,
                 1,
-                &resources,
                 prepared_stage.as_deref_mut(),
             )?;
             retained.push_str(unit);
@@ -1752,25 +1223,11 @@ impl PreparedFontEnvironment {
     ) -> Result<Option<ResolvedFontPair>, FontError> {
         let core = self.core.read().map_err(|_| FontError::Synchronization)?;
         for prepared in &core.prepared_pairs {
-            core.generation_resources
-                .claim_visits(1)
-                .map_err(FontError::ShapeAdmission)?;
-            if prepared.weight == weight
-                && prepared.stack.same(stack, &core.generation_resources)?
-            {
+            if prepared.weight == weight && prepared.stack.same(stack) {
                 return Ok(Some(prepared.resolved.clone()));
             }
         }
         Ok(None)
-    }
-
-    pub(crate) fn resource_usage(&self) -> Result<FontResourceUsage, FontError> {
-        self.core
-            .read()
-            .map_err(|_| FontError::Synchronization)?
-            .budget
-            .resources
-            .usage()
     }
 
     pub(crate) fn shape_run(
@@ -1858,7 +1315,7 @@ impl PreparedFontEnvironment {
                 CanonicalFontCore::from_retained(
                     files,
                     &HostGenericNames::default(),
-                    FontBudget::new(ResourceLimits::PRODUCTION),
+                    FontPreparation::new(),
                     scalar_presence_map().unwrap(),
                 )
                 .unwrap(),
@@ -1889,7 +1346,7 @@ impl PreparedFontEnvironment {
                 CanonicalFontCore::from_retained(
                     files,
                     &HostGenericNames::default(),
-                    FontBudget::new(ResourceLimits::PRODUCTION),
+                    FontPreparation::new(),
                     scalar_presence_map().unwrap(),
                 )
                 .unwrap(),
@@ -1901,15 +1358,11 @@ impl PreparedFontEnvironment {
 #[allow(dead_code)]
 impl CanonicalFontCore {
     pub(crate) fn discover_system() -> Result<Self, FontError> {
-        Self::discover_system_with_resources(
-            FontBudget::new(ResourceLimits::PRODUCTION),
-            scalar_presence_map()?,
-            None,
-        )
+        Self::discover_prepared(FontPreparation::new(), scalar_presence_map()?, None)
     }
 
-    fn discover_system_with_resources(
-        budget: FontBudget,
+    fn discover_prepared(
+        preparation: FontPreparation,
         scalar_presence: Vec<u64>,
         mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
     ) -> Result<Self, FontError> {
@@ -1918,7 +1371,7 @@ impl CanonicalFontCore {
         Self::from_retained_with_stage(
             files,
             &sources.generics,
-            budget,
+            preparation,
             scalar_presence,
             prepared_stage,
         )
@@ -1991,12 +1444,8 @@ impl CanonicalFontCore {
                         }),
                 )
             {
-                self.generation_resources
-                    .claim_visits(1)
-                    .map_err(FontError::ShapeAdmission)?;
                 if ordinal == request.pair_ordinal
-                    || (weight == request.weight
-                        && stack.same(request.stack, &self.generation_resources)?)
+                    || (weight == request.weight && stack.same(request.stack))
                 {
                     return Err(FontError::DuplicatePreparedPair {
                         pair_ordinal: request.pair_ordinal,
@@ -2026,19 +1475,13 @@ impl CanonicalFontCore {
                 &self.database,
                 preparation.request.stack,
                 &mut preparation.resolved_names,
-                &mut self.budget,
+                &mut self.preparation,
                 prepared_stage.as_deref_mut(),
             )?;
-            preparation.raw_candidate_count = count_candidate_occurrences(
-                &self.faces,
-                &preparation.resolved_names,
-                &mut self.budget,
-            )?;
-            preparation.candidate_count = count_unique_candidate_survivors(
-                &self.faces,
-                &preparation.resolved_names,
-                &mut self.budget,
-            )?;
+            preparation.raw_candidate_count =
+                count_candidate_occurrences(&self.faces, &preparation.resolved_names)?;
+            preparation.candidate_count =
+                count_unique_candidate_survivors(&self.faces, &preparation.resolved_names)?;
             if preparation.candidate_count == 0 {
                 return Err(FontError::MissingFamily {
                     pair_ordinal: preparation.request.pair_ordinal,
@@ -2047,8 +1490,6 @@ impl CanonicalFontCore {
             let (scalar_count, rendering_scalar_count) = scalar_selection_capacities(
                 preparation.request.required_scalars,
                 &mut self.scalar_presence,
-                &mut self.budget,
-                false,
             )?;
             preparation.scalar_count = scalar_count;
             preparation.maximum_probes =
@@ -2080,18 +1521,7 @@ impl CanonicalFontCore {
                 "font glyph probes",
                 prepared_stage.as_deref_mut(),
             )?;
-            self.budget
-                .resources
-                .claim_visits(preparation.request.stack.byte_work()? as u64)?;
-            self.budget.resources.claim_bytes(
-                preparation
-                    .request
-                    .stack
-                    .len()
-                    .checked_mul(size_of::<FontFamily>())
-                    .ok_or(FontError::Arithmetic("prepared font stack bytes"))?
-                    as u64,
-            )?;
+
             reserve_prepared_or_local(
                 &mut preparation.retained_stack,
                 preparation.request.stack.len(),
@@ -2101,7 +1531,6 @@ impl CanonicalFontCore {
             reserve_family_stack_names(
                 &mut preparation.retained_stack,
                 preparation.request.stack,
-                &self.budget.resources,
                 prepared_stage.as_deref_mut(),
             )?;
         }
@@ -2120,7 +1549,6 @@ impl CanonicalFontCore {
                 &self.faces,
                 &preparation.resolved_names,
                 request.weight,
-                &mut self.budget,
                 &mut preparation.candidates,
             )?;
             if preparation.candidates.len() != preparation.raw_candidate_count {
@@ -2128,7 +1556,7 @@ impl CanonicalFontCore {
                     "font candidate count/materialization mismatch",
                 ));
             }
-            canonicalize_candidate_occurrences(&mut preparation.candidates, &mut self.budget)?;
+            canonicalize_candidate_occurrences(&mut preparation.candidates);
             if preparation.candidates.len() != preparation.candidate_count {
                 return Err(FontError::Arithmetic(
                     "canonical candidate count/materialization mismatch",
@@ -2142,12 +1570,8 @@ impl CanonicalFontCore {
             );
             let primary = preparation.provenance[0];
 
-            let (scalar_count, rendering_scalar_count) = scalar_selection_capacities(
-                request.required_scalars,
-                &mut self.scalar_presence,
-                &mut self.budget,
-                false,
-            )?;
+            let (scalar_count, rendering_scalar_count) =
+                scalar_selection_capacities(request.required_scalars, &mut self.scalar_presence)?;
             let maximum_probes =
                 maximum_glyph_probes(rendering_scalar_count, preparation.candidates.len())?;
             if scalar_count != preparation.scalar_count
@@ -2164,7 +1588,6 @@ impl CanonicalFontCore {
                 &preparation.candidates,
                 request.required_scalars,
                 &mut self.scalar_presence,
-                &mut self.budget,
                 scalar_count,
                 maximum_probes,
                 &mut preparation.selected_scalars,
@@ -2190,10 +1613,7 @@ impl CanonicalFontCore {
             fill_reserved_family_stack(&mut preparation.retained_stack, request.stack)?;
             self.prepared_pairs.push(PreparedPair {
                 stack: FontStack {
-                    families: {
-                        self.budget.resources.claim_bytes(font_stack_arc_bytes()?)?;
-                        Arc::new(preparation.retained_stack)
-                    },
+                    families: { Arc::new(preparation.retained_stack) },
                 },
                 weight: request.weight,
                 resolved: ResolvedFontPair {
@@ -2217,21 +1637,13 @@ impl CanonicalFontCore {
         stack: &FontStack,
         weight: RequestedWeight,
         required_scalars: &[char],
-        charge_required_scalars: bool,
     ) -> Result<ResolvedFontPair, FontError> {
-        self.resolve_pair_with_stage(
-            pair_ordinal,
-            stack,
-            weight,
-            required_scalars,
-            charge_required_scalars,
-            None,
-        )
+        self.resolve_pair_with_stage(pair_ordinal, stack, weight, required_scalars, None)
     }
 
     #[expect(
         clippy::too_many_lines,
-        reason = "cache admission, incremental selection, and result copying remain ordered"
+        reason = "cache lookup, incremental selection, and result copying remain ordered"
     )]
     fn resolve_pair_with_stage(
         &mut self,
@@ -2239,14 +1651,12 @@ impl CanonicalFontCore {
         stack: &FontStack,
         weight: RequestedWeight,
         required_scalars: &[char],
-        charge_required_scalars: bool,
+
         mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
     ) -> Result<ResolvedFontPair, FontError> {
-        self.budget.claim_visits(stack.len() as u64)?;
         let mut cached_index = None;
         for (index, cached) in self.incremental_pairs.iter().enumerate() {
-            self.budget.claim_visits(1)?;
-            if cached.weight == weight && cached.stack.same(stack, &self.generation_resources)? {
+            if cached.weight == weight && cached.stack.same(stack) {
                 cached_index = Some(index);
                 break;
             }
@@ -2261,24 +1671,17 @@ impl CanonicalFontCore {
                 &self.faces,
                 stack,
                 weight,
-                &mut self.budget,
+                &mut self.preparation,
                 prepared_stage.as_deref_mut(),
             )?;
             if candidates.is_empty() {
                 return Err(FontError::MissingFamily { pair_ordinal });
             }
-            let retained_stack = copy_stack_with_stage(
-                stack,
-                &self.budget.resources,
-                prepared_stage.as_deref_mut(),
-            )?;
-            self.generation_resources
-                .claim_cache_entries(1)
-                .map_err(FontError::ShapeAdmission)?;
+            let retained_stack = copy_stack_with_stage(stack, prepared_stage.as_deref_mut())?;
+
             reserve_cached_with_stage(
                 &mut self.incremental_pairs,
                 1,
-                &self.budget.resources,
                 prepared_stage.as_deref_mut(),
             )?;
             let index = self.incremental_pairs.len();
@@ -2292,9 +1695,7 @@ impl CanonicalFontCore {
         };
         let cached = &mut self.incremental_pairs[index];
         let mut missing = Vec::new();
-        if charge_required_scalars {
-            self.budget.claim_visits(required_scalars.len() as u64)?;
-        }
+
         for scalar in required_scalars {
             let mut found = false;
             for candidate in cached
@@ -2303,19 +1704,13 @@ impl CanonicalFontCore {
                 .map(|selected| selected.scalar)
                 .chain(missing.iter().copied())
             {
-                self.budget.claim_visits(1)?;
                 if candidate == *scalar {
                     found = true;
                     break;
                 }
             }
             if !found {
-                reserve_cached_with_stage(
-                    &mut missing,
-                    1,
-                    &self.budget.resources,
-                    prepared_stage.as_deref_mut(),
-                )?;
+                reserve_cached_with_stage(&mut missing, 1, prepared_stage.as_deref_mut())?;
                 missing.push(*scalar);
             }
         }
@@ -2327,8 +1722,6 @@ impl CanonicalFontCore {
                 &cached.candidates,
                 &missing,
                 &mut self.scalar_presence,
-                &mut self.budget,
-                false,
                 prepared_stage.as_deref_mut(),
                 |candidate, scalar| {
                     #[cfg(test)]
@@ -2351,12 +1744,9 @@ impl CanonicalFontCore {
             reserve_cached_with_stage(
                 &mut cached.selected_scalars,
                 selected.len(),
-                &self.budget.resources,
                 prepared_stage.as_deref_mut(),
             )?;
-            self.generation_resources
-                .claim_cache_entries(selected.len() as u128)
-                .map_err(FontError::ShapeAdmission)?;
+
             cached.selected_scalars.extend(selected);
         }
         // Return the operation's accumulated coverage. Copies are admitted;
@@ -2365,7 +1755,6 @@ impl CanonicalFontCore {
         reserve_cached_with_stage(
             &mut provenance,
             cached.candidates.len(),
-            &self.budget.resources,
             prepared_stage.as_deref_mut(),
         )?;
         provenance.extend(
@@ -2379,7 +1768,6 @@ impl CanonicalFontCore {
         reserve_cached_with_stage(
             &mut selected_scalars,
             cached.selected_scalars.len(),
-            &self.budget.resources,
             prepared_stage,
         )?;
         selected_scalars.extend_from_slice(&cached.selected_scalars);
@@ -2414,16 +1802,16 @@ impl CanonicalFontCore {
         script: rustybuzz::Script,
         context: ShapingContext<'_>,
     ) -> Result<ShapedRun, FontError> {
-        let metadata = self.find_face(identity)?.ok_or(FontError::Shape {
+        let metadata = self.find_face(identity).ok_or(FontError::Shape {
             identity,
             reason: "identity is not retained",
         })?;
         let file = &self.files[metadata.file_ordinal];
-        shape_retained_run(file, metadata, text, direction, script, context, self)
+        shape_retained_run(file, metadata, text, direction, script, context)
     }
 
     pub(crate) fn face_metrics(&self, identity: FaceIdentity) -> Result<DesignMetrics, FontError> {
-        self.find_face(identity)?
+        self.find_face(identity)
             .map(|face| face.metrics)
             .ok_or(FontError::Shape {
                 identity,
@@ -2431,14 +1819,11 @@ impl CanonicalFontCore {
             })
     }
 
-    fn find_face(&self, identity: FaceIdentity) -> Result<Option<&FaceMetadata>, FontError> {
-        for face in &self.faces {
-            self.budget.resources.claim_visits(1)?;
-            if face.identity == identity {
-                return Ok(Some(face));
-            }
-        }
-        Ok(None)
+    fn find_face(&self, identity: FaceIdentity) -> Option<&FaceMetadata> {
+        self.faces
+            .iter()
+            .find(|&face| face.identity == identity)
+            .map(|v| v as _)
     }
 
     fn outline_glyph(
@@ -2447,7 +1832,7 @@ impl CanonicalFontCore {
         glyph_id: u16,
         builder: &mut dyn ttf_parser::OutlineBuilder,
     ) -> Result<(DesignMetrics, Option<GlyphInk>), FontError> {
-        let metadata = self.find_face(identity)?.ok_or(FontError::Outline {
+        let metadata = self.find_face(identity).ok_or(FontError::Outline {
             identity,
             glyph_id,
             reason: "identity is not retained",
@@ -2474,20 +1859,20 @@ impl CanonicalFontCore {
     fn from_retained(
         files: Vec<RetainedFontFile>,
         generics: &HostGenericNames,
-        budget: FontBudget,
+        preparation: FontPreparation,
         scalar_presence: Vec<u64>,
     ) -> Result<Self, FontError> {
-        Self::from_retained_with_stage(files, generics, budget, scalar_presence, None)
+        Self::from_retained_with_stage(files, generics, preparation, scalar_presence, None)
     }
 
     fn from_retained_with_stage(
         files: Vec<RetainedFontFile>,
         generics: &HostGenericNames,
-        mut budget: FontBudget,
+        preparation: FontPreparation,
         scalar_presence: Vec<u64>,
         mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
     ) -> Result<Self, FontError> {
-        let generation_resources = budget.resources.generation_resources();
+        let operation = preparation.operation.clone();
         let mut database = Database::new();
 
         let face_capacity = files.iter().try_fold(0_usize, |total, file| {
@@ -2498,9 +1883,7 @@ impl CanonicalFontCore {
                 .checked_add(count)
                 .ok_or(FontError::Arithmetic("font face count"))
         })?;
-        budget.claim_visits(
-            u64::try_from(face_capacity).map_err(|_| FontError::Arithmetic("font face count"))?,
-        )?;
+
         let mut faces = Vec::new();
         reserve_prepared_or_local(
             &mut faces,
@@ -2526,8 +1909,7 @@ impl CanonicalFontCore {
                     }
                 })?;
 
-                let names =
-                    decode_family_names(&parsed, &mut budget, prepared_stage.as_deref_mut())?;
+                let names = decode_family_names(&parsed, prepared_stage.as_deref_mut())?;
                 let identity = FaceIdentity {
                     sha256: file.sha256,
                     face_index: index,
@@ -2559,29 +1941,10 @@ impl CanonicalFontCore {
             prepared_pairs: Vec::new(),
             incremental_pairs: Vec::new(),
             prepared_pairs_sealed: false,
-            generation_resources,
-            budget,
+            operation,
+            preparation,
         })
     }
-}
-
-fn claim_text_generation_resource(
-    consumed: &mut u128,
-    amount: u128,
-    resource: &'static str,
-) -> Result<(), TextGenerationClaimError> {
-    let cumulative_claim = consumed
-        .checked_add(amount)
-        .ok_or(TextGenerationClaimError::Arithmetic(resource))?;
-    if ENFORCE_RESOURCE_QUOTAS && cumulative_claim > TEXT_GENERATION_LIMIT {
-        return Err(TextGenerationClaimError::Limit {
-            resource,
-            limit: TEXT_GENERATION_LIMIT,
-            cumulative_claim,
-        });
-    }
-    *consumed = cumulative_claim;
-    Ok(())
 }
 
 fn design_metrics(
@@ -2606,25 +1969,21 @@ fn design_metrics(
 
 fn decode_family_names(
     face: &ttf_parser::Face<'_>,
-    budget: &mut FontBudget,
+
     prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<Vec<NameOccurrence>, FontError> {
     let names = face.names();
-    budget.claim_visits(u64::from(names.len()))?;
+
     let mut occurrence_count = 0;
     for record in names {
         if matches!(
             record.name_id,
             ttf_parser::name_id::TYPOGRAPHIC_FAMILY | ttf_parser::name_id::FAMILY
         ) {
-            occurrence_count += usize::from(decodes_like_ttf_parser(&record, budget)?);
+            occurrence_count += usize::from(decodes_like_ttf_parser(&record));
         }
     }
-    budget
-        .resources
-        .generation
-        .claim_slots(occurrence_count as u128)
-        .map_err(FontError::ShapeAdmission)?;
+
     let mut occurrences = Vec::new();
     reserve_prepared_or_local(
         &mut occurrences,
@@ -2632,33 +1991,13 @@ fn decode_family_names(
         "font family name occurrences",
         prepared_stage,
     )?;
-    budget.claim_visits(u64::from(names.len()))?;
+
     for (record_ordinal, record) in names.into_iter().enumerate() {
         let rank = match record.name_id {
             ttf_parser::name_id::TYPOGRAPHIC_FAMILY => NameRank::TypographicFamily,
             ttf_parser::name_id::FAMILY => NameRank::LegacyFamily,
             _ => continue,
         };
-        // Admit the bounded UTF-16 decode before entering ttf-parser's
-        // allocator; normalization below separately charges its own passes.
-        let encoded_bytes = u64::try_from(record.name.len())
-            .map_err(|_| FontError::Arithmetic("font family name input"))?;
-        if record.is_unicode() {
-            budget.claim_visits(
-                char::decode_utf16(
-                    record
-                        .name
-                        .chunks_exact(2)
-                        .map(|unit| u16::from_be_bytes([unit[0], unit[1]])),
-                )
-                .count() as u64,
-            )?;
-        }
-        budget.claim_bytes(
-            encoded_bytes
-                .checked_mul(3)
-                .ok_or(FontError::Arithmetic("font family name decode bytes"))?,
-        )?;
         let Some(value) = record.to_string() else {
             continue;
         };
@@ -2678,12 +2017,9 @@ fn decode_family_names(
     Ok(occurrences)
 }
 
-fn decodes_like_ttf_parser(
-    record: &ttf_parser::name::Name<'_>,
-    budget: &mut FontBudget,
-) -> Result<bool, FontError> {
+fn decodes_like_ttf_parser(record: &ttf_parser::name::Name<'_>) -> bool {
     if !record.is_unicode() {
-        return Ok(false);
+        return false;
     }
     for scalar in char::decode_utf16(
         record
@@ -2691,12 +2027,11 @@ fn decodes_like_ttf_parser(
             .chunks_exact(2)
             .map(|unit| u16::from_be_bytes([unit[0], unit[1]])),
     ) {
-        budget.claim_visits(1)?;
         if scalar.is_err() {
-            return Ok(false);
+            return false;
         }
     }
-    Ok(true)
+    true
 }
 
 fn canonical_candidates(
@@ -2704,9 +2039,9 @@ fn canonical_candidates(
     faces: &[FaceMetadata],
     stack: &FontStack,
     requested_weight: RequestedWeight,
-    budget: &mut FontBudget,
+    preparation: &mut FontPreparation,
 ) -> Result<Vec<CandidateFace>, FontError> {
-    canonical_candidates_with_stage(database, faces, stack, requested_weight, budget, None)
+    canonical_candidates_with_stage(database, faces, stack, requested_weight, preparation, None)
 }
 
 fn canonical_candidates_with_stage(
@@ -2714,7 +2049,7 @@ fn canonical_candidates_with_stage(
     faces: &[FaceMetadata],
     stack: &FontStack,
     requested_weight: RequestedWeight,
-    budget: &mut FontBudget,
+    preparation: &mut FontPreparation,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<Vec<CandidateFace>, FontError> {
     let mut resolved_names = Vec::new();
@@ -2728,39 +2063,26 @@ fn canonical_candidates_with_stage(
         database,
         stack,
         &mut resolved_names,
-        budget,
+        preparation,
         prepared_stage.as_deref_mut(),
     )?;
 
-    let count = count_candidate_occurrences(faces, &resolved_names, budget)?;
+    let count = count_candidate_occurrences(faces, &resolved_names)?;
     let mut candidates = Vec::new();
-    budget.claim_bytes(
-        u64::try_from(
-            count
-                .checked_mul(std::mem::size_of::<CandidateFace>())
-                .ok_or(FontError::Arithmetic("cached candidate bytes"))?,
-        )
-        .map_err(|_| FontError::Arithmetic("cached candidate bytes"))?,
-    )?;
+
     reserve_prepared_or_local(
         &mut candidates,
         count,
         "font candidate occurrences",
         prepared_stage,
     )?;
-    materialize_candidate_occurrences(
-        faces,
-        &resolved_names,
-        requested_weight,
-        budget,
-        &mut candidates,
-    )?;
+    materialize_candidate_occurrences(faces, &resolved_names, requested_weight, &mut candidates)?;
     if candidates.len() != count {
         return Err(FontError::Arithmetic(
             "font candidate count/materialization mismatch",
         ));
     }
-    canonicalize_candidate_occurrences(&mut candidates, budget)?;
+    canonicalize_candidate_occurrences(&mut candidates);
     Ok(candidates)
 }
 
@@ -2768,19 +2090,14 @@ fn resolve_stack_names_into(
     database: &Database,
     stack: &FontStack,
     resolved_names: &mut Vec<(String, bool)>,
-    budget: &mut FontBudget,
+    preparation: &mut FontPreparation,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), FontError> {
-    budget.claim_visits(stack.len() as u64)?;
-    for cached in &budget.normalized_stacks {
-        budget.resources.claim_visits(1)?;
-        if cached
-            .source
-            .same(stack, &budget.resources.generation_resources())?
-        {
+    for cached in &preparation.normalized_stacks {
+        if cached.source.same(stack) {
             for (name, generic) in &cached.names {
                 resolved_names.push((
-                    copy_name_with_stage(name, &budget.resources, prepared_stage.as_deref_mut())?,
+                    copy_name_with_stage(name, prepared_stage.as_deref_mut())?,
                     *generic,
                 ));
             }
@@ -2807,32 +2124,22 @@ fn resolve_stack_names_into(
             "resolved font stack count/materialization mismatch",
         ));
     }
-    let source = copy_stack_with_stage(stack, &budget.resources, prepared_stage.as_deref_mut())?;
+    let source = copy_stack_with_stage(stack, prepared_stage.as_deref_mut())?;
     let mut names = Vec::new();
     reserve_cached_with_stage(
         &mut names,
         resolved_names.len(),
-        &budget.resources,
         prepared_stage.as_deref_mut(),
     )?;
     for (name, generic) in resolved_names.iter() {
         names.push((
-            copy_name_with_stage(name, &budget.resources, prepared_stage.as_deref_mut())?,
+            copy_name_with_stage(name, prepared_stage.as_deref_mut())?,
             *generic,
         ));
     }
-    budget
-        .resources
-        .generation
-        .claim_cache_entries(1)
-        .map_err(FontError::ShapeAdmission)?;
-    reserve_cached_with_stage(
-        &mut budget.normalized_stacks,
-        1,
-        &budget.resources,
-        prepared_stage,
-    )?;
-    budget
+
+    reserve_cached_with_stage(&mut preparation.normalized_stacks, 1, prepared_stage)?;
+    preparation
         .normalized_stacks
         .push(NormalizedStack { source, names });
     Ok(())
@@ -2844,35 +2151,22 @@ fn fold_family_name(value: &str) -> Result<String, FontError> {
     super::unicode16::nfkc_casefold(value)
 }
 
-fn reserve_cached<T>(
-    values: &mut Vec<T>,
-    additional: usize,
-    resources: &OperationFontResources,
-) -> Result<(), FontError> {
-    reserve_cached_with_stage(values, additional, resources, None)
+fn reserve_cached<T>(values: &mut Vec<T>, additional: usize) -> Result<(), FontError> {
+    reserve_cached_with_stage(values, additional, None)
 }
 
 fn reserve_cached_with_stage<T>(
     values: &mut Vec<T>,
     additional: usize,
-    resources: &OperationFontResources,
+
     prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), FontError> {
     let required = values
         .len()
         .checked_add(additional)
         .ok_or(FontError::Arithmetic("font cache length"))?;
-    resources
-        .generation
-        .claim_slots(additional as u128)
-        .map_err(FontError::ShapeAdmission)?;
+
     if required > values.capacity() {
-        let bytes = required
-            .checked_mul(std::mem::size_of::<T>())
-            .ok_or(FontError::Arithmetic("font cache bytes"))?;
-        resources.claim_bytes(
-            u64::try_from(bytes).map_err(|_| FontError::Arithmetic("font cache bytes"))?,
-        )?;
         reserve_prepared_or_local(values, additional, "operation font cache", prepared_stage)?;
     }
     Ok(())
@@ -2880,10 +2174,9 @@ fn reserve_cached_with_stage<T>(
 
 fn copy_name_with_stage(
     source: &str,
-    resources: &OperationFontResources,
+
     prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<String, FontError> {
-    resources.claim_bytes(source.len() as u64)?;
     let mut output = String::new();
     reserve_string_prepared_or_local(
         &mut output,
@@ -2897,33 +2190,16 @@ fn copy_name_with_stage(
 
 fn copy_stack_with_stage(
     source: &FontStack,
-    resources: &OperationFontResources,
-    prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
-) -> Result<FontStack, FontError> {
-    source
-        .admit_copy(resources)?
-        .copy_with_stage(prepared_stage)
-}
-
-fn copy_admitted_stack_with_stage(
-    admitted: AdmittedFontStackCopy<'_>,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<FontStack, FontError> {
-    let AdmittedFontStackCopy { source, resources } = admitted;
-    resources.claim_bytes(font_stack_arc_bytes()?)?;
     let mut output = Vec::new();
-    reserve_cached_with_stage(
-        &mut output,
-        source.len(),
-        &resources,
-        prepared_stage.as_deref_mut(),
-    )?;
+    reserve_cached_with_stage(&mut output, source.len(), prepared_stage.as_deref_mut())?;
     for entry in source {
         output.push(FontFamily {
             kind: match &entry.kind {
                 FontFamilyKind::Named(name) => {
                     let mut retained = String::new();
-                    resources.claim_bytes(name.len() as u64)?;
+
                     reserve_string_prepared_or_local(
                         &mut retained,
                         name.len(),
@@ -2946,7 +2222,7 @@ fn materialize_candidate_occurrences(
     faces: &[FaceMetadata],
     resolved_names: &[(String, bool)],
     requested_weight: RequestedWeight,
-    budget: &mut FontBudget,
+
     candidates: &mut Vec<CandidateFace>,
 ) -> Result<(), FontError> {
     for (stack_entry_index, (resolved_name, generic)) in resolved_names.iter().enumerate() {
@@ -2954,7 +2230,6 @@ fn materialize_candidate_occurrences(
             .map_err(|_| FontError::Arithmetic("font stack entry index"))?;
         for (face_ordinal, face) in faces.iter().enumerate() {
             for name in &face.names {
-                budget.claim_visits(1)?;
                 if name.folded != *resolved_name {
                     continue;
                 }
@@ -2980,13 +2255,11 @@ fn materialize_candidate_occurrences(
 fn count_candidate_occurrences(
     faces: &[FaceMetadata],
     resolved_names: &[(String, bool)],
-    budget: &mut FontBudget,
 ) -> Result<usize, FontError> {
     let mut count = 0_usize;
     for (resolved_name, _) in resolved_names {
         for face in faces {
             for name in &face.names {
-                budget.claim_visits(1)?;
                 if name.folded == *resolved_name {
                     count = count
                         .checked_add(1)
@@ -3001,19 +2274,16 @@ fn count_candidate_occurrences(
 fn count_unique_candidate_survivors(
     faces: &[FaceMetadata],
     resolved_names: &[(String, bool)],
-    budget: &mut FontBudget,
 ) -> Result<usize, FontError> {
     let mut count = 0_usize;
     for (face_index, face) in faces.iter().enumerate() {
-        budget.claim_visits(1)?;
-        if !face_matches_resolved_names(face, resolved_names, budget)? {
+        if !face_matches_resolved_names(face, resolved_names) {
             continue;
         }
         let mut duplicate = false;
         for earlier in &faces[..face_index] {
-            budget.claim_visits(1)?;
             if earlier.identity == face.identity
-                && face_matches_resolved_names(earlier, resolved_names, budget)?
+                && face_matches_resolved_names(earlier, resolved_names)
             {
                 duplicate = true;
                 break;
@@ -3029,29 +2299,18 @@ fn count_unique_candidate_survivors(
     Ok(count)
 }
 
-fn face_matches_resolved_names(
-    face: &FaceMetadata,
-    resolved_names: &[(String, bool)],
-    budget: &mut FontBudget,
-) -> Result<bool, FontError> {
+fn face_matches_resolved_names(face: &FaceMetadata, resolved_names: &[(String, bool)]) -> bool {
     for (resolved_name, _) in resolved_names {
         for name in &face.names {
-            budget.claim_visits(1)?;
             if name.folded == *resolved_name {
-                return Ok(true);
+                return true;
             }
         }
     }
-    Ok(false)
+    false
 }
 
-fn canonicalize_candidate_occurrences(
-    candidates: &mut Vec<CandidateFace>,
-    budget: &mut FontBudget,
-) -> Result<(), FontError> {
-    let input = u64::try_from(candidates.len())
-        .map_err(|_| FontError::Arithmetic("candidate occurrence sort"))?;
-    budget.claim_visits(input)?;
+fn canonicalize_candidate_occurrences(candidates: &mut Vec<CandidateFace>) {
     candidates.sort_by(|left, right| {
         left.occurrence
             .identity
@@ -3059,14 +2318,9 @@ fn canonicalize_candidate_occurrences(
             .then_with(|| left.occurrence.canonical_cmp(&right.occurrence))
     });
 
-    budget.claim_visits(input)?;
     candidates.dedup_by(|right, left| right.occurrence.identity == left.occurrence.identity);
 
-    let survivors = u64::try_from(candidates.len())
-        .map_err(|_| FontError::Arithmetic("canonical candidate sort"))?;
-    budget.claim_visits(survivors)?;
     candidates.sort_by(|left, right| left.occurrence.canonical_cmp(&right.occurrence));
-    Ok(())
 }
 
 const fn style_distance(style: Style) -> u8 {
@@ -3082,8 +2336,7 @@ fn select_scalar_faces<F>(
     candidates: &[CandidateFace],
     required_scalars: &[char],
     presence: &mut [u64],
-    budget: &mut FontBudget,
-    charge_required_scalars: bool,
+
     has_glyph: F,
 ) -> Result<Vec<SelectedScalarFace>, FontError>
 where
@@ -3094,24 +2347,17 @@ where
         candidates,
         required_scalars,
         presence,
-        budget,
-        charge_required_scalars,
         None,
         has_glyph,
     )
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the scalar resolver keeps the pair, resources, reservation stage, and exact probe explicit"
-)]
 fn select_scalar_faces_with_stage<F>(
     pair_ordinal: u32,
     candidates: &[CandidateFace],
     required_scalars: &[char],
     presence: &mut [u64],
-    budget: &mut FontBudget,
-    charge_required_scalars: bool,
+
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
     has_glyph: F,
 ) -> Result<Vec<SelectedScalarFace>, FontError>
@@ -3119,7 +2365,7 @@ where
     F: FnMut(&CandidateFace, char) -> Result<bool, FontError>,
 {
     let (scalar_count, rendering_scalar_count) =
-        scalar_selection_capacities(required_scalars, presence, budget, charge_required_scalars)?;
+        scalar_selection_capacities(required_scalars, presence)?;
     let maximum_probes = maximum_glyph_probes(rendering_scalar_count, candidates.len())?;
 
     let mut selected = Vec::new();
@@ -3141,7 +2387,6 @@ where
         candidates,
         required_scalars,
         presence,
-        budget,
         scalar_count,
         maximum_probes,
         &mut selected,
@@ -3154,16 +2399,12 @@ where
 fn scalar_selection_capacities(
     required_scalars: &[char],
     presence: &mut [u64],
-    budget: &mut FontBudget,
-    charge_required_scalars: bool,
 ) -> Result<(usize, usize), FontError> {
     if presence.len() != SCALAR_MAP_WORDS {
         return Err(FontError::Arithmetic("Unicode scalar presence map"));
     }
     presence.fill(0);
-    if charge_required_scalars {
-        budget.claim_visits(required_scalars.len() as u64)?;
-    }
+
     for scalar in required_scalars {
         if scalar.is_control()
             && !is_nonrendering_mandatory_break(*scalar)
@@ -3229,7 +2470,7 @@ fn materialize_scalar_selection<F>(
     candidates: &[CandidateFace],
     required_scalars: &[char],
     presence: &mut [u64],
-    budget: &mut FontBudget,
+
     scalar_count: usize,
     maximum_probes: usize,
     selected: &mut Vec<SelectedScalarFace>,
@@ -3264,7 +2505,6 @@ where
         }
 
         for candidate in candidates {
-            budget.claim_visits(1)?;
             probes.push(GlyphProbe {
                 scalar,
                 identity: candidate.occurrence.identity,
@@ -3296,7 +2536,7 @@ where
 }
 
 // UAX #14 BK, CR, LF, and NL controls partition paragraphs and do not paint.
-// They remain in the charged census, but a glyph probe would incorrectly make
+// They remain in the census, but a glyph probe would incorrectly make
 // newline coverage a font requirement. VT/FF/LS/PS have BK and NEL has NL.
 pub(crate) const fn is_nonrendering_mandatory_break(scalar: char) -> bool {
     matches!(
@@ -3324,10 +2564,6 @@ pub(crate) struct ShapingContext<'a> {
     pub(crate) soft_hyphen: Option<usize>,
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "context, third-party shaping, root admission, and first-party retention stay ordered"
-)]
 fn shape_retained_run(
     file: &RetainedFontFile,
     metadata: &FaceMetadata,
@@ -3335,14 +2571,7 @@ fn shape_retained_run(
     direction: ShapingDirection,
     script: rustybuzz::Script,
     context: ShapingContext<'_>,
-    core: &CanonicalFontCore,
 ) -> Result<ShapedRun, FontError> {
-    let input = text.chars().count()
-        + context.pre.chars().rev().take(5).count()
-        + context.post.chars().take(5).count();
-    core.generation_resources
-        .claim_visits(input as u128)
-        .map_err(FontError::ShapeAdmission)?;
     if text.chars().any(is_nonrendering_mandatory_break) {
         return Err(FontError::Shape {
             identity: metadata.identity,
@@ -3397,19 +2626,7 @@ fn shape_retained_run(
     #[cfg(test)]
     FONT_SHAPE_CALLS.with(|calls| calls.set(calls.get() + 1));
     let shaped = rustybuzz::shape(&face, &[], buffer);
-    let count = shaped.len() as u128;
-    core.generation_resources
-        .claim_slots(count)
-        .map_err(FontError::ShapeAdmission)?;
-    core.budget.resources.claim_bytes(
-        u64::try_from(
-            shaped
-                .len()
-                .checked_mul(size_of::<ShapedGlyph>())
-                .ok_or(FontError::Arithmetic("shaped glyph bytes"))?,
-        )
-        .map_err(|_| FontError::Arithmetic("shaped glyph bytes"))?,
-    )?;
+
     let mut glyphs = Vec::new();
     try_reserve_exact(&mut glyphs, shaped.len(), "shaped glyphs")?;
     for (info, position) in shaped.glyph_infos().iter().zip(shaped.glyph_positions()) {
@@ -3790,14 +3007,13 @@ fn reserve_string_prepared_or_local(
 fn reserve_family_stack_names(
     retained: &mut Vec<FontFamily>,
     source: &FontStack,
-    resources: &OperationFontResources,
+
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), FontError> {
     for preference in source {
         retained.push(FontFamily {
             kind: match &preference.kind {
                 FontFamilyKind::Named(name) => {
-                    resources.claim_bytes(name.len() as u64)?;
                     let mut reserved = String::new();
                     if let Some(stage) = prepared_stage.as_deref_mut() {
                         stage
@@ -4666,172 +3882,145 @@ mod tests {
     use super::*;
 
     #[test]
-    fn font_stack_comparisons_charge_the_terminating_byte_and_entry() {
-        let left = FontStack::new([
-            FontFamily::named("αZ").unwrap(),
+    fn literal_stack_copy_preserves_values_and_owns_its_buffers() {
+        let source = FontStack::new([
+            FontFamily::named("A, B").unwrap(),
+            FontFamily::named("A, B").unwrap(),
             FontFamily::generic(GenericFontFamily::Serif),
         ])
         .unwrap();
-        let mismatch = FontStack::new([
-            FontFamily::named("αY").unwrap(),
-            FontFamily::generic(GenericFontFamily::Monospace),
-        ])
-        .unwrap();
-        // Stack length, first entry, name length, and three examined UTF-8 bytes.
-        for remaining in [0, 5, 6] {
-            let resources = OperationGenerationResources::with_test_limits(remaining, 0);
-            let result = left.same(&mismatch, &resources);
-            if remaining == 6 {
-                assert!(!result.unwrap());
-            } else {
-                assert!(result.is_err());
+        let retained = source.try_copy().unwrap();
+        assert_eq!(retained, source);
+        assert_ne!(retained.families().as_ptr(), source.families().as_ptr());
+        assert_ne!(
+            retained.families()[0].name().unwrap().as_ptr(),
+            source.families()[0].name().unwrap().as_ptr()
+        );
+    }
+
+    #[test]
+    fn retained_face_lookups_require_the_exact_identity() {
+        struct Outline(usize);
+        impl ttf_parser::OutlineBuilder for Outline {
+            fn move_to(&mut self, _: f32, _: f32) {
+                self.0 += 1;
             }
-            assert_eq!(resources.usage().unwrap().1, remaining);
-            assert_eq!(resources.byte_usage().unwrap(), 0);
+            fn line_to(&mut self, _: f32, _: f32) {
+                self.0 += 1;
+            }
+            fn quad_to(&mut self, _: f32, _: f32, _: f32, _: f32) {
+                self.0 += 1;
+            }
+            fn curve_to(&mut self, _: f32, _: f32, _: f32, _: f32, _: f32, _: f32) {
+                self.0 += 1;
+            }
+            fn close(&mut self) {
+                self.0 += 1;
+            }
         }
-        // Equal names also examine the terminating generic entry.
-        let independent = FontStack::new([
-            FontFamily::named("αZ").unwrap(),
-            FontFamily::generic(GenericFontFamily::Serif),
-        ])
-        .unwrap();
-        for remaining in [6, 7] {
-            let resources = OperationGenerationResources::with_test_limits(remaining, 0);
-            let result = left.same(&independent, &resources);
-            assert_eq!(result.is_ok(), remaining == 7);
-            assert_eq!(resources.usage().unwrap().1, remaining);
+        let environment = PreparedFontEnvironment::synthetic_faces(&[
+            ("First", &['A']),
+            ("Middle", &['A']),
+            ("Last", &['A']),
+        ]);
+        for target in [0, 2, 3] {
+            let identity = if target == 3 {
+                FaceIdentity {
+                    sha256: [0; 32],
+                    face_index: 0,
+                }
+            } else {
+                environment.core.read().unwrap().faces[target].identity
+            };
+            for route in 0..3 {
+                let mut outline = Outline(0);
+                let result = match route {
+                    0 => environment
+                        .shape_run(
+                            identity,
+                            "A",
+                            ShapingDirection::LeftToRight,
+                            rustybuzz::script::LATIN,
+                        )
+                        .map(|_| ()),
+                    1 => environment.face_metrics(identity).map(|_| ()),
+                    _ => environment
+                        .outline_glyph(identity, 1, &mut outline)
+                        .map(|_| ()),
+                };
+                if target == 3 {
+                    assert!(matches!(
+                        result,
+                        Err(FontError::Shape {
+                            reason: "identity is not retained",
+                            ..
+                        } | FontError::Outline {
+                            reason: "identity is not retained",
+                            ..
+                        })
+                    ));
+                } else {
+                    result.unwrap();
+                    if route == 2 {
+                        assert!(outline.0 > 0);
+                    }
+                }
+            }
         }
     }
 
     #[test]
-    fn css_admits_known_utf8_passes_without_an_unpriced_scalar_prescan() {
+    fn css_preserves_quoted_utf8_names() {
         let stack = named_stack(&["α, A"]);
-        // Each count/materialization pass visits one entry and five source bytes.
-        for remaining in [0, 11, 12] {
-            let resources = OperationFontResources::new();
-            resources
-                .generation_resources()
-                .set_test_limits(remaining, 536_870_912);
-            let result = stack.css(&resources);
-            if remaining == 12 {
-                assert_eq!(result.unwrap(), "\"α, A\"");
-                assert_eq!(resources.usage().unwrap().processing_visits, 12);
-                assert_eq!(resources.usage().unwrap().font_bytes, 7);
-            } else {
-                assert!(result.is_err());
-                assert_eq!(resources.usage().unwrap().processing_visits, 0);
-                assert_eq!(resources.usage().unwrap().font_bytes, 0);
-            }
-        }
+        assert_eq!(stack.css().unwrap(), "\"α, A\"");
     }
 
     #[test]
-    fn prepared_font_pair_hit_admits_name_content_before_returning_a_pair() {
+    fn prepared_font_pair_hits_preserve_pair_identity() {
         let environment = PreparedFontEnvironment::synthetic();
         let stack = named_stack(&["Test Sans"]);
         environment
             .prepare_pair(0, &stack, RequestedWeight::Normal, &['A'], None)
             .unwrap();
-        for remaining in [0, 12, 13] {
-            let resources = environment.generation_resources();
-            let before = resources.usage().unwrap().1;
-            let bytes = resources.byte_usage().unwrap();
-            resources.set_test_limits(before + remaining, bytes);
+        for _ in 0..3 {
             let result = environment.prepared_pair(&stack, RequestedWeight::Normal);
-            if remaining == 13 {
-                assert_eq!(result.unwrap().unwrap().provenance.pair_ordinal, 0);
-            } else {
-                assert!(result.is_err());
-            }
-            assert_eq!(resources.usage().unwrap().1 - before, remaining);
-            assert_eq!(resources.byte_usage().unwrap(), bytes);
+            assert_eq!(result.unwrap().unwrap().provenance.pair_ordinal, 0);
         }
     }
 
     #[test]
-    fn incremental_and_normalized_hits_price_content_without_reprobing_fonts() {
+    fn incremental_and_normalized_hits_do_not_reprobe_fonts() {
         for normalized in [false, true] {
             let environment = PreparedFontEnvironment::synthetic();
             let stack = named_stack(&["Test Sans"]);
             environment
                 .resolve_pair(0, &stack, RequestedWeight::Normal, &['A'])
                 .unwrap();
-            // Entry scan + cache scan + stack comparison (12). Incremental
-            // lookup additionally visits one supplied and one retained scalar.
-            let work = if normalized { 14 } else { 16 };
-            for remaining in [0, work - 1, work] {
-                let resources = environment.generation_resources();
-                let before = resources.usage().unwrap().1;
-                resources.set_test_limits(before + remaining, 536_870_912);
+            for _ in 0..3 {
                 FONT_PAIR_RESOLUTION_CALLS.with(|calls| calls.set(0));
                 FONT_NORMALIZATION_CALLS.with(|calls| calls.set(0));
                 FONT_SELECTION_PROBES.with(|calls| calls.set(0));
                 let success = if normalized {
                     let mut core = environment.core.write().unwrap();
                     let CanonicalFontCore {
-                        database, budget, ..
+                        database,
+                        preparation,
+                        ..
                     } = &mut *core;
                     let mut names = Vec::with_capacity(1);
-                    resolve_stack_names_into(database, &stack, &mut names, budget, None).is_ok()
+                    resolve_stack_names_into(database, &stack, &mut names, preparation, None)
+                        .is_ok()
                 } else {
                     environment
                         .resolve_pair(1, &stack, RequestedWeight::Normal, &['A'])
                         .is_ok()
                 };
-                assert_eq!(success, remaining == work);
-                assert_eq!(resources.usage().unwrap().1 - before, remaining);
+                assert!(success);
+
                 FONT_PAIR_RESOLUTION_CALLS.with(|calls| assert_eq!(calls.get(), 0));
                 FONT_NORMALIZATION_CALLS.with(|calls| assert_eq!(calls.get(), 0));
                 FONT_SELECTION_PROBES.with(|calls| assert_eq!(calls.get(), 0));
             }
-        }
-    }
-
-    #[test]
-    fn staged_stack_copy_prices_one_byte_pass_before_any_font_storage() {
-        let source = FontStack::new([
-            FontFamily::named("αX").unwrap(),
-            FontFamily::named("A, B").unwrap(),
-            FontFamily::generic(GenericFontFamily::Serif),
-        ])
-        .unwrap();
-        let bytes = 3 * size_of::<FontFamily>()
-            + 3
-            + 4
-            + usize::try_from(font_stack_arc_bytes().unwrap()).unwrap();
-        let work = 3 + 3 + 4;
-        for remaining in [0, work - 1, work] {
-            let stopped = crate::layout::plan_exact_root(
-                1,
-                1,
-                |stage| {
-                    let resources = stage.font_resources();
-                    resources
-                        .generation_resources()
-                        .set_test_limits(remaining, bytes as u64);
-                    let copy = source.copy_with_stage(&resources, Some(stage));
-                    if remaining == work {
-                        let copy = copy.unwrap();
-                        assert_eq!(copy, source);
-                        assert_ne!(copy.families().as_ptr(), source.families().as_ptr());
-                        assert_eq!(resources.usage().unwrap().processing_visits, work);
-                        assert_eq!(resources.usage().unwrap().font_bytes, bytes as u128);
-                    } else {
-                        assert!(copy.is_err());
-                        assert_eq!(resources.usage().unwrap().processing_visits, 0);
-                        assert_eq!(resources.usage().unwrap().font_bytes, 0);
-                        assert_eq!(resources.generation_resources().usage().unwrap().0, 0);
-                    }
-                    // Stop the enclosing root before unrelated feedback storage;
-                    // the producer's success/refusal has been inspected above.
-                    Err::<(), _>(crate::Error::Render("font copy boundary inspected".into()))
-                },
-                |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
-                |(), _, (), _| Ok(()),
-            )
-            .err()
-            .unwrap();
-            assert!(stopped.to_string().contains("font copy boundary inspected"));
         }
     }
 
@@ -4854,7 +4043,7 @@ mod tests {
             Some(GenericFontFamily::SansSerif)
         );
         assert_eq!(
-            stack.css(&OperationFontResources::new()).unwrap(),
+            stack.css().unwrap(),
             "\"A, B\", \"sans-serif\", \"A, B\", sans-serif"
         );
         for name in [
@@ -4876,28 +4065,21 @@ mod tests {
             "revert-layer",
             "default",
         ] {
-            assert_eq!(
-                named_stack(&[name])
-                    .css(&OperationFontResources::new())
-                    .unwrap(),
-                format!("\"{name}\"")
-            );
+            assert_eq!(named_stack(&[name]).css().unwrap(), format!("\"{name}\""));
         }
         assert_eq!(
             named_stack(&["A\"B\\C", "A  B", "16 Font", "A; B"])
-                .css(&OperationFontResources::new())
+                .css()
                 .unwrap(),
             "\"A\\\"B\\\\C\", \"A  B\", \"16 Font\", \"A; B\""
         );
         assert_eq!(
-            builtin_font_stack()
-                .css(&OperationFontResources::new())
-                .unwrap(),
+            builtin_font_stack().css().unwrap(),
             crate::DEFAULT_FONT_FAMILY_STACK
         );
         assert_eq!(
             named_stack(&["-Font", "--Font", "-16 Font", "sans-serif Display", "emoji"])
-                .css(&OperationFontResources::new())
+                .css()
                 .unwrap(),
             "-Font, --Font, \"-16 Font\", \"sans-serif Display\", \"emoji\""
         );
@@ -4959,314 +4141,18 @@ mod tests {
     }
 
     #[test]
-    fn literal_stack_clone_admits_exact_storage_and_refuses_before_copy() {
-        let source = FontStack::new([
-            FontFamily::named("A, B").unwrap(),
-            FontFamily::named("A, B").unwrap(),
-            FontFamily::generic(GenericFontFamily::Serif),
-        ])
-        .unwrap();
-        let bytes = 3 * size_of::<FontFamily>()
-            + 2 * "A, B".len()
-            + usize::try_from(font_stack_arc_bytes().unwrap()).unwrap();
-        for remaining in [bytes - 1, bytes] {
-            let resources = OperationGenerationResources::with_test_limits(
-                source.byte_work().unwrap() as u128,
-                remaining as u64,
-            );
-            let result = source.copy_with_generation(&resources);
-            if remaining == bytes {
-                let retained = result.unwrap();
-                assert_eq!(retained, source);
-                assert_ne!(retained.families().as_ptr(), source.families().as_ptr());
-                assert_ne!(
-                    retained.families()[0].name().unwrap().as_ptr(),
-                    source.families()[0].name().unwrap().as_ptr()
-                );
-                assert_eq!(resources.byte_usage().unwrap(), bytes as u64);
-            } else {
-                assert!(matches!(
-                    result,
-                    Err(FontError::Limit {
-                        resource: "system-font bytes",
-                        ..
-                    })
-                ));
-            }
-        }
-        let resources = OperationGenerationResources::with_test_limits(
-            source.byte_work().unwrap() as u128 - 1,
-            bytes as u64,
-        );
-        assert!(source.copy_with_generation(&resources).is_err());
-        assert_eq!(resources.byte_usage().unwrap(), 0);
-    }
-
-    #[test]
-    fn retained_face_lookups_admit_each_comparison_before_shaping_metrics_or_outlining() {
-        struct OutlineCalls(usize);
-        impl ttf_parser::OutlineBuilder for OutlineCalls {
-            fn move_to(&mut self, _x: f32, _y: f32) {
-                self.0 += 1;
-            }
-            fn line_to(&mut self, _x: f32, _y: f32) {
-                self.0 += 1;
-            }
-            fn quad_to(&mut self, _x1: f32, _y1: f32, _x: f32, _y: f32) {
-                self.0 += 1;
-            }
-            fn curve_to(&mut self, _x1: f32, _y1: f32, _x2: f32, _y2: f32, _x: f32, _y: f32) {
-                self.0 += 1;
-            }
-            fn close(&mut self) {
-                self.0 += 1;
-            }
-        }
-        for (target, examined) in [(0, 1_u128), (2, 3), (3, 3)] {
-            for route in 0..3 {
-                let total = examined + u128::from(route == 0 && target != 3);
-                for remaining in [examined - 1, total] {
-                    let environment = PreparedFontEnvironment::synthetic_faces(&[
-                        ("First", &['A']),
-                        ("Middle", &['A']),
-                        ("Last", &['A']),
-                    ]);
-                    let identity = if target == 3 {
-                        FaceIdentity {
-                            sha256: [0; 32],
-                            face_index: 0,
-                        }
-                    } else {
-                        environment.core.read().unwrap().faces[target].identity
-                    };
-                    let before = environment.resource_usage().unwrap();
-                    let records = environment.generation_resources().usage().unwrap().0;
-                    environment
-                        .claim_processing_visits(1_000_000 - before.processing_visits - remaining)
-                        .unwrap();
-                    FONT_SHAPE_CALLS.with(|calls| calls.set(0));
-                    SHAPED_GLYPH_RETAINS.with(|calls| calls.set(0));
-                    let mut outline = OutlineCalls(0);
-                    let result = match route {
-                        0 => environment
-                            .shape_run(
-                                identity,
-                                "A",
-                                ShapingDirection::LeftToRight,
-                                rustybuzz::script::LATIN,
-                            )
-                            .map(|_| ()),
-                        1 => environment.face_metrics(identity).map(|_| ()),
-                        _ => environment
-                            .outline_glyph(identity, 1, &mut outline)
-                            .map(|_| ()),
-                    };
-                    if remaining < examined {
-                        assert!(matches!(
-                            result,
-                            Err(FontError::Limit {
-                                resource: "root processing visits",
-                                ..
-                            })
-                        ));
-                        FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 0));
-                        SHAPED_GLYPH_RETAINS.with(|calls| assert_eq!(calls.get(), 0));
-                        assert_eq!(outline.0, 0);
-                        assert_eq!(
-                            environment.generation_resources().usage().unwrap().0,
-                            records
-                        );
-                        assert_eq!(
-                            environment.resource_usage().unwrap().font_bytes,
-                            before.font_bytes
-                        );
-                    } else if target == 3 {
-                        assert!(matches!(
-                            result,
-                            Err(FontError::Shape {
-                                reason: "identity is not retained",
-                                ..
-                            } | FontError::Outline {
-                                reason: "identity is not retained",
-                                ..
-                            })
-                        ));
-                    } else {
-                        result.unwrap();
-                        if route == 2 {
-                            assert!(outline.0 > 0);
-                        }
-                    }
-                    assert_eq!(
-                        environment.resource_usage().unwrap().processing_visits,
-                        1_000_000
-                    );
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn generation_limits_are_independent_inclusive_and_shared() {
-        for resource in 0..5 {
-            let font = OperationFontResources::new();
-            let generation = font.generation_resources();
-            let claim = |amount| match resource {
-                0 => generation.claim_slots(amount),
-                1 => generation.claim_visits(amount),
-                2 => generation.claim_calls(amount),
-                3 => generation.claim_cache_entries(amount),
-                _ => generation.claim_topology_slots(amount),
-            };
-            claim(999_999).unwrap();
-            claim(1).unwrap();
-            assert!(matches!(
-                claim(1),
-                Err(TextGenerationClaimError::Limit {
-                    limit: 1_000_000,
-                    cumulative_claim: 1_000_001,
-                    ..
-                })
-            ));
-            assert!(matches!(
-                claim(u128::MAX),
-                Err(TextGenerationClaimError::Arithmetic(_))
-            ));
-            let (records, visits) = generation.usage().unwrap();
-            let (calls, entries) = generation.clone().call_cache_usage();
-            for (index, used) in [records, visits, calls, entries, generation.topology_usage()]
-                .into_iter()
-                .enumerate()
-            {
-                assert_eq!(used, if index == resource { 1_000_000 } else { 0 });
-            }
-            font.claim_bytes(FONT_BYTE_LIMIT).unwrap();
-            assert!(font.claim_bytes(1).is_err());
-            assert_eq!(generation.usage().unwrap(), (records, visits));
-            assert_eq!(generation.call_cache_usage(), (calls, entries));
-        }
-        for resource in 0..3 {
-            let resources = OperationGenerationResources::new();
-            let claim = |amount| match resource {
-                0 => resources.clone().claim_calls(amount),
-                1 => resources.clone().claim_cache_entries(amount),
-                _ => resources.clone().claim_topology_slots(amount),
-            };
-            claim(100_000).unwrap();
-            let successes = std::thread::scope(|scope| {
-                let a = scope.spawn(|| claim(600_000).is_ok());
-                let b = scope.spawn(|| claim(600_000).is_ok());
-                usize::from(a.join().unwrap()) + usize::from(b.join().unwrap())
-            });
-            assert_eq!(successes, 1);
-            claim(300_000).unwrap();
-            assert!(claim(1).is_err());
-        }
-    }
-
-    #[test]
-    fn font_cache_refusal_does_not_insert_or_prevent_existing_entry_reuse() {
-        let environment = PreparedFontEnvironment::synthetic();
-        let stack = named_stack(&["Test Sans"]);
-        environment
-            .resolve_pair(0, &stack, RequestedWeight::Normal, &['A'])
-            .unwrap();
-        let resources = environment.generation_resources();
-        let used = resources.call_cache_usage().1;
-        resources.claim_cache_entries(1_000_000 - used).unwrap();
-        environment
-            .resolve_pair(0, &stack, RequestedWeight::Normal, &['A'])
-            .unwrap();
-        assert!(matches!(
-            environment.resolve_pair(
-                1,
-                &named_stack(&["Test Serif"]),
-                RequestedWeight::Normal,
-                &['A']
-            ),
-            Err(FontError::ShapeAdmission(TextGenerationClaimError::Limit {
-                resource: "root-local cache entries",
-                ..
-            }))
-        ));
-        assert_eq!(
-            environment
-                .core
-                .read()
-                .unwrap()
-                .budget
-                .normalized_stacks
-                .len(),
-            1
-        );
-        assert_eq!(resources.call_cache_usage().1, 1_000_000);
-    }
-
-    #[test]
     fn prepared_fonts_keep_their_operation_across_clones() {
-        let font = OperationFontResources::new();
-        let generation = font.generation_resources();
+        let font = OperationContext::new();
+        let generation = font.clone();
         let environment = PreparedFontEnvironment::synthetic();
-        let original = environment.generation_resources();
-        environment.share_generation_resources(&original).unwrap();
+        let original = environment.operation();
+        environment.validate_operation(&original).unwrap();
         environment
             .clone()
-            .share_generation_resources(&original.clone())
+            .validate_operation(&original.clone())
             .unwrap();
-        assert!(environment
-            .clone()
-            .share_generation_resources(&generation)
-            .is_err());
-        assert!(environment.generation_resources().same_operation(&original));
-    }
-
-    #[test]
-    fn canonical_shaping_admits_only_consumed_context_before_the_engine() {
-        let environment = PreparedFontEnvironment::synthetic();
-        let stack = named_stack(&["Test Sans"]);
-        let pair = environment
-            .resolve_pair(0, &stack, RequestedWeight::Normal, &['A'])
-            .unwrap();
-        let context = "A".repeat(2048);
-        let before = environment.resource_usage().unwrap().processing_visits;
-        environment
-            .claim_processing_visits(1_000_000 - before - 12)
-            .unwrap();
-        FONT_SHAPE_CALLS.with(|calls| calls.set(0));
-        let shaped = environment
-            .shape_run_with_context(
-                pair.primary,
-                "A",
-                ShapingDirection::LeftToRight,
-                rustybuzz::script::LATIN,
-                ShapingContext {
-                    pre: &context,
-                    post: &context,
-                    soft_hyphen: None,
-                },
-            )
-            .unwrap();
-        assert_eq!(shaped.glyphs.len(), 1);
-        assert_eq!(
-            environment.resource_usage().unwrap().processing_visits,
-            1_000_000
-        );
-        FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 1));
-        SHAPED_GLYPH_RETAINS.with(|count| count.set(0));
-        assert!(matches!(
-            environment.shape_run(
-                pair.primary,
-                "A",
-                ShapingDirection::LeftToRight,
-                rustybuzz::script::LATIN
-            ),
-            Err(FontError::Limit {
-                resource: "root processing visits",
-                ..
-            })
-        ));
-        FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 1));
-        SHAPED_GLYPH_RETAINS.with(|count| assert_eq!(count.get(), 0));
+        assert!(environment.clone().validate_operation(&generation).is_err());
+        assert!(environment.operation().same_operation(&original));
     }
 
     #[test]
@@ -5280,9 +4166,7 @@ mod tests {
         environment
             .resolve_pair(0, &stack, RequestedWeight::Normal, &['A'])
             .unwrap();
-        let resources = environment.core.read().unwrap().budget.resources.clone();
-        resources.claim_visits(900_000).unwrap();
-        let before = resources.usage().unwrap().processing_visits;
+
         for ordinal in 1..=1000 {
             let stack = stack.clone();
             let pair = shared
@@ -5291,8 +4175,7 @@ mod tests {
             assert_eq!(pair.provenance.pair_ordinal, ordinal);
             assert_eq!(pair.selected_scalars.len(), 1);
         }
-        let after = resources.usage().unwrap().processing_visits;
-        assert!(after > before && after < 1_000_000);
+
         FONT_NORMALIZATION_CALLS.with(|calls| assert_eq!(calls.get(), 1));
         FONT_PAIR_RESOLUTION_CALLS.with(|calls| assert_eq!(calls.get(), 1));
         FONT_SELECTION_PROBES.with(|calls| assert_eq!(calls.get(), 1));
@@ -5313,14 +4196,10 @@ mod tests {
         FONT_PAIR_RESOLUTION_CALLS.with(|calls| assert_eq!(calls.get(), 2));
         FONT_NORMALIZATION_CALLS.with(|calls| assert_eq!(calls.get(), 1));
         FONT_SELECTION_PROBES.with(|calls| assert_eq!(calls.get(), 3));
-        let used = resources.usage().unwrap().processing_visits;
-        resources
-            .claim_visits(u64::try_from(1_000_000 - used).unwrap())
+
+        shared
+            .resolve_pair(1003, &stack, RequestedWeight::Normal, &['A'])
             .unwrap();
-        assert!(matches!(
-            shared.resolve_pair(1003, &stack, RequestedWeight::Normal, &['A']),
-            Err(FontError::Limit { .. })
-        ));
     }
 
     #[test]
@@ -5848,8 +4727,8 @@ mod tests {
             candidate(identity_a, 0, 0, 20),
             candidate(identity_a, 0, 0, 10),
         ];
-        let mut budget = FontBudget::new(ResourceLimits::PRODUCTION);
-        canonicalize_candidate_occurrences(&mut candidates, &mut budget).unwrap();
+
+        canonicalize_candidate_occurrences(&mut candidates);
         assert_eq!(candidates.len(), 2);
         assert_eq!(candidates[0].occurrence.identity, identity_a);
         assert_eq!(candidates[0].occurrence.weight_distance, 10);
@@ -5860,13 +4739,13 @@ mod tests {
     fn unmatched_family_produces_no_candidates() {
         let database = Database::new();
         let face = fake_face(identity(1, 0), "Test Sans");
-        let mut budget = FontBudget::new(ResourceLimits::PRODUCTION);
+        let mut preparation = FontPreparation::new();
         let candidates = canonical_candidates(
             &database,
             &[face],
             &named_stack(&["Other Sans"]),
             RequestedWeight::Normal,
-            &mut budget,
+            &mut preparation,
         )
         .unwrap();
         assert!(candidates.is_empty());
@@ -5875,18 +4754,10 @@ mod tests {
     #[test]
     fn missing_glyph_is_explicit_and_mandatory_controls_are_not_probed() {
         let candidates = [candidate(identity(1, 0), 0, 0, 0)];
-        let mut budget = FontBudget::new(ResourceLimits::PRODUCTION);
+
         let mut presence = scalar_presence_map();
-        let error = select_scalar_faces(
-            4,
-            &candidates,
-            &['x'],
-            &mut presence,
-            &mut budget,
-            true,
-            |_, _| Ok(false),
-        )
-        .unwrap_err();
+        let error = select_scalar_faces(4, &candidates, &['x'], &mut presence, |_, _| Ok(false))
+            .unwrap_err();
         assert!(matches!(
             error,
             FontError::MissingGlyph {
@@ -5898,17 +4769,11 @@ mod tests {
         let controls = [
             '\n', '\r', '\u{000B}', '\u{000C}', '\u{0085}', '\u{2028}', '\u{2029}',
         ];
-        let mut budget = FontBudget::new(ResourceLimits::PRODUCTION);
+
         let mut presence = scalar_presence_map();
-        let selected = select_scalar_faces(
-            0,
-            &candidates,
-            &controls,
-            &mut presence,
-            &mut budget,
-            true,
-            |_, _| panic!("mandatory line-break controls must not be probed"),
-        )
+        let selected = select_scalar_faces(0, &candidates, &controls, &mut presence, |_, _| {
+            panic!("mandatory line-break controls must not be probed")
+        })
         .unwrap();
         assert!(selected.iter().all(|selected| matches!(
             selected.selection,
@@ -5921,7 +4786,7 @@ mod tests {
         let first = identity(1, 0);
         let second = identity(2, 0);
         let candidates = [candidate(first, 0, 0, 0), candidate(second, 0, 0, 0)];
-        let mut budget = FontBudget::new(ResourceLimits::PRODUCTION);
+
         let mut presence = scalar_presence_map();
         let mut probes = Vec::new();
 
@@ -5930,8 +4795,6 @@ mod tests {
             &candidates,
             &['z', 'a', 'z', 'm'],
             &mut presence,
-            &mut budget,
-            true,
             |candidate, scalar| {
                 probes.push((candidate.occurrence.identity, scalar));
                 Ok(candidate.occurrence.identity == second || scalar != 'z')
@@ -5982,7 +4845,7 @@ mod tests {
         let first = identity(1, 0);
         let second = identity(2, 0);
         let candidates = [candidate(first, 0, 0, 0), candidate(second, 0, 0, 0)];
-        let mut budget = FontBudget::new(ResourceLimits::PRODUCTION);
+
         let mut presence = scalar_presence_map();
         let mut probes = Vec::new();
 
@@ -5991,8 +4854,6 @@ mod tests {
             &candidates,
             &['z', 'a', 'z'],
             &mut presence,
-            &mut budget,
-            true,
             |candidate, scalar| {
                 probes.push((candidate.occurrence.identity, scalar));
                 Ok(false)
@@ -6044,7 +4905,7 @@ mod tests {
         let stack = named_stack(&["Test Sans"]);
         let normal_scalars = ['A'];
         let bold_scalars = ['\n', 'A', '\n'];
-        let before = environment.resource_usage().unwrap().processing_visits;
+
         FONT_PAIR_RESOLUTION_CALLS.with(|calls| calls.set(0));
 
         environment
@@ -6068,9 +4929,6 @@ mod tests {
             )
             .unwrap();
 
-        let after = environment.resource_usage().unwrap().processing_visits;
-        assert!(after > before && after <= 1_000_000);
-        assert_eq!(after, environment.generation_resources().usage().unwrap().1);
         FONT_PAIR_RESOLUTION_CALLS.with(|calls| assert_eq!(calls.get(), 2));
         let core = environment.core.read().unwrap();
         assert_eq!(
@@ -6093,7 +4951,7 @@ mod tests {
         let environment = PreparedFontEnvironment::synthetic();
         let stack = named_stack(&["Test Sans"]);
         let scalars = ['A'];
-        let before = environment.resource_usage().unwrap().processing_visits;
+
         FONT_PAIR_RESOLUTION_CALLS.with(|calls| calls.set(0));
 
         let error = environment
@@ -6111,37 +4969,8 @@ mod tests {
             error,
             FontError::DuplicatePreparedPair { pair_ordinal: 1 }
         ));
-        assert_eq!(
-            environment.resource_usage().unwrap().processing_visits,
-            before + 1 + 1 // one prior-request visit and the identical immutable stack handle
-        );
+
         FONT_PAIR_RESOLUTION_CALLS.with(|calls| assert_eq!(calls.get(), 0));
-        assert!(environment.core.read().unwrap().prepared_pairs.is_empty());
-    }
-
-    #[test]
-    fn batch_counts_every_pair_before_first_pair_materialization() {
-        let environment = PreparedFontEnvironment::synthetic();
-        let stack = named_stack(&["Test Sans"]);
-        let scalars = ['A'];
-        environment
-            .claim_processing_visits(
-                999_990 - environment.resource_usage().unwrap().processing_visits,
-            )
-            .unwrap();
-
-        let error = environment
-            .prepare_pairs(
-                [
-                    FontPairPreparationRequest::new(0, &stack, RequestedWeight::Normal, &scalars),
-                    FontPairPreparationRequest::new(1, &stack, RequestedWeight::Bold, &scalars),
-                ]
-                .into_iter(),
-                None,
-            )
-            .unwrap_err();
-
-        assert!(matches!(error, FontError::Limit { .. }));
         assert!(environment.core.read().unwrap().prepared_pairs.is_empty());
     }
 
@@ -6154,7 +4983,6 @@ mod tests {
                 &named_stack(&["TEST SANS"]),
                 RequestedWeight::Normal,
                 &['A'],
-                true,
             )
             .unwrap();
         let run = core
@@ -6201,7 +5029,6 @@ mod tests {
             &FontStack::new([FontFamily::generic(GenericFontFamily::SansSerif)]).unwrap(),
             RequestedWeight::Normal,
             &['A'],
-            true,
         );
         if matches == 0 {
             assert!(matches!(resolved, Err(FontError::MissingFamily { .. })));
@@ -6277,14 +5104,14 @@ mod tests {
                 sha256,
             }],
             &HostGenericNames::default(),
-            FontBudget::new(ResourceLimits::PRODUCTION),
+            FontPreparation::new(),
             scalar_presence_map(),
         )
         .unwrap()
     }
 
     #[test]
-    fn formatted_census_counts_units_across_write_boundaries() {
+    fn formatted_census_counts_utf8_bytes_across_write_boundaries() {
         for mark in (0..=0x10_FFFF)
             .filter_map(char::from_u32)
             .filter(|scalar| is_visible_mark(*scalar))
@@ -6304,18 +5131,12 @@ mod tests {
                     write!(&mut count, "{scalar}").unwrap();
                 }
                 assert_eq!(count.bytes, source.len());
-                assert_eq!(count.scalars, 3);
-                assert_eq!(
-                    usize::try_from(count.units).unwrap(),
-                    selection_units(&source).count(),
-                    "{source:?}"
-                );
             }
         }
     }
 
     #[test]
-    fn formatted_census_admits_work_and_bytes_before_output_writes() {
+    fn formatted_census_retains_chunked_output_after_counting() {
         struct Observed<'a>(&'a std::cell::Cell<usize>);
         impl std::fmt::Display for Observed<'_> {
             fn fmt(&self, output: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -6324,51 +5145,10 @@ mod tests {
                 output.write_str("\u{0301}")
             }
         }
-        for refusal in [None, Some("work"), Some("bytes")] {
-            let result = crate::layout::plan_exact_root(
-                320,
-                240,
-                |stage| {
-                    if refusal == Some("work") {
-                        stage
-                            .font_resources()
-                            .claim_visits(PROCESSING_VISIT_LIMIT)
-                            .unwrap();
-                    } else if refusal == Some("bytes") {
-                        stage.font_resources().claim_bytes(FONT_BYTE_LIMIT).unwrap();
-                    }
-                    let writes = std::cell::Cell::new(0);
-                    let result =
-                        format_census_source(format_args!("{}", Observed(&writes)), Some(stage));
-                    if refusal.is_some() {
-                        assert!(matches!(result, Err(FontError::Limit { .. })));
-                        assert_eq!(
-                            writes.get(),
-                            1,
-                            "only the allocation-free count pass may run"
-                        );
-                    } else {
-                        assert_eq!(result.unwrap(), "A\u{0301}");
-                        assert_eq!(writes.get(), 2);
-                        let usage = stage.font_resources().usage().unwrap();
-                        assert_eq!(usage.font_bytes, 3);
-                        assert_eq!(usage.processing_visits, 3);
-                    }
-                    Ok(())
-                },
-                |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
-                |(), _, (), _| Ok(()),
-            );
-            if refusal == Some("bytes") {
-                assert!(result
-                    .err()
-                    .unwrap()
-                    .to_string()
-                    .contains("system-font bytes"));
-            } else {
-                result.unwrap();
-            }
-        }
+        let writes = std::cell::Cell::new(0);
+        let source = format_census_source(format_args!("{}", Observed(&writes)), None).unwrap();
+        assert_eq!(source, "A\u{0301}");
+        assert_eq!(writes.get(), 2);
     }
 
     #[test]
@@ -6394,7 +5174,7 @@ mod tests {
                 CanonicalFontCore::from_retained(
                     files,
                     &HostGenericNames::default(),
-                    FontBudget::new(ResourceLimits::PRODUCTION),
+                    FontPreparation::new(),
                     scalar_presence_map(),
                 )
                 .unwrap(),
@@ -6488,15 +5268,14 @@ mod tests {
             &stack,
             RequestedWeight::Normal,
             &['\n', '\u{200C}', '\u{200D}', '\u{FE0F}', '\u{2067}'],
-            true,
         )
         .unwrap();
         assert!(matches!(
-            core.resolve_pair(0, &stack, RequestedWeight::Normal, &['\u{0301}'], true),
+            core.resolve_pair(0, &stack, RequestedWeight::Normal, &['\u{0301}']),
             Err(FontError::MissingGlyph { .. })
         ));
         assert!(matches!(
-            core.resolve_pair(0, &stack, RequestedWeight::Normal, &['\t'], true),
+            core.resolve_pair(0, &stack, RequestedWeight::Normal, &['\t']),
             Err(FontError::UnsupportedControl { .. })
         ));
     }
@@ -6513,7 +5292,7 @@ mod tests {
         let core = CanonicalFontCore::from_retained(
             files,
             &HostGenericNames::default(),
-            FontBudget::new(ResourceLimits::PRODUCTION),
+            FontPreparation::new(),
             scalar_presence_map(),
         )
         .unwrap();
@@ -6545,7 +5324,7 @@ mod tests {
                 bytes,
             }],
             &HostGenericNames::default(),
-            FontBudget::new(ResourceLimits::PRODUCTION),
+            FontPreparation::new(),
             scalar_presence_map(),
         )
         .unwrap();

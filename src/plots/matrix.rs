@@ -27,7 +27,7 @@ use crate::render::backend::{
     points_share_canonical_position, with_clip, with_layer, Backend, FillStyle, LineStyle, Point2D,
 };
 use crate::spec::{PlotRenderContext, PlotRenderResult};
-use crate::stats::distribution::{gaussian_kde_with_source, strict_scott_bandwidth};
+use crate::stats::distribution::{gaussian_kde, strict_scott_bandwidth};
 use crate::theme::{AccentColors, CategoryColors, ResolvedTheme};
 use crate::Error;
 use crate::{LegendPosition, Plot};
@@ -74,7 +74,7 @@ fn matrix_raw_hue_color_map_refuses_missing_used_key_before_fonts() {
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
     let error = crate::plots::shared_x::prepare_plot(
         &plot,
-        &crate::font::canonical::OperationGenerationResources::new(),
+        &crate::font::canonical::OperationContext::new(),
         None,
     )
     .err()
@@ -103,7 +103,6 @@ impl PreparedMatrixAxes {
         let accents = AccentColors::resolve(
             &theme.marks.accents,
             usize::from(self.groups.iter().any(|group| group.identity.hue.is_none())),
-            resources,
         )?;
         Ok((colors, accents))
     }
@@ -112,10 +111,9 @@ impl PreparedMatrixAxes {
         group: &HueGroup,
         colors: &CategoryColors,
         accents: &AccentColors,
-        resources: &crate::font::canonical::OperationGenerationResources,
     ) -> Result<(u8, u8, u8), Error> {
         if let Some(hue) = &group.identity.hue {
-            colors.color(hue, resources)
+            colors.color(hue)
         } else {
             accents.color(0)
         }
@@ -134,24 +132,21 @@ pub(crate) fn intrinsic_body_minimum(
     })?;
     let n = prepared.labels.len();
     let density = theme.marks.matrix_density.backend_style((0, 0, 0));
-    let (out_x, out_y) = crate::render::geometry::rectangular_fill_ink_outset(theme, &density)?;
+    let (out_x, out_y) = crate::render::geometry::rectangular_fill_ink_outset(&density)?;
     let mut cell = (
         (2.0 * out_x).max(1.0 / 1024.0),
         (2.0 * out_y).max(1.0 / 1024.0),
     );
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = chart.data().with_axis_resources(&resources);
+
     for _ in &prepared.groups {
-        data.claim_source_visits(1)?;
         let style = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.matrix);
-        let (x, y) = crate::render::geometry::point_ink_dimensions(theme, &style)?;
+        let (x, y) = crate::render::geometry::point_ink_dimensions(&style)?;
         cell.0 = cell.0.max(x);
         cell.1 = cell.1.max(y);
     }
     let mut width = 0.0;
     let mut height = 0.0;
     for label in &prepared.labels {
-        data.claim_source_visits(1)?;
         let hard = crate::layout::fit::intrinsic_widths(
             theme,
             label,
@@ -175,16 +170,13 @@ pub(crate) fn natural_body_preference(
         .as_ref()
         .ok_or_else(|| Error::Render("natural Matrix variables missing".into()))?;
     let hard = intrinsic_body_minimum(chart, theme)?;
-    let resources = theme.prepared_font_environment()?.generation_resources();
+
     let point = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.matrix);
-    let point = crate::render::geometry::point_ink_dimensions(theme, &point)?;
+    let point = crate::render::geometry::point_ink_dimensions(&point)?;
     let density = theme.marks.matrix_density.backend_style((0, 0, 0));
-    let ink = crate::render::geometry::rectangular_fill_ink_outset(theme, &density)?;
+    let ink = crate::render::geometry::rectangular_fill_ink_outset(&density)?;
     let mut side = theme.composition_grid_gap()? * marks.labels.len().saturating_sub(1) as f64;
     for label in &marks.labels {
-        resources
-            .claim_visits(1)
-            .map_err(|error| Error::Render(format!("Matrix preference: {error:?}")))?;
         let width = layout::fit::intrinsic_widths(
             theme,
             label,
@@ -210,20 +202,20 @@ pub(crate) fn natural_guide_preference(
         .prepared_matrix_axes
         .as_ref()
         .ok_or_else(|| Error::Render("Matrix natural guide requires preparation".into()))?;
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = chart.data().with_axis_resources(&resources);
+    let resources = theme.prepared_font_environment()?.operation();
+    let data = chart.data().with_operation(&resources);
     let (colors, accents) = prepared.resolved_colors(chart, theme, data)?;
-    let mapped = data.collect_source(
+    let mapped = crate::data::source::collect_source(
         prepared
             .groups
             .iter()
-            .map(|group| PreparedMatrixAxes::group_color(group, &colors, &accents, &resources)),
+            .map(|group| PreparedMatrixAxes::group_color(group, &colors, &accents)),
     )?;
-    let entries = matrix_guide_entries(chart, &prepared.groups, &mapped, theme, data)?;
+    let entries = matrix_guide_entries(chart, &prepared.groups, &mapped, theme)?;
     if entries.is_empty() {
         return Ok((0.0, 0.0));
     }
-    let title = crate::decorations::legend::resolved_title(&entries, &resources)?;
+    let title = crate::decorations::legend::resolved_title(&entries)?;
     Legend::natural_preference(&title, &entries, theme)
 }
 
@@ -247,7 +239,7 @@ fn prepared_matrix_uses_variable_count_cell_labels_and_complete_mark_ink() {
         )
         .erase()
     };
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let resources = crate::font::canonical::OperationContext::new();
     let first = plot(2);
     let second = plot(3);
     let first = crate::plots::shared_x::prepare_plot(&first, &resources, None)
@@ -258,9 +250,7 @@ fn prepared_matrix_uses_variable_count_cell_labels_and_complete_mark_ink() {
         .unwrap()
         .attach(second)
         .unwrap();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let baseline = intrinsic_body_minimum(&first, &theme).unwrap();
     let more_cells = intrinsic_body_minimum(&second, &theme).unwrap();
     assert!(more_cells.0 > baseline.0 && more_cells.1 > baseline.1);
@@ -306,14 +296,12 @@ fn native_matrix_allocates_unequal_variable_tracks_and_retains_the_full_square()
     ])
     .size(1200, 900)
     .erase();
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let resources = crate::font::canonical::OperationContext::new();
     let chart = crate::plots::shared_x::prepare_plot(&source, &resources, None)
         .unwrap()
         .attach(source)
         .unwrap();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
@@ -419,22 +407,16 @@ impl MatrixPayload {
         }
         Ok(())
     }
-    pub(crate) fn axis_geometry(
-        &self,
-        theme: &ResolvedTheme,
-    ) -> Result<crate::render::geometry::GeometrySnapshot, Error> {
-        let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
-        let resources = theme.prepared_font_environment()?.generation_resources();
+    pub(crate) fn axis_geometry(&self) -> Result<crate::render::geometry::GeometrySnapshot, Error> {
+        let mut geometry = crate::render::geometry::GeometrySnapshot::new();
+
         for cell in &self.cells {
-            resources
-                .claim_visits(1)
-                .map_err(|error| Error::Render(format!("Matrix axis geometry: {error:?}")))?;
             if let Some(style) = &self.frame_style {
                 for line in cell.frame.iter().flatten() {
                     geometry.line(line, style, None)?;
                 }
             }
-            geometry.append(&cell.axes.geometry_snapshot(theme)?)?;
+            geometry.append(&cell.axes.geometry_snapshot()?)?;
         }
         Ok(geometry)
     }
@@ -460,11 +442,8 @@ impl MatrixPayload {
         Ok(())
     }
 
-    fn geometry(
-        &self,
-        theme: &ResolvedTheme,
-    ) -> Result<crate::render::geometry::GeometrySnapshot, Error> {
-        let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    fn geometry(&self) -> Result<crate::render::geometry::GeometrySnapshot, Error> {
+        let mut geometry = crate::render::geometry::GeometrySnapshot::new();
         for cell in &self.cells {
             if let Some(style) = &self.frame_style {
                 for line in cell.frame.iter().flatten() {
@@ -475,7 +454,7 @@ impl MatrixPayload {
             for mark in &cell.marks {
                 mark.geometry(&mut geometry, clip)?;
             }
-            geometry.append(&cell.axes.geometry_snapshot(theme)?)?;
+            geometry.append(&cell.axes.geometry_snapshot()?)?;
         }
         if let Some(legend) = &self.legend {
             legend.geometry(&mut geometry)?;
@@ -498,23 +477,14 @@ pub(crate) fn prepare_axes(
     #[cfg(test)]
     crate::plots::shared_x::AXIS_PREPARATIONS.with(|count| count.set(count.get() + 1));
     let mut cols = Vec::new();
-    let variables = chart.matrix_variable_names().len();
-    let cells = variables
-        .checked_mul(variables)
-        .ok_or_else(|| Error::Render("Matrix declared square overflow".into()))?;
-    data.claim_topology_slots(cells)?;
-    let points = variables
-        .checked_mul(variables.saturating_sub(1))
-        .and_then(|panels| panels.checked_mul(data.height()))
-        .ok_or_else(|| Error::Render("Matrix source mark topology overflow".into()))?;
-    data.claim_topology_slots(points)?;
-    data.reserve_source(&mut cols, chart.matrix_variable_names().len())?;
+
+    crate::data::source::reserve_source(&mut cols, chart.matrix_variable_names().len())?;
     cols.extend(chart.matrix_variable_names().iter().map(String::as_str));
-    let labels = chart.resolve_axis_label_domain("matrix variables", cols.iter().copied(), data)?;
+    let labels = chart.resolve_axis_label_domain("matrix variables", cols.iter().copied())?;
     let (groups, hues) = build_groups(chart, &cols, data)?;
     if let Some(exact) = chart.categorical_colors_spec() {
         for hue in &hues {
-            if exact.color_in(hue, data.source_resources()?)?.is_none() {
+            if exact.color_in(hue).is_none() {
                 return Err(Error::Data(format!(
                     "matrix: category {hue:?} has no caller-owned color"
                 )));
@@ -522,12 +492,8 @@ pub(crate) fn prepare_axes(
         }
     }
     let mut ranges = Vec::new();
-    data.reserve_source(&mut ranges, cols.len())?;
+    crate::data::source::reserve_source(&mut ranges, cols.len())?;
     for (index, column) in cols.iter().enumerate() {
-        for group in &groups {
-            data.claim_source_visits(group.columns[index].len())?;
-            data.claim_source_visits(group.columns[index].len())?;
-        }
         ranges.push(matrix_support_range(
             &groups,
             index,
@@ -536,9 +502,11 @@ pub(crate) fn prepare_axes(
             chart.hue_name(),
         )?);
     }
-    let diagonals = data.collect_source(cols.iter().enumerate().map(|(index, column)| {
-        prepare_density(chart, &groups, index, column, ranges[index], data)
-    }))?;
+    let diagonals = crate::data::source::collect_source(
+        cols.iter()
+            .enumerate()
+            .map(|(index, column)| prepare_density(chart, &groups, index, column, ranges[index])),
+    )?;
     Ok(PreparedMatrixAxes {
         ranges,
         labels,
@@ -559,7 +527,7 @@ fn prefont_variable_domains_and_labels_are_consumed_by_matrix_measurement() {
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
     let prepared = crate::plots::shared_x::prepare_plot(
         &plot,
-        &crate::font::canonical::OperationGenerationResources::new(),
+        &crate::font::canonical::OperationContext::new(),
         None,
     )
     .unwrap()
@@ -571,9 +539,7 @@ fn prefont_variable_domains_and_labels_are_consumed_by_matrix_measurement() {
     );
     let inputs = prepared.prepared_matrix_axes.as_ref().unwrap();
     let preparations = crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get);
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let panel = panel_box(&prepared, &theme).unwrap();
     let measured = prepared
         .preflight_panel(crate::PlotKind::Matrix, panel, &theme)
@@ -597,23 +563,12 @@ fn matrix_dispatch_preserves_scoped_tick_fit_miss() {
         crate::NumericValues::new("y", [0.0, 1.0, 2.0]),
     ])
     .erase();
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     theme.typography.axes.tick_label.font_size = 48;
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
+    let resources = theme.prepared_font_environment().unwrap().operation();
     let prepared = crate::plots::shared_x::prepare_plot(&plot, &resources, None).unwrap();
     let plot = prepared.attach(plot).unwrap();
-    let scope = FitScope::root()
-        .child(
-            AddressRole::CanvasCell,
-            2,
-            &crate::font::canonical::OperationGenerationResources::new(),
-        )
-        .unwrap();
+    let scope = FitScope::root().child(AddressRole::CanvasCell, 2).unwrap();
     let outcome = plot
         .preflight_measurement(
             plot.kind(),
@@ -629,17 +584,9 @@ fn matrix_dispatch_preserves_scoped_tick_fit_miss() {
     assert_eq!(
         failure.reason.address,
         scope
-            .child(
-                AddressRole::MatrixCell,
-                0,
-                &crate::font::canonical::OperationGenerationResources::new()
-            )
+            .child(AddressRole::MatrixCell, 0)
             .unwrap()
-            .child(
-                AddressRole::AxisBottom,
-                0,
-                &crate::font::canonical::OperationGenerationResources::new()
-            )
+            .child(AddressRole::AxisBottom, 0)
             .unwrap()
             .address
     );
@@ -656,15 +603,13 @@ fn tick_planner_failure_is_not_reported_as_small_matrix_cells() {
     .erase();
     let plot = crate::plots::shared_x::prepare_plot(
         &plot,
-        &crate::font::canonical::OperationGenerationResources::new(),
+        &crate::font::canonical::OperationContext::new(),
         None,
     )
     .unwrap()
     .attach(plot)
     .unwrap();
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     theme.prepare_font_environment().unwrap();
     theme.typography.axes.tick_label.font_size = 0;
     let context =
@@ -686,8 +631,8 @@ pub(crate) fn measure(
     #[cfg(test)]
     SELECTIONS.with(|count| count.set(count.get() + 1));
     let theme = context.theme;
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = context.data.with_axis_resources(&resources);
+    let resources = theme.prepared_font_environment()?.operation();
+    let data = context.data.with_operation(&resources);
     let prepared = chart
         .prepared_matrix_axes
         .as_ref()
@@ -697,10 +642,10 @@ pub(crate) fn measure(
 
     let groups = &prepared.groups;
     let (colors, accents) = prepared.resolved_colors(chart, theme, data)?;
-    let group_colors = data.collect_source(
+    let group_colors = crate::data::source::collect_source(
         groups
             .iter()
-            .map(|group| PreparedMatrixAxes::group_color(group, &colors, &accents, &resources)),
+            .map(|group| PreparedMatrixAxes::group_color(group, &colors, &accents)),
     )?;
     let legend = match matrix_legend(
         chart,
@@ -712,10 +657,9 @@ pub(crate) fn measure(
         ),
         theme,
         context.fit_scope(),
-        data,
     )? {
         crate::layout::fit::FitOutcome::Measured(legend) => {
-            legend.map(|legend| data.source_arc(legend)).transpose()?
+            legend.map(crate::data::source::source_arc).transpose()?
         }
         crate::layout::fit::FitOutcome::Miss(reason) => {
             return Err(crate::layout::fit::PlanError::Fit(reason));
@@ -739,11 +683,10 @@ pub(crate) fn measure(
     }
     let gap = theme.composition_grid_gap()?;
     let density = theme.marks.matrix_density.backend_style((0, 0, 0));
-    let ink = crate::render::geometry::rectangular_fill_ink_outset(theme, &density)?;
+    let ink = crate::render::geometry::rectangular_fill_ink_outset(&density)?;
     let point = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.matrix);
-    let point = crate::render::geometry::point_ink_dimensions(theme, &point)?;
-    let specs = data.collect_source(display_cols.iter().map(|label| {
-        data.claim_source_visits(1)?;
+    let point = crate::render::geometry::point_ink_dimensions(&point)?;
+    let specs = crate::data::source::collect_source(display_cols.iter().map(|label| {
         let hard = layout::fit::intrinsic_widths(
             theme,
             label,
@@ -770,20 +713,13 @@ pub(crate) fn measure(
         };
         Ok((track(x), track(y)))
     }))?;
-    let x_specs = data.collect_source(specs.iter().map(|(x, _)| {
-        data.claim_source_visits(1)?;
-        Ok(*x)
-    }))?;
-    let y_specs = data.collect_source(specs.iter().map(|(_, y)| {
-        data.claim_source_visits(1)?;
-        Ok(*y)
-    }))?;
+    let x_specs = crate::data::source::collect_source(specs.iter().map(|(x, _)| Ok(*x)))?;
+    let y_specs = crate::data::source::collect_source(specs.iter().map(|(_, y)| Ok(*y)))?;
     let columns = layout::interior::tracks::assign(
         &x_specs,
         (outer.x0, outer.x1 - legend_reserve),
         gap,
         false,
-        data,
         context.fit_scope(),
     )?;
     let rows = layout::interior::tracks::assign(
@@ -791,7 +727,6 @@ pub(crate) fn measure(
         (outer.y0, outer.y1),
         gap,
         true,
-        data,
         context.fit_scope(),
     )?;
     let (grid_bottom, grid_top) = (outer.y0, outer.y1);
@@ -805,7 +740,8 @@ pub(crate) fn measure(
     // canonical range wherever it appears, not one range as x and another
     // as y. The range includes the diagonal KDE evaluation extent so the
     // diagonal and off-diagonal cells stay visually aligned.
-    let prepared_ranges = data.collect_source(prepared.ranges.iter().copied().map(Ok))?;
+    let prepared_ranges =
+        crate::data::source::collect_source(prepared.ranges.iter().copied().map(Ok))?;
 
     // --- Styles ---
     let frame_style = theme
@@ -816,7 +752,7 @@ pub(crate) fn measure(
     // Each cell freezes the selected sides once. Common plans own ticks and
     // outer text without painting a duplicate frame or grid.
     let common_chrome = theme.axes.cell_axis_chrome();
-    let mut axis_theme = theme.admitted_clone(data)?;
+    let mut axis_theme = theme.clone();
     axis_theme.axes = axis_theme
         .axes
         .with_frame(common_chrome.frame.cloned())?
@@ -826,23 +762,9 @@ pub(crate) fn measure(
     // X selection depends only on a column's range and X coordinates; Y
     // selection depends only on a row's range and Y coordinates. Retain the
     // complete sources across capture; outer cells alone paint their labels.
-    let environment = theme.prepared_font_environment()?;
+
     let cache_count = n;
-    let cache_records = cache_count
-        .checked_mul(2)
-        .ok_or_else(|| Error::Render("matrix tick cache count overflow".into()))?;
-    let cache_bytes = cache_records
-        .checked_mul(size_of::<Option<MatrixTickCache>>())
-        .ok_or_else(|| Error::Render("matrix tick cache bytes overflow".into()))?;
-    environment
-        .claim_text_generation_slots(cache_records as u128)
-        .map_err(|error| Error::Render(format!("matrix tick cache: {error:?}")))?;
-    environment
-        .claim_unicode_bytes(
-            u64::try_from(cache_bytes)
-                .map_err(|_| Error::Render("matrix tick cache bytes overflow".into()))?,
-        )
-        .map_err(|error| Error::Render(format!("matrix tick cache: {error}")))?;
+
     let mut x_ticks = Vec::new();
     let mut y_ticks = Vec::new();
     x_ticks
@@ -864,7 +786,7 @@ pub(crate) fn measure(
     let mut gutters = [0.0_f64; 4];
 
     let mut cells = Vec::new();
-    data.reserve_source(
+    crate::data::source::reserve_source(
         &mut cells,
         n.checked_mul(n)
             .ok_or_else(|| Error::Render("matrix cell count overflow".into()))?,
@@ -872,7 +794,6 @@ pub(crate) fn measure(
     // Retain every declared cell in row-major semantic order.
     for row in 0..n {
         for col in 0..n {
-            data.claim_source_visits(1)?;
             let (x0, x1) = axes.columns[col];
             let (y0, y1) = axes.rows[row];
             let cell_panel = PanelBox::new(x0, x1, y0, y1);
@@ -885,11 +806,9 @@ pub(crate) fn measure(
                 y0 + ink.1 + 2.0 / 1024.0,
                 y1 - ink.1 - 2.0 / 1024.0,
             );
-            let scope = context.fit_scope().child(
-                layout::AddressRole::MatrixCell,
-                row * n + col,
-                data.source_resources()?,
-            )?;
+            let scope = context
+                .fit_scope()
+                .child(layout::AddressRole::MatrixCell, row * n + col)?;
             if mark_panel.width() <= 0.0 || mark_panel.height() <= 0.0 {
                 return Err(scope
                     .failure(
@@ -906,17 +825,17 @@ pub(crate) fn measure(
             let axis = |ticks: &layout::NumericTickPlan, label: Option<&str>| {
                 Ok::<_, Error>(layout::Axis {
                     source: ticks.source,
-                    ticks: data.collect_source(ticks.ticks.iter().map(|tick| {
+                    ticks: crate::data::source::collect_source(ticks.ticks.iter().map(|tick| {
                         Ok(layout::AxisTick {
                             position: tick.position,
                             label: if label.is_some() {
-                                data.copy_source_string(&tick.label)?
+                                crate::data::source::copy_source_string(&tick.label)?
                             } else {
                                 String::new()
                             },
                         })
                     }))?,
-                    label: data.copy_source_string(label.unwrap_or_default())?,
+                    label: crate::data::source::copy_source_string(label.unwrap_or_default())?,
                     explicit_ticks: false,
                     assigned_tick_width: None,
                     assigned_cells: None,
@@ -1000,7 +919,7 @@ pub(crate) fn measure(
             if row == 0 {
                 gutters[3] = gutters[3].max(required.top + 4.0);
             }
-            data.reserve_source(&mut cell.marks, groups.len())?;
+            crate::data::source::reserve_source(&mut cell.marks, groups.len())?;
 
             if row == col {
                 select_diagonal_kde(
@@ -1009,19 +928,21 @@ pub(crate) fn measure(
                     &group_colors,
                     &prepared.diagonals[row],
                     &cell_layout.projection,
-                    data,
                 )?;
             } else {
                 for (group, &color) in groups.iter().zip(&group_colors) {
                     let xs = &group.columns[col];
                     let ys = &group.columns[row];
                     let ps = chart.point_style(theme, color, theme.marks.point_sizes.matrix);
-                    let pts = data.collect_source(xs.iter().zip(ys.iter()).map(|(&xi, &yi)| {
-                        data.claim_source_visits(1)?;
-                        let (px, py) = cell_layout.projection.project(xi, yi);
-                        Ok(Point2D::new(px, py))
-                    }))?;
-                    let rows = data.collect_source(group.source_rows.iter().copied().map(Ok))?;
+                    let pts = crate::data::source::collect_source(xs.iter().zip(ys.iter()).map(
+                        |(&xi, &yi)| {
+                            let (px, py) = cell_layout.projection.project(xi, yi);
+                            Ok(Point2D::new(px, py))
+                        },
+                    ))?;
+                    let rows = crate::data::source::collect_source(
+                        group.source_rows.iter().copied().map(Ok),
+                    )?;
                     cell.marks.push(MatrixPrimitive::Scatter(pts, rows, ps));
                 }
             }
@@ -1029,7 +950,7 @@ pub(crate) fn measure(
             // Inspect independent, unclipped ink before the selected geometry
             // applies the explicit cell clip. Matrix has no parent per-variable
             // domain feedback owner; an uncontainable automatic mark is a FIT.
-            let mut full = crate::render::geometry::GeometrySnapshot::new(theme)?;
+            let mut full = crate::render::geometry::GeometrySnapshot::new();
             for mark in &cell.marks {
                 match mark {
                     MatrixPrimitive::Scatter(points, _, style) => {
@@ -1070,7 +991,7 @@ pub(crate) fn measure(
         }
         .max(0.0);
         let (lx, ly) = legend.box_at(left, bottom).anchor();
-        Some(legend.select(lx, ly, data)?)
+        Some(legend.select(lx, ly)?)
     } else {
         None
     };
@@ -1084,13 +1005,15 @@ pub(crate) fn measure(
         frame_style,
         legend: legend_payload,
     };
-    let geometry = payload.geometry(theme)?;
-    result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
-        payload: crate::layout::interior::MarkPayload::Matrix(payload),
-        geometry,
-    })?);
+    let geometry = payload.geometry()?;
+    result.marks = Some(crate::data::source::source_arc(
+        crate::layout::interior::SelectedMarkPlan {
+            payload: crate::layout::interior::MarkPayload::Matrix(payload),
+            geometry,
+        },
+    )?);
     result.self_managed_legend = legend;
-    result.matrix_axes = Some(data.source_arc(axes)?);
+    result.matrix_axes = Some(crate::data::source::source_arc(axes)?);
     Ok(result)
 }
 
@@ -1110,7 +1033,7 @@ struct MatrixTickCache {
     range: [u64; 2],
     span: [u64; 2],
     side: layout::AxisSide,
-    operation: crate::font::canonical::OperationGenerationResources,
+    operation: crate::font::canonical::OperationContext,
 }
 
 fn matrix_ticks<'a>(
@@ -1122,12 +1045,7 @@ fn matrix_ticks<'a>(
     scope: &crate::layout::fit::FitScope,
 ) -> Result<&'a layout::NumericTickPlan, crate::layout::fit::PlanError> {
     let environment = theme.prepared_font_environment()?;
-    let admission = environment
-        .claim_measurement_call()
-        .map_err(|error| Error::Render(format!("matrix tick call admission: {error:?}")))?;
-    environment
-        .claim_processing_visits(1)
-        .map_err(|error| Error::Render(format!("matrix tick lookup: {error:?}")))?;
+
     let range_bits = [range.0.to_bits(), range.1.to_bits()];
     let panel = projection.panel_box();
     let span = match side {
@@ -1135,32 +1053,26 @@ fn matrix_ticks<'a>(
         layout::AxisSide::Left => [panel.y0.to_bits(), panel.y1.to_bits()],
     };
     let matches = if let Some(cached) = cached.as_ref() {
-        cached
-            .operation
-            .same_operation(&environment.generation_resources())
+        cached.operation.same_operation(&environment.operation())
             && cached.range == range_bits
             && cached.span == span
             && cached.side == side
-            && cached
-                .standard
-                .matches(theme, &environment.generation_resources())?
+            && cached.standard.matches(theme)?
     } else {
         false
     };
     if !matches {
-        let plan = layout::NumericTickPlan::measure_in_call(
-            range, None, false, projection, side, theme, false, scope, &admission,
+        let plan = layout::NumericTickPlan::measure_selected_source(
+            range, None, false, projection, side, theme, false, scope,
         )?;
-        environment
-            .claim_cache_entries(1)
-            .map_err(|error| Error::Render(format!("matrix tick cache admission: {error:?}")))?;
+
         *cached = Some(MatrixTickCache {
             plan,
             standard: layout::StandardPanelInputs::new(theme)?,
             range: range_bits,
             span,
             side,
-            operation: environment.generation_resources(),
+            operation: environment.operation(),
         });
     }
     cached
@@ -1171,12 +1083,10 @@ fn matrix_ticks<'a>(
 
 #[test]
 fn matrix_tick_selection_is_shared_only_along_the_orthogonal_axis() {
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let environment = theme.prepared_font_environment().unwrap();
-    let resources = environment.generation_resources();
-    environment.share_generation_resources(&resources).unwrap();
+    let resources = environment.operation();
+    environment.validate_operation(&resources).unwrap();
     let range = (0.0, 10.0);
     let original = layout::Projection::new(range, range, (10.25, 210.75, 20.25, 220.75));
     for (side, translated) in [
@@ -1212,8 +1122,7 @@ fn matrix_tick_selection_is_shared_only_along_the_orthogonal_axis() {
         .unwrap()
         .ticks;
         assert_eq!(first.ticks, expected);
-        let before = resources.usage().unwrap();
-        let bytes = environment.resource_usage().unwrap().font_bytes;
+
         let reused = matrix_ticks(
             &mut cached,
             range,
@@ -1224,36 +1133,9 @@ fn matrix_tick_selection_is_shared_only_along_the_orthogonal_axis() {
         )
         .unwrap();
         assert_eq!(reused.ticks, expected);
-        assert_eq!(resources.usage().unwrap(), (before.0, before.1 + 144));
-        assert_eq!(environment.resource_usage().unwrap().font_bytes, bytes);
+
         assert!(cached.as_ref().unwrap().plan.source.cap > 1);
     }
-}
-
-#[test]
-fn matrix_tick_source_refusal_leaves_no_retained_cache_entry() {
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
-    let environment = theme.prepared_font_environment().unwrap();
-    let used = environment.resource_usage().unwrap().font_bytes;
-    environment
-        .claim_unicode_bytes(u64::try_from(536_870_912 - used).unwrap())
-        .unwrap();
-    let projection = layout::Projection::new((0.0, 1.0), (0.0, 1.0), (0.0, 100.0, 0.0, 100.0));
-    let mut cached = None;
-    let error = matrix_ticks(
-        &mut cached,
-        (0.0, 1.0),
-        &projection,
-        layout::AxisSide::Bottom,
-        &theme,
-        &crate::layout::fit::ROOT_SCOPE,
-    )
-    .unwrap_err();
-    assert!(matches!(error, crate::layout::fit::PlanError::Fatal(_)));
-    assert!(error.into_error().to_string().contains("system-font bytes"));
-    assert!(cached.is_none());
 }
 
 #[cfg(test)]
@@ -1268,23 +1150,15 @@ fn matrix_legend(
     available: (f64, Option<f64>),
     theme: &ResolvedTheme,
     scope: &crate::layout::fit::FitScope,
-    data: crate::data::PlotData<'_>,
 ) -> Result<crate::layout::fit::FitOutcome<Option<Legend>>, Error> {
     use crate::layout::fit::FitOutcome;
-    let entries = matrix_guide_entries(chart, groups, group_colors, theme, data)?;
+    let entries = matrix_guide_entries(chart, groups, group_colors, theme)?;
     if entries.is_empty() {
         return Ok(FitOutcome::Measured(None));
     }
-    let title = crate::decorations::legend::resolved_title(
-        &entries,
-        &theme.prepared_font_environment()?.generation_resources(),
-    )?;
-    let entries = Legend::admit_entries(entries, theme)?;
-    let scope = scope.child(
-        crate::layout::AddressRole::InsideGuide,
-        0,
-        &theme.prepared_font_environment()?.generation_resources(),
-    )?;
+    let title = crate::decorations::legend::resolved_title(&entries)?;
+    let entries = Legend::share_entries(entries)?;
+    let scope = scope.child(crate::layout::AddressRole::InsideGuide, 0)?;
     match Legend::measure_assigned(
         &title, entries, available, false, false, theme, &mut false, &scope,
     )? {
@@ -1298,32 +1172,26 @@ fn matrix_guide_entries(
     groups: &[HueGroup],
     group_colors: &[(u8, u8, u8)],
     theme: &ResolvedTheme,
-    data: crate::data::PlotData<'_>,
 ) -> Result<Vec<crate::decorations::legend::LegendEntry>, Error> {
-    data.claim_source_visits(groups.len())?;
     if !groups.iter().any(|group| group.identity.hue.is_some())
         || chart.legend_policy_spec() == crate::LegendPolicy::Hidden
     {
         return Ok(Vec::new());
     }
     let mut entries = Vec::new();
-    data.reserve_source(&mut entries, groups.len())?;
+    crate::data::source::reserve_source(&mut entries, groups.len())?;
     for (group, &color) in groups
         .iter()
         .zip(group_colors)
         .filter(|(group, _)| group.identity.hue.is_some())
     {
         entries.push(LegendEntry::point_fill(
-            chart.collective_legend_identity(&group.identity, data)?,
+            chart.collective_legend_identity(&group.identity)?,
             chart.point_style(theme, color, theme.marks.point_sizes.matrix),
             theme.marks.matrix_density.backend_style(color),
         ));
     }
-    crate::decorations::legend::resolve_entries(
-        chart,
-        &mut entries,
-        &theme.prepared_font_environment()?.generation_resources(),
-    )?;
+    crate::decorations::legend::resolve_entries(chart, &mut entries)?;
     Ok(entries)
 }
 
@@ -1333,7 +1201,6 @@ fn prepare_density(
     col_idx: usize,
     column: &str,
     range: (f64, f64),
-    data: crate::data::PlotData<'_>,
 ) -> Result<MatrixDensity, Error> {
     #[cfg(test)]
     SEMANTIC_STAGES.with(|counts| {
@@ -1341,35 +1208,29 @@ fn prepare_density(
         counts.set([groups, densities + 1]);
     });
     let (d_lo, d_hi) = range;
-    let grid_pts = data.collect_source((0..KDE_POINTS).map(|i| {
-        data.claim_source_visits(1)?;
-        Ok(d_lo + (d_hi - d_lo) * (i as f64 / (KDE_POINTS - 1) as f64))
-    }))?;
+    let grid_pts = crate::data::source::collect_source(
+        (0..KDE_POINTS).map(|i| Ok(d_lo + (d_hi - d_lo) * (i as f64 / (KDE_POINTS - 1) as f64))),
+    )?;
 
     // Total sample count across all groups for common_norm scaling
     // (matches seaborn pairplot default: area proportional to group size).
-    data.claim_source_visits(groups.len())?;
+
     let n_total: f64 = groups.iter().map(|g| g.columns[col_idx].len() as f64).sum();
 
     // Compute KDE for each group, scaled by group proportion (common_norm).
-    let densities_per_group = data.collect_source(groups.iter().map(|g| {
-        let mut weighted = gaussian_kde_with_source(
-            &g.columns[col_idx],
-            &grid_pts,
-            g.bandwidths[col_idx],
-            Some(data),
-        )
-        .map_err(|error| {
-            let context = matrix_group_context(column, chart.group_name(), chart.hue_name(), g);
-            Error::Data(format!("matrix: {context}: {error}"))
-        })?;
+    let densities_per_group = crate::data::source::collect_source(groups.iter().map(|g| {
+        let mut weighted = gaussian_kde(&g.columns[col_idx], &grid_pts, g.bandwidths[col_idx])
+            .map_err(|error| {
+                let context = matrix_group_context(column, chart.group_name(), chart.hue_name(), g);
+                Error::Data(format!("matrix: {context}: {error}"))
+            })?;
         #[allow(clippy::cast_precision_loss)]
         let weight = g.columns[col_idx].len() as f64 / n_total;
-        data.claim_source_visits(weighted.len())?;
+
         for density in &mut weighted {
             *density *= weight;
         }
-        data.claim_source_visits(weighted.len())?;
+
         if weighted.iter().any(|density| !density.is_finite()) {
             let context = matrix_group_context(column, chart.group_name(), chart.hue_name(), g);
             return Err(Error::Data(format!(
@@ -1380,9 +1241,7 @@ fn prepare_density(
     }))?;
 
     // Shared max across all weighted densities.
-    for densities in &densities_per_group {
-        data.claim_source_visits(densities.len())?;
-    }
+
     let d_max = densities_per_group
         .iter()
         .flat_map(|d| d.iter())
@@ -1407,7 +1266,6 @@ fn select_diagonal_kde(
     group_colors: &[(u8, u8, u8)],
     density: &MatrixDensity,
     projection: &layout::Projection,
-    data: crate::data::PlotData<'_>,
 ) -> Result<(), Error> {
     let panel = projection.panel_box();
     let projection = layout::Projection::new(
@@ -1429,12 +1287,10 @@ fn select_diagonal_kde(
         ));
     }
     for (densities, &color) in density.densities.iter().zip(group_colors) {
-        data.claim_source_visits(1)?;
         let mut poly = Vec::new();
-        data.reserve_source(&mut poly, KDE_POINTS + 2)?;
+        crate::data::source::reserve_source(&mut poly, KDE_POINTS + 2)?;
         poly.push(Point2D::new(x0, y0));
         for (i, (&x, &d)) in density.positions.iter().zip(densities).enumerate() {
-            data.claim_source_visits(1)?;
             let (px, py) = projection.project(x, d);
             let point = Point2D::new(px, py);
             let closure = if i == 0 {
@@ -1480,28 +1336,24 @@ fn build_groups(
         None,
         "matrix",
     )?;
-    let hue_levels = data.collect_source(
+    let hue_levels = crate::data::source::collect_source(
         chart
             .global_hue_levels()
             .unwrap_or(&channels.hue_levels)
             .iter()
-            .map(|level| data.copy_source_string(level)),
+            .map(|level| crate::data::source::copy_source_string(level)),
     )?;
     let identities = chart
         .global_collective_pairs()
         .unwrap_or(&channels.identities);
-    let density_targets = cols
-        .len()
-        .checked_mul(channels.identities.len())
-        .ok_or_else(|| Error::Render("Matrix density topology overflow".into()))?;
-    data.claim_topology_slots(density_targets)?;
+
     let mut groups = Vec::new();
-    data.reserve_source(&mut groups, identities.len())?;
+    crate::data::source::reserve_source(&mut groups, identities.len())?;
     let mut rows = Vec::new();
-    data.reserve_source(&mut rows, channels.rows.len())?;
+    crate::data::source::reserve_source(&mut rows, channels.rows.len())?;
     for identity in identities {
         rows.clear();
-        data.claim_source_visits(channels.rows.len())?;
+
         rows.extend(
             channels
                 .rows
@@ -1512,7 +1364,7 @@ fn build_groups(
         if rows.is_empty() {
             continue;
         }
-        data.claim_source_visits(hue_levels.len())?;
+
         if let Some(hue) = &identity.hue {
             if !hue_levels.contains(hue) {
                 return Err(Error::Data(format!(
@@ -1521,27 +1373,21 @@ fn build_groups(
             }
         }
         groups.push(HueGroup {
-            identity: data.copy_source_pair(identity)?,
+            identity: crate::data::source::copy_source_pair(identity)?,
             collapsed: channels.collapsed,
-            source_rows: data.collect_source(rows.iter().map(|row| Ok(data.source_row(*row))))?,
-            columns: data.collect_source(
-                columns
-                    .iter()
-                    .map(|column| data.collect_source(rows.iter().map(|row| Ok(column[*row])))),
+            source_rows: crate::data::source::collect_source(
+                rows.iter().map(|row| Ok(data.source_row(*row))),
             )?,
+            columns: crate::data::source::collect_source(columns.iter().map(|column| {
+                crate::data::source::collect_source(rows.iter().map(|row| Ok(column[*row])))
+            }))?,
             bandwidths: Vec::new(),
         });
     }
     if groups.is_empty() {
         return Err(Error::Data("matrix: no valid finite rows".into()));
     }
-    validate_group_kdes(
-        &mut groups,
-        cols,
-        chart.group_name(),
-        chart.hue_name(),
-        data,
-    )?;
+    validate_group_kdes(&mut groups, cols, chart.group_name(), chart.hue_name())?;
     Ok((groups, hue_levels))
 }
 
@@ -1550,21 +1396,18 @@ fn validate_group_kdes(
     columns: &[&str],
     group_column: Option<&str>,
     hue_column: Option<&str>,
-    data: crate::data::PlotData<'_>,
 ) -> Result<(), Error> {
     for group in groups {
-        group.bandwidths =
-            data.collect_source(group.columns.iter().zip(columns).map(|(samples, column)| {
-                for _ in 0..5 {
-                    data.claim_source_visits(samples.len())?;
-                }
+        group.bandwidths = crate::data::source::collect_source(
+            group.columns.iter().zip(columns).map(|(samples, column)| {
                 strict_scott_bandwidth(samples).map_err(|reason| {
                     Error::Data(format!(
                         "matrix: {} {reason}",
                         matrix_group_context(column, group_column, hue_column, group)
                     ))
                 })
-            }))?;
+            }),
+        )?;
     }
     Ok(())
 }
@@ -1656,12 +1499,11 @@ fn extract_columns_f64(
     data: crate::data::PlotData<'_>,
     cols: &[&str],
 ) -> Result<Vec<Vec<f64>>, Error> {
-    let columns = data.collect_source(
+    let columns = crate::data::source::collect_source(
         cols.iter()
             .map(|column| crate::data::strict_finite_f64(data, column, "matrix")),
     )?;
 
-    data.claim_source_visits(columns.len())?;
     if columns.iter().any(|column| column.len() != data.height()) {
         return Err(Error::Data("matrix: column length mismatch".into()));
     }
@@ -1671,44 +1513,17 @@ fn extract_columns_f64(
 #[cfg(test)]
 mod semantic_tests {
     use super::*;
-    use crate::font::canonical::OperationGenerationResources;
+    use crate::font::canonical::OperationContext;
     use crate::{CategoryValues, NumericValues};
-
-    #[test]
-    fn declared_square_and_source_mark_topology_refuse_before_fonts() {
-        let source = source();
-        // Four declared cells, six points in each of the two off-diagonal
-        // cells, and two density paths in each of two diagonal cells.
-        let expected = 4 + 6 * 2 + 2 * 2;
-        for available in [expected - 1, expected] {
-            let resources = OperationGenerationResources::new();
-            resources
-                .claim_topology_slots(1_000_000 - available)
-                .unwrap();
-            crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-            let result = prepare_axes(&source, source.data().with_axis_resources(&resources));
-            assert_eq!(result.is_ok(), available == expected);
-            assert_eq!(
-                crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
-                0
-            );
-        }
-    }
 
     #[test]
     fn matrix_composite_observes_tick_source_and_semantics_even_without_axis_ink() {
         let source = source();
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         theme.axes.frame = None;
         theme.axes.grid = None;
         let scope = layout::fit::FitScope::root()
-            .child(
-                layout::AddressRole::MatrixCell,
-                3,
-                &crate::font::canonical::OperationGenerationResources::new(),
-            )
+            .child(layout::AddressRole::MatrixCell, 3)
             .unwrap();
         let make = |cap, configured| {
             let mut cell = Layout::envelope(PanelBox::new(10.0, 200.0, 10.0, 200.0));
@@ -1724,8 +1539,8 @@ mod semantic_tests {
             let original = make(1, false);
             let changed = make(cap, configured);
             assert_eq!(
-                original.geometry_snapshot(&theme).unwrap().bounds(),
-                changed.geometry_snapshot(&theme).unwrap().bounds()
+                original.geometry_snapshot().unwrap().bounds(),
+                changed.geometry_snapshot().unwrap().bounds()
             );
             let mut payload = MatrixPayload {
                 cells: vec![MatrixCellPayload {
@@ -1761,58 +1576,22 @@ mod semantic_tests {
     }
 
     #[test]
-    fn diagonal_projection_admits_every_examined_group_and_vertex() {
-        let source = source();
-        let prepared = prepare_axes(&source, source.data()).unwrap();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
-        let projection = layout::Projection::new(
-            prepared.ranges[0],
-            prepared.ranges[0],
-            (10.0, 600.0, 10.0, 500.0),
-        );
-        let expected = 2 * (1 + 60);
-        for available in [expected - 1, expected] {
-            let resources = OperationGenerationResources::with_test_limits(available, 1_000_000);
-            let mut marks = Vec::new();
-            let result = select_diagonal_kde(
-                &theme,
-                &mut marks,
-                &[(1, 2, 3), (4, 5, 6)],
-                &prepared.diagonals[0],
-                &projection,
-                source.data().with_axis_resources(&resources),
-            );
-            assert_eq!(result.is_ok(), available == expected);
-        }
-    }
-
-    #[test]
     fn mapped_source_rows_survive_matrix_grouping_and_selected_cells() {
         let source = source();
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let prepared = prepare_axes(
             &source,
             source
                 .data()
                 .map_source_rows(&[80, 30, 70, 60, 10, 90])
-                .with_axis_resources(&resources),
+                .with_operation(&resources),
         )
         .unwrap();
         assert_eq!(prepared.groups[0].source_rows, [80, 30, 70]);
         assert_eq!(prepared.groups[1].source_rows, [60, 10, 90]);
         let mut chart = source;
-        chart.prepared_matrix_axes = Some(
-            chart
-                .data()
-                .with_axis_resources(&resources)
-                .source_arc(prepared)
-                .unwrap(),
-        );
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        chart.prepared_matrix_axes = Some(crate::data::source::source_arc(prepared).unwrap());
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let selected = measure(
             &chart,
             PlotRenderContext::new(
@@ -1840,16 +1619,10 @@ mod semantic_tests {
     #[test]
     fn automatic_matrix_ink_is_complete_or_returns_a_typed_cell_fit() {
         let source = source();
-        let inputs = crate::plots::shared_x::prepare_plot(
-            &source,
-            &OperationGenerationResources::new(),
-            None,
-        )
-        .unwrap();
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         theme.marks.matrix_density.outline =
             Some(crate::theme::DataOutlineTheme::mapped(36.0, 255).unwrap());
         theme.marks.point_sizes.matrix = 20;
@@ -1898,29 +1671,16 @@ mod semantic_tests {
     }
 
     #[test]
-    fn successful_kde_budget_does_not_depend_on_diagnostic_names() {
+    fn successful_kde_only_builds_diagnostic_context_on_error() {
         let source = source();
         DIAGNOSTIC_CONTEXTS.with(|calls| calls.set(0));
         let mut prepared = prepare_axes(&source, source.data()).unwrap();
         assert_eq!(DIAGNOSTIC_CONTEXTS.with(std::cell::Cell::get), 0);
-        let run = |name: &str, resources: &OperationGenerationResources| {
-            prepare_density(
-                &source,
-                &prepared.groups,
-                0,
-                name,
-                prepared.ranges[0],
-                source.data().with_axis_resources(resources),
-            )
-        };
-        let resources = OperationGenerationResources::new();
-        run("first_value", &resources).unwrap();
-        let visits = resources.usage().unwrap().1;
-        let bytes = resources.byte_usage().unwrap();
-        let exact = OperationGenerationResources::with_test_limits(visits, bytes);
-        run(&"long diagnostic name".repeat(1000), &exact).unwrap();
-        assert_eq!(exact.usage().unwrap().1, visits);
-        assert_eq!(exact.byte_usage().unwrap(), bytes);
+        let run =
+            |name: &str| prepare_density(&source, &prepared.groups, 0, name, prepared.ranges[0]);
+        run("first_value").unwrap();
+        run(&"long diagnostic name".repeat(1000)).unwrap();
+
         assert_eq!(DIAGNOSTIC_CONTEXTS.with(std::cell::Cell::get), 0);
         prepared.groups[0].bandwidths[0] = 0.0;
         let error = prepare_density(
@@ -1929,7 +1689,6 @@ mod semantic_tests {
             0,
             "first_value",
             prepared.ranges[0],
-            source.data(),
         )
         .unwrap_err();
         assert_eq!(DIAGNOSTIC_CONTEXTS.with(std::cell::Cell::get), 1);
@@ -1940,7 +1699,7 @@ mod semantic_tests {
     }
 
     #[test]
-    fn many_hue_matrix_legend_uses_the_operation_ledger_end_to_end() {
+    fn many_hue_matrix_legend_preserves_all_labels() {
         let source = Plot::matrix(vec![
             NumericValues::new("x", (0..24).map(f64::from)),
             NumericValues::new("y", (0..24).map(|index| f64::from(index * index))),
@@ -1955,60 +1714,36 @@ mod semantic_tests {
         .size(1600, 1000)
         .erase();
         let prepared = prepare_axes(&source, source.data()).unwrap();
-        let run = |limits: Option<(u128, u64)>| {
-            let theme = crate::Theme::Publication
-                .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                .unwrap();
-            let color_resources = crate::font::canonical::OperationGenerationResources::new();
+        let run = || {
+            let theme = crate::Theme::Publication.resolve().unwrap();
+            let color_resources = crate::font::canonical::OperationContext::new();
             let (colors, accents) = prepared
                 .resolved_colors(
                     &source,
                     &theme,
-                    source.data().with_axis_resources(&color_resources),
+                    source.data().with_operation(&color_resources),
                 )
                 .unwrap();
             let mapped = prepared
                 .groups
                 .iter()
-                .map(|group| {
-                    PreparedMatrixAxes::group_color(group, &colors, &accents, &color_resources)
-                })
+                .map(|group| PreparedMatrixAxes::group_color(group, &colors, &accents))
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap();
-            let resources = theme
-                .prepared_font_environment()
-                .unwrap()
-                .generation_resources();
-            if let Some((visits, bytes)) = limits {
-                resources.set_test_limits(visits, bytes);
-            }
-            let result = matrix_legend(
+            matrix_legend(
                 &source,
                 &prepared.groups,
                 &mapped,
                 (1600.0, Some(1000.0)),
                 &theme,
                 &crate::layout::fit::FitScope::root(),
-                source.data().with_axis_resources(&resources),
-            );
-            (resources, result)
+            )
         };
-        let (resources, legend) = run(None);
+        let legend = run();
         let crate::layout::fit::FitOutcome::Measured(Some(legend)) = legend.unwrap() else {
             panic!("prepared matrix guide should fit its assigned panel")
         };
         assert_eq!(legend.text_plans().count(), 13);
-        let visits = resources.usage().unwrap().1;
-        let bytes = resources.byte_usage().unwrap();
-        for limits in [
-            (visits - 1, bytes),
-            (visits, bytes - 1),
-            (0, bytes),
-            (visits, 0),
-        ] {
-            assert!(run(Some(limits)).1.is_err());
-        }
-        run(Some((visits, bytes))).1.unwrap();
     }
 
     fn source() -> Plot {
@@ -2022,11 +1757,11 @@ mod semantic_tests {
     }
 
     #[test]
-    fn root_semantics_and_density_storage_have_exact_pre_font_admission() {
+    fn root_semantics_and_density_are_prepared_before_fonts() {
         let source = source();
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         SEMANTIC_STAGES.with(|counts| counts.set([0; 2]));
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         assert_eq!(SEMANTIC_STAGES.with(std::cell::Cell::get), [1, 2]);
         let prepared = inputs.matrix.as_ref().unwrap();
@@ -2036,22 +1771,8 @@ mod semantic_tests {
         assert_eq!(prepared.groups[1].identity.hue.as_deref(), Some("a"));
         assert_eq!(prepared.groups[0].columns[0], [1.0, 1.2, 1.4]);
         assert_eq!(prepared.groups[1].columns[1], [4.0, 4.2, 4.3]);
-        let visits = resources.usage().unwrap().1;
-        let bytes = resources.byte_usage().unwrap();
-        for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
-            assert!(crate::plots::shared_x::prepare_plot(
-                &source,
-                &OperationGenerationResources::with_test_limits(visits, bytes),
-                None,
-            )
-            .is_err());
-        }
-        crate::plots::shared_x::prepare_plot(
-            &source,
-            &OperationGenerationResources::with_test_limits(visits, bytes),
-            None,
-        )
-        .unwrap();
+
+        crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         let attached = inputs.attach(source).unwrap();
         assert!(std::sync::Arc::ptr_eq(
             attached.prepared_matrix_axes.as_ref().unwrap(),
@@ -2081,16 +1802,11 @@ mod semantic_tests {
                 .iter()
                 .map(|group| {
                     let weight = group.columns[index].len() as f64 / total;
-                    gaussian_kde_with_source(
-                        &group.columns[index],
-                        &grid,
-                        group.bandwidths[index],
-                        None,
-                    )
-                    .unwrap()
-                    .into_iter()
-                    .map(|density| density * weight)
-                    .collect::<Vec<_>>()
+                    gaussian_kde(&group.columns[index], &grid, group.bandwidths[index])
+                        .unwrap()
+                        .into_iter()
+                        .map(|density| density * weight)
+                        .collect::<Vec<_>>()
                 })
                 .collect::<Vec<_>>();
             assert_eq!(prepared.diagonals[index].densities, expected);
@@ -2109,17 +1825,11 @@ mod semantic_tests {
     #[test]
     fn repeated_matrix_measurements_do_not_rebuild_groups_or_statistics() {
         let source = source();
-        let inputs = crate::plots::shared_x::prepare_plot(
-            &source,
-            &OperationGenerationResources::new(),
-            None,
-        )
-        .unwrap();
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         let source = inputs.attach(source).unwrap();
         let stages = SEMANTIC_STAGES.with(std::cell::Cell::get);
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         for panel in [
             PanelBox::new(80.0, 700.0, 60.0, 540.0),
             PanelBox::new(80.25, 700.75, 60.5, 500.25),
@@ -2135,16 +1845,11 @@ mod semantic_tests {
     fn selected_matrix_cells_preserve_geometry_and_poisoned_capture_does_no_layout_work() {
         for preset in [crate::Theme::Publication, crate::Theme::Science] {
             let source = source();
-            let inputs = crate::plots::shared_x::prepare_plot(
-                &source,
-                &OperationGenerationResources::new(),
-                None,
-            )
-            .unwrap();
+            let inputs =
+                crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None)
+                    .unwrap();
             let source = inputs.attach(source).unwrap();
-            let theme = preset
-                .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                .unwrap();
+            let theme = preset.resolve().unwrap();
             let panel = PanelBox::new(80.25, 700.75, 60.5, 500.25);
             let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
             let begins =
@@ -2238,49 +1943,6 @@ mod semantic_tests {
             assert_eq!(stages, SEMANTIC_STAGES.with(std::cell::Cell::get));
             assert_eq!(selections, SELECTIONS.with(std::cell::Cell::get));
         }
-    }
-
-    #[test]
-    fn selected_matrix_storage_refuses_at_exact_operation_limits() {
-        let source = source();
-        let inputs = crate::plots::shared_x::prepare_plot(
-            &source,
-            &OperationGenerationResources::new(),
-            None,
-        )
-        .unwrap();
-        let source = inputs.attach(source).unwrap();
-        let run = |limits: Option<(u128, u64)>| {
-            let theme = crate::Theme::Publication
-                .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                .unwrap();
-            let resources = theme
-                .prepared_font_environment()
-                .unwrap()
-                .generation_resources();
-            if let Some((visits, bytes)) = limits {
-                resources.set_test_limits(visits, bytes);
-            }
-            let result = source.measure_selected_interior(PlotRenderContext::new(
-                source.data(),
-                PanelBox::new(80.0, 700.0, 60.0, 500.0),
-                &theme,
-            ));
-            (resources, result)
-        };
-        let (resources, selected) = run(None);
-        selected.unwrap();
-        let visits = resources.usage().unwrap().1;
-        let bytes = resources.byte_usage().unwrap();
-        for (visits, bytes) in [
-            (visits - 1, bytes),
-            (visits, bytes - 1),
-            (0, bytes),
-            (visits, 0),
-        ] {
-            assert!(run(Some((visits, bytes))).1.is_err());
-        }
-        run(Some((visits, bytes))).1.unwrap();
     }
 
     #[test]

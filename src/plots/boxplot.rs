@@ -76,12 +76,10 @@ pub(crate) fn intrinsic_body_minimum(
         0.5
     };
     let fill = theme.marks.box_body.backend_style((0, 0, 0));
-    let body = crate::render::geometry::rectangular_fill_ink_bounds(theme, &fill)?;
-    let (_, out_y) = crate::render::geometry::rectangular_fill_ink_outset(theme, &fill)?;
-    let summary = crate::render::geometry::line_ink_width(
-        theme,
-        &theme.marks.summary_stroke.backend_style(),
-    )?;
+    let body = crate::render::geometry::rectangular_fill_ink_bounds(&fill)?;
+    let (_, out_y) = crate::render::geometry::rectangular_fill_ink_outset(&fill)?;
+    let summary =
+        crate::render::geometry::line_ink_width(&theme.marks.summary_stroke.backend_style())?;
     let overlay = chart.raw_overlay_spec();
     let point_style = if overlay.is_visible() {
         theme
@@ -91,10 +89,8 @@ pub(crate) fn intrinsic_body_minimum(
     } else {
         chart.point_style(theme, theme.foreground, theme.marks.point_sizes.box_flier)
     };
-    let point = crate::render::geometry::point_ink_bounds(theme, &point_style)?;
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = chart.data().with_axis_resources(&resources);
-    data.claim_source_visits(prepared.stats.len())?;
+    let point = crate::render::geometry::point_ink_bounds(&point_style)?;
+
     let mut pitch = 1.0_f64 / 1024.0;
     let mut numeric = out_y.max(summary);
     for (stat, group) in prepared.stats.iter().zip(&sample.groups) {
@@ -129,7 +125,6 @@ pub(crate) fn intrinsic_body_minimum(
         }
         if let Some(ink) = point {
             if overlay.is_visible() {
-                data.claim_source_visits(group.observations.len())?;
                 for observation in &group.observations {
                     let x = crate::plots::distribution_sample::overlay_x(
                         overlay,
@@ -175,10 +170,12 @@ pub(crate) fn prepare(
     let sample = crate::plots::distribution_sample::prepare_scoped(chart, data, "boxplot", facet)?;
 
     // Display stats per group: Q1, median, Q3, lower whisker, upper whisker.
-    let stats = data.collect_source(sample.groups.iter().map(
+    let stats = crate::data::source::collect_source(sample.groups.iter().map(
         |group| -> Result<BoxStats, Error> {
-            let mut ys = data.collect_source(group.observations.iter().map(|o| Ok(o.value)))?;
-            let summary = box_summary_with_source(&mut ys, Some(data))?;
+            let mut ys = crate::data::source::collect_source(
+                group.observations.iter().map(|o| Ok(o.value)),
+            )?;
+            let summary = box_summary_with_source(&mut ys)?;
             Ok(BoxStats {
                 x_index: group.x_index,
                 group_index: group.group_index,
@@ -192,9 +189,6 @@ pub(crate) fn prepare(
         },
     ))?;
 
-    for stat in &stats {
-        data.claim_source_visits(stat.fliers.len().saturating_add(1).saturating_mul(2))?;
-    }
     let y_min = stats.iter().fold(f64::INFINITY, |min, stat| {
         stat.fliers
             .iter()
@@ -226,8 +220,8 @@ pub(crate) fn measure_marks(
         return Err(Error::Render("boxplot requires retained box summaries".into()).into());
     };
     let theme = context.theme;
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = context.data.with_axis_resources(&resources);
+    let resources = theme.prepared_font_environment()?.operation();
+    let data = context.data.with_operation(&resources);
     let sample = &prepared.sample;
     let stats = &prepared.stats;
     let x_levels = &sample.x_levels;
@@ -235,9 +229,11 @@ pub(crate) fn measure_marks(
     let group_active = !group_levels.is_empty();
     let base_y_range = layout.projection.y_range();
     let mut rendered_maxima =
-        data.collect_source((0..x_levels.len()).map(|_| Ok(f64::NEG_INFINITY)))?;
-    let mut grouped_maxima = data.collect_source((0..x_levels.len()).map(|_| {
-        data.collect_source((0..group_levels.len().max(1)).map(|_| Ok(f64::NEG_INFINITY)))
+        crate::data::source::collect_source((0..x_levels.len()).map(|_| Ok(f64::NEG_INFINITY)))?;
+    let mut grouped_maxima = crate::data::source::collect_source((0..x_levels.len()).map(|_| {
+        crate::data::source::collect_source(
+            (0..group_levels.len().max(1)).map(|_| Ok(f64::NEG_INFINITY)),
+        )
     }))?;
     for stat in stats {
         let maximum = stat.fliers.iter().copied().fold(stat.hi_whisker, f64::max);
@@ -249,7 +245,7 @@ pub(crate) fn measure_marks(
     let (colors, legend_entries) = {
         let retained = categorical_distribution::retained(chart)?;
         let colors = retained.resolved_colors(chart, theme, data)?;
-        let entries = retained.guide_entries_with_colors(chart, theme, data, &colors)?;
+        let entries = retained.guide_entries_with_colors(chart, theme, &colors)?;
         (colors, entries)
     };
     let significance = if group_levels.is_empty() {
@@ -286,10 +282,7 @@ pub(crate) fn measure_marks(
     let mut payload = DistributionPayload::new(layout.projection.panel_box(), chart.kind());
     for (i, stat) in stats.iter().enumerate() {
         let group = &sample.groups[i];
-        let color = colors.color(
-            group.hue_label.as_deref().unwrap_or(&group.label),
-            &resources,
-        )?;
+        let color = colors.color(group.hue_label.as_deref().unwrap_or(&group.label))?;
         let fill = theme.marks.box_body.backend_style(color);
         let style = theme.marks.summary_stroke.backend_style();
 
@@ -325,7 +318,7 @@ pub(crate) fn measure_marks(
         }
 
         // Box.
-        let pts = data.collect_source(
+        let pts = crate::data::source::collect_source(
             [
                 Point2D::new(xc - box_w_px / 2.0, y_q1),
                 Point2D::new(xc - box_w_px / 2.0, y_q3),
@@ -335,7 +328,7 @@ pub(crate) fn measure_marks(
             .into_iter()
             .map(Ok),
         )?;
-        payload.polygon(pts, fill, data)?;
+        payload.polygon(pts, fill)?;
 
         // Median line.
         payload.line(
@@ -344,69 +337,54 @@ pub(crate) fn measure_marks(
                 Point2D::new(xc + box_w_px / 2.0, y_med),
             ],
             &style,
-            data,
         )?;
 
         // Whiskers.
-        payload.line(
-            &[Point2D::new(xc, y_q3), Point2D::new(xc, y_hi)],
-            &style,
-            data,
-        )?;
-        payload.line(
-            &[Point2D::new(xc, y_q1), Point2D::new(xc, y_lo)],
-            &style,
-            data,
-        )?;
+        payload.line(&[Point2D::new(xc, y_q3), Point2D::new(xc, y_hi)], &style)?;
+        payload.line(&[Point2D::new(xc, y_q1), Point2D::new(xc, y_lo)], &style)?;
         let cap = box_w_px * 0.3;
         payload.line(
             &[Point2D::new(xc - cap, y_hi), Point2D::new(xc + cap, y_hi)],
             &style,
-            data,
         )?;
         payload.line(
             &[Point2D::new(xc - cap, y_lo), Point2D::new(xc + cap, y_lo)],
             &style,
-            data,
         )?;
 
         if overlay == RawOverlay::Hidden {
             let flier_style =
                 chart.point_style(theme, theme.foreground, theme.marks.point_sizes.box_flier);
-            let flier_points = data.collect_source(stat.fliers.iter().map(|y| {
-                data.claim_source_visits(1)?;
+            let flier_points = crate::data::source::collect_source(stat.fliers.iter().map(|y| {
                 let (x_px, y_px) = proj.project(x_center_data, *y);
                 Ok(Point2D::new(x_px, y_px))
             }))?;
             if !flier_points.is_empty() {
-                payload.scatter(flier_points, flier_style, data)?;
+                payload.scatter(flier_points, flier_style)?;
             }
         }
     }
     if overlay.is_visible() {
         for group in &sample.groups {
             let center = crate::plots::distribution_sample::center(group, group_levels.len());
-            let points = data.collect_source(group.observations.iter().map(|observation| {
-                data.claim_source_visits(1)?;
-                let x = crate::plots::distribution_sample::overlay_x(
-                    overlay,
-                    center,
-                    box_w_data,
-                    observation.source_row,
-                );
-                let (x, y) = proj.project(x, observation.value);
-                Ok(Point2D::new(x, y))
-            }))?;
+            let points = crate::data::source::collect_source(group.observations.iter().map(
+                |observation| {
+                    let x = crate::plots::distribution_sample::overlay_x(
+                        overlay,
+                        center,
+                        box_w_data,
+                        observation.source_row,
+                    );
+                    let (x, y) = proj.project(x, observation.value);
+                    Ok(Point2D::new(x, y))
+                },
+            ))?;
             payload.scatter(
                 points,
                 crate::plots::distribution_sample::overlay_style(
-                    colors.color(
-                        group.hue_label.as_deref().unwrap_or(&group.label),
-                        &resources,
-                    )?,
+                    colors.color(group.hue_label.as_deref().unwrap_or(&group.label))?,
                     theme,
                 ),
-                data,
             )?;
         }
     }
@@ -419,28 +397,23 @@ pub(crate) fn measure_marks(
 
 #[cfg(test)]
 fn box_summary(values: &mut [f64]) -> Result<BoxSummary, Error> {
-    box_summary_with_source(values, None)
+    box_summary_with_source(values)
 }
 
-fn box_summary_with_source(
-    values: &mut [f64],
-    data: Option<PlotData<'_>>,
-) -> Result<BoxSummary, Error> {
-    use crate::data::source::SourceAdmission;
-    data.source_visits(values.len())?;
+fn box_summary_with_source(values: &mut [f64]) -> Result<BoxSummary, Error> {
     if values.is_empty() || values.iter().any(|v| !v.is_finite()) {
         return Err(Error::Data(
             "boxplot: samples must be finite and nonempty".into(),
         ));
     }
-    crate::data::source::sort_numeric_source(values, data)?;
+    crate::data::source::sort_numeric_source(values);
     let q1 = crate::stats::distribution::sorted_quantile(values, 0.25);
     let median = crate::stats::distribution::sorted_quantile(values, 0.5);
     let q3 = crate::stats::distribution::sorted_quantile(values, 0.75);
     let iqr = q3 - q1;
     let lo_fence = q1 - 1.5 * iqr;
     let hi_fence = q3 + 1.5 * iqr;
-    data.source_visits(values.len().saturating_mul(3))?;
+
     let lo_whisker = values
         .iter()
         .copied()
@@ -453,7 +426,7 @@ fn box_summary_with_source(
         .find(|value| *value <= hi_fence)
         .unwrap_or(q3);
     let mut fliers = Vec::new();
-    data.source_reserve(&mut fliers, values.len())?;
+    crate::data::source::reserve_source(&mut fliers, values.len())?;
     fliers.extend(
         values
             .iter()
@@ -491,7 +464,7 @@ mod tests {
             .erase();
         let single = Plot::boxplot(categories, values).erase();
         let intrinsic = |source: Plot, theme: &crate::theme::ResolvedTheme| {
-            let resources = crate::font::canonical::OperationGenerationResources::new();
+            let resources = crate::font::canonical::OperationContext::new();
             let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
             inputs
                 .attach(source)
@@ -499,9 +472,7 @@ mod tests {
                 .intrinsic_body_minimum(theme)
                 .unwrap()
         };
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         theme.marks.box_body.outline = Some(crate::theme::DataOutlineTheme::fixed(
             theme
                 .marks
@@ -531,16 +502,7 @@ mod tests {
         ));
         theme.marks.point_sizes.box_flier = 80;
         let flier = intrinsic(grouped.clone(), &theme);
-        assert!(
-            flier.0
-                > intrinsic(
-                    grouped,
-                    &crate::Theme::Publication
-                        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                        .unwrap()
-                )
-                .0
-        );
+        assert!(flier.0 > intrinsic(grouped, &crate::Theme::Publication.resolve().unwrap()).0);
         let exact = Plot::boxplot(
             crate::CategoryValues::new("category", ["a", "a", "a", "a", "b", "b", "b", "b"])
                 .unwrap(),
@@ -549,12 +511,7 @@ mod tests {
         .y_limits(0.0, 101.0)
         .erase();
         let styled = intrinsic(exact, &theme);
-        let plain = intrinsic(
-            single,
-            &crate::Theme::Publication
-                .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                .unwrap(),
-        );
+        let plain = intrinsic(single, &crate::Theme::Publication.resolve().unwrap());
         assert_eq!(styled.1.to_bits(), plain.1.to_bits());
     }
 

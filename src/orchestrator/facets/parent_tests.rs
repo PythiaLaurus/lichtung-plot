@@ -70,9 +70,7 @@ fn outer_roles_use_one_root_producer_without_changing_centered_strips() {
         .erase();
         source.title_alignment = alignments[0];
         source.subtitle_alignment = alignments[1];
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         theme.prepare_font_environment().unwrap();
         let mut children = crate::decorations::plan::children::ChildPlans::facets(&source);
         crate::layout::plan_exact_root(
@@ -81,7 +79,7 @@ fn outer_roles_use_one_root_producer_without_changing_centered_strips() {
             |stage| {
                 let inputs = crate::plots::shared_x::prepare_plot(
                     &source,
-                    &stage.generation_resources(),
+                    &stage.operation(),
                     Some(&crate::theme::scale_values::test_defaults()),
                 )?;
                 let guide = prepare_discrete_guide(
@@ -89,7 +87,7 @@ fn outer_roles_use_one_root_producer_without_changing_centered_strips() {
                     PlotKind::Scatter,
                     &theme,
                     &inputs,
-                    &stage.generation_resources(),
+                    &stage.operation(),
                 )?;
                 Ok((inputs, guide))
             },
@@ -118,7 +116,7 @@ fn outer_roles_use_one_root_producer_without_changing_centered_strips() {
                     .iter()
                     .all(|strip| strip.placement.anchor == TextAnchor::Middle));
                 assert_eq!(plan.panel_plans.len(), 2);
-                children.finish_round(round)?;
+                children.finish_round(round);
                 Ok(crate::layout::MeasuredLayout::new(assigned, plan))
             },
             |_, assigned, plan, stage| {
@@ -195,15 +193,9 @@ fn measured_facet_tracks_keep_exact_fit_and_typed_owner() {
     )
     .erase();
     let scope = FitScope::root()
-        .child(
-            crate::layout::AddressRole::FacetGrid,
-            0,
-            &crate::font::canonical::OperationGenerationResources::new(),
-        )
+        .child(crate::layout::AddressRole::FacetGrid, 0)
         .unwrap();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     for width in [80.0, 80.0 - 1.0 / 1024.0] {
         let outcome = tracks::allocate(
             plot.data(),
@@ -239,26 +231,19 @@ fn measured_facet_tracks_keep_exact_fit_and_typed_owner() {
 }
 
 #[test]
-fn parent_topology_admits_exact_budget_and_does_not_refund_rejected_trials() {
+fn parent_tracks_accept_a_fitting_retry_after_a_miss() {
     let plot = Plot::scatter(
         crate::NumericValues::new("x", [0.0]),
         crate::NumericValues::new("y", [0.0]),
     )
     .erase();
     let scope = FitScope::root();
-    let run = |limits: Option<(u128, u64)>, repeat: bool| {
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+    let run = |repeat: bool| {
+        let theme = crate::Theme::Publication.resolve().unwrap();
         theme.prepare_font_environment().unwrap();
-        let resources = theme
-            .prepared_font_environment()
-            .unwrap()
-            .generation_resources();
-        if let Some((visits, bytes)) = limits {
-            resources.set_test_limits(visits, bytes);
-        }
-        let data = plot.data().with_axis_resources(&resources);
+        let resources = theme.prepared_font_environment().unwrap().operation();
+
+        let data = plot.data().with_operation(&resources);
         let panels = [data::FacetPanel {
             panel_index: 0,
             row: 0,
@@ -285,19 +270,10 @@ fn parent_topology_admits_exact_budget_and_does_not_refund_rejected_trials() {
         let second = repeat.then(|| attempt(80.0));
         (resources, result, second)
     };
-    let (resources, result, _) = run(None, false);
+    let (_, result, next) = run(true);
     assert!(matches!(result.unwrap(), FitOutcome::Miss(_)));
-    let visits = resources.usage().unwrap().1;
-    let bytes = resources.byte_usage().unwrap();
-    assert!(visits > 0 && bytes > 0);
-    assert!(run(Some((visits - 1, bytes)), false).1.is_err());
-    assert!(run(Some((visits, bytes - 1)), false).1.is_err());
-    let (_, exact, next) = run(Some((visits, bytes)), true);
-    assert!(matches!(exact.unwrap(), FitOutcome::Miss(_)));
-    assert!(
-        next.unwrap().is_err(),
-        "a rejected fit does not refund admitted work"
-    );
+
+    assert!(matches!(next.unwrap().unwrap(), FitOutcome::Measured(_)));
 }
 
 #[test]
@@ -312,9 +288,7 @@ fn impossible_outer_title_returns_typed_fit_before_child_measurement() {
     .title("M".repeat(200))
     .size(160, 120)
     .erase();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     theme.prepare_font_environment().unwrap();
     crate::layout::plan_exact_root(
         source.width(),
@@ -322,7 +296,7 @@ fn impossible_outer_title_returns_typed_fit_before_child_measurement() {
         |stage| {
             let inputs = crate::plots::shared_x::prepare_plot(
                 &source,
-                &stage.generation_resources(),
+                &stage.operation(),
                 Some(&crate::theme::scale_values::test_defaults()),
             )?;
             prepare_discrete_guide(
@@ -330,7 +304,7 @@ fn impossible_outer_title_returns_typed_fit_before_child_measurement() {
                 PlotKind::Scatter,
                 &theme,
                 &inputs,
-                &stage.generation_resources(),
+                &stage.operation(),
             )
         },
         |guide, assigned, round| {
@@ -352,11 +326,8 @@ fn impossible_outer_title_returns_typed_fit_before_child_measurement() {
             assert_eq!(failure.reason.kind, FitKind::Text);
             assert_eq!(
                 failure.reason.address,
-                crate::layout::ComponentAddress::root().child(
-                    crate::layout::AddressRole::RootTitle,
-                    0,
-                    round.resources()
-                )?
+                crate::layout::ComponentAddress::root()
+                    .child(crate::layout::AddressRole::RootTitle, 0)?
             );
             crate::decorations::plan::children::CHILD_MEASUREMENTS
                 .with(|calls| assert!(calls.borrow().is_empty()));

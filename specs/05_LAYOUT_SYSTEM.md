@@ -219,13 +219,9 @@ Layout `log10` uses the correctly rounded ties-to-even exact-integer interval
 algorithm in `src/numeric.rs`, with pinned `num-bigint 0.4.8`. It bounds the
 atanh series with outward fixed-point arithmetic, starting at 128 fractional
 bits and doubling precision until both rational bounds round identically.
-The current root's operation ledger is mandatory: each input, exact-power
-comparison, refinement, series setup/iteration, and final conversion is admitted
-before work. Checked upper bounds on first-party BigUint temporaries are charged
-before their algebra, including limb rounding and capacity growth. The existing
-shared 1,000,000-visit and 512 MiB cumulative-byte limits bound this work and
-scratch; there is no separate precision cap or unbudgeted production entry point.
-Refusal and precision/scratch arithmetic failure are fatal and propagate through
+There is no accounting parameter or per-expression price. Checked precision
+growth, actual integer representation, certified bounds and exact rounding remain.
+Real arithmetic/allocation failure is fatal and propagates through
 Forest values, references, ticks, limits, and nice-range consumers.
 Exactly representable powers `10^0..10^22` and exceptional inputs are handled
 explicitly; rationality proves termination for all remaining binary64 inputs.
@@ -506,16 +502,15 @@ in particular, a failed endpoint encountered during retreat stops later extensio
 without reshaping. A paragraph-fit failure can likewise be reused at that same
 start. Release failed trial glyph payloads and obsolete line-start cache entries
 as scanning advances; retain selected exact lines and the one paragraph map.
-Any optional retained trial cache is admitted incrementally under the same
-record/work limits, never a complete boundary-pair or all-suffix collection.
+Any optional retained trial cache grows fallibly as needed, never as a complete
+boundary-pair or all-suffix collection.
 
 Paragraph advances only propose a break; they are never exact line-fit proof.
 Final geometry uses retained contextual whole-line shaping, not sums of standalone
 words, glyph estimates, or paragraph-map advances. This policy deliberately does
 NOT promise a globally longest fit under pathological nonmonotonic contextual
-widths: it never skips a failing next endpoint seeking a distant fit. Every scan
-and exact trial is charged incrementally as specified below. Expensive text can
-still fail the admitted budget explicitly, without an uncharged search phase.
+widths: it never skips a failing next endpoint seeking a distant fit. Actual
+allocation, arithmetic and fit failures propagate; scans and trials have no fees.
 
 Compute paragraph bidi levels once with full paragraph context, preserve them
 across soft wraps, then apply UAX #9 line-specific reset/reordering to each
@@ -639,16 +634,12 @@ decoded face contributes no candidate. That is not permission to discard a
 selected face after shaping or metrics fail. No built-in-font, next-path,
 network, or project-cache recovery is admitted.
 
-Fontconfig configuration/includes and include-directory entries share discovery
-and byte budgets with fonts. Includes are iterative, canonical-file deduplicated,
-with sorted directory entries and bounded depth represented by admitted records.
-Read an admitted configuration length before parsing; reject internal XML entity
-declarations as syntax failure. Admit actual parser scalar input to the shared
-processing ledger and set node limit `2*count('<')+1` before parsing; the prior
-`2*count('<')+count('=')+1` synthetic parser-capacity price is superseded.
-Relevant `dir`, `include`, `reset-dirs`, and generic-alias directives each claim
-an entry before retained storage. Discard temporary configuration bytes after
-bounded root/generic extraction; their cumulative charges remain.
+Fontconfig includes are iterative and canonical-file deduplicated, with sorted
+directory entries and fallibly retained traversal records. Read the verified
+configuration length before parsing; reject internal XML entity declarations as
+syntax failure. Set the actual-input-derived node limit `2*count('<')+1` before
+parsing. Relevant `dir`, `include`, `reset-dirs` and generic-alias directives keep
+their established semantics. Discard configuration bytes after extraction.
 
 For admitted inputs within the resource envelope, fontconfig directive and
 fallback semantics follow locked `fontconfig-parser 0.5.8` as used by fontdb.
@@ -1273,184 +1264,76 @@ derived from Rust traits or an unchanged request list.
 
 ## Resources And Lifecycle
 
-**Current user-directed override:** resource-accounting quota refusal is disabled
-by `ENFORCE_RESOURCE_QUOTAS = false` in `src/font/canonical.rs`. The same switch
-gates all three central quota predicates, covering processing visits, records,
-topology, calls, cache entries, font discovery and cumulative byte claims.
-The discovery counter has since been removed; the remaining counters and their
-checked arithmetic continue operating outside the migrated paths below. This supersedes the
-seven ledger limits below as production refusal conditions; it does not change
-allocation/representability, data/font validation, root/guide coordination or PNG
-policies. The configuration fields and old quota-oriented tests are retained for
-now, without a new fault-injection framework or test migration. Those old refusal
-expectations do not describe the disabled policy. The audit documents describe
-the historical baseline and its limitations, not complete actual-resource coverage.
+Production rendering has no unified resource-accounting ledger. Processing
+visits, retained records, topology slots, measurement calls, cache insertions,
+font-discovery events and cumulative font/source/scratch bytes have no cumulative
+quota or per-operation debit. The counters, quota configuration, enforcement
+switch, accounting-only errors, measurement tickets and pricing expressions are
+removed under `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md`.
 
-The user-approved simplification in `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md`
-is now being implemented. Operation identity is an independent shared identity,
-not the address of the accounting counters. Clones retain it and new operations
-receive distinct identities; source tickets and operation-local caches continue
-to use it. Subsequent accounting deletion must preserve this lifetime contract.
+`OperationContext` retains an independent shared identity and the operation-local
+palette cache. Clones share identity; fresh operations differ. `RowSourceContext`
+checks original source identity and operation ownership through row views.
+Prepared fonts retain their operation, sealed census, exact source bytes and
+coverage; `FontPreparation` owns normalization preparation rather than a budget.
+Actual cache synchronization, complete cache-key equality and immutable sharing
+remain. Pointer equality alone is not a substitute for complete content equality.
 
-Filesystem font discovery now grows its record vector fallibly from actual
-encountered entries, with checked amortized capacity growth. It no longer reserves
-one million records or accepts an accounting budget. Directory traversal, native
-path ordering/deduplication, retained-byte hashing, one-open-file-at-a-time behavior
-and file-change detection remain. Prepared-stage reservation errors still propagate.
-Fontconfig configuration traversal likewise has no accounting dependency. Its
-canonical-file deduplication, iterative include ordering, input-derived XML node
-capacity, entity handling, optional missing-path behavior, actual read extent and
-file-change checks remain. A previously discovered include that disappears still
-returns an I/O error. The discovery counter, limit and dedicated mutex are deleted.
-Remaining font preparation retains other counters until its own migration;
-historical usage totals below do not describe current normalization or discovery.
+| Mechanism | Current contract |
+| --- | --- |
+| Root feedback | At most eight rounds; adjacent equality succeeds, cycles and changed final round fail. |
+| Guide trials | Existing deterministic edge/flow order, automatic/explicit attempt rules and nonresetting owner identity. |
+| Optional exact text memo | Stop optional insertion at 256 entries; continue rendering and using retained hits. |
+| PNG axis / pixels / parser input | 32,768 / 100,000,000 / 67,108,864 bytes, only at PNG terminals. |
+| Storage and arithmetic | Checked real lengths, products, indices, layouts and spatial conversions; fallible first-party reservations and real I/O errors. |
+| Scientific and font validity | Finite/range/source validation, actual coverage, file consistency and prepared-stage ownership remain mandatory. |
 
-PF4's accepted replacement contract below is implemented. Final primary
-`just verify`, independent byte/variable-visit recheck, and all 27 baseline output
-hash comparisons passed; evidence is in `docs/resource-admission.md` and T5a3p4
-in `91_IMPLEMENTATION_PLAN.md`. These are static cumulative quotas, not CPU/RSS
-guarantees. T5a3p closure does not start the later native layout phases.
+First-party storage reserves known extents or grows fallibly from actual demand.
+Vector reservation also checks representable capacity; removing a byte-price
+formula does not bypass real allocation failure. Retained scene output counters
+still calculate actual serialized sizes and PNG parser input. There is no
+replacement SVG byte cap, precision budget or whole-operation score. Existing
+family/input limits, mathematical convergence rules and local fit rules remain.
+Infallible third-party allocations do not become recoverable merely because the
+renderer uses fallible reservations for its own buffers.
 
-| PF4 Resource | Inclusive Limit | Admission Point And Unit |
-| --- | ---: | --- |
-| Root processing visits, shared by font and text | `1_000_000` | Actual scalar inputs to variable text passes; normalization input/decomposition nodes and each actual preceding comparison in quadratic ordering; candidate, unit, endpoint, and list visits; collision pair tests. Admit known inputs in bulk before processing and variable visits before their guarded operation. |
-| Retained planning records | `1_000_000` | Actual headers/elements, including glyphs, before first-party retention; immutable sharing counts once and copied values count again. |
-| Prepared topology slots | `1_000_000` | Existing structural census before preparation. |
-| Measurement/intrinsic call attempts | `1_000_000` | Before lookup, including hits. |
-| Root-local cache entries | `1_000_000` | Before insertion. The exact text cache still optionally stops at `256` entries. |
-| Font discovery entries | `1_000_000` | Before discovery admission. |
-| Font/source/scratch bytes | `536_870_912` | Checked cumulative byte admission before read or first-party retention, including glyph output; no processing price for hashing, copying, or materialization. |
-| Root feedback rounds / guide placement trials | `8` / `8` | Existing round/trial boundaries. |
-| PNG axis / pixels / parser-input bytes | `32_768` / `100_000_000` / `67_108_864` | Existing PNG-local format boundaries only. |
+Font discovery uses checked amortized growth rather than a million-record
+preallocation. Native ordering/deduplication, retained-byte hashing, one open
+font file at a time and file-change detection remain. Fontconfig includes retain
+iterative traversal, canonical-file deduplication, input-derived XML capacity,
+entity handling and actual read extents. Optional missing includes remain
+distinct from a discovered file disappearing, which is an I/O error.
 
-One root processing-visits ledger exists from operation creation, before font
-preparation. Font budgets, generation resources, and their clones share it.
-Sharing resources must transfer consumed admissions or safely refuse a mismatched
-started ledger; it must never reset or discard consumption. Nested replay owns
-its independent record budget; copying child-cache values does not create a new
-root quota. Claims are synchronized, not computed from racy usage snapshots.
+Unicode normalization, segmentation, line breaking, bidi, shaping, fitting,
+sorting, projection and exact arithmetic run their existing algorithms without
+accounting callbacks or fees. Required text and scientific inputs remain
+complete. Arithmetic, allocation, font and lifecycle errors remain terminal;
+they cannot cause omission, a smaller representation or a fit retry. Functions
+without any remaining failure source return directly.
 
-Font-family Unicode normalization no longer takes a resource callback or charges
-input scans, decomposition, ordering, recomposition or scratch storage. NFC and
-NFKC casefold retain their Unicode 16 tables, actual algorithms, checked lengths
-and fallible buffer growth. The ordering and recomposition passes have no remaining
-failure source and return directly; allocation and representation failures still
-propagate from normalization. Text line breaking likewise has no resource callback:
-UAX #14 analysis, ASCII-run contraction/source mapping and UAX #29 boundary
-intersection retain their algorithms and fallible storage. The shared text-vector
-reservation helper retains checked lengths and growth without charging bytes.
-Other text planning/shaping/cache accounting remains pending. Equality-based cache
-fallback remains valid; pointer identity alone is not sufficient.
-
-Shaping input is admitted at the canonical Rustybuzz call boundary, before buffer
-construction and shaping, counting actual input plus at most five trailing
-pre-context scalars and five leading post-context scalars, exactly as consumed by
-locked Rustybuzz `0.20.1` (`CONTEXT_LENGTH = 5`). Do not scan or charge the rest of
-either context string. Known output records and bytes are admitted in bulk
-before first-party vectors or ink probes, avoiding per-glyph locks. Third-party
-internals retain their bounded-input caveat. Guarded variable loops may batch only
-without unpaid failure paths or concurrent oversubscription.
-
-Failure precedence is checked representability, cumulative admission, fallible
-reservation, then processing/retention. Existing typed arithmetic, resource,
-reservation, and font refusals remain terminal; none triggers omission, a smaller
-representation, or fit retry. Claims are cumulative and never refunded. The
-million-visit magnitude protects actual variable and quadratic workloads without
-artificial rule prices; a physically fitting 2,048-word workload is positive
-evidence when its actual visits, records, and bytes fit. Successful glyphs, line
-breaks, ticks, geometry, PF7 line filling, and script context remain unchanged.
-Release evidence must report visits and records separately from CPU/wall time and
-check all nine publication output hash sets against the preserved baseline. Fewer
-accounting units are not evidence of speed. No global cache is introduced.
-
-PNG dimension, pixel, and parser-input limits apply only at a PNG terminal, in
-all three sizing modes. They are not shared layout or SVG admission gates.
-Automatic SVG has no PNG-derived canonical byte cap either. All modes retain
-the shared processing-visits and record caps, checked representability and byte
-arithmetic, and fallible reservations; no replacement SVG byte cap is introduced.
-
-Existing stricter semantic family limits remain. Structural slots are exactly
-the addressed component/prepared-record census above, including sparse slots,
-marks, cells, targets, categories, connectors, and entries. Planning records are
-retained plan/state/cache/feedback headers and each retained line, glyph, track,
-box, tick/label, flow slot, packing offset, or obstacle element; immutable shared
-payload counts once, a copied payload again. Original semantic strings/font bytes
-are admitted by their source census/byte rules, not counted as one record per byte.
-No candidate-product or unused alternative-capacity counter exists.
-
-Actual scalar inputs to paragraph partition, segmentation, line-break,
-script-resolution, bidi, and shaping passes consume visits. Sorting and
-deduplication bulk-admit their input record counts, not comparator prices.
-Variable list searches charge examined entries rather than unused list tails.
-Retained-face searches for shaping, metrics, and outlining, and guide-owner
-searches for trials and ordinals, admit each entry before its comparison,
-including the terminating match. Direct file-ordinal access has no list scan.
-Storage-only traversals, copying, and hashing do not acquire a second processing
-price. A cache hit does no producer processing; cache search still admits visited
-entries, and retention still admits records/bytes before insertion.
-
-Text proposal clusters, legal endpoints, and forward/retreat/extension steps
-consume actual visits. An endpoint's exact advance and ink predicates together
-count as one fit trial, not two; a reused failed result has a boundary visit but
-no second shaping or predicate evaluation. The initial whole-paragraph fit is
-one trial. PF7 line filling and early stopping at the first failed extension are
-unchanged. Shaper output counts as actual retained records/bytes, not visits.
-
-First-party paragraph/run headers, scalar-property/source-index metadata,
-grapheme and legal-boundary entries, base-plus-mark unit spans/selections,
-shaping-cluster/source intervals, proposal
-prefix entries, trial-cache headers/results, and retained glyph/path-command
-elements each count as one planning record per logical element. A fixed-field
-record counts once; a variable payload counts its header plus each element,
-not merely its outer vector. Shared identical immutable data counts once;
-copies and repeated materialization consume new cumulative admissions. Glyph
-outline commands and temporary trial metadata are not an unbounded exempt phase.
-Variable UTF-8/byte payload capacities use checked byte admission and fallible
-growth. Release does not refund cumulative record/visit/byte claims. No arbitrary first-million-slot
-allocation replaces incremental admission of actually needed metadata.
-
-Font processing uses the same root ledger: census scalar inputs, discovery/config
-entry visits, decoded face/name inputs, candidate/unit/coverage visits, and actual
-examined canonical-path deduplication records. Fontconfig parser input is admitted
-as actual scalar input, not parser-capacity prices.
-Font bytes admit each source read/hash pass before access; a single read that
-hashes the same buffer is one byte stream, rereads are additional charges.
-The 512 MiB byte bound includes font/source/scratch admissions and remains
-independent of PNG backing-store viability, processing visits, and record counts.
-
-All counters bound named admitted processing/storage, NOT allocator overhead,
-RSS, wall time, CPU instructions, or third-party allocations. Large glyph
-outlines and variable-length payloads still require checked byte arithmetic and
-fallible admission. Do not promise fully controlled third-party OOM handling.
-Third-party parsers/shapers receive already bounded inputs and configured limits
-where supported; internally infallible allocations remain an explicit residual
-risk, not a reason to bypass first-party admission.
-
-Before any retained first-party allocation, check `u128` and `usize`, admit its
-known records/bytes, then reserve fallibly. Exact known counts reserve their
-needed capacity; unknown payloads may grow incrementally with checked admission
-and fallible bounded growth BEFORE retaining the next chunk. Capacity growth
-must fit the admitted class and checked byte extent. No exact whole-world glyph
-or font payload census is required before parsing/shaping can discover lengths.
-No million-entry discovery/cache allocation is mandatory. Resource/reservation
-failure aborts, never retries a smaller representation or omits content.
+Existing test/benchmark observations retain named shaping, cache, candidate,
+intrinsic, projection and lifecycle metrics. They do not sum unlike units into
+a resource score. Performance evidence compares successful same-source output
+against the disabled-refusal baseline, with elapsed time and RSS measured
+separately. Historical quota evidence in `docs/resource-admission.md` and the
+resource-accounting study describes its recorded revisions, not this contract.
 
 Root lifecycle order is:
 
 1. Validate call-local PNG options first when invoked through a PNG terminal;
    normalize numeric/root constraints and resolve theme/scale ownership.
-2. Validate semantic/exact policies, domains and shared descriptors; count/admit
-   topology and text requirements before retaining their bounded preparation.
-3. Perform bounded font census/discovery/resolution and intrinsic summaries.
+2. Validate semantic/exact policies, domains and shared descriptors; prepare
+   topology and text requirements with checked, fallible storage.
+3. Perform font census/discovery/resolution and intrinsic summaries.
 4. Choose root width once; execute root-coordinated constrained rounds, with
-   admission before every retained local plan, state, cache, and feedback growth.
+   checked, fallible local plan, state, cache and feedback growth.
 5. Converge or fail; validate semantic completeness, hard fit, finite positive
    dimensions, and checked canonical dimension conversion. Do not apply
    hypothetical PNG viability or PNG-derived byte gates to the shared plan.
 6. Freeze root plan, glyph IDs, origins/positions, advances, bounds, face identities,
    and immutable same-byte face sources needed for later outline extraction.
    PF3, implemented in `5c0acdf`, captures each producer once with
-   checked incremental admission and fallible bounded growth during planning,
+   checked incremental reservation and fallible growth during planning,
    before final canonical storage reservation. Never rerun a producer to size it.
    Count from the captured immutable commands; capture is not final backend draw.
    Count canonical serialization tokens; reserve final plan/scene storage,
@@ -1464,7 +1347,7 @@ Root lifecycle order is:
 Count-only operations create no Null/concrete backend and emit no artifact.
 All first-party canonical drawing storage is reserved before Null begins. Final draw
 does not measure, wrap, shape, choose ticks/edges, pack, resize, change domains,
-or account new planning work. Arithmetic/resource/font errors abort at their
+or construct new planning work. Arithmetic/allocation/font errors abort at their
 encountered stage. No partial scene or file is published on failure.
 
 Derived outlined-SVG/PNG publication may extract paths later ONLY as deterministic
@@ -1474,8 +1357,8 @@ reshape, wrap, change bounds, or perform new layout. Already extracted paths may
 be reused. Derived conversion buffers and path-command payloads may be admitted
 incrementally with checked byte/element counts and fallible growth under the
 applicable format gates; they are not mandatory pre-Null canonical buffers or
-new layout-planning trials. If extracted during planning, those path records
-remain subject to the planning accounting above. Conversion failure remains
+new layout-planning trials. If extracted during planning, path storage uses the
+same real length checks and fallible reservation. Conversion failure remains
 format-local and cannot mutate the canonical scene.
 
 ## Canonical Output And Viability

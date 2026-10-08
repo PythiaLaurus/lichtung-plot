@@ -1,4 +1,19 @@
 use super::*;
+use crate::font::canonical::OperationContext;
+
+#[test]
+fn used_map_lookup_is_exact_and_clone_shares_keys() {
+    let map =
+        CategoricalColors::from_opaque([("αx".into(), OpaqueColor::rgb(11, 23, 37))]).unwrap();
+    assert_eq!(map.color_in("αx"), Some(OpaqueColor::rgb(11, 23, 37)));
+    assert_eq!(map.color_in("αy"), None);
+    let copy = map.clone();
+    assert_eq!(copy, map);
+    assert_eq!(
+        copy.entries().next().unwrap().0.as_ptr(),
+        map.entries().next().unwrap().0.as_ptr()
+    );
+}
 
 fn stop(offset: f64, red: u8) -> ColorStop {
     ColorStop::new(
@@ -222,55 +237,35 @@ fn domains_and_continuous_edits_validate_kind_center_and_complete_result() {
 }
 
 #[test]
-fn operation_sequence_retention_and_immutable_sharing_have_exact_refusal_boundaries() {
+fn sequence_retention_and_immutable_sharing_preserve_values() {
     let values = [OpaqueColor::rgb(13, 29, 47), OpaqueColor::rgb(71, 83, 97)];
-    let bytes = (size_of::<Vec<OpaqueColor>>()
-        + 2 * size_of::<usize>()
-        + 2 * size_of::<OpaqueColor>()) as u64;
-    for (visits, limit) in [(0, bytes), (2, bytes), (3, bytes - 1), (3, bytes)] {
-        let resources = OperationGenerationResources::with_test_limits(visits, limit);
-        let result = AccentPalette::new_in(values, &resources);
-        assert_eq!(result.is_ok(), visits == 3 && limit == bytes);
-    }
+    assert_eq!(AccentPalette::new(values).unwrap().seeds(), values);
     let source = ContinuousColorScale::sequential(
         Some(SequentialGradient::new(HEATMAP_SEQUENTIAL_STOPS).unwrap()),
         None,
     )
     .unwrap();
-    let resources = OperationGenerationResources::with_test_limits(1, 0);
-    let copy = source.share(&resources).unwrap();
+
+    let copy = source.clone();
     assert_eq!(copy, source);
     assert_eq!(
         copy.stops().unwrap().as_ptr(),
         source.stops().unwrap().as_ptr()
     );
-    assert_eq!(resources.byte_usage().unwrap(), 0);
-    assert!(source.share(&resources).is_err());
 }
 
 #[test]
-fn unknown_length_sequence_growth_prices_full_reallocations_and_copy_work() {
+fn unknown_length_sequence_growth_preserves_values() {
     let colors = [OpaqueColor::rgb(11, 23, 37), OpaqueColor::rgb(41, 59, 73)];
-    let bytes = (size_of::<Vec<OpaqueColor>>()
-        + 2 * size_of::<usize>()
-        + 3 * size_of::<OpaqueColor>()) as u64;
-    for (work, byte_limit) in [(3, bytes), (4, bytes - 1), (4, bytes)] {
-        let resources = OperationGenerationResources::with_test_limits(work, byte_limit);
-        let result = AccentPalette::new_in(colors.into_iter().filter(|_| true), &resources);
-        assert_eq!(result.is_ok(), work == 4 && byte_limit == bytes);
-        if let Ok(palette) = result {
-            assert_eq!(palette.seeds(), colors);
-            assert_eq!(resources.usage().unwrap().1, 4);
-            assert_eq!(resources.byte_usage().unwrap(), bytes);
-        }
-    }
+    let palette = AccentPalette::new(colors.into_iter().filter(|_| true)).unwrap();
+    assert_eq!(palette.seeds(), colors);
 }
 
 #[test]
 fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_owner() {
     use crate::render::backend::Backend;
-    let resources = OperationGenerationResources::new();
-    let mut theme = crate::Theme::Publication.resolve(&resources).unwrap();
+    let resources = OperationContext::new();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     let original = theme.clone();
     let palette =
         QualitativePalette::fixed([OpaqueColor::rgb(11, 23, 37), OpaqueColor::rgb(41, 59, 73)])
@@ -311,9 +306,7 @@ fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_own
         crate::plots::shared_x::prepare_plot(&source, &resources, Some(&theme.color_scales))
             .unwrap();
     let prepared = &inputs.heatmap.as_ref().unwrap().panels[0].1;
-    let semantics = prepared
-        .guide_semantics(&theme, source.data().with_axis_resources(&resources))
-        .unwrap();
+    let semantics = prepared.guide_semantics(&theme).unwrap();
     assert_eq!(semantics.selection.sequential_gradient(), Some(&gradient));
     assert_eq!(
         semantics.selection.stops().unwrap().as_ptr(),
@@ -352,34 +345,4 @@ fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_own
         original.color_scales.qualitative().capacity(),
         PaletteCapacity::Extendable
     );
-}
-
-#[test]
-fn used_map_lookup_and_clone_admit_actual_bytes_and_one_shared_handle() {
-    let map =
-        CategoricalColors::from_opaque([("αx".into(), OpaqueColor::rgb(11, 23, 37))]).unwrap();
-    let run = |limit| {
-        let resources = OperationGenerationResources::with_test_limits(limit, 0);
-        let result = map.color_in("αx", &resources);
-        (resources, result)
-    };
-    let (resources, result) = run(u128::MAX);
-    assert_eq!(result.unwrap(), Some(OpaqueColor::rgb(11, 23, 37)));
-    let work = resources.usage().unwrap().1;
-    assert!(run(work - 1).1.is_err());
-    assert_eq!(run(work).1.unwrap(), map.color("αx"));
-    let source = crate::Plot::scatter(
-        crate::NumericValues::new("x", [0.0]),
-        crate::NumericValues::new("y", [1.0]),
-    )
-    .erase();
-    assert!(map.admit_clone(source.data()).is_err());
-    let resources = OperationGenerationResources::with_test_limits(1, 0);
-    map.admit_clone(source.data().with_axis_resources(&resources))
-        .unwrap();
-    assert_eq!(resources.usage().unwrap().1, 1);
-    assert_eq!(resources.byte_usage().unwrap(), 0);
-    assert!(map
-        .admit_clone(source.data().with_axis_resources(&resources))
-        .is_err());
 }

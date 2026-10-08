@@ -184,12 +184,7 @@ impl CanonicalPlannedText {
                         .any(|run| run.bidi_level > 1 || run.direction != line.base_direction),
             });
         }
-        if let Some(stage) = stage {
-            stage.claim_capture_bytes(
-                std::mem::size_of::<CanonicalTextPayload>() + 2 * std::mem::size_of::<usize>(),
-                "prepared text shared geometry",
-            )?;
-        }
+
         Ok(Self(Arc::new(CanonicalTextPayload {
             plan: plan.clone(),
             center: canonical.position.inverted(height)?,
@@ -372,7 +367,7 @@ impl CanonicalScatter {
         raw: &[Point2D],
         style: &PointStyle,
         height: u32,
-        resources: &crate::font::canonical::OperationGenerationResources,
+
         stage: Option<&mut FinalStage<'_>>,
     ) -> Result<Self, Error> {
         let markers = match style.shape {
@@ -406,12 +401,7 @@ impl CanonicalScatter {
         let outline = style
             .outline
             .as_ref()
-            .map(|outline| {
-                Ok::<_, Error>((
-                    outline.color,
-                    outline.width_for_radius(style.radius, resources)?,
-                ))
-            })
+            .map(|outline| Ok::<_, Error>((outline.color, outline.width_for_radius(style.radius)?)))
             .transpose()?;
         Ok(Self {
             markers,

@@ -94,7 +94,6 @@ impl SvgBackend {
             next_gradient_id: 0,
             state: SvgCanvasState::Fresh,
             font_environment: None,
-            spacing_resources: crate::font::canonical::OperationGenerationResources::new(),
             text_replacements: Vec::new(),
             replacement_count: 0,
             fixed: false,
@@ -110,7 +109,6 @@ impl SvgBackend {
         font_environment: PreparedFontEnvironment,
     ) -> Self {
         let mut backend = Self::in_memory(width, height);
-        backend.spacing_resources = font_environment.generation_resources();
         backend.font_environment = Some(font_environment);
         backend
     }
@@ -1260,7 +1258,6 @@ pub struct SvgSerializer<S: SvgSink> {
     next_gradient_id: usize,
     state: SvgCanvasState,
     font_environment: Option<PreparedFontEnvironment>,
-    spacing_resources: crate::font::canonical::OperationGenerationResources,
     text_replacements: Vec<TextReplacement>,
     replacement_count: usize,
     fixed: bool,
@@ -1311,7 +1308,6 @@ impl SvgStorage {
             next_gradient_id: 0,
             state: SvgCanvasState::Open,
             font_environment: None,
-            spacing_resources: environment.generation_resources(),
             text_replacements: Vec::new(),
             replacement_count: 0,
             fixed: true,
@@ -1379,7 +1375,6 @@ impl SvgStorage {
                 next_clip_id: 0,
                 next_gradient_id: 0,
                 state: SvgCanvasState::Fresh,
-                spacing_resources: environment.generation_resources(),
                 font_environment: Some(environment),
                 text_replacements: replacements,
                 replacement_count: 0,
@@ -1590,8 +1585,7 @@ impl<S: SvgSink> SvgSerializer<S> {
         style: &PointStyle,
     ) -> Result<(), Error> {
         self.ensure_begun("draw_scatter")?;
-        let scatter =
-            CanonicalScatter::new(points, style, self.height, &self.spacing_resources, None)?;
+        let scatter = CanonicalScatter::new(points, style, self.height, None)?;
         self.draw_canonical_scatter(&scatter)
     }
 
@@ -1830,7 +1824,7 @@ impl<S: SvgSink> SvgSerializer<S> {
                 "<text x=\"{}\" y=\"{}\" font-family=\"{}\" font-size=\"{}\"{weight}{preserve_space} {fill} text-anchor=\"{anchor}\" dominant-baseline=\"middle\" transform=\"rotate({},{},{})\">{escaped}</text>",
                 x,
                 y,
-                Self::escape_text(&style.font_family.css(&crate::font::canonical::OperationFontResources::new()).map_err(|error| Error::Render(error.to_string()))?),
+                Self::escape_text(&style.font_family.css().map_err(|error| Error::Render(error.to_string()))?),
                 style.font_size,
                 canonical.rotation,
                 x,
@@ -1842,7 +1836,7 @@ impl<S: SvgSink> SvgSerializer<S> {
                 "<text x=\"{}\" y=\"{}\" font-family=\"{}\" font-size=\"{}\"{weight}{preserve_space} {fill} text-anchor=\"{anchor}\" dominant-baseline=\"middle\">{escaped}</text>",
                 x,
                 y,
-                Self::escape_text(&style.font_family.css(&crate::font::canonical::OperationFontResources::new()).map_err(|error| Error::Render(error.to_string()))?),
+                Self::escape_text(&style.font_family.css().map_err(|error| Error::Render(error.to_string()))?),
                 style.font_size
             );
         }
@@ -1881,7 +1875,7 @@ impl<S: SvgSink> SvgSerializer<S> {
         let label = Self::escape_text(&bracket.label);
         let css = style
             .font_family
-            .css(&crate::font::canonical::OperationFontResources::new())
+            .css()
             .map_err(|error| Error::Render(error.to_string()))?;
         let font_family = Self::escape_text(&css);
         let weight = FontWeight(style.weight);
@@ -2594,7 +2588,7 @@ mod tests {
                 "<polygon points=\"20,78 18.267578125,81 21.732421875,81\" fill=\"#010203\" fill-opacity=\"0.8196078431372549\"/>",
                 "<circle cx=\"15\" cy=\"80\" r=\"2\" fill=\"#070809\" fill-opacity=\"0.8196078431372549\" stroke=\"#FFFFFF\" stroke-width=\"0.2001953125\"/>",
                 "<polygon points=\"30,78 28.267578125,81 31.732421875,81\" fill=\"#040506\" fill-opacity=\"0.8196078431372549\" stroke=\"#FFFFFF\" stroke-width=\"0.2001953125\" stroke-linejoin=\"miter\" stroke-miterlimit=\"4.0\"/>",
-                "<polygon points=\"10,90 20,90 10,80\" fill=\"#010203\" stroke=\"#040506\" stroke-width=\"0\" stroke-linejoin=\"miter\" stroke-miterlimit=\"4.0\"/>",
+                "<polygon points=\"10,90 20,90 10,80\" fill=\"#010203\" stroke=\"#000000\" stroke-opacity=\"0\" stroke-width=\"0\" stroke-linejoin=\"miter\" stroke-miterlimit=\"4.0\"/>",
             ]
         );
     }

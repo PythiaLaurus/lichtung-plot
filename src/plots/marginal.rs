@@ -23,9 +23,7 @@ use crate::decorations::legend::LegendEntry;
 use crate::layout::{self, AxisSpec, PanelBox};
 use crate::render::backend::{with_clip, Backend, FillStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
-use crate::stats::distribution::{
-    gaussian_kde_with_source, kde_support_range, strict_scott_bandwidth,
-};
+use crate::stats::distribution::{gaussian_kde, kde_support_range, strict_scott_bandwidth};
 use crate::theme::{AccentColors, CategoryColors};
 use crate::Error;
 use crate::Plot;
@@ -70,15 +68,9 @@ pub(crate) struct PreparedMarginal {
 }
 
 impl PreparedMarginal {
-    pub(crate) fn primary_mark_count(
-        &self,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<u128, Error> {
+    pub(crate) fn checked_primary_mark_count(&self) -> Result<u128, Error> {
         let mut count = 0_u128;
         for group in &self.groups {
-            resources
-                .claim_visits(1)
-                .map_err(|error| Error::Render(format!("Marginal mark count: {error:?}")))?;
             count = count
                 .checked_add(group.x.len() as u128)
                 .ok_or_else(|| Error::Render("Marginal mark count overflow".into()))?;
@@ -103,7 +95,6 @@ impl PreparedMarginal {
         let accents = AccentColors::resolve(
             &theme.marks.accents,
             usize::from(self.groups.iter().any(|group| group.identity.hue.is_none())),
-            resources,
         )?;
         Ok((colors, accents))
     }
@@ -112,10 +103,9 @@ impl PreparedMarginal {
         group: &HueGroup,
         colors: &CategoryColors,
         accents: &AccentColors,
-        resources: &crate::font::canonical::OperationGenerationResources,
     ) -> Result<(u8, u8, u8), Error> {
         if let Some(hue) = &group.identity.hue {
-            colors.color(hue, resources)
+            colors.color(hue)
         } else {
             accents.color(0)
         }
@@ -134,27 +124,26 @@ impl PreparedMarginal {
         data: crate::data::PlotData<'_>,
     ) -> Result<Vec<LegendEntry>, Error> {
         let (colors, accents) = self.resolved_colors(chart, theme, data)?;
-        self.guide_entries_with_colors(chart, theme, data, &colors, &accents)
+        self.guide_entries_with_colors(chart, theme, &colors, &accents)
     }
 
     fn guide_entries_with_colors(
         &self,
         chart: &Plot,
         theme: &crate::theme::ResolvedTheme,
-        data: crate::data::PlotData<'_>,
+
         colors: &CategoryColors,
         accents: &AccentColors,
     ) -> Result<Vec<LegendEntry>, Error> {
-        let resources = data.source_resources()?;
         let mut entries = Vec::new();
-        data.reserve_source(&mut entries, self.groups.len())?;
+        crate::data::source::reserve_source(&mut entries, self.groups.len())?;
         for group in &self.groups {
             if group.identity.hue.is_none() {
                 continue;
             }
-            let color = Self::group_color(group, colors, accents, resources)?;
+            let color = Self::group_color(group, colors, accents)?;
             entries.push(LegendEntry::point_fill(
-                chart.collective_legend_identity(&group.identity, data)?,
+                chart.collective_legend_identity(&group.identity)?,
                 chart.point_style(theme, color, theme.marks.point_sizes.marginal),
                 theme.marks.marginal_density.backend_style(color),
             ));
@@ -175,17 +164,15 @@ pub(crate) fn intrinsic_body_minimum(
         .ok_or_else(|| Error::Render("marginal intrinsic requires prepared groups".into()))?;
     let mut central =
         crate::layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = chart.data().with_axis_resources(&resources);
+
     for _ in &prepared.groups {
-        data.claim_source_visits(1)?;
         let style = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.marginal);
-        let (x, y) = crate::render::geometry::point_ink_dimensions(theme, &style)?;
+        let (x, y) = crate::render::geometry::point_ink_dimensions(&style)?;
         central.0 = central.0.max(x);
         central.1 = central.1.max(y);
     }
     let density = theme.marks.marginal_density.backend_style((0, 0, 0));
-    let (out_x, out_y) = crate::render::geometry::rectangular_fill_ink_outset(theme, &density)?;
+    let (out_x, out_y) = crate::render::geometry::rectangular_fill_ink_outset(&density)?;
     // Each filled KDE strip has a positive extent even when its paint is
     // transparent. Its stroke is measured by the same canonical geometry as
     // selection, not inferred from the nominal line width.
@@ -202,12 +189,10 @@ fn prepared_marginal_points_and_density_strokes_enlarge_linked_tracks() {
         crate::NumericValues::new("y", [2.0, 2.1, 2.3, 4.0, 4.2, 4.3]),
     )
     .erase();
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let resources = crate::font::canonical::OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let baseline = intrinsic_body_minimum(&chart, &theme).unwrap();
     assert!(
         matches!(chart.measure_selected_interior(PlotRenderContext::new(
@@ -251,14 +236,12 @@ fn wide_finite_scales_normalize_each_linked_kde_to_its_actual_peak() {
     .erase();
     let inputs = crate::plots::shared_x::prepare_plot(
         &chart,
-        &crate::font::canonical::OperationGenerationResources::new(),
+        &crate::font::canonical::OperationContext::new(),
         None,
     )
     .unwrap();
     let chart = inputs.attach(chart).unwrap();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
@@ -279,7 +262,7 @@ fn wide_finite_scales_normalize_each_linked_kde_to_its_actual_peak() {
         .map(|point| point.y)
         .fold(f64::NEG_INFINITY, f64::max);
     let density = theme.marks.marginal_density.backend_style((0, 0, 0));
-    let ink = crate::render::geometry::rectangular_fill_ink_outset(&theme, &density).unwrap();
+    let ink = crate::render::geometry::rectangular_fill_ink_outset(&density).unwrap();
     let expected =
         strip.y0 + ink.1 + 2.0 / 1024.0 + 0.90 * (strip.height() - 2.0 * ink.1 - 4.0 / 1024.0);
     assert!((peak - expected).abs() < 1.0 / 1024.0);
@@ -295,14 +278,12 @@ fn unrepresentable_linked_kde_rejects_instead_of_substituting_a_density_floor() 
     .erase();
     let inputs = crate::plots::shared_x::prepare_plot(
         &chart,
-        &crate::font::canonical::OperationGenerationResources::new(),
+        &crate::font::canonical::OperationContext::new(),
         None,
     )
     .unwrap();
     let chart = inputs.attach(chart).unwrap();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     assert!(
         matches!(chart.measure_selected_interior(PlotRenderContext::new(
         chart.data(), PanelBox::new(70.0, 670.0, 60.0, 450.0), &theme,
@@ -325,15 +306,13 @@ fn marginal_central_points_request_only_automatic_numeric_edges() {
             plot.erase()
         }
     };
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     theme.marks.point_sizes.marginal = 350;
     for exact in [false, true] {
         let plot = source(exact);
         let inputs = crate::plots::shared_x::prepare_plot(
             &plot,
-            &crate::font::canonical::OperationGenerationResources::new(),
+            &crate::font::canonical::OperationContext::new(),
             None,
         )
         .unwrap();
@@ -400,7 +379,6 @@ fn measure_linked_panel(
     ranges: [(f64, f64); 2],
     role: layout::AddressRole,
     context: PlotRenderContext<'_>,
-    data: crate::data::PlotData<'_>,
 ) -> Result<LinkedPanelPlan, crate::layout::fit::PlanError> {
     if ![panel.x0, panel.x1, panel.y0, panel.y1]
         .into_iter()
@@ -414,17 +392,8 @@ fn measure_linked_panel(
         )
         .into());
     }
-    let resources = data.source_resources()?;
-    resources
-        .claim_slots(1)
-        .map_err(|error| Error::Render(format!("Marginal subpanel record: {error:?}")))?;
-    data.claim_source_bytes(std::mem::size_of::<LinkedPanelPlan>())?;
-    context
-        .theme
-        .prepared_font_environment()?
-        .claim_measurement_call()
-        .map_err(|error| Error::Render(format!("Marginal subpanel call: {error:?}")))?;
-    let address = context.fit_scope().address.child(role, 0, resources)?;
+
+    let address = context.fit_scope().address.child(role, 0)?;
     if panel.width() <= 0.0 || panel.height() <= 0.0 {
         return Err(crate::layout::fit::FitScope::new(&address, 0)
             .failure(
@@ -505,7 +474,7 @@ pub(crate) fn natural_body_preference(
     let hard = intrinsic_body_minimum(chart, theme)?;
     let gap = theme.composition_grid_gap()?;
     let density = theme.marks.marginal_density.backend_style((0, 0, 0));
-    let ink = crate::render::geometry::rectangular_fill_ink_outset(theme, &density)?;
+    let ink = crate::render::geometry::rectangular_fill_ink_outset(&density)?;
     let axes = layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
     let central = (
         (hard.0 - gap - (2.0 * ink.0).max(1.0 / 1024.0)).max(axes.0),
@@ -533,7 +502,7 @@ pub(crate) fn natural_body_height(
     let gap = theme.composition_grid_gap()?;
     let hard = intrinsic_body_minimum(chart, theme)?;
     let density = theme.marks.marginal_density.backend_style((0, 0, 0));
-    let ink = crate::render::geometry::rectangular_fill_ink_outset(theme, &density)?;
+    let ink = crate::render::geometry::rectangular_fill_ink_outset(&density)?;
     let right_hard = (2.0 * ink.0).max(1.0 / 1024.0);
     let top_hard = (2.0 * ink.1).max(1.0 / 1024.0);
     let axes = layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
@@ -553,7 +522,7 @@ pub(crate) fn natural_body_height(
     };
     let quarter = i64::try_from((i128::from(preference.body_quanta.0) + 3) / 4)
         .map_err(|_| Error::Render("Marginal quarter width overflowed".into()))?;
-    let resources = theme.prepared_font_environment()?.generation_resources();
+
     let columns = layout::interior::tracks::assign(
         &[
             track(central_hard.0, preference.body_quanta.0)?,
@@ -562,7 +531,6 @@ pub(crate) fn natural_body_height(
         (0.0, width),
         gap,
         false,
-        chart.data().with_axis_resources(&resources),
         &layout::fit::FitScope::root(),
     )
     .map_err(layout::fit::PlanError::into_error)?;
@@ -590,8 +558,8 @@ pub(crate) fn measure(
         .as_ref()
         .ok_or_else(|| Error::Render("marginal requires root-prepared semantics".into()))?;
     let groups = &prepared.groups;
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = context.data.with_axis_resources(&resources);
+    let resources = theme.prepared_font_environment()?.operation();
+    let data = context.data.with_operation(&resources);
 
     // --- Layout geometry ---
     let outer = context.panel;
@@ -604,7 +572,7 @@ pub(crate) fn measure(
         ).into());
     }
     let density = theme.marks.marginal_density.backend_style((0, 0, 0));
-    let ink = crate::render::geometry::rectangular_fill_ink_outset(theme, &density)?;
+    let ink = crate::render::geometry::rectangular_fill_ink_outset(&density)?;
     let right_hard = (2.0 * ink.0).max(1.0 / 1024.0);
     let top_hard = (2.0 * ink.1).max(1.0 / 1024.0);
     let axes_hard =
@@ -635,7 +603,6 @@ pub(crate) fn measure(
         (outer.x0, outer.x1),
         gap,
         false,
-        data,
         context.fit_scope(),
     )?;
     let rows = layout::interior::tracks::assign(
@@ -646,7 +613,6 @@ pub(crate) fn measure(
         (outer.y0, outer.y1),
         gap,
         true,
-        data,
         context.fit_scope(),
     )?;
     let (central_x0, central_x1) = columns[0];
@@ -670,13 +636,13 @@ pub(crate) fn measure(
             (x_low, x_high),
             (y_low, y_high),
             crate::layout::PanelBox::new(central_x0, central_x1, central_y0, central_y1),
-            data.copy_source_string(
+            crate::data::source::copy_source_string(
                 &chart
                     .prepared_axis_inputs()
                     .ok_or_else(|| Error::Render("Marginal axes missing".into()))?
                     .labels[0],
             )?,
-            data.copy_source_string(
+            crate::data::source::copy_source_string(
                 &chart
                     .prepared_axis_inputs()
                     .ok_or_else(|| Error::Render("Marginal axes missing".into()))?
@@ -705,7 +671,7 @@ pub(crate) fn measure(
     // Top KDE panel: x-axis ticks along the bottom edge (y = top_y0).
     // Positions match the central scatter's x-axis ticks.
     let mut ticks = Vec::new();
-    data.reserve_source(
+    crate::data::source::reserve_source(
         &mut ticks,
         layout.x_axis.ticks.len() + layout.y_axis.ticks.len(),
     )?;
@@ -737,9 +703,7 @@ pub(crate) fn measure(
     let y_densities = &curves.y_densities;
     let y_grid = &curves.y_grid;
     let n_grid = curves.x_grid.len();
-    for density in x_densities.iter().chain(y_densities) {
-        data.claim_source_visits(density.len())?;
-    }
+
     let x_dens_max = x_densities
         .iter()
         .flatten()
@@ -770,49 +734,45 @@ pub(crate) fn measure(
             ranges,
             layout::AddressRole::MarginalCentral,
             context,
-            data,
         )?,
         measure_linked_panel(
             top_panel,
             [ranges[0], (0.0, 1.0)],
             layout::AddressRole::MarginalTop,
             context,
-            data,
         )?,
         measure_linked_panel(
             right_panel,
             [(0.0, 1.0), ranges[1]],
             layout::AddressRole::MarginalRight,
             context,
-            data,
         )?,
     ];
     let mut selected = Vec::new();
-    data.reserve_source(&mut selected, groups.len())?;
+    crate::data::source::reserve_source(&mut selected, groups.len())?;
     let (colors, accents) = prepared.resolved_colors(chart, theme, data)?;
-    let legend_entries =
-        prepared.guide_entries_with_colors(chart, theme, data, &colors, &accents)?;
+    let legend_entries = prepared.guide_entries_with_colors(chart, theme, &colors, &accents)?;
     let mut source = [(f64::INFINITY, f64::NEG_INFINITY); 2];
     let mut point_ink: Option<crate::render::geometry::GeometryBox> = None;
     for (gi, group) in groups.iter().enumerate() {
-        let color = PreparedMarginal::group_color(group, &colors, &accents, &resources)?;
+        let color = PreparedMarginal::group_color(group, &colors, &accents)?;
         let point_style = chart.point_style(theme, color, theme.marks.point_sizes.marginal);
-        if let Some(ink) = crate::render::geometry::point_ink_bounds(theme, &point_style)? {
+        if let Some(ink) = crate::render::geometry::point_ink_bounds(&point_style)? {
             point_ink = Some(point_ink.map_or(ink, |previous| previous.union(ink)));
         }
-        let pts = data.collect_source(group.x.iter().zip(&group.y).map(|(&x, &y)| {
-            data.claim_source_visits(1)?;
-            source[0].0 = source[0].0.min(x);
-            source[0].1 = source[0].1.max(x);
-            source[1].0 = source[1].0.min(y);
-            source[1].1 = source[1].1.max(y);
-            let (x, y) = panels[0].projection.project(x, y);
-            Ok(Point2D::new(x, y))
-        }))?;
+        let pts =
+            crate::data::source::collect_source(group.x.iter().zip(&group.y).map(|(&x, &y)| {
+                source[0].0 = source[0].0.min(x);
+                source[0].1 = source[0].1.max(x);
+                source[1].0 = source[1].0.min(y);
+                source[1].1 = source[1].1.max(y);
+                let (x, y) = panels[0].projection.project(x, y);
+                Ok(Point2D::new(x, y))
+            }))?;
         let mut top_poly = Vec::new();
         let mut right_poly = Vec::new();
-        data.reserve_source(&mut top_poly, n_grid + 2)?;
-        data.reserve_source(&mut right_poly, n_grid + 2)?;
+        crate::data::source::reserve_source(&mut top_poly, n_grid + 2)?;
+        crate::data::source::reserve_source(&mut right_poly, n_grid + 2)?;
         let (top_start, _) = panels[1].projection.project(curves.x_grid[0], 0.0);
         let (_, right_start) = panels[2].projection.project(0.0, curves.y_grid[0]);
         let baseline_y = top_y0 + ink.1 + 2.0 / 1024.0;
@@ -831,7 +791,6 @@ pub(crate) fn measure(
         top_poly.push(Point2D::new(top_start, baseline_y));
         right_poly.push(Point2D::new(baseline_x, right_start));
         for i in 0..n_grid {
-            data.claim_source_visits(2)?;
             let (x, _) = panels[1].projection.project(curves.x_grid[i], 0.0);
             let y = baseline_y + x_densities[gi][i] / x_dens_max * 0.90 * top_span;
             top_poly.push(Point2D::new(x, y));
@@ -846,7 +805,9 @@ pub(crate) fn measure(
         let fill = theme.marks.marginal_density.backend_style(color);
         selected.push(MarginalGroupPayload {
             points: pts,
-            source_rows: data.collect_source(group.source_rows.iter().copied().map(Ok))?,
+            source_rows: crate::data::source::collect_source(
+                group.source_rows.iter().copied().map(Ok),
+            )?,
             point_style,
             top: top_poly,
             right: right_poly,
@@ -862,14 +823,13 @@ pub(crate) fn measure(
                 chart.user_x_limits().is_none(),
                 chart.user_y_limits().is_none(),
             ],
-            data,
             context.fit_scope(),
         )?
     } else {
         [None; 2]
     };
     for (side, panel) in [(0, &panels[1]), (1, &panels[2])] {
-        let mut full = crate::render::geometry::GeometrySnapshot::new(theme)?;
+        let mut full = crate::render::geometry::GeometrySnapshot::new();
         for group in &selected {
             full.polygon(
                 if side == 0 { &group.top } else { &group.right },
@@ -906,7 +866,6 @@ pub(crate) fn measure(
                     side == 0 && chart.user_x_limits().is_none(),
                     side == 1 && chart.user_y_limits().is_none(),
                 ],
-                data,
                 context.fit_scope(),
             )?;
             domain_expansions =
@@ -920,7 +879,7 @@ pub(crate) fn measure(
         groups: selected,
         domain_expansions,
     };
-    let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    let mut geometry = crate::render::geometry::GeometrySnapshot::new();
     if let Some(style) = &payload.tick_style {
         for tick in &payload.ticks {
             geometry.line(tick, style, None)?;
@@ -938,10 +897,12 @@ pub(crate) fn measure(
         chart.axis_semantic_inputs([crate::spec::AxisDomain::Continuous; 2]),
         || layout::StandardPanelInputs::new(theme),
     )?);
-    result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
-        payload: crate::layout::interior::MarkPayload::Marginal(payload),
-        geometry,
-    })?);
+    result.marks = Some(crate::data::source::source_arc(
+        crate::layout::interior::SelectedMarkPlan {
+            payload: crate::layout::interior::MarkPayload::Marginal(payload),
+            geometry,
+        },
+    )?);
     Ok(result)
 }
 
@@ -951,22 +912,18 @@ pub(crate) fn prepare(
 ) -> Result<PreparedMarginal, Error> {
     #[cfg(test)]
     count(0);
-    data.source_resources()?
-        .claim_topology_slots(3)
-        .map_err(|error| {
-            Error::Render(format!("Marginal declared subpanel topology: {error:?}"))
-        })?;
+
     let (groups, hues) = build_groups(chart, data)?;
     if let Some(exact) = chart.categorical_colors_spec() {
         for hue in &hues {
-            if exact.color_in(hue, data.source_resources()?)?.is_none() {
+            if exact.color_in(hue).is_none() {
                 return Err(Error::Data(format!(
                     "marginal: category {hue:?} has no caller-owned color"
                 )));
             }
         }
     }
-    let ranges = ranges_from_groups(chart, data, &groups)?;
+    let ranges = ranges_from_groups(chart, &groups)?;
     Ok(PreparedMarginal {
         groups,
         hues,
@@ -978,60 +935,49 @@ pub(crate) fn prepare(
 pub(crate) fn finish(
     mut prepared: PreparedMarginal,
     x_limits: Option<(f64, f64)>,
-    data: crate::data::PlotData<'_>,
 ) -> Result<PreparedMarginal, Error> {
     #[cfg(test)]
     count(1);
     if let Some(limits) = x_limits {
         prepared.ranges[0] = limits;
     }
-    prepared.curves = render_curves(&prepared.groups, prepared.ranges, data)?;
+    prepared.curves = render_curves(&prepared.groups, prepared.ranges)?;
     Ok(prepared)
 }
 
-fn render_curves(
-    groups: &[HueGroup],
-    ranges: [(f64, f64); 2],
-    data: crate::data::PlotData<'_>,
-) -> Result<MarginalCurves, Error> {
+fn render_curves(groups: &[HueGroup], ranges: [(f64, f64); 2]) -> Result<MarginalCurves, Error> {
     let [(x_low, x_high), (y_low, y_high)] = ranges;
     // --- KDE grid (shared across groups) ---
     let n_grid = 80;
-    let x_grid = data.collect_source((0..n_grid).map(|i| {
-        data.claim_source_visits(1)?;
-        Ok(x_low + (x_high - x_low) * (i as f64 / (n_grid - 1) as f64))
-    }))?;
-    let y_grid = data.collect_source((0..n_grid).map(|i| {
-        data.claim_source_visits(1)?;
-        Ok(y_low + (y_high - y_low) * (i as f64 / (n_grid - 1) as f64))
-    }))?;
+    let x_grid = crate::data::source::collect_source(
+        (0..n_grid).map(|i| Ok(x_low + (x_high - x_low) * (i as f64 / (n_grid - 1) as f64))),
+    )?;
+    let y_grid = crate::data::source::collect_source(
+        (0..n_grid).map(|i| Ok(y_low + (y_high - y_low) * (i as f64 / (n_grid - 1) as f64))),
+    )?;
 
     // Compute per-group KDE densities to find the shared max.
-    let mut x_densities = data.collect_source(groups.iter().map(|group| {
-        gaussian_kde_with_source(&group.x, &x_grid, group.x_bandwidth, Some(data)).map_err(
-            |error| {
-                if !matches!(error, Error::Data(_)) {
-                    return error;
-                }
-                Error::Data(format!(
-                    "marginal: x distribution for {}: {error}",
-                    group.identity.description(group.collapsed)
-                ))
-            },
-        )
+    let mut x_densities = crate::data::source::collect_source(groups.iter().map(|group| {
+        gaussian_kde(&group.x, &x_grid, group.x_bandwidth).map_err(|error| {
+            if !matches!(error, Error::Data(_)) {
+                return error;
+            }
+            Error::Data(format!(
+                "marginal: x distribution for {}: {error}",
+                group.identity.description(group.collapsed)
+            ))
+        })
     }))?;
-    let mut y_densities = data.collect_source(groups.iter().map(|group| {
-        gaussian_kde_with_source(&group.y, &y_grid, group.y_bandwidth, Some(data)).map_err(
-            |error| {
-                if !matches!(error, Error::Data(_)) {
-                    return error;
-                }
-                Error::Data(format!(
-                    "marginal: y distribution for {}: {error}",
-                    group.identity.description(group.collapsed)
-                ))
-            },
-        )
+    let mut y_densities = crate::data::source::collect_source(groups.iter().map(|group| {
+        gaussian_kde(&group.y, &y_grid, group.y_bandwidth).map_err(|error| {
+            if !matches!(error, Error::Data(_)) {
+                return error;
+            }
+            Error::Data(format!(
+                "marginal: y distribution for {}: {error}",
+                group.identity.description(group.collapsed)
+            ))
+        })
     }))?;
 
     for density in x_densities.iter_mut().chain(y_densities.iter_mut()) {
@@ -1056,25 +1002,17 @@ fn validate_marginal_range<'a>(
     range: (f64, f64),
     values: impl Fn(&'a HueGroup) -> &'a [f64],
     channel: &str,
-    data: Option<crate::data::PlotData<'_>>,
 ) -> Result<(), Error> {
-    use crate::data::source::SourceAdmission;
     if range.0.is_finite() && range.1.is_finite() && range.0 < range.1 {
         return Ok(());
     }
     let mut invalid = None;
     for group in groups {
         let samples = values(group);
-        data.source_visits(samples.len())?;
+
         let wide = crate::data::min_max(samples.iter().copied(), "marginal")
             .is_ok_and(|(minimum, maximum)| !(maximum - minimum).is_finite());
-        if !wide {
-            data.source_visits(samples.len())?;
-            if samples.len() >= 2 {
-                data.source_visits(samples.len())?;
-                data.source_visits(samples.len())?;
-            }
-        }
+
         if wide || kde_support_range(std::iter::once(samples), MARGINAL_KDE_CUT).is_none() {
             invalid = Some(group);
             break;
@@ -1089,11 +1027,7 @@ fn validate_marginal_range<'a>(
     )))
 }
 
-fn ranges_from_groups(
-    chart: &Plot,
-    data: crate::data::PlotData<'_>,
-    groups: &[HueGroup],
-) -> Result<[(f64, f64); 2], Error> {
+fn ranges_from_groups(chart: &Plot, groups: &[HueGroup]) -> Result<[(f64, f64); 2], Error> {
     let mut ranges = [(0.0, 1.0); 2];
     for (index, spec) in [chart.x_axis_spec(), chart.y_axis_spec()]
         .into_iter()
@@ -1104,22 +1038,19 @@ fn ranges_from_groups(
         } else {
             |group| &group.y
         };
-        for group in groups {
-            data.claim_source_visits(values(group).len())?;
-        }
+
         let range = crate::data::min_max(
             groups
                 .iter()
                 .flat_map(|group| values(group).iter().copied()),
             "marginal",
         )?;
-        ranges[index] = marginal_display_range(groups.iter().map(values), range, spec, Some(data))?;
+        ranges[index] = marginal_display_range(groups.iter().map(values), range, spec)?;
         validate_marginal_range(
             groups,
             ranges[index],
             values,
             if index == 0 { "x" } else { "y" },
-            Some(data),
         )?;
     }
     Ok(ranges)
@@ -1130,9 +1061,7 @@ pub(crate) fn shared_x_domain(
     data: crate::data::PlotData<'_>,
 ) -> Result<(f64, f64), Error> {
     let (groups, _) = build_groups(chart, data)?;
-    for group in &groups {
-        data.claim_source_visits(group.x.len())?;
-    }
+
     let range = crate::data::min_max(
         groups.iter().flat_map(|group| group.x.iter().copied()),
         "marginal",
@@ -1141,9 +1070,8 @@ pub(crate) fn shared_x_domain(
         groups.iter().map(|group| group.x.as_slice()),
         range,
         chart.x_axis_spec(),
-        Some(data),
     )?;
-    validate_marginal_range(&groups, range, |group| &group.x, "x", Some(data))?;
+    validate_marginal_range(&groups, range, |group| &group.x, "x")?;
     Ok(range)
 }
 
@@ -1160,8 +1088,9 @@ fn build_groups<'a>(
         .y_col()
         .ok_or_else(|| Error::Data("marginal: y column not set".into()))?;
     let rows = crate::data::aligned_finite_rows(data, x_col, y_col, "marginal")?;
-    data.claim_mark_rows()?;
-    let retained_rows = data.collect_source(rows.iter().map(|(row, _, _)| Ok(*row)))?;
+    data.validate_row_source()?;
+    let retained_rows =
+        crate::data::source::collect_source(rows.iter().map(|(row, _, _)| Ok(*row)))?;
     let channels = crate::data::observed_collectives(
         data,
         chart.group_col(),
@@ -1171,24 +1100,17 @@ fn build_groups<'a>(
         Some(&retained_rows),
         "marginal",
     )?;
-    let hue_levels = data.collect_source(
+    let hue_levels = crate::data::source::collect_source(
         chart
             .global_hue_levels()
             .unwrap_or(&channels.hue_levels)
             .iter()
-            .map(|level| data.copy_source_string(level)),
+            .map(|level| crate::data::source::copy_source_string(level)),
     )?;
     let mut groups = Vec::new();
-    data.claim_topology_slots(
-        channels
-            .identities
-            .len()
-            .checked_mul(2)
-            .ok_or_else(|| Error::Render("Marginal density topology overflow".into()))?,
-    )?;
-    data.reserve_source(&mut groups, channels.identities.len())?;
+
+    crate::data::source::reserve_source(&mut groups, channels.identities.len())?;
     for identity in &channels.identities {
-        data.claim_source_visits(rows.len())?;
         let count = channels.rows.iter().filter(|row| *row == identity).count();
         let selected = rows
             .iter()
@@ -1197,10 +1119,10 @@ fn build_groups<'a>(
         let mut x = Vec::new();
         let mut y = Vec::new();
         let mut source_rows = Vec::new();
-        data.reserve_source(&mut x, count)?;
-        data.reserve_source(&mut y, count)?;
-        data.reserve_source(&mut source_rows, count)?;
-        data.claim_source_visits(rows.len())?;
+        crate::data::source::reserve_source(&mut x, count)?;
+        crate::data::source::reserve_source(&mut y, count)?;
+        crate::data::source::reserve_source(&mut source_rows, count)?;
+
         for ((row, x_value, y_value), _) in selected {
             x.push(*x_value);
             y.push(*y_value);
@@ -1209,10 +1131,7 @@ fn build_groups<'a>(
         if x.is_empty() {
             continue;
         }
-        for _ in 0..5 {
-            data.claim_source_visits(x.len())?;
-            data.claim_source_visits(y.len())?;
-        }
+
         let x_bandwidth = strict_scott_bandwidth(&x).map_err(|reason| {
             Error::Data(format!(
                 "marginal: x distribution for {} {reason}",
@@ -1226,7 +1145,6 @@ fn build_groups<'a>(
             ))
         })?;
         if let Some(hue) = &identity.hue {
-            data.claim_source_visits(hue_levels.len())?;
             if !hue_levels.contains(hue) {
                 return Err(Error::Data(format!(
                     "marginal: hue {hue:?} is absent from the prepared domain"
@@ -1234,7 +1152,7 @@ fn build_groups<'a>(
             }
         }
         groups.push(HueGroup {
-            identity: data.copy_source_pair(identity)?,
+            identity: crate::data::source::copy_source_pair(identity)?,
             collapsed: channels.collapsed,
             x,
             y,
@@ -1250,19 +1168,14 @@ fn marginal_display_range<'a>(
     groups: impl Iterator<Item = &'a [f64]> + Clone,
     data_range: (f64, f64),
     spec: &AxisSpec,
-    data: Option<crate::data::PlotData<'_>>,
 ) -> Result<(f64, f64), Error> {
     let data_display_range = marginal_data_display_range(data_range, spec);
     if spec.limits.is_some() {
         return Ok(data_display_range);
     }
 
-    let Some(visible_kde_range) = kde_visible_support_range(
-        groups,
-        MARGINAL_KDE_CUT,
-        MARGINAL_KDE_VISIBLE_FRACTION,
-        data,
-    )?
+    let Some(visible_kde_range) =
+        kde_visible_support_range(groups, MARGINAL_KDE_CUT, MARGINAL_KDE_VISIBLE_FRACTION)?
     else {
         return Ok(data_display_range);
     };
@@ -1297,20 +1210,11 @@ fn kde_visible_support_range<'a>(
     groups: impl Iterator<Item = &'a [f64]> + Clone,
     cut: f64,
     visible_fraction: f64,
-    data: Option<crate::data::PlotData<'_>>,
 ) -> Result<Option<(f64, f64)>, Error> {
-    use crate::data::source::SourceAdmission;
-    for samples in groups.clone() {
-        data.source_visits(samples.len())?;
-        if samples.len() >= 2 {
-            data.source_visits(samples.len())?;
-            data.source_visits(samples.len())?;
-        }
-    }
     let Some((support_low, support_high)) = kde_support_range(groups.clone(), cut) else {
         return Ok(None);
     };
-    data.source_visits(MARGINAL_KDE_GRID_POINTS)?;
+
     let grid: [f64; MARGINAL_KDE_GRID_POINTS] = std::array::from_fn(|i| {
         support_low
             + (support_high - support_low) * (i as f64 / (MARGINAL_KDE_GRID_POINTS - 1) as f64)
@@ -1319,18 +1223,18 @@ fn kde_visible_support_range<'a>(
     let mut low = f64::INFINITY;
     let mut high = f64::NEG_INFINITY;
     for samples in groups {
-        let densities = match crate::stats::distribution::kde_with_source(samples, &grid, data) {
+        let densities = match crate::stats::distribution::kde(samples, &grid) {
             Ok(densities) => densities,
             Err(Error::Data(_)) => continue,
             Err(error) => return Err(error),
         };
-        data.source_visits(densities.len())?;
+
         let max_density = densities.iter().fold(0.0_f64, |acc, value| acc.max(*value));
         if max_density <= 0.0 {
             continue;
         }
         let threshold = max_density * visible_fraction;
-        data.source_visits(grid.len())?;
+
         for (&x, &density) in grid.iter().zip(densities.iter()) {
             if density >= threshold {
                 low = low.min(x);
@@ -1344,44 +1248,3 @@ fn kde_visible_support_range<'a>(
 
 #[cfg(test)]
 mod extraction;
-
-#[cfg(test)]
-#[test]
-fn visible_support_propagates_resource_refusal_instead_of_skipping_the_group() {
-    let plot = Plot::scatter(
-        crate::NumericValues::new("x", [1.0]),
-        crate::NumericValues::new("y", [1.0]),
-    )
-    .erase();
-    for (visits, bytes, expected) in [
-        (0, 1000, "work admission"),
-        (100_000, 0, "storage admission"),
-    ] {
-        let resources =
-            crate::font::canonical::OperationGenerationResources::with_test_limits(visits, bytes);
-        let error = kde_visible_support_range(
-            std::iter::once(&[1.0, 2.0, 3.0][..]),
-            MARGINAL_KDE_CUT,
-            MARGINAL_KDE_VISIBLE_FRACTION,
-            Some(plot.data().with_axis_resources(&resources)),
-        )
-        .unwrap_err();
-        assert!(matches!(error, Error::Render(_)), "{error}");
-        assert!(error.to_string().contains(expected), "{error}");
-    }
-    let samples = [1.0, 2.0, 3.0];
-    let resources = crate::font::canonical::OperationGenerationResources::new();
-    let calculate = |data| {
-        kde_visible_support_range(
-            std::iter::once(samples.as_slice()),
-            MARGINAL_KDE_CUT,
-            MARGINAL_KDE_VISIBLE_FRACTION,
-            data,
-        )
-        .unwrap()
-    };
-    assert_eq!(
-        calculate(None),
-        calculate(Some(plot.data().with_axis_resources(&resources)))
-    );
-}

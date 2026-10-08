@@ -214,10 +214,8 @@ fn ordinary_and_cell_frames_are_independent_complete_roles_with_cross_sibling_va
     let mut poisoned = source.clone();
     poisoned.frame.as_mut().unwrap().stroke.width = f32::NAN;
     assert!(poisoned.with_cell_frame(None).is_err());
-    let resources = OperationGenerationResources::with_test_limits(1, 0);
-    assert!(!source.same(&changed, &resources).unwrap());
-    assert_eq!(resources.usage().unwrap(), (0, 1));
-    assert_eq!(resources.byte_usage().unwrap(), 0);
+
+    assert!(!source.same_validated(&changed).unwrap());
 }
 
 #[test]
@@ -258,8 +256,7 @@ fn all_six_spacing_edits_are_independent_and_resolve_against_their_selected_role
     edit!(y_title_tick_label_gap, with_y_title_tick_label_gap, 4);
     edit!(y_title_edge_padding, with_y_title_edge_padding, 5);
     for (tick, title, factor) in [(16, 17, 1.0_f64), (32, 34, 2.0)] {
-        let resources = OperationGenerationResources::new();
-        let lengths = source.lengths(tick, title, &resources).unwrap();
+        let lengths = source.lengths(tick, title).unwrap();
         for (length, expected) in [
             &lengths.x_tick_label_gap,
             &lengths.y_tick_label_gap,
@@ -272,60 +269,47 @@ fn all_six_spacing_edits_are_independent_and_resolve_against_their_selected_role
         .zip([8.0, 6.0, 8.0, 16.0, 16.0, 12.0])
         {
             assert_eq!(
-                AxisLengths::position(length, &resources).unwrap().to_bits(),
+                AxisLengths::position(length).unwrap().to_bits(),
                 (expected * factor).to_bits()
             );
             assert_eq!(
-                AxisLengths::hard(length, &resources).unwrap().to_bits(),
+                AxisLengths::hard(length).unwrap().to_bits(),
                 (expected * factor).to_bits()
             );
         }
     }
-    assert!(source
-        .lengths(0, 17, &OperationGenerationResources::new())
-        .is_err());
-    assert!(source
-        .lengths(16, 0, &OperationGenerationResources::new())
-        .is_err());
+    assert!(source.lengths(0, 17).is_err());
+    assert!(source.lengths(16, 0).is_err());
 }
 
 #[test]
 fn complete_hard_sums_keep_fractional_gaps_until_the_single_rounding_boundary() {
-    let resources = OperationGenerationResources::new();
     let first = RelativeSpacing::ratio(1, 3072)
         .unwrap()
-        .product(LocalMetric::css_pixels(1).unwrap(), &resources)
-        .unwrap();
+        .product(LocalMetric::css_pixels(1).unwrap());
     let sum = first
-        .add(&first, &resources)
-        .unwrap()
-        .add(&first, &resources)
-        .unwrap()
-        .add_pixels(1.0, &resources)
+        .add_length(&first)
+        .add_length(&first)
+        .add_pixels(1.0)
         .unwrap();
     assert_eq!(
-        AxisLengths::hard(&sum, &resources).unwrap().to_bits(),
+        AxisLengths::hard(&sum).unwrap().to_bits(),
         (1025.0_f64 / 1024.0).to_bits()
     );
+    assert_eq!(AxisLengths::position(&first).unwrap().to_bits(), 0);
     assert_eq!(
-        AxisLengths::position(&first, &resources).unwrap().to_bits(),
-        0
-    );
-    assert_eq!(
-        AxisLengths::hard(&first, &resources).unwrap().to_bits(),
+        AxisLengths::hard(&first).unwrap().to_bits(),
         (1.0_f64 / 1024.0).to_bits()
     );
-    let huge = ExactLength::pixels(f64::MAX, &resources).unwrap();
-    assert!(AxisLengths::position(&huge, &resources).is_err());
+    let huge = ExactLength::pixels(f64::MAX).unwrap();
+    assert!(AxisLengths::position(&huge).is_err());
 }
 
 #[test]
 fn whole_positions_round_half_quantum_ties_with_the_final_anchor_parity() {
-    let resources = OperationGenerationResources::new();
     let half = RelativeSpacing::ratio(1, 2048)
         .unwrap()
-        .product(LocalMetric::css_pixels(1).unwrap(), &resources)
-        .unwrap();
+        .product(LocalMetric::css_pixels(1).unwrap());
     for (anchor, expected) in [
         (0.0, 0.0),
         (1.0 / 1024.0, 0.0),
@@ -333,24 +317,20 @@ fn whole_positions_round_half_quantum_ties_with_the_final_anchor_parity() {
         (-1.0 / 1024.0, -2.0 / 1024.0),
     ] {
         assert_eq!(
-            AxisLengths::before(&half, anchor, &resources)
-                .unwrap()
-                .to_bits(),
+            AxisLengths::before(&half, anchor).unwrap().to_bits(),
             f64::to_bits(expected)
         );
     }
 }
 
 #[test]
-fn axis_sharing_and_full_identity_have_exact_handle_and_content_refusal_boundaries() {
+fn axis_sharing_preserves_handles_and_complete_identity() {
     let source = complete();
-    for remaining in [0, 5, 6] {
-        let resources = OperationGenerationResources::with_test_limits(remaining, 0);
-        let shared = source.share(&resources);
-        assert_eq!(shared.is_ok(), remaining == 6);
-        assert_eq!(resources.byte_usage().unwrap(), 0);
+    {
+        let shared = source.validated_clone();
+        assert!(shared.is_ok());
+
         if let Ok(shared) = shared {
-            assert_eq!(resources.usage().unwrap(), (0, 6));
             for (left, right) in source
                 .spacing()
                 .relationships()
@@ -363,16 +343,8 @@ fn axis_sharing_and_full_identity_have_exact_handle_and_content_refusal_boundari
     }
     let shared = source.clone();
     let independent = complete();
-    for (other, work) in [(&shared, 7), (&independent, 31)] {
-        for remaining in [0, work - 1, work] {
-            let resources = OperationGenerationResources::with_test_limits(remaining, 0);
-            let result = source.same(other, &resources);
-            assert_eq!(result.is_ok(), remaining == work);
-            if let Ok(same) = result {
-                assert!(same);
-            }
-            assert_eq!(resources.byte_usage().unwrap(), 0);
-        }
+    for other in [&shared, &independent] {
+        assert!(source.same_validated(other).unwrap());
     }
     let changed = source
         .clone()
@@ -384,14 +356,5 @@ fn axis_sharing_and_full_identity_have_exact_handle_and_content_refusal_boundari
                 .unwrap(),
         )
         .unwrap();
-    for remaining in [8, 9] {
-        let resources = OperationGenerationResources::with_test_limits(remaining, 0);
-        let result = source.same(&changed, &resources);
-        if remaining == 9 {
-            assert!(!result.unwrap());
-        } else {
-            assert!(result.is_err());
-        }
-        assert_eq!(resources.usage().unwrap(), (0, remaining));
-    }
+    assert!(!source.same_validated(&changed).unwrap());
 }

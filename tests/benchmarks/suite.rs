@@ -25,10 +25,6 @@ pub(super) struct CaseMeasurement {
 }
 
 fn report_work(prefix: &str, name: &str, run: usize, work: &measurements::Observations) {
-    println!(
-        "{prefix}_resources,{name},{run},records={},processing_visits={},font_source_scratch_bytes={},measurement_calls={},cache_entries={},topology_slots={}",
-        work.records, work.visits, work.bytes, work.measurement_calls, work.cache_entries, work.topology_slots
-    );
     for counter in measurements::Counter::ALL {
         println!(
             "{prefix}_counter,{name},{run},{},{}",
@@ -73,17 +69,6 @@ fn assert_stable_work(
         work.producers, first.producers,
         "producer invocations: {name}"
     );
-    let resources = |work: &measurements::Observations| {
-        [
-            work.records,
-            work.visits,
-            work.bytes,
-            work.measurement_calls,
-            work.cache_entries,
-            work.topology_slots,
-        ]
-    };
-    assert_eq!(resources(work), resources(first), "resources: {name}");
     let roots = |work: &measurements::Observations| {
         work.roots
             .iter()
@@ -236,15 +221,12 @@ pub(super) fn measure_pair(
                 "failure"
             };
             println!(
-                "paired_sample,{name},{run},{outcome},{:.6},{:.6},{:?},{:?},{},{},{},{},{}",
+                "paired_sample,{name},{run},{outcome},{:.6},{:.6},{:?},{:?},{},{}",
                 sample.elapsed.as_secs_f64() * 1000.0,
                 sample.setup.as_secs_f64() * 1000.0,
                 sample.observations.times,
                 sample.observations.calls,
                 sample.observations.producers,
-                sample.observations.records,
-                sample.observations.visits,
-                sample.observations.bytes,
                 sample.shapes,
             );
             if let Some(error) = &sample.error {
@@ -477,10 +459,6 @@ fn measure<R>(
             shapes
         );
         samples.push(row);
-        println!(
-            "admission,{name},{run},{},{},{}",
-            observation.records, observation.visits, observation.bytes
-        );
         report_work("publication", name, run, &observation);
         if let Some((first, first_shapes)) = &first_work {
             assert_stable_work(name, &observation, first);
@@ -533,7 +511,7 @@ fn measure<R>(
 }
 
 #[test]
-fn matrix_publication_feedback_storage_stays_within_the_operation_ledger() {
+fn matrix_publication_feedback_produces_complete_output() {
     let sample = measure_case(
         "matrix4_feedback_storage",
         || {
@@ -553,12 +531,8 @@ fn matrix_publication_feedback_storage_stays_within_the_operation_ledger() {
         true,
         false,
     );
-    println!(
-        "matrix_feedback_admission,records={},visits={},bytes={}",
-        sample.observations.records, sample.observations.visits, sample.observations.bytes
-    );
     assert!(sample.error.is_none());
-    assert!(sample.observations.bytes < 536_870_912);
+    assert!(sample.output.is_some());
 }
 
 #[test]
@@ -657,9 +631,7 @@ fn publication_efficiency_measurements() {
 
     for run in 0..3 {
         let start = Instant::now();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         theme.prepare_font_environment().unwrap();
         println!(
             "font_probe,{run},fresh_environment,{:.6}",

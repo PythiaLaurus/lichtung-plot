@@ -216,12 +216,7 @@ fn font_system_preparation_measurements() {
             } else {
                 assert!(probes[0] > 0);
             }
-            println!(
-                "font_system_coverage,{run},{phase},candidates={},retained_scalars={},usage={:?}",
-                pair.provenance.candidates.len(),
-                pair.selected_scalars.len(),
-                environment.resource_usage().unwrap()
-            );
+
             previous = Some(pair);
         }
         assert_eq!(FONT_DISCOVERY_CALLS.with(std::cell::Cell::get), 1);
@@ -340,7 +335,7 @@ fn font_observer_overhead_measurements() {
                     .selected_units
                     .iter()
                     .all(|unit| unit.face == Some(selected)));
-                let outcome = (prepared, cached, environment.resource_usage().unwrap());
+                let outcome = (prepared, cached);
                 if let Some(expected) = &expected {
                     assert_eq!(&outcome, expected);
                 } else {

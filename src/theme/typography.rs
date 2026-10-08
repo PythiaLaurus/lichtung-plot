@@ -1,6 +1,5 @@
 //! Complete immutable typography construction and semantic role ownership.
 
-use crate::font::canonical::OperationGenerationResources;
 use crate::{Error, SignificanceMarkStyle};
 
 use super::TextTheme;
@@ -149,12 +148,8 @@ impl TypographyTheme {
     pub(crate) fn effective_significance_label(
         &self,
         exact: Option<SignificanceMarkStyle>,
-        resources: &OperationGenerationResources,
     ) -> Result<TextTheme, Error> {
-        let mut effective = self
-            .annotations()
-            .significance_label()
-            .copy_with_generation(resources)?;
+        let mut effective = self.annotations().significance_label().try_copy()?;
         if let Some(exact) = exact {
             effective = effective
                 .with_font_size(exact.font_size_spec())?

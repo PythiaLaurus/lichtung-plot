@@ -32,18 +32,18 @@ pub(crate) fn text_census_labels(
             [selector] => visit(
                 format_args!(
                     "{} = {}",
-                    source.resolve_source_label(&selector.variable, source.data())?,
-                    source.resolve_source_label(&selector.level, source.data())?
+                    source.resolve_label(&selector.variable)?,
+                    source.resolve_label(&selector.level)?
                 )
                 .into(),
             )?,
             [row, column] => visit(
                 format_args!(
                     "{} = {} | {} = {}",
-                    source.resolve_source_label(&row.variable, source.data())?,
-                    source.resolve_source_label(&row.level, source.data())?,
-                    source.resolve_source_label(&column.variable, source.data())?,
-                    source.resolve_source_label(&column.level, source.data())?
+                    source.resolve_label(&row.variable)?,
+                    source.resolve_label(&row.level)?,
+                    source.resolve_label(&column.variable)?,
+                    source.resolve_label(&column.level)?
                 )
                 .into(),
             )?,
@@ -71,22 +71,14 @@ impl FacetTextCensusPanel<'_> {
         crate::data::PlotData::with_rows(self.plot, &self.panel.rows, &self.panel.source_rows)
     }
 
-    pub(crate) fn scope(&self, data: crate::data::PlotData<'_>) -> Result<String, Error> {
-        self.panel.render_scope(data)
+    pub(crate) fn scope(&self) -> Result<String, Error> {
+        self.panel.render_scope()
     }
 
     pub(crate) fn significance_annotations(
         &self,
-        data: crate::data::PlotData<'_>,
-    ) -> Result<impl Iterator<Item = &crate::significance::SignificanceAnnotation>, Error> {
-        for _ in self.plot.significance_annotations() {
-            data.claim_source_visits(1)?;
-            for selector in &self.panel.cell {
-                data.claim_source_visits(selector.level.len())?;
-            }
-        }
-        Ok(self
-            .plot
+    ) -> impl Iterator<Item = &crate::significance::SignificanceAnnotation> {
+        self.plot
             .significance_annotations()
             .iter()
             .filter(|annotation| {
@@ -98,7 +90,7 @@ impl FacetTextCensusPanel<'_> {
                             .map(|selector| selector.level.as_str()),
                     )
                 })
-            }))
+            })
     }
 }
 
@@ -116,8 +108,8 @@ pub(crate) fn text_census_panels<'a>(
     }
     let selectors = data::facet_selectors(source, source_data)?;
     let panels = data::extract_panels(source, &selectors, None, source_data)?;
-    data::validate_significance_facet_anchors(source, &panels, source_data)?;
-    source_data.collect_source(panels.into_iter().map(|panel| {
+    data::validate_significance_facet_anchors(source, &panels)?;
+    crate::data::source::collect_source(panels.into_iter().map(|panel| {
         Ok(FacetTextCensusPanel {
             plot: source,
             panel,
@@ -136,7 +128,7 @@ pub(super) fn prepare_discrete_guide(
     kind: PlotKind,
     theme: &ResolvedTheme,
     inputs: &crate::layout::interior::PreparedInteriorInputs,
-    resources: &crate::font::canonical::OperationGenerationResources,
+    resources: &crate::font::canonical::OperationContext,
 ) -> Result<PreparedFacetGuide, Error> {
     legend::prepare_discrete_guide(source, kind, theme, inputs, resources)
 }
@@ -186,8 +178,7 @@ impl FacetPlan {
         }
 
         let selectors = data::facet_selectors(source, source.data())?;
-        let [horizontal_axis_label, vertical_axis_label] =
-            source.prepare_axis_labels(source.data(), None)?;
+        let [horizontal_axis_label, vertical_axis_label] = source.prepare_axis_labels(None)?;
         let horizontal_axis_label =
             (!horizontal_axis_label.is_empty()).then_some(horizontal_axis_label);
         let vertical_axis_label = (!vertical_axis_label.is_empty()).then_some(vertical_axis_label);
@@ -200,8 +191,8 @@ impl FacetPlan {
         )?;
         let mut outer = canvas_layout.panel_box;
         round.observe_canvas(&canvas_layout)?;
-        let resources = theme.prepared_font_environment()?.generation_resources();
-        let data = source.data().with_axis_resources(&resources);
+        let resources = theme.prepared_font_environment()?.operation();
+        let data = source.data().with_operation(&resources);
         let mut base_plot = data::base_plot(
             source,
             kind,
@@ -210,20 +201,18 @@ impl FacetPlan {
             &resources,
         )?;
         if let Some(levels) = &prepared_guide.hue_levels {
-            let resources = theme.prepared_font_environment()?.generation_resources();
-            let data = source.data().with_axis_resources(&resources);
-            base_plot = base_plot.with_global_hue_levels(
-                data.collect_source(levels.iter().map(|level| data.copy_source_string(level)))?,
-            );
+            base_plot = base_plot.with_global_hue_levels(crate::data::source::collect_source(
+                levels
+                    .iter()
+                    .map(|level| crate::data::source::copy_source_string(level)),
+            )?);
         }
         let mut panels = data::extract_panels(source, &selectors, None, data)?;
-        data::validate_significance_facet_anchors(source, &panels, data)?;
+        data::validate_significance_facet_anchors(source, &panels)?;
         let mut minima = Vec::new();
-        data.reserve_source(&mut minima, panels.len())?;
+        crate::data::source::reserve_source(&mut minima, panels.len())?;
         for facet in &panels {
-            let scoped = base_plot
-                .admitted_clone(data)?
-                .with_render_scope(facet.render_scope(data)?);
+            let scoped = base_plot.clone().with_render_scope(facet.render_scope()?);
             minima.push(scoped.intrinsic_body_minimum(theme)?);
         }
         let provisional_content = content_sizing.then(|| tracks::ContentSizing {
@@ -276,15 +265,14 @@ impl FacetPlan {
         } else {
             std::slice::from_ref(&position)
         };
-        let owner = crate::layout::ComponentAddress::root().child(
-            crate::decorations::legend::address_role(position),
-            0,
-            &resources,
-        )?;
+        let owner = crate::layout::ComponentAddress::root()
+            .child(crate::decorations::legend::address_role(position), 0)?;
         let positive_span = crate::layout::canvas::MINIMUM_PANEL_SPAN;
-        let mut columns = data.collect_source((0..selectors.columns).map(|_| Ok(positive_span)))?;
-        let mut rows = data.collect_source((0..selectors.rows).map(|_| Ok(positive_span)))?;
-        data.claim_source_visits(panels.len())?;
+        let mut columns =
+            crate::data::source::collect_source((0..selectors.columns).map(|_| Ok(positive_span)))?;
+        let mut rows =
+            crate::data::source::collect_source((0..selectors.rows).map(|_| Ok(positive_span)))?;
+
         for (facet, hard) in panels.iter().zip(&minima) {
             columns[facet.column] = columns[facet.column].max(hard.0);
             rows[facet.row] = rows[facet.row].max(hard.1);
@@ -300,26 +288,22 @@ impl FacetPlan {
         }
         // The guide and grid share one containing frame. Reserve the consumed
         // column/row gutters before measuring flow, not after fixing its width.
-        let grid = crate::layout::ComponentAddress::root().child(
-            crate::layout::AddressRole::FacetGrid,
-            0,
-            &resources,
-        )?;
+        let grid = crate::layout::ComponentAddress::root()
+            .child(crate::layout::AddressRole::FacetGrid, 0)?;
         let mut columns = Vec::new();
-        data.reserve_source(&mut columns, selectors.columns)?;
+        crate::data::source::reserve_source(&mut columns, selectors.columns)?;
         columns.resize(selectors.columns, [0.0_f64; 2]);
         let mut rows = Vec::new();
-        data.reserve_source(&mut rows, selectors.rows)?;
+        crate::data::source::reserve_source(&mut rows, selectors.rows)?;
         rows.resize(selectors.rows, [0.0_f64; 2]);
         for (index, panel) in panels.iter().enumerate() {
             let address = grid.child(
                 crate::layout::AddressRole::FacetCell,
                 u32::try_from(index)
                     .map_err(|_| Error::Render("facet address overflowed".into()))?,
-                &resources,
             )?;
             let [left, right, bottom, top] =
-                round.insets(&address, crate::layout::kernel::FeedbackKind::AxisGutter)?;
+                round.insets(&address, crate::layout::kernel::FeedbackKind::AxisGutter);
             columns[panel.column][0] = columns[panel.column][0].max(left);
             columns[panel.column][1] = columns[panel.column][1].max(right);
             rows[panel.row][0] = rows[panel.row][0].max(bottom);
@@ -428,9 +412,7 @@ impl FacetPlan {
                         let height = crate::layout::interior::sizing::integral(
                             canvas_layout.height_for_body(height, theme)?,
                         )?;
-                        let owner = source
-                            .admitted_clone(data)?
-                            .with_canvas_size(source.width(), height);
+                        let owner = source.clone().with_canvas_size(source.width(), height);
                         canvas_layout = planning::canvas_layout(
                             &owner,
                             theme,
@@ -471,9 +453,7 @@ impl FacetPlan {
                         let height = crate::layout::interior::sizing::integral(
                             canvas_layout.height_for_body(height, theme)?,
                         )?;
-                        let owner = source
-                            .admitted_clone(data)?
-                            .with_canvas_size(source.width(), height);
+                        let owner = source.clone().with_canvas_size(source.width(), height);
                         canvas_layout = planning::canvas_layout(
                             &owner,
                             theme,
@@ -508,7 +488,7 @@ impl FacetPlan {
                         FitFailure::retain_least(
                             &mut first_miss,
                             scope
-                                .child(crate::layout::AddressRole::FacetGrid, 0, &resources)?
+                                .child(crate::layout::AddressRole::FacetGrid, 0)?
                                 .failure(
                                     FitKind::TrackOrResidual,
                                     "shared facet titles leave insufficient assigned grid space",
@@ -539,7 +519,7 @@ impl FacetPlan {
                             trial.reject();
                         }
                         round.record_failure(reason)?;
-                        if let TrialOutcome::Miss(reason) = round.finish_trial(checkpoint)? {
+                        if let TrialOutcome::Miss(reason) = round.finish_trial(checkpoint) {
                             FitFailure::retain_least(&mut first_miss, reason);
                         }
                         continue;
@@ -578,7 +558,7 @@ impl FacetPlan {
                             trial.reject();
                         }
                         round.record_failure(failure)?;
-                        if let TrialOutcome::Miss(failure) = round.finish_trial(checkpoint)? {
+                        if let TrialOutcome::Miss(failure) = round.finish_trial(checkpoint) {
                             FitFailure::retain_least(&mut first_miss, failure);
                         }
                         continue;
@@ -586,7 +566,7 @@ impl FacetPlan {
                 };
                 #[cfg(test)]
                 let guide_outcome;
-                match round.finish_trial(checkpoint)? {
+                match round.finish_trial(checkpoint) {
                     TrialOutcome::Miss(reason) => {
                         #[cfg(test)]
                         if let Some(trial) = &guide_trial {
@@ -607,11 +587,7 @@ impl FacetPlan {
                     }
                 }
                 let mut strip_text = Vec::new();
-                crate::render::backend::reserve_text_records(
-                    &mut strip_text,
-                    panels.len(),
-                    theme.prepared_font_environment()?,
-                )?;
+                crate::render::backend::reserve_text_records(&mut strip_text, panels.len())?;
                 for facet in &panels {
                     strip_text.push(rendering::plan_facet_strip(&planned_plot, facet, theme)?);
                 }
@@ -619,28 +595,28 @@ impl FacetPlan {
                 let mut legends = Vec::new();
                 let mut strip_layers = Vec::new();
                 let mut panel_layers = Vec::new();
-                let resources = theme.prepared_font_environment()?.generation_resources();
-                let data = source.data().with_axis_resources(&resources);
-                data.reserve_source(&mut panel_layers, panels.len())?;
-                data.reserve_source(&mut panel_plots, panels.len())?;
-                data.reserve_source(&mut legends, panels.len())?;
-                data.reserve_source(&mut strip_layers, panels.len())?;
+                theme.prepared_font_environment()?;
+
+                crate::data::source::reserve_source(&mut panel_layers, panels.len())?;
+                crate::data::source::reserve_source(&mut panel_plots, panels.len())?;
+                crate::data::source::reserve_source(&mut legends, panels.len())?;
+                crate::data::source::reserve_source(&mut strip_layers, panels.len())?;
                 for (index, (facet, panel)) in panels.iter().zip(&panel_plans).enumerate() {
-                    let scope = facet.render_scope(data)?;
+                    let scope = facet.render_scope()?;
                     let mut layers = [String::new(), String::new(), String::new()];
                     for (layer, suffix) in layers.iter_mut().zip(["grid", "axes", "legend"]) {
                         let length = scope
                             .len()
                             .checked_add(suffix.len() + 1)
                             .ok_or_else(|| Error::Render("facet layer length overflow".into()))?;
-                        data.reserve_source_string(layer, length)?;
+                        crate::data::source::reserve_source_string(layer, length)?;
                         layer.push_str(&scope);
                         layer.push('-');
                         layer.push_str(suffix);
                     }
                     panel_layers.push(layers);
                     let plot = panel
-                        .plot_with_planned_limits(&planned_plot, data)?
+                        .plot_with_planned_limits(&planned_plot)
                         .with_render_scope(scope)
                         .with_significance_subset(facet.significance_selectors());
                     panel_plots.push(plot);
@@ -653,12 +629,12 @@ impl FacetPlan {
                         legend
                             .map(|legend| {
                                 let (x, y) = legend.bounds.anchor();
-                                legend.legend.select(x, y, source.data())
+                                legend.legend.select(x, y)
                             })
                             .transpose()?,
                     );
                     let mut layer = String::new();
-                    source.data().reserve_source_string(&mut layer, 32)?;
+                    crate::data::source::reserve_source_string(&mut layer, 32)?;
                     write!(layer, "facet-strip-{}", facet.panel_index).expect("reserved index");
                     strip_layers.push(layer);
                 }
@@ -690,7 +666,7 @@ impl FacetPlan {
                     outer,
                     shared_axis_origin,
                 };
-                plan.observe_arranged(theme, round)?;
+                plan.observe_arranged(round)?;
                 #[cfg(test)]
                 if let Some(trial) = &guide_trial {
                     trial.complete(&guide_outcome);
@@ -710,14 +686,13 @@ impl FacetPlan {
 
     fn observe_arranged(
         &self,
-        theme: &ResolvedTheme,
+
         round: &mut crate::layout::kernel::FeedbackRound,
     ) -> Result<(), Error> {
-        round.begin_owner(&crate::layout::ComponentAddress::root().child(
-            crate::layout::AddressRole::FacetGrid,
-            0,
-            round.resources(),
-        )?)?;
+        round.begin_owner(
+            &crate::layout::ComponentAddress::root()
+                .child(crate::layout::AddressRole::FacetGrid, 0)?,
+        )?;
         round.observe_box(self.outer)?;
         for label in [&self.horizontal_axis_label, &self.vertical_axis_label]
             .into_iter()
@@ -740,7 +715,7 @@ impl FacetPlan {
                 legend.observe_feedback(round)?;
             }
         }
-        rendering::observe_arranged_chrome(self, theme, round)
+        rendering::observe_arranged_chrome(self, round)
     }
 
     pub(super) fn render(
@@ -814,18 +789,10 @@ mod feedback_tests {
         };
         use crate::layout::{AddressRole, ComponentAddress};
         let owner = ComponentAddress::root()
-            .child(
-                AddressRole::FacetCell,
-                0,
-                &crate::font::canonical::OperationGenerationResources::new(),
-            )
+            .child(AddressRole::FacetCell, 0)
             .unwrap();
         let neighbor = ComponentAddress::root()
-            .child(
-                AddressRole::FacetCell,
-                1,
-                &crate::font::canonical::OperationGenerationResources::new(),
-            )
+            .child(AddressRole::FacetCell, 1)
             .unwrap();
         for scales in [FacetScales::Free, FacetScales::Fixed] {
             let source = Plot::scatter(
@@ -853,9 +820,7 @@ mod feedback_tests {
             for disabled in [true, false] {
                 DISABLE_CHILD_REUSE.with(|value| value.set(disabled));
                 CHILD_MEASUREMENTS.with(|events| events.borrow_mut().clear());
-                let theme = crate::Theme::Publication
-                    .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                    .unwrap();
+                let theme = crate::Theme::Publication.resolve().unwrap();
                 let mut children = ChildPlans::facets(&source);
                 let mut calls = 0;
                 let mut retained_neighbor = None;
@@ -865,7 +830,7 @@ mod feedback_tests {
                     |stage| {
                         let inputs = crate::plots::shared_x::prepare_plot(
                             &source,
-                            &stage.generation_resources(),
+                            &stage.operation(),
                             Some(&crate::theme::scale_values::test_defaults()),
                         )?;
                         let guide = prepare_discrete_guide(
@@ -873,7 +838,7 @@ mod feedback_tests {
                             PlotKind::Scatter,
                             &theme,
                             &inputs,
-                            &stage.generation_resources(),
+                            &stage.operation(),
                         )?;
                         let requirements = crate::layout::foundational_plot_requirements(
                             Some(&inputs),
@@ -927,7 +892,7 @@ mod feedback_tests {
                                 !disabled && scales == FacetScales::Free
                             );
                         }
-                        children.finish_round(round)?;
+                        children.finish_round(round);
                         Ok(crate::layout::MeasuredLayout::new(assigned, plan))
                     },
                     |_, assigned, plan, stage| {
@@ -1049,16 +1014,14 @@ mod feedback_tests {
         .hue(crate::CategoryValues::new("hue", ["a", "b", "a", "b"]).unwrap())
         .size(900, 900)
         .erase();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         crate::layout::plan_exact_root(
             source.width(),
             source.height(),
             |stage| {
                 let inputs = crate::plots::shared_x::prepare_plot(
                     &source,
-                    &stage.generation_resources(),
+                    &stage.operation(),
                     Some(&crate::theme::scale_values::test_defaults()),
                 )?;
                 let guide = prepare_discrete_guide(
@@ -1066,7 +1029,7 @@ mod feedback_tests {
                     PlotKind::Scatter,
                     &theme,
                     &inputs,
-                    &stage.generation_resources(),
+                    &stage.operation(),
                 )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     Some(&inputs),
@@ -1181,16 +1144,14 @@ mod feedback_tests {
         .x_label("MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM")
         .size(960, 640)
         .erase();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let root = crate::layout::plan_exact_root(
             source.width(),
             source.height(),
             |stage| {
                 let inputs = crate::plots::shared_x::prepare_plot(
                     &source,
-                    &stage.generation_resources(),
+                    &stage.operation(),
                     Some(&crate::theme::scale_values::test_defaults()),
                 )?;
                 let guide = prepare_discrete_guide(
@@ -1198,7 +1159,7 @@ mod feedback_tests {
                     PlotKind::Scatter,
                     &theme,
                     &inputs,
-                    &stage.generation_resources(),
+                    &stage.operation(),
                 )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     Some(&inputs),
@@ -1272,7 +1233,7 @@ mod feedback_tests {
             |stage| {
                 crate::plots::shared_x::prepare_plot(
                     &source,
-                    &stage.generation_resources(),
+                    &stage.operation(),
                     Some(&crate::theme::scale_values::test_defaults()),
                 )
             },
@@ -1304,9 +1265,7 @@ mod feedback_tests {
         .legend(crate::LegendPolicy::Visible(LegendPosition::OutsideRight))
         .size(960, 640)
         .erase();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         theme.prepare_font_environment().unwrap();
         let mut arranged = None;
         crate::layout::plan_exact_root(
@@ -1315,7 +1274,7 @@ mod feedback_tests {
             |stage| {
                 let inputs = crate::plots::shared_x::prepare_plot(
                     &source,
-                    &stage.generation_resources(),
+                    &stage.operation(),
                     Some(&crate::theme::scale_values::test_defaults()),
                 )?;
                 let guide = prepare_discrete_guide(
@@ -1323,7 +1282,7 @@ mod feedback_tests {
                     PlotKind::Scatter,
                     &theme,
                     &inputs,
-                    &stage.generation_resources(),
+                    &stage.operation(),
                 )?;
                 Ok((inputs, guide))
             },
@@ -1375,7 +1334,7 @@ mod feedback_tests {
                             plan.shared_axis_origin.0 += 1.0;
                         }
                     }
-                    plan.observe_arranged(&theme, round)?;
+                    plan.observe_arranged(round)?;
                     Ok(crate::layout::MeasuredLayout::new(assigned, ()))
                 },
                 |(), _, (), _| Ok(()),

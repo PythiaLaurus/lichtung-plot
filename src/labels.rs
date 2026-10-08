@@ -3,7 +3,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use crate::data::{source::SourceAdmission, PlotData};
 use crate::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,35 +72,13 @@ impl Labels {
         self
     }
 
-    pub(crate) fn resolve(&self, raw: &str) -> String {
-        self.resolve_source(raw, None).expect("label allocation")
-    }
-
-    pub(crate) fn resolve_source(
-        &self,
-        raw: &str,
-        data: Option<PlotData<'_>>,
-    ) -> Result<String, Error> {
-        data.source_visits(raw.len())?;
-        // BTreeMap does not expose its comparisons. Admit a conservative bound
-        // before lookup, including the constant work of empty-key comparisons.
-        data.source_visits(
-            raw.len()
-                .checked_add(1)
-                .and_then(|length| {
-                    self.aliases
-                        .as_ref()
-                        .map_or(0, |aliases| aliases.len())
-                        .checked_mul(length)
-                })
-                .ok_or_else(|| Error::Render("label alias lookup work overflow".into()))?,
-        )?;
+    pub(crate) fn resolve(&self, raw: &str) -> Result<String, Error> {
         if let Some(alias) = self.aliases.as_ref().and_then(|aliases| aliases.get(raw)) {
-            copy_label(alias, data)
+            copy_label(alias)
         } else if self.mode == LabelMode::Humanized {
-            humanize(raw, data)
+            humanize(raw)
         } else {
-            copy_label(raw, data)
+            copy_label(raw)
         }
     }
 
@@ -110,30 +87,18 @@ impl Labels {
         domain: &str,
         raw_labels: impl IntoIterator<Item = &'a str>,
     ) -> Result<Vec<String>, Error> {
-        self.resolve_domain_source(domain, raw_labels, None)
-    }
-
-    pub(crate) fn resolve_domain_source<'a>(
-        &self,
-        domain: &str,
-        raw_labels: impl IntoIterator<Item = &'a str>,
-        data: Option<PlotData<'_>>,
-    ) -> Result<Vec<String>, Error> {
         let mut identities = Vec::new();
         let mut resolved = Vec::new();
         let raw_labels = raw_labels.into_iter();
         let minimum = raw_labels.size_hint().0;
-        data.source_reserve(&mut identities, minimum)?;
-        data.source_reserve(&mut resolved, minimum)?;
+        crate::data::source::reserve_source(&mut identities, minimum)?;
+        crate::data::source::reserve_source(&mut resolved, minimum)?;
         for raw in raw_labels {
-            data.source_reserve(&mut identities, 1)?;
-            data.source_reserve(&mut resolved, 1)?;
-            let display = self.resolve_source(raw, data)?;
+            crate::data::source::reserve_source(&mut identities, 1)?;
+            crate::data::source::reserve_source(&mut resolved, 1)?;
+            let display = self.resolve(raw)?;
             let mut collision = None;
             for (&previous, prior) in identities.iter().zip(&resolved) {
-                data.source_visits(1)?;
-                data.source_visits(display.len())?;
-                data.source_visits(raw.len())?;
                 if prior == &display && previous != raw {
                     collision = Some(previous);
                     break;
@@ -158,35 +123,24 @@ impl Labels {
     }
 }
 
-fn copy_label(raw: &str, data: Option<PlotData<'_>>) -> Result<String, Error> {
+fn copy_label(raw: &str) -> Result<String, Error> {
     let mut output = String::new();
-    reserve_label(&mut output, raw.len(), data)?;
+    reserve_label(&mut output, raw.len())?;
     output.push_str(raw);
     Ok(output)
 }
 
-fn reserve_label(
-    output: &mut String,
-    count: usize,
-    data: Option<PlotData<'_>>,
-) -> Result<(), Error> {
-    if let Some(data) = data {
-        data.reserve_source_string(output, count)
-    } else {
-        output
-            .try_reserve_exact(count)
-            .map_err(|error| Error::Render(error.to_string()))
-    }
+fn reserve_label(output: &mut String, count: usize) -> Result<(), Error> {
+    crate::data::source::reserve_source_string(output, count)
 }
 
-fn humanize(raw: &str, data: Option<PlotData<'_>>) -> Result<String, Error> {
+fn humanize(raw: &str) -> Result<String, Error> {
     let mut split = String::new();
     reserve_label(
         &mut split,
         raw.len()
             .checked_mul(2)
             .ok_or_else(|| Error::Render("humanized label length overflow".into()))?,
-        data,
     )?;
     let mut chars = raw.chars().peekable();
     let mut previous = None;
@@ -208,20 +162,14 @@ fn humanize(raw: &str, data: Option<PlotData<'_>>) -> Result<String, Error> {
         last_was_space = false;
     }
     let mut output = String::new();
-    data.source_visits(split.len())?;
+
     for (index, word) in split.split_whitespace().enumerate() {
-        data.source_visits(
-            word.len()
-                .checked_mul(22)
-                .ok_or_else(|| Error::Render("humanized word work overflow".into()))?,
-        )?;
         let acronym = acronym(word);
         reserve_label(
             &mut output,
             word.len()
                 .checked_add(12)
                 .ok_or_else(|| Error::Render("humanized word length overflow".into()))?,
-            data,
         )?;
         if index != 0 {
             output.push(' ');
@@ -242,7 +190,7 @@ fn humanize(raw: &str, data: Option<PlotData<'_>>) -> Result<String, Error> {
         }
     }
     if output.is_empty() {
-        copy_label(raw, data)
+        copy_label(raw)
     } else {
         Ok(output)
     }
@@ -288,12 +236,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn source_labels_admit_aliases_humanization_and_collision_storage() {
-        let plot = crate::Plot::scatter(
-            crate::NumericValues::new("x", [1.0]),
-            crate::NumericValues::new("y", [1.0]),
-        )
-        .erase();
+    fn labels_preserve_aliases_humanization_and_collision_errors() {
         let cases = [
             ("HTTPResponse_code", "HTTP response code"),
             ("ci95_pca", "CI 95 PCA"),
@@ -304,41 +247,19 @@ mod tests {
             ("m/zValue", "m/z value"),
         ];
         for (raw, expected) in cases {
-            let resources = crate::font::canonical::OperationGenerationResources::new();
-            let data = plot.data().with_axis_resources(&resources);
-            assert_eq!(
-                Labels::humanized().resolve_source(raw, Some(data)).unwrap(),
-                expected
-            );
-            assert_eq!(Labels::humanized().resolve(raw), expected);
+            assert_eq!(Labels::humanized().resolve(raw).unwrap(), expected);
         }
-        for labels in [
-            Labels::raw(),
-            Labels::humanized(),
-            Labels::raw().alias("raw", "display"),
+        for (labels, expected) in [
+            (Labels::raw(), "raw"),
+            (Labels::humanized(), "Raw"),
+            (Labels::raw().alias("raw", "display"), "display"),
         ] {
-            for (visits, bytes) in [(0, u64::MAX), (u128::MAX, 0)] {
-                let resources =
-                    crate::font::canonical::OperationGenerationResources::with_test_limits(
-                        visits, bytes,
-                    );
-                let data = plot.data().with_axis_resources(&resources);
-                assert!(matches!(
-                    labels.resolve_source("raw", Some(data)),
-                    Err(Error::Render(_))
-                ));
-                assert!(labels
-                    .resolve_domain_source("axis", ["raw"], Some(data))
-                    .is_err());
-            }
+            assert_eq!(labels.resolve("raw").unwrap(), expected);
+            assert_eq!(labels.resolve_domain("axis", ["raw"]).unwrap(), [expected]);
         }
         let labels = Labels::raw().alias("a", "same").alias("b", "same");
-        let resources = crate::font::canonical::OperationGenerationResources::new();
-        let data = plot.data().with_axis_resources(&resources);
         assert_eq!(
-            labels
-                .resolve_domain_source("axis", ["a", "a"], Some(data))
-                .unwrap(),
+            labels.resolve_domain("axis", ["a", "a"]).unwrap(),
             ["same", "same"]
         );
         let expected = labels
@@ -347,38 +268,37 @@ mod tests {
             .to_string();
         assert_eq!(
             labels
-                .resolve_domain_source("axis", ["a", "b"], Some(data))
+                .resolve_domain("axis", ["a", "b"])
                 .unwrap_err()
                 .to_string(),
             expected
         );
         let calls = std::cell::Cell::new(0);
-        let resources =
-            crate::font::canonical::OperationGenerationResources::with_test_limits(u128::MAX, 0);
-        let data = plot.data().with_axis_resources(&resources);
-        let result = labels.resolve_domain_source(
+        let result = labels.resolve_domain(
             "axis",
             ["a", "b"]
                 .into_iter()
                 .inspect(|_| calls.set(calls.get() + 1)),
-            Some(data),
         );
         assert!(result.is_err());
-        assert_eq!(calls.get(), 0);
+        assert_eq!(calls.get(), 2);
     }
 
     #[test]
     fn humanized_labels_split_common_identifier_styles() {
         let labels = Labels::humanized();
 
-        assert_eq!(labels.resolve("HTTPResponse_code"), "HTTP response code");
+        assert_eq!(
+            labels.resolve("HTTPResponse_code").unwrap(),
+            "HTTP response code"
+        );
     }
 
     #[test]
     fn aliases_take_precedence_over_humanization() {
         let labels = Labels::humanized().alias("petal_length", "Petal length (cm)");
 
-        assert_eq!(labels.resolve("petal_length"), "Petal length (cm)");
+        assert_eq!(labels.resolve("petal_length").unwrap(), "Petal length (cm)");
     }
 
     #[test]

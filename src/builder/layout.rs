@@ -11,11 +11,11 @@ impl<K: crate::kind::Marker> Plot<K> {
     #[must_use]
     #[cfg(test)]
     pub(crate) fn canvas_layout(&self) -> RootFramePlan {
-        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let resources = crate::font::canonical::OperationContext::new();
         let theme = self
             .theme
             .unwrap_or(crate::Theme::Publication)
-            .resolve(&resources)
+            .resolve()
             .unwrap();
         let plot = crate::kind::into_erased(self.clone());
         let plot = crate::plots::shared_x::prepare_plot(&plot, &resources, None)

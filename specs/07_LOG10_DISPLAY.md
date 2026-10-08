@@ -5,6 +5,13 @@ below; implementation and executable validation pending.** This document does
 not describe a current public API or mark a code implementation/executable
 certification gate complete.
 
+**Accounting simplification:** spec95 supersedes every cumulative work/byte
+charging requirement in this design. The pricing schedules in §8 and charge-delta
+fixtures in §11.5 are historical design evidence, not implementation requirements.
+Keep the exact mathematical bounds, real output/precision/index checks, fallible
+storage and cache identity. Do not implement their old ledger, fees or quota
+tests. The current execution and verification contracts are §9 and §12 below.
+
 ## 1. Authority And Evidence Boundary
 
 [Spec93](93_T6_EXECUTION_PLAN.md), especially “Numeric Conversion And Precision”
@@ -24,10 +31,9 @@ Source inspection at repository revision `e6febe3` establishes that:
   MPFR 4.2.1 logarithm vectors and a digest, interval/refinement tests, rational
   binary64 tie tests, scratch/work refusal tests and Forest refusal propagation.
   Those are existing logarithm evidence, **not** inverse-power display evidence.
-* `OperationGenerationResources` in `src/font/canonical.rs` owns the shared
-  cumulative visits/bytes and existing retained-record/cache-entry counters.
-  `claim_bytes` and `claim_visits` are separate admissions. The production root
-  currently has 1,000,000 processing visits and 512 MiB cumulative bytes.
+* At that historical revision, `OperationGenerationResources` owned cumulative
+  counters and quotas. Those have since been removed under spec95; current
+  operation context retains identity and actual caches only.
 * The project already pins `num-bigint = 0.4.8`. No new dependency, network
   access, asset provisioning, Python support or separate tool project is needed.
 
@@ -550,7 +556,11 @@ bit length. The power builder's prefix accumulator and intermediate square
 never exceed `10^r`; its literal base is 10 only when `r>0`. Reduced numerator bounds must not be confused
 with the possibly 1074-bit fractional remainder for a tiny negative exponent.
 
-### 8.2 Capacity, Headers And Cumulative Admissions
+### 8.2 Capacity Bounds And Historical Charging Design
+
+The capacity/live-expression bounds remain mathematical evidence. Cumulative
+admissions, materialization prices and visit allowances below are superseded by
+spec95 and must not be restored in a future implementation.
 
 Use checked arithmetic in `u128` for planning; convert claims to the existing
 ledger's types fallibly. Let
@@ -794,48 +804,38 @@ Cache hits cannot bypass exhausted work/bytes or change the mathematical result.
 ## 9. Deterministic Core Order And Fatal Refusal
 
 The target core accepts the exact exponent bits, a normalized concrete precision
-policy and the current `OperationGenerationResources`; there is no unbudgeted
-production entry point. Its order is:
+policy and any actual cache dependency. It takes no accounting context. Its order is:
 
-1. Admit input/context work and reduction storage; validate finiteness and decode.
+1. Validate finiteness and decode; check real reduction storage.
    Add scale exactly, perform Euclidean floor reduction and construct `n,F,D`.
 2. Compute `g,h,t,r`, the symbolic integral/zero decision and the output body,
    affix and conversion-buffer size plan using bounded exact integer arithmetic,
-   guarded by the separate planning block in §8.2.
-3. Claim the conservative output/reservation capacity bytes; reject failed
+   using the proved size bounds.
+3. Fallibly reserve output/conversion capacity; reject failed
    representation/checked arithmetic before attempting a power or writing zeros.
-   The output plan supplies capacity bounds, not an unknown-digit writing-work
-   claim. Defer emission visits until the actual rounded/trimmed result and
-   selected copy/write lengths are known.
+   The output plan supplies real capacity bounds.
 4. Resolve a symbolic integral/zero result directly if applicable. Otherwise set
-   `p=128` and construct checked `B(p,r)` and the next block's prices.
-5. At every refinement, **admit that attempt before consulting the constant cache
-   or constructing `S`**. For each block claim bytes first, then visits, then run
-   it. A failed visit claim after a successful byte claim does not refund bytes.
+   `p=128` and construct checked `B(p,r)`.
+5. At every refinement, check actual representation and allocation requirements
+   before constructing its scratch values. Cache hits preserve exact identity.
 6. Fetch/build the `p`-keyed `ln(10)` enclosure, form dyadic `x`, run exactly `p`
    positive Taylor iterations and the tail step, then four outward-square pairs.
-7. Build only the admitted/indexable quantum power (or denominator 10), quantize
+7. Build only the representable/indexable quantum power (or denominator 10), quantize
    both endpoints as integers at the same `t`, and compare. Do not format either
    endpoint as a label or normalize it separately.
-8. On disagreement, drop per-operand scratch, checked-double `p`, derive the new
-   price and return to step 5. Previous claims remain cumulative. On agreement,
-   normalize the one rounded physical value and serialize into the admitted
-   buffers with actual-work guards: conversion/trim scans admit actual iterations
-   and examined positions; known selected digit, zero-run and affix copies admit
-   their actual lengths before writing. Freeze the resulting label operand.
+8. On disagreement, drop per-operand scratch, checked-double `p`, derive actual
+   size bounds and return to step 5. On agreement, normalize the one rounded
+   physical value and serialize into checked, fallibly reserved buffers. Check
+   actual selected digit, zero-run and affix lengths before writing. Freeze the
+   resulting label operand.
 
-Sizes are calculated before claims with bounded/checkable planning arithmetic;
-claims precede the guarded algebra, loop iteration, lookup, clone or write.
-There is no “calculate the expensive enclosure to find out its price” step.
-Byte plans use the proved storage envelopes; work plans distinguish known exact
-pass counts from data-dependent guards. No conversion, comparison, output or
-oracle complexity bound is preclaimed as an actual-work total. This distinction
-does not change the algorithm, the interval proofs or the allocation boundary.
+Removing prices does not change the algorithm, interval proofs or allocation
+boundary. No new precision quota or fallback representation is introduced.
 Fatal refusal propagates through axis source/intrinsic/measurement/preparation
 paths. Only an actually certified but nonunique complete candidate is a normal
 axis source miss. Continuous/value-set adaptive exhaustion is the spec93
-pre-font presentation error. The cache and public adaptive loop share the same
-root ledger, and later geometry/font/replay consumes the certified retained text.
+pre-font presentation error. Later geometry/font/replay consumes the certified
+retained text.
 
 ## 10. Independent Rust Oracle: Roots, Not Logarithms
 
@@ -1140,7 +1140,11 @@ contradict its stated interval bounds. A budget refusal before that decision is
 still fatal and supplies no label. This is an analytic precision certificate,
 not a report of an executed refinement trace.
 
-### 11.5 Actual-Visit Boundary Fixtures
+### 11.5 Historical Actual-Visit Boundary Fixtures (Superseded)
+
+These fee-boundary fixtures document the former design only. Keep genuine
+comparison, conversion, refinement and error-propagation behavior checks under
+§12; do not implement quota refusal or exact-charge tests.
 
 These are specified counter expectations for the actual-work contract, not
 executed tests. Each fixture starts its counter observation **after** admitted
@@ -1203,20 +1207,13 @@ not deferred mathematical questions:
   (`5/2 -> 2`, `7/2 -> 4`, binade/decade carries), even though irrational Forest
   powers themselves cannot be exact ties. Verify normalization preserves `R`
   exactly, especially engineering fractional versus significant policies.
-* Instrument guarded blocks so one-byte/one-visit-below admission, exact required
-  admission and one-above admission demonstrate refusal **before** the relevant
-  iteration/materialization/write. Preconsume the shared root ledger to verify
-  remaining-budget behavior. Include `39.5` refinement, its next-attempt refusal,
-  representation/precision/price overflow and integral giant-output refusal.
-  Include §11.5's actual-visit deltas, early-stopping comparisons and conversion,
-  final-byte/end decisions and fatal merge/neighbor propagation. Newton traces
-  charge their actual iteration counts including confirmation, not `H_root`;
-  output traces separate conservative capacity bytes from actual selected writes.
-* Verify live expression-result counts, capacity/header claims, every project
-  loop and conversion vector entry count against §8's schedule. Audit cache
-  miss/hit/insertion, borrowed versus copied bounds and no post-refusal cache
-  success. Cache-enabled/disabled successful output must be byte-identical;
-  different actual work/byte usage is allowed and must be reported accurately.
+* Include `39.5` refinement, real representation/precision overflow and integral
+  giant-output refusal. Preserve early-stopping comparison/conversion behavior,
+  final-byte/end decisions and fatal merge/neighbor propagation. Use existing
+  diagnostics for actual iteration counts when useful, without pricing guards.
+* Verify real output capacities and live expression bounds against §8's
+  mathematical schedule. Audit cache miss/hit/insertion and borrowed versus copied
+  bounds. Cache-enabled/disabled successful output must be byte-identical.
 * Verify complete-set adaptive collisions and exact-format source misses,
   fatal refusal propagation to Forest axis/intrinsic/preparation callers,
   exact-tick precedence, retained fonts/affix spans, composition identities and
@@ -1224,8 +1221,8 @@ not deferred mathematical questions:
 
 The display mathematics is closed here: exact floor/scaling, symbolic powers,
 one-round quantization/carry, logarithm and Taylor enclosure recurrences, explicit
-round-error/tail/squaring convergence, termination, size/cumulative-resource
-policy, deterministic work order and an independently proved oracle are all
+round-error/tail/squaring convergence, termination, real size bounds,
+deterministic work order and an independently proved oracle are all
 specified. There is no unresolved product choice or deferred “prove it” step.
 The stated third-party allocation boundary is the existing resource-contract
 boundary, not an invented promise to make an infallible dependency fallible.

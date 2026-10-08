@@ -133,9 +133,7 @@ fn complete_group_replacements_retain_siblings_and_do_not_couple_equal_initial_r
         11,
     );
 
-    let preset = crate::Theme::Publication
-        .resolve(&OperationGenerationResources::new())
-        .unwrap();
+    let preset = crate::Theme::Publication.resolve().unwrap();
     assert_eq!(
         preset.typography.annotations().estimate_detail(),
         preset.typography.annotations().waterfall_total()
@@ -273,32 +271,15 @@ fn contrast_construction_and_edits_require_both_complete_candidates_to_be_opaque
 }
 
 #[test]
-fn retained_theme_matching_visits_each_nested_role_once_and_refuses_before_skipping_work() {
-    let source = crate::Theme::Publication
-        .resolve(&OperationGenerationResources::new())
-        .unwrap();
+fn retained_theme_matching_distinguishes_every_nested_role() {
+    let source = crate::Theme::Publication.resolve().unwrap();
     macro_rules! mismatch {
         ($($path:ident).+; $index:expr) => {
             let mut retained = source.clone();
             retained.typography.$($path).+ = retained.typography.$($path).+.clone()
                 .with_line_height(1.75).unwrap();
             assert_ne!(retained, source);
-            // Four scale/accent, seven axis and two point-ratio witnesses,
-            // then one font witness per unchanged
-            // preceding role. The differing scalar refuses equality before
-            // examining that role's font payload.
-            let work = 45 + $index;
-            for remaining in [work - 1, work] {
-                let resources = OperationGenerationResources::with_test_limits(remaining, 0);
-                let result = retained.same(&source, &resources);
-                if remaining == work {
-                    assert!(!result.unwrap());
-                } else {
-                    assert!(result.is_err());
-                }
-                assert_eq!(resources.usage().unwrap(), (0, remaining));
-                assert_eq!(resources.byte_usage().unwrap(), 0);
-            }
+            assert!(!retained.same_validated(&source).unwrap());
         };
     }
     mismatch!(root.title; 0);
@@ -323,19 +304,14 @@ fn retained_theme_matching_visits_each_nested_role_once_and_refuses_before_skipp
 
 #[test]
 fn publication_title_keeps_the_exact_binary64_leading_and_upward_occupancy() {
-    let resources = OperationGenerationResources::new();
-    let theme = crate::Theme::Publication.resolve(&resources).unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let title = theme.typography.root().title();
     assert_eq!(title.line_height().to_bits(), 0x3ff4_cccc_cccc_cccd);
-    let exact = RelativeSpacing::new_in(title.line_height(), &resources)
+    let exact = RelativeSpacing::new(title.line_height())
         .unwrap()
-        .product(
-            LocalMetric::css_pixels(title.font_size()).unwrap(),
-            &resources,
-        )
-        .unwrap();
+        .product(LocalMetric::css_pixels(title.font_size()).unwrap());
     let occupancy = exact
-        .round(crate::layout::kernel::SpatialRounding::Ceil, &resources)
+        .round(crate::layout::kernel::SpatialRounding::Ceil)
         .unwrap();
     assert_eq!(occupancy.quanta(), 26_625);
 }

@@ -29,7 +29,7 @@ fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
         let plot = if prepared {
             crate::plots::shared_x::prepare_plot(
                 &source,
-                &crate::font::canonical::OperationGenerationResources::new(),
+                &crate::font::canonical::OperationContext::new(),
                 None,
             )
             .unwrap()
@@ -38,9 +38,7 @@ fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
         } else {
             source.clone()
         };
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let context = PlotRenderContext::new(
             plot.data(),
             crate::layout::PanelBox::new(0.0, 400.0, 0.0, 300.0),
@@ -64,17 +62,10 @@ fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
             [0; measurements::Counter::ALL.len()]
         );
 
-        let environment = theme.prepared_font_environment().unwrap();
-        let call = environment.claim_measurement_call().unwrap();
-        let resources = environment.generation_resources();
-        resources
-            .claim_calls(1_000_000 - resources.call_cache_usage().0)
-            .unwrap();
         measurements::start();
         for error in [
             plot.measure_panel(PlotKind::Line, context).unwrap_err(),
-            plot.measure_panel_in_call(PlotKind::Line, context, &call)
-                .unwrap_err(),
+            plot.measure_panel(PlotKind::Line, context).unwrap_err(),
         ] {
             assert!(matches!(
                 error,
@@ -90,7 +81,7 @@ fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
             ),
             Err(Error::Data(_))
         ));
-        assert_eq!(resources.call_cache_usage().0, 1_000_000);
+
         assert_eq!(
             measurements::finish().counters,
             [0; measurements::Counter::ALL.len()]
@@ -219,22 +210,10 @@ impl Plot {
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn measure_panel(
         &self,
         kind: PlotKind,
         context: PlotRenderContext<'_>,
-    ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-        crate::layout::interior::InteriorRoute::classify(kind).validate(self)?;
-        let call = self.admit_interior_call(context.theme)?;
-        self.measure_panel_in_call(kind, context, &call)
-    }
-
-    pub(crate) fn measure_panel_in_call(
-        &self,
-        kind: PlotKind,
-        context: PlotRenderContext<'_>,
-        call: &crate::font::canonical::MeasurementCall,
     ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
         crate::layout::interior::InteriorRoute::classify(kind).validate(self)?;
         #[cfg(test)]
@@ -272,22 +251,11 @@ impl Plot {
             | PlotKind::Beeswarm
             | PlotKind::Waterfall
             | PlotKind::Marginal
-            | PlotKind::Matrix => self.measure_selected_interior_in_call(context, call),
+            | PlotKind::Matrix => self.measure_selected_interior(context),
         }
     }
 
-    pub(crate) fn measure_selected_interior(
-        &self,
-        context: PlotRenderContext<'_>,
-    ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-        let call = self.admit_interior_call(context.theme)?;
-        self.measure_selected_interior_in_call(context, &call)
-    }
-
-    fn admit_interior_call(
-        &self,
-        theme: &crate::theme::ResolvedTheme,
-    ) -> Result<crate::font::canonical::MeasurementCall, Error> {
+    fn validate_interior_preparation(&self) -> Result<(), Error> {
         if crate::layout::interior::InteriorRoute::classify(self.kind()).is_coordinate()
             && self.prepared_axes.is_empty()
         {
@@ -295,18 +263,15 @@ impl Plot {
                 "native coordinate panel requires root-prepared axes".into(),
             ));
         }
-        theme
-            .prepared_font_environment()?
-            .claim_measurement_call()
-            .map_err(|error| Error::Render(format!("interior call admission: {error:?}")))
+        Ok(())
     }
 
-    fn measure_selected_interior_in_call(
+    pub(crate) fn measure_selected_interior(
         &self,
         context: PlotRenderContext<'_>,
-        _call: &crate::font::canonical::MeasurementCall,
     ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
         use crate::layout::interior::{InteriorRoute as R, SpecializedGrid as G};
+        self.validate_interior_preparation()?;
         #[cfg(test)]
         SELECTED_INTERIOR_MEASUREMENTS.with(|calls| calls.set(calls.get() + 1));
         #[cfg(test)]
@@ -326,26 +291,22 @@ impl Plot {
             R::SpecializedGrid(G::Beeswarm) => crate::plots::beeswarm::measure(self, context)?,
             R::SpecializedGrid(G::Waterfall) => crate::plots::waterfall::measure(self, context)?,
         };
-        let resources = context
-            .theme
-            .prepared_font_environment()?
-            .generation_resources();
-        let data = context.data.with_axis_resources(&resources);
-        let mut geometry = crate::render::geometry::GeometrySnapshot::new(context.theme)?;
+
+        let mut geometry = crate::render::geometry::GeometrySnapshot::new();
         let significance_styles = if matches!(
             self.kind(),
             PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud
         ) {
             let mut styles = Vec::new();
             if let Some(significance) = &result.significance {
-                data.reserve_source(&mut styles, significance.brackets.len())?;
+                crate::data::source::reserve_source(&mut styles, significance.brackets.len())?;
                 for bracket in &significance.brackets {
                     let label = &bracket.label.plan;
                     let style = crate::render::backend::BracketStyle {
                         color: context.theme.annotations.bracket_stroke.color(),
                         width: context.theme.annotations.bracket_stroke.width(),
                         label_color: label.style.paint,
-                        font_family: data.copy_font_stack(&label.style.stack)?,
+                        font_family: crate::data::source::copy_font_stack(&label.style.stack)?,
                         font_size: label.style.font_size,
                         line_height: label.line_height(),
                         weight: label.style.weight,
@@ -363,7 +324,7 @@ impl Plot {
         } else {
             None
         };
-        let guides = layers::GuideSnapshot::measure(self, &result, data, &mut geometry)?;
+        let guides = layers::GuideSnapshot::measure(self, &result, &mut geometry)?;
         validate_frozen_axes_and_guides(self, &mut result, context)?;
         result.panel_text = crate::decorations::panel_text::measure_plans(
             self,
@@ -373,7 +334,7 @@ impl Plot {
         )?;
         let panel_clip = result.layout.projection.panel_box();
         let canonical_clip = crate::render::backend::validate_clip_region(panel_clip)?.panel();
-        let text = data.collect_source(result.panel_text.iter().map(|plan| {
+        let text = crate::data::source::collect_source(result.panel_text.iter().map(|plan| {
             let placed = plan.retained_placement();
             geometry.text(placed.placement, &placed.plan, Some(canonical_clip))?;
             Ok(placed)
@@ -386,7 +347,7 @@ impl Plot {
                 .axis_scope()
                 .map_or(Some(10), |scope| scope.len().checked_add(11))
                 .ok_or_else(|| Error::Render("panel text layer name overflow".into()))?;
-            data.reserve_source_string(&mut name, length)?;
+            crate::data::source::reserve_source_string(&mut name, length)?;
             if let Some(scope) = self.axis_scope() {
                 name.push_str(scope);
                 name.push('-');
@@ -394,7 +355,7 @@ impl Plot {
             name.push_str("panel-text");
             Some(name)
         };
-        result.annotations = Some(data.source_arc(
+        result.annotations = Some(crate::data::source::source_arc(
             crate::layout::interior::SelectedAnnotationPlan {
                 significance_styles,
                 guides,
@@ -418,16 +379,12 @@ fn validate_frozen_axes_and_guides(
     {
         return Ok(());
     }
-    let theme = context.theme;
+
     if result.axes.is_none() {
         return Err(Error::Render("native panel is missing its frozen axes".into()).into());
     }
     if !result.legend_entries.is_empty() {
-        crate::decorations::legend::resolve_entries(
-            plot,
-            &mut result.legend_entries,
-            &theme.prepared_font_environment()?.generation_resources(),
-        )?;
+        crate::decorations::legend::resolve_entries(plot, &mut result.legend_entries)?;
     }
     Ok(())
 }
@@ -456,9 +413,7 @@ fn missing_frozen_axes_do_not_trigger_label_reconstruction() {
     .labels(crate::Labels::raw())
     .erase();
     let panel = crate::layout::PanelBox::new(0.0, 600.0, 0.0, 400.0);
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let mut result = PlotRenderResult::new(crate::layout::Layout::envelope(panel), Vec::new());
     let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
     let error = validate_frozen_axes_and_guides(
@@ -481,9 +436,7 @@ fn missing_frozen_axes_do_not_trigger_label_reconstruction() {
 #[test]
 fn later_axis_font_failure_wins_over_an_earlier_text_fit() {
     use crate::layout::fit::{FitScope, PlanError};
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     theme.prepare_font_environment().unwrap();
     let mut layout =
         crate::layout::Layout::envelope(crate::layout::PanelBox::new(80.0, 610.0, 60.0, 450.0));

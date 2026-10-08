@@ -35,7 +35,7 @@ struct HeightMeasurement {
 }
 
 impl HeightInputs {
-    fn matches(&self, other: &Self, theme: &ResolvedTheme) -> Result<bool, Error> {
+    fn matches_assignment(&self, other: &Self) -> bool {
         if self.width != other.width
             || self.ranges != other.ranges
             || self.provenance != other.provenance
@@ -46,25 +46,19 @@ impl HeightInputs {
             || self.legend != other.legend
             || self.continuous_hidden != other.continuous_hidden
         {
-            return Ok(false);
+            return false;
         }
         match (&self.scope, &other.scope) {
-            (None, None) => Ok(true),
+            (None, None) => true,
             (Some(a), Some(b)) if a.len() == b.len() => {
                 for (a, b) in a.bytes().zip(b.bytes()) {
-                    theme
-                        .prepared_font_environment()?
-                        .claim_processing_visits(1)
-                        .map_err(|error| {
-                            Error::Render(format!("height scope identity: {error:?}"))
-                        })?;
                     if a != b {
-                        return Ok(false);
+                        return false;
                     }
                 }
-                Ok(true)
+                true
             }
-            _ => Ok(false),
+            _ => false,
         }
     }
     fn new(
@@ -73,7 +67,6 @@ impl HeightInputs {
         parent_insets: [i64; 4],
         round: &FeedbackRound,
         owner: &ComponentAddress,
-        theme: &ResolvedTheme,
     ) -> Result<Self, Error> {
         let axes = plot.prepared_axis_inputs().ok_or_else(|| {
             Error::Render("height measurement requires prepared cell axes".into())
@@ -83,22 +76,18 @@ impl HeightInputs {
             plot.y_axis_spec().limits.unwrap_or(axes.ranges[1]),
         ]
         .map(|range| [range.0.to_bits(), range.1.to_bits()]);
-        let child = ComponentAddress::root().child(
-            AddressRole::CanvasCell,
-            owner.leaf_slot_index(),
-            &theme.prepared_font_environment()?.generation_resources(),
-        )?;
+        let child =
+            ComponentAddress::root().child(AddressRole::CanvasCell, owner.leaf_slot_index())?;
         let mut own_insets = [[0; 4]; 2];
         for (target, kind) in own_insets
             .iter_mut()
             .zip([FeedbackKind::AxisGutter, FeedbackKind::OwnedInk])
         {
-            for (target, value) in target.iter_mut().zip(round.insets(&child, kind)?) {
+            for (target, value) in target.iter_mut().zip(round.insets(&child, kind)) {
                 *target = crate::layout::kernel::nearest_spatial_quanta(value)?;
             }
         }
-        let resources = theme.prepared_font_environment()?.generation_resources();
-        let data = plot.data().with_axis_resources(&resources);
+
         Ok(Self {
             width: crate::layout::kernel::nearest_spatial_quanta(width)?,
             ranges,
@@ -113,7 +102,7 @@ impl HeightInputs {
             continuous_hidden: plot.continuous_guide_suppressed(),
             scope: plot
                 .axis_scope()
-                .map(|scope| data.copy_source_string(scope))
+                .map(crate::data::source::copy_source_string)
                 .transpose()?,
         })
     }
@@ -124,33 +113,20 @@ impl HeightMeasurements {
         &self,
         inputs: &HeightInputs,
         owner: &ComponentAddress,
-        theme: &ResolvedTheme,
     ) -> Result<Option<f64>, Error> {
-        theme
-            .prepared_font_environment()?
-            .claim_measurement_call()
-            .map_err(|error| Error::Render(format!("content height lookup: {error:?}")))?;
-        theme
-            .prepared_font_environment()?
-            .claim_processing_visits(1)
-            .map_err(|error| Error::Render(format!("content height input lookup: {error:?}")))?;
         let index = usize::try_from(owner.leaf_slot_index())
             .map_err(|_| Error::Render("content height slot overflowed".into()))?;
         let entries = self.0.borrow();
         let Some(Some(entry)) = entries.get(index) else {
             return Ok(None);
         };
-        if entry.inputs.matches(inputs, theme)? {
+        if entry.inputs.matches_assignment(inputs) {
             Ok(Some(entry.height))
         } else {
             Ok(None)
         }
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "retain one measured consequence under its actual cell dependencies"
-    )]
     pub(super) fn record(
         &self,
         plot: &Plot,
@@ -159,9 +135,8 @@ impl HeightMeasurements {
         parent_insets: [i64; 4],
         round: &FeedbackRound,
         owner: &ComponentAddress,
-        theme: &ResolvedTheme,
     ) -> Result<(), Error> {
-        let inputs = HeightInputs::new(plot, width, parent_insets, round, owner, theme)?;
+        let inputs = HeightInputs::new(plot, width, parent_insets, round, owner)?;
         let index = usize::try_from(owner.leaf_slot_index())
             .map_err(|_| Error::Render("content height slot overflowed".into()))?;
         let mut entries = self.0.borrow_mut();
@@ -171,17 +146,13 @@ impl HeightMeasurements {
         if entries.len() < needed {
             let additional = needed - entries.len();
             fit::reserve(
-                theme,
                 &mut entries,
                 additional,
                 "content height measurement inputs",
             )?;
             entries.resize_with(needed, || None);
         }
-        theme
-            .prepared_font_environment()?
-            .claim_cache_entries(1)
-            .map_err(|error| Error::Render(format!("content height consequence: {error:?}")))?;
+
         entries[index] = Some(HeightMeasurement {
             inputs,
             height: crate::layout::kernel::required_length(height)?,
@@ -213,8 +184,8 @@ pub(super) fn measured_preference(
             )?);
         }
     }
-    let gutters = round.insets(owner, FeedbackKind::AxisGutter)?;
-    let ink = round.insets(owner, FeedbackKind::OwnedInk)?;
+    let gutters = round.insets(owner, FeedbackKind::AxisGutter);
+    let ink = round.insets(owner, FeedbackKind::OwnedInk);
     crate::layout::kernel::required_length(
         height + gutters[2] + gutters[3] + ink[2] + ink[3] + local_text_height,
     )
@@ -257,9 +228,9 @@ pub(super) fn cell_height(
         &FitScope::root(),
     )
     .map_err(fit::PlanError::into_error)?;
-    let identity = HeightInputs::new(plot, width, parent_insets, round, owner, theme)?;
+    let identity = HeightInputs::new(plot, width, parent_insets, round, owner)?;
     if let Some(measurements) = measurements {
-        if let Some(height) = measurements.measured(&identity, owner, theme)? {
+        if let Some(height) = measurements.measured(&identity, owner)? {
             return Ok(height);
         }
     }
@@ -293,41 +264,31 @@ pub(super) fn cell_height(
     } else {
         plot.natural_body_height(theme, body_width, preference.1)?
     };
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let height = prose.height_with_body(height + local[2] + local[3], &resources)?;
+
+    let height = prose.height_with_body(height + local[2] + local[3])?;
     if present {
         theme.root_outer_height(&height)
     } else {
-        crate::theme::composition::hard(&height, &resources)
+        crate::theme::composition::hard(&height)
     }
 }
 
 pub(super) fn grid_gutters(
     source: &Canvas,
-    theme: &ResolvedTheme,
+
     round: &FeedbackRound,
 ) -> Result<Vec<(usize, usize, PanelRequirements)>, Error> {
-    let grid_owner = ComponentAddress::root().child(
-        AddressRole::CanvasGrid,
-        0,
-        &theme.prepared_font_environment()?.generation_resources(),
-    )?;
+    let grid_owner = ComponentAddress::root().child(AddressRole::CanvasGrid, 0)?;
     let mut gutters = Vec::new();
-    fit::reserve(
-        theme,
-        &mut gutters,
-        source.panels.len(),
-        "Canvas content gutters",
-    )?;
+    fit::reserve(&mut gutters, source.panels.len(), "Canvas content gutters")?;
     for index in 0..source.panels.len() {
         let owner = grid_owner.child(
             AddressRole::CanvasCell,
             u32::try_from(index)
                 .map_err(|_| Error::Render("Canvas content address overflow".into()))?,
-            &theme.prepared_font_environment()?.generation_resources(),
         )?;
-        let [left, right, bottom, top] = round.insets(&owner, FeedbackKind::AxisGutter)?;
-        let ink = round.insets(&owner, FeedbackKind::OwnedInk)?;
+        let [left, right, bottom, top] = round.insets(&owner, FeedbackKind::AxisGutter);
+        let ink = round.insets(&owner, FeedbackKind::OwnedInk);
         gutters.push((
             index / source.columns,
             index % source.columns,
@@ -344,9 +305,8 @@ pub(super) fn grid_gutters(
             AddressRole::CanvasRangeGroup,
             u32::try_from(index)
                 .map_err(|_| Error::Render("Canvas range group address overflow".into()))?,
-            &theme.prepared_font_environment()?.generation_resources(),
         )?;
-        let alignment = round.insets(&owner, FeedbackKind::SharedAlignment)?;
+        let alignment = round.insets(&owner, FeedbackKind::SharedAlignment);
         for &index in group {
             gutters[index].2.left = gutters[index].2.left.max(alignment[0]);
             gutters[index].2.right = gutters[index].2.right.max(alignment[1]);
@@ -379,10 +339,7 @@ pub(super) fn content_frame(
         &FitScope::root(),
     )
     .map_err(fit::PlanError::into_error)?;
-    let height = integral(theme.root_outer_height(&prose.height_with_body(
-        height,
-        &theme.prepared_font_environment()?.generation_resources(),
-    )?)?)?;
+    let height = integral(theme.root_outer_height(&prose.height_with_body(height)?)?)?;
     crate::layout::RootFramePlan::measure(
         (width, height),
         theme,
@@ -412,21 +369,14 @@ pub(super) fn measure(
         return Ok(RootSize::new(width, height));
     }
     let theme = prepared.themes.root();
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    resources
-        .claim_calls(1)
-        .map_err(|error| Error::Render(format!("Canvas content sizing: {error:?}")))?;
+
     let mut plots = Vec::new();
     fit::reserve(
-        theme,
         &mut plots,
         source.panels.len(),
         "Canvas content sizing children",
     )?;
     for (index, panel) in source.panels.iter().enumerate() {
-        resources
-            .claim_visits(1)
-            .map_err(|error| Error::Render(format!("Canvas content child: {error:?}")))?;
         let Some(panel) = panel else {
             plots.push(None);
             continue;
@@ -434,8 +384,8 @@ pub(super) fn measure(
         let input = prepared.interiors[index]
             .as_ref()
             .expect("prepared Canvas plot");
-        let data = panel.data().with_axis_resources(&resources);
-        let mut plot = panel.admitted_clone(data)?;
+
+        let mut plot = panel.clone();
         if let Some(labels) = &source.labels {
             plot = plot.labels(labels.clone());
         }
@@ -446,25 +396,25 @@ pub(super) fn measure(
             .ok_or_else(|| {
                 Error::Render("Canvas content child requires its prepared scope".into())
             })?;
-        plot = input.attach(plot.with_render_scope(data.copy_source_string(scope)?))?;
+        plot = input
+            .attach(plot.with_render_scope(crate::data::source::copy_source_string(scope)?))?;
         if let Some(limits) = prepared.shared_x.get(index).copied().flatten() {
             plot = plot.with_planned_x_limits(limits);
         }
         plots.push(Some(plot.with_parent_axis_gutters()));
     }
-    source.coordinate_plots(&mut plots, &prepared.shared_x, round, &resources)?;
-    let grid_owner = ComponentAddress::root().child(AddressRole::CanvasGrid, 0, &resources)?;
+    source.coordinate_plots(&mut plots, &prepared.shared_x, round)?;
+    let grid_owner = ComponentAddress::root().child(AddressRole::CanvasGrid, 0)?;
     let mut gutters = Vec::new();
-    fit::reserve(theme, &mut gutters, plots.len(), "Canvas content gutters")?;
+    fit::reserve(&mut gutters, plots.len(), "Canvas content gutters")?;
     for index in 0..plots.len() {
         let owner = grid_owner.child(
             AddressRole::CanvasCell,
             u32::try_from(index)
                 .map_err(|_| Error::Render("Canvas content address overflow".into()))?,
-            &resources,
         )?;
-        let [left, right, bottom, top] = round.insets(&owner, FeedbackKind::AxisGutter)?;
-        let ink = round.insets(&owner, FeedbackKind::OwnedInk)?;
+        let [left, right, bottom, top] = round.insets(&owner, FeedbackKind::AxisGutter);
+        let ink = round.insets(&owner, FeedbackKind::OwnedInk);
         gutters.push((
             index / source.columns,
             index % source.columns,
@@ -481,9 +431,8 @@ pub(super) fn measure(
             AddressRole::CanvasRangeGroup,
             u32::try_from(index)
                 .map_err(|_| Error::Render("Canvas range group address overflow".into()))?,
-            &resources,
         )?;
-        let alignment = round.insets(&owner, FeedbackKind::SharedAlignment)?;
+        let alignment = round.insets(&owner, FeedbackKind::SharedAlignment);
         for &index in group {
             gutters[index].2.left = gutters[index].2.left.max(alignment[0]);
             gutters[index].2.right = gutters[index].2.right.max(alignment[1]);
@@ -496,7 +445,7 @@ pub(super) fn measure(
         guide = crate::layout::interior::sizing::continuous_preference(
             descriptor,
             theme,
-            &FitScope::root().child(AddressRole::CanvasSharedLegend, 0, &resources)?,
+            &FitScope::root().child(AddressRole::CanvasSharedLegend, 0)?,
         )?;
     }
     let guide_gap = if guide.0 > 0.0 {
@@ -570,9 +519,8 @@ pub(super) fn measure(
         &FitScope::root(),
     )
     .map_err(fit::PlanError::into_error)?;
-    let height = integral(
-        theme.root_outer_height(&prose.height_with_body(grid.size.1.max(guide.1), &resources)?)?,
-    )?;
+    let height =
+        integral(theme.root_outer_height(&prose.height_with_body(grid.size.1.max(guide.1))?)?)?;
     Ok(RootSize::new(width, height))
 }
 
@@ -582,14 +530,9 @@ mod tests {
 
     #[test]
     fn same_width_local_gutter_replacement_remeasures_and_contracts_height() {
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         theme.prepare_font_environment().unwrap();
-        let resources = theme
-            .prepared_font_environment()
-            .unwrap()
-            .generation_resources();
+        let resources = theme.prepared_font_environment().unwrap().operation();
         let source = Plot::scatter(
             crate::NumericValues::new("x", [0.0, 1.0]),
             crate::NumericValues::new("y", [1.0, 2.0]),
@@ -598,12 +541,12 @@ mod tests {
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let plot = inputs.attach(source).unwrap();
         let owner = ComponentAddress::root()
-            .child(AddressRole::CanvasGrid, 0, &resources)
+            .child(AddressRole::CanvasGrid, 0)
             .unwrap()
-            .child(AddressRole::CanvasCell, 0, &resources)
+            .child(AddressRole::CanvasCell, 0)
             .unwrap();
         let child = ComponentAddress::root()
-            .child(AddressRole::CanvasCell, 0, &resources)
+            .child(AddressRole::CanvasCell, 0)
             .unwrap();
         let measurements = HeightMeasurements::default();
         let mut history = Vec::new();
@@ -627,7 +570,7 @@ mod tests {
                     &plot, &theme, 160.0, &inputs, false, round, &owner, [0; 4], None,
                 )?;
                 assert_eq!(height.to_bits(), fresh.to_bits());
-                measurements.record(&plot, 160.0, height, [0; 4], round, &owner, &theme)?;
+                measurements.record(&plot, 160.0, height, [0; 4], round, &owner)?;
                 let bottom = if history.is_empty() { 100.0 } else { 0.0 };
                 history.push(height);
                 round.request_insets(
@@ -647,19 +590,10 @@ mod tests {
     }
 
     #[test]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one retained-height fixture checks width, domain, gutter, visibility and contraction against the same cached plan"
-    )]
     fn retained_height_rejects_width_domain_gutter_and_visibility_changes() {
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         theme.prepare_font_environment().unwrap();
-        let resources = theme
-            .prepared_font_environment()
-            .unwrap()
-            .generation_resources();
+        let resources = theme.prepared_font_environment().unwrap().operation();
         let source = Plot::beeswarm(
             crate::CategoryValues::new("group", ["a"; 40]).unwrap(),
             crate::NumericValues::new("x", (0..40).map(f64::from)),
@@ -678,19 +612,19 @@ mod tests {
             |_| Ok(()),
             |(), assigned, round| {
                 let owner = ComponentAddress::root()
-                    .child(AddressRole::CanvasGrid, 0, &resources)?
-                    .child(AddressRole::CanvasCell, 0, &resources)?;
-                let key = HeightInputs::new(&plot, 160.0, [0; 4], round, &owner, &theme)?;
+                    .child(AddressRole::CanvasGrid, 0)?
+                    .child(AddressRole::CanvasCell, 0)?;
+                let key = HeightInputs::new(&plot, 160.0, [0; 4], round, &owner)?;
                 let original = cell_height(
                     &plot, &theme, 160.0, &inputs, false, round, &owner, [0; 4], None,
                 )?;
-                measurements.record(&plot, 160.0, original, [0; 4], round, &owner, &theme)?;
-                assert!(measurements.measured(&key, &owner, &theme)?.is_some());
-                let smaller = HeightInputs::new(&plot, 120.0, [0; 4], round, &owner, &theme)?;
-                assert!(measurements.measured(&smaller, &owner, &theme)?.is_none());
+                measurements.record(&plot, 160.0, original, [0; 4], round, &owner)?;
+                assert!(measurements.measured(&key, &owner)?.is_some());
+                let smaller = HeightInputs::new(&plot, 120.0, [0; 4], round, &owner)?;
+                assert!(measurements.measured(&smaller, &owner)?.is_none());
                 let widened = plot.clone().with_planned_x_limits((0.0, 1_000_000.0));
-                let domain = HeightInputs::new(&widened, 160.0, [0; 4], round, &owner, &theme)?;
-                assert!(measurements.measured(&domain, &owner, &theme)?.is_none());
+                let domain = HeightInputs::new(&widened, 160.0, [0; 4], round, &owner)?;
+                assert!(measurements.measured(&domain, &owner)?.is_none());
                 let recomputed = cell_height(
                     &widened,
                     &theme,
@@ -706,16 +640,13 @@ mod tests {
                     recomputed > original,
                     "occupied packing must be remeasured at the coordinated domain"
                 );
-                let parent =
-                    HeightInputs::new(&plot, 160.0, [1024, 0, 0, 0], round, &owner, &theme)?;
-                assert!(measurements.measured(&parent, &owner, &theme)?.is_none());
+                let parent = HeightInputs::new(&plot, 160.0, [1024, 0, 0, 0], round, &owner)?;
+                assert!(measurements.measured(&parent, &owner)?.is_none());
                 let hidden = plot.clone().with_y_tick_labels_visible(false);
-                let visibility = HeightInputs::new(&hidden, 160.0, [0; 4], round, &owner, &theme)?;
-                assert!(measurements
-                    .measured(&visibility, &owner, &theme)?
-                    .is_none());
+                let visibility = HeightInputs::new(&hidden, 160.0, [0; 4], round, &owner)?;
+                assert!(measurements.measured(&visibility, &owner)?.is_none());
                 // Replacement can contract under a later actual dependency identity.
-                measurements.record(&widened, 160.0, recomputed, [0; 4], round, &owner, &theme)?;
+                measurements.record(&widened, 160.0, recomputed, [0; 4], round, &owner)?;
                 let contracted = cell_height(
                     &plot,
                     &theme,
@@ -729,7 +660,7 @@ mod tests {
                 )?;
                 assert_eq!(contracted.to_bits(), original.to_bits());
                 assert!(contracted < recomputed);
-                measurements.record(&plot, 160.0, original, [0; 4], round, &owner, &theme)?;
+                measurements.record(&plot, 160.0, original, [0; 4], round, &owner)?;
                 let retained = cell_height(
                     &plot,
                     &theme,
@@ -743,10 +674,7 @@ mod tests {
                 )?;
                 assert_eq!(retained.to_bits(), contracted.to_bits());
                 assert_eq!(
-                    measurements
-                        .measured(&key, &owner, &theme)?
-                        .unwrap()
-                        .to_bits(),
+                    measurements.measured(&key, &owner)?.unwrap().to_bits(),
                     crate::layout::kernel::required_length(original)?.to_bits()
                 );
                 Ok(crate::layout::MeasuredLayout::new(assigned, ()))

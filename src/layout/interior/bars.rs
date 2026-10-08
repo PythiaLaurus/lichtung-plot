@@ -1,5 +1,5 @@
 use super::{coordinate::Intrinsics, InteriorRoute, MarkPayload, OneCategoricalAxis};
-use crate::font::canonical::OperationGenerationResources;
+use crate::font::canonical::OperationContext;
 use crate::layout::{AxisSide, PanelBox, TickSource};
 use crate::orchestrator::measurements::{self, Counter};
 use crate::spec::{AxisDomain, PlotRenderContext};
@@ -93,12 +93,8 @@ fn native_bars_preserve_signed_stacks_midpoints_raw_labels_and_assigned_projecti
         let horizontal = family % 2 == 1;
         let source =
             source.labels(crate::Labels::humanized().alias("after_visit", "Follow-up visit"));
-        let inputs = crate::plots::shared_x::prepare_plot(
-            &source,
-            &OperationGenerationResources::new(),
-            None,
-        )
-        .unwrap();
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         assert_eq!(inputs.route, InteriorRoute::OneCategoricalAxis(route));
         let plot = inputs.attach(source).unwrap();
         let prepared = crate::plots::bar_data::retained(&plot).unwrap();
@@ -120,9 +116,7 @@ fn native_bars_preserve_signed_stacks_midpoints_raw_labels_and_assigned_projecti
                 ]
             );
         }
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
         for panel in [
             PanelBox::new(80.25, 550.75, 70.5, 410.25),
@@ -251,16 +245,10 @@ fn native_hidden_horizontal_categories_preserve_identity_without_intrinsic_or_gu
                 "after_visit",
                 "First line\nSecond line\nThird line\nFourth line",
             ));
-        let inputs = crate::plots::shared_x::prepare_plot(
-            &source,
-            &OperationGenerationResources::new(),
-            None,
-        )
-        .unwrap();
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         let plot = inputs.attach(source).unwrap();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let visible = Intrinsics::prepared(&plot, &theme).unwrap().minimum(&plot);
         let hidden = plot.clone().with_y_tick_labels_visible(false);
         assert!(
@@ -306,16 +294,10 @@ fn native_bar_domain_feedback_is_conditional_and_final_axes_match_marks_at_the_p
     for (family, source) in configured_sources(true).into_iter().enumerate() {
         let horizontal = family % 2 == 1;
         let source = source.with_suppressed_legend().size(900, 700);
-        let inputs = crate::plots::shared_x::prepare_plot(
-            &source,
-            &OperationGenerationResources::new(),
-            None,
-        )
-        .unwrap();
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         let plot = inputs.attach(source).unwrap();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         for cell in [
             PanelBox::new(16.0, 625.0, 8.0, 390.0),
             PanelBox::new(30.25, 800.5, 40.75, 610.0),
@@ -341,7 +323,7 @@ fn native_bar_domain_feedback_is_conditional_and_final_axes_match_marks_at_the_p
             };
             assert!(payload.domain_expansion.is_none());
             let projection = &plan.result.layout.projection;
-            let final_plot = plan.plot_with_planned_limits(&plot, plot.data()).unwrap();
+            let final_plot = plan.plot_with_planned_limits(&plot);
             let selected = final_plot
                 .measure_selected_interior(PlotRenderContext::new(
                     final_plot.data(),
@@ -462,16 +444,11 @@ fn native_bar_fixed_limits_and_exact_numeric_labels_never_expand_and_invalid_sou
                     crate::AxisTick::new(range.1, "raw_upper"),
                 ],
             );
-            let inputs = crate::plots::shared_x::prepare_plot(
-                &exact,
-                &OperationGenerationResources::new(),
-                None,
-            )
-            .unwrap();
+            let inputs =
+                crate::plots::shared_x::prepare_plot(&exact, &OperationContext::new(), None)
+                    .unwrap();
             let plot = inputs.attach(exact).unwrap();
-            let theme = crate::Theme::Publication
-                .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                .unwrap();
+            let theme = crate::Theme::Publication.resolve().unwrap();
             let result = plot.measure_selected_interior(PlotRenderContext::new(
                 plot.data(),
                 PanelBox::new(80.0, 600.0, 70.0, 450.0),
@@ -532,12 +509,9 @@ fn native_bar_signs_keep_the_scientific_zero_anchor_in_both_orientations() {
             Plot::stacked_horizontal_bar(categories, numeric, series).erase(),
         ];
         for (family, source) in plots.into_iter().enumerate() {
-            let inputs = crate::plots::shared_x::prepare_plot(
-                &source,
-                &OperationGenerationResources::new(),
-                None,
-            )
-            .unwrap();
+            let inputs =
+                crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None)
+                    .unwrap();
             let range = inputs.axes[0].1.ranges[usize::from(family % 2 == 0)];
             if values.iter().all(|value| *value >= 0.0) {
                 assert_eq!(range.0.to_bits(), 0.0_f64.to_bits());

@@ -141,7 +141,6 @@ impl PreparedInteriorInputs {
                 crate::plots::heatmap::prepare_intrinsics(
                     &prepared.1,
                     axes,
-                    plot.data(),
                     theme,
                     scope.as_deref(),
                 )?;
@@ -365,14 +364,14 @@ pub(crate) fn automatic_mark_ink_expansions(
     projection: &crate::layout::Projection,
     bounds: crate::render::geometry::GeometryBox,
     automatic: [bool; 2],
-    data: crate::data::PlotData<'_>,
+
     scope: &crate::layout::fit::FitScope,
 ) -> Result<[Option<DomainExpansion>; 2], crate::layout::fit::PlanError> {
     let mut expansions = [None; 2];
     if !automatic.into_iter().any(|axis| axis) {
         return Ok(expansions);
     }
-    data.claim_source_visits(2)?;
+
     let low = projection.project(source[0].0, source[1].0);
     let high = projection.project(source[0].1, source[1].1);
     let panel = projection.panel_box();
@@ -418,14 +417,14 @@ pub(crate) fn automatic_absolute_ink_expansions(
     projection: &crate::layout::Projection,
     bounds: crate::render::geometry::GeometryBox,
     automatic: [bool; 2],
-    data: crate::data::PlotData<'_>,
+
     scope: &crate::layout::fit::FitScope,
 ) -> Result<[Option<DomainExpansion>; 2], crate::layout::fit::PlanError> {
     let mut expansions = [None; 2];
     if !automatic.into_iter().any(|axis| axis) {
         return Ok(expansions);
     }
-    data.claim_source_visits(2)?;
+
     let low = projection.project(source[0].0, source[1].0);
     let high = projection.project(source[0].1, source[1].1);
     let panel = projection.panel_box();
@@ -482,8 +481,8 @@ pub(crate) fn merge_mark_domain_expansions(
 }
 
 /// Insets use the existing spatial quantization and operation-owned feedback.
-/// No adapter owns a budget, retry loop, or root alternative. Requests replace
-/// stale effects through FeedbackRound; rejected work remains charged there.
+/// Requests replace stale effects through FeedbackRound. Adapters do not own
+/// retry loops or root alternatives.
 pub(crate) enum InteriorReserveRequest {
     AxisGutter([f64; 4]),
     OwnedInk([f64; 4]),

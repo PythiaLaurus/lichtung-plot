@@ -1417,7 +1417,8 @@ map is nonempty. Fixed preflight checks required/available capacity; extendable
 and accents use the current first-party OKLab/OKLCH algorithm without cycling.
 Supply prefixes are exact, stable and independent of requested final count.
 Repeated colors are permitted. Constructor iteration/allocation is checked and
-fallible; render-time extension uses the existing operation work/storage ledger.
+fallible; render-time extension retains the operation-local palette cache and
+checked fallible storage, with no work/storage ledger under spec95.
 
 Map keys are the actual consumer's normalized semantic raw identities. Construction
 requires original input keys to be nonempty, already trimmed, control-free and
@@ -1466,8 +1467,8 @@ offset, epsilon coalescing or transparent stop. Sequential has at least two stop
 and exact endpoints 0 and 1. Diverging has at least three, exact endpoints and
 exactly one explicit neutral at **0.5**, with at least one stop on each side.
 Extra ordered stops on either side are permitted. There is no new arbitrary stop
-count cap: unknown-length construction grows fallibly, and actual preflight
-storage/work is bounded by the existing ledger. This is a general finite ordered
+count cap: unknown-length construction and preflight storage grow with real
+length checks and fallible reservations. This is a general finite ordered
 input, not public backend GradientStop or raw `(f64, RGB)` variants.
 
 `neutral()` is derived from the unique 0.5 stop, not separately editable storage.

@@ -1,5 +1,5 @@
 use super::*;
-use crate::font::canonical::OperationGenerationResources;
+use crate::font::canonical::OperationContext;
 use crate::layout::fit::{FitKind, FitScope, PlanError};
 use crate::layout::interior::{
     coordinate::Intrinsics, InteriorRoute, MarkPayload, OneCategoricalAxis,
@@ -42,8 +42,7 @@ fn native_bottom_conditions_keep_parent_trace_order_palette_sparse_connectors_an
             },
         ]);
     let inputs =
-        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new(), None)
-            .unwrap();
+        crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
     assert_eq!(
         inputs.route,
         InteriorRoute::OneCategoricalAxis(OneCategoricalAxis::Interaction)
@@ -73,14 +72,11 @@ fn native_bottom_conditions_keep_parent_trace_order_palette_sparse_connectors_an
         crate::Theme::Nature,
         crate::Theme::Science,
     ] {
-        let theme = preset
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        let theme = preset.resolve().unwrap();
+        let plot = crate::plots::shared_x::prepare_plot(&plot, &OperationContext::new(), None)
+            .unwrap()
+            .attach(plot.clone())
             .unwrap();
-        let plot =
-            crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new(), None)
-                .unwrap()
-                .attach(plot.clone())
-                .unwrap();
         let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
         for panel in [
             PanelBox::new(80.25, 550.75, 70.5, 410.25),
@@ -137,9 +133,9 @@ fn native_bottom_conditions_keep_parent_trace_order_palette_sparse_connectors_an
                 };
                 assert_eq!(payload.clip, panel);
                 assert_eq!(payload.traces.len(), prepared.traces.len());
-                let resources = OperationGenerationResources::new();
+                let resources = OperationContext::new();
                 let colors = prepared
-                    .resolved_colors(&plot, &theme, plot.data().with_axis_resources(&resources))
+                    .resolved_colors(&plot, &theme, plot.data().with_operation(&resources))
                     .unwrap();
                 for (actual, trace) in payload.traces.iter().zip(&prepared.traces) {
                     let key = trace
@@ -148,7 +144,7 @@ fn native_bottom_conditions_keep_parent_trace_order_palette_sparse_connectors_an
                         .as_deref()
                         .or(trace.identity.group.as_deref())
                         .unwrap();
-                    let color = colors.color(key, &resources).unwrap();
+                    let color = colors.color(key).unwrap();
                     assert_eq!(
                         actual.interval,
                         LineStyle::solid(crate::theme::color_from_rgb(color), 1.2)
@@ -222,12 +218,9 @@ fn native_condition_hard_intrinsics_and_exact_numeric_labels_reject_before_marks
     ])
     .erase();
     let inputs =
-        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new(), None)
-            .unwrap();
+        crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
     let plot = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let minimum = Intrinsics::prepared(&plot, &theme).unwrap().minimum(&plot);
     let hard = crate::layout::fit::intrinsic_widths(
         &theme,
@@ -241,11 +234,7 @@ fn native_condition_hard_intrinsics_and_exact_numeric_labels_reject_before_marks
     assert!(minimum.0 > 80.0);
     let scope = FitScope::new(
         &crate::layout::ComponentAddress::root()
-            .child(
-                crate::layout::AddressRole::PlotBody,
-                0,
-                &crate::font::canonical::OperationGenerationResources::new(),
-            )
+            .child(crate::layout::AddressRole::PlotBody, 0)
             .unwrap(),
         7,
     );
@@ -300,12 +289,8 @@ fn native_parent_feedback_freezes_actual_marks_axes_and_gutters_at_the_assigned_
             source = source.y_limits(0.0, 8.0);
         }
         let source = source.size(900, 700).erase();
-        let inputs = crate::plots::shared_x::prepare_plot(
-            &source,
-            &OperationGenerationResources::new(),
-            None,
-        )
-        .unwrap();
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         let range = inputs.axes[0].1.ranges[1];
         let plot = inputs.attach(source).unwrap();
         for preset in [
@@ -313,17 +298,11 @@ fn native_parent_feedback_freezes_actual_marks_axes_and_gutters_at_the_assigned_
             crate::Theme::Nature,
             crate::Theme::Science,
         ] {
-            let theme = preset
-                .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            let theme = preset.resolve().unwrap();
+            let plot = crate::plots::shared_x::prepare_plot(&plot, &OperationContext::new(), None)
+                .unwrap()
+                .attach(plot.clone())
                 .unwrap();
-            let plot = crate::plots::shared_x::prepare_plot(
-                &plot,
-                &OperationGenerationResources::new(),
-                None,
-            )
-            .unwrap()
-            .attach(plot.clone())
-            .unwrap();
             for cell in [
                 PanelBox::new(16.0, 625.0, 8.0, 390.0),
                 PanelBox::new(30.25, 800.5, 40.75, 610.0),
@@ -335,7 +314,7 @@ fn native_parent_feedback_freezes_actual_marks_axes_and_gutters_at_the_assigned_
                 let work = measurements::finish();
                 assert!(work.roots.len() >= 2);
                 assert_eq!(work.counters[Counter::LegacyPanelConstructor as usize], 0);
-                let final_plot = plan.plot_with_planned_limits(&plot, plot.data()).unwrap();
+                let final_plot = plan.plot_with_planned_limits(&plot);
                 let selected = final_plot
                     .measure_selected_interior(PlotRenderContext::new(
                         final_plot.data(),

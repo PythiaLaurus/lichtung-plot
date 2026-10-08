@@ -13,8 +13,6 @@ pub(crate) fn nearest_spatial_quanta(value: f64) -> Result<i64, Error> {
 pub(crate) fn ceil_spatial_quanta(value: f64) -> Result<i64, Error> {
     LayoutScalar::from_css_pixels(value, SpatialRounding::Ceil).map(|value| value.0)
 }
-#[cfg(test)]
-const TOPOLOGY_SLOT_LIMIT: u128 = 1_000_000;
 
 #[cfg(test)]
 thread_local! {
@@ -334,19 +332,15 @@ impl ComponentAddress {
         self.descendants().last().unwrap_or(&self.root).slot_index
     }
 
-    pub(crate) fn under_grid(
-        &self,
-        grid: AddressRole,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<Self, Error> {
+    pub(crate) fn under_grid(&self, grid: AddressRole) -> Result<Self, Error> {
         let [leaf] = self.descendants() else {
             return Err(Error::Render(
                 "child owner must be one root-local cell".into(),
             ));
         };
         Self::root()
-            .child(grid, 0, resources)?
-            .child(leaf.role, leaf.slot_index, resources)
+            .child(grid, 0)?
+            .child(leaf.role, leaf.slot_index)
     }
     fn is_within(&self, owner: &Self) -> bool {
         self.root == owner.root && self.descendants().starts_with(owner.descendants())
@@ -361,34 +355,16 @@ impl ComponentAddress {
         }
     }
 
-    pub(crate) fn child(
-        &self,
-        role: AddressRole,
-        slot_index: u32,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<Self, Error> {
+    pub(crate) fn child(&self, role: AddressRole, slot_index: u32) -> Result<Self, Error> {
         let count = self
             .descendants()
             .len()
             .checked_add(1)
             .ok_or_else(|| Error::Render("component address length overflowed".into()))?;
-        let bytes = count
-            .checked_mul(std::mem::size_of::<AddressSegment>())
-            .and_then(|bytes| {
-                bytes.checked_add(
-                    std::mem::size_of::<Vec<AddressSegment>>() + 2 * std::mem::size_of::<usize>(),
-                )
-            })
-            .and_then(|bytes| u64::try_from(bytes).ok())
-            .ok_or_else(|| Error::Render("component address storage overflowed".into()))?;
+
         // The immutable path owns its Vec header and each actual segment. A
         // scope, failure, or feedback clone only shares that admitted payload.
-        resources
-            .claim_slots(count as u128 + 1)
-            .map_err(|error| Error::Render(format!("component address records: {error:?}")))?;
-        resources
-            .claim_bytes(bytes)
-            .map_err(|error| Error::Render(format!("component address bytes: {error:?}")))?;
+
         let mut descendants = Vec::new();
         descendants.try_reserve_exact(count).map_err(|error| {
             Error::Render(format!(
@@ -437,36 +413,12 @@ impl AddressRole {
     }
 }
 
-struct ResourceState {
-    generation_resources: crate::font::canonical::OperationGenerationResources,
-    font_resources: crate::font::canonical::OperationFontResources,
-}
-
-impl ResourceState {
-    fn new() -> Self {
-        let font_resources = crate::font::canonical::OperationFontResources::new();
-        #[cfg(test)]
-        crate::orchestrator::measurements::resources(font_resources.clone());
-        Self {
-            generation_resources: font_resources.generation_resources(),
-            font_resources,
-        }
-    }
-}
-
 pub(crate) struct PreparedStage<'a> {
-    resources: &'a mut ResourceState,
+    resources: &'a mut crate::font::canonical::OperationContext,
     reservations: &'a mut ReservationDriver,
 }
 
 impl PreparedStage<'_> {
-    pub(crate) fn claim_topology_slots(&mut self, amount: u128) -> Result<(), Error> {
-        self.resources
-            .generation_resources
-            .claim_topology_slots(amount)
-            .map_err(|error| Error::Render(format!("layout topology admission: {error:?}")))
-    }
-
     pub(crate) fn reserve_scalar_presence_map(&mut self) -> Result<Vec<u64>, Error> {
         const SCALAR_MAP_WORDS: usize = 0x11_0000 / u64::BITS as usize;
         let mut presence = Vec::new();
@@ -506,38 +458,16 @@ impl PreparedStage<'_> {
             .map_err(|error| reservation_error(ReservationStage::Prepared, payload, error))
     }
 
-    pub(crate) fn font_resources(&self) -> crate::font::canonical::OperationFontResources {
-        self.resources.font_resources.clone()
-    }
-
-    pub(crate) fn generation_resources(
-        &self,
-    ) -> crate::font::canonical::OperationGenerationResources {
-        self.resources.generation_resources.clone()
+    pub(crate) fn operation(&self) -> crate::font::canonical::OperationContext {
+        self.resources.clone()
     }
 }
 
 pub(crate) struct FinalStage<'a> {
     reservations: &'a mut ReservationDriver,
-    resources: &'a ResourceState,
 }
 
 impl FinalStage<'_> {
-    pub(crate) fn claim_capture_bytes(&self, bytes: usize, payload: &str) -> Result<(), Error> {
-        let bytes = u64::try_from(bytes)
-            .map_err(|_| Error::Render(format!("{payload}: capture byte count overflow")))?;
-        self.resources
-            .font_resources
-            .claim_bytes(bytes)
-            .map_err(|error| Error::Render(format!("{payload}: {error}")))
-    }
-    pub(crate) fn claim_capture_call(&self) -> Result<(), Error> {
-        self.resources
-            .generation_resources
-            .claim_slots(1)
-            .map_err(|error| Error::Render(format!("prepared scene call admission: {error:?}")))
-    }
-
     pub(crate) fn reserve_capture<T>(
         &mut self,
         values: &mut Vec<T>,
@@ -552,14 +482,7 @@ impl FinalStage<'_> {
             return Ok(());
         }
         let capacity = needed.max(values.capacity().saturating_mul(2));
-        let bytes = (capacity - values.capacity())
-            .checked_mul(std::mem::size_of::<T>())
-            .and_then(|bytes| u64::try_from(bytes).ok())
-            .ok_or_else(|| Error::Render(format!("{payload}: capture byte count overflow")))?;
-        self.resources
-            .font_resources
-            .claim_bytes(bytes)
-            .map_err(|error| Error::Render(format!("{payload}: {error}")))?;
+
         self.reserve_final(values, capacity - values.len(), payload)
     }
 
@@ -761,7 +684,7 @@ pub(crate) fn required_length(value: f64) -> Result<f64, Error> {
 /// Prepare once, coordinate at most eight complete rounds, then freeze once.
 #[expect(
     clippy::too_many_lines,
-    reason = "preparation, cumulative round admission, convergence, and finalization stay ordered"
+    reason = "preparation, bounded feedback, convergence, and finalization stay ordered"
 )]
 pub(crate) fn plan_exact_root<Plan, FinalPlan, Prepared>(
     width: impl Into<Option<u32>>,
@@ -803,13 +726,13 @@ pub(crate) fn plan_exact_root<Plan, FinalPlan, Prepared>(
             height: dimension(height)?,
         },
     };
-    let mut resources = ResourceState::new();
+    let mut resources = crate::font::canonical::OperationContext::new();
     let mut reservations = ReservationDriver::new();
     let mut prepared_stage = PreparedStage {
         resources: &mut resources,
         reservations: &mut reservations,
     };
-    prepared_stage.claim_topology_slots(1)?;
+
     #[cfg(test)]
     let preparation_timer = crate::orchestrator::measurements::Timer::new(0);
     let prepared = prepare(&mut prepared_stage)?;
@@ -827,21 +750,11 @@ pub(crate) fn plan_exact_root<Plan, FinalPlan, Prepared>(
         "measured exact-root plan",
     )?;
     let measured = loop {
-        resources
-            .generation_resources
-            .claim_calls(1)
-            .map_err(|error| {
-                Error::Render(format!("root measurement call admission: {error:?}"))
-            })?;
         #[cfg(test)]
         let _measurement_timer = crate::orchestrator::measurements::root_round(history.len());
         #[cfg(test)]
         ROOT_FEEDBACK_ROUNDS.with(|rounds| rounds.set(rounds.get() + 1));
-        let mut round = FeedbackRound::new(
-            history.last(),
-            resources.generation_resources.clone(),
-            history.len(),
-        )?;
+        let mut round = FeedbackRound::new(history.last(), history.len())?;
         if let Some(width) = assigned.requested_dimensions().0 {
             round.observe_number(f64::from(width))?;
         }
@@ -869,19 +782,19 @@ pub(crate) fn plan_exact_root<Plan, FinalPlan, Prepared>(
         }
         // Automatic width is chosen by initial bottom-up composition exactly once.
         assigned.width = Some(measured_width);
-        let state = round.finish()?;
-        if let Some(error) = state.terminal_error(&resources.generation_resources)? {
+        let state = round.finish();
+        if let Some(error) = state.terminal_error() {
             return Err(error);
         }
         // Measure and validate the current assignment before accepting its plan.
         // Observation equality would require an unconditional duplicate pass.
-        if state.feedback_unchanged(&resources.generation_resources)? {
-            if let Some(error) = state.unchanged_error(&resources.generation_resources)? {
+        if state.feedback_unchanged()? {
+            if let Some(error) = state.unchanged_error() {
                 return Err(error);
             }
             break result;
         }
-        if state.repeats_history(&history, &resources.generation_resources)? {
+        if state.repeats_history(&history)? {
             return Err(Error::Render("layout root feedback cycle detected".into()));
         }
         if history.len() == 7 {
@@ -921,7 +834,6 @@ pub(crate) fn plan_exact_root<Plan, FinalPlan, Prepared>(
     let mut allocation = Vec::new();
     let mut final_stage = FinalStage {
         reservations: &mut reservations,
-        resources: &resources,
     };
     final_stage.reserve_final(&mut allocation, 1, "frozen exact-root plan")?;
     let plan = finalize(&prepared, assigned, measured.plan, &mut final_stage)?;

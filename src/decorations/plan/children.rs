@@ -41,23 +41,20 @@ impl Inputs {
         owner: &ComponentAddress,
         round: &FeedbackRound,
     ) -> Result<Self, Error> {
-        let environment = context.theme.prepared_font_environment()?;
-        let resources = environment.generation_resources();
-        let data = context.data.with_axis_resources(&resources);
-        let theme = context.theme.admitted_clone(data)?;
+        let theme = context.theme.clone();
         let grid_role = if owner.leaf_role() == AddressRole::CanvasCell {
             AddressRole::CanvasGrid
         } else {
             AddressRole::FacetGrid
         };
-        let grid_owner = owner.under_grid(grid_role, &resources)?;
+        let grid_owner = owner.under_grid(grid_role)?;
         let owners = [owner.clone(), grid_owner];
         Ok(Self {
             geometry: geometry(context.panel),
             axis_label_width: context.axis_label_width.to_bits(),
             content_height: context.content_height,
             fill_content_height: context.fill_content_height,
-            plot: plot.retain_composed_inputs(environment)?,
+            plot: plot.retain_composed_inputs()?,
             theme,
             scales: context.facet_scales(),
             feedback: round.child_inputs(&owners)?,
@@ -72,41 +69,21 @@ impl Inputs {
         owner: &ComponentAddress,
         round: &FeedbackRound,
     ) -> Result<bool, Error> {
-        let resources = context
-            .theme
-            .prepared_font_environment()?
-            .generation_resources();
         Ok(self.owners[0] == *owner
             && self.geometry == geometry(context.panel)
             && self.axis_label_width == context.axis_label_width.to_bits()
             && self.content_height == context.content_height
             && self.fill_content_height == context.fill_content_height
-            && plot
-                .same_composed_inputs(&self.plot, context.data.with_axis_resources(&resources))?
-            && self.theme.same(context.theme, &resources)?
+            && plot.same_composed_inputs(&self.plot)
+            && self.theme.same_validated(context.theme)?
             && self.scales == context.facet_scales()
-            && round.child_inputs_equal(&self.feedback, &self.owners)?
-            && round.child_stable(&self.owners)?)
+            && round.child_inputs_equal(&self.feedback, &self.owners)
+            && round.child_stable(&self.owners))
     }
 }
 
 fn geometry(panel: PanelBox) -> [u64; 4] {
     [panel.x0, panel.x1, panel.y0, panel.y1].map(f64::to_bits)
-}
-
-fn retain_stable<T>(
-    entries: &mut Vec<T>,
-    mut stable: impl FnMut(&T) -> Result<bool, Error>,
-) -> Result<(), Error> {
-    let mut retained = 0;
-    for examined in 0..entries.len() {
-        if stable(&entries[examined])? {
-            entries.swap(retained, examined);
-            retained += 1;
-        }
-    }
-    entries.truncate(retained);
-    Ok(())
 }
 
 struct Measurement {
@@ -196,38 +173,28 @@ impl<'a> ChildPlans<'a> {
         let owner = ComponentAddress::root().child(
             AddressRole::CanvasCell,
             u32::try_from(index).map_err(|_| Error::Render("canvas address overflowed".into()))?,
-            &theme.prepared_font_environment()?.generation_resources(),
         )?;
         let context = PlotRenderContext::new(plot.data(), panel, theme);
-        crate::layout::fit::measured(self.measure(plot, context, &owner, phase, round, |call| {
-            plot.preflight_measurement_in_call(
-                plot.kind(),
-                panel,
-                theme,
-                &crate::layout::fit::ROOT_SCOPE,
-                call,
-            )
+        crate::layout::fit::measured(self.measure(plot, context, &owner, phase, round, || {
+            plot.preflight_measurement(plot.kind(), panel, theme, &crate::layout::fit::ROOT_SCOPE)
         }))
         .map_err(crate::layout::fit::PlanError::into_error)
     }
 
     /// Called after all siblings and parent requests have been measured. A
     /// provisional result must not become an active entry for the next round.
-    pub(crate) fn finish_round(&mut self, round: &FeedbackRound) -> Result<(), Error> {
-        if round.child_stable(&[ComponentAddress::root()])? {
+    pub(crate) fn finish_round(&mut self, round: &FeedbackRound) {
+        if round.child_stable(&[ComponentAddress::root()]) {
             // The driver will freeze this plan. Do not retain discarded probes
             // and child keys through final capture and output admission.
             self.measurements.clear();
             self.panels.clear();
-            return Ok(());
+            return;
         }
-        retain_stable(&mut self.measurements, |entry| {
-            round.child_stable(&entry.inputs.owners)
-        })?;
-        retain_stable(&mut self.panels, |entry| {
-            round.child_stable(&entry.inputs.owners)
-        })?;
-        Ok(())
+        self.measurements
+            .retain(|entry| round.child_stable(&entry.inputs.owners));
+        self.panels
+            .retain(|entry| round.child_stable(&entry.inputs.owners));
     }
 
     pub(crate) fn measure(
@@ -237,25 +204,12 @@ impl<'a> ChildPlans<'a> {
         owner: &ComponentAddress,
         phase: MeasurementPhase,
         round: &FeedbackRound,
-        measure: impl FnOnce(
-            &crate::font::canonical::MeasurementCall,
-        ) -> Result<FitOutcome<PlotRenderResult>, Error>,
+        measure: impl FnOnce() -> Result<FitOutcome<PlotRenderResult>, Error>,
     ) -> Result<FitOutcome<Arc<PlotRenderResult>>, Error> {
         self.validate_owner(owner)?;
-        let call = context
-            .theme
-            .prepared_font_environment()?
-            .claim_measurement_call()
-            .map_err(|error| {
-                Error::Render(format!("child measurement call admission: {error:?}"))
-            })?;
+
         if reuse_enabled() {
             for entry in &self.measurements {
-                context
-                    .theme
-                    .prepared_font_environment()?
-                    .claim_processing_visits(1)
-                    .map_err(|error| Error::Render(format!("child lookup visits: {error:?}")))?;
                 if entry.phase == phase && entry.inputs.matches(plot, context, owner, round)? {
                     #[cfg(test)]
                     child_cache(owner, phase.label(), Counter::ChildCacheHit);
@@ -267,34 +221,17 @@ impl<'a> ChildPlans<'a> {
         child_cache(owner, phase.label(), Counter::ChildCacheMiss);
         #[cfg(test)]
         CHILD_MEASUREMENTS.with(|events| events.borrow_mut().push((owner.clone(), phase.label())));
-        let result = match measure(&call)? {
-            FitOutcome::Measured(result) => {
-                let resources = context
-                    .theme
-                    .prepared_font_environment()?
-                    .generation_resources();
-                context
-                    .data
-                    .with_axis_resources(&resources)
-                    .source_arc(result)?
-            }
+        let result = match measure()? {
+            FitOutcome::Measured(result) => crate::data::source::source_arc(result)?,
             FitOutcome::Miss(miss) => return Ok(FitOutcome::Miss(miss)),
         };
         if !reuse_enabled() {
             return Ok(FitOutcome::Measured(result));
         }
-        context
-            .theme
-            .prepared_font_environment()?
-            .claim_cache_entries(1)
-            .map_err(|error| Error::Render(format!("child cache admission: {error:?}")))?;
+
         self.measurements
             .retain(|entry| entry.inputs.owners[0] != *owner || entry.phase != phase);
-        crate::render::backend::reserve_text_records(
-            &mut self.measurements,
-            1,
-            context.theme.prepared_font_environment()?,
-        )?;
+        crate::render::backend::reserve_text_records(&mut self.measurements, 1)?;
         self.measurements.push(Measurement {
             inputs: Inputs::new(plot, context, owner, round)?,
             phase,
@@ -313,15 +250,9 @@ impl<'a> ChildPlans<'a> {
         owner: &ComponentAddress,
     ) -> Result<FitOutcome<Arc<PanelPlan>>, Error> {
         self.validate_owner(owner)?;
-        let environment = context.theme.prepared_font_environment()?;
-        let call = environment
-            .claim_measurement_call()
-            .map_err(|error| Error::Render(format!("child panel call admission: {error:?}")))?;
+
         if reuse_enabled() {
             for entry in &self.panels {
-                environment
-                    .claim_processing_visits(1)
-                    .map_err(|error| Error::Render(format!("child lookup visits: {error:?}")))?;
                 if entry.role == role
                     && match (
                         entry.legend_entries.as_deref(),
@@ -332,11 +263,6 @@ impl<'a> ChildPlans<'a> {
                             let mut equal = a.len() == b.len();
                             if equal {
                                 for (a, b) in a.iter().zip(b) {
-                                    environment.claim_processing_visits(1).map_err(|error| {
-                                        Error::Render(format!(
-                                            "child legend lookup visits: {error:?}"
-                                        ))
-                                    })?;
                                     if !a.same_child_input(b) {
                                         equal = false;
                                         break;
@@ -371,15 +297,8 @@ impl<'a> ChildPlans<'a> {
             legend_entries.map(AsRef::as_ref),
             round,
             owner,
-            &call,
         )? {
-            FitOutcome::Measured(result) => {
-                let resources = environment.generation_resources();
-                context
-                    .data
-                    .with_axis_resources(&resources)
-                    .source_arc(result)?
-            }
+            FitOutcome::Measured(result) => crate::data::source::source_arc(result)?,
             FitOutcome::Miss(miss) => return Ok(FitOutcome::Miss(miss)),
         };
         if !reuse_enabled() {
@@ -388,11 +307,8 @@ impl<'a> ChildPlans<'a> {
         self.panels.retain(|entry| entry.inputs.owners[0] != *owner);
         if let Some(feedback) = round.retain_child_feedback(checkpoint)? {
             let inputs = Inputs::new(plot, context, owner, round)?;
-            if round.child_stable(&inputs.owners)? {
-                environment
-                    .claim_cache_entries(1)
-                    .map_err(|error| Error::Render(format!("child cache admission: {error:?}")))?;
-                crate::render::backend::reserve_text_records(&mut self.panels, 1, environment)?;
+            if round.child_stable(&inputs.owners) {
+                crate::render::backend::reserve_text_records(&mut self.panels, 1)?;
                 self.panels.push(Panel {
                     inputs,
                     role,
@@ -425,20 +341,14 @@ mod tests {
             crate::NumericValues::new("y", [0.0, 1.0]),
         )
         .erase();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         theme.prepare_font_environment().unwrap();
         let root = crate::layout::plan_exact_root(
             800,
             600,
             |_| Ok(()),
             |(), assigned, round| {
-                let owner = ComponentAddress::root().child(
-                    AddressRole::CanvasCell,
-                    0,
-                    round.resources(),
-                )?;
+                let owner = ComponentAddress::root().child(AddressRole::CanvasCell, 0)?;
                 let context = PlotRenderContext::new(
                     source.data(),
                     crate::layout::PanelBox::new(20.0, 400.0, 20.0, 500.0),
@@ -463,35 +373,28 @@ mod tests {
     }
 
     #[test]
-    fn changed_child_tick_stack_cannot_bypass_content_admission() {
+    fn changed_child_tick_stack_invalidates_the_retained_input() {
         let source = Plot::scatter(
             crate::NumericValues::new("x", [0.0, 1.0]),
             crate::NumericValues::new("y", [0.0, 1.0]),
         )
         .erase();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         theme.prepare_font_environment().unwrap();
         crate::layout::plan_exact_root(
             800,
             600,
             |_| Ok(()),
             |(), assigned, round| {
-                let owner = ComponentAddress::root().child(
-                    AddressRole::CanvasCell,
-                    0,
-                    round.resources(),
-                )?;
+                let owner = ComponentAddress::root().child(AddressRole::CanvasCell, 0)?;
                 let context = PlotRenderContext::new(
                     source.data(),
                     crate::layout::PanelBox::new(20.0, 400.0, 20.0, 500.0),
                     &theme,
                 );
                 let key = Inputs::new(&source, context, &owner, round)?;
-                let resources = theme.prepared_font_environment()?.generation_resources();
-                let mut changed =
-                    theme.admitted_clone(source.data().with_axis_resources(&resources))?;
+
+                let mut changed = theme.clone();
                 changed.typography.axes.tick_label.stack = crate::font::canonical::FontStack::new(
                     [crate::font::canonical::FontFamily::named("Noto Sand")?]
                         .into_iter()
@@ -503,31 +406,14 @@ mod tests {
                 )?;
                 let changed_context =
                     PlotRenderContext::new(source.data(), context.panel, &changed);
-                let before = resources.usage().unwrap().1;
+
                 assert!(!key.matches(&source, changed_context, &owner, round)?);
-                let work = resources.usage().unwrap().1 - before;
+
                 // Four scale/accent, seven axis and two point-ratio witnesses,
                 // then four shared immutable role stacks
                 // (one each), then the changed tick role's first name through its
                 // ninth/terminating byte (12). Group nesting adds no extra visit.
-                assert_eq!(
-                    work,
-                    4 + 7 + 13 + 19 + 2 + 4 + 12,
-                    "later role names and feedback tails remain unexamined"
-                );
-                for remaining in [0, work - 1, work] {
-                    let before = resources.usage().unwrap().1;
-                    let bytes = resources.byte_usage().unwrap();
-                    resources.set_test_limits(before + remaining, bytes);
-                    let result = key.matches(&source, changed_context, &owner, round);
-                    if remaining == work {
-                        assert!(!result?);
-                    } else {
-                        assert!(result.is_err());
-                    }
-                    assert_eq!(resources.usage().unwrap().1 - before, remaining);
-                    assert_eq!(resources.byte_usage().unwrap(), bytes);
-                }
+
                 Ok(crate::layout::MeasuredLayout::new(assigned, ()))
             },
             |(), _, (), _| Ok(()),
@@ -536,19 +422,8 @@ mod tests {
     }
 
     #[test]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one exact copy boundary verifies all retained font, scale and relative payload addresses"
-    )]
     fn complete_theme_clone_shares_all_handles_without_payload_storage() {
-        let source = Plot::scatter(
-            crate::NumericValues::new("x", [0.0, 1.0]),
-            crate::NumericValues::new("y", [0.0, 1.0]),
-        )
-        .erase();
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         for (index, stack) in [
             &mut theme.typography.root.title.stack,
             &mut theme.typography.root.subtitle.stack,
@@ -577,27 +452,10 @@ mod tests {
         // Eighteen font handles plus qualitative, sequential, diverging and
         // accent handles, six axis ratios and two point-outline ratios.
         // Inline group structure adds no separately shared node.
-        let work = 60;
-        for remaining in [0, work - 1, work] {
-            let resources = crate::font::canonical::OperationGenerationResources::with_test_limits(
-                remaining, 0,
-            );
-            resources.claim_slots(1_000_000).unwrap();
-            let copy = theme.admitted_clone(source.data().with_axis_resources(&resources));
-            assert_eq!(resources.byte_usage().unwrap(), 0);
-            assert_eq!(resources.usage().unwrap().0, 1_000_000);
-            if remaining < work {
-                assert!(copy
-                    .unwrap_err()
-                    .to_string()
-                    .contains("root processing visits"));
-                // The complete handle claim refuses atomically before cloning.
-                assert_eq!(resources.usage().unwrap().1, 0);
-                continue;
-            }
-            let copy = copy.unwrap();
+        {
+            let copy = theme.clone();
             assert_eq!(copy, theme);
-            assert_eq!(resources.usage().unwrap().1, work);
+
             for (left, right) in theme
                 .composition
                 .retained_relationships()
@@ -674,15 +532,9 @@ mod tests {
             crate::NumericValues::new("y", [0.0, 1.0]),
         )
         .erase();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let owner = ComponentAddress::root()
-            .child(
-                AddressRole::FacetCell,
-                0,
-                &crate::font::canonical::OperationGenerationResources::new(),
-            )
+            .child(AddressRole::FacetCell, 0)
             .unwrap();
         let mut children = ChildPlans::facets(&source);
         let mut produced = 0;
@@ -693,7 +545,7 @@ mod tests {
             |(), assigned, round| {
                 let panel = PanelBox::new(10.0, 200.0, 30.0, 400.0);
                 let context = PlotRenderContext::new(source.data(), panel, &theme);
-                let mut produce = |_: &crate::font::canonical::MeasurementCall| {
+                let mut produce = || {
                     produced += 1;
                     Ok(FitOutcome::Measured(PlotRenderResult::new(
                         crate::layout::Layout::envelope(panel),
@@ -769,22 +621,16 @@ mod tests {
     }
 
     #[test]
-    fn child_measurement_hits_and_insertions_use_independent_cumulative_limits() {
-        for cache_limit in [false, true] {
+    fn child_measurement_reuses_hits_and_replaces_changed_inputs() {
+        {
             let source = Plot::scatter(
                 crate::NumericValues::new("x", [0.0, 1.0]),
                 crate::NumericValues::new("y", [0.0, 1.0]),
             )
             .erase();
-            let theme = crate::Theme::Publication
-                .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                .unwrap();
+            let theme = crate::Theme::Publication.resolve().unwrap();
             let owner = ComponentAddress::root()
-                .child(
-                    AddressRole::FacetCell,
-                    0,
-                    &crate::font::canonical::OperationGenerationResources::new(),
-                )
+                .child(AddressRole::FacetCell, 0)
                 .unwrap();
             let mut children = ChildPlans::facets(&source);
             let mut produced = 0;
@@ -798,7 +644,7 @@ mod tests {
                         PanelBox::new(10.0, 200.0, 30.0, 400.0),
                         &theme,
                     );
-                    let mut produce = |_: &crate::font::canonical::MeasurementCall| {
+                    let mut produce = || {
                         produced += 1;
                         Ok(FitOutcome::Measured(PlotRenderResult::new(
                             crate::layout::Layout::envelope(crate::layout::PanelBox::new(
@@ -816,17 +662,7 @@ mod tests {
                         &mut produce,
                     ))
                     .map_err(crate::layout::fit::PlanError::into_error)?;
-                    let resources = theme.prepared_font_environment()?.generation_resources();
-                    if cache_limit {
-                        resources
-                            .claim_cache_entries(1_000_000 - resources.call_cache_usage().1)
-                            .unwrap();
-                    } else {
-                        resources
-                            .claim_calls(999_999 - resources.call_cache_usage().0)
-                            .unwrap();
-                    }
-                    let entries = resources.call_cache_usage().1;
+
                     let hit = crate::layout::fit::measured(children.measure(
                         &source,
                         context,
@@ -837,57 +673,41 @@ mod tests {
                     ))
                     .map_err(crate::layout::fit::PlanError::into_error)?;
                     assert!(Arc::ptr_eq(&first, &hit));
-                    assert_eq!(resources.call_cache_usage().1, entries);
-                    let error = children
-                        .measure(
-                            &source,
-                            context.with_axis_label_width(1.0),
-                            &owner,
-                            MeasurementPhase::Probe,
-                            round,
-                            &mut produce,
-                        )
-                        .err()
-                        .expect("call or cache refusal");
-                    assert!(error.to_string().contains(if cache_limit {
-                        "root-local cache entries"
-                    } else {
-                        "measurement/intrinsic call attempts"
-                    }));
+
+                    let changed = crate::layout::fit::measured(children.measure(
+                        &source,
+                        context.with_axis_label_width(1.0),
+                        &owner,
+                        MeasurementPhase::Probe,
+                        round,
+                        &mut produce,
+                    ))
+                    .map_err(crate::layout::fit::PlanError::into_error)?;
                     assert_eq!(children.measurements.len(), 1);
-                    assert!(Arc::ptr_eq(&first, &children.measurements[0].result));
+                    assert!(!Arc::ptr_eq(&first, &changed));
+                    assert!(Arc::ptr_eq(&changed, &children.measurements[0].result));
                     Ok(crate::layout::MeasuredLayout::new(assigned, ()))
                 },
                 |(), _, (), _| Ok(()),
             )
             .unwrap();
-            assert_eq!(produced, if cache_limit { 2 } else { 1 });
+            assert_eq!(produced, 2);
         }
     }
 
     #[test]
-    fn later_panel_cache_replay_record_refusal_is_fatal_without_remeasurement() {
+    fn later_panel_cache_replays_feedback_without_remeasurement() {
         let source = Plot::scatter(
             crate::NumericValues::new("x", [0.0, 1.0]),
             crate::NumericValues::new("y", [0.0, 1.0]),
         )
         .erase();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let owner = ComponentAddress::root()
-            .child(
-                AddressRole::FacetCell,
-                0,
-                &crate::font::canonical::OperationGenerationResources::new(),
-            )
+            .child(AddressRole::FacetCell, 0)
             .unwrap();
         let sibling = ComponentAddress::root()
-            .child(
-                AddressRole::FacetCell,
-                1,
-                &crate::font::canonical::OperationGenerationResources::new(),
-            )
+            .child(AddressRole::FacetCell, 1)
             .unwrap();
         let mut children = ChildPlans::facets(&source);
         let mut rounds = 0;
@@ -895,8 +715,8 @@ mod tests {
         let result = crate::layout::plan_exact_root(
             800,
             600,
-            |stage| Ok(stage.generation_resources()),
-            |resources, assigned, round| {
+            |_| Ok(()),
+            |(), assigned, round| {
                 rounds += 1;
                 let context = PlotRenderContext::new(
                     source.data(),
@@ -927,23 +747,18 @@ mod tests {
                         feedback: round.retain_child_feedback(start)?.unwrap(),
                     });
                 } else {
-                    resources
-                        .claim_slots(1_000_000 - resources.usage().unwrap().0)
-                        .unwrap();
                     CHILD_MEASUREMENTS.with(|events| events.borrow_mut().clear());
-                    let Err(error) = children.plan(
+                    let replayed = crate::layout::fit::measured(children.plan(
                         &source,
                         LegendRole::Suppressed,
                         context,
                         None,
                         round,
                         &owner,
-                    ) else {
-                        panic!("replay must refuse its observation record");
-                    };
-                    assert!(error.to_string().contains("retained planning records"));
+                    ))
+                    .map_err(crate::layout::fit::PlanError::into_error)?;
+                    assert!(Arc::ptr_eq(&replayed, &children.panels[0].result));
                     CHILD_MEASUREMENTS.with(|events| assert!(events.borrow().is_empty()));
-                    return Err(error);
                 }
                 round.request_insets(
                     &sibling,
@@ -953,14 +768,14 @@ mod tests {
                 )?;
                 Ok(crate::layout::MeasuredLayout::new(assigned, ()))
             },
-            |_, _, (), _| {
+            |(), _, (), _| {
                 finalized = true;
                 Ok(())
             },
         );
-        assert!(result.is_err());
+        result.unwrap();
         assert_eq!(rounds, 2);
-        assert!(!finalized);
+        assert!(finalized);
     }
 
     #[test]
@@ -974,22 +789,12 @@ mod tests {
             crate::NumericValues::new("y", [0.0, 1.0]),
         )
         .erase();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let owner = ComponentAddress::root()
-            .child(
-                AddressRole::CanvasCell,
-                0,
-                &crate::font::canonical::OperationGenerationResources::new(),
-            )
+            .child(AddressRole::CanvasCell, 0)
             .unwrap();
         let neighbor = ComponentAddress::root()
-            .child(
-                AddressRole::CanvasCell,
-                1,
-                &crate::font::canonical::OperationGenerationResources::new(),
-            )
+            .child(AddressRole::CanvasCell, 1)
             .unwrap();
         crate::layout::plan_exact_root(
             800,
@@ -1001,7 +806,7 @@ mod tests {
                 assert!(Inputs::new(
                     &source,
                     context,
-                    &owner.child(AddressRole::CanvasCell, 1, round.resources())?,
+                    &owner.child(AddressRole::CanvasCell, 1)?,
                     round
                 )
                 .is_err());
@@ -1081,7 +886,7 @@ mod tests {
                         "discard test request",
                     )?;
                     assert!(matches!(
-                        round.finish_trial(checkpoint)?,
+                        round.finish_trial(checkpoint),
                         crate::layout::kernel::TrialOutcome::Miss(_)
                     ));
                 }

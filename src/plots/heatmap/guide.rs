@@ -13,10 +13,10 @@ pub(super) fn measure(
     minimum: f64,
     theme: &ResolvedTheme,
     scope: &FitScope,
-    data: crate::data::PlotData<'_>,
+
     content_plot: Option<&crate::Plot>,
 ) -> Result<(PanelBox, MeasuredContinuousGuide), PlanError> {
-    let semantics = marks.guide_semantics(theme, data)?;
+    let semantics = marks.guide_semantics(theme)?;
     let indices: &[usize] = if crate::decorations::legend::descriptor::same_value(
         semantics.domain.0,
         semantics.domain.1,
@@ -32,18 +32,19 @@ pub(super) fn measure(
         &[0, 1]
     };
     let descriptor = crate::decorations::legend::descriptor::ContinuousDescriptor {
-        field: data.copy_source_string(&marks.color_label)?,
-        title: data.copy_source_string(&marks.color_label)?,
-        stops: data.collect_source(marks.colorbar_stops.iter().copied().map(Ok))?,
+        field: crate::data::source::copy_source_string(&marks.color_label)?,
+        title: crate::data::source::copy_source_string(&marks.color_label)?,
+        stops: crate::data::source::collect_source(marks.colorbar_stops.iter().copied().map(Ok))?,
         center: semantics.selection.center(),
         selection: semantics.selection,
         missing: semantics.missing,
         domain: semantics.domain,
         exact: true,
-        labels: data.collect_source(indices.iter().map(|&index| {
-            data.claim_source_visits(1)?;
-            data.copy_source_string(&marks.colorbar_values[index])
-        }))?,
+        labels: crate::data::source::collect_source(
+            indices.iter().map(|&index| {
+                crate::data::source::copy_source_string(&marks.colorbar_values[index])
+            }),
+        )?,
     };
     crate::layout::interior::guide::continuous_right(
         &descriptor,
@@ -51,7 +52,6 @@ pub(super) fn measure(
         minimum,
         theme,
         scope,
-        data,
         content_plot,
     )
 }
@@ -60,11 +60,9 @@ pub(super) fn select(
     guide: &MeasuredContinuousGuide,
     body: PanelBox,
     theme: &ResolvedTheme,
-    data: crate::data::PlotData<'_>,
 ) -> Result<LegendDrawPlan, Error> {
     guide.select(
         body.x1 + theme.legend_outside_gap()?,
         body.y0 + (body.height() - guide.height) / 2.0,
-        data,
     )
 }

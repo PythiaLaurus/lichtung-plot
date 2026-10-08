@@ -753,41 +753,29 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.caption.as_deref()
     }
 
-    pub(crate) fn resolve_label(&self, raw: &str) -> String {
+    pub(crate) fn resolve_label(&self, raw: &str) -> Result<String, Error> {
         self.labels.resolve(raw)
-    }
-
-    pub(crate) fn resolve_source_label(
-        &self,
-        raw: &str,
-        data: crate::data::PlotData<'_>,
-    ) -> Result<String, Error> {
-        self.labels.resolve_source(raw, Some(data))
     }
 
     pub(crate) fn resolve_axis_label_domain<'b>(
         &self,
         domain: &str,
         raw_labels: impl IntoIterator<Item = &'b str>,
-        data: crate::data::PlotData<'_>,
     ) -> Result<Vec<String>, Error> {
-        self.labels
-            .resolve_domain_source(domain, raw_labels, Some(data))
+        self.labels.resolve_domain(domain, raw_labels)
     }
 
     pub(crate) fn prepare_axis_labels(
         &self,
-        data: crate::data::PlotData<'_>,
+
         policy: Option<&crate::Labels>,
     ) -> Result<[String; 2], Error> {
         let mut labels = [String::new(), String::new()];
         for (target, (raw, inferred)) in labels.iter_mut().zip(self.axis_label_sources(self.kind)) {
             *target = if inferred {
-                policy
-                    .unwrap_or(&self.labels)
-                    .resolve_source(raw, Some(data))?
+                policy.unwrap_or(&self.labels).resolve(raw)?
             } else {
-                data.copy_source_string(raw)?
+                crate::data::source::copy_source_string(raw)?
             };
         }
         Ok(labels)
@@ -814,7 +802,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         );
         let [x, y] = self.axis_label_sources(kind).map(|(raw, inferred)| {
             if inferred {
-                self.resolve_label(raw)
+                self.resolve_label(raw).expect("label allocation")
             } else {
                 raw.to_owned()
             }
@@ -872,15 +860,13 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     pub(crate) fn prepare_color_label(
         &self,
-        data: crate::data::PlotData<'_>,
+
         policy: Option<&crate::Labels>,
     ) -> Result<String, Error> {
         if let Some(label) = self.color_label_text() {
-            data.copy_source_string(label)
+            crate::data::source::copy_source_string(label)
         } else if let Some(values) = self.color_values() {
-            policy
-                .unwrap_or(&self.labels)
-                .resolve_source(values.name(), Some(data))
+            policy.unwrap_or(&self.labels).resolve(values.name())
         } else {
             Ok(String::new())
         }
@@ -914,7 +900,6 @@ impl<K: crate::kind::Marker> Plot<K> {
     pub(crate) fn collective_legend_identity(
         &self,
         pair: &crate::data::CollectivePair,
-        data: crate::data::PlotData<'_>,
     ) -> Result<crate::decorations::legend::LegendIdentity, Error> {
         match (
             self.group_name(),
@@ -931,28 +916,28 @@ impl<K: crate::kind::Marker> Plot<K> {
                     ));
                 }
                 Ok(crate::decorations::legend::LegendIdentity::single(
-                    data.copy_source_string(group_field)?,
-                    data.copy_source_string(group_value)?,
+                    crate::data::source::copy_source_string(group_field)?,
+                    crate::data::source::copy_source_string(group_value)?,
                 ))
             }
             (Some(group_field), Some(group_value), Some(hue_field), Some(hue_value)) => {
                 Ok(crate::decorations::legend::LegendIdentity::pair(
-                    data.copy_source_string(group_field)?,
-                    data.copy_source_string(group_value)?,
-                    data.copy_source_string(hue_field)?,
-                    data.copy_source_string(hue_value)?,
+                    crate::data::source::copy_source_string(group_field)?,
+                    crate::data::source::copy_source_string(group_value)?,
+                    crate::data::source::copy_source_string(hue_field)?,
+                    crate::data::source::copy_source_string(hue_value)?,
                 ))
             }
             (Some(group_field), Some(group_value), _, None) => {
                 Ok(crate::decorations::legend::LegendIdentity::single(
-                    data.copy_source_string(group_field)?,
-                    data.copy_source_string(group_value)?,
+                    crate::data::source::copy_source_string(group_field)?,
+                    crate::data::source::copy_source_string(group_value)?,
                 ))
             }
             (_, None, Some(hue_field), Some(hue_value)) => {
                 Ok(crate::decorations::legend::LegendIdentity::single(
-                    data.copy_source_string(hue_field)?,
-                    data.copy_source_string(hue_value)?,
+                    crate::data::source::copy_source_string(hue_field)?,
+                    crate::data::source::copy_source_string(hue_value)?,
                 ))
             }
             _ => Err(Error::Render(
@@ -965,18 +950,17 @@ impl<K: crate::kind::Marker> Plot<K> {
     pub(crate) fn point_legend_identity(
         &self,
         label: &str,
-        data: crate::data::PlotData<'_>,
     ) -> Result<crate::decorations::legend::LegendIdentity, Error> {
-        let value = data.copy_source_string(label)?;
+        let value = crate::data::source::copy_source_string(label)?;
         Ok(
             if self.interaction_styles.is_some() || self.hue_dimension_key().is_some() {
                 crate::decorations::legend::LegendIdentity::single(
-                    data.copy_source_string(self.legend_title_key())?,
+                    crate::data::source::copy_source_string(self.legend_title_key())?,
                     value,
                 )
             } else {
                 crate::decorations::legend::LegendIdentity::literal(
-                    data.copy_source_string("series")?,
+                    crate::data::source::copy_source_string("series")?,
                     value,
                 )
             },

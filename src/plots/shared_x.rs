@@ -17,11 +17,11 @@ thread_local! {
 
 pub(crate) fn domain(
     chart: &Plot,
-    resources: &crate::font::canonical::OperationGenerationResources,
+    resources: &crate::font::canonical::OperationContext,
 ) -> Result<(f64, f64), Error> {
     #[cfg(test)]
     DOMAIN_PREPARATIONS.with(|count| count.set(count.get() + 1));
-    let data = crate::data::PlotData::from(chart).with_axis_resources(resources);
+    let data = crate::data::PlotData::from(chart).with_operation(resources);
     domain_with_data(chart, data)
 }
 
@@ -41,11 +41,10 @@ pub(super) fn domain_with_data(
                     .ok_or_else(|| Error::Data("shared x: y column not set".into()))?,
                 "shared x",
             )?;
-            data.claim_source_visits(points.len())?;
+
             crate::layout::continuous_auto_range(
                 crate::data::min_max(points.iter().map(|point| point.0), "shared x")?,
                 chart.x_axis_spec(),
-                data.source_resources()?,
             )?
         }
         PlotKind::Histogram => super::histogram::shared_x_domain(chart, data)?,
@@ -68,12 +67,7 @@ pub(super) fn domain_with_data(
                 super::bar_data::BarMode::Single
             };
             let range = super::bar_data::prepare(chart, data, mode)?.value_range;
-            crate::layout::anchored_auto_range(
-                range,
-                chart.x_axis_spec(),
-                0.0,
-                data.source_resources()?,
-            )?
+            crate::layout::anchored_auto_range(range, chart.x_axis_spec(), 0.0)?
         }
         PlotKind::Marginal => super::marginal::shared_x_domain(chart, data)?,
         PlotKind::Beeswarm => {
@@ -84,20 +78,15 @@ pub(super) fn domain_with_data(
                     .ok_or_else(|| Error::Data("beeswarm: x column not set".into()))?,
                 "beeswarm",
             )?;
-            data.claim_source_visits(values.len())?;
+
             crate::layout::continuous_auto_range(
                 crate::data::min_max(values.iter().copied(), "beeswarm")?,
                 chart.x_axis_spec(),
-                data.source_resources()?,
             )?
         }
         PlotKind::Waterfall => {
             let marks = super::waterfall::prepare(chart, data)?;
-            crate::layout::continuous_auto_range(
-                marks.range,
-                chart.x_axis_spec(),
-                data.source_resources()?,
-            )?
+            crate::layout::continuous_auto_range(marks.range, chart.x_axis_spec())?
         }
         PlotKind::Interaction
         | PlotKind::Heatmap
@@ -126,10 +115,7 @@ mod tests {
     use crate::{Bounds, CategoryValues, NumericValues};
 
     fn domain(chart: &Plot) -> Result<(f64, f64), Error> {
-        super::domain(
-            chart,
-            &crate::font::canonical::OperationGenerationResources::new(),
-        )
+        super::domain(chart, &crate::font::canonical::OperationContext::new())
     }
 
     #[test]
@@ -159,12 +145,8 @@ mod tests {
         .erase();
         assert_eq!(
             domain(&forest).unwrap(),
-            crate::layout::continuous_auto_range(
-                (-1.0, 3.0),
-                &crate::layout::AxisSpec::default(),
-                &crate::font::canonical::OperationGenerationResources::new()
-            )
-            .unwrap()
+            crate::layout::continuous_auto_range((-1.0, 3.0), &crate::layout::AxisSpec::default())
+                .unwrap()
         );
         let waterfall = Plot::waterfall(
             CategoryValues::new("step", ["a", "b"]).unwrap(),
@@ -177,7 +159,6 @@ mod tests {
             crate::layout::continuous_auto_range(
                 (-10.0, 30.0),
                 &crate::layout::AxisSpec::default(),
-                &crate::font::canonical::OperationGenerationResources::new(),
             )
             .unwrap()
         );
@@ -185,67 +166,5 @@ mod tests {
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
             0
         );
-    }
-
-    #[test]
-    fn shared_numeric_sources_refuse_before_fonts_and_materialization() {
-        use crate::font::canonical::OperationGenerationResources;
-        let plots = [
-            Plot::scatter(
-                NumericValues::new("x", [1.0, 2.0]),
-                NumericValues::new("y", [2.0, 3.0]),
-            )
-            .erase(),
-            Plot::regression(
-                NumericValues::new("x", [1.0, 2.0]),
-                NumericValues::new("y", [2.0, 3.0]),
-            )
-            .erase(),
-            Plot::density(NumericValues::new("x", [1.0, 2.0])).erase(),
-            Plot::qq(NumericValues::new("x", [1.0, 2.0])).erase(),
-            Plot::waterfall(
-                CategoryValues::new("step", ["a", "b"]).unwrap(),
-                NumericValues::new("delta", [20.0, -40.0]),
-                10.0,
-            )
-            .erase(),
-        ];
-        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-        for plot in &plots {
-            for (visits, bytes, expected) in
-                [(0, 1024, "work admission"), (100, 0, "storage admission")]
-            {
-                let resources = OperationGenerationResources::with_test_limits(visits, bytes);
-                let error = super::domain(plot, &resources).unwrap_err();
-                assert!(matches!(error, Error::Render(_)), "{error}");
-                assert!(error.to_string().contains(expected), "{error}");
-            }
-        }
-        assert_eq!(
-            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
-            0
-        );
-    }
-
-    #[test]
-    fn density_sample_storage_is_admitted_after_channel_preparation() {
-        let plot = Plot::density(NumericValues::new("x", [1.0, 2.0, 3.0])).erase();
-        let before_samples = 3
-            * (std::mem::size_of::<f64>()
-                + std::mem::size_of::<usize>()
-                + 2 * std::mem::size_of::<crate::data::CollectivePair>());
-        let resources = crate::font::canonical::OperationGenerationResources::with_test_limits(
-            1000,
-            u64::try_from(before_samples).unwrap(),
-        );
-        let error = super::domain(&plot, &resources).unwrap_err();
-        assert!(
-            error.to_string().contains("axis source storage admission"),
-            "{error}"
-        );
-        // Three numeric validations, three collective rows, and two identity
-        // comparisons. Refused sample storage and unvisited range work cost none.
-        assert_eq!(resources.usage().unwrap(), (15, 3 + 3 + 2));
-        assert_eq!(resources.byte_usage().unwrap(), before_samples as u64);
     }
 }

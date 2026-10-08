@@ -1,7 +1,7 @@
 use super::*;
 
 fn evaluate(value: f64) -> f64 {
-    log10(value, &OperationGenerationResources::new()).unwrap()
+    log10(value).unwrap()
 }
 
 #[test]
@@ -72,27 +72,20 @@ fn mpfr_rounding_vectors_cover_subnormals_cancellation_and_platform_misses() {
 
 #[test]
 fn outward_series_bounds_nest_and_ambiguous_rounding_requires_more_precision() {
-    let resources = OperationGenerationResources::new();
     for (numerator, denominator) in [(1, 3), (1, 9), (17, 91)] {
-        let (low, high) = ln_bounds(numerator, denominator, 32, &resources).unwrap();
-        let (fine_low, fine_high) = ln_bounds(numerator, denominator, 128, &resources).unwrap();
+        let (low, high) = ln_bounds(numerator, denominator, 32).unwrap();
+        let (fine_low, fine_high) = ln_bounds(numerator, denominator, 128).unwrap();
         assert!((&low << 96) <= fine_low);
         assert!((&high << 96) >= fine_high);
         let unit = BigUint::from(1_u32) << 32_usize;
         assert_ne!(
-            rounded_ratio(low, unit.clone(), &resources)
-                .unwrap()
-                .to_bits(),
-            rounded_ratio(high, unit, &resources).unwrap().to_bits()
+            rounded_ratio(low, unit.clone()).unwrap().to_bits(),
+            rounded_ratio(high, unit).unwrap().to_bits()
         );
         let unit = BigUint::from(1_u32) << 128_usize;
         assert_eq!(
-            rounded_ratio(fine_low, unit.clone(), &resources)
-                .unwrap()
-                .to_bits(),
-            rounded_ratio(fine_high, unit, &resources)
-                .unwrap()
-                .to_bits()
+            rounded_ratio(fine_low, unit.clone()).unwrap().to_bits(),
+            rounded_ratio(fine_high, unit).unwrap().to_bits()
         );
     }
 }
@@ -145,111 +138,10 @@ fn rational_rounding_resolves_even_ties_and_binade_carry() {
         (1, 2, 0.5),
     ] {
         assert_eq!(
-            rounded_ratio(
-                numerator.into(),
-                denominator.into(),
-                &OperationGenerationResources::new()
-            )
-            .unwrap()
-            .to_bits(),
+            rounded_ratio(numerator.into(), denominator.into())
+                .unwrap()
+                .to_bits(),
             expected.to_bits()
         );
     }
-}
-
-#[test]
-fn scratch_and_work_limits_refuse_before_the_guarded_series_iteration() {
-    // At p=128: 8 outer temporaries + 7 series setup temporaries, 96 bytes each.
-    // The first iteration admits 6 more before its first BigUint expression.
-    for (bytes, completed) in [(2015, 0), (2016, 1)] {
-        let resources = OperationGenerationResources::with_test_limits(1_000_000, bytes);
-        SERIES_WORK.with(|work| work.set(0));
-        assert!(log10(1.5, &resources)
-            .unwrap_err()
-            .to_string()
-            .contains("log10 scratch admission"));
-        assert_eq!(SERIES_WORK.with(std::cell::Cell::get), completed);
-        assert_eq!(
-            resources.byte_usage().unwrap(),
-            1440 + completed as u64 * 576
-        );
-    }
-    let measured = OperationGenerationResources::new();
-    let expected = log10(1.5, &measured).unwrap();
-    let required = measured.byte_usage().unwrap();
-    for bytes in [required - 1, required, required + 1] {
-        let resources = OperationGenerationResources::with_test_limits(1_000_000, bytes);
-        let result = log10(1.5, &resources);
-        if bytes < required {
-            assert!(result
-                .unwrap_err()
-                .to_string()
-                .contains("log10 scratch admission"));
-        } else {
-            assert_eq!(result.unwrap().to_bits(), expected.to_bits());
-        }
-    }
-    for remaining in [required - 1, required] {
-        let resources = OperationGenerationResources::new();
-        resources
-            .claim_bytes(512 * 1024 * 1024 - remaining)
-            .unwrap();
-        assert_eq!(log10(1.5, &resources).is_ok(), remaining == required);
-    }
-    let resources = OperationGenerationResources::with_test_limits(26, 512 * 1024 * 1024);
-    SERIES_WORK.with(|work| work.set(0));
-    assert!(log10(1.5, &resources)
-        .unwrap_err()
-        .to_string()
-        .contains("log10 work admission"));
-    assert_eq!(SERIES_WORK.with(std::cell::Cell::get), 0);
-    assert_eq!(resources.usage().unwrap().1, 26);
-    assert!(admit(&OperationGenerationResources::new(), usize::MAX, u64::MAX).is_err());
-}
-
-#[test]
-fn nice_ranges_and_prepared_forest_limits_propagate_root_refusal() {
-    let resources = OperationGenerationResources::with_test_limits(0, 512 * 1024 * 1024);
-    let spec = crate::layout::AxisSpec::default();
-    for result in [
-        crate::layout::continuous_auto_range((1.0, 2.0), &spec, &resources),
-        crate::layout::anchored_auto_range((1.0, 2.0), &spec, 0.0, &resources),
-    ] {
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("log10 work admission"));
-    }
-    let plot = crate::Plot::forest(
-        crate::CategoryValues::new("term", ["a"]).unwrap(),
-        crate::NumericValues::new("estimate", [1.5]),
-        crate::Bounds::new(
-            crate::NumericValues::new("lower", [1.0]),
-            crate::NumericValues::new("upper", [2.0]),
-        ),
-        1.0,
-    )
-    .scale(crate::AxisScale::Log10)
-    .x_limits(1.0, 2.0)
-    .erase();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
-    let before = resources.usage().unwrap().1;
-    resources.set_test_limits(before + 3, 512 * 1024 * 1024);
-    let result = crate::spec::PlotRenderContext::new(
-        plot.data(),
-        crate::layout::PanelBox::new(0.0, 400.0, 0.0, 300.0),
-        &theme,
-    )
-    .with_prepared_axes(&plot);
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("log10 work admission"));
-    assert_eq!(resources.usage().unwrap().1, before + 3);
 }

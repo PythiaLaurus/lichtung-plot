@@ -59,54 +59,51 @@ pub(crate) fn prepare_scoped(
         family,
     )?;
     let mut x_levels = Vec::new();
-    let group_levels = data.collect_source(
+    let group_levels = crate::data::source::collect_source(
         facet
             .and_then(|scope| scope.groups)
             .or_else(|| chart.global_group_levels())
             .unwrap_or(&channels.group_levels)
             .iter()
-            .map(|level| data.copy_source_string(level)),
+            .map(|level| crate::data::source::copy_source_string(level)),
     )?;
-    let hue_levels = data.collect_source(
+    let hue_levels = crate::data::source::collect_source(
         facet
             .and_then(|scope| scope.hues)
             .or_else(|| chart.global_hue_levels())
             .unwrap_or(&channels.hue_levels)
             .iter()
-            .map(|level| data.copy_source_string(level)),
+            .map(|level| crate::data::source::copy_source_string(level)),
     )?;
     let mut groups: Vec<DistributionGroup> = Vec::new();
     for (row, (label, value)) in x_values.into_iter().zip(y_values).enumerate() {
-        data.claim_source_visits(x_levels.len())?;
         if !x_levels.contains(&label) {
-            data.reserve_source(&mut x_levels, 1)?;
-            x_levels.push(data.copy_source_string(&label)?);
+            crate::data::source::reserve_source(&mut x_levels, 1)?;
+            x_levels.push(crate::data::source::copy_source_string(&label)?);
         }
         let group_label = channels
             .groups
             .as_ref()
-            .map(|values| data.copy_source_string(&values[row]))
+            .map(|values| crate::data::source::copy_source_string(&values[row]))
             .transpose()?;
         let hue_label = channels
             .hues
             .as_ref()
-            .map(|values| data.copy_source_string(&values[row]))
+            .map(|values| crate::data::source::copy_source_string(&values[row]))
             .transpose()?;
-        data.claim_source_visits(groups.len())?;
+
         if let Some(group) = groups
             .iter_mut()
             .find(|group| group.label == label && group.group_label == group_label)
         {
-            data.reserve_source(&mut group.observations, 1)?;
+            crate::data::source::reserve_source(&mut group.observations, 1)?;
             group.observations.push(DistributionObservation {
                 source_row: data.source_row(row),
                 value,
             });
             continue;
         }
-        data.claim_source_visits(x_levels.len())?;
-        data.claim_source_visits(group_levels.len())?;
-        data.claim_source_visits(hue_levels.len())?;
+
         let x_index = x_levels
             .iter()
             .position(|level| level == &label)
@@ -123,12 +120,12 @@ pub(crate) fn prepare_scoped(
             }
         }
         let mut observations = Vec::new();
-        data.reserve_source(&mut observations, 1)?;
+        crate::data::source::reserve_source(&mut observations, 1)?;
         observations.push(DistributionObservation {
             source_row: data.source_row(row),
             value,
         });
-        data.reserve_source(&mut groups, 1)?;
+        crate::data::source::reserve_source(&mut groups, 1)?;
         groups.push(DistributionGroup {
             label,
             group_label,

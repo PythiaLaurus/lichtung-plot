@@ -2,7 +2,7 @@
 
 #![allow(clippy::cast_precision_loss)]
 
-use crate::data::{source::SourceAdmission, PlotData};
+use crate::data::PlotData;
 use crate::Error;
 
 use crate::render::backend::{with_clip, Backend, LineStyle, Point2D, PointStyle};
@@ -49,9 +49,9 @@ pub(crate) fn intrinsic_body_minimum(
         ));
     }
     let style = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.qq);
-    let (width, height) = crate::render::geometry::point_ink_dimensions(theme, &style)?;
+    let (width, height) = crate::render::geometry::point_ink_dimensions(&style)?;
     let reference = if prepared.line.is_some() {
-        crate::render::geometry::line_ink_width(theme, &theme.marks.qq_reference.backend_style())?
+        crate::render::geometry::line_ink_width(&theme.marks.qq_reference.backend_style())?
     } else {
         0.0
     };
@@ -74,12 +74,7 @@ impl PreparedQq {
         self.theoretical.len() as u128
     }
 
-    pub(crate) fn validate_ranges(
-        &self,
-        ranges: [(f64, f64); 2],
-        data: PlotData<'_>,
-    ) -> Result<(), Error> {
-        data.claim_source_visits(1)?;
+    pub(crate) fn validate_ranges(&self, ranges: [(f64, f64); 2]) -> Result<(), Error> {
         if let Some(line) = self.line {
             visible_line_segment(line, ranges[0], ranges[1])?;
         }
@@ -87,7 +82,7 @@ impl PreparedQq {
     }
 
     pub(crate) fn new(chart: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
-        data.claim_mark_rows()?;
+        data.validate_row_source()?;
         #[cfg(test)]
         crate::layout::interior::distributions::count(2, 0);
         if let Some(hue) = chart.hue_col() {
@@ -99,15 +94,10 @@ impl PreparedQq {
             .x_col()
             .ok_or_else(|| Error::Data("Q-Q plot: value column not set".into()))?;
         let values = crate::data::strict_finite_f64(data, column, "Q-Q plot")?;
-        prepare_qq_admitted(&values, chart.qq_line_spec(), Some(data))
+        prepare_qq(&values, chart.qq_line_spec())
     }
 
-    pub(crate) fn ranges(
-        &self,
-        chart: &Plot,
-        data: PlotData<'_>,
-    ) -> Result<[(f64, f64); 2], Error> {
-        data.claim_source_visits(4)?;
+    pub(crate) fn ranges(&self, chart: &Plot) -> Result<[(f64, f64); 2], Error> {
         Ok([
             qq_display_range(
                 (
@@ -116,13 +106,11 @@ impl PreparedQq {
                 ),
                 chart.x_axis_spec(),
                 "x-axis",
-                data.source_resources()?,
             )?,
             qq_display_range(
                 (self.observed[0], self.observed[self.observed.len() - 1]),
                 chart.y_axis_spec(),
                 "y-axis",
-                data.source_resources()?,
             )?,
         ])
     }
@@ -174,14 +162,14 @@ pub(crate) fn measure_marks(
             )
         })?;
     let theme = context.theme;
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = context.data.with_axis_resources(&resources);
+
     let projection = layout.projection.clone();
-    let mut result = project(chart, prepared, layout, theme, data)?;
-    if let Some(ink) = crate::render::geometry::point_ink_bounds(
+    let mut result = project(chart, prepared, layout, theme)?;
+    if let Some(ink) = crate::render::geometry::point_ink_bounds(&chart.point_style(
         theme,
-        &chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.qq),
-    )? {
+        (0, 0, 0),
+        theme.marks.point_sizes.qq,
+    ))? {
         let source = [
             (
                 prepared.theoretical[0],
@@ -200,7 +188,6 @@ pub(crate) fn measure_marks(
                 chart.user_x_limits().is_none(),
                 chart.user_y_limits().is_none(),
             ],
-            data,
             context.fit_scope(),
         )?;
         let marks = std::sync::Arc::get_mut(result.marks.as_mut().expect("selected Qq marks"))
@@ -218,7 +205,6 @@ pub(crate) fn project(
     prepared: &PreparedQq,
     layout: crate::layout::Layout,
     theme: &crate::theme::ResolvedTheme,
-    data: PlotData<'_>,
 ) -> Result<PlotRenderResult, Error> {
     let mut payload = QqPayload {
         clip: layout.projection.panel_box(),
@@ -227,13 +213,12 @@ pub(crate) fn project(
         line_style: theme.marks.qq_reference.backend_style(),
         point_style: chart.point_style(
             theme,
-            crate::theme::AccentColors::resolve(&theme.marks.accents, 1, data.source_resources()?)?
-                .color(0)?,
+            crate::theme::AccentColors::resolve(&theme.marks.accents, 1)?.color(0)?,
             theme.marks.point_sizes.qq,
         ),
         domain_expansions: [None; 2],
     };
-    data.claim_source_visits(1)?;
+
     if let Some(line) = prepared.line {
         if let Some(((line_x0, line_y0), (line_x1, line_y1))) = visible_line_segment(
             line,
@@ -245,8 +230,8 @@ pub(crate) fn project(
             payload.line = Some([Point2D::new(x0, y0), Point2D::new(x1, y1)]);
         }
     }
-    data.reserve_source(&mut payload.points, prepared.theoretical.len())?;
-    data.claim_source_visits(prepared.theoretical.len())?;
+    crate::data::source::reserve_source(&mut payload.points, prepared.theoretical.len())?;
+
     payload.points.extend(
         prepared
             .theoretical
@@ -272,7 +257,7 @@ pub(crate) fn project(
                 (x.is_finite() && y.is_finite()).then_some(Point2D::new(x, y))
             }),
     );
-    let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    let mut geometry = crate::render::geometry::GeometrySnapshot::new();
     #[cfg(test)]
     crate::layout::interior::distributions::count(2, 2);
     let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
@@ -281,10 +266,12 @@ pub(crate) fn project(
     }
     geometry.scatter(&payload.points, &payload.point_style, clip)?;
     let mut result = PlotRenderResult::new(layout, Vec::new());
-    result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
-        payload: crate::layout::interior::MarkPayload::Qq(payload),
-        geometry,
-    })?);
+    result.marks = Some(crate::data::source::source_arc(
+        crate::layout::interior::SelectedMarkPlan {
+            payload: crate::layout::interior::MarkPayload::Qq(payload),
+            geometry,
+        },
+    )?);
     Ok(result)
 }
 
@@ -308,7 +295,6 @@ pub(crate) fn shared_x_domain(
         ),
         chart.x_axis_spec(),
         "x-axis",
-        data.source_resources()?,
     )
 }
 
@@ -316,7 +302,6 @@ pub(super) fn qq_display_range(
     data_range: (f64, f64),
     spec: &crate::layout::AxisSpec,
     axis: &str,
-    resources: &crate::font::canonical::OperationGenerationResources,
 ) -> Result<(f64, f64), Error> {
     #[cfg(test)]
     crate::orchestrator::measurements::count(
@@ -343,7 +328,7 @@ pub(super) fn qq_display_range(
             data_range.0
         )));
     }
-    let display = crate::layout::continuous_auto_range(data_range, spec, resources)?;
+    let display = crate::layout::continuous_auto_range(data_range, spec)?;
     if display.0.is_finite() && display.1.is_finite() && display.0 < display.1 {
         Ok(display)
     } else if data_range.0.is_finite() && data_range.1.is_finite() && data_range.0 < data_range.1 {
@@ -452,40 +437,30 @@ fn reference_clip_error() -> Error {
     Error::Data("Q-Q plot: reference line cannot be clipped to the displayed finite range".into())
 }
 
-#[cfg(test)]
 fn prepare_qq(values: &[f64], line_mode: QqLine) -> Result<PreparedQq, Error> {
-    prepare_qq_admitted(values, line_mode, None)
-}
-
-fn prepare_qq_admitted(
-    values: &[f64],
-    line_mode: QqLine,
-    data: Option<PlotData<'_>>,
-) -> Result<PreparedQq, Error> {
     if values.len() < 2 {
         return Err(Error::Data(format!(
             "Q-Q plot: at least 2 finite observations are required, got {}",
             values.len()
         )));
     }
-    data.source_visits(values.len())?;
+
     if values.iter().any(|value| !value.is_finite()) {
         return Err(Error::Data("Q-Q plot: observations must be finite".into()));
     }
     let mut observed = Vec::new();
-    data.source_reserve(&mut observed, values.len())?;
-    data.source_visits(values.len())?;
+    crate::data::source::reserve_source(&mut observed, values.len())?;
+
     observed.extend_from_slice(values);
-    crate::data::source::sort_numeric_source(&mut observed, data)?;
+    crate::data::source::sort_numeric_source(&mut observed);
     let mut theoretical = Vec::new();
-    data.source_reserve(&mut theoretical, observed.len())?;
-    data.source_visits(observed.len())?;
+    crate::data::source::reserve_source(&mut theoretical, observed.len())?;
+
     for index in 0..observed.len() {
         theoretical.push(theoretical_quantile(index, observed.len())?);
     }
     let line = match line_mode {
         QqLine::Quartiles => {
-            data.source_visits(4)?;
             let theoretical_q1 = sorted_quantile(&theoretical, 0.25);
             let theoretical_q3 = sorted_quantile(&theoretical, 0.75);
             let observed_q1 = sorted_quantile(&observed, 0.25);
@@ -559,12 +534,10 @@ mod tests {
         let source = Plot::qq(crate::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]))
             .x_limits(-2.0, 2.0)
             .erase();
-        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let resources = crate::font::canonical::OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let before = chart.intrinsic_body_minimum(&theme).unwrap();
         theme.marks.point_sizes.qq = 54;
         let sized = chart.intrinsic_body_minimum(&theme).unwrap();
@@ -643,33 +616,15 @@ mod tests {
         let spec = crate::layout::AxisSpec::default();
 
         assert_eq!(
-            qq_display_range(
-                (0.0, 0.0),
-                &spec,
-                "y-axis",
-                &crate::font::canonical::OperationGenerationResources::new()
-            )
-            .unwrap(),
+            qq_display_range((0.0, 0.0), &spec, "y-axis").unwrap(),
             (0.0_f64.next_down(), 0.0_f64.next_up())
         );
         assert_eq!(
-            qq_display_range(
-                (f64::MAX, f64::MAX),
-                &spec,
-                "y-axis",
-                &crate::font::canonical::OperationGenerationResources::new()
-            )
-            .unwrap(),
+            qq_display_range((f64::MAX, f64::MAX), &spec, "y-axis").unwrap(),
             (f64::MAX.next_down(), f64::MAX)
         );
         assert_eq!(
-            qq_display_range(
-                (-f64::MAX, -f64::MAX),
-                &spec,
-                "y-axis",
-                &crate::font::canonical::OperationGenerationResources::new()
-            )
-            .unwrap(),
+            qq_display_range((-f64::MAX, -f64::MAX), &spec, "y-axis").unwrap(),
             (-f64::MAX, (-f64::MAX).next_up())
         );
     }
@@ -680,13 +635,7 @@ mod tests {
         let spec = crate::layout::AxisSpec::default().limits(0.0, upper);
 
         assert_eq!(
-            qq_display_range(
-                (-10.0, 10.0),
-                &spec,
-                "y-axis",
-                &crate::font::canonical::OperationGenerationResources::new()
-            )
-            .unwrap(),
+            qq_display_range((-10.0, 10.0), &spec, "y-axis").unwrap(),
             (0.0, upper)
         );
     }
@@ -695,13 +644,7 @@ mod tests {
     fn qq_opposite_extreme_auto_range_retains_endpoints_with_scaled_ticks() {
         let spec = crate::layout::AxisSpec::default();
 
-        let range = qq_display_range(
-            (-f64::MAX, f64::MAX),
-            &spec,
-            "y-axis",
-            &crate::font::canonical::OperationGenerationResources::new(),
-        )
-        .unwrap();
+        let range = qq_display_range((-f64::MAX, f64::MAX), &spec, "y-axis").unwrap();
 
         assert_eq!(range, (-f64::MAX, f64::MAX));
         assert_eq!(

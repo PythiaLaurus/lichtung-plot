@@ -77,35 +77,23 @@ pub(crate) fn intrinsic_body_minimum(
             "Interaction has no categorical slots or traces".into(),
         ));
     }
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    resources
-        .claim_visits(prepared.traces.len() as u128)
-        .map_err(|error| {
-            Error::Render(format!("Interaction trace intrinsic admission: {error:?}"))
-        })?;
+
     let mut pitch = 1.0_f64 / 1024.0;
     let mut numeric = 0.0_f64;
     let interval = crate::render::geometry::line_ink_width(
-        theme,
         &theme.marks.interaction_interval.backend_style((0, 0, 0)),
     )?;
     for trace in &prepared.traces {
-        resources
-            .claim_visits(trace.cells.len() as u128)
-            .map_err(|error| {
-                Error::Render(format!("Interaction occupied-slot admission: {error:?}"))
-            })?;
         let marker = if chart.markers_visible() {
             let point = chart
                 .point_style(theme, (0, 0, 0), theme.marks.point_sizes.interaction)
                 .with_shape(trace.style.point_shape);
-            crate::render::geometry::point_ink_bounds(theme, &point)?
+            crate::render::geometry::point_ink_bounds(&point)?
         } else {
             None
         };
         let connector = if chart.interaction_connectors_visible() && trace.cells.len() > 1 {
             crate::render::geometry::line_ink_width(
-                theme,
                 &theme.marks.interaction_connector.backend_style((0, 0, 0)),
             )?
         } else {
@@ -158,11 +146,15 @@ impl PreparedInteraction {
             chart.global_group_levels()
         };
         let keys = if let Some(levels) = parent {
-            data.collect_source(levels.iter().map(|level| data.copy_source_string(level)))?
+            crate::data::source::collect_source(
+                levels
+                    .iter()
+                    .map(|level| crate::data::source::copy_source_string(level)),
+            )?
         } else {
             let mut observed = Vec::new();
-            data.reserve_source(&mut observed, self.traces.len())?;
-            data.claim_source_visits(self.traces.len())?;
+            crate::data::source::reserve_source(&mut observed, self.traces.len())?;
+
             for trace in &self.traces {
                 let raw = if has_hue {
                     trace.identity.hue.as_ref()
@@ -170,9 +162,9 @@ impl PreparedInteraction {
                     trace.identity.group.as_ref()
                 }
                 .ok_or_else(|| Error::Render("Interaction color identity is missing".into()))?;
-                observed.push(data.copy_source_string(raw)?);
+                observed.push(crate::data::source::copy_source_string(raw)?);
             }
-            data.source_levels(&observed)?
+            crate::data::source::source_levels(&observed)?
         };
         CategoryColors::resolve(
             &keys,
@@ -182,15 +174,7 @@ impl PreparedInteraction {
         )
     }
 
-    pub(crate) fn primary_mark_count(
-        &self,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<u128, Error> {
-        resources
-            .claim_visits(self.traces.len() as u128)
-            .map_err(|error| {
-                Error::Render(format!("Interaction primary-trace admission: {error:?}"))
-            })?;
+    pub(crate) fn checked_primary_mark_count(&self) -> Result<u128, Error> {
         self.traces.iter().try_fold(0_u128, |count, trace| {
             count
                 .checked_add(trace.cells.len() as u128)
@@ -217,19 +201,18 @@ impl PreparedInteraction {
         data: PlotData<'_>,
     ) -> Result<Vec<LegendEntry>, Error> {
         let colors = self.resolved_colors(chart, theme, data)?;
-        self.guide_entries_with_colors(chart, theme, data, &colors)
+        self.guide_entries_with_colors(chart, theme, &colors)
     }
 
     fn guide_entries_with_colors(
         &self,
         chart: &Plot,
         theme: &crate::theme::ResolvedTheme,
-        data: PlotData<'_>,
+
         colors: &CategoryColors,
     ) -> Result<Vec<LegendEntry>, Error> {
-        let resources = data.source_resources()?;
         let mut entries = Vec::new();
-        data.reserve_source(&mut entries, self.traces.len())?;
+        crate::data::source::reserve_source(&mut entries, self.traces.len())?;
         for trace in &self.traces {
             if trace.identity.hue.is_none() && chart.interaction_styles_spec().is_none() {
                 continue;
@@ -240,8 +223,8 @@ impl PreparedInteraction {
                 .as_deref()
                 .or(trace.identity.group.as_deref())
                 .ok_or_else(|| Error::Render("interaction trace has no color identity".into()))?;
-            let color = colors.color(key, resources)?;
-            let identity = chart.collective_legend_identity(&trace.identity, data)?;
+            let color = colors.color(key)?;
+            let identity = chart.collective_legend_identity(&trace.identity)?;
             let point = chart
                 .point_style(theme, color, theme.marks.point_sizes.interaction)
                 .with_shape(trace.style.point_shape);
@@ -281,7 +264,7 @@ pub(crate) fn prepare(
     data: PlotData<'_>,
     parent: Option<&ObservedCollectives>,
 ) -> Result<PreparedInteraction, Error> {
-    data.claim_mark_rows()?;
+    data.validate_row_source()?;
     #[cfg(test)]
     count(0);
     let x_col = chart
@@ -323,15 +306,15 @@ pub(crate) fn prepare(
             "interaction: all channels must have equal non-zero lengths".into(),
         ));
     }
-    let conditions = data.source_levels(&x)?;
+    let conditions = crate::data::source::source_levels(&x)?;
     let domain = parent.unwrap_or(&channels);
     let groups = chart.global_group_levels().unwrap_or(&domain.group_levels);
     let hues = chart.global_hue_levels().unwrap_or(&domain.hue_levels);
     let identities = chart
         .global_collective_pairs()
         .unwrap_or(&domain.identities);
-    let styles = resolve_trace_styles(chart, groups, data)?;
-    data.claim_source_visits(x.len())?;
+    let styles = resolve_trace_styles(chart, groups)?;
+
     for row in 0..x.len() {
         if lower[row] > estimate[row] || estimate[row] > upper[row] {
             return Err(Error::Data(format!(
@@ -339,22 +322,21 @@ pub(crate) fn prepare(
                 data.source_row(row)
             )));
         }
-        data.claim_source_visits(row)?;
+
         if (0..row).any(|prior| x[prior] == x[row] && channels.rows[prior] == channels.rows[row]) {
             return Err(Error::Data(format!("interaction: duplicate (condition, group, hue) cell ({:?}, {:?}, {:?}) at source row {}", x[row], channels.rows[row].group, channels.rows[row].hue, data.source_row(row))));
         }
     }
     let mut traces = Vec::new();
-    data.reserve_source(&mut traces, identities.len())?;
+    crate::data::source::reserve_source(&mut traces, identities.len())?;
     for identity in identities {
-        data.claim_source_visits(channels.rows.len())?;
         if !channels.rows.contains(identity) {
             continue;
         }
         let group = identity.group.as_deref().ok_or_else(|| {
             Error::Data("interaction: graphical group channel did not resolve".into())
         })?;
-        data.claim_source_visits(groups.len())?;
+
         let index = groups
             .iter()
             .position(|level| level == group)
@@ -364,7 +346,6 @@ pub(crate) fn prepare(
                 ))
             })?;
         if let Some(hue) = &identity.hue {
-            data.claim_source_visits(hues.len())?;
             if !hues.contains(hue) {
                 return Err(Error::Data(format!(
                     "interaction: hue {hue:?} is absent from the resolved order"
@@ -372,11 +353,10 @@ pub(crate) fn prepare(
             }
         }
         let mut cells = Vec::new();
-        data.claim_source_visits(channels.rows.len())?;
+
         let cell_count = channels.rows.iter().filter(|row| *row == identity).count();
-        data.reserve_source(&mut cells, cell_count)?;
+        crate::data::source::reserve_source(&mut cells, cell_count)?;
         for (condition, level) in conditions.iter().enumerate() {
-            data.claim_source_visits(x.len())?;
             if let Some(row) =
                 (0..x.len()).find(|row| &x[*row] == level && &channels.rows[*row] == identity)
             {
@@ -389,7 +369,7 @@ pub(crate) fn prepare(
             }
         }
         traces.push(Trace {
-            identity: data.copy_source_pair(identity)?,
+            identity: crate::data::source::copy_source_pair(identity)?,
             style: styles
                 .as_ref()
                 .map_or_else(TraceStyle::default, |styles| styles[index]),
@@ -404,15 +384,14 @@ pub(crate) fn prepare(
                 .as_deref()
                 .or(trace.identity.group.as_deref())
                 .ok_or_else(|| Error::Render("Interaction color identity is missing".into()))?;
-            if exact.color_in(key, data.source_resources()?)?.is_none() {
+            if exact.color_in(key).is_none() {
                 return Err(Error::Data(format!(
                     "interaction: category {key:?} has no caller-owned color"
                 )));
             }
         }
     }
-    data.claim_source_visits(lower.len())?;
-    data.claim_source_visits(upper.len())?;
+
     Ok(PreparedInteraction {
         conditions,
         range: crate::data::min_max(lower.into_iter().chain(upper), "interaction")?,
@@ -443,12 +422,10 @@ impl InteractionPayload {
         marks: &PreparedInteraction,
         projection: &crate::layout::Projection,
         context: PlotRenderContext<'_>,
-        data: PlotData<'_>,
     ) -> Result<(), crate::layout::fit::PlanError> {
-        let mut full = crate::render::geometry::GeometrySnapshot::new(context.theme)?;
-        data.claim_source_visits(self.traces.len())?;
+        let mut full = crate::render::geometry::GeometrySnapshot::new();
+
         for trace in &self.traces {
-            data.claim_source_visits(trace.intervals.len())?;
             for interval in &trace.intervals {
                 full.line(interval, &trace.interval, None)?;
             }
@@ -484,7 +461,6 @@ impl InteractionPayload {
                         projection,
                         bounds,
                         [false, true],
-                        data,
                         context.fit_scope(),
                     )?;
             }
@@ -536,20 +512,17 @@ pub(crate) fn measure_marks(
         .ok_or_else(|| {
             Error::Render("interaction measurement requires root-prepared semantics".into())
         })?;
-    let resources = context
-        .theme
-        .prepared_font_environment()?
-        .generation_resources();
-    let data = context.data.with_axis_resources(&resources);
+    let resources = context.theme.prepared_font_environment()?.operation();
+    let data = context.data.with_operation(&resources);
     let mut payload = InteractionPayload {
         clip: layout.projection.panel_box(),
         traces: Vec::new(),
         domain_expansions: [None; 2],
     };
     let colors = marks.resolved_colors(chart, context.theme, data)?;
-    let legends = marks.guide_entries_with_colors(chart, context.theme, data, &colors)?;
-    data.reserve_source(&mut payload.traces, marks.traces.len())?;
-    let mut geometry = crate::render::geometry::GeometrySnapshot::new(context.theme)?;
+    let legends = marks.guide_entries_with_colors(chart, context.theme, &colors)?;
+    crate::data::source::reserve_source(&mut payload.traces, marks.traces.len())?;
+    let mut geometry = crate::render::geometry::GeometrySnapshot::new();
     let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
     for trace in &marks.traces {
         let key = trace
@@ -558,7 +531,7 @@ pub(crate) fn measure_marks(
             .as_deref()
             .or(trace.identity.group.as_deref())
             .ok_or_else(|| Error::Render("interaction trace has no color identity".into()))?;
-        let color = colors.color(key, &resources)?;
+        let color = colors.color(key)?;
         let point = chart
             .point_style(
                 context.theme,
@@ -584,8 +557,8 @@ pub(crate) fn measure_marks(
                 .then(|| line.clone()),
             marker: chart.markers_visible().then(|| point.clone()),
         };
-        data.reserve_source(&mut selected.intervals, trace.cells.len())?;
-        data.reserve_source(&mut selected.points, trace.cells.len())?;
+        crate::data::source::reserve_source(&mut selected.intervals, trace.cells.len())?;
+        crate::data::source::reserve_source(&mut selected.points, trace.cells.len())?;
         for cell in &trace.cells {
             let x = cell.condition as f64 + 0.5;
             let (px, py) = layout.projection.project(x, cell.estimate);
@@ -611,34 +584,32 @@ pub(crate) fn measure_marks(
         }
         payload.traces.push(selected);
     }
-    payload.measure_ink(chart, marks, &layout.projection, context, data)?;
+    payload.measure_ink(chart, marks, &layout.projection, context)?;
     let mut result = PlotRenderResult::new(layout, legends);
     result.x_domain = crate::spec::AxisDomain::Categorical;
-    result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
-        payload: crate::layout::interior::MarkPayload::Interaction(payload),
-        geometry,
-    })?);
+    result.marks = Some(crate::data::source::source_arc(
+        crate::layout::interior::SelectedMarkPlan {
+            payload: crate::layout::interior::MarkPayload::Interaction(payload),
+            geometry,
+        },
+    )?);
     Ok(result)
 }
 
-fn resolve_trace_styles(
-    chart: &Plot,
-    levels: &[String],
-    data: PlotData<'_>,
-) -> Result<Option<Vec<TraceStyle>>, Error> {
+fn resolve_trace_styles(chart: &Plot, levels: &[String]) -> Result<Option<Vec<TraceStyle>>, Error> {
     let Some(configured) = chart.interaction_styles_spec() else {
         return Ok(None);
     };
-    let mut styles = data.collect_source(levels.iter().map(|_| Ok(None)))?;
+    let mut styles = crate::data::source::collect_source(levels.iter().map(|_| Ok(None)))?;
     for configured in configured {
-        let index = data
-            .source_position(levels, |level| level == configured.group())?
-            .ok_or_else(|| {
-                Error::Data(format!(
-                    "interaction: style references unknown graphical group {:?}",
-                    configured.group()
-                ))
-            })?;
+        let index =
+            crate::data::source::source_position(levels, |level| level == configured.group())
+                .ok_or_else(|| {
+                    Error::Data(format!(
+                        "interaction: style references unknown graphical group {:?}",
+                        configured.group()
+                    ))
+                })?;
         if styles[index].is_some() {
             return Err(Error::Data(format!(
                 "interaction: graphical group {:?} has more than one configured style",
@@ -650,8 +621,7 @@ fn resolve_trace_styles(
             line_pattern: configured.line_pattern(),
         });
     }
-    data.collect_source(styles.into_iter().zip(levels).map(|(style, trace)| {
-        data.claim_source_visits(1)?;
+    crate::data::source::collect_source(styles.into_iter().zip(levels).map(|(style, trace)| {
         style.ok_or_else(|| {
             Error::Data(format!(
                 "interaction: graphical group {trace:?} has no configured style"

@@ -1,8 +1,7 @@
-//! Immutable guide chrome and operation-admitted local relationships.
+//! Immutable guide chrome and exact local relationships.
 
 use std::cmp::Ordering;
 
-use crate::font::canonical::OperationGenerationResources;
 use crate::layout::kernel::{FeedbackRound, SpatialRounding};
 use crate::{Error, Result};
 
@@ -40,13 +39,13 @@ macro_rules! legend_spacing {
             pub(crate) radius: Option<ExactLength>,
         }
         impl LegendTheme {
-            pub(crate) fn lengths(&self, label_size: u32, title_size: u32, resources: &OperationGenerationResources) -> Result<LegendLengths> {
+            pub(crate) fn lengths(&self, label_size: u32, title_size: u32) -> Result<LegendLengths> {
                 let metrics = [LocalMetric::css_pixels(label_size)?, LocalMetric::css_pixels(title_size)?];
                 Ok(LegendLengths {
-                    $($field: self.spacing().$field().product(metrics[$metric], resources)?),+,
-                    minimum: self.gradient_lengths().minimum().product(metrics[0], resources)?,
-                    preferred: self.gradient_lengths().preferred().product(metrics[0], resources)?,
-                    radius: self.frame().map(|frame| frame.radius().product(metrics[0], resources)).transpose()?,
+                    $($field: self.spacing().$field().product(metrics[$metric])),+,
+                    minimum: self.gradient_lengths().minimum().product(metrics[0]),
+                    preferred: self.gradient_lengths().preferred().product(metrics[0]),
+                    radius: self.frame().map(|frame| frame.radius().product(metrics[0])),
                 })
             }
         }
@@ -69,21 +68,14 @@ pub(crate) struct GradientLengths {
 
 impl GradientLengths {
     pub(crate) fn new(minimum: RelativeSpacing, preferred: RelativeSpacing) -> Result<Self> {
-        Self::new_in(minimum, preferred, &OperationGenerationResources::new())
-    }
-    pub(crate) fn new_in(
-        minimum: RelativeSpacing,
-        preferred: RelativeSpacing,
-        resources: &OperationGenerationResources,
-    ) -> Result<Self> {
         let value = Self { minimum, preferred };
-        value.validate_in(resources)?;
+        value.validate_in()?;
         Ok(value)
     }
-    fn validate_in(&self, resources: &OperationGenerationResources) -> Result<()> {
+    fn validate_in(&self) -> Result<()> {
         positive(self.minimum(), "gradient minimum")?;
         positive(self.preferred(), "gradient preference")?;
-        if self.minimum().compare(self.preferred(), resources)? == Ordering::Greater {
+        if self.minimum().compare(self.preferred()) == Ordering::Greater {
             return Err(Error::Data(
                 "guide gradient preference must be at least its minimum".into(),
             ));
@@ -194,59 +186,45 @@ pub(crate) struct LegendTheme {
 }
 
 impl LegendTheme {
-    pub(crate) fn builtin(resources: &OperationGenerationResources) -> Result<Self> {
+    pub(crate) fn builtin() -> Result<Self> {
         let spacing = LegendSpacing::new(
-            RelativeSpacing::from_pixels_in(8.8, 11, resources)?,
-            RelativeSpacing::ratio_in(1, 1, resources)?,
-            RelativeSpacing::from_pixels_in(8.8, 11, resources)?,
-            RelativeSpacing::from_pixels_in(8.8, 11, resources)?,
-            RelativeSpacing::from_pixels_in(17.6, 11, resources)?,
-            RelativeSpacing::from_pixels_in(3.3, 11, resources)?,
-            RelativeSpacing::from_pixels_in(13.2, 11, resources)?,
-            RelativeSpacing::from_pixels_in(7.8, 12, resources)?,
-            RelativeSpacing::new_in(0.2, resources)?,
+            RelativeSpacing::from_pixels(8.8, 11)?,
+            RelativeSpacing::ratio(1, 1)?,
+            RelativeSpacing::from_pixels(8.8, 11)?,
+            RelativeSpacing::from_pixels(8.8, 11)?,
+            RelativeSpacing::from_pixels(17.6, 11)?,
+            RelativeSpacing::from_pixels(3.3, 11)?,
+            RelativeSpacing::from_pixels(13.2, 11)?,
+            RelativeSpacing::from_pixels(7.8, 12)?,
+            RelativeSpacing::new(0.2)?,
         )?;
-        let lengths = GradientLengths::new_in(
-            RelativeSpacing::ratio_in(40, 11, resources)?,
-            RelativeSpacing::ratio_in(160, 11, resources)?,
-            resources,
+        let lengths = GradientLengths::new(
+            RelativeSpacing::ratio(40, 11)?,
+            RelativeSpacing::ratio(160, 11)?,
         )?;
         let frame = LegendFrameTheme::new(
             Color::rgba(255, 255, 255, 204),
             Some(OutlineTheme::new(Color::rgb(200, 200, 200), 1.0)?),
-            RelativeSpacing::ratio_in(2, 11, resources)?,
+            RelativeSpacing::ratio(2, 11)?,
         )?;
-        Self::new_in(spacing, lengths, Some(frame), resources)
+        Self::new(spacing, lengths, Some(frame))
     }
     pub(crate) fn new(
         spacing: LegendSpacing,
         gradient_lengths: GradientLengths,
         frame: Option<LegendFrameTheme>,
     ) -> Result<Self> {
-        Self::new_in(
-            spacing,
-            gradient_lengths,
-            frame,
-            &OperationGenerationResources::new(),
-        )
-    }
-    pub(crate) fn new_in(
-        spacing: LegendSpacing,
-        gradient_lengths: GradientLengths,
-        frame: Option<LegendFrameTheme>,
-        resources: &OperationGenerationResources,
-    ) -> Result<Self> {
         let value = Self {
             spacing,
             gradient_lengths,
             frame,
         };
-        value.validate_in(resources)?;
+        value.validate_in()?;
         Ok(value)
     }
-    fn validate_in(&self, resources: &OperationGenerationResources) -> Result<()> {
+    fn validate_in(&self) -> Result<()> {
         self.spacing().validate()?;
-        self.gradient_lengths().validate_in(resources)?;
+        self.gradient_lengths().validate_in()?;
         if let Some(frame) = self.frame() {
             frame.validate()?;
         }
@@ -305,9 +283,7 @@ impl LegendTheme {
         let spacing = self.spacing.with_shared_gap(value)?;
         Self::new(spacing, self.gradient_lengths, self.frame)
     }
-    pub(crate) fn relationship_count(&self) -> usize {
-        11 + usize::from(self.frame().is_some())
-    }
+
     #[cfg(test)]
     pub(crate) fn retained_relationships(&self) -> impl Iterator<Item = &RelativeSpacing> {
         self.spacing()
@@ -319,25 +295,13 @@ impl LegendTheme {
             ])
             .chain(self.frame().map(LegendFrameTheme::radius))
     }
-    pub(crate) fn share(&self, resources: &OperationGenerationResources) -> Result<Self> {
-        resources
-            .claim_visits(self.relationship_count() as u128)
-            .map_err(|error| Error::Render(format!("guide sharing: {error:?}")))?;
-        Ok(self.clone())
-    }
-    pub(crate) fn same(
-        &self,
-        other: &Self,
-        resources: &OperationGenerationResources,
-    ) -> Result<bool> {
-        resources
-            .claim_visits(1)
-            .map_err(|error| Error::Render(format!("guide identity: {error:?}")))?;
+
+    pub(crate) fn same(&self, other: &Self) -> bool {
         match (self.frame(), other.frame()) {
             (None, None) => {}
             (Some(left), Some(right))
                 if left.fill() == right.fill() && left.outline() == right.outline() => {}
-            _ => return Ok(false),
+            _ => return false,
         }
         for (left, right) in self
             .spacing()
@@ -345,8 +309,8 @@ impl LegendTheme {
             .into_iter()
             .zip(other.spacing().relationships())
         {
-            if !left.same(right, resources)? {
-                return Ok(false);
+            if !left.same(right) {
+                return false;
             }
         }
         for (left, right) in [
@@ -359,16 +323,16 @@ impl LegendTheme {
                 other.gradient_lengths().preferred(),
             ),
         ] {
-            if !left.same(right, resources)? {
-                return Ok(false);
+            if !left.same(right) {
+                return false;
             }
         }
         if let (Some(left), Some(right)) = (self.frame(), other.frame()) {
-            if !left.radius().same(right.radius(), resources)? {
-                return Ok(false);
+            if !left.radius().same(right.radius()) {
+                return false;
             }
         }
-        Ok(true)
+        true
     }
     pub(crate) fn observe_feedback(&self, round: &mut FeedbackRound) -> Result<()> {
         round.observe_count(usize::from(self.frame().is_some()))?;
@@ -396,65 +360,18 @@ impl LegendTheme {
         }
         Ok(())
     }
-    pub(crate) fn outside_gap_pixels(
-        &self,
-        label_size: u32,
-        resources: &OperationGenerationResources,
-    ) -> Result<f64> {
+    pub(crate) fn outside_gap_pixels(&self, label_size: u32) -> Result<f64> {
         self.spacing()
             .outside_gap()
-            .product(LocalMetric::css_pixels(label_size)?, resources)?
-            .pixels_rounded(SpatialRounding::NearestEven, resources)
+            .product(LocalMetric::css_pixels(label_size)?)
+            .pixels_rounded(SpatialRounding::NearestEven)
     }
-    pub(crate) fn shared_gap_pixels(
-        &self,
-        label_size: u32,
-        resources: &OperationGenerationResources,
-    ) -> Result<f64> {
+    pub(crate) fn shared_gap_pixels(&self, label_size: u32) -> Result<f64> {
         self.shared_gap()
-            .product(LocalMetric::css_pixels(label_size)?, resources)?
-            .pixels_rounded(SpatialRounding::NearestEven, resources)
+            .product(LocalMetric::css_pixels(label_size)?)
+            .pixels_rounded(SpatialRounding::NearestEven)
     }
 }
 
 #[cfg(test)]
 mod tests;
-
-/// Independent native-integer certificate for the builtin construction charges.
-#[cfg(test)]
-pub(crate) fn builtin_resource_oracle() -> (u128, u64) {
-    // Exact dyadic numerator and pre-reduction denominator*metric, independently
-    // encoded from the documented source IEEE bits. All operands fit one limb.
-    let sources = [
-        (2_476_979_795_053_773_u64, (1_u64 << 48) * 11),
-        (2_476_979_795_053_773, (1_u64 << 48) * 11),
-        (2_476_979_795_053_773, (1_u64 << 48) * 11),
-        (2_476_979_795_053_773, (1_u64 << 47) * 11),
-        (3_715_469_692_580_659, (1_u64 << 50) * 11),
-        (3_715_469_692_580_659, (1_u64 << 48) * 11),
-        (8_782_019_273_372_467, (1_u64 << 50) * 12),
-    ];
-    let mut gcd_steps = 0_u64;
-    for (mut left, mut right) in sources {
-        while right != 0 {
-            (left, right) = (right, left % right);
-            gcd_steps += 1;
-        }
-    }
-    // Seven P values: header+dyadic+division+gcd setup+reduction = 15 visits,
-    // 640 bytes, plus 6 visits/240 bytes per gcd step. Four native ratios cost
-    // 4+8+7+6 visits and 160 bytes each; edge dyadic costs 5/240; the two actual
-    // complete gradient comparisons cost 2/80 each.
-    let header = (size_of::<RelativeSpacing>()
-        + 2 * size_of::<num_bigint::BigUint>()
-        + size_of::<f64>()
-        + 2 * size_of::<usize>()) as u64;
-    let operand = 16 + size_of::<num_bigint::BigUint>() as u64;
-    let bytes = 7 * (header + 14 * operand)
-        + 6 * gcd_steps * operand
-        + 4 * (header + 2 * operand)
-        + header
-        + 4 * operand
-        + 4 * operand;
-    (139 + 6 * u128::from(gcd_steps), bytes)
-}

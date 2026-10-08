@@ -32,15 +32,6 @@
 /// assert!(densities[2] > densities[4]);
 /// ```
 pub fn kde(samples: &[f64], grid_points: &[f64]) -> Result<Vec<f64>, crate::Error> {
-    kde_with_source(samples, grid_points, None)
-}
-
-pub(crate) fn kde_with_source(
-    samples: &[f64],
-    grid_points: &[f64],
-    data: Option<crate::data::PlotData<'_>>,
-) -> Result<Vec<f64>, crate::Error> {
-    use crate::data::source::SourceAdmission;
     use crate::Error;
     if samples.is_empty() {
         return Err(Error::Data(
@@ -55,14 +46,13 @@ pub(crate) fn kde_with_source(
     let n_f = n as f64;
 
     // Bandwidth via Scott's rule.
-    data.source_visits(samples.len())?;
+
     let mean = samples.iter().sum::<f64>() / n_f;
     // Sample variance (n - 1 in the denominator for the
     // unbiased estimator; for the KDE bandwidth the n
     // denominator is also valid, but (n - 1) is the
     // scipy convention).
     let var = if n > 1 {
-        data.source_visits(samples.len())?;
         samples.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / (n_f - 1.0)
     } else {
         0.0
@@ -74,25 +64,22 @@ pub(crate) fn kde_with_source(
     // doesn't blow up to a Dirac delta.
     let h = (n_f.powf(-0.2) * std).max(1e-6);
 
-    gaussian_kde_with_source(samples, grid_points, h, data)
+    gaussian_kde(samples, grid_points, h)
 }
 
 /// Evaluate a Gaussian KDE with an already validated bandwidth.
-pub(crate) fn gaussian_kde_with_source(
+pub(crate) fn gaussian_kde(
     samples: &[f64],
     grid_points: &[f64],
     bandwidth: f64,
-    data: Option<crate::data::PlotData<'_>>,
 ) -> Result<Vec<f64>, crate::Error> {
-    use crate::data::source::SourceAdmission;
     use crate::Error;
     if samples.is_empty() || !bandwidth.is_finite() || bandwidth <= 0.0 {
         return Err(Error::Data(
             "kde: samples and a positive finite bandwidth are required".into(),
         ));
     }
-    data.source_visits(samples.len())?;
-    data.source_visits(grid_points.len())?;
+
     if samples
         .iter()
         .chain(grid_points)
@@ -111,9 +98,8 @@ pub(crate) fn gaussian_kde_with_source(
         ));
     }
     let mut densities = Vec::new();
-    data.source_reserve(&mut densities, grid_points.len())?;
+    crate::data::source::reserve_source(&mut densities, grid_points.len())?;
     for &x in grid_points {
-        data.source_visits(samples.len())?;
         let mut sum = 0.0;
         for &s in samples {
             let z = (x - s) / bandwidth;

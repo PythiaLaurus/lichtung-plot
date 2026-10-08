@@ -58,9 +58,8 @@ pub(crate) fn intrinsic_body_minimum(
         return Err(Error::Render("Density has no retained group curves".into()));
     }
     let line = theme.marks.density_line.backend_style((0, 0, 0));
-    let ink = crate::render::geometry::line_ink_width(theme, &line)?;
+    let ink = crate::render::geometry::line_ink_width(&line)?;
     let area = crate::render::geometry::rectangular_fill_ink_outset(
-        theme,
         &theme.marks.density_area.backend_style((0, 0, 0)),
     )?;
     Ok((
@@ -86,17 +85,21 @@ impl PreparedDensity {
     ) -> Result<(CategoryColors, AccentColors), Error> {
         let resources = data.source_resources()?;
         let keys = if let Some(global) = chart.global_hue_levels() {
-            data.collect_source(global.iter().map(|key| data.copy_source_string(key)))?
+            crate::data::source::collect_source(
+                global
+                    .iter()
+                    .map(|key| crate::data::source::copy_source_string(key)),
+            )?
         } else {
             let mut observed = Vec::new();
-            data.reserve_source(&mut observed, self.curves.len())?;
-            data.claim_source_visits(self.curves.len())?;
+            crate::data::source::reserve_source(&mut observed, self.curves.len())?;
+
             for curve in &self.curves {
                 if let Some(hue) = &curve.identity.hue {
-                    observed.push(data.copy_source_string(hue)?);
+                    observed.push(crate::data::source::copy_source_string(hue)?);
                 }
             }
-            data.source_levels(&observed)?
+            crate::data::source::source_levels(&observed)?
         };
         let map = CategoryColors::resolve(
             &keys,
@@ -107,7 +110,6 @@ impl PreparedDensity {
         let accent = AccentColors::resolve(
             &theme.marks.accents,
             usize::from(self.curves.iter().any(|curve| curve.identity.hue.is_none())),
-            resources,
         )?;
         Ok((map, accent))
     }
@@ -116,10 +118,9 @@ impl PreparedDensity {
         curve: &DensityCurve,
         colors: &CategoryColors,
         accent: &AccentColors,
-        resources: &crate::font::canonical::OperationGenerationResources,
     ) -> Result<(u8, u8, u8), Error> {
         if let Some(hue) = &curve.identity.hue {
-            colors.color(hue, resources)
+            colors.color(hue)
         } else {
             accent.color(0)
         }
@@ -134,24 +135,19 @@ impl PreparedDensity {
             .filter_map(|curve| curve.identity.hue.as_deref())
     }
 
-    pub(crate) fn group_order(
-        &self,
-        chart: &Plot,
-        data: PlotData<'_>,
-    ) -> Result<Vec<(usize, usize)>, Error> {
-        let mut order =
-            data.collect_source(self.curves.iter().enumerate().map(|(index, curve)| {
+    pub(crate) fn group_order(&self, chart: &Plot) -> Result<Vec<(usize, usize)>, Error> {
+        let mut order = crate::data::source::collect_source(self.curves.iter().enumerate().map(
+            |(index, curve)| {
                 let pairs = chart.global_collective_pairs().unwrap_or(&[]);
-                data.claim_source_visits(pairs.len())?;
+
                 let key = pairs
                     .iter()
                     .position(|pair| pair == &curve.identity)
                     .unwrap_or(index);
                 Ok((key, index))
-            }))?;
-        crate::data::source::sort_source_by(&mut order, Some(data), |a, b| {
-            (a.0, a.1).cmp(&(b.0, b.1))
-        })?;
+            },
+        ))?;
+        crate::data::source::sort_source_by(&mut order, |a, b| (a.0, a.1).cmp(&(b.0, b.1)));
         Ok(order)
     }
 
@@ -163,29 +159,28 @@ impl PreparedDensity {
         order: &[(usize, usize)],
     ) -> Result<Vec<LegendEntry>, Error> {
         let (colors, accent) = self.resolved_colors(chart, theme, data)?;
-        self.guide_entries_with_colors(chart, theme, data, order, &colors, &accent)
+        self.guide_entries_with_colors(chart, theme, order, &colors, &accent)
     }
 
     fn guide_entries_with_colors(
         &self,
         chart: &Plot,
         theme: &crate::theme::ResolvedTheme,
-        data: PlotData<'_>,
+
         order: &[(usize, usize)],
         colors: &CategoryColors,
         accent: &AccentColors,
     ) -> Result<Vec<LegendEntry>, Error> {
-        let resources = data.source_resources()?;
         let mut entries = Vec::new();
-        data.reserve_source(&mut entries, order.len())?;
+        crate::data::source::reserve_source(&mut entries, order.len())?;
         for &(_, index) in order {
             let curve = &self.curves[index];
             if curve.identity.hue.is_none() {
                 continue;
             }
-            let color = Self::curve_color(curve, colors, accent, resources)?;
+            let color = Self::curve_color(curve, colors, accent)?;
             entries.push(LegendEntry::line_fill(
-                chart.collective_legend_identity(&curve.identity, data)?,
+                chart.collective_legend_identity(&curve.identity)?,
                 theme.marks.density_line.backend_style(color),
                 theme.marks.density_area.backend_style(color),
             ));
@@ -194,7 +189,7 @@ impl PreparedDensity {
     }
 
     pub(crate) fn new(chart: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
-        data.claim_mark_rows()?;
+        data.validate_row_source()?;
         #[cfg(test)]
         crate::layout::interior::distributions::count(1, 0);
         let column = chart
@@ -203,7 +198,7 @@ impl PreparedDensity {
         let prepared = prepare_density_for_chart(chart, data, column)?;
         if let Some(exact) = chart.categorical_colors_spec() {
             for hue in prepared.hue_levels() {
-                if exact.color_in(hue, data.source_resources()?)?.is_none() {
+                if exact.color_in(hue).is_none() {
                     return Err(Error::Data(format!(
                         "density: category {hue:?} has no caller-owned color"
                     )));
@@ -213,19 +208,10 @@ impl PreparedDensity {
         Ok(prepared)
     }
 
-    pub(crate) fn ranges(
-        &self,
-        chart: &Plot,
-        data: PlotData<'_>,
-    ) -> Result<[(f64, f64); 2], Error> {
+    pub(crate) fn ranges(&self, chart: &Plot) -> Result<[(f64, f64); 2], Error> {
         Ok([
             chart.x_axis_spec().limits.unwrap_or(self.x_range),
-            crate::layout::anchored_auto_range(
-                (0.0, self.maximum),
-                chart.y_axis_spec(),
-                0.0,
-                data.source_resources()?,
-            )?,
+            crate::layout::anchored_auto_range((0.0, self.maximum), chart.y_axis_spec(), 0.0)?,
         ])
     }
 }
@@ -274,12 +260,7 @@ pub(crate) fn axis_ranges(
     let prepared = prepare_density_for_chart(chart, data, column)?;
     Ok([
         chart.x_axis_spec().limits.unwrap_or(prepared.x_range),
-        crate::layout::anchored_auto_range(
-            (0.0, prepared.maximum),
-            chart.y_axis_spec(),
-            0.0,
-            data.source_resources()?,
-        )?,
+        crate::layout::anchored_auto_range((0.0, prepared.maximum), chart.y_axis_spec(), 0.0)?,
     ])
 }
 
@@ -306,8 +287,8 @@ pub(crate) fn measure_marks(
             )
         })?;
     let theme = context.theme;
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = context.data.with_axis_resources(&resources);
+    let resources = theme.prepared_font_environment()?.operation();
+    let data = context.data.with_operation(&resources);
     let projection = layout.projection.clone();
     let mut result = project(chart, prepared, layout, theme, data)?;
     let automatic = [
@@ -316,7 +297,6 @@ pub(crate) fn measure_marks(
     ];
     let mut requests = [None; 2];
     if let Some(ink) = crate::render::geometry::line_ink_bounds(
-        theme,
         &theme.marks.density_line.backend_style((0, 0, 0)),
     )? {
         requests = crate::layout::interior::automatic_mark_ink_expansions(
@@ -324,7 +304,6 @@ pub(crate) fn measure_marks(
             &projection,
             ink,
             automatic,
-            data,
             context.fit_scope(),
         )?;
     }
@@ -336,7 +315,7 @@ pub(crate) fn measure_marks(
     else {
         unreachable!("Density selected its own mark payload")
     };
-    let mut area = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    let mut area = crate::render::geometry::GeometrySnapshot::new();
     for curve in &payload.curves {
         if curve.fill.len() >= 3 {
             area.polygon(&curve.fill, &curve.fill_style, None)?;
@@ -353,7 +332,6 @@ pub(crate) fn measure_marks(
             &projection,
             bounds,
             automatic,
-            data,
             context.fit_scope(),
         )?;
         requests = crate::layout::interior::merge_mark_domain_expansions(requests, additional);
@@ -379,28 +357,28 @@ pub(crate) fn project(
         curves: Vec::new(),
         domain_expansions: [None; 2],
     };
-    data.reserve_source(&mut payload.curves, prepared.curves.len())?;
-    let order = prepared.group_order(chart, data)?;
+    crate::data::source::reserve_source(&mut payload.curves, prepared.curves.len())?;
+    let order = prepared.group_order(chart)?;
     let (colors, accent) = prepared.resolved_colors(chart, theme, data)?;
     let legend_entries =
-        prepared.guide_entries_with_colors(chart, theme, data, &order, &colors, &accent)?;
-    let resources = data.source_resources()?;
+        prepared.guide_entries_with_colors(chart, theme, &order, &colors, &accent)?;
+
     for &(_, index) in &order {
         let curve = &prepared.curves[index];
-        let visible = visible_curve(curve, layout.projection.x_range(), data)?;
+        let visible = visible_curve(curve, layout.projection.x_range())?;
         if visible.len() < 2 {
             continue;
         }
-        let color = PreparedDensity::curve_color(curve, &colors, &accent, resources)?;
+        let color = PreparedDensity::curve_color(curve, &colors, &accent)?;
         let mut fill = Vec::new();
-        data.reserve_source(&mut fill, visible.len() + 2)?;
+        crate::data::source::reserve_source(&mut fill, visible.len() + 2)?;
         fill.push((visible[0].0, 0.0));
         fill.extend(visible.iter().copied());
         fill.push((visible[visible.len() - 1].0, 0.0));
-        let fill = clip_polygon_y(fill, layout.projection.y_range(), data)?;
+        let fill = clip_polygon_y(fill, layout.projection.y_range())?;
         let mut projected = DensityCurvePayload {
             fill: if fill.len() >= 3 {
-                project_points(&fill, &layout, data, true)?
+                project_points(&fill, &layout, true)?
             } else {
                 Vec::new()
             },
@@ -408,18 +386,18 @@ pub(crate) fn project(
             fill_style: theme.marks.density_area.backend_style(color),
             line_style: theme.marks.density_line.backend_style(color),
         };
-        data.reserve_source(&mut projected.segments, visible.len() - 1)?;
+        crate::data::source::reserve_source(&mut projected.segments, visible.len() - 1)?;
         for pair in visible.windows(2) {
             if let Some(segment) = clip_line_y(pair[0], pair[1], layout.projection.y_range()) {
                 projected
                     .segments
-                    .push(project_points(&segment, &layout, data, false)?);
+                    .push(project_points(&segment, &layout, false)?);
             }
         }
         payload.curves.push(projected);
     }
 
-    let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    let mut geometry = crate::render::geometry::GeometrySnapshot::new();
     #[cfg(test)]
     crate::layout::interior::distributions::count(1, 2);
     let clip = Some(crate::render::backend::validate_clip_region(payload.clip)?.panel());
@@ -430,10 +408,12 @@ pub(crate) fn project(
         }
     }
     let mut result = PlotRenderResult::new(layout, legend_entries);
-    result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
-        payload: crate::layout::interior::MarkPayload::Density(payload),
-        geometry,
-    })?);
+    result.marks = Some(crate::data::source::source_arc(
+        crate::layout::interior::SelectedMarkPlan {
+            payload: crate::layout::interior::MarkPayload::Density(payload),
+            geometry,
+        },
+    )?);
     Ok(result)
 }
 
@@ -475,10 +455,10 @@ pub(crate) fn shared_x_domain(
     }
     let mut range = (f64::INFINITY, f64::NEG_INFINITY);
     let mut samples = Vec::new();
-    data.reserve_source(&mut samples, values.len())?;
+    crate::data::source::reserve_source(&mut samples, values.len())?;
     for identity in &channels.identities {
         samples.clear();
-        data.claim_source_visits(values.len())?;
+
         samples.extend(
             channels
                 .rows
@@ -487,11 +467,7 @@ pub(crate) fn shared_x_domain(
                 .filter_map(|(row, value)| (row == identity).then_some(*value)),
         );
         // Scott bandwidth scans five times; support adds one min/max pass.
-        let visits = samples
-            .len()
-            .checked_mul(6)
-            .ok_or_else(|| Error::Render("density axis source visits overflow".into()))?;
-        data.claim_source_visits(visits)?;
+
         let (low, high, _) =
             density_support(&samples, || identity.description(channels.collapsed))?;
         range = (range.0.min(low), range.1.max(high));
@@ -540,10 +516,6 @@ fn prepare_density_for_chart<'a>(
     )
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "channel columns, semantic names, and global orders form one density preparation boundary"
-)]
 fn prepare_density_ordered<'a>(
     data: impl Into<crate::data::PlotData<'a>>,
     value_col: &str,
@@ -569,12 +541,12 @@ fn prepare_density_ordered<'a>(
     let mut support_high = f64::NEG_INFINITY;
     let mut curves = Vec::new();
     let mut maximum = 0.0_f64;
-    data.reserve_source(&mut curves, ordered_identities.len())?;
+    crate::data::source::reserve_source(&mut curves, ordered_identities.len())?;
     let mut samples = Vec::new();
-    data.reserve_source(&mut samples, values.len())?;
+    crate::data::source::reserve_source(&mut samples, values.len())?;
     for identity in ordered_identities {
         samples.clear();
-        data.claim_source_visits(values.len())?;
+
         samples.extend(
             channels
                 .rows
@@ -585,9 +557,7 @@ fn prepare_density_ordered<'a>(
         if samples.is_empty() {
             continue;
         }
-        for _ in 0..6 {
-            data.claim_source_visits(samples.len())?;
-        }
+
         let description = || identity.description(channels.collapsed);
         let (low, high, bandwidth) = density_support(&samples, description)?;
         support_low = support_low.min(low);
@@ -612,13 +582,12 @@ fn prepare_density_ordered<'a>(
             )));
         }
         let mut grid = Vec::new();
-        data.reserve_source(&mut grid, interval_count + 1)?;
+        crate::data::source::reserve_source(&mut grid, interval_count + 1)?;
         grid.extend(
             (0..=interval_count)
                 .map(|index| scaled_lerp(low, high, index as f64 / interval_count as f64)),
         );
-        data.claim_source_visits(grid.len())?;
-        data.claim_source_visits(grid.len() - 1)?;
+
         if grid.iter().any(|coordinate| !coordinate.is_finite())
             || grid.windows(2).any(|pair| pair[0] >= pair[1])
         {
@@ -627,20 +596,15 @@ fn prepare_density_ordered<'a>(
                 description()
             )));
         }
-        let densities = crate::stats::distribution::gaussian_kde_with_source(
-            &samples,
-            &grid,
-            bandwidth,
-            Some(data),
-        )
-        .map_err(|error| match error {
-            Error::Data(_) => Error::Data(format!("density: {}: {error}", description())),
-            error => error,
-        })?;
-        data.claim_source_visits(densities.len())?;
+        let densities = crate::stats::distribution::gaussian_kde(&samples, &grid, bandwidth)
+            .map_err(|error| match error {
+                Error::Data(_) => Error::Data(format!("density: {}: {error}", description())),
+                error => error,
+            })?;
+
         maximum = densities.iter().copied().fold(maximum, f64::max);
         curves.push(DensityCurve {
-            identity: data.copy_source_pair(identity)?,
+            identity: crate::data::source::copy_source_pair(identity)?,
             grid,
             densities,
         });
@@ -657,11 +621,7 @@ fn prepare_density_ordered<'a>(
     })
 }
 
-fn visible_curve(
-    curve: &DensityCurve,
-    x_range: (f64, f64),
-    data: PlotData<'_>,
-) -> Result<Vec<(f64, f64)>, Error> {
+fn visible_curve(curve: &DensityCurve, x_range: (f64, f64)) -> Result<Vec<(f64, f64)>, Error> {
     let first = curve.grid[0];
     let last = curve.grid[curve.grid.len() - 1];
     if x_range.1 < first || x_range.0 > last {
@@ -670,8 +630,8 @@ fn visible_curve(
     let low = x_range.0.max(first);
     let high = x_range.1.min(last);
     let mut visible = Vec::new();
-    data.reserve_source(&mut visible, curve.grid.len() + 2)?;
-    data.claim_source_visits(curve.grid.len())?;
+    crate::data::source::reserve_source(&mut visible, curve.grid.len() + 2)?;
+
     visible.push((low, density_at(curve, low)));
     visible.extend(
         curve
@@ -729,17 +689,15 @@ fn clip_line_y(
 fn clip_polygon_y(
     mut polygon: Vec<(f64, f64)>,
     y_range: (f64, f64),
-    data: PlotData<'_>,
 ) -> Result<Vec<(f64, f64)>, Error> {
-    polygon = clip_polygon_boundary(polygon, y_range.0, true, data)?;
-    clip_polygon_boundary(polygon, y_range.1, false, data)
+    polygon = clip_polygon_boundary(polygon, y_range.0, true)?;
+    clip_polygon_boundary(polygon, y_range.1, false)
 }
 
 fn clip_polygon_boundary(
     polygon: Vec<(f64, f64)>,
     boundary: f64,
     keep_above: bool,
-    data: PlotData<'_>,
 ) -> Result<Vec<(f64, f64)>, Error> {
     let Some(mut previous) = polygon.last().copied() else {
         return Ok(polygon);
@@ -749,8 +707,8 @@ fn clip_polygon_boundary(
         .len()
         .checked_mul(2)
         .ok_or_else(|| Error::Render("density clip storage overflow".into()))?;
-    data.reserve_source(&mut output, count)?;
-    data.claim_source_visits(polygon.len())?;
+    crate::data::source::reserve_source(&mut output, count)?;
+
     for current in polygon {
         let previous_inside = if keep_above {
             previous.1 >= boundary
@@ -777,28 +735,30 @@ fn clip_polygon_boundary(
 fn project_points(
     points: &[(f64, f64)],
     layout: &Layout,
-    data: PlotData<'_>,
+
     polygon: bool,
 ) -> Result<Vec<Point2D>, Error> {
     let mut source_extents = [(f64::INFINITY, f64::NEG_INFINITY); 2];
     let mut projected_extents = source_extents;
-    let points = data.collect_source(points.iter().map(|&(source_x, source_y)| {
-        data.claim_source_visits(1)?;
-        let (x, y) = layout.projection.project(source_x, source_y);
-        for (index, (source, projected)) in [(source_x, x), (source_y, y)].into_iter().enumerate() {
-            source_extents[index].0 = source_extents[index].0.min(source);
-            source_extents[index].1 = source_extents[index].1.max(source);
-            projected_extents[index].0 = projected_extents[index].0.min(projected);
-            projected_extents[index].1 = projected_extents[index].1.max(projected);
-        }
-        if x.is_finite() && y.is_finite() {
-            Ok(Point2D::new(x, y))
-        } else {
-            Err(Error::Data(
-                "density: visible curve cannot be projected at this numeric scale".into(),
-            ))
-        }
-    }))?;
+    let points =
+        crate::data::source::collect_source(points.iter().map(|&(source_x, source_y)| {
+            let (x, y) = layout.projection.project(source_x, source_y);
+            for (index, (source, projected)) in
+                [(source_x, x), (source_y, y)].into_iter().enumerate()
+            {
+                source_extents[index].0 = source_extents[index].0.min(source);
+                source_extents[index].1 = source_extents[index].1.max(source);
+                projected_extents[index].0 = projected_extents[index].0.min(projected);
+                projected_extents[index].1 = projected_extents[index].1.max(projected);
+            }
+            if x.is_finite() && y.is_finite() {
+                Ok(Point2D::new(x, y))
+            } else {
+                Err(Error::Data(
+                    "density: visible curve cannot be projected at this numeric scale".into(),
+                ))
+            }
+        }))?;
     // A filled density needs both extents. A line only requires distinct points,
     // not a positive extent on each axis (horizontal/vertical lines are valid).
     if polygon || points.first() == points.last() {
@@ -854,10 +814,10 @@ mod tests {
             .hue(crate::CategoryValues::new("hue", ["a", "a", "b", "b"]).unwrap())
             .categorical_colors(crate::CategoricalColors::new([("a".into(), (5, 7, 11))]).unwrap())
             .erase();
-        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let resources = crate::font::canonical::OperationContext::new();
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-        let error = PreparedDensity::new(&source, source.data().with_axis_resources(&resources))
-            .unwrap_err();
+        let error =
+            PreparedDensity::new(&source, source.data().with_operation(&resources)).unwrap_err();
         assert!(matches!(error, Error::Data(message) if message.contains("category \"b\"")));
         assert_eq!(
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
@@ -871,12 +831,10 @@ mod tests {
         let source = Plot::density(NumericValues::new("sample", [1.0, 2.0, 3.0, 4.0]))
             .x_limits(0.0, 5.0)
             .erase();
-        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let resources = crate::font::canonical::OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let original = chart.intrinsic_body_minimum(&theme).unwrap();
         theme.marks.density_line.width = 140.0;
         let thick = chart.intrinsic_body_minimum(&theme).unwrap();
@@ -899,7 +857,7 @@ mod tests {
         ))
         .hue(CategoryValues::new("series", ["a", "a", "a", "b", "b", "b"]).unwrap())
         .erase();
-        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let resources = crate::font::canonical::OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs
             .attach(source)
@@ -915,9 +873,7 @@ mod tests {
                     hue: Some("a".into()),
                 },
             ]);
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
         let selected = chart
             .measure_selected_interior(PlotRenderContext::new(
@@ -973,7 +929,6 @@ mod tests {
                 changed.legend_entries[0].clone()
             ],
             "custom Density line",
-            &crate::font::canonical::OperationGenerationResources::new(),
         )
         .unwrap_err()
         .to_string()
@@ -998,12 +953,11 @@ mod tests {
                     plot.hue(CategoryValues::new("color", ["u", "u", "u", "v", "v", "v"]).unwrap());
             }
             let plot = plot.erase();
-            let resources = crate::font::canonical::OperationGenerationResources::new();
-            let data = plot.data().with_axis_resources(&resources);
+            let resources = crate::font::canonical::OperationContext::new();
+            let data = plot.data().with_operation(&resources);
             let range = shared_x_domain(&plot, data).unwrap();
             let prepared = prepare_density_for_chart(&plot, plot.data(), crate::data::X).unwrap();
             assert_eq!(range, prepared.x_range);
-            assert!(resources.usage().unwrap().1 > 0);
         }
     }
 

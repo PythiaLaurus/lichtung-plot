@@ -2,9 +2,7 @@ use super::*;
 
 #[test]
 fn fractional_insets_and_gap_fit_once_and_subquantum_text_capacity_keeps_its_source_address() {
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     theme.typography.composition.text_panel_title = theme
         .typography
         .composition
@@ -81,7 +79,7 @@ fn fractional_insets_and_gap_fit_once_and_subquantum_text_capacity_keeps_its_sou
             AddressRole::TextPanelTitle
         );
     }
-    let mut ink = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+    let mut ink = crate::render::geometry::GeometrySnapshot::new();
     ink.text(plan.title_placement, plan.title.plan(), None)
         .unwrap();
     ink.text(plan.body_placement, plan.body.plan(), None)

@@ -33,7 +33,7 @@ use crate::data::PlotData;
 use crate::plots::categorical_distribution::{self, DistributionPayload, PreparedDistribution};
 use crate::render::backend::Point2D;
 use crate::spec::{PlotRenderContext, PlotRenderResult};
-use crate::stats::distribution::{kde_support_range, kde_with_source};
+use crate::stats::distribution::{kde, kde_support_range};
 use crate::theme::ResolvedTheme;
 use crate::Plot;
 
@@ -78,11 +78,10 @@ pub(crate) fn raincloud_strip_pitch(
         theme.marks.raw_overlay_radius,
         true,
     );
-    let point = crate::render::geometry::point_ink_bounds(theme, &style)?;
+    let point = crate::render::geometry::point_ink_bounds(&style)?;
     let left = point.map_or(0.0, |ink| (-ink.left).max(0.0));
     let right = point.map_or(0.0, |ink| ink.right.max(0.0));
     let box_right = crate::render::geometry::rectangular_fill_ink_bounds(
-        theme,
         &theme.marks.raincloud_box.backend_style(),
     )?
     .map_or(0.0, |ink| ink.right.max(0.0));
@@ -117,20 +116,16 @@ pub(crate) fn intrinsic_body_minimum(
         0.8
     };
     let cloud_style = theme.marks.violin_body.backend_style((0, 0, 0));
-    let cloud = crate::render::geometry::rectangular_fill_ink_bounds(theme, &cloud_style)?;
-    let (_, cloud_y) = crate::render::geometry::rectangular_fill_ink_outset(theme, &cloud_style)?;
+    let cloud = crate::render::geometry::rectangular_fill_ink_bounds(&cloud_style)?;
+    let (_, cloud_y) = crate::render::geometry::rectangular_fill_ink_outset(&cloud_style)?;
     let inner_style = theme.marks.raincloud_box.backend_style();
-    let inner = crate::render::geometry::rectangular_fill_ink_bounds(theme, &inner_style)?;
-    let (_, inner_y) = crate::render::geometry::rectangular_fill_ink_outset(theme, &inner_style)?;
-    let summary_ink = crate::render::geometry::line_ink_bounds(
-        theme,
-        &theme.marks.summary_stroke.backend_style(),
-    )?;
+    let inner = crate::render::geometry::rectangular_fill_ink_bounds(&inner_style)?;
+    let (_, inner_y) = crate::render::geometry::rectangular_fill_ink_outset(&inner_style)?;
+    let summary_ink =
+        crate::render::geometry::line_ink_bounds(&theme.marks.summary_stroke.backend_style())?;
     let summary = summary_ink.map_or(0.0, |ink| ink.top - ink.bottom);
-    let median_ink = crate::render::geometry::line_ink_bounds(
-        theme,
-        &theme.marks.raincloud_median.backend_style(),
-    )?;
+    let median_ink =
+        crate::render::geometry::line_ink_bounds(&theme.marks.raincloud_median.backend_style())?;
     let median = median_ink.map_or(0.0, |ink| ink.top - ink.bottom);
     let overlay = chart.raw_overlay_spec();
     let points_visible = raincloud || overlay.is_visible();
@@ -140,13 +135,11 @@ pub(crate) fn intrinsic_body_minimum(
             theme.marks.raw_overlay_radius,
             true,
         );
-        crate::render::geometry::point_ink_bounds(theme, &style)?
+        crate::render::geometry::point_ink_bounds(&style)?
     } else {
         None
     };
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = chart.data().with_axis_resources(&resources);
-    data.claim_source_visits(sample.groups.len())?;
+
     let mut pitch = 1.0_f64 / 1024.0;
     let mut numeric = cloud_y
         .max(inner_y)
@@ -201,7 +194,6 @@ pub(crate) fn intrinsic_body_minimum(
                 numeric = numeric.max(ink.top - ink.bottom);
             }
             if !raincloud && overlay.is_visible() {
-                data.claim_source_visits(group.observations.len())?;
                 for observation in &group.observations {
                     let x = crate::plots::distribution_sample::overlay_x(
                         overlay,
@@ -248,7 +240,7 @@ pub(crate) fn prepare(
     if chart.kind() == crate::PlotKind::Raincloud {
         let mut source_rows = Vec::new();
         for group in &sample.groups {
-            data.reserve_source(&mut source_rows, group.observations.len())?;
+            crate::data::source::reserve_source(&mut source_rows, group.observations.len())?;
             let start = source_rows.len();
             source_rows.extend(
                 group
@@ -258,8 +250,8 @@ pub(crate) fn prepare(
                     .map(|(index, observation)| (observation.source_row, start + index)),
             );
         }
-        crate::data::source::sort_source_by(&mut source_rows, Some(data), Ord::cmp)?;
-        data.claim_source_visits(source_rows.len())?;
+        crate::data::source::sort_source_by(&mut source_rows, Ord::cmp);
+
         // Keep the former traversal's first duplicate diagnostic without a hash
         // table allocation or quadratic identity scans.
         if let Some((row, _)) = source_rows
@@ -274,9 +266,6 @@ pub(crate) fn prepare(
         }
     }
 
-    for group in &sample.groups {
-        data.claim_source_visits(group.observations.len())?;
-    }
     let (data_y_min, data_y_max) = sample
         .groups
         .iter()
@@ -295,19 +284,13 @@ pub(crate) fn prepare(
         )));
     }
 
-    let extent_groups = data.collect_source(
-        sample
-            .groups
-            .iter()
-            .map(|group| data.collect_source(group.observations.iter().map(|o| Ok(o.value)))),
-    )?;
-    for values in &extent_groups {
-        data.claim_source_visits(values.len().saturating_mul(3))?;
-    }
+    let extent_groups = crate::data::source::collect_source(sample.groups.iter().map(|group| {
+        crate::data::source::collect_source(group.observations.iter().map(|o| Ok(o.value)))
+    }))?;
+
     let support_range = kde_support_range(extent_groups.iter().map(Vec::as_slice), 2.0)
         .ok_or_else(|| Error::Data(format!("{family}: no finite KDE support")))?;
-    let grid = data.collect_source((0..64).map(|k| {
-        data.claim_source_visits(1)?;
+    let grid = crate::data::source::collect_source((0..64).map(|k| {
         // The zero-density seam must share the exact retained support end,
         // including when the parent assigns that end as a display limit.
         Ok(if k == 63 {
@@ -316,12 +299,12 @@ pub(crate) fn prepare(
             support_range.0 + (support_range.1 - support_range.0) * (k as f64) / 63.0
         })
     }))?;
-    let densities = data.collect_source(extent_groups.iter().map(|values| {
-        let summary = violin_summary_with_source(values, Some(data))?;
-        let mut densities = kde_with_source(values, &grid, Some(data))?;
+    let densities = crate::data::source::collect_source(extent_groups.iter().map(|values| {
+        let summary = violin_summary_with_source(values)?;
+        let mut densities = kde(values, &grid)?;
         densities[0] = 0.0;
         densities[63] = 0.0;
-        data.claim_source_visits(densities.len())?;
+
         let maximum = densities.iter().copied().fold(0.0_f64, f64::max);
         Ok(ViolinDensity {
             summary,
@@ -357,18 +340,19 @@ pub(crate) fn measure_marks(
         DistributionLayout::Raincloud
     };
     let theme = context.theme;
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = context.data.with_axis_resources(&resources);
+    let resources = theme.prepared_font_environment()?.operation();
+    let data = context.data.with_operation(&resources);
     let sample = &prepared.sample;
     let x_levels = &sample.x_levels;
     let group_levels = &sample.group_levels;
     let support_range = prepared.support_range;
     let base_display_range = layout.projection.y_range();
-    let rendered_maxima = data.collect_source((0..x_levels.len()).map(|_| Ok(support_range.1)))?;
+    let rendered_maxima =
+        crate::data::source::collect_source((0..x_levels.len()).map(|_| Ok(support_range.1)))?;
     let overlay = chart.raw_overlay_spec();
     let panel = context.panel;
     let colors = retained.resolved_colors(chart, theme, data)?;
-    let legend_entries = retained.guide_entries_with_colors(chart, theme, data, &colors)?;
+    let legend_entries = retained.guide_entries_with_colors(chart, theme, &colors)?;
     let significance = if group_levels.is_empty() {
         crate::significance::plan(
             chart,
@@ -380,9 +364,12 @@ pub(crate) fn measure_marks(
             context.fit_scope(),
         )?
     } else {
-        let mut grouped_maxima = data.collect_source((0..x_levels.len()).map(|_| {
-            data.collect_source((0..group_levels.len()).map(|_| Ok(f64::NEG_INFINITY)))
-        }))?;
+        let mut grouped_maxima =
+            crate::data::source::collect_source((0..x_levels.len()).map(|_| {
+                crate::data::source::collect_source(
+                    (0..group_levels.len()).map(|_| Ok(f64::NEG_INFINITY)),
+                )
+            }))?;
         for group in &sample.groups {
             grouped_maxima[group.x_index][group.group_index] = support_range.1;
         }
@@ -423,12 +410,12 @@ pub(crate) fn measure_marks(
         let fill = theme
             .marks
             .violin_body
-            .backend_style(group_color(group, &colors, &resources)?);
+            .backend_style(group_color(group, &colors)?);
         match distribution_layout {
             DistributionLayout::Mirrored => {
                 // Violin shape
                 let mut pts = Vec::new();
-                data.reserve_source(&mut pts, 2 * n_grid + 1)?;
+                crate::data::source::reserve_source(&mut pts, 2 * n_grid + 1)?;
                 for (gy, d) in grid.iter().zip(densities.iter()) {
                     let x_off = (*d / max_d) * (violin_w_data / 2.0);
                     let (px, py) = proj.project(center_x_data + x_off, *gy);
@@ -446,7 +433,7 @@ pub(crate) fn measure_marks(
                     let (px, py) = proj.project(center_x_data - x_off, *gy);
                     pts.push(Point2D::new(px, py));
                 }
-                payload.polygon(pts, fill, data)?;
+                payload.polygon(pts, fill)?;
 
                 // Inner box-and-whisker mark, matching seaborn's default inner="box" cue.
                 let (cx_px, _) = proj.project(center_x_data, 0.0);
@@ -485,7 +472,6 @@ pub(crate) fn measure_marks(
                         Point2D::new(cx_px, hi_whisker_px),
                     ],
                     &whisker_line,
-                    data,
                 )?;
                 payload.line(
                     &[
@@ -493,7 +479,6 @@ pub(crate) fn measure_marks(
                         Point2D::new(cx_px + cap_w_px, lo_whisker_px),
                     ],
                     &whisker_line,
-                    data,
                 )?;
                 payload.line(
                     &[
@@ -501,9 +486,8 @@ pub(crate) fn measure_marks(
                         Point2D::new(cx_px + cap_w_px, hi_whisker_px),
                     ],
                     &whisker_line,
-                    data,
                 )?;
-                let box_pts = data.collect_source(
+                let box_pts = crate::data::source::collect_source(
                     [
                         Point2D::new(cx_px - box_w_px, q1_px),
                         Point2D::new(cx_px + box_w_px, q1_px),
@@ -514,7 +498,7 @@ pub(crate) fn measure_marks(
                     .map(Ok),
                 )?;
                 let box_fill = theme.marks.raincloud_box.backend_style();
-                payload.polygon(box_pts, box_fill, data)?;
+                payload.polygon(box_pts, box_fill)?;
 
                 let median_line = theme.marks.raincloud_median.backend_style();
                 payload.line(
@@ -523,13 +507,12 @@ pub(crate) fn measure_marks(
                         Point2D::new(cx_px + box_w_px, median_px),
                     ],
                     &median_line,
-                    data,
                 )?;
             }
             DistributionLayout::Raincloud => {
                 let baseline = center_x_data - violin_w_data * 0.10;
                 let mut cloud = Vec::new();
-                data.reserve_source(&mut cloud, n_grid + 2)?;
+                crate::data::source::reserve_source(&mut cloud, n_grid + 2)?;
                 for (gy, density) in grid.iter().zip(densities) {
                     let offset = (*density / max_d) * violin_w_data * 0.40;
                     let (x, y) = proj.project(baseline - offset, *gy);
@@ -546,7 +529,7 @@ pub(crate) fn measure_marks(
                 )?;
                 cloud.push(Point2D::new(baseline_high_x, baseline_high_y));
                 cloud.push(Point2D::new(baseline_low_x, baseline_low_y));
-                payload.polygon(cloud, fill, data)?;
+                payload.polygon(cloud, fill)?;
 
                 let box_center = center_x_data + violin_w_data * 0.02;
                 let box_half_width = violin_w_data * 0.08;
@@ -563,7 +546,7 @@ pub(crate) fn measure_marks(
                     "raincloud box polygon",
                 )?;
                 payload.polygon(
-                    data.collect_source(
+                    crate::data::source::collect_source(
                         [
                             Point2D::new(box_left, q1),
                             Point2D::new(box_right, q1),
@@ -574,7 +557,6 @@ pub(crate) fn measure_marks(
                         .map(Ok),
                     )?,
                     theme.marks.raincloud_box.backend_style(),
-                    data,
                 )?;
                 payload.line(
                     &[
@@ -582,7 +564,6 @@ pub(crate) fn measure_marks(
                         Point2D::new(box_right, median),
                     ],
                     &theme.marks.raincloud_median.backend_style(),
-                    data,
                 )?;
             }
         }
@@ -598,32 +579,32 @@ pub(crate) fn measure_marks(
             let (box_right, _) = proj.project(center + violin_w_data * 0.10, 0.0);
             let (strip_left, _) = proj.project(center + violin_w_data * 0.24, 0.0);
             let (strip_right, _) = proj.project(center + violin_w_data * 0.46, 0.0);
-            let color = group_color(group, &colors, &resources)?;
+            let color = group_color(group, &colors)?;
             let style = crate::plots::distribution_sample::overlay_style(color, theme);
-            let point_ink = crate::render::geometry::point_ink_bounds(theme, &style)?;
+            let point_ink = crate::render::geometry::point_ink_bounds(&style)?;
             let point_left = point_ink.map_or(0.0, |ink| (-ink.left).max(0.0));
             let point_right = point_ink.map_or(0.0, |ink| ink.right.max(0.0));
             let box_right_ink = crate::render::geometry::rectangular_fill_ink_bounds(
-                theme,
                 &theme.marks.raincloud_box.backend_style(),
             )?
             .map_or(0.0, |ink| ink.right.max(0.0));
             let strip_min = strip_left + point_left;
             let strip_max = strip_right - point_right;
             if strip_min - point_left <= box_right + box_right_ink || strip_max < strip_min {
-                return Err(context.fit_scope().child(crate::layout::AddressRole::CategoricalSeriesSlot, index, &theme.prepared_font_environment()?.generation_resources())?.failure(crate::layout::fit::FitKind::SpecializedGeometry,
+                return Err(context.fit_scope().child(crate::layout::AddressRole::CategoricalSeriesSlot, index)?.failure(crate::layout::fit::FitKind::SpecializedGeometry,
                         "raincloud: panel is too narrow to separate the complete observation strip from the IQR box; increase width or reduce series"
                     ).into());
             }
-            let points = data.collect_source(group.observations.iter().map(|observation| {
-                data.claim_source_visits(1)?;
-                let unit =
-                    crate::plots::distribution_sample::source_row_unit(observation.source_row);
-                let x = strip_min + unit * (strip_max - strip_min);
-                let (_, y) = proj.project(center, observation.value);
-                Ok(Point2D::new(x, y))
-            }))?;
-            payload.scatter(points, style, data)?;
+            let points = crate::data::source::collect_source(group.observations.iter().map(
+                |observation| {
+                    let unit =
+                        crate::plots::distribution_sample::source_row_unit(observation.source_row);
+                    let x = strip_min + unit * (strip_max - strip_min);
+                    let (_, y) = proj.project(center, observation.value);
+                    Ok(Point2D::new(x, y))
+                },
+            ))?;
+            payload.scatter(points, style)?;
         }
     }
     if overlay.is_visible() {
@@ -634,22 +615,22 @@ pub(crate) fn measure_marks(
         };
         for group in &sample.groups {
             let center = crate::plots::distribution_sample::center(group, group_levels.len());
-            let color = group_color(group, &colors, &resources)?;
-            let points = data.collect_source(group.observations.iter().map(|observation| {
-                data.claim_source_visits(1)?;
-                let x = crate::plots::distribution_sample::overlay_x(
-                    overlay,
-                    center,
-                    violin_w_data,
-                    observation.source_row,
-                );
-                let (x, y) = proj.project(x, observation.value);
-                Ok(Point2D::new(x, y))
-            }))?;
+            let color = group_color(group, &colors)?;
+            let points = crate::data::source::collect_source(group.observations.iter().map(
+                |observation| {
+                    let x = crate::plots::distribution_sample::overlay_x(
+                        overlay,
+                        center,
+                        violin_w_data,
+                        observation.source_row,
+                    );
+                    let (x, y) = proj.project(x, observation.value);
+                    Ok(Point2D::new(x, y))
+                },
+            ))?;
             payload.scatter(
                 points,
                 crate::plots::distribution_sample::overlay_style(color, theme),
-                data,
             )?;
         }
     }
@@ -663,38 +644,29 @@ pub(crate) fn measure_marks(
 fn group_color(
     group: &crate::plots::distribution_sample::DistributionGroup,
     colors: &crate::theme::CategoryColors,
-    resources: &crate::font::canonical::OperationGenerationResources,
 ) -> Result<(u8, u8, u8), Error> {
-    colors.color(
-        group.hue_label.as_deref().unwrap_or(&group.label),
-        resources,
-    )
+    colors.color(group.hue_label.as_deref().unwrap_or(&group.label))
 }
 
 #[cfg(test)]
 fn violin_summary(values: &[f64]) -> Result<ViolinSummary, Error> {
-    violin_summary_with_source(values, None)
+    violin_summary_with_source(values)
 }
 
-fn violin_summary_with_source(
-    values: &[f64],
-    data: Option<PlotData<'_>>,
-) -> Result<ViolinSummary, Error> {
-    use crate::data::source::SourceAdmission;
-    data.source_visits(values.len())?;
+fn violin_summary_with_source(values: &[f64]) -> Result<ViolinSummary, Error> {
     if values.is_empty() || values.iter().any(|v| !v.is_finite()) {
         return Err(Error::Data(
             "violin: samples must be finite and nonempty".into(),
         ));
     }
     let mut sorted = Vec::new();
-    data.source_reserve(&mut sorted, values.len())?;
+    crate::data::source::reserve_source(&mut sorted, values.len())?;
     sorted.extend_from_slice(values);
-    crate::data::source::sort_numeric_source(&mut sorted, data)?;
+    crate::data::source::sort_numeric_source(&mut sorted);
     let q1 = crate::stats::distribution::sorted_quantile(&sorted, 0.25);
     let median = crate::stats::distribution::sorted_quantile(&sorted, 0.5);
     let q3 = crate::stats::distribution::sorted_quantile(&sorted, 0.75);
-    data.source_visits(values.len().saturating_mul(2))?;
+
     let iqr = q3 - q1;
     let lo_whisker = values
         .iter()
@@ -753,7 +725,7 @@ mod tests {
             }
         };
         let intrinsic = |source: crate::Plot, theme: &crate::theme::ResolvedTheme| {
-            let resources = crate::font::canonical::OperationGenerationResources::new();
+            let resources = crate::font::canonical::OperationContext::new();
             let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
             inputs
                 .attach(source)
@@ -761,9 +733,7 @@ mod tests {
                 .intrinsic_body_minimum(theme)
                 .unwrap()
         };
-        let plain = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let plain = crate::Theme::Publication.resolve().unwrap();
         let mut styled = plain.clone();
         styled.marks.violin_body.outline = Some(crate::theme::DataOutlineTheme::fixed(
             styled
@@ -808,9 +778,7 @@ mod tests {
     #[test]
     fn sampled_collective_bodies_preserve_all_ink_at_assigned_category_tracks() {
         let theme = {
-            let mut theme = crate::Theme::Publication
-                .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                .unwrap();
+            let mut theme = crate::Theme::Publication.resolve().unwrap();
             theme.marks.violin_body.outline = Some(crate::theme::DataOutlineTheme::fixed(
                 theme
                     .marks
@@ -848,7 +816,7 @@ mod tests {
                     .size(1600, 900)
                     .erase()
             };
-            let resources = crate::font::canonical::OperationGenerationResources::new();
+            let resources = crate::font::canonical::OperationContext::new();
             let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
             let chart = inputs.attach(source).unwrap();
             let cell = crate::layout::PanelBox::new(80.0, 1500.0, 80.0, 800.0);
@@ -866,7 +834,7 @@ mod tests {
                 panic!("selected distribution")
             };
             let panel = selected.result.layout.projection.panel_box();
-            let mut ink = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+            let mut ink = crate::render::geometry::GeometrySnapshot::new();
             for mark in &payload.marks {
                 match mark {
                     crate::plots::categorical_distribution::Mark::Polygon(points, style) => {
@@ -889,17 +857,17 @@ mod tests {
     }
 
     #[test]
-    fn admitted_identity_sort_preserves_first_group_traversal_duplicate() {
+    fn identity_sort_preserves_first_group_traversal_duplicate() {
         let chart = crate::Plot::raincloud(crate::RaincloudInput::samples(
             crate::CategoryValues::new("category", ["a", "b", "a", "b"]).unwrap(),
             crate::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]),
         ))
         .erase();
-        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let resources = crate::font::canonical::OperationContext::new();
         let data = chart
             .data()
             .map_source_rows(&[5, 4, 5, 4])
-            .with_axis_resources(&resources);
+            .with_operation(&resources);
         let error = super::prepare(&chart, data, None).unwrap_err();
         assert!(
             error

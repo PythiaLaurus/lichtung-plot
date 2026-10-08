@@ -234,13 +234,6 @@ pub struct NumericLabelFormat {
 }
 
 impl NumericLabelFormat {
-    pub(crate) fn admit_clone(&self, data: crate::data::PlotData<'_>) -> Result<(), crate::Error> {
-        if let Some(suffix) = &self.suffix {
-            data.admit_clone_str(suffix)?;
-        }
-        Ok(())
-    }
-
     /// Construct fixed decimal formatting without a suffix.
     pub fn new(precision: usize) -> Result<Self, crate::Error> {
         Self::default().precision(precision)
@@ -280,11 +273,7 @@ impl NumericLabelFormat {
         self.display(value).to_string()
     }
 
-    pub(crate) fn format_source(
-        &self,
-        value: f64,
-        data: crate::data::PlotData<'_>,
-    ) -> Result<String, crate::Error> {
+    pub(crate) fn format_source(&self, value: f64) -> Result<String, crate::Error> {
         use std::fmt::Write;
         struct Count(usize);
         impl Write for Count {
@@ -294,13 +283,12 @@ impl NumericLabelFormat {
             }
         }
         // A finite f64 needs at most 309 integral digits and 12 fractional digits.
-        data.claim_source_visits(324)?;
-        data.claim_source_visits(self.suffix.as_ref().map_or(0, String::len))?;
+
         let mut count = Count(0);
         write!(count, "{}", self.display(value))
             .map_err(|error| crate::Error::Render(format!("estimate label count: {error}")))?;
         let mut text = String::new();
-        data.reserve_source_string(&mut text, count.0)?;
+        crate::data::source::reserve_source_string(&mut text, count.0)?;
         write!(text, "{}", self.display(value))
             .map_err(|error| crate::Error::Render(format!("estimate label: {error}")))?;
         Ok(text)
@@ -822,17 +810,8 @@ impl<'a> PlotRenderContext<'a> {
     pub(crate) fn producer_text(self) -> Result<ProducerText<'a>, Error> {
         let mut lookup = std::collections::HashMap::new();
         if let Some(frozen) = self.producer_text {
-            let environment = self.theme.prepared_font_environment()?;
-            environment
-                .claim_text_generation_slots(frozen.len() as u128)
-                .map_err(|error| Error::Render(format!("producer lookup slots: {error:?}")))?;
             // Four bucket records per entry also covers the hash table's control bytes.
-            let bucket_bytes = 4
-                * (std::mem::size_of::<((&str, &str), &crate::layout::ResolvedTextPlan)>() + 1)
-                + 16;
-            environment
-                .claim_unicode_bytes((frozen.len() * bucket_bytes) as u64)
-                .map_err(|error| Error::Render(format!("producer lookup bytes: {error}")))?;
+
             lookup
                 .try_reserve(frozen.len())
                 .map_err(|_| Error::Render("producer lookup allocation failed".into()))?;
@@ -882,14 +861,8 @@ impl<'a> PlotRenderContext<'a> {
         self.prepared_limits = [plot.x_axis_spec().limits, plot.y_axis_spec().limits];
         if plot.kind() == PlotKind::Forest && plot.axis_scale_spec() == AxisScale::Log10 {
             if let Some((lo, hi)) = self.prepared_limits[0] {
-                let resources = self
-                    .theme
-                    .prepared_font_environment()?
-                    .generation_resources();
-                self.prepared_limits[0] = Some((
-                    crate::numeric::log10(lo, &resources)?,
-                    crate::numeric::log10(hi, &resources)?,
-                ));
+                self.prepared_limits[0] =
+                    Some((crate::numeric::log10(lo)?, crate::numeric::log10(hi)?));
             }
         }
         if let Some(shared) = plot.resolved_facet_x_range() {
@@ -949,8 +922,6 @@ impl<'a> PlotRenderContext<'a> {
         y_spec: &crate::layout::AxisSpec,
         theme: &crate::theme::ResolvedTheme,
     ) -> Result<Layout, crate::layout::fit::PlanError> {
-        let resources = theme.prepared_font_environment()?.generation_resources();
-        let data = self.data.with_axis_resources(&resources);
         let mut specs = [
             crate::layout::AxisSpec::default(),
             crate::layout::AxisSpec::default(),
@@ -964,10 +935,10 @@ impl<'a> PlotRenderContext<'a> {
                     .exact_ticks
                     .as_ref()
                     .map(|ticks| {
-                        data.collect_source(ticks.iter().map(|tick| {
+                        crate::data::source::collect_source(ticks.iter().map(|tick| {
                             Ok(crate::layout::AxisTick::new(
                                 tick.position,
-                                data.copy_source_string(&tick.label)?,
+                                crate::data::source::copy_source_string(&tick.label)?,
                             ))
                         }))
                     })
@@ -980,10 +951,10 @@ impl<'a> PlotRenderContext<'a> {
                 .enumerate()
             {
                 if let Some(categories) = &axes.categories[side] {
-                    *ticks = data.collect_source(categories.iter().map(|tick| {
+                    *ticks = crate::data::source::collect_source(categories.iter().map(|tick| {
                         Ok(crate::layout::AxisTick::new(
                             tick.position,
-                            data.copy_source_string(&tick.label)?,
+                            crate::data::source::copy_source_string(&tick.label)?,
                         ))
                     }))?;
                     *range = axes.ranges[side];

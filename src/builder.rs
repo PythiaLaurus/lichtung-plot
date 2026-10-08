@@ -10,7 +10,8 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 mod accessors;
-mod admission;
+#[cfg(test)]
+mod cloning;
 mod configuration;
 mod facets;
 mod layout;

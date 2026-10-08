@@ -28,17 +28,17 @@ pub(crate) fn measure_marks(
     bar_data::count(chart.kind(), 1);
     let mode = bar_data::mode(chart);
     let prepared = bar_data::retained(chart)?;
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = context.data.with_axis_resources(&resources);
+    let resources = theme.prepared_font_environment()?.operation();
+    let data = context.data.with_operation(&resources);
     let (colors, accents) = prepared.resolved_colors(chart, theme, data)?;
-    let legend_entries = bar_data::legend_entries(prepared, chart, theme, data, &colors, &accents)?;
+    let legend_entries = bar_data::legend_entries(prepared, chart, theme, &colors, &accents)?;
     let mut rendered_maxima =
-        data.collect_source((0..prepared.categories.len()).map(|_| Ok(0.0_f64)))?;
+        crate::data::source::collect_source((0..prepared.categories.len()).map(|_| Ok(0.0_f64)))?;
     let anchor_count = prepared.series.len().max(1);
-    let mut grouped_maxima = data.collect_source(
-        (0..prepared.categories.len())
-            .map(|_| data.collect_source((0..anchor_count).map(|_| Ok(f64::NEG_INFINITY)))),
-    )?;
+    let mut grouped_maxima =
+        crate::data::source::collect_source((0..prepared.categories.len()).map(|_| {
+            crate::data::source::collect_source((0..anchor_count).map(|_| Ok(f64::NEG_INFINITY)))
+        }))?;
     for bar in &prepared.bars {
         let maximum = bar
             .interval
@@ -63,7 +63,7 @@ pub(crate) fn measure_marks(
     let mark_style = chart.significance_mark_style_spec();
     let significance_label = theme
         .typography
-        .effective_significance_label(chart.significance_mark_style_override(), &resources)?;
+        .effective_significance_label(chart.significance_mark_style_override())?;
     let attached_label_plans = bar_data::attached_significance_text_plans(
         context,
         &prepared.significance,
@@ -132,7 +132,6 @@ pub(crate) fn measure_marks(
         mark_range,
         significance.y_range,
         crate::layout::interior::ClearanceAxis::Y,
-        data.source_resources()?,
     )?;
     validate_bar_significance_collisions(
         chart,
@@ -141,7 +140,6 @@ pub(crate) fn measure_marks(
         &layout,
         &attached_label_plans,
         context.fit_scope(),
-        data,
         domain_expansion.is_some(),
     )?;
 
@@ -157,9 +155,9 @@ pub(crate) fn measure_marks(
         #[cfg(test)]
         kind: chart.kind(),
     };
-    data.reserve_source(&mut payload.bars, prepared.bars.len())?;
-    data.reserve_source(&mut payload.text, prepared.significance.len())?;
-    data.reserve_source(&mut payload.points, prepared.points.len())?;
+    crate::data::source::reserve_source(&mut payload.bars, prepared.bars.len())?;
+    crate::data::source::reserve_source(&mut payload.text, prepared.significance.len())?;
+    crate::data::source::reserve_source(&mut payload.points, prepared.points.len())?;
     for bar in &prepared.bars {
         let (x_center, width) =
             bar_data::category_bar_geometry(bar, prepared, mode, chart.bar_spacing_spec(), false);
@@ -169,7 +167,7 @@ pub(crate) fn measure_marks(
             fill: theme
                 .marks
                 .bar_body
-                .backend_style(prepared.bar_color(chart, bar, &colors, &accents, &resources)?),
+                .backend_style(prepared.bar_color(chart, bar, &colors, &accents)?),
             interval: bar
                 .interval
                 .map(|(lower, upper)| {
@@ -207,13 +205,11 @@ pub(crate) fn measure_marks(
         prepared,
         &payload,
         &layout.projection,
-        theme,
-        data,
         context.fit_scope(),
     )?;
     let mut result = PlotRenderResult::new(layout, legend_entries)
         .with_significance_plan(significance)
-        .with_deferred_annotation_text(data.collect_source(
+        .with_deferred_annotation_text(crate::data::source::collect_source(
             attached_label_plans.into_iter().map(|plan| {
                 Ok(crate::layout::DeferredAnnotationTextPlan::from_resolved(
                     plan,
@@ -283,10 +279,6 @@ fn place_bar_significance(
     ))
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "selected geometry and its provisional domain consequence share collision validation"
-)]
 fn validate_bar_significance_collisions(
     chart: &Plot,
     prepared: &PreparedBars,
@@ -294,18 +286,14 @@ fn validate_bar_significance_collisions(
     layout: &Layout,
     text_plans: &[ResolvedTextPlan],
     scope: &crate::layout::fit::FitScope,
-    data: crate::data::PlotData<'_>,
+
     pending_domain: bool,
 ) -> Result<(), crate::layout::fit::PlanError> {
     let style = chart.significance_mark_style_spec();
     let mut bounds = Vec::new();
-    data.reserve_source(&mut bounds, prepared.significance.len())?;
+    crate::data::source::reserve_source(&mut bounds, prepared.significance.len())?;
     for (index, (mark, text_plan)) in prepared.significance.iter().zip(text_plans).enumerate() {
-        let scope = scope.child(
-            crate::layout::AddressRole::Annotation,
-            index,
-            data.source_resources()?,
-        )?;
+        let scope = scope.child(crate::layout::AddressRole::Annotation, index)?;
         let center = significance_center(mark.category_index, mark.series_index, prepared, mode);
         let (x, edge_y) = layout.projection.project(center, mark.edge);
         let width = text_plan.width();
@@ -325,7 +313,7 @@ fn validate_bar_significance_collisions(
         if !pending_domain && (draw_y < panel.y0 || draw_y + height > panel.y1) {
             return Err(scope.failure(crate::layout::fit::FitKind::OverlayCollision, format!("bar significance mark {:?} does not clear its confidence interval and panel boundary; widen the y-axis range", mark.label)).into());
         }
-        data.claim_source_visits(bounds.len())?;
+
         if bounds.iter().any(|&(x0, x1, y0, y1)| {
             candidate.0 < x1 && x0 < candidate.1 && candidate.2 < y1 && y0 < candidate.3
         }) {

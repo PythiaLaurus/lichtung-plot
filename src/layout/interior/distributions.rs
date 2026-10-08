@@ -54,24 +54,16 @@ fn sources_faceted(facet: Option<&crate::FacetSpec>) -> [Plot; 4] {
 }
 
 #[test]
-fn semantic_storage_and_statistics_are_admitted_once_before_fonts() {
-    use crate::font::canonical::OperationGenerationResources;
+fn semantic_storage_and_statistics_are_prepared_once_before_fonts() {
+    use crate::font::canonical::OperationContext;
     for (family, source) in sources().into_iter().enumerate() {
         STAGES.with(|counts| counts.set([[0; 4]; 4]));
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         assert_eq!(STAGES.with(std::cell::Cell::get)[family], [1, 0, 0, 0]);
-        let bytes = resources.byte_usage().unwrap();
-        let visits = resources.usage().unwrap().1;
-        for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
-            let resources = OperationGenerationResources::with_test_limits(visits, bytes);
-            assert!(matches!(
-                crate::plots::shared_x::prepare_plot(&source, &resources, None),
-                Err(Error::Render(_))
-            ));
-        }
-        let resources = OperationGenerationResources::with_test_limits(visits, bytes);
+
+        let resources = OperationContext::new();
         crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let attached = inputs.attach(source).unwrap();
         assert!(std::sync::Arc::ptr_eq(
@@ -143,21 +135,15 @@ fn facets_and_shared_canvas_retain_each_components_statistics_once() {
 }
 
 #[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "compare retained marks against the prior assigned-panel constructor and exact resource boundaries"
-)]
-fn projected_storage_refuses_exact_limits_and_selected_extents_match_drawn_ink() {
-    use crate::font::canonical::OperationGenerationResources;
+fn selected_extents_match_drawn_ink() {
+    use crate::font::canonical::OperationContext;
     use crate::render::backend::Backend;
     for source in sources() {
         let source = source
             .with_planned_x_limits((2.0, 6.0))
             .with_planned_y_limits((0.0, 5.0));
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
-        let resources = OperationGenerationResources::new();
+        let theme = crate::Theme::Publication.resolve().unwrap();
+        let resources = OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let attached = inputs.attach(source.clone()).unwrap();
         let selected = attached
@@ -185,15 +171,14 @@ fn projected_storage_refuses_exact_limits_and_selected_extents_match_drawn_ink()
         assert_eq!(prior.y_axis.ticks, selected.layout.y_axis.ticks);
         assert_eq!(prior.x_axis.source, selected.layout.x_axis.source);
         assert_eq!(prior.y_axis.source, selected.layout.y_axis.source);
-        let project = |resources: &OperationGenerationResources| {
-            let data = attached.data().with_axis_resources(resources);
+        let project = |resources: &OperationContext| {
+            let data = attached.data().with_operation(resources);
             let layout = prior.clone();
             match source.kind() {
                 PlotKind::Histogram => crate::plots::histogram::project(
                     &inputs.histogram.as_ref().unwrap().panels[0].1,
                     layout,
                     &theme,
-                    data,
                 ),
                 PlotKind::Density => crate::plots::density::project(
                     &attached,
@@ -207,36 +192,21 @@ fn projected_storage_refuses_exact_limits_and_selected_extents_match_drawn_ink()
                     &inputs.qq.as_ref().unwrap().panels[0].1,
                     layout,
                     &theme,
-                    data,
                 ),
                 PlotKind::Regression => crate::plots::regression::project(
                     &attached,
                     &inputs.regression.as_ref().unwrap().panels[0].1,
                     layout,
                     &theme,
-                    data,
                 ),
                 _ => unreachable!(),
             }
         };
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let projected = project(&resources).unwrap();
-        let visits = resources.usage().unwrap().1;
-        let bytes = resources.byte_usage().unwrap();
-        for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
-            assert!(matches!(
-                project(&OperationGenerationResources::with_test_limits(
-                    visits, bytes
-                )),
-                Err(Error::Render(_))
-            ));
-        }
-        let exact = OperationGenerationResources::with_test_limits(visits, bytes);
+
+        let exact = OperationContext::new();
         project(&exact).unwrap();
-        assert!(
-            project(&exact).is_err(),
-            "another candidate must remain charged"
-        );
         let plan = projected.marks.unwrap();
         assert_eq!(
             plan.geometry.bounds(),
@@ -261,7 +231,7 @@ fn projected_storage_refuses_exact_limits_and_selected_extents_match_drawn_ink()
 
 #[test]
 fn native_scientific_ranges_retain_full_sample_statistics_across_assignments() {
-    use crate::font::canonical::OperationGenerationResources;
+    use crate::font::canonical::OperationContext;
     use crate::layout::interior::{InteriorRoute, StandardCoordinate};
     let routes = [
         StandardCoordinate::Histogram,
@@ -270,8 +240,8 @@ fn native_scientific_ranges_retain_full_sample_statistics_across_assignments() {
         StandardCoordinate::Regression,
     ];
     for (family, source) in sources().into_iter().enumerate() {
-        let resources = OperationGenerationResources::new();
-        let data = source.data().with_axis_resources(&resources);
+        let resources = OperationContext::new();
+        let data = source.data().with_operation(&resources);
         let expected = match source.kind() {
             PlotKind::Histogram => crate::plots::histogram::axis_ranges(&source, data),
             PlotKind::Density => crate::plots::density::axis_ranges(&source, data),
@@ -282,32 +252,24 @@ fn native_scientific_ranges_retain_full_sample_statistics_across_assignments() {
                         crate::stats::distribution::standard_normal_quantile(5.5 / 6.0).unwrap(),
                     ),
                     source.x_axis_spec(),
-                    &resources,
                 )
                 .unwrap(),
-                crate::layout::continuous_auto_range((1.0, 8.0), source.y_axis_spec(), &resources)
-                    .unwrap(),
+                crate::layout::continuous_auto_range((1.0, 8.0), source.y_axis_spec()).unwrap(),
             ]),
             PlotKind::Regression => crate::plots::regression::axis_ranges(&source, data),
             _ => unreachable!(),
         }
         .unwrap();
         STAGES.with(|counts| counts.set([[0; 4]; 4]));
-        let inputs = crate::plots::shared_x::prepare_plot(
-            &source,
-            &OperationGenerationResources::new(),
-            None,
-        )
-        .unwrap();
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         assert_eq!(
             inputs.route,
             InteriorRoute::StandardCoordinate(routes[family])
         );
         let plot = inputs.attach(source).unwrap();
         assert_eq!(plot.prepared_axis_inputs().unwrap().ranges, expected);
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
         for panel in [
             crate::layout::PanelBox::new(30.0, 610.0, 50.0, 440.0),
@@ -456,9 +418,7 @@ fn invalid_statistics_and_exact_sources_reject_before_unavailable_fonts() {
                     .with_test_axis_ticks(0, vec![crate::AxisTick::new(2.0, "outside")])
             }),
     ) {
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         theme.typography.axes.tick_label.stack =
             crate::font::canonical::named_stack(&["Lichtung unavailable T5a6a3b 901e"]);
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
@@ -466,7 +426,7 @@ fn invalid_statistics_and_exact_sources_reject_before_unavailable_fonts() {
             640,
             480,
             |stage| {
-                crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources(), None)?;
+                crate::plots::shared_x::prepare_plot(&source, &stage.operation(), None)?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     None,
                     &source,
@@ -510,18 +470,13 @@ fn selected_capture_and_replay_do_no_source_projection_statistics_axis_or_shapin
         STAGES.with(|counts| counts.set([[0; 4]; 4]));
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|count| count.set(0));
         crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(|count| count.set(0));
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let root = crate::layout::plan_exact_root(
             640,
             480,
             |stage| {
-                let inputs = crate::plots::shared_x::prepare_plot(
-                    &source,
-                    &stage.generation_resources(),
-                    None,
-                )?;
+                let inputs =
+                    crate::plots::shared_x::prepare_plot(&source, &stage.operation(), None)?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     None,
                     &source,

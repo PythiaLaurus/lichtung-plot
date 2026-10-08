@@ -1,6 +1,5 @@
 //! Complete axis chrome and exact role-local spacing construction.
 
-use crate::font::canonical::OperationGenerationResources;
 use crate::layout::kernel::{FeedbackRound, SpatialRounding};
 use crate::{Error, Result};
 
@@ -186,9 +185,9 @@ macro_rules! axis_spacing {
             )+
             fn revalidated(self) -> Result<Self> { Self::new($(self.$field),+) }
             pub(crate) fn relationships(&self) -> [&RelativeSpacing; 6] { [$(&self.$field),+] }
-            pub(crate) fn lengths(&self, tick: u32, title: u32, resources: &OperationGenerationResources) -> Result<AxisLengths> {
+            pub(crate) fn lengths(&self, tick: u32, title: u32) -> Result<AxisLengths> {
                 let metrics = [LocalMetric::css_pixels(tick)?, LocalMetric::css_pixels(title)?];
-                Ok(AxisLengths { $($field: self.$field().product(metrics[$metric], resources)?),+ })
+                Ok(AxisLengths { $($field: self.$field().product(metrics[$metric])),+ })
             }
         }
 
@@ -228,7 +227,6 @@ impl AxisChrome<'_> {
         &self,
         side: crate::layout::AxisSide,
         present_ticks: bool,
-        resources: &OperationGenerationResources,
     ) -> Result<ExactLength> {
         let frame = self.frame.filter(|frame| match side {
             crate::layout::AxisSide::Bottom => frame.sides().bottom(),
@@ -236,12 +234,11 @@ impl AxisChrome<'_> {
         });
         let mut length = ExactLength::pixels(
             frame.map_or(0.0, |frame| f64::from(frame.stroke().width()) / 2.0),
-            resources,
         )?;
         if let Some(ticks) = self.ticks.filter(|_| present_ticks) {
             length = length
-                .add_pixels(f64::from(ticks.length()), resources)?
-                .add_pixels(f64::from(ticks.stroke().width()) / 2.0, resources)?;
+                .add_pixels(f64::from(ticks.length()))?
+                .add_pixels(f64::from(ticks.stroke().width()) / 2.0)?;
         }
         Ok(length)
     }
@@ -341,24 +338,17 @@ impl AxisTheme {
         Self::new(self.frame, self.cell_frame, self.ticks, self.grid, spacing)
     }
 
-    pub(crate) fn share(&self, resources: &OperationGenerationResources) -> Result<Self> {
+    #[cfg(test)]
+    pub(crate) fn validated_clone(&self) -> Result<Self> {
         self.validate()?;
-        resources
-            .claim_visits(6)
-            .map_err(|error| Error::Render(format!("axis sharing: {error:?}")))?;
+
         Ok(self.clone())
     }
 
-    pub(crate) fn same(
-        &self,
-        other: &Self,
-        resources: &OperationGenerationResources,
-    ) -> Result<bool> {
+    pub(crate) fn same_validated(&self, other: &Self) -> Result<bool> {
         self.validate()?;
         other.validate()?;
-        resources
-            .claim_visits(1)
-            .map_err(|error| Error::Render(format!("axis identity: {error:?}")))?;
+
         if self.frame != other.frame
             || self.cell_frame != other.cell_frame
             || self.ticks != other.ticks
@@ -372,7 +362,7 @@ impl AxisTheme {
             .into_iter()
             .zip(other.spacing().relationships())
         {
-            if !left.same(right, resources)? {
+            if !left.same(right) {
                 return Ok(false);
             }
         }
@@ -416,12 +406,8 @@ impl AxisTheme {
 }
 
 impl AxisLengths {
-    pub(crate) fn before(
-        value: &ExactLength,
-        anchor: f64,
-        resources: &OperationGenerationResources,
-    ) -> Result<f64> {
-        Self::pixels(value.before(anchor, resources)?)
+    pub(crate) fn before(value: &ExactLength, anchor: f64) -> Result<f64> {
+        Self::pixels(value.before(anchor)?)
     }
     /// Position/preference consequence of one exact local product.
     #[cfg_attr(
@@ -431,18 +417,12 @@ impl AxisLengths {
             reason = "boundary fixtures inspect standalone products; painted positions retain their complete anchors"
         )
     )]
-    pub(crate) fn position(
-        value: &ExactLength,
-        resources: &OperationGenerationResources,
-    ) -> Result<f64> {
-        Self::pixels(value.round(SpatialRounding::NearestEven, resources)?)
+    pub(crate) fn position(value: &ExactLength) -> Result<f64> {
+        Self::pixels(value.round(SpatialRounding::NearestEven)?)
     }
 
-    pub(crate) fn hard(
-        value: &ExactLength,
-        resources: &OperationGenerationResources,
-    ) -> Result<f64> {
-        Self::pixels(value.round(SpatialRounding::Ceil, resources)?)
+    pub(crate) fn hard(value: &ExactLength) -> Result<f64> {
+        Self::pixels(value.round(SpatialRounding::Ceil)?)
     }
 
     #[expect(

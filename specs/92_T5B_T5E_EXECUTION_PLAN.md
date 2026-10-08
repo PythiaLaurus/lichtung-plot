@@ -2,6 +2,11 @@
 
 **Status: IN PROGRESS — T5b–T5d complete; T5e in progress.**
 
+**Resource-policy update:** historical ledger/admission evidence below is retained
+for its recorded revisions. Spec95 removes production accounting; current and
+future code retains checked storage, source identity and guide/root coordination
+without per-call fees or cumulative quotas. Spec05 owns the current contract.
+
 This is the execution partition of the four T5b–T5e umbrellas in
 `91_IMPLEMENTATION_PLAN.md`, based on the verified T5a closure at `1e8e3ee`.
 The user requested this planning work and approved the explicit-data-window

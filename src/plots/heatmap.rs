@@ -50,7 +50,6 @@ impl HeatmapData {
     pub(crate) fn guide_semantics(
         &self,
         theme: &ResolvedTheme,
-        data: crate::data::PlotData<'_>,
     ) -> Result<crate::decorations::legend::descriptor::ContinuousSemantics, Error> {
         let domain = self.color.domain();
         let missing = self
@@ -62,24 +61,23 @@ impl HeatmapData {
                 Ok(crate::decorations::legend::descriptor::MissingKey {
                     fill: theme.marks.heatmap_missing_fill,
                     outline: theme.marks.heatmap_missing_key_outline.clone(),
-                    label: data.copy_source_string(label)?,
+                    label: crate::data::source::copy_source_string(label)?,
                 })
             })
             .transpose()?;
         Ok(
             crate::decorations::legend::descriptor::ContinuousSemantics {
                 domain: (domain.minimum, domain.maximum),
-                selection: self.color.selection.share(data.source_resources()?)?,
+                selection: self.color.selection.clone(),
                 missing,
             },
         )
     }
 
-    pub(crate) fn guide_samples(&self, data: crate::data::PlotData<'_>) -> Result<Vec<f64>, Error> {
+    pub(crate) fn guide_samples(&self) -> Result<Vec<f64>, Error> {
         let mut samples = Vec::new();
-        data.reserve_source(&mut samples, self.cells.len())?;
+        crate::data::source::reserve_source(&mut samples, self.cells.len())?;
         for &value in &self.cells {
-            data.claim_source_visits(1)?;
             if let Some(value) = value {
                 samples.push(value);
             }
@@ -90,35 +88,23 @@ impl HeatmapData {
     pub(crate) fn install_shared_domain(
         &mut self,
         descriptor: &crate::decorations::legend::descriptor::ContinuousDescriptor,
-        data: crate::data::PlotData<'_>,
     ) -> Result<(), Error> {
-        self.replace_domain(
-            ResolvedColorDomain {
-                minimum: descriptor.domain.0,
-                maximum: descriptor.domain.1,
-                center: descriptor.center,
-            },
-            data,
-        )
+        self.replace_domain(ResolvedColorDomain {
+            minimum: descriptor.domain.0,
+            maximum: descriptor.domain.1,
+            center: descriptor.center,
+        })
     }
 
-    fn replace_domain(
-        &mut self,
-        domain: ResolvedColorDomain,
-        data: crate::data::PlotData<'_>,
-    ) -> Result<(), Error> {
-        let color = PreparedHeatmapColor::resolve(
-            domain,
-            self.color.selection.share(data.source_resources()?)?,
-            data.source_resources()?,
+    fn replace_domain(&mut self, domain: ResolvedColorDomain) -> Result<(), Error> {
+        let color = PreparedHeatmapColor::resolve(domain, self.color.selection.clone())?;
+        let fills = crate::data::source::collect_source(
+            self.cells
+                .iter()
+                .map(|value| value.map(|value| color.scale.color(value)).transpose()),
         )?;
-        let fills = data.collect_source(self.cells.iter().map(|value| {
-            value
-                .map(|value| color.scale.color(value, data.source_resources()?))
-                .transpose()
-        }))?;
-        let colorbar_stops = color.guide_stops(&self.guide_samples(data)?, data)?;
-        let colorbar_values = prepare_guide_labels(domain, self.has_missing, data)?;
+        let colorbar_stops = color.guide_stops(&self.guide_samples()?)?;
+        let colorbar_values = prepare_guide_labels(domain, self.has_missing)?;
         self.color = color;
         self.fills = fills;
         self.colorbar_stops = colorbar_stops;
@@ -141,20 +127,19 @@ fn assigned_columns(
     labels: &[String],
     panel: PanelBox,
     theme: &ResolvedTheme,
-    data: crate::data::PlotData<'_>,
+
     scope: &crate::layout::fit::FitScope,
 ) -> Result<Vec<f64>, crate::layout::fit::PlanError> {
     use crate::layout::fit::FitOutcome;
     use crate::layout::kernel::{GridRequirement, TrackSpec};
 
-    let resources = data.source_resources()?;
     let count = prepared.x_levels.len();
-    let cell = intrinsic_cell_ink(prepared, theme, data)?;
-    let mut hard = data.collect_source(labels.iter().map(|label| {
-        data.claim_source_visits(1)?;
-        Ok((cell.0 / count as f64).max(column_label_hard(prepared, label, theme)?))
-    }))?;
-    data.claim_source_visits(prepared.value_labels.len())?;
+    let cell = intrinsic_cell_ink(prepared, theme)?;
+    let mut hard =
+        crate::data::source::collect_source(labels.iter().map(|label| {
+            Ok((cell.0 / count as f64).max(column_label_hard(prepared, label, theme)?))
+        }))?;
+
     for (index, (source, fill)) in prepared
         .value_labels
         .iter()
@@ -176,7 +161,7 @@ fn assigned_columns(
     let preferred = crate::layout::kernel::ceil_spatial_quanta(
         2.0 * f64::from(theme.typography.axes.tick_label.font_size),
     )?;
-    let base = data.collect_source(hard.into_iter().map(|width| {
+    let base = crate::data::source::collect_source(hard.into_iter().map(|width| {
         let min = crate::layout::kernel::ceil_spatial_quanta(width)?;
         Ok(TrackSpec {
             min,
@@ -199,14 +184,13 @@ fn assigned_columns(
         0,
         None,
         true,
-        resources,
         scope,
     )? {
         FitOutcome::Measured(allocation) => allocation,
         FitOutcome::Miss(failure) => return Err(failure.into()),
     };
     let mut edges = Vec::new();
-    data.reserve_source(&mut edges, count + 1)?;
+    crate::data::source::reserve_source(&mut edges, count + 1)?;
     let mut edge = start;
     edges.push(track_pixels(edge));
     for width in allocation.sizes {
@@ -226,14 +210,13 @@ fn assigned_rows(
     labels: &[String],
     tick_width: f64,
     context: PlotRenderContext<'_>,
-    data: crate::data::PlotData<'_>,
 ) -> Result<Vec<f64>, crate::layout::fit::PlanError> {
     use crate::layout::fit::FitOutcome;
     use crate::layout::kernel::{GridRequirement, TrackSpec};
 
     let panel = context.panel;
     let theme = context.theme;
-    let resources = data.source_resources()?;
+
     let count = prepared.y_levels.len();
     let width = prepared.x_levels.len();
     if labels.len() != count {
@@ -241,10 +224,10 @@ fn assigned_rows(
             Error::Render("Heatmap prepared row label count differs from tracks".into()).into(),
         );
     }
-    let ink = intrinsic_cell_ink(prepared, theme, data)?;
-    let mut hard = data.collect_source((0..count).map(|_| Ok(ink.1 / count as f64)))?;
+    let ink = intrinsic_cell_ink(prepared, theme)?;
+    let mut hard =
+        crate::data::source::collect_source((0..count).map(|_| Ok(ink.1 / count as f64)))?;
     for (index, label) in labels.iter().enumerate() {
-        data.claim_source_visits(1)?;
         if label.is_empty() {
             continue;
         }
@@ -255,27 +238,23 @@ fn assigned_rows(
             tick_width,
             PhysicalTextAlignment::End,
             "y-axis tick label",
-            &context.fit_scope().child(
-                crate::layout::AddressRole::AxisLeft,
-                0,
-                &theme.prepared_font_environment()?.generation_resources(),
-            )?,
+            &context
+                .fit_scope()
+                .child(crate::layout::AddressRole::AxisLeft, 0)?,
         ))?;
         hard[index] = hard[index].max(text.height() + 2.0 * crate::layout::LABEL_CLEARANCE);
     }
     for (index, plan) in annotations.values.iter().enumerate() {
-        data.claim_source_visits(1)?;
         if let Some(plan) = plan {
             hard[index / width] = hard[index / width].max(plan.height() + 5.0);
         }
     }
     for (index, plan) in annotations.rows.iter().enumerate() {
-        data.claim_source_visits(1)?;
         if let Some(plan) = plan {
             hard[index] = hard[index].max(plan.height() + 4.0);
         }
     }
-    data.claim_source_visits(width)?;
+
     let square = columns
         .windows(2)
         .map(|pair| pair[1] - pair[0])
@@ -283,7 +262,7 @@ fn assigned_rows(
     let preferred = crate::layout::kernel::ceil_spatial_quanta(
         square.max(2.0 * f64::from(theme.typography.axes.tick_label.font_size)),
     )?;
-    let base = data.collect_source(hard.into_iter().map(|height| {
+    let base = crate::data::source::collect_source(hard.into_iter().map(|height| {
         let min = crate::layout::kernel::ceil_spatial_quanta(height)?;
         Ok(TrackSpec {
             min,
@@ -306,14 +285,13 @@ fn assigned_rows(
         0,
         None,
         true,
-        resources,
         context.fit_scope(),
     )? {
         FitOutcome::Measured(allocation) => allocation,
         FitOutcome::Miss(failure) => return Err(failure.into()),
     };
     let mut edges = Vec::new();
-    data.reserve_source(&mut edges, count + 1)?;
+    crate::data::source::reserve_source(&mut edges, count + 1)?;
     let mut edge = top;
     edges.push(track_pixels(edge));
     for height in allocation.sizes {
@@ -345,18 +323,13 @@ fn retained(chart: &Plot) -> Result<&HeatmapData, Error> {
         .ok_or_else(|| Error::Render("heatmap requires root-prepared semantics".into()))
 }
 
-fn retained_in<'a>(chart: &'a Plot, theme: &ResolvedTheme) -> Result<&'a HeatmapData, Error> {
+fn retained_in(chart: &Plot) -> Result<&HeatmapData, Error> {
     let inputs = chart
         .prepared_heatmap
         .as_ref()
         .ok_or_else(|| Error::Render("heatmap requires root-prepared semantics".into()))?;
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    crate::layout::interior::preference::panel(
-        &inputs.panels,
-        chart.axis_scope(),
-        "Heatmap",
-        &resources,
-    )
+
+    crate::layout::interior::preference::panel(&inputs.panels, chart.axis_scope(), "Heatmap")
 }
 
 #[cfg(test)]
@@ -390,7 +363,6 @@ impl PreparedHeatmapColor {
     fn resolve(
         domain: ResolvedColorDomain,
         selection: ContinuousColorScale,
-        resources: &crate::font::canonical::OperationGenerationResources,
     ) -> Result<Self, Error> {
         let semantic_stops = selection.stops()?;
         if selection.kind() == crate::theme::ContinuousScaleKind::Sequential
@@ -492,7 +464,6 @@ impl PreparedHeatmapColor {
                 } else {
                     &stops[..count]
                 },
-                resources,
             )?,
             selection,
         })
@@ -507,12 +478,8 @@ impl PreparedHeatmapColor {
         }
     }
 
-    fn guide_stops(
-        &self,
-        observed: &[f64],
-        data: crate::data::PlotData<'_>,
-    ) -> Result<Vec<GradientStop>, Error> {
-        self.scale.guide_stops(observed, data)
+    fn guide_stops(&self, observed: &[f64]) -> Result<Vec<GradientStop>, Error> {
+        self.scale.guide_stops(observed)
     }
 }
 
@@ -539,25 +506,16 @@ pub(crate) struct HeatmapIntrinsicCache {
 }
 
 impl HeatmapIntrinsicCache {
-    fn matches(
-        &self,
-        prepared: &HeatmapData,
-        theme: &ResolvedTheme,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<bool, Error> {
-        Ok(self.color_scale.same(&prepared.color.scale, resources)?
+    fn matches_inputs(&self, prepared: &HeatmapData, theme: &ResolvedTheme) -> bool {
+        self.color_scale.same(&prepared.color.scale)
             && self
                 .contrast_light
-                .same(&theme.typography.annotations.contrast.light, resources)?
+                .same(&theme.typography.annotations.contrast.light)
             && self
                 .contrast_dark
-                .same(&theme.typography.annotations.contrast.dark, resources)?
-            && self
-                .tick_label
-                .same(&theme.typography.axes.tick_label, resources)?
-            && self
-                .axis_title
-                .same(&theme.typography.axes.axis_title, resources)?
+                .same(&theme.typography.annotations.contrast.dark)
+            && self.tick_label.same(&theme.typography.axes.tick_label)
+            && self.axis_title.same(&theme.typography.axes.axis_title)
             && self.plot_panel == theme.surfaces.plot_panel
             && self.canvas_root == theme.surfaces.canvas_root
             && self.canvas_override == theme.canvas_surface_override
@@ -566,7 +524,7 @@ impl HeatmapIntrinsicCache {
             && self.cell_outline == theme.marks.heatmap_cell_outline
             && self.highlight_outline == theme.marks.heatmap_highlight_outline
             && self.missing_row_outline == theme.marks.heatmap_missing_row_outline
-            && self.missing_cross == theme.marks.heatmap_missing_cross.backend_style())
+            && self.missing_cross == theme.marks.heatmap_missing_cross.backend_style()
     }
 
     fn new(
@@ -574,16 +532,11 @@ impl HeatmapIntrinsicCache {
         without_y_labels: (f64, f64),
         prepared: &HeatmapData,
         theme: &ResolvedTheme,
-        data: crate::data::PlotData<'_>,
     ) -> Result<Self, Error> {
-        data.claim_source_bytes(std::mem::size_of::<Self>())?;
-        let color_scale = prepared
-            .color
-            .scale
-            .share(data.require_source_resources()?)?;
+        let color_scale = prepared.color.scale.clone();
         let text = |role: &crate::theme::TextTheme| -> Result<_, Error> {
             crate::theme::TextTheme::new(
-                data.copy_font_stack(role.stack())?,
+                crate::data::source::copy_font_stack(role.stack())?,
                 role.color(),
                 role.font_size(),
                 role.weight(),
@@ -620,13 +573,8 @@ pub(crate) fn intrinsic_body_minimum(
     let axes = chart
         .prepared_axis_inputs()
         .ok_or_else(|| Error::Render("heatmap intrinsics require root-prepared axes".into()))?;
-    let (minimum, without_y_labels) = analyze_intrinsics(
-        retained_in(chart, theme)?,
-        axes,
-        chart.data(),
-        theme,
-        chart.axis_scope(),
-    )?;
+    let (minimum, without_y_labels) =
+        analyze_intrinsics(retained_in(chart)?, axes, theme, chart.axis_scope())?;
     if chart.y_tick_labels_visible() {
         Ok(minimum)
     } else {
@@ -638,7 +586,7 @@ pub(crate) fn natural_body_preference(
     chart: &Plot,
     theme: &ResolvedTheme,
 ) -> Result<(f64, f64), Error> {
-    let marks = retained_in(chart, theme)?;
+    let marks = retained_in(chart)?;
     let hard = intrinsic_body_minimum(chart, theme)?;
     let pitch = 2.0 * f64::from(theme.typography.axes.tick_label.font_size);
     Ok((
@@ -652,12 +600,12 @@ pub(crate) fn natural_body_height(
     theme: &ResolvedTheme,
     width: f64,
 ) -> Result<f64, Error> {
-    let marks = retained_in(chart, theme)?;
+    let marks = retained_in(chart)?;
     let axes = chart
         .prepared_axis_inputs()
         .ok_or_else(|| Error::Render("natural Heatmap axes missing".into()))?;
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = chart.data().with_axis_resources(&resources);
+    let resources = theme.prepared_font_environment()?.operation();
+    let data = chart.data().with_operation(&resources);
     let labels = axes.display_categories[0]
         .as_ref()
         .ok_or_else(|| Error::Render("natural Heatmap columns missing".into()))?;
@@ -666,7 +614,6 @@ pub(crate) fn natural_body_height(
         labels,
         PanelBox::new(0.0, width, 0.0, 1.0),
         theme,
-        data,
         &crate::layout::fit::FitScope::root(),
     )
     .map_err(crate::layout::fit::PlanError::into_error)?;
@@ -685,16 +632,15 @@ pub(crate) fn natural_body_height(
         2.0 * f64::from(theme.typography.axes.tick_label.font_size),
         f64::max,
     );
-    let mut heights = data.collect_source(marks.y_levels.iter().map(|_| Ok(preferred)))?;
+    let mut heights =
+        crate::data::source::collect_source(marks.y_levels.iter().map(|_| Ok(preferred)))?;
     for (index, plan) in annotations.values.iter().enumerate() {
-        data.claim_source_visits(1)?;
         if let Some(plan) = plan {
             heights[index / marks.x_levels.len()] =
                 heights[index / marks.x_levels.len()].max(plan.height() + 5.0);
         }
     }
     for (index, plan) in annotations.rows.iter().enumerate() {
-        data.claim_source_visits(1)?;
         if let Some(plan) = plan {
             heights[index] = heights[index].max(plan.height() + 4.0);
         }
@@ -702,11 +648,7 @@ pub(crate) fn natural_body_height(
     Ok(heights.into_iter().sum())
 }
 
-fn intrinsic_cell_ink(
-    prepared: &HeatmapData,
-    theme: &ResolvedTheme,
-    data: crate::data::PlotData<'_>,
-) -> Result<(f64, f64), Error> {
+fn intrinsic_cell_ink(prepared: &HeatmapData, theme: &ResolvedTheme) -> Result<(f64, f64), Error> {
     let (columns, rows) = (prepared.x_levels.len(), prepared.y_levels.len());
     let slots = columns.checked_mul(rows).ok_or_else(|| {
         Error::Render("heatmap declared cell topology exceeds spatial capacity".into())
@@ -724,7 +666,7 @@ fn intrinsic_cell_ink(
     let quantum = 1.0 / 1024.0;
     let cell = |style: &crate::theme::OutlineTheme| -> Result<_, Error> {
         let fill = style.backend_style(crate::theme::Color::rgb(0, 0, 0));
-        let (x, y) = crate::render::geometry::rectangular_fill_ink_outset(theme, &fill)?;
+        let (x, y) = crate::render::geometry::rectangular_fill_ink_outset(&fill)?;
         Ok((x + quantum, y + quantum))
     };
     let mut normal = None;
@@ -732,7 +674,7 @@ fn intrinsic_cell_ink(
     let mut missing_row = None;
     let mut cross = None;
     let mut pitch = (quantum, quantum);
-    data.claim_source_visits(prepared.cells.len())?;
+
     for y in 0..rows {
         if prepared.null_row_annotations[y].is_some() {
             let ink = if let Some(ink) = missing_row {
@@ -775,7 +717,6 @@ fn intrinsic_cell_ink(
                     stroke
                 } else {
                     let stroke = crate::render::geometry::line_ink_width(
-                        theme,
                         &theme.marks.heatmap_missing_cross.backend_style(),
                     )?;
                     cross = Some(stroke);
@@ -842,11 +783,10 @@ fn column_label_hard(
 pub(crate) fn prepare_intrinsics(
     prepared: &HeatmapData,
     axes: &crate::plots::shared_x::PreparedAxes,
-    data: crate::data::PlotData<'_>,
     theme: &ResolvedTheme,
     scope: Option<&str>,
 ) -> Result<(f64, f64), Error> {
-    Ok(analyze_intrinsics(prepared, axes, data, theme, scope)?.0)
+    Ok(analyze_intrinsics(prepared, axes, theme, scope)?.0)
 }
 
 #[expect(
@@ -856,34 +796,30 @@ pub(crate) fn prepare_intrinsics(
 fn analyze_intrinsics(
     prepared: &HeatmapData,
     axes: &crate::plots::shared_x::PreparedAxes,
-    data: crate::data::PlotData<'_>,
     theme: &ResolvedTheme,
-    scope: Option<&str>,
+    diagnostic_scope: Option<&str>,
 ) -> Result<((f64, f64), (f64, f64)), Error> {
-    let environment = theme.prepared_font_environment()?;
-    let resources = environment.generation_resources();
-    environment.claim_measurement_call().map_err(|error| {
-        Error::Render(format!(
-            "heatmap intrinsic call admission {scope:?}: {error:?}"
-        ))
-    })?;
+    theme.prepared_font_environment()?;
+    #[cfg(not(test))]
+    let _ = diagnostic_scope;
+
     if let Some(cached) = axes.heatmap_intrinsics.get() {
-        if cached.matches(prepared, theme, &resources)? {
+        if cached.matches_inputs(prepared, theme) {
             return Ok((cached.minimum, cached.without_y_labels));
         }
     }
     #[cfg(test)]
     crate::orchestrator::measurements::intrinsic(
         crate::orchestrator::measurements::Counter::HeatmapIntrinsic,
-        scope,
+        diagnostic_scope,
     );
     let mut minimum = (1.0_f64 / 1024.0, 1.0_f64 / 1024.0);
-    let data = data.with_axis_resources(&resources);
-    let cell = intrinsic_cell_ink(prepared, theme, data)?;
+    let cell = intrinsic_cell_ink(prepared, theme)?;
     let columns = prepared.x_levels.len();
     let base_column = (cell.0 / columns as f64).max(1.0 / 1024.0);
-    let mut column_hard = data.collect_source((0..columns).map(|_| Ok(base_column)))?;
-    let mut row_hard = data.collect_source(
+    let mut column_hard =
+        crate::data::source::collect_source((0..columns).map(|_| Ok(base_column)))?;
+    let mut row_hard = crate::data::source::collect_source(
         (0..prepared.y_levels.len()).map(|_| Ok(cell.1 / prepared.y_levels.len() as f64)),
     )?;
     let x_labels = axes.display_categories[0]
@@ -893,12 +829,11 @@ fn analyze_intrinsics(
         .as_ref()
         .ok_or_else(|| Error::Render("Heatmap y intrinsic labels missing".into()))?;
     for (index, label) in x_labels.iter().enumerate() {
-        data.claim_source_visits(1)?;
         column_hard[index] = column_hard[index].max(column_label_hard(prepared, label, theme)?);
     }
-    let mut y_label_hard = data.collect_source((0..y_labels.len()).map(|_| Ok(0.0_f64)))?;
+    let mut y_label_hard =
+        crate::data::source::collect_source((0..y_labels.len()).map(|_| Ok(0.0_f64)))?;
     for (index, label) in y_labels.iter().enumerate() {
-        data.claim_source_visits(1)?;
         let plan = theme.measure_text(
             label,
             &theme.typography.axes.tick_label,
@@ -910,7 +845,7 @@ fn analyze_intrinsics(
             y_label_hard[index] = plan.height() + 2.0 * crate::layout::LABEL_CLEARANCE;
         }
     }
-    data.claim_source_visits(prepared.value_labels.len() + prepared.null_row_annotations.len())?;
+
     for (index, (source, fill)) in prepared
         .value_labels
         .iter()
@@ -974,7 +909,6 @@ fn analyze_intrinsics(
         .max(cell.1);
     let mut without_y_labels = (minimum.0, without_y_height);
     for (side, title) in axes.labels.iter().enumerate() {
-        data.claim_source_visits(1)?;
         if title.is_empty() {
             continue;
         }
@@ -994,10 +928,7 @@ fn analyze_intrinsics(
         }
     }
     if axes.heatmap_intrinsics.get().is_none() {
-        environment.claim_cache_entries(1).map_err(|error| {
-            Error::Render(format!("heatmap intrinsic cache admission: {error:?}"))
-        })?;
-        let cache = HeatmapIntrinsicCache::new(minimum, without_y_labels, prepared, theme, data)?;
+        let cache = HeatmapIntrinsicCache::new(minimum, without_y_labels, prepared, theme)?;
         let _ = axes.heatmap_intrinsics.set(cache);
     }
     Ok((minimum, without_y_labels))
@@ -1032,10 +963,9 @@ pub(crate) fn measure(
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     #[cfg(test)]
     count(1);
-    let prepared = retained_in(chart, context.theme)?;
+    let prepared = retained_in(chart)?;
     let theme = context.theme;
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = context.data.with_axis_resources(&resources);
+
     let text = context.producer_text()?;
     let minimum = intrinsic_body_minimum(chart, theme)?;
     let (body, colorbar) = if chart.continuous_guide_suppressed() {
@@ -1046,12 +976,9 @@ pub(crate) fn measure(
             context.panel,
             minimum.0,
             theme,
-            &context.fit_scope().child(
-                crate::layout::AddressRole::OutsideGuideRight,
-                0,
-                &theme.prepared_font_environment()?.generation_resources(),
-            )?,
-            data,
+            &context
+                .fit_scope()
+                .child(crate::layout::AddressRole::OutsideGuideRight, 0)?,
             context.content_height.then_some(chart),
         )?;
         (body, Some(guide))
@@ -1060,21 +987,21 @@ pub(crate) fn measure(
     let mut columns = None;
     let mut rows = None;
     let layout = (|| -> Result<_, crate::layout::fit::PlanError> {
-        let x_labels = data.collect_source(
+        let x_labels = crate::data::source::collect_source(
             context
                 .prepared_category_labels(0)
                 .ok_or_else(|| Error::Render("heatmap x labels require prepared axes".into()))?
                 .iter()
-                .map(|label| data.copy_source_string(label)),
+                .map(|label| crate::data::source::copy_source_string(label)),
         )?;
-        let y_labels = data.collect_source(
+        let y_labels = crate::data::source::collect_source(
             context
                 .prepared_category_labels(1)
                 .ok_or_else(|| Error::Render("heatmap y labels require prepared axes".into()))?
                 .iter()
                 .map(|label| {
                     if chart.y_tick_labels_visible() {
-                        data.copy_source_string(label)
+                        crate::data::source::copy_source_string(label)
                     } else {
                         Ok(String::new())
                     }
@@ -1118,8 +1045,7 @@ pub(crate) fn measure(
 
         let x_count = prepared.x_levels.len();
         let y_count = prepared.y_levels.len();
-        let assigned =
-            assigned_columns(prepared, &x_labels, panel, theme, data, context.fit_scope())?;
+        let assigned = assigned_columns(prepared, &x_labels, panel, theme, context.fit_scope())?;
         columns = Some(assigned);
         let column_edges = columns.as_ref().expect("assigned Heatmap columns");
         let measured = measure_annotations(
@@ -1134,16 +1060,13 @@ pub(crate) fn measure(
             y_labels
         } else {
             fitted_unique_labels(
-                data,
                 theme,
                 &y_labels,
                 |_| tick_width,
                 "y",
-                &context.fit_scope().child(
-                    crate::layout::AddressRole::AxisLeft,
-                    0,
-                    &theme.prepared_font_environment()?.generation_resources(),
-                )?,
+                &context
+                    .fit_scope()
+                    .child(crate::layout::AddressRole::AxisLeft, 0)?,
             )?
         };
         let assigned = assigned_rows(
@@ -1153,7 +1076,6 @@ pub(crate) fn measure(
             &y_labels,
             tick_width,
             context.with_panel(panel),
-            data,
         )?;
         check_annotation_tracks(
             chart,
@@ -1162,25 +1084,24 @@ pub(crate) fn measure(
             column_edges,
             &assigned,
             context.fit_scope(),
-            data,
         )?;
         annotations = Some(measured);
         rows = Some(assigned);
         let row_edges = rows.as_ref().expect("assigned Heatmap rows");
-        let x_ticks =
-            data.collect_source(prepared.x_levels.iter().enumerate().map(|(index, _)| {
-                data.claim_source_visits(1)?;
+        let x_ticks = crate::data::source::collect_source(
+            prepared.x_levels.iter().enumerate().map(|(index, _)| {
                 let middle = f64::midpoint(column_edges[index], column_edges[index + 1]);
                 let x = (middle - panel.x0) / panel.width() * x_count as f64;
                 Ok(AxisTick::new(x, ""))
-            }))?;
-        let y_ticks =
-            data.collect_source(y_labels.into_iter().enumerate().map(|(index, label)| {
-                data.claim_source_visits(1)?;
+            }),
+        )?;
+        let y_ticks = crate::data::source::collect_source(y_labels.into_iter().enumerate().map(
+            |(index, label)| {
                 let middle = f64::midpoint(row_edges[index], row_edges[index + 1]);
                 let y = (middle - panel.y0) / panel.height() * y_count as f64;
                 Ok(AxisTick::new(y, label))
-            }))?;
+            },
+        ))?;
         let axes = chart
             .prepared_axis_inputs()
             .ok_or_else(|| Error::Render("Heatmap requires prepared native axes".into()))?;
@@ -1191,7 +1112,7 @@ pub(crate) fn measure(
                 panel.as_tuple(),
             ),
             x_axis: crate::layout::Axis {
-                label: data.copy_source_string(&axes.labels[0])?,
+                label: crate::data::source::copy_source_string(&axes.labels[0])?,
                 ticks: x_ticks,
                 explicit_ticks: false,
                 assigned_tick_width: None,
@@ -1199,7 +1120,7 @@ pub(crate) fn measure(
                 source: crate::layout::TickSource::SUPPLIED,
             },
             y_axis: crate::layout::Axis {
-                label: data.copy_source_string(&axes.labels[1])?,
+                label: crate::data::source::copy_source_string(&axes.labels[1])?,
                 ticks: y_ticks,
                 explicit_ticks: false,
                 assigned_tick_width: None,
@@ -1210,31 +1131,24 @@ pub(crate) fn measure(
         // Elision already selected the complete displayed labels; do not wrap them again.
         layout.y_axis.explicit_ticks = !wrap_labels;
         layout.y_axis.assigned_tick_width = Some(tick_width);
-        layout.x_axis.assigned_cells =
-            Some(data.collect_source(column_edges.windows(2).map(|edge| {
-                data.claim_source_visits(1)?;
-                Ok((edge[0], edge[1]))
-            }))?);
-        layout.y_axis.assigned_cells =
-            Some(data.collect_source(row_edges.windows(2).map(|edge| {
-                data.claim_source_visits(1)?;
-                Ok((edge[1], edge[0]))
-            }))?);
+        layout.x_axis.assigned_cells = Some(crate::data::source::collect_source(
+            column_edges.windows(2).map(|edge| Ok((edge[0], edge[1]))),
+        )?);
+        layout.y_axis.assigned_cells = Some(crate::data::source::collect_source(
+            row_edges.windows(2).map(|edge| Ok((edge[1], edge[0]))),
+        )?);
         // Row text and exact cell fit preceded this axis selection.
         let x_labels = if wrap_labels {
             x_labels
         } else {
             fitted_unique_labels(
-                data,
                 theme,
                 &x_labels,
                 |index| (column_edges[index + 1] - column_edges[index]) * 0.9,
                 "x",
-                &context.fit_scope().child(
-                    crate::layout::AddressRole::AxisBottom,
-                    0,
-                    &theme.prepared_font_environment()?.generation_resources(),
-                )?,
+                &context
+                    .fit_scope()
+                    .child(crate::layout::AddressRole::AxisBottom, 0)?,
             )?
         };
         for (tick, label) in layout.x_axis.ticks.iter_mut().zip(x_labels) {
@@ -1255,18 +1169,28 @@ pub(crate) fn measure(
     let payload = HeatmapPayload {
         clip: panel,
         cross_style: theme.marks.heatmap_missing_cross.backend_style(),
-        cells: select_cells(prepared, columns, rows, theme, &annotations, data)?,
+        cells: select_cells(prepared, columns, rows, theme, &annotations)?,
         colorbar: colorbar
             .as_ref()
-            .map(|guide| guide::select(guide, panel, theme, data))
+            .map(|guide| guide::select(guide, panel, theme))
             .transpose()?,
     };
-    payload.validate_annotation_ink(theme, context.fit_scope(), data)?;
-    let geometry = payload.geometry(theme)?;
+    payload.validate_annotation_ink(context.fit_scope())?;
+    let geometry = payload.geometry()?;
 
     let mut result = PlotRenderResult::new(layout, Vec::new()).with_resolved_axis_keys(
-        data.collect_source(prepared.x_levels.iter().map(|s| data.copy_source_string(s)))?,
-        data.collect_source(prepared.y_levels.iter().map(|s| data.copy_source_string(s)))?,
+        crate::data::source::collect_source(
+            prepared
+                .x_levels
+                .iter()
+                .map(|s| crate::data::source::copy_source_string(s)),
+        )?,
+        crate::data::source::collect_source(
+            prepared
+                .y_levels
+                .iter()
+                .map(|s| crate::data::source::copy_source_string(s)),
+        )?,
     );
     result.x_domain = crate::spec::AxisDomain::Categorical;
     result.y_domain = crate::spec::AxisDomain::Categorical;
@@ -1276,9 +1200,7 @@ pub(crate) fn measure(
         chart.axis_semantic_inputs([result.x_domain, result.y_domain]),
         || crate::layout::StandardPanelInputs::new(theme),
     )?);
-    if let Some(bar) = &payload.colorbar {
-        data.claim_source_visits(bar.calls.len())?;
-    }
+
     let texts = payload
         .cells
         .iter()
@@ -1290,13 +1212,15 @@ pub(crate) fn measure(
             })
         }));
     for text in texts {
-        data.reserve_source(&mut result.producer_text, 1)?;
+        crate::data::source::reserve_source(&mut result.producer_text, 1)?;
         result.producer_text.push(text.clone());
     }
-    result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
-        payload: crate::layout::interior::MarkPayload::Heatmap(payload),
-        geometry,
-    })?);
+    result.marks = Some(crate::data::source::source_arc(
+        crate::layout::interior::SelectedMarkPlan {
+            payload: crate::layout::interior::MarkPayload::Heatmap(payload),
+            geometry,
+        },
+    )?);
     Ok(result)
 }
 
@@ -1309,25 +1233,26 @@ fn category_levels(
     match chart.heatmap_layout_spec() {
         HeatmapLayout::Cartesian => Ok([
             resolve_axis_order(
-                &data.source_levels(x)?,
+                &crate::data::source::source_levels(x)?,
                 chart.x_category_order_spec(),
                 "x",
                 !data.is_full_plot(),
-                data,
             )?,
             resolve_axis_order(
-                &data.source_levels(y)?,
+                &crate::data::source::source_levels(y)?,
                 chart.y_category_order_spec(),
                 "y",
                 !data.is_full_plot(),
-                data,
             )?,
         ]),
         layout => {
-            let observed = triangular_family_order(x, y, layout, data)?;
-            let family = resolve_triangular_order(chart, &observed, !data.is_full_plot(), data)?;
-            let copy =
-                data.collect_source(family.iter().map(|level| data.copy_source_string(level)))?;
+            let observed = triangular_family_order(x, y, layout)?;
+            let family = resolve_triangular_order(chart, &observed, !data.is_full_plot())?;
+            let copy = crate::data::source::collect_source(
+                family
+                    .iter()
+                    .map(|level| crate::data::source::copy_source_string(level)),
+            )?;
             Ok([copy, family])
         }
     }
@@ -1388,79 +1313,27 @@ pub(crate) fn prepare<'a>(
     let explicit_triangular_order = heatmap_layout != HeatmapLayout::Cartesian
         && (!matches!(chart.x_category_order_spec(), CategoryOrder::Observed)
             || !matches!(chart.y_category_order_spec(), CategoryOrder::Observed));
-    let mut x_indices = data.collect_source(
+    let mut x_indices = crate::data::source::collect_source(
         x_levels
             .iter()
             .enumerate()
             .map(|(index, level)| Ok((level.as_str(), index))),
     )?;
-    let mut y_indices = data.collect_source(
+    let mut y_indices = crate::data::source::collect_source(
         y_levels
             .iter()
             .enumerate()
             .map(|(index, level)| Ok((level.as_str(), index))),
     )?;
-    crate::data::source::sort_source_by(&mut x_indices, Some(data), |left, right| {
-        left.0.cmp(right.0)
-    })?;
-    crate::data::source::sort_source_by(&mut y_indices, Some(data), |left, right| {
-        left.0.cmp(right.0)
-    })?;
-    // Admit the declared grid and semantic targets before any cell arrays.
-    // A merged null row replaces its ordinary cells and missing crosses with
-    // one rectangle and one text target. Highlights remain addressed targets
-    // even though their outline is painted by the primary rectangle.
-    let mut active = 0_usize;
-    for y in 0..y_levels.len() {
-        for x in 0..x_levels.len() {
-            data.claim_source_visits(1)?;
-            active += usize::from(active_cell(heatmap_layout, x, y));
-        }
-    }
-    data.claim_source_visits(fills.len())?;
-    let finite_count = fills.iter().flatten().count();
-    let merged = chart.heatmap_null_row_annotations_spec().len();
-    let merged_cells = merged
-        .checked_mul(x_levels.len())
-        .ok_or_else(|| Error::Render("Heatmap merged topology overflow".into()))?;
-    let ordinary = active.saturating_sub(merged_cells);
-    let missing = ordinary.saturating_sub(finite_count);
-    let highlight_count = if let Some(highlights) = &highlights {
-        data.claim_source_visits(highlights.len())?;
-        highlights.iter().filter(|highlight| **highlight).count()
-    } else {
-        0
-    };
-    data.claim_mark_rows()?;
-    for count in [
-        cell_count,
-        x_levels.len(),
-        y_levels.len(),
-        ordinary,
-        merged,
-        missing
-            .checked_mul(2)
-            .ok_or_else(|| Error::Render("Heatmap missing topology overflow".into()))?,
-        merged,
-        highlight_count,
-        if matches!(
-            chart.heatmap_annotations_spec(),
-            HeatmapAnnotations::Values(_)
-        ) {
-            finite_count
-        } else {
-            0
-        },
-    ] {
-        data.claim_topology_slots(count)?;
-    }
-    let mut seen = data.collect_source((0..cell_count).map(|_| Ok(false)))?;
-    let mut cells = data.collect_source((0..cell_count).map(|_| Ok(None)))?;
-    let mut highlighted = data.collect_source((0..cell_count).map(|_| Ok(false)))?;
-    data.claim_source_visits(x_values.len())?;
+    crate::data::source::sort_source_by(&mut x_indices, |left, right| left.0.cmp(right.0));
+    crate::data::source::sort_source_by(&mut y_indices, |left, right| left.0.cmp(right.0));
+    data.validate_row_source()?;
+
+    let mut seen = crate::data::source::collect_source((0..cell_count).map(|_| Ok(false)))?;
+    let mut cells = crate::data::source::collect_source((0..cell_count).map(|_| Ok(None)))?;
+    let mut highlighted = crate::data::source::collect_source((0..cell_count).map(|_| Ok(false)))?;
+
     for (row, ((x, y), fill)) in x_values.iter().zip(&y_values).zip(&fills).enumerate() {
-        data.claim_source_visits(x_indices.len().ilog2() as usize + 2)?;
-        data.claim_source_visits(y_indices.len().ilog2() as usize + 2)?;
         let mut x_index = x_indices[x_indices
             .binary_search_by_key(&x.as_str(), |entry| entry.0)
             .expect("observed x level")]
@@ -1496,12 +1369,11 @@ pub(crate) fn prepare<'a>(
         &cells,
         &highlighted,
         x_levels.len(),
-        data,
     )?;
 
     let mut finite = Vec::new();
-    data.reserve_source(&mut finite, fills.len())?;
-    data.claim_source_visits(fills.len())?;
+    crate::data::source::reserve_source(&mut finite, fills.len())?;
+
     finite.extend(fills.iter().flatten().copied());
     if finite.is_empty() && chart.heatmap_color_limits_spec().is_none() {
         return Err(Error::Data(
@@ -1509,25 +1381,22 @@ pub(crate) fn prepare<'a>(
                 .into(),
         ));
     }
-    data.claim_source_visits(finite.len())?;
-    data.claim_source_visits(finite.len())?;
+
     let domain = color_domain(
         &finite,
         chart.heatmap_scale_spec(),
         chart.heatmap_color_limits_spec(),
     )?;
-    let resources = data.source_resources()?;
+
     let exact_domain = chart
         .heatmap_color_limits_spec()
         .map(|(minimum, maximum)| crate::theme::ColorDomain::exact(minimum, maximum))
         .transpose()?;
     let override_gradient = chart.heatmap_gradient_spec()?;
-    resources
-        .claim_visits(1)
-        .map_err(|e| Error::Render(format!("heatmap gradient sharing: {e:?}")))?;
+
     let selection = if let Some(center) = domain.center {
         let gradient = if let Some(gradient) = override_gradient {
-            DivergingGradient::from_sequence(gradient, resources)?
+            DivergingGradient::from_sequence(gradient)?
         } else {
             color_scales.diverging().clone()
         };
@@ -1542,42 +1411,43 @@ pub(crate) fn prepare<'a>(
             exact_domain,
         )?
     };
-    let color = PreparedHeatmapColor::resolve(domain, selection, resources)?;
-    let resolved_fills = data.collect_source(cells.iter().map(|value| {
-        value
-            .map(|value| color.scale.color(value, data.source_resources()?))
-            .transpose()
-    }))?;
-    data.claim_source_visits(cells.len())?;
+    let color = PreparedHeatmapColor::resolve(domain, selection)?;
+    let resolved_fills = crate::data::source::collect_source(
+        cells
+            .iter()
+            .map(|value| value.map(|value| color.scale.color(value)).transpose()),
+    )?;
+
     let has_missing = cells.iter().enumerate().any(|(index, value)| {
         let x_index = index % x_levels.len();
         let y_index = index / x_levels.len();
         active_cell(heatmap_layout, x_index, y_index) && value.is_none()
     });
 
-    let value_labels = data.collect_source(cells.iter().map(|value| {
+    let value_labels = crate::data::source::collect_source(cells.iter().map(|value| {
         match (value, chart.heatmap_annotations_spec()) {
             (Some(value), HeatmapAnnotations::Values(format)) => {
-                format.format_source(*value, data).map(Some)
+                format.format_source(*value).map(Some)
             }
             _ => Ok(None),
         }
     }))?;
-    let value_owners =
-        data.collect_source(value_labels.iter().enumerate().map(|(index, label)| {
+    let value_owners = crate::data::source::collect_source(value_labels.iter().enumerate().map(
+        |(index, label)| {
             use std::fmt::Write;
             if label.is_none() {
                 return Ok(None);
             }
             let mut owner = String::new();
-            data.reserve_source_string(&mut owner, 44)?;
+            crate::data::source::reserve_source_string(&mut owner, 44)?;
             write!(owner, "heatmap value annotation {index}")
                 .expect("reserved annotation identity");
             Ok(Some(owner))
-        }))?;
-    let colorbar_values = prepare_guide_labels(domain, has_missing, data)?;
+        },
+    ))?;
+    let colorbar_values = prepare_guide_labels(domain, has_missing)?;
     let mut prepared = HeatmapData {
-        color_label: chart.prepare_color_label(data, None)?,
+        color_label: chart.prepare_color_label(None)?,
         layout: heatmap_layout,
         label_fit: chart.heatmap_label_fit_spec(),
         value_labels,
@@ -1593,16 +1463,13 @@ pub(crate) fn prepare<'a>(
         color,
         colorbar_stops: Vec::new(),
     };
-    prepared.colorbar_stops = prepared
-        .color
-        .guide_stops(&prepared.guide_samples(data)?, data)?;
+    prepared.colorbar_stops = prepared.color.guide_stops(&prepared.guide_samples()?)?;
     Ok(prepared)
 }
 
 fn prepare_guide_labels(
     domain: ResolvedColorDomain,
     has_missing: bool,
-    data: crate::data::PlotData<'_>,
 ) -> Result<Vec<String>, Error> {
     let center = domain
         .center
@@ -1614,11 +1481,10 @@ fn prepare_guide_labels(
     ];
     let mut labels = crate::decorations::legend::descriptor::numeric_labels(
         &values[..2 + usize::from(center.is_some())],
-        data,
     )?;
     if has_missing {
-        data.reserve_source(&mut labels, 1)?;
-        labels.push(data.copy_source_string("Missing")?);
+        crate::data::source::reserve_source(&mut labels, 1)?;
+        labels.push(crate::data::source::copy_source_string("Missing")?);
     }
     Ok(labels)
 }
@@ -1673,10 +1539,9 @@ fn resolve_null_row_annotations(
     cells: &[Option<f64>],
     highlighted: &[bool],
     x_count: usize,
-    data: crate::data::PlotData<'_>,
 ) -> Result<Vec<Option<String>>, Error> {
     let annotations = chart.heatmap_null_row_annotations_spec();
-    let mut resolved = data.collect_source(y_levels.iter().map(|_| Ok(None)))?;
+    let mut resolved = crate::data::source::collect_source(y_levels.iter().map(|_| Ok(None)))?;
     if annotations.is_empty() {
         return Ok(resolved);
     }
@@ -1687,16 +1552,16 @@ fn resolve_null_row_annotations(
     }
 
     let mut seen = Vec::new();
-    data.reserve_source(&mut seen, annotations.len())?;
+    crate::data::source::reserve_source(&mut seen, annotations.len())?;
     for annotation in annotations {
-        let row_label = data.normalize_source_string(annotation.row_label())?;
-        data.claim_source_visits(seen.len())?;
+        let row_label = crate::data::source::normalize_source_string(annotation.row_label())?;
+
         if seen.contains(&row_label) {
             return Err(Error::Data(format!(
                 "heatmap: duplicate fully-null row annotation for normalized y category {row_label:?}"
             )));
         }
-        data.claim_source_visits(y_levels.len())?;
+
         let y_index = y_levels
             .iter()
             .position(|level| level == &row_label)
@@ -1706,13 +1571,13 @@ fn resolve_null_row_annotations(
                 ))
             })?;
         let row = &cells[y_index * x_count..(y_index + 1) * x_count];
-        data.claim_source_visits(row.len())?;
+
         if row.iter().any(Option::is_some) {
             return Err(Error::Data(format!(
                 "heatmap: row {row_label:?} must be fully null before it can receive a merged row annotation"
             )));
         }
-        data.claim_source_visits(x_count)?;
+
         if highlighted[y_index * x_count..(y_index + 1) * x_count]
             .iter()
             .any(|value| *value)
@@ -1721,7 +1586,7 @@ fn resolve_null_row_annotations(
                 "heatmap: fully-null row {row_label:?} cannot combine a merged annotation with true cell highlights"
             )));
         }
-        resolved[y_index] = Some(data.copy_source_string(annotation.text())?);
+        resolved[y_index] = Some(crate::data::source::copy_source_string(annotation.text())?);
         seen.push(row_label);
     }
     Ok(resolved)
@@ -1732,12 +1597,12 @@ fn normalized_categories(
     column: &str,
     axis: &str,
 ) -> Result<Vec<String>, Error> {
-    data.collect_source(
+    crate::data::source::collect_source(
         crate::data::strict_strings(data, column, "heatmap")?
             .into_iter()
             .enumerate()
             .map(|(row, value)| {
-                let normalized = data.normalize_source_string(&value)?;
+                let normalized = crate::data::source::normalize_source_string(&value)?;
                 if normalized.is_empty() {
                     let source_row = data.source_row(row);
                     Err(Error::Data(format!(
@@ -1755,13 +1620,12 @@ fn resolve_axis_order(
     order: &CategoryOrder,
     axis: &str,
     is_subset: bool,
-    data: crate::data::PlotData<'_>,
 ) -> Result<Vec<String>, Error> {
     match order {
-        CategoryOrder::Observed => data.collect_source(observed.iter().map(|level| data.copy_source_string(level))),
+        CategoryOrder::Observed => crate::data::source::collect_source(observed.iter().map(|level| crate::data::source::copy_source_string(level))),
         CategoryOrder::Explicit(requested) => {
-            let requested = data.collect_source(requested.iter().map(|level| data.normalize_source_string(level)))?;
-            data.claim_source_visits(requested.len())?;
+            let requested = crate::data::source::collect_source(requested.iter().map(|level| crate::data::source::normalize_source_string(level)))?;
+
             if requested.iter().any(String::is_empty) {
                 return Err(Error::Data(format!(
                     "heatmap: explicit {axis} category order contains an empty normalized level"
@@ -1772,7 +1636,6 @@ fn resolve_axis_order(
                 &requested,
                 &format!("heatmap {axis} category order"),
                 is_subset,
-                Some(data),
             )
         }
         CategoryOrder::Value(sort) => Err(Error::Data(format!(
@@ -1785,18 +1648,19 @@ fn resolve_triangular_order(
     chart: &Plot,
     observed: &[String],
     is_subset: bool,
-    data: crate::data::PlotData<'_>,
 ) -> Result<Vec<String>, Error> {
     match (chart.x_category_order_spec(), chart.y_category_order_spec()) {
-        (CategoryOrder::Observed, CategoryOrder::Observed) => {
-            data.collect_source(observed.iter().map(|level| data.copy_source_string(level)))
-        }
-        (CategoryOrder::Observed, y) => resolve_axis_order(observed, y, "y", is_subset, data),
-        (x, CategoryOrder::Observed) => resolve_axis_order(observed, x, "x", is_subset, data),
+        (CategoryOrder::Observed, CategoryOrder::Observed) => crate::data::source::collect_source(
+            observed
+                .iter()
+                .map(|level| crate::data::source::copy_source_string(level)),
+        ),
+        (CategoryOrder::Observed, y) => resolve_axis_order(observed, y, "y", is_subset),
+        (x, CategoryOrder::Observed) => resolve_axis_order(observed, x, "x", is_subset),
         (x, y) => {
-            let x = resolve_axis_order(observed, x, "x", is_subset, data)?;
-            let y = resolve_axis_order(observed, y, "y", is_subset, data)?;
-            data.claim_source_visits(x.len())?;
+            let x = resolve_axis_order(observed, x, "x", is_subset)?;
+            let y = resolve_axis_order(observed, y, "y", is_subset)?;
+
             if x != y {
                 return Err(Error::Data(
                     "heatmap: triangular x and y category orders must resolve to the same family order"
@@ -1812,7 +1676,6 @@ fn triangular_family_order(
     x_values: &[String],
     y_values: &[String],
     layout: HeatmapLayout,
-    data: crate::data::PlotData<'_>,
 ) -> Result<Vec<String>, Error> {
     let mut levels = Vec::new();
     for (x, y) in x_values.iter().zip(y_values) {
@@ -1821,10 +1684,9 @@ fn triangular_family_order(
             HeatmapLayout::LowerTriangle { .. } | HeatmapLayout::Cartesian => [x, y],
         };
         for value in pair {
-            data.claim_source_visits(levels.len())?;
             if !levels.contains(value) {
-                data.reserve_source(&mut levels, 1)?;
-                levels.push(data.copy_source_string(value)?);
+                crate::data::source::reserve_source(&mut levels, 1)?;
+                levels.push(crate::data::source::copy_source_string(value)?);
             }
         }
     }
@@ -1972,14 +1834,12 @@ impl CellPayload {
 impl HeatmapPayload {
     fn validate_annotation_ink(
         &self,
-        theme: &ResolvedTheme,
+
         scope: &crate::layout::fit::FitScope,
-        data: crate::data::PlotData<'_>,
     ) -> Result<(), crate::layout::fit::PlanError> {
-        data.claim_source_visits(self.cells.len())?;
         for (index, cell) in self.cells.iter().enumerate() {
             let Some(text) = &cell.text else { continue };
-            let mut ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
+            let mut ink = crate::render::geometry::GeometrySnapshot::new();
             ink.text(text.placement, &text.plan, None)?;
             let containing = PanelBox::new(
                 cell.corners[0].x,
@@ -1994,11 +1854,7 @@ impl HeatmapPayload {
                     || bounds.top > containing.y1
             }) {
                 return Err(scope
-                    .child(
-                        crate::layout::AddressRole::HeatmapCell,
-                        index,
-                        &theme.prepared_font_environment()?.generation_resources(),
-                    )?
+                    .child(crate::layout::AddressRole::HeatmapCell, index)?
                     .failure(
                         crate::layout::fit::FitKind::Text,
                         "required Heatmap annotation ink exceeds its assigned cell",
@@ -2024,11 +1880,8 @@ impl HeatmapPayload {
         Ok(())
     }
 
-    fn geometry(
-        &self,
-        theme: &ResolvedTheme,
-    ) -> Result<crate::render::geometry::GeometrySnapshot, Error> {
-        let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    fn geometry(&self) -> Result<crate::render::geometry::GeometrySnapshot, Error> {
+        let mut geometry = crate::render::geometry::GeometrySnapshot::new();
         let clip = crate::render::backend::validate_clip_region(self.clip)?.panel();
         for cell in &self.cells {
             cell.geometry(&mut geometry, Some(clip), &self.cross_style)?;
@@ -2042,9 +1895,7 @@ impl HeatmapPayload {
 
 #[test]
 fn required_heatmap_cell_text_must_fit_its_unclipped_cell() {
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let text = theme
         .measure_legacy_appearance_text(
             "Required",
@@ -2078,30 +1929,20 @@ fn required_heatmap_cell_text_must_fit_its_unclipped_cell() {
         }],
         colorbar: None,
     };
-    let chart = Plot::heatmap(
-        crate::CategoryValues::new("x", ["a"]).unwrap(),
-        crate::CategoryValues::new("y", ["b"]).unwrap(),
-        crate::NumericValues::new("value", [1.0]),
-    )
-    .erase();
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
-    let data = chart.data().with_axis_resources(&resources);
+
     let error = payload
-        .validate_annotation_ink(&theme, &crate::layout::fit::ROOT_SCOPE, data)
+        .validate_annotation_ink(&crate::layout::fit::ROOT_SCOPE)
         .unwrap_err();
     assert!(matches!(error, crate::layout::fit::PlanError::Fit(failure)
         if failure.reason.kind == crate::layout::fit::FitKind::Text
             && failure.reason.address == crate::layout::ComponentAddress::root()
-                .child(crate::layout::AddressRole::HeatmapCell, 0, &crate::font::canonical::OperationGenerationResources::new()).unwrap()));
+                .child(crate::layout::AddressRole::HeatmapCell, 0).unwrap()));
     let cell = &mut payload.cells[0];
     cell.corners[1].x = 200.0;
     cell.corners[2].x = 200.0;
     cell.text.as_mut().unwrap().placement.position.x = 100.0;
     assert!(payload
-        .validate_annotation_ink(&theme, &crate::layout::fit::ROOT_SCOPE, data)
+        .validate_annotation_ink(&crate::layout::fit::ROOT_SCOPE)
         .is_ok());
 }
 
@@ -2111,15 +1952,13 @@ fn select_cells(
     rows: &[f64],
     theme: &ResolvedTheme,
     annotations: &AnnotationPlans,
-    data: crate::data::PlotData<'_>,
 ) -> Result<Vec<CellPayload>, Error> {
     let x_count = prepared.x_levels.len();
     let y_count = prepared.y_levels.len();
     let mut cross_width = None;
     let mut cells = Vec::new();
-    data.reserve_source(&mut cells, prepared.cells.len())?;
+    crate::data::source::reserve_source(&mut cells, prepared.cells.len())?;
     for y_index in 0..y_count {
-        data.claim_source_visits(1)?;
         let (bottom, top) = (rows[y_index + 1], rows[y_index]);
         if let Some(annotation) = &annotations.rows[y_index] {
             let (left, right) = (columns[0], columns[x_count]);
@@ -2150,7 +1989,6 @@ fn select_cells(
             continue;
         }
         for x_index in 0..x_count {
-            data.claim_source_visits(1)?;
             if !active_cell(prepared.layout, x_index, y_index) {
                 continue;
             }
@@ -2192,7 +2030,6 @@ fn select_cells(
                     stroke
                 } else {
                     let stroke = crate::render::geometry::line_ink_width(
-                        theme,
                         &theme.marks.heatmap_missing_cross.backend_style(),
                     )?;
                     cross_width = Some(stroke);
@@ -2234,19 +2071,7 @@ fn measure_annotations(
     use crate::layout::fit::{self, FitFailure, FitKind, FitOutcome};
     use crate::layout::AddressRole;
     let mut miss = None;
-    let count = prepared.cells.len() + prepared.null_row_annotations.len();
-    let environment = theme.prepared_font_environment()?;
-    environment
-        .claim_processing_visits(count as u128)
-        .map_err(|error| Error::Render(format!("heatmap annotation work: {error:?}")))?;
-    environment
-        .claim_text_generation_slots(count as u128)
-        .map_err(|error| Error::Render(format!("heatmap text slots: {error:?}")))?;
-    environment
-        .claim_unicode_bytes(
-            (count * std::mem::size_of::<Option<crate::layout::ResolvedTextPlan>>()) as u64,
-        )
-        .map_err(|error| Error::Render(format!("heatmap text bytes: {error}")))?;
+
     let mut plans = AnnotationPlans {
         values: Vec::new(),
         rows: Vec::new(),
@@ -2276,11 +2101,7 @@ fn measure_annotations(
             let owner = prepared.value_owners[index]
                 .as_deref()
                 .ok_or_else(|| Error::Render("heatmap value owner missing".into()))?;
-            let cell_scope = scope.child(
-                AddressRole::HeatmapValueLabel,
-                index,
-                &theme.prepared_font_environment()?.generation_resources(),
-            )?;
+            let cell_scope = scope.child(AddressRole::HeatmapValueLabel, index)?;
             let measured = text.plan(source, owner, || {
                 fit::measured(fit::text(
                     theme,
@@ -2306,11 +2127,7 @@ fn measure_annotations(
         let Some(annotation) = annotation else {
             continue;
         };
-        let row_scope = scope.child(
-            AddressRole::HeatmapMergedRow,
-            y_index,
-            &theme.prepared_font_environment()?.generation_resources(),
-        )?;
+        let row_scope = scope.child(AddressRole::HeatmapMergedRow, y_index)?;
         let block =
             match fit::outcome(
                 text.plan(annotation, "heatmap fully-null row annotation", || {
@@ -2355,7 +2172,6 @@ fn check_annotation_tracks(
     columns: &[f64],
     rows: &[f64],
     scope: &crate::layout::fit::FitScope,
-    data: crate::data::PlotData<'_>,
 ) -> Result<(), crate::layout::fit::PlanError> {
     use crate::layout::fit::{FitFailure, FitKind};
     use crate::layout::AddressRole;
@@ -2363,7 +2179,6 @@ fn check_annotation_tracks(
     let mut miss = None;
     let count = prepared.x_levels.len();
     for (index, plan) in annotations.values.iter().enumerate() {
-        data.claim_source_visits(1)?;
         let Some(plan) = plan else { continue };
         let col = index % count;
         let row = index / count;
@@ -2374,16 +2189,15 @@ fn check_annotation_tracks(
                 HeatmapAnnotations::Values(format) => format.configured_precision(),
                 HeatmapAnnotations::Hidden => 0,
             };
-            FitFailure::retain_least(&mut miss, scope.child(AddressRole::HeatmapValueLabel, index, data.source_resources()?)?.failure(FitKind::Text, format!(
+            FitFailure::retain_least(&mut miss, scope.child(AddressRole::HeatmapValueLabel, index)?.failure(FitKind::Text, format!(
                 "heatmap: cell {col},{row} is too small for required value annotation at precision {precision}; increase chart size or hide annotations"
             )));
         }
     }
     for (row, plan) in annotations.rows.iter().enumerate() {
-        data.claim_source_visits(1)?;
         let Some(plan) = plan else { continue };
         if rows[row] - rows[row + 1] < plan.height() + 4.0 {
-            FitFailure::retain_least(&mut miss, scope.child(AddressRole::HeatmapMergedRow, row, data.source_resources()?)?.failure(FitKind::Text,
+            FitFailure::retain_least(&mut miss, scope.child(AddressRole::HeatmapMergedRow, row)?.failure(FitKind::Text,
                 "heatmap: required merged row text exceeds its assigned row; increase chart height"));
         }
     }
@@ -2394,12 +2208,7 @@ fn same_value(left: f64, right: f64) -> bool {
     left.total_cmp(&right).is_eq() || (left.abs().to_bits() == 0 && right.abs().to_bits() == 0)
 }
 
-fn fitted_label(
-    data: crate::data::PlotData<'_>,
-    theme: &ResolvedTheme,
-    label: &str,
-    maximum_width: f64,
-) -> Result<String, Error> {
+fn fitted_label(theme: &ResolvedTheme, label: &str, maximum_width: f64) -> Result<String, Error> {
     const ELLIPSIS: &str = "...";
 
     let text_width = |text: &str| {
@@ -2414,7 +2223,7 @@ fn fitted_label(
             .map(|plan| plan.fit_width())
     };
     if text_width(label)? <= maximum_width {
-        return data.copy_source_string(label);
+        return crate::data::source::copy_source_string(label);
     }
     if text_width(ELLIPSIS)? > maximum_width {
         return Ok(String::new());
@@ -2424,12 +2233,11 @@ fn fitted_label(
         .len()
         .checked_add(ELLIPSIS.len())
         .ok_or_else(|| Error::Render("heatmap elision length overflow".into()))?;
-    data.reserve_source_string(&mut fitted, capacity)?;
+    crate::data::source::reserve_source_string(&mut fitted, capacity)?;
     let mut candidate = String::new();
-    data.reserve_source_string(&mut candidate, capacity)?;
-    data.claim_source_visits(label.len())?;
+    crate::data::source::reserve_source_string(&mut candidate, capacity)?;
+
     for grapheme in label.graphemes(true) {
-        data.claim_source_visits(fitted.len() + grapheme.len() + ELLIPSIS.len())?;
         candidate.clear();
         candidate.push_str(&fitted);
         candidate.push_str(grapheme);
@@ -2448,27 +2256,25 @@ fn fitted_label(
 }
 
 fn fitted_unique_labels(
-    data: crate::data::PlotData<'_>,
     theme: &ResolvedTheme,
     labels: &[String],
     maximum_width: impl Fn(usize) -> f64,
     axis: &str,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<Vec<String>, crate::layout::fit::PlanError> {
-    let fitted = data.collect_source(
+    let fitted = crate::data::source::collect_source(
         labels
             .iter()
             .enumerate()
-            .map(|(index, label)| fitted_label(data, theme, label, maximum_width(index))),
+            .map(|(index, label)| fitted_label(theme, label, maximum_width(index))),
     )?;
-    data.claim_source_visits(fitted.len())?;
+
     if fitted.iter().any(String::is_empty) {
         return Err(scope.failure(crate::layout::fit::FitKind::Tick, format!(
             "heatmap: {axis}-axis category labels have no room for an ellipsis; increase chart size or shorten labels"
         )).into());
     }
     for (index, label) in fitted.iter().enumerate() {
-        data.claim_source_visits(index)?;
         if fitted[..index].contains(label) {
             return Err(scope.failure(crate::layout::fit::FitKind::Tick, format!(
             "heatmap: {axis}-axis category labels become ambiguous after elision; increase chart size or shorten labels"

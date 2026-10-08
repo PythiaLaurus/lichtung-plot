@@ -10,6 +10,11 @@ retention/modification inventory and progress are recorded in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md`. Further public-foundation
 feature work remains paused while this simplification proceeds.
 
+Accounting requirements and quota-specific tests in completed historical entries
+below describe their recorded revisions. Spec95 and the current resource/lifecycle
+contract in spec05 supersede those fees and counters; future work must not restore
+them. Source identity, real allocation/arithmetic checks and coordination remain.
+
 This document records the active theme-system design and implementation
 sequence. The completed API-boundary and output-contract remediation remains
 available in Git history through commit `0dcff20`; it is not a second current

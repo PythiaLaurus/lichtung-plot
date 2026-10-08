@@ -1,11 +1,10 @@
-//! One immutable reduced rational identity and operation-admitted local lengths.
+//! Immutable reduced rational identities and exact local lengths.
 
 use std::cmp::Ordering;
 use std::sync::Arc;
 
 use num_bigint::BigUint;
 
-use crate::font::canonical::OperationGenerationResources;
 use crate::layout::kernel::{LayoutScalar, SpatialRounding};
 use crate::{Error, Result};
 
@@ -34,50 +33,34 @@ impl Eq for SpacingPayload {}
 pub(crate) struct RelativeSpacing(Arc<SpacingPayload>);
 
 impl RelativeSpacing {
-    pub(crate) fn compare(
-        &self,
-        other: &Self,
-        resources: &OperationGenerationResources,
-    ) -> Result<Ordering> {
+    pub(crate) fn compare(&self, other: &Self) -> Ordering {
         if Arc::ptr_eq(&self.0, &other.0) {
-            admit(resources, 1, 0)?;
-            return Ok(Ordering::Equal);
+            return Ordering::Equal;
         }
         let left = &self.0.rational;
         let right = &other.0.rational;
-        let bits = sum_bits(
-            left.numerator.bits().max(left.denominator.bits()),
-            right.numerator.bits().max(right.denominator.bits()),
-        )?;
-        admit_math(resources, bits, 2)?;
-        Ok((&left.numerator * &right.denominator).cmp(&(&right.numerator * &left.denominator)))
+
+        (&left.numerator * &right.denominator).cmp(&(&right.numerator * &left.denominator))
     }
-    pub(crate) fn same(
-        &self,
-        other: &Self,
-        resources: &OperationGenerationResources,
-    ) -> Result<bool> {
-        admit(resources, 1, 0)?;
+    pub(crate) fn same(&self, other: &Self) -> bool {
         if Arc::ptr_eq(&self.0, &other.0) {
-            return Ok(true);
+            return true;
         }
         for (left, right) in [
             (&self.0.rational.numerator, &other.0.rational.numerator),
             (&self.0.rational.denominator, &other.0.rational.denominator),
         ] {
-            admit(resources, 1, 0)?;
             if left.iter_u64_digits().len() != right.iter_u64_digits().len() {
-                return Ok(false);
+                return false;
             }
             let (mut left, mut right) = (left.iter_u64_digits(), right.iter_u64_digits());
             while left.len() != 0 {
-                admit(resources, 1, 0)?;
                 if left.next() != right.next() {
-                    return Ok(false);
+                    return false;
                 }
             }
         }
-        Ok(true)
+        true
     }
 
     pub(crate) fn observe_feedback(
@@ -88,7 +71,6 @@ impl RelativeSpacing {
             let mut digits = value.iter_u64_digits();
             round.observe_count(digits.len())?;
             while digits.len() != 0 {
-                admit(round.resources(), 1, 0)?;
                 let digit = digits.next().expect("remaining normalized rational digit");
                 round.observe_count((digit >> 32) as usize)?;
                 round.observe_count((digit & 0xffff_ffff) as usize)?;
@@ -96,54 +78,28 @@ impl RelativeSpacing {
         }
         Ok(())
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "standalone validated construction awaits public foundation exposure; production supplies its active ledger"
-        )
-    )]
-    pub(crate) fn new(value: f64) -> Result<Self> {
-        Self::new_in(value, &OperationGenerationResources::new())
-    }
 
-    pub(crate) fn new_in(value: f64, resources: &OperationGenerationResources) -> Result<Self> {
+    pub(crate) fn new(value: f64) -> Result<Self> {
         validate(value)?;
-        retain_header(resources)?;
-        let rational = dyadic(value, resources)?;
+
+        let rational = dyadic(value);
         Ok(Self(Arc::new(SpacingPayload {
             rational,
             approximate: if value == 0.0 { 0.0 } else { value },
         })))
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "typed rational theme assembly follows the private foundation"
-        )
-    )]
     pub(crate) fn ratio(numerator: u32, denominator: u32) -> Result<Self> {
-        Self::ratio_in(numerator, denominator, &OperationGenerationResources::new())
-    }
-
-    pub(crate) fn ratio_in(
-        numerator: u32,
-        denominator: u32,
-        resources: &OperationGenerationResources,
-    ) -> Result<Self> {
         if denominator == 0 {
             return Err(invalid("ratio denominator must be positive"));
         }
-        retain_header(resources)?;
+
         // Bounded Euclidean gcd on mathematical integers, before BigUint storage.
         let (mut left, mut right) = (numerator, denominator);
         while right != 0 {
-            admit(resources, 1, 0)?;
             (left, right) = (right, left % right);
         }
-        admit_math(resources, 32, 2)?;
+
         Ok(Self(Arc::new(SpacingPayload {
             rational: Rational {
                 numerator: BigUint::from(numerator / left),
@@ -155,36 +111,16 @@ impl RelativeSpacing {
         })))
     }
 
-    /// P(p,m): preserve the represented source length, then divide exactly by m.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "pixel relationship assembly is consumed by the complete-role cutover"
-        )
-    )]
     pub(crate) fn from_pixels(pixels: f64, em: u32) -> Result<Self> {
-        Self::from_pixels_in(pixels, em, &OperationGenerationResources::new())
-    }
-
-    pub(crate) fn from_pixels_in(
-        pixels: f64,
-        em: u32,
-        resources: &OperationGenerationResources,
-    ) -> Result<Self> {
         validate(pixels)?;
         if em == 0 {
             return Err(invalid("source em must be positive"));
         }
-        retain_header(resources)?;
-        let source = dyadic(pixels, resources)?;
-        admit_math(
-            resources,
-            sum_bits(source.denominator.bits(), integer_bits(u64::from(em)))?,
-            2,
-        )?;
+
+        let source = dyadic(pixels);
+
         let denominator = &source.denominator * em;
-        let rational = reduce(source.numerator, denominator, resources)?;
+        let rational = reduce(source.numerator, denominator);
         Ok(Self(Arc::new(SpacingPayload {
             rational,
             approximate: if pixels == 0.0 {
@@ -215,22 +151,13 @@ impl RelativeSpacing {
         Arc::ptr_eq(&self.0, &other.0)
     }
 
-    pub(crate) fn product(
-        &self,
-        metric: LocalMetric,
-        resources: &OperationGenerationResources,
-    ) -> Result<ExactLength> {
+    pub(crate) fn product(&self, metric: LocalMetric) -> ExactLength {
         let rational = &self.0.rational;
-        admit_math(
-            resources,
-            sum_bits(rational.numerator.bits(), integer_bits(metric.0))?
-                .max(rational.denominator.bits()),
-            3,
-        )?;
-        Ok(ExactLength(Rational {
+
+        ExactLength(Rational {
             numerator: &rational.numerator * metric.0,
             denominator: rational.denominator.clone(),
-        }))
+        })
     }
 }
 
@@ -256,7 +183,7 @@ impl LocalMetric {
 pub(crate) struct ExactLength(Rational);
 
 // Test oracles may compare independently measured exact consequences. Runtime
-// matching uses the operation-admitted compare method, not this trait.
+// matching uses the exact compare method, not this trait.
 #[cfg(test)]
 impl PartialEq for ExactLength {
     fn eq(&self, other: &Self) -> bool {
@@ -265,97 +192,55 @@ impl PartialEq for ExactLength {
 }
 
 impl ExactLength {
-    /// Retained canonical layout/text quanta are already exact integers. Admit
-    /// their two rational operands directly, without decoding a pixel projection.
-    pub(crate) fn quanta(
-        value: LayoutScalar,
-        resources: &OperationGenerationResources,
-    ) -> Result<Self> {
+    /// Retain canonical integer quanta without decoding a pixel projection.
+    pub(crate) fn quanta(value: LayoutScalar) -> Result<Self> {
         let value =
             u64::try_from(value.quanta()).map_err(|_| invalid("length must be nonnegative"))?;
-        admit_math(resources, integer_bits(value).max(1), 2)?;
+
         Ok(Self(Rational {
             numerator: BigUint::from(value),
             denominator: BigUint::from(1_u8),
         }))
     }
-    /// Checked unrounded remainder. Admission precedes cross-products and
-    /// subtraction; a negative remainder is unavailable capacity, not zero.
-    pub(crate) fn subtract(
-        &self,
-        other: &Self,
-        resources: &OperationGenerationResources,
-    ) -> Result<Option<Self>> {
-        let bits = sum_bits(
-            self.0.numerator.bits().max(self.0.denominator.bits()),
-            other.0.numerator.bits().max(other.0.denominator.bits()),
-        )?;
-        admit_math(resources, sum_bits(bits, 1)?, 6)?;
+    /// Unrounded remainder; a negative remainder is unavailable capacity, not zero.
+    pub(crate) fn subtract(&self, other: &Self) -> Option<Self> {
         let left = &self.0.numerator * &other.0.denominator;
         let right = &other.0.numerator * &self.0.denominator;
         if left < right {
-            return Ok(None);
+            return None;
         }
-        Ok(Some(Self(Rational {
+        Some(Self(Rational {
             numerator: left - right,
             denominator: &self.0.denominator * &other.0.denominator,
-        })))
+        }))
     }
-    pub(crate) fn before_pixels(
-        &self,
-        anchor: f64,
-        resources: &OperationGenerationResources,
-    ) -> Result<f64> {
-        scalar_pixels(self.before(anchor, resources)?)
+    pub(crate) fn before_pixels(&self, anchor: f64) -> Result<f64> {
+        scalar_pixels(self.before(anchor)?)
     }
-    pub(crate) fn after_pixels(
-        &self,
-        anchor: f64,
-        resources: &OperationGenerationResources,
-    ) -> Result<f64> {
-        let value = self.before_pixels(-anchor, resources)?;
+    pub(crate) fn after_pixels(&self, anchor: f64) -> Result<f64> {
+        let value = self.before_pixels(-anchor)?;
         Ok(if value == 0.0 { 0.0 } else { -value })
     }
-    pub(crate) fn divided_by(
-        &self,
-        value: f64,
-        resources: &OperationGenerationResources,
-    ) -> Result<Self> {
+    pub(crate) fn divided_by(&self, value: f64) -> Result<Self> {
         if !value.is_finite() || value <= 0.0 {
             return Err(invalid("length divisor must be finite and positive"));
         }
-        let divisor = dyadic(value, resources)?;
-        let bits = sum_bits(
-            self.0.numerator.bits().max(self.0.denominator.bits()),
-            divisor.numerator.bits().max(divisor.denominator.bits()),
-        )?;
-        admit_math(resources, bits, 2)?;
+        let divisor = dyadic(value);
+
         Ok(Self(Rational {
             numerator: &self.0.numerator * divisor.denominator,
             denominator: &self.0.denominator * divisor.numerator,
         }))
     }
 
-    pub(crate) fn pixels_rounded(
-        &self,
-        rounding: SpatialRounding,
-        resources: &OperationGenerationResources,
-    ) -> Result<f64> {
-        scalar_pixels(self.round(rounding, resources)?)
+    pub(crate) fn pixels_rounded(&self, rounding: SpatialRounding) -> Result<f64> {
+        scalar_pixels(self.round(rounding)?)
     }
     /// Resolve a whole position, retaining anchor parity through half-quantum
     /// ties instead of independently rounding the offset before subtraction.
-    pub(crate) fn before(
-        &self,
-        anchor: f64,
-        resources: &OperationGenerationResources,
-    ) -> Result<LayoutScalar> {
-        let origin = Self::pixels(anchor.abs(), resources)?;
-        let bits = sum_bits(
-            origin.0.numerator.bits().max(origin.0.denominator.bits()),
-            self.0.numerator.bits().max(self.0.denominator.bits()),
-        )?;
-        admit_math(resources, sum_bits(bits, 1)?, 6)?;
+    pub(crate) fn before(&self, anchor: f64) -> Result<LayoutScalar> {
+        let origin = Self::pixels(anchor.abs())?;
+
         let left = &origin.0.numerator * &self.0.denominator;
         let right = &self.0.numerator * &origin.0.denominator;
         let (negative, numerator) = if anchor.is_sign_negative() {
@@ -369,7 +254,7 @@ impl ExactLength {
             numerator,
             denominator: &origin.0.denominator * &self.0.denominator,
         })
-        .round(SpatialRounding::NearestEven, resources)?;
+        .round(SpatialRounding::NearestEven)?;
         let quanta = if negative {
             value
                 .quanta()
@@ -380,100 +265,49 @@ impl ExactLength {
         };
         Ok(LayoutScalar::from_quanta(quanta))
     }
-    /// Exact nonnegative represented pixel ink/occupancy, on the active ledger.
-    pub(crate) fn pixels(value: f64, resources: &OperationGenerationResources) -> Result<Self> {
+    /// Exact nonnegative represented pixel ink/occupancy.
+    pub(crate) fn pixels(value: f64) -> Result<Self> {
         validate(value)?;
-        let rational = dyadic(value, resources)?;
-        admit_math(resources, sum_bits(rational.numerator.bits(), 10)?, 2)?;
+        let rational = dyadic(value);
+
         Ok(Self(Rational {
             numerator: rational.numerator << 10_usize,
             denominator: rational.denominator,
         }))
     }
 
-    pub(crate) fn add_pixels(
-        &self,
-        value: f64,
-        resources: &OperationGenerationResources,
-    ) -> Result<Self> {
-        self.add(&Self::pixels(value, resources)?, resources)
+    pub(crate) fn add_pixels(&self, value: f64) -> Result<Self> {
+        Ok(self.add_length(&Self::pixels(value)?))
     }
-    pub(crate) fn add(
-        &self,
-        other: &Self,
-        resources: &OperationGenerationResources,
-    ) -> Result<Self> {
-        let bits = sum_bits(
-            self.0.numerator.bits().max(self.0.denominator.bits()),
-            other.0.numerator.bits().max(other.0.denominator.bits()),
-        )?;
-        admit_math(resources, sum_bits(bits, 1)?, 6)?;
+    pub(crate) fn add_length(&self, other: &Self) -> Self {
         let numerator =
             &self.0.numerator * &other.0.denominator + &other.0.numerator * &self.0.denominator;
         let denominator = &self.0.denominator * &other.0.denominator;
-        Ok(Self(reduce(numerator, denominator, resources)?))
+        Self(reduce(numerator, denominator))
     }
 
-    pub(crate) fn times(
-        &self,
-        count: u32,
-        resources: &OperationGenerationResources,
-    ) -> Result<Self> {
-        admit_math(
-            resources,
-            sum_bits(self.0.numerator.bits(), integer_bits(u64::from(count)))?
-                .max(self.0.denominator.bits()),
-            3,
-        )?;
-        Ok(Self(Rational {
+    pub(crate) fn times(&self, count: u32) -> Self {
+        Self(Rational {
             numerator: &self.0.numerator * count,
             denominator: self.0.denominator.clone(),
-        }))
+        })
     }
 
-    pub(crate) fn add_quanta(
-        &self,
-        value: LayoutScalar,
-        resources: &OperationGenerationResources,
-    ) -> Result<Self> {
+    pub(crate) fn add_quanta(&self, value: LayoutScalar) -> Result<Self> {
         let value =
             u64::try_from(value.quanta()).map_err(|_| invalid("length must be nonnegative"))?;
-        admit_math(
-            resources,
-            sum_bits(
-                sum_bits(self.0.denominator.bits(), integer_bits(value))?
-                    .max(self.0.numerator.bits()),
-                1,
-            )?,
-            4,
-        )?;
+
         Ok(Self(Rational {
             numerator: &self.0.numerator + &self.0.denominator * value,
             denominator: self.0.denominator.clone(),
         }))
     }
 
-    pub(crate) fn compare(
-        &self,
-        other: &Self,
-        resources: &OperationGenerationResources,
-    ) -> Result<Ordering> {
-        let bits = sum_bits(
-            self.0.numerator.bits().max(self.0.denominator.bits()),
-            other.0.numerator.bits().max(other.0.denominator.bits()),
-        )?;
-        admit_math(resources, bits, 2)?;
-        Ok((&self.0.numerator * &other.0.denominator)
-            .cmp(&(&other.0.numerator * &self.0.denominator)))
+    pub(crate) fn compare(&self, other: &Self) -> Ordering {
+        (&self.0.numerator * &other.0.denominator).cmp(&(&other.0.numerator * &self.0.denominator))
     }
 
-    pub(crate) fn round(
-        &self,
-        rounding: SpatialRounding,
-        resources: &OperationGenerationResources,
-    ) -> Result<LayoutScalar> {
-        let bits = self.0.numerator.bits().max(self.0.denominator.bits());
-        admit_math(resources, sum_bits(bits, 1)?, 8)?;
+    pub(crate) fn round(&self, rounding: SpatialRounding) -> Result<LayoutScalar> {
         let quotient = &self.0.numerator / &self.0.denominator;
         let remainder = &self.0.numerator % &self.0.denominator;
         let mut digits = quotient.iter_u64_digits();
@@ -519,7 +353,7 @@ fn validate(value: f64) -> Result<()> {
     }
 }
 
-fn dyadic(value: f64, resources: &OperationGenerationResources) -> Result<Rational> {
+fn dyadic(value: f64) -> Rational {
     let bits = value.to_bits();
     let exponent = i32::try_from((bits >> 52) & 0x7ff).expect("11-bit exponent");
     let fraction = bits & ((1_u64 << 52) - 1);
@@ -529,24 +363,18 @@ fn dyadic(value: f64, resources: &OperationGenerationResources) -> Result<Ration
         (fraction | (1_u64 << 52), exponent - 1075)
     };
     if significand == 0 {
-        admit_math(resources, 1, 2)?;
-        return Ok(Rational {
+        return Rational {
             numerator: BigUint::from(0_u8),
             denominator: BigUint::from(1_u8),
-        });
+        };
     }
     let zeros = significand.trailing_zeros();
     significand >>= zeros;
     shift += i32::try_from(zeros).expect("at most 53 bits");
-    let size = if shift >= 0 {
-        integer_bits(significand) + u64::from(shift.unsigned_abs())
-    } else {
-        integer_bits(significand).max(1 + u64::from(shift.unsigned_abs()))
-    };
-    admit_math(resources, size, 4)?;
+
     let numerator = BigUint::from(significand);
     let denominator = BigUint::from(1_u8);
-    Ok(if shift >= 0 {
+    if shift >= 0 {
         Rational {
             numerator: numerator << shift.unsigned_abs() as usize,
             denominator,
@@ -556,73 +384,20 @@ fn dyadic(value: f64, resources: &OperationGenerationResources) -> Result<Ration
             numerator,
             denominator: denominator << shift.unsigned_abs() as usize,
         }
-    })
+    }
 }
 
-fn reduce(
-    numerator: BigUint,
-    denominator: BigUint,
-    resources: &OperationGenerationResources,
-) -> Result<Rational> {
-    let bits = numerator.bits().max(denominator.bits());
-    admit_math(resources, bits, 2)?;
+fn reduce(numerator: BigUint, denominator: BigUint) -> Rational {
     let (mut left, mut right) = (numerator.clone(), denominator.clone());
     while right.bits() != 0 {
-        admit_math(resources, left.bits().max(right.bits()), 6)?;
         let remainder = &left % &right;
         (left, right) = (right, remainder);
     }
-    admit_math(resources, bits, 6)?;
-    Ok(Rational {
+
+    Rational {
         numerator: numerator / &left,
         denominator: denominator / &left,
-    })
-}
-
-fn retain_header(resources: &OperationGenerationResources) -> Result<()> {
-    // Payload and Arc counters are admitted before constructing retained integers.
-    admit(
-        resources,
-        1,
-        (std::mem::size_of::<RelativeSpacing>()
-            + std::mem::size_of::<SpacingPayload>()
-            + 2 * std::mem::size_of::<usize>()) as u64,
-    )
-}
-
-fn sum_bits(left: u64, right: u64) -> Result<u64> {
-    left.checked_add(right)
-        .ok_or_else(|| invalid("integer size overflow"))
-}
-
-fn integer_bits(value: u64) -> u64 {
-    u64::from(u64::BITS - value.leading_zeros())
-}
-
-fn admit_math(resources: &OperationGenerationResources, bits: u64, operands: u64) -> Result<()> {
-    // num-bigint stores native limbs; charge a conservative doubled capacity,
-    // operand headers and bounded schoolbook work, before each expression. There
-    // is no quota-sized preallocation or promise about third-party allocator OOM.
-    let limbs = bits
-        .checked_add(63)
-        .map(|bits| (bits / 64).max(1))
-        .ok_or_else(|| invalid("integer size overflow"))?;
-    let bytes = limbs
-        .checked_mul(16)
-        .and_then(|bytes| bytes.checked_add(std::mem::size_of::<BigUint>() as u64))
-        .and_then(|bytes| bytes.checked_mul(operands))
-        .ok_or_else(|| invalid("integer storage overflow"))?;
-    let work = u128::from(limbs) * u128::from(limbs) * u128::from(operands);
-    admit(resources, work, bytes)
-}
-
-fn admit(resources: &OperationGenerationResources, work: u128, bytes: u64) -> Result<()> {
-    resources
-        .claim_visits(work)
-        .map_err(|error| invalid(&format!("work admission: {error:?}")))?;
-    resources
-        .claim_bytes(bytes)
-        .map_err(|error| invalid(&format!("byte admission: {error}")))
+    }
 }
 
 fn invalid(message: &str) -> Error {
@@ -634,35 +409,11 @@ mod tests {
     use super::*;
 
     fn resolved(value: &RelativeSpacing, pixels: u32, rounding: SpatialRounding) -> i64 {
-        let resources = OperationGenerationResources::new();
         value
-            .product(LocalMetric::css_pixels(pixels).unwrap(), &resources)
-            .unwrap()
-            .round(rounding, &resources)
+            .product(LocalMetric::css_pixels(pixels).unwrap())
+            .round(rounding)
             .unwrap()
             .quanta()
-    }
-
-    #[test]
-    fn rational_matching_admits_each_examined_limb_and_stops_at_the_terminating_digit() {
-        let source = RelativeSpacing::new(f64::from_bits(1)).unwrap();
-        let equal = RelativeSpacing::new(f64::from_bits(1)).unwrap();
-        let different = RelativeSpacing::new(f64::from_bits(2)).unwrap();
-        // Handle, numerator length/digit, denominator length, seventeen actual
-        // denominator digits. The differing bit is in the final digit.
-        for (other, expected) in [(&equal, true), (&different, false)] {
-            for remaining in [0, 20, 21] {
-                let resources = OperationGenerationResources::with_test_limits(remaining, 0);
-                let result = source.same(other, &resources);
-                if remaining == 21 {
-                    assert_eq!(result.unwrap(), expected);
-                } else {
-                    assert!(result.is_err());
-                }
-                assert_eq!(resources.usage().unwrap(), (0, remaining));
-                assert_eq!(resources.byte_usage().unwrap(), 0);
-            }
-        }
     }
 
     #[test]
@@ -741,30 +492,25 @@ mod tests {
         assert_eq!(resolved(&tiny, u32::MAX, SpatialRounding::Floor), 0);
         assert_eq!(resolved(&tiny, u32::MAX, SpatialRounding::NearestEven), 0);
         assert_eq!(resolved(&tiny, u32::MAX, SpatialRounding::Ceil), 1);
-        let resources = OperationGenerationResources::new();
+
         let large = RelativeSpacing::new(f64::MAX)
             .unwrap()
-            .product(LocalMetric::css_pixels(1).unwrap(), &resources)
-            .unwrap();
-        assert!(large.round(SpatialRounding::Ceil, &resources).is_err());
+            .product(LocalMetric::css_pixels(1).unwrap());
+        assert!(large.round(SpatialRounding::Ceil).is_err());
         let maximum = RelativeSpacing::ratio(1, 1)
             .unwrap()
-            .product(
-                LocalMetric::scalar(LayoutScalar::from_quanta(i64::MAX)).unwrap(),
-                &resources,
-            )
-            .unwrap();
+            .product(LocalMetric::scalar(LayoutScalar::from_quanta(i64::MAX)).unwrap());
         assert_eq!(
             maximum
-                .round(SpatialRounding::NearestEven, &resources)
+                .round(SpatialRounding::NearestEven)
                 .unwrap()
                 .quanta(),
             i64::MAX
         );
         assert!(maximum
-            .add_quanta(LayoutScalar::from_quanta(1), &resources)
+            .add_quanta(LayoutScalar::from_quanta(1))
             .unwrap()
-            .round(SpatialRounding::Floor, &resources)
+            .round(SpatialRounding::Floor)
             .is_err());
     }
 
@@ -791,30 +537,21 @@ mod tests {
         ] {
             assert_eq!(f64::to_bits(pixels), bits);
             let value = RelativeSpacing::from_pixels(pixels, em).unwrap();
-            let resources = OperationGenerationResources::new();
-            let restored = value
-                .product(LocalMetric::css_pixels(em).unwrap(), &resources)
-                .unwrap();
+
+            let restored = value.product(LocalMetric::css_pixels(em).unwrap());
             let source = RelativeSpacing::new(pixels)
                 .unwrap()
-                .product(LocalMetric::css_pixels(1).unwrap(), &resources)
-                .unwrap();
-            assert_eq!(
-                restored.compare(&source, &resources).unwrap(),
-                Ordering::Equal
-            );
+                .product(LocalMetric::css_pixels(1).unwrap());
+            assert_eq!(restored.compare(&source), Ordering::Equal);
             assert_eq!(
                 restored
-                    .round(SpatialRounding::NearestEven, &resources)
+                    .round(SpatialRounding::NearestEven)
                     .unwrap()
                     .quanta(),
                 nearest
             );
             assert_eq!(
-                restored
-                    .round(SpatialRounding::Ceil, &resources)
-                    .unwrap()
-                    .quanta(),
+                restored.round(SpatialRounding::Ceil).unwrap().quanta(),
                 hard
             );
             assert_eq!(value.as_f64().to_bits(), (pixels / f64::from(em)).to_bits());
@@ -863,55 +600,33 @@ mod tests {
 
     #[test]
     fn exact_aggregate_retains_the_edge_inset_quantum_and_repeated_gap_sum() {
-        let resources = OperationGenerationResources::new();
         let em = LocalMetric::css_pixels(11).unwrap();
-        let padding = RelativeSpacing::from_pixels(8.8, 11)
-            .unwrap()
-            .product(em, &resources)
-            .unwrap();
-        let comfort = RelativeSpacing::new(0.2)
-            .unwrap()
-            .product(em, &resources)
-            .unwrap();
-        let edge = padding.add(&comfort, &resources).unwrap();
+        let padding = RelativeSpacing::from_pixels(8.8, 11).unwrap().product(em);
+        let comfort = RelativeSpacing::new(0.2).unwrap().product(em);
+        let edge = padding.add_length(&comfort);
         assert_eq!(
-            edge.round(SpatialRounding::NearestEven, &resources)
-                .unwrap()
-                .quanta(),
+            edge.round(SpatialRounding::NearestEven).unwrap().quanta(),
             11264
         );
+        assert_eq!(edge.round(SpatialRounding::Ceil).unwrap().quanta(), 11265);
         assert_eq!(
-            edge.round(SpatialRounding::Ceil, &resources)
-                .unwrap()
-                .quanta(),
-            11265
-        );
-        assert_eq!(
-            edge.times(2, &resources)
-                .unwrap()
-                .round(SpatialRounding::Ceil, &resources)
-                .unwrap()
-                .quanta(),
+            edge.times(2).round(SpatialRounding::Ceil).unwrap().quanta(),
             22529
         );
         let gap = RelativeSpacing::ratio(1, 3072)
             .unwrap()
-            .product(LocalMetric::css_pixels(1).unwrap(), &resources)
-            .unwrap();
+            .product(LocalMetric::css_pixels(1).unwrap());
         assert_eq!(
-            gap.times(3, &resources)
+            gap.times(3)
+                .add_quanta(LayoutScalar::from_quanta(1024))
                 .unwrap()
-                .add_quanta(LayoutScalar::from_quanta(1024), &resources)
-                .unwrap()
-                .round(SpatialRounding::Ceil, &resources)
+                .round(SpatialRounding::Ceil)
                 .unwrap()
                 .quanta(),
             1025
         );
-        assert_eq!(gap.compare(&edge, &resources).unwrap(), Ordering::Less);
-        assert!(gap
-            .add_quanta(LayoutScalar::from_quanta(-1), &resources)
-            .is_err());
+        assert_eq!(gap.compare(&edge), Ordering::Less);
+        assert!(gap.add_quanta(LayoutScalar::from_quanta(-1)).is_err());
     }
 
     #[test]
@@ -959,66 +674,11 @@ mod tests {
     }
 
     #[test]
-    fn constructor_admission_refuses_before_retained_integers_and_clone_shares() {
-        for (visits, bytes) in [(0, u64::MAX), (u128::MAX, 0)] {
-            let resources = OperationGenerationResources::with_test_limits(visits, bytes);
-            assert!(RelativeSpacing::new_in(0.1, &resources).is_err());
-            assert_eq!(resources.byte_usage().unwrap(), 0);
-        }
-        let resources = OperationGenerationResources::new();
-        let value = RelativeSpacing::new_in(f64::from_bits(1), &resources).unwrap();
-        let usage = (resources.usage().unwrap(), resources.byte_usage().unwrap());
+    fn spacing_clone_shares_exact_retained_integers() {
+        let value = RelativeSpacing::new(f64::from_bits(1)).unwrap();
+
         let copy = value.clone();
         assert!(Arc::ptr_eq(&value.0, &copy.0));
         assert_eq!(value, copy);
-        assert_eq!(
-            usage,
-            (resources.usage().unwrap(), resources.byte_usage().unwrap())
-        );
-        let header = (std::mem::size_of::<RelativeSpacing>()
-            + std::mem::size_of::<SpacingPayload>()
-            + 2 * std::mem::size_of::<usize>()) as u64;
-        let resources = OperationGenerationResources::with_test_limits(u128::MAX, header);
-        assert!(RelativeSpacing::from_pixels_in(8.8, 11, &resources).is_err());
-        assert_eq!(resources.byte_usage().unwrap(), header);
-        let resources = OperationGenerationResources::with_test_limits(1, u64::MAX);
-        assert!(RelativeSpacing::ratio_in(5, 14, &resources).is_err());
-        assert_eq!(resources.byte_usage().unwrap(), header);
-    }
-
-    #[test]
-    fn each_exact_expression_refuses_on_the_shared_entry_budget() {
-        let value = RelativeSpacing::new(0.1).unwrap();
-        let metric = LocalMetric::css_pixels(11).unwrap();
-        let resources = OperationGenerationResources::new();
-        let length = value.product(metric, &resources).unwrap();
-        for (visits, bytes) in [(0, u64::MAX), (u128::MAX, 0)] {
-            let resources = OperationGenerationResources::with_test_limits(visits, bytes);
-            assert!(value.product(metric, &resources).is_err());
-            assert!(length.add(&length, &resources).is_err());
-            assert!(length.times(2, &resources).is_err());
-            assert!(length
-                .add_quanta(LayoutScalar::from_quanta(1), &resources)
-                .is_err());
-            assert!(length.compare(&length, &resources).is_err());
-            assert!(length
-                .round(SpatialRounding::NearestEven, &resources)
-                .is_err());
-            assert_eq!(resources.byte_usage().unwrap(), 0);
-        }
-        let budget = OperationGenerationResources::new();
-        value.product(metric, &budget).unwrap();
-        let (visits, bytes) = (budget.usage().unwrap().1, budget.byte_usage().unwrap());
-        let exact = OperationGenerationResources::with_test_limits(visits, bytes);
-        value.product(metric, &exact).unwrap();
-        assert!(value.product(metric, &exact.clone()).is_err());
-        for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
-            assert!(value
-                .product(
-                    metric,
-                    &OperationGenerationResources::with_test_limits(visits, bytes)
-                )
-                .is_err());
-        }
     }
 }

@@ -1003,14 +1003,12 @@ with different sections, full glyph geometry, title leading or coordinated domai
 Height feedback replaces the previous consequence, including contraction; it
 does not aggregate guide height as cumulative owned ink or rechoose root width.
 
-Every lookup/call, examined variable equality/comparison, projection occurrence,
-section record, key, string, address, text/glyph plan, column slot, feedback record
-and source/cache copy uses existing checked admission. Known counts reserve
-fallibly before work; unknown lengths grow through bounded checked buffers. Arc
-sharing counts retained payload once; copied values again. Cumulative claims are
-not refunded when a trial fails. Limit/reservation/arithmetic/font errors remain
-fatal rather than unsupported-factorization errors or fit retries. Section count
-multiplies actual work/records, never placement budgets or resource quotas.
+Retained sections, keys, strings, addresses, text/glyph plans, column slots and
+feedback use checked lengths and fallible storage. Immutable Arc sharing and
+complete cache identity remain. Spec95 removes accounting fees, cumulative
+claims and resource quotas; no comparison/call ticket is required. Real
+reservation/arithmetic/font errors remain fatal rather than factorization errors
+or fit retries. More sections do not grant additional guide placement attempts.
 
 Observe selected composition/section identity, title/entry geometry, capacities,
 flow slots and exact glyph consequences, not just outer width/height. Replayed
@@ -1054,8 +1052,8 @@ planning, new decisions or authorization for another renderer/default route.
 | Layer source/count/style identity | `point_labels_and_whole_layer_legend_identity_remain_distinct`, `repeated_explicit_colors_and_exact_duplicate_legend_entries_are_accepted`, `conflicting_duplicate_point_layer_legend_identity_is_rejected`, `explicit_point_layer_consumes_its_automatic_palette_position`, `canvas_absent_hue_levels_do_not_consume_accent_slots` in `tests/lines/numeric_layers.rs` |
 | Shared exact/hidden behavior | `shared_canvas_legend_merges_typed_collective_pairs`, `hidden_canvas_legends_do_not_preflight_suppressed_glyphs`, `hidden_discrete_guide_still_coordinates_visible_mark_colors` in `tests/composition/canvases.rs`; `shared_canvas_legend_rejects_conflicting_caller_color_mapping`, `shared_canvas_legend_rejects_conflicting_point_outline_mapping` in `tests/interactions/styles.rs` |
 | Bounded complete guide flow/ink | `assigned_discrete_flow_matches_horizontal_and_vertical_worked_examples`, `compact_vertical_flow_remeasures_labels_and_fits_two_columns`, `entries_in_one_row_share_a_baseline_and_union_their_ink_heights`, `local_and_shared_discrete_guides_allocate_complete_custom_glyph_and_frame_ink`, `glyph_changes_invalidate_feedback_even_when_legend_extent_is_unchanged` in `src/decorations/legend.rs` |
-| Actual cache/feedback/admission | `actual_child_hit_is_invalidated_by_legend_only_paint_and_geometry_changes`, `child_keys_include_exact_origin_computed_policy_and_relevant_feedback`, `later_panel_cache_replay_record_refusal_is_fatal_without_remeasurement` in `src/decorations/plan/children.rs`; `rejected_ancestor_attempts_do_not_reset_child_guide_budget` in `src/layout/kernel/feedback.rs` |
-| Matrix/local and natural root owners | `many_hue_matrix_legend_uses_the_operation_ledger_end_to_end` in `src/plots/matrix.rs`; `matrix_content_roots_compose_the_native_hue_guide_and_variable_square`, `owning_facet_discrete_guide_preference_is_composed_once_at_its_explicit_edge` in `src/orchestrator/lifecycle.rs` |
+| Actual cache/feedback | `actual_child_hit_is_invalidated_by_legend_only_paint_and_geometry_changes`, `child_keys_include_exact_origin_computed_policy_and_relevant_feedback`, `later_panel_cache_replays_feedback_without_remeasurement` in `src/decorations/plan/children.rs`; `rejected_ancestor_attempts_do_not_reset_child_guide_budget` in `src/layout/kernel/feedback.rs` |
+| Matrix/local and natural root owners | `many_hue_matrix_legend_preserves_all_labels` in `src/plots/matrix.rs`; `matrix_content_roots_compose_the_native_hue_guide_and_variable_square`, `owning_facet_discrete_guide_preference_is_composed_once_at_its_explicit_edge` in `src/orchestrator/lifecycle.rs` |
 | Selected output/containing fit | `standalone_capture_uses_selected_legend_operands_not_measured_style_or_position` in `src/orchestrator/lifecycle.rs`; `shared_guide_recovery_measures_the_complete_canvas_body`, `content_shared_guide_recovers_after_measured_gutters_without_reselecting_width` in `src/canvas.rs`; `inside_legend_resolved_box_does_not_overlap_bracket_or_label` in `tests/annotations/significance_layout.rs` |
 
 ### New Fixtures And Independent Expectations (All Pending)
@@ -1120,10 +1118,9 @@ The following names identify required future Rust fixtures, not executed tests.
   exact-pair standalone/facet/PerPlot/Shared; one initial preferred-Right width,
   selected Top/compact recovery and contracted height; complete axes/annotations
   remain present. A changed guide-only consequence cannot reuse stale HeightInputs.
-* `section_work_admission_has_exact_boundaries_and_one_owner_budget`: actual
-  sections/entries/projections/bytes/calls/cache/font visits at exact inclusive
-  limits and one-unit-less refusal; normal/compact/ancestor replay share one
-  budget. More sections never grant more trials or reset quotas.
+* Preserve real section/source identity, checked storage and immutable replay.
+  Normal/compact/ancestor replay share one guide owner and its existing attempt
+  rules. More sections never grant more trials. Do not add resource-fee tests.
 * Public compile/setter fixtures bind only the 17 Legend kinds; all owner precedence
   and setter orders are explicit. A common Canvas selection is harmless under
   PerPlot/Hidden and changes Shared only. No continuous/Any extension is tested

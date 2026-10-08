@@ -111,16 +111,6 @@ enum FacetCellLayout {
 }
 
 impl FacetCell {
-    pub(crate) fn admit_clone(&self, data: crate::data::PlotData<'_>) -> Result<(), Error> {
-        match &self.layout {
-            FacetCellLayout::Single(level) => data.admit_clone_str(level),
-            FacetCellLayout::Grid { row, column } => {
-                data.admit_clone_str(row)?;
-                data.admit_clone_str(column)
-            }
-        }
-    }
-
     /// Select one level of a row, column, or wrapped facet.
     #[must_use]
     pub fn single(level: impl Into<String>) -> Self {

@@ -51,40 +51,29 @@ struct WaterfallSpan {
     delta: f64,
 }
 
-fn retained<'a>(
-    chart: &'a Plot,
-    theme: &crate::theme::ResolvedTheme,
-) -> Result<&'a PreparedWaterfall, Error> {
+fn retained(chart: &Plot) -> Result<&PreparedWaterfall, Error> {
     let inputs = chart
         .prepared_waterfall
         .as_ref()
         .ok_or_else(|| Error::Render("Waterfall requires root-prepared spans".into()))?;
-    crate::layout::interior::preference::panel(
-        &inputs.panels,
-        chart.axis_scope(),
-        "Waterfall",
-        &theme.prepared_font_environment()?.generation_resources(),
-    )
+    crate::layout::interior::preference::panel(&inputs.panels, chart.axis_scope(), "Waterfall")
 }
 
 fn mark_intrinsic_body_minimum(
     chart: &Plot,
     theme: &crate::theme::ResolvedTheme,
 ) -> Result<(f64, f64), Error> {
-    let prepared = retained(chart, theme)?;
+    let prepared = retained(chart)?;
     if prepared.labels.is_empty() || prepared.labels.len() != prepared.spans.len() {
         return Err(Error::Render(
             "Waterfall categories and scientific spans differ".into(),
         ));
     }
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    resources
-        .claim_visits(prepared.spans.len() as u128)
-        .map_err(|error| Error::Render(format!("Waterfall span intrinsic admission: {error:?}")))?;
+
     let positive = theme.marks.waterfall_bar.backend_style((0, 0, 0));
     let negative = positive.clone();
-    let positive_ink = crate::render::geometry::rectangular_fill_ink_bounds(theme, &positive)?;
-    let negative_ink = crate::render::geometry::rectangular_fill_ink_bounds(theme, &negative)?;
+    let positive_ink = crate::render::geometry::rectangular_fill_ink_bounds(&positive)?;
+    let negative_ink = crate::render::geometry::rectangular_fill_ink_bounds(&negative)?;
     let mut pitch = 1.0_f64 / 1024.0;
     let mut numeric = 0.0_f64;
     for span in &prepared.spans {
@@ -103,14 +92,12 @@ fn mark_intrinsic_body_minimum(
     }
     if prepared.spans.len() > 1 {
         let connector = crate::render::geometry::line_ink_width(
-            theme,
             &theme.marks.waterfall_connector.backend_style(),
         )?;
         pitch = pitch.max(connector / 0.4);
         numeric = numeric.max(connector);
     }
     numeric = numeric.max(crate::render::geometry::line_ink_width(
-        theme,
         &theme.marks.waterfall_reference.backend_style(),
     )?);
     let categories = f64::from(
@@ -141,13 +128,10 @@ pub(crate) fn intrinsic_body_minimum(
     let marks = mark_intrinsic_body_minimum(chart, theme)?;
     let axes =
         crate::layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
-    let prepared = retained(chart, theme)?;
-    let resources = theme.prepared_font_environment()?.generation_resources();
+    let prepared = retained(chart)?;
+
     let mut height = 0.0_f64;
     for (value, text) in &prepared.totals {
-        resources
-            .claim_visits(1)
-            .map_err(|error| Error::Render(format!("Waterfall total intrinsic: {error:?}")))?;
         if chart
             .user_x_limits()
             .is_some_and(|range| *value < range.0 || *value > range.1)
@@ -176,7 +160,7 @@ pub(crate) fn natural_body_height(
     theme: &crate::theme::ResolvedTheme,
     width: f64,
 ) -> Result<f64, Error> {
-    let resources = theme.prepared_font_environment()?.generation_resources();
+    let resources = theme.prepared_font_environment()?.operation();
     let inputs = chart
         .prepared_waterfall
         .as_ref()
@@ -185,7 +169,6 @@ pub(crate) fn natural_body_height(
         &inputs.panels,
         chart.axis_scope(),
         "natural Waterfall",
-        &resources,
     )?;
     let axes = chart
         .prepared_axis_inputs()
@@ -194,14 +177,13 @@ pub(crate) fn natural_body_height(
     let panel = PanelBox::new(0.0, width, 0.0, 1.0);
     let projection =
         crate::layout::Projection::new(range, (0.0, marks.labels.len() as f64), panel.as_tuple());
-    let data = chart.data().with_axis_resources(&resources);
+    let data = chart.data().with_operation(&resources);
     let plan = plan_annotations(
         &projection,
         panel,
         marks.labels.len() as f64,
         &marks.totals,
         PlotRenderContext::new(data, panel, theme),
-        data,
     )
     .map_err(crate::layout::fit::PlanError::into_error)?;
     let hard = mark_intrinsic_body_minimum(chart, theme)?.1.max(
@@ -243,12 +225,10 @@ pub(crate) fn prepare(
     if !base.is_finite() {
         return Err(Error::Data("waterfall: base value must be finite".into()));
     }
-    data.claim_mark_rows()?;
+    data.validate_row_source()?;
     // Category slots, connectors, and the two named total targets survive
     // caller-window clipping. Bar records are the original row slots above.
-    data.claim_topology_slots(labels.len())?;
-    data.claim_topology_slots(labels.len().saturating_sub(1))?;
-    data.claim_topology_slots(2)?;
+
     let (spans, range) = prepare_spans(base, &deltas, data)?;
     let running = spans.last().map_or(base, |span| span.end);
     let (base_label, terminal_label) = chart
@@ -259,7 +239,7 @@ pub(crate) fn prepare(
     let mut totals = [(base, String::new()), (running, String::new())];
     for ((value, text), label) in totals.iter_mut().zip([base_label, terminal_label]) {
         use std::fmt::Write;
-        data.reserve_source_string(
+        crate::data::source::reserve_source_string(
             text,
             label
                 .len()
@@ -284,13 +264,12 @@ fn prepare_spans(
     data.source_resources()?;
     let mut running = base;
     let mut spans = Vec::new();
-    data.reserve_source(&mut spans, deltas.len())?;
-    data.claim_source_visits(deltas.len())?;
+    crate::data::source::reserve_source(&mut spans, deltas.len())?;
+
     let mut range = (base, base);
     for (index, delta) in deltas.iter().enumerate() {
         let next = running + delta;
         if !next.is_finite() {
-            data.claim_source_bytes(128)?;
             return Err(Error::Data(format!(
                 "waterfall: cumulative endpoint is non-finite at source row {}",
                 data.source_row(index)
@@ -315,17 +294,16 @@ pub(crate) fn measure(
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     #[cfg(test)]
     count(1);
-    let prepared = retained(chart, context.theme)?;
+    let prepared = retained(chart)?;
     let theme = context.theme;
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = context.data.with_axis_resources(&resources);
+
     let labels = &prepared.labels;
     let spans = &prepared.spans;
     let range = prepared.range;
     let base = prepared.totals[0].0;
     let terminal = prepared.totals[1].0;
     let x_range = context.axis_range(crate::layout::AxisSide::Bottom, || {
-        crate::layout::continuous_auto_range(range, chart.x_axis_spec(), data.source_resources()?)
+        crate::layout::continuous_auto_range(range, chart.x_axis_spec())
     })?;
     let panel = context.panel;
     let y_range = context.axis_range(crate::layout::AxisSide::Left, || {
@@ -342,13 +320,11 @@ pub(crate) fn measure(
         labels.len() as f64,
         &prepared.totals,
         context,
-        data,
     )?;
     let mark_minimum = mark_intrinsic_body_minimum(chart, theme)?;
     let axes_minimum =
         crate::layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
     if annotations.height > panel.height() - mark_minimum.1.max(axes_minimum.1) {
-        data.claim_source_bytes(1024)?;
         return Err(context.fit_scope().failure(crate::layout::fit::FitKind::SpecializedGeometry, format!(
             "waterfall: total annotations require {:.0}px while preserving the traced category tracks; increase chart height or shorten the configured labels",
             annotations.height
@@ -366,7 +342,6 @@ pub(crate) fn measure(
     let width = context.axis_label_width.max(1.0 / 1024.0);
     if chart.y_tick_labels_visible() {
         for label in display {
-            data.claim_source_visits(1)?;
             let plan = crate::layout::fit::measured(crate::layout::fit::text(
                 theme,
                 label,
@@ -376,7 +351,7 @@ pub(crate) fn measure(
                 "y-axis tick label",
                 &context
                     .fit_scope()
-                    .child(crate::layout::AddressRole::AxisLeft, 0, &resources)?,
+                    .child(crate::layout::AddressRole::AxisLeft, 0)?,
             ))?;
             pitch = pitch.max(plan.height() + 2.0 * crate::layout::LABEL_CLEARANCE);
         }
@@ -385,7 +360,7 @@ pub(crate) fn measure(
     let preferred = min.max(crate::layout::kernel::ceil_spatial_quanta(
         2.0 * f64::from(theme.typography.axes.tick_label.font_size),
     )?);
-    let specs = data.collect_source(labels.iter().map(|_| {
+    let specs = crate::data::source::collect_source(labels.iter().map(|_| {
         Ok(crate::layout::kernel::TrackSpec {
             min,
             preferred,
@@ -398,7 +373,6 @@ pub(crate) fn measure(
         (mark_panel.y0, mark_panel.y1),
         0.0,
         false,
-        data,
         context.fit_scope(),
     )?;
     let projection =
@@ -410,22 +384,22 @@ pub(crate) fn measure(
         theme,
         context.fit_scope(),
     )?;
-    let ticks = data.collect_source(display.iter().zip(&bands).map(|(label, band)| {
-        data.claim_source_visits(1)?;
-        Ok(AxisTick::new(
-            (f64::midpoint(band.0, band.1) - mark_panel.y0) / mark_panel.height()
-                * labels.len() as f64,
-            if chart.y_tick_labels_visible() {
-                data.copy_source_string(label)?
-            } else {
-                String::new()
-            },
-        ))
-    }))?;
+    let ticks =
+        crate::data::source::collect_source(display.iter().zip(&bands).map(|(label, band)| {
+            Ok(AxisTick::new(
+                (f64::midpoint(band.0, band.1) - mark_panel.y0) / mark_panel.height()
+                    * labels.len() as f64,
+                if chart.y_tick_labels_visible() {
+                    crate::data::source::copy_source_string(label)?
+                } else {
+                    String::new()
+                },
+            ))
+        }))?;
     let layout = crate::layout::Layout {
         projection,
         x_axis: crate::layout::Axis {
-            label: data.copy_source_string(&axes.labels[0])?,
+            label: crate::data::source::copy_source_string(&axes.labels[0])?,
             ticks: x.ticks,
             source: x.source,
             explicit_ticks: axes.specs[0].exact_ticks.is_some(),
@@ -433,26 +407,24 @@ pub(crate) fn measure(
             assigned_cells: None,
         },
         y_axis: crate::layout::Axis {
-            label: data.copy_source_string(&axes.labels[1])?,
+            label: crate::data::source::copy_source_string(&axes.labels[1])?,
             ticks,
             source: crate::layout::TickSource::SUPPLIED,
             explicit_ticks: false,
             assigned_tick_width: Some(width),
-            assigned_cells: Some(data.collect_source(bands.iter().map(|band| {
-                data.claim_source_visits(1)?;
-                Ok(*band)
-            }))?),
+            assigned_cells: Some(crate::data::source::collect_source(
+                bands.iter().map(|band| Ok(*band)),
+            )?),
         },
     };
     let mut bars = Vec::new();
     let mut source_rows = Vec::new();
     let mut connectors = Vec::new();
-    let accents = crate::theme::AccentColors::resolve(&theme.marks.accents, 2, &resources)?;
-    data.reserve_source(&mut bars, spans.len())?;
-    data.reserve_source(&mut source_rows, spans.len())?;
-    data.reserve_source(&mut connectors, spans.len().saturating_sub(1))?;
+    let accents = crate::theme::AccentColors::resolve(&theme.marks.accents, 2)?;
+    crate::data::source::reserve_source(&mut bars, spans.len())?;
+    crate::data::source::reserve_source(&mut source_rows, spans.len())?;
+    crate::data::source::reserve_source(&mut connectors, spans.len().saturating_sub(1))?;
     for (index, span) in spans.iter().enumerate() {
-        data.claim_source_visits(1)?;
         let (start, end, delta) = (&span.start, &span.end, &span.delta);
         let y0 = index as f64 + 0.2;
         let y1 = index as f64 + 0.8;
@@ -497,7 +469,7 @@ pub(crate) fn measure(
             ));
         }
     }
-    data.claim_source_visits(2)?;
+
     let references = [base, terminal].map(|value| {
         let (x, y0) = layout.projection.project(value, 0.0);
         let (_, y1) = layout.projection.project(value, labels.len() as f64);
@@ -511,8 +483,8 @@ pub(crate) fn measure(
     } = annotations;
     let mut text = Vec::new();
     let mut text_targets = Vec::new();
-    data.reserve_source(&mut text, items.len())?;
-    data.reserve_source(&mut text_targets, items.len())?;
+    crate::data::source::reserve_source(&mut text, items.len())?;
+    crate::data::source::reserve_source(&mut text_targets, items.len())?;
     for annotation in items {
         text_targets.push(annotation.target);
         let text_plan = annotation.text_plan;
@@ -538,7 +510,7 @@ pub(crate) fn measure(
         text_targets,
         domain_expansions: [None; 2],
     };
-    let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    let mut geometry = crate::render::geometry::GeometrySnapshot::new();
     let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
     for (index, (points, style)) in payload.bars.iter().enumerate() {
         geometry.polygon(points, style, Some(clip))?;
@@ -552,10 +524,10 @@ pub(crate) fn measure(
     for text in &payload.text {
         geometry.text(text.placement, &text.plan, None)?;
     }
-    let mut label_ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
-    data.claim_source_visits(payload.text.len())?;
+    let mut label_ink = crate::render::geometry::GeometrySnapshot::new();
+
     for (index, text) in payload.text.iter().enumerate() {
-        let mut one = crate::render::geometry::GeometrySnapshot::new(theme)?;
+        let mut one = crate::render::geometry::GeometrySnapshot::new();
         one.text(text.placement, &text.plan, None)?;
         for ink in one.bounds() {
             if ink.bottom < mark_panel.y1
@@ -565,7 +537,7 @@ pub(crate) fn measure(
             {
                 return Err(context
                     .fit_scope()
-                    .child(payload.text_targets[index], 0, &resources)?
+                    .child(payload.text_targets[index], 0)?
                     .failure(
                         crate::layout::fit::FitKind::Text,
                         "required Waterfall total ink exceeds its assigned annotation shelf",
@@ -575,8 +547,8 @@ pub(crate) fn measure(
         }
         label_ink.append(&one)?;
     }
-    let mut full = crate::render::geometry::GeometrySnapshot::new(theme)?;
-    data.claim_source_visits(payload.bars.len() + payload.connectors.len())?;
+    let mut full = crate::render::geometry::GeometrySnapshot::new();
+
     for (points, style) in &payload.bars {
         full.polygon(points, style, None)?;
     }
@@ -601,7 +573,7 @@ pub(crate) fn measure(
     }
     // Base/terminal reference strokes belong to the numeric axis but their
     // vertical ends intentionally meet the category frame.
-    data.claim_source_visits(payload.references.len())?;
+
     for (points, style) in &payload.references {
         full.line(points, style, None)?;
     }
@@ -621,7 +593,6 @@ pub(crate) fn measure(
                 &layout.projection,
                 bounds,
                 [true, false],
-                data,
                 context.fit_scope(),
             )?;
             payload.domain_expansions = crate::layout::interior::merge_mark_domain_expansions(
@@ -643,7 +614,6 @@ pub(crate) fn measure(
                 &layout.projection,
                 bounds,
                 [true, false],
-                data,
                 context.fit_scope(),
             )?;
             payload.domain_expansions = crate::layout::interior::merge_mark_domain_expansions(
@@ -655,18 +625,23 @@ pub(crate) fn measure(
     let mut result = PlotRenderResult::new(layout, Vec::new());
     result.y_domain = crate::spec::AxisDomain::Categorical;
     result.y_tick_keys =
-        Some(data.collect_source(labels.iter().map(|label| data.copy_source_string(label)))?);
+        Some(crate::data::source::collect_source(labels.iter().map(
+            |label| crate::data::source::copy_source_string(label),
+        ))?);
     result.axes = Some(result.layout.measure_axes_with_inputs(
         theme,
         context.fit_scope(),
         chart.axis_semantic_inputs([result.x_domain, result.y_domain]),
         || crate::layout::StandardPanelInputs::new(theme),
     )?);
-    result.producer_text = data.collect_source(payload.text.iter().map(|text| Ok(text.clone())))?;
-    result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
-        payload: crate::layout::interior::MarkPayload::Waterfall(payload),
-        geometry,
-    })?);
+    result.producer_text =
+        crate::data::source::collect_source(payload.text.iter().map(|text| Ok(text.clone())))?;
+    result.marks = Some(crate::data::source::source_arc(
+        crate::layout::interior::SelectedMarkPlan {
+            payload: crate::layout::interior::MarkPayload::Waterfall(payload),
+            geometry,
+        },
+    )?);
     Ok(result)
 }
 
@@ -766,15 +741,14 @@ fn plan_annotations(
     source_y: f64,
     candidates: &[(f64, String); 2],
     context: PlotRenderContext<'_>,
-    data: crate::data::PlotData<'_>,
 ) -> Result<AnnotationPlan, crate::layout::fit::PlanError> {
     let theme = context.theme;
     let scope = context.fit_scope();
     let mut rows: Vec<ShelfRow> = Vec::new();
     let mut items = Vec::new();
     let mut miss = None;
-    data.reserve_source(&mut items, 2)?;
-    data.reserve_source(&mut rows, 2)?;
+    crate::data::source::reserve_source(&mut items, 2)?;
+    crate::data::source::reserve_source(&mut rows, 2)?;
     let metrics = &theme.annotations;
     if [
         metrics.waterfall_shelf_padding,
@@ -798,7 +772,7 @@ fn plan_annotations(
         } else {
             crate::layout::AddressRole::WaterfallTerminalLabel
         };
-        data.claim_source_visits(1)?;
+
         if !projection.contains_data(*value, source_y) {
             continue;
         }
@@ -815,14 +789,8 @@ fn plan_annotations(
         if width + 2.0 * metrics.waterfall_shelf_padding > panel.width() {
             // Debug escaping can expand each source byte; admit both the text
             // diagnostic before allocation; child paths have their own admission.
-            let diagnostic_bytes = text
-                .len()
-                .checked_mul(10)
-                .and_then(|bytes| bytes.checked_add(1024))
-                .ok_or_else(|| Error::Render("waterfall: diagnostic text size overflow".into()))?;
-            data.claim_source_visits(diagnostic_bytes)?;
-            data.claim_source_bytes(diagnostic_bytes)?;
-            crate::layout::fit::FitFailure::retain_least(&mut miss, scope.child(if index == 0 { crate::layout::AddressRole::WaterfallBaseLabel } else { crate::layout::AddressRole::WaterfallTerminalLabel }, 0, data.source_resources()?)?.failure(crate::layout::fit::FitKind::Text, format!(
+
+            crate::layout::fit::FitFailure::retain_least(&mut miss, scope.child(if index == 0 { crate::layout::AddressRole::WaterfallBaseLabel } else { crate::layout::AddressRole::WaterfallTerminalLabel }, 0)?.failure(crate::layout::fit::FitKind::Text, format!(
                 "waterfall: total annotation {text:?} requires {:.0}px but only {:.0}px is available; increase chart width or shorten the configured label",
                 width + 2.0 * metrics.waterfall_shelf_padding,
                 panel.width()
@@ -870,10 +838,8 @@ fn plan_annotations(
         );
         let mut row = rows.len();
         for (candidate, occupied) in rows.iter().enumerate() {
-            data.claim_source_visits(1)?;
             let mut fits = true;
             for &(left, right) in &occupied.intervals {
-                data.claim_source_visits(1)?;
                 if i128::from(bounds.1) + i128::from(gap) > i128::from(left)
                     && i128::from(right) + i128::from(gap) > i128::from(bounds.0)
                 {
@@ -893,7 +859,7 @@ fn plan_annotations(
                 below: 0,
             });
         }
-        data.reserve_source(&mut rows[row].intervals, 1)?;
+        crate::data::source::reserve_source(&mut rows[row].intervals, 1)?;
         rows[row].intervals.push(bounds);
         rows[row].above = rows[row].above.max(above);
         rows[row].below = rows[row].below.max(below);
@@ -908,14 +874,13 @@ fn plan_annotations(
         return Err(failure.into());
     }
     let mut baselines = Vec::new();
-    data.reserve_source(&mut baselines, rows.len())?;
+    crate::data::source::reserve_source(&mut baselines, rows.len())?;
     let mut height = if rows.is_empty() {
         0_i128
     } else {
         i128::from(padding)
     };
     for (index, row) in rows.iter().enumerate() {
-        data.claim_source_visits(1)?;
         let baseline = height
             .checked_add(i128::from(row.below))
             .ok_or_else(|| Error::Render("Waterfall shelf baseline overflow".into()))?;
@@ -950,7 +915,7 @@ fn plan_annotations(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::font::canonical::OperationGenerationResources;
+    use crate::font::canonical::OperationContext;
     use crate::layout::fit::PlanError;
     use crate::layout::kernel::nearest_spatial_quanta;
     use crate::{CategoryValues, NumericValues};
@@ -963,16 +928,10 @@ mod tests {
             0.0,
         )
         .erase();
-        let inputs = crate::plots::shared_x::prepare_plot(
-            &source,
-            &OperationGenerationResources::new(),
-            None,
-        )
-        .unwrap();
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         theme.marks.accents =
             crate::theme::AccentPalette::new(theme.marks.accents.seeds()[..1].iter().copied())
                 .unwrap();
@@ -1010,16 +969,10 @@ mod tests {
         .x_label("")
         .y_label("")
         .erase();
-        let inputs = crate::plots::shared_x::prepare_plot(
-            &source,
-            &OperationGenerationResources::new(),
-            None,
-        )
-        .unwrap();
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let panel = PanelBox::new(50.0, 850.0, 50.0, 550.0);
         let selected = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
@@ -1035,11 +988,11 @@ mod tests {
             payload.text[1].placement.position.x.to_bits()
         );
         assert!(payload.text[1].placement.position.y > payload.text[0].placement.position.y);
-        let mut first = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+        let mut first = crate::render::geometry::GeometrySnapshot::new();
         first
             .text(payload.text[0].placement, &payload.text[0].plan, None)
             .unwrap();
-        let mut second = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+        let mut second = crate::render::geometry::GeometrySnapshot::new();
         second
             .text(payload.text[1].placement, &payload.text[1].plan, None)
             .unwrap();
@@ -1071,16 +1024,10 @@ mod tests {
         .x_label("")
         .y_label("")
         .erase();
-        let inputs = crate::plots::shared_x::prepare_plot(
-            &source,
-            &OperationGenerationResources::new(),
-            None,
-        )
-        .unwrap();
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let measure = |height| {
             chart.measure_selected_interior(PlotRenderContext::new(
                 chart.data(),
@@ -1118,18 +1065,13 @@ mod tests {
             }
         };
         let panel = PanelBox::new(180.0, 780.0, 80.0, 800.0);
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         theme.typography.annotations.waterfall_total.font_size = 48;
         for exact in [false, true] {
             let chart = source(exact);
-            let inputs = crate::plots::shared_x::prepare_plot(
-                &chart,
-                &OperationGenerationResources::new(),
-                None,
-            )
-            .unwrap();
+            let inputs =
+                crate::plots::shared_x::prepare_plot(&chart, &OperationContext::new(), None)
+                    .unwrap();
             let chart = inputs.attach(chart).unwrap();
             let selected = chart.measure_selected_interior(PlotRenderContext::new(
                 chart.data(),
@@ -1182,9 +1124,7 @@ mod tests {
         )
         .size(800, 900)
         .erase();
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         theme.marks.waterfall_bar.outline = Some(crate::theme::DataOutlineTheme::fixed(
             theme
                 .marks
@@ -1198,7 +1138,7 @@ mod tests {
                 .unwrap(),
         ));
         theme.marks.waterfall_connector.width = 16.0;
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let cell = PanelBox::new(80.0, 700.0, 80.0, 800.0);
@@ -1218,7 +1158,7 @@ mod tests {
         };
         assert!(payload.domain_expansions.iter().all(Option::is_none));
         let panel = selected.result.layout.projection.panel_box();
-        let mut ink = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+        let mut ink = crate::render::geometry::GeometrySnapshot::new();
         for (corners, style) in &payload.bars {
             ink.polygon(corners, style, None).unwrap();
         }
@@ -1240,13 +1180,11 @@ mod tests {
         )
         .size(1200, 800)
         .erase();
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let panel = PanelBox::new(80.0, 750.0, 60.0, 500.0);
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let old = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
             .unwrap();
@@ -1299,12 +1237,9 @@ mod tests {
                 )
                 .x_limits(range.0, range.1)
                 .erase();
-                let inputs = crate::plots::shared_x::prepare_plot(
-                    &plot,
-                    &OperationGenerationResources::new(),
-                    None,
-                )
-                .unwrap();
+                let inputs =
+                    crate::plots::shared_x::prepare_plot(&plot, &OperationContext::new(), None)
+                        .unwrap();
                 let span = inputs.waterfall.as_ref().unwrap().panels[0].1.spans[0];
                 let (start, end, source_delta) = (span.start, span.end, span.delta);
                 assert_eq!(source_delta.to_bits(), delta.to_bits());
@@ -1315,9 +1250,7 @@ mod tests {
                     nearest_spatial_quanta(projection.project(end, 0.8).0).unwrap()
                 );
                 let plot = inputs.attach(plot).unwrap();
-                let theme = crate::Theme::Publication
-                    .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                    .unwrap();
+                let theme = crate::Theme::Publication.resolve().unwrap();
                 let result = plot.measure_selected_interior(PlotRenderContext::new(
                     plot.data(),
                     panel,

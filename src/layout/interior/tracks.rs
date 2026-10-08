@@ -1,6 +1,5 @@
 //! Shared quantized track assignment for the closed scientific Grid producers.
 
-use crate::data::PlotData;
 use crate::layout::fit::{self, FitScope, PlanError};
 use crate::layout::kernel::{
     allocate_grid_axis, nearest_spatial_quanta, GridRequirement, TrackSpec,
@@ -20,7 +19,7 @@ pub(crate) fn assign(
     edges: (f64, f64),
     gap: f64,
     reverse: bool,
-    data: PlotData<'_>,
+
     scope: &FitScope,
 ) -> Result<Vec<(f64, f64)>, PlanError> {
     let lower = nearest_spatial_quanta(edges.0)?;
@@ -38,14 +37,12 @@ pub(crate) fn assign(
         gap,
         None,
         true,
-        data.source_resources()?,
         scope,
     ))?;
     let mut bounds = Vec::new();
-    data.reserve_source(&mut bounds, base.len())?;
+    crate::data::source::reserve_source(&mut bounds, base.len())?;
     let mut position = if reverse { upper } else { lower };
     for (index, size) in allocated.sizes.into_iter().enumerate() {
-        data.claim_source_visits(1)?;
         let next = if reverse {
             position.checked_sub(size)
         } else {

@@ -122,7 +122,7 @@ fn hue_path_style_uses_caller_colors_for_paths_markers_and_legend_lines() {
         ]
     );
     let alpha = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .resolve()
         .unwrap()
         .marks
         .primary_point
@@ -477,9 +477,7 @@ fn waterfall_close_total_annotations_are_measured_disjoint_and_in_bounds() {
 
 #[test]
 fn detail_and_guide_text_use_publication_roles() {
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let detail_size = theme.detail_font_size;
     assert!(detail_size >= 11);
 
@@ -565,9 +563,7 @@ fn text_bounds(backend: &RecordingBackend, text: &str) -> PanelBox {
         .find(|(_, _, candidate, _)| candidate == text)
         .unwrap_or_else(|| panic!("text draw {text:?} should exist"));
     assert_eq!(style.anchor, TextAnchor::Middle);
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let mut appearance = theme.typography.annotations.panel_text.clone();
     appearance.font_size = style.font_size;
     appearance.weight = style.weight;

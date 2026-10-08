@@ -66,15 +66,7 @@ pub(crate) fn intrinsic_body_minimum(
         .map(|(_, prepared)| prepared)
         .ok_or_else(|| Error::Render("Scatter intrinsic requires root-prepared marks".into()))?;
     // This identity is independent of visibility, coincidence, and clipping.
-    // Group cardinality is charged before checking each group's source length.
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    resources
-        .claim_visits(prepared.groups.len() as u128)
-        .map_err(|error| {
-            Error::Render(format!(
-                "Scatter intrinsic group-count admission: {error:?}"
-            ))
-        })?;
+
     let count = prepared.groups.iter().try_fold(0_u128, |total, group| {
         total
             .checked_add(group.points.len() as u128)
@@ -88,8 +80,8 @@ pub(crate) fn intrinsic_body_minimum(
     let style = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.scatter);
     crate::render::backend::validate_point_style(&style)?;
     // Reuse the canonical painted-ink owner on one origin-relative point; no
-    // source point is projected or clipped and scratch/record growth is admitted.
-    let (width, height) = crate::render::geometry::point_ink_dimensions(theme, &style)?;
+    // source point is projected or clipped and scratch storage is reserved.
+    let (width, height) = crate::render::geometry::point_ink_dimensions(&style)?;
     Ok((
         if chart.user_x_limits().is_none() {
             width
@@ -105,15 +97,7 @@ pub(crate) fn intrinsic_body_minimum(
 }
 
 impl PreparedScatter {
-    pub(crate) fn primary_mark_count(
-        &self,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<u128, Error> {
-        resources
-            .claim_visits(self.groups.len() as u128)
-            .map_err(|error| {
-                Error::Render(format!("Scatter primary-mark count admission: {error:?}"))
-            })?;
+    pub(crate) fn checked_primary_mark_count(&self) -> Result<u128, Error> {
         self.groups.iter().try_fold(0_u128, |count, group| {
             count
                 .checked_add(group.points.len() as u128)
@@ -128,7 +112,7 @@ impl PreparedScatter {
     }
 
     pub(crate) fn new(chart: &Plot, data: crate::data::PlotData<'_>) -> Result<Self, Error> {
-        data.claim_mark_rows()?;
+        data.validate_row_source()?;
         #[cfg(test)]
         STAGES.with(|stages| {
             let mut counts = stages.get();
@@ -145,8 +129,7 @@ impl PreparedScatter {
         if rows.is_empty() {
             return Err(Error::Data("scatter: no rows".into()));
         }
-        data.claim_source_visits(rows.len())?;
-        data.claim_source_visits(rows.len())?;
+
         let ranges = [
             crate::data::min_max(rows.iter().map(|(_, x, _)| *x), "scatter")?,
             crate::data::min_max(rows.iter().map(|(_, _, y)| *y), "scatter")?,
@@ -154,21 +137,20 @@ impl PreparedScatter {
         let mut groups = Vec::new();
         if let Some(hue_col) = chart.hue_col() {
             let hues = crate::data::strict_strings(data, hue_col, "scatter")?;
-            let retained_hues = data.collect_source(
+            let retained_hues = crate::data::source::collect_source(
                 rows.iter()
-                    .map(|(row, _, _)| data.copy_source_string(&hues[*row])),
+                    .map(|(row, _, _)| crate::data::source::copy_source_string(&hues[*row])),
             )?;
-            let keys = data.source_levels(&retained_hues)?;
-            data.reserve_source(&mut groups, keys.len())?;
+            let keys = crate::data::source::source_levels(&retained_hues)?;
+            crate::data::source::reserve_source(&mut groups, keys.len())?;
             for label in keys {
-                data.claim_source_visits(rows.len())?;
                 let count = rows
                     .iter()
                     .filter(|(row, _, _)| hues[*row] == label)
                     .count();
                 let mut points = Vec::new();
-                data.reserve_source(&mut points, count)?;
-                data.claim_source_visits(rows.len())?;
+                crate::data::source::reserve_source(&mut points, count)?;
+
                 points.extend(
                     rows.iter()
                         .filter(|(row, _, _)| hues[*row] == label)
@@ -180,16 +162,18 @@ impl PreparedScatter {
                 });
             }
         } else {
-            data.reserve_source(&mut groups, 1)?;
+            crate::data::source::reserve_source(&mut groups, 1)?;
             groups.push(ScatterGroup {
                 label: None,
-                points: data.collect_source(rows.iter().map(|(_, x, y)| Ok((*x, *y))))?,
+                points: crate::data::source::collect_source(
+                    rows.iter().map(|(_, x, y)| Ok((*x, *y))),
+                )?,
             });
         }
         if let Some(exact) = chart.categorical_colors_spec() {
             for group in &groups {
                 if let Some(label) = &group.label {
-                    if exact.color_in(label, data.source_resources()?)?.is_none() {
+                    if exact.color_in(label).is_none() {
                         return Err(Error::Data(format!(
                             "scatter: category {label:?} has no caller-owned color"
                         )));
@@ -208,14 +192,18 @@ impl PreparedScatter {
     ) -> Result<CategoryColors, Error> {
         let resources = data.source_resources()?;
         let keys = if let Some(global) = chart.global_hue_levels() {
-            data.collect_source(global.iter().map(|key| data.copy_source_string(key)))?
+            crate::data::source::collect_source(
+                global
+                    .iter()
+                    .map(|key| crate::data::source::copy_source_string(key)),
+            )?
         } else {
             let mut keys = Vec::new();
-            data.reserve_source(&mut keys, self.groups.len())?;
-            data.claim_source_visits(self.groups.len())?;
+            crate::data::source::reserve_source(&mut keys, self.groups.len())?;
+
             for group in &self.groups {
                 if let Some(label) = &group.label {
-                    keys.push(data.copy_source_string(label)?);
+                    keys.push(crate::data::source::copy_source_string(label)?);
                 }
             }
             keys
@@ -236,20 +224,19 @@ impl PreparedScatter {
         order: &[usize],
     ) -> Result<Vec<LegendEntry>, Error> {
         let map = self.resolved_colors(chart, theme, data)?;
-        self.guide_entries_with_colors(chart, theme, data, order, &map)
+        self.guide_entries_with_colors(chart, theme, order, &map)
     }
 
     fn guide_entries_with_colors(
         &self,
         chart: &Plot,
         theme: &crate::theme::ResolvedTheme,
-        data: crate::data::PlotData<'_>,
+
         order: &[usize],
         map: &CategoryColors,
     ) -> Result<Vec<LegendEntry>, Error> {
-        let resources = data.source_resources()?;
         let mut entries = Vec::new();
-        data.reserve_source(
+        crate::data::source::reserve_source(
             &mut entries,
             self.groups
                 .iter()
@@ -260,9 +247,9 @@ impl PreparedScatter {
             let Some(label) = &self.groups[group_index].label else {
                 continue;
             };
-            let color = map.color(label, resources)?;
+            let color = map.color(label)?;
             entries.push(LegendEntry::point(
-                chart.point_legend_identity(label, data)?,
+                chart.point_legend_identity(label)?,
                 chart.point_style(theme, color, theme.marks.point_sizes.scatter),
             ));
         }
@@ -270,29 +257,26 @@ impl PreparedScatter {
     }
 
     /// Semantic order is independent of panel assignment and font discovery.
-    pub(crate) fn group_order(
-        &self,
-        chart: &Plot,
-        data: crate::data::PlotData<'_>,
-    ) -> Result<Vec<usize>, Error> {
-        let mut order = data.collect_source((0..self.groups.len()).map(Ok))?;
-        let ranks = data.collect_source(self.groups.iter().enumerate().map(|(index, group)| {
-            if let Some(label) = &group.label {
-                if let Some(parent) = chart.global_hue_levels() {
-                    return data
-                        .source_position(parent, |key| key == label)?
-                        .ok_or_else(|| {
-                            Error::Data(format!(
+    pub(crate) fn group_order(&self, chart: &Plot) -> Result<Vec<usize>, Error> {
+        let mut order = crate::data::source::collect_source((0..self.groups.len()).map(Ok))?;
+        let ranks = crate::data::source::collect_source(self.groups.iter().enumerate().map(
+            |(index, group)| {
+                if let Some(label) = &group.label {
+                    if let Some(parent) = chart.global_hue_levels() {
+                        return crate::data::source::source_position(parent, |key| key == label)
+                            .ok_or_else(|| {
+                                Error::Data(format!(
                                 "scatter hue {label:?} is missing from the prepared parent domain"
                             ))
-                        });
+                            });
+                    }
                 }
-            }
-            Ok(index)
-        }))?;
-        crate::data::source::sort_source_by(&mut order, Some(data), |a, b| {
+                Ok(index)
+            },
+        ))?;
+        crate::data::source::sort_source_by(&mut order, |a, b| {
             (ranks[*a], *a).cmp(&(ranks[*b], *b))
-        })?;
+        });
         Ok(order)
     }
 
@@ -310,21 +294,21 @@ impl PreparedScatter {
             stages.set(counts);
         });
         let mut groups = Vec::new();
-        data.reserve_source(&mut groups, self.groups.len())?;
-        let order = self.group_order(chart, data)?;
+        crate::data::source::reserve_source(&mut groups, self.groups.len())?;
+        let order = self.group_order(chart)?;
         let map = self.resolved_colors(chart, theme, data)?;
-        let legends = self.guide_entries_with_colors(chart, theme, data, &order, &map)?;
-        let resources = data.source_resources()?;
+        let legends = self.guide_entries_with_colors(chart, theme, &order, &map)?;
+
         let accent = self
             .groups
             .iter()
             .any(|group| group.label.is_none())
-            .then(|| AccentColors::resolve(&theme.marks.accents, 1, resources))
+            .then(|| AccentColors::resolve(&theme.marks.accents, 1))
             .transpose()?;
         for group_index in order {
             let group = &self.groups[group_index];
             let color = if let Some(label) = &group.label {
-                map.color(label, resources)?
+                map.color(label)?
             } else {
                 accent
                     .as_ref()
@@ -332,8 +316,7 @@ impl PreparedScatter {
                     .color(0)?
             };
             let style = chart.point_style(theme, color, theme.marks.point_sizes.scatter);
-            let points = data.collect_source(group.points.iter().map(|(x, y)| {
-                data.claim_source_visits(1)?;
+            let points = crate::data::source::collect_source(group.points.iter().map(|(x, y)| {
                 let (x, y) = projection.project(*x, *y);
                 Ok(Point2D::new(x, y))
             }))?;
@@ -394,11 +377,11 @@ pub(crate) fn measure_marks(
                 "Scatter measurement requires root-prepared semantics for its component".into(),
             )
         })?;
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = context.data.with_axis_resources(&resources);
+    let resources = theme.prepared_font_environment()?.operation();
+    let data = context.data.with_operation(&resources);
     let mut payload = prepared.project(chart, &layout.projection, theme, data)?;
     let point_style = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.scatter);
-    if let Some(ink) = crate::render::geometry::point_ink_bounds(theme, &point_style)? {
+    if let Some(ink) = crate::render::geometry::point_ink_bounds(&point_style)? {
         payload.domain_expansions = crate::layout::interior::automatic_mark_ink_expansions(
             prepared.ranges,
             &layout.projection,
@@ -407,34 +390,33 @@ pub(crate) fn measure_marks(
                 chart.user_x_limits().is_none(),
                 chart.user_y_limits().is_none(),
             ],
-            data,
             context.fit_scope(),
         )?;
     }
-    let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    let mut geometry = crate::render::geometry::GeometrySnapshot::new();
     let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
     for (points, style) in &payload.groups {
         geometry.scatter(points, style, clip)?;
     }
     let mut result = PlotRenderResult::new(layout, std::mem::take(&mut payload.legends));
-    result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
-        payload: crate::layout::interior::MarkPayload::Scatter(payload),
-        geometry,
-    })?);
+    result.marks = Some(crate::data::source::source_arc(
+        crate::layout::interior::SelectedMarkPlan {
+            payload: crate::layout::interior::MarkPayload::Scatter(payload),
+            geometry,
+        },
+    )?);
     Ok(result)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::font::canonical::OperationGenerationResources;
+    use crate::font::canonical::OperationContext;
     use crate::{CategoryValues, NumericValues};
 
     #[test]
     fn prepared_hues_extend_without_palette_cycling_and_exact_missing_keys_precede_fonts() {
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let seeds = theme.color_scales.qualitative().colors();
         let count = seeds.len() + 2;
         let hues = (0..count)
@@ -449,24 +431,17 @@ mod tests {
             .erase()
         };
         let source = make();
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let prepared =
-            PreparedScatter::new(&source, source.data().with_axis_resources(&resources)).unwrap();
+            PreparedScatter::new(&source, source.data().with_operation(&resources)).unwrap();
         let mapping = prepared
-            .resolved_colors(
-                &source,
-                &theme,
-                source.data().with_axis_resources(&resources),
-            )
+            .resolved_colors(&source, &theme, source.data().with_operation(&resources))
             .unwrap();
         assert_eq!(&mapping.colors()[..seeds.len()], seeds);
         assert!(mapping.colors()[seeds.len()..]
             .iter()
             .all(|color| !seeds.contains(color)));
-        assert_eq!(
-            mapping.color("hue-0", &resources).unwrap(),
-            seeds[0].as_rgb()
-        );
+        assert_eq!(mapping.color("hue-0").unwrap(), seeds[0].as_rgb());
 
         let exact = crate::CategoricalColors::new([("hue-0".into(), (1, 2, 3))]).unwrap();
         let source = Plot::scatter(
@@ -479,9 +454,7 @@ mod tests {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let error = PreparedScatter::new(
             &source,
-            source
-                .data()
-                .with_axis_resources(&OperationGenerationResources::new()),
+            source.data().with_operation(&OperationContext::new()),
         )
         .unwrap_err();
         assert!(matches!(error, Error::Data(message) if message.contains("hue-1")));
@@ -503,12 +476,10 @@ mod tests {
     #[test]
     fn complete_scatter_point_ink_sets_only_automatic_axis_hard_size() {
         let source = source();
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let coordinate = crate::layout::interior::coordinate::Intrinsics::prepared(&chart, &theme)
             .unwrap()
             .minimum(&chart);
@@ -545,7 +516,7 @@ mod tests {
         )
         .x_limits(0.0, 3.0)
         .erase();
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         theme.marks.primary_point.fill_alpha = 255;
@@ -575,12 +546,10 @@ mod tests {
             NumericValues::new("y", [0.0, 10.0]),
         )
         .erase();
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         theme.marks.point_sizes.scatter = 18;
         let panel = crate::layout::PanelBox::new(30.0, 190.0, 40.0, 180.0);
         let result = chart
@@ -600,7 +569,7 @@ mod tests {
         assert!(y.1 > result.layout.projection.y_range().1);
         let projection = crate::layout::Projection::new(x, y, panel.as_tuple());
         let point = chart.point_style(&theme, (0, 0, 0), 18);
-        let ink = crate::render::geometry::point_ink_bounds(&theme, &point)
+        let ink = crate::render::geometry::point_ink_bounds(&point)
             .unwrap()
             .unwrap();
         let low = projection.project(0.0, 0.0);
@@ -614,7 +583,7 @@ mod tests {
         )
         .x_limits(0.0, 10.0)
         .erase();
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let exact = chart
@@ -632,14 +601,12 @@ mod tests {
     #[test]
     fn prepared_guide_glyphs_match_selected_marks_without_fonts_or_a_panel_search() {
         let plot = source();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
-        let resources = OperationGenerationResources::new();
-        let data = plot.data().with_axis_resources(&resources);
+        let theme = crate::Theme::Publication.resolve().unwrap();
+        let resources = OperationContext::new();
+        let data = plot.data().with_operation(&resources);
         let prepared = PreparedScatter::new(&plot, data).unwrap();
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-        let order = prepared.group_order(&plot, data).unwrap();
+        let order = prepared.group_order(&plot).unwrap();
         let entries = prepared
             .guide_entries_in_order(&plot, &theme, data, &order)
             .unwrap();
@@ -669,13 +636,11 @@ mod tests {
     #[test]
     fn custom_primary_point_paints_match_prepared_guides_and_hidden_outline_stays_hidden() {
         let plot = source();
-        let resources = OperationGenerationResources::new();
-        let data = plot.data().with_axis_resources(&resources);
+        let resources = OperationContext::new();
+        let data = plot.data().with_operation(&resources);
         let prepared = PreparedScatter::new(&plot, data).unwrap();
-        let order = prepared.group_order(&plot, data).unwrap();
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let order = prepared.group_order(&plot).unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let original = prepared
             .project(
                 &plot,
@@ -723,7 +688,6 @@ mod tests {
         assert!(crate::decorations::legend::merge_exact_entries(
             [original.legends[0].clone(), selected.legends[0].clone()],
             "custom primary point",
-            &OperationGenerationResources::new(),
         )
         .unwrap_err()
         .to_string()
@@ -759,9 +723,7 @@ mod tests {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| calls.set(0));
         let plot = source();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let context = PlotRenderContext::new(
             plot.data(),
             crate::layout::PanelBox::new(0.0, 100.0, 0.0, 100.0),
@@ -828,20 +790,14 @@ mod tests {
         .legend(crate::LegendPolicy::Hidden)
         .size(640, 480)
         .erase();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         STAGES.with(|stages| stages.set([0; 4]));
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| calls.set(0));
         let root = crate::layout::plan_exact_root(
             640,
             480,
             |stage| {
-                let inputs = crate::plots::shared_x::prepare_plot(
-                    &plot,
-                    &stage.generation_resources(),
-                    None,
-                )?;
+                let inputs = crate::plots::shared_x::prepare_plot(&plot, &stage.operation(), None)?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     None,
                     &plot,
@@ -976,9 +932,7 @@ mod tests {
     #[test]
     fn selected_extents_match_clipped_legacy_ink_for_every_point_shape() {
         use crate::render::geometry::{GeometryBackend, GeometrySnapshot};
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let clip = crate::layout::PanelBox::new(10.25, 100.75, 20.5, 90.25);
         let points = [
             Point2D::new(10.25, 20.5),
@@ -994,7 +948,7 @@ mod tests {
                 }
                 for opacity in [0.0, 0.5, 1.0] {
                     style = style.with_opacity(opacity).unwrap();
-                    let mut selected = GeometrySnapshot::new(&theme).unwrap();
+                    let mut selected = GeometrySnapshot::new();
                     selected.scatter(&points, &style, clip).unwrap();
                     let mut legacy = GeometryBackend::new(&theme).unwrap();
                     legacy.begin(640, 480).unwrap();
@@ -1017,9 +971,8 @@ mod tests {
     fn semantic_preparation_preserves_aligned_rows_and_observed_hue_order_without_fonts() {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let plot = source();
-        let resources = OperationGenerationResources::new();
-        let prepared =
-            PreparedScatter::new(&plot, plot.data().with_axis_resources(&resources)).unwrap();
+        let resources = OperationContext::new();
+        let prepared = PreparedScatter::new(&plot, plot.data().with_operation(&resources)).unwrap();
         assert_eq!(prepared.ranges, [(1.0, 3.0), (2.0, 6.0)]);
         assert_eq!(prepared.groups.len(), 2);
         assert_eq!(prepared.groups[0].label.as_deref(), Some("b"));
@@ -1033,35 +986,23 @@ mod tests {
     }
 
     #[test]
-    fn semantic_and_projected_buffers_use_the_callers_exact_admission() {
+    fn semantic_and_projected_buffers_preserve_grouped_points() {
         let plot = source();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let projection =
             crate::layout::Projection::new((1.0, 3.0), (2.0, 6.0), (10.25, 210.75, 20.5, 120.25));
-        let resources = OperationGenerationResources::new();
-        let prepared =
-            PreparedScatter::new(&plot, plot.data().with_axis_resources(&resources)).unwrap();
-        let semantic = (
-            resources.usage().unwrap().1,
-            resources.byte_usage().unwrap(),
-        );
-        for (visits, bytes) in [(semantic.0 - 1, semantic.1), (semantic.0, semantic.1 - 1)] {
-            let limited = OperationGenerationResources::with_test_limits(visits, bytes);
-            assert!(
-                PreparedScatter::new(&plot, plot.data().with_axis_resources(&limited)).is_err()
-            );
-        }
-        let exact = OperationGenerationResources::with_test_limits(semantic.0, semantic.1);
-        PreparedScatter::new(&plot, plot.data().with_axis_resources(&exact)).unwrap();
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
+        let prepared = PreparedScatter::new(&plot, plot.data().with_operation(&resources)).unwrap();
+
+        let exact = OperationContext::new();
+        PreparedScatter::new(&plot, plot.data().with_operation(&exact)).unwrap();
+        let resources = OperationContext::new();
         let payload = prepared
             .project(
                 &plot,
                 &projection,
                 &theme,
-                plot.data().with_axis_resources(&resources),
+                plot.data().with_operation(&resources),
             )
             .unwrap();
         assert_eq!(payload.clip, projection.panel_box());
@@ -1070,31 +1011,14 @@ mod tests {
         assert_eq!(payload.groups[0].0[1], Point2D::new(210.75, 120.25));
         assert_eq!(payload.groups[1].0, [Point2D::new(10.25, 20.5)]);
         assert_eq!(payload.legends.len(), 2);
-        let projected = (
-            resources.usage().unwrap().1,
-            resources.byte_usage().unwrap(),
-        );
-        for (visits, bytes) in [
-            (projected.0 - 1, projected.1),
-            (projected.0, projected.1 - 1),
-        ] {
-            let limited = OperationGenerationResources::with_test_limits(visits, bytes);
-            assert!(prepared
-                .project(
-                    &plot,
-                    &projection,
-                    &theme,
-                    plot.data().with_axis_resources(&limited)
-                )
-                .is_err());
-        }
-        let exact = OperationGenerationResources::with_test_limits(projected.0, projected.1);
+
+        let exact = OperationContext::new();
         prepared
             .project(
                 &plot,
                 &projection,
                 &theme,
-                plot.data().with_axis_resources(&exact),
+                plot.data().with_operation(&exact),
             )
             .unwrap();
     }
@@ -1107,9 +1031,9 @@ mod tests {
             NumericValues::new("y", [1.0]),
         )
         .erase();
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         assert!(matches!(
-            PreparedScatter::new(&plot, plot.data().with_axis_resources(&resources)),
+            PreparedScatter::new(&plot, plot.data().with_operation(&resources)),
             Err(Error::Data(_))
         ));
         assert_eq!(
@@ -1119,7 +1043,7 @@ mod tests {
     }
 
     #[test]
-    fn projected_legend_fields_and_values_are_admitted_for_every_candidate() {
+    fn projected_legend_fields_and_values_retain_caller_identity() {
         let field = "caller_owned_hue_dimension_".repeat(128);
         let plot = |name: &str| {
             Plot::scatter(
@@ -1131,23 +1055,20 @@ mod tests {
         };
         let short = plot("hue");
         let long = plot(&field);
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let prepared =
-            PreparedScatter::new(&short, short.data().with_axis_resources(&resources)).unwrap();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+            PreparedScatter::new(&short, short.data().with_operation(&resources)).unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let projection =
             crate::layout::Projection::new((0.0, 1.0), (0.0, 1.0), (10.25, 210.75, 20.5, 120.25));
-        let mut usage = Vec::new();
         for plot in [&short, &long] {
-            let resources = OperationGenerationResources::new();
+            let resources = OperationContext::new();
             let payload = prepared
                 .project(
                     plot,
                     &projection,
                     &theme,
-                    plot.data().with_axis_resources(&resources),
+                    plot.data().with_operation(&resources),
                 )
                 .unwrap();
             for (entry, value) in payload.legends.iter().zip(["a", "b"]) {
@@ -1159,71 +1080,18 @@ mod tests {
                     )
                 );
             }
-            let visits = resources.usage().unwrap().1;
-            let bytes = resources.byte_usage().unwrap();
-            let records = resources.usage().unwrap().0;
-            usage.push((visits, bytes, records));
-            let limited = OperationGenerationResources::with_test_limits(visits, bytes);
-            limited.claim_slots(1_000_000 - records + 1).unwrap();
-            assert!(prepared
-                .project(
-                    plot,
-                    &projection,
-                    &theme,
-                    plot.data().with_axis_resources(&limited)
-                )
-                .is_err());
-            for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
-                let limited = OperationGenerationResources::with_test_limits(visits, bytes);
-                assert!(prepared
-                    .project(
-                        plot,
-                        &projection,
-                        &theme,
-                        plot.data().with_axis_resources(&limited)
-                    )
-                    .is_err());
-            }
-            let exact = OperationGenerationResources::with_test_limits(2 * visits, 2 * bytes);
+
+            let exact = OperationContext::new();
             for _ in 0..2 {
                 prepared
                     .project(
                         plot,
                         &projection,
                         &theme,
-                        plot.data().with_axis_resources(&exact),
+                        plot.data().with_operation(&exact),
                     )
                     .unwrap();
             }
-            assert_eq!(exact.usage().unwrap().1, 2 * visits);
-            assert_eq!(exact.byte_usage().unwrap(), 2 * bytes);
-            assert!(prepared
-                .project(
-                    plot,
-                    &projection,
-                    &theme,
-                    plot.data().with_axis_resources(&exact)
-                )
-                .is_err());
         }
-        let extra = 2 * (field.len() - "hue".len());
-        assert_eq!(
-            usage[1].0, usage[0].0,
-            "identity byte copying is not processing"
-        );
-        assert_eq!(
-            usage[1].2, usage[0].2,
-            "string payload bytes are not records"
-        );
-        assert_eq!(usage[1].1 - usage[0].1, u64::try_from(extra).unwrap());
-        let short_budget = OperationGenerationResources::with_test_limits(usage[0].0, usage[0].1);
-        assert!(prepared
-            .project(
-                &long,
-                &projection,
-                &theme,
-                long.data().with_axis_resources(&short_budget)
-            )
-            .is_err());
     }
 }

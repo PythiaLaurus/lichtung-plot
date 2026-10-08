@@ -32,9 +32,9 @@ pub(super) struct FacetPanel {
 }
 
 impl FacetPanel {
-    pub(super) fn render_scope(&self, data: crate::data::PlotData<'_>) -> Result<String, Error> {
+    pub(super) fn render_scope(&self) -> Result<String, Error> {
         let mut scope = String::new();
-        data.reserve_source_string(&mut scope, 32)?;
+        crate::data::source::reserve_source_string(&mut scope, 32)?;
         if self.cell.is_empty() {
             use std::fmt::Write;
             write!(scope, "facet-{}", self.panel_index).expect("reserved index");
@@ -47,7 +47,7 @@ impl FacetPanel {
                     .checked_add(selector.level.len())
                     .and_then(|length| length.checked_add(3))
                     .ok_or_else(|| Error::Render("facet scope length overflow".into()))?;
-                data.reserve_source_string(&mut scope, length)?;
+                crate::data::source::reserve_source_string(&mut scope, length)?;
                 if index != 0 {
                     scope.push_str(", ");
                 }
@@ -80,17 +80,18 @@ pub(super) fn facet_selectors(
     };
     let (row_column, column_column, wrap_column, wrap_columns) = plot.facet_columns();
     let mut variable_names = Vec::new();
-    data.reserve_source(&mut variable_names, 3)?;
+    crate::data::source::reserve_source(&mut variable_names, 3)?;
     for column in [row_column, column_column, wrap_column]
         .into_iter()
         .flatten()
     {
         variable_names.push(data.column(column)?.name());
     }
-    plot.resolve_axis_label_domain("facet variables", variable_names.iter().copied(), data)?;
+    plot.resolve_axis_label_domain("facet variables", variable_names.iter().copied())?;
     let cells = if let Some(wrap) = wrap_column {
-        let levels = data.source_levels(&crate::data::strict_strings(data, wrap, "facet")?)?;
-        plot.resolve_axis_label_domain("facet levels", levels.iter().map(String::as_str), data)?;
+        let levels =
+            crate::data::source::source_levels(&crate::data::strict_strings(data, wrap, "facet")?)?;
+        plot.resolve_axis_label_domain("facet levels", levels.iter().map(String::as_str))?;
         let columns = wrap_columns.unwrap_or(1);
         if columns == 0 {
             return Err(Error::Data(
@@ -98,38 +99,46 @@ pub(super) fn facet_selectors(
             ));
         }
         let variable = data.column(wrap)?.name();
-        data.collect_source(levels.into_iter().enumerate().map(|(index, level)| {
-            Ok((
-                index / columns,
-                index % columns,
-                data.collect_source(std::iter::once(Ok(FacetSelector {
-                    column: wrap,
-                    variable: data.copy_source_string(variable)?,
-                    level,
-                })))?,
-            ))
-        }))?
+        crate::data::source::collect_source(levels.into_iter().enumerate().map(
+            |(index, level)| {
+                Ok((
+                    index / columns,
+                    index % columns,
+                    crate::data::source::collect_source(std::iter::once(Ok(FacetSelector {
+                        column: wrap,
+                        variable: crate::data::source::copy_source_string(variable)?,
+                        level,
+                    })))?,
+                ))
+            },
+        ))?
     } else {
         let row_levels = row_column.map_or_else(
-            || data.collect_source(std::iter::once(Ok(String::new()))),
-            |column| data.source_levels(&crate::data::strict_strings(data, column, "facet")?),
+            || crate::data::source::collect_source(std::iter::once(Ok(String::new()))),
+            |column| {
+                crate::data::source::source_levels(&crate::data::strict_strings(
+                    data, column, "facet",
+                )?)
+            },
         )?;
         let column_levels = column_column.map_or_else(
-            || data.collect_source(std::iter::once(Ok(String::new()))),
-            |column| data.source_levels(&crate::data::strict_strings(data, column, "facet")?),
+            || crate::data::source::collect_source(std::iter::once(Ok(String::new()))),
+            |column| {
+                crate::data::source::source_levels(&crate::data::strict_strings(
+                    data, column, "facet",
+                )?)
+            },
         )?;
         if row_column.is_some() {
             plot.resolve_axis_label_domain(
                 "facet levels for \"__facet_row\"",
                 row_levels.iter().map(String::as_str),
-                data,
             )?;
         }
         if column_column.is_some() {
             plot.resolve_axis_label_domain(
                 "facet levels for \"__facet_column\"",
                 column_levels.iter().map(String::as_str),
-                data,
             )?;
         }
         let mut cells = Vec::new();
@@ -137,26 +146,30 @@ pub(super) fn facet_selectors(
             .len()
             .checked_mul(column_levels.len())
             .ok_or_else(|| Error::Render("facet cell count overflow".into()))?;
-        data.reserve_source(&mut cells, count)?;
+        crate::data::source::reserve_source(&mut cells, count)?;
         for (row_index, row_level) in row_levels.iter().enumerate() {
             for (column_index, column_level) in column_levels.iter().enumerate() {
                 let mut cell = Vec::new();
-                data.reserve_source(
+                crate::data::source::reserve_source(
                     &mut cell,
                     usize::from(row_column.is_some()) + usize::from(column_column.is_some()),
                 )?;
                 if let Some(column) = row_column {
                     cell.push(FacetSelector {
                         column,
-                        variable: data.copy_source_string(data.column(column)?.name())?,
-                        level: data.copy_source_string(row_level)?,
+                        variable: crate::data::source::copy_source_string(
+                            data.column(column)?.name(),
+                        )?,
+                        level: crate::data::source::copy_source_string(row_level)?,
                     });
                 }
                 if let Some(column) = column_column {
                     cell.push(FacetSelector {
                         column,
-                        variable: data.copy_source_string(data.column(column)?.name())?,
-                        level: data.copy_source_string(column_level)?,
+                        variable: crate::data::source::copy_source_string(
+                            data.column(column)?.name(),
+                        )?,
+                        level: crate::data::source::copy_source_string(column_level)?,
                     });
                 }
                 cells.push((row_index, column_index, cell));
@@ -169,8 +182,7 @@ pub(super) fn facet_selectors(
             "faceting requires at least one observed level".into(),
         ));
     }
-    data.claim_source_visits(cells.len())?;
-    data.claim_source_visits(cells.len())?;
+
     let rows = cells.iter().map(|(row, _, _)| *row).max().unwrap_or(0) + 1;
     let columns = cells
         .iter()
@@ -190,13 +202,13 @@ pub(super) fn base_plot(
     kind: PlotKind,
     has_horizontal_axis_label: bool,
     has_vertical_axis_label: bool,
-    resources: &crate::font::canonical::OperationGenerationResources,
+    resources: &crate::font::canonical::OperationContext,
 ) -> Result<Plot, Error> {
     let source_rows = source.configured_source_rows()?;
     let data = source_rows
         .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
-        .with_axis_resources(resources);
-    let mut base_plot = source.admitted_clone(data)?.without_facets();
+        .with_operation(resources);
+    let mut base_plot = source.clone().without_facets();
     if has_horizontal_axis_label {
         base_plot = base_plot.x_label("");
     }
@@ -266,18 +278,17 @@ pub(super) fn extract_panels(
         mapped_data
     };
     let mut panels = Vec::new();
-    mapped_data.reserve_source(&mut panels, selectors.cells.len())?;
+    crate::data::source::reserve_source(&mut panels, selectors.cells.len())?;
     for (panel_index, (row, column, cell)) in selectors.cells.iter().enumerate() {
-        let columns_data = mapped_data
-            .collect_source(cell.iter().map(|selector| {
+        let columns_data =
+            crate::data::source::collect_source(cell.iter().map(|selector| {
                 crate::data::strict_strings(mapped_data, selector.column, "facet")
             }))?;
         let mut source_indices = Vec::new();
-        mapped_data.reserve_source(&mut source_indices, plot.row_count())?;
+        crate::data::source::reserve_source(&mut source_indices, plot.row_count())?;
         for index in 0..plot.row_count() {
             let mut matches = true;
             for (selector_index, selector) in cell.iter().enumerate() {
-                mapped_data.claim_source_visits(selector.level.len())?;
                 if columns_data[selector_index][index] != selector.level {
                     matches = false;
                     break;
@@ -290,11 +301,12 @@ pub(super) fn extract_panels(
         if source_indices.is_empty() {
             continue;
         }
-        let source_rows = mapped_data.collect_source(source_indices.iter().map(|index| {
-            Ok(configured_source_rows
-                .as_ref()
-                .map_or(*index, |rows| rows[*index]))
-        }))?;
+        let source_rows =
+            crate::data::source::collect_source(source_indices.iter().map(|index| {
+                Ok(configured_source_rows
+                    .as_ref()
+                    .map_or(*index, |rows| rows[*index]))
+            }))?;
         let panel = provisional.map_or(PanelBox::new(0.0, 1.0, 0.0, 1.0), |boxes| {
             boxes[*row * selectors.columns + *column]
         });
@@ -302,11 +314,11 @@ pub(super) fn extract_panels(
             panel_index,
             row: *row,
             column: *column,
-            cell: mapped_data.collect_source(cell.iter().map(|selector| {
+            cell: crate::data::source::collect_source(cell.iter().map(|selector| {
                 Ok(FacetSelector {
                     column: selector.column,
-                    variable: mapped_data.copy_source_string(&selector.variable)?,
-                    level: mapped_data.copy_source_string(&selector.level)?,
+                    variable: crate::data::source::copy_source_string(&selector.variable)?,
+                    level: crate::data::source::copy_source_string(&selector.level)?,
                 })
             }))?,
             rows: source_indices,
@@ -320,11 +332,9 @@ pub(super) fn extract_panels(
 pub(super) fn validate_significance_facet_anchors(
     plot: &Plot,
     panels: &[FacetPanel],
-    data: crate::data::PlotData<'_>,
 ) -> Result<(), Error> {
     let dimensions = panels.first().map_or(0, |panel| panel.cell.len());
     for annotation in plot.significance_annotations() {
-        data.claim_source_visits(1)?;
         let Some(cell) = annotation.facet_cell() else {
             return Err(Error::Render(
                 "faceted significance annotation must identify one FacetCell; annotations are never replicated across facets".into(),
@@ -337,10 +347,6 @@ pub(super) fn validate_significance_facet_anchors(
         }
         let mut anchored = false;
         for panel in panels {
-            data.claim_source_visits(1)?;
-            for selector in &panel.cell {
-                data.claim_source_visits(selector.level.len())?;
-            }
             if cell.matches(panel.cell.iter().map(|selector| selector.level.as_str())) {
                 anchored = true;
                 break;

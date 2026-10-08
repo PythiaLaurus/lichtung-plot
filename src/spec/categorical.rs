@@ -47,15 +47,6 @@ pub struct CategoricalColors {
 }
 
 impl CategoricalColors {
-    #[expect(
-        clippy::unused_self,
-        reason = "the source map's copy-admission contract prices one immutable handle before the enclosing Plot clone"
-    )]
-    pub(crate) fn admit_clone(&self, data: crate::data::PlotData<'_>) -> Result<(), Error> {
-        data.require_source_resources()?;
-        data.claim_source_visits(1)
-    }
-
     /// Constructs a non-empty color map with unique, exact category labels.
     ///
     /// # Errors
@@ -124,18 +115,12 @@ impl CategoricalColors {
             .map(|(_, color)| *color)
     }
 
-    pub(crate) fn color_in(
-        &self,
-        label: &str,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<Option<crate::theme::OpaqueColor>, Error> {
+    pub(crate) fn color_in(&self, label: &str) -> Option<crate::theme::OpaqueColor> {
         for (candidate, color) in self.entries() {
-            if crate::font::canonical::same_bytes(candidate, label, resources)
-                .map_err(|e| Error::Render(e.to_string()))?
-            {
-                return Ok(Some(color));
+            if crate::font::canonical::same_bytes(candidate, label) {
+                return Some(color);
             }
         }
-        Ok(None)
+        None
     }
 }

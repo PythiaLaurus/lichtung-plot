@@ -2,51 +2,7 @@ use super::plan_panel_for_test as plan_panel;
 use super::*;
 
 #[test]
-fn p2_panel_call_refusal_precedes_metadata_retention_and_body_work() {
-    let plot = Plot::scatter(
-        crate::NumericValues::new("x", [1.0]),
-        crate::NumericValues::new("y", [2.0]),
-    )
-    .title("metadata ".repeat(8192))
-    .erase();
-    let theme = theme();
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
-    resources.claim_calls(1_000_000).unwrap();
-    let before = (resources.usage().unwrap(), resources.byte_usage().unwrap());
-    crate::layout::plan_exact_root(
-        800,
-        600,
-        |_| Ok(()),
-        |(), assigned, round| {
-            let result = super::plan_panel(
-                &plot,
-                plot.kind(),
-                PanelBox::new(0.0, 800.0, 0.0, 600.0),
-                LegendRole::Panel,
-                &theme,
-                round,
-                &ComponentAddress::root(),
-            );
-            let error = result
-                .err()
-                .expect("call refusal before unprepared body or clone");
-            assert!(error.to_string().contains("panel frame call admission"));
-            assert_eq!(
-                (resources.usage().unwrap(), resources.byte_usage().unwrap()),
-                before
-            );
-            Ok(crate::layout::MeasuredLayout::new(assigned, ()))
-        },
-        |(), _, (), _| Ok(()),
-    )
-    .unwrap();
-}
-
-#[test]
-fn p2_planned_limit_metadata_is_admitted_for_every_copy_without_processing() {
+fn planned_limit_copies_preserve_title_and_caption_metadata() {
     let title = "metadata ".repeat(64);
     let caption = "retained caption";
     let plot = Plot::scatter(
@@ -67,18 +23,12 @@ fn p2_planned_limit_metadata_is_admitted_for_every_copy_without_processing() {
         planned_x_limits: Some((0.0, 3.0)),
         planned_y_limits: Some((0.0, 4.0)),
     };
-    let bytes = (title.len() + caption.len()) as u64;
-    let resources =
-        crate::font::canonical::OperationGenerationResources::with_test_limits(0, 2 * bytes);
-    let data = plot.data().with_axis_resources(&resources);
-    for count in 1..=2 {
-        let retained = plan.plot_with_planned_limits(&plot, data).unwrap();
+
+    for _ in 1..=2 {
+        let retained = plan.plot_with_planned_limits(&plot);
         assert_eq!(retained.title_text(), Some(title.as_str()));
         assert_eq!(retained.caption_text(), Some(caption));
-        assert_eq!(resources.usage().unwrap(), (3 * u128::from(count), 0));
-        assert_eq!(resources.byte_usage().unwrap(), count * bytes);
     }
-    assert!(plan.plot_with_planned_limits(&plot, data).is_err());
 }
 
 #[test]
@@ -104,14 +54,9 @@ fn marginal_auto_recovers_from_scoped_terminal_tick_miss() {
     .size(640, 480)
     .legend(LegendPolicy::Visible(LegendPosition::Auto))
     .erase();
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     theme.typography.axes.tick_label.font_size = 48;
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
+    let resources = theme.prepared_font_environment().unwrap().operation();
     let prepared = crate::plots::shared_x::prepare_plot(&plot, &resources, None).unwrap();
     let plot = prepared.attach(plot).unwrap();
     // The real guide title makes preferred/compact entry allocations identical.
@@ -187,11 +132,7 @@ fn marginal_auto_recovers_from_scoped_terminal_tick_miss() {
     assert_eq!(
         failure.reason.address,
         ComponentAddress::root()
-            .child(
-                AddressRole::AxisBottom,
-                0,
-                &crate::font::canonical::OperationGenerationResources::new()
-            )
+            .child(AddressRole::AxisBottom, 0)
             .unwrap()
     );
     assert_eq!(fixed_observed.counters[Counter::TickFitMiss as usize], 0);
@@ -241,14 +182,9 @@ fn automatic_guide_recovers_from_terminal_numeric_tick_miss() {
     .size(640, 480)
     .legend(LegendPolicy::Visible(LegendPosition::Auto))
     .erase();
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     theme.typography.axes.tick_label.font_size = 40;
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
+    let resources = theme.prepared_font_environment().unwrap().operation();
     let prepared = crate::plots::shared_x::prepare_plot(&plot, &resources, None).unwrap();
     let plot = prepared.attach(plot).unwrap();
     // Preserve the scientific domain and actual guide text. Preferred Right
@@ -256,7 +192,7 @@ fn automatic_guide_recovers_from_terminal_numeric_tick_miss() {
     // whereas Top leaves the full horizontal span for the same labels.
     let cell = PanelBox::new(80.0, 445.0, 60.0, 450.0);
     measurements::start();
-    let before = resources.usage().unwrap();
+
     let auto = plan_panel(&plot, plot.kind(), cell, LegendRole::Panel, &theme);
     let observed = measurements::finish();
     assert!(auto.is_ok(), "{:?}; {:?}", auto.err(), observed.guides);
@@ -286,7 +222,7 @@ fn automatic_guide_recovers_from_terminal_numeric_tick_miss() {
         0,
         "caller sources must not enter automatic terminal-source exhaustion"
     );
-    assert!(resources.usage().unwrap().1 > before.1);
+
     assert!(observed
         .guides
         .iter()
@@ -341,7 +277,7 @@ fn automatic_guide_recovers_from_terminal_numeric_tick_miss() {
 fn specialized_producer_plans_survive_first_capture_without_shaping() {
     let source = format!(
         "{}AA\u{2029}A \u{202b}\u{5d0} A \u{5d0} \u{202c}A",
-        "A\u{ad}".repeat(60)
+        "A\u{ad}".repeat(100)
     );
     let plots = [
         Plot::beeswarm(
@@ -397,9 +333,7 @@ fn specialized_producer_plans_survive_first_capture_without_shaping() {
     for plot in plots {
         let plot = plot.with_canvas_size(1000, 1000);
         let kind = plot.kind();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         crate::layout::plan_exact_root(
             plot.width(),
             plot.height(),
@@ -410,8 +344,8 @@ fn specialized_producer_plans_survive_first_capture_without_shaping() {
                 ) {
                     Some(crate::plots::shared_x::prepare_plot(
                         &plot,
-                        &stage.generation_resources(),
-                        None,
+                        &stage.operation(),
+                        Some(&theme.color_scales),
                     )?)
                 } else {
                     None
@@ -583,11 +517,7 @@ fn automatic_outside_guide_respects_native_body_intrinsics_before_allocation() {
             plot.width(),
             plot.height(),
             |stage| {
-                let inputs = crate::plots::shared_x::prepare_plot(
-                    &plot,
-                    &stage.generation_resources(),
-                    None,
-                )?;
+                let inputs = crate::plots::shared_x::prepare_plot(&plot, &stage.operation(), None)?;
                 prepare_guide_producer_fonts(
                     &plot,
                     &inputs,
@@ -682,7 +612,7 @@ fn explicit_left_and_bottom_guides_reserve_complete_axis_ink() {
 fn clearance_arithmetic_failures_are_fatal_through_every_owner() {
     let plot =
         crate::kind::into_erased(line_plot(&line_data(["upper", "upper", "lower", "lower"])));
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let resources = crate::font::canonical::OperationContext::new();
     let plot = crate::plots::shared_x::prepare_plot(&plot, &resources, None)
         .unwrap()
         .attach(plot)
@@ -794,7 +724,6 @@ fn clearance_arithmetic_failures_are_fatal_through_every_owner() {
         &geometry,
         LegendClearance::HorizontalMaximum,
         0,
-        &theme,
     )
     .is_err());
     assert!(automatic_clearance(
@@ -805,7 +734,6 @@ fn clearance_arithmetic_failures_are_fatal_through_every_owner() {
         &geometry,
         LegendDefault::LowestOverlap,
         0,
-        &theme,
     )
     .is_err());
     assert!(expansion_ratio((0.0, f64::from_bits(1)), (0.0, f64::MAX))
@@ -827,10 +755,7 @@ fn annotation_conflict_links_only_to_a_resolving_assignment() {
     let initial_source = source.clone().erase();
     let initial_source = crate::plots::shared_x::prepare_plot(
         &initial_source,
-        &theme
-            .prepared_font_environment()
-            .unwrap()
-            .generation_resources(),
+        &theme.prepared_font_environment().unwrap().operation(),
         None,
     )
     .unwrap()
@@ -873,11 +798,7 @@ fn annotation_conflict_links_only_to_a_resolving_assignment() {
         source.width(),
         source.height(),
         |stage| {
-            crate::plots::shared_x::prepare_plot(
-                &source.clone().erase(),
-                &stage.generation_resources(),
-                None,
-            )
+            crate::plots::shared_x::prepare_plot(&source.clone().erase(), &stage.operation(), None)
         },
         |inputs, assigned, round| {
             let source = inputs.attach(source.clone().erase())?;
@@ -947,11 +868,8 @@ fn automatic_outside_guides_avoid_annotations_at_all_inside_corners() {
             source.width(),
             source.height(),
             |stage| {
-                let inputs = crate::plots::shared_x::prepare_plot(
-                    &source,
-                    &stage.generation_resources(),
-                    None,
-                )?;
+                let inputs =
+                    crate::plots::shared_x::prepare_plot(&source, &stage.operation(), None)?;
                 let source = inputs.attach(source.clone())?;
                 prepare_guide_producer_fonts(&source, &inputs, &theme, &address, stage)?;
                 let initial = source.preflight_panel(
@@ -959,10 +877,7 @@ fn automatic_outside_guides_avoid_annotations_at_all_inside_corners() {
                     PanelBox::new(100.0, 500.0, 80.0, 400.0),
                     &theme,
                 )?;
-                let title = crate::decorations::legend::resolved_title(
-                    &initial.legend_entries,
-                    &theme.prepared_font_environment()?.generation_resources(),
-                )?;
+                let title = crate::decorations::legend::resolved_title(&initial.legend_entries)?;
                 let legend = crate::decorations::legend::test_assigned_legend(
                     &title,
                     initial.legend_entries,
@@ -1000,8 +915,7 @@ fn automatic_outside_guides_avoid_annotations_at_all_inside_corners() {
                             &annotations,
                             narrow,
                             bounds,
-                            &theme,
-                        )?
+                        )
                     );
                 }
                 let mut containing = if resolves { cell } else { narrow };
@@ -1038,17 +952,8 @@ fn automatic_outside_guides_avoid_annotations_at_all_inside_corners() {
                 plan.result.layout.projection.panel_box()
             ));
             assert!(root.prepared().1.iter().all(|annotation| annotation
-                .avoids_legend_in(
-                    plan.result.layout.projection.panel_box(),
-                    legend.bounds,
-                    &theme
-                )
-                .unwrap()));
-            assert!(
-                auto_candidate_avoiding_panel_text(&plan.result, &legend.legend, 0, &theme)
-                    .unwrap()
-                    .is_none()
-            );
+                .avoids_legend_in(plan.result.layout.projection.panel_box(), legend.bounds)));
+            assert!(auto_candidate_avoiding_panel_text(&plan.result, &legend.legend, 0).is_none());
         }
     }
 }
@@ -1057,9 +962,7 @@ use crate::render::backend::{Backend, LineStyle, Point2D};
 use crate::{CategoryValues, NumericValues};
 
 fn theme() -> crate::theme::ResolvedTheme {
-    crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap()
+    crate::Theme::Publication.resolve().unwrap()
 }
 
 fn prepare_guide_producer_fonts(
@@ -1099,8 +1002,8 @@ fn prepare_guide_producer_fonts(
     theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
     assert!(theme
         .prepared_font_environment()?
-        .generation_resources()
-        .same_operation(&stage.generation_resources()));
+        .operation()
+        .same_operation(&stage.operation()));
     Ok(())
 }
 
@@ -1185,8 +1088,8 @@ fn auto_legend_avoids_recorded_line_and_ribbon_geometry() {
     let plan = plan_panel(&plot, PlotKind::Line, cell, LegendRole::Panel, &theme()).unwrap();
     let legend = plan.legend.as_ref().unwrap();
     let plot = plot.erase();
-    let plot_with_planned_limits = plan.plot_with_planned_limits(&plot, plot.data()).unwrap();
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let plot_with_planned_limits = plan.plot_with_planned_limits(&plot);
+    let resources = crate::font::canonical::OperationContext::new();
     let plot_with_planned_limits =
         crate::plots::shared_x::prepare_plot(&plot_with_planned_limits, &resources, None)
             .unwrap()
@@ -1218,7 +1121,7 @@ fn auto_legend_avoids_recorded_line_and_ribbon_geometry() {
 fn production_geometry_discovery_returns_a_backend_independent_snapshot() {
     let data = line_data(["upper", "upper", "lower", "lower"]);
     let plot = crate::kind::into_erased(line_plot(&data));
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let resources = crate::font::canonical::OperationContext::new();
     let plot = crate::plots::shared_x::prepare_plot(&plot, &resources, None)
         .unwrap()
         .attach(plot)
@@ -1238,7 +1141,7 @@ fn production_geometry_discovery_returns_a_backend_independent_snapshot() {
 fn automatic_legend_ignores_zero_width_lines_but_avoids_painted_lines() {
     let data = line_data(["upper", "upper", "lower", "lower"]);
     let plot = crate::kind::into_erased(line_plot(&data));
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let resources = crate::font::canonical::OperationContext::new();
     let plot = crate::plots::shared_x::prepare_plot(&plot, &resources, None)
         .unwrap()
         .attach(plot)
@@ -1534,10 +1437,7 @@ fn scatter_painted_edges_expand_both_automatic_axes_in_one_root_feedback_driver(
     .erase();
     let mut theme = theme();
     theme.marks.point_sizes.scatter = 18;
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
+    let resources = theme.prepared_font_environment().unwrap().operation();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let cell = PanelBox::new(70.0, 270.0, 70.0, 270.0);
@@ -1550,12 +1450,9 @@ fn scatter_painted_edges_expand_both_automatic_axes_in_one_root_feedback_driver(
         panic!("selected Scatter")
     };
     assert!(payload.domain_expansions.iter().all(Option::is_none));
-    let ink = crate::render::geometry::point_ink_bounds(
-        &theme,
-        &chart.point_style(&theme, (0, 0, 0), 18),
-    )
-    .unwrap()
-    .unwrap();
+    let ink = crate::render::geometry::point_ink_bounds(&chart.point_style(&theme, (0, 0, 0), 18))
+        .unwrap()
+        .unwrap();
     let panel = result.result.layout.projection.panel_box();
     for point in &payload.groups[0].0 {
         assert!(
@@ -1580,10 +1477,7 @@ fn line_marker_ink_uses_the_same_root_domain_feedback_without_explicit_clipping(
     .erase();
     let mut theme = theme();
     theme.marks.point_sizes.path = 18;
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
+    let resources = theme.prepared_font_environment().unwrap().operation();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let cell = PanelBox::new(70.0, 270.0, 70.0, 270.0);
@@ -1596,12 +1490,9 @@ fn line_marker_ink_uses_the_same_root_domain_feedback_without_explicit_clipping(
         panic!("selected Line")
     };
     assert!(payload.domain_expansions.iter().all(Option::is_none));
-    let ink = crate::render::geometry::point_ink_bounds(
-        &theme,
-        &chart.point_style(&theme, (0, 0, 0), 18),
-    )
-    .unwrap()
-    .unwrap();
+    let ink = crate::render::geometry::point_ink_bounds(&chart.point_style(&theme, (0, 0, 0), 18))
+        .unwrap()
+        .unwrap();
     let panel = result.result.layout.projection.panel_box();
     for value in [0.0, 10.0] {
         let (x, y) = result.result.layout.projection.project(value, value);
@@ -1626,10 +1517,7 @@ fn line_ribbon_full_stroke_is_retained_inside_the_final_automatic_panel() {
     let mut theme = theme();
     theme.marks.line_band.outline =
         Some(crate::theme::DataOutlineTheme::mapped(100.0, 255).unwrap());
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
+    let resources = theme.prepared_font_environment().unwrap().operation();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let cell = PanelBox::new(70.0, 420.0, 70.0, 420.0);
@@ -1643,7 +1531,7 @@ fn line_ribbon_full_stroke_is_retained_inside_the_final_automatic_panel() {
     };
     assert!(payload.domain_expansions.iter().all(Option::is_none));
     let panel = result.result.layout.projection.panel_box();
-    let mut full = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+    let mut full = crate::render::geometry::GeometrySnapshot::new();
     for mark in &payload.marks {
         if let crate::plots::line::LineMark::Ribbon(points, style) = mark {
             full.polygon(points, style, None).unwrap();
@@ -1672,10 +1560,7 @@ fn line_ribbon_full_stroke_is_retained_inside_the_final_automatic_panel() {
     .size(640, 480)
     .legend(LegendPolicy::Hidden)
     .erase();
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
+    let resources = theme.prepared_font_environment().unwrap().operation();
     let inputs = crate::plots::shared_x::prepare_plot(&exact_source, &resources, None).unwrap();
     let exact_chart = inputs.attach(exact_source).unwrap();
     let exact = plan_panel(
@@ -1696,10 +1581,7 @@ fn qq_observation_ink_expands_two_automatic_domains_without_moving_source_quanti
         .erase();
     let mut theme = theme();
     theme.marks.point_sizes.qq = 60;
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
+    let resources = theme.prepared_font_environment().unwrap().operation();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let cell = PanelBox::new(70.0, 420.0, 70.0, 420.0);
@@ -1717,12 +1599,9 @@ fn qq_observation_ink_expands_two_automatic_domains_without_moving_source_quanti
         panic!("selected Qq")
     };
     assert!(payload.domain_expansions.iter().all(Option::is_none));
-    let ink = crate::render::geometry::point_ink_bounds(
-        &theme,
-        &chart.point_style(&theme, (0, 0, 0), 60),
-    )
-    .unwrap()
-    .unwrap();
+    let ink = crate::render::geometry::point_ink_bounds(&chart.point_style(&theme, (0, 0, 0), 60))
+        .unwrap()
+        .unwrap();
     let panel = result.result.layout.projection.panel_box();
     assert_eq!(payload.points.len(), 4);
     for point in &payload.points {
@@ -1734,10 +1613,7 @@ fn qq_observation_ink_expands_two_automatic_domains_without_moving_source_quanti
         .x_limits(-2.0, 2.0)
         .size(640, 480)
         .erase();
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
+    let resources = theme.prepared_font_environment().unwrap().operation();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let exact = plan_panel(&chart, PlotKind::Qq, cell, LegendRole::Panel, &theme).unwrap();
@@ -1757,10 +1633,7 @@ fn regression_observation_ink_remeasures_under_root_feedback_without_changing_ol
     theme.marks.point_sizes.regression = 54;
     theme.marks.regression_band.outline =
         Some(crate::theme::DataOutlineTheme::mapped(32.0, 255).unwrap());
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
+    let resources = theme.prepared_font_environment().unwrap().operation();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let cell = PanelBox::new(70.0, 420.0, 70.0, 420.0);
@@ -1779,19 +1652,16 @@ fn regression_observation_ink_remeasures_under_root_feedback_without_changing_ol
         panic!("selected Regression")
     };
     assert!(payload.domain_expansions.iter().all(Option::is_none));
-    let ink = crate::render::geometry::point_ink_bounds(
-        &theme,
-        &chart.point_style(&theme, (0, 0, 0), 54),
-    )
-    .unwrap()
-    .unwrap();
+    let ink = crate::render::geometry::point_ink_bounds(&chart.point_style(&theme, (0, 0, 0), 54))
+        .unwrap()
+        .unwrap();
     let panel = result.result.layout.projection.panel_box();
     assert_eq!(payload.points.len(), 4);
     for point in &payload.points {
         assert!(point.x + ink.left >= panel.x0 && point.x + ink.right <= panel.x1);
         assert!(point.y + ink.bottom >= panel.y0 && point.y + ink.top <= panel.y1);
     }
-    let mut band_ink = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+    let mut band_ink = crate::render::geometry::GeometrySnapshot::new();
     band_ink
         .polygon(payload.band.as_ref().unwrap(), &payload.band_fill, None)
         .unwrap();
@@ -1820,10 +1690,7 @@ fn grouped_dumbbell_endpoints_clear_only_the_automatic_numeric_axis() {
     .erase();
     let mut theme = theme();
     theme.marks.point_sizes.dumbbell = 54;
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
+    let resources = theme.prepared_font_environment().unwrap().operation();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let cell = PanelBox::new(80.0, 900.0, 80.0, 800.0);
@@ -1844,12 +1711,9 @@ fn grouped_dumbbell_endpoints_clear_only_the_automatic_numeric_axis() {
     };
     assert!(payload.domain_expansions.iter().all(Option::is_none));
     let panel = selected.result.layout.projection.panel_box();
-    let ink = crate::render::geometry::point_ink_bounds(
-        &theme,
-        &chart.point_style(&theme, (0, 0, 0), 54),
-    )
-    .unwrap()
-    .unwrap();
+    let ink = crate::render::geometry::point_ink_bounds(&chart.point_style(&theme, (0, 0, 0), 54))
+        .unwrap()
+        .unwrap();
     for pair in &payload.pairs {
         for point in pair {
             assert!(point.x + ink.left >= panel.x0 && point.x + ink.right <= panel.x1);
@@ -1886,10 +1750,7 @@ fn bar_orientations_clear_the_painted_zero_edge_through_one_numeric_feedback_own
     ));
     for horizontal in [false, true] {
         let source = source(horizontal);
-        let resources = theme
-            .prepared_font_environment()
-            .unwrap()
-            .generation_resources();
+        let resources = theme.prepared_font_environment().unwrap().operation();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let cell = PanelBox::new(80.0, 700.0, 80.0, 520.0);
@@ -1908,7 +1769,7 @@ fn bar_orientations_clear_the_painted_zero_edge_through_one_numeric_feedback_own
         };
         assert!(payload.domain_expansion.is_none());
         let panel = selected.result.layout.projection.panel_box();
-        let mut ink = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+        let mut ink = crate::render::geometry::GeometrySnapshot::new();
         for bar in &payload.bars {
             ink.polygon(&bar.polygon, &bar.fill, None).unwrap();
         }
@@ -1941,10 +1802,7 @@ fn boxplot_whisker_and_body_ink_clear_the_automatic_value_edge() {
             .unwrap(),
     ));
     theme.marks.summary_stroke.width = 220.0;
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
+    let resources = theme.prepared_font_environment().unwrap().operation();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let cell = PanelBox::new(80.0, 700.0, 80.0, 520.0);
@@ -1958,7 +1816,7 @@ fn boxplot_whisker_and_body_ink_clear_the_automatic_value_edge() {
     };
     assert!(payload.domain_expansions.iter().all(Option::is_none));
     let panel = selected.result.layout.projection.panel_box();
-    let mut full = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+    let mut full = crate::render::geometry::GeometrySnapshot::new();
     for mark in &payload.marks {
         match mark {
             crate::plots::categorical_distribution::Mark::Polygon(points, style) => {
@@ -1983,10 +1841,7 @@ fn boxplot_whisker_and_body_ink_clear_the_automatic_value_edge() {
     .y_limits(1.0, 8.0)
     .size(800, 600)
     .erase();
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
+    let resources = theme.prepared_font_environment().unwrap().operation();
     let inputs = crate::plots::shared_x::prepare_plot(&exact_source, &resources, None).unwrap();
     let exact_chart = inputs.attach(exact_source).unwrap();
     let exact = plan_panel(
@@ -2020,10 +1875,7 @@ fn supplemental_bar_point_outside_bar_values_extends_numeric_ink_domain() {
     .size(800, 600)
     .erase();
     let theme = theme();
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
+    let resources = theme.prepared_font_environment().unwrap().operation();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let cell = PanelBox::new(80.0, 700.0, 80.0, 520.0);
@@ -2037,7 +1889,7 @@ fn supplemental_bar_point_outside_bar_values_extends_numeric_ink_domain() {
     assert_eq!(payload.points.len(), 1);
     let panel = selected.result.layout.projection.panel_box();
     let (point, style) = &payload.points[0];
-    let bounds = crate::render::geometry::point_ink_bounds(&theme, style)
+    let bounds = crate::render::geometry::point_ink_bounds(style)
         .unwrap()
         .unwrap();
     assert!(point.y + bounds.bottom >= panel.y0 && point.y + bounds.top <= panel.y1);
@@ -2052,10 +1904,7 @@ fn density_curve_support_clears_automatic_edges_without_repreparing_kde() {
     theme.marks.density_line.width = 28.0;
     theme.marks.density_area.outline =
         Some(crate::theme::DataOutlineTheme::mapped(18.0, 255).unwrap());
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
+    let resources = theme.prepared_font_environment().unwrap().operation();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let cell = PanelBox::new(70.0, 420.0, 70.0, 420.0);
@@ -2068,7 +1917,7 @@ fn density_curve_support_clears_automatic_edges_without_repreparing_kde() {
     };
     assert!(payload.domain_expansions.iter().all(Option::is_none));
     let panel = result.result.layout.projection.panel_box();
-    let mut area = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+    let mut area = crate::render::geometry::GeometrySnapshot::new();
     for curve in &payload.curves {
         area.polygon(&curve.fill, &curve.fill_style, None).unwrap();
     }
@@ -2081,10 +1930,7 @@ fn density_curve_support_clears_automatic_edges_without_repreparing_kde() {
         .x_limits(0.0, 5.0)
         .size(640, 480)
         .erase();
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
+    let resources = theme.prepared_font_environment().unwrap().operation();
     let inputs = crate::plots::shared_x::prepare_plot(&exact_source, &resources, None).unwrap();
     let exact_chart = inputs.attach(exact_source).unwrap();
     let exact = plan_panel(
@@ -2125,10 +1971,7 @@ fn histogram_bin_and_overlay_ink_remeasure_under_one_root_domain_owner() {
             .unwrap(),
     ));
     theme.marks.histogram_curve.width = 12.0;
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
+    let resources = theme.prepared_font_environment().unwrap().operation();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let cell = PanelBox::new(70.0, 420.0, 70.0, 420.0);
@@ -2143,7 +1986,7 @@ fn histogram_bin_and_overlay_ink_remeasure_under_one_root_domain_owner() {
     assert!(payload.domain_expansions.iter().all(Option::is_none));
     assert_eq!(payload.bins.len(), 2);
     let panel = result.result.layout.projection.panel_box();
-    let mut geometry = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+    let mut geometry = crate::render::geometry::GeometrySnapshot::new();
     for bin in &payload.bins {
         geometry.polygon(bin, &payload.fill, None).unwrap();
     }
@@ -2180,7 +2023,7 @@ fn right_edge_legend_expands_generic_continuous_x_axis() {
 fn auto_legend_keeps_categorical_tracks_while_clearing_painted_zero_ink() {
     let data = dense_horizontal_data();
     let plot = dense_bar_plot(&data, true);
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let resources = crate::font::canonical::OperationContext::new();
     let plot = crate::plots::shared_x::prepare_plot(&plot, &resources, None)
         .unwrap()
         .attach(plot)
@@ -2225,7 +2068,7 @@ fn auto_legend_keeps_categorical_tracks_while_clearing_painted_zero_ink() {
     )
     .unwrap();
     let legend = plan.legend.as_ref().unwrap();
-    let plot_with_planned_limits = plan.plot_with_planned_limits(&plot, plot.data()).unwrap();
+    let plot_with_planned_limits = plan.plot_with_planned_limits(&plot);
     let (final_result, final_geometry) = discover_geometry(
         &plot_with_planned_limits,
         PlotKind::HorizontalBar,
@@ -2347,7 +2190,7 @@ fn negative_vertical_bars_keep_zero_start_and_clear_outline_with_outside_guide()
 fn automatic_clearance_does_not_expand_categorical_domains() {
     let data = dense_horizontal_data();
     let plot = dense_bar_plot(&data, true);
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let resources = crate::font::canonical::OperationContext::new();
     let plot = crate::plots::shared_x::prepare_plot(&plot, &resources, None)
         .unwrap()
         .attach(plot)
@@ -2377,7 +2220,6 @@ fn automatic_clearance_does_not_expand_categorical_domains() {
         geometry.bounds(),
         PlotKind::HorizontalBar.legend_default(false),
         0,
-        &theme(),
     )
     .unwrap()
     .is_none());

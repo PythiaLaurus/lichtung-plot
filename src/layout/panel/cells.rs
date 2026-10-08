@@ -7,7 +7,6 @@ use crate::layout::kernel::nearest_spatial_quanta;
 use crate::layout::ResolvedTextPlan;
 use crate::render::backend::{PlannedTextPlacement, Point2D, TextAnchor};
 use crate::render::coordinates::{canonical_text, CoordinatePrecision};
-use crate::theme::ResolvedTheme;
 use crate::Error;
 
 // Split the existing 4px label separation across the two neighboring cells.
@@ -100,7 +99,7 @@ pub(super) fn assign(
     assigned: Option<&[(f64, f64)]>,
     projection: &Projection,
     side: AxisSide,
-    theme: &ResolvedTheme,
+
     scope: &FitScope,
 ) -> Result<Vec<LabelCell>, PlanError> {
     let panel = projection.panel_box();
@@ -110,13 +109,10 @@ pub(super) fn assign(
     };
     let (origin, span) = axis_quanta(origin, end)?;
     let mut cells = Vec::new();
-    crate::layout::fit::reserve(theme, &mut cells, ticks.len(), "axis label cells")?;
+    crate::layout::fit::reserve(&mut cells, ticks.len(), "axis label cells")?;
     let mut previous_key = None;
-    let environment = theme.prepared_font_environment()?;
+
     for tick in ticks {
-        environment
-            .claim_processing_visits(1)
-            .map_err(|error| Error::Render(format!("axis position admission: {error:?}")))?;
         let key = projection_key(tick.position, range).ok_or_else(|| {
             scope.failure(
                 FitKind::Tick,
@@ -169,9 +165,6 @@ pub(super) fn assign(
     if !categorical {
         let mut previous: Option<usize> = None;
         for (index, tick) in ticks.iter().enumerate() {
-            environment
-                .claim_processing_visits(1)
-                .map_err(|error| Error::Render(format!("axis boundary admission: {error:?}")))?;
             if tick.label.is_empty() {
                 continue;
             }
@@ -192,21 +185,17 @@ pub(super) fn assign(
             cells[last].inward = true;
         }
     }
-    apply_clearance(&mut cells, ticks, theme, scope)?;
+    apply_clearance(&mut cells, ticks, scope)?;
     Ok(cells)
 }
 
 fn apply_clearance(
     cells: &mut [LabelCell],
     ticks: &[AxisTick],
-    theme: &ResolvedTheme,
+
     scope: &FitScope,
 ) -> Result<(), PlanError> {
-    let environment = theme.prepared_font_environment()?;
     for (cell, tick) in cells.iter_mut().zip(ticks) {
-        environment
-            .claim_processing_visits(1)
-            .map_err(|error| Error::Render(format!("axis clearance admission: {error:?}")))?;
         if !tick.label.is_empty() {
             cell.start += LABEL_CLEARANCE;
             cell.end -= LABEL_CLEARANCE;
@@ -244,72 +233,57 @@ mod tests {
     use super::*;
 
     #[test]
-    fn p2_cells_charge_each_semantic_pass_including_empty_labels() {
+    fn assigned_cells_keep_positions_including_empty_labels() {
         let ticks = [
             AxisTick::new(0.5, "left"),
             AxisTick::new(1.5, ""),
             AxisTick::new(2.5, "right"),
         ];
         let projection = Projection::new((0.0, 3.0), (0.0, 3.0), (10.0, 310.0, 20.0, 320.0));
-        for (categorical, visits) in [(false, 9), (true, 6)] {
-            for available in [0, visits - 1, visits, visits + 1] {
-                let theme = crate::Theme::Publication
-                    .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                    .unwrap();
-                let resources = theme
-                    .prepared_font_environment()
-                    .unwrap()
-                    .generation_resources();
-                let before = resources.usage().unwrap().1;
-                resources.set_test_limits(before + available, u64::MAX);
+        for categorical in [false, true] {
+            {
                 let result = assign(
                     &ticks,
                     categorical,
                     None,
                     &projection,
                     AxisSide::Bottom,
-                    &theme,
                     &FitScope::root(),
                 );
-                assert_eq!(result.is_ok(), available >= visits);
-                assert_eq!(resources.usage().unwrap().1 - before, available.min(visits));
-                if let Err(error) = result {
-                    assert!(matches!(error, PlanError::Fatal(_)));
-                }
+                let cells = result.unwrap();
+                assert_eq!(cells.len(), ticks.len());
+                assert_eq!(
+                    cells
+                        .iter()
+                        .map(|cell| cell.center.to_bits())
+                        .collect::<Vec<_>>(),
+                    [60.0, 160.0, 260.0].map(f64::to_bits)
+                );
             }
         }
     }
 
     #[test]
-    fn p2_cells_stop_visiting_after_position_failure() {
+    fn unordered_positions_return_a_tick_fit_failure() {
         let ticks = [
             AxisTick::new(1.5, "a"),
             AxisTick::new(0.5, "b"),
             AxisTick::new(2.5, "c"),
         ];
         let projection = Projection::new((0.0, 3.0), (0.0, 3.0), (0.0, 300.0, 0.0, 300.0));
-        for available in [1, 2, 3] {
-            let theme = crate::Theme::Publication
-                .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                .unwrap();
-            let resources = theme
-                .prepared_font_environment()
-                .unwrap()
-                .generation_resources();
-            let before = resources.usage().unwrap().1;
-            resources.set_test_limits(before + available, u64::MAX);
+        {
             let error = assign(
                 &ticks,
                 false,
                 None,
                 &projection,
                 AxisSide::Bottom,
-                &theme,
                 &FitScope::root(),
             )
             .unwrap_err();
-            assert_eq!(matches!(error, PlanError::Fatal(_)), available < 2);
-            assert_eq!(resources.usage().unwrap().1 - before, available.min(2));
+            assert!(
+                matches!(error, PlanError::Fit(failure) if failure.reason.kind == FitKind::Tick)
+            );
         }
     }
 }

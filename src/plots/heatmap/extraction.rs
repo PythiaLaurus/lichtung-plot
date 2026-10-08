@@ -1,5 +1,5 @@
 use super::*;
-use crate::font::canonical::OperationGenerationResources;
+use crate::font::canonical::OperationContext;
 use crate::{BooleanValues, CategoryValues, NumericValues};
 
 fn source() -> Plot<crate::kind::Heatmap> {
@@ -31,10 +31,8 @@ fn local_and_shared_heatmap_numeric_labels_are_unique_before_fonts() {
         NumericValues::new("color", [0.1, 0.100_000_1]),
     )
     .erase();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
-    let resources = OperationGenerationResources::new();
+    let theme = crate::Theme::Publication.resolve().unwrap();
+    let resources = OperationContext::new();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
     let inputs = crate::plots::shared_x::prepare_plot(
         &source,
@@ -43,18 +41,12 @@ fn local_and_shared_heatmap_numeric_labels_are_unique_before_fonts() {
     )
     .unwrap();
     let marks = &inputs.heatmap.as_ref().unwrap().panels[0].1;
-    let contributor = ContinuousContributor::for_plot(
-        &source,
-        &inputs,
-        &theme,
-        source.data().with_axis_resources(&resources),
-    )
-    .unwrap()
-    .unwrap();
-    let shared =
-        ContinuousContributor::merge([contributor], source.data().with_axis_resources(&resources))
-            .unwrap()
-            .unwrap();
+    let contributor = ContinuousContributor::for_plot(&source, &inputs, &theme)
+        .unwrap()
+        .unwrap();
+    let shared = ContinuousContributor::merge([contributor])
+        .unwrap()
+        .unwrap();
     assert_ne!(marks.colorbar_values[0], marks.colorbar_values[1]);
     assert_eq!(shared.labels, marks.colorbar_values);
     assert_eq!(shared.domain, (0.1, 0.100_000_1));
@@ -80,11 +72,11 @@ fn legacy_signed_zero_diverging_centers_prepare_identical_neutral_colors_before_
                 source = source.color_limits(minimum, maximum);
             }
             let source = source.erase();
-            let resources = OperationGenerationResources::new();
+            let resources = OperationContext::new();
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
             let prepared = prepare(
                 &source,
-                source.data().with_axis_resources(&resources),
+                source.data().with_operation(&resources),
                 &crate::theme::scale_values::test_defaults(),
             )
             .unwrap();
@@ -125,7 +117,7 @@ fn signed_zero_local_heatmap_normalizes_its_exact_domain_and_keeps_one_numeric_l
     )
     .color_limits(-0.0, 0.0)
     .erase();
-    let resources = OperationGenerationResources::new();
+    let resources = OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(
         &source,
         &resources,
@@ -136,9 +128,7 @@ fn signed_zero_local_heatmap_normalizes_its_exact_domain_and_keeps_one_numeric_l
     assert_eq!(domain.minimum.to_bits(), 0.0_f64.to_bits());
     assert_eq!(domain.maximum.to_bits(), 0.0_f64.to_bits());
     let plot = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let selected = plot
         .measure_selected_interior(PlotRenderContext::new(
             plot.data(),
@@ -157,32 +147,6 @@ fn signed_zero_local_heatmap_normalizes_its_exact_domain_and_keeps_one_numeric_l
 }
 
 #[test]
-fn heatmap_topology_prices_declared_cells_merged_missing_highlight_and_text_targets() {
-    // Five original rows; a 2x3 grid; two column and three row slots;
-    // four ordinary cells + one merged row; two missing-cross strokes;
-    // one merged text, one highlighted target, and three value texts.
-    let expected = 5 + 6 + 2 + 3 + 4 + 1 + 2 + 1 + 1 + 3;
-    let source = source().erase();
-    for available in [expected - 1, expected] {
-        let resources = OperationGenerationResources::new();
-        resources
-            .claim_topology_slots(1_000_000 - available)
-            .unwrap();
-        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-        let result = prepare(
-            &source,
-            source.data().with_axis_resources(&resources),
-            &crate::theme::scale_values::test_defaults(),
-        );
-        assert_eq!(result.is_ok(), available == expected);
-        assert_eq!(
-            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
-            0
-        );
-    }
-}
-
-#[test]
 fn heatmap_hidden_y_labels_use_the_same_cached_annotation_and_ink_summary() {
     let source = Plot::heatmap(
         CategoryValues::new("x", ["a", "b"]).unwrap(),
@@ -195,14 +159,12 @@ fn heatmap_hidden_y_labels_use_the_same_cached_annotation_and_ink_summary() {
     .erase();
     let inputs = crate::plots::shared_x::prepare_plot(
         &source,
-        &OperationGenerationResources::new(),
+        &OperationContext::new(),
         Some(&crate::theme::scale_values::test_defaults()),
     )
     .unwrap();
     let mut chart = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let visible = intrinsic_body_minimum(&chart, &theme).unwrap();
     chart = chart.with_y_tick_labels_visible(false);
     let hidden = intrinsic_body_minimum(&chart, &theme).unwrap();
@@ -213,10 +175,10 @@ fn heatmap_hidden_y_labels_use_the_same_cached_annotation_and_ink_summary() {
 }
 
 #[test]
-fn semantic_grids_text_and_styles_use_exact_root_admission_before_fonts() {
+fn semantic_grids_text_and_styles_are_retained_before_fonts() {
     let source = source().erase();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-    let resources = OperationGenerationResources::new();
+    let resources = OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(
         &source,
         &resources,
@@ -238,19 +200,10 @@ fn semantic_grids_text_and_styles_use_exact_root_admission_before_fonts() {
     assert_eq!(marks.value_labels[0].as_deref(), Some("-1.00"));
     assert_eq!(marks.colorbar_values, ["-2", "2", "0", "Missing"]);
     assert!(marks.has_missing);
-    let visits = resources.usage().unwrap().1;
-    let bytes = resources.byte_usage().unwrap();
-    for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
-        assert!(crate::plots::shared_x::prepare_plot(
-            &source,
-            &OperationGenerationResources::with_test_limits(visits, bytes),
-            Some(&crate::theme::scale_values::test_defaults()),
-        )
-        .is_err());
-    }
+
     crate::plots::shared_x::prepare_plot(
         &source,
-        &OperationGenerationResources::with_test_limits(visits, bytes),
+        &OperationContext::new(),
         Some(&crate::theme::scale_values::test_defaults()),
     )
     .unwrap();
@@ -266,7 +219,7 @@ fn semantic_grids_text_and_styles_use_exact_root_admission_before_fonts() {
 }
 
 #[test]
-fn borrowed_canvas_category_policy_keeps_raw_keys_and_exact_admission() {
+fn borrowed_canvas_category_policy_keeps_raw_keys() {
     let source = Plot::heatmap(
         CategoryValues::new("x_axis", [" a_b ", "a b", "a_b", "a b"]).unwrap(),
         CategoryValues::new("y_axis", ["c_d", "c_d", "c d", "c d"]).unwrap(),
@@ -285,22 +238,21 @@ fn borrowed_canvas_category_policy_keeps_raw_keys_and_exact_admission() {
             [["First X", "Second X"], ["First Y", "Second Y"]],
         ),
     ] {
-        let prepare = |resources: &OperationGenerationResources| {
+        let prepare = |resources: &OperationContext| {
             let marks = crate::plots::shared_x::PreparedReference::new(
                 &source,
-                source.data().with_axis_resources(resources),
+                source.data().with_operation(resources),
                 Some(&crate::theme::scale_values::test_defaults()),
             )?;
             crate::plots::shared_x::prepare_reference_plot(
                 &source,
-                resources,
                 marks,
                 Some("panel-0"),
                 None,
                 Some(&policy),
             )
         };
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let inputs = prepare(&resources).unwrap();
         let axes = &inputs.axes[0].1;
         for (side, raw) in [["a_b", "a b"], ["c_d", "c d"]].iter().enumerate() {
@@ -318,22 +270,12 @@ fn borrowed_canvas_category_policy_keeps_raw_keys_and_exact_admission() {
                 raw
             );
         }
-        let visits = resources.usage().unwrap().1;
-        let bytes = resources.byte_usage().unwrap();
-        for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
-            assert!(prepare(&OperationGenerationResources::with_test_limits(
-                visits, bytes
-            ))
-            .is_err());
-        }
-        prepare(&OperationGenerationResources::with_test_limits(
-            visits, bytes,
-        ))
-        .unwrap();
+
+        prepare(&OperationContext::new()).unwrap();
     }
     assert!(crate::plots::shared_x::prepare_plot(
         &source,
-        &OperationGenerationResources::new(),
+        &OperationContext::new(),
         Some(&crate::theme::scale_values::test_defaults())
     )
     .err()
@@ -417,30 +359,18 @@ fn cell_label_minimum_precedes_constrained_heatmap_discovery_and_is_retained() {
         .erase();
     let inputs = crate::plots::shared_x::prepare_plot(
         &source,
-        &OperationGenerationResources::new(),
+        &OperationContext::new(),
         Some(&crate::theme::scale_values::test_defaults()),
     )
     .unwrap();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     inputs.prepare_intrinsics(&source, &theme).unwrap();
     let source = inputs.attach(source).unwrap();
     let minimum = intrinsic_body_minimum(&source, &theme).unwrap();
     assert!(minimum.0 > 80.0);
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
-    let before = (
-        resources.usage().unwrap(),
-        resources.byte_usage().unwrap(),
-        resources.call_cache_usage().0,
-    );
+
     assert_eq!(intrinsic_body_minimum(&source, &theme).unwrap(), minimum);
-    assert_eq!(resources.usage().unwrap(), (before.0 .0, before.0 .1 + 1));
-    assert_eq!(resources.byte_usage().unwrap(), before.1);
-    assert_eq!(resources.call_cache_usage().0, before.2 + 1);
+
     STAGES.with(|counts| counts.set([0; 3]));
     let root = crate::layout::plan_exact_root(
         800,
@@ -471,14 +401,12 @@ fn selected_payload_geometry_and_poisoned_capture_preserve_every_operand() {
         let source = source().heatmap_label_fit(policy).erase();
         let inputs = crate::plots::shared_x::prepare_plot(
             &source,
-            &OperationGenerationResources::new(),
+            &OperationContext::new(),
             Some(&crate::theme::scale_values::test_defaults()),
         )
         .unwrap();
         let source = inputs.attach(source).unwrap();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
         let begins = crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get);
         let selected = source
@@ -575,18 +503,16 @@ fn selected_payload_geometry_and_poisoned_capture_preserve_every_operand() {
 }
 
 #[test]
-fn selected_cell_guide_storage_and_elision_refuse_at_exact_limits() {
+fn selected_cells_guides_and_unique_labels_fit_the_assigned_panel() {
     let source = source().erase();
     let inputs = crate::plots::shared_x::prepare_plot(
         &source,
-        &OperationGenerationResources::new(),
+        &OperationContext::new(),
         Some(&crate::theme::scale_values::test_defaults()),
     )
     .unwrap();
     let source = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let selected = source
         .measure_selected_interior(PlotRenderContext::new(
             source.data(),
@@ -631,26 +557,19 @@ fn selected_cell_guide_storage_and_elision_refuse_at_exact_limits() {
         "Long category alpha".to_owned(),
         "Distinct category beta".to_owned(),
     ];
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
     let (_, guide) = guide::measure(
         marks,
         selected.layout.projection.panel_box(),
         1.0 / 1024.0,
         &theme,
         &crate::layout::fit::FitScope::root(),
-        source.data().with_axis_resources(&resources),
         None,
     )
     .unwrap();
     for component in 0..3 {
-        let run = |resources: &OperationGenerationResources| -> Result<(), Error> {
-            let data = source.data().with_axis_resources(resources);
+        let run = || -> Result<(), Error> {
             if component == 0 {
                 fitted_unique_labels(
-                    data,
                     &theme,
                     &labels,
                     |_| 55.0,
@@ -659,33 +578,13 @@ fn selected_cell_guide_storage_and_elision_refuse_at_exact_limits() {
                 )
                 .map_err(crate::layout::fit::PlanError::into_error)?;
             } else if component == 1 {
-                select_cells(marks, &columns, &rows, &theme, &annotations, data)?;
+                select_cells(marks, &columns, &rows, &theme, &annotations)?;
             } else {
-                guide::select(&guide, selected.layout.projection.panel_box(), &theme, data)?;
+                guide::select(&guide, selected.layout.projection.panel_box(), &theme)?;
             }
             Ok(())
         };
-        let resources = OperationGenerationResources::new();
-        run(&resources).unwrap();
-        let records = resources.usage().unwrap().0;
-        let visits = resources.usage().unwrap().1;
-        let bytes = resources.byte_usage().unwrap();
-        if component == 1 {
-            // Three rows; the merged last row does not examine individual cells.
-            assert_eq!(visits, 3 + 2 * 2);
-        }
-        for (records, visits, bytes) in [(records - 1, visits, bytes), (records, visits, bytes - 1)]
-            .into_iter()
-            .chain(visits.checked_sub(1).map(|visits| (records, visits, bytes)))
-        {
-            let limited = OperationGenerationResources::with_test_limits(visits, bytes);
-            limited.claim_slots(1_000_000 - records).unwrap();
-            assert!(run(&limited).is_err());
-        }
-        let exact = OperationGenerationResources::with_test_limits(visits, bytes);
-        exact.claim_slots(1_000_000 - records).unwrap();
-        run(&exact).unwrap();
-        assert_eq!(exact.usage().unwrap(), (1_000_000, visits));
+        run().unwrap();
     }
 }
 

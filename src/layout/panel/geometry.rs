@@ -102,19 +102,18 @@ impl Layout {
             crate::orchestrator::measurements::Counter::LegacyPanelConstructor,
         );
         let pixel_box = panel_box.as_tuple();
-        let resources = theme.prepared_font_environment()?.generation_resources();
 
         // Don't expand categorical x ranges — the user picked
         // them deliberately.
         let x_range = if x_ticks.is_empty() || x_spec.exact_ticks.is_some() {
-            resolve_range(x_range, x_spec, &resources)?
+            resolve_range(x_range, x_spec)?
         } else if let Some(limits) = x_spec.limits {
             limits
         } else {
             x_range
         };
         let y_range = if y_ticks.is_empty() || y_spec.exact_ticks.is_some() {
-            resolve_range(y_range, y_spec, &resources)?
+            resolve_range(y_range, y_spec)?
         } else if let Some(limits) = y_spec.limits {
             limits
         } else {
@@ -190,13 +189,10 @@ impl AxisSpec {
         };
         if let Some(ticks) = &self.exact_ticks {
             Axis::validate_ticks(ticks, range, axis)?;
-            let environment = theme.prepared_font_environment()?;
+
             let mut retained = Vec::new();
-            crate::render::backend::reserve_text_records(&mut retained, ticks.len(), environment)?;
+            crate::render::backend::reserve_text_records(&mut retained, ticks.len())?;
             for tick in ticks {
-                environment
-                    .claim_unicode_bytes(tick.label.len() as u64)
-                    .map_err(|error| Error::Render(error.to_string()))?;
                 let mut label = String::new();
                 label
                     .try_reserve_exact(tick.label.len())

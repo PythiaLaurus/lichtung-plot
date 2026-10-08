@@ -1,5 +1,5 @@
 use super::*;
-use crate::font::canonical::OperationGenerationResources;
+use crate::font::canonical::OperationContext;
 use crate::{Bounds, CategoryValues, NumericValues};
 
 pub(crate) fn source() -> Plot<crate::kind::Interaction> {
@@ -27,11 +27,9 @@ fn sparse_trace_points_claim_category_pitch_and_complete_numeric_ink() {
     )
     .size(1400, 900)
     .erase();
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     theme.marks.point_sizes.interaction = 160;
-    let resources = OperationGenerationResources::new();
+    let resources = OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let hard = chart.intrinsic_body_minimum(&theme).unwrap();
@@ -57,7 +55,7 @@ fn sparse_trace_points_claim_category_pitch_and_complete_numeric_ink() {
     for trace in &payload.traces {
         count += trace.points.len();
         let Some(style) = &trace.marker else { continue };
-        let ink = crate::render::geometry::point_ink_bounds(&theme, style)
+        let ink = crate::render::geometry::point_ink_bounds(style)
             .unwrap()
             .unwrap();
         for point in &trace.points {
@@ -77,13 +75,11 @@ fn custom_connector_appearance_keeps_exact_group_patterns_and_guide_identity() {
         ])
         .y_limits(-2.0, 10.0)
         .erase();
-    let resources = OperationGenerationResources::new();
+    let resources = OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     let panel = crate::layout::PanelBox::new(80.0, 550.0, 70.0, 410.0);
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     let old = chart
         .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
         .unwrap();
@@ -125,7 +121,6 @@ fn custom_connector_appearance_keeps_exact_group_patterns_and_guide_identity() {
             selected.legend_entries[0].clone()
         ],
         "custom interaction connector",
-        &OperationGenerationResources::new(),
     )
     .unwrap_err()
     .to_string()
@@ -163,17 +158,12 @@ fn same_assignment_marks_match_canonical_projection_fingerprints() {
             crate::Theme::Nature,
             crate::Theme::Science,
         ] {
-            let theme = preset
-                .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                .unwrap();
-            let plot = crate::plots::shared_x::prepare_plot(
-                &source,
-                &OperationGenerationResources::new(),
-                None,
-            )
-            .unwrap()
-            .attach(source.clone())
-            .unwrap();
+            let theme = preset.resolve().unwrap();
+            let plot =
+                crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None)
+                    .unwrap()
+                    .attach(source.clone())
+                    .unwrap();
             for panel in [
                 PanelBox::new(80.25, 550.75, 70.5, 410.25),
                 PanelBox::new(30.0, 810.0, 50.0, 600.0),
@@ -205,14 +195,11 @@ fn sparse_marks_ticks_and_grid_share_odd_quantum_coordinates() {
         .y_ticks(vec![crate::AxisTick::new(2.0, " raw_estimate ")])
         .labels(crate::Labels::raw().alias("b", " raw_b "))
         .erase();
-    let plot =
-        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new(), None)
-            .unwrap()
-            .attach(source)
-            .unwrap();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+    let plot = crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None)
+        .unwrap()
+        .attach(source)
         .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let panel = crate::layout::PanelBox::new(
         80.0 + 1.0 / 1024.0,
         550.0 + 4.0 / 1024.0,
@@ -326,10 +313,10 @@ fn sparse_marks_ticks_and_grid_share_odd_quantum_coordinates() {
 }
 
 #[test]
-fn admitted_semantics_preserve_sparse_cells_and_prefont_refusal() {
+fn prepared_semantics_preserve_sparse_cells_without_font_discovery() {
     let source = source().erase();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
-    let resources = OperationGenerationResources::new();
+    let resources = OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let marks = &inputs.interaction.as_ref().unwrap().panels[0].1;
     assert_eq!(marks.conditions, ["b", "a", "c"]);
@@ -342,24 +329,8 @@ fn admitted_semantics_preserve_sparse_cells_and_prefont_refusal() {
             .collect::<Vec<_>>(),
         [0, 2]
     );
-    let visits = resources.usage().unwrap().1;
-    let bytes = resources.byte_usage().unwrap();
-    for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
-        assert!(matches!(
-            crate::plots::shared_x::prepare_plot(
-                &source,
-                &OperationGenerationResources::with_test_limits(visits, bytes),
-                None,
-            ),
-            Err(Error::Render(_))
-        ));
-    }
-    crate::plots::shared_x::prepare_plot(
-        &source,
-        &OperationGenerationResources::with_test_limits(visits, bytes),
-        None,
-    )
-    .unwrap();
+
+    crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
     let attached = inputs.attach(source).unwrap();
     assert!(std::sync::Arc::ptr_eq(
         attached.prepared_interaction.as_ref().unwrap(),
@@ -372,27 +343,12 @@ fn admitted_semantics_preserve_sparse_cells_and_prefont_refusal() {
 }
 
 #[test]
-fn trace_style_completeness_admits_processing_before_missing_style() {
+fn trace_style_completeness_reports_the_first_missing_style() {
     let source = source().styles([]).erase();
     let levels = ["one", "two", "three"].map(String::from);
-    for available in [0, 1, 2] {
-        let resources = OperationGenerationResources::with_test_limits(available, 1024);
-        let error = resolve_trace_styles(
-            &source,
-            &levels,
-            source.data().with_axis_resources(&resources),
-        )
-        .unwrap_err();
-        if available == 0 {
-            assert!(matches!(error, Error::Render(message)
-                if message.contains("axis source work admission")
-                    && message.contains("root processing visits")));
-        } else {
-            assert!(matches!(error, Error::Data(message)
+    let error = resolve_trace_styles(&source, &levels).unwrap_err();
+    assert!(matches!(error, Error::Data(message)
                 if message == "interaction: graphical group \"one\" has no configured style"));
-        }
-        assert_eq!(resources.usage().unwrap().1, available.min(1));
-    }
 }
 
 #[test]
@@ -401,25 +357,9 @@ fn trace_style_processing_stops_at_first_match_and_first_missing_style() {
         .styles([crate::InteractionStyle::new("one")])
         .erase();
     let levels = ["one", "two", "three"].map(String::from);
-    // One lookup comparison plus two completeness checks; neither scans the tail.
-    for available in [0, 1, 2, 3, 4] {
-        let resources = OperationGenerationResources::with_test_limits(available, 1024);
-        let error = resolve_trace_styles(
-            &source,
-            &levels,
-            source.data().with_axis_resources(&resources),
-        )
-        .unwrap_err();
-        if available < 3 {
-            assert!(matches!(error, Error::Render(message)
-                if message.contains("axis source work admission")
-                    && message.contains("root processing visits")));
-        } else {
-            assert!(matches!(error, Error::Data(message)
+    let error = resolve_trace_styles(&source, &levels).unwrap_err();
+    assert!(matches!(error, Error::Data(message)
                 if message == "interaction: graphical group \"two\" has no configured style"));
-        }
-        assert_eq!(resources.usage().unwrap().1, available.min(3));
-    }
 }
 
 #[test]
@@ -479,12 +419,9 @@ fn selected_geometry_and_capture_are_immutable() {
     let source = source()
         .hue(CategoryValues::new("color", ["red", "red", "red", "blue", "blue"]).unwrap())
         .erase();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let inputs =
-        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new(), None)
-            .unwrap();
+        crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
     let attached = inputs.attach(source).unwrap();
     let reads_before_measurement = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
     let geometry_begins =
@@ -598,11 +535,7 @@ fn invalid_intervals_and_final_ranges_fail_before_fonts() {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
         measurements::start();
         assert!(matches!(
-            crate::plots::shared_x::prepare_plot(
-                &source,
-                &OperationGenerationResources::new(),
-                None
-            ),
+            crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None),
             Err(Error::Data(_))
         ));
         let work = measurements::finish();

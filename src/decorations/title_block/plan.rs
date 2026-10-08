@@ -1,6 +1,5 @@
 //! Assigned-width root text, frozen before scene capture and Null validation.
 
-use crate::font::canonical::OperationGenerationResources;
 use crate::layout::fit::{self, FitScope, PlanError};
 use crate::layout::{AddressRole, PanelBox, PhysicalTextAlignment, ResolvedTextPlan};
 use crate::render::backend::{Backend, PlannedTextPlacement, Point2D};
@@ -63,28 +62,21 @@ pub(crate) struct RootTextReserves {
 }
 
 impl RootTextReserves {
-    pub(crate) fn height_with_body(
-        &self,
-        body: f64,
-        resources: &OperationGenerationResources,
-    ) -> Result<ExactLength, Error> {
-        self.total.add_pixels(body, resources)
+    pub(crate) fn height_with_body(&self, body: f64) -> Result<ExactLength, Error> {
+        self.total.add_pixels(body)
     }
     pub(crate) fn body(
         &self,
         outer: PanelBox,
         padding: &RootPaddingLengths,
-        resources: &OperationGenerationResources,
     ) -> Result<PanelBox, Error> {
         Ok(PanelBox::new(
-            padding.left.after_pixels(outer.x0, resources)?,
-            padding.right.before_pixels(outer.x1, resources)?,
+            padding.left.after_pixels(outer.x0)?,
+            padding.right.before_pixels(outer.x1)?,
             self.bottom
-                .add(&padding.bottom, resources)?
-                .after_pixels(outer.y0, resources)?,
-            self.top
-                .add(&padding.top, resources)?
-                .before_pixels(outer.y1, resources)?,
+                .add_length(&padding.bottom)
+                .after_pixels(outer.y0)?,
+            self.top.add_length(&padding.top).before_pixels(outer.y1)?,
         ))
     }
 }
@@ -102,12 +94,7 @@ impl RootTitleBlockIntrinsics {
             .fold((0.0_f64, 0.0_f64), |a, b| (a.0.max(b.0), a.1.max(b.1)))
     }
 
-    pub(crate) fn check_width(
-        self,
-        width: f64,
-        scope: &FitScope,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<(), PlanError> {
+    pub(crate) fn check_width(self, width: f64, scope: &FitScope) -> Result<(), PlanError> {
         if width >= self.widths().0 {
             return Ok(());
         }
@@ -118,7 +105,7 @@ impl RootTitleBlockIntrinsics {
         ]) {
             if hard > 0.0 && hard > width {
                 return Err(scope
-                    .child(role, 0, resources)?
+                    .child(role, 0)?
                     .failure(
                         fit::FitKind::Text,
                         "root title block is narrower than its hard text intrinsic",
@@ -131,14 +118,6 @@ impl RootTitleBlockIntrinsics {
 }
 
 impl RootTitleBlockPlan {
-    pub(crate) fn retained_handle_count(&self) -> usize {
-        1 + self
-            .roles
-            .iter()
-            .flatten()
-            .map(|role| role.text.retained_handle_count())
-            .sum::<usize>()
-    }
     #[cfg(test)]
     pub(crate) fn placed_text(
         &self,
@@ -174,12 +153,7 @@ impl RootTitleBlockPlan {
     ) -> Result<RootTitleBlockIntrinsics, Error> {
         #[cfg(not(test))]
         let _ = scope;
-        theme
-            .prepared_font_environment()?
-            .claim_measurement_call()
-            .map_err(|error| {
-                Error::Render(format!("root title intrinsic call admission: {error:?}"))
-            })?;
+
         #[cfg(test)]
         crate::orchestrator::measurements::intrinsic(
             crate::orchestrator::measurements::Counter::RootTitleIntrinsic,
@@ -218,12 +192,6 @@ impl RootTitleBlockPlan {
         minimum_body_height: f64,
         scope: &FitScope,
     ) -> Result<Self, PlanError> {
-        theme
-            .prepared_font_environment()?
-            .claim_measurement_call()
-            .map_err(|error| {
-                Error::Render(format!("root title measurement admission: {error:?}"))
-            })?;
         if [
             span.x0,
             span.x1,
@@ -248,8 +216,8 @@ impl RootTitleBlockPlan {
                 )
                 .into());
         }
-        let resources = theme.prepared_font_environment()?.generation_resources();
-        let text_span = padding.inset(span, &resources)?;
+
+        let text_span = padding.inset(span)?;
         let (plans, reserves) = Self::measure_content(
             theme,
             sources,
@@ -261,9 +229,8 @@ impl RootTitleBlockPlan {
         let adjacent = plans[0].is_some() && plans[1].is_some();
         if crate::theme::composition::hard(
             &reserves
-                .height_with_body(minimum_body_height, &resources)?
-                .add(&padding.vertical(&resources)?, &resources)?,
-            &resources,
+                .height_with_body(minimum_body_height)?
+                .add_length(&padding.vertical()),
         )? > span.height()
         {
             return Err(scope
@@ -275,7 +242,6 @@ impl RootTitleBlockPlan {
         }
         let mut consumed = crate::theme::spacing::ExactLength::quanta(
             crate::layout::kernel::LayoutScalar::from_quanta(0),
-            &resources,
         )?;
         let mut roles = [None, None, None];
         for (index, plan) in plans.into_iter().enumerate() {
@@ -283,14 +249,11 @@ impl RootTitleBlockPlan {
                 let top = if index == 2 {
                     crate::theme::spacing::ExactLength::quanta(
                         crate::layout::kernel::LayoutScalar::from_quanta(text.height_quanta),
-                        &resources,
                     )?
-                    .add(&padding.bottom, &resources)?
-                    .after_pixels(span.y0, &resources)?
+                    .add_length(&padding.bottom)
+                    .after_pixels(span.y0)?
                 } else {
-                    consumed
-                        .add(&padding.top, &resources)?
-                        .before_pixels(span.y1, &resources)?
+                    consumed.add_length(&padding.top).before_pixels(span.y1)?
                 };
                 let alignment = [alignments.title, alignments.subtitle, alignments.caption][index];
                 let (mut x, anchor) = alignment.resolve_physical(text_span.x0, text_span.x1);
@@ -322,28 +285,22 @@ impl RootTitleBlockPlan {
                                 crate::layout::kernel::LayoutScalar::from_quanta(
                                     text.height_quanta,
                                 ),
-                                &resources,
                             )?
-                            .subtract(
-                                &crate::theme::spacing::ExactLength::quanta(
-                                    crate::layout::kernel::LayoutScalar::from_quanta(first),
-                                    &resources,
-                                )?,
-                                &resources,
-                            )?
+                            .subtract(&crate::theme::spacing::ExactLength::quanta(
+                                crate::layout::kernel::LayoutScalar::from_quanta(first),
+                            )?)
                             .ok_or_else(|| {
                                 Error::Render("root caption baseline exceeds its extent".into())
                             })?
-                            .add(&padding.bottom, &resources)?
-                            .after_pixels(span.y0, &resources)?
+                            .add_length(&padding.bottom)
+                            .after_pixels(span.y0)?
                         } else {
                             consumed
-                                .add_quanta(
-                                    crate::layout::kernel::LayoutScalar::from_quanta(first),
-                                    &resources,
-                                )?
-                                .add(&padding.top, &resources)?
-                                .before_pixels(span.y1, &resources)?
+                                .add_quanta(crate::layout::kernel::LayoutScalar::from_quanta(
+                                    first,
+                                ))?
+                                .add_length(&padding.top)
+                                .before_pixels(span.y1)?
                         },
                     ),
                     anchor,
@@ -352,10 +309,9 @@ impl RootTitleBlockPlan {
                 if index < 2 {
                     consumed = consumed.add_quanta(
                         crate::layout::kernel::LayoutScalar::from_quanta(text.height_quanta),
-                        &resources,
                     )?;
                     if index == 0 && adjacent {
-                        consumed = consumed.add(&spacing.title_subtitle_gap, &resources)?;
+                        consumed = consumed.add_length(&spacing.title_subtitle_gap);
                     }
                 }
                 roles[index] = Some(RootTextRole {
@@ -365,12 +321,7 @@ impl RootTitleBlockPlan {
                 });
             }
         }
-        resources
-            .claim_slots(1)
-            .map_err(|error| Error::Render(format!("root exact reserve retention: {error:?}")))?;
-        resources
-            .claim_bytes((size_of::<RootTextReserves>() + 2 * size_of::<usize>()) as u64)
-            .map_err(|error| Error::Render(format!("root exact reserve storage: {error:?}")))?;
+
         Ok(Self {
             alignments,
             roles,
@@ -409,7 +360,6 @@ impl RootTitleBlockPlan {
             AddressRole::RootCaption,
         ];
         let plans = fit::collect(
-            theme,
             "root title block",
             (0..3).map(|index| {
                 sources[index]
@@ -426,48 +376,38 @@ impl RootTitleBlockPlan {
                                 TitleAlignment::End => PhysicalTextAlignment::End,
                             },
                             "root title block",
-                            &scope.child(
-                                addresses[index],
-                                0,
-                                &theme.prepared_font_environment()?.generation_resources(),
-                            )?,
+                            &scope.child(addresses[index], 0)?,
                         ))
                     })
                     .transpose()
             }),
         )?;
-        let resources = theme.prepared_font_environment()?.generation_resources();
+
         let spacing = theme.root_title_lengths()?;
         let mut top_reserve = crate::theme::spacing::ExactLength::quanta(
             crate::layout::kernel::LayoutScalar::from_quanta(
                 plans[0].as_ref().map_or(0, |plan| plan.height_quanta),
             ),
-            &resources,
         )?
-        .add_quanta(
-            crate::layout::kernel::LayoutScalar::from_quanta(
-                plans[1].as_ref().map_or(0, |plan| plan.height_quanta),
-            ),
-            &resources,
-        )?;
+        .add_quanta(crate::layout::kernel::LayoutScalar::from_quanta(
+            plans[1].as_ref().map_or(0, |plan| plan.height_quanta),
+        ))?;
         if plans[0].is_some() && plans[1].is_some() {
-            top_reserve = top_reserve.add(&spacing.title_subtitle_gap, &resources)?;
+            top_reserve = top_reserve.add_length(&spacing.title_subtitle_gap);
         }
         if plans[0].is_some() || plans[1].is_some() {
-            top_reserve = top_reserve.add(&spacing.title_block_to_content_clearance, &resources)?;
+            top_reserve = top_reserve.add_length(&spacing.title_block_to_content_clearance);
         }
         let bottom_reserve = if let Some(plan) = &plans[2] {
             spacing.caption_to_content_clearance.add_quanta(
                 crate::layout::kernel::LayoutScalar::from_quanta(plan.height_quanta),
-                &resources,
             )?
         } else {
             crate::theme::spacing::ExactLength::quanta(
                 crate::layout::kernel::LayoutScalar::from_quanta(0),
-                &resources,
             )?
         };
-        let total = top_reserve.add(&bottom_reserve, &resources)?;
+        let total = top_reserve.add_length(&bottom_reserve);
         Ok((
             plans,
             RootTextReserves {
@@ -511,14 +451,16 @@ impl RootTitleBlockPlan {
         ] {
             round.observe_count(alignment as usize)?;
         }
-        round.observe_number(self.reserves.top.pixels_rounded(
-            crate::layout::kernel::SpatialRounding::NearestEven,
-            round.resources(),
-        )?)?;
-        round.observe_number(self.reserves.bottom.pixels_rounded(
-            crate::layout::kernel::SpatialRounding::NearestEven,
-            round.resources(),
-        )?)?;
+        round.observe_number(
+            self.reserves
+                .top
+                .pixels_rounded(crate::layout::kernel::SpatialRounding::NearestEven)?,
+        )?;
+        round.observe_number(
+            self.reserves
+                .bottom
+                .pixels_rounded(crate::layout::kernel::SpatialRounding::NearestEven)?,
+        )?;
         for role in &self.roles {
             round.observe_count(usize::from(role.is_some()))?;
             if let Some(role) = role {

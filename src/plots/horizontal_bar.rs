@@ -27,16 +27,16 @@ pub(crate) fn measure_marks(
     bar_data::count(chart.kind(), 1);
     let mode = bar_data::mode(chart);
     let prepared = bar_data::retained(chart)?;
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = context.data.with_axis_resources(&resources);
+    let resources = theme.prepared_font_environment()?.operation();
+    let data = context.data.with_operation(&resources);
     let (colors, accents) = prepared.resolved_colors(chart, theme, data)?;
-    let legend_entries = bar_data::legend_entries(prepared, chart, theme, data, &colors, &accents)?;
+    let legend_entries = bar_data::legend_entries(prepared, chart, theme, &colors, &accents)?;
     let y_count = prepared.categories.len() as f64;
     let panel_box = context.panel;
     let mark_style = chart.significance_mark_style_spec();
     let significance_label = theme
         .typography
-        .effective_significance_label(chart.significance_mark_style_override(), &resources)?;
+        .effective_significance_label(chart.significance_mark_style_override())?;
     let attached_label_plans = bar_data::attached_significance_text_plans(
         context,
         &prepared.significance,
@@ -60,10 +60,10 @@ pub(crate) fn measure_marks(
         &attached_label_plans,
     );
     let anchor_count = prepared.series.len().max(1);
-    let mut rendered_maxima = data.collect_source(
-        (0..prepared.categories.len())
-            .map(|_| data.collect_source((0..anchor_count).map(|_| Ok(f64::NEG_INFINITY)))),
-    )?;
+    let mut rendered_maxima =
+        crate::data::source::collect_source((0..prepared.categories.len()).map(|_| {
+            crate::data::source::collect_source((0..anchor_count).map(|_| Ok(f64::NEG_INFINITY)))
+        }))?;
     for bar in &prepared.bars {
         let anchor = bar.series_index.unwrap_or(0);
         rendered_maxima[bar.category_index][anchor] = rendered_maxima[bar.category_index][anchor]
@@ -124,7 +124,6 @@ pub(crate) fn measure_marks(
         mark_range,
         significance.y_range,
         crate::layout::interior::ClearanceAxis::X,
-        data.source_resources()?,
     )?;
     validate_bar_significance_collisions(
         chart,
@@ -133,7 +132,6 @@ pub(crate) fn measure_marks(
         &layout,
         &attached_label_plans,
         context.fit_scope(),
-        data,
         domain_expansion.is_some(),
     )?;
 
@@ -149,9 +147,9 @@ pub(crate) fn measure_marks(
         #[cfg(test)]
         kind: chart.kind(),
     };
-    data.reserve_source(&mut payload.bars, prepared.bars.len())?;
-    data.reserve_source(&mut payload.text, prepared.significance.len())?;
-    data.reserve_source(&mut payload.points, prepared.points.len())?;
+    crate::data::source::reserve_source(&mut payload.bars, prepared.bars.len())?;
+    crate::data::source::reserve_source(&mut payload.text, prepared.significance.len())?;
+    crate::data::source::reserve_source(&mut payload.points, prepared.points.len())?;
     if chart.zero_line_visible() && base_x_range.0 <= 0.0 && base_x_range.1 >= 0.0 {
         let (x, y0) = layout.projection.project(0.0, 0.0);
         let (_, y1) = layout.projection.project(0.0, y_count);
@@ -160,7 +158,7 @@ pub(crate) fn measure_marks(
     for bar in &prepared.bars {
         let (y_center, height) =
             bar_data::category_bar_geometry(bar, prepared, mode, chart.bar_spacing_spec(), true);
-        let color = prepared.bar_color(chart, bar, &colors, &accents, &resources)?;
+        let color = prepared.bar_color(chart, bar, &colors, &accents)?;
         let polygon = project_bar(&layout.projection, bar, y_center, height)?;
         payload.bars.push(bar_data::BarShape {
             polygon,
@@ -202,13 +200,11 @@ pub(crate) fn measure_marks(
         prepared,
         &payload,
         &layout.projection,
-        theme,
-        data,
         context.fit_scope(),
     )?;
     let mut result = PlotRenderResult::new(layout, legend_entries)
         .with_significance_plan(significance)
-        .with_deferred_annotation_text(data.collect_source(
+        .with_deferred_annotation_text(crate::data::source::collect_source(
             attached_label_plans.into_iter().map(|plan| {
                 Ok(crate::layout::DeferredAnnotationTextPlan::from_resolved(
                     plan,
@@ -282,10 +278,6 @@ fn place_bar_significance(
     ))
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "selected geometry and its provisional domain consequence share collision validation"
-)]
 fn validate_bar_significance_collisions(
     chart: &Plot,
     prepared: &PreparedBars,
@@ -293,18 +285,14 @@ fn validate_bar_significance_collisions(
     layout: &Layout,
     text_plans: &[ResolvedTextPlan],
     scope: &crate::layout::fit::FitScope,
-    data: crate::data::PlotData<'_>,
+
     pending_domain: bool,
 ) -> Result<(), crate::layout::fit::PlanError> {
     let style = chart.significance_mark_style_spec();
     let mut bounds = Vec::new();
-    data.reserve_source(&mut bounds, prepared.significance.len())?;
+    crate::data::source::reserve_source(&mut bounds, prepared.significance.len())?;
     for (index, (mark, text_plan)) in prepared.significance.iter().zip(text_plans).enumerate() {
-        let scope = scope.child(
-            crate::layout::AddressRole::Annotation,
-            index,
-            data.source_resources()?,
-        )?;
+        let scope = scope.child(crate::layout::AddressRole::Annotation, index)?;
         let y = significance_center(mark.category_index, mark.series_index, prepared, mode);
         let (edge_x, y) = layout.projection.project(mark.edge, y);
         let width = text_plan.width();
@@ -319,7 +307,7 @@ fn validate_bar_significance_collisions(
         if !pending_domain && (x0 < panel.x0 || x1 > panel.x1) {
             return Err(scope.failure(crate::layout::fit::FitKind::OverlayCollision, format!("horizontal bar significance mark {:?} does not clear its confidence interval and panel boundary; widen the x-axis range", mark.label)).into());
         }
-        data.claim_source_visits(bounds.len())?;
+
         if bounds.iter().any(|&(x0, x1, y0, y1)| {
             candidate.0 < x1 && x0 < candidate.1 && candidate.2 < y1 && y0 < candidate.3
         }) {

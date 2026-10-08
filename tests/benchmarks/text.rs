@@ -249,9 +249,7 @@ fn paragraph_case(multiline: bool) -> [Duration; 2] {
     } else {
         "Measured response".to_owned()
     };
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     theme.prepare_font_environment().unwrap();
     let mut previous = None;
     let mut elapsed_samples = [Duration::ZERO; 2];

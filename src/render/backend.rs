@@ -81,12 +81,7 @@ impl PointStyle {
         Self {
             color: color_from_rgb(color).with_alpha(209),
             radius,
-            outline: Some(
-                PointOutline::publication(
-                    &crate::font::canonical::OperationGenerationResources::new(),
-                )
-                .unwrap(),
-            ),
+            outline: Some(PointOutline::publication().unwrap()),
             shape: PointShape::Circle,
         }
     }
@@ -128,25 +123,19 @@ pub(crate) struct PointOutline {
 impl PointOutline {
     /// Construct the publication outline on the caller's operation ledger.
     #[cfg(test)]
-    pub(crate) fn publication(
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<Self, Error> {
-        Ok(crate::theme::PointOutlineTheme::publication(resources)?.backend_style())
+    pub(crate) fn publication() -> Result<Self, Error> {
+        Ok(crate::theme::PointOutlineTheme::publication()?.backend_style())
     }
 
     /// Resolve the outline stroke width for the given point radius.
     pub(crate) fn width_for_radius(
         &self,
         radius: u32,
-        resources: &crate::font::canonical::OperationGenerationResources,
     ) -> Result<coordinates::CanonicalCoordinate, Error> {
         let width = self
             .width_ratio
-            .product(crate::theme::LocalMetric::css_pixels(radius)?, resources)?
-            .round(
-                crate::layout::kernel::SpatialRounding::NearestEven,
-                resources,
-            )?
+            .product(crate::theme::LocalMetric::css_pixels(radius)?)
+            .round(crate::layout::kernel::SpatialRounding::NearestEven)?
             .quanta();
         if width > (1_i64 << 53) - 1 || (width == 0 && !self.width_ratio.is_zero()) {
             return Err(Error::Render("point outline width exceeds canonical coordinates or its positive extent collapses".into()));
@@ -158,105 +147,47 @@ impl PointOutline {
 #[cfg(test)]
 mod relative_outline_tests {
     use super::*;
-    use crate::font::canonical::OperationGenerationResources;
+
     use crate::theme::RelativeSpacing;
 
     #[test]
-    fn publication_outline_construction_admits_exact_work_and_bytes_before_retention() {
-        // One shared handle, a two-integer-plus-float payload, Arc counters,
-        // then four one-limb operands with doubled limb capacity and headers.
-        let header = (std::mem::size_of::<RelativeSpacing>()
-            + 2 * std::mem::size_of::<num_bigint::BigUint>()
-            + std::mem::size_of::<f64>()
-            + 2 * std::mem::size_of::<usize>()) as u64;
-        let bytes = header + 4 * (16 + std::mem::size_of::<num_bigint::BigUint>() as u64);
-        let visits = 5; // handle entry plus the four bounded one-limb operands
-        for (work_limit, byte_limit) in [
-            (0, bytes),
-            (visits, 0),
-            (visits - 1, bytes),
-            (visits, bytes - 1),
-            (visits, bytes),
-        ] {
-            let resources = OperationGenerationResources::with_test_limits(work_limit, byte_limit);
-            let result = PointOutline::publication(&resources);
-            if (work_limit, byte_limit) == (visits, bytes) {
-                let outline = result.unwrap();
-                assert_eq!(
-                    outline.width_ratio.as_f64().to_bits(),
-                    0x3fb9_9999_9999_999a
-                );
-                assert_eq!(resources.usage().unwrap().1, visits);
-                assert_eq!(resources.byte_usage().unwrap(), bytes);
-                assert!(PointOutline::publication(&resources.clone()).is_err());
-            } else {
-                assert!(result.is_err());
-                assert_eq!(
-                    resources.byte_usage().unwrap(),
-                    if work_limit > 0 && byte_limit > 0 {
-                        header
-                    } else {
-                        0
-                    }
-                );
-            }
-        }
-    }
-
-    #[test]
     fn outline_retains_source_bits_and_resolves_exact_radius_quanta() {
-        let resources = OperationGenerationResources::new();
-        let outline = PointOutline::publication(&resources).unwrap();
+        let outline = PointOutline::publication().unwrap();
         assert_eq!(
             outline.width_ratio.as_f64().to_bits(),
             0x3fb9_9999_9999_999a
         );
         assert_ne!(outline.width_ratio, RelativeSpacing::ratio(1, 10).unwrap());
         for (radius, width) in [(1, 102), (2, 205), (3, 307), (4, 410)] {
-            assert_eq!(
-                outline
-                    .width_for_radius(radius, &resources)
-                    .unwrap()
-                    .units(),
-                width
-            );
+            assert_eq!(outline.width_for_radius(radius).unwrap().units(), width);
         }
         let ratio = PointOutline {
             color: Color::rgb(255, 255, 255),
             width_ratio: RelativeSpacing::ratio(5, 14).unwrap(),
         };
-        assert_eq!(
-            ratio.width_for_radius(14, &resources).unwrap().units(),
-            5120
-        );
+        assert_eq!(ratio.width_for_radius(14).unwrap().units(), 5120);
         let copy = ratio.clone();
         assert_eq!(copy, ratio);
     }
 
     #[test]
-    fn outline_refuses_collapse_overflow_and_entry_budget_exhaustion() {
-        let resources = OperationGenerationResources::new();
+    fn outline_refuses_collapse_and_overflow() {
         let outline = |width_ratio| PointOutline {
             color: Color::rgb(0, 0, 0),
             width_ratio,
         };
         assert!(outline(RelativeSpacing::ratio(1, 4096).unwrap())
-            .width_for_radius(1, &resources)
+            .width_for_radius(1)
             .is_err());
         assert!(outline(RelativeSpacing::new(f64::MAX).unwrap())
-            .width_for_radius(1, &resources)
+            .width_for_radius(1)
             .is_err());
         // Fits i64 layout, exceeds exactly representable backend coordinates.
         assert!(outline(RelativeSpacing::new(8_796_093_022_208.0).unwrap())
-            .width_for_radius(1, &resources)
+            .width_for_radius(1)
             .is_err());
-        let default = PointOutline::publication(&resources).unwrap();
-        assert!(default.width_for_radius(0, &resources).is_err());
-        for (visits, bytes) in [(0, u64::MAX), (u128::MAX, 0)] {
-            let resources = OperationGenerationResources::with_test_limits(visits, bytes);
-            assert!(default.width_for_radius(3, &resources).is_err());
-            assert_eq!(resources.byte_usage().unwrap(), 0);
-        }
+        let default = PointOutline::publication().unwrap();
+        assert!(default.width_for_radius(0).is_err());
     }
 }
 
@@ -524,11 +455,7 @@ pub(crate) struct PlacedText {
 pub(crate) fn reserve_text_records<T>(
     records: &mut Vec<T>,
     additional: usize,
-    environment: &crate::font::canonical::PreparedFontEnvironment,
 ) -> Result<(), Error> {
-    environment
-        .claim_text_generation_slots(additional as u128)
-        .map_err(|error| Error::Render(format!("producer text slots: {error:?}")))?;
     if additional > records.capacity() - records.len() {
         let capacity = records
             .len()
@@ -536,13 +463,7 @@ pub(crate) fn reserve_text_records<T>(
             .zip(records.capacity().checked_mul(2))
             .map(|(required, doubled)| required.max(doubled).max(4))
             .ok_or_else(|| Error::Render("producer text capacity overflow".into()))?;
-        let bytes = capacity
-            .checked_mul(std::mem::size_of::<T>())
-            .and_then(|bytes| u64::try_from(bytes).ok())
-            .ok_or_else(|| Error::Render("producer text storage overflow".into()))?;
-        environment
-            .claim_unicode_bytes(bytes)
-            .map_err(|error| Error::Render(format!("producer text bytes: {error}")))?;
+
         records
             .try_reserve_exact(capacity - records.len())
             .map_err(|_| Error::Render("producer text allocation failed".into()))?;
@@ -1151,9 +1072,7 @@ pub(crate) fn validate_bracket_label(
     if call.label.exact_override != plan.style.exact_override
         || call.bracket.label != plan.source
         || call.style.label_color != plan.style.paint
-        || !plan
-            .same_stack(&call.style.font_family)
-            .map_err(|error| Error::Render(error.to_string()))?
+        || !plan.same_stack(&call.style.font_family)
         || call.style.font_size != plan.style.font_size
         || call.style.weight != plan.style.weight
     {
@@ -1218,37 +1137,13 @@ pub(crate) fn finish_scope<T>(
 #[cfg(test)]
 mod tests {
     #[test]
-    fn producer_record_storage_refuses_before_allocating() {
-        use crate::font::canonical::PreparedFontEnvironment;
-        for resource in ["slots", "bytes"] {
-            let environment = PreparedFontEnvironment::synthetic();
-            if resource == "slots" {
-                environment
-                    .claim_text_generation_slots(
-                        1_000_000 - environment.generation_resources().usage().unwrap().0,
-                    )
-                    .unwrap();
-            } else {
-                let used = environment.resource_usage().unwrap().font_bytes;
-                environment
-                    .claim_unicode_bytes(u64::try_from(536_870_912 - used).unwrap())
-                    .unwrap();
-            }
-            let mut records = Vec::<super::PlacedText>::new();
-            assert!(
-                super::reserve_text_records(&mut records, 1, &environment).is_err(),
-                "{resource}"
-            );
-            assert_eq!(records.capacity(), 0);
-        }
-        let environment = PreparedFontEnvironment::synthetic();
-        environment
-            .claim_processing_visits(
-                1_000_000 - environment.resource_usage().unwrap().processing_visits,
-            )
-            .unwrap();
+    fn producer_record_storage_refuses_unrepresentable_capacity() {
         let mut records = Vec::<super::PlacedText>::new();
-        super::reserve_text_records(&mut records, 1, &environment).unwrap();
+        assert!(super::reserve_text_records(&mut records, usize::MAX).is_err());
+        assert_eq!(records.capacity(), 0);
+
+        let mut records = Vec::<super::PlacedText>::new();
+        super::reserve_text_records(&mut records, 1).unwrap();
         assert!(
             records.capacity() >= 1,
             "record retention has no processing price"

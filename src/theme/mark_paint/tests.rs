@@ -284,7 +284,7 @@ fn point_roles_share_the_exact_ratio_and_apply_outline_policy_once() {
     assert_eq!(source.fill_alpha(), 17);
     assert_eq!(source.shape(), PointShape::TriangleUp);
     assert_eq!(source.outline(), Some(&outline));
-    let resources = OperationGenerationResources::new();
+
     let style = source.backend_style((83, 97, 109), 14, true);
     assert_eq!(style.color, Color::rgba(83, 97, 109, 17));
     assert_eq!(style.radius, 14);
@@ -298,12 +298,7 @@ fn point_roles_share_the_exact_ratio_and_apply_outline_policy_once() {
         .width_ratio
         .shares_payload_with(outline.width_ratio()));
     assert_eq!(
-        style
-            .outline
-            .unwrap()
-            .width_for_radius(14, &resources)
-            .unwrap()
-            .units(),
+        style.outline.unwrap().width_for_radius(14).unwrap().units(),
         5120
     );
     assert!(source
@@ -338,15 +333,9 @@ fn point_roles_share_the_exact_ratio_and_apply_outline_policy_once() {
         .is_none());
     let tiny =
         PointOutlineTheme::new(paint, RelativeSpacing::new(f64::from_bits(1)).unwrap()).unwrap();
-    assert!(tiny
-        .backend_style()
-        .width_for_radius(1, &resources)
-        .is_err());
+    assert!(tiny.backend_style().width_for_radius(1).is_err());
     let large = PointOutlineTheme::new(paint, RelativeSpacing::new(f64::MAX).unwrap()).unwrap();
-    assert!(large
-        .backend_style()
-        .width_for_radius(1, &resources)
-        .is_err());
+    assert!(large.backend_style().width_for_radius(1).is_err());
 }
 
 #[test]

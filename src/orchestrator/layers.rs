@@ -8,12 +8,9 @@ use crate::spec::{AxisScale, PlotKind, PlotRenderResult};
 use crate::{GuideSpec, Plot};
 
 impl Plot {
-    pub(crate) fn projected_explicit_x_ticks(
-        &self,
-        data: crate::data::PlotData<'_>,
-    ) -> Result<Option<Vec<AxisTick>>, Error> {
+    pub(crate) fn projected_explicit_x_ticks(&self) -> Result<Option<Vec<AxisTick>>, Error> {
         self.explicit_x_ticks()
-            .map(|ticks| projected_x_ticks(self, ticks, data))
+            .map(|ticks| projected_x_ticks(self, ticks))
             .transpose()
     }
     pub(crate) fn validate_supplemental_configuration(&self, kind: PlotKind) -> Result<(), Error> {
@@ -84,12 +81,7 @@ pub(crate) struct GuideSnapshot {
 }
 
 impl GuideSnapshot {
-    pub(crate) fn validate_sources(
-        chart: &Plot,
-        ranges: [(f64, f64); 2],
-        data: crate::data::PlotData<'_>,
-    ) -> Result<(), Error> {
-        data.claim_source_visits(chart.guides().len())?;
+    pub(crate) fn validate_sources(chart: &Plot, ranges: [(f64, f64); 2]) -> Result<(), Error> {
         for (index, guide) in chart.guides().iter().enumerate() {
             guide_endpoints(guide, index, ranges[0], ranges[1])?;
         }
@@ -98,7 +90,7 @@ impl GuideSnapshot {
     pub(crate) fn measure(
         chart: &Plot,
         result: &PlotRenderResult,
-        data: crate::data::PlotData<'_>,
+
         geometry: &mut crate::render::geometry::GeometrySnapshot,
     ) -> Result<Self, Error> {
         let projection = &result.layout.projection;
@@ -118,9 +110,8 @@ impl GuideSnapshot {
         }
         let clip = projection.panel_box();
         let canonical_clip = crate::render::backend::validate_clip_region(clip)?.panel();
-        let lines =
-            data.collect_source(chart.guides().iter().enumerate().map(|(index, guide)| {
-                data.claim_source_visits(1)?;
+        let lines = crate::data::source::collect_source(chart.guides().iter().enumerate().map(
+            |(index, guide)| {
                 project_guide(
                     guide,
                     index,
@@ -128,7 +119,8 @@ impl GuideSnapshot {
                     projection.x_range(),
                     projection.y_range(),
                 )
-            }))?;
+            },
+        ))?;
         for (points, style) in &lines {
             geometry.line(points, style, Some(canonical_clip))?;
         }
@@ -148,12 +140,8 @@ impl GuideSnapshot {
     }
 }
 
-fn projected_x_ticks(
-    chart: &Plot,
-    ticks: &[AxisTick],
-    data: crate::data::PlotData<'_>,
-) -> Result<Vec<AxisTick>, Error> {
-    data.collect_source(ticks
+fn projected_x_ticks(chart: &Plot, ticks: &[AxisTick]) -> Result<Vec<AxisTick>, Error> {
+    crate::data::source::collect_source(ticks
         .iter()
         .enumerate()
         .map(|(index, tick)| {
@@ -168,17 +156,15 @@ fn projected_x_ticks(
                 }
                 #[cfg(test)]
                 super::measurements::count(super::measurements::Counter::ForestRawTickProjection);
-                crate::numeric::log10(tick.position, data.source_resources()?)?
+                crate::numeric::log10(tick.position)?
             };
-            Ok(AxisTick::new(position, data.copy_source_string(&tick.label)?))
+            Ok(AxisTick::new(position, crate::data::source::copy_source_string(&tick.label)?))
         }))
 }
 
 #[cfg(test)]
 #[test]
-fn projected_exact_ticks_admit_records_and_labels_before_transformation() {
-    use crate::font::canonical::{OperationGenerationResources, TextGenerationClaimError};
-
+fn projected_exact_ticks_validate_positions_and_preserve_labels() {
     let chart = Plot::forest(
         crate::CategoryValues::new("term", ["a"]).unwrap(),
         crate::NumericValues::new("value", [1.0]),
@@ -190,89 +176,17 @@ fn projected_exact_ticks_admit_records_and_labels_before_transformation() {
     )
     .scale(AxisScale::Log10)
     .erase();
-    for (records, bytes, message) in [
-        (0, u64::MAX, "record admission"),
-        (1, 0, "storage admission"),
-    ] {
-        let resources = OperationGenerationResources::with_test_limits(0, bytes);
-        resources.claim_slots(1_000_000 - records).unwrap();
-        let error = projected_x_ticks(
-            &chart,
-            &[AxisTick::new(0.0, "invalid")],
-            chart.data().with_axis_resources(&resources),
-        )
-        .unwrap_err();
-        assert!(
-            matches!(&error, Error::Render(actual) if actual.contains(message)),
-            "{error}"
-        );
-        assert_eq!(resources.usage().unwrap().1, 0);
-        assert_eq!(resources.byte_usage().unwrap(), 0);
-    }
-    let resources = OperationGenerationResources::with_test_limits(0, u64::MAX);
-    let error = projected_x_ticks(
-        &chart,
-        &[AxisTick::new(1.0, "valid")],
-        chart.data().with_axis_resources(&resources),
-    )
-    .unwrap_err();
-    let expected = TextGenerationClaimError::Limit {
-        resource: "root processing visits",
-        limit: 0,
-        cumulative_claim: 1,
-    };
+    let error = projected_x_ticks(&chart, &[AxisTick::new(0.0, "invalid")]).unwrap_err();
     assert!(
-        matches!(&error, Error::Render(message) if message == &format!("log10 work admission: {expected:?}")),
+        matches!(&error, Error::Data(message) if message.contains("strictly positive")),
         "{error}"
     );
-    assert_eq!(resources.usage().unwrap(), (1, 0));
-    assert_eq!(
-        resources.byte_usage().unwrap(),
-        u64::try_from(std::mem::size_of::<AxisTick>()).unwrap()
-    );
-    let resources = OperationGenerationResources::new();
+
     let ticks = [AxisTick::new(0.1, "lower"), AxisTick::new(10.0, "upper")];
     assert_eq!(
-        projected_x_ticks(&chart, &ticks, chart.data().with_axis_resources(&resources)).unwrap(),
+        projected_x_ticks(&chart, &ticks).unwrap(),
         [AxisTick::new(-1.0, "lower"), AxisTick::new(1.0, "upper")]
     );
-}
-
-#[cfg(test)]
-#[test]
-fn ten_thousand_log_ticks_share_the_root_work_ceiling_before_fonts() {
-    let chart = Plot::forest(
-        crate::CategoryValues::new("term", ["a"]).unwrap(),
-        crate::NumericValues::new("estimate", [1.5]),
-        crate::Bounds::new(
-            crate::NumericValues::new("lower", [1.0]),
-            crate::NumericValues::new("upper", [2.0]),
-        ),
-        1.0,
-    )
-    .scale(AxisScale::Log10)
-    .erase();
-    let ticks: Vec<_> = (1..=10_000)
-        .map(|index| AxisTick::new(1.0 + f64::from(index) / 10_001.0, ""))
-        .collect();
-    let resources = crate::font::canonical::OperationGenerationResources::new();
-    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-    let error = projected_x_ticks(&chart, &ticks, chart.data().with_axis_resources(&resources))
-        .unwrap_err();
-    assert!(
-        error.to_string().contains("log10 work admission"),
-        "{error}"
-    );
-    assert_eq!(resources.usage().unwrap().1, 1_000_000);
-    assert!(resources.byte_usage().unwrap() < 512 * 1024 * 1024);
-    assert_eq!(
-        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
-        0
-    );
-    assert!(projected_x_ticks(&chart, &ticks[..1], chart.data())
-        .unwrap_err()
-        .to_string()
-        .contains("current root resource ledger"));
 }
 
 fn project_guide(

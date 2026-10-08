@@ -1,5 +1,4 @@
 use super::*;
-use crate::font::canonical::OperationGenerationResources;
 use crate::theme::{AxisSpacing, FrameSides, FrameTheme, RelativeSpacing};
 
 #[test]
@@ -18,9 +17,7 @@ fn selected_sides_are_frozen_drawn_and_published_once_with_no_inactive_edge_rese
         ),
         (None, 0, false),
     ] {
-        let mut theme = crate::Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let stroke = theme.axes.frame().unwrap().stroke().clone();
         theme.axes = theme
             .axes
@@ -52,16 +49,14 @@ fn selected_sides_are_frozen_drawn_and_published_once_with_no_inactive_edge_rese
         if count == 1 {
             assert!(svg.contains("points=\"80,120 80,520\""));
         }
-        let geometry = plan.geometry_snapshot(&theme).unwrap();
+        let geometry = plan.geometry_snapshot().unwrap();
         assert_eq!(geometry.bounds().len(), count);
     }
 }
 
 #[test]
 fn ordinary_panel_does_not_paint_or_reserve_the_independent_cell_frame() {
-    let mut theme = crate::Theme::Publication
-        .resolve(&OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     let cell = theme
         .axes
         .cell_frame()
@@ -102,9 +97,7 @@ fn ordinary_panel_does_not_paint_or_reserve_the_independent_cell_frame() {
 
 #[test]
 fn zero_chrome_keeps_required_text_and_combines_fractional_gaps_before_hard_rounding() {
-    let mut theme = crate::Theme::Publication
-        .resolve(&OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     let zero = RelativeSpacing::ratio(0, 1).unwrap();
     // Against the actual selected font metrics, each gap is exactly one third
     // of a CSS quantum. Independent upward rounding would over-reserve a quantum.
@@ -147,35 +140,4 @@ fn zero_chrome_keeps_required_text_and_combines_fractional_gaps_before_hard_roun
     );
     assert_eq!(label.source, "I");
     assert_eq!(title.source, "I");
-}
-
-#[test]
-fn spacing_resolution_refusal_is_fatal_before_axis_text_or_painted_geometry() {
-    let theme = crate::Theme::Publication
-        .resolve(&OperationGenerationResources::new())
-        .unwrap();
-    let standard = super::super::StandardPanelInputs::new(&theme).unwrap();
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
-    let before = resources.usage().unwrap();
-    let bytes = resources.byte_usage().unwrap();
-    resources.set_test_limits(before.1, bytes);
-    let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
-    let layout = Layout::envelope(crate::layout::PanelBox::new(80.0, 480.0, 80.0, 480.0));
-    let result = layout.x_axis.measure(
-        &layout.projection,
-        AxisSide::Bottom,
-        &theme,
-        &standard,
-        &FitScope::root(),
-    );
-    assert!(matches!(result, Err(PlanError::Fatal(_))));
-    assert_eq!(resources.usage().unwrap(), before);
-    assert_eq!(resources.byte_usage().unwrap(), bytes);
-    assert_eq!(
-        crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
-        shapes
-    );
 }

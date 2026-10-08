@@ -815,26 +815,19 @@ merging/installation remains pre-font preparation and is not a later feedback
 operation. Freeze final strings, precision, face/glyph plans and placements once;
 outlined SVG and PNG replay them without numeric conversion or fresh shaping.
 
-## Admission, Determinism And Failure Boundaries
+## Storage, Determinism And Failure Boundaries
 
-Keep existing root quotas and source/text/work ownership. Known fixed inputs are
-admitted before traversal; variable comparisons/refinement iterations are charged
-before each guarded operation; buffers/temporary outputs/records are admitted
-before growth. Long affixes are constructor-valid but may fail actual operation
-admission or layout fit. No arbitrary small affix cap is introduced.
+Keep source/text ownership, checked real lengths and fallible buffer growth.
+The approved accounting simplification removes production quotas, work/byte
+prices and accounting-only parameters. Long affixes are constructor-valid but
+may fail actual representation, allocation or layout fit; there is no arbitrary
+small affix cap. Mathematical certificates, exact coefficient arithmetic and
+Forest temporary-size bounds remain required in their numeric owner.
 
-The same root ledger runs from scientific preparation through numeric conversion,
-font requirements, candidate retries, measurement, cache, feedback and capture.
-Retain the limits in spec05: one million processing visits/planning records/
-topology slots/call attempts/cache entries under their respective units, 512 MiB
-cumulative font/source/scratch bytes, and eight root rounds/guide trials. PNG's
-format-local limits remain PNG-local. Nothing about a scientific power entitles
-the formatter to reset resources or use another convergence driver.
-
-Certificates/refinement, failed precision lists and discarded candidate storage
-remain charged. Exact coefficient arithmetic and Forest temporary bounds are
-proved in their numeric owner before implementation. No production entry point
-may omit operation resources because a unit test has an unbudgeted helper.
+The existing root/guide coordination rules and PNG-local format limits in spec05
+remain. A formatter cannot introduce a second convergence driver or change the
+candidate sequence. Retain useful actual refinement/cache diagnostics in the
+existing test framework without cumulative resource scores or charging guards.
 
 Format choice is deterministic from exact operands/policy and complete set
 identity. Actual source text, fonts/units, constraints and consumed feedback
@@ -849,7 +842,7 @@ coordinate serialization are different owners and are not replaced by this API.
 | Invalid format field or actual categorical-axis instruction | Existing Data error before fonts |
 | Exact/generated numeric labels collide | Axis complete source miss; no selected subsequence |
 | Required guide/adaptive value set cannot be distinguished within bounds | Data presentation error before fonts |
-| Mathematical certificate, resource, arithmetic, allocation or font failure | Fatal; no coarsening, notation fallback or partial label |
+| Mathematical certificate, arithmetic, allocation or font failure | Fatal; no coarsening, notation fallback or partial label |
 | Complete measured label/guide/value/shelf cannot fit | Existing typed fit miss/root named consequences; no shrink/elision/precision lowering |
 | Exact caller tick labels collide geometrically | Existing caller-owned strict fit rejection; no formatting rescue |
 
@@ -924,7 +917,7 @@ later processing after the refused guard, not just assert that some error occurs
 | Exact/value conversion | `src/spec/tests.rs` numeric defaults, selective validation, counted census extremes; `plots/interval_estimate/extraction.rs::semantics_and_label_strings_obey_exact_limits_before_fonts` |
 | Axis grammar/source order | `layout/panel/sources/tests.rs::generated_labels_are_unique_and_covered_by_the_closed_census`, `numeric_formatting_uses_nearest_even_and_declared_thresholds`, exact-source/interval cases |
 | Fonts/census | `layout/text/requirements.rs` automatic/exact alphabet and contrast-role tests; `font/canonical.rs::retained_units_prefer_complete_faces_without_changing_scalar_or_primary_selection` plus new generated boundary requirements |
-| Continuous guides | `decorations/legend/descriptor.rs` unique-order/signed-zero and close-endpoint budget tests; `tests/heatmap/suite.rs::local_and_shared_guides_publish_the_same_distinct_close_numeric_labels` |
+| Continuous guides | `decorations/legend/descriptor.rs` unique-order/signed-zero and close-endpoint uniqueness tests; `tests/heatmap/suite.rs::local_and_shared_guides_publish_the_same_distinct_close_numeric_labels` |
 | Heatmap values/fit | retained census/refusal tests in `plots/heatmap/tests.rs`; integration suffix and strict cell-fit tests in `tests/heatmap/suite.rs` |
 | Estimate presence/fit | `tests/estimates/model_displays.rs::coefficient_fixed_value_labels_are_point_only_and_default_is_inert`; estimate attached-label pitch and expansion tests |
 | Totals/parents | `plots/waterfall/extraction.rs` topology/typed shelf/reserve cases; `tests/categorical/waterfall.rs::waterfall_full_svg_fingerprints` with numeric default-byte attribution |

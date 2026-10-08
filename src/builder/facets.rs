@@ -101,28 +101,19 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// Compare the computed inputs that Canvas/facet coordination can replace.
     /// All other source configuration is immutable for a root-local child owner.
-    pub(crate) fn same_composed_inputs(
-        &self,
-        other: &ComposedInputs,
-        data: crate::data::PlotData<'_>,
-    ) -> Result<bool, crate::Error> {
-        fn same_values<T: PartialEq>(
-            a: Option<&[T]>,
-            b: Option<&[T]>,
-            data: crate::data::PlotData<'_>,
-        ) -> Result<bool, crate::Error> {
+    pub(crate) fn same_composed_inputs(&self, other: &ComposedInputs) -> bool {
+        fn same_values<T: PartialEq>(a: Option<&[T]>, b: Option<&[T]>) -> bool {
             match (a, b) {
-                (None, None) => Ok(true),
+                (None, None) => true,
                 (Some(a), Some(b)) if a.len() == b.len() => {
                     for (a, b) in a.iter().zip(b) {
-                        data.claim_source_visits(1)?;
                         if a != b {
-                            return Ok(false);
+                            return false;
                         }
                     }
-                    Ok(true)
+                    true
                 }
-                _ => Ok(false),
+                _ => false,
             }
         }
         for (axis, other) in [
@@ -132,60 +123,41 @@ impl<K: crate::kind::Marker> Plot<K> {
             if axis.limits != other.limits
                 || axis.provenance != other.provenance
                 || axis.interval != other.interval
-                || !same_values(
-                    axis.exact_ticks.as_deref(),
-                    other.exact_ticks.as_deref(),
-                    data,
-                )?
+                || !same_values(axis.exact_ticks.as_deref(), other.exact_ticks.as_deref())
             {
-                return Ok(false);
+                return false;
             }
         }
         let range = |value: Option<(f64, f64)>| value.map(|(a, b)| (a.to_bits(), b.to_bits()));
-        Ok(
-            range(self.x_axis_spec.limits) == range(other.x_axis_spec.limits)
-                && range(self.y_axis_spec.limits) == range(other.y_axis_spec.limits)
-                && range(self.resolved_facet_x_range) == range(other.resolved_facet_x_range)
-                && same_values(
-                    self.global_hue_levels.as_deref(),
-                    other.global_hue_levels.as_deref(),
-                    data,
-                )?
-                && same_values(
-                    self.global_group_levels.as_deref(),
-                    other.global_group_levels.as_deref(),
-                    data,
-                )?
-                && same_values(
-                    self.global_collective_pairs.as_deref(),
-                    other.global_collective_pairs.as_deref(),
-                    data,
-                )?
-                && same_values(
-                    self.global_line_condition_levels.as_deref(),
-                    other.global_line_condition_levels.as_deref(),
-                    data,
-                )?
-                && self.axis_gutter_owner == other.axis_gutter_owner
-                && self.y_tick_labels_visible == other.y_tick_labels_visible
-                && self.render_scope == other.render_scope
-                && self.legend_policy == other.legend_policy
-                && self.suppress_continuous_guide == other.suppress_continuous_guide
-                && (self.width, self.height) == (other.width, other.height),
-        )
+        range(self.x_axis_spec.limits) == range(other.x_axis_spec.limits)
+            && range(self.y_axis_spec.limits) == range(other.y_axis_spec.limits)
+            && range(self.resolved_facet_x_range) == range(other.resolved_facet_x_range)
+            && same_values(
+                self.global_hue_levels.as_deref(),
+                other.global_hue_levels.as_deref(),
+            )
+            && same_values(
+                self.global_group_levels.as_deref(),
+                other.global_group_levels.as_deref(),
+            )
+            && same_values(
+                self.global_collective_pairs.as_deref(),
+                other.global_collective_pairs.as_deref(),
+            )
+            && same_values(
+                self.global_line_condition_levels.as_deref(),
+                other.global_line_condition_levels.as_deref(),
+            )
+            && self.axis_gutter_owner == other.axis_gutter_owner
+            && self.y_tick_labels_visible == other.y_tick_labels_visible
+            && self.render_scope == other.render_scope
+            && self.legend_policy == other.legend_policy
+            && self.suppress_continuous_guide == other.suppress_continuous_guide
+            && (self.width, self.height) == (other.width, other.height)
     }
 
-    pub(crate) fn retain_composed_inputs(
-        &self,
-        environment: &crate::font::canonical::PreparedFontEnvironment,
-    ) -> Result<ComposedInputs, crate::Error> {
+    pub(crate) fn retain_composed_inputs(&self) -> Result<ComposedInputs, crate::Error> {
         let copy = |source: &str| -> Result<String, crate::Error> {
-            environment
-                .claim_unicode_bytes(
-                    u64::try_from(source.len())
-                        .map_err(|_| crate::Error::Render("child input bytes overflow".into()))?,
-                )
-                .map_err(|error| crate::Error::Render(error.to_string()))?;
             let mut value = String::new();
             value
                 .try_reserve_exact(source.len())
@@ -203,11 +175,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             target.interval = source.interval;
             if let Some(ticks) = &source.exact_ticks {
                 let mut retained = Vec::new();
-                crate::render::backend::reserve_text_records(
-                    &mut retained,
-                    ticks.len(),
-                    environment,
-                )?;
+                crate::render::backend::reserve_text_records(&mut retained, ticks.len())?;
                 for tick in ticks {
                     retained.push(crate::AxisTick {
                         position: tick.position,
@@ -225,11 +193,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         ]) {
             if let Some(source) = source {
                 let mut retained = Vec::new();
-                crate::render::backend::reserve_text_records(
-                    &mut retained,
-                    source.len(),
-                    environment,
-                )?;
+                crate::render::backend::reserve_text_records(&mut retained, source.len())?;
                 for value in source {
                     retained.push(copy(value)?);
                 }
@@ -238,7 +202,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         }
         let pairs = if let Some(source) = &self.global_collective_pairs {
             let mut retained = Vec::new();
-            crate::render::backend::reserve_text_records(&mut retained, source.len(), environment)?;
+            crate::render::backend::reserve_text_records(&mut retained, source.len())?;
             for pair in source {
                 retained.push(crate::data::CollectivePair {
                     group: pair.group.as_deref().map(&copy).transpose()?,

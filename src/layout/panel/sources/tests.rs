@@ -4,15 +4,11 @@
 )]
 use super::super::projection::{projection_key, ratio_position};
 use super::*;
-use crate::font::canonical::OperationGenerationResources;
 
 #[test]
-fn resource_audit_numeric_axis_ticket_charges_one_owner_and_refusal_never_coarsens() {
-    let theme = crate::Theme::Publication
-        .resolve(&OperationGenerationResources::new())
-        .unwrap();
-    let environment = theme.prepared_font_environment().unwrap();
-    let resources = environment.generation_resources();
+fn repeated_numeric_axis_selection_preserves_ticks_without_reshaping() {
+    let theme = crate::Theme::Publication.resolve().unwrap();
+
     let projection = Projection::new((0.0, 1.0), (0.0, 1.0), (0.0, 1000.0, 0.0, 1000.0));
     let scope = crate::layout::fit::FitScope::root();
     let first = numeric_tick_plan(
@@ -26,9 +22,8 @@ fn resource_audit_numeric_axis_ticket_charges_one_owner_and_refusal_never_coarse
         &scope,
     )
     .unwrap();
-    let calls = resources.call_cache_usage().0;
-    let admission = environment.claim_measurement_call().unwrap();
-    let second = NumericTickPlan::measure_in_call(
+
+    let second = NumericTickPlan::measure_selected_source(
         (0.0, 1.0),
         None,
         false,
@@ -37,17 +32,10 @@ fn resource_audit_numeric_axis_ticket_charges_one_owner_and_refusal_never_coarse
         &theme,
         false,
         &scope,
-        &admission,
     )
     .unwrap();
     assert_eq!(first.ticks, second.ticks);
-    assert_eq!(resources.call_cache_usage().0, 2 * calls);
-    resources.claim_calls(1_000_000 - 2 * calls).unwrap();
-    let before = (
-        resources.usage().unwrap(),
-        resources.byte_usage().unwrap(),
-        resources.call_cache_usage(),
-    );
+
     crate::font::canonical::FONT_SHAPE_CALLS.with(|count| count.set(0));
     let result = numeric_tick_plan(
         (0.0, 1.0),
@@ -59,18 +47,8 @@ fn resource_audit_numeric_axis_ticket_charges_one_owner_and_refusal_never_coarse
         false,
         &scope,
     );
-    assert!(matches!(
-        result,
-        Err(crate::layout::fit::PlanError::Fatal(_))
-    ));
-    assert_eq!(
-        (
-            resources.usage().unwrap(),
-            resources.byte_usage().unwrap(),
-            resources.call_cache_usage()
-        ),
-        before
-    );
+    assert_eq!(result.unwrap().ticks, first.ticks);
+
     crate::font::canonical::FONT_SHAPE_CALLS.with(|count| assert_eq!(count.get(), 0));
 }
 
@@ -107,7 +85,7 @@ fn common_step_admits_complete_counts_and_exact_integral_indices() {
 
 #[test]
 fn common_step_uses_index_products_not_accumulated_addition_or_endpoint_tolerance() {
-    let positions = linear_positions((0.0, 1.0), 0.1, None).unwrap().unwrap();
+    let positions = linear_positions((0.0, 1.0), 0.1).unwrap().unwrap();
     for (index, position) in positions.iter().enumerate() {
         assert_eq!(position.to_bits(), (index as f64 * 0.1).to_bits());
     }
@@ -116,7 +94,7 @@ fn common_step_uses_index_products_not_accumulated_addition_or_endpoint_toleranc
     // domain. The whole source misses, rather than dropping that first tick.
     let step = 0.1;
     let lo = 0.3_f64.next_up();
-    if let Some(positions) = linear_positions((lo, 0.9), step, None).unwrap() {
+    if let Some(positions) = linear_positions((lo, 0.9), step).unwrap() {
         assert!(positions
             .iter()
             .all(|position| *position >= lo && *position <= 0.9));
@@ -126,18 +104,18 @@ fn common_step_uses_index_products_not_accumulated_addition_or_endpoint_toleranc
 #[test]
 fn adaptive_step_uses_decimal_table_ties_and_scaled_extreme_subtraction() {
     assert_eq!(
-        adaptive_positions((0.0, 100.0), 5, None).unwrap().unwrap(),
+        adaptive_positions((0.0, 100.0), 5).unwrap().unwrap(),
         [0.0, 25.0, 50.0, 75.0, 100.0]
     );
     assert_eq!(
-        adaptive_positions((-f64::MAX, f64::MAX), 5, None)
+        adaptive_positions((-f64::MAX, f64::MAX), 5)
             .unwrap()
             .unwrap(),
         [-1e308, 0.0, 1e308]
     );
     let adjacent = (1.0, 1.0_f64.next_up());
     assert_eq!(
-        adaptive_positions(adjacent, 10_000, None).unwrap().unwrap(),
+        adaptive_positions(adjacent, 10_000).unwrap().unwrap(),
         [adjacent.0, adjacent.1]
     );
     assert_eq!(decimal_power(-323), "1e-323".parse::<f64>().unwrap());
@@ -149,7 +127,7 @@ fn adaptive_step_uses_decimal_table_ties_and_scaled_extreme_subtraction() {
         (1.0, 1.000_000_000_000_01),
     ] {
         for seed in [1, 2, 10, 10_000] {
-            if let Some(positions) = adaptive_positions(range, seed, None).unwrap() {
+            if let Some(positions) = adaptive_positions(range, seed).unwrap() {
                 assert!((2..=10_000).contains(&positions.len()));
                 assert!(positions.windows(2).all(|pair| pair[0] < pair[1]));
                 assert!(positions
@@ -162,10 +140,6 @@ fn adaptive_step_uses_decimal_table_ties_and_scaled_extreme_subtraction() {
 
 #[test]
 fn adaptive_source_order_is_seed_descending_then_one_midpoint() {
-    let theme = crate::Theme::Publication
-        .resolve(&OperationGenerationResources::new())
-        .unwrap();
-    let environment = theme.prepared_font_environment().unwrap();
     let mut sources = Sources::new((0.0, 10.0), false, None, 4).unwrap();
     assert_eq!(sources.cap, 5);
     for (ordinal, kind) in [
@@ -178,7 +152,7 @@ fn adaptive_source_order_is_seed_descending_then_one_midpoint() {
     .into_iter()
     .enumerate()
     {
-        let (source, _) = sources.next(environment).unwrap();
+        let (source, _) = sources.next().unwrap();
         assert_eq!(
             source,
             TickSource {
@@ -189,7 +163,7 @@ fn adaptive_source_order_is_seed_descending_then_one_midpoint() {
         );
     }
     assert!(sources
-        .next(environment)
+        .next()
         .unwrap_err()
         .to_string()
         .contains("cap exhausted"));
@@ -197,44 +171,33 @@ fn adaptive_source_order_is_seed_descending_then_one_midpoint() {
 
 #[test]
 fn additive_sources_are_requested_first_then_complete_decimal_coarsenings() {
-    let theme = crate::Theme::Publication
-        .resolve(&OperationGenerationResources::new())
-        .unwrap();
-    let environment = theme.prepared_font_environment().unwrap();
     let mut sources =
         Sources::new((-7.0, 9.0), false, Some(TickInterval::Additive(1.0)), 100).unwrap();
     for (ordinal, step) in [1.0, 2.0, 3.0, 5.0, 10.0, 20.0, 30.0, 50.0]
         .into_iter()
         .enumerate()
     {
-        let (source, positions) = sources.next(environment).unwrap();
+        let (source, positions) = sources.next().unwrap();
         assert_eq!(source.kind, SourceKind::Additive(step));
         assert_eq!(source.ordinal, ordinal);
-        assert_eq!(
-            positions,
-            linear_positions((-7.0, 9.0), step, None).unwrap()
-        );
+        assert_eq!(positions, linear_positions((-7.0, 9.0), step).unwrap());
     }
-    let (source, positions) = sources.next(environment).unwrap();
+    let (source, positions) = sources.next().unwrap();
     assert_eq!(source.kind, SourceKind::Midpoint);
     assert_eq!(positions.unwrap(), [1.0]);
 }
 
 #[test]
 fn dense_and_empty_interval_misses_do_not_poison_coarser_sources() {
-    let theme = crate::Theme::Publication
-        .resolve(&OperationGenerationResources::new())
-        .unwrap();
-    let environment = theme.prepared_font_environment().unwrap();
     let mut dense =
         Sources::new((0.0, 10_000.0), false, Some(TickInterval::Additive(1.0)), 2).unwrap();
-    assert!(dense.next(environment).unwrap().1.is_none());
-    let (source, positions) = dense.next(environment).unwrap();
+    assert!(dense.next().unwrap().1.is_none());
+    let (source, positions) = dense.next().unwrap();
     assert_eq!(source.kind, SourceKind::Additive(2.0));
     assert_eq!(positions.unwrap().len(), 5001);
     let mut empty = Sources::new((1.1, 1.2), false, Some(TickInterval::Additive(1.0)), 2).unwrap();
     loop {
-        let (source, positions) = empty.next(environment).unwrap();
+        let (source, positions) = empty.next().unwrap();
         if source.kind == SourceKind::Midpoint {
             assert_eq!(positions.unwrap(), [f64::midpoint(1.1, 1.2)]);
             break;
@@ -245,10 +208,6 @@ fn dense_and_empty_interval_misses_do_not_poison_coarser_sources() {
 
 #[test]
 fn additive_full_binary64_span_stays_within_declared_cap() {
-    let theme = crate::Theme::Publication
-        .resolve(&OperationGenerationResources::new())
-        .unwrap();
-    let environment = theme.prepared_font_environment().unwrap();
     let mut sources = Sources::new(
         (1.0, f64::MAX),
         false,
@@ -258,7 +217,7 @@ fn additive_full_binary64_span_stays_within_declared_cap() {
     .unwrap();
     let mut previous = 0.0;
     loop {
-        let (source, _) = sources.next(environment).unwrap();
+        let (source, _) = sources.next().unwrap();
         assert!(source.ordinal < source.cap);
         match source.kind {
             SourceKind::Additive(step) => {
@@ -273,10 +232,6 @@ fn additive_full_binary64_span_stays_within_declared_cap() {
 
 #[test]
 fn logarithmic_interval_vectors_are_divisible_integral_exponents_not_subsequences() {
-    let theme = crate::Theme::Publication
-        .resolve(&OperationGenerationResources::new())
-        .unwrap();
-    let environment = theme.prepared_font_environment().unwrap();
     let mut sources = Sources::new(
         (-400.0, 400.0),
         true,
@@ -285,7 +240,7 @@ fn logarithmic_interval_vectors_are_divisible_integral_exponents_not_subsequence
     )
     .unwrap();
     for step in [2, 4, 6, 10, 20, 40, 60, 100] {
-        let (source, positions) = sources.next(environment).unwrap();
+        let (source, positions) = sources.next().unwrap();
         assert_eq!(source.kind, SourceKind::LogInterval(step));
         let expected = (-323..=308)
             .filter(|exponent| i64::from(*exponent) % i64::try_from(step).unwrap() == 0)
@@ -296,11 +251,7 @@ fn logarithmic_interval_vectors_are_divisible_integral_exponents_not_subsequence
 }
 
 #[test]
-fn logarithmic_empty_intersection_charges_one_miss_then_original_midpoint() {
-    let theme = crate::Theme::Publication
-        .resolve(&OperationGenerationResources::new())
-        .unwrap();
-    let environment = theme.prepared_font_environment().unwrap();
+fn logarithmic_empty_intersection_falls_back_to_the_original_midpoint() {
     let mut sources = Sources::new(
         (400.0, 500.0),
         true,
@@ -308,8 +259,8 @@ fn logarithmic_empty_intersection_charges_one_miss_then_original_midpoint() {
         100,
     )
     .unwrap();
-    assert_eq!(sources.next(environment).unwrap().1, None);
-    let (source, positions) = sources.next(environment).unwrap();
+    assert_eq!(sources.next().unwrap().1, None);
+    let (source, positions) = sources.next().unwrap();
     assert_eq!(source.ordinal, 1);
     assert_eq!(source.kind, SourceKind::Midpoint);
     assert_eq!(positions.unwrap(), [450.0]);
@@ -317,10 +268,6 @@ fn logarithmic_empty_intersection_charges_one_miss_then_original_midpoint() {
 
 #[test]
 fn logarithmic_integer_overflow_terminates_without_wrapping() {
-    let theme = crate::Theme::Publication
-        .resolve(&OperationGenerationResources::new())
-        .unwrap();
-    let environment = theme.prepared_font_environment().unwrap();
     let mut sources = Sources::new(
         (-3.0, 3.0),
         true,
@@ -328,33 +275,20 @@ fn logarithmic_integer_overflow_terminates_without_wrapping() {
         100,
     )
     .unwrap();
-    assert_eq!(sources.next(environment).unwrap().1.unwrap(), [0.0]);
-    assert_eq!(
-        sources.next(environment).unwrap().0.kind,
-        SourceKind::Midpoint
-    );
+    assert_eq!(sources.next().unwrap().1.unwrap(), [0.0]);
+    assert_eq!(sources.next().unwrap().0.kind, SourceKind::Midpoint);
 }
 
 #[test]
 fn logarithmic_automatic_order_has_full_integrals_then_even_indices() {
-    let theme = crate::Theme::Publication
-        .resolve(&OperationGenerationResources::new())
-        .unwrap();
-    let environment = theme.prepared_font_environment().unwrap();
     let mut sources = Sources::new((-3.0, 3.0), true, None, 3).unwrap();
     assert_eq!(
-        sources.next(environment).unwrap().1.unwrap(),
+        sources.next().unwrap().1.unwrap(),
         [-3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0]
     );
-    assert_eq!(
-        sources.next(environment).unwrap().1.unwrap(),
-        [-3.0, 0.0, 3.0]
-    );
-    assert_eq!(sources.next(environment).unwrap().1.unwrap(), [-3.0, 3.0]);
-    assert_eq!(
-        sources.next(environment).unwrap().0.kind,
-        SourceKind::Midpoint
-    );
+    assert_eq!(sources.next().unwrap().1.unwrap(), [-3.0, 0.0, 3.0]);
+    assert_eq!(sources.next().unwrap().1.unwrap(), [-3.0, 3.0]);
+    assert_eq!(sources.next().unwrap().0.kind, SourceKind::Midpoint);
 }
 
 #[test]
@@ -372,9 +306,7 @@ fn source_semantics_reject_before_fonts() {
         ((0.0, 1.0), true, Some(TickInterval::Additive(1.0))),
         ((0.0, 1.0), false, Some(TickInterval::Log10Decades(1))),
     ] {
-        let theme = crate::Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let projection = Projection::new(range, range, (0.0, 1000.0, 0.0, 1000.0));
         assert!(numeric_tick_plan(
@@ -396,37 +328,8 @@ fn source_semantics_reject_before_fonts() {
 }
 
 #[test]
-fn source_admission_refuses_before_position_storage_or_ordinal_advancement() {
-    let theme = crate::Theme::Publication
-        .resolve(&OperationGenerationResources::new())
-        .unwrap();
-    let environment = theme.prepared_font_environment().unwrap();
-    let used = environment.generation_resources().usage().unwrap().0;
-    environment
-        .claim_text_generation_slots(1_000_000 - used)
-        .unwrap();
-    let before = environment.resource_usage().unwrap().font_bytes;
-    let mut sources = Sources::new((0.0, 1.0), false, None, 10_000).unwrap();
-    assert!(sources
-        .next(environment)
-        .unwrap_err()
-        .to_string()
-        .contains("axis source admission"));
-    assert_eq!(sources.ordinal, 0);
-    assert_eq!(environment.resource_usage().unwrap().font_bytes, before);
-}
-
-#[test]
-fn dense_source_miss_has_no_position_allocation_charge() {
-    let theme = crate::Theme::Publication
-        .resolve(&OperationGenerationResources::new())
-        .unwrap();
-    let environment = theme.prepared_font_environment().unwrap();
-    let before = environment.resource_usage().unwrap().font_bytes;
-    assert!(linear_positions((0.0, 10_000.0), 1.0, Some(environment))
-        .unwrap()
-        .is_none());
-    assert_eq!(environment.resource_usage().unwrap().font_bytes, before);
+fn dense_source_returns_a_miss_without_positions() {
+    assert!(linear_positions((0.0, 10_000.0), 1.0).unwrap().is_none());
 }
 
 #[test]
@@ -461,9 +364,7 @@ fn projection_keys_are_exact_at_endpoints_midpoints_and_subnormal_fractions() {
 
 #[test]
 fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
-    let theme = crate::Theme::Publication
-        .resolve(&OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let projection = Projection::new((0.0, 100.0), (0.0, 100.0), (0.0, 1000.0, 0.0, 1000.0));
     let plan = numeric_tick_plan(
         (0.0, 100.0),
@@ -500,21 +401,15 @@ fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
             .iter()
             .map(|tick| tick.position)
             .collect::<Vec<_>>(),
-        linear_positions((0.0, 100.0), step, None).unwrap().unwrap()
+        linear_positions((0.0, 100.0), step).unwrap().unwrap()
     );
 }
 
 #[test]
 fn midpoint_is_conditional_and_must_itself_fit() {
-    let theme = crate::Theme::Publication
-        .resolve(&OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let scope = crate::layout::fit::FitScope::root()
-        .child(
-            crate::layout::AddressRole::FacetCell,
-            3,
-            &crate::font::canonical::OperationGenerationResources::new(),
-        )
+        .child(crate::layout::AddressRole::FacetCell, 3)
         .unwrap();
     for width in [1.0, 100.0] {
         let projection = Projection::new((1.1, 1.2), (0.0, 1.0), (0.0, width, 0.0, 100.0));
@@ -535,11 +430,7 @@ fn midpoint_is_conditional_and_must_itself_fit() {
             assert_eq!(
                 failure.reason,
                 scope
-                    .child(
-                        crate::layout::AddressRole::AxisBottom,
-                        0,
-                        &crate::font::canonical::OperationGenerationResources::new()
-                    )
+                    .child(crate::layout::AddressRole::AxisBottom, 0)
                     .unwrap()
                     .failure(crate::layout::fit::FitKind::Tick, "")
                     .reason
@@ -551,33 +442,10 @@ fn midpoint_is_conditional_and_must_itself_fit() {
 }
 
 #[test]
-fn numeric_source_resource_and_font_failures_remain_fatal() {
+fn numeric_source_invalid_range_and_font_failures_remain_fatal() {
     use crate::layout::fit::{PlanError, ROOT_SCOPE};
-    let theme = crate::Theme::Publication
-        .resolve(&OperationGenerationResources::new())
-        .unwrap();
-    let environment = theme.prepared_font_environment().unwrap();
-    let used = environment.generation_resources().usage().unwrap().0;
-    environment
-        .claim_text_generation_slots(1_000_000 - used)
-        .unwrap();
     let projection = Projection::new((1.1, 1.2), (0.0, 1.0), (0.0, 1.0, 0.0, 100.0));
-    assert!(matches!(
-        numeric_tick_plan(
-            (1.1, 1.2),
-            None,
-            false,
-            &projection,
-            AxisSide::Bottom,
-            &theme,
-            false,
-            &ROOT_SCOPE
-        ),
-        Err(PlanError::Fatal(_))
-    ));
-    let mut theme = crate::Theme::Publication
-        .resolve(&OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     theme.typography.axes.tick_label.font_size = 0;
     assert!(matches!(
         numeric_tick_plan(
@@ -609,9 +477,7 @@ fn numeric_source_resource_and_font_failures_remain_fatal() {
 
 #[test]
 fn generated_labels_are_unique_and_covered_by_the_closed_census() {
-    let theme = crate::Theme::Publication
-        .resolve(&OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     for (range, log) in [
         ((1.000_000_000_000_01, 1.000_000_000_000_09), false),
         ((-400.0, 400.0), true),
@@ -648,14 +514,8 @@ fn generated_labels_are_unique_and_covered_by_the_closed_census() {
             }
         }
     }
-    assert_eq!(
-        format_label(-323.0, true, true, 0, None).unwrap(),
-        "1.00e-323"
-    );
-    assert_eq!(
-        format_label(308.0, true, true, 0, None).unwrap(),
-        "1.00e308"
-    );
+    assert_eq!(format_label(-323.0, true, true, 0).unwrap(), "1.00e-323");
+    assert_eq!(format_label(308.0, true, true, 0).unwrap(), "1.00e308");
     assert_eq!(super::super::range_ticks::format_tick(-0.0), "0");
 }
 
@@ -675,23 +535,18 @@ fn numeric_formatting_uses_nearest_even_and_declared_thresholds() {
         (1e12, "1.00e12"),
         (-1e12, "-1.00e12"),
     ] {
-        assert_eq!(
-            format_label(value, false, false, 0, None).unwrap(),
-            expected
-        );
+        assert_eq!(format_label(value, false, false, 0).unwrap(), expected);
     }
     assert_eq!(
-        format_label(-0.0, false, false, 17, None).unwrap(),
+        format_label(-0.0, false, false, 17).unwrap(),
         "0.00000000000000000e0"
     );
-    assert_eq!(format_label(0.5, true, false, 0, None).unwrap(), "10^0.5");
+    assert_eq!(format_label(0.5, true, false, 0).unwrap(), "10^0.5");
 }
 
 #[test]
 fn exact_source_overrides_intervals_and_provenance_survives_layout_cloning() {
-    let theme = crate::Theme::Publication
-        .resolve(&OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let x = super::super::AxisSpec {
         provenance: super::super::RangeProvenance::Configured,
         limits: Some((0.0, 10.0)),

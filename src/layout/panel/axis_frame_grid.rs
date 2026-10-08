@@ -154,9 +154,8 @@ struct FrozenAxisPlan {
 impl PanelAxisPlan {
     pub(crate) fn geometry_snapshot(
         &self,
-        theme: &ResolvedTheme,
     ) -> Result<crate::render::geometry::GeometrySnapshot, Error> {
-        let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+        let mut geometry = crate::render::geometry::GeometrySnapshot::new();
         if let Some(frame) = &self.frame {
             for side in frame.sides.iter().flatten() {
                 geometry.line(side, &frame.style, None)?;
@@ -312,14 +311,6 @@ impl Layout {
         semantics: [super::AxisSemanticInputs; 2],
         standard: impl FnOnce() -> Result<super::StandardPanelInputs, Error>,
     ) -> Result<PanelAxisPlan, PlanError> {
-        let resources = theme.prepared_font_environment()?.generation_resources();
-        theme
-            .prepared_font_environment()?
-            .claim_unicode_bytes(
-                u64::try_from(std::mem::size_of::<PanelAxisPlan>())
-                    .map_err(|_| Error::Render("axis plan storage overflow".into()))?,
-            )
-            .map_err(|error| Error::Render(format!("axis plan admission: {error}")))?;
         let standard = standard()?;
         // Evaluate both siblings: a later fatal error takes precedence over a fit miss.
         let x_axis = self.x_axis.measure(
@@ -327,14 +318,14 @@ impl Layout {
             AxisSide::Bottom,
             theme,
             &standard,
-            &scope.child(crate::layout::AddressRole::AxisBottom, 0, &resources)?,
+            &scope.child(crate::layout::AddressRole::AxisBottom, 0)?,
         );
         let y_axis = self.y_axis.measure(
             &self.projection,
             AxisSide::Left,
             theme,
             &standard,
-            &scope.child(crate::layout::AddressRole::AxisLeft, 0, &resources)?,
+            &scope.child(crate::layout::AddressRole::AxisLeft, 0)?,
         );
         let (x_axis, y_axis) = match (x_axis, y_axis) {
             (Err(PlanError::Fatal(error)), _) | (_, Err(PlanError::Fatal(error))) => {
@@ -356,7 +347,7 @@ impl Layout {
                 .len()
                 .checked_add(y_axis.ticks.len())
                 .ok_or_else(|| Error::Render("grid plan count overflow".into()))?;
-            fit::reserve(theme, &mut lines, count, "grid geometry")?;
+            fit::reserve(&mut lines, count, "grid geometry")?;
             for tick in &x_axis.ticks {
                 lines.push([
                     Point2D::new(tick.segment[0].x, y0),
@@ -492,10 +483,6 @@ impl Axis {
         standard: &super::StandardPanelInputs,
         scope: &FitScope,
     ) -> Result<FrozenAxisPlan, PlanError> {
-        theme
-            .prepared_font_environment()?
-            .claim_measurement_call()
-            .map_err(|error| Error::Render(format!("axis call admission: {error:?}")))?;
         let categorical = self.source == TickSource::SUPPLIED;
         let cells = cells::assign(
             &self.ticks,
@@ -503,7 +490,6 @@ impl Axis {
             self.assigned_cells.as_deref(),
             projection,
             side,
-            theme,
             scope,
         )?;
         let panel = projection.panel_box();
@@ -512,11 +498,10 @@ impl Axis {
         } else {
             0.0
         };
-        let resources = theme.prepared_font_environment()?.generation_resources();
+
         let lengths = standard.axes.spacing().lengths(
             standard.tick_label.font_size(),
             standard.axis_title.font_size(),
-            &resources,
         )?;
         let frame_half = standard
             .axes
@@ -531,22 +516,21 @@ impl Axis {
             .map(|ticks| crate::theme::axis::stroke_style(ticks.stroke()))
             .transpose()?;
         let tick_length = tick_appearance.map_or(0.0, |ticks| f64::from(ticks.length()));
-        let frame_offset = ExactLength::pixels(frame_half, &resources)?;
-        let tick_end = frame_offset.add_pixels(tick_length, &resources)?;
+        let frame_offset = ExactLength::pixels(frame_half)?;
+        let tick_end = frame_offset.add_pixels(tick_length)?;
         let outward = tick_end.add_pixels(
             tick_style
                 .as_ref()
                 .map_or(0.0, |style| f64::from(style.width) / 2.0),
-            &resources,
         )?;
         let anchor = match side {
             AxisSide::Bottom => panel.y0,
             AxisSide::Left => panel.x0,
         };
-        let segment_start = AxisLengths::before(&frame_offset, anchor, &resources)?;
-        let segment_end = AxisLengths::before(&tick_end, anchor, &resources)?;
+        let segment_start = AxisLengths::before(&frame_offset, anchor)?;
+        let segment_end = AxisLengths::before(&tick_end, anchor)?;
         let mut ticks = Vec::new();
-        fit::reserve(theme, &mut ticks, self.ticks.len(), "frozen axis ticks")?;
+        fit::reserve(&mut ticks, self.ticks.len(), "frozen axis ticks")?;
         let mut label_extent = 0.0_f64;
         let (gap, title_gap, title_width, tick_role, title_role) = match side {
             AxisSide::Bottom => (
@@ -591,14 +575,12 @@ impl Axis {
                     tick_role,
                     scope,
                 ))?;
-                let offset = outward.add(gap, &resources)?;
+                let offset = outward.add_length(gap);
                 let perpendicular = match side {
-                    AxisSide::Bottom => AxisLengths::before(
-                        &offset.add_pixels(plan.height() / 2.0, &resources)?,
-                        panel.y0,
-                        &resources,
-                    )?,
-                    AxisSide::Left => AxisLengths::before(&offset, panel.x0, &resources)?,
+                    AxisSide::Bottom => {
+                        AxisLengths::before(&offset.add_pixels(plan.height() / 2.0)?, panel.y0)?
+                    }
+                    AxisSide::Left => AxisLengths::before(&offset, panel.x0)?,
                 };
                 let placement = cell.placement(&plan, side, perpendicular)?.ok_or_else(|| {
                     scope.failure(
@@ -638,9 +620,7 @@ impl Axis {
         }
         let mut gutter = outward;
         if label_extent > 0.0 {
-            gutter = gutter
-                .add(gap, &resources)?
-                .add_pixels(label_extent, &resources)?;
+            gutter = gutter.add_length(gap).add_pixels(label_extent)?;
         }
         let title = if self.label.is_empty() {
             None
@@ -662,12 +642,8 @@ impl Axis {
                     AxisSide::Left => title_gap,
                 }
             };
-            gutter = gutter.add(separation, &resources)?;
-            let position = AxisLengths::before(
-                &gutter.add_pixels(plan.height() / 2.0, &resources)?,
-                anchor,
-                &resources,
-            )?;
+            gutter = gutter.add_length(separation);
+            let position = AxisLengths::before(&gutter.add_pixels(plan.height() / 2.0)?, anchor)?;
             let mut placement = match side {
                 AxisSide::Bottom => PlannedTextPlacement::middle(
                     Point2D::new(f64::midpoint(panel.x0, panel.x1), position),
@@ -700,11 +676,11 @@ impl Axis {
                     AxisSide::Left => plan.height() / 2.0 - ink.left,
                 });
             }
-            gutter = gutter.add_pixels(thickness, &resources)?;
+            gutter = gutter.add_pixels(thickness)?;
             Some((plan, placement))
         };
         if side == AxisSide::Left && title.is_some() {
-            gutter = gutter.add(&lengths.y_title_edge_padding, &resources)?;
+            gutter = gutter.add_length(&lengths.y_title_edge_padding);
         }
         let (start, end) = match side {
             AxisSide::Bottom => (panel.x0, panel.x1),
@@ -726,7 +702,7 @@ impl Axis {
             ticks,
             title,
             tick_style,
-            gutter: AxisLengths::hard(&gutter, &resources)?,
+            gutter: AxisLengths::hard(&gutter)?,
             start_overhang,
             end_overhang,
         })

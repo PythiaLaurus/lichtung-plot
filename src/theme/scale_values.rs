@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 
-use crate::font::canonical::OperationGenerationResources;
 use crate::spec::CategoricalColors;
 use crate::{Error, Result};
 
@@ -12,48 +11,27 @@ fn invalid(message: &str) -> Error {
     Error::Data(message.into())
 }
 
-/// Fallible construction; operation-owned assembly supplies its actual ledger.
-fn retain<T>(
-    values: impl IntoIterator<Item = T>,
-    resources: Option<&OperationGenerationResources>,
-) -> Result<Arc<Vec<T>>> {
-    if let Some(resources) = resources {
-        resources
-            .claim_visits(1)
-            .map_err(|e| Error::Render(format!("scale input header: {e:?}")))?;
-        resources
-            .claim_slots(1)
-            .map_err(|e| Error::Render(format!("scale input header: {e:?}")))?;
-        resources
-            .claim_bytes((size_of::<Vec<T>>() + 2 * size_of::<usize>()) as u64)
-            .map_err(|e| Error::Render(e.to_string()))?;
-    }
+/// Checked, fallible construction of immutable scale inputs.
+fn retain<T>(values: impl IntoIterator<Item = T>) -> Result<Arc<Vec<T>>> {
     let values = values.into_iter();
     let (minimum, maximum) = values.size_hint();
     let mut retained = Vec::new();
     if maximum == Some(minimum) && minimum > 0 {
-        reserve_input(&mut retained, minimum, resources)?;
+        reserve_input(&mut retained, minimum)?;
     }
     for value in values {
         let next = retained
             .len()
             .checked_add(1)
             .ok_or_else(|| invalid("scale input length overflow"))?;
-        if let Some(resources) = resources {
-            resources
-                .claim_visits(1)
-                .map_err(|e| Error::Render(format!("scale input retention: {e:?}")))?;
-            resources
-                .claim_slots(1)
-                .map_err(|e| Error::Render(format!("scale input retention: {e:?}")))?;
-        }
+
         if next > retained.capacity() {
             let capacity = retained
                 .capacity()
                 .checked_mul(2)
                 .ok_or_else(|| invalid("scale input capacity overflow"))?
                 .max(next);
-            reserve_input(&mut retained, capacity, resources)?;
+            reserve_input(&mut retained, capacity)?;
         }
         retained.push(value);
     }
@@ -63,23 +41,7 @@ fn retain<T>(
     Ok(Arc::new(retained))
 }
 
-fn reserve_input<T>(
-    values: &mut Vec<T>,
-    capacity: usize,
-    resources: Option<&OperationGenerationResources>,
-) -> Result<()> {
-    let bytes = capacity
-        .checked_mul(size_of::<T>())
-        .and_then(|bytes| u64::try_from(bytes).ok())
-        .ok_or_else(|| invalid("scale input allocation size overflow"))?;
-    if let Some(resources) = resources {
-        resources
-            .claim_visits(values.len() as u128)
-            .map_err(|e| Error::Render(format!("scale input growth copy: {e:?}")))?;
-        resources
-            .claim_bytes(bytes)
-            .map_err(|e| Error::Render(e.to_string()))?;
-    }
+fn reserve_input<T>(values: &mut Vec<T>, capacity: usize) -> Result<()> {
     values
         .try_reserve_exact(capacity - values.len())
         .map_err(|_| invalid("cannot reserve scale input"))
@@ -107,29 +69,13 @@ impl QualitativePalette {
     )]
     pub(crate) fn fixed(colors: impl IntoIterator<Item = OpaqueColor>) -> Result<Self> {
         Ok(Self {
-            colors: retain(colors, None)?,
+            colors: retain(colors)?,
             capacity: PaletteCapacity::Fixed,
         })
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "standalone palette construction awaits public foundation exposure"
-        )
-    )]
     pub(crate) fn extendable(colors: impl IntoIterator<Item = OpaqueColor>) -> Result<Self> {
         Ok(Self {
-            colors: retain(colors, None)?,
-            capacity: PaletteCapacity::Extendable,
-        })
-    }
-    pub(crate) fn extendable_in(
-        colors: impl IntoIterator<Item = OpaqueColor>,
-        resources: &OperationGenerationResources,
-    ) -> Result<Self> {
-        Ok(Self {
-            colors: retain(colors, Some(resources))?,
+            colors: retain(colors)?,
             capacity: PaletteCapacity::Extendable,
         })
     }
@@ -147,24 +93,9 @@ pub(crate) struct AccentPalette {
 }
 
 impl AccentPalette {
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "standalone accent construction awaits complete theme customization"
-        )
-    )]
     pub(crate) fn new(seeds: impl IntoIterator<Item = OpaqueColor>) -> Result<Self> {
         Ok(Self {
-            seeds: retain(seeds, None)?,
-        })
-    }
-    pub(crate) fn new_in(
-        seeds: impl IntoIterator<Item = OpaqueColor>,
-        resources: &OperationGenerationResources,
-    ) -> Result<Self> {
-        Ok(Self {
-            seeds: retain(seeds, Some(resources))?,
+            seeds: retain(seeds)?,
         })
     }
     pub(crate) fn seeds(&self) -> &[OpaqueColor] {
@@ -259,19 +190,7 @@ pub(crate) const BEESWARM_SEQUENTIAL_STOPS: [ColorStop; 2] = [
     ColorStop::builtin(1.0, OpaqueColor::rgb(222, 45, 38)),
 ];
 
-fn validate_stops(
-    stops: &[ColorStop],
-    diverging: bool,
-    resources: Option<&OperationGenerationResources>,
-) -> Result<()> {
-    if let Some(resources) = resources {
-        resources
-            .claim_visits(
-                (3 + stops.len().saturating_sub(1) + if diverging { stops.len() } else { 0 })
-                    as u128,
-            )
-            .map_err(|e| Error::Render(format!("gradient validation: {e:?}")))?;
-    }
+fn validate_stops(stops: &[ColorStop], diverging: bool) -> Result<()> {
     if stops.len() < if diverging { 3 } else { 2 }
         || stops.first().is_none_or(|s| s.offset.to_bits() != 0)
         || stops
@@ -293,20 +212,18 @@ fn validate_stops(
 macro_rules! gradient {
     ($name:ident, $diverging:expr) => {
         #[derive(Debug, Clone, PartialEq, Eq)]
-        pub(crate) struct $name { stops: Arc<Vec<ColorStop>> }
+        pub(crate) struct $name {
+            stops: Arc<Vec<ColorStop>>,
+        }
         impl $name {
-            #[cfg_attr(not(test), expect(dead_code, reason = "standalone typed gradient construction awaits public scale attachment; production uses its supplied ledger"))]
             pub(crate) fn new(stops: impl IntoIterator<Item = ColorStop>) -> Result<Self> {
-                let stops = retain(stops, None)?;
-                validate_stops(&stops, $diverging, None)?;
+                let stops = retain(stops)?;
+                validate_stops(&stops, $diverging)?;
                 Ok(Self { stops })
             }
-            pub(crate) fn new_in(stops: impl IntoIterator<Item = ColorStop>, resources: &OperationGenerationResources) -> Result<Self> {
-                let stops = retain(stops, Some(resources))?;
-                validate_stops(&stops, $diverging, Some(resources))?;
-                Ok(Self { stops })
+            pub(crate) fn stops(&self) -> &[ColorStop] {
+                &self.stops
             }
-            pub(crate) fn stops(&self) -> &[ColorStop] { &self.stops }
         }
     };
 }
@@ -314,43 +231,28 @@ gradient!(SequentialGradient, false);
 gradient!(DivergingGradient, true);
 
 impl SequentialGradient {
-    /// Compare complete normalized content on the operation ledger; immutable
+    /// Compare complete normalized content; immutable
     /// payload sharing is a constant-work witness for the same exact value.
-    pub(crate) fn same_in(
-        &self,
-        other: &Self,
-        resources: &OperationGenerationResources,
-    ) -> Result<bool> {
-        resources
-            .claim_visits(1)
-            .map_err(|e| Error::Render(format!("gradient comparison: {e:?}")))?;
+    pub(crate) fn same_in(&self, other: &Self) -> bool {
         if Arc::ptr_eq(&self.stops, &other.stops) {
-            return Ok(true);
+            return true;
         }
         if self.stops.len() != other.stops.len() {
-            return Ok(false);
+            return false;
         }
         for (left, right) in self.stops.iter().zip(other.stops.iter()) {
-            resources
-                .claim_visits(1)
-                .map_err(|e| Error::Render(format!("gradient comparison: {e:?}")))?;
             if left != right {
-                return Ok(false);
+                return false;
             }
         }
-        Ok(true)
+        true
     }
 }
 
 impl DivergingGradient {
-    pub(crate) fn from_sequence(
-        sequence: &SequentialGradient,
-        resources: &OperationGenerationResources,
-    ) -> Result<Self> {
-        validate_stops(sequence.stops(), true, Some(resources))?;
-        resources
-            .claim_visits(1)
-            .map_err(|e| Error::Render(format!("diverging gradient sharing: {e:?}")))?;
+    pub(crate) fn from_sequence(sequence: &SequentialGradient) -> Result<Self> {
+        validate_stops(sequence.stops(), true)?;
+
         Ok(Self {
             stops: Arc::clone(&sequence.stops),
         })
@@ -442,31 +344,6 @@ impl ColorScales {
     pub(crate) fn with_diverging(self, value: DivergingGradient) -> Result<Self> {
         Self::new(self.qualitative, self.sequential, value)
     }
-
-    pub(crate) fn admit_comparison(
-        &self,
-        other: &Self,
-        resources: &OperationGenerationResources,
-    ) -> Result<()> {
-        let colors = if Arc::ptr_eq(&self.qualitative.colors, &other.qualitative.colors) {
-            1
-        } else {
-            1 + self.qualitative.colors.len() + other.qualitative.colors.len()
-        };
-        let sequential = if Arc::ptr_eq(&self.sequential.stops, &other.sequential.stops) {
-            1
-        } else {
-            1 + self.sequential.stops.len() + other.sequential.stops.len()
-        };
-        let diverging = if Arc::ptr_eq(&self.diverging.stops, &other.diverging.stops) {
-            1
-        } else {
-            1 + self.diverging.stops.len() + other.diverging.stops.len()
-        };
-        resources
-            .claim_visits((colors + sequential + diverging) as u128)
-            .map_err(|e| Error::Render(format!("scale appearance comparison: {e:?}")))
-    }
 }
 
 #[cfg(test)]
@@ -479,22 +356,7 @@ pub(crate) fn test_defaults() -> ColorScales {
     .unwrap()
 }
 
-impl AccentPalette {
-    pub(crate) fn admit_comparison(
-        &self,
-        other: &Self,
-        resources: &OperationGenerationResources,
-    ) -> Result<()> {
-        let visits = if Arc::ptr_eq(&self.seeds, &other.seeds) {
-            1
-        } else {
-            1 + self.seeds.len() + other.seeds.len()
-        };
-        resources
-            .claim_visits(visits as u128)
-            .map_err(|e| Error::Render(format!("accent appearance comparison: {e:?}")))
-    }
-}
+impl AccentPalette {}
 
 fn zero(value: f64) -> f64 {
     if value == 0.0 {
@@ -693,12 +555,6 @@ impl ContinuousColorScale {
                 "prepared continuous selection has no retained gradient".into(),
             )),
         }
-    }
-    pub(crate) fn share(&self, resources: &OperationGenerationResources) -> Result<Self> {
-        resources
-            .claim_visits(1)
-            .map_err(|e| Error::Render(format!("continuous selection sharing: {e:?}")))?;
-        Ok(self.clone())
     }
 }
 

@@ -16,7 +16,7 @@ use super::{
     FrameTheme, GuideTextRoles, LegendTheme, OutlineTheme, PointOutlineTheme, PointTheme,
     RootTextRoles, SolidStrokeTheme, StrokeTheme, TickTheme, TypographyTheme,
 };
-use crate::font::canonical::{OperationGenerationResources, PreparedFontEnvironment};
+use crate::font::canonical::PreparedFontEnvironment;
 use crate::layout::{
     PhysicalTextAlignment, ResolvedTextPlan, TextLineHeight, TextPlanInput, TextPlanProvenance,
 };
@@ -59,10 +59,10 @@ macro_rules! define_themes {
         }
 
         impl Theme {
-            pub(crate) fn resolve(self, resources: &OperationGenerationResources) -> Result<ResolvedTheme, Error> {
+            pub(crate) fn resolve(self) -> Result<ResolvedTheme, Error> {
                 #[cfg(test)]
                 THEME_RESOLUTION_CALLS.with(|calls| calls.set(calls.get() + 1));
-                match self { $(Self::$variant => $resolver(resources)),+ }
+                match self { $(Self::$variant => $resolver()),+ }
             }
         }
     };
@@ -126,27 +126,17 @@ struct TextQueryIndex {
 }
 
 impl TextQueryCache {
-    fn profile_entry(
-        &self,
-        input: &TextPlanInput<'_>,
-        prepared_only: bool,
-        environment: &PreparedFontEnvironment,
-    ) -> Result<Option<usize>, Error> {
+    fn profile_entry(&self, input: &TextPlanInput<'_>, prepared_only: bool) -> Option<usize> {
         let (mut low, mut high) = (0, self.profiles.len());
         while low < high {
             let middle = low + (high - low) / 2;
             let index = self.profiles[middle];
-            match self.compare_profile(index, input, prepared_only, environment)? {
+            match self.compare_profile(index, input, prepared_only) {
                 std::cmp::Ordering::Less => low = middle + 1,
                 std::cmp::Ordering::Greater => high = middle,
                 std::cmp::Ordering::Equal => {
-                    if self.entries[index]
-                        .appearance
-                        .stack
-                        .same(input.stack, &environment.generation_resources())
-                        .map_err(|error| Error::Render(error.to_string()))?
-                    {
-                        return Ok(Some(index));
+                    if self.entries[index].appearance.stack.same(input.stack) {
+                        return Some(index);
                     }
                     // Distinct literal stacks can share source/size/weight. They
                     // stay distinct; inspect only this equal-source interval.
@@ -165,26 +155,21 @@ impl TextQueryCache {
                                 break;
                             }
                             let index = self.profiles[position];
-                            if self.compare_profile(index, input, prepared_only, environment)?
+                            if self.compare_profile(index, input, prepared_only)
                                 != std::cmp::Ordering::Equal
                             {
                                 break;
                             }
-                            if self.entries[index]
-                                .appearance
-                                .stack
-                                .same(input.stack, &environment.generation_resources())
-                                .map_err(|error| Error::Render(error.to_string()))?
-                            {
-                                return Ok(Some(index));
+                            if self.entries[index].appearance.stack.same(input.stack) {
+                                return Some(index);
                             }
                         }
                     }
-                    return Ok(None);
+                    return None;
                 }
             }
         }
-        Ok(None)
+        None
     }
 
     fn compare_profile(
@@ -192,11 +177,7 @@ impl TextQueryCache {
         index: usize,
         input: &TextPlanInput<'_>,
         prepared_only: bool,
-        environment: &PreparedFontEnvironment,
-    ) -> Result<std::cmp::Ordering, Error> {
-        environment
-            .claim_processing_visits(1)
-            .map_err(|error| Error::Render(format!("text profile lookup: {error:?}")))?;
+    ) -> std::cmp::Ordering {
         let entry = &self.entries[index];
         let metadata = (
             entry.source.len(),
@@ -211,33 +192,25 @@ impl TextQueryCache {
                 prepared_only,
             ));
         if metadata != std::cmp::Ordering::Equal {
-            return Ok(metadata);
+            return metadata;
         }
         if std::ptr::eq(entry.source.as_str(), input.source) {
-            return Ok(std::cmp::Ordering::Equal);
+            return std::cmp::Ordering::Equal;
         }
         for index in 0..input.source.len() {
-            environment
-                .claim_processing_visits(1)
-                .map_err(|error| Error::Render(format!("text profile content: {error:?}")))?;
             let ordering = entry.source.as_bytes()[index].cmp(&input.source.as_bytes()[index]);
             if ordering != std::cmp::Ordering::Equal {
-                return Ok(ordering);
+                return ordering;
             }
         }
-        Ok(std::cmp::Ordering::Equal)
+        std::cmp::Ordering::Equal
     }
 
-    fn profile_insertion_point(
-        &self,
-        input: &TextPlanInput<'_>,
-        prepared_only: bool,
-        environment: &PreparedFontEnvironment,
-    ) -> Result<usize, Error> {
+    fn profile_insertion_point(&self, input: &TextPlanInput<'_>, prepared_only: bool) -> usize {
         let (mut low, mut high) = (0, self.profiles.len());
         while low < high {
             let middle = low + (high - low) / 2;
-            if self.compare_profile(self.profiles[middle], input, prepared_only, environment)?
+            if self.compare_profile(self.profiles[middle], input, prepared_only)
                 == std::cmp::Ordering::Less
             {
                 low = middle + 1;
@@ -245,7 +218,7 @@ impl TextQueryCache {
                 high = middle;
             }
         }
-        Ok(low)
+        low
     }
 
     fn query_key(
@@ -253,38 +226,29 @@ impl TextQueryCache {
         input: &TextPlanInput<'_>,
         preferred_lines: Option<usize>,
         prepared_only: bool,
-        environment: &PreparedFontEnvironment,
-    ) -> Result<TextQueryKey, Error> {
-        let shaping_entry = self.profile_entry(input, prepared_only, environment)?;
-        let resources = environment.generation_resources();
+    ) -> TextQueryKey {
+        let shaping_entry = self.profile_entry(input, prepared_only);
+
         let shaping_state = if let Some(index) = shaping_entry {
             self.entries[index].shaping_state.clone()
         } else {
-            CachedTextQuery::shaping_state(input, prepared_only, &resources)?
+            CachedTextQuery::shaping_state(input, prepared_only)
         };
-        Ok(TextQueryKey {
+        TextQueryKey {
             shaping_entry,
             shaping_fingerprint: shaping_state.clone().finalize().into(),
             fingerprint: CachedTextQuery::presentation_fingerprint(
                 shaping_state.clone(),
                 input,
                 preferred_lines,
-                &resources,
-            )?,
+            ),
             shaping_state,
             observed_entries: self.entries.len(),
-        })
+        }
     }
-    fn lower_bound(
-        index: &[TextQueryIndex],
-        fingerprint: [u8; 32],
-        environment: &PreparedFontEnvironment,
-    ) -> Result<usize, Error> {
+    fn lower_bound(index: &[TextQueryIndex], fingerprint: [u8; 32]) -> usize {
         let (mut low, mut high) = (0, index.len());
         while low < high {
-            environment
-                .claim_processing_visits(1)
-                .map_err(|error| Error::Render(format!("text query lookup: {error:?}")))?;
             let middle = low + (high - low) / 2;
             if index[middle].fingerprint < fingerprint {
                 low = middle + 1;
@@ -292,24 +256,21 @@ impl TextQueryCache {
                 high = middle;
             }
         }
-        Ok(low)
+        low
     }
 
-    fn find(
+    fn find_query(
         &self,
         index: &[TextQueryIndex],
         fingerprint: [u8; 32],
         key: (&TextPlanInput<'_>, Option<usize>, bool),
         exact: bool,
-        environment: &PreparedFontEnvironment,
+
         shaping_entry: Option<usize>,
-    ) -> Result<Option<usize>, Error> {
+    ) -> Option<usize> {
         let (input, preferred_lines, _prepared_only) = key;
-        let start = Self::lower_bound(index, fingerprint, environment)?;
+        let start = Self::lower_bound(index, fingerprint);
         for candidate in &index[start..] {
-            environment
-                .claim_processing_visits(1)
-                .map_err(|error| Error::Render(format!("text query lookup: {error:?}")))?;
             if candidate.fingerprint != fingerprint {
                 break;
             }
@@ -317,19 +278,15 @@ impl TextQueryCache {
             if shaping_entry == Some(query.shaping_entry)
                 && (!exact
                     || (query.width == input.maximum_width_quanta
-                        && query.matches_presentation(
-                            input,
-                            preferred_lines,
-                            &environment.generation_resources(),
-                        )?))
+                        && query.matches_presentation(input, preferred_lines)))
             {
-                return Ok(Some(candidate.entry));
+                return Some(candidate.entry);
             }
         }
-        Ok(None)
+        None
     }
 
-    fn reserve<T>(values: &mut Vec<T>, environment: &PreparedFontEnvironment) -> Result<(), Error> {
+    fn reserve<T>(values: &mut Vec<T>) -> Result<(), Error> {
         if values.len() < values.capacity() {
             return Ok(());
         }
@@ -343,28 +300,15 @@ impl TextQueryCache {
                     .map(|doubled| required.max(doubled))
             })
             .ok_or_else(|| Error::Render("text query cache capacity overflow".into()))?;
-        let bytes = capacity
-            .checked_mul(size_of::<T>())
-            .and_then(|bytes| u64::try_from(bytes).ok())
-            .ok_or_else(|| Error::Render("text query cache byte count overflow".into()))?;
-        environment
-            .claim_unicode_bytes(bytes)
-            .map_err(|error| Error::Render(format!("text query cache: {error}")))?;
+
         values
             .try_reserve_exact(capacity - values.len())
             .map_err(|_| Error::Render("cannot reserve text query cache".into()))
     }
 
-    fn insertion_point(
-        index: &[TextQueryIndex],
-        value: TextQueryIndex,
-        environment: &PreparedFontEnvironment,
-    ) -> Result<usize, Error> {
+    fn insertion_point(index: &[TextQueryIndex], value: TextQueryIndex) -> usize {
         let (mut low, mut high) = (0, index.len());
         while low < high {
-            environment
-                .claim_processing_visits(1)
-                .map_err(|error| Error::Render(format!("text query index: {error:?}")))?;
             let middle = low + (high - low) / 2;
             if index[middle] < value {
                 low = middle + 1;
@@ -372,7 +316,7 @@ impl TextQueryCache {
                 high = middle;
             }
         }
-        Ok(low)
+        low
     }
 }
 
@@ -415,36 +359,23 @@ impl CachedTextQuery {
         input: &TextPlanInput<'_>,
         preferred_lines: Option<usize>,
         prepared_only: bool,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<([u8; 32], [u8; 32]), Error> {
-        let state = Self::shaping_state(input, prepared_only, resources)?;
-        Ok((
+    ) -> ([u8; 32], [u8; 32]) {
+        let state = Self::shaping_state(input, prepared_only);
+        (
             state.clone().finalize().into(),
-            Self::presentation_fingerprint(state, input, preferred_lines, resources)?,
-        ))
+            Self::presentation_fingerprint(state, input, preferred_lines),
+        )
     }
 
-    fn shaping_state(
-        input: &TextPlanInput<'_>,
-        prepared_only: bool,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<Sha256, Error> {
-        resources
-            .claim_visits(8 + input.source.len() as u128)
-            .map_err(|error| Error::Render(format!("text query hashing: {error:?}")))?;
+    fn shaping_state(input: &TextPlanInput<'_>, prepared_only: bool) -> Sha256 {
         let mut hash = Sha256::new();
         // The complete, unnormalized source fixes paragraph bidi and scripts;
         // language and Unicode policy are fixed for this renderer. The memo is
         // shared only together with its immutable operation font environment.
         hash.update((input.source.len() as u64).to_le_bytes());
         hash.update(input.source.as_bytes());
-        input
-            .stack
-            .hash_into(&mut hash, resources)
-            .map_err(|error| Error::Render(format!("text query hashing: {error}")))?;
-        resources
-            .claim_visits(6)
-            .map_err(|error| Error::Render(format!("text query hashing: {error:?}")))?;
+        input.stack.hash_into(&mut hash);
+
         hash.update(input.font_size.to_le_bytes());
         hash.update([
             match input.weight {
@@ -454,21 +385,14 @@ impl CachedTextQuery {
             },
             u8::from(prepared_only),
         ]);
-        Ok(hash)
+        hash
     }
 
     fn presentation_fingerprint(
         mut hash: Sha256,
         input: &TextPlanInput<'_>,
         preferred_lines: Option<usize>,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<[u8; 32], Error> {
-        resources
-            .claim_visits(
-                36 + input.provenance.owner.len() as u128
-                    + if preferred_lines.is_some() { 8 } else { 0 },
-            )
-            .map_err(|error| Error::Render(format!("text query hashing: {error:?}")))?;
+    ) -> [u8; 32] {
         hash.update((input.provenance.owner.len() as u64).to_le_bytes());
         hash.update(input.provenance.owner.as_bytes());
         hash.update(input.provenance.pair_ordinal.to_le_bytes());
@@ -499,24 +423,22 @@ impl CachedTextQuery {
         if let Some(lines) = preferred_lines {
             hash.update((lines as u64).to_le_bytes());
         }
-        Ok(hash.finalize().into())
+        hash.finalize().into()
     }
 
     fn matches_presentation(
         &self,
         input: &TextPlanInput<'_>,
         preferred_lines: Option<usize>,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<bool, Error> {
-        Ok(self.appearance.paint == input.paint
+    ) -> bool {
+        self.appearance.paint == input.paint
             && input.line_height
                 == TextLineHeight::Multiplier(self.appearance.line_height_multiplier)
             && self.alignment == input.alignment
             && self.pair_ordinal == input.provenance.pair_ordinal
             && self.exact_override == input.exact_override
             && self.preferred_lines == preferred_lines
-            && crate::font::canonical::same_bytes(&self.owner, &input.provenance.owner, resources)
-                .map_err(|error| Error::Render(error.to_string()))?)
+            && crate::font::canonical::same_bytes(&self.owner, &input.provenance.owner)
     }
 
     fn matches_width(&self, width: i64) -> bool {
@@ -556,44 +478,28 @@ impl ResolvedTheme {
 
 impl ResolvedTheme {
     pub(crate) fn legend_outside_gap(&self) -> Result<f64, Error> {
-        self.legend.outside_gap_pixels(
-            self.typography.guides.legend_label.font_size(),
-            &self.prepared_font_environment()?.generation_resources(),
-        )
+        self.legend
+            .outside_gap_pixels(self.typography.guides.legend_label.font_size())
     }
     pub(crate) fn legend_shared_gap(&self) -> Result<f64, Error> {
-        self.legend.shared_gap_pixels(
-            self.typography.guides.legend_label.font_size(),
-            &self.prepared_font_environment()?.generation_resources(),
-        )
+        self.legend
+            .shared_gap_pixels(self.typography.guides.legend_label.font_size())
     }
-    pub(crate) fn same(
-        &self,
-        other: &Self,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<bool, Error> {
-        self.color_scales
-            .admit_comparison(&other.color_scales, resources)?;
-        self.marks
-            .accents
-            .admit_comparison(&other.marks.accents, resources)?;
-        if !self.axes.same(&other.axes, resources)? {
+    pub(crate) fn same_validated(&self, other: &Self) -> Result<bool, Error> {
+        if !self.axes.same_validated(&other.axes)? {
             return Ok(false);
         }
-        if !self.legend.same(&other.legend, resources)? {
+        if !self.legend.same(&other.legend) {
             return Ok(false);
         }
-        if !self.composition.same(&other.composition, resources)? {
+        if !self.composition.same(&other.composition) {
             return Ok(false);
         }
-        if !self
-            .marks
-            .primary_point
-            .same(&other.marks.primary_point, resources)?
+        if !self.marks.primary_point.same(&other.marks.primary_point)
             || !self
                 .marks
                 .raw_overlay_point
-                .same(&other.marks.raw_overlay_point, resources)?
+                .same(&other.marks.raw_overlay_point)
         {
             return Ok(false);
         }
@@ -606,29 +512,13 @@ impl ResolvedTheme {
             .into_iter()
             .zip(other.typography.roles())
         {
-            if !left.same(right, resources)? {
+            if !left.same(right) {
                 return Ok(false);
             }
         }
         Ok(true)
     }
 
-    pub(crate) fn admitted_clone(&self, data: crate::data::PlotData<'_>) -> Result<Self, Error> {
-        data.require_source_resources()?;
-        let point_ratios = usize::from(self.marks.primary_point.outline.is_some())
-            + usize::from(self.marks.raw_overlay_point.outline.is_some());
-        data.claim_source_visits(
-            self.typography.roles().len()
-                + 4
-                + 6
-                + point_ratios
-                + self.legend.relationship_count()
-                + 18,
-        )?;
-        // All fonts, four scale/accent payloads, six axis relationships and each
-        // structurally present point-outline relationship are shared once.
-        Ok(self.clone())
-    }
     /// Initialize this operation's canonical system-font environment.
     pub(crate) fn prepare_font_environment(&self) -> Result<(), Error> {
         self.prepared_font_environment().map(|_| ())
@@ -699,9 +589,7 @@ impl ResolvedTheme {
     ) -> Result<f64, crate::Error> {
         self.prepare_font_environment()?;
         let environment = self.prepared_font_environment()?;
-        environment
-            .claim_measurement_call()
-            .map_err(|error| Error::Render(format!("axis intrinsic call admission: {error:?}")))?;
+
         let appearance = self.typography.axes().tick_label();
         let height = crate::layout::maximum_width_quanta(available_height)
             .map_err(|error| crate::Error::Render(format!("axis row height: {error}")))?;
@@ -735,11 +623,9 @@ impl ResolvedTheme {
                 },
                 exact_override: false,
             };
-            let call = environment.claim_measurement_call().map_err(|error| {
-                Error::Render(format!("text intrinsic call admission: {error:?}"))
-            })?;
+
             let (cached, query_key) =
-                self.cached_text_query(&input, Some(preferred_lines), true, &call)?;
+                self.cached_text_query(&input, Some(preferred_lines), true)?;
             let preferred_width = if let Some(CachedTextResult::PreferredWidth(width)) = cached {
                 width
             } else {
@@ -747,7 +633,7 @@ impl ResolvedTheme {
                     plan
                 } else {
                     let plan = environment
-                        .plan_text_in_call(input.clone(), true, &call)
+                        .plan_text_with_policy(input.clone(), true)
                         .map_err(|error| {
                             crate::Error::Render(format!("axis intrinsic text analysis: {error}"))
                         })?;
@@ -762,8 +648,7 @@ impl ResolvedTheme {
                                 query_key.shaping_state.clone(),
                                 &input,
                                 None,
-                                &environment.generation_resources(),
-                            )?,
+                            ),
                             shaping_state: query_key.shaping_state.clone(),
                             ..query_key
                         },
@@ -772,7 +657,7 @@ impl ResolvedTheme {
                 };
                 let requirements =
                     analysis
-                        .intrinsic_in_call(preferred_lines, &call)
+                        .intrinsic_from_analysis(preferred_lines)
                         .map_err(|error| {
                             crate::Error::Render(format!(
                                 "axis intrinsic text requirements: {error}"
@@ -900,35 +785,22 @@ impl ResolvedTheme {
             exact_override,
         };
         let environment = self.prepared_font_environment()?;
-        let call = environment
-            .claim_measurement_call()
-            .map_err(|error| Error::Render(format!("text query call admission: {error:?}")))?;
-        #[cfg(test)]
-        let before = environment
-            .resource_usage()
-            .map_err(|error| Error::Render(error.to_string()))?
-            .processing_visits;
-        let (cached, query_key) = self.cached_text_query(&input, None, prepared_only, &call)?;
-        #[cfg(test)]
-        if input.source.len() > 1000 && std::env::var_os("LICHTUNG_FONT_WORK_AUDIT").is_some() {
-            eprintln!("font_query owner={owner:?} bytes={} width={maximum_width_quanta} before={before} lookup={} route={}", input.source.len(), environment.resource_usage().map_err(|error| Error::Render(error.to_string()))?.processing_visits - before, match &cached { Some(CachedTextResult::Plan(_)) => "hit", Some(CachedTextResult::Reflow(_)) => "reflow", _ => "cold" });
-        }
+
+        let (cached, query_key) = self.cached_text_query(&input, None, prepared_only)?;
+
         let result = match cached {
             Some(CachedTextResult::Plan(plan)) => return Ok(plan),
             Some(CachedTextResult::Reflow(plan)) => {
                 let (source, stack) = plan
                     .analysis_profile()
                     .map_err(|error| Error::Render(error.to_string()))?;
-                plan.reflow_in_call(
-                    TextPlanInput {
-                        source,
-                        stack,
-                        ..input.clone()
-                    },
-                    &call,
-                )
+                plan.reflow(TextPlanInput {
+                    source,
+                    stack,
+                    ..input.clone()
+                })
             }
-            _ => environment.plan_text_in_call(input.clone(), prepared_only, &call),
+            _ => environment.plan_text_with_policy(input.clone(), prepared_only),
         };
         let plan = result.map_err(|error| match error {
             crate::layout::TextPlanError::Fit(miss) => scope
@@ -949,18 +821,7 @@ impl ResolvedTheme {
             CachedTextResult::Plan(plan.clone()),
             query_key,
         )?;
-        #[cfg(test)]
-        if input.source.len() > 1000 && std::env::var_os("LICHTUNG_FONT_WORK_AUDIT").is_some() {
-            eprintln!(
-                "font_query_done owner={owner:?} bytes={} width={maximum_width_quanta} visits={}",
-                input.source.len(),
-                environment
-                    .resource_usage()
-                    .map_err(|error| Error::Render(error.to_string()))?
-                    .processing_visits
-                    - before
-            );
-        }
+
         Ok(plan)
     }
 
@@ -969,45 +830,35 @@ impl ResolvedTheme {
         input: &TextPlanInput<'_>,
         preferred_lines: Option<usize>,
         prepared_only: bool,
-        _call: &crate::font::canonical::MeasurementCall,
     ) -> Result<(Option<CachedTextResult>, TextQueryKey), Error> {
-        let environment = self.prepared_font_environment()?;
         let cache = self
             .text_queries
             .lock()
             .map_err(|_| Error::Render("text query cache lock poisoned".into()))?;
-        let query_key = cache.query_key(input, preferred_lines, prepared_only, environment)?;
+        let query_key = cache.query_key(input, preferred_lines, prepared_only);
         let shaping_fingerprint = query_key.shaping_fingerprint;
         let fingerprint = query_key.fingerprint;
         let key = (input, preferred_lines, prepared_only);
-        if let Some(index) = cache.find(
+        if let Some(index) = cache.find_query(
             &cache.exact,
             fingerprint,
             key,
             true,
-            environment,
             query_key.shaping_entry,
-        )? {
+        ) {
             return Ok((Some(cache.entries[index].result.clone()), query_key));
         }
-        if let Some(index) = cache.find(
+        if let Some(index) = cache.find_query(
             &cache.shaping,
             shaping_fingerprint,
             key,
             false,
-            environment,
             query_key.shaping_entry,
-        )? {
+        ) {
             let query = &cache.entries[index];
-            environment
-                .claim_processing_visits(1)
-                .map_err(|error| Error::Render(format!("text query lookup: {error:?}")))?;
+
             if query.matches_width(input.maximum_width_quanta)
-                && query.matches_presentation(
-                    input,
-                    preferred_lines,
-                    &environment.generation_resources(),
-                )?
+                && query.matches_presentation(input, preferred_lines)
             {
                 return Ok((Some(query.result.clone()), query_key));
             }
@@ -1020,7 +871,7 @@ impl ResolvedTheme {
 
     #[expect(
         clippy::too_many_lines,
-        reason = "key proof, ordered admission, index insertion and payload freezing stay in one cache transaction"
+        reason = "key proof, storage reservation, index insertion and payload freezing stay in one cache transaction"
     )]
     fn cache_text_query(
         &self,
@@ -1039,66 +890,42 @@ impl ResolvedTheme {
         if cache.entries.len() == 256 {
             return Ok(());
         }
-        let environment = self.prepared_font_environment()?;
-        let resources = environment.generation_resources();
+
         if query_key.shaping_entry.is_none() && cache.entries.len() != query_key.observed_entries {
-            query_key.shaping_entry = cache.profile_entry(input, prepared_only, environment)?;
+            query_key.shaping_entry = cache.profile_entry(input, prepared_only);
         }
-        let source_bytes = if query_key.shaping_entry.is_some() {
-            0
-        } else {
-            input.source.len()
-        };
-        let key_bytes = source_bytes
-            .checked_add(input.provenance.owner.len())
-            .ok_or_else(|| Error::Render("text query cache byte count overflow".into()))?;
+
         let shaping_fingerprint = query_key.shaping_fingerprint;
         let fingerprint = query_key.fingerprint;
         let key = (input, preferred_lines, prepared_only);
         if cache
-            .find(
+            .find_query(
                 &cache.exact,
                 fingerprint,
                 key,
                 true,
-                environment,
                 query_key.shaping_entry,
-            )?
+            )
             .is_some()
         {
             return Ok(());
         }
         let new_shaping = matches!(&result, CachedTextResult::Plan(_))
             && cache
-                .find(
+                .find_query(
                     &cache.shaping,
                     shaping_fingerprint,
                     key,
                     false,
-                    environment,
                     query_key.shaping_entry,
-                )?
+                )
                 .is_none();
-        resources
-            .claim_visits((source_bytes + input.provenance.owner.len()) as u128)
-            .map_err(|error| Error::Render(format!("text query key copy: {error:?}")))?;
-        environment
-            .claim_cache_entries(1)
-            .map_err(|error| Error::Render(format!("text query cache admission: {error:?}")))?;
-        environment
-            .claim_text_generation_slots(2 + 2 * u128::from(new_shaping))
-            .map_err(|error| Error::Render(format!("text query cache: {error:?}")))?;
-        environment
-            .claim_unicode_bytes(
-                u64::try_from(key_bytes)
-                    .map_err(|_| Error::Render("text query cache byte count overflow".into()))?,
-            )
-            .map_err(|error| Error::Render(format!("text query cache: {error}")))?;
-        TextQueryCache::reserve(&mut cache.entries, environment)?;
-        TextQueryCache::reserve(&mut cache.exact, environment)?;
+
+        TextQueryCache::reserve(&mut cache.entries)?;
+        TextQueryCache::reserve(&mut cache.exact)?;
         if new_shaping {
-            TextQueryCache::reserve(&mut cache.shaping, environment)?;
-            TextQueryCache::reserve(&mut cache.profiles, environment)?;
+            TextQueryCache::reserve(&mut cache.shaping)?;
+            TextQueryCache::reserve(&mut cache.profiles)?;
         }
         let exact_record = TextQueryIndex {
             fingerprint,
@@ -1108,19 +935,17 @@ impl ResolvedTheme {
             fingerprint: shaping_fingerprint,
             entry: cache.entries.len(),
         };
-        let exact_position =
-            TextQueryCache::insertion_point(&cache.exact, exact_record, environment)?;
+        let exact_position = TextQueryCache::insertion_point(&cache.exact, exact_record);
         let shaping_position = if new_shaping {
             Some(TextQueryCache::insertion_point(
                 &cache.shaping,
                 shaping_record,
-                environment,
-            )?)
+            ))
         } else {
             None
         };
         let profile_position = if new_shaping {
-            Some(cache.profile_insertion_point(input, prepared_only, environment)?)
+            Some(cache.profile_insertion_point(input, prepared_only))
         } else {
             None
         };
@@ -1133,29 +958,15 @@ impl ResolvedTheme {
             Ok(owned)
         };
         let appearance = TextTheme::new(
-            appearance
-                .stack()
-                .share(&resources)
-                .map_err(|error| Error::Render(error.to_string()))?,
+            appearance.stack().clone(),
             appearance.color(),
             appearance.font_size(),
             appearance.weight(),
             appearance.line_height(),
         )?;
         let source = if let Some(index) = query_key.shaping_entry {
-            resources
-                .claim_visits(1)
-                .map_err(|error| Error::Render(format!("text source sharing: {error:?}")))?;
             Arc::clone(&cache.entries[index].source)
         } else {
-            let layout = std::alloc::Layout::new::<[std::sync::atomic::AtomicUsize; 2]>()
-                .extend(std::alloc::Layout::new::<String>())
-                .map_err(|_| Error::Render("text source Arc layout overflow".into()))?
-                .0
-                .pad_to_align();
-            environment
-                .claim_unicode_bytes(layout.size() as u64)
-                .map_err(|error| Error::Render(error.to_string()))?;
             Arc::new(copy(input.source)?)
         };
         cache.entries.push(CachedTextQuery {
@@ -1163,7 +974,7 @@ impl ResolvedTheme {
             shaping_state: query_key.shaping_state,
             unwrapped_width: match &result {
                 CachedTextResult::Plan(plan) => plan
-                    .unwrapped_fit_width(environment)
+                    .unwrapped_fit_width()
                     .map_err(|error| Error::Render(format!("cached paragraph fit: {error}")))?,
                 CachedTextResult::PreferredWidth(_) | CachedTextResult::Reflow(_) => None,
             },
@@ -1346,7 +1157,7 @@ impl TextTheme {
         not(test),
         expect(
             dead_code,
-            reason = "construction-only stack replacement awaits complete theme customization; operation copies retain their admitted stack path"
+            reason = "construction-only stack replacement awaits complete theme customization"
         )
     )]
     pub(crate) fn with_stack(
@@ -1409,28 +1220,18 @@ impl TextTheme {
         )
     }
 
-    pub(crate) fn same(
-        &self,
-        other: &Self,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<bool, Error> {
-        Ok(self.font_size == other.font_size
+    pub(crate) fn same(&self, other: &Self) -> bool {
+        self.font_size == other.font_size
             && self.weight == other.weight
             && self.paint == other.paint
             && self.line_height_multiplier.to_bits() == other.line_height_multiplier.to_bits()
-            && self
-                .stack
-                .same(&other.stack, resources)
-                .map_err(|error| Error::Render(error.to_string()))?)
+            && self.stack.same(&other.stack)
     }
 
-    pub(crate) fn copy_with_generation(
-        &self,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<Self, Error> {
+    pub(crate) fn try_copy(&self) -> Result<Self, Error> {
         Self::new(
             self.stack
-                .copy_with_generation(resources)
+                .try_copy()
                 .map_err(|error| Error::Render(error.to_string()))?,
             self.color(),
             self.font_size(),
@@ -1511,7 +1312,7 @@ pub(crate) struct MarkAppearance {
 }
 
 impl MarkAppearance {
-    // The two point relationships have their own admitted comparison. Exhaustive
+    // The two point relationships have their own exact comparison. Exhaustive
     // destructuring prevents any retained field escaping theme identity.
     fn non_point_eq(&self, other: &Self) -> bool {
         macro_rules! fields {
@@ -1652,7 +1453,6 @@ impl TitleAlignment {
     reason = "the four closed presets provide one compact table of preserved scalar values"
 )]
 fn resolved_theme(
-    resources: &OperationGenerationResources,
     colors: &[(u8, u8, u8)],
     foreground: (u8, u8, u8),
     axis_width: f32,
@@ -1663,18 +1463,18 @@ fn resolved_theme(
     axis_title_font_size: u32,
     grid_color: (u8, u8, u8),
 ) -> Result<ResolvedTheme, Error> {
-    let primary_outline = PointOutlineTheme::publication(resources)?;
-    let overlay_outline = PointOutlineTheme::publication(resources)?;
+    let primary_outline = PointOutlineTheme::publication()?;
+    let overlay_outline = PointOutlineTheme::publication()?;
     let stack = crate::font::canonical::builtin_font_stack();
     let foreground_paint = color_from_rgb(foreground);
     let muted_paint = color_from_rgb(MUTED_TEXT);
     let opaque = |&(r, g, b): &(u8, u8, u8)| OpaqueColor::rgb(r, g, b);
     let color_scales = ColorScales::new(
-        QualitativePalette::extendable_in(colors.iter().map(opaque), resources)?,
-        SequentialGradient::new_in(crate::theme::HEATMAP_SEQUENTIAL_STOPS, resources)?,
-        DivergingGradient::new_in(crate::theme::HEATMAP_DIVERGING_STOPS, resources)?,
+        QualitativePalette::extendable(colors.iter().map(opaque))?,
+        SequentialGradient::new(crate::theme::HEATMAP_SEQUENTIAL_STOPS)?,
+        DivergingGradient::new(crate::theme::HEATMAP_DIVERGING_STOPS)?,
     )?;
-    let accents = AccentPalette::new_in(colors.iter().map(opaque), resources)?;
+    let accents = AccentPalette::new(colors.iter().map(opaque))?;
     let stroke = |width, pattern| StrokeTheme::new(foreground_paint, width, pattern);
     let filled = |alpha, width| {
         DataFillTheme::new(
@@ -1748,7 +1548,7 @@ fn resolved_theme(
                 )?,
             )?,
         )?,
-        legend: LegendTheme::builtin(resources)?,
+        legend: LegendTheme::builtin()?,
         axes: AxisTheme::new(
             Some(FrameTheme::new(
                 FrameSides::new(true, true, true, true)?,
@@ -1768,12 +1568,12 @@ fn resolved_theme(
                 StrokePattern::MediumDash,
             )?),
             AxisSpacing::new(
-                super::RelativeSpacing::ratio_in(8, 16, resources)?,
-                super::RelativeSpacing::ratio_in(6, 16, resources)?,
-                super::RelativeSpacing::ratio_in(8, axis_title_font_size, resources)?,
-                super::RelativeSpacing::ratio_in(16, axis_title_font_size, resources)?,
-                super::RelativeSpacing::ratio_in(16, axis_title_font_size, resources)?,
-                super::RelativeSpacing::ratio_in(12, axis_title_font_size, resources)?,
+                super::RelativeSpacing::ratio(8, 16)?,
+                super::RelativeSpacing::ratio(6, 16)?,
+                super::RelativeSpacing::ratio(8, axis_title_font_size)?,
+                super::RelativeSpacing::ratio(16, axis_title_font_size)?,
+                super::RelativeSpacing::ratio(16, axis_title_font_size)?,
+                super::RelativeSpacing::ratio(12, axis_title_font_size)?,
             )?,
         )?,
         marks: MarkAppearance {
@@ -1844,7 +1644,6 @@ fn resolved_theme(
             subtitle_font_size,
             caption_font_size,
             axis_title_font_size,
-            resources,
         )?,
         font_environment: Arc::new(OnceLock::new()),
         text_queries: Arc::default(),
@@ -1855,10 +1654,9 @@ fn plus_six_line_height(font_size: u32) -> f64 {
     (f64::from(font_size) + 6.0) / f64::from(font_size)
 }
 
-fn publication_theme(resources: &OperationGenerationResources) -> Result<ResolvedTheme, Error> {
+fn publication_theme() -> Result<ResolvedTheme, Error> {
     // Okabe-Ito 8-color qualitative palette (colorblind-safe).
     resolved_theme(
-        resources,
         &[
             (0, 114, 178),
             (213, 94, 0),
@@ -1880,9 +1678,8 @@ fn publication_theme(resources: &OperationGenerationResources) -> Result<Resolve
     )
 }
 
-fn nature_theme(resources: &OperationGenerationResources) -> Result<ResolvedTheme, Error> {
+fn nature_theme() -> Result<ResolvedTheme, Error> {
     resolved_theme(
-        resources,
         &[
             (40, 86, 130),
             (130, 160, 188),
@@ -1901,9 +1698,8 @@ fn nature_theme(resources: &OperationGenerationResources) -> Result<ResolvedThem
     )
 }
 
-fn science_theme(resources: &OperationGenerationResources) -> Result<ResolvedTheme, Error> {
+fn science_theme() -> Result<ResolvedTheme, Error> {
     resolved_theme(
-        resources,
         &[
             (255, 0, 0),
             (0, 0, 255),
@@ -1922,9 +1718,8 @@ fn science_theme(resources: &OperationGenerationResources) -> Result<ResolvedThe
     )
 }
 
-fn chi_theme(resources: &OperationGenerationResources) -> Result<ResolvedTheme, Error> {
+fn chi_theme() -> Result<ResolvedTheme, Error> {
     resolved_theme(
-        resources,
         &[
             (171, 199, 232),
             (243, 169, 175),
@@ -2380,10 +2175,7 @@ mod tests {
                 primary_point: PointTheme {
                     fill_alpha: 209,
                     shape: crate::PointShape::Circle,
-                    outline: Some(
-                        PointOutlineTheme::publication(&OperationGenerationResources::new())
-                            .unwrap(),
-                    ),
+                    outline: Some(PointOutlineTheme::publication().unwrap()),
                 },
                 bar_body: DataFillTheme::new(
                     255,
@@ -2441,10 +2233,7 @@ mod tests {
                 raw_overlay_point: PointTheme {
                     fill_alpha: 209,
                     shape: crate::PointShape::Circle,
-                    outline: Some(
-                        PointOutlineTheme::publication(&OperationGenerationResources::new())
-                            .unwrap(),
-                    ),
+                    outline: Some(PointOutlineTheme::publication().unwrap()),
                 },
                 raw_overlay_radius: 2,
                 heatmap_cell_outline: OutlineTheme {
@@ -2587,7 +2376,6 @@ mod tests {
                 expected.subtitle_size,
                 expected.caption_size,
                 expected.axis_title_size,
-                &OperationGenerationResources::new(),
             )
             .unwrap(),
             font_environment: Arc::new(OnceLock::new()),
@@ -2598,18 +2386,14 @@ mod tests {
     #[test]
     fn built_in_themes_preserve_every_resolved_value() {
         for theme in BUILT_IN_THEMES {
-            assert_eq!(
-                theme.resolve(&OperationGenerationResources::new()).unwrap(),
-                expected_theme(theme),
-                "{theme:?}"
-            );
+            assert_eq!(theme.resolve().unwrap(), expected_theme(theme), "{theme:?}");
         }
     }
 
     #[test]
     fn built_in_themes_have_complete_foundational_records() {
         for theme in BUILT_IN_THEMES {
-            let resolved = theme.resolve(&OperationGenerationResources::new()).unwrap();
+            let resolved = theme.resolve().unwrap();
             let text_roles = [
                 &resolved.typography.root.title,
                 &resolved.typography.root.subtitle,
@@ -2667,7 +2451,7 @@ mod tests {
     #[test]
     fn built_in_foundational_paints_are_complete_rgba() {
         for theme in BUILT_IN_THEMES {
-            let resolved = theme.resolve(&OperationGenerationResources::new()).unwrap();
+            let resolved = theme.resolve().unwrap();
             let foreground = color_from_rgb(resolved.foreground);
             assert_eq!(
                 resolved.surfaces.canvas_root,
@@ -2697,9 +2481,7 @@ mod tests {
 
     #[test]
     fn private_uncertainty_and_summary_strokes_are_independent_of_axis_chrome() {
-        let mut theme = Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = Theme::Publication.resolve().unwrap();
         let axis = theme.axes.frame.as_ref().unwrap().stroke.backend_style();
         theme.marks.uncertainty_stroke.paint = Color::rgb(11, 23, 37);
         theme.marks.uncertainty_stroke.width = 2.5;
@@ -2721,9 +2503,7 @@ mod tests {
 
     #[test]
     fn custom_bracket_stroke_changes_annotation_identity_without_recoloring_text_or_axes() {
-        let mut theme = Theme::Nature
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = Theme::Nature.resolve().unwrap();
         let original = theme.clone();
         theme.annotations.bracket_stroke.paint = Color::rgb(15, 29, 41);
         theme.annotations.bracket_stroke.width = 2.25;
@@ -2746,9 +2526,7 @@ mod tests {
 
     #[test]
     fn point_label_gap_is_independent_of_point_and_text_appearance() {
-        let mut theme = Theme::CHI
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = Theme::CHI.resolve().unwrap();
         let original = theme.clone();
         theme.annotations.point_label_gap = 7.0;
         assert_ne!(theme, original);
@@ -2763,9 +2541,7 @@ mod tests {
 
     #[test]
     fn composed_plot_contrast_uses_the_canvas_owner_surface() {
-        let mut theme = Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = Theme::Publication.resolve().unwrap();
         theme.surfaces.canvas_root = Color::rgba(0, 0, 0, 0);
         theme.surfaces.plot_panel = Color::rgba(0, 0, 0, 0);
         theme.annotations.planning_backdrop = Color::rgb(0, 0, 0);
@@ -2783,9 +2559,7 @@ mod tests {
 
     #[test]
     fn histogram_curve_and_rug_styles_do_not_inherit_axis_or_bin_strokes() {
-        let mut theme = Theme::Science
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = Theme::Science.resolve().unwrap();
         let original = theme.clone();
         theme.marks.histogram_curve.paint = Color::rgb(25, 49, 73);
         theme.marks.histogram_curve.width = 2.5;
@@ -2809,9 +2583,7 @@ mod tests {
 
     #[test]
     fn estimate_reference_and_dumbbell_roles_do_not_alias_each_other() {
-        let mut theme = Theme::Nature
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = Theme::Nature.resolve().unwrap();
         let original = theme.clone();
         theme.marks.estimate_interval.paint = Color::rgb(23, 47, 71);
         theme.marks.estimate_interval.width = 2.25;
@@ -2843,10 +2615,7 @@ mod tests {
     #[test]
     fn built_in_line_heights_preserve_current_geometry() {
         for theme in BUILT_IN_THEMES {
-            let typography = theme
-                .resolve(&OperationGenerationResources::new())
-                .unwrap()
-                .typography;
+            let typography = theme.resolve().unwrap().typography;
             for role in [
                 &typography.root.title,
                 &typography.root.subtitle,
@@ -2873,11 +2642,7 @@ mod tests {
     fn all_built_ins_center_the_root_title_block() {
         for theme in BUILT_IN_THEMES {
             assert_eq!(
-                theme
-                    .resolve(&OperationGenerationResources::new())
-                    .unwrap()
-                    .composition
-                    .root_title_alignment(),
+                theme.resolve().unwrap().composition.root_title_alignment(),
                 TitleAlignment::Center,
                 "{theme:?}"
             );
@@ -2904,7 +2669,7 @@ mod tests {
     #[test]
     fn built_in_axis_chrome_is_structural_and_preserves_sources() {
         for theme in BUILT_IN_THEMES {
-            let resolved = theme.resolve(&OperationGenerationResources::new()).unwrap();
+            let resolved = theme.resolve().unwrap();
             let (_, expected) = expected_preset(theme);
             let frame = resolved.axes.frame().expect("built-in frame");
             let ticks = resolved.axes.ticks().expect("built-in ticks");
@@ -2931,14 +2696,9 @@ mod tests {
     #[test]
     fn significance_label_defaults_and_exact_precedence_are_complete() {
         for theme in BUILT_IN_THEMES {
-            let typography = theme
-                .resolve(&OperationGenerationResources::new())
-                .unwrap()
-                .typography;
-            let resources = crate::font::canonical::OperationGenerationResources::new();
-            let default = typography
-                .effective_significance_label(None, &resources)
-                .unwrap();
+            let typography = theme.resolve().unwrap().typography;
+
+            let default = typography.effective_significance_label(None).unwrap();
             assert_eq!(default.font_size, 16, "{theme:?}");
             assert_eq!(default.weight, TextWeight::Normal, "{theme:?}");
             assert!(
@@ -2949,7 +2709,7 @@ mod tests {
             let exact = SignificanceMarkStyle::new(23, TextWeight::Bold, 9.0)
                 .expect("valid exact significance style");
             let effective = typography
-                .effective_significance_label(Some(exact), &resources)
+                .effective_significance_label(Some(exact))
                 .unwrap();
             assert_eq!(effective.stack, default.stack, "{theme:?}");
             assert_eq!(effective.paint, default.paint, "{theme:?}");
@@ -2965,29 +2725,23 @@ mod tests {
     #[test]
     fn composition_spacing_preserves_active_values() {
         for theme in BUILT_IN_THEMES {
-            let resolved = theme.resolve(&OperationGenerationResources::new()).unwrap();
+            let resolved = theme.resolve().unwrap();
             let lengths = resolved.root_title_lengths().unwrap();
-            let resources = resolved
-                .prepared_font_environment()
-                .unwrap()
-                .generation_resources();
+
             assert_eq!(
-                crate::theme::composition::hard(&lengths.title_subtitle_gap, &resources)
+                crate::theme::composition::hard(&lengths.title_subtitle_gap)
                     .unwrap()
                     .to_bits(),
                 0.0_f64.to_bits()
             );
             assert_eq!(
-                crate::theme::composition::hard(
-                    &lengths.title_block_to_content_clearance,
-                    &resources
-                )
-                .unwrap()
-                .to_bits(),
+                crate::theme::composition::hard(&lengths.title_block_to_content_clearance)
+                    .unwrap()
+                    .to_bits(),
                 14.0_f64.to_bits()
             );
             assert_eq!(
-                crate::theme::composition::hard(&lengths.caption_to_content_clearance, &resources)
+                crate::theme::composition::hard(&lengths.caption_to_content_clearance)
                     .unwrap()
                     .to_bits(),
                 12.0_f64.to_bits()
@@ -2998,9 +2752,7 @@ mod tests {
     #[test]
     fn theme_clone_discovers_one_shared_font_environment() {
         FONT_ENVIRONMENT_DISCOVERIES.with(|calls| calls.set(0));
-        let theme = Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let theme = Theme::Publication.resolve().unwrap();
         let clone = theme.clone();
 
         theme.prepare_font_environment().unwrap();
@@ -3013,12 +2765,8 @@ mod tests {
     #[test]
     fn separately_resolved_theme_can_share_the_root_font_owner() {
         FONT_ENVIRONMENT_DISCOVERIES.with(|calls| calls.set(0));
-        let root = Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
-        let mut plot = Theme::Science
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let root = Theme::Publication.resolve().unwrap();
+        let mut plot = Theme::Science.resolve().unwrap();
         plot.share_font_environment_from(&root);
 
         root.prepare_font_environment().unwrap();
@@ -3030,12 +2778,8 @@ mod tests {
 
     #[test]
     fn runtime_font_preparation_does_not_affect_appearance_equality() {
-        let prepared = Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
-        let unresolved = Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let prepared = Theme::Publication.resolve().unwrap();
+        let unresolved = Theme::Publication.resolve().unwrap();
         prepared.prepare_font_environment().unwrap();
 
         assert_eq!(prepared, unresolved);
@@ -3044,9 +2788,7 @@ mod tests {
 
     #[test]
     fn role_weight_changes_metrics_when_the_host_resolves_a_distinct_face() {
-        let theme = Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let theme = Theme::Publication.resolve().unwrap();
         let normal = theme
             .measure_text(
                 "Minimum WWW maximum",
@@ -3088,9 +2830,7 @@ mod tests {
     #[test]
     fn text_block_views_do_not_rediscover_or_fallback() {
         FONT_ENVIRONMENT_DISCOVERIES.with(|calls| calls.set(0));
-        let theme = Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let theme = Theme::Publication.resolve().unwrap();
         let plan = theme
             .plan_text(
                 "planned text",
@@ -3119,12 +2859,8 @@ mod tests {
 
     #[test]
     fn root_text_queries_share_payloads_but_not_profiles_or_constraints() {
-        let root = Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
-        let mut child = Theme::Science
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let root = Theme::Publication.resolve().unwrap();
+        let mut child = Theme::Science.resolve().unwrap();
         child.share_font_environment_from(&root);
         let appearance = &root.typography.root.title;
         let first = root
@@ -3187,17 +2923,13 @@ mod tests {
         assert_eq!(changed.style.paint, Color::rgb(3, 2, 1));
         assert!(!first.shares_payload(&changed));
         assert!(first.shares_analysis(&changed));
-        let other_root = Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let other_root = Theme::Publication.resolve().unwrap();
         assert!(!Arc::ptr_eq(&root.text_queries, &other_root.text_queries));
     }
 
     #[test]
     fn text_analysis_is_font_scoped_not_presentation_scoped() {
-        let root = Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let root = Theme::Publication.resolve().unwrap();
         root.font_environment
             .set(Ok(PreparedFontEnvironment::synthetic()))
             .unwrap();
@@ -3262,9 +2994,7 @@ mod tests {
 
     #[test]
     fn intrinsic_query_memo_reuses_the_root_prepared_fonts() {
-        let root = Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let root = Theme::Publication.resolve().unwrap();
         let first = root
             .intrinsic_tick_label_width(["Measured responses"].into_iter(), 100.0)
             .unwrap();
@@ -3302,18 +3032,16 @@ mod tests {
     #[test]
     #[expect(
         clippy::too_many_lines,
-        reason = "one root verifies index scaling, stable collision order, and exact charged comparisons"
+        reason = "one root verifies indexed lookup, stable collision order, and complete matching"
     )]
-    fn indexed_text_queries_charge_search_and_matching_buckets_only() {
-        let root = Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+    fn indexed_text_queries_preserve_matching_and_collision_order() {
+        let root = Theme::Publication.resolve().unwrap();
         root.font_environment
             .set(Ok(PreparedFontEnvironment::synthetic()))
             .unwrap();
         let environment = root.prepared_font_environment().unwrap();
-        let resources = environment.generation_resources();
-        environment.share_generation_resources(&resources).unwrap();
+        let resources = environment.operation();
+        environment.validate_operation(&resources).unwrap();
         let mut appearance = root.typography.root.caption.clone();
         appearance.stack = crate::font::canonical::named_stack(&["Test Sans"]);
         appearance.font_size = 10;
@@ -3334,8 +3062,7 @@ mod tests {
             }
         }
         let input = indexed_query_input("A", &appearance, "owner 000");
-        let (_, fingerprint) =
-            CachedTextQuery::fingerprints(&input, None, true, &resources).unwrap();
+        let (_, fingerprint) = CachedTextQuery::fingerprints(&input, None, true);
         let comparisons = {
             let cache = root.text_queries.lock().unwrap();
             assert_eq!(cache.entries.len(), 128);
@@ -3359,8 +3086,7 @@ mod tests {
             comparisons
         };
         assert!(comparisons <= 8);
-        let before = resources.usage().unwrap();
-        let bytes = environment.resource_usage().unwrap().font_bytes;
+
         let hit = root
             .plan_text(
                 "A",
@@ -3372,12 +3098,9 @@ mod tests {
             )
             .unwrap();
         assert!(first.unwrap().shares_payload(&hit));
-        let after = resources.usage().unwrap();
+
         // Profile metadata/source (2), immutable font handle (1), only the
         // presentation hash (36+9), owner equality (10), and index comparisons.
-        assert_eq!(after.1 - before.1, comparisons + 1 + 2 + 1 + 45 + 10);
-        assert_eq!(after.0, before.0);
-        assert_eq!(environment.resource_usage().unwrap().font_bytes, bytes);
 
         root.plan_text(
             "AA",
@@ -3398,63 +3121,48 @@ mod tests {
             }
             index.sort_unstable();
         }
-        let before = resources.usage().unwrap().1;
+
         assert_eq!(
-            cache
-                .find(
-                    &cache.exact,
-                    [0; 32],
-                    (&collision, None, true),
-                    true,
-                    environment,
-                    Some(expected)
-                )
-                .unwrap(),
+            cache.find_query(
+                &cache.exact,
+                [0; 32],
+                (&collision, None, true),
+                true,
+                Some(expected)
+            ),
             Some(expected)
         );
+
         assert_eq!(
-            resources.usage().unwrap().1 - before,
-            8 + cache.exact.len() as u128 + 10
-        );
-        let before = resources.usage().unwrap().1;
-        assert_eq!(
-            cache
-                .find(
-                    &cache.shaping,
-                    [0; 32],
-                    (&collision, None, true),
-                    false,
-                    environment,
-                    Some(expected)
-                )
-                .unwrap(),
+            cache.find_query(
+                &cache.shaping,
+                [0; 32],
+                (&collision, None, true),
+                false,
+                Some(expected)
+            ),
             Some(expected)
         );
-        assert_eq!(resources.usage().unwrap().1 - before, 4);
+
         let mut wrong_provenance = collision.clone();
         wrong_provenance.provenance.pair_ordinal += 1;
         assert!(cache
-            .find(
+            .find_query(
                 &cache.exact,
                 [0; 32],
                 (&wrong_provenance, None, true),
                 true,
-                environment,
                 Some(expected)
             )
-            .unwrap()
             .is_none());
         assert_eq!(
-            cache
-                .find(
-                    &cache.shaping,
-                    [0; 32],
-                    (&wrong_provenance, None, true),
-                    false,
-                    environment,
-                    Some(expected)
-                )
-                .unwrap(),
+            cache.find_query(
+                &cache.shaping,
+                [0; 32],
+                (&wrong_provenance, None, true),
+                false,
+                Some(expected)
+            ),
             Some(expected)
         );
     }
@@ -3462,14 +3170,14 @@ mod tests {
     #[test]
     fn indexed_query_fingerprints_include_exact_presentation_and_provenance() {
         let appearance = Theme::Publication
-            .resolve(&OperationGenerationResources::new())
+            .resolve()
             .unwrap()
             .typography
             .root
             .caption;
         let input = indexed_query_input("A", &appearance, "owner");
-        let resources = crate::font::canonical::OperationGenerationResources::new();
-        let fingerprints = CachedTextQuery::fingerprints(&input, None, true, &resources).unwrap();
+
+        let fingerprints = CachedTextQuery::fingerprints(&input, None, true);
         for change in 0..7 {
             let mut changed = input.clone();
             match change {
@@ -3481,14 +3189,12 @@ mod tests {
                 5 => changed.provenance.owner.push('x'),
                 _ => changed.provenance.pair_ordinal += 1,
             }
-            let changed = CachedTextQuery::fingerprints(&changed, None, true, &resources).unwrap();
+            let changed = CachedTextQuery::fingerprints(&changed, None, true);
             assert_eq!(changed.0, fingerprints.0);
             assert_ne!(changed.1, fingerprints.1);
         }
         assert_ne!(
-            CachedTextQuery::fingerprints(&input, Some(2), true, &resources)
-                .unwrap()
-                .1,
+            CachedTextQuery::fingerprints(&input, Some(2), true).1,
             fingerprints.1
         );
         for change in 0..4 {
@@ -3501,52 +3207,20 @@ mod tests {
                 _ => changed.weight = TextWeight::Bold,
             }
             assert_ne!(
-                CachedTextQuery::fingerprints(&changed, None, true, &resources)
-                    .unwrap()
-                    .0,
+                CachedTextQuery::fingerprints(&changed, None, true).0,
                 fingerprints.0
             );
         }
         assert_ne!(
-            CachedTextQuery::fingerprints(&input, None, false, &resources)
-                .unwrap()
-                .0,
+            CachedTextQuery::fingerprints(&input, None, false).0,
             fingerprints.0
         );
     }
 
     #[test]
-    fn query_hashing_admits_every_font_byte_before_the_complete_hash_pass() {
-        use crate::font::canonical::{named_stack, OperationGenerationResources};
-        let appearance = TextTheme {
-            stack: named_stack(&["α, A"]),
-            ..Theme::Publication
-                .resolve(&OperationGenerationResources::new())
-                .unwrap()
-                .typography
-                .root
-                .caption
-        };
-        let input = indexed_query_input("A", &appearance, "owner");
-        // 58 fixed bytes, source/owner bytes, one entry visit, tag+length, five name bytes.
-        let work = 58 + 1 + 5 + 1 + 9 + 5;
-        for remaining in [0, work - 1, work] {
-            let resources = OperationGenerationResources::with_test_limits(remaining, 0);
-            let result = CachedTextQuery::fingerprints(&input, None, true, &resources);
-            assert_eq!(result.is_ok(), remaining == work);
-            if remaining == work {
-                assert_eq!(resources.usage().unwrap().1, work);
-            }
-            assert_eq!(resources.byte_usage().unwrap(), 0);
-        }
-    }
-
-    #[test]
-    fn cached_text_hit_refuses_content_work_without_allocating_or_reshaping() {
+    fn cached_text_hits_share_payload_without_reshaping() {
         use crate::font::canonical::{named_stack, FONT_SHAPE_CALLS};
-        let theme = Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let theme = Theme::Publication.resolve().unwrap();
         theme
             .font_environment
             .set(Ok(PreparedFontEnvironment::synthetic()))
@@ -3566,16 +3240,8 @@ mod tests {
                 false,
             )
             .unwrap();
-        let resources = theme
-            .prepared_font_environment()
-            .unwrap()
-            .generation_resources();
-        // Profile metadata/source 2, shared font 1, presentation hash 41,
-        // binary/candidate lookup 2 and owner bytes/length 6: 52.
-        for remaining in [0, 51, 52] {
-            let before = resources.usage().unwrap();
-            let bytes = resources.byte_usage().unwrap();
-            resources.set_test_limits(before.1 + remaining, bytes);
+
+        for _ in 0..3 {
             FONT_SHAPE_CALLS.with(|calls| calls.set(0));
             let result = theme.plan_text(
                 "A",
@@ -3585,17 +3251,8 @@ mod tests {
                 "owner",
                 false,
             );
-            if remaining == 52 {
-                assert!(first.shares_payload(&result.unwrap()));
-            } else {
-                assert!(result
-                    .unwrap_err()
-                    .to_string()
-                    .contains("root processing visits"));
-            }
-            assert_eq!(resources.usage().unwrap().1 - before.1, remaining);
-            assert_eq!(resources.usage().unwrap().0, before.0);
-            assert_eq!(resources.byte_usage().unwrap(), bytes);
+            assert!(first.shares_payload(&result.unwrap()));
+
             FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 0));
         }
     }
@@ -3623,7 +3280,14 @@ mod tests {
             .size(size.0, size.1)
             .svg_preserve_text(&path);
             let evidence = crate::orchestrator::measurements::finish();
-            eprintln!("font_work_evidence,{name},visits={},bytes={},records={},calls={},cache_entries={},source_bytes={},proposal_visits={},exact_trials={}", evidence.visits, evidence.bytes, evidence.records, evidence.measurement_calls, evidence.cache_entries, caption.len(), evidence.counters[crate::orchestrator::measurements::Counter::TextProposalVisit as usize], evidence.counters[crate::orchestrator::measurements::Counter::TextExactTrial as usize]);
+            eprintln!(
+                "font_work_evidence,{name},source_bytes={},proposal_visits={},exact_trials={}",
+                caption.len(),
+                evidence.counters
+                    [crate::orchestrator::measurements::Counter::TextProposalVisit as usize],
+                evidence.counters
+                    [crate::orchestrator::measurements::Counter::TextExactTrial as usize]
+            );
             result.unwrap();
             let svg = std::fs::read_to_string(&path).unwrap();
             let retained = svg
@@ -3648,9 +3312,7 @@ mod tests {
     #[test]
     fn presentation_queries_share_source_profile_and_preserve_literal_stack_identity() {
         use crate::font::canonical::{named_stack, FONT_SHAPE_CALLS};
-        let theme = Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let theme = Theme::Publication.resolve().unwrap();
         theme
             .font_environment
             .set(Ok(PreparedFontEnvironment::synthetic_faces(&[
@@ -3748,9 +3410,7 @@ mod tests {
 
     #[test]
     fn retained_profile_does_not_trust_a_reused_mutable_input_address() {
-        let theme = Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let theme = Theme::Publication.resolve().unwrap();
         theme
             .font_environment
             .set(Ok(PreparedFontEnvironment::synthetic_faces(&[(
@@ -3794,30 +3454,14 @@ mod tests {
     }
 
     #[test]
-    fn effective_significance_copy_uses_actual_role_storage_and_refuses_before_copy() {
-        use crate::font::canonical::{named_stack, FontFamily, OperationGenerationResources};
-        let mut theme = Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+    fn effective_significance_copy_preserves_role_and_exact_override() {
+        use crate::font::canonical::named_stack;
+        let mut theme = Theme::Publication.resolve().unwrap();
         theme.typography.annotations.significance_label.stack = named_stack(&["αX", "A, B"]);
-        let bytes = 2 * size_of::<FontFamily>()
-            + 3
-            + 4
-            + size_of::<[std::sync::atomic::AtomicUsize; 2]>()
-            + size_of::<Vec<FontFamily>>();
-        let work = 2 + 3 + 4;
         let exact = SignificanceMarkStyle::new(23, TextWeight::Bold, 9.0).unwrap();
-        for (visits, limit) in [
-            (0, bytes),
-            (work - 1, bytes),
-            (work, bytes - 1),
-            (work, bytes),
-        ] {
-            let resources = OperationGenerationResources::with_test_limits(visits, limit as u64);
-            let result = theme
-                .typography
-                .effective_significance_label(Some(exact), &resources);
-            if visits == work && limit == bytes {
+        {
+            let result = theme.typography.effective_significance_label(Some(exact));
+            {
                 let result = result.unwrap();
                 assert_eq!(
                     result.stack,
@@ -3825,44 +3469,24 @@ mod tests {
                 );
                 assert_eq!(result.font_size, 23);
                 assert_eq!(result.weight, TextWeight::Bold);
-                assert_eq!(resources.byte_usage().unwrap(), bytes as u64);
-                assert_eq!(resources.usage().unwrap(), (2, work));
-            } else {
-                assert!(result.is_err());
-            }
-            if visits < work {
-                assert_eq!(resources.byte_usage().unwrap(), 0);
             }
         }
     }
 
     #[test]
-    fn admitted_theme_clone_covers_all_eighteen_roles_with_exact_refusal_boundaries() {
-        use crate::font::canonical::{
-            named_stack, OperationGenerationResources, FONT_DISCOVERY_CALLS,
-        };
-        let plot = crate::Plot::scatter(
-            crate::NumericValues::new("x", [0.0]),
-            crate::NumericValues::new("y", [0.0]),
-        )
-        .erase();
-        let mut theme = Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+    fn theme_clone_shares_all_eighteen_roles() {
+        use crate::font::canonical::{named_stack, FONT_DISCOVERY_CALLS};
+
+        let mut theme = Theme::Publication.resolve().unwrap();
         theme.typography.root.title.stack = named_stack(&["αX", "A, B"]);
         let roles = theme.typography.roles();
         assert_eq!(roles.len(), 18);
-        let bytes = 0_u64; // all palette/gradient payloads and font entries are immutable shares
-        let work = 60; // prior forty-two handles plus eighteen composition relationships
         let discoveries = FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
-        for (visits, limit) in [(0, bytes), (work - 1, bytes), (work, bytes)] {
-            let resources = OperationGenerationResources::with_test_limits(visits, limit);
-            let copy = theme.admitted_clone(plot.data().with_axis_resources(&resources));
-            if visits == work && limit == bytes {
-                let copy = copy.unwrap();
+        {
+            let copy = theme.clone();
+            {
                 assert_eq!(copy, theme);
-                assert_eq!(resources.usage().unwrap().1, work);
-                assert_eq!(resources.byte_usage().unwrap(), bytes);
+
                 for (retained, original) in copy.typography.roles().into_iter().zip(roles) {
                     assert_eq!(
                         retained.stack.families().as_ptr(),
@@ -3880,41 +3504,48 @@ mod tests {
                         }
                     }
                 }
-            } else {
-                assert!(copy.is_err());
             }
         }
         assert_eq!(FONT_DISCOVERY_CALLS.with(std::cell::Cell::get), discoveries);
-        assert!(theme.admitted_clone(plot.data()).is_err());
     }
 
     #[test]
-    fn retained_theme_matching_prices_all_eighteen_stack_profiles() {
-        use crate::font::canonical::{named_stack, OperationGenerationResources};
-        let theme = Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+    fn retained_theme_matching_distinguishes_stack_profiles() {
+        use crate::font::canonical::named_stack;
+        let theme = Theme::Publication.resolve().unwrap();
         let mut retained = theme.clone();
-        let work: usize = 63; // sixty payloads plus axis, guide and composition metadata witnesses
-        for remaining in [0, work - 1, work] {
-            let resources = OperationGenerationResources::with_test_limits(remaining as u128, 0);
-            let result = retained.same(&theme, &resources);
-            assert_eq!(result.is_ok(), remaining == work);
-            assert_eq!(resources.usage().unwrap().1, remaining as u128);
-            assert_eq!(resources.byte_usage().unwrap(), 0);
-        }
+        assert!(retained.same_validated(&theme).unwrap());
         retained.typography.root.title.stack = named_stack(&["A, B"]);
-        let resources = OperationGenerationResources::with_test_limits(46, 0);
-        assert!(!retained.same(&theme, &resources).unwrap());
-        assert_eq!(resources.usage().unwrap().1, 46); // forty-five witnesses, then differing font entry count
+
+        assert!(!retained.same_validated(&theme).unwrap());
     }
 
     #[test]
-    fn text_and_intrinsic_cache_hits_admit_calls_before_lookup() {
+    fn text_cache_stops_optional_insertion_without_refusing_rendering() {
+        let root = Theme::Publication.resolve().unwrap();
+        root.font_environment
+            .set(Ok(PreparedFontEnvironment::synthetic()))
+            .unwrap();
+        let mut appearance = root.typography.root.caption.clone();
+        appearance.stack = crate::font::canonical::named_stack(&["Test Sans"]);
+        let render = |owner: &str| {
+            root.measure_text("A", &appearance, PhysicalTextAlignment::Start, owner, false)
+                .unwrap()
+        };
+        let first = render("first");
+        for index in 1..256 {
+            render(&format!("owner {index}"));
+        }
+        assert_eq!(root.text_queries.lock().unwrap().entries.len(), 256);
+        assert_eq!(render("uncached owner").source, "A");
+        assert_eq!(root.text_queries.lock().unwrap().entries.len(), 256);
+        assert!(first.shares_payload(&render("first")));
+    }
+
+    #[test]
+    fn text_and_intrinsic_cache_hits_do_not_reshape() {
         for intrinsic in [false, true] {
-            let mut root = Theme::Publication
-                .resolve(&OperationGenerationResources::new())
-                .unwrap();
+            let mut root = Theme::Publication.resolve().unwrap();
             root.font_environment
                 .set(Ok(PreparedFontEnvironment::synthetic()))
                 .unwrap();
@@ -3936,144 +3567,13 @@ mod tests {
                 }
             };
             query().unwrap();
-            let resources = root
-                .prepared_font_environment()
-                .unwrap()
-                .generation_resources();
-            assert_eq!(resources.call_cache_usage().0, 1 + u128::from(intrinsic));
-            let calls = 1 + u128::from(intrinsic);
-            resources
-                .claim_calls(1_000_000 - calls - resources.call_cache_usage().0)
-                .unwrap();
-            let entries = resources.call_cache_usage().1;
-            let records = resources.usage().unwrap().0;
+
             crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
             query().unwrap();
-            assert_eq!(resources.call_cache_usage(), (1_000_000, entries));
-            assert_eq!(resources.usage().unwrap().0, records);
-            let usage = resources.usage().unwrap();
-            let bytes = resources.byte_usage().unwrap();
-            let error = query().unwrap_err();
-            assert!(error
-                .to_string()
-                .contains("measurement/intrinsic call attempts"));
-            assert_eq!(resources.usage().unwrap(), usage);
-            assert_eq!(resources.byte_usage().unwrap(), bytes);
+
+            query().unwrap();
+
             crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 0));
         }
-    }
-
-    #[test]
-    fn text_cache_insertion_limit_is_independent_and_refusal_remains_fatal() {
-        let root = Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
-        root.font_environment
-            .set(Ok(PreparedFontEnvironment::synthetic()))
-            .unwrap();
-        let mut appearance = root.typography.root.caption.clone();
-        appearance.stack = crate::font::canonical::named_stack(&["Test Sans"]);
-        let first = root
-            .measure_text(
-                "A",
-                &appearance,
-                PhysicalTextAlignment::Start,
-                "first",
-                false,
-            )
-            .unwrap();
-        let resources = root
-            .prepared_font_environment()
-            .unwrap()
-            .generation_resources();
-        resources
-            .claim_cache_entries(999_999 - resources.call_cache_usage().1)
-            .unwrap();
-        let input = indexed_query_input("A", &appearance, "last admitted");
-        let key = root
-            .text_queries
-            .lock()
-            .unwrap()
-            .query_key(
-                &input,
-                None,
-                true,
-                root.prepared_font_environment().unwrap(),
-            )
-            .unwrap();
-        root.cache_text_query(
-            &input,
-            &appearance,
-            None,
-            true,
-            CachedTextResult::Plan(first.clone()),
-            key,
-        )
-        .unwrap();
-        assert_eq!(resources.call_cache_usage().1, 1_000_000);
-        let usage = resources.usage().unwrap().0;
-        let bytes = resources.byte_usage().unwrap();
-        let input = indexed_query_input("A", &appearance, "refused");
-        let key = root
-            .text_queries
-            .lock()
-            .unwrap()
-            .query_key(
-                &input,
-                None,
-                true,
-                root.prepared_font_environment().unwrap(),
-            )
-            .unwrap();
-        let error = root
-            .cache_text_query(
-                &input,
-                &appearance,
-                None,
-                true,
-                CachedTextResult::Plan(first.clone()),
-                key,
-            )
-            .unwrap_err();
-        assert!(error.to_string().contains("root-local cache entries"));
-        assert_eq!(resources.usage().unwrap().0, usage);
-        assert_eq!(resources.byte_usage().unwrap(), bytes);
-        assert_eq!(root.text_queries.lock().unwrap().entries.len(), 2);
-        let error = root
-            .plan_text_quanta_with_policy(
-                "A",
-                &appearance,
-                i64::MAX,
-                PhysicalTextAlignment::Start,
-                "refused",
-                false,
-                true,
-                &crate::layout::fit::ROOT_SCOPE,
-            )
-            .unwrap_err();
-        assert!(matches!(error, crate::layout::fit::PlanError::Fatal(_)));
-        let hit = root
-            .measure_text(
-                "A",
-                &appearance,
-                PhysicalTextAlignment::Start,
-                "first",
-                false,
-            )
-            .unwrap();
-        assert!(first.shares_payload(&hit));
-        assert_eq!(resources.call_cache_usage().1, 1_000_000);
-    }
-
-    #[test]
-    fn text_query_index_storage_is_admitted_before_allocation() {
-        let environment = PreparedFontEnvironment::synthetic();
-        let used = environment.resource_usage().unwrap().font_bytes;
-        environment
-            .claim_unicode_bytes(u64::try_from(536_870_912 - used).unwrap())
-            .unwrap();
-        let mut index = Vec::<TextQueryIndex>::new();
-        assert!(TextQueryCache::reserve(&mut index, &environment).is_err());
-        assert_eq!(index.capacity(), 0);
     }
 }

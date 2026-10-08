@@ -40,7 +40,6 @@ pub(crate) struct PreparedTextRequirement {
     pub(crate) stack: FontStack,
     pub(crate) weight: TextWeight,
     pub(crate) pair_ordinal: u32,
-    source_work_admitted: bool,
 }
 
 impl PreparedTextRequirement {
@@ -69,17 +68,8 @@ impl PreparedTextRequirement {
         {
             let mut used = false;
             for requirement in requirements.iter() {
-                stage
-                    .generation_resources()
-                    .claim_visits(1)
-                    .map_err(|error| {
-                        Error::Render(format!("preference metric font-pair lookup: {error:?}"))
-                    })?;
                 if requirement.weight == appearance.weight
-                    && requirement
-                        .stack
-                        .same(&appearance.stack, &stage.generation_resources())
-                        .map_err(|error| Error::Render(error.to_string()))?
+                    && requirement.stack.same(&appearance.stack)
                 {
                     used = true;
                     break;
@@ -93,7 +83,6 @@ impl PreparedTextRequirement {
                 u32::try_from(index).map_err(|_| {
                     Error::Render("preference metric census address overflowed".into())
                 })?,
-                &stage.generation_resources(),
             )?;
             Self::push_into(
                 requirements,
@@ -126,21 +115,6 @@ impl PreparedTextRequirement {
         #[cfg(not(test))]
         if prepared_stage.is_none() {
             return Err(PreparedTextCensusError::MissingPreparedStage);
-        }
-        if let Some(stage) = prepared_stage.as_deref_mut() {
-            let mut present = false;
-            for entry in requirements.iter() {
-                stage.font_resources().claim_visits(1)?;
-                if entry.component_address == address {
-                    present = true;
-                    break;
-                }
-            }
-            if !present {
-                stage
-                    .claim_topology_slots(1)
-                    .map_err(|error| PreparedTextCensusError::Reservation(error.to_string()))?;
-            }
         }
         reserve_census_vec(
             requirements,
@@ -193,39 +167,10 @@ impl PreparedTextRequirement {
             return Err(PreparedTextCensusError::GeneratedAlphabetOrder);
         }
         let source = source.into();
-        let resources = prepared_stage
-            .as_ref()
-            .map_or_else(canonical::OperationFontResources::new, |stage| {
-                stage.font_resources()
-            });
-        // Admit this one actual font copy before source formatting or any retained buffer.
-        let admitted_stack = appearance.stack.admit_copy(&resources)?;
-        if let Some(stage) = prepared_stage.as_deref_mut() {
-            stage.font_resources().claim_visits(
-                u64::try_from(generated_alphabet.len()).map_err(|_| {
-                    PreparedTextCensusError::Arithmetic("borrowed text census work")
-                })?,
-            )?;
-        }
+        let stack_source = &appearance.stack;
+
         let (source, formatted) = match source {
-            CensusSource::Text(source) => {
-                if let Some(stage) = prepared_stage.as_deref_mut() {
-                    let work = source
-                        .chars()
-                        .count()
-                        .checked_add(canonical::selection_units(&source).count())
-                        .and_then(|work| work.checked_add(usize::from(source.contains('\u{00AD}'))))
-                        .ok_or(PreparedTextCensusError::Arithmetic(
-                            "borrowed text census work",
-                        ))?;
-                    stage
-                        .font_resources()
-                        .claim_visits(u64::try_from(work).map_err(|_| {
-                            PreparedTextCensusError::Arithmetic("borrowed text census work")
-                        })?)?;
-                }
-                (source, false)
-            }
+            CensusSource::Text(source) => (source, false),
             CensusSource::Formatted(arguments) => (
                 Cow::Owned(canonical::format_census_source(
                     arguments,
@@ -251,9 +196,6 @@ impl PreparedTextRequirement {
                 // rather than allocating a second census copy.
                 if let Some(stage) = prepared_stage.as_deref_mut().filter(|_| !formatted) {
                     stage
-                        .font_resources()
-                        .claim_bytes(source.capacity() as u64)?;
-                    stage
                         .reserve_prepared_string(&mut source, 0, "prepared semantic text source")
                         .map_err(|error| PreparedTextCensusError::Reservation(error.to_string()))?;
                 }
@@ -267,8 +209,7 @@ impl PreparedTextRequirement {
             "prepared generated alphabet",
             prepared_stage.as_deref_mut(),
         )?;
-        let source_work_admitted = prepared_stage.is_some();
-        let stack = admitted_stack.copy_with_stage(prepared_stage)?;
+        let stack = stack_source.copy_with_stage(prepared_stage)?;
         retained_alphabet.extend_from_slice(generated_alphabet);
         Ok(Self {
             component_address,
@@ -279,7 +220,6 @@ impl PreparedTextRequirement {
             stack,
             weight: appearance.weight,
             pair_ordinal: u32::MAX,
-            source_work_admitted,
         })
     }
 
@@ -354,11 +294,7 @@ impl PreparedTextCensus {
         if prepared_stage.is_none() {
             return Err(PreparedTextCensusError::MissingPreparedStage);
         }
-        let resources = prepared_stage
-            .as_ref()
-            .map_or_else(canonical::OperationGenerationResources::new, |stage| {
-                stage.generation_resources()
-            });
+
         requirements.sort_unstable_by(|left, right| {
             left.component_address
                 .canonical_text_cmp(&right.component_address)
@@ -374,7 +310,7 @@ impl PreparedTextCensus {
         }
         let mut pair_count = 0;
         for index in 0..requirements.len() {
-            if pair_first_use(&requirements, index, &resources)? {
+            if pair_first_use(&requirements, index) {
                 pair_count += 1;
             }
         }
@@ -386,7 +322,7 @@ impl PreparedTextCensus {
             prepared_stage.as_deref_mut(),
         )?;
         for index in 0..requirements.len() {
-            if pair_first_use(&requirements, index, &resources)? {
+            if pair_first_use(&requirements, index) {
                 first_use_indices.push(index);
             }
         }
@@ -425,13 +361,10 @@ impl PreparedTextCensus {
         for requirement_index in 0..requirements.len() {
             let mut pair_index = None;
             for (ordinal, index) in first_use_indices.iter().enumerate() {
-                resources
-                    .claim_visits(1)
-                    .map_err(canonical::FontError::ShapeAdmission)?;
                 if requirements[*index].weight == requirements[requirement_index].weight
                     && requirements[*index]
                         .stack
-                        .same(&requirements[requirement_index].stack, &resources)?
+                        .same(&requirements[requirement_index].stack)
                 {
                     pair_index = Some(ordinal);
                     break;
@@ -478,13 +411,9 @@ impl PreparedTextCensus {
         &self,
         stack: &FontStack,
         weight: TextWeight,
-        resources: &canonical::OperationGenerationResources,
     ) -> Result<u32, PreparedTextCensusError> {
         for pair in &self.pairs {
-            resources
-                .claim_visits(1)
-                .map_err(canonical::FontError::ShapeAdmission)?;
-            if pair.weight == weight && pair.stack.same(stack, resources)? {
+            if pair.weight == weight && pair.stack.same(stack) {
                 return Ok(pair.pair_ordinal);
             }
         }
@@ -496,17 +425,10 @@ impl PreparedTextCensus {
         mut presence: Vec<u64>,
         prepared_stage: &mut crate::layout::kernel::PreparedStage<'_>,
     ) -> Result<PreparedFontEnvironment, PreparedTextCensusError> {
-        for requirement in &self.requirements {
-            if !requirement.source_work_admitted {
-                prepared_stage
-                    .font_resources()
-                    .claim_visits(requirement.scalar_occurrence_count()?)?;
-            }
-        }
         self.materialize_required_scalars(&mut presence, Some(prepared_stage))?;
-        let environment = PreparedFontEnvironment::discover_system_with_prepared_resources(
+        let environment = PreparedFontEnvironment::discover_for_operation(
             presence,
-            prepared_stage.font_resources(),
+            prepared_stage.operation(),
             prepared_stage,
         )?;
         self.prepare_pairs_in(&environment, Some(prepared_stage))?;
@@ -611,7 +533,6 @@ impl PreparedTextCensus {
         environment: &PreparedFontEnvironment,
         presence: &mut [u64],
     ) -> Result<(), PreparedTextCensusError> {
-        environment.claim_preflight_visits(self.scalar_occurrence_count()?)?;
         self.materialize_required_scalars(presence, None)?;
         self.prepare_pairs_in(environment, None)
     }
@@ -644,23 +565,14 @@ impl PreparedTextCensus {
     }
 }
 
-fn pair_first_use(
-    requirements: &[PreparedTextRequirement],
-    index: usize,
-    resources: &canonical::OperationGenerationResources,
-) -> Result<bool, PreparedTextCensusError> {
+fn pair_first_use(requirements: &[PreparedTextRequirement], index: usize) -> bool {
     let requirement = &requirements[index];
     for earlier in &requirements[..index] {
-        resources
-            .claim_visits(1)
-            .map_err(canonical::FontError::ShapeAdmission)?;
-        if earlier.weight == requirement.weight
-            && earlier.stack.same(&requirement.stack, resources)?
-        {
-            return Ok(false);
+        if earlier.weight == requirement.weight && earlier.stack.same(&requirement.stack) {
+            return false;
         }
     }
-    Ok(true)
+    true
 }
 
 fn reserve_census_vec<T>(
@@ -670,20 +582,6 @@ fn reserve_census_vec<T>(
     prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), PreparedTextCensusError> {
     if let Some(stage) = prepared_stage {
-        super::claim_text_generation(stage.generation_resources().claim_slots(additional as u128))
-            .map_err(|error| PreparedTextCensusError::Reservation(error.to_string()))?;
-        let required = values
-            .len()
-            .checked_add(additional)
-            .ok_or(PreparedTextCensusError::Arithmetic(payload))?;
-        if required > values.capacity() {
-            let bytes = required
-                .checked_mul(std::mem::size_of::<T>())
-                .ok_or(PreparedTextCensusError::Arithmetic(payload))?;
-            stage.font_resources().claim_bytes(
-                u64::try_from(bytes).map_err(|_| PreparedTextCensusError::Arithmetic(payload))?,
-            )?;
-        }
         stage
             .reserve_prepared(values, additional, payload)
             .map_err(|error| PreparedTextCensusError::Reservation(error.to_string()))
@@ -701,16 +599,6 @@ fn reserve_census_string(
     prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), PreparedTextCensusError> {
     if let Some(stage) = prepared_stage {
-        let required = value
-            .len()
-            .checked_add(additional)
-            .ok_or(PreparedTextCensusError::Arithmetic(payload))?;
-        if required > value.capacity() {
-            stage.font_resources().claim_bytes(
-                u64::try_from(required)
-                    .map_err(|_| PreparedTextCensusError::Arithmetic(payload))?,
-            )?;
-        }
         stage
             .reserve_prepared_string(value, additional, payload)
             .map_err(|error| PreparedTextCensusError::Reservation(error.to_string()))
@@ -725,12 +613,7 @@ fn retain_family_stack(
     source: &FontStack,
     prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<FontStack, PreparedTextCensusError> {
-    let resources = prepared_stage
-        .as_ref()
-        .map_or_else(canonical::OperationFontResources::new, |stage| {
-            stage.font_resources()
-        });
-    Ok(source.copy_with_stage(&resources, prepared_stage)?)
+    Ok(source.copy_with_stage(prepared_stage)?)
 }
 
 fn reserve_required_scalar_capacities(
@@ -794,9 +677,9 @@ fn prepared_address_child(
     slot_index: u32,
     prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<ComponentAddress, Error> {
-    let stage = prepared_stage
+    prepared_stage
         .ok_or_else(|| Error::Render(PreparedTextCensusError::MissingPreparedStage.to_string()))?;
-    base.child(role, slot_index, &stage.generation_resources())
+    base.child(role, slot_index)
 }
 
 #[expect(
@@ -986,15 +869,9 @@ impl PreparedTextRequirement {
             }
         }
 
-        let significance_appearance = theme.typography.effective_significance_label(
-            plot.significance_mark_style_override(),
-            &prepared_stage
-                .as_ref()
-                .ok_or_else(|| {
-                    Error::Render(PreparedTextCensusError::MissingPreparedStage.to_string())
-                })?
-                .generation_resources(),
-        )?;
+        let significance_appearance = theme
+            .typography
+            .effective_significance_label(plot.significance_mark_style_override())?;
         for (index, annotation) in plot.significance_annotations().iter().enumerate() {
             let address = prepared_address_child(
                 base,
@@ -1124,9 +1001,7 @@ fn push_deferred_plot_requirements(
         }
         if let Some(label) = layer.legend_label_text() {
             if plot.legend_policy_spec() != crate::LegendPolicy::Hidden {
-                let (_, label) = plot
-                    .legend_identity(label)
-                    .resolved_text(plot, plot.data())?;
+                let (_, label) = plot.legend_identity(label).resolved_text(plot)?;
                 push_deferred_body(
                     requirements,
                     &body_address,
@@ -1141,7 +1016,7 @@ fn push_deferred_plot_requirements(
     }
 
     if plot_data_legend_is_visible(plot, kind) {
-        for source in legend_title_census(plot, kind) {
+        for source in legend_title_census(plot, kind)? {
             push_deferred_body(
                 requirements,
                 &body_address,
@@ -1193,7 +1068,7 @@ fn push_deferred_plot_requirements(
                     requirements,
                     &body_address,
                     &mut body_index,
-                    plot.resolve_label(values.name()),
+                    plot.resolve_label(values.name())?,
                     &[],
                     &theme.typography.guides.legend_title,
                     prepared_stage.as_deref_mut(),
@@ -1240,7 +1115,7 @@ fn push_deferred_plot_requirements(
                         requirements,
                         &body_address,
                         &mut body_index,
-                        plot.resolve_label(value),
+                        plot.resolve_label(value)?,
                         &[],
                         &theme.typography.guides.legend_label,
                         prepared_stage.as_deref_mut(),
@@ -1296,7 +1171,7 @@ fn push_deferred_plot_requirements(
                         requirements,
                         &body_address,
                         &mut body_index,
-                        plot.resolve_label(hue),
+                        plot.resolve_label(hue)?,
                         &[],
                         &theme.typography.guides.legend_label,
                         prepared_stage.as_deref_mut(),
@@ -1315,7 +1190,7 @@ fn push_deferred_plot_requirements(
                     address,
                     PreparedTextRole::AxisTitle,
                     body_index,
-                    plot.resolve_label(variable),
+                    plot.resolve_label(variable)?,
                     &[],
                     &theme.typography.axes.axis_title,
                     prepared_stage.as_deref_mut(),
@@ -1500,12 +1375,10 @@ fn push_deferred_plot_requirements(
             PlotKind::Coefficient | PlotKind::Forest | PlotKind::PointInterval
         )
     {
-        let resources = prepared_stage
-            .as_ref()
-            .map(|stage| stage.generation_resources());
+        let resources = prepared_stage.as_ref().map(|stage| stage.operation());
         let data = resources.as_ref().map_or_else(
             || plot.data(),
-            |resources| plot.data().with_axis_resources(resources),
+            |resources| plot.data().with_operation(resources),
         );
         for panel in crate::orchestrator::facet_text_census_panels(plot, data)? {
             specialized_text_census(
@@ -1689,17 +1562,20 @@ fn legend_uses_pair_identity(plot: &Plot, kind: PlotKind) -> bool {
         )
 }
 
-fn legend_title_census(plot: &Plot, kind: PlotKind) -> impl Iterator<Item = Cow<'_, str>> {
-    if kind == PlotKind::HorizontalBar && plot.colors_by_sign() {
+fn legend_title_census(
+    plot: &Plot,
+    kind: PlotKind,
+) -> Result<impl Iterator<Item = Cow<'_, str>>, Error> {
+    let sources = if kind == PlotKind::HorizontalBar && plot.colors_by_sign() {
         [Some(Cow::Borrowed("Change")), None, None]
     } else if legend_uses_pair_identity(plot, kind) {
         [
             Some(Cow::Owned(plot.resolve_label(
                 plot.group_name().expect("pair identity has a group"),
-            ))),
+            )?)),
             Some(Cow::Owned(plot.resolve_label(
                 plot.hue_name().expect("pair identity has a hue"),
-            ))),
+            )?)),
             Some(Cow::Borrowed(" × ")),
         ]
     } else {
@@ -1709,14 +1585,13 @@ fn legend_title_census(plot: &Plot, kind: PlotKind) -> impl Iterator<Item = Cow<
             Some(if literal {
                 Cow::Borrowed("series")
             } else {
-                Cow::Owned(plot.resolve_label(plot.legend_title_key()))
+                Cow::Owned(plot.resolve_label(plot.legend_title_key())?)
             }),
             None,
             None,
         ]
-    }
-    .into_iter()
-    .flatten()
+    };
+    Ok(sources.into_iter().flatten())
 }
 
 fn specialized_text_census(
@@ -1989,9 +1864,7 @@ mod tests {
             crate::NumericValues::new("y", [2.0]),
         )
         .erase();
-        let theme = crate::Theme::Publication
-            .resolve(&canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let discoveries = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
         let error = foundational_plot_requirements(
             None,
@@ -2127,21 +2000,17 @@ mod tests {
     }
 
     #[test]
-    fn soft_hyphen_borrowed_and_chunked_format_admission_include_derived_work_once() {
+    fn soft_hyphen_borrowed_and_chunked_sources_include_derived_literal_once() {
         for formatted in [false, true] {
             for alphabet in [&[][..], &['-'][..]] {
-                for refuse in [false, true] {
+                {
                     crate::layout::plan_exact_root(
                         320,
                         240,
                         |stage| {
                             // One copy (entry + nine name bytes), source scalars/units,
                             // one derived literal, and the generated alphabet occurrences.
-                            let work = 10 + 7 + u64::try_from(alphabet.len()).unwrap();
-                            stage
-                                .font_resources()
-                                .claim_visits(1_000_000 - work + u64::from(refuse))
-                                .unwrap();
+
                             let appearance = appearance("Test Sans", TextWeight::Bold);
                             let result = if formatted {
                                 PreparedTextRequirement::new_with_stage(
@@ -2164,24 +2033,12 @@ mod tests {
                                     Some(stage),
                                 )
                             };
-                            if refuse {
-                                assert!(matches!(
-                                    result,
-                                    Err(PreparedTextCensusError::Font(
-                                        canonical::FontError::Limit { .. }
-                                    ))
-                                ));
-                                assert_eq!(stage.font_resources().usage().unwrap().font_bytes, 0);
-                            } else {
+                            {
                                 let requirement = result.unwrap();
                                 assert_eq!(requirement.source, "A\u{00AD}\u{00AD}");
                                 assert_eq!(
                                     requirement.scalar_occurrence_count().unwrap(),
                                     4 + u64::try_from(alphabet.len()).unwrap()
-                                );
-                                assert_eq!(
-                                    stage.font_resources().usage().unwrap().processing_visits,
-                                    1_000_000
                                 );
                             }
                             Ok(())
@@ -2196,7 +2053,7 @@ mod tests {
     }
 
     #[test]
-    fn formatted_source_census_charges_the_same_source_work_and_bytes_once() {
+    fn formatted_source_census_preserves_the_complete_source() {
         for formatted in [false, true] {
             crate::layout::plan_exact_root(
                 320,
@@ -2231,19 +2088,7 @@ mod tests {
                     }
                     .map_err(|error| Error::Render(error.to_string()))?;
                     assert_eq!(source.source, "1\u{0301}");
-                    assert_eq!(
-                        stage.font_resources().usage().unwrap().processing_visits,
-                        2 + 1 + 10 // source scalars/unit and one actual stack copy
-                    );
-                    let expected_bytes = 3
-                        + "Test Sans".len()
-                        + std::mem::size_of::<canonical::FontFamily>()
-                        + size_of::<[std::sync::atomic::AtomicUsize; 2]>()
-                        + size_of::<Vec<canonical::FontFamily>>();
-                    assert_eq!(
-                        stage.font_resources().usage().unwrap().font_bytes,
-                        expected_bytes as u128
-                    );
+
                     requirements.push(source);
                     let census = PreparedTextCensus::materialize(requirements, Some(stage), None)
                         .map_err(|error| Error::Render(error.to_string()))?;
@@ -2258,13 +2103,11 @@ mod tests {
     }
 
     #[test]
-    fn staged_topology_is_admitted_before_requirement_storage_and_shared_addresses_count_once() {
+    fn staged_requirements_preserve_shared_and_distinct_addresses() {
         crate::layout::plan_exact_root(
             320,
             240,
             |stage| {
-                // The exact-root driver already owns one structural slot.
-                stage.claim_topology_slots(999_998)?;
                 let appearance = appearance("Test Sans", TextWeight::Normal);
                 let address = ComponentAddress::root();
                 let mut requirements = Vec::new();
@@ -2281,10 +2124,8 @@ mod tests {
                     )
                     .map_err(|error| Error::Render(error.to_string()))?;
                 }
-                let other =
-                    address.child(AddressRole::RootCaption, 0, &stage.generation_resources())?;
-                let capacity = requirements.capacity();
-                let error = PreparedTextRequirement::push_into(
+                let other = address.child(AddressRole::RootCaption, 0)?;
+                PreparedTextRequirement::push_into(
                     &mut requirements,
                     other,
                     PreparedTextRole::Caption,
@@ -2294,11 +2135,12 @@ mod tests {
                     &appearance,
                     Some(stage),
                 )
-                .unwrap_err();
-                assert!(error.to_string().contains("prepared topology slots"));
-                assert_eq!(stage.generation_resources().topology_usage(), 1_000_000);
-                assert_eq!(requirements.len(), 2);
-                assert_eq!(requirements.capacity(), capacity);
+                .unwrap();
+                assert_eq!(requirements.len(), 3);
+                assert_eq!(
+                    PreparedTextCensus::structural_address_count(&requirements).unwrap(),
+                    2
+                );
                 Ok(())
             },
             |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
@@ -2308,45 +2150,11 @@ mod tests {
     }
 
     #[test]
-    fn borrowed_source_work_refusal_precedes_source_retention() {
-        crate::layout::plan_exact_root(
-            320,
-            240,
-            |stage| {
-                stage
-                    .font_resources()
-                    .claim_visits(1_000_000)
-                    .map_err(|error| Error::Render(error.to_string()))?;
-                let appearance = appearance("Test Sans", TextWeight::Normal);
-                let error = PreparedTextRequirement::new_with_stage(
-                    ComponentAddress::root(),
-                    PreparedTextRole::Title,
-                    0,
-                    "A\u{0301}",
-                    &[],
-                    &appearance,
-                    Some(stage),
-                )
-                .unwrap_err();
-                assert!(error.to_string().contains("root processing visits"));
-                assert_eq!(stage.font_resources().usage().unwrap().font_bytes, 0);
-                Ok(())
-            },
-            |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
-            |(), _, (), _| Ok(()),
-        )
-        .unwrap();
-    }
-
-    #[test]
-    fn census_admits_one_utf8_stack_copy_before_source_and_font_buffers() {
-        for remaining in [0, 2, 3, 4] {
+    fn census_retains_an_independent_utf8_stack_copy() {
+        {
             with_prepared_stage(|stage| {
                 let appearance = appearance("α", TextWeight::Normal);
-                let resources = stage.font_resources();
-                resources
-                    .generation_resources()
-                    .set_test_limits(remaining, 536_870_912);
+
                 let result = PreparedTextRequirement::new_with_stage(
                     ComponentAddress::root(),
                     PreparedTextRole::Title,
@@ -2356,24 +2164,12 @@ mod tests {
                     &appearance,
                     Some(stage),
                 );
-                if remaining >= 3 {
-                    let requirement = result.unwrap();
-                    assert_eq!(requirement.stack, appearance.stack);
-                    assert_eq!(resources.usage().unwrap().processing_visits, 3); // one entry + two UTF-8 bytes
-                    assert_eq!(
-                        resources.usage().unwrap().font_bytes,
-                        (size_of::<canonical::FontFamily>()
-                            + 2
-                            + size_of::<[std::sync::atomic::AtomicUsize; 2]>()
-                            + size_of::<Vec<canonical::FontFamily>>())
-                            as u128
-                    );
-                } else {
-                    assert!(result.is_err());
-                    assert_eq!(resources.usage().unwrap().processing_visits, 0);
-                    assert_eq!(resources.usage().unwrap().font_bytes, 0);
-                    assert_eq!(resources.generation_resources().usage().unwrap().0, 0);
-                }
+                let requirement = result.unwrap();
+                assert_eq!(requirement.stack, appearance.stack);
+                assert_ne!(
+                    requirement.stack.families().as_ptr(),
+                    appearance.stack.families().as_ptr()
+                );
                 Ok(())
             })
             .unwrap();
@@ -2403,8 +2199,7 @@ mod tests {
                 .map_err(|error| Error::Render(error.to_string()))?;
                 let storage_pointer = requirements.as_ptr();
                 assert_eq!(requirements[0].source.as_ptr(), source_pointer);
-                let work = stage.font_resources().usage().unwrap().processing_visits;
-                assert_eq!(work, 2 + 1 + 1 + "Test Sans".len() as u128);
+
                 let mut presence = stage.reserve_scalar_presence_map()?;
                 let census =
                     PreparedTextCensus::materialize(requirements, Some(stage), Some(&mut presence))
@@ -2446,13 +2241,7 @@ mod tests {
     #[test]
     fn census_orders_records_and_assigns_structural_pairs_by_first_use() {
         let root = ComponentAddress::root();
-        let panel = root
-            .child(
-                AddressRole::DataPanel,
-                0,
-                &crate::font::canonical::OperationGenerationResources::new(),
-            )
-            .unwrap();
+        let panel = root.child(AddressRole::DataPanel, 0).unwrap();
         let mut normal = appearance("Test Sans", TextWeight::Normal);
         normal.stack = FontStack::new([
             canonical::FontFamily::named("Test Sans").unwrap(),
@@ -2496,22 +2285,12 @@ mod tests {
         assert_eq!(census.counts.structural_addresses, 2);
         assert_eq!(
             census
-                .pair_ordinal(
-                    &normal.stack,
-                    TextWeight::Normal,
-                    &canonical::OperationGenerationResources::new()
-                )
+                .pair_ordinal(&normal.stack, TextWeight::Normal)
                 .unwrap(),
             0
         );
         assert_eq!(
-            census
-                .pair_ordinal(
-                    &bold.stack,
-                    TextWeight::Bold,
-                    &canonical::OperationGenerationResources::new()
-                )
-                .unwrap(),
+            census.pair_ordinal(&bold.stack, TextWeight::Bold).unwrap(),
             1
         );
     }
@@ -2568,8 +2347,8 @@ mod tests {
     }
 
     #[test]
-    fn staged_census_dedup_and_ordinals_admit_each_examined_name_byte() {
-        for remaining in [0, 47, 48] {
+    fn staged_census_preserves_distinct_names_and_ordinals() {
+        {
             with_prepared_stage(|stage| {
                 let requirements = ["Alpha0", "Alpha1"]
                     .into_iter()
@@ -2587,14 +2366,9 @@ mod tests {
                         .unwrap()
                     })
                     .collect();
-                let resources = stage.generation_resources();
-                let before = resources.usage().unwrap().1;
-                let bytes = resources.byte_usage().unwrap();
-                resources.set_test_limits(before + remaining, 536_870_912);
+
                 let result = PreparedTextCensus::materialize(requirements, Some(stage), None);
-                // Count/fill comparisons: 10 each; two copies: 7 each.
-                // Ordinals: 2 for the exact first source, 10+2 for the second.
-                if remaining == 48 {
+                {
                     let census = result.unwrap();
                     assert_eq!(census.pairs.len(), 2);
                     assert_eq!(
@@ -2605,13 +2379,8 @@ mod tests {
                             .collect::<Vec<_>>(),
                         [0, 1]
                     );
-                } else {
-                    assert!(result.is_err());
                 }
-                assert_eq!(resources.usage().unwrap().1 - before, remaining);
-                if remaining == 0 {
-                    assert_eq!(resources.byte_usage().unwrap(), bytes);
-                }
+
                 Ok(())
             })
             .unwrap();
@@ -2619,7 +2388,7 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_scalar_occurrences_charge_work_but_pair_membership_deduplicates() {
+    fn duplicate_scalar_occurrences_preserve_unique_pair_membership() {
         let appearance = appearance("Test Sans", TextWeight::Normal);
         let mut census = PreparedTextCensus::materialize(
             vec![requirement(
@@ -2685,9 +2454,7 @@ mod tests {
         )
         .x_ticks(vec![crate::layout::AxisTick::new(1.0, "exact")])
         .erase();
-        let theme = crate::Theme::Publication
-            .resolve(&canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let requirements = with_prepared_stage(|stage| {
             foundational_plot_requirements(
                 None,
@@ -2736,16 +2503,14 @@ mod tests {
                 crate::NumericLabelFormat::default(),
             ))
             .erase();
-            let resources = crate::font::canonical::OperationGenerationResources::new();
+            let resources = crate::font::canonical::OperationContext::new();
             let inputs = crate::plots::shared_x::prepare_plot(
                 &plot,
                 &resources,
                 Some(&crate::theme::scale_values::test_defaults()),
             )
             .unwrap();
-            let mut theme = crate::Theme::Publication
-                .resolve(&canonical::OperationGenerationResources::new())
-                .unwrap();
+            let mut theme = crate::Theme::Publication.resolve().unwrap();
             theme.typography.annotations.contrast.light.stack =
                 canonical::named_stack(&["Light contrast font"]);
             theme.typography.annotations.contrast.dark.stack =
@@ -2792,16 +2557,14 @@ mod tests {
             crate::HeatmapNullRowAnnotation::new("absent", "Unavailable").unwrap(),
         )
         .erase();
-        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let resources = crate::font::canonical::OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(
             &plot,
             &resources,
             Some(&crate::theme::scale_values::test_defaults()),
         )
         .unwrap();
-        let mut theme = crate::Theme::Publication
-            .resolve(&canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         theme.surfaces.plot_panel = Color::rgba(0, 0, 0, 0);
         theme.surfaces.canvas_root = Color::rgba(0, 0, 0, 0);
         theme.marks.heatmap_missing_fill = Color::rgba(20, 40, 60, 0);
@@ -2861,16 +2624,14 @@ mod tests {
             crate::NumericLabelFormat::default().precision(2).unwrap(),
         ))
         .erase();
-        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let resources = crate::font::canonical::OperationContext::new();
         let mut inputs = crate::plots::shared_x::prepare_plot(
             &plot,
             &resources,
             Some(&crate::theme::scale_values::test_defaults()),
         )
         .unwrap();
-        let mut theme = crate::Theme::Publication
-            .resolve(&canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         theme.typography.annotations.contrast.light.stack =
             canonical::named_stack(&["Selected light contrast"]);
         theme.typography.annotations.contrast.dark.stack =
@@ -2930,7 +2691,7 @@ mod tests {
             .unwrap()
             .panels[0]
             .1
-            .install_shared_domain(&descriptor, plot.data().with_axis_resources(&resources))
+            .install_shared_domain(&descriptor)
             .unwrap();
         assert_eq!(
             selected_stack(&inputs).unwrap(),
@@ -2953,16 +2714,14 @@ mod tests {
             crate::EstimateStatus::NotEstimable,
         ])
         .erase();
-        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let resources = crate::font::canonical::OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(
             &plot,
             &resources,
             Some(&crate::theme::scale_values::test_defaults()),
         )
         .unwrap();
-        let mut theme = crate::Theme::Publication
-            .resolve(&canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         theme.typography.annotations.estimate_detail.stack =
             canonical::named_stack(&["Estimate detail only"]);
         theme.typography.annotations.estimate_detail.font_size = 20;
@@ -3009,9 +2768,7 @@ mod tests {
                 crate::NumericLabelFormat::default(),
             ))
             .erase();
-            let mut theme = crate::Theme::Publication
-                .resolve(&canonical::OperationGenerationResources::new())
-                .unwrap();
+            let mut theme = crate::Theme::Publication.resolve().unwrap();
             let available = theme.typography.annotations.contrast.light.stack.clone();
             let missing = canonical::named_stack(&["No Such Contrast Face In This Operation"]);
             theme.typography.annotations.contrast.light.stack = if light_selected {
@@ -3031,7 +2788,7 @@ mod tests {
                 |stage| {
                     let inputs = crate::plots::shared_x::prepare_plot(
                         &plot,
-                        &stage.generation_resources(),
+                        &stage.operation(),
                         Some(&crate::theme::scale_values::test_defaults()),
                     )?;
                     let requirements = foundational_plot_requirements(
@@ -3059,7 +2816,6 @@ mod tests {
                     let minimum = crate::plots::heatmap::prepare_intrinsics(
                         marks,
                         &inputs.axes[0].1,
-                        plot.data(),
                         &theme,
                         None,
                     )?;

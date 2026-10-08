@@ -1,6 +1,5 @@
 //! Quantized track allocation for active sequence and later Grid owners.
 
-use crate::font::canonical::OperationGenerationResources;
 use crate::layout::fit::{FitOutcome, FitScope};
 use crate::layout::kernel::FitKind;
 use crate::layout::ComponentAddress;
@@ -31,14 +30,7 @@ pub(crate) struct GridRequirement<'a> {
     pub address: &'a ComponentAddress,
 }
 
-fn admitted<T>(resources: &OperationGenerationResources, count: usize) -> Result<Vec<T>, Error> {
-    let bytes = count
-        .checked_mul(std::mem::size_of::<T>())
-        .and_then(|bytes| u64::try_from(bytes).ok())
-        .ok_or_else(|| Error::Render("track storage overflowed".into()))?;
-    resources
-        .claim_bytes(bytes)
-        .map_err(|error| Error::Render(format!("track allocation admission: {error:?}")))?;
+fn admitted<T>(count: usize) -> Result<Vec<T>, Error> {
     let mut values = Vec::new();
     values
         .try_reserve_exact(count)
@@ -62,7 +54,7 @@ pub(crate) fn allocate_tracks(
     insets: [i64; 2],
     gap: i64,
     require_full: bool,
-    resources: &OperationGenerationResources,
+
     scope: &FitScope,
 ) -> Result<FitOutcome<TrackAllocation>, Error> {
     if total < 0 || gap < 0 || insets.into_iter().any(|inset| inset < 0) {
@@ -70,15 +62,12 @@ pub(crate) fn allocate_tracks(
             "track constraints must be nonnegative".into(),
         ));
     }
-    let mut sizes = admitted(resources, specs.len())?;
-    let mut flexible = admitted(resources, specs.len())?;
+    let mut sizes = admitted(specs.len())?;
+    let mut flexible = admitted(specs.len())?;
     let mut inflexible_total = 0_i128;
     let mut flexible_min = 0_i128;
     let mut flexible_preferred = 0_i128;
     for (index, spec) in specs.iter().enumerate() {
-        resources
-            .claim_visits(1)
-            .map_err(|error| Error::Render(format!("track specification admission: {error:?}")))?;
         if spec.min < 0 || spec.preferred < spec.min || spec.max.is_some_and(|max| max < spec.min) {
             return Err(Error::Render(
                 "inconsistent track minimum, preference, or maximum".into(),
@@ -112,7 +101,7 @@ pub(crate) fn allocate_tracks(
     if remainder < flexible_preferred {
         let deficit = checked(flexible_preferred - remainder)?;
         let capacity = checked(flexible_preferred - flexible_min)?;
-        let mut remainders = admitted(resources, flexible.len())?;
+        let mut remainders = admitted(flexible.len())?;
         let mut spent = 0_i64;
         for &index in &flexible {
             let cap = sizes[index] - specs[index].min;
@@ -129,16 +118,7 @@ pub(crate) fn allocate_tracks(
                 .ok_or_else(|| Error::Render("proportional shrink overflowed".into()))?;
             remainders.push((numerator % denominator, index));
         }
-        resources
-            .claim_visits(
-                u128::try_from(remainders.len())
-                    .map_err(|_| Error::Render("track sort count overflowed".into()))?
-                    .checked_mul(u128::from(
-                        remainders.len().checked_ilog2().unwrap_or(0) + 1,
-                    ))
-                    .ok_or_else(|| Error::Render("track sort count overflowed".into()))?,
-            )
-            .map_err(|error| Error::Render(format!("track shrink sort admission: {error:?}")))?;
+
         remainders.sort_unstable_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
         let mut leftover = deficit - spent;
         for &(_, index) in &remainders {
@@ -157,17 +137,9 @@ pub(crate) fn allocate_tracks(
         }
     } else {
         let mut surplus = checked(remainder - flexible_preferred)?;
-        let mut active = admitted(resources, flexible.len())?;
+        let mut active = admitted(flexible.len())?;
         active.extend(flexible);
         while surplus > 0 && !active.is_empty() {
-            resources
-                .claim_visits(
-                    u128::try_from(active.len())
-                        .map_err(|_| Error::Render("track surplus count overflowed".into()))?
-                        .checked_mul(2)
-                        .ok_or_else(|| Error::Render("track surplus count overflowed".into()))?,
-                )
-                .map_err(|error| Error::Render(format!("track surplus admission: {error:?}")))?;
             let count = i64::try_from(active.len())
                 .map_err(|_| Error::Render("track count overflowed".into()))?;
             let quotient = surplus / count;
@@ -225,7 +197,6 @@ fn raise_span(
     target: i64,
     gap: i64,
     hard: bool,
-    resources: &OperationGenerationResources,
 ) -> Result<bool, Error> {
     let mut current = i128::from(gap)
         * i128::try_from(span - 1).map_err(|_| Error::Render("Grid span overflowed".into()))?;
@@ -236,16 +207,9 @@ fn raise_span(
     if deficit <= 0 {
         return Ok(true);
     }
-    let mut active = admitted(resources, span)?;
+    let mut active = admitted(span)?;
     active.extend((start..start + span).filter(|&index| tracks[index].flexible));
     while deficit > 0 && !active.is_empty() {
-        resources
-            .claim_visits(
-                u128::try_from(active.len())
-                    .map_err(|_| Error::Render("Grid span work overflowed".into()))?
-                    * 2,
-            )
-            .map_err(|error| Error::Render(format!("Grid span admission: {error:?}")))?;
         let count = i128::try_from(active.len())
             .map_err(|_| Error::Render("Grid span count overflowed".into()))?;
         let quotient = deficit / count;
@@ -294,7 +258,7 @@ pub(crate) fn allocate_grid_axis(
     gap: i64,
     declared_em: Option<i64>,
     require_full: bool,
-    resources: &OperationGenerationResources,
+
     scope: &FitScope,
 ) -> Result<FitOutcome<TrackAllocation>, Error> {
     if base.is_empty() || gap < 0 || declared_em.is_some_and(|em| em < 0) {
@@ -312,11 +276,8 @@ pub(crate) fn allocate_grid_axis(
             ));
         }
     }
-    let mut order = admitted(resources, children.len())?;
+    let mut order = admitted(children.len())?;
     for (index, child) in children.iter().enumerate() {
-        resources
-            .claim_visits(1)
-            .map_err(|error| Error::Render(format!("Grid child admission: {error:?}")))?;
         if child.span == 0
             || child
                 .start
@@ -331,14 +292,7 @@ pub(crate) fn allocate_grid_axis(
         }
         order.push(index);
     }
-    resources
-        .claim_visits(
-            u128::try_from(order.len())
-                .map_err(|_| Error::Render("Grid sort overflowed".into()))?
-                * u128::from(order.len().checked_ilog2().unwrap_or(0) + 1)
-                * 2,
-        )
-        .map_err(|error| Error::Render(format!("Grid order admission: {error:?}")))?;
+
     order.sort_unstable_by(|&left, &right| children[left].address.cmp(children[right].address));
     if order
         .windows(2)
@@ -352,7 +306,7 @@ pub(crate) fn allocate_grid_axis(
             .cmp(&children[right].span)
             .then_with(|| children[left].address.cmp(children[right].address))
     });
-    let mut tracks = admitted(resources, base.len())?;
+    let mut tracks = admitted(base.len())?;
     tracks.extend_from_slice(base);
     if let Some(em) = declared_em {
         for track in &mut tracks {
@@ -379,15 +333,7 @@ pub(crate) fn allocate_grid_axis(
                 )));
             }
             track.min = track.min.max(child.hard);
-        } else if !raise_span(
-            &mut tracks,
-            child.start,
-            child.span,
-            child.hard,
-            gap,
-            true,
-            resources,
-        )? {
+        } else if !raise_span(&mut tracks, child.start, child.span, child.hard, gap, true)? {
             return Ok(FitOutcome::Miss(FitScope::new(child.address, 0).failure(
                 FitKind::TrackOrResidual,
                 "Grid span has no flexible hard headroom",
@@ -423,7 +369,6 @@ pub(crate) fn allocate_grid_axis(
                 child.preferred,
                 gap,
                 false,
-                resources,
             )?;
         }
     }
@@ -441,7 +386,7 @@ pub(crate) fn allocate_grid_axis(
                         .map_err(|_| Error::Render("natural Grid gap count overflowed".into()))?,
         )?,
     };
-    let result = allocate_tracks(&tracks, total, insets, gap, require_full, resources, scope)?;
+    let result = allocate_tracks(&tracks, total, insets, gap, require_full, scope)?;
     if let FitOutcome::Measured(allocation) = &result {
         for &index in &order {
             let child = &children[index];
@@ -497,11 +442,7 @@ mod tests {
     #[test]
     fn natural_grid_uses_its_preferred_vector_and_retains_trailing_declared_tracks() {
         let owner = ComponentAddress::root()
-            .child(
-                AddressRole::CanvasHeader,
-                0,
-                &crate::font::canonical::OperationGenerationResources::new(),
-            )
+            .child(AddressRole::CanvasHeader, 0)
             .unwrap();
         let children = [grid(&owner, 0, 2, 5, 9)];
         let FitOutcome::Measured(natural) = allocate_grid_axis(
@@ -512,7 +453,6 @@ mod tests {
             1,
             Some(2),
             true,
-            &OperationGenerationResources::new(),
             &FitScope::root(),
         )
         .unwrap() else {
@@ -528,7 +468,6 @@ mod tests {
             1,
             Some(2),
             true,
-            &OperationGenerationResources::new(),
             &FitScope::root(),
         )
         .unwrap() else {
@@ -540,11 +479,7 @@ mod tests {
     #[test]
     fn grid_spanning_header_raises_equal_tracks_before_assigned_allocation() {
         let address = ComponentAddress::root()
-            .child(
-                AddressRole::CanvasHeader,
-                0,
-                &crate::font::canonical::OperationGenerationResources::new(),
-            )
+            .child(AddressRole::CanvasHeader, 0)
             .unwrap();
         let children = [grid(&address, 0, 2, 10, 14)];
         let FitOutcome::Measured(result) = allocate_grid_axis(
@@ -555,7 +490,6 @@ mod tests {
             2,
             None,
             true,
-            &OperationGenerationResources::new(),
             &FitScope::root(),
         )
         .unwrap() else {
@@ -568,11 +502,7 @@ mod tests {
     #[test]
     fn spanning_hard_surplus_redistributes_after_one_track_caps() {
         let address = ComponentAddress::root()
-            .child(
-                AddressRole::CanvasHeader,
-                0,
-                &crate::font::canonical::OperationGenerationResources::new(),
-            )
+            .child(AddressRole::CanvasHeader, 0)
             .unwrap();
         let mut base = [flex(0, 0, None); 3];
         base[0].max = Some(1);
@@ -584,7 +514,6 @@ mod tests {
             0,
             None,
             true,
-            &OperationGenerationResources::new(),
             &FitScope::root(),
         )
         .unwrap() else {
@@ -596,18 +525,10 @@ mod tests {
     #[test]
     fn overlapping_spans_are_canonical_and_infeasible_total_misses() {
         let a = ComponentAddress::root()
-            .child(
-                AddressRole::CanvasHeader,
-                0,
-                &crate::font::canonical::OperationGenerationResources::new(),
-            )
+            .child(AddressRole::CanvasHeader, 0)
             .unwrap();
         let b = ComponentAddress::root()
-            .child(
-                AddressRole::CanvasHeader,
-                1,
-                &crate::font::canonical::OperationGenerationResources::new(),
-            )
+            .child(AddressRole::CanvasHeader, 1)
             .unwrap();
         let base = [flex(0, 0, None); 3];
         let run = |reversed, total| {
@@ -623,7 +544,6 @@ mod tests {
                 0,
                 None,
                 true,
-                &OperationGenerationResources::new(),
                 &FitScope::root(),
             )
             .unwrap()
@@ -641,7 +561,6 @@ mod tests {
 
     #[test]
     fn declared_sparse_tracks_remain_noncollapsing_while_empty_slots_stay_zero() {
-        let resources = OperationGenerationResources::new();
         let FitOutcome::Measured(declared) = allocate_grid_axis(
             &[TrackSpec {
                 min: 0,
@@ -655,7 +574,6 @@ mod tests {
             0,
             Some(4),
             true,
-            &resources,
             &FitScope::root(),
         )
         .unwrap() else {
@@ -663,11 +581,7 @@ mod tests {
         };
         assert_eq!(declared.sizes, [4, 4, 4]);
         let empty = ComponentAddress::root()
-            .child(
-                AddressRole::CanvasCell,
-                0,
-                &crate::font::canonical::OperationGenerationResources::new(),
-            )
+            .child(AddressRole::CanvasCell, 0)
             .unwrap();
         let FitOutcome::Measured(unoccupied) = allocate_grid_axis(
             &[TrackSpec {
@@ -682,7 +596,6 @@ mod tests {
             0,
             None,
             false,
-            &resources,
             &FitScope::root(),
         )
         .unwrap() else {
@@ -692,11 +605,7 @@ mod tests {
         assert_eq!(unoccupied.trailing_slack, 5);
 
         let filled = ComponentAddress::root()
-            .child(
-                AddressRole::CanvasCell,
-                2,
-                &crate::font::canonical::OperationGenerationResources::new(),
-            )
+            .child(AddressRole::CanvasCell, 2)
             .unwrap();
         let FitOutcome::Measured(sparse) = allocate_grid_axis(
             &[TrackSpec {
@@ -711,7 +620,6 @@ mod tests {
             0,
             Some(4),
             true,
-            &resources,
             &FitScope::root(),
         )
         .unwrap() else {
@@ -723,13 +631,9 @@ mod tests {
     #[test]
     fn invalid_or_capped_grid_topology_rejects_without_another_search() {
         let owner = ComponentAddress::root()
-            .child(
-                AddressRole::CanvasHeader,
-                0,
-                &crate::font::canonical::OperationGenerationResources::new(),
-            )
+            .child(AddressRole::CanvasHeader, 0)
             .unwrap();
-        let resources = OperationGenerationResources::new();
+
         let base = [flex(0, 0, Some(2)); 2];
         let run = |children: &[GridRequirement<'_>]| {
             allocate_grid_axis(
@@ -740,7 +644,6 @@ mod tests {
                 0,
                 None,
                 false,
-                &resources,
                 &FitScope::root(),
             )
         };
@@ -753,16 +656,7 @@ mod tests {
     }
 
     fn alloc(specs: &[TrackSpec], total: i64, require_full: bool) -> FitOutcome<TrackAllocation> {
-        allocate_tracks(
-            specs,
-            total,
-            [0; 2],
-            0,
-            require_full,
-            &OperationGenerationResources::new(),
-            &FitScope::root(),
-        )
-        .unwrap()
+        allocate_tracks(specs, total, [0; 2], 0, require_full, &FitScope::root()).unwrap()
     }
 
     #[test]
@@ -819,56 +713,16 @@ mod tests {
                 flexible: false,
             },
         ];
-        let FitOutcome::Measured(allocation) = allocate_tracks(
-            &specs,
-            200,
-            [16, 16],
-            12,
-            false,
-            &OperationGenerationResources::new(),
-            &FitScope::root(),
-        )
-        .unwrap() else {
+        let FitOutcome::Measured(allocation) =
+            allocate_tracks(&specs, 200, [16, 16], 12, false, &FitScope::root()).unwrap()
+        else {
             panic!("sequence content fits");
         };
         assert_eq!(allocation.sizes, [20, 30]);
         assert_eq!(allocation.trailing_slack, 106);
         assert!(matches!(
-            allocate_tracks(
-                &specs,
-                93,
-                [16, 16],
-                12,
-                false,
-                &OperationGenerationResources::new(),
-                &FitScope::root()
-            )
-            .unwrap(),
+            allocate_tracks(&specs, 93, [16, 16], 12, false, &FitScope::root()).unwrap(),
             FitOutcome::Miss(_)
-        ));
-    }
-
-    #[test]
-    fn allocation_refuses_one_visit_or_byte_below_its_exact_admitted_cost() {
-        let specs = [flex(1, 4, Some(6)), flex(1, 3, None)];
-        let run = |limit: Option<(u128, u64)>| {
-            let resources = OperationGenerationResources::new();
-            if let Some((visits, bytes)) = limit {
-                resources.set_test_limits(visits, bytes);
-            }
-            let result = allocate_tracks(&specs, 8, [0, 0], 0, true, &resources, &FitScope::root());
-            (resources, result)
-        };
-        let (resources, result) = run(None);
-        assert!(matches!(result.unwrap(), FitOutcome::Measured(_)));
-        let visits = resources.usage().unwrap().1;
-        let bytes = resources.byte_usage().unwrap();
-        assert!(visits > 0 && bytes > 0);
-        assert!(run(Some((visits - 1, bytes))).1.is_err());
-        assert!(run(Some((visits, bytes - 1))).1.is_err());
-        assert!(matches!(
-            run(Some((visits, bytes))).1.unwrap(),
-            FitOutcome::Measured(_)
         ));
     }
 }

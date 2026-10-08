@@ -66,12 +66,12 @@ pub(super) fn allocate(
     let count = rows
         .checked_mul(columns)
         .ok_or_else(|| Error::Render("facet Grid topology overflowed".into()))?;
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = data.with_axis_resources(&resources);
+    let resources = theme.prepared_font_environment()?.operation();
+    let data = data.with_operation(&resources);
     let mut column_insets = Vec::new();
     let mut row_insets = Vec::new();
-    data.reserve_source(&mut column_insets, columns)?;
-    data.reserve_source(&mut row_insets, rows)?;
+    crate::data::source::reserve_source(&mut column_insets, columns)?;
+    crate::data::source::reserve_source(&mut row_insets, rows)?;
     column_insets.resize(columns, [0_i64; 2]);
     row_insets.resize(rows, [0_i64; 2]);
     let gap = required(theme.composition_facet_gap()?)?;
@@ -92,9 +92,9 @@ pub(super) fn allocate(
         row_track[0] = row_track[0].max(required(req.bottom)?);
         row_track[1] = row_track[1].max(required(req.top)?);
     }
-    let grid = ComponentAddress::root().child(AddressRole::FacetGrid, 0, &resources)?;
+    let grid = ComponentAddress::root().child(AddressRole::FacetGrid, 0)?;
     let mut owners = Vec::new();
-    data.reserve_source(&mut owners, panels.len())?;
+    crate::data::source::reserve_source(&mut owners, panels.len())?;
     for panel in panels {
         if panel.row >= rows || panel.column >= columns {
             return Err(Error::Render(
@@ -106,20 +106,19 @@ pub(super) fn allocate(
                 AddressRole::FacetCell,
                 u32::try_from(panel.panel_index)
                     .map_err(|_| Error::Render("facet cell address overflowed".into()))?,
-                &resources,
             )?,
         );
     }
     let mut widths = Vec::new();
     let mut heights = Vec::new();
-    data.reserve_source(&mut widths, panels.len())?;
-    data.reserve_source(&mut heights, panels.len())?;
+    crate::data::source::reserve_source(&mut widths, panels.len())?;
+    crate::data::source::reserve_source(&mut heights, panels.len())?;
     for ((panel, minimum), address) in panels.iter().zip(minima).zip(&owners) {
         let preferred = if let Some(content) = content {
             let plot = content
                 .plot
-                .admitted_clone(data)?
-                .with_render_scope(panel.render_scope(data)?);
+                .clone()
+                .with_render_scope(panel.render_scope()?);
             let preference =
                 crate::layout::interior::sizing::body_preference(&plot, theme, *minimum)?;
             let guided = if matches!(
@@ -145,9 +144,7 @@ pub(super) fn allocate(
             preferred.max(crate::theme::composition::hard(
                 &strip_lengths.horizontal_inset.add_pixels(
                     crate::layout::interior::sizing::text_width(theme, &label, appearance)?,
-                    &resources,
                 )?,
-                &resources,
             )?)
         } else {
             minimum.0
@@ -207,8 +204,8 @@ pub(super) fn allocate(
     };
     let mut column_specs = Vec::new();
     let mut row_specs = Vec::new();
-    data.reserve_source(&mut column_specs, columns)?;
-    data.reserve_source(&mut row_specs, rows)?;
+    crate::data::source::reserve_source(&mut column_specs, columns)?;
+    crate::data::source::reserve_source(&mut row_specs, rows)?;
     column_specs.resize(columns, column_base);
     row_specs.resize(rows, row_base);
     let columns = match allocate_grid_axis(
@@ -223,7 +220,6 @@ pub(super) fn allocate(
         gap,
         Some(em),
         true,
-        &resources,
         scope,
     )? {
         FitOutcome::Measured(value) => value.sizes,
@@ -235,28 +231,27 @@ pub(super) fn allocate(
         {
             let mut plot = content
                 .plot
-                .admitted_clone(data)?
-                .with_render_scope(panel.render_scope(data)?);
+                .clone()
+                .with_render_scope(panel.render_scope()?);
             let address = ComponentAddress::root().child(
                 AddressRole::FacetCell,
                 u32::try_from(index)
                     .map_err(|_| Error::Render("facet content domain address overflowed".into()))?,
-                &resources,
             )?;
-            if let Some(domain) = content.round.domain(
+            if let Some(domain) = content.round.feedback_domain(
                 &address,
                 crate::layout::kernel::FeedbackKind::AutomaticDomainX,
-            )? {
+            ) {
                 let domain = plot
                     .x_axis_spec()
                     .limits
                     .map_or(domain, |base| (base.0.min(domain.0), base.1.max(domain.1)));
                 plot = plot.with_planned_x_limits(domain);
             }
-            if let Some(domain) = content.round.domain(
+            if let Some(domain) = content.round.feedback_domain(
                 &address,
                 crate::layout::kernel::FeedbackKind::AutomaticDomainY,
-            )? {
+            ) {
                 let domain = plot
                     .y_axis_spec()
                     .limits
@@ -292,11 +287,7 @@ pub(super) fn allocate(
                     theme,
                     &label,
                     appearance,
-                    crate::theme::composition::capacity(
-                        width,
-                        &strip_lengths.horizontal_inset,
-                        &resources,
-                    )?,
+                    crate::theme::composition::capacity(width, &strip_lengths.horizontal_inset)?,
                     crate::layout::PhysicalTextAlignment::Center,
                     "natural facet strip",
                     scope,
@@ -305,9 +296,8 @@ pub(super) fn allocate(
                 height = crate::theme::composition::hard(
                     &strip_lengths
                         .content_clearance
-                        .add_pixels(strip.height(), &resources)?
-                        .add_pixels(height, &resources)?,
-                    &resources,
+                        .add_pixels(strip.height())?
+                        .add_pixels(height)?,
                 )?;
             }
             child.preferred = required(height)?.max(child.hard);
@@ -325,7 +315,6 @@ pub(super) fn allocate(
         gap,
         Some(em),
         true,
-        &resources,
         scope,
     )? {
         FitOutcome::Measured(value) => value.sizes,
@@ -352,8 +341,8 @@ pub(super) fn allocate(
     };
     let mut x_positions = Vec::new();
     let mut y_positions = Vec::new();
-    data.reserve_source(&mut x_positions, columns.len())?;
-    data.reserve_source(&mut y_positions, rows.len())?;
+    crate::data::source::reserve_source(&mut x_positions, columns.len())?;
+    crate::data::source::reserve_source(&mut y_positions, rows.len())?;
     let mut cursor = i128::from(x0);
     for (index, &width) in columns.iter().enumerate() {
         cursor += i128::from(column_insets[index][0]);
@@ -373,8 +362,8 @@ pub(super) fn allocate(
         }
     }
     let mut cells = Vec::new();
-    data.reserve_source(&mut cells, count)?;
-    data.claim_source_visits(count)?;
+    crate::data::source::reserve_source(&mut cells, count)?;
+
     for &top in &y_positions {
         for (&left, &width) in x_positions.iter().zip(&columns) {
             let row = cells.len() / columns.len();
@@ -403,9 +392,9 @@ mod tests {
             crate::NumericValues::new("y", [1.0, 0.0]),
         )
         .erase();
-        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let resources = crate::font::canonical::OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources, None).unwrap();
-        let mut theme = crate::Theme::Publication.resolve(&resources).unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         theme.composition = theme
             .composition
             .clone()
@@ -487,8 +476,8 @@ mod tests {
     }
 
     #[test]
-    fn incoming_scoped_data_is_bound_before_first_grid_storage_or_source_work() {
-        use crate::font::canonical::OperationGenerationResources;
+    fn grid_allocation_preserves_incoming_scoped_rows_without_source_reads() {
+        use crate::font::canonical::OperationContext;
         let plot = crate::Plot::scatter(
             crate::NumericValues::new("x", [0.0, 1.0, 2.0, 3.0]),
             crate::NumericValues::new("y", [4.0, 5.0, 6.0, 7.0]),
@@ -496,23 +485,12 @@ mod tests {
         .erase();
         let rows = [1, 3];
         let ids = [7, 29];
-        for records in [true, false] {
-            let theme = crate::Theme::Publication
-                .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                .unwrap();
-            let resources = theme
-                .prepared_font_environment()
-                .unwrap()
-                .generation_resources();
-            let foreign = OperationGenerationResources::with_test_limits(0, 0);
-            let data = PlotData::with_rows(&plot, &rows, &ids).with_axis_resources(&foreign);
-            let before = (resources.usage().unwrap(), resources.byte_usage().unwrap());
-            if records {
-                resources.claim_slots(999_999 - before.0 .0).unwrap();
-            } else {
-                // Two columns retain exactly two [i64; 2] records: 32 bytes.
-                resources.set_test_limits(before.0 .1, before.1 + 31);
-            }
+        {
+            let theme = crate::Theme::Publication.resolve().unwrap();
+
+            let foreign = OperationContext::new();
+            let data = PlotData::with_rows(&plot, &rows, &ids).with_operation(&foreign);
+
             let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
             let result = allocate(
                 data,
@@ -525,18 +503,11 @@ mod tests {
                 &FitScope::root(),
                 None,
             );
-            assert!(result.err().unwrap().to_string().contains(if records {
-                "record admission"
-            } else {
-                "storage admission"
-            }));
-            assert_eq!(
-                resources.usage().unwrap().0,
-                if records { 999_999 } else { before.0 .0 + 2 }
-            );
-            assert_eq!(resources.usage().unwrap().1, before.0 .1);
-            assert_eq!(resources.byte_usage().unwrap(), before.1);
-            assert_eq!(foreign.usage().unwrap(), (0, 0));
+            let FitOutcome::Measured(grid) = result.unwrap() else {
+                panic!("empty facet grid should fit")
+            };
+            assert_eq!(grid.cells.len(), 4);
+
             assert_eq!(data.height(), 2);
             assert_eq!([data.source_row(0), data.source_row(1)], ids);
             assert_eq!(
@@ -553,9 +524,7 @@ mod tests {
             crate::NumericValues::new("y", [3.0, 4.0]),
         )
         .erase();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let panels = [0, 1].map(|index| FacetPanel {
             panel_index: index,
             row: 0,

@@ -1,11 +1,7 @@
 use super::*;
 
 #[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "the matrix verifies cold, payload-hit, and reflow work under one unchanged root budget"
-)]
-fn typography_performance_evidence_and_root_cache_budgets() {
+fn typography_reuses_analysis_and_keeps_complete_sources() {
     let sentence = "Measured responses remained stable across independent trials under controlled conditions. ";
     let mut workloads = vec![
         ("original144".to_owned(), "A ".repeat(144)),
@@ -18,31 +14,19 @@ fn typography_performance_evidence_and_root_cache_budgets() {
     for count in [128, 256, 512, 2048] {
         workloads.push((format!("words{count}"), "Measured ".repeat(count)));
     }
-    let mut scaling = Vec::new();
     for (name, source) in workloads {
-        let setup = std::time::Instant::now();
-        let theme = crate::Theme::Publication
-            .resolve(&canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let environment = theme.prepared_font_environment().unwrap();
-        let resources = environment.generation_resources();
-        environment.share_generation_resources(&resources).unwrap();
-        eprintln!(
-            "{name} setup_us={} initial={:?} stack={:?}",
-            setup.elapsed().as_micros(),
-            environment.resource_usage().unwrap(),
-            theme.typography.root.caption.stack
-        );
+        let resources = environment.operation();
+        environment.validate_operation(&resources).unwrap();
+
         let mut first: Option<ResolvedTextPlan> = None;
-        let mut cold_work = 0;
         for (phase, width) in [
             ("cold", 768.0),
             ("hit", 768.0),
             ("new_width", 736.0),
             ("return_width", 768.0),
         ] {
-            let before = resources.usage().unwrap();
-            let font_before = environment.resource_usage().unwrap();
             TEXT_WORK.with(|work| work.set(TextWork::default()));
             PARAGRAPH_BIDI_CALLS.with(|calls| calls.set(0));
             canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
@@ -56,14 +40,9 @@ fn typography_performance_evidence_and_root_cache_budgets() {
                 false,
             );
             let elapsed = start.elapsed();
-            let after = resources.usage().unwrap();
-            let font_after = environment.resource_usage().unwrap();
+
             let work = TEXT_WORK.with(std::cell::Cell::get);
-            assert_eq!(
-                after.1 - before.1,
-                font_after.processing_visits - font_before.processing_visits
-            );
-            eprintln!("{name}/{phase}: elapsed_us={} records={} processing_visits={} cumulative={after:?} bytes={} {work:?} bidi={} shapes={}", elapsed.as_micros(), after.0 - before.0, after.1 - before.1, font_after.font_bytes - font_before.font_bytes, PARAGRAPH_BIDI_CALLS.with(std::cell::Cell::get), canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get));
+
             let plan = result.unwrap_or_else(|error| panic!("{name}/{phase}: {error}"));
             assert_eq!(plan.line_texts().concat(), source.replace('\n', ""));
             assert!(
@@ -85,30 +64,17 @@ fn typography_performance_evidence_and_root_cache_budgets() {
                 .map(|run| run.glyphs.len())
                 .sum();
             eprintln!(
-                "{name}/{phase}: lines={} retained_glyphs={glyphs} primary={:?}",
+                "{name}/{phase}: elapsed_us={} lines={} retained_glyphs={glyphs} primary={:?}",
+                elapsed.as_micros(),
                 plan.lines.len(),
                 plan.lines[0].runs[0].face
             );
-            assert!(after.1 <= 1_000_000);
+
             if phase == "hit" || phase == "return_width" {
                 assert!(first.as_ref().unwrap().shares_payload(&plan));
                 assert!(first.as_ref().unwrap().shares_analysis(&plan));
                 assert_eq!(work, TextWork::default());
-                assert_eq!(after.0, before.0);
-                assert_eq!(font_after.font_bytes, font_before.font_bytes);
-                let binary_comparisons = if phase == "hit" { 1 } else { 2 };
-                // Profile metadata + source bytes, exact immutable font handle,
-                // then only presentation hash and owner equality. The complete
-                // source/font hash prepass is retained from the cold call.
-                let profile = 1 + source.len() + 1;
-                let hash = 36 + "performance caption".len();
-                let equality = 1 + "performance caption".len();
-                assert_eq!(
-                    after.1 - before.1,
-                    binary_comparisons + 1 + (profile + hash + equality) as u128
-                );
             } else if phase == "cold" {
-                cold_work = after.1 - before.1;
                 first = Some(plan);
             } else {
                 let first = first.as_ref().unwrap();
@@ -116,23 +82,8 @@ fn typography_performance_evidence_and_root_cache_budgets() {
                 assert!(first.shares_analysis(&plan));
                 PARAGRAPH_BIDI_CALLS.with(|calls| assert_eq!(calls.get(), 0));
                 assert!(work.shaping_scalars <= 3 * source.chars().count());
-                assert!(after.1 - before.1 < cold_work);
-                if let Some(words) = name.strip_prefix("words") {
-                    if let Ok(words @ (128 | 256 | 512)) = words.parse::<usize>() {
-                        scaling.push((words, cold_work, after.1 - before.1));
-                    }
-                }
             }
         }
-    }
-    assert_eq!(scaling.len(), 3);
-    for pair in scaling.windows(2) {
-        assert_eq!(pair[1].0, pair[0].0 * 2);
-        assert!(pair[1].1 <= pair[0].1 * 2 + 4096, "cold work: {scaling:?}");
-        assert!(
-            pair[1].2 <= pair[0].2 * 2 + 4096,
-            "reflow work: {scaling:?}"
-        );
     }
 }
 
@@ -311,7 +262,7 @@ fn selected_soft_hyphen_uses_the_sealed_literal_hyphen_fallback() {
     assert_eq!(runs[1].glyphs[0].cluster, 1);
     assert_eq!(runs[1].glyphs[0].glyph_origin_x_quanta, 6_144);
     assert_eq!(runs[1].design_x_advance, 600);
-    assert_eq!(planned.into_line_texts(&environment).unwrap(), ["A-", "AA"]);
+    assert_eq!(planned.into_line_texts().unwrap(), ["A-", "AA"]);
 }
 
 #[test]
@@ -386,25 +337,6 @@ fn selected_soft_hyphen_preserves_same_face_gpos_and_original_clusters() {
             ))
             .collect::<Vec<_>>()
     );
-}
-
-#[test]
-fn owned_line_extraction_uses_the_same_root_byte_ledger() {
-    let environment = PreparedFontEnvironment::synthetic();
-    let plan = environment
-        .plan_text(tests::input("A", i64::MAX, PhysicalTextAlignment::Start))
-        .unwrap();
-    let used = environment.resource_usage().unwrap().font_bytes;
-    environment
-        .claim_unicode_bytes(u64::try_from(536_870_912 - used).unwrap())
-        .unwrap();
-    assert!(matches!(
-        plan.into_line_texts(&environment),
-        Err(TextPlanError::Font(FontError::Limit {
-            resource: "system-font bytes",
-            ..
-        }))
-    ));
 }
 
 #[test]
@@ -504,32 +436,10 @@ fn wrapped_arabic_context_stops_at_selected_line_boundaries() {
 }
 
 #[test]
-fn review_canonical_output_admission_precedes_retention() {
-    let environment = PreparedFontEnvironment::synthetic();
-    let identity = tests::plan("A", i64::MAX, PhysicalTextAlignment::Start).lines[0].runs[0].face;
-    environment
-        .claim_text_generation_slots(
-            1_000_000 - environment.generation_resources().usage().unwrap().0,
-        )
-        .unwrap();
-    canonical::SHAPED_GLYPH_RETAINS.with(|count| count.set(0));
-    assert!(environment
-        .shape_run(
-            identity,
-            "A",
-            ShapingDirection::LeftToRight,
-            rustybuzz::script::LATIN
-        )
-        .is_err());
-    canonical::SHAPED_GLYPH_RETAINS.with(|count| assert_eq!(count.get(), 0));
-}
-
-#[test]
 fn review_unresolved_script_extensions_do_not_pick_an_arbitrary_script() {
-    let environment = PreparedFontEnvironment::synthetic();
     let identity = tests::plan("A", i64::MAX, PhysicalTextAlignment::Start).lines[0].runs[0].face;
     for source in ["\u{30fc}", "\u{301}", "A\u{30fc}\u{628}"] {
-        let items = paragraph_items(&environment, source, |_, _| Ok(identity)).unwrap();
+        let items = paragraph_items(source, |_, _| Ok(identity)).unwrap();
         let index = usize::from(source.starts_with('A'));
         assert_eq!(items[index].script, Script::Common, "{source:?}");
     }
@@ -560,7 +470,6 @@ fn review_hard_metrics_round_outward_for_empty_lines() {
         .unwrap();
     shaped.metrics = metrics;
     let scaled = scale_run(
-        &environment,
         shaped,
         TextSourceSpan::new(1, 2).unwrap(),
         Script::Common,
@@ -581,15 +490,7 @@ fn review_hard_metrics_round_outward_for_empty_lines() {
     whitespace.plan.runs.push(scaled.plan);
     let mut request = tests::input("\n ", i64::MAX, PhysicalTextAlignment::Start);
     request.font_size = 1;
-    let plan = finalize_plan(
-        &environment,
-        request,
-        &stack,
-        pair.provenance,
-        1,
-        vec![line, whitespace],
-    )
-    .unwrap();
+    let plan = finalize_plan(request, &stack, pair.provenance, 1, vec![line, whitespace]).unwrap();
     assert_eq!(plan.line_pitch_quanta, 502);
     assert_eq!(plan.height_quanta, 1004);
     assert_eq!(plan.first_baseline_quanta, Some(401));
@@ -597,17 +498,13 @@ fn review_hard_metrics_round_outward_for_empty_lines() {
 }
 
 #[test]
-fn actual_gsub_count_and_root_bytes_gate_every_glyph_copy() {
+fn glyph_copy_preserves_actual_gsub_output() {
     let environment = contextual_environment();
     let stack = canonical::named_stack(&["Second"]);
     let pair = environment
         .resolve_pair(0, &stack, RequestedWeight::Normal, &['A', '\u{301}'])
         .unwrap();
-    environment
-        .claim_text_generation_slots(
-            999_999 - environment.generation_resources().usage().unwrap().0,
-        )
-        .unwrap();
+
     canonical::SHAPED_GLYPH_RETAINS.with(|count| count.set(0));
     let shaped = environment
         .shape_run(
@@ -620,57 +517,42 @@ fn actual_gsub_count_and_root_bytes_gate_every_glyph_copy() {
     assert_eq!(
         shaped.glyphs.len(),
         1,
-        "admit actual ligature output, not input scalar count"
+        "retain actual ligature output, not input scalar count"
     );
     canonical::SHAPED_GLYPH_RETAINS.with(|count| assert_eq!(count.get(), 1));
-    assert!(matches!(
-        scale_run(
-            &environment,
-            shaped,
-            TextSourceSpan::new(0, 3).unwrap(),
-            Script::Latin,
-            1,
-            ExactRational::ZERO,
-            ExactRational::ZERO,
-            0
-        ),
-        Err(TextPlanError::Limit {
-            resource: "retained planning records",
-            ..
-        })
-    ));
+    let scaled = scale_run(
+        shaped,
+        TextSourceSpan::new(0, 3).unwrap(),
+        Script::Latin,
+        1,
+        ExactRational::ZERO,
+        ExactRational::ZERO,
+        0,
+    )
+    .unwrap();
+    assert_eq!(scaled.plan.glyphs.len(), 1);
 
     let environment = PreparedFontEnvironment::synthetic();
     let stack = canonical::named_stack(&["Test Sans"]);
     let pair = environment
         .resolve_pair(0, &stack, RequestedWeight::Normal, &['A'])
         .unwrap();
-    let used = environment.resource_usage().unwrap().font_bytes;
-    environment
-        .claim_unicode_bytes(u64::try_from(536_870_912 - used).unwrap())
-        .unwrap();
+
     canonical::SHAPED_GLYPH_RETAINS.with(|count| count.set(0));
-    assert!(matches!(
-        environment.shape_run(
+    let shaped = environment
+        .shape_run(
             pair.primary,
             "A",
             ShapingDirection::LeftToRight,
-            rustybuzz::script::LATIN
-        ),
-        Err(FontError::Limit {
-            resource: "system-font bytes",
-            ..
-        })
-    ));
-    canonical::SHAPED_GLYPH_RETAINS.with(|count| assert_eq!(count.get(), 0));
+            rustybuzz::script::LATIN,
+        )
+        .unwrap();
+    assert_eq!(shaped.glyphs.len(), 1);
+    canonical::SHAPED_GLYPH_RETAINS.with(|count| assert_eq!(count.get(), 1));
     let request = tests::input("", 0, PhysicalTextAlignment::Start);
-    assert!(matches!(
-        finalize_plan(&environment, request, &stack, pair.provenance, 1, vec![]),
-        Err(TextPlanError::Font(FontError::Limit {
-            resource: "system-font bytes",
-            ..
-        }))
-    ));
+    let empty = finalize_plan(request, &stack, pair.provenance, 1, vec![]).unwrap();
+    assert!(empty.source.is_empty());
+    assert!(empty.lines.is_empty());
 }
 
 #[test]
@@ -918,7 +800,6 @@ fn fallback_runs_with_different_font_units_share_one_exact_pen_and_outward_ink()
             });
         }
         let built = scale_run(
-            &environment,
             shaped,
             run.source_span,
             run.script,
@@ -1208,7 +1089,7 @@ fn shape(
 fn generated_gsub_gpos_preserve_base_accent_and_arabic_context() {
     let bytes = contextual_font();
     let face = rustybuzz::Face::from_slice(&bytes, 0).unwrap();
-    let environment = PreparedFontEnvironment::synthetic();
+
     let identity = tests::plan("A", i64::MAX, PhysicalTextAlignment::Start).lines[0].runs[0].face;
     for (source, script, direction, expected) in [
         (
@@ -1231,8 +1112,8 @@ fn generated_gsub_gpos_preserve_base_accent_and_arabic_context() {
     ] {
         let whole = shape(&face, source, script, direction);
         assert_eq!(whole, expected);
-        let items = paragraph_items(&environment, source, |_, _| Ok(identity)).unwrap();
-        let groups = itemize_bidi_run(&environment, &items, 0, 0..source.len()).unwrap();
+        let items = paragraph_items(source, |_, _| Ok(identity)).unwrap();
+        let groups = itemize_bidi_run(&items, 0, 0..source.len()).unwrap();
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].script, script);
         let planned = shape(
@@ -1252,7 +1133,6 @@ fn generated_gsub_gpos_preserve_base_accent_and_arabic_context() {
 
 #[test]
 fn script_extensions_brackets_and_leading_marks_use_paragraph_context() {
-    let environment = PreparedFontEnvironment::synthetic();
     let identity = tests::plan("A", i64::MAX, PhysicalTextAlignment::Start).lines[0].runs[0].face;
     for (source, expected) in [
         ("\u{301}A\u{301}", vec![Script::Latin; 3]),
@@ -1281,7 +1161,7 @@ fn script_extensions_brackets_and_leading_marks_use_paragraph_context() {
         ),
         ("\u{3008}\u{30ab}\u{3009}", vec![Script::Katakana; 3]),
     ] {
-        let items = paragraph_items(&environment, source, |_, _| Ok(identity)).unwrap();
+        let items = paragraph_items(source, |_, _| Ok(identity)).unwrap();
         assert_eq!(
             items.iter().map(|i| i.script).collect::<Vec<_>>(),
             expected,
@@ -1346,7 +1226,6 @@ fn origins_round_exact_cumulative_positions_once_and_ink_uses_those_origins() {
         });
     }
     let run = scale_run(
-        &environment,
         shaped,
         TextSourceSpan::new(0, 4).unwrap(),
         Script::Latin,

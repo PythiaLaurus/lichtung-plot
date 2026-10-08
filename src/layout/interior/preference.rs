@@ -1,6 +1,5 @@
 //! Bottom-up standard-panel soft sizes; exact root assignment remains separate.
 
-use crate::font::canonical::OperationGenerationResources;
 use crate::layout::PhysicalTextAlignment;
 use crate::theme::ResolvedTheme;
 use crate::{Error, Plot, PlotKind};
@@ -48,7 +47,6 @@ pub(crate) fn categorical_preference(
     theme: &ResolvedTheme,
     hard: (f64, f64),
 ) -> Result<CategoricalPanelPreference, Error> {
-    let resources = theme.prepared_font_environment()?.generation_resources();
     let scope = plot.axis_scope();
     let (axis, slots, primary_marks) =
         match plot.kind() {
@@ -57,11 +55,11 @@ pub(crate) fn categorical_preference(
                     .prepared_estimate
                     .as_deref()
                     .ok_or_else(|| Error::Render("estimate preference lacks preparation".into()))?;
-                let marks = panel(&inputs.panels, scope, "Estimate", &resources)?;
+                let marks = panel(&inputs.panels, scope, "Estimate")?;
                 (
                     crate::layout::AxisSide::Left,
                     marks.labels.len(),
-                    marks.primary_mark_count(&resources)?,
+                    marks.primary_mark_count(),
                 )
             }
             PlotKind::Dumbbell => {
@@ -69,7 +67,7 @@ pub(crate) fn categorical_preference(
                     .prepared_dumbbell
                     .as_deref()
                     .ok_or_else(|| Error::Render("Dumbbell preference lacks preparation".into()))?;
-                let marks = panel(&inputs.panels, scope, "Dumbbell", &resources)?;
+                let marks = panel(&inputs.panels, scope, "Dumbbell")?;
                 (
                     crate::layout::AxisSide::Left,
                     marks.categories.len(),
@@ -84,7 +82,7 @@ pub(crate) fn categorical_preference(
                     .prepared_bars
                     .as_deref()
                     .ok_or_else(|| Error::Render("Bar preference lacks preparation".into()))?;
-                let marks = panel(&inputs.panels, scope, "Bars", &resources)?;
+                let marks = panel(&inputs.panels, scope, "Bars")?;
                 let axis = if matches!(plot.kind(), PlotKind::Bar | PlotKind::StackedBar) {
                     crate::layout::AxisSide::Bottom
                 } else {
@@ -96,7 +94,7 @@ pub(crate) fn categorical_preference(
                 let inputs = plot.prepared_distributions.as_deref().ok_or_else(|| {
                     Error::Render("distribution preference lacks preparation".into())
                 })?;
-                let marks = panel(&inputs.panels, scope, "Distribution", &resources)?;
+                let marks = panel(&inputs.panels, scope, "Distribution")?;
                 (
                     crate::layout::AxisSide::Bottom,
                     marks.categories().len(),
@@ -107,11 +105,11 @@ pub(crate) fn categorical_preference(
                 let inputs = plot.prepared_interaction.as_deref().ok_or_else(|| {
                     Error::Render("Interaction preference lacks preparation".into())
                 })?;
-                let marks = panel(&inputs.panels, scope, "Interaction", &resources)?;
+                let marks = panel(&inputs.panels, scope, "Interaction")?;
                 (
                     crate::layout::AxisSide::Bottom,
                     marks.conditions.len(),
-                    marks.primary_mark_count(&resources)?,
+                    marks.checked_primary_mark_count()?,
                 )
             }
             _ => {
@@ -175,12 +173,8 @@ pub(crate) fn panel<'a, T>(
     panels: &'a [(Option<String>, T)],
     scope: Option<&str>,
     owner: &str,
-    resources: &OperationGenerationResources,
 ) -> Result<&'a T, Error> {
     for (key, marks) in panels {
-        resources.claim_visits(1).map_err(|error| {
-            Error::Render(format!("{owner} primary-mark scope admission: {error:?}"))
-        })?;
         if key.as_deref() == scope {
             return Ok(marks);
         }
@@ -216,113 +210,107 @@ pub(crate) fn mark_preference(
     theme: &ResolvedTheme,
     hard: (f64, f64),
 ) -> Result<StandardPanelPreference, Error> {
-    let resources = theme.prepared_font_environment()?.generation_resources();
     let scope = plot.axis_scope();
     let point_ink = |radius| -> Result<f64, Error> {
         let point = plot.point_style(theme, (0, 0, 0), radius);
-        let (x, y) = crate::render::geometry::point_ink_dimensions(theme, &point)?;
+        let (x, y) = crate::render::geometry::point_ink_dimensions(&point)?;
         Ok(x.max(y))
     };
-    let (count, primary_ink) = match plot.kind() {
-        PlotKind::Scatter => {
-            let inputs = plot
-                .prepared_scatter
-                .as_deref()
-                .ok_or_else(|| Error::Render("Scatter mark preference lacks preparation".into()))?;
-            let marks = panel(&inputs.panels, scope, "Scatter", &resources)?;
-            (
-                marks.primary_mark_count(&resources)?,
-                point_ink(theme.marks.point_sizes.scatter)?,
-            )
-        }
-        PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
-            let inputs = plot
-                .prepared_line
-                .as_deref()
-                .ok_or_else(|| Error::Render("Line mark preference lacks preparation".into()))?;
-            let marks = panel(&inputs.panels, scope, "Line", &resources)?;
-            let stroke = if plot.kind() == PlotKind::Line {
-                &theme.marks.series_line
-            } else {
-                &theme.marks.path_line
-            };
-            let line =
-                crate::render::geometry::line_ink_width(theme, &stroke.backend_style((0, 0, 0)))?;
-            let marker = if plot.kind() == PlotKind::Trajectory || plot.markers_visible() {
-                point_ink(if plot.kind() == PlotKind::Line {
-                    theme.marks.point_sizes.path
+    let (count, primary_ink) =
+        match plot.kind() {
+            PlotKind::Scatter => {
+                let inputs = plot.prepared_scatter.as_deref().ok_or_else(|| {
+                    Error::Render("Scatter mark preference lacks preparation".into())
+                })?;
+                let marks = panel(&inputs.panels, scope, "Scatter")?;
+                (
+                    marks.checked_primary_mark_count()?,
+                    point_ink(theme.marks.point_sizes.scatter)?,
+                )
+            }
+            PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
+                let inputs = plot.prepared_line.as_deref().ok_or_else(|| {
+                    Error::Render("Line mark preference lacks preparation".into())
+                })?;
+                let marks = panel(&inputs.panels, scope, "Line")?;
+                let stroke = if plot.kind() == PlotKind::Line {
+                    &theme.marks.series_line
                 } else {
-                    theme.marks.point_sizes.trajectory
-                })?
-            } else {
-                0.0
-            };
-            (marks.primary_mark_count(&resources)?, line.max(marker))
-        }
-        PlotKind::Histogram => {
-            let inputs = plot.prepared_histogram.as_deref().ok_or_else(|| {
-                Error::Render("Histogram mark preference lacks preparation".into())
-            })?;
-            let marks = panel(&inputs.panels, scope, "Histogram", &resources)?;
-            let (x, y) = crate::render::geometry::rectangular_fill_ink_outset(
-                theme,
-                &theme.marks.histogram_bin.backend_style((0, 0, 0)),
-            )?;
-            (marks.primary_mark_count(), x.max(y))
-        }
-        PlotKind::Density => {
-            let inputs = plot
-                .prepared_density
-                .as_deref()
-                .ok_or_else(|| Error::Render("Density mark preference lacks preparation".into()))?;
-            let marks = panel(&inputs.panels, scope, "Density", &resources)?;
-            let line = crate::render::geometry::line_ink_width(
-                theme,
-                &theme.marks.density_line.backend_style((0, 0, 0)),
-            )?;
-            let (x, y) = crate::render::geometry::rectangular_fill_ink_outset(
-                theme,
-                &theme.marks.density_area.backend_style((0, 0, 0)),
-            )?;
-            (marks.primary_mark_count(), line.max(x).max(y))
-        }
-        PlotKind::Qq => {
-            let inputs = plot
-                .prepared_qq
-                .as_deref()
-                .ok_or_else(|| Error::Render("Qq mark preference lacks preparation".into()))?;
-            let marks = panel(&inputs.panels, scope, "Qq", &resources)?;
-            (
-                marks.primary_mark_count(),
-                point_ink(theme.marks.point_sizes.qq)?,
-            )
-        }
-        PlotKind::Regression => {
-            let inputs = plot.prepared_regression.as_deref().ok_or_else(|| {
-                Error::Render("Regression mark preference lacks preparation".into())
-            })?;
-            let marks = panel(&inputs.panels, scope, "Regression", &resources)?;
-            (
-                marks.primary_mark_count(),
-                point_ink(theme.marks.point_sizes.regression)?,
-            )
-        }
-        PlotKind::Marginal => {
-            let marks = plot
-                .prepared_marginal
-                .as_ref()
-                .ok_or_else(|| Error::Render("Marginal preference lacks preparation".into()))?;
-            (
-                marks.primary_mark_count(&resources)?,
-                point_ink(theme.marks.point_sizes.marginal)?,
-            )
-        }
-        _ => {
-            return Err(Error::Render(
-                "standard mark preference requires a standard coordinate family".into(),
-            ))
-        }
-    };
+                    &theme.marks.path_line
+                };
+                let line =
+                    crate::render::geometry::line_ink_width(&stroke.backend_style((0, 0, 0)))?;
+                let marker = if plot.kind() == PlotKind::Trajectory || plot.markers_visible() {
+                    point_ink(if plot.kind() == PlotKind::Line {
+                        theme.marks.point_sizes.path
+                    } else {
+                        theme.marks.point_sizes.trajectory
+                    })?
+                } else {
+                    0.0
+                };
+                (marks.checked_primary_mark_count()?, line.max(marker))
+            }
+            PlotKind::Histogram => {
+                let inputs = plot.prepared_histogram.as_deref().ok_or_else(|| {
+                    Error::Render("Histogram mark preference lacks preparation".into())
+                })?;
+                let marks = panel(&inputs.panels, scope, "Histogram")?;
+                let (x, y) = crate::render::geometry::rectangular_fill_ink_outset(
+                    &theme.marks.histogram_bin.backend_style((0, 0, 0)),
+                )?;
+                (marks.primary_mark_count(), x.max(y))
+            }
+            PlotKind::Density => {
+                let inputs = plot.prepared_density.as_deref().ok_or_else(|| {
+                    Error::Render("Density mark preference lacks preparation".into())
+                })?;
+                let marks = panel(&inputs.panels, scope, "Density")?;
+                let line = crate::render::geometry::line_ink_width(
+                    &theme.marks.density_line.backend_style((0, 0, 0)),
+                )?;
+                let (x, y) = crate::render::geometry::rectangular_fill_ink_outset(
+                    &theme.marks.density_area.backend_style((0, 0, 0)),
+                )?;
+                (marks.primary_mark_count(), line.max(x).max(y))
+            }
+            PlotKind::Qq => {
+                let inputs = plot
+                    .prepared_qq
+                    .as_deref()
+                    .ok_or_else(|| Error::Render("Qq mark preference lacks preparation".into()))?;
+                let marks = panel(&inputs.panels, scope, "Qq")?;
+                (
+                    marks.primary_mark_count(),
+                    point_ink(theme.marks.point_sizes.qq)?,
+                )
+            }
+            PlotKind::Regression => {
+                let inputs = plot.prepared_regression.as_deref().ok_or_else(|| {
+                    Error::Render("Regression mark preference lacks preparation".into())
+                })?;
+                let marks = panel(&inputs.panels, scope, "Regression")?;
+                (
+                    marks.primary_mark_count(),
+                    point_ink(theme.marks.point_sizes.regression)?,
+                )
+            }
+            PlotKind::Marginal => {
+                let marks = plot
+                    .prepared_marginal
+                    .as_ref()
+                    .ok_or_else(|| Error::Render("Marginal preference lacks preparation".into()))?;
+                (
+                    marks.checked_primary_mark_count()?,
+                    point_ink(theme.marks.point_sizes.marginal)?,
+                )
+            }
+            _ => {
+                return Err(Error::Render(
+                    "standard mark preference requires a standard coordinate family".into(),
+                ))
+            }
+        };
     let em = f64::from(theme.typography.axes.tick_label.font_size);
     let mark_pitch = em.max(primary_ink);
     let density_side = f64::from(ceil_sqrt(count)?) * mark_pitch;
@@ -357,36 +345,25 @@ pub(crate) fn mark_preference(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::font::canonical::OperationContext;
     use crate::{CategoryValues, NumericValues};
 
     #[test]
-    fn retained_panel_lookup_prices_only_entries_actually_examined() {
+    fn retained_panel_lookup_selects_its_scope_and_rejects_missing_scopes() {
         let panels = [
             (None, 10),
             (Some("second".into()), 20),
             (Some("unused".into()), 30),
         ];
-        for (scope, visits, expected) in [(None, 1, 10), (Some("second"), 2, 20)] {
-            let resources = OperationGenerationResources::with_test_limits(visits, 0);
-            assert_eq!(
-                *panel(&panels, scope, "test", &resources).unwrap(),
-                expected
-            );
-            assert_eq!(resources.usage().unwrap(), (0, visits));
-            let limited = OperationGenerationResources::with_test_limits(visits - 1, 0);
-            assert!(panel(&panels, scope, "test", &limited).is_err());
+        for (scope, expected) in [(None, 10), (Some("second"), 20)] {
+            assert_eq!(*panel(&panels, scope, "test").unwrap(), expected);
         }
-        for visits in [0, 2, 3, 4] {
-            let resources = OperationGenerationResources::with_test_limits(visits, 0);
-            let error = panel(&panels, Some("missing"), "test", &resources)
+        {
+            let error = panel(&panels, Some("missing"), "test")
                 .unwrap_err()
                 .to_string();
-            assert_eq!(resources.usage().unwrap(), (0, visits.min(3)));
-            if visits < 3 {
-                assert!(error.contains("root processing visits"));
-            } else {
-                assert!(error.contains("scope is not prepared"));
-            }
+
+            assert!(error.contains("scope is not prepared"));
         }
     }
 
@@ -454,12 +431,10 @@ mod tests {
             (grouped(false), crate::layout::AxisSide::Bottom, 2),
             (grouped(true), crate::layout::AxisSide::Left, 2),
         ] {
-            let resources = OperationGenerationResources::new();
+            let resources = OperationContext::new();
             let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
             let chart = prepared.attach(source).unwrap();
-            let theme = crate::Theme::Publication
-                .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                .unwrap();
+            let theme = crate::Theme::Publication.resolve().unwrap();
             let root = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
             let preference = categorical(&root);
             assert_eq!(preference.axis, axis);
@@ -487,12 +462,10 @@ mod tests {
         .series(CategoryValues::new("series", ["one", "two"]).unwrap())
         .size(1200, 900)
         .erase();
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = prepared.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let original = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
         theme.marks.bar_body.outline = Some(crate::theme::DataOutlineTheme::fixed(
             theme
@@ -580,12 +553,10 @@ mod tests {
             .map(|plot| (plot, 2, 2))
             .chain([(supplied, 2, 2), (interaction, 3, 4)])
         {
-            let resources = OperationGenerationResources::new();
+            let resources = OperationContext::new();
             let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
             let chart = inputs.attach(source).unwrap();
-            let theme = crate::Theme::Publication
-                .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                .unwrap();
+            let theme = crate::Theme::Publication.resolve().unwrap();
             let root = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
             let preference = categorical(&root);
             assert_eq!(preference.axis, crate::layout::AxisSide::Bottom);
@@ -625,12 +596,10 @@ mod tests {
         )
         .size(800, 600)
         .erase();
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = prepared.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let original = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
         let preference = standard(&original);
         assert_eq!(preference.primary_marks, 25);
@@ -668,7 +637,7 @@ mod tests {
         .x_limits(10.0, 11.0)
         .size(800, 600)
         .erase();
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let clipped = prepared.attach(source).unwrap();
         let exact = super::super::coordinate::canvas_layout(&clipped, &theme).unwrap();
@@ -681,14 +650,12 @@ mod tests {
             .into_iter()
             .zip([8, 2, 6, 6])
         {
-            let resources = OperationGenerationResources::new();
+            let resources = OperationContext::new();
             let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
             let chart = prepared.attach(source).unwrap();
             let root = super::super::coordinate::canvas_layout(
                 &chart,
-                &crate::Theme::Publication
-                    .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                    .unwrap(),
+                &crate::Theme::Publication.resolve().unwrap(),
             )
             .unwrap();
             assert_eq!(standard(&root).primary_marks, expected);
@@ -701,14 +668,12 @@ mod tests {
         let y = NumericValues::new("y", [1.0, 2.0, 2.0, 3.0]);
         let group = CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap();
         let source = Plot::trajectory(x, y, group).size(800, 600).erase();
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = prepared.attach(source).unwrap();
         let root = super::super::coordinate::canvas_layout(
             &chart,
-            &crate::Theme::Publication
-                .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                .unwrap(),
+            &crate::Theme::Publication.resolve().unwrap(),
         )
         .unwrap();
         assert_eq!(standard(&root).primary_marks, 4);

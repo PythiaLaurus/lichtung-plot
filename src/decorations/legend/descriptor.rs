@@ -1,7 +1,6 @@
 //! Font-independent shared continuous guide semantics. The containing frame
 //! measures one assigned guide only after semantic compatibility is established.
 
-use crate::data::PlotData;
 use crate::decorations::legend::LegendEntry;
 use crate::render::backend::GradientStop;
 use crate::theme::{Color, ColorStop, ContinuousColorScale};
@@ -62,12 +61,11 @@ impl ContinuousContributor {
         plot: &Plot,
         input: &crate::layout::interior::PreparedInteriorInputs,
         theme: &crate::theme::ResolvedTheme,
-        data: PlotData<'_>,
     ) -> Result<Option<Self>, Error> {
         let Some(field) = plot.color_dimension_key() else {
             return Ok(None);
         };
-        let field = data.copy_source_string(field)?;
+        let field = crate::data::source::copy_source_string(field)?;
         let (title, semantics, samples) = match plot.kind() {
             crate::PlotKind::Heatmap => {
                 let marks = input
@@ -78,11 +76,11 @@ impl ContinuousContributor {
                     .ok_or_else(|| {
                         Error::Render("shared Heatmap guide has no prepared input".into())
                     })?;
-                let semantics = marks.guide_semantics(theme, data)?;
+                let semantics = marks.guide_semantics(theme)?;
                 (
-                    data.copy_source_string(&marks.color_label)?,
+                    crate::data::source::copy_source_string(&marks.color_label)?,
                     semantics,
-                    marks.guide_samples(data)?,
+                    marks.guide_samples()?,
                 )
             }
             crate::PlotKind::Beeswarm => {
@@ -94,11 +92,11 @@ impl ContinuousContributor {
                     .ok_or_else(|| {
                         Error::Render("shared Beeswarm guide has no prepared input".into())
                     })?;
-                let semantics = marks.guide_semantics(data)?;
+                let semantics = marks.continuous_semantics();
                 (
-                    data.copy_source_string(&marks.color_label)?,
+                    crate::data::source::copy_source_string(&marks.color_label)?,
                     semantics,
-                    marks.guide_samples(data)?,
+                    marks.guide_samples()?,
                 )
             }
             _ => return Ok(None),
@@ -126,27 +124,21 @@ impl ContinuousContributor {
 
     pub(crate) fn merge(
         contributors: impl IntoIterator<Item = Self>,
-        data: PlotData<'_>,
     ) -> Result<Option<ContinuousDescriptor>, Error> {
         let mut combined: Option<ContinuousDescriptor> = None;
         let mut automatic = None;
         let mut samples = Vec::new();
         for contributor in contributors {
-            data.claim_source_visits(1)?;
             if let Some(existing) = &mut combined {
                 let same_center = match (existing.center, contributor.selection.center()) {
                     (None, None) => true,
                     (Some(a), Some(b)) => a.to_bits() == b.to_bits(),
                     _ => false,
                 };
-                if !same_text(&existing.field, &contributor.field, data)?
-                    || !same_text(&existing.title, &contributor.title, data)?
+                if !same_text(&existing.field, &contributor.field)
+                    || !same_text(&existing.title, &contributor.title)
                     || existing.selection.kind() != contributor.selection.kind()
-                    || !same_stops(
-                        existing.selection.stops()?,
-                        contributor.selection.stops()?,
-                        data,
-                    )?
+                    || !same_stops(existing.selection.stops()?, contributor.selection.stops()?)
                     || !same_center
                     || existing.missing != contributor.missing
                 {
@@ -195,7 +187,7 @@ impl ContinuousContributor {
                     labels: Vec::new(),
                 });
             }
-            data.reserve_source(&mut samples, contributor.samples.len())?;
+            crate::data::source::reserve_source(&mut samples, contributor.samples.len())?;
             samples.extend_from_slice(&contributor.samples);
         }
         if let (Some(existing), Some((low, high))) = (&combined, automatic) {
@@ -206,42 +198,34 @@ impl ContinuousContributor {
             }
         }
         if let Some(existing) = &mut combined {
-            existing.selection = existing
-                .selection
-                .share(data.source_resources()?)?
-                .with_domain(
-                    existing
-                        .exact
-                        .then(|| {
-                            crate::theme::ColorDomain::exact(existing.domain.0, existing.domain.1)
-                        })
-                        .transpose()?,
-                )?;
+            existing.selection = existing.selection.clone().with_domain(
+                existing
+                    .exact
+                    .then(|| crate::theme::ColorDomain::exact(existing.domain.0, existing.domain.1))
+                    .transpose()?,
+            )?;
             existing.stops = final_stops(
                 existing.domain,
                 existing.center,
                 existing.selection.stops()?,
                 &samples,
-                data,
             )?;
-            existing.labels = generated_labels(existing, data)?;
+            existing.labels = generated_labels(existing)?;
         }
         Ok(combined)
     }
 }
 
-fn same_stops(left: &[ColorStop], right: &[ColorStop], data: PlotData<'_>) -> Result<bool, Error> {
-    data.claim_source_visits(1)?;
+fn same_stops(left: &[ColorStop], right: &[ColorStop]) -> bool {
     if left.len() != right.len() {
-        return Ok(false);
+        return false;
     }
     for (left, right) in left.iter().zip(right) {
-        data.claim_source_visits(1)?;
         if left.offset().to_bits() != right.offset().to_bits() || left.color() != right.color() {
-            return Ok(false);
+            return false;
         }
     }
-    Ok(true)
+    true
 }
 
 fn final_stops(
@@ -249,13 +233,11 @@ fn final_stops(
     center: Option<f64>,
     semantic: &[ColorStop],
     samples: &[f64],
-    data: PlotData<'_>,
 ) -> Result<Vec<GradientStop>, Error> {
-    let resources = data.source_resources()?;
     if let Some(center) = center {
         // Validate the supplied semantic gradient before projecting its center
         // into the selected domain; never repair malformed endpoint offsets.
-        let _ = crate::theme::ContinuousColors::resolve((0.0, 1.0), semantic, resources)?;
+        let _ = crate::theme::ContinuousColors::resolve((0.0, 1.0), semantic)?;
         if !center.is_finite() || center < domain.0 || center > domain.1 {
             return Err(Error::Data(
                 "shared diverging color domain excludes its center".into(),
@@ -303,44 +285,38 @@ fn final_stops(
         } else {
             2
         };
-        return crate::theme::ContinuousColors::resolve(domain, &selected[..count], resources)?
-            .guide_stops(samples, data);
+        return crate::theme::ContinuousColors::resolve(domain, &selected[..count])?
+            .guide_stops(samples);
     }
     if same_value(domain.0, domain.1) {
-        let scale = crate::theme::ContinuousColors::resolve((0.0, 1.0), semantic, resources)?;
-        let midpoint = scale.color(0.5, resources)?;
+        let scale = crate::theme::ContinuousColors::resolve((0.0, 1.0), semantic)?;
+        let midpoint = scale.color(0.5)?;
         let stops = [
             ColorStop::new(0.0, midpoint)?,
             ColorStop::new(1.0, midpoint)?,
         ];
-        return crate::theme::ContinuousColors::resolve(domain, &stops, resources)?
-            .guide_stops(samples, data);
+        return crate::theme::ContinuousColors::resolve(domain, &stops)?.guide_stops(samples);
     }
-    crate::theme::ContinuousColors::resolve(domain, semantic, resources)?.guide_stops(samples, data)
+    crate::theme::ContinuousColors::resolve(domain, semantic)?.guide_stops(samples)
 }
 
 pub(crate) fn same_value(left: f64, right: f64) -> bool {
     left.total_cmp(&right).is_eq() || (left.abs().to_bits() == 0 && right.abs().to_bits() == 0)
 }
 
-fn same_text(left: &str, right: &str, data: PlotData<'_>) -> Result<bool, Error> {
+fn same_text(left: &str, right: &str) -> bool {
     if left.len() != right.len() {
-        data.claim_source_visits(1)?;
-        return Ok(false);
+        return false;
     }
     for (left, right) in left.bytes().zip(right.bytes()) {
-        data.claim_source_visits(1)?;
         if left != right {
-            return Ok(false);
+            return false;
         }
     }
-    Ok(true)
+    true
 }
 
-fn generated_labels(
-    descriptor: &ContinuousDescriptor,
-    data: PlotData<'_>,
-) -> Result<Vec<String>, Error> {
+fn generated_labels(descriptor: &ContinuousDescriptor) -> Result<Vec<String>, Error> {
     let mut values = [0.0_f64; 3];
     let count = if same_value(descriptor.domain.0, descriptor.domain.1) {
         values[0] = descriptor.domain.0;
@@ -358,14 +334,13 @@ fn generated_labels(
         values[count] = descriptor.domain.1;
         count + 1
     };
-    numeric_labels(&values[..count], data)
+    numeric_labels(&values[..count])
 }
 
 /// One pre-font numeric grammar and precision search for every continuous guide.
 /// Equal scientific values (including signed zero) may repeat in a family's
 /// retained census; distinct scientific values must have distinct labels.
-pub(crate) fn numeric_labels(values: &[f64], data: PlotData<'_>) -> Result<Vec<String>, Error> {
-    data.claim_source_visits(values.len())?;
+pub(crate) fn numeric_labels(values: &[f64]) -> Result<Vec<String>, Error> {
     if !matches!(values.len(), 1..=3) || values.iter().any(|value| !value.is_finite()) {
         return Err(Error::Data(
             "continuous guide needs one to three finite numeric values".into(),
@@ -373,15 +348,12 @@ pub(crate) fn numeric_labels(values: &[f64], data: PlotData<'_>) -> Result<Vec<S
     }
     for precision in std::iter::once(0).chain(2..=17) {
         let mut labels: Vec<String> = Vec::new();
-        data.reserve_source(&mut labels, values.len())?;
+        crate::data::source::reserve_source(&mut labels, values.len())?;
         let mut unique = true;
         for (index, value) in values.iter().copied().enumerate() {
-            data.claim_source_visits(1)?;
-            let label = crate::layout::format_guide_label(value, precision, data)?;
+            let label = crate::layout::format_guide_label(value, precision)?;
             for (previous, existing) in labels.iter().enumerate() {
-                if !same_value(values[previous], values[index])
-                    && same_text(existing, &label, data)?
-                {
+                if !same_value(values[previous], values[index]) && same_text(existing, &label) {
                     unique = false;
                     break;
                 }
@@ -400,31 +372,23 @@ pub(crate) fn numeric_labels(values: &[f64], data: PlotData<'_>) -> Result<Vec<S
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::font::canonical::OperationGenerationResources;
 
     #[test]
     fn numeric_guide_precision_is_unique_in_every_order_and_normalizes_signed_zero() {
-        let source = crate::Plot::scatter(
-            crate::NumericValues::new("x", [0.0, 1.0]),
-            crate::NumericValues::new("y", [0.0, 1.0]),
-        )
-        .erase();
-        let resources = OperationGenerationResources::new();
-        let data = source.data().with_axis_resources(&resources);
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         for values in [
             [0.1, 0.1001],
             [0.1, 0.100_000_1],
             [1.0, f64::from_bits(1.0_f64.to_bits() + 1)],
         ] {
-            let labels = numeric_labels(&values, data).unwrap();
+            let labels = numeric_labels(&values).unwrap();
             assert_ne!(labels[0], labels[1]);
             assert_eq!(
-                numeric_labels(&[values[1], values[0]], data).unwrap(),
+                numeric_labels(&[values[1], values[0]]).unwrap(),
                 [labels[1].clone(), labels[0].clone()]
             );
         }
-        assert_eq!(numeric_labels(&[-0.0, 0.0], data).unwrap(), ["0", "0"]);
+        assert_eq!(numeric_labels(&[-0.0, 0.0]).unwrap(), ["0", "0"]);
         assert_eq!(
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
             0
@@ -457,24 +421,15 @@ mod tests {
 
     #[test]
     fn merged_domain_precedes_unique_numeric_labels_and_rejects_missing_conflicts() {
-        let plot = crate::Plot::scatter(
-            crate::NumericValues::new("x", [1.0, 2.0]),
-            crate::NumericValues::new("y", [2.0, 3.0]),
-        )
-        .erase();
-        let resources = OperationGenerationResources::new();
-        let data = plot.data().with_axis_resources(&resources);
         let merged =
-            ContinuousContributor::merge([contributor((-2.0, 0.0)), contributor((0.0, 3.0))], data)
+            ContinuousContributor::merge([contributor((-2.0, 0.0)), contributor((0.0, 3.0))])
                 .unwrap()
                 .unwrap();
         assert_eq!(merged.domain, (-2.0, 3.0));
         assert_eq!(merged.labels, ["-2", "0", "3"]);
         let mut constant = contributor((1.0, 1.0));
         constant.selection = constant.selection.with_center(1.0).unwrap();
-        let constant = ContinuousContributor::merge([constant], data)
-            .unwrap()
-            .unwrap();
+        let constant = ContinuousContributor::merge([constant]).unwrap().unwrap();
         assert_eq!(constant.labels, ["1"]);
         let mut missing = contributor((0.0, 1.0));
         missing.missing = Some(MissingKey {
@@ -486,7 +441,7 @@ mod tests {
             label: "Missing".into(),
         });
         assert!(matches!(
-            ContinuousContributor::merge([contributor((0.0, 1.0)), missing.clone()], data),
+            ContinuousContributor::merge([contributor((0.0, 1.0)), missing.clone()]),
             Err(Error::Data(message)) if message.contains("missing block")
         ));
         let mut different_alpha = missing.clone();
@@ -494,12 +449,12 @@ mod tests {
         let mut different_width = missing.clone();
         different_width.missing.as_mut().unwrap().outline.width = 3.0;
         assert!(matches!(
-            ContinuousContributor::merge([missing.clone(), different_width], data),
+            ContinuousContributor::merge([missing.clone(), different_width]),
             Err(Error::Data(message)) if message.contains("missing block")
         ));
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         assert!(matches!(
-            ContinuousContributor::merge([missing, different_alpha], data),
+            ContinuousContributor::merge([missing, different_alpha]),
             Err(Error::Data(message)) if message.contains("missing block")
         ));
         assert_eq!(
@@ -521,13 +476,6 @@ mod tests {
 
     #[test]
     fn ordered_sequential_stops_are_retained_and_mismatched_colors_reject_before_fonts() {
-        let plot = crate::Plot::scatter(
-            crate::NumericValues::new("x", [1.0, 2.0]),
-            crate::NumericValues::new("y", [2.0, 3.0]),
-        )
-        .erase();
-        let resources = OperationGenerationResources::new();
-        let data = plot.data().with_axis_resources(&resources);
         let mut first = contributor((0.0, 2.0));
         first.selection = ContinuousColorScale::sequential(
             Some(
@@ -544,7 +492,7 @@ mod tests {
         let mut second = first.clone();
         second.domain = (1.0, 3.0);
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-        let merged = ContinuousContributor::merge([first.clone(), second.clone()], data)
+        let merged = ContinuousContributor::merge([first.clone(), second.clone()])
             .unwrap()
             .unwrap();
         assert_eq!(merged.domain, (0.0, 3.0));
@@ -570,7 +518,7 @@ mod tests {
             ))
             .unwrap();
         assert!(matches!(
-            ContinuousContributor::merge([first, second], data),
+            ContinuousContributor::merge([first, second]),
             Err(Error::Data(message)) if message.contains("incompatible identity")
         ));
         assert_eq!(
@@ -580,18 +528,9 @@ mod tests {
     }
 
     #[test]
-    fn close_endpoints_retry_a_complete_unique_format_under_one_budget() {
-        let plot = crate::Plot::scatter(
-            crate::NumericValues::new("x", [1.0, 2.0]),
-            crate::NumericValues::new("y", [2.0, 3.0]),
-        )
-        .erase();
+    fn close_endpoints_retry_a_complete_unique_format() {
         let close = (1.0, f64::from_bits(1.0_f64.to_bits() + 1));
-        let run = |limit: Option<(u128, u64)>| {
-            let resources = OperationGenerationResources::new();
-            if let Some((visits, bytes)) = limit {
-                resources.set_test_limits(visits, bytes);
-            }
+        let run = || {
             let mut candidate = contributor(close);
             candidate.selection = ContinuousColorScale::sequential(
                 Some(
@@ -604,21 +543,10 @@ mod tests {
                 None,
             )
             .unwrap();
-            let outcome = ContinuousContributor::merge(
-                [candidate],
-                plot.data().with_axis_resources(&resources),
-            );
-            (resources, outcome)
+            ContinuousContributor::merge([candidate])
         };
-        let (resources, result) = run(None);
-        let result = result.unwrap().unwrap();
+        let result = run().unwrap().unwrap();
         assert_eq!(result.labels.len(), 2);
         assert_ne!(result.labels[0], result.labels[1]);
-        let visits = resources.usage().unwrap().1;
-        let bytes = resources.byte_usage().unwrap();
-        assert!(visits > 0 && bytes > 0);
-        assert!(run(Some((visits - 1, bytes))).1.is_err());
-        assert!(run(Some((visits, bytes - 1))).1.is_err());
-        assert_eq!(run(Some((visits, bytes))).1.unwrap().unwrap(), result);
     }
 }

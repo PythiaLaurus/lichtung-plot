@@ -467,9 +467,7 @@ fn standalone_lifecycle_preserves_distinct_transparent_root_and_panel_surfaces()
         NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
     )
     .erase();
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     theme.surfaces.canvas_root = crate::theme::Color::rgba(17, 34, 51, 128);
     theme.surfaces.plot_panel = crate::theme::Color::rgba(68, 85, 102, 64);
     let plan = crate::orchestrator::lifecycle::PlotPlan::new_with_resolved_theme(
@@ -781,14 +779,14 @@ fn canvas_preflight_and_render_reuse_one_chrome_and_one_theme_per_child() {
     let x = NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]);
     let y = NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]);
     let nature_color = crate::Theme::Nature
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .resolve()
         .unwrap()
         .marks
         .accents
         .seeds()[0]
         .as_rgb();
     let science_color = crate::Theme::Science
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
+        .resolve()
         .unwrap()
         .marks
         .accents
@@ -881,7 +879,7 @@ fn canvas_preflight_and_render_reuse_one_chrome_and_one_theme_per_child() {
                 .map(|(index, color)| {
                     crate::theme::color_from_rgb(color).with_alpha(
                         themes[index]
-                            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+                            .resolve()
                             .unwrap()
                             .marks
                             .primary_point
@@ -1009,13 +1007,19 @@ fn canvas_shared_headers_use_canvas_root_for_plan_and_render() {
         .unwrap();
     for text in ["Shared model", "Outcome"] {
         let selected = |backend: &RecordingBackend| {
-            let (x, y, _, style) = backend
+            let (_, _, _, style) = backend
                 .text_draws
                 .iter()
                 .find(|(_, _, candidate, _)| candidate == text)
                 .expect("shared Canvas header is rendered");
-            (*x, *y, style.color, style.font_size)
+            (
+                style.color,
+                style.font_size,
+                style.font_family.clone(),
+                style.weight,
+            )
         };
+        // Child metrics can move span centers; header typography belongs to the root.
         assert_eq!(selected(&backend), selected(&reversed));
     }
 }
@@ -1675,7 +1679,7 @@ fn orchestration_runs_measurement_planning_and_render_passes() {
             preflight_calls,
             rendered_canvas_calls
         ),
-        // This counter belongs to measure_panel_in_call, not render_panel.
+        // This counter belongs to measure_panel, not render_panel.
         // Facets make four semantic probes; each Canvas measures its complete
         // provisional gutters in two rounds. Capture/replay uses retained plans
         // and the Canvas capture guard forbids this measurement entry point.
@@ -1820,16 +1824,14 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
             }
         }
     }
-    crate::canvas::admission_tests::mixed_family_parent_audit(&plots);
+    crate::canvas::lifecycle_tests::mixed_family_parent_audit(&plots);
     for (kind, plot) in plots {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-        let domain = crate::plots::shared_x::domain(
-            &plot,
-            &crate::font::canonical::OperationGenerationResources::new(),
-        );
+        let domain =
+            crate::plots::shared_x::domain(&plot, &crate::font::canonical::OperationContext::new());
         let prepared = crate::plots::shared_x::prepare_plot(
             &plot,
-            &crate::font::canonical::OperationGenerationResources::new(),
+            &crate::font::canonical::OperationContext::new(),
             Some(&crate::theme::scale_values::test_defaults()),
         )
         .unwrap_or_else(|error| panic!("{kind:?}: {error}"))
@@ -1891,9 +1893,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
                     "{kind:?} {side}: {error}"
                 );
             }
-            let theme = crate::Theme::Publication
-                .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                .unwrap();
+            let theme = crate::Theme::Publication.resolve().unwrap();
             let preparations = crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get);
             let panel = prepared.measured_canvas_layout(&theme).unwrap().panel_box;
             // Extracted families have no unprepared combined route.

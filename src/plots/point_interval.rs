@@ -22,7 +22,7 @@ pub(crate) fn shared_x_domain(
     if let Some(limits) = chart.x_axis_spec().limits {
         return Ok(limits);
     }
-    data.claim_source_visits(rows.len())?;
+
     let range =
         crate::plots::interval_estimate::estimate_data_range(rows.iter().map(|row| &row.estimate))
             .ok_or_else(|| {
@@ -30,7 +30,7 @@ pub(crate) fn shared_x_domain(
                     "point_interval: all rows are not_estimable; set explicit x-axis limits".into(),
                 )
             })?;
-    point_interval_display_range(range, chart.x_axis_spec(), data.source_resources()?)
+    point_interval_display_range(range, chart.x_axis_spec())
 }
 
 pub(crate) fn prepare<'a>(
@@ -72,16 +72,16 @@ pub(crate) fn prepare<'a>(
     }
 
     let mut rows: Vec<PointIntervalRow> = Vec::new();
-    data.reserve_source(&mut rows, length)?;
+    crate::data::source::reserve_source(&mut rows, length)?;
     for (index, (label, estimate)) in labels.into_iter().zip(estimates).enumerate() {
-        let label = data.normalize_source_string(&label)?;
+        let label = crate::data::source::normalize_source_string(&label)?;
         let source_row = data.source_row(index);
         if label.is_empty() {
             return Err(Error::Data(format!(
                 "point_interval: category label is empty at source row {source_row}"
             )));
         }
-        data.claim_source_visits(rows.len())?;
+
         if rows.iter().any(|row| row.label == label) {
             return Err(Error::Data(format!(
                 "point_interval: duplicate rendered category label {label:?} at source row {source_row}"
@@ -113,33 +113,29 @@ fn apply_category_order(
     order: &CategoryOrder,
     data: crate::data::PlotData<'_>,
 ) -> Result<(), Error> {
-    if matches!(order, CategoryOrder::Value(_)) {
-        data.claim_source_visits(rows.len())?;
-    }
     match order {
         CategoryOrder::Observed => {}
         CategoryOrder::Explicit(requested) => {
-            let requested = data.collect_source(
+            let requested = crate::data::source::collect_source(
                 requested
                     .iter()
-                    .map(|label| data.normalize_source_string(label)),
+                    .map(|label| crate::data::source::normalize_source_string(label)),
             )?;
             for (index, label) in requested.iter().enumerate() {
-                data.claim_source_visits(index)?;
                 if requested[..index].contains(label) {
                     return Err(Error::Data(format!("point_interval category order: explicit category order contains duplicate level {label:?}")));
                 }
-                data.claim_source_visits(rows.len())?;
+
                 if data.is_full_plot() && !rows.iter().any(|row| &row.label == label) {
                     return Err(Error::Data(format!("point_interval category order: explicit category order contains unknown level {label:?}")));
                 }
             }
-            let mut order = data.collect_source(rows.iter().enumerate().map(|(index, row)| {
-                data.claim_source_visits(requested.len())?;
+            let mut order = crate::data::source::collect_source(rows.iter().enumerate().map(|(index, row)| {
+
                 let rank = requested.iter().position(|label| label == &row.label).ok_or_else(|| Error::Data(format!("point_interval category order: explicit category order omits observed level {:?}", row.label)))?;
                 Ok((rank, index))
             }))?;
-            sort_rows(rows, &mut order, data)?;
+            sort_rows(rows, &mut order);
         }
         CategoryOrder::Value(_) if rows.iter().any(|row| row.estimate.is_none()) => {
             return Err(Error::Data(
@@ -148,15 +144,12 @@ fn apply_category_order(
             ));
         }
         CategoryOrder::Value(sort) => {
-            let mut order = data.collect_source((0..rows.len()).map(|index| Ok((index, index))))?;
+            let mut order = crate::data::source::collect_source(
+                (0..rows.len()).map(|index| Ok((index, index))),
+            )?;
             // Original indices break ties, preserving the stable scientific order
             // without the standard stable sort's hidden scratch allocation.
-            let work = rows
-                .len()
-                .checked_mul(rows.len().max(1).ilog2() as usize + 1)
-                .and_then(|work| work.checked_mul(4))
-                .ok_or_else(|| Error::Render("axis source sort work overflow".into()))?;
-            data.claim_source_visits(work)?;
+
             order.sort_unstable_by(|left, right| {
                 let left_value = rows[left.0]
                     .estimate
@@ -175,45 +168,32 @@ fn apply_category_order(
             for (rank, entry) in order.iter_mut().enumerate() {
                 entry.0 = rank;
             }
-            sort_rows(rows, &mut order, data)?;
+            sort_rows(rows, &mut order);
         }
     }
     Ok(())
 }
 
-fn sort_rows(
-    rows: &mut [PointIntervalRow],
-    order: &mut [(usize, usize)],
-    data: crate::data::PlotData<'_>,
-) -> Result<(), Error> {
-    let work = order
-        .len()
-        .checked_mul(order.len().max(1).ilog2() as usize + 1)
-        .and_then(|work| work.checked_mul(4))
-        .ok_or_else(|| Error::Render("axis source sort work overflow".into()))?;
-    data.claim_source_visits(work)?;
+fn sort_rows(rows: &mut [PointIntervalRow], order: &mut [(usize, usize)]) {
     order.sort_unstable();
     for (rank, entry) in order.iter_mut().enumerate() {
         entry.0 = rank;
     }
-    data.claim_source_visits(work)?;
+
     order.sort_unstable_by_key(|entry| entry.1);
     // Each source now owns its destination; cycle swaps need no scratch vector.
     for index in 0..order.len() {
         while order[index].0 != index {
-            data.claim_source_visits(1)?;
             let source = order[index].0;
             rows.swap(index, source);
             order.swap(index, source);
         }
     }
-    Ok(())
 }
 
 pub(crate) fn point_interval_display_range(
     data_range: (f64, f64),
     spec: &AxisSpec,
-    resources: &crate::font::canonical::OperationGenerationResources,
 ) -> Result<(f64, f64), Error> {
     #[cfg(test)]
     crate::orchestrator::measurements::count(
@@ -222,7 +202,7 @@ pub(crate) fn point_interval_display_range(
     if let Some(limits) = spec.limits {
         return Ok(limits);
     }
-    let display = crate::layout::continuous_auto_range(data_range, spec, resources)?;
+    let display = crate::layout::continuous_auto_range(data_range, spec)?;
     if display.0.is_finite() && display.1.is_finite() && display.0 < display.1 {
         return Ok(display);
     }
@@ -308,8 +288,8 @@ mod tests {
     }
 
     #[test]
-    fn category_order_admits_before_normalization_or_sort_and_preserves_cycles_and_ties() {
-        use crate::font::canonical::OperationGenerationResources;
+    fn category_order_preserves_cycles_and_ties() {
+        use crate::font::canonical::OperationContext;
         let plot = chart(&valid_data()).erase();
         let make_rows = || {
             [("a", 3.0), ("b", 1.0), ("c", 1.0), ("d", 2.0)]
@@ -339,32 +319,10 @@ mod tests {
                 ["a", "d", "b", "c"],
             ),
         ] {
-            for (visits, bytes) in [(0, 4096), (4096, 0)] {
-                let resources = OperationGenerationResources::with_test_limits(visits, bytes);
-                let mut rows = make_rows();
-                assert!(matches!(
-                    apply_category_order(
-                        &mut rows,
-                        &order,
-                        plot.data().with_axis_resources(&resources)
-                    ),
-                    Err(Error::Render(_))
-                ));
-                assert_eq!(
-                    rows.iter()
-                        .map(|row| row.label.as_str())
-                        .collect::<Vec<_>>(),
-                    ["a", "b", "c", "d"]
-                );
-            }
-            let resources = OperationGenerationResources::new();
+            let resources = OperationContext::new();
             let mut rows = make_rows();
-            apply_category_order(
-                &mut rows,
-                &order,
-                plot.data().with_axis_resources(&resources),
-            )
-            .unwrap();
+            apply_category_order(&mut rows, &order, plot.data().with_operation(&resources))
+                .unwrap();
             assert_eq!(
                 rows.iter()
                     .map(|row| row.label.as_str())
@@ -372,24 +330,6 @@ mod tests {
                 expected
             );
         }
-    }
-
-    #[test]
-    fn estimate_tuple_storage_refuses_after_numeric_channels() {
-        let plot = chart(&valid_data()).erase();
-        let resources =
-            crate::font::canonical::OperationGenerationResources::with_test_limits(1000, 3 * 2 * 8);
-        let error = crate::plots::interval_estimate::prepare_estimate_tuples(
-            &plot,
-            plot.data().with_axis_resources(&resources),
-            "point_interval",
-            true,
-        )
-        .unwrap_err();
-        assert!(
-            error.to_string().contains("axis source storage admission"),
-            "{error}"
-        );
     }
 
     #[test]
@@ -513,29 +453,14 @@ mod tests {
         let spec = AxisSpec::default();
 
         assert_eq!(
-            point_interval_display_range(
-                (-f64::MAX, f64::MAX),
-                &spec,
-                &crate::font::canonical::OperationGenerationResources::new()
-            )
-            .unwrap(),
+            point_interval_display_range((-f64::MAX, f64::MAX), &spec).unwrap(),
             (-f64::MAX, f64::MAX)
         );
         assert_eq!(
-            point_interval_display_range(
-                (f64::MAX, f64::MAX),
-                &spec,
-                &crate::font::canonical::OperationGenerationResources::new()
-            )
-            .unwrap(),
+            point_interval_display_range((f64::MAX, f64::MAX), &spec).unwrap(),
             (f64::MAX.next_down(), f64::MAX)
         );
-        let signed_zero = point_interval_display_range(
-            (-0.0, 0.0),
-            &spec,
-            &crate::font::canonical::OperationGenerationResources::new(),
-        )
-        .unwrap();
+        let signed_zero = point_interval_display_range((-0.0, 0.0), &spec).unwrap();
         assert!(signed_zero.0.is_finite() && signed_zero.0 < 0.0);
         assert!(signed_zero.1.is_finite() && signed_zero.1 > 0.0);
     }

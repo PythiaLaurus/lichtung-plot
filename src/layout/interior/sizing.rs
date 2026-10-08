@@ -108,13 +108,8 @@ pub(crate) fn continuous_preference(
     Ok((guide.width, guide.height))
 }
 
-fn scoped_guide<'a, T>(
-    panels: &'a [(Option<String>, T)],
-    plot: &Plot,
-    data: crate::data::PlotData<'_>,
-) -> Result<&'a T, Error> {
+fn scoped_guide<'a, T>(panels: &'a [(Option<String>, T)], plot: &Plot) -> Result<&'a T, Error> {
     for (scope, marks) in panels {
-        data.claim_source_visits(1)?;
         if scope.as_deref() == plot.axis_scope() {
             return Ok(marks);
         }
@@ -135,92 +130,91 @@ pub(crate) fn guided_preference(
     inputs: &super::PreparedInteriorInputs,
     theme: &ResolvedTheme,
 ) -> Result<Option<GuidedPreference>, Error> {
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    resources
-        .claim_calls(1)
-        .map_err(|error| Error::Render(format!("guided intrinsic call: {error:?}")))?;
-    let data = plot.data().with_axis_resources(&resources);
+    let resources = theme.prepared_font_environment()?.operation();
+
+    let data = plot.data().with_operation(&resources);
     if matches!(plot.kind(), PlotKind::Heatmap | PlotKind::Beeswarm) {
         if plot.continuous_guide_suppressed() {
             return Ok(None);
         }
-        let descriptor = match plot.kind() {
-            PlotKind::Heatmap => {
-                let prepared = inputs.heatmap.as_ref().ok_or_else(|| {
-                    Error::Render("scoped Heatmap guide preference is missing".into())
-                })?;
-                let marks = scoped_guide(&prepared.panels, plot, data)?;
-                let semantics = marks.guide_semantics(theme, data)?;
-                let values = marks.guide_values();
-                let indices: &[usize] =
-                    if semantics.domain.0.to_bits() == semantics.domain.1.to_bits() {
-                        &[0]
-                    } else if semantics.selection.center().is_some_and(|center| {
-                        center > semantics.domain.0 && center < semantics.domain.1
-                    }) {
-                        &[0, 2, 1]
-                    } else {
-                        &[0, 1]
-                    };
-                ContinuousDescriptor {
-                    field: data.copy_source_string(plot.color_dimension_key().unwrap_or(""))?,
-                    title: data.copy_source_string(&marks.color_label)?,
-                    stops: data.collect_source(
-                        semantics
-                            .selection
-                            .stops()?
-                            .iter()
-                            .map(|s| Ok(s.backend_stop())),
-                    )?,
-                    center: semantics.selection.center(),
-                    selection: semantics.selection,
-                    missing: semantics.missing,
-                    domain: semantics.domain,
-                    exact: plot.heatmap_color_limits_spec().is_some(),
-                    labels: data.collect_source(
-                        indices
-                            .iter()
-                            .map(|&index| data.copy_source_string(&values[index])),
-                    )?,
+        let descriptor =
+            match plot.kind() {
+                PlotKind::Heatmap => {
+                    let prepared = inputs.heatmap.as_ref().ok_or_else(|| {
+                        Error::Render("scoped Heatmap guide preference is missing".into())
+                    })?;
+                    let marks = scoped_guide(&prepared.panels, plot)?;
+                    let semantics = marks.guide_semantics(theme)?;
+                    let values = marks.guide_values();
+                    let indices: &[usize] =
+                        if semantics.domain.0.to_bits() == semantics.domain.1.to_bits() {
+                            &[0]
+                        } else if semantics.selection.center().is_some_and(|center| {
+                            center > semantics.domain.0 && center < semantics.domain.1
+                        }) {
+                            &[0, 2, 1]
+                        } else {
+                            &[0, 1]
+                        };
+                    ContinuousDescriptor {
+                        field: crate::data::source::copy_source_string(
+                            plot.color_dimension_key().unwrap_or(""),
+                        )?,
+                        title: crate::data::source::copy_source_string(&marks.color_label)?,
+                        stops: crate::data::source::collect_source(
+                            semantics
+                                .selection
+                                .stops()?
+                                .iter()
+                                .map(|s| Ok(s.backend_stop())),
+                        )?,
+                        center: semantics.selection.center(),
+                        selection: semantics.selection,
+                        missing: semantics.missing,
+                        domain: semantics.domain,
+                        exact: plot.heatmap_color_limits_spec().is_some(),
+                        labels: crate::data::source::collect_source(indices.iter().map(
+                            |&index| crate::data::source::copy_source_string(&values[index]),
+                        ))?,
+                    }
                 }
-            }
-            PlotKind::Beeswarm => {
-                let prepared = inputs.beeswarm.as_ref().ok_or_else(|| {
-                    Error::Render("scoped Beeswarm guide preference is missing".into())
-                })?;
-                let marks = scoped_guide(&prepared.panels, plot, data)?;
-                let semantics = marks.guide_semantics(data)?;
-                let values = marks.guide_values();
-                let indices: &[usize] =
-                    if semantics.domain.0.to_bits() == semantics.domain.1.to_bits() {
-                        &[1]
-                    } else {
-                        &[1, 0]
-                    };
-                ContinuousDescriptor {
-                    field: data.copy_source_string(plot.color_dimension_key().unwrap_or(""))?,
-                    title: data.copy_source_string(&marks.color_label)?,
-                    stops: data.collect_source(
-                        semantics
-                            .selection
-                            .stops()?
-                            .iter()
-                            .map(|s| Ok(s.backend_stop())),
-                    )?,
-                    center: semantics.selection.center(),
-                    selection: semantics.selection,
-                    missing: semantics.missing,
-                    domain: semantics.domain,
-                    exact: plot.beeswarm_color_limits_spec().is_some(),
-                    labels: data.collect_source(
-                        indices
-                            .iter()
-                            .map(|&index| data.copy_source_string(&values[index])),
-                    )?,
+                PlotKind::Beeswarm => {
+                    let prepared = inputs.beeswarm.as_ref().ok_or_else(|| {
+                        Error::Render("scoped Beeswarm guide preference is missing".into())
+                    })?;
+                    let marks = scoped_guide(&prepared.panels, plot)?;
+                    let semantics = marks.continuous_semantics();
+                    let values = marks.guide_values();
+                    let indices: &[usize] =
+                        if semantics.domain.0.to_bits() == semantics.domain.1.to_bits() {
+                            &[1]
+                        } else {
+                            &[1, 0]
+                        };
+                    ContinuousDescriptor {
+                        field: crate::data::source::copy_source_string(
+                            plot.color_dimension_key().unwrap_or(""),
+                        )?,
+                        title: crate::data::source::copy_source_string(&marks.color_label)?,
+                        stops: crate::data::source::collect_source(
+                            semantics
+                                .selection
+                                .stops()?
+                                .iter()
+                                .map(|s| Ok(s.backend_stop())),
+                        )?,
+                        center: semantics.selection.center(),
+                        selection: semantics.selection,
+                        missing: semantics.missing,
+                        domain: semantics.domain,
+                        exact: plot.beeswarm_color_limits_spec().is_some(),
+                        labels: crate::data::source::collect_source(indices.iter().map(
+                            |&index| crate::data::source::copy_source_string(&values[index]),
+                        ))?,
+                    }
                 }
-            }
-            _ => unreachable!("continuous kind selected"),
-        };
+                _ => unreachable!("continuous kind selected"),
+            };
         return Ok(Some(GuidedPreference {
             descriptor: PreparedGuideDescriptor::Continuous(descriptor),
             position: crate::LegendPosition::OutsideRight,
@@ -235,12 +229,12 @@ pub(crate) fn guided_preference(
         return Ok(None);
     }
     let mut entries = inputs.guide_entries(plot, theme, data, plot.axis_scope())?;
-    crate::decorations::legend::resolve_entries(plot, &mut entries, &resources)?;
+    crate::decorations::legend::resolve_entries(plot, &mut entries)?;
     if entries.is_empty() {
         return Ok(None);
     }
-    let title = crate::decorations::legend::resolved_title(&entries, &resources)?;
-    let entries = crate::decorations::legend::Legend::admit_entries(entries, theme)?;
+    let title = crate::decorations::legend::resolved_title(&entries)?;
+    let entries = crate::decorations::legend::Legend::share_entries(entries)?;
     Ok(Some(GuidedPreference {
         descriptor: PreparedGuideDescriptor::Discrete((title, entries)),
         position,
@@ -414,18 +408,13 @@ pub(crate) fn plot_size(
     if let (Some(width), Some(height)) = (requested_width, requested_height) {
         return Ok(RootSize::new(width, height));
     }
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    resources
-        .claim_calls(1)
-        .map_err(|error| Error::Render(format!("natural root sizing call: {error:?}")))?;
-    let data = plot.data().with_axis_resources(&resources);
+
     let hard = plot.intrinsic_body_minimum(theme)?;
     let preference = body_preference(plot, theme, hard)?;
     let axes = plot.prepared_axis_inputs();
     let lengths = theme.axes.spacing().lengths(
         theme.typography.axes.tick_label.font_size(),
         theme.typography.axes.axis_title.font_size(),
-        &resources,
     )?;
     let common_chrome = if plot.kind() == PlotKind::Matrix {
         theme.axes.cell_axis_chrome()
@@ -433,27 +422,21 @@ pub(crate) fn plot_size(
         theme.axes.coordinate_chrome()
     };
     let panel_edge = theme.panel_edge_length()?;
-    let left_outward = common_chrome.outward(crate::layout::AxisSide::Left, true, &resources)?;
-    let bottom_outward =
-        common_chrome.outward(crate::layout::AxisSide::Bottom, true, &resources)?;
+    let left_outward = common_chrome.outward(crate::layout::AxisSide::Left, true)?;
+    let bottom_outward = common_chrome.outward(crate::layout::AxisSide::Bottom, true)?;
     let chrome = crate::theme::AxisLengths::hard(
         &lengths
             .y_tick_label_gap
-            .add(&lengths.y_title_tick_label_gap, &resources)?
-            .add(&lengths.y_title_edge_padding, &resources)?
-            .add_pixels(
-                theme.typography.axes.axis_title.line_pitch_pixels(),
-                &resources,
-            )?
-            .add(&left_outward, &resources)?
-            .add(&panel_edge, &resources)?,
-        &resources,
+            .add_length(&lengths.y_title_tick_label_gap)
+            .add_length(&lengths.y_title_edge_padding)
+            .add_pixels(theme.typography.axes.axis_title.line_pitch_pixels())?
+            .add_length(&left_outward)
+            .add_length(&panel_edge),
     )?;
     let mut y_width = 0.0_f64;
     if let Some(axes) = axes {
         if let Some(labels) = &axes.display_categories[1] {
             for label in labels {
-                data.claim_source_visits(1)?;
                 y_width = y_width.max(
                     theme
                         .measure_text(
@@ -472,8 +455,7 @@ pub(crate) fn plot_size(
                 f64::midpoint(axes.ranges[1].0, axes.ranges[1].1),
                 axes.ranges[1].1,
             ] {
-                data.claim_source_visits(1)?;
-                let label = crate::layout::format_guide_label(value, 0, data)?;
+                let label = crate::layout::format_guide_label(value, 0)?;
                 y_width = y_width.max(
                     theme
                         .measure_text(
@@ -523,13 +505,9 @@ pub(crate) fn plot_size(
         }
     }
     let width = requested_width.map_or_else(|| integral(outer_width), Ok)?;
-    let owner = ComponentAddress::root().child(
-        crate::layout::AddressRole::PlotBody,
-        0,
-        &theme.prepared_font_environment()?.generation_resources(),
-    )?;
-    let gutters = round.insets(&owner, FeedbackKind::AxisGutter)?;
-    let ink = round.insets(&owner, FeedbackKind::OwnedInk)?;
+    let owner = ComponentAddress::root().child(crate::layout::AddressRole::PlotBody, 0)?;
+    let gutters = round.insets(&owner, FeedbackKind::AxisGutter);
+    let ink = round.insets(&owner, FeedbackKind::OwnedInk);
     let left = if gutters[0] > 0.0 {
         gutters[0]
     } else {
@@ -560,23 +538,15 @@ pub(crate) fn plot_size(
         crate::theme::AxisLengths::hard(
             &lengths
                 .x_tick_label_gap
-                .add(&lengths.x_title_tick_label_gap, &resources)?
-                .add_pixels(
-                    theme.typography.axes.tick_label.line_pitch_pixels(),
-                    &resources,
-                )?
-                .add_pixels(
-                    theme.typography.axes.axis_title.line_pitch_pixels(),
-                    &resources,
-                )?
-                .add(&bottom_outward, &resources)?
-                .add(&panel_edge, &resources)?,
-            &resources,
+                .add_length(&lengths.x_title_tick_label_gap)
+                .add_pixels(theme.typography.axes.tick_label.line_pitch_pixels())?
+                .add_pixels(theme.typography.axes.axis_title.line_pitch_pixels())?
+                .add_length(&bottom_outward)
+                .add_length(&panel_edge),
         )?
     };
     let height = integral(theme.root_outer_height(&prose.height_with_body(
         body_height.max(guide_height) + bottom + gutters[3] + ink[2] + ink[3],
-        &resources,
     )?)?)?;
     Ok(RootSize::new(width, height))
 }
@@ -621,10 +591,6 @@ impl Plot {
 #[cfg(test)]
 mod tests {
     #[test]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one independent width boundary verifies natural, measured and native-right owners with retained source labels"
-    )]
     fn continuous_natural_and_native_right_width_keep_half_quantum_reserves_exact() {
         use crate::decorations::legend::{
             descriptor::ContinuousDescriptor, MeasuredContinuousGuide,
@@ -633,9 +599,7 @@ mod tests {
             fit::{FitOutcome, FitScope},
             PanelBox,
         };
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let half = crate::theme::RelativeSpacing::ratio(1, 22_528).unwrap();
         let spacing = theme
             .legend
@@ -701,17 +665,7 @@ mod tests {
             .unwrap(),
             FitOutcome::Miss(_)
         ));
-        let source = crate::Plot::heatmap(
-            crate::CategoryValues::new("x", ["a", "b"]).unwrap(),
-            crate::CategoryValues::new("y", ["a", "a"]).unwrap(),
-            crate::NumericValues::new("Value", [0.0, 1.0]),
-        )
-        .erase();
-        let resources = theme
-            .prepared_font_environment()
-            .unwrap()
-            .generation_resources();
-        let data = source.data().with_axis_resources(&resources);
+
         let gap = theme.legend_outside_gap().unwrap();
         let (_, guide) = crate::layout::interior::guide::continuous_right(
             &descriptor,
@@ -719,7 +673,6 @@ mod tests {
             64.0,
             &theme,
             &scope,
-            data,
             None,
         )
         .unwrap();
@@ -731,7 +684,6 @@ mod tests {
                 64.0,
                 &theme,
                 &scope,
-                data,
                 None
             ),
             Err(crate::layout::fit::PlanError::Fit(_))
@@ -740,9 +692,7 @@ mod tests {
 
     #[test]
     fn continuous_intrinsic_width_admits_broad_frame_and_missing_key_chrome() {
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let frame = crate::theme::LegendFrameTheme::new(
             theme.legend.frame().unwrap().fill(),
             Some(

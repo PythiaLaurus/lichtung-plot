@@ -36,22 +36,13 @@ impl Intrinsics {
         theme: &crate::theme::ResolvedTheme,
         scope: Option<&str>,
     ) -> Result<&'a Self, Error> {
-        let environment = theme.prepared_font_environment()?;
-        environment.claim_measurement_call().map_err(|error| {
-            Error::Render(format!("coordinate intrinsic call admission: {error:?}"))
-        })?;
         if axes.intrinsics.get().is_none() {
             let summary = Self::analyze(axes, theme, scope)?;
-            environment.claim_cache_entries(1).map_err(|error| {
-                Error::Render(format!("coordinate intrinsic cache admission: {error:?}"))
-            })?;
+
             let _ = axes.intrinsics.set(summary);
         }
         let summary = axes.intrinsics.get().expect("initialized panel intrinsics");
-        if !summary
-            .standard
-            .matches(theme, &environment.generation_resources())?
-        {
+        if !summary.standard.matches(theme)? {
             return Err(Error::Render(
                 "prepared panel intrinsic typography changed".into(),
             ));
@@ -70,19 +61,17 @@ impl Intrinsics {
         )
     }
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "both foundational axis sources and their visibility summaries are analyzed together"
-    )]
     fn analyze(
         axes: &crate::plots::shared_x::PreparedAxes,
         theme: &crate::theme::ResolvedTheme,
-        scope: Option<&str>,
+        diagnostic_scope: Option<&str>,
     ) -> Result<Self, Error> {
+        #[cfg(not(test))]
+        let _ = diagnostic_scope;
         #[cfg(test)]
         crate::orchestrator::measurements::intrinsic(
             crate::orchestrator::measurements::Counter::StandardPanelIntrinsic,
-            scope,
+            diagnostic_scope,
         );
         let standard = StandardPanelInputs::new(theme)?;
         let mut minimum_body = (
@@ -106,12 +95,6 @@ impl Intrinsics {
                 }
             }
             if let Some(labels) = &axes.display_categories[side] {
-                theme
-                    .prepared_font_environment()?
-                    .claim_processing_visits(labels.len() as u128)
-                    .map_err(|error| {
-                        Error::Render(format!("coordinate intrinsic labels {scope:?}: {error:?}"))
-                    })?;
                 let mut category_pitch = 0.0_f64;
                 for label in labels {
                     if !label.is_empty() {
@@ -158,7 +141,6 @@ impl Intrinsics {
                     axes.logarithmic && side == 0,
                     false,
                     0,
-                    Some(theme.prepared_font_environment()?),
                 )?;
                 let plan = theme.measure_text(
                     &label,
@@ -320,11 +302,7 @@ impl InteriorRoute {
                 .each_ref()
                 .map(|ticks| ticks.as_ref().map(Vec::len)),
         );
-        let resources = context
-            .theme
-            .prepared_font_environment()?
-            .generation_resources();
-        let data = context.data.with_axis_resources(&resources);
+
         let mut keys = [None, None];
         let domains = inputs.categories.each_ref().map(|categories| {
             if categories.is_some() {
@@ -334,7 +312,6 @@ impl InteriorRoute {
             }
         });
         let mut axes = fit::collect(
-            context.theme,
             "native coordinate axes",
             (0..2).map(|side| {
                 let supplied = if let Some(categories) = &inputs.categories[side] {
@@ -347,23 +324,22 @@ impl InteriorRoute {
                         )
                         .into());
                     }
-                    keys[side] = Some(
-                        data.collect_source(
-                            categories
-                                .iter()
-                                .map(|tick| data.copy_source_string(&tick.label)),
-                        )?,
-                    );
-                    data.collect_source(categories.iter().zip(display).map(|(tick, label)| {
-                        Ok(crate::layout::AxisTick {
-                            position: tick.position,
-                            label: if side == 1 && !plot.y_tick_labels_visible() {
-                                String::new()
-                            } else {
-                                data.copy_source_string(label)?
-                            },
-                        })
-                    }))?
+                    keys[side] =
+                        Some(crate::data::source::collect_source(categories.iter().map(
+                            |tick| crate::data::source::copy_source_string(&tick.label),
+                        ))?);
+                    crate::data::source::collect_source(categories.iter().zip(display).map(
+                        |(tick, label)| {
+                            Ok(crate::layout::AxisTick {
+                                position: tick.position,
+                                label: if side == 1 && !plot.y_tick_labels_visible() {
+                                    String::new()
+                                } else {
+                                    crate::data::source::copy_source_string(label)?
+                                },
+                            })
+                        },
+                    ))?
                 } else {
                     Vec::new()
                 };
@@ -392,7 +368,7 @@ impl InteriorRoute {
                     )?
                 };
                 Ok(Axis {
-                    label: data.copy_source_string(&inputs.labels[side])?,
+                    label: crate::data::source::copy_source_string(&inputs.labels[side])?,
                     ticks: ticks.ticks,
                     explicit_ticks: inputs.specs[side].exact_ticks.is_some(),
                     assigned_tick_width: None,
@@ -538,14 +514,12 @@ mod intrinsic_tests {
             .x_label("")
             .y_label("")
             .erase();
-            let resources = crate::font::canonical::OperationGenerationResources::new();
+            let resources = crate::font::canonical::OperationContext::new();
             let chart = crate::plots::shared_x::prepare_plot(&source, &resources, None)
                 .unwrap()
                 .attach(source)
                 .unwrap();
-            let mut theme = crate::Theme::Publication
-                .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                .unwrap();
+            let mut theme = crate::Theme::Publication.resolve().unwrap();
             if tight_lines {
                 theme.typography.axes.tick_label.line_height_multiplier = 0.1;
             }
@@ -588,18 +562,15 @@ mod intrinsic_tests {
             .x_label("")
             .y_label("")
             .erase();
-            let resources = crate::font::canonical::OperationGenerationResources::new();
+            let resources = crate::font::canonical::OperationContext::new();
             let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
             let chart = inputs.attach(source).unwrap();
-            let theme = crate::Theme::Publication
-                .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                .unwrap();
+            let theme = crate::Theme::Publication.resolve().unwrap();
             let label = crate::layout::panel::format_label(
                 f64::midpoint(range.0, range.1),
                 false,
                 false,
                 0,
-                Some(theme.prepared_font_environment().unwrap()),
             )
             .unwrap();
             let measured = theme

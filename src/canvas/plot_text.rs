@@ -31,13 +31,13 @@ impl PlotLocalTextPlan {
         let present = sources
             .iter()
             .any(|source| source.is_some_and(|text| !text.is_empty()));
-        let resources = theme.prepared_font_environment()?.generation_resources();
+
         let padding = if present {
             theme.root_padding_lengths()?
         } else {
-            crate::theme::composition::RootPaddingLengths::zero(&resources)?
+            crate::theme::composition::RootPaddingLengths::zero()?
         };
-        let span = padding.inset(cell, &resources)?;
+        let span = padding.inset(cell)?;
         let maximum_width = if present {
             theme.root_inner_width(cell.width())?
         } else {
@@ -45,23 +45,15 @@ impl PlotLocalTextPlan {
         };
         if span.width() <= 0.0 || span.height() <= 0.0 {
             return Ok(FitOutcome::Miss(
-                scope
-                    .child(
-                        AddressRole::RootBody,
-                        0,
-                        &theme.prepared_font_environment()?.generation_resources(),
-                    )?
-                    .failure(
-                        FitKind::TrackOrResidual,
-                        "Canvas Plot local text leaves no content span",
-                    ),
+                scope.child(AddressRole::RootBody, 0)?.failure(
+                    FitKind::TrackOrResidual,
+                    "Canvas Plot local text leaves no content span",
+                ),
             ));
         }
-        if let FitOutcome::Miss(reason) = fit::outcome(intrinsics.check_width(
-            maximum_width.min(span.width()),
-            scope,
-            &theme.prepared_font_environment()?.generation_resources(),
-        ))? {
+        if let FitOutcome::Miss(reason) =
+            fit::outcome(intrinsics.check_width(maximum_width.min(span.width()), scope))?
+        {
             return Ok(FitOutcome::Miss(reason));
         }
         let minimum = plot.intrinsic_body_minimum(theme)?;
@@ -83,20 +75,14 @@ impl PlotLocalTextPlan {
             FitOutcome::Measured(text) => text,
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
         };
-        let reserved = text.reserves.body(cell, &padding, &resources)?;
+        let reserved = text.reserves.body(cell, &padding)?;
         let body = PanelBox::new(cell.x0, cell.x1, reserved.y0, reserved.y1);
         if body.width() < minimum.0 || body.height() < minimum.1 {
             return Ok(FitOutcome::Miss(
-                scope
-                    .child(
-                        AddressRole::RootBody,
-                        0,
-                        &theme.prepared_font_environment()?.generation_resources(),
-                    )?
-                    .failure(
-                        FitKind::TrackOrResidual,
-                        "Canvas Plot local title block leaves insufficient body space",
-                    ),
+                scope.child(AddressRole::RootBody, 0)?.failure(
+                    FitKind::TrackOrResidual,
+                    "Canvas Plot local title block leaves insufficient body space",
+                ),
             ));
         }
         Ok(FitOutcome::Measured(Self { text, body }))

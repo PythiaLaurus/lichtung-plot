@@ -95,7 +95,7 @@ pub(super) fn allocate(
         ));
     }
     let theme = themes.root();
-    let resources = theme.prepared_font_environment()?.generation_resources();
+
     let gap = required(theme.composition_grid_gap()?)?;
     let em = required(f64::from(
         theme.typography.composition.composition_header.font_size(),
@@ -104,7 +104,6 @@ pub(super) fn allocate(
     let appearance = theme.typography.composition().composition_header();
     let mut row_header_plans = Vec::new();
     crate::layout::fit::reserve(
-        theme,
         &mut row_header_plans,
         row_headers.len(),
         "Canvas row-header plans",
@@ -135,8 +134,7 @@ pub(super) fn allocate(
         row_header_width = crate::theme::composition::hard(
             &header_lengths
                 .row_header_padding
-                .add_pixels(row_header_width, &resources)?,
-            &resources,
+                .add_pixels(row_header_width)?,
         )?;
     }
     let header_outer = outer;
@@ -149,8 +147,8 @@ pub(super) fn allocate(
     }
     let mut column_insets = Vec::new();
     let mut row_insets = Vec::new();
-    crate::layout::fit::reserve(theme, &mut column_insets, columns, "Canvas column gutters")?;
-    crate::layout::fit::reserve(theme, &mut row_insets, rows, "Canvas row gutters")?;
+    crate::layout::fit::reserve(&mut column_insets, columns, "Canvas column gutters")?;
+    crate::layout::fit::reserve(&mut row_insets, rows, "Canvas row gutters")?;
     column_insets.resize(columns, [0_i64; 2]);
     row_insets.resize(rows, [0_i64; 2]);
     for &(row, column, requirement) in gutters {
@@ -166,20 +164,15 @@ pub(super) fn allocate(
         row[0] = row[0].max(required(requirement.bottom)?);
         row[1] = row[1].max(required(requirement.top)?);
     }
-    let grid = ComponentAddress::root().child(
-        AddressRole::CanvasGrid,
-        0,
-        &theme.prepared_font_environment()?.generation_resources(),
-    )?;
+    let grid = ComponentAddress::root().child(AddressRole::CanvasGrid, 0)?;
     let mut owners = Vec::new();
-    crate::layout::fit::reserve(theme, &mut owners, count, "Canvas cell owners")?;
+    crate::layout::fit::reserve(&mut owners, count, "Canvas cell owners")?;
     for index in 0..count {
         owners.push(
             grid.child(
                 AddressRole::CanvasCell,
                 u32::try_from(index)
                     .map_err(|_| Error::Render("Canvas cell address overflowed".into()))?,
-                &theme.prepared_font_environment()?.generation_resources(),
             )?,
         );
     }
@@ -189,16 +182,11 @@ pub(super) fn allocate(
         .checked_add(column_headers.len())
         .and_then(|count| count.checked_add(row_titles.len()))
         .ok_or_else(|| Error::Render("Canvas header requirement count overflowed".into()))?;
-    crate::layout::fit::reserve(
-        theme,
-        &mut widths,
-        width_count,
-        "Canvas column requirements",
-    )?;
+    crate::layout::fit::reserve(&mut widths, width_count, "Canvas column requirements")?;
     let height_count = count
         .checked_add(row_headers.len())
         .ok_or_else(|| Error::Render("Canvas row-header requirement count overflowed".into()))?;
-    crate::layout::fit::reserve(theme, &mut heights, height_count, "Canvas row requirements")?;
+    crate::layout::fit::reserve(&mut heights, height_count, "Canvas row requirements")?;
     for index in 0..count {
         let minimum = if let Some(plot) = &plots[index] {
             let child_theme = themes
@@ -292,7 +280,6 @@ pub(super) fn allocate(
     }
     let mut row_header_owners = Vec::new();
     crate::layout::fit::reserve(
-        theme,
         &mut row_header_owners,
         row_headers.len(),
         "Canvas row-header owners",
@@ -303,11 +290,7 @@ pub(super) fn allocate(
             .checked_add(index)
             .and_then(|index| u32::try_from(index).ok())
             .ok_or_else(|| Error::Render("Canvas row-header address overflowed".into()))?;
-        row_header_owners.push(ComponentAddress::root().child(
-            AddressRole::CanvasHeader,
-            ordinal,
-            &theme.prepared_font_environment()?.generation_resources(),
-        )?);
+        row_header_owners.push(ComponentAddress::root().child(AddressRole::CanvasHeader, ordinal)?);
     }
     for ((header, plan), owner) in row_headers
         .iter()
@@ -326,7 +309,6 @@ pub(super) fn allocate(
     }
     let mut header_owners = Vec::new();
     crate::layout::fit::reserve(
-        theme,
         &mut header_owners,
         column_headers.len(),
         "Canvas header owners",
@@ -347,7 +329,6 @@ pub(super) fn allocate(
                 AddressRole::CanvasHeader,
                 u32::try_from(index)
                     .map_err(|_| Error::Render("Canvas header address overflowed".into()))?,
-                &theme.prepared_font_environment()?.generation_resources(),
             )?,
         );
     }
@@ -369,7 +350,6 @@ pub(super) fn allocate(
     }
     let mut row_title_owners = Vec::new();
     crate::layout::fit::reserve(
-        theme,
         &mut row_title_owners,
         row_titles.len(),
         "Canvas row-title owners",
@@ -384,7 +364,6 @@ pub(super) fn allocate(
             AddressRole::CanvasRowTitle,
             u32::try_from(index)
                 .map_err(|_| Error::Render("Canvas row-title address overflowed".into()))?,
-            &theme.prepared_font_environment()?.generation_resources(),
         )?;
         row_title_owners.push(owner);
     }
@@ -395,13 +374,9 @@ pub(super) fn allocate(
         widths.push(GridRequirement {
             start: 0,
             span: columns,
-            hard: required(crate::theme::composition::hard(
-                &padding.add_pixels(hard, &resources)?,
-                &resources,
-            )?)?,
+            hard: required(crate::theme::composition::hard(&padding.add_pixels(hard)?)?)?,
             preferred: required(crate::theme::composition::hard(
-                &padding.add_pixels(preferred.max(hard), &resources)?,
-                &resources,
+                &padding.add_pixels(preferred.max(hard))?,
             )?)?,
             fill: false,
             address: owner,
@@ -439,8 +414,8 @@ pub(super) fn allocate(
     };
     let mut column_base = Vec::new();
     let mut row_base = Vec::new();
-    crate::layout::fit::reserve(theme, &mut column_base, columns, "Canvas column tracks")?;
-    crate::layout::fit::reserve(theme, &mut row_base, rows, "Canvas row tracks")?;
+    crate::layout::fit::reserve(&mut column_base, columns, "Canvas column tracks")?;
+    crate::layout::fit::reserve(&mut row_base, rows, "Canvas row tracks")?;
     column_base.resize(columns, base);
     row_base.resize(rows, base);
     let columns = match allocate_grid_axis(
@@ -455,14 +430,13 @@ pub(super) fn allocate(
         gap,
         Some(em),
         true,
-        &resources,
         scope,
     )? {
         FitOutcome::Measured(value) => value.sizes,
         FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
     };
     let mut x_positions = Vec::new();
-    crate::layout::fit::reserve(theme, &mut x_positions, columns.len(), "Canvas x positions")?;
+    crate::layout::fit::reserve(&mut x_positions, columns.len(), "Canvas x positions")?;
     let mut cursor = i128::from(x0);
     for (index, &width) in columns.iter().enumerate() {
         cursor += i128::from(column_insets[index][0]);
@@ -477,7 +451,6 @@ pub(super) fn allocate(
     )?);
     let mut column_plans = Vec::new();
     crate::layout::fit::reserve(
-        theme,
         &mut column_plans,
         column_headers.len(),
         "Canvas measured column headers",
@@ -504,14 +477,12 @@ pub(super) fn allocate(
         header_height = header_height.max(crate::theme::composition::hard(
             &header_lengths
                 .column_header_padding
-                .add_pixels(plan.height(), &resources)?,
-            &resources,
+                .add_pixels(plan.height())?,
         )?);
         column_plans.push((plan, left, right));
     }
     let mut row_title_plans = Vec::new();
     crate::layout::fit::reserve(
-        theme,
         &mut row_title_plans,
         row_titles.len(),
         "Canvas measured row titles",
@@ -522,12 +493,7 @@ pub(super) fn allocate(
         i128::from(x_positions[last]) + i128::from(columns[last]),
     )?);
     let mut row_title_heights = Vec::new();
-    crate::layout::fit::reserve(
-        theme,
-        &mut row_title_heights,
-        rows,
-        "Canvas row-title heights",
-    )?;
+    crate::layout::fit::reserve(&mut row_title_heights, rows, "Canvas row-title heights")?;
     row_title_heights.resize(rows, 0_i64);
     for (index, title) in row_titles.iter().enumerate() {
         let plan = match fit::text(
@@ -537,7 +503,6 @@ pub(super) fn allocate(
             crate::theme::composition::capacity(
                 title_right - title_left,
                 &header_lengths.row_title_horizontal_padding,
-                &resources,
             )?,
             PhysicalTextAlignment::Center,
             "Canvas row title",
@@ -549,8 +514,7 @@ pub(super) fn allocate(
         let reserve = required(crate::theme::composition::hard(
             &header_lengths
                 .row_title_vertical_padding
-                .add_pixels(plan.height(), &resources)?,
-            &resources,
+                .add_pixels(plan.height())?,
         )?)?;
         row_title_heights[title.start] = reserve;
         row_title_plans.push(plan);
@@ -560,7 +524,7 @@ pub(super) fn allocate(
         .map(|&height| i128::from(height))
         .sum::<i128>();
     let mut axis_row_tops = Vec::new();
-    crate::layout::fit::reserve(theme, &mut axis_row_tops, rows, "Canvas row axis tops")?;
+    crate::layout::fit::reserve(&mut axis_row_tops, rows, "Canvas row axis tops")?;
     axis_row_tops.extend(row_insets.iter().map(|insets| insets[1]));
     for (insets, &title_height) in row_insets.iter_mut().zip(&row_title_heights) {
         insets[1] = checked(i128::from(insets[1]) + i128::from(title_height))?;
@@ -571,9 +535,7 @@ pub(super) fn allocate(
             if child.address.leaf_role() != AddressRole::CanvasCell {
                 continue;
             }
-            resources.claim_visits(1).map_err(|error| {
-                Error::Render(format!("Canvas content owner lookup: {error:?}"))
-            })?;
+
             let index = usize::try_from(child.address.leaf_slot_index())
                 .map_err(|_| Error::Render("Canvas content slot index overflowed".into()))?;
             let width = pixels(columns[index % columns.len()]);
@@ -624,7 +586,6 @@ pub(super) fn allocate(
         gap,
         Some(em),
         true,
-        &resources,
         scope,
     )? {
         FitOutcome::Measured(value) => value.sizes,
@@ -646,7 +607,7 @@ pub(super) fn allocate(
         )?;
     }
     let mut y_positions = Vec::new();
-    crate::layout::fit::reserve(theme, &mut y_positions, rows.len(), "Canvas y positions")?;
+    crate::layout::fit::reserve(&mut y_positions, rows.len(), "Canvas y positions")?;
     let mut cursor = i128::from(y1);
     for (index, &height) in rows.iter().enumerate() {
         cursor -= i128::from(row_insets[index][1]);
@@ -660,19 +621,13 @@ pub(super) fn allocate(
     let mut content_insets = Vec::new();
     if content.is_some() {
         crate::layout::fit::reserve(
-            theme,
             &mut content_insets,
             count,
             "Canvas content dependency insets",
         )?;
     }
-    crate::layout::fit::reserve(theme, &mut cells, count, "Canvas assigned cells")?;
-    resources
-        .claim_visits(
-            u128::try_from(count)
-                .map_err(|_| Error::Render("Canvas cell visit count overflowed".into()))?,
-        )
-        .map_err(|error| Error::Render(format!("Canvas cell allocation admission: {error:?}")))?;
+    crate::layout::fit::reserve(&mut cells, count, "Canvas assigned cells")?;
+
     for (row, &top) in y_positions.iter().enumerate() {
         for (column, (&left, &width)) in x_positions.iter().zip(&columns).enumerate() {
             cells.push(PanelBox::new(
@@ -696,11 +651,7 @@ pub(super) fn allocate(
         .len()
         .checked_add(row_headers.len())
         .ok_or_else(|| Error::Render("Canvas header storage overflowed".into()))?;
-    crate::render::backend::reserve_text_records(
-        &mut headers,
-        header_count,
-        theme.prepared_font_environment()?,
-    )?;
+    crate::render::backend::reserve_text_records(&mut headers, header_count)?;
     for (plan, left, right) in column_plans {
         let x = centered_x(left, right, &plan)?;
         headers.push(CanvasHeaderPlan {
@@ -726,11 +677,7 @@ pub(super) fn allocate(
         });
     }
     let mut measured_row_titles = Vec::new();
-    crate::render::backend::reserve_text_records(
-        &mut measured_row_titles,
-        row_titles.len(),
-        theme.prepared_font_environment()?,
-    )?;
+    crate::render::backend::reserve_text_records(&mut measured_row_titles, row_titles.len())?;
     for (title, plan) in row_titles.iter().zip(row_title_plans) {
         let row = title.start;
         let x = centered_x(title_left, title_right, &plan)?;
@@ -766,12 +713,7 @@ mod tests {
     #[test]
     fn one_pixel_headers_freeze_subpixel_centers_inside_their_actual_unpadded_bands() {
         let plots = [None];
-        let mut themes = ResolvedCanvasThemes::new(
-            crate::Theme::Publication,
-            &plots,
-            &crate::font::canonical::OperationGenerationResources::new(),
-        )
-        .unwrap();
+        let mut themes = ResolvedCanvasThemes::new(crate::Theme::Publication, &plots).unwrap();
         themes.root.typography.composition.composition_header = themes
             .root
             .typography
@@ -838,8 +780,7 @@ mod tests {
             for (text, band) in bands {
                 assert_eq!(text.plan.source, "0");
                 assert_eq!(text.plan.style.font_size, 1);
-                let mut ink =
-                    crate::render::geometry::GeometrySnapshot::new(themes.root()).unwrap();
+                let mut ink = crate::render::geometry::GeometrySnapshot::new();
                 ink.text(text.placement, &text.plan, None).unwrap();
                 assert!(!ink.bounds().is_empty());
                 assert!(
@@ -857,12 +798,7 @@ mod tests {
     #[test]
     fn unicode_spanning_headers_retain_complete_rtl_sources_and_unclipped_ink() {
         let plots = [None, None, None, None];
-        let themes = ResolvedCanvasThemes::new(
-            crate::Theme::Publication,
-            &plots,
-            &crate::font::canonical::OperationGenerationResources::new(),
-        )
-        .unwrap();
+        let themes = ResolvedCanvasThemes::new(crate::Theme::Publication, &plots).unwrap();
         let source = "مرحبا بالعالم\nעברית ושמות";
         let header = CanvasHeader {
             start: 0,
@@ -900,7 +836,7 @@ mod tests {
         {
             assert_eq!(text.plan.source, source);
             assert_eq!(text.plan.lines.len(), 2);
-            let mut ink = crate::render::geometry::GeometrySnapshot::new(themes.root()).unwrap();
+            let mut ink = crate::render::geometry::GeometrySnapshot::new();
             ink.text(text.placement, &text.plan, None).unwrap();
             assert!(!ink.bounds().is_empty());
             assert!(ink.bounds().iter().all(|bounds| bounds.left >= outer.x0
@@ -913,12 +849,7 @@ mod tests {
     #[test]
     fn declared_empty_tracks_use_header_em_independently_of_body_and_text_panel_title() {
         let plots = [None, None];
-        let mut themes = ResolvedCanvasThemes::new(
-            crate::Theme::Publication,
-            &plots,
-            &crate::font::canonical::OperationGenerationResources::new(),
-        )
-        .unwrap();
+        let mut themes = ResolvedCanvasThemes::new(crate::Theme::Publication, &plots).unwrap();
         themes.root.composition = themes
             .root
             .composition
@@ -995,12 +926,7 @@ mod tests {
     fn sparse_mixed_grid_keeps_declared_gaps_and_trailing_cells() {
         let plots: Vec<Option<Plot>> = (0..4).map(|_| None).collect();
         let plot_titles = [None; 4];
-        let themes = ResolvedCanvasThemes::new(
-            crate::Theme::Publication,
-            &plots,
-            &crate::font::canonical::OperationGenerationResources::new(),
-        )
-        .unwrap();
+        let themes = ResolvedCanvasThemes::new(crate::Theme::Publication, &plots).unwrap();
         let text = super::super::TextPanel::new("A", "B").unwrap();
         let mut intrinsics = [None; 4];
         intrinsics[0] = Some(TextPanelIntrinsics::prepare(&text, themes.root()).unwrap());
@@ -1031,12 +957,7 @@ mod tests {
     #[test]
     fn text_panels_with_asymmetric_intrinsics_get_unequal_fill_columns() {
         let plots: Vec<Option<Plot>> = [None, None].into();
-        let themes = ResolvedCanvasThemes::new(
-            crate::Theme::Publication,
-            &plots,
-            &crate::font::canonical::OperationGenerationResources::new(),
-        )
-        .unwrap();
+        let themes = ResolvedCanvasThemes::new(crate::Theme::Publication, &plots).unwrap();
         let long =
             super::super::TextPanel::new("MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM", "Body").unwrap();
         let short = super::super::TextPanel::new("Brief", "Body").unwrap();
@@ -1070,12 +991,7 @@ mod tests {
     #[test]
     fn spanning_column_header_preserves_title_width_without_repacking_sparse_cells() {
         let plots: Vec<Option<Plot>> = [None, None, None].into();
-        let themes = ResolvedCanvasThemes::new(
-            crate::Theme::Publication,
-            &plots,
-            &crate::font::canonical::OperationGenerationResources::new(),
-        )
-        .unwrap();
+        let themes = ResolvedCanvasThemes::new(crate::Theme::Publication, &plots).unwrap();
         let header = CanvasHeader {
             start: 0,
             span: 2,
@@ -1116,12 +1032,7 @@ mod tests {
     #[test]
     fn spanning_row_header_owns_its_left_track_and_vertical_span() {
         let plots: Vec<Option<Plot>> = [None, None].into();
-        let themes = ResolvedCanvasThemes::new(
-            crate::Theme::Publication,
-            &plots,
-            &crate::font::canonical::OperationGenerationResources::new(),
-        )
-        .unwrap();
+        let themes = ResolvedCanvasThemes::new(crate::Theme::Publication, &plots).unwrap();
         let row = CanvasHeader {
             start: 0,
             span: 2,
@@ -1155,12 +1066,7 @@ mod tests {
     #[test]
     fn wrapped_row_title_owns_a_top_track_above_axis_gutters() {
         let plots: Vec<Option<Plot>> = [None, None].into();
-        let themes = ResolvedCanvasThemes::new(
-            crate::Theme::Publication,
-            &plots,
-            &crate::font::canonical::OperationGenerationResources::new(),
-        )
-        .unwrap();
+        let themes = ResolvedCanvasThemes::new(crate::Theme::Publication, &plots).unwrap();
         let title = CanvasHeader {
             start: 0,
             span: 1,

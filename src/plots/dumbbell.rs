@@ -49,10 +49,7 @@ pub(crate) fn intrinsic_body_minimum(
             "Dumbbell has no occupied category/pair slots".into(),
         ));
     }
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    resources
-        .claim_visits(prepared.rows.len() as u128)
-        .map_err(|error| Error::Render(format!("Dumbbell occupied-slot admission: {error:?}")))?;
+
     let slot = 0.72
         / f64::from(
             u32::try_from(prepared.group_count).map_err(|_| {
@@ -76,18 +73,17 @@ pub(crate) fn intrinsic_body_minimum(
     let mut outward = 0.0_f64;
     let mut numeric = 0.0_f64;
     for color in [endpoints.left_color(), endpoints.right_color()] {
-        if let Some(ink) = crate::render::geometry::point_ink_bounds(
+        if let Some(ink) = crate::render::geometry::point_ink_bounds(&chart.point_style(
             theme,
-            &chart.point_style(theme, color, theme.marks.point_sizes.dumbbell),
-        )? {
+            color,
+            theme.marks.point_sizes.dumbbell,
+        ))? {
             outward = outward.max(ink.top.max(-ink.bottom));
             numeric = numeric.max(ink.right - ink.left);
         }
     }
-    let connector = crate::render::geometry::line_ink_width(
-        theme,
-        &theme.marks.dumbbell_connector.backend_style(),
-    )?;
+    let connector =
+        crate::render::geometry::line_ink_width(&theme.marks.dumbbell_connector.backend_style())?;
     outward = outward.max(connector / 2.0);
     numeric = numeric.max(connector);
     let pitch = (outward / (0.5 - offset)).max(1.0 / 1024.0);
@@ -119,19 +115,18 @@ impl DumbbellData {
     pub(crate) fn guide_entries(
         chart: &Plot,
         theme: &crate::theme::ResolvedTheme,
-        data: crate::data::PlotData<'_>,
     ) -> Result<Vec<LegendEntry>, Error> {
         let endpoints = chart
             .dumbbell_endpoints_spec()
             .ok_or_else(|| Error::Render("Dumbbell guide requires endpoint metadata".into()))?;
         let mut entries = Vec::new();
-        data.reserve_source(&mut entries, 2)?;
+        crate::data::source::reserve_source(&mut entries, 2)?;
         for (label, color) in [
             (endpoints.left_label(), endpoints.left_color()),
             (endpoints.right_label(), endpoints.right_color()),
         ] {
             entries.push(LegendEntry::point(
-                chart.point_legend_identity(label, data)?,
+                chart.point_legend_identity(label)?,
                 chart.point_style(theme, color, theme.marks.point_sizes.dumbbell),
             ));
         }
@@ -186,13 +181,9 @@ pub(crate) fn measure_marks(
         })
         .map(|(_, prepared)| prepared)
         .ok_or_else(|| Error::Render("Dumbbell requires root-prepared semantics".into()))?;
-    let resources = context
-        .theme
-        .prepared_font_environment()?
-        .generation_resources();
-    let data = context.data.with_axis_resources(&resources);
+
     let projection = layout.projection.clone();
-    let mut result = project(chart, prepared, layout, context.theme, data)?;
+    let mut result = project(chart, prepared, layout, context.theme)?;
     let crate::layout::interior::MarkPayload::Dumbbell(payload) = &result
         .marks
         .as_ref()
@@ -201,9 +192,9 @@ pub(crate) fn measure_marks(
     else {
         unreachable!("Dumbbell selected its own mark payload")
     };
-    let mut ink = crate::render::geometry::line_ink_bounds(context.theme, &payload.connector)?;
+    let mut ink = crate::render::geometry::line_ink_bounds(&payload.connector)?;
     for point in &payload.points {
-        let next = crate::render::geometry::point_ink_bounds(context.theme, point)?;
+        let next = crate::render::geometry::point_ink_bounds(point)?;
         ink = match (ink, next) {
             (Some(current), Some(next)) => Some(current.union(next)),
             (current, next) => current.or(next),
@@ -218,7 +209,6 @@ pub(crate) fn measure_marks(
             &projection,
             ink,
             [chart.user_x_limits().is_none(), false],
-            data,
             context.fit_scope(),
         )?;
         let marks =
@@ -237,7 +227,6 @@ fn project(
     prepared: &DumbbellData,
     layout: crate::layout::Layout,
     theme: &crate::theme::ResolvedTheme,
-    data: crate::data::PlotData<'_>,
 ) -> Result<PlotRenderResult, Error> {
     let endpoints = chart
         .dumbbell_endpoints_spec()
@@ -262,8 +251,8 @@ fn project(
         ],
         domain_expansions: [None; 2],
     };
-    data.reserve_source(&mut payload.pairs, prepared.rows.len())?;
-    data.claim_source_visits(prepared.rows.len())?;
+    crate::data::source::reserve_source(&mut payload.pairs, prepared.rows.len())?;
+
     for row in &prepared.rows {
         let y = replicate_y(
             row.category_index,
@@ -284,22 +273,24 @@ fn project(
             .pairs
             .push([Point2D::new(left_x, left_y), Point2D::new(right_x, right_y)]);
     }
-    let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    let mut geometry = crate::render::geometry::GeometrySnapshot::new();
     let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
     for pair in &payload.pairs {
         geometry.line(pair, &payload.connector, Some(clip))?;
         geometry.scatter(&pair[..1], &payload.points[0], clip)?;
         geometry.scatter(&pair[1..], &payload.points[1], clip)?;
     }
-    let legend = DumbbellData::guide_entries(chart, theme, data)?;
+    let legend = DumbbellData::guide_entries(chart, theme)?;
     #[cfg(test)]
     count(2);
     let mut result = PlotRenderResult::new(layout, legend);
     result.y_domain = crate::spec::AxisDomain::Categorical;
-    result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
-        payload: crate::layout::interior::MarkPayload::Dumbbell(payload),
-        geometry,
-    })?);
+    result.marks = Some(crate::data::source::source_arc(
+        crate::layout::interior::SelectedMarkPlan {
+            payload: crate::layout::interior::MarkPayload::Dumbbell(payload),
+            geometry,
+        },
+    )?);
     Ok(result)
 }
 
@@ -321,12 +312,10 @@ pub(crate) fn shared_x_domain(
             .ok_or_else(|| Error::Data("dumbbell: right value column not set".into()))?,
         "dumbbell",
     )?;
-    data.claim_source_visits(left.len())?;
-    data.claim_source_visits(right.len())?;
+
     crate::layout::continuous_auto_range(
         crate::data::min_max(left.into_iter().chain(right), "dumbbell")?,
         chart.x_axis_spec(),
-        data.source_resources()?,
     )
 }
 
@@ -335,7 +324,7 @@ pub(crate) fn prepare<'a>(
     data: impl Into<crate::data::PlotData<'a>>,
 ) -> Result<DumbbellData, Error> {
     let data = data.into();
-    data.claim_mark_rows()?;
+    data.validate_row_source()?;
     #[cfg(test)]
     count(0);
     if chart.y_axis_spec() != &AxisSpec::default() {
@@ -386,18 +375,18 @@ pub(crate) fn prepare<'a>(
         ));
     }
 
-    let category_levels = data.source_levels(&categories)?;
+    let category_levels = crate::data::source::source_levels(&categories)?;
     let group_levels = groups
         .as_ref()
-        .map(|values| data.source_levels(values))
+        .map(|values| crate::data::source::source_levels(values))
         .transpose()?
         .unwrap_or_default();
     let mut rows = Vec::new();
-    data.reserve_source(&mut rows, categories.len())?;
+    crate::data::source::reserve_source(&mut rows, categories.len())?;
     for index in 0..categories.len() {
         let source_row = data.source_row(index);
         let group = groups.as_ref().map(|values| values[index].as_str());
-        data.claim_source_visits(index)?;
+
         if (0..index).any(|previous| {
             categories[previous] == categories[index]
                 && groups.as_ref().map(|values| values[previous].as_str()) == group
@@ -409,8 +398,7 @@ pub(crate) fn prepare<'a>(
                 source_row
             )));
         }
-        data.claim_source_visits(category_levels.len())?;
-        data.claim_source_visits(group_levels.len())?;
+
         let category_index =
             resolved_level_index(&category_levels, &categories[index], "category", source_row)?;
         let group_index = group
@@ -424,8 +412,7 @@ pub(crate) fn prepare<'a>(
             right: right[index],
         });
     }
-    data.claim_source_visits(left.len())?;
-    data.claim_source_visits(right.len())?;
+
     let range = crate::data::min_max(left.into_iter().chain(right), "dumbbell")?;
     Ok(DumbbellData {
         categories: category_levels,
@@ -483,7 +470,7 @@ fn replicate_y(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::font::canonical::OperationGenerationResources;
+    use crate::font::canonical::OperationContext;
     use crate::{CategoryValues, DumbbellEndpoints, FacetScales, FacetSpec, NumericValues};
 
     fn source() -> Plot<crate::kind::Dumbbell> {
@@ -499,12 +486,10 @@ mod tests {
     #[test]
     fn grouped_dumbbell_pitch_tracks_only_occupied_endpoint_slots() {
         let plot = source().erase();
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources, None).unwrap();
         let chart = inputs.attach(plot).unwrap();
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let base = chart.intrinsic_body_minimum(&theme).unwrap();
         theme.marks.point_sizes.dumbbell = 54;
         let styled = chart.intrinsic_body_minimum(&theme).unwrap();
@@ -512,7 +497,7 @@ mod tests {
         assert!(styled.1 > 300.0);
 
         let plot = source().x_limits(0.0, 5.0).erase();
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources, None).unwrap();
         let chart = inputs.attach(plot).unwrap();
         let exact = chart.intrinsic_body_minimum(&theme).unwrap();
@@ -525,26 +510,12 @@ mod tests {
         let plot = source().erase();
         STAGES.with(|counts| counts.set([0; 4]));
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources, None).unwrap();
         assert_eq!(STAGES.with(std::cell::Cell::get), [1, 0, 0, 0]);
         assert_eq!(inputs.axes[0].1.ranges, [(0.85, 4.15), (0.0, 2.0)]);
-        let bytes = resources.byte_usage().unwrap();
-        let visits = resources.usage().unwrap().1;
-        for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
-            assert!(crate::plots::shared_x::prepare_plot(
-                &plot,
-                &OperationGenerationResources::with_test_limits(visits, bytes),
-                None,
-            )
-            .is_err());
-        }
-        crate::plots::shared_x::prepare_plot(
-            &plot,
-            &OperationGenerationResources::with_test_limits(visits, bytes),
-            None,
-        )
-        .unwrap();
+
+        crate::plots::shared_x::prepare_plot(&plot, &OperationContext::new(), None).unwrap();
         assert_eq!(
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
             0
@@ -599,10 +570,8 @@ mod tests {
     #[test]
     fn projected_limits_and_geometry_match_drawn_ink() {
         let source = source().x_limits(1.5, 3.5).erase();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
-        let resources = OperationGenerationResources::new();
+        let theme = crate::Theme::Publication.resolve().unwrap();
+        let resources = OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let attached = inputs.attach(source).unwrap();
         let selected = attached
@@ -612,28 +581,16 @@ mod tests {
                 &theme,
             ))
             .unwrap();
-        let project = |resources: &OperationGenerationResources| {
+        let project = || {
             super::project(
                 &attached,
                 &inputs.dumbbell.as_ref().unwrap().panels[0].1,
                 selected.layout.clone(),
                 &theme,
-                attached.data().with_axis_resources(resources),
             )
         };
-        let resources = OperationGenerationResources::new();
-        let projected = project(&resources).unwrap();
-        let bytes = resources.byte_usage().unwrap();
-        let visits = resources.usage().unwrap().1;
-        for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
-            assert!(project(&OperationGenerationResources::with_test_limits(
-                visits, bytes
-            ))
-            .is_err());
-        }
-        let exact = OperationGenerationResources::with_test_limits(visits, bytes);
-        project(&exact).unwrap();
-        assert!(project(&exact).is_err());
+        let projected = project().unwrap();
+        project().unwrap();
         let plan = projected.marks.unwrap();
         let mut drawn = crate::render::geometry::GeometryBackend::new(&theme).unwrap();
         drawn.begin(640, 480).unwrap();
@@ -675,11 +632,8 @@ mod tests {
                 )
                 .erase();
                 crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
-                let prepared = crate::plots::shared_x::prepare_plot(
-                    &plot,
-                    &OperationGenerationResources::new(),
-                    None,
-                );
+                let prepared =
+                    crate::plots::shared_x::prepare_plot(&plot, &OperationContext::new(), None);
                 if inside_union && matches!(scales, FacetScales::Fixed | FacetScales::FreeY) {
                     let prepared = prepared.unwrap();
                     assert_eq!(prepared.axes[0].1.ranges[0], prepared.axes[1].1.ranges[0]);
@@ -702,9 +656,7 @@ mod tests {
     fn selected_capture_does_not_read_project_or_shape() {
         use crate::orchestrator::measurements::{self, Counter};
         let source = source().erase();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         STAGES.with(|counts| counts.set([0; 4]));
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|count| count.set(0));
         crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(|count| count.set(0));
@@ -712,11 +664,8 @@ mod tests {
             640,
             480,
             |stage| {
-                let inputs = crate::plots::shared_x::prepare_plot(
-                    &source,
-                    &stage.generation_resources(),
-                    None,
-                )?;
+                let inputs =
+                    crate::plots::shared_x::prepare_plot(&source, &stage.operation(), None)?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     None,
                     &source,

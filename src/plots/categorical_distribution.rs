@@ -31,12 +31,12 @@ impl PreparedDistribution {
         } else {
             // A category keyed by its position must not be recolored when an
             // earlier observed category is absent from a particular facet.
-            let source = chart.data().with_axis_resources(resources);
+            let source = chart.data().with_operation(resources);
             let column = chart.x_col().ok_or_else(|| {
                 Error::Render("distribution category color source is missing".into())
             })?;
             let raw = crate::data::strict_strings(source, column, "distribution color domain")?;
-            let parent = source.source_levels(&raw)?;
+            let parent = crate::data::source::source_levels(&raw)?;
             return CategoryColors::resolve(
                 &parent,
                 theme.color_scales.qualitative(),
@@ -67,32 +67,31 @@ impl PreparedDistribution {
         data: PlotData<'_>,
     ) -> Result<Vec<LegendEntry>, Error> {
         let colors = self.resolved_colors(chart, theme, data)?;
-        self.guide_entries_with_colors(chart, theme, data, &colors)
+        self.guide_entries_with_colors(chart, theme, &colors)
     }
 
     pub(crate) fn guide_entries_with_colors(
         &self,
         chart: &Plot,
         theme: &crate::theme::ResolvedTheme,
-        data: PlotData<'_>,
+
         colors: &CategoryColors,
     ) -> Result<Vec<LegendEntry>, Error> {
-        let resources = data.source_resources()?;
         match self {
-            Self::Boxplot(prepared) => {
-                data.collect_source(prepared.sample.hue_levels.iter().map(|label| {
-                    let color = colors.color(label, resources)?;
+            Self::Boxplot(prepared) => crate::data::source::collect_source(
+                prepared.sample.hue_levels.iter().map(|label| {
+                    let color = colors.color(label)?;
                     Ok(LegendEntry::line_fill(
-                        chart.point_legend_identity(label, data)?,
+                        chart.point_legend_identity(label)?,
                         theme.marks.summary_stroke.backend_style(),
                         theme.marks.box_body.backend_style(color),
                     ))
-                }))
-            }
-            Self::Violin(prepared) => {
-                data.collect_source(prepared.sample.hue_levels.iter().map(|label| {
-                    let color = colors.color(label, resources)?;
-                    let identity = chart.point_legend_identity(label, data)?;
+                }),
+            ),
+            Self::Violin(prepared) => crate::data::source::collect_source(
+                prepared.sample.hue_levels.iter().map(|label| {
+                    let color = colors.color(label)?;
+                    let identity = chart.point_legend_identity(label)?;
                     let fill = theme.marks.violin_body.backend_style(color);
                     Ok(if chart.kind() == PlotKind::Violin {
                         LegendEntry::fill(identity, fill)
@@ -103,9 +102,9 @@ impl PreparedDistribution {
                             fill,
                         )
                     })
-                }))
-            }
-            Self::Supplied(prepared) => prepared.guide_entries(chart, theme, data, colors),
+                }),
+            ),
+            Self::Supplied(prepared) => prepared.guide_entries(chart, theme, colors),
         }
     }
 
@@ -121,7 +120,7 @@ impl PreparedDistribution {
         data: PlotData<'_>,
         facet: Option<crate::data::FacetAxisSources<'_>>,
     ) -> Result<Self, Error> {
-        data.claim_mark_rows()?;
+        data.validate_row_source()?;
         #[cfg(test)]
         count(chart.kind(), 0);
         let prepared = match chart.kind() {
@@ -129,7 +128,7 @@ impl PreparedDistribution {
                 chart, data, facet,
             )?)),
             PlotKind::Raincloud if chart.raincloud_geometry_input().is_some() => Ok(
-                Self::Supplied(crate::plots::violin::precomputed::prepare(chart, data)?),
+                Self::Supplied(crate::plots::violin::precomputed::prepare(chart)?),
             ),
             PlotKind::Violin | PlotKind::Raincloud => Ok(Self::Violin(
                 crate::plots::violin::prepare(chart, data, facet)?,
@@ -145,7 +144,7 @@ impl PreparedDistribution {
                 prepared.hue_levels()
             };
             for key in keys {
-                if exact.color_in(key, data.source_resources()?)?.is_none() {
+                if exact.color_in(key).is_none() {
                     return Err(Error::Data(format!(
                         "distribution: category {key:?} has no caller-owned color"
                     )));
@@ -223,36 +222,21 @@ impl DistributionPayload {
         }
     }
 
-    pub(crate) fn polygon(
-        &mut self,
-        points: Vec<Point2D>,
-        style: FillStyle,
-        data: PlotData<'_>,
-    ) -> Result<(), Error> {
-        data.reserve_source(&mut self.marks, 1)?;
+    pub(crate) fn polygon(&mut self, points: Vec<Point2D>, style: FillStyle) -> Result<(), Error> {
+        crate::data::source::reserve_source(&mut self.marks, 1)?;
         self.marks.push(Mark::Polygon(points, style));
         Ok(())
     }
 
-    pub(crate) fn line(
-        &mut self,
-        points: &[Point2D],
-        style: &LineStyle,
-        data: PlotData<'_>,
-    ) -> Result<(), Error> {
-        let points = data.collect_source(points.iter().copied().map(Ok))?;
-        data.reserve_source(&mut self.marks, 1)?;
+    pub(crate) fn line(&mut self, points: &[Point2D], style: &LineStyle) -> Result<(), Error> {
+        let points = crate::data::source::collect_source(points.iter().copied().map(Ok))?;
+        crate::data::source::reserve_source(&mut self.marks, 1)?;
         self.marks.push(Mark::Line(points, style.clone()));
         Ok(())
     }
 
-    pub(crate) fn scatter(
-        &mut self,
-        points: Vec<Point2D>,
-        style: PointStyle,
-        data: PlotData<'_>,
-    ) -> Result<(), Error> {
-        data.reserve_source(&mut self.marks, 1)?;
+    pub(crate) fn scatter(&mut self, points: Vec<Point2D>, style: PointStyle) -> Result<(), Error> {
+        crate::data::source::reserve_source(&mut self.marks, 1)?;
         self.marks.push(Mark::Scatter(points, style));
         Ok(())
     }
@@ -278,12 +262,7 @@ impl DistributionPayload {
         context: crate::spec::PlotRenderContext<'_>,
         chart: &Plot,
     ) -> Result<crate::spec::PlotRenderResult, crate::layout::fit::PlanError> {
-        let resources = context
-            .theme
-            .prepared_font_environment()?
-            .generation_resources();
-        let data = context.data.with_axis_resources(&resources);
-        let mut geometry = crate::render::geometry::GeometrySnapshot::new(context.theme)?;
+        let mut geometry = crate::render::geometry::GeometrySnapshot::new();
         let clip = crate::render::backend::validate_clip_region(self.clip)?.panel();
         for mark in &self.marks {
             match mark {
@@ -292,8 +271,8 @@ impl DistributionPayload {
                 Mark::Scatter(points, style) => geometry.scatter(points, style, clip)?,
             }
         }
-        let mut full = crate::render::geometry::GeometrySnapshot::new(context.theme)?;
-        data.claim_source_visits(self.marks.len())?;
+        let mut full = crate::render::geometry::GeometrySnapshot::new();
+
         for mark in &self.marks {
             match mark {
                 Mark::Polygon(points, style) => full.polygon(points, style, None)?,
@@ -324,7 +303,6 @@ impl DistributionPayload {
                         &result.layout.projection,
                         bounds,
                         [false, true],
-                        data,
                         context.fit_scope(),
                     )?;
             }
@@ -332,10 +310,12 @@ impl DistributionPayload {
         #[cfg(test)]
         count(self.kind, 2);
         result.x_domain = crate::spec::AxisDomain::Categorical;
-        result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
-            payload: crate::layout::interior::MarkPayload::Distribution(self),
-            geometry,
-        })?);
+        result.marks = Some(crate::data::source::source_arc(
+            crate::layout::interior::SelectedMarkPlan {
+                payload: crate::layout::interior::MarkPayload::Distribution(self),
+                geometry,
+            },
+        )?);
         Ok(result)
     }
 }
@@ -368,13 +348,11 @@ mod appearance_tests {
             .unwrap(),
         )
         .erase();
-        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let resources = crate::font::canonical::OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let panel = crate::layout::PanelBox::new(10.0, 620.0, 20.0, 420.0);
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let old = chart
             .measure_selected_interior(crate::spec::PlotRenderContext::new(
                 chart.data(),
@@ -426,7 +404,6 @@ mod appearance_tests {
                 changed.legend_entries[0].clone()
             ],
             "custom Raincloud strip",
-            &crate::font::canonical::OperationGenerationResources::new(),
         )
         .unwrap_err()
         .to_string()
@@ -450,13 +427,11 @@ mod appearance_tests {
             .unwrap(),
         )
         .erase();
-        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let resources = crate::font::canonical::OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let panel = crate::layout::PanelBox::new(10.0, 620.0, 20.0, 420.0);
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let old = chart
             .measure_selected_interior(crate::spec::PlotRenderContext::new(
                 chart.data(),
@@ -507,7 +482,6 @@ mod appearance_tests {
                 changed.legend_entries[0].clone()
             ],
             "custom violin body",
-            &crate::font::canonical::OperationGenerationResources::new(),
         )
         .unwrap_err()
         .to_string()

@@ -1,6 +1,5 @@
 //! Validated compound paints, independent of backend geometry and operation state.
 
-use crate::font::canonical::OperationGenerationResources;
 use crate::render::backend::{FillStyle, LineStyle, PointOutline, PointStyle, StrokePattern};
 use crate::{Error, PointShape, Result};
 
@@ -181,11 +180,8 @@ impl PointOutlineTheme {
         Self::new(self.color, width_ratio)
     }
 
-    pub(crate) fn publication(resources: &OperationGenerationResources) -> Result<Self> {
-        Self::new(
-            Color::rgb(255, 255, 255),
-            RelativeSpacing::new_in(0.1, resources)?,
-        )
+    pub(crate) fn publication() -> Result<Self> {
+        Self::new(Color::rgb(255, 255, 255), RelativeSpacing::new(0.1)?)
     }
 
     /// Materialize the operational outline by sharing the same immutable ratio.
@@ -383,19 +379,16 @@ pub(crate) struct PointTheme {
 }
 
 impl PointTheme {
-    pub(crate) fn same(
-        &self,
-        other: &Self,
-        resources: &OperationGenerationResources,
-    ) -> Result<bool> {
+    pub(crate) fn same(&self, other: &Self) -> bool {
         if self.fill_alpha() != other.fill_alpha() || self.shape() != other.shape() {
-            return Ok(false);
+            return false;
         }
         match (self.outline(), other.outline()) {
-            (None, None) => Ok(true),
-            (Some(left), Some(right)) => Ok(left.color() == right.color()
-                && left.width_ratio().same(right.width_ratio(), resources)?),
-            _ => Ok(false),
+            (None, None) => true,
+            (Some(left), Some(right)) => {
+                left.color() == right.color() && left.width_ratio().same(right.width_ratio())
+            }
+            _ => false,
         }
     }
     pub(crate) fn new(

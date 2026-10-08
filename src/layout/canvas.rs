@@ -76,7 +76,6 @@ impl PanelRequirements {
     ) -> Result<Self, crate::layout::fit::PlanError> {
         let mut requirements = Self::measure_header(axes, theme)?;
         if let Some(text) = top_text {
-            let resources = theme.prepared_font_environment()?.generation_resources();
             let strip = theme.facet_strip_lengths()?;
             let plan = crate::layout::fit::measured(crate::layout::fit::text(
                 theme,
@@ -85,21 +84,13 @@ impl PanelRequirements {
                 crate::theme::composition::capacity(
                     available_panel.width(),
                     &strip.horizontal_inset,
-                    &resources,
                 )?,
                 PhysicalTextAlignment::Center,
                 "facet strip",
-                &scope.child(
-                    crate::layout::AddressRole::FacetHeader,
-                    0,
-                    &theme.prepared_font_environment()?.generation_resources(),
-                )?,
+                &scope.child(crate::layout::AddressRole::FacetHeader, 0)?,
             ))?;
             let facet_top = crate::theme::composition::hard(
-                &strip
-                    .content_clearance
-                    .add_pixels(plan.height(), &resources)?,
-                &resources,
+                &strip.content_clearance.add_pixels(plan.height())?,
             )?;
             requirements.top = requirements.top.max(facet_top);
         }
@@ -111,11 +102,9 @@ impl PanelRequirements {
         theme: &ResolvedTheme,
     ) -> Result<Self, crate::layout::fit::PlanError> {
         let required = axes.requirements();
-        let resources = theme.prepared_font_environment()?.generation_resources();
+
         let clearance = theme.panel_edge_length()?;
-        let edge = |value| {
-            crate::theme::composition::hard(&clearance.add_pixels(value, &resources)?, &resources)
-        };
+        let edge = |value| crate::theme::composition::hard(&clearance.add_pixels(value)?);
         Ok(Self {
             left: edge(required.left)?,
             right: edge(required.right)?,
@@ -159,53 +148,31 @@ impl RootFramePlan {
         body: f64,
         theme: &ResolvedTheme,
     ) -> Result<f64, crate::Error> {
-        let resources = theme.prepared_font_environment()?.generation_resources();
         let padding = theme.root_padding_lengths()?;
         let bottom = self
             .root_text
             .reserves
             .bottom
-            .add(&padding.bottom, &resources)?
-            .after_pixels(0.0, &resources)?;
+            .add_length(&padding.bottom)
+            .after_pixels(0.0)?;
         let top = self
             .root_text
             .reserves
             .top
-            .add(&padding.top, &resources)?
-            .pixels_rounded(
-                crate::layout::kernel::SpatialRounding::NearestEven,
-                &resources,
-            )?;
+            .add_length(&padding.top)
+            .pixels_rounded(crate::layout::kernel::SpatialRounding::NearestEven)?;
         let additional = (self.insets.bottom - bottom) + (self.insets.top - top);
         crate::theme::composition::hard(
             &self
                 .root_text
                 .reserves
-                .height_with_body(body + additional, &resources)?
-                .add(&padding.vertical(&resources)?, &resources)?,
-            &resources,
+                .height_with_body(body + additional)?
+                .add_length(&padding.vertical()),
         )
     }
-    pub(crate) fn admitted_clone(
-        &self,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<Self, crate::Error> {
-        resources
-            .claim_visits(1 + self.root_text.retained_handle_count() as u128)
-            .map_err(|error| crate::Error::Render(format!("root frame sharing: {error:?}")))?;
-        Ok(self.clone())
-    }
-    pub(crate) fn into_shared(
-        self,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<std::sync::Arc<Self>, crate::Error> {
-        resources
-            .claim_slots(1)
-            .map_err(|error| crate::Error::Render(format!("root frame retention: {error:?}")))?;
-        resources
-            .claim_bytes((size_of::<Self>() + 2 * size_of::<usize>()) as u64)
-            .map_err(|error| crate::Error::Render(format!("root frame storage: {error:?}")))?;
-        Ok(std::sync::Arc::new(self))
+
+    pub(crate) fn into_shared(self) -> std::sync::Arc<Self> {
+        std::sync::Arc::new(self)
     }
     pub(crate) fn measure(
         canvas_size: (u32, u32),
@@ -215,7 +182,7 @@ impl RootFramePlan {
         minimum_body: (f64, f64),
     ) -> Result<Self, crate::layout::fit::PlanError> {
         let (canvas_width, canvas_height) = canvas_size;
-        let resources = theme.prepared_font_environment()?.generation_resources();
+
         let outer = PanelBox::new(0.0, f64::from(canvas_width), 0.0, f64::from(canvas_height));
         let padding = theme.root_padding_lengths()?;
         let plan = crate::decorations::title_block::plan::RootTitleBlockPlan::measure(
@@ -236,7 +203,7 @@ impl RootFramePlan {
                 )
                 .into());
         }
-        let panel_box = plan.reserves.body(outer, &padding, &resources)?;
+        let panel_box = plan.reserves.body(outer, &padding)?;
         let insets = CanvasInsets {
             left: panel_box.x0,
             right: outer.x1 - panel_box.x1,
@@ -271,7 +238,7 @@ fn try_wrap_text(
     theme
         .plan_text(text, appearance, maximum_width, alignment, role, false)
         .and_then(|plan| {
-            plan.into_line_texts(theme.prepared_font_environment()?)
+            plan.into_line_texts()
                 .map_err(|error| Error::Render(error.to_string()))
         })
 }
@@ -301,9 +268,7 @@ mod tests {
 
     #[test]
     fn root_padding_has_no_axis_estimate_or_unconditional_top_minimum() {
-        let theme = Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = Theme::Publication.resolve().unwrap();
         let frame = RootFramePlan::measure(
             (100, 80),
             &theme,
@@ -333,9 +298,7 @@ mod tests {
         reason = "positive built-in insets plus the measured child minimum fit u32 after ceiling"
     )]
     fn measured_child_root_frame_rejects_residual_fit_without_clamping_or_text_fallback() {
-        let theme = Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = Theme::Publication.resolve().unwrap();
         let insets = CanvasInsets {
             left: 16.0,
             right: 16.0,
@@ -369,9 +332,7 @@ mod tests {
 
     #[test]
     fn measured_caption_wraps_without_shortening_and_rejects_impossible_fit() {
-        let theme = Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = Theme::Publication.resolve().unwrap();
         let caption =
             "diagnostic provenance with a deliberately long model and adjustment description";
         let alignments = crate::decorations::title_block::plan::RootAlignments::resolve(
@@ -391,14 +352,7 @@ mod tests {
         assert_eq!(lines.concat(), caption);
         let plan = &layout.root_text;
         assert!(
-            crate::theme::composition::hard(
-                &plan.reserves.bottom,
-                &theme
-                    .prepared_font_environment()
-                    .unwrap()
-                    .generation_resources()
-            )
-            .unwrap()
+            crate::theme::composition::hard(&plan.reserves.bottom).unwrap()
                 > theme.typography.root.caption.line_pitch_pixels()
         );
         assert!(RootFramePlan::measure(
@@ -413,9 +367,7 @@ mod tests {
 
     #[test]
     fn root_title_subtitle_gap_affects_reservation_and_position() {
-        let base = Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let base = Theme::Publication.resolve().unwrap();
         let mut spaced = base.clone();
         spaced.composition = spaced
             .composition
@@ -456,9 +408,7 @@ mod tests {
 
     #[test]
     fn facet_measurement_uses_the_complete_selected_role_occupancy() {
-        let mut theme = Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = Theme::Publication.resolve().unwrap();
         theme.typography.root.subtitle.font_size = 7;
         theme.typography.composition.facet_header = theme
             .typography
@@ -497,21 +447,13 @@ mod tests {
         )
         .unwrap();
 
-        let resources = theme
-            .prepared_font_environment()
-            .unwrap()
-            .generation_resources();
         let strip = theme.facet_strip_lengths().unwrap();
         let plan = theme
             .plan_text(
                 "facet",
                 &theme.typography.composition.facet_header,
-                crate::theme::composition::capacity(
-                    panel.width(),
-                    &strip.horizontal_inset,
-                    &resources,
-                )
-                .unwrap(),
+                crate::theme::composition::capacity(panel.width(), &strip.horizontal_inset)
+                    .unwrap(),
                 PhysicalTextAlignment::Center,
                 "facet strip",
                 false,
@@ -520,11 +462,7 @@ mod tests {
         assert_eq!(
             requirements.top.to_bits(),
             crate::theme::composition::hard(
-                &strip
-                    .content_clearance
-                    .add_pixels(plan.height(), &resources)
-                    .unwrap(),
-                &resources
+                &strip.content_clearance.add_pixels(plan.height()).unwrap()
             )
             .unwrap()
             .to_bits()
@@ -533,9 +471,7 @@ mod tests {
 
     #[test]
     fn wrapping_uses_shared_measurement_for_wide_combining_and_newline_text() {
-        let theme = Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = Theme::Publication.resolve().unwrap();
         let mut appearance = theme.typography.annotations.panel_text.clone();
         appearance.font_size = 12;
 

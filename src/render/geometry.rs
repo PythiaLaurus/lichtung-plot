@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use crate::Error;
 
+#[cfg(test)]
 use crate::font::canonical::PreparedFontEnvironment;
 use crate::layout::{PanelBox, ResolvedTextPlan, CSS_PIXEL_QUANTA};
 #[cfg(test)]
@@ -175,6 +176,7 @@ impl GeometryBox {
 #[cfg(test)]
 pub(crate) struct GeometryBackend {
     snapshot: GeometrySnapshot,
+    font_environment: PreparedFontEnvironment,
     clips: Vec<PanelBox>,
     scopes: Vec<GeometryScope>,
     state: GeometryCanvasState,
@@ -185,7 +187,6 @@ pub(crate) struct GeometryBackend {
 pub(crate) struct GeometrySnapshot {
     bounds: Vec<GeometryBox>,
     text: Vec<PositionedText>,
-    font_environment: PreparedFontEnvironment,
 }
 
 #[derive(Debug)]
@@ -242,8 +243,8 @@ impl GeometryBackend {
             snapshot: GeometrySnapshot {
                 bounds: Vec::new(),
                 text: Vec::new(),
-                font_environment,
             },
+            font_environment,
             clips: Vec::new(),
             scopes: Vec::new(),
             state: GeometryCanvasState::Fresh,
@@ -256,24 +257,11 @@ impl GeometryBackend {
 }
 
 impl GeometrySnapshot {
-    fn admit_scratch<T>(&self, count: usize) -> Result<(), Error> {
-        let bytes = count
-            .checked_mul(std::mem::size_of::<T>())
-            .and_then(|bytes| u64::try_from(bytes).ok())
-            .ok_or_else(|| Error::Render("geometry scratch storage overflow".into()))?;
-        self.font_environment
-            .claim_processing_visits(count as u128)
-            .map_err(|error| Error::Render(format!("geometry scratch work: {error:?}")))?;
-        self.font_environment
-            .claim_unicode_bytes(bytes)
-            .map_err(|error| Error::Render(format!("geometry scratch storage: {error}")))
-    }
-    pub(crate) fn new(theme: &crate::theme::ResolvedTheme) -> Result<Self, Error> {
-        Ok(Self {
+    pub(crate) fn new() -> Self {
+        Self {
             bounds: Vec::new(),
             text: Vec::new(),
-            font_environment: theme.prepared_font_environment()?.clone(),
-        })
+        }
     }
 
     pub(crate) fn record(
@@ -282,7 +270,7 @@ impl GeometrySnapshot {
         clip: Option<PanelBox>,
     ) -> Result<(), Error> {
         if let Some(bounds) = bounds.and_then(|bounds| bounds.clipped(clip)) {
-            backend::reserve_text_records(&mut self.bounds, 1, &self.font_environment)?;
+            backend::reserve_text_records(&mut self.bounds, 1)?;
             self.bounds.push(bounds);
         }
         Ok(())
@@ -303,17 +291,7 @@ impl GeometrySnapshot {
         style: &PointStyle,
         clip: Option<PanelBox>,
     ) -> Result<(), Error> {
-        self.admit_scratch::<CanonicalPoint>(points.len())?;
-        if style.shape == PointShape::TriangleUp {
-            self.admit_scratch::<[CanonicalPoint; 3]>(points.len())?;
-            self.admit_scratch::<[Option<[StrokeInterval; 2]>; 3]>(points.len())?;
-        }
-        scatter_bounds(
-            points,
-            style,
-            &self.font_environment.generation_resources(),
-            |bounds| self.record(bounds, clip),
-        )
+        scatter_bounds(points, style, |bounds| self.record(bounds, clip))
     }
 
     pub(crate) fn rounded_rect(
@@ -364,7 +342,6 @@ impl GeometrySnapshot {
         style: &LineStyle,
         clip: Option<PanelBox>,
     ) -> Result<(), Error> {
-        self.admit_scratch::<CanonicalPoint>(points.len())?;
         line_bounds(points, style, |bounds| self.record(bounds, clip))
     }
 
@@ -380,7 +357,7 @@ impl GeometrySnapshot {
             rotation: canonical.rotation.value(),
             ..placement
         };
-        backend::reserve_text_records(&mut self.text, 1, &self.font_environment)?;
+        backend::reserve_text_records(&mut self.text, 1)?;
         let before = self.bounds.len();
         self.record(
             planned_text_ink_bounds(
@@ -411,9 +388,7 @@ impl GeometrySnapshot {
         if points.len() < 3 {
             return Ok(());
         }
-        self.admit_scratch::<CanonicalPoint>(points.len())?;
-        self.admit_scratch::<CanonicalPoint>(points.len())?;
-        self.admit_scratch::<Option<[StrokeInterval; 2]>>(points.len())?;
+
         let points = backend::validate_polygon_points(points)?;
         let style = super::primitives::CanonicalFillStyle::new(style)?;
         let ring = polygon_ring(&points);
@@ -443,7 +418,6 @@ impl GeometrySnapshot {
         stops: &[GradientStop],
         clip: Option<PanelBox>,
     ) -> Result<(), Error> {
-        self.admit_scratch::<super::coordinates::CanonicalGradientStop>(stops.len())?;
         let gradient = backend::validate_linear_gradient(bounds, start, end, stops)?;
         let bounds = gradient.bounds;
         self.record(
@@ -483,7 +457,7 @@ impl GeometrySnapshot {
                 ..bounds
             });
         let placement = backend::planned_bracket_placement(canonical);
-        backend::reserve_text_records(&mut self.text, 1, &self.font_environment)?;
+        backend::reserve_text_records(&mut self.text, 1)?;
         self.text.push(PositionedText {
             placement,
             plan: call.label.plan.clone(),
@@ -508,12 +482,8 @@ impl GeometrySnapshot {
     }
 
     pub(crate) fn append(&mut self, other: &Self) -> Result<(), Error> {
-        backend::reserve_text_records(
-            &mut self.bounds,
-            other.bounds.len(),
-            &self.font_environment,
-        )?;
-        backend::reserve_text_records(&mut self.text, other.text.len(), &self.font_environment)?;
+        backend::reserve_text_records(&mut self.bounds, other.bounds.len())?;
+        backend::reserve_text_records(&mut self.text, other.text.len())?;
         let offset = self.bounds.len();
         self.bounds.extend_from_slice(&other.bounds);
         self.text
@@ -568,9 +538,6 @@ impl GeometrySnapshot {
         margin: f64,
         screen_text: impl Fn(&ResolvedTextPlan) -> Option<PlannedTextPlacement>,
     ) -> Result<f64, Error> {
-        self.font_environment
-            .claim_processing_visits(self.bounds.len() as u128 + self.text.len() as u128)
-            .map_err(|error| Error::Render(format!("assignment feedback work: {error:?}")))?;
         let mut text = self
             .text
             .iter()
@@ -649,16 +616,8 @@ impl GeometrySnapshot {
         declared: impl Iterator<Item = &'a ResolvedTextPlan> + Clone,
     ) -> Result<bool, Error> {
         for text in &self.text {
-            self.font_environment
-                .claim_processing_visits(1)
-                .map_err(|error| Error::Render(format!("annotation feedback visits: {error:?}")))?;
             let mut found = false;
             for plan in declared.clone() {
-                self.font_environment
-                    .claim_processing_visits(1)
-                    .map_err(|error| {
-                        Error::Render(format!("annotation feedback visits: {error:?}"))
-                    })?;
                 if plan == &text.plan {
                     found = true;
                     break;
@@ -732,42 +691,28 @@ impl GeometrySnapshot {
 
 /// Exact painted extent of one origin-relative point. The same canonical
 /// geometry path measures pre-selection point requirements and selected ink.
-pub(crate) fn point_ink_dimensions(
-    theme: &crate::theme::ResolvedTheme,
-    style: &PointStyle,
-) -> Result<(f64, f64), Error> {
-    Ok(
-        point_ink_bounds(theme, style)?.map_or((0.0, 0.0), |bounds| {
-            (bounds.right - bounds.left, bounds.top - bounds.bottom)
-        }),
-    )
+pub(crate) fn point_ink_dimensions(style: &PointStyle) -> Result<(f64, f64), Error> {
+    Ok(point_ink_bounds(style)?.map_or((0.0, 0.0), |bounds| {
+        (bounds.right - bounds.left, bounds.top - bounds.bottom)
+    }))
 }
 
-pub(crate) fn point_ink_bounds(
-    theme: &crate::theme::ResolvedTheme,
-    style: &PointStyle,
-) -> Result<Option<GeometryBox>, Error> {
-    let mut ink = GeometrySnapshot::new(theme)?;
+pub(crate) fn point_ink_bounds(style: &PointStyle) -> Result<Option<GeometryBox>, Error> {
+    let mut ink = GeometrySnapshot::new();
     ink.scatter_with_clip(&[Point2D::new(0.0, 0.0)], style, None)?;
     Ok(ink.bounds().first().copied())
 }
 
 /// Painted thickness of an origin-relative one-pixel path, independent of the
 /// prepared scientific length and orientation.
-pub(crate) fn line_ink_width(
-    theme: &crate::theme::ResolvedTheme,
-    style: &LineStyle,
-) -> Result<f64, Error> {
-    Ok(line_ink_bounds(theme, style)?.map_or(0.0, |bounds| bounds.top - bounds.bottom))
+pub(crate) fn line_ink_width(style: &LineStyle) -> Result<f64, Error> {
+    Ok(line_ink_bounds(style)?.map_or(0.0, |bounds| bounds.top - bounds.bottom))
 }
 
 /// Relative painted extents of an axis-aligned path. The synthetic one-pixel
 /// segment itself is removed from the right end; both caps stay in the ink.
-pub(crate) fn line_ink_bounds(
-    theme: &crate::theme::ResolvedTheme,
-    style: &LineStyle,
-) -> Result<Option<GeometryBox>, Error> {
-    let mut ink = GeometrySnapshot::new(theme)?;
+pub(crate) fn line_ink_bounds(style: &LineStyle) -> Result<Option<GeometryBox>, Error> {
+    let mut ink = GeometrySnapshot::new();
     ink.line(
         &[Point2D::new(0.0, 0.0), Point2D::new(1.0, 0.0)],
         style,
@@ -781,12 +726,9 @@ pub(crate) fn line_ink_bounds(
 
 /// Outward painted size beyond a unit, axis-aligned bin body. This is the
 /// histogram's actual rectangular polygon grammar, including mitered stroke.
-pub(crate) fn rectangular_fill_ink_outset(
-    theme: &crate::theme::ResolvedTheme,
-    style: &FillStyle,
-) -> Result<(f64, f64), Error> {
+pub(crate) fn rectangular_fill_ink_outset(style: &FillStyle) -> Result<(f64, f64), Error> {
     Ok(
-        rectangular_fill_ink_bounds(theme, style)?.map_or((0.0, 0.0), |bounds| {
+        rectangular_fill_ink_bounds(style)?.map_or((0.0, 0.0), |bounds| {
             (
                 (bounds.right - bounds.left).max(0.0),
                 (bounds.top - bounds.bottom).max(0.0),
@@ -795,11 +737,8 @@ pub(crate) fn rectangular_fill_ink_outset(
     )
 }
 
-pub(crate) fn rectangular_fill_ink_bounds(
-    theme: &crate::theme::ResolvedTheme,
-    style: &FillStyle,
-) -> Result<Option<GeometryBox>, Error> {
-    let mut ink = GeometrySnapshot::new(theme)?;
+pub(crate) fn rectangular_fill_ink_bounds(style: &FillStyle) -> Result<Option<GeometryBox>, Error> {
+    let mut ink = GeometrySnapshot::new();
     ink.polygon(
         &[
             Point2D::new(0.0, 0.0),
@@ -824,10 +763,8 @@ impl GeometryBackend {
         placement: PlannedTextPlacement,
         plan: &ResolvedTextPlan,
     ) -> Result<(), Error> {
-        backend::reserve_text_records(&mut self.snapshot.text, 1, &self.snapshot.font_environment)?;
-        self.font_environment
-            .claim_processing_visits(self.clips.len() as u128)
-            .map_err(|error| Error::Render(format!("geometry text admission: {error:?}")))?;
+        backend::reserve_text_records(&mut self.snapshot.text, 1)?;
+
         let clip = self.clips.iter().copied().reduce(|a, b| {
             let left = a.x0.max(b.x0);
             let bottom = a.y0.max(b.y0);
@@ -987,7 +924,7 @@ fn physical_alignment(anchor: TextAnchor) -> PhysicalTextAlignment {
 fn scatter_bounds(
     points: &[Point2D],
     style: &PointStyle,
-    resources: &crate::font::canonical::OperationGenerationResources,
+
     mut record: impl FnMut(Option<GeometryBox>) -> Result<(), Error>,
 ) -> Result<(), Error> {
     let canonical_points = backend::validate_points(points, "scatter")?;
@@ -998,7 +935,7 @@ fn scatter_bounds(
         .filter(|outline| outline.color.alpha() > 0)
         .map(|outline| {
             outline
-                .width_for_radius(style.radius, resources)
+                .width_for_radius(style.radius)
                 .map(super::coordinates::CanonicalCoordinate::units)
         })
         .transpose()?
@@ -1172,19 +1109,19 @@ fn polygon_has_positive_area(points: &[CanonicalPoint]) -> Result<bool, Error> {
             (-raw_x, -raw_y, -1_i32)
         };
         let overflow = || Error::Render("polygon canonical area arithmetic overflowed".into());
-        let product = |direction: i128, coordinate: i64| {
+        let checked_product = |direction: i128, coordinate: i64| {
             direction
                 .checked_mul(i128::from(coordinate))
                 .ok_or_else(overflow)
         };
-        let line = product(direction_y, start.x.units())?
-            .checked_sub(product(direction_x, start.y.units())?)
+        let line = checked_product(direction_y, start.x.units())?
+            .checked_sub(checked_product(direction_x, start.y.units())?)
             .ok_or_else(overflow)?;
-        let start_projection = product(direction_x, start.x.units())?
-            .checked_add(product(direction_y, start.y.units())?)
+        let start_projection = checked_product(direction_x, start.x.units())?
+            .checked_add(checked_product(direction_y, start.y.units())?)
             .ok_or_else(overflow)?;
-        let end_projection = product(direction_x, end.x.units())?
-            .checked_add(product(direction_y, end.y.units())?)
+        let end_projection = checked_product(direction_x, end.x.units())?
+            .checked_add(checked_product(direction_y, end.y.units())?)
             .ok_or_else(overflow)?;
         let (low, high) = if start_projection < end_projection {
             (start_projection, end_projection)
@@ -1541,15 +1478,10 @@ impl Backend for GeometryBackend {
 
     fn draw_scatter(&mut self, points: &[Point2D], style: &PointStyle) -> Result<(), Error> {
         self.ensure_open("draw_scatter")?;
-        scatter_bounds(
-            points,
-            style,
-            &self.font_environment.generation_resources(),
-            |bounds| {
-                self.record(bounds);
-                Ok(())
-            },
-        )
+        scatter_bounds(points, style, |bounds| {
+            self.record(bounds);
+            Ok(())
+        })
     }
 
     fn draw_line(&mut self, points: &[Point2D], style: &LineStyle) -> Result<(), Error> {
@@ -2069,74 +2001,7 @@ mod tests {
     }
 
     #[test]
-    fn selected_geometry_admits_scratch_and_bounds_before_allocating() {
-        for remaining in [0, std::mem::size_of::<CanonicalPoint>() as u64] {
-            let theme = crate::Theme::Publication
-                .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                .unwrap();
-            let mut geometry = GeometrySnapshot::new(&theme).unwrap();
-            let used = geometry
-                .font_environment
-                .resource_usage()
-                .unwrap()
-                .font_bytes;
-            geometry
-                .font_environment
-                .claim_unicode_bytes(u64::try_from(536_870_912 - used).unwrap() - remaining)
-                .unwrap();
-            let style = PointStyle::new((0, 0, 0), 3);
-            let error = geometry
-                .scatter(
-                    &[Point2D::new(50.0, 50.0)],
-                    &style,
-                    PanelBox::new(0.0, 100.0, 0.0, 100.0),
-                )
-                .unwrap_err();
-            assert!(error.to_string().contains("bytes"), "{error}");
-            assert_eq!(geometry.bounds.capacity(), 0);
-            assert!(geometry.bounds.is_empty());
-        }
-    }
-
-    #[test]
-    fn geometry_text_bytes_refuse_before_allocation_or_clip_processing() {
-        let mut geometry = begun_backend();
-        let plan = geometry
-            .plan_raw_text(
-                "A",
-                &test_text_style(),
-                PhysicalTextAlignment::Start,
-                "test",
-            )
-            .unwrap();
-        geometry.clips.push(PanelBox::new(0.0, 100.0, 0.0, 100.0));
-        let before = geometry.font_environment.resource_usage().unwrap();
-        geometry
-            .font_environment
-            .claim_unicode_bytes(u64::try_from(536_870_912 - before.font_bytes).unwrap())
-            .unwrap();
-        assert_eq!(geometry.text.capacity(), 0);
-        let placement =
-            PlannedTextPlacement::middle(Point2D::new(10.0, 10.0), TextAnchor::Start, 0.0);
-        assert!(geometry
-            .record_text(placement, &plan)
-            .unwrap_err()
-            .to_string()
-            .contains("system-font bytes"));
-        assert_eq!(geometry.text.capacity(), 0);
-        assert!(geometry.text.is_empty());
-        assert_eq!(
-            geometry
-                .font_environment
-                .resource_usage()
-                .unwrap()
-                .processing_visits,
-            before.processing_visits
-        );
-    }
-
-    #[test]
-    fn collision_pairs_share_the_font_processing_cap() {
+    fn collision_pairs_keep_their_geometric_overlap_on_repeated_queries() {
         let mut geometry = begun_backend();
         let bounds = GeometryBox {
             left: 1.0,
@@ -2146,11 +2011,7 @@ mod tests {
             weight: 1.0,
         };
         geometry.bounds = vec![bounds; 2];
-        let environment = &geometry.font_environment;
-        let used = environment.resource_usage().unwrap().processing_visits;
-        environment
-            .claim_processing_visits(1_000_000 - used - 2)
-            .unwrap();
+
         let panel = PanelBox::new(0.0, 100.0, 0.0, 100.0);
         assert_eq!(
             geometry
@@ -2159,15 +2020,14 @@ mod tests {
                 .to_bits(),
             2.0_f64.to_bits()
         );
+
         assert_eq!(
-            environment.resource_usage().unwrap().processing_visits,
-            1_000_000
+            geometry
+                .overlap_after_assignment(panel, panel, bounds, 0.0, |_| None)
+                .unwrap()
+                .to_bits(),
+            2.0_f64.to_bits()
         );
-        assert!(geometry
-            .overlap_after_assignment(panel, panel, bounds, 0.0, |_| None)
-            .unwrap_err()
-            .to_string()
-            .contains("root processing visits"));
     }
 
     fn test_text_style() -> TextStyle {
@@ -2269,7 +2129,7 @@ mod tests {
                     calls += 1;
                     let address = crate::layout::ComponentAddress::root();
                     let domain = round
-                        .domain(&address, FeedbackKind::AutomaticDomainX)?
+                        .feedback_domain(&address, FeedbackKind::AutomaticDomainX)
                         .unwrap_or((0.0, 1.0));
                     let panel = PanelBox::new(0.0, 100.0, 0.0, 100.0);
                     let current =
@@ -2510,9 +2370,6 @@ mod tests {
 
     #[test]
     fn invisible_point_parts_do_not_create_collision_bounds() {
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
         let panel = PanelBox::new(0.0, 100.0, 0.0, 100.0);
         for shape in [PointShape::Circle, PointShape::TriangleUp] {
             let mut style = PointStyle::new((1, 2, 3), 2).with_shape(shape);
@@ -2521,13 +2378,13 @@ mod tests {
                 width_ratio: crate::theme::RelativeSpacing::ratio(1, 2).unwrap(),
             });
             style.color = Color::rgba(1, 2, 3, 0);
-            let mut empty = GeometrySnapshot::new(&theme).unwrap();
+            let mut empty = GeometrySnapshot::new();
             empty
                 .scatter(&[Point2D::new(40.0, 40.0)], &style, panel)
                 .unwrap();
             assert!(empty.bounds.is_empty());
             style.outline.as_mut().unwrap().color = Color::rgba(4, 5, 6, 128);
-            let mut stroked = GeometrySnapshot::new(&theme).unwrap();
+            let mut stroked = GeometrySnapshot::new();
             stroked
                 .scatter(&[Point2D::new(40.0, 40.0)], &style, panel)
                 .unwrap();
@@ -2537,15 +2394,12 @@ mod tests {
 
     #[test]
     fn transparent_line_has_no_painted_ink_but_still_validates_geometry() {
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
         let style = LineStyle {
             color: Color::rgba(1, 2, 3, 0),
             width: 140.0,
             pattern: backend::StrokePattern::Solid,
         };
-        let mut snapshot = GeometrySnapshot::new(&theme).unwrap();
+        let mut snapshot = GeometrySnapshot::new();
         snapshot
             .line(
                 &[Point2D::new(1.0, 1.0), Point2D::new(2.0, 1.0)],

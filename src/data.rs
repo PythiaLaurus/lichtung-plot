@@ -64,8 +64,8 @@ pub(crate) struct PlotData<'a> {
     plot: &'a crate::builder::Plot,
     rows: Option<&'a [usize]>,
     source_rows: Option<&'a [usize]>,
-    axis_resources: Option<&'a crate::font::canonical::OperationGenerationResources>,
-    row_topology: Option<&'a source::RowTopologyAdmission<'a>>,
+    operation: Option<&'a crate::font::canonical::OperationContext>,
+    row_topology: Option<&'a source::RowSourceContext<'a>>,
 }
 
 impl std::fmt::Debug for PlotData<'_> {
@@ -84,7 +84,7 @@ impl<'a> PlotData<'a> {
             plot,
             rows: None,
             source_rows: None,
-            axis_resources: None,
+            operation: None,
             row_topology: None,
         }
     }
@@ -103,25 +103,25 @@ impl<'a> PlotData<'a> {
             plot,
             rows: Some(rows),
             source_rows: Some(source_rows),
-            axis_resources: None,
+            operation: None,
             row_topology: None,
         }
     }
 
     /// Axis source work uses the root counters; ordinary mark preparation remains separate.
-    pub(crate) fn with_axis_resources(
+    pub(crate) fn with_operation(
         mut self,
-        resources: &'a crate::font::canonical::OperationGenerationResources,
+        resources: &'a crate::font::canonical::OperationContext,
     ) -> Self {
-        self.axis_resources = Some(resources);
+        self.operation = Some(resources);
         self
     }
 
     pub(crate) fn source_resources(
         self,
-    ) -> Result<&'a crate::font::canonical::OperationGenerationResources, Error> {
-        self.axis_resources.ok_or_else(|| {
-            Error::Render("numeric source requires the current root resource ledger".into())
+    ) -> Result<&'a crate::font::canonical::OperationContext, Error> {
+        self.operation.ok_or_else(|| {
+            Error::Render("numeric source requires the current root operation".into())
         })
     }
 
@@ -153,9 +153,9 @@ impl<'a> PlotData<'a> {
         let Some(statuses) = self.plot.estimate_status_values() else {
             return Ok(None);
         };
-        self.collect_source((0..self.height())
+        crate::data::source::collect_source((0..self.height())
             .map(|row| {
-                self.claim_source_visits(1)?;
+
                 statuses.get(self.row_index(row)).copied().ok_or_else(|| {
                     Error::Data(format!(
                         "estimate status values are shorter than the aligned plot input at source row {}",
@@ -192,8 +192,7 @@ pub(crate) fn strict_finite_f64<'a>(
             data.column(column)?.name()
         )));
     };
-    data.collect_source((0..data.height()).map(|row| {
-        data.claim_source_visits(1)?;
+    crate::data::source::collect_source((0..data.height()).map(|row| {
         match values.get(data.row_index(row)) {
             Some(Some(value)) if value.is_finite() => Ok(value),
             Some(Some(value)) => Err(Error::Data(format!(
@@ -249,8 +248,7 @@ pub(crate) fn nullable_finite_f64<'a>(
             data.column(column)?.name()
         )));
     };
-    data.collect_source((0..data.height()).map(|row| {
-        data.claim_source_visits(1)?;
+    crate::data::source::collect_source((0..data.height()).map(|row| {
         match values.get(data.row_index(row)) {
             Some(Some(value)) if value.is_finite() => Ok(Some(value)),
             Some(Some(value)) => Err(Error::Data(format!(
@@ -276,8 +274,7 @@ pub(crate) fn strict_bool<'a>(
             data.column(column)?.name()
         )));
     };
-    data.collect_source((0..data.height()).map(|row| {
-        data.claim_source_visits(1)?;
+    crate::data::source::collect_source((0..data.height()).map(|row| {
         match values.get(data.row_index(row)) {
             Some(Some(value)) => Ok(value),
             Some(None) => Err(Error::Data(format!(
@@ -307,8 +304,8 @@ pub(crate) fn aligned_finite_f64<'a>(
         )));
     }
     let mut pairs = Vec::new();
-    data.reserve_source(&mut pairs, x.len())?;
-    data.claim_source_visits(x.len())?;
+    crate::data::source::reserve_source(&mut pairs, x.len())?;
+
     pairs.extend(x.into_iter().zip(y).filter_map(|(x, y)| x.zip(y)));
     Ok(pairs)
 }
@@ -330,8 +327,8 @@ pub(crate) fn aligned_finite_rows<'a>(
         )));
     }
     let mut rows = Vec::new();
-    data.reserve_source(&mut rows, x.len())?;
-    data.claim_source_visits(x.len())?;
+    crate::data::source::reserve_source(&mut rows, x.len())?;
+
     rows.extend(
         x.into_iter()
             .zip(y)
@@ -352,8 +349,7 @@ fn optional_finite_f64(
             data.column(column)?.name()
         )));
     };
-    data.collect_source((0..data.height()).map(|row| {
-        data.claim_source_visits(1)?;
+    crate::data::source::collect_source((0..data.height()).map(|row| {
         match values.get(data.row_index(row)) {
             Some(Some(value)) if value.is_infinite() => Err(Error::Data(format!(
                 "{plot}: value {:?} contains infinite value {value} at source row {}",
@@ -416,7 +412,7 @@ pub(crate) fn observed_collectives<'a>(
 ) -> Result<ObservedCollectives, Error> {
     let data = data.into();
     let mut row_indices = Vec::new();
-    data.reserve_source(
+    crate::data::source::reserve_source(
         &mut row_indices,
         retained_rows.map_or(data.height(), <[usize]>::len),
     )?;
@@ -435,7 +431,6 @@ pub(crate) fn observed_collectives<'a>(
         .zip(hue_name)
         .is_some_and(|(group, hue)| group == hue);
     if collapsed {
-        data.claim_source_visits(row_indices.len())?;
         let (Some(groups), Some(hues)) = (groups.as_ref(), hues.as_ref()) else {
             return Err(Error::Data(format!(
                 "{plot}: equal graphical group and hue names require both categorical channels"
@@ -454,49 +449,46 @@ pub(crate) fn observed_collectives<'a>(
         }
     }
 
-    let rows = data.collect_source((0..row_indices.len()).map(|index| {
+    let rows = crate::data::source::collect_source((0..row_indices.len()).map(|index| {
         Ok(CollectivePair {
             group: groups
                 .as_ref()
-                .map(|values| data.copy_source_string(&values[index]))
+                .map(|values| crate::data::source::copy_source_string(&values[index]))
                 .transpose()?,
             hue: hues
                 .as_ref()
-                .map(|values| data.copy_source_string(&values[index]))
+                .map(|values| crate::data::source::copy_source_string(&values[index]))
                 .transpose()?,
         })
     }))?;
-    let group_levels = groups
-        .as_ref()
-        .map_or_else(|| Ok(Vec::new()), |values| data.source_levels(values))?;
-    let hue_levels = hues
-        .as_ref()
-        .map_or_else(|| Ok(Vec::new()), |values| data.source_levels(values))?;
+    let group_levels = groups.as_ref().map_or_else(
+        || Ok(Vec::new()),
+        |values| crate::data::source::source_levels(values),
+    )?;
+    let hue_levels = hues.as_ref().map_or_else(
+        || Ok(Vec::new()),
+        |values| crate::data::source::source_levels(values),
+    )?;
     let mut identities = Vec::new();
-    data.reserve_source(&mut identities, rows.len())?;
+    crate::data::source::reserve_source(&mut identities, rows.len())?;
     if groups.is_some() {
         for group in &group_levels {
             for identity in &rows {
-                data.claim_source_visits(1)?;
                 if identity.group.as_ref() != Some(group) {
                     continue;
                 }
-                if data
-                    .source_position(&identities, |seen| seen == identity)?
+                if crate::data::source::source_position(&identities, |seen| seen == identity)
                     .is_none()
                 {
-                    identities.push(data.copy_source_pair(identity)?);
+                    identities.push(crate::data::source::copy_source_pair(identity)?);
                 }
             }
         }
     } else {
         for identity in &rows {
-            data.claim_source_visits(1)?;
-            if data
-                .source_position(&identities, |seen| seen == identity)?
-                .is_none()
+            if crate::data::source::source_position(&identities, |seen| seen == identity).is_none()
             {
-                identities.push(data.copy_source_pair(identity)?);
+                identities.push(crate::data::source::copy_source_pair(identity)?);
             }
         }
     }
@@ -522,18 +514,17 @@ fn strict_strings_for_rows(
             data.column(column)?.name()
         )));
     };
-    data.collect_source(rows.iter().map(|row| {
-        data.claim_source_visits(1)?;
-        match values.get(data.row_index(*row)) {
-            Some(Some(value)) => data.copy_source_string(value),
+    crate::data::source::collect_source(rows.iter().map(
+        |row| match values.get(data.row_index(*row)) {
+            Some(Some(value)) => crate::data::source::copy_source_string(value),
             Some(None) => Err(Error::Data(format!(
                 "{plot}: value {:?} contains null at source row {}",
                 values.name(),
                 data.source_row(*row)
             ))),
             None => Err(length_error(plot, values.name(), *row)),
-        }
-    }))
+        },
+    ))
 }
 
 pub(crate) fn collective_channels<'a>(
@@ -566,15 +557,16 @@ pub(crate) fn collective_channels<'a>(
 
     if let Some(hues_ref) = hues.as_ref() {
         let mut marks: Vec<(Option<&str>, Option<&str>, &str)> = Vec::new();
-        data.reserve_source(&mut marks, row_count)?;
+        crate::data::source::reserve_source(&mut marks, row_count)?;
         for row in 0..row_count {
-            data.claim_source_visits(1)?;
             let cell = cells.map(|values| values[row].as_str());
             let group = groups.as_ref().map(|values| values[row].as_str());
             let hue = hues_ref[row].as_str();
-            if let Some(index) = data.source_position(&marks, |(seen_cell, seen_group, _)| {
-                *seen_cell == cell && *seen_group == group
-            })? {
+            if let Some(index) =
+                crate::data::source::source_position(&marks, |(seen_cell, seen_group, _)| {
+                    *seen_cell == cell && *seen_group == group
+                })
+            {
                 let (_, _, seen_hue) = &marks[index];
                 if *seen_hue != hue {
                     return Err(Error::Data(format!(
@@ -589,12 +581,14 @@ pub(crate) fn collective_channels<'a>(
     }
 
     Ok(CollectiveChannels {
-        group_levels: groups
-            .as_ref()
-            .map_or_else(|| Ok(Vec::new()), |values| data.source_levels(values))?,
-        hue_levels: hues
-            .as_ref()
-            .map_or_else(|| Ok(Vec::new()), |values| data.source_levels(values))?,
+        group_levels: groups.as_ref().map_or_else(
+            || Ok(Vec::new()),
+            |values| crate::data::source::source_levels(values),
+        )?,
+        hue_levels: hues.as_ref().map_or_else(
+            || Ok(Vec::new()),
+            |values| crate::data::source::source_levels(values),
+        )?,
         groups,
         hues,
     })
@@ -615,32 +609,24 @@ pub(crate) fn explicit_category_order(
     requested: &[String],
     context: &str,
     allow_unobserved: bool,
-    data: Option<PlotData<'_>>,
 ) -> Result<Vec<String>, Error> {
-    use source::SourceAdmission;
     let mut seen = Vec::new();
-    data.source_reserve(&mut seen, requested.len())?;
+    crate::data::source::reserve_source(&mut seen, requested.len())?;
     for level in requested {
-        data.source_visits(seen.len())?;
         if seen.contains(level) {
             return Err(Error::Data(format!(
                 "{context}: explicit category order contains duplicate level {level:?}"
             )));
         }
-        data.source_visits(observed.len())?;
+
         if !allow_unobserved && !observed.contains(level) {
             return Err(Error::Data(format!(
                 "{context}: explicit category order contains unknown level {level:?}"
             )));
         }
-        seen.push(if let Some(data) = data {
-            data.copy_source_string(level)?
-        } else {
-            level.clone()
-        });
+        seen.push(crate::data::source::copy_source_string(level)?);
     }
     for level in observed {
-        data.source_visits(seen.len())?;
         if !seen.contains(level) {
             return Err(Error::Data(format!(
                 "{context}: explicit category order omits observed level {level:?}"
@@ -648,9 +634,6 @@ pub(crate) fn explicit_category_order(
         }
     }
     if allow_unobserved {
-        for _ in &seen {
-            data.source_visits(observed.len())?;
-        }
         seen.retain(|level| observed.contains(level));
     }
     Ok(seen)
@@ -668,10 +651,9 @@ pub(crate) fn strict_strings<'a>(
             data.column(column)?.name()
         )));
     };
-    data.collect_source((0..data.height()).map(|row| {
-        data.claim_source_visits(1)?;
+    crate::data::source::collect_source((0..data.height()).map(|row| {
         match values.get(data.row_index(row)) {
-            Some(Some(value)) => data.copy_source_string(value),
+            Some(Some(value)) => crate::data::source::copy_source_string(value),
             Some(None) => Err(Error::Data(format!(
                 "{plot}: value {:?} contains null at source row {}",
                 values.name(),
@@ -689,12 +671,12 @@ pub(crate) fn strict_normalized_strings<'a>(
     role: &str,
 ) -> Result<Vec<String>, Error> {
     let data = data.into();
-    data.collect_source(
+    crate::data::source::collect_source(
         strict_strings(data, column, plot)?
             .into_iter()
             .enumerate()
             .map(|(row, value)| {
-                let normalized = data.normalize_source_string(&value)?;
+                let normalized = crate::data::source::normalize_source_string(&value)?;
                 if normalized.is_empty() {
                     Err(Error::Data(format!(
                     "{plot}: {role} label is empty after whitespace normalization at source row {}",

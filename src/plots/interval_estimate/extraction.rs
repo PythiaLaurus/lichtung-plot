@@ -1,5 +1,5 @@
 use super::*;
-use crate::font::canonical::OperationGenerationResources;
+use crate::font::canonical::OperationContext;
 use crate::{
     Bounds, CategoryValues, CoefficientInput, FacetScales, FacetSpec, NumericValues, PlotKind,
 };
@@ -120,18 +120,12 @@ fn wide_estimate_labels_request_automatic_headroom_but_not_exact_x() {
             plot.erase()
         }
     };
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let panel = crate::layout::PanelBox::new(80.0, 920.0, 80.0, 580.0);
     for exact in [false, true] {
         let source = source(exact);
-        let inputs = crate::plots::shared_x::prepare_plot(
-            &source,
-            &OperationGenerationResources::new(),
-            None,
-        )
-        .unwrap();
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         let chart = inputs.attach(source).unwrap();
         let selected =
             chart.measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme));
@@ -167,14 +161,14 @@ fn wide_estimate_labels_request_automatic_headroom_but_not_exact_x() {
 }
 
 #[test]
-fn semantics_and_label_strings_obey_exact_limits_before_fonts() {
+fn semantics_and_label_strings_are_prepared_before_fonts() {
     for source in sources(None, None)
         .into_iter()
         .chain([labels(false), labels(true)])
     {
         STAGES.with(|counts| counts.set([[0; 4]; 3]));
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         assert_eq!(
             STAGES
@@ -184,24 +178,8 @@ fn semantics_and_label_strings_obey_exact_limits_before_fonts() {
                 .sum::<usize>(),
             1
         );
-        let bytes = resources.byte_usage().unwrap();
-        let visits = resources.usage().unwrap().1;
-        for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
-            assert!(matches!(
-                crate::plots::shared_x::prepare_plot(
-                    &source,
-                    &OperationGenerationResources::with_test_limits(visits, bytes),
-                    None,
-                ),
-                Err(Error::Render(_))
-            ));
-        }
-        crate::plots::shared_x::prepare_plot(
-            &source,
-            &OperationGenerationResources::with_test_limits(visits, bytes),
-            None,
-        )
-        .unwrap();
+
+        crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         let attached = inputs.attach(source).unwrap();
         assert!(std::sync::Arc::ptr_eq(
             attached.prepared_estimate.as_ref().unwrap(),
@@ -212,32 +190,14 @@ fn semantics_and_label_strings_obey_exact_limits_before_fonts() {
             0
         );
     }
-    let source = labels(false);
+
     let format = crate::NumericLabelFormat::default()
         .precision(12)
         .unwrap()
         .suffix("s".repeat(20_000))
         .unwrap();
     for value in [0.0, -0.0, f64::MAX, -f64::MAX, f64::MIN_POSITIVE] {
-        let resources = OperationGenerationResources::new();
-        assert_eq!(
-            format
-                .format_source(value, source.data().with_axis_resources(&resources))
-                .unwrap(),
-            format.format(value)
-        );
-        let bytes = resources.byte_usage().unwrap();
-        let visits = resources.usage().unwrap().1;
-        for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
-            assert!(format
-                .format_source(
-                    value,
-                    source.data().with_axis_resources(
-                        &OperationGenerationResources::with_test_limits(visits, bytes)
-                    )
-                )
-                .is_err());
-        }
+        assert_eq!(format.format_source(value).unwrap(), format.format(value));
     }
 }
 
@@ -251,7 +211,7 @@ fn missing_facets_and_mixed_shared_canvas_prepare_each_family_once() {
     ] {
         for (family, source) in sources(Some(scales), None).into_iter().enumerate() {
             STAGES.with(|counts| counts.set([[0; 4]; 3]));
-            let resources = OperationGenerationResources::new();
+            let resources = OperationContext::new();
             let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None);
             assert_eq!(STAGES.with(std::cell::Cell::get)[family], [2, 0, 0, 0]);
             if matches!(scales, FacetScales::FreeX | FacetScales::Free) {
@@ -327,15 +287,9 @@ fn projected_limits_and_geometry_match_selected_draw_order() {
         .into_iter()
         .chain([labels(false), labels(true)])
     {
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
-        let inputs = crate::plots::shared_x::prepare_plot(
-            &source,
-            &OperationGenerationResources::new(),
-            None,
-        )
-        .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         let attached = inputs.attach(source).unwrap();
         let context = PlotRenderContext::new(
             attached.data(),
@@ -343,28 +297,16 @@ fn projected_limits_and_geometry_match_selected_draw_order() {
             &theme,
         );
         let selected = attached.measure_selected_interior(context).unwrap();
-        let project = |resources: &OperationGenerationResources| {
+        let project = || {
             super::project(
                 &attached,
                 &inputs.estimate.as_ref().unwrap().panels[0].1,
                 selected.layout.clone(),
                 context,
-                attached.data().with_axis_resources(resources),
             )
         };
-        let resources = OperationGenerationResources::new();
-        let projected = project(&resources).unwrap();
-        let bytes = resources.byte_usage().unwrap();
-        let visits = resources.usage().unwrap().1;
-        for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
-            assert!(project(&OperationGenerationResources::with_test_limits(
-                visits, bytes
-            ))
-            .is_err());
-        }
-        let exact = OperationGenerationResources::with_test_limits(visits, bytes);
-        project(&exact).unwrap();
-        assert!(project(&exact).is_err());
+        let projected = project().unwrap();
+        project().unwrap();
         let plan = projected.marks.unwrap();
         let mut drawn = crate::render::geometry::GeometryBackend::new(&theme).unwrap();
         drawn.begin(640, 480).unwrap();
@@ -402,20 +344,14 @@ fn raw_interval_intent_survives_correctly_rounded_logarithms() {
         .scale(crate::AxisScale::Log10)
         .x_limits(1e15, 1e17)
         .erase();
-        let inputs = crate::plots::shared_x::prepare_plot(
-            &source,
-            &OperationGenerationResources::new(),
-            None,
-        )
-        .unwrap();
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         let tuple = inputs.estimate.as_ref().unwrap().panels[0].1.estimates[0].unwrap();
         assert_eq!(tuple.lower.unwrap().to_bits(), 16.0_f64.to_bits());
         assert_eq!(tuple.upper.unwrap().to_bits(), 16.0_f64.to_bits());
         assert_eq!(tuple.nonzero_interval, nonzero);
         let source = inputs.attach(source).unwrap();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let result = source.measure_selected_interior(PlotRenderContext::new(
             source.data(),
             crate::layout::PanelBox::new(80.0, 600.0, 60.0, 400.0),
@@ -456,8 +392,7 @@ fn facet_owned_significance_is_retained_only_by_its_selected_panel() {
     .size(1000, 480)
     .erase();
     let inputs =
-        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new(), None)
-            .unwrap();
+        crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
     let panels = &inputs.estimate.as_ref().unwrap().panels;
     assert_eq!(panels[0].1.adjacent, [None]);
     assert_eq!(panels[1].1.adjacent, [Some(("**".into(), true))]);
@@ -471,16 +406,14 @@ fn facet_owned_significance_is_retained_only_by_its_selected_panel() {
 #[test]
 fn final_guides_ticks_and_invalid_tuples_precede_unavailable_fonts() {
     fn with_unavailable_fonts(source: &Plot) -> Result<(), Error> {
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         theme.typography.axes.tick_label.stack =
             crate::font::canonical::named_stack(&["T5a6a3c unavailable font 91f7"]);
         crate::layout::plan_exact_root(
             640,
             480,
             |stage| {
-                crate::plots::shared_x::prepare_plot(source, &stage.generation_resources(), None)?;
+                crate::plots::shared_x::prepare_plot(source, &stage.operation(), None)?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     None,
                     source,
@@ -583,16 +516,15 @@ fn logarithmic_shared_limits_and_raw_exact_ticks_are_transformed_once() {
         crate::AxisTick::new(1000.0, "high"),
     ])
     .erase();
-    let resources = OperationGenerationResources::new();
+    let resources = OperationContext::new();
     let marks = crate::plots::shared_x::PreparedReference::new(
         &source,
-        source.data().with_axis_resources(&resources),
+        source.data().with_operation(&resources),
         None,
     )
     .unwrap();
     let inputs = crate::plots::shared_x::prepare_reference_plot(
         &source,
-        &resources,
         marks,
         Some("panel-0"),
         Some((-1.0, 3.0)),
@@ -635,9 +567,9 @@ fn borrowed_views_preserve_original_source_row_diagnostics() {
             .erase(),
     ];
     for source in sources {
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let data =
-            crate::data::PlotData::with_rows(&source, &[2], &[42]).with_axis_resources(&resources);
+            crate::data::PlotData::with_rows(&source, &[2], &[42]).with_operation(&resources);
         let error =
             PreparedEstimate::new(&source, data, source.significance_annotations()).unwrap_err();
         assert!(error.to_string().contains("source row 42"), "{error}");
@@ -658,18 +590,13 @@ fn poisoned_capture_repeats_no_source_projection_axis_or_shaping_work() {
         STAGES.with(|counts| counts.set([[0; 4]; 3]));
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|count| count.set(0));
         crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(|count| count.set(0));
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let root = crate::layout::plan_exact_root(
             640,
             480,
             |stage| {
-                let inputs = crate::plots::shared_x::prepare_plot(
-                    &source,
-                    &stage.generation_resources(),
-                    None,
-                )?;
+                let inputs =
+                    crate::plots::shared_x::prepare_plot(&source, &stage.operation(), None)?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     None,
                     &source,

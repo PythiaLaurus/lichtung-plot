@@ -7,7 +7,6 @@
 )]
 
 use super::OpaqueColor;
-use crate::font::canonical::OperationGenerationResources;
 use crate::Error;
 use num_bigint::BigUint;
 use std::cmp::Ordering;
@@ -293,11 +292,7 @@ pub(super) struct Oklab {
 }
 
 impl Oklab {
-    pub(super) fn from_rgb(
-        rgb: (u8, u8, u8),
-        resources: &OperationGenerationResources,
-    ) -> Result<Self, Error> {
-        resources.claim_visits(3).map_err(work_error)?;
+    pub(super) fn from_rgb(rgb: (u8, u8, u8)) -> Result<Self, Error> {
         let red = super::contrast::linear_channel(rgb.0);
         let green = super::contrast::linear_channel(rgb.1);
         let blue = super::contrast::linear_channel(rgb.2);
@@ -306,9 +301,9 @@ impl Oklab {
         let long = (0.412_221_470_8 * red + 0.536_332_536_3 * green) + 0.051_445_992_9 * blue;
         let medium = (0.211_903_498_2 * red + 0.680_699_545_1 * green) + 0.107_396_956_6 * blue;
         let short = (0.088_302_461_9 * red + 0.281_718_837_6 * green) + 0.629_978_700_5 * blue;
-        let long = cube_root(long, resources)?;
-        let medium = cube_root(medium, resources)?;
-        let short = cube_root(short, resources)?;
+        let long = cube_root(long)?;
+        let medium = cube_root(medium)?;
+        let short = cube_root(short)?;
         Ok(Self {
             l: (0.210_454_255_3 * long + 0.793_617_785_0 * medium) - 0.004_072_046_8 * short,
             a: (1.977_998_495_1 * long - 2.428_592_205_0 * medium) + 0.450_593_709_9 * short,
@@ -342,15 +337,12 @@ impl Oklab {
         Ok(result)
     }
 
-    pub(super) fn opaque_rgb(
-        self,
-        resources: &OperationGenerationResources,
-    ) -> Result<(u8, u8, u8), Error> {
+    pub(super) fn opaque_rgb(self) -> Result<(u8, u8, u8), Error> {
         let [red, green, blue] = self.linear_rgb()?;
         Ok((
-            encoded_channel(red, resources)?,
-            encoded_channel(green, resources)?,
-            encoded_channel(blue, resources)?,
+            encoded_channel(red)?,
+            encoded_channel(green)?,
+            encoded_channel(blue)?,
         ))
     }
 
@@ -364,12 +356,9 @@ impl Oklab {
     /// Fixed 24-step chroma bisection at this source-derived lightness/hue.
     /// The first attempted color is used verbatim when already in gamut;
     /// otherwise every trial is admitted before inverse matrix evaluation.
-    pub(super) fn reduced_rgb(
-        self,
-        resources: &OperationGenerationResources,
-    ) -> Result<((u8, u8, u8), Self), Error> {
+    pub(super) fn reduced_rgb(self) -> Result<((u8, u8, u8), Self), Error> {
         if self.in_gamut()? {
-            return Ok((self.opaque_rgb(resources)?, self));
+            return Ok((self.opaque_rgb()?, self));
         }
         let neutral = Self {
             a: 0.0,
@@ -383,7 +372,6 @@ impl Oklab {
         }
         let (mut lower, mut upper) = (0.0_f64, 1.0_f64);
         for _ in 0..24 {
-            resources.claim_visits(1).map_err(work_error)?;
             let midpoint = f64::midpoint(lower, upper);
             let candidate = Self {
                 a: self.a * midpoint,
@@ -401,7 +389,7 @@ impl Oklab {
             b: self.b * lower,
             ..self
         };
-        Ok((selected.opaque_rgb(resources)?, selected))
+        Ok((selected.opaque_rgb()?, selected))
     }
 }
 
@@ -411,9 +399,7 @@ pub(super) fn interpolate(
     first: (u8, u8, u8),
     second: (u8, u8, u8),
     fraction: f64,
-    resources: &OperationGenerationResources,
 ) -> Result<(u8, u8, u8), Error> {
-    resources.claim_visits(1).map_err(work_error)?;
     if !fraction.is_finite() || !(0.0..=1.0).contains(&fraction) {
         return Err(Error::Data(
             "OKLab interpolation fraction must be finite in [0,1]".into(),
@@ -425,15 +411,15 @@ pub(super) fn interpolate(
     if fraction.to_bits() == 1.0_f64.to_bits() {
         return Ok(second);
     }
-    let first = Oklab::from_rgb(first, resources)?;
-    let second = Oklab::from_rgb(second, resources)?;
+    let first = Oklab::from_rgb(first)?;
+    let second = Oklab::from_rgb(second)?;
     let interpolate = |low: f64, high: f64| low + (high - low) * fraction;
     Oklab {
         l: interpolate(first.l, second.l),
         a: interpolate(first.a, second.a),
         b: interpolate(first.b, second.b),
     }
-    .reduced_rgb(resources)
+    .reduced_rgb()
     .map(|(rgb, _)| rgb)
 }
 
@@ -502,11 +488,9 @@ fn select_candidate(
     labs: &[Oklab],
     candidates: usize,
     generated: &mut Vec<PaletteCandidate>,
-    resources: &OperationGenerationResources,
 ) -> Result<(OpaqueColor, Oklab), Error> {
     for ordinal in generated.len()..candidates {
-        resources.claim_visits(1).map_err(work_error)?;
-        let (rgb, _) = candidate_lab(character, ordinal).reduced_rgb(resources)?;
+        let (rgb, _) = candidate_lab(character, ordinal).reduced_rgb()?;
         generated.push(PaletteCandidate {
             color: OpaqueColor::rgb(rgb.0, rgb.1, rgb.2),
             lab: None,
@@ -514,11 +498,9 @@ fn select_candidate(
     }
     let mut best: Option<CandidateChoice> = None;
     for (ordinal, candidate) in generated.iter_mut().enumerate().take(candidates) {
-        resources.claim_visits(1).map_err(work_error)?;
         let rgb = candidate.color;
         let mut duplicate = false;
         for prior in colors {
-            resources.claim_visits(1).map_err(work_error)?;
             if *prior == rgb {
                 duplicate = true;
                 break;
@@ -530,13 +512,12 @@ fn select_candidate(
         let actual = if let Some(lab) = candidate.lab {
             lab
         } else {
-            let lab = Oklab::from_rgb(rgb.as_rgb(), resources)?;
+            let lab = Oklab::from_rgb(rgb.as_rgb())?;
             candidate.lab = Some(lab);
             lab
         };
         let mut minimum = f64::INFINITY;
         for prior in labs {
-            resources.claim_visits(1).map_err(work_error)?;
             let difference = (actual.l - prior.l) * (actual.l - prior.l)
                 + (actual.a - prior.a) * (actual.a - prior.a)
                 + (actual.b - prior.b) * (actual.b - prior.b);
@@ -557,20 +538,7 @@ fn select_candidate(
     Ok((selected.color, selected.lab))
 }
 
-fn admit_candidates(
-    count: usize,
-    resources: &OperationGenerationResources,
-) -> Result<Vec<PaletteCandidate>, Error> {
-    resources.claim_slots(count as u128).map_err(work_error)?;
-    let bytes = count
-        .checked_mul(std::mem::size_of::<PaletteCandidate>())
-        .and_then(|bytes| u64::try_from(bytes).ok())
-        .ok_or_else(|| Error::Render("palette candidate cache storage overflowed".into()))?;
-    resources.claim_bytes(bytes).map_err(|error| {
-        Error::Render(format!(
-            "palette candidate cache storage admission: {error}"
-        ))
-    })?;
+fn admit_candidates(count: usize) -> Result<Vec<PaletteCandidate>, Error> {
     let mut values = Vec::new();
     values
         .try_reserve_exact(count)
@@ -581,7 +549,6 @@ fn admit_candidates(
 pub(super) fn extend_palette(
     seeds: &[OpaqueColor],
     requested: usize,
-    resources: &OperationGenerationResources,
 ) -> Result<Vec<OpaqueColor>, Error> {
     if seeds.is_empty() {
         return Err(Error::Data(
@@ -592,16 +559,6 @@ pub(super) fn extend_palette(
         return Ok(Vec::new());
     }
     if requested <= seeds.len() {
-        resources
-            .claim_slots(requested as u128)
-            .map_err(work_error)?;
-        let bytes = requested
-            .checked_mul(std::mem::size_of::<OpaqueColor>())
-            .and_then(|bytes| u64::try_from(bytes).ok())
-            .ok_or_else(|| Error::Render("palette prefix storage overflowed".into()))?;
-        resources
-            .claim_bytes(bytes)
-            .map_err(|error| Error::Render(format!("palette prefix storage admission: {error}")))?;
         let mut prefix = Vec::new();
         prefix
             .try_reserve_exact(requested)
@@ -612,14 +569,7 @@ pub(super) fn extend_palette(
     let records = requested
         .checked_add(seeds.len())
         .ok_or_else(|| Error::Render("color palette capacity arithmetic overflowed".into()))?;
-    resources.claim_slots(records as u128).map_err(work_error)?;
-    let bytes = records
-        .checked_mul(std::mem::size_of::<Oklab>() + 3)
-        .and_then(|bytes| u64::try_from(bytes).ok())
-        .ok_or_else(|| Error::Render("color palette storage arithmetic overflowed".into()))?;
-    resources
-        .claim_bytes(bytes)
-        .map_err(|error| Error::Render(format!("color palette storage admission: {error}")))?;
+
     let mut result = Vec::new();
     let mut lab = Vec::new();
     result
@@ -628,7 +578,7 @@ pub(super) fn extend_palette(
     lab.try_reserve_exact(records)
         .map_err(|_| Error::Render("cannot reserve resolved OKLab colors".into()))?;
     for &color in seeds {
-        lab.push(Oklab::from_rgb(color.as_rgb(), resources)?);
+        lab.push(Oklab::from_rgb(color.as_rgb())?);
         if result.len() < requested {
             result.push(color);
         }
@@ -640,7 +590,6 @@ pub(super) fn extend_palette(
         .map_err(|_| Error::Render("palette seed count exceeds exact color arithmetic".into()))?;
     let (mut lightness, mut chroma) = (0.0_f64, 0.0_f64);
     for seed in &lab {
-        resources.claim_visits(1).map_err(work_error)?;
         lightness += seed.l;
         chroma += (seed.a * seed.a + seed.b * seed.b).sqrt();
     }
@@ -653,27 +602,20 @@ pub(super) fn extend_palette(
     let max_candidates = 128_usize
         .saturating_add(max_ordinal.saturating_mul(32))
         .min(cap);
-    let mut generated = admit_candidates(max_candidates, resources)?;
+    let mut generated = admit_candidates(max_candidates)?;
     while result.len() < requested {
         let new_ordinal = result.len() - seeds.len();
         let candidates = 128_usize
             .saturating_add(new_ordinal.saturating_mul(32))
             .min(cap);
-        let (rgb, actual) = select_candidate(
-            character,
-            &result,
-            &lab,
-            candidates,
-            &mut generated,
-            resources,
-        )?;
+        let (rgb, actual) = select_candidate(character, &result, &lab, candidates, &mut generated)?;
         result.push(rgb);
         lab.push(actual);
     }
     Ok(result)
 }
 
-fn encoded_channel(value: f64, resources: &OperationGenerationResources) -> Result<u8, Error> {
+fn encoded_channel(value: f64) -> Result<u8, Error> {
     // The inverse coefficients use 10 decimal digits. A 2^-22 slack bounds
     // their finite binary64 roundtrip error at the two exact gamut edges;
     // genuinely out-of-gamut colors go to the explicit T5d1b chroma reducer.
@@ -685,7 +627,6 @@ fn encoded_channel(value: f64, resources: &OperationGenerationResources) -> Resu
     let value = value.clamp(0.0, 1.0);
     let (mut lower, mut upper) = (0_usize, ENCODED_HALF_LINEAR_BITS.len());
     while lower < upper {
-        resources.claim_visits(1).map_err(work_error)?;
         let middle = lower + (upper - lower) / 2;
         let threshold = f64::from_bits(ENCODED_HALF_LINEAR_BITS[middle]);
         if value > threshold
@@ -704,21 +645,20 @@ fn encoded_channel(value: f64, resources: &OperationGenerationResources) -> Resu
 /// bit domain, then compare the exact rational cube of the midpoint between
 /// adjacent representable candidates. No host libm call, approximate fallback
 /// or iteration-sensitive convergence threshold is involved.
-fn cube_root(input: f64, resources: &OperationGenerationResources) -> Result<f64, Error> {
+fn cube_root(input: f64) -> Result<f64, Error> {
     if !input.is_finite() || !(0.0..=2.0).contains(&input) {
         return Err(Error::Render(
             "OKLab LMS component is outside its finite domain".into(),
         ));
     }
     if input == 0.0 {
-        resources.claim_visits(1).map_err(work_error)?;
         return Ok(0.0);
     }
     let (mut lower, mut upper) = (0_u64, 2.0_f64.to_bits());
     while upper - lower > 1 {
         let midpoint = lower + (upper - lower) / 2;
         let (significand, exponent) = binary_rational(f64::from_bits(midpoint));
-        if compare_cube(significand, exponent, input, resources)?.is_le() {
+        if compare_cube(significand, exponent, input).is_le() {
             lower = midpoint;
         } else {
             upper = midpoint;
@@ -733,7 +673,7 @@ fn cube_root(input: f64, resources: &OperationGenerationResources) -> Result<f64
             << usize::try_from(hi_exp - common_exp)
                 .expect("upper exponent is above common exponent"));
     let (target_sig, target_exp) = binary_rational(input);
-    admit(resources)?;
+
     let cube = &middle_sig * &middle_sig * &middle_sig;
     let ordering = compare_rational(
         &cube,
@@ -750,21 +690,16 @@ fn cube_root(input: f64, resources: &OperationGenerationResources) -> Result<f64
     ))
 }
 
-fn compare_cube(
-    significand: u64,
-    exponent: i32,
-    input: f64,
-    resources: &OperationGenerationResources,
-) -> Result<Ordering, Error> {
+fn compare_cube(significand: u64, exponent: i32, input: f64) -> Ordering {
     let (target_sig, target_exp) = binary_rational(input);
-    admit(resources)?;
+
     let value = BigUint::from(significand);
-    Ok(compare_rational(
+    compare_rational(
         &(&value * &value * &value),
         3 * exponent,
         &BigUint::from(target_sig),
         target_exp,
-    ))
+    )
 }
 
 fn binary_rational(value: f64) -> (u64, i32) {
@@ -790,20 +725,6 @@ fn compare_rational(left: &BigUint, left_exp: i32, right: &BigUint, right_exp: i
     }
 }
 
-fn admit(resources: &OperationGenerationResources) -> Result<(), Error> {
-    resources.claim_visits(1).map_err(work_error)?;
-    // Comparing three 53-bit binary significands with a binary64 target can
-    // align at most 3*1074+160 bits. Charge five 4096-bit scratch operands
-    // before the exact products and shifts, against the one root ledger.
-    resources
-        .claim_bytes(5 * 512)
-        .map_err(|error| Error::Render(format!("OKLab cube-root scratch admission: {error}")))
-}
-
-fn work_error(error: crate::font::canonical::TextGenerationClaimError) -> Error {
-    Error::Render(format!("OKLab cube-root work admission: {error:?}"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -822,32 +743,25 @@ mod tests {
         assert!(ENCODED_HALF_LINEAR_BITS
             .windows(2)
             .all(|pair| pair[0] < pair[1]));
-        let resources = OperationGenerationResources::new();
+
         for index in [0_usize, 1, 127, 254] {
             let midpoint = f64::from_bits(ENCODED_HALF_LINEAR_BITS[index]);
             let lower = u8::try_from(index).unwrap();
+            assert_eq!(encoded_channel(midpoint.next_down()).unwrap(), lower);
             assert_eq!(
-                encoded_channel(midpoint.next_down(), &resources).unwrap(),
-                lower
-            );
-            assert_eq!(
-                encoded_channel(midpoint, &resources).unwrap(),
+                encoded_channel(midpoint).unwrap(),
                 if index.is_multiple_of(2) {
                     lower
                 } else {
                     lower + 1
                 }
             );
-            assert_eq!(
-                encoded_channel(midpoint.next_up(), &resources).unwrap(),
-                lower + 1
-            );
+            assert_eq!(encoded_channel(midpoint.next_up()).unwrap(), lower + 1);
         }
     }
 
     #[test]
     fn opaque_channels_round_trip_without_an_srgb_libm_call() {
-        let resources = OperationGenerationResources::new();
         for channel in 0_u8..=u8::MAX {
             for rgb in [
                 (channel, channel, channel),
@@ -855,9 +769,9 @@ mod tests {
                 (0, channel, 0),
                 (0, 0, channel),
             ] {
-                let lab = Oklab::from_rgb(rgb, &resources).unwrap();
+                let lab = Oklab::from_rgb(rgb).unwrap();
                 assert_eq!(
-                    lab.opaque_rgb(&resources)
+                    lab.opaque_rgb()
                         .unwrap_or_else(|error| panic!("{rgb:?}: {error}; {:?}", lab.linear_rgb())),
                     rgb
                 );
@@ -879,7 +793,7 @@ mod tests {
                 (0.452_013_718_4, -0.032_456_984_2, -0.311_528_147_7),
             ),
         ] {
-            let actual = Oklab::from_rgb(rgb, &resources).unwrap();
+            let actual = Oklab::from_rgb(rgb).unwrap();
             let tolerance = if rgb == (255, 255, 255) { 1e-7 } else { 1e-9 };
             assert!(
                 (actual.l - expected.0).abs() < tolerance,
@@ -896,9 +810,8 @@ mod tests {
         reason = "independently computed reference bit patterns are verbatim"
     )]
     fn cube_root_rounds_exact_binary_rationals_without_host_math() {
-        let resources = OperationGenerationResources::new();
         for input in [0.0, f64::from_bits(1), 0.125, 1.0, 2.0] {
-            let actual = cube_root(input, &resources).unwrap();
+            let actual = cube_root(input).unwrap();
             assert!(actual.is_finite() && actual >= 0.0);
             if input.to_bits() == 0.125_f64.to_bits() {
                 assert_eq!(actual.to_bits(), 0.5_f64.to_bits());
@@ -920,9 +833,7 @@ mod tests {
             (0x3f69a5c37387b719, 0x3fc2b9ac34fcfa33),
         ] {
             assert_eq!(
-                cube_root(f64::from_bits(source), &resources)
-                    .unwrap()
-                    .to_bits(),
+                cube_root(f64::from_bits(source)).unwrap().to_bits(),
                 expected,
                 "{source:016x}"
             );
@@ -930,23 +841,14 @@ mod tests {
     }
 
     #[test]
-    fn color_math_refuses_before_unadmitted_work_or_a_non_gamut_output() {
-        for (visits, bytes, role) in [
-            (0, u64::MAX, "work admission"),
-            (1_000, 0, "scratch admission"),
-        ] {
-            let resources = OperationGenerationResources::with_test_limits(visits, bytes);
-            let error = Oklab::from_rgb((240, 70, 50), &resources).unwrap_err();
-            assert!(error.to_string().contains(role), "{error}");
-        }
-        let resources = OperationGenerationResources::new();
+    fn color_math_rejects_a_non_gamut_output() {
         let outside = Oklab {
             l: 0.5,
             a: 2.0,
             b: 2.0,
         };
         assert!(outside
-            .opaque_rgb(&resources)
+            .opaque_rgb()
             .unwrap_err()
             .to_string()
             .contains("outside the sRGB gamut"));
@@ -954,38 +856,34 @@ mod tests {
 
     #[test]
     fn independent_oklab_midpoints_preserve_endpoints_and_reduce_chroma_only_when_needed() {
-        let resources = OperationGenerationResources::new();
         for (first, second, expected) in [
             ((255, 0, 0), (0, 0, 255), (140, 83, 162)),
             ((255, 0, 0), (0, 255, 0), (208, 168, 0)),
             ((0, 0, 0), (255, 255, 255), (99, 99, 99)),
         ] {
-            assert_eq!(interpolate(first, second, 0.0, &resources).unwrap(), first);
-            assert_eq!(interpolate(first, second, 1.0, &resources).unwrap(), second);
-            assert_eq!(
-                interpolate(first, second, 0.5, &resources).unwrap(),
-                expected
-            );
+            assert_eq!(interpolate(first, second, 0.0).unwrap(), first);
+            assert_eq!(interpolate(first, second, 1.0).unwrap(), second);
+            assert_eq!(interpolate(first, second, 0.5).unwrap(), expected);
         }
-        let lab = Oklab::from_rgb((255, 0, 0), &resources).unwrap();
+        let lab = Oklab::from_rgb((255, 0, 0)).unwrap();
         let outside = Oklab {
             a: lab.a * 2.0,
             b: lab.b * 2.0,
             ..lab
         };
-        assert!(outside.opaque_rgb(&resources).is_err());
-        let (rgb, reduced) = outside.reduced_rgb(&resources).unwrap();
+        assert!(outside.opaque_rgb().is_err());
+        let (rgb, reduced) = outside.reduced_rgb().unwrap();
         assert!(reduced.in_gamut().unwrap());
         assert!(reduced.a.abs() < outside.a.abs() && reduced.b.abs() < outside.b.abs());
-        assert_eq!(reduced.opaque_rgb(&resources).unwrap(), rgb);
-        assert!(interpolate((0, 0, 0), (255, 255, 255), f64::NAN, &resources).is_err());
+        assert_eq!(reduced.opaque_rgb().unwrap(), rgb);
+        assert!(interpolate((0, 0, 0), (255, 255, 255), f64::NAN).is_err());
     }
 
     #[test]
     fn candidate_order_is_prefix_stable_and_never_cycles_a_seed() {
         let seeds = [OpaqueColor::rgb(0, 114, 178), OpaqueColor::rgb(230, 159, 0)];
-        let short = extend_palette(&seeds, 3, &OperationGenerationResources::new()).unwrap();
-        let extended = extend_palette(&seeds, 5, &OperationGenerationResources::new()).unwrap();
+        let short = extend_palette(&seeds, 3).unwrap();
+        let extended = extend_palette(&seeds, 5).unwrap();
         assert_eq!(short.as_slice(), &extended[..3]);
         assert_eq!(&extended[..2], &seeds);
         assert_eq!(
@@ -1000,7 +898,7 @@ mod tests {
             .iter()
             .enumerate()
             .all(|(index, color)| !extended[..index].contains(color)));
-        assert!(extend_palette(&[], 1, &OperationGenerationResources::new()).is_err());
+        assert!(extend_palette(&[], 1).is_err());
         let first = CandidateChoice {
             distance: 0.25,
             index: 5,

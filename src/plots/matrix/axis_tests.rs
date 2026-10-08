@@ -3,14 +3,9 @@ use crate::layout::fit::ROOT_SCOPE;
 use crate::render::backend::*;
 
 #[test]
-fn cache_hit_admits_the_last_call_even_with_no_cache_entries_left() {
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
+fn cache_hits_and_fresh_selection_keep_the_same_tick_source() {
+    let theme = crate::Theme::Publication.resolve().unwrap();
+
     let projection = layout::Projection::new((0.0, 3.0), (0.0, 3.0), (0.1, 300.1, 0.1, 300.1));
     let mut cached = None;
     let lookup = |cached: &mut Option<MatrixTickCache>| {
@@ -25,44 +20,20 @@ fn cache_hit_admits_the_last_call_even_with_no_cache_entries_left() {
         .map(|plan| plan.source)
     };
     let source = lookup(&mut cached).unwrap();
-    let (calls, entries) = resources.call_cache_usage();
-    resources.claim_calls(1_000_000 - calls - 1).unwrap();
-    resources.claim_cache_entries(1_000_000 - entries).unwrap();
-    let before = resources.usage().unwrap();
-    let bytes = resources.byte_usage().unwrap();
+
     assert_eq!(lookup(&mut cached).unwrap(), source);
-    assert_eq!(resources.call_cache_usage(), (1_000_000, 1_000_000));
-    // One key, seven axis witnesses, two complete font comparisons each:
-    // stack length (1), six entries, five name lengths and 56 actual UTF-8 bytes.
-    assert_eq!(
-        resources.usage().unwrap(),
-        (before.0, before.1 + 8 + 2 * 68)
-    );
-    assert_eq!(resources.byte_usage().unwrap(), bytes);
-    let before = resources.usage().unwrap();
+
     for slot in [&mut cached, &mut None] {
-        let error = lookup(slot).unwrap_err();
-        assert!(matches!(error, layout::fit::PlanError::Fatal(_)));
-        assert!(error
-            .into_error()
-            .to_string()
-            .contains("matrix tick call admission"));
-        assert_eq!(resources.usage().unwrap(), before);
-        assert_eq!(resources.byte_usage().unwrap(), bytes);
+        assert_eq!(lookup(slot).unwrap(), source);
     }
     assert_eq!(cached.unwrap().plan.source, source);
 }
 
 #[test]
-fn cache_miss_reuses_its_call_ticket_and_admits_insertion_independently() {
-    for available_entries in [0, 1] {
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
-        let resources = theme
-            .prepared_font_environment()
-            .unwrap()
-            .generation_resources();
+fn cache_miss_retains_the_selected_numeric_ticks() {
+    {
+        let theme = crate::Theme::Publication.resolve().unwrap();
+
         let projection = layout::Projection::new((0.0, 3.0), (0.0, 3.0), (0.1, 300.1, 0.1, 300.1));
         let select = || {
             layout::numeric_tick_plan(
@@ -77,16 +48,9 @@ fn cache_miss_reuses_its_call_ticket_and_admits_insertion_independently() {
             )
         };
         select().unwrap();
-        let calls = resources.call_cache_usage().0;
+
         let expected = select().unwrap();
-        let (used_calls, used_entries) = resources.call_cache_usage();
-        let source_calls = used_calls - calls;
-        resources
-            .claim_calls(1_000_000 - used_calls - source_calls)
-            .unwrap();
-        resources
-            .claim_cache_entries(1_000_000 - used_entries - available_entries)
-            .unwrap();
+
         let mut cached = None;
         let result = matrix_ticks(
             &mut cached,
@@ -96,32 +60,19 @@ fn cache_miss_reuses_its_call_ticket_and_admits_insertion_independently() {
             &theme,
             &ROOT_SCOPE,
         );
-        if available_entries == 0 {
-            let error = result.unwrap_err();
-            assert!(matches!(error, layout::fit::PlanError::Fatal(_)));
-            assert!(error
-                .into_error()
-                .to_string()
-                .contains("matrix tick cache admission"));
-            assert!(cached.is_none());
-        } else {
+        {
             let actual = result.unwrap();
             assert_eq!(actual.source, expected.source);
             assert_eq!(actual.ticks, expected.ticks);
         }
-        assert_eq!(resources.call_cache_usage(), (1_000_000, 1_000_000));
     }
 }
 
 #[test]
 fn matrix_selection_cache_cannot_cross_operation_or_selected_span() {
     let projection = layout::Projection::new((0.0, 3.0), (0.0, 3.0), (0.0, 300.0, 0.0, 300.0));
-    let first = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
-    let second = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let first = crate::Theme::Publication.resolve().unwrap();
+    let second = crate::Theme::Publication.resolve().unwrap();
     let mut cached = None;
     matrix_ticks(
         &mut cached,
@@ -143,12 +94,11 @@ fn matrix_selection_cache_cannot_cross_operation_or_selected_span() {
     )
     .unwrap();
     assert_ne!(cached.as_ref().unwrap().plan.ticks.as_ptr(), address);
-    assert!(cached.as_ref().unwrap().operation.same_operation(
-        &second
-            .prepared_font_environment()
-            .unwrap()
-            .generation_resources()
-    ));
+    assert!(cached
+        .as_ref()
+        .unwrap()
+        .operation
+        .same_operation(&second.prepared_font_environment().unwrap().operation()));
     let address = cached.as_ref().unwrap().plan.ticks.as_ptr();
     let smaller = layout::Projection::new((0.0, 3.0), (0.0, 3.0), (0.0, 200.0, 0.0, 300.0));
     matrix_ticks(
@@ -164,14 +114,9 @@ fn matrix_selection_cache_cannot_cross_operation_or_selected_span() {
 }
 
 #[test]
-fn cell_frame_identity_is_in_the_cached_axis_descriptor_and_refusal_does_not_reanalyze() {
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
+fn cell_frame_identity_is_in_the_cached_axis_descriptor() {
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
+
     let projection = layout::Projection::new((0.0, 3.0), (0.0, 3.0), (0.0, 300.0, 0.0, 300.0));
     let mut cached = None;
     matrix_ticks(
@@ -187,27 +132,7 @@ fn cell_frame_identity_is_in_the_cached_axis_descriptor_and_refusal_does_not_rea
     let ordinary = theme.axes.frame().cloned();
     theme.axes = theme.axes.clone().with_cell_frame(None).unwrap();
     assert_eq!(theme.axes.frame(), ordinary.as_ref());
-    let before = resources.usage().unwrap();
-    let bytes = resources.byte_usage().unwrap();
-    let entries = resources.call_cache_usage().1;
-    // The one lookup witness fits, but the complete axis descriptor does not.
-    resources.set_test_limits(before.1 + 1, bytes);
-    assert!(matches!(
-        matrix_ticks(
-            &mut cached,
-            (0.0, 3.0),
-            &projection,
-            layout::AxisSide::Bottom,
-            &theme,
-            &ROOT_SCOPE
-        ),
-        Err(layout::fit::PlanError::Fatal(_))
-    ));
-    assert_eq!(cached.as_ref().unwrap().plan.ticks.as_ptr(), address);
-    assert_eq!(resources.usage().unwrap(), (before.0, before.1 + 1));
-    assert_eq!(resources.byte_usage().unwrap(), bytes);
-    assert_eq!(resources.call_cache_usage().1, entries);
-    resources.set_test_limits(u128::MAX, u64::MAX);
+
     matrix_ticks(
         &mut cached,
         (0.0, 3.0),
@@ -225,18 +150,12 @@ fn cell_frame_identity_is_in_the_cached_axis_descriptor_and_refusal_does_not_rea
         .axes
         .cell_frame()
         .is_none());
-    assert_eq!(resources.call_cache_usage().1, entries + 1);
 }
 
 #[test]
-fn cached_matrix_selection_rechecks_axis_relationships_and_propagates_matching_refusal() {
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
+fn cached_matrix_selection_rechecks_axis_relationships() {
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
+
     let projection = layout::Projection::new((0.0, 3.0), (0.0, 3.0), (0.0, 300.0, 0.0, 300.0));
     let mut cached = None;
     matrix_ticks(
@@ -249,7 +168,7 @@ fn cached_matrix_selection_rechecks_axis_relationships_and_propagates_matching_r
     )
     .unwrap();
     let address = cached.as_ref().unwrap().plan.ticks.as_ptr();
-    let entries = resources.call_cache_usage().1;
+
     theme.axes = theme
         .axes
         .clone()
@@ -262,25 +181,7 @@ fn cached_matrix_selection_rechecks_axis_relationships_and_propagates_matching_r
                 .unwrap(),
         )
         .unwrap();
-    let before = resources.usage().unwrap();
-    let bytes = resources.byte_usage().unwrap();
-    // Key (1), axis metadata (1), five shares, then changed numerator's
-    // handle/length/digit (3). Nine visits cannot finish the comparison.
-    resources.set_test_limits(before.1 + 9, bytes);
-    let result = matrix_ticks(
-        &mut cached,
-        (0.0, 3.0),
-        &projection,
-        layout::AxisSide::Bottom,
-        &theme,
-        &ROOT_SCOPE,
-    );
-    assert!(matches!(result, Err(layout::fit::PlanError::Fatal(_))));
-    assert_eq!(cached.as_ref().unwrap().plan.ticks.as_ptr(), address);
-    assert_eq!(resources.call_cache_usage().1, entries);
-    assert_eq!(resources.usage().unwrap(), (before.0, before.1 + 9));
-    assert_eq!(resources.byte_usage().unwrap(), bytes);
-    resources.set_test_limits(u128::MAX, u64::MAX);
+
     matrix_ticks(
         &mut cached,
         (0.0, 3.0),
@@ -291,7 +192,6 @@ fn cached_matrix_selection_rechecks_axis_relationships_and_propagates_matching_r
     )
     .unwrap();
     assert_ne!(cached.as_ref().unwrap().plan.ticks.as_ptr(), address);
-    assert_eq!(resources.call_cache_usage().1, entries + 1);
 }
 
 #[test]
@@ -303,7 +203,7 @@ fn matrix_cells_freeze_selected_frame_sides_once_and_keep_scientific_marks_and_a
     .erase();
     let plot = crate::plots::shared_x::prepare_plot(
         &plot,
-        &crate::font::canonical::OperationGenerationResources::new(),
+        &crate::font::canonical::OperationContext::new(),
         None,
     )
     .unwrap()
@@ -320,9 +220,7 @@ fn matrix_cells_freeze_selected_frame_sides_once_and_keep_scientific_marks_and_a
         ),
         (None, 0),
     ] {
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let stroke = crate::theme::StrokeTheme::new(
             crate::theme::Color::rgb(1, 2, 3),
             theme.axes.cell_frame().unwrap().stroke().width(),
@@ -464,15 +362,13 @@ fn matrix_marks_ticks_and_reference_grid_share_large_fractional_cell_coordinates
             .erase();
             let plot = crate::plots::shared_x::prepare_plot(
                 &plot,
-                &crate::font::canonical::OperationGenerationResources::new(),
+                &crate::font::canonical::OperationContext::new(),
                 None,
             )
             .unwrap()
             .attach(plot)
             .unwrap();
-            let theme = crate::Theme::Publication
-                .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                .unwrap();
+            let theme = crate::Theme::Publication.resolve().unwrap();
             let panel = PanelBox::new(
                 origin,
                 origin + 608.0 + 6.0 / 1024.0,
@@ -588,9 +484,7 @@ fn matrix_marks_ticks_and_reference_grid_share_large_fractional_cell_coordinates
 #[test]
 fn selected_source_cells_keep_logical_and_ink_clearance_at_odd_quanta() {
     for side in [layout::AxisSide::Bottom, layout::AxisSide::Left] {
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         theme.axes.frame = None;
         theme.axes.grid = None;
         for span in [81_923, 204_803, 307_205] {

@@ -722,7 +722,7 @@ fn validate_full_explicit_order(
     } else {
         requested.clone()
     };
-    crate::data::explicit_category_order(observed, &requested, context, false, None)?;
+    crate::data::explicit_category_order(observed, &requested, context, false)?;
     Ok(())
 }
 

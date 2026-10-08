@@ -1,5 +1,5 @@
 use super::*;
-use crate::font::canonical::OperationGenerationResources;
+use crate::font::canonical::OperationContext;
 use crate::{CategoryValues, NumericValues};
 
 #[test]
@@ -13,10 +13,9 @@ fn keyed_line_colors_validate_all_prepared_hues_before_font_discovery() {
     .categorical_colors(colors)
     .erase();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-    let error =
-        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new(), None)
-            .err()
-            .expect("used missing hue must refuse");
+    let error = crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None)
+        .err()
+        .expect("used missing hue must refuse");
     assert!(matches!(error, Error::Data(message) if message.contains("second")));
     assert_eq!(
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
@@ -48,16 +47,10 @@ fn source_point_collapse_matches_canonical_line_distinctions() {
         .x_limits(0.0, 1.0)
         .y_limits(-1.0, 1.0)
         .erase();
-        let inputs = crate::plots::shared_x::prepare_plot(
-            &source,
-            &OperationGenerationResources::new(),
-            None,
-        )
-        .unwrap();
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         let source = inputs.attach(source).unwrap();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let result = source.measure_selected_interior(PlotRenderContext::new(
             source.data(),
             crate::layout::PanelBox::new(0.0, 100.0, 0.0, 200.0),
@@ -74,14 +67,13 @@ fn source_point_collapse_matches_canonical_line_distinctions() {
 }
 
 #[test]
-fn p2_trajectory_condition_search_does_not_charge_an_unused_global_tail() {
+fn trajectory_condition_positions_are_independent_of_unused_global_tail() {
     let source = Plot::trajectory(
         CategoryValues::new("condition", ["first", "second"]).unwrap(),
         NumericValues::new("y", [1.0, 2.0]),
         CategoryValues::new("group", ["one"; 2]).unwrap(),
     )
     .erase();
-    let mut prices = Vec::new();
     for conditions in [
         vec!["first".to_owned(), "second".to_owned()],
         vec![
@@ -91,10 +83,10 @@ fn p2_trajectory_condition_search_does_not_charge_an_unused_global_tail() {
             "tail".to_owned(),
         ],
     ] {
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let prepared = PreparedLine::new(
             &source,
-            source.data().with_axis_resources(&resources),
+            source.data().with_operation(&resources),
             Some(&conditions),
         )
         .unwrap();
@@ -106,19 +98,7 @@ fn p2_trajectory_condition_search_does_not_charge_an_unused_global_tail() {
                 .collect::<Vec<_>>(),
             [0.5_f64.to_bits(), 1.5_f64.to_bits()]
         );
-        prices.push((
-            resources.usage().unwrap().1,
-            resources.byte_usage().unwrap(),
-        ));
     }
-    assert_eq!(
-        prices[0].0, prices[1].0,
-        "unexamined condition records are not processing"
-    );
-    assert!(
-        prices[1].1 > prices[0].1,
-        "copied condition storage remains admitted"
-    );
 }
 
 fn configured<
@@ -232,15 +212,12 @@ fn visible_point_layer_labels_expand_automatic_edges_but_refuse_exact_overflow()
             plot.erase()
         }
     };
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let panel = crate::layout::PanelBox::new(60.0, 760.0, 70.0, 570.0);
     for exact in [false, true] {
         let plot = source(exact);
         let inputs =
-            crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new(), None)
-                .unwrap();
+            crate::plots::shared_x::prepare_plot(&plot, &OperationContext::new(), None).unwrap();
         let chart = inputs.attach(plot).unwrap();
         let selected =
             chart.measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme));
@@ -291,12 +268,9 @@ fn exact_window_keeps_the_declared_off_domain_point_label_gate() {
     .x_limits(0.0, 10.0)
     .erase();
     let inputs =
-        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new(), None)
-            .unwrap();
+        crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
     let chart = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
@@ -316,12 +290,10 @@ fn exact_window_keeps_the_declared_off_domain_point_label_gate() {
 #[test]
 fn point_layer_label_gap_moves_the_selected_text_without_moving_its_mark() {
     let source = decorated_line();
-    let resources = OperationGenerationResources::new();
+    let resources = OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let plot = inputs.attach(source).unwrap();
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     let selected = plot
         .measure_selected_interior(PlotRenderContext::new(
             plot.data(),
@@ -335,7 +307,7 @@ fn point_layer_label_gap_moves_the_selected_text_without_moving_its_mark() {
         prepared,
         selected.layout.clone(),
         &theme,
-        plot.data().with_axis_resources(&resources),
+        plot.data().with_operation(&resources),
         &crate::layout::fit::ROOT_SCOPE,
     )
     .unwrap();
@@ -345,7 +317,7 @@ fn point_layer_label_gap_moves_the_selected_text_without_moving_its_mark() {
         prepared,
         selected.layout,
         &theme,
-        plot.data().with_axis_resources(&resources),
+        plot.data().with_operation(&resources),
         &crate::layout::fit::ROOT_SCOPE,
     )
     .unwrap();
@@ -376,12 +348,10 @@ fn point_layer_label_gap_moves_the_selected_text_without_moving_its_mark() {
 #[test]
 fn point_layer_label_uses_theme_font_and_exact_layer_paint() {
     let source = decorated_line();
-    let resources = OperationGenerationResources::new();
+    let resources = OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let plot = inputs.attach(source).unwrap();
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     let panel = crate::layout::PanelBox::new(10.0, 600.0, 10.0, 410.0);
     let selected = plot
         .measure_selected_interior(PlotRenderContext::new(plot.data(), panel, &theme))
@@ -392,7 +362,7 @@ fn point_layer_label_uses_theme_font_and_exact_layer_paint() {
         prepared,
         selected.layout.clone(),
         &theme,
-        plot.data().with_axis_resources(&resources),
+        plot.data().with_operation(&resources),
         &crate::layout::fit::ROOT_SCOPE,
     )
     .unwrap();
@@ -403,7 +373,7 @@ fn point_layer_label_uses_theme_font_and_exact_layer_paint() {
         prepared,
         selected.layout,
         &theme,
-        plot.data().with_axis_resources(&resources),
+        plot.data().with_operation(&resources),
         &crate::layout::fit::ROOT_SCOPE,
     )
     .unwrap();
@@ -437,12 +407,10 @@ fn path_hard_ink_observes_visibility_and_resolved_stroke_on_automatic_axes() {
     )
     .markers(false)
     .erase();
-    let resources = OperationGenerationResources::new();
+    let resources = OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     let original = chart.intrinsic_body_minimum(&theme).unwrap();
     theme.marks.point_sizes.path = 54;
     assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), original);
@@ -460,7 +428,7 @@ fn path_hard_ink_observes_visibility_and_resolved_stroke_on_automatic_axes() {
         CategoryValues::new("group", ["a", "a"]).unwrap(),
     )
     .erase();
-    let resources = OperationGenerationResources::new();
+    let resources = OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let chart = inputs.attach(source).unwrap();
     theme.marks.point_sizes.trajectory = 54;
@@ -471,9 +439,7 @@ fn path_hard_ink_observes_visibility_and_resolved_stroke_on_automatic_axes() {
 #[test]
 fn categorical_trajectory_and_exact_path_windows_only_expand_numeric_automatic_axes() {
     let theme = {
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         theme.marks.point_sizes.trajectory = 18;
         theme
     };
@@ -484,7 +450,7 @@ fn categorical_trajectory_and_exact_path_windows_only_expand_numeric_automatic_a
         CategoryValues::new("group", ["a", "a"]).unwrap(),
     )
     .erase();
-    let resources = OperationGenerationResources::new();
+    let resources = OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(&trajectory, &resources, None).unwrap();
     let chart = inputs.attach(trajectory).unwrap();
     let selected = chart
@@ -506,7 +472,7 @@ fn categorical_trajectory_and_exact_path_windows_only_expand_numeric_automatic_a
     .markers(true)
     .x_limits(0.0, 10.0)
     .erase();
-    let resources = OperationGenerationResources::new();
+    let resources = OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(&path, &resources, None).unwrap();
     let chart = inputs.attach(path).unwrap();
     let selected = chart
@@ -524,12 +490,10 @@ fn categorical_trajectory_and_exact_path_windows_only_expand_numeric_automatic_a
 #[test]
 fn custom_series_line_style_is_shared_by_selected_marks_and_guide_identity() {
     let source = decorated_line();
-    let resources = OperationGenerationResources::new();
+    let resources = OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
     let plot = inputs.attach(source).unwrap();
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     let selected = plot
         .measure_selected_interior(PlotRenderContext::new(
             plot.data(),
@@ -543,7 +507,7 @@ fn custom_series_line_style_is_shared_by_selected_marks_and_guide_identity() {
         prepared,
         selected.layout.clone(),
         &theme,
-        plot.data().with_axis_resources(&resources),
+        plot.data().with_operation(&resources),
         &crate::layout::fit::ROOT_SCOPE,
     )
     .unwrap();
@@ -554,7 +518,7 @@ fn custom_series_line_style_is_shared_by_selected_marks_and_guide_identity() {
         prepared,
         selected.layout,
         &theme,
-        plot.data().with_axis_resources(&resources),
+        plot.data().with_operation(&resources),
         &crate::layout::fit::ROOT_SCOPE,
     )
     .unwrap();
@@ -585,7 +549,6 @@ fn custom_series_line_style_is_shared_by_selected_marks_and_guide_identity() {
             changed.legend_entries[0].clone(),
         ],
         "custom series line style",
-        &OperationGenerationResources::new(),
     )
     .unwrap_err();
     assert!(error.to_string().contains("glyphs must match exactly"));
@@ -594,18 +557,16 @@ fn custom_series_line_style_is_shared_by_selected_marks_and_guide_identity() {
 #[test]
 fn prepared_path_family_glyphs_match_selected_marks_before_fonts() {
     for plot in sources(false, None).into_iter().chain([decorated_line()]) {
-        let resources = OperationGenerationResources::new();
-        let data = plot.data().with_axis_resources(&resources);
+        let resources = OperationContext::new();
+        let data = plot.data().with_operation(&resources);
         let prepared = PreparedLine::new(&plot, data, None).unwrap();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-        let order = prepared.group_order(&plot, data).unwrap();
+        let order = prepared.group_order(&plot).unwrap();
         let mut entries = prepared
             .guide_entries_in_order(&plot, &theme, data, &order)
             .unwrap();
-        crate::decorations::legend::resolve_entries(&plot, &mut entries, &resources).unwrap();
+        crate::decorations::legend::resolve_entries(&plot, &mut entries).unwrap();
         assert_eq!(
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
             0
@@ -617,7 +578,7 @@ fn prepared_path_family_glyphs_match_selected_marks_before_fonts() {
             .unwrap();
         let result = selected
             .measure_selected_interior(PlotRenderContext::new(
-                selected.data().with_axis_resources(&resources),
+                selected.data().with_operation(&resources),
                 crate::layout::PanelBox::new(60.0, 600.0, 50.0, 400.0),
                 &theme,
             ))
@@ -631,12 +592,12 @@ fn prepared_path_family_glyphs_match_selected_marks_before_fonts() {
 }
 
 #[test]
-fn semantic_order_ranges_conditions_and_exact_admission_precede_fonts() {
+fn semantic_order_ranges_and_conditions_are_prepared_before_fonts() {
     for plot in sources(false, None).into_iter().chain([decorated_line()]) {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let prepared =
-            PreparedLine::new(&plot, plot.data().with_axis_resources(&resources), None).unwrap();
+            PreparedLine::new(&plot, plot.data().with_operation(&resources), None).unwrap();
         assert!(prepared.groups.iter().all(|group| !group.points.is_empty()));
         if plot.kind() == PlotKind::LinePath {
             assert_eq!(
@@ -657,16 +618,9 @@ fn semantic_order_ranges_conditions_and_exact_admission_precede_fonts() {
             assert_eq!(levels, &["after", "before", "later"]);
             assert_eq!(prepared.ranges[0], (0.0, 3.0));
         }
-        let visits = resources.usage().unwrap().1;
-        let bytes = resources.byte_usage().unwrap();
-        for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
-            let limited = OperationGenerationResources::with_test_limits(visits, bytes);
-            assert!(
-                PreparedLine::new(&plot, plot.data().with_axis_resources(&limited), None).is_err()
-            );
-        }
-        let exact = OperationGenerationResources::with_test_limits(visits, bytes);
-        PreparedLine::new(&plot, plot.data().with_axis_resources(&exact), None).unwrap();
+
+        let exact = OperationContext::new();
+        PreparedLine::new(&plot, plot.data().with_operation(&exact), None).unwrap();
         assert_eq!(
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
             0
@@ -725,9 +679,7 @@ fn selected_capture_never_prepares_projects_reads_sources_or_shapes_and_replays_
         .chain([decorated_line()])
     {
         let plot = plot.size(640, 480);
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let kind = plot.kind();
         STAGES.with(|stages| stages.set([[0; 4]; 3]));
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| calls.set(0));
@@ -735,11 +687,7 @@ fn selected_capture_never_prepares_projects_reads_sources_or_shapes_and_replays_
             640,
             480,
             |stage| {
-                let inputs = crate::plots::shared_x::prepare_plot(
-                    &plot,
-                    &stage.generation_resources(),
-                    None,
-                )?;
+                let inputs = crate::plots::shared_x::prepare_plot(&plot, &stage.operation(), None)?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     None,
                     &plot,
@@ -906,9 +854,7 @@ fn invalid_semantics_and_missing_preparation_reject_without_fonts() {
         .zip(sources(false, Some(f64::INFINITY)))
     {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let context = PlotRenderContext::new(
             plot.data(),
             crate::layout::PanelBox::new(0.0, 100.0, 0.0, 100.0),
@@ -981,12 +927,10 @@ fn invalid_semantics_and_missing_preparation_reject_without_fonts() {
 }
 
 #[test]
-fn projected_buffers_share_exact_admission_and_payload_geometry_matches_clipped_ink() {
+fn projected_payload_geometry_matches_clipped_ink() {
     for plot in sources(false, None).into_iter().chain([decorated_line()]) {
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
-        let resources = OperationGenerationResources::new();
+        let theme = crate::Theme::Publication.resolve().unwrap();
+        let resources = OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources, None).unwrap();
         let attached = inputs.attach(plot.clone()).unwrap();
         let selected = attached
@@ -997,37 +941,24 @@ fn projected_buffers_share_exact_admission_and_payload_geometry_matches_clipped_
             ))
             .unwrap();
         let prepared = &inputs.line.as_ref().unwrap().panels[0].1;
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let selected = project(
             &attached,
             prepared,
             selected.layout,
             &theme,
-            attached.data().with_axis_resources(&resources),
+            attached.data().with_operation(&resources),
             &crate::layout::fit::ROOT_SCOPE,
         )
         .unwrap();
-        let visits = resources.usage().unwrap().1;
-        let bytes = resources.byte_usage().unwrap();
-        for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
-            let limited = OperationGenerationResources::with_test_limits(visits, bytes);
-            assert!(project(
-                &attached,
-                prepared,
-                selected.layout.clone(),
-                &theme,
-                attached.data().with_axis_resources(&limited),
-                &crate::layout::fit::ROOT_SCOPE,
-            )
-            .is_err());
-        }
-        let exact = OperationGenerationResources::with_test_limits(visits, bytes);
+
+        let exact = OperationContext::new();
         project(
             &attached,
             prepared,
             selected.layout.clone(),
             &theme,
-            attached.data().with_axis_resources(&exact),
+            attached.data().with_operation(&exact),
             &crate::layout::fit::ROOT_SCOPE,
         )
         .unwrap();
@@ -1060,7 +991,7 @@ fn sparse_intervals_do_not_create_empty_series_and_path_policies_keep_draw_order
             hue: Some("one".into()),
         },
     ]);
-    let resources = OperationGenerationResources::new();
+    let resources = OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources, None).unwrap();
     let prepared = &inputs.line.as_ref().unwrap().panels[0].1;
     assert_eq!(prepared.groups.len(), 1);
@@ -1069,9 +1000,7 @@ fn sparse_intervals_do_not_create_empty_series_and_path_policies_keep_draw_order
         .iter()
         .all(|point| point.interval.is_some()));
     let plot = inputs.attach(plot).unwrap();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let selected = plot
         .measure_selected_interior(PlotRenderContext::new(
             plot.data(),

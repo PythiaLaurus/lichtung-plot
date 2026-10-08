@@ -52,8 +52,8 @@ impl TextPanelIntrinsics {
             "text panel body intrinsics",
         )?;
         let lengths = theme.text_panel_lengths()?;
-        let resources = theme.prepared_font_environment()?.generation_resources();
-        let edges = lengths.inset.times(2, &resources)?;
+
+        let edges = lengths.inset.times(2);
         let title_ch = theme
             .measure_text(
                 "0",
@@ -76,16 +76,12 @@ impl TextPanelIntrinsics {
             title,
             body,
             minimum: (
-                crate::theme::composition::hard(
-                    &edges.add_pixels(title.0.max(body.0), &resources)?,
-                    &resources,
-                )?,
+                crate::theme::composition::hard(&edges.add_pixels(title.0.max(body.0))?)?,
                 crate::theme::composition::hard(
                     &edges
-                        .add(&lengths.gap, &resources)?
-                        .add(&title_style.line_pitch_exact(&resources)?, &resources)?
-                        .add(&body_style.line_pitch_exact(&resources)?, &resources)?,
-                    &resources,
+                        .add_length(&lengths.gap)
+                        .add_length(&title_style.line_pitch_exact()?)
+                        .add_length(&body_style.line_pitch_exact()?),
                 )?,
             ),
             preferred_width: crate::theme::composition::hard(
@@ -94,9 +90,7 @@ impl TextPanelIntrinsics {
                         .0
                         .max(title.1.min(66.0 * title_ch))
                         .max(body.0.max(body.1.min(66.0 * body_ch))),
-                    &resources,
                 )?,
-                &resources,
             )?,
         })
     }
@@ -109,12 +103,8 @@ pub(super) fn natural_height(
 ) -> Result<f64, Error> {
     let [title, body] = text_appearance(theme);
     let lengths = theme.text_panel_lengths()?;
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let available = crate::theme::composition::capacity(
-        width,
-        &lengths.inset.times(2, &resources)?,
-        &resources,
-    )?;
+
+    let available = crate::theme::composition::capacity(width, &lengths.inset.times(2))?;
     let title = fit::measured(fit::text(
         theme,
         source.title(),
@@ -138,11 +128,10 @@ pub(super) fn natural_height(
     crate::theme::composition::hard(
         &lengths
             .inset
-            .times(2, &resources)?
-            .add(&lengths.gap, &resources)?
-            .add_pixels(title.height(), &resources)?
-            .add_pixels(body.height(), &resources)?,
-        &resources,
+            .times(2)
+            .add_length(&lengths.gap)
+            .add_pixels(title.height())?
+            .add_pixels(body.height())?,
     )
 }
 
@@ -159,21 +148,9 @@ impl TextPanelPlan {
         intrinsics: TextPanelIntrinsics,
         scope: &FitScope,
     ) -> Result<FitOutcome<Self>, Error> {
-        let owner = scope.child(
-            AddressRole::TextPanelContent,
-            index,
-            &theme.prepared_font_environment()?.generation_resources(),
-        )?;
-        let title_scope = owner.child(
-            AddressRole::TextPanelTitle,
-            0,
-            &theme.prepared_font_environment()?.generation_resources(),
-        )?;
-        let body_scope = owner.child(
-            AddressRole::TextPanelBody,
-            0,
-            &theme.prepared_font_environment()?.generation_resources(),
-        )?;
+        let owner = scope.child(AddressRole::TextPanelContent, index)?;
+        let title_scope = owner.child(AddressRole::TextPanelTitle, 0)?;
+        let body_scope = owner.child(AddressRole::TextPanelBody, 0)?;
         let [title_style, body_style] = text_appearance(theme);
         let (title_hard, title_preferred) = intrinsics.title;
         let (body_hard, body_preferred) = intrinsics.body;
@@ -187,11 +164,11 @@ impl TextPanelPlan {
         let height = y1
             .checked_sub(y0)
             .ok_or_else(|| Error::Render("TextPanel height overflowed".into()))?;
-        let resources = theme.prepared_font_environment()?.generation_resources();
+
         let lengths = theme.text_panel_lengths()?;
-        let edges = lengths.inset.times(2, &resources)?;
+        let edges = lengths.inset.times(2);
         let content_width = nearest_spatial_quanta(
-            crate::theme::composition::capacity(pixels(width), &edges, &resources)?.max(0.0),
+            crate::theme::composition::capacity(pixels(width), &edges)?.max(0.0),
         )?;
         let hard = nearest_spatial_quanta(crate::layout::kernel::required_length(
             title_hard.max(body_hard),
@@ -232,7 +209,6 @@ impl TextPanelPlan {
             0,
             None,
             true,
-            &resources,
             &owner,
         )? {
             FitOutcome::Measured(assigned) => assigned.sizes[0],
@@ -307,10 +283,9 @@ impl TextPanelPlan {
                 address: &body_scope.address,
             },
         ];
-        let vertical_reserve = edges.add(&lengths.gap, &resources)?;
+        let vertical_reserve = edges.add_length(&lengths.gap);
         let content_height = nearest_spatial_quanta(
-            crate::theme::composition::capacity(pixels(height), &vertical_reserve, &resources)?
-                .max(0.0),
+            crate::theme::composition::capacity(pixels(height), &vertical_reserve)?.max(0.0),
         )?;
         let allocation = match allocate_grid_axis(
             &rows,
@@ -320,13 +295,12 @@ impl TextPanelPlan {
             0,
             None,
             false,
-            &resources,
             &owner,
         )? {
             FitOutcome::Measured(value) => value,
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
         };
-        let x = lengths.inset.after_pixels(pixels(x0), &resources)?;
+        let x = lengths.inset.after_pixels(pixels(x0))?;
         if i128::from(allocation.sizes[0])
             + i128::from(allocation.sizes[1])
             + i128::from(allocation.trailing_slack)
@@ -338,13 +312,11 @@ impl TextPanelPlan {
         }
         let body_offset = lengths
             .inset
-            .add_pixels(pixels(allocation.sizes[0]), &resources)?
-            .add(&lengths.gap, &resources)?;
+            .add_pixels(pixels(allocation.sizes[0]))?
+            .add_length(&lengths.gap);
         let title_baseline = title.plan().first_baseline_quanta.unwrap_or(0);
         let body_baseline = body.plan().first_baseline_quanta.unwrap_or(0);
-        resources
-            .claim_bytes(40)
-            .map_err(|error| Error::Render(format!("TextPanel layer admission: {error:?}")))?;
+
         Ok(FitOutcome::Measured(Self {
             layer: format!("canvas-text-panel-{index}"),
             cell,
@@ -353,8 +325,8 @@ impl TextPanelPlan {
                     x,
                     lengths
                         .inset
-                        .add_pixels(pixels(title_baseline), &resources)?
-                        .before_pixels(pixels(y1), &resources)?,
+                        .add_pixels(pixels(title_baseline))?
+                        .before_pixels(pixels(y1))?,
                 ),
                 TextAnchor::Start,
                 0.0,
@@ -363,8 +335,8 @@ impl TextPanelPlan {
                 Point2D::new(
                     x,
                     body_offset
-                        .add_pixels(pixels(body_baseline), &resources)?
-                        .before_pixels(pixels(y1), &resources)?,
+                        .add_pixels(pixels(body_baseline))?
+                        .before_pixels(pixels(y1))?,
                 ),
                 TextAnchor::Start,
                 0.0,

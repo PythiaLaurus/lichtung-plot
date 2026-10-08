@@ -410,16 +410,16 @@ separate required gate before integration. Its design summary is:
    accumulated rounding bound and enclosure convergence.
 4. Quantize both interval endpoints directly to the requested decimal result.
    Accept only when they round identically; otherwise increase precision through
-   the existing cumulative ledger. No midpoint approximation, `powf`, temporary
+   checked precision growth. No midpoint approximation, `powf`, temporary
    binary64 value or best-effort label after refusal.
 5. Integral cases are exact; a nonintegral rational exponent yields an irrational
    power, so it cannot equal a rational decimal tie boundary. Convergence gives
-   eventual certification with sufficient resources, not a promise within every
-   operation's remaining budget. Resource/arithmetic refusal stays fatal and
+   eventual certification when the required storage is representable and available.
+   Real allocation/arithmetic refusal stays fatal and
    cannot trigger axis coarsening.
 6. Derive temporary-size/output-length admission bounds for dyadic numerators,
    series products, squares, decimal quantization and large exponents. Do not
-   copy unrelated `log10` scratch constants or increase quotas.
+   copy unrelated `log10` scratch constants or reintroduce accounting quotas.
 
 Use an independent Rust oracle based on repeated certified integer square roots
 of ten and exact interval products, with separately verified integer-square-root

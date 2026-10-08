@@ -45,10 +45,10 @@ fn chart(data: &HeatmapValues) -> Plot<crate::kind::Heatmap> {
 
 fn prepare_chart(chart: &Plot<crate::kind::Heatmap>) -> Result<HeatmapData, Error> {
     let chart = chart.clone().erase();
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let resources = crate::font::canonical::OperationContext::new();
     prepare(
         &chart,
-        chart.data().with_axis_resources(&resources),
+        chart.data().with_operation(&resources),
         &crate::theme::scale_values::test_defaults(),
     )
 }
@@ -56,7 +56,7 @@ fn prepare_chart(chart: &Plot<crate::kind::Heatmap>) -> Result<HeatmapData, Erro
 #[test]
 fn custom_heatmap_outlines_and_cross_leave_selected_cells_and_missing_key_in_place() {
     let source = chart(&valid_data()).size(1200, 800).erase();
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let resources = crate::font::canonical::OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(
         &source,
         &resources,
@@ -65,9 +65,7 @@ fn custom_heatmap_outlines_and_cross_leave_selected_cells_and_missing_key_in_pla
     .unwrap();
     let chart = inputs.attach(source).unwrap();
     let panel = PanelBox::new(10.0, 850.0, 20.0, 620.0);
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     let original = chart
         .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
         .unwrap();
@@ -124,11 +122,7 @@ fn custom_heatmap_outlines_and_cross_leave_selected_cells_and_missing_key_in_pla
     assert_eq!(new_key.stroke.alpha(), 90);
     assert_eq!(new_key.stroke_width.to_bits(), 2.5_f32.to_bits());
     let prepared = &chart.prepared_heatmap.as_ref().unwrap().panels[0].1;
-    let missing = prepared
-        .guide_semantics(&theme, chart.data().with_axis_resources(&resources))
-        .unwrap()
-        .missing
-        .unwrap();
+    let missing = prepared.guide_semantics(&theme).unwrap().missing.unwrap();
     assert_eq!(missing.fill, new_missing);
     assert_eq!(missing.outline.paint, new_key.stroke);
     assert_eq!(
@@ -149,7 +143,7 @@ fn missing_row_and_key_consume_one_plot_owned_fill_independent_of_the_gradient()
     )
     .size(1200, 800)
     .erase();
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let resources = crate::font::canonical::OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(
         &source,
         &resources,
@@ -157,9 +151,7 @@ fn missing_row_and_key_consume_one_plot_owned_fill_independent_of_the_gradient()
     )
     .unwrap();
     let chart = inputs.attach(source).unwrap();
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     theme.marks.heatmap_missing_fill = crate::theme::Color::rgba(30, 40, 50, 175);
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
@@ -208,7 +200,7 @@ fn heatmap_intrinsic_cache_rechecks_contrast_role_metrics_after_theme_change() {
                 .unwrap(),
         ))
         .erase();
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let resources = crate::font::canonical::OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(
         &source,
         &resources,
@@ -216,9 +208,7 @@ fn heatmap_intrinsic_cache_rechecks_contrast_role_metrics_after_theme_change() {
     )
     .unwrap();
     let chart = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let original = intrinsic_body_minimum(&chart, &theme).unwrap();
     assert_eq!(intrinsic_body_minimum(&chart, &theme).unwrap(), original);
     let mut custom = theme.clone();
@@ -234,9 +224,7 @@ fn heatmap_intrinsic_cache_rechecks_contrast_role_metrics_after_theme_change() {
 
 #[test]
 fn intrinsic_width_accumulates_only_occupied_column_text_instead_of_repeating_the_longest() {
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let measure = |values: [f64; 3]| {
         let source = Plot::heatmap(
             CategoryValues::new("column", ["a", "b", "c"]).unwrap(),
@@ -248,7 +236,7 @@ fn intrinsic_width_accumulates_only_occupied_column_text_instead_of_repeating_th
         ))
         .size(1200, 800)
         .erase();
-        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let resources = crate::font::canonical::OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(
             &source,
             &resources,
@@ -278,7 +266,7 @@ fn assigned_columns_keep_each_value_and_categorical_tick_at_its_measured_cell_ce
     ))
     .size(1200, 800)
     .erase();
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let resources = crate::font::canonical::OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(
         &source,
         &resources,
@@ -286,9 +274,7 @@ fn assigned_columns_keep_each_value_and_categorical_tick_at_its_measured_cell_ce
     )
     .unwrap();
     let chart = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
@@ -330,7 +316,7 @@ fn missing_fill_and_backdrop_invalidate_cached_intrinsics_with_unequal_contrast_
         crate::HeatmapNullRowAnnotation::new("absent", "A long unavailable measurement").unwrap(),
     )
     .erase();
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let resources = crate::font::canonical::OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(
         &source,
         &resources,
@@ -339,16 +325,14 @@ fn missing_fill_and_backdrop_invalidate_cached_intrinsics_with_unequal_contrast_
     .unwrap();
     let marks = &inputs.heatmap.as_ref().unwrap().panels[0].1;
     let axes = &inputs.axes[0].1;
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     theme.surfaces.plot_panel = Color::rgba(0, 0, 0, 0);
     theme.surfaces.canvas_root = Color::rgba(0, 0, 0, 0);
     theme.marks.heatmap_missing_fill = Color::rgba(20, 40, 60, 0);
     theme.annotations.planning_backdrop = Color::rgb(0, 0, 0);
     theme.typography.annotations.contrast.light.font_size = 40;
     theme.typography.annotations.contrast.dark.font_size = 9;
-    let large = prepare_intrinsics(marks, axes, source.data(), &theme, None).unwrap();
+    let large = prepare_intrinsics(marks, axes, &theme, None).unwrap();
     assert_eq!(
         theme
             .contrasting_text(theme.marks.heatmap_missing_fill)
@@ -360,16 +344,14 @@ fn missing_fill_and_backdrop_invalidate_cached_intrinsics_with_unequal_contrast_
         .heatmap_intrinsics
         .get()
         .unwrap()
-        .matches(marks, &theme, &resources)
-        .unwrap());
+        .matches_inputs(marks, &theme));
 
     theme.annotations.planning_backdrop = Color::rgb(255, 255, 255);
     assert!(!axes
         .heatmap_intrinsics
         .get()
         .unwrap()
-        .matches(marks, &theme, &resources)
-        .unwrap());
+        .matches_inputs(marks, &theme));
     assert_eq!(
         theme
             .contrasting_text(theme.marks.heatmap_missing_fill)
@@ -377,7 +359,7 @@ fn missing_fill_and_backdrop_invalidate_cached_intrinsics_with_unequal_contrast_
             .font_size,
         9
     );
-    let small = prepare_intrinsics(marks, axes, source.data(), &theme, None).unwrap();
+    let small = prepare_intrinsics(marks, axes, &theme, None).unwrap();
     assert!(
         small.0 < large.0 && small.1 <= large.1,
         "small={small:?} large={large:?}"
@@ -388,8 +370,7 @@ fn missing_fill_and_backdrop_invalidate_cached_intrinsics_with_unequal_contrast_
         .heatmap_intrinsics
         .get()
         .unwrap()
-        .matches(marks, &theme, &resources)
-        .unwrap());
+        .matches_inputs(marks, &theme));
     assert_eq!(
         theme
             .contrasting_text(theme.marks.heatmap_missing_fill)
@@ -398,7 +379,7 @@ fn missing_fill_and_backdrop_invalidate_cached_intrinsics_with_unequal_contrast_
         40
     );
     assert_eq!(
-        prepare_intrinsics(marks, axes, source.data(), &theme, None).unwrap(),
+        prepare_intrinsics(marks, axes, &theme, None).unwrap(),
         large
     );
 }
@@ -417,7 +398,7 @@ fn constrained_merged_row_gets_its_own_height_and_keeps_all_cells_and_ticks() {
     ).unwrap())
     .size(600, 400)
     .erase();
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let resources = crate::font::canonical::OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(
         &source,
         &resources,
@@ -425,9 +406,7 @@ fn constrained_merged_row_gets_its_own_height_and_keeps_all_cells_and_ticks() {
     )
     .unwrap();
     let chart = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
@@ -489,7 +468,7 @@ fn native_heatmap_uses_traced_tracks_below_the_retired_parity_floor() {
     .y_label("")
     .erase()
     .with_suppressed_continuous_guide();
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let resources = crate::font::canonical::OperationContext::new();
     let chart = crate::plots::shared_x::prepare_plot(
         &source,
         &resources,
@@ -498,9 +477,7 @@ fn native_heatmap_uses_traced_tracks_below_the_retired_parity_floor() {
     .unwrap()
     .attach(source)
     .unwrap();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let hard = intrinsic_body_minimum(&chart, &theme).unwrap();
     assert!(hard.0 < 40.0 && hard.1 < 60.0);
     let panel = PanelBox::new(50.0, 83.0, 50.0, 74.0);
@@ -532,34 +509,29 @@ fn heatmap_intrinsic_cache_rechecks_the_final_shared_color_domain() {
             .unwrap(),
     ))
     .erase();
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let resources = crate::font::canonical::OperationContext::new();
     let mut inputs = crate::plots::shared_x::prepare_plot(
         &source,
         &resources,
         Some(&crate::theme::scale_values::test_defaults()),
     )
     .unwrap();
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     theme.typography.annotations.contrast.light.font_size = 40;
     theme.typography.annotations.contrast.dark.font_size = 9;
     let axes = &inputs.axes[0].1;
     let prepared = &inputs.heatmap.as_ref().unwrap().panels[0].1;
-    let initial = prepare_intrinsics(prepared, axes, source.data(), &theme, None).unwrap();
+    let initial = prepare_intrinsics(prepared, axes, &theme, None).unwrap();
     let original = prepared.annotation_labels().last().unwrap().1;
     assert_eq!(theme.contrasting_text(original).unwrap().font_size, 40);
     let panels = std::sync::Arc::get_mut(inputs.heatmap.as_mut().unwrap()).unwrap();
     let prepared = &mut panels.panels[0].1;
     prepared
-        .replace_domain(
-            ResolvedColorDomain {
-                minimum: -100.0,
-                maximum: 100.0,
-                center: Some(0.0),
-            },
-            source.data().with_axis_resources(&resources),
-        )
+        .replace_domain(ResolvedColorDomain {
+            minimum: -100.0,
+            maximum: 100.0,
+            center: Some(0.0),
+        })
         .unwrap();
     let remapped = prepared.annotation_labels().last().unwrap().1;
     assert_eq!(theme.contrasting_text(remapped).unwrap().font_size, 9);
@@ -567,9 +539,8 @@ fn heatmap_intrinsic_cache_rechecks_the_final_shared_color_domain() {
         .heatmap_intrinsics
         .get()
         .unwrap()
-        .matches(prepared, &theme, &resources)
-        .unwrap());
-    let changed = prepare_intrinsics(prepared, axes, source.data(), &theme, None).unwrap();
+        .matches_inputs(prepared, &theme));
+    let changed = prepare_intrinsics(prepared, axes, &theme, None).unwrap();
     assert!(changed.0 < initial.0);
 }
 
@@ -586,7 +557,7 @@ fn a_custom_gradient_invalidates_the_cached_contrast_role_at_the_same_numeric_do
             .unwrap(),
     ))
     .erase();
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let resources = crate::font::canonical::OperationContext::new();
     let mut inputs = crate::plots::shared_x::prepare_plot(
         &source,
         &resources,
@@ -594,15 +565,12 @@ fn a_custom_gradient_invalidates_the_cached_contrast_role_at_the_same_numeric_do
     )
     .unwrap();
     let axes = &inputs.axes[0].1;
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     theme.typography.annotations.contrast.light.font_size = 40;
     theme.typography.annotations.contrast.dark.font_size = 9;
     let initial = prepare_intrinsics(
         &inputs.heatmap.as_ref().unwrap().panels[0].1,
         axes,
-        source.data(),
         &theme,
         None,
     )
@@ -622,28 +590,23 @@ fn a_custom_gradient_invalidates_the_cached_contrast_role_at_the_same_numeric_do
             None,
         )
         .unwrap(),
-        &resources,
     )
     .unwrap();
-    marks.fills = source
-        .data()
-        .with_axis_resources(&resources)
-        .collect_source(marks.cells.iter().map(|value| {
-            value
-                .map(|value| marks.color.scale.color(value, &resources))
-                .transpose()
-        }))
-        .unwrap();
+    marks.fills = crate::data::source::collect_source(marks.cells.iter().map(|value| {
+        value
+            .map(|value| marks.color.scale.color(value))
+            .transpose()
+    }))
+    .unwrap();
     assert!(!axes
         .heatmap_intrinsics
         .get()
         .unwrap()
-        .matches(marks, &theme, &resources)
-        .unwrap());
+        .matches_inputs(marks, &theme));
     assert!(marks
         .annotation_labels()
         .all(|(_, fill)| { theme.contrasting_text(fill).unwrap().font_size == 9 }));
-    let changed = prepare_intrinsics(marks, axes, source.data(), &theme, None).unwrap();
+    let changed = prepare_intrinsics(marks, axes, &theme, None).unwrap();
     assert!(
         changed.0 < initial.0,
         "changed={changed:?} initial={initial:?}"
@@ -658,7 +621,7 @@ fn heatmap_cell_and_missing_cross_ink_supply_preselection_track_bounds() {
         NumericValues::nullable("fill", [Some(1.0), None, None, None, None]),
     )
     .erase();
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let resources = crate::font::canonical::OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(
         &source,
         &resources,
@@ -666,9 +629,7 @@ fn heatmap_cell_and_missing_cross_ink_supply_preselection_track_bounds() {
     )
     .unwrap();
     let chart = inputs.attach(source).unwrap();
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     let baseline = chart.intrinsic_body_minimum(&theme).unwrap();
     theme.marks.heatmap_cell_outline.width = 100.0;
     let outlined = chart.intrinsic_body_minimum(&theme).unwrap();
@@ -690,7 +651,7 @@ fn highlighted_cell_outline_invalidates_only_its_matching_intrinsic_input() {
     )
     .heatmap_highlight(crate::BooleanValues::new("selected", [true, false, false]))
     .erase();
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let resources = crate::font::canonical::OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(
         &source,
         &resources,
@@ -698,9 +659,7 @@ fn highlighted_cell_outline_invalidates_only_its_matching_intrinsic_input() {
     )
     .unwrap();
     let chart = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let baseline = chart.intrinsic_body_minimum(&theme).unwrap();
     let mut changed = theme.clone();
     changed.marks.heatmap_highlight_outline.width = 100.0;
@@ -718,7 +677,7 @@ fn wide_missing_cell_cross_retains_complete_ink_within_its_cell() {
     )
     .size(1200, 900)
     .erase();
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let resources = crate::font::canonical::OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(
         &source,
         &resources,
@@ -726,9 +685,7 @@ fn wide_missing_cell_cross_retains_complete_ink_within_its_cell() {
     )
     .unwrap();
     let chart = inputs.attach(source).unwrap();
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     theme.marks.heatmap_missing_cross.width = 24.0;
     let panel = PanelBox::new(50.0, 1000.0, 50.0, 800.0);
     let result = chart
@@ -745,7 +702,7 @@ fn wide_missing_cell_cross_retains_complete_ink_within_its_cell() {
         observed += 1;
         let (left, right) = (cell.corners[0].x, cell.corners[1].x);
         let (bottom, top) = (cell.corners[0].y, cell.corners[2].y);
-        let mut geometry = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+        let mut geometry = crate::render::geometry::GeometrySnapshot::new();
         for segment in cross {
             geometry.line(segment, &payload.cross_style, None).unwrap();
         }
@@ -769,7 +726,7 @@ fn census_borrows_retained_formatted_values_in_render_order() {
         .erase();
     let inputs = crate::plots::shared_x::prepare_plot(
         &source,
-        &crate::font::canonical::OperationGenerationResources::new(),
+        &crate::font::canonical::OperationContext::new(),
         Some(&crate::theme::scale_values::test_defaults()),
     )
     .unwrap();
@@ -794,57 +751,7 @@ fn census_borrows_retained_formatted_values_in_render_order() {
 }
 
 #[test]
-fn census_stops_on_first_admission_refusal_without_visiting_later_values() {
-    let source = chart(&valid_data())
-        .annotations(HeatmapAnnotations::Values(
-            crate::NumericLabelFormat::default(),
-        ))
-        .erase();
-    let inputs = crate::plots::shared_x::prepare_plot(
-        &source,
-        &crate::font::canonical::OperationGenerationResources::new(),
-        Some(&crate::theme::scale_values::test_defaults()),
-    )
-    .unwrap();
-    let source = inputs.attach(source).unwrap();
-    crate::layout::plan_exact_root(
-        320,
-        240,
-        |stage| {
-            stage.font_resources().claim_visits(1_000_000).unwrap();
-            let mut visits = 0;
-            let marks = retained(&source).unwrap();
-            let result = marks
-                .guide_labels()
-                .chain(marks.annotation_labels().map(|(label, _)| label))
-                .chain(marks.missing_guide_label())
-                .try_for_each(|source| {
-                    visits += 1;
-                    crate::font::canonical::format_census_source(
-                        format_args!("{source}"),
-                        Some(stage),
-                    )
-                    .map(|_| ())
-                    .map_err(|error| Error::Render(error.to_string()))
-                });
-            assert!(result
-                .unwrap_err()
-                .to_string()
-                .contains("root processing visits"));
-            assert_eq!(visits, 1);
-            assert_eq!(stage.font_resources().usage().unwrap().font_bytes, 0);
-            Ok(())
-        },
-        |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
-        |(), _, (), _| Ok(()),
-    )
-    .unwrap();
-}
-
-#[test]
 fn guide_numbers_use_the_common_modern_grammar_and_normalize_signed_zero() {
-    let source = chart(&valid_data()).erase();
-    let resources = crate::font::canonical::OperationGenerationResources::new();
     for (value, expected) in [
         (-0.0, "0"),
         (0.0, "0"),
@@ -855,11 +762,7 @@ fn guide_numbers_use_the_common_modern_grammar_and_normalize_signed_zero() {
         (1_000_000.0, "1M"),
         (f64::MAX, "1.80e308"),
     ] {
-        let labels = crate::decorations::legend::descriptor::numeric_labels(
-            &[value],
-            source.data().with_axis_resources(&resources),
-        )
-        .unwrap();
+        let labels = crate::decorations::legend::descriptor::numeric_labels(&[value]).unwrap();
         assert_eq!(labels, [expected]);
     }
 }
@@ -1006,13 +909,10 @@ fn prepare_rejects_cartesian_grid_above_safety_limit() {
     };
 
     let source = chart(&data).erase();
-    let resources = crate::font::canonical::OperationGenerationResources::with_test_limits(
-        10_000_000,
-        100_000_000,
-    );
+    let resources = crate::font::canonical::OperationContext::new();
     let error = prepare(
         &source,
-        source.data().with_axis_resources(&resources),
+        source.data().with_operation(&resources),
         &crate::theme::scale_values::test_defaults(),
     )
     .unwrap_err()
@@ -1110,7 +1010,6 @@ fn constant_domains_map_to_midpoint_colors_and_explicit_domains_saturate() {
         center: Some(0.0),
     };
 
-    let resources = crate::font::canonical::OperationGenerationResources::new();
     let sequential = PreparedHeatmapColor::resolve(
         sequential,
         ContinuousColorScale::sequential(
@@ -1121,7 +1020,6 @@ fn constant_domains_map_to_midpoint_colors_and_explicit_domains_saturate() {
             None,
         )
         .unwrap(),
-        &resources,
     )
     .unwrap();
     let diverging = PreparedHeatmapColor::resolve(
@@ -1135,32 +1033,25 @@ fn constant_domains_map_to_midpoint_colors_and_explicit_domains_saturate() {
             None,
         )
         .unwrap(),
-        &resources,
     )
     .unwrap();
     assert_eq!(
-        sequential.scale.color(2.0, &resources).unwrap().as_rgb(),
+        sequential.scale.color(2.0).unwrap().as_rgb(),
         (122, 146, 181)
     );
     assert_eq!(
-        diverging.scale.color(0.0, &resources).unwrap().as_rgb(),
+        diverging.scale.color(0.0).unwrap().as_rgb(),
         (247, 247, 247)
     );
     assert_eq!(
-        diverging.scale.color(-2.0, &resources).unwrap().as_rgb(),
+        diverging.scale.color(-2.0).unwrap().as_rgb(),
         (49, 130, 189)
     );
-    assert_eq!(
-        diverging.scale.color(2.0, &resources).unwrap().as_rgb(),
-        (222, 45, 38)
-    );
+    assert_eq!(diverging.scale.color(2.0).unwrap().as_rgb(), (222, 45, 38));
 }
 
 #[test]
 fn colorbar_gradient_stops_preserve_sequential_diverging_and_constant_scales() {
-    let resources = crate::font::canonical::OperationGenerationResources::new();
-    let source = chart(&valid_data()).erase();
-    let data = source.data().with_axis_resources(&resources);
     let sequential = PreparedHeatmapColor::resolve(
         ResolvedColorDomain {
             minimum: 0.0,
@@ -1175,10 +1066,9 @@ fn colorbar_gradient_stops_preserve_sequential_diverging_and_constant_scales() {
             None,
         )
         .unwrap(),
-        &resources,
     )
     .unwrap()
-    .guide_stops(&[], data)
+    .guide_stops(&[])
     .unwrap();
     let diverging = PreparedHeatmapColor::resolve(
         ResolvedColorDomain {
@@ -1195,10 +1085,9 @@ fn colorbar_gradient_stops_preserve_sequential_diverging_and_constant_scales() {
             None,
         )
         .unwrap(),
-        &resources,
     )
     .unwrap()
-    .guide_stops(&[], data)
+    .guide_stops(&[])
     .unwrap();
     let constant = PreparedHeatmapColor::resolve(
         ResolvedColorDomain {
@@ -1214,10 +1103,9 @@ fn colorbar_gradient_stops_preserve_sequential_diverging_and_constant_scales() {
             None,
         )
         .unwrap(),
-        &resources,
     )
     .unwrap()
-    .guide_stops(&[], data)
+    .guide_stops(&[])
     .unwrap();
 
     assert_eq!(
@@ -1243,7 +1131,7 @@ fn large_offset_diverging_center_uses_the_same_fraction_for_cell_and_guide() {
     let low = 1.0e300_f64;
     let center = f64::from_bits(low.to_bits() + 375);
     let high = f64::from_bits(low.to_bits() + 1000);
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+
     let resolved = PreparedHeatmapColor::resolve(
         ResolvedColorDomain {
             minimum: low,
@@ -1259,11 +1147,10 @@ fn large_offset_diverging_center_uses_the_same_fraction_for_cell_and_guide() {
             None,
         )
         .unwrap(),
-        &resources,
     )
     .unwrap();
     assert_eq!(
-        resolved.scale.color(center, &resources).unwrap().as_rgb(),
+        resolved.scale.color(center).unwrap().as_rgb(),
         (247, 247, 247)
     );
     assert_eq!(resolved.scale.stops()[1].color().as_rgb(), (247, 247, 247));
@@ -1321,7 +1208,7 @@ fn private_plot_gradient_freezes_custom_sequential_and_diverging_marks_guides_be
             Some(0.0),
         ),
     ] {
-        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let resources = crate::font::canonical::OperationContext::new();
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let inputs = crate::plots::shared_x::prepare_plot(
             &plot,
@@ -1337,11 +1224,9 @@ fn private_plot_gradient_freezes_custom_sequential_and_diverging_marks_guides_be
         let theme = plot
             .theme_spec()
             .unwrap_or(crate::Theme::Publication)
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
+            .resolve()
             .unwrap();
-        let semantics = marks
-            .guide_semantics(&theme, plot.data().with_axis_resources(&resources))
-            .unwrap();
+        let semantics = marks.guide_semantics(&theme).unwrap();
         assert_eq!(semantics.selection.center(), center);
         assert_eq!(
             semantics
@@ -1397,7 +1282,7 @@ fn private_plot_gradient_freezes_custom_sequential_and_diverging_marks_guides_be
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
     assert!(crate::plots::shared_x::prepare_plot(
         &source,
-        &crate::font::canonical::OperationGenerationResources::new(),
+        &crate::font::canonical::OperationContext::new(),
         Some(&crate::theme::scale_values::test_defaults()),
     )
     .is_err());
@@ -1420,7 +1305,7 @@ fn private_plot_gradient_freezes_custom_sequential_and_diverging_marks_guides_be
     assert!(matches!(
         crate::plots::shared_x::prepare_plot(
             &wrong_center,
-            &crate::font::canonical::OperationGenerationResources::new(),
+            &crate::font::canonical::OperationContext::new(),
             Some(&crate::theme::scale_values::test_defaults()),
         ),
         Err(Error::Data(message)) if message.contains("neutral center stop")
@@ -1445,7 +1330,7 @@ fn private_gradient_survives_faceted_root_preparation_and_shared_raw_domain() {
     ))
     .size(1200, 800)
     .erase();
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let resources = crate::font::canonical::OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(
         &source,
         &resources,
@@ -1482,7 +1367,7 @@ fn prepared_cell_guide_and_value_label_share_final_diverging_colors() {
         crate::NumericLabelFormat::default(),
     ))
     .erase();
-    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let resources = crate::font::canonical::OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(
         &source,
         &resources,
@@ -1490,14 +1375,12 @@ fn prepared_cell_guide_and_value_label_share_final_diverging_colors() {
     )
     .unwrap();
     let prepared = &inputs.heatmap.as_ref().unwrap().panels[0].1;
-    let data = source.data().with_axis_resources(&resources);
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
-    let guide = prepared.guide_semantics(&theme, data).unwrap();
+
+    let theme = crate::Theme::Publication.resolve().unwrap();
+    let guide = prepared.guide_semantics(&theme).unwrap();
     let stops = prepared
         .color
-        .guide_stops(&prepared.guide_samples(data).unwrap(), data)
+        .guide_stops(&prepared.guide_samples().unwrap())
         .unwrap();
     assert_eq!(
         prepared.fills[..3]
@@ -1552,9 +1435,7 @@ fn validate_options_rejects_heatmap_incompatible_configuration() {
 
 #[test]
 fn fitted_label_elides_only_at_extended_grapheme_boundaries() {
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let expected = "e\u{301}...";
     let maximum_width = theme
         .measure_text(
@@ -1567,18 +1448,7 @@ fn fitted_label_elides_only_at_extended_grapheme_boundaries() {
         .unwrap()
         .fit_width();
 
-    let source = chart(&valid_data()).erase();
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
-    let fitted = fitted_label(
-        source.data().with_axis_resources(&resources),
-        &theme,
-        "e\u{301}e\u{301}e\u{301}e\u{301}",
-        maximum_width,
-    )
-    .unwrap();
+    let fitted = fitted_label(&theme, "e\u{301}e\u{301}e\u{301}e\u{301}", maximum_width).unwrap();
 
     assert_eq!(fitted, expected);
     assert!(
@@ -1598,16 +1468,9 @@ fn fitted_label_elides_only_at_extended_grapheme_boundaries() {
 
 #[test]
 fn fitted_unique_labels_rejects_space_too_narrow_for_an_ellipsis() {
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
-    let source = chart(&valid_data()).erase();
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
+    let theme = crate::Theme::Publication.resolve().unwrap();
+
     let error = fitted_unique_labels(
-        source.data().with_axis_resources(&resources),
         &theme,
         &["category".into()],
         |_| 1.0,

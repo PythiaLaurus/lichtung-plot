@@ -1,7 +1,7 @@
 use super::*;
 
 fn source() -> CompositionTheme {
-    CompositionTheme::builtin(20, 15, 15, 17, &OperationGenerationResources::new()).unwrap()
+    CompositionTheme::builtin(20, 15, 15, 17).unwrap()
 }
 
 #[test]
@@ -126,8 +126,7 @@ fn complete_builtin_sources_have_exact_preset_local_basis_without_fonts() {
         (21, 16, 15, 17),
         (19, 15, 15, 17),
     ] {
-        let source =
-            CompositionTheme::builtin(t, s, c, a, &OperationGenerationResources::new()).unwrap();
+        let source = CompositionTheme::builtin(t, s, c, a).unwrap();
         let pairs = [
             (0, 1),
             (14, t.max(s)),
@@ -166,66 +165,22 @@ fn complete_builtin_sources_have_exact_preset_local_basis_without_fonts() {
 }
 
 #[test]
-fn builtin_admission_matches_independent_integer_certificate_and_refuses_before_fonts() {
-    for (t, s, c, a, expected) in [
-        (20, 15, 15, 17, 109),
-        (19, 14, 14, 16, 106),
-        (21, 16, 15, 17, 112),
-        (19, 15, 15, 17, 117),
-    ] {
-        let (work, bytes) = builtin_resource_oracle(t, s, c, a);
-        assert_eq!(work, expected);
-        for (visits, limit) in [
-            (0, bytes),
-            (work - 1, bytes),
-            (work, bytes - 1),
-            (work, bytes),
-        ] {
-            crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-            let resources = OperationGenerationResources::with_test_limits(visits, limit);
-            let result = CompositionTheme::builtin(t, s, c, a, &resources);
-            assert_eq!(result.is_ok(), visits == work && limit == bytes);
-            if result.is_ok() {
-                assert_eq!(resources.usage().unwrap(), (0, work));
-                assert_eq!(resources.byte_usage().unwrap(), bytes);
-            }
-            assert_eq!(
-                crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
-                0
-            );
-        }
-    }
-}
-
-#[test]
-fn identity_visits_all_actual_handles_and_alignment_mismatch_stops_before_ratios() {
+fn composition_identity_includes_alignment() {
     let source = source();
-    for visits in [0, 18, 19] {
-        let resources = OperationGenerationResources::with_test_limits(visits, 0);
-        assert_eq!(
-            source.same(&source.clone(), &resources).is_ok(),
-            visits == 19
-        );
-        assert_eq!(resources.byte_usage().unwrap(), 0);
-    }
-    let resources = OperationGenerationResources::with_test_limits(1, 0);
-    assert!(!source
-        .same(
-            &source
-                .clone()
-                .with_root_subtitle_alignment(Some(TitleAlignment::End))
-                .unwrap(),
-            &resources
-        )
-        .unwrap());
+    assert!(source.same(&source.clone()));
+
+    assert!(!source.same(
+        &source
+            .clone()
+            .with_root_subtitle_alignment(Some(TitleAlignment::End))
+            .unwrap()
+    ));
 }
 
 #[test]
 fn root_padding_keeps_fractional_edges_until_the_complete_hard_boundary() {
     use crate::layout::canvas::RootFramePlan;
-    let mut theme = super::super::Theme::Publication
-        .resolve(&OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = super::super::Theme::Publication.resolve().unwrap();
     let third = RelativeSpacing::ratio(1, 17 * 3072).unwrap();
     let zero = RelativeSpacing::ratio(0, 1).unwrap();
     theme.composition = theme
@@ -249,17 +204,13 @@ fn root_padding_keeps_fractional_edges_until_the_complete_hard_boundary() {
         measure(1.0),
         Err(crate::layout::fit::PlanError::Fit(_))
     ));
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
+
     assert_eq!(
         theme
             .root_padding_lengths()
             .unwrap()
-            .horizontal(&resources)
-            .unwrap()
-            .round(SpatialRounding::Ceil, &resources)
+            .horizontal()
+            .round(SpatialRounding::Ceil)
             .unwrap()
             .quanta(),
         1
@@ -268,9 +219,7 @@ fn root_padding_keeps_fractional_edges_until_the_complete_hard_boundary() {
 
 #[test]
 fn complete_local_metrics_ignore_legacy_carriers_and_preserve_distinct_gap_and_track_owners() {
-    let mut theme = super::super::Theme::Publication
-        .resolve(&OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = super::super::Theme::Publication.resolve().unwrap();
     theme.label_font_size = 1;
     theme.composition_title_font_size = 1;
     theme.facet_header_font_size = 1;
@@ -312,17 +261,11 @@ fn complete_local_metrics_ignore_legacy_carriers_and_preserve_distinct_gap_and_t
         theme.composition_facet_gap().unwrap().to_bits(),
         24.0_f64.to_bits()
     );
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
+
     assert_eq!(
-        hard(
-            &theme.facet_strip_lengths().unwrap().horizontal_inset,
-            &resources
-        )
-        .unwrap()
-        .to_bits(),
+        hard(&theme.facet_strip_lengths().unwrap().horizontal_inset)
+            .unwrap()
+            .to_bits(),
         32.0_f64.to_bits()
     );
 }

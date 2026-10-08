@@ -16,7 +16,6 @@
     clippy::cast_precision_loss
 )]
 
-use crate::font::canonical::OperationGenerationResources;
 use crate::layout::{PhysicalTextAlignment, TextBlock};
 use crate::render::backend::{
     Backend, FillStyle, LineStyle, PlannedTextPlacement, Point2D, PointStyle, TextAnchor,
@@ -281,17 +280,13 @@ impl LegendIdentity {
         Self::BarSign { decreasing }
     }
 
-    fn same_title(
-        &self,
-        other: &Self,
-        resources: &OperationGenerationResources,
-    ) -> Result<bool, Error> {
+    fn same_title(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Single { field: left, .. }, Self::Single { field: right, .. })
             | (Self::Literal { title: left, .. }, Self::Literal { title: right, .. }) => {
-                legend_text_eq(left, right, resources)
+                legend_text_eq(left, right)
             }
-            (Self::BarSign { .. }, Self::BarSign { .. }) => Ok(true),
+            (Self::BarSign { .. }, Self::BarSign { .. }) => true,
             (
                 Self::Pair {
                     group_field: left_group,
@@ -303,27 +298,22 @@ impl LegendIdentity {
                     hue_field: right_hue,
                     ..
                 },
-            ) => Ok(legend_text_eq(left_group, right_group, resources)?
-                && legend_text_eq(left_hue, right_hue, resources)?),
-            _ => Ok(false),
+            ) => legend_text_eq(left_group, right_group) && legend_text_eq(left_hue, right_hue),
+            _ => false,
         }
     }
 
-    pub(crate) fn same_identity(
-        &self,
-        other: &Self,
-        resources: &OperationGenerationResources,
-    ) -> Result<bool, Error> {
-        if !self.same_title(other, resources)? {
-            return Ok(false);
+    pub(crate) fn same_identity(&self, other: &Self) -> bool {
+        if !self.same_title(other) {
+            return false;
         }
         match (self, other) {
             (Self::Single { value: left, .. }, Self::Single { value: right, .. })
             | (Self::Literal { value: left, .. }, Self::Literal { value: right, .. }) => {
-                legend_text_eq(left, right, resources)
+                legend_text_eq(left, right)
             }
             (Self::BarSign { decreasing: left }, Self::BarSign { decreasing: right }) => {
-                Ok(left == right)
+                left == right
             }
             (
                 Self::Pair {
@@ -336,32 +326,26 @@ impl LegendIdentity {
                     hue_value: right_hue,
                     ..
                 },
-            ) => Ok(legend_text_eq(left_group, right_group, resources)?
-                && legend_text_eq(left_hue, right_hue, resources)?),
-            _ => Ok(false),
+            ) => legend_text_eq(left_group, right_group) && legend_text_eq(left_hue, right_hue),
+            _ => false,
         }
     }
 
-    pub(crate) fn resolved_text(
-        &self,
-        plot: &crate::Plot,
-        data: crate::data::PlotData<'_>,
-    ) -> Result<(String, String), Error> {
+    pub(crate) fn resolved_text(&self, plot: &crate::Plot) -> Result<(String, String), Error> {
         let join = |mut first: String, separator: &str, second: String| -> Result<String, Error> {
             let additional = separator
                 .len()
                 .checked_add(second.len())
                 .ok_or_else(|| Error::Render("legend label length overflow".into()))?;
-            data.reserve_source_string(&mut first, additional)?;
+            crate::data::source::reserve_source_string(&mut first, additional)?;
             first.push_str(separator);
             first.push_str(&second);
             Ok(first)
         };
         match self {
-            Self::Single { field, value } => Ok((
-                plot.resolve_source_label(field, data)?,
-                plot.resolve_source_label(value, data)?,
-            )),
+            Self::Single { field, value } => {
+                Ok((plot.resolve_label(field)?, plot.resolve_label(value)?))
+            }
             Self::Pair {
                 group_field,
                 group_value,
@@ -369,23 +353,23 @@ impl LegendIdentity {
                 hue_value,
             } => Ok((
                 join(
-                    plot.resolve_source_label(group_field, data)?,
+                    plot.resolve_label(group_field)?,
                     " × ",
-                    plot.resolve_source_label(hue_field, data)?,
+                    plot.resolve_label(hue_field)?,
                 )?,
                 join(
-                    plot.resolve_source_label(group_value, data)?,
+                    plot.resolve_label(group_value)?,
                     ", ",
-                    plot.resolve_source_label(hue_value, data)?,
+                    plot.resolve_label(hue_value)?,
                 )?,
             )),
             Self::Literal { title, value } => Ok((
-                data.copy_source_string(title)?,
-                data.copy_source_string(value)?,
+                crate::data::source::copy_source_string(title)?,
+                crate::data::source::copy_source_string(value)?,
             )),
             Self::BarSign { decreasing } => Ok((
-                data.copy_source_string("Change")?,
-                data.copy_source_string(if *decreasing {
+                crate::data::source::copy_source_string("Change")?,
+                crate::data::source::copy_source_string(if *decreasing {
                     "Decreasing"
                 } else {
                     "Nondecreasing"
@@ -439,33 +423,6 @@ pub(crate) struct LegendEntry {
 impl LegendEntry {
     pub(crate) fn display_label(&self) -> &str {
         &self.label
-    }
-
-    pub(crate) fn admitted_clone(&self, data: crate::data::PlotData<'_>) -> Result<Self, Error> {
-        let identity = match &self.identity {
-            LegendIdentity::Single { field, value } => [Some(field), Some(value), None, None],
-            LegendIdentity::Literal { title, value } => [Some(title), Some(value), None, None],
-            LegendIdentity::BarSign { .. } => [None, None, None, None],
-            LegendIdentity::Pair {
-                group_field,
-                group_value,
-                hue_field,
-                hue_value,
-            } => [
-                Some(group_field),
-                Some(group_value),
-                Some(hue_field),
-                Some(hue_value),
-            ],
-        };
-        for text in identity
-            .into_iter()
-            .flatten()
-            .chain([&self.title, &self.label])
-        {
-            data.admit_clone_str(text)?;
-        }
-        Ok(self.clone())
     }
 
     pub(crate) fn same_child_input(&self, other: &Self) -> bool {
@@ -586,11 +543,10 @@ impl LegendEntry {
     fn glyph_ink(
         &self,
         metrics: &LegendMetrics,
-        theme: &crate::theme::ResolvedTheme,
     ) -> Result<crate::render::geometry::GeometryBox, Error> {
         let half_width = metrics.handle_w / 2.0;
         let half_height = metrics.font_size * 0.32;
-        let mut ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
+        let mut ink = crate::render::geometry::GeometrySnapshot::new();
         if let Some(fill) = &self.glyph.fill {
             ink.polygon(
                 &[
@@ -616,7 +572,7 @@ impl LegendEntry {
         if let Some(point) = &self.glyph.point {
             ink.scatter_with_clip(&[Point2D::new(0.0, 0.0)], point, None)?;
         }
-        legend_visits(theme, ink.bounds().len())?;
+
         Ok(ink.bounds().iter().copied().fold(
             crate::render::geometry::GeometryBox {
                 left: -half_width,
@@ -633,30 +589,23 @@ impl LegendEntry {
 pub(crate) fn resolve_entries(
     plot: &crate::Plot,
     entries: &mut Vec<LegendEntry>,
-    resources: &OperationGenerationResources,
 ) -> Result<(), Error> {
-    let data = plot.data().with_axis_resources(resources);
-    data.claim_source_visits(entries.len())?;
     for entry in entries.iter_mut() {
-        (entry.title, entry.label) = entry.identity.resolved_text(plot, data)?;
+        (entry.title, entry.label) = entry.identity.resolved_text(plot)?;
     }
-    *entries = merge_exact_entries(std::mem::take(entries), "plot legend", resources)?;
+    *entries = merge_exact_entries(std::mem::take(entries), "plot legend")?;
     Ok(())
 }
 
 pub(crate) fn merge_exact_entries(
     entries: impl IntoIterator<Item = LegendEntry>,
     context: &str,
-    resources: &OperationGenerationResources,
 ) -> Result<Vec<LegendEntry>, Error> {
     let mut merged: Vec<LegendEntry> = Vec::new();
     for entry in entries {
-        resources
-            .claim_visits(1)
-            .map_err(|error| Error::Render(format!("legend work admission: {error:?}")))?;
         if let Some(first) = merged.first() {
-            if !first.identity.same_title(&entry.identity, resources)?
-                || !legend_text_eq(&first.title, &entry.title, resources)?
+            if !first.identity.same_title(&entry.identity)
+                || !legend_text_eq(&first.title, &entry.title)
             {
                 return Err(Error::Render(format!(
                     "{context} requires compatible semantic titles, labels, and styles; glyphs must match exactly"
@@ -665,14 +614,8 @@ pub(crate) fn merge_exact_entries(
         }
         let mut duplicate = None;
         for existing in &merged {
-            resources
-                .claim_visits(1)
-                .map_err(|error| Error::Render(format!("legend work admission: {error:?}")))?;
-            if !existing
-                .identity
-                .same_identity(&entry.identity, resources)?
-            {
-                if legend_text_eq(&existing.label, &entry.label, resources)? {
+            if !existing.identity.same_identity(&entry.identity) {
+                if legend_text_eq(&existing.label, &entry.label) {
                     return Err(Error::Render(format!(
                         "{context} has distinct raw identities resolving to display label {:?}",
                         entry.label
@@ -683,8 +626,8 @@ pub(crate) fn merge_exact_entries(
             }
         }
         if let Some(existing) = duplicate {
-            if !legend_text_eq(&existing.title, &entry.title, resources)?
-                || !legend_text_eq(&existing.label, &entry.label, resources)?
+            if !legend_text_eq(&existing.title, &entry.title)
+                || !legend_text_eq(&existing.label, &entry.label)
                 || !existing.glyph.exact_eq(&entry.glyph)
             {
                 return Err(Error::Render(format!(
@@ -692,15 +635,6 @@ pub(crate) fn merge_exact_entries(
                 )));
             }
         } else {
-            resources
-                .claim_slots(1)
-                .map_err(|error| Error::Render(format!("merged legend records: {error:?}")))?;
-            resources
-                .claim_bytes(
-                    u64::try_from(std::mem::size_of::<LegendEntry>())
-                        .map_err(|_| Error::Render("legend entry storage overflow".into()))?,
-                )
-                .map_err(|error| Error::Render(format!("merged legend storage: {error}")))?;
             merged
                 .try_reserve(1)
                 .map_err(|error| Error::Render(format!("merged legend reservation: {error}")))?;
@@ -710,34 +644,21 @@ pub(crate) fn merge_exact_entries(
     Ok(merged)
 }
 
-pub(crate) fn resolved_title(
-    entries: &[LegendEntry],
-    resources: &OperationGenerationResources,
-) -> Result<String, Error> {
+pub(crate) fn resolved_title(entries: &[LegendEntry]) -> Result<String, Error> {
     let Some(first) = entries.first() else {
         return Ok(String::new());
     };
-    resources
-        .claim_visits(entries.len() as u128)
-        .map_err(|error| Error::Render(format!("legend work admission: {error:?}")))?;
+
     for entry in entries {
-        if !entry.identity.same_title(&first.identity, resources)?
-            || !legend_text_eq(&entry.title, &first.title, resources)?
+        if !entry.identity.same_title(&first.identity)
+            || !legend_text_eq(&entry.title, &first.title)
         {
             return Err(Error::Render(
                 "legend entries require one compatible semantic title".into(),
             ));
         }
     }
-    resources
-        .claim_slots(1)
-        .map_err(|error| Error::Render(format!("legend title record admission: {error:?}")))?;
-    resources
-        .claim_bytes(
-            u64::try_from(first.title.len())
-                .map_err(|_| Error::Render("legend title length overflow".into()))?,
-        )
-        .map_err(|error| Error::Render(format!("legend title storage admission: {error}")))?;
+
     let mut title = String::new();
     title
         .try_reserve_exact(first.title.len())
@@ -746,36 +667,19 @@ pub(crate) fn resolved_title(
     Ok(title)
 }
 
-fn legend_visits(theme: &crate::theme::ResolvedTheme, count: usize) -> Result<(), Error> {
-    theme
-        .prepared_font_environment()?
-        .claim_processing_visits(count as u128)
-        .map_err(|error| Error::Render(format!("legend work admission: {error:?}")))
-}
-
-pub(crate) fn legend_text_eq(
-    left: &str,
-    right: &str,
-    resources: &OperationGenerationResources,
-) -> Result<bool, Error> {
-    resources
-        .claim_visits(1)
-        .map_err(|error| Error::Render(format!("legend work admission: {error:?}")))?;
+pub(crate) fn legend_text_eq(left: &str, right: &str) -> bool {
     if left.len() != right.len() {
-        return Ok(false);
+        return false;
     }
     if std::ptr::eq(left, right) {
-        return Ok(true);
+        return true;
     }
     for index in 0..left.len() {
-        resources
-            .claim_visits(1)
-            .map_err(|error| Error::Render(format!("legend work admission: {error:?}")))?;
         if left.as_bytes()[index] != right.as_bytes()[index] {
-            return Ok(false);
+            return false;
         }
     }
-    Ok(true)
+    true
 }
 
 fn optional_point_style_eq(left: Option<&PointStyle>, right: Option<&PointStyle>) -> bool {
@@ -871,14 +775,13 @@ fn absent_fill_outline_paints_do_not_split_shared_guide_identity() {
     .unwrap()
     .backend_style();
     assert!(optional_fill_style_eq(Some(&first), Some(&second)));
-    let resources = OperationGenerationResources::new();
+
     let entries = merge_exact_entries(
         [
             LegendEntry::fill(LegendIdentity::single("group", "one"), first),
             LegendEntry::fill(LegendIdentity::single("group", "one"), second),
         ],
         "shared absent outlines",
-        &resources,
     )
     .unwrap();
     assert_eq!(entries.len(), 1);
@@ -942,25 +845,20 @@ impl LegendMetrics {
     /// Complete role-local metrics do not depend on the outer root dimensions.
     pub(crate) fn from_theme(theme: &crate::theme::ResolvedTheme) -> Result<Self, Error> {
         use crate::layout::kernel::SpatialRounding::{Ceil, NearestEven};
-        let resources = theme.prepared_font_environment()?.generation_resources();
+
         let exact = theme.legend.lengths(
             theme.typography.guides.legend_label.font_size(),
             theme.typography.guides.legend_title.font_size(),
-            &resources,
         )?;
-        let s = |value: &crate::theme::spacing::ExactLength| {
-            value.pixels_rounded(NearestEven, &resources)
-        };
+        let s = |value: &crate::theme::spacing::ExactLength| value.pixels_rounded(NearestEven);
         let font_size = f64::from(theme.typography.guides.legend_label.font_size);
         let pad = s(&exact.padding)?;
-        let entry_h = s(&exact.row_gap.add_pixels(
-            theme.typography.guides.legend_label.line_pitch_pixels(),
-            &resources,
-        )?)?;
-        let title_h = s(&exact.title_gap.add_pixels(
-            theme.typography.guides.legend_title.line_pitch_pixels(),
-            &resources,
-        )?)?;
+        let entry_h = s(&exact
+            .row_gap
+            .add_pixels(theme.typography.guides.legend_label.line_pitch_pixels())?)?;
+        let title_h = s(&exact
+            .title_gap
+            .add_pixels(theme.typography.guides.legend_title.line_pitch_pixels())?)?;
         let handle_w = s(&exact.key_width)?;
         if handle_w <= 0.0 {
             return Err(Error::Render(
@@ -995,7 +893,7 @@ impl LegendMetrics {
                 })
             })
             .transpose()?;
-        let edge_pad = s(&exact.padding.add(&exact.glyph_edge_padding, &resources)?)?;
+        let edge_pad = s(&exact.padding.add_length(&exact.glyph_edge_padding))?;
         Ok(Self {
             font_size,
             pad,
@@ -1008,135 +906,77 @@ impl LegendMetrics {
             column_gap: s(&exact.column_gap)?,
             row_gap: s(&exact.row_gap)?,
             title_gap: s(&exact.title_gap)?,
-            minimum: exact.minimum.pixels_rounded(Ceil, &resources)?,
+            minimum: exact.minimum.pixels_rounded(Ceil)?,
             preferred: s(&exact.preferred)?,
             edge_pad,
             frame,
             exact,
-            source: theme.legend.share(&resources)?,
+            source: theme.legend.clone(),
         })
     }
 
-    fn resources(
-        theme: &crate::theme::ResolvedTheme,
-    ) -> Result<OperationGenerationResources, Error> {
-        Ok(theme.prepared_font_environment()?.generation_resources())
+    fn hard(value: &crate::theme::spacing::ExactLength) -> Result<f64, Error> {
+        value.pixels_rounded(crate::layout::kernel::SpatialRounding::Ceil)
     }
-    fn hard(
-        value: &crate::theme::spacing::ExactLength,
-        theme: &crate::theme::ResolvedTheme,
-    ) -> Result<f64, Error> {
-        value.pixels_rounded(
-            crate::layout::kernel::SpatialRounding::Ceil,
-            &Self::resources(theme)?,
-        )
+    fn position(value: &crate::theme::spacing::ExactLength) -> Result<f64, Error> {
+        value.pixels_rounded(crate::layout::kernel::SpatialRounding::NearestEven)
     }
-    fn position(
-        value: &crate::theme::spacing::ExactLength,
-        theme: &crate::theme::ResolvedTheme,
-    ) -> Result<f64, Error> {
-        value.pixels_rounded(
-            crate::layout::kernel::SpatialRounding::NearestEven,
-            &Self::resources(theme)?,
-        )
-    }
-    fn allocation_insets(
-        &mut self,
-        minimum: f64,
-        theme: &crate::theme::ResolvedTheme,
-    ) -> Result<f64, Error> {
-        let resources = Self::resources(theme)?;
+    fn allocation_insets(&mut self, minimum: f64) -> Result<f64, Error> {
         let frame_inset = self.frame.as_ref().map_or(0.0, |frame| frame.inset);
-        let inset =
-            crate::theme::spacing::ExactLength::pixels(minimum.max(frame_inset), &resources)?;
-        if self.exact.padding.compare(&inset, &resources)? == std::cmp::Ordering::Less {
+        let inset = crate::theme::spacing::ExactLength::pixels(minimum.max(frame_inset))?;
+        if self.exact.padding.compare(&inset) == std::cmp::Ordering::Less {
             self.exact.padding = inset;
         }
-        self.pad = Self::position(&self.exact.padding, theme)?;
+        self.pad = Self::position(&self.exact.padding)?;
         self.edge_pad = Self::position(
             &self
                 .exact
                 .padding
-                .add(&self.exact.glyph_edge_padding, &resources)?,
-            theme,
+                .add_length(&self.exact.glyph_edge_padding),
         )?;
         if let Some(radius) = &self.exact.radius {
-            Self::hard(
-                &radius
-                    .add_pixels(frame_inset, &resources)?
-                    .times(2, &resources)?,
-                theme,
-            )
+            Self::hard(&radius.add_pixels(frame_inset)?.times(2))
         } else {
             Ok(0.0)
         }
     }
-    fn ensure_key_gap(
-        &mut self,
-        minimum: f64,
-        theme: &crate::theme::ResolvedTheme,
-    ) -> Result<(), Error> {
-        let resources = Self::resources(theme)?;
-        let required = crate::theme::spacing::ExactLength::pixels(minimum, &resources)?;
-        if self.exact.key_label_gap.compare(&required, &resources)? == std::cmp::Ordering::Less {
+    fn ensure_key_gap(&mut self, minimum: f64) -> Result<(), Error> {
+        let required = crate::theme::spacing::ExactLength::pixels(minimum)?;
+        if self.exact.key_label_gap.compare(&required) == std::cmp::Ordering::Less {
             self.exact.key_label_gap = required;
         }
-        self.handle_text = Self::position(&self.exact.key_label_gap, theme)?;
+        self.handle_text = Self::position(&self.exact.key_label_gap)?;
         Ok(())
     }
-    fn chrome(
-        &self,
-        key: f64,
-        theme: &crate::theme::ResolvedTheme,
-    ) -> Result<crate::theme::spacing::ExactLength, Error> {
-        self.exact
-            .key_label_gap
-            .add_pixels(key, &Self::resources(theme)?)
+    fn chrome(&self, key: f64) -> Result<crate::theme::spacing::ExactLength, Error> {
+        self.exact.key_label_gap.add_pixels(key)
     }
-    fn outer_width(
-        &self,
-        content: &crate::theme::spacing::ExactLength,
-        theme: &crate::theme::ResolvedTheme,
-    ) -> Result<f64, Error> {
-        Self::hard(
-            &self
-                .exact
-                .padding
-                .times(2, &Self::resources(theme)?)?
-                .add(content, &Self::resources(theme)?)?,
-            theme,
-        )
+    fn outer_width(&self, content: &crate::theme::spacing::ExactLength) -> Result<f64, Error> {
+        Self::hard(&self.exact.padding.times(2).add_length(content))
     }
     fn outer_height(
         &self,
         content: &crate::theme::spacing::ExactLength,
         comfort: bool,
-        theme: &crate::theme::ResolvedTheme,
     ) -> Result<f64, Error> {
-        let resources = Self::resources(theme)?;
         let edge = if comfort {
             self.exact
                 .padding
-                .add(&self.exact.glyph_edge_padding, &resources)?
+                .add_length(&self.exact.glyph_edge_padding)
         } else {
-            self.exact.padding.times(1, &resources)?
+            self.exact.padding.times(1)
         };
-        Self::hard(&edge.times(2, &resources)?.add(content, &resources)?, theme)
+        Self::hard(&edge.times(2).add_length(content))
     }
-    fn edge_reserve(
-        &self,
-        comfort: bool,
-        theme: &crate::theme::ResolvedTheme,
-    ) -> Result<crate::theme::spacing::ExactLength, Error> {
-        let resources = Self::resources(theme)?;
+    fn edge_reserve(&self, comfort: bool) -> crate::theme::spacing::ExactLength {
         let edge = if comfort {
             self.exact
                 .padding
-                .add(&self.exact.glyph_edge_padding, &resources)?
+                .add_length(&self.exact.glyph_edge_padding)
         } else {
-            self.exact.padding.times(1, &resources)?
+            self.exact.padding.times(1)
         };
-        edge.times(2, &resources)
+        edge.times(2)
     }
     fn background(
         &self,
@@ -1220,38 +1060,28 @@ fn discrete_guide_intrinsics(
     metrics: &LegendMetrics,
 ) -> Result<DiscreteGuideIntrinsics, Error> {
     let mut widths = Vec::new();
-    crate::layout::fit::reserve(
-        theme,
-        &mut widths,
-        entries.len(),
-        "guide width requirements",
-    )?;
-    let resources = LegendMetrics::resources(theme)?;
-    let mut preferred_column = crate::theme::spacing::ExactLength::pixels(0.0, &resources)?;
+    crate::layout::fit::reserve(&mut widths, entries.len(), "guide width requirements")?;
+
+    let mut preferred_column = crate::theme::spacing::ExactLength::pixels(0.0)?;
     for entry in entries {
-        legend_visits(theme, 1)?;
         let (hard, natural) = crate::layout::fit::intrinsic_widths(
             theme,
             &entry.label,
             &theme.typography.guides.legend_label,
             "legend entry intrinsic",
         )?;
-        let ink = entry.glyph_ink(metrics, theme)?;
+        let ink = entry.glyph_ink(metrics)?;
         let key = crate::layout::kernel::required_length(2.0 * (-ink.left).max(ink.right))?;
-        let chrome_exact = metrics.chrome(key, theme)?;
-        let minimum = chrome_exact.add_pixels(hard, &resources)?;
+        let chrome_exact = metrics.chrome(key)?;
+        let minimum = chrome_exact.add_pixels(hard)?;
         // A canonical preferred slot is an allocation choice, not the hard
         // minimum. Keep the latter exact so a tighter complete assignment can
         // select its unrounded remainder instead of adding independent ceilings.
-        let preferred = crate::theme::spacing::ExactLength::pixels(
-            LegendMetrics::hard(
-                &chrome_exact.add_pixels(hard.max(natural), &resources)?,
-                theme,
-            )?,
-            &resources,
-        )?;
-        if preferred_column.compare(&preferred, &resources)? == std::cmp::Ordering::Less {
-            preferred_column = preferred.times(1, &resources)?;
+        let preferred = crate::theme::spacing::ExactLength::pixels(LegendMetrics::hard(
+            &chrome_exact.add_pixels(hard.max(natural))?,
+        )?)?;
+        if preferred_column.compare(&preferred) == std::cmp::Ordering::Less {
+            preferred_column = preferred.times(1);
         }
         widths.push(EntryIntrinsics {
             minimum,
@@ -1273,14 +1103,13 @@ fn entry_allocation(
     preferred_column: &crate::theme::spacing::ExactLength,
     cap: &crate::theme::spacing::ExactLength,
     horizontal: bool,
-    resources: &OperationGenerationResources,
-) -> Result<crate::theme::spacing::ExactLength, Error> {
+) -> crate::theme::spacing::ExactLength {
     let desired = if horizontal {
         &entry.preferred
     } else {
         preferred_column
     };
-    let bounded = if desired.compare(cap, resources)? == std::cmp::Ordering::Greater {
+    let bounded = if desired.compare(cap) == std::cmp::Ordering::Greater {
         cap
     } else {
         desired
@@ -1288,7 +1117,7 @@ fn entry_allocation(
     // Vertical entries share this total column allocation despite differing
     // key/chrome widths. A hard minimum above it rejects the trial; it cannot
     // silently enlarge one entry beyond the normal or compact cap.
-    bounded.times(1, resources)
+    bounded.times(1)
 }
 
 struct MeasuredLegendFlow {
@@ -1325,22 +1154,18 @@ impl FlowCapacity<'_> {
         consumed: &crate::theme::spacing::ExactLength,
         ascent: f64,
         anchor: f64,
-        resources: &OperationGenerationResources,
     ) -> Result<f64, Error> {
-        let offset = consumed.add_pixels(ascent, resources)?;
+        let offset = consumed.add_pixels(ascent)?;
         if let Some(title) = self.title_offset {
-            title
-                .add(&offset, resources)?
-                .before_pixels(anchor, resources)
+            title.add_length(&offset).before_pixels(anchor)
         } else {
-            offset.before_pixels(anchor, resources)
+            offset.before_pixels(anchor)
         }
     }
     fn fits(
         &self,
         value: &crate::theme::spacing::ExactLength,
         horizontal: bool,
-        theme: &crate::theme::ResolvedTheme,
     ) -> Result<bool, Error> {
         let (available, reserve) = if horizontal {
             (self.width, self.horizontal_reserve)
@@ -1348,12 +1173,9 @@ impl FlowCapacity<'_> {
             (self.height, self.vertical_reserve)
         };
         let hard = if let Some(reserve) = reserve {
-            LegendMetrics::hard(
-                &reserve.add(value, &LegendMetrics::resources(theme)?)?,
-                theme,
-            )?
+            LegendMetrics::hard(&reserve.add_length(value))?
         } else {
-            LegendMetrics::hard(value, theme)?
+            LegendMetrics::hard(value)?
         };
         Ok(hard <= available)
     }
@@ -1369,7 +1191,7 @@ fn flow_assigned_entries(
     body_top: f64,
     metrics: &LegendMetrics,
     horizontal: bool,
-    theme: &crate::theme::ResolvedTheme,
+
     scope: &crate::layout::fit::FitScope,
 ) -> Result<crate::layout::fit::FitOutcome<MeasuredLegendFlow>, Error> {
     use crate::layout::fit::FitOutcome;
@@ -1377,13 +1199,13 @@ fn flow_assigned_entries(
     use crate::theme::spacing::ExactLength;
 
     let mut slots: Vec<LegendSlot> = Vec::new();
-    crate::layout::fit::reserve(theme, &mut slots, entries.len(), "measured guide slots")?;
-    let resources = LegendMetrics::resources(theme)?;
-    let mut x = ExactLength::pixels(0.0, &resources)?;
-    let mut y = ExactLength::pixels(0.0, &resources)?;
-    let mut used_width = ExactLength::pixels(0.0, &resources)?;
-    let mut used_height = ExactLength::pixels(0.0, &resources)?;
-    let mut column_width = ExactLength::pixels(0.0, &resources)?;
+    crate::layout::fit::reserve(&mut slots, entries.len(), "measured guide slots")?;
+
+    let mut x = ExactLength::pixels(0.0)?;
+    let mut y = ExactLength::pixels(0.0)?;
+    let mut used_width = ExactLength::pixels(0.0)?;
+    let mut used_height = ExactLength::pixels(0.0)?;
+    let mut column_width = ExactLength::pixels(0.0)?;
     let mut columns = 1;
     let mut row_entries = 0;
     let mut row_start = 0;
@@ -1392,40 +1214,40 @@ fn flow_assigned_entries(
     for entry in entries {
         let entry_height = entry.ascent + entry.descent;
         if horizontal {
-            if row_entries > 0 && !capacity.fits(&x.add(&entry.width, &resources)?, true, theme)? {
-                let baseline = capacity.baseline(&y, row_ascent, body_top, &resources)?;
+            if row_entries > 0 && !capacity.fits(&x.add_length(&entry.width), true)? {
+                let baseline = capacity.baseline(&y, row_ascent, body_top)?;
                 for slot in &mut slots[row_start..] {
                     slot.key.y = baseline;
                     slot.label.position.y = baseline;
                 }
                 y = y
-                    .add_pixels(row_ascent, &resources)?
-                    .add_pixels(row_descent, &resources)?
-                    .add(&metrics.exact.row_gap, &resources)?;
+                    .add_pixels(row_ascent)?
+                    .add_pixels(row_descent)?
+                    .add_length(&metrics.exact.row_gap);
                 row_start = slots.len();
                 row_entries = 0;
                 row_ascent = 0.0;
                 row_descent = 0.0;
-                x = ExactLength::pixels(0.0, &resources)?;
+                x = ExactLength::pixels(0.0)?;
             }
             row_entries += 1;
             columns = columns.max(row_entries);
             row_ascent = row_ascent.max(entry.ascent);
             row_descent = row_descent.max(entry.descent);
-        } else if LegendMetrics::position(&y, theme)? > 0.0
-            && !capacity.fits(&y.add_pixels(entry_height, &resources)?, false, theme)?
+        } else if LegendMetrics::position(&y)? > 0.0
+            && !capacity.fits(&y.add_pixels(entry_height)?, false)?
         {
             x = x
-                .add(&column_width, &resources)?
-                .add(&metrics.exact.column_gap, &resources)?;
-            column_width = ExactLength::pixels(0.0, &resources)?;
-            y = ExactLength::pixels(0.0, &resources)?;
+                .add_length(&column_width)
+                .add_length(&metrics.exact.column_gap);
+            column_width = ExactLength::pixels(0.0)?;
+            y = ExactLength::pixels(0.0)?;
             columns += 1;
         }
-        let entry_right = x.add(&entry.width, &resources)?;
-        let entry_bottom = y.add_pixels(entry_height, &resources)?;
-        if !capacity.fits(&entry_right, true, theme)?
-            || (!horizontal && !capacity.fits(&entry_bottom, false, theme)?)
+        let entry_right = x.add_length(&entry.width);
+        let entry_bottom = y.add_pixels(entry_height)?;
+        if !capacity.fits(&entry_right, true)?
+            || (!horizontal && !capacity.fits(&entry_bottom, false)?)
         {
             return Ok(FitOutcome::Miss(scope.failure(
                 FitKind::LegendOrGuide,
@@ -1435,53 +1257,51 @@ fn flow_assigned_entries(
         let baseline = if horizontal {
             0.0
         } else {
-            capacity.baseline(&y, entry.ascent, body_top, &resources)?
+            capacity.baseline(&y, entry.ascent, body_top)?
         };
         slots.push(LegendSlot {
             key: Point2D::new(
-                x.after_pixels((entry.key - metrics.handle_w) / 2.0, &resources)?,
+                x.after_pixels((entry.key - metrics.handle_w) / 2.0)?,
                 baseline,
             ),
             label: PlannedTextPlacement::baseline(
                 Point2D::new(
-                    LegendMetrics::position(&x.add(&entry.chrome, &resources)?, theme)?,
+                    LegendMetrics::position(&x.add_length(&entry.chrome))?,
                     baseline,
                 ),
                 TextAnchor::Start,
                 0.0,
             ),
-            width: LegendMetrics::position(&entry.width, theme)?,
+            width: LegendMetrics::position(&entry.width)?,
             height: entry_height,
         });
-        if used_width.compare(&entry_right, &resources)? == std::cmp::Ordering::Less {
+        if used_width.compare(&entry_right) == std::cmp::Ordering::Less {
             used_width = entry_right;
         }
         if horizontal {
             x = x
-                .add(&entry.width, &resources)?
-                .add(&metrics.exact.column_gap, &resources)?;
+                .add_length(&entry.width)
+                .add_length(&metrics.exact.column_gap);
         } else {
-            if column_width.compare(&entry.width, &resources)? == std::cmp::Ordering::Less {
-                column_width = entry.width.times(1, &resources)?;
+            if column_width.compare(&entry.width) == std::cmp::Ordering::Less {
+                column_width = entry.width.times(1);
             }
-            if used_height.compare(&entry_bottom, &resources)? == std::cmp::Ordering::Less {
+            if used_height.compare(&entry_bottom) == std::cmp::Ordering::Less {
                 used_height = entry_bottom;
             }
             y = y
-                .add_pixels(entry_height, &resources)?
-                .add(&metrics.exact.row_gap, &resources)?;
+                .add_pixels(entry_height)?
+                .add_length(&metrics.exact.row_gap);
         }
     }
     if horizontal {
-        let baseline = capacity.baseline(&y, row_ascent, body_top, &resources)?;
+        let baseline = capacity.baseline(&y, row_ascent, body_top)?;
         for slot in &mut slots[row_start..] {
             slot.key.y = baseline;
             slot.label.position.y = baseline;
         }
-        used_height = y
-            .add_pixels(row_ascent, &resources)?
-            .add_pixels(row_descent, &resources)?;
-        if !capacity.fits(&used_height, false, theme)? {
+        used_height = y.add_pixels(row_ascent)?.add_pixels(row_descent)?;
+        if !capacity.fits(&used_height, false)? {
             return Ok(FitOutcome::Miss(scope.failure(
                 FitKind::LegendOrGuide,
                 "outside legend rows exceed their assigned height",
@@ -1535,7 +1355,7 @@ impl Legend {
         theme: &crate::theme::ResolvedTheme,
     ) -> Result<(LegendMetrics, f64), Error> {
         let mut metrics = LegendMetrics::from_theme(theme)?;
-        let minimum = metrics.allocation_insets(0.0, theme)?;
+        let minimum = metrics.allocation_insets(0.0)?;
         Ok((metrics, minimum))
     }
 
@@ -1557,7 +1377,7 @@ impl Legend {
                     theme,
                     &entry.label,
                     &theme.typography.guides.legend_label,
-                )? + LegendMetrics::position(&requirement.chrome, theme)?,
+                )? + LegendMetrics::position(&requirement.chrome)?,
             );
         }
         let title_plan = crate::layout::fit::measured(crate::layout::fit::text(
@@ -1570,59 +1390,45 @@ impl Legend {
             &crate::layout::fit::FitScope::root(),
         ))
         .map_err(crate::layout::fit::PlanError::into_error)?;
-        let resources = LegendMetrics::resources(theme)?;
-        let mut height =
-            crate::theme::spacing::ExactLength::pixels(title_plan.height(), &resources)?;
+
+        let mut height = crate::theme::spacing::ExactLength::pixels(title_plan.height())?;
         let mut natural_width = crate::theme::spacing::ExactLength::pixels(
             title_plan.width().max(title_plan.fit_width()),
-            &resources,
         )?;
         if !title.is_empty() {
-            height = height.add(&metrics.exact.title_gap, &resources)?;
+            height = height.add_length(&metrics.exact.title_gap);
         }
         for (index, entry) in entries.iter().enumerate() {
-            theme
-                .prepared_font_environment()?
-                .claim_processing_visits(1)
-                .map_err(|error| Error::Render(format!("natural legend entry: {error:?}")))?;
             let plan = crate::layout::fit::measured(crate::layout::fit::text(
                 theme,
                 &entry.label,
                 &theme.typography.guides.legend_label,
-                width - LegendMetrics::position(&intrinsic.entries[index].chrome, theme)?,
+                width - LegendMetrics::position(&intrinsic.entries[index].chrome)?,
                 crate::layout::PhysicalTextAlignment::Start,
                 "natural legend entry",
                 &crate::layout::fit::FitScope::root(),
             ))
             .map_err(crate::layout::fit::PlanError::into_error)?;
-            width = width.max(LegendMetrics::position(
-                &intrinsic.entries[index].minimum,
-                theme,
-            )?);
+            width = width.max(LegendMetrics::position(&intrinsic.entries[index].minimum)?);
             let candidate = intrinsic.entries[index]
                 .chrome
-                .add_pixels(plan.width().max(plan.fit_width()), &resources)?;
-            if natural_width.compare(&candidate, &resources)? == std::cmp::Ordering::Less {
+                .add_pixels(plan.width().max(plan.fit_width()))?;
+            if natural_width.compare(&candidate) == std::cmp::Ordering::Less {
                 natural_width = candidate;
             }
             let baseline = plan.first_baseline_quanta.unwrap_or(0) as f64 / 1024.0;
             height = height
-                .add_pixels(baseline.max(intrinsic.entries[index].ascent), &resources)?
-                .add_pixels(
-                    (plan.height() - baseline).max(intrinsic.entries[index].descent),
-                    &resources,
-                )?;
+                .add_pixels(baseline.max(intrinsic.entries[index].ascent))?
+                .add_pixels((plan.height() - baseline).max(intrinsic.entries[index].descent))?;
             if index + 1 < entries.len() {
-                height = height.add(&metrics.exact.row_gap, &resources)?;
+                height = height.add_length(&metrics.exact.row_gap);
             }
         }
         Ok((
             metrics
-                .outer_width(&natural_width.add_pixels(1.0 / 1024.0, &resources)?, theme)?
+                .outer_width(&natural_width.add_pixels(1.0 / 1024.0)?)?
                 .max(frame_minimum),
-            metrics
-                .outer_height(&height, true, theme)?
-                .max(frame_minimum),
+            metrics.outer_height(&height, true)?.max(frame_minimum),
         ))
     }
     #[cfg(test)]
@@ -1647,15 +1453,10 @@ impl Legend {
     ) -> Result<crate::layout::fit::FitOutcome<Self>, Error> {
         use crate::layout::fit::{self, FitOutcome};
         use crate::layout::{kernel::FitKind, AddressRole};
-        theme
-            .prepared_font_environment()?
-            .claim_measurement_call()
-            .map_err(|error| {
-                Error::Render(format!("legend measurement call admission: {error:?}"))
-            })?;
+
         let available = (available.0, available.1.into());
         theme.prepare_font_environment()?;
-        let resources = theme.prepared_font_environment()?.generation_resources();
+
         if !compact {
             *compact_changes = false;
         }
@@ -1669,22 +1470,21 @@ impl Legend {
             )));
         }
         let (metrics, frame_minimum) = Self::allocation_metrics(theme)?;
-        let horizontal_reserve = metrics.edge_reserve(false, theme)?;
-        let Some(inner_exact) =
-            crate::theme::spacing::ExactLength::pixels(available.0.max(0.0), &resources)?
-                .subtract(&horizontal_reserve, &resources)?
+        let horizontal_reserve = metrics.edge_reserve(false);
+        let Some(inner_exact) = crate::theme::spacing::ExactLength::pixels(available.0.max(0.0))?
+            .subtract(&horizontal_reserve)
         else {
             return Ok(FitOutcome::Miss(scope.failure(
                 FitKind::LegendOrGuide,
                 "outside guide has no positive content width",
             )));
         };
-        let inner_width = inner_exact
-            .pixels_rounded(crate::layout::kernel::SpatialRounding::Floor, &resources)?;
-        let vertical_reserve = metrics.edge_reserve(true, theme)?;
+        let inner_width =
+            inner_exact.pixels_rounded(crate::layout::kernel::SpatialRounding::Floor)?;
+        let vertical_reserve = metrics.edge_reserve(true);
         let inner_height = available
             .1
-            .map(|height| Ok::<_, Error>(height - LegendMetrics::hard(&vertical_reserve, theme)?))
+            .map(|height| Ok::<_, Error>(height - LegendMetrics::hard(&vertical_reserve)?))
             .transpose()?;
         if inner_width <= 0.0 || inner_height.is_some_and(|height| height <= 0.0) {
             return Ok(FitOutcome::Miss(scope.failure(
@@ -1701,18 +1501,18 @@ impl Legend {
             inner_width,
             PhysicalTextAlignment::Start,
             "outside legend title",
-            &scope.child(AddressRole::LegendTitle, 0, &resources)?,
+            &scope.child(AddressRole::LegendTitle, 0)?,
         )? {
             FitOutcome::Measured(plan) => plan,
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
         };
-        let mut occupied_title = vertical_reserve.add_pixels(title_plan.height(), &resources)?;
+        let mut occupied_title = vertical_reserve.add_pixels(title_plan.height())?;
         if !title.is_empty() {
-            occupied_title = occupied_title.add(&metrics.exact.title_gap, &resources)?;
+            occupied_title = occupied_title.add_length(&metrics.exact.title_gap);
         }
         let body_height = available
             .1
-            .map(|height| Ok::<_, Error>(height - LegendMetrics::hard(&occupied_title, theme)?))
+            .map(|height| Ok::<_, Error>(height - LegendMetrics::hard(&occupied_title)?))
             .transpose()?;
         if body_height.is_some_and(|height| height <= 0.0) {
             return Ok(FitOutcome::Miss(scope.failure(
@@ -1723,28 +1523,22 @@ impl Legend {
         let intrinsic = discrete_guide_intrinsics(&entries, theme, &metrics)?;
         let preferred_column = &intrinsic.preferred_column;
         let compact_cap = inner_exact
-            .subtract(&metrics.exact.column_gap, &resources)?
+            .subtract(&metrics.exact.column_gap)
             .map(|remaining| {
                 let width = remaining
-                    .divided_by(2.0, &resources)?
-                    .pixels_rounded(crate::layout::kernel::SpatialRounding::Floor, &resources)?;
-                crate::theme::spacing::ExactLength::pixels(width, &resources)
+                    .divided_by(2.0)?
+                    .pixels_rounded(crate::layout::kernel::SpatialRounding::Floor)?;
+                crate::theme::spacing::ExactLength::pixels(width)
             })
             .transpose()?;
         if !compact {
             if let Some(cap) = &compact_cap {
                 *compact_changes = false;
                 for entry in &intrinsic.entries {
-                    let regular = entry_allocation(
-                        entry,
-                        preferred_column,
-                        &inner_exact,
-                        horizontal,
-                        &resources,
-                    )?;
-                    let reduced =
-                        entry_allocation(entry, preferred_column, cap, horizontal, &resources)?;
-                    if regular.compare(&reduced, &resources)? == std::cmp::Ordering::Greater {
+                    let regular =
+                        entry_allocation(entry, preferred_column, &inner_exact, horizontal);
+                    let reduced = entry_allocation(entry, preferred_column, cap, horizontal);
+                    if regular.compare(&reduced) == std::cmp::Ordering::Greater {
                         *compact_changes = true;
                         break;
                     }
@@ -1763,55 +1557,39 @@ impl Legend {
             &inner_exact
         };
         for (index, entry) in intrinsic.entries.iter().enumerate() {
-            let allocated = entry_allocation(entry, preferred_column, cap, horizontal, &resources)?;
-            if entry.minimum.compare(&allocated, &resources)? == std::cmp::Ordering::Greater
-                || metrics.outer_width(&entry.minimum, theme)? > available.0
+            let allocated = entry_allocation(entry, preferred_column, cap, horizontal);
+            if entry.minimum.compare(&allocated) == std::cmp::Ordering::Greater
+                || metrics.outer_width(&entry.minimum)? > available.0
             {
                 return Ok(FitOutcome::Miss(
-                    scope
-                        .child(AddressRole::LegendEntry, index, &resources)?
-                        .failure(
-                            FitKind::Text,
-                            "guide entry allocation is below its hard unbroken requirement",
-                        ),
+                    scope.child(AddressRole::LegendEntry, index)?.failure(
+                        FitKind::Text,
+                        "guide entry allocation is below its hard unbroken requirement",
+                    ),
                 ));
             }
         }
         let mut entry_blocks = Vec::new();
         let mut measured = Vec::new();
-        fit::reserve(
-            theme,
-            &mut entry_blocks,
-            entries.len(),
-            "measured guide labels",
-        )?;
-        fit::reserve(
-            theme,
-            &mut measured,
-            entries.len(),
-            "measured guide entries",
-        )?;
+        fit::reserve(&mut entry_blocks, entries.len(), "measured guide labels")?;
+        fit::reserve(&mut measured, entries.len(), "measured guide entries")?;
         let title_half = GLYPH_HALF_HEIGHT_FACTOR * f64::from(title_appearance.font_size);
         let title_offset = if title.is_empty() {
-            crate::theme::spacing::ExactLength::pixels(title_plan.height(), &resources)?
+            crate::theme::spacing::ExactLength::pixels(title_plan.height())?
         } else {
-            metrics
-                .exact
-                .title_gap
-                .add_pixels(title_plan.height(), &resources)?
+            metrics.exact.title_gap.add_pixels(title_plan.height())?
         };
         let body_top = title_half;
         for (index, (entry, width)) in entries.iter().zip(intrinsic.entries).enumerate() {
-            let allocated =
-                entry_allocation(&width, preferred_column, cap, horizontal, &resources)?;
-            let Some(text_capacity) = allocated.subtract(&width.chrome, &resources)? else {
+            let allocated = entry_allocation(&width, preferred_column, cap, horizontal);
+            let Some(text_capacity) = allocated.subtract(&width.chrome) else {
                 return Ok(FitOutcome::Miss(scope.failure(
                     FitKind::Text,
                     "guide entry has no text capacity after exact chrome",
                 )));
             };
-            let text_width = text_capacity
-                .pixels_rounded(crate::layout::kernel::SpatialRounding::Floor, &resources)?;
+            let text_width =
+                text_capacity.pixels_rounded(crate::layout::kernel::SpatialRounding::Floor)?;
             let plan = match fit::text(
                 theme,
                 &entry.label,
@@ -1823,7 +1601,7 @@ impl Legend {
                 },
                 PhysicalTextAlignment::Start,
                 "outside legend entry",
-                &scope.child(AddressRole::LegendEntry, index, &resources)?,
+                &scope.child(AddressRole::LegendEntry, index)?,
             )? {
                 FitOutcome::Measured(plan) => plan,
                 FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
@@ -1844,13 +1622,11 @@ impl Legend {
         } else {
             let count = u32::try_from(entries.len().saturating_sub(1))
                 .map_err(|_| Error::Render("guide row count overflow".into()))?;
-            let mut height = metrics.exact.row_gap.times(count, &resources)?;
+            let mut height = metrics.exact.row_gap.times(count);
             for entry in &measured {
-                height = height
-                    .add_pixels(entry.ascent, &resources)?
-                    .add_pixels(entry.descent, &resources)?;
+                height = height.add_pixels(entry.ascent)?.add_pixels(entry.descent)?;
             }
-            LegendMetrics::hard(&height, theme)?
+            LegendMetrics::hard(&height)?
         };
         let flow = match flow_assigned_entries(
             &measured,
@@ -1864,7 +1640,6 @@ impl Legend {
             body_top,
             &metrics,
             horizontal,
-            theme,
             scope,
         )? {
             FitOutcome::Measured(flow) => flow,
@@ -1873,24 +1648,20 @@ impl Legend {
         let title_baseline = title_plan.first_baseline_quanta.unwrap_or(0) as f64 / 1024.0;
         let title_width = crate::theme::spacing::ExactLength::pixels(
             title_plan.width().max(title_plan.fit_width()),
-            &resources,
         )?;
-        let content_width =
-            if flow.width.compare(&title_width, &resources)? == std::cmp::Ordering::Less {
-                title_width
-            } else {
-                flow.width
-            };
-        let mut content_height = flow.height.add_pixels(title_plan.height(), &resources)?;
+        let content_width = if flow.width.compare(&title_width) == std::cmp::Ordering::Less {
+            title_width
+        } else {
+            flow.width
+        };
+        let mut content_height = flow.height.add_pixels(title_plan.height())?;
         if !title.is_empty() {
-            content_height = content_height.add(&metrics.exact.title_gap, &resources)?;
+            content_height = content_height.add_length(&metrics.exact.title_gap);
         }
         let layout = LegendLayout {
-            width: metrics
-                .outer_width(&content_width, theme)?
-                .max(frame_minimum),
+            width: metrics.outer_width(&content_width)?.max(frame_minimum),
             height: metrics
-                .outer_height(&content_height, true, theme)?
+                .outer_height(&content_height, true)?
                 .max(frame_minimum),
             columns: flow.columns,
             title: PlannedTextPlacement::baseline(
@@ -1918,25 +1689,15 @@ impl Legend {
                 .guides
                 .legend_label
                 .stack
-                .copy_with_stage(
-                    &theme
-                        .prepared_font_environment()?
-                        .font_resources()
-                        .map_err(|error| Error::Render(error.to_string()))?,
-                    None,
-                )
+                .copy_with_stage(None)
                 .map_err(|error| Error::Render(error.to_string()))?,
             layout,
         };
         let bounds = legend.box_at(0.0, 0.0);
-        let mut ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
+        let mut ink = crate::render::geometry::GeometrySnapshot::new();
         let (x, y) = bounds.anchor();
-        legend.visit_calls(x, y, |call| {
-            legend_visits(theme, 1)?;
-            call.geometry(&mut ink)
-        })?;
+        legend.visit_calls(x, y, |call| call.geometry(&mut ink))?;
         for ink in ink.bounds() {
-            legend_visits(theme, 1)?;
             if ink.left < bounds.left
                 || ink.right > bounds.right
                 || ink.bottom < bounds.bottom
@@ -1977,12 +1738,11 @@ impl Legend {
         ] {
             round.observe_number(metric)?;
         }
-        let resources = round.resources().clone();
+
         for spacing in [&self.metrics.exact.padding, &self.metrics.exact.row_gap] {
-            round.observe_number(spacing.pixels_rounded(
-                crate::layout::kernel::SpatialRounding::NearestEven,
-                &resources,
-            )?)?;
+            round.observe_number(
+                spacing.pixels_rounded(crate::layout::kernel::SpatialRounding::NearestEven)?,
+            )?;
         }
         round.observe_count(usize::from(self.metrics.frame.is_some()))?;
         if let Some(frame) = &self.metrics.frame {
@@ -2023,28 +1783,16 @@ impl Legend {
         }
         Ok(())
     }
-    /// Admit the exact slice allocation before converting measured entries to Arc.
-    pub(crate) fn admit_entries(
+    /// Check the represented shared allocation before retaining measured entries.
+    pub(crate) fn share_entries(
         entries: Vec<LegendEntry>,
-        theme: &crate::theme::ResolvedTheme,
     ) -> Result<std::sync::Arc<[LegendEntry]>, Error> {
-        let allocation = std::alloc::Layout::new::<[std::sync::atomic::AtomicUsize; 2]>()
+        std::alloc::Layout::new::<[std::sync::atomic::AtomicUsize; 2]>()
             .extend(
                 std::alloc::Layout::array::<LegendEntry>(entries.len())
                     .map_err(|_| Error::Render("legend entry storage overflow".into()))?,
             )
-            .map_err(|_| Error::Render("legend entry Arc layout overflow".into()))?
-            .0
-            .pad_to_align();
-        legend_visits(theme, entries.len())?;
-        theme
-            .prepared_font_environment()?
-            .claim_unicode_bytes(
-                u64::try_from(allocation.size())
-                    .map_err(|_| Error::Render("legend entry storage overflow".into()))?,
-            )
-            .map_err(|error| Error::Render(format!("legend entry Arc admission: {error}")))?;
-        // Stable Arc has no fallible slice constructor; admit its exact layout first.
+            .map_err(|_| Error::Render("legend entry Arc layout overflow".into()))?;
         Ok(entries.into())
     }
 
@@ -2133,17 +1881,12 @@ impl Legend {
         }
     }
 
-    pub(crate) fn select(
-        &self,
-        x: f64,
-        y: f64,
-        data: crate::data::PlotData<'_>,
-    ) -> Result<LegendDrawPlan, Error> {
+    pub(crate) fn select(&self, x: f64, y: f64) -> Result<LegendDrawPlan, Error> {
         #[cfg(test)]
         crate::orchestrator::measurements::count(
             crate::orchestrator::measurements::Counter::LegendSelection,
         );
-        data.claim_source_visits(self.entries.len())?;
+
         let count = self.entries.iter().try_fold(
             1 + usize::from(self.metrics.frame.is_some()),
             |count, entry| {
@@ -2157,7 +1900,7 @@ impl Legend {
             },
         )?;
         let mut calls = Vec::new();
-        data.reserve_source(&mut calls, count)?;
+        crate::data::source::reserve_source(&mut calls, count)?;
         self.visit_calls(x, y, |call| {
             calls.push(call);
             Ok(())
@@ -2269,7 +2012,7 @@ pub(crate) fn test_assigned_legend(
     available: (f64, f64),
     theme: &crate::theme::ResolvedTheme,
 ) -> Result<Legend, Error> {
-    let entries = Legend::admit_entries(entries, theme)?;
+    let entries = Legend::share_entries(entries)?;
     match Legend::measure_assigned(
         title,
         entries,
@@ -2288,12 +2031,11 @@ pub(crate) fn test_assigned_legend(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::font::canonical::OperationContext;
 
     #[test]
     fn small_private_discrete_metrics_do_not_acquire_a_new_size_floor() {
-        let mut theme = crate::Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         theme.typography.guides.legend_title.font_size = 2;
         theme.typography.guides.legend_label.font_size = 2;
         let spacing = theme
@@ -2343,17 +2085,11 @@ mod tests {
         )
         .hue(crate::CategoryValues::new("group", ["a", "b"]).unwrap())
         .erase();
-        let prepared = crate::plots::shared_x::prepare_plot(
-            &source,
-            &OperationGenerationResources::new(),
-            None,
-        )
-        .unwrap();
+        let prepared =
+            crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         let plot = prepared.attach(source).unwrap();
         for shape in [crate::PointShape::Circle, crate::PointShape::TriangleUp] {
-            let mut theme = crate::Theme::Publication
-                .resolve(&OperationGenerationResources::new())
-                .unwrap();
+            let mut theme = crate::Theme::Publication.resolve().unwrap();
             theme.marks.primary_point.shape = shape;
             theme.marks.point_sizes.scatter = 6;
             theme.marks.primary_point.outline = Some(
@@ -2383,10 +2119,7 @@ mod tests {
                     &theme,
                 ))
                 .unwrap();
-            let resources = theme
-                .prepared_font_environment()
-                .unwrap()
-                .generation_resources();
+
             let mut local = result.legend_entries;
             assert_eq!(local.len(), 2);
             let mut composite = LegendEntry::point_line_fill(
@@ -2401,11 +2134,10 @@ mod tests {
             let shared = merge_exact_entries(
                 local.iter().cloned().chain(local.iter().cloned()),
                 "shared test guide",
-                &resources,
             )
             .unwrap();
             for entries in [local, shared] {
-                let entries = Legend::admit_entries(entries, &theme).unwrap();
+                let entries = Legend::share_entries(entries).unwrap();
                 let natural = Legend::natural_preference("Group", &entries, &theme).unwrap();
                 for horizontal in [false, true] {
                     let guide = fit::measured(Legend::measure_assigned(
@@ -2421,10 +2153,8 @@ mod tests {
                     .unwrap();
                     let bounds = guide.box_at(20.0, 30.0);
                     let (x, y) = bounds.anchor();
-                    let selected = guide
-                        .select(x, y, plot.data().with_axis_resources(&resources))
-                        .unwrap();
-                    let mut ink = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+                    let selected = guide.select(x, y).unwrap();
+                    let mut ink = crate::render::geometry::GeometrySnapshot::new();
                     selected.geometry(&mut ink).unwrap();
                     assert!(ink.bounds().iter().all(|ink| ink.left >= bounds.left
                         && ink.right <= bounds.right
@@ -2462,9 +2192,7 @@ mod tests {
 
     #[test]
     fn assigned_outside_frame_uses_the_owner_theme_gap_once() {
-        let mut theme = crate::Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let spacing = theme
             .legend
             .spacing()
@@ -2498,25 +2226,18 @@ mod tests {
     )]
     fn assigned_discrete_flow_matches_horizontal_and_vertical_worked_examples() {
         use crate::layout::fit::{FitOutcome, FitScope};
-        let theme = crate::Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let mut metrics = LegendMetrics::from_theme(&theme).unwrap();
-        let resources = theme
-            .prepared_font_environment()
-            .unwrap()
-            .generation_resources();
+
         metrics.column_gap = 5.0;
         metrics.row_gap = 4.0;
-        metrics.exact.column_gap =
-            crate::theme::spacing::ExactLength::pixels(5.0, &resources).unwrap();
-        metrics.exact.row_gap =
-            crate::theme::spacing::ExactLength::pixels(4.0, &resources).unwrap();
+        metrics.exact.column_gap = crate::theme::spacing::ExactLength::pixels(5.0).unwrap();
+        metrics.exact.row_gap = crate::theme::spacing::ExactLength::pixels(4.0).unwrap();
         let horizontal = [(60.0, 6.0, 4.0), (50.0, 6.0, 4.0), (90.0, 10.0, 10.0)].map(
             |(width, ascent, descent)| MeasuredEntry {
-                width: crate::theme::spacing::ExactLength::pixels(width, &resources).unwrap(),
+                width: crate::theme::spacing::ExactLength::pixels(width).unwrap(),
                 key: metrics.handle_w,
-                chrome: crate::theme::spacing::ExactLength::pixels(20.0, &resources).unwrap(),
+                chrome: crate::theme::spacing::ExactLength::pixels(20.0).unwrap(),
                 ascent,
                 descent,
             },
@@ -2527,7 +2248,6 @@ mod tests {
             0.0,
             &metrics,
             true,
-            &theme,
             &FitScope::root(),
         )
         .unwrap() else {
@@ -2535,8 +2255,8 @@ mod tests {
         };
         assert_eq!(
             (
-                LegendMetrics::hard(&rows.width, &theme).unwrap().to_bits(),
-                LegendMetrics::hard(&rows.height, &theme).unwrap().to_bits(),
+                LegendMetrics::hard(&rows.width).unwrap().to_bits(),
+                LegendMetrics::hard(&rows.height).unwrap().to_bits(),
                 rows.columns
             ),
             (90.0_f64.to_bits(), 48.0_f64.to_bits(), 1)
@@ -2552,14 +2272,12 @@ mod tests {
 
         metrics.column_gap = 10.0;
         metrics.row_gap = 5.0;
-        metrics.exact.column_gap =
-            crate::theme::spacing::ExactLength::pixels(10.0, &resources).unwrap();
-        metrics.exact.row_gap =
-            crate::theme::spacing::ExactLength::pixels(5.0, &resources).unwrap();
+        metrics.exact.column_gap = crate::theme::spacing::ExactLength::pixels(10.0).unwrap();
+        metrics.exact.row_gap = crate::theme::spacing::ExactLength::pixels(5.0).unwrap();
         let vertical = [60.0, 70.0, 50.0].map(|_| MeasuredEntry {
-            width: crate::theme::spacing::ExactLength::pixels(70.0, &resources).unwrap(),
+            width: crate::theme::spacing::ExactLength::pixels(70.0).unwrap(),
             key: metrics.handle_w,
-            chrome: crate::theme::spacing::ExactLength::pixels(20.0, &resources).unwrap(),
+            chrome: crate::theme::spacing::ExactLength::pixels(20.0).unwrap(),
             ascent: 10.0,
             descent: 10.0,
         });
@@ -2569,7 +2287,6 @@ mod tests {
             0.0,
             &metrics,
             false,
-            &theme,
             &FitScope::root(),
         )
         .unwrap() else {
@@ -2577,12 +2294,8 @@ mod tests {
         };
         assert_eq!(
             (
-                LegendMetrics::hard(&columns.width, &theme)
-                    .unwrap()
-                    .to_bits(),
-                LegendMetrics::hard(&columns.height, &theme)
-                    .unwrap()
-                    .to_bits(),
+                LegendMetrics::hard(&columns.width).unwrap().to_bits(),
+                LegendMetrics::hard(&columns.height).unwrap().to_bits(),
                 columns.columns
             ),
             (150.0_f64.to_bits(), 45.0_f64.to_bits(), 2)
@@ -2602,14 +2315,13 @@ mod tests {
                 0.0,
                 &metrics,
                 false,
-                &theme,
                 &FitScope::root()
             )
             .unwrap(),
             FitOutcome::Miss(_)
         ));
         let compact = vertical.map(|entry| MeasuredEntry {
-            width: crate::theme::spacing::ExactLength::pixels(65.0, &resources).unwrap(),
+            width: crate::theme::spacing::ExactLength::pixels(65.0).unwrap(),
             ..entry
         });
         let FitOutcome::Measured(columns) = flow_assigned_entries(
@@ -2618,7 +2330,6 @@ mod tests {
             0.0,
             &metrics,
             false,
-            &theme,
             &FitScope::root(),
         )
         .unwrap() else {
@@ -2626,12 +2337,8 @@ mod tests {
         };
         assert_eq!(
             (
-                LegendMetrics::hard(&columns.width, &theme)
-                    .unwrap()
-                    .to_bits(),
-                LegendMetrics::hard(&columns.height, &theme)
-                    .unwrap()
-                    .to_bits(),
+                LegendMetrics::hard(&columns.width).unwrap().to_bits(),
+                LegendMetrics::hard(&columns.height).unwrap().to_bits(),
                 columns.columns
             ),
             (140.0_f64.to_bits(), 45.0_f64.to_bits(), 2)
@@ -2640,9 +2347,7 @@ mod tests {
 
     #[test]
     fn assigned_discrete_width_keeps_three_fractional_reserves_until_the_full_boundary() {
-        let mut theme = crate::Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let third = crate::theme::RelativeSpacing::ratio(1, 33_792).unwrap();
         let zero = crate::theme::RelativeSpacing::ratio(0, 1).unwrap();
         let spacing = theme
@@ -2674,12 +2379,12 @@ mod tests {
             "fractional width fixture",
         )
         .unwrap();
-        let ink = entry.glyph_ink(&metrics, &theme).unwrap();
+        let ink = entry.glyph_ink(&metrics).unwrap();
         let key = crate::layout::kernel::required_length(2.0 * (-ink.left).max(ink.right)).unwrap();
         let base = crate::layout::kernel::ceil_spatial_quanta(key + hard_label).unwrap();
         let full = f64::from(u32::try_from(base + 1).unwrap()) / 1024.0;
         let below = f64::from(u32::try_from(base).unwrap()) / 1024.0;
-        let entries = Legend::admit_entries(vec![entry], &theme).unwrap();
+        let entries = Legend::share_entries(vec![entry]).unwrap();
         for horizontal in [false, true] {
             let measure = |width, compact| {
                 Legend::measure_assigned(
@@ -2736,9 +2441,7 @@ mod tests {
     )]
     fn compact_vertical_columns_reject_unequal_minima_above_the_uniform_cap() {
         use crate::layout::fit::{FitOutcome, FitScope};
-        let mut theme = crate::Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let zero = crate::theme::RelativeSpacing::ratio(0, 1).unwrap();
         let spacing = theme
             .legend
@@ -2763,14 +2466,11 @@ mod tests {
             .unwrap();
         let mut second = entry("i");
         second.glyph.point = Some(PointStyle::new((255, 0, 0), 12));
-        let entries = Legend::admit_entries(
-            vec![entry("UnbreakableLegendWidthBoundary"), second],
-            &theme,
-        )
-        .unwrap();
+        let entries =
+            Legend::share_entries(vec![entry("UnbreakableLegendWidthBoundary"), second]).unwrap();
         let (metrics, _) = Legend::allocation_metrics(&theme).unwrap();
         let intrinsic = discrete_guide_intrinsics(&entries, &theme, &metrics).unwrap();
-        let resources = LegendMetrics::resources(&theme).unwrap();
+
         assert_ne!(
             intrinsic.entries[0].key.to_bits(),
             intrinsic.entries[1].key.to_bits()
@@ -2778,12 +2478,11 @@ mod tests {
         assert_eq!(
             intrinsic.entries[0]
                 .minimum
-                .compare(&intrinsic.entries[1].minimum, &resources)
-                .unwrap(),
+                .compare(&intrinsic.entries[1].minimum),
             std::cmp::Ordering::Greater
         );
-        let column = LegendMetrics::hard(&intrinsic.entries[0].minimum, &theme).unwrap();
-        let normal_column = LegendMetrics::hard(&intrinsic.preferred_column, &theme).unwrap();
+        let column = LegendMetrics::hard(&intrinsic.entries[0].minimum).unwrap();
+        let normal_column = LegendMetrics::hard(&intrinsic.preferred_column).unwrap();
         let full = 2.0 * column;
         let narrow = full - 2.0 / 1024.0;
         let scope = FitScope::root();
@@ -2811,22 +2510,17 @@ mod tests {
             .fold(0.0_f64, f64::max);
         let height = metrics
             .outer_height(
-                &crate::theme::spacing::ExactLength::pixels(entry_height, &resources)
+                &crate::theme::spacing::ExactLength::pixels(entry_height)
                     .unwrap()
-                    .add_pixels(probe.title_block.height(), &resources)
+                    .add_pixels(probe.title_block.height())
                     .unwrap(),
                 true,
-                &theme,
             )
             .unwrap();
         assert!(height < probe.compute_box_height());
-        let narrow_cap =
-            crate::theme::spacing::ExactLength::pixels(narrow / 2.0, &resources).unwrap();
+        let narrow_cap = crate::theme::spacing::ExactLength::pixels(narrow / 2.0).unwrap();
         assert_eq!(
-            intrinsic.entries[0]
-                .minimum
-                .compare(&narrow_cap, &resources)
-                .unwrap(),
+            intrinsic.entries[0].minimum.compare(&narrow_cap),
             std::cmp::Ordering::Greater
         );
         assert!(
@@ -2853,7 +2547,7 @@ mod tests {
             assert_eq!(guide.compute_box_width().to_bits(), full.to_bits());
             let origin = |index: usize| {
                 let slot = &guide.layout.entries[index];
-                let ink = entries[index].glyph_ink(&guide.metrics, &theme).unwrap();
+                let ink = entries[index].glyph_ink(&guide.metrics).unwrap();
                 let key = crate::layout::kernel::required_length(2.0 * (-ink.left).max(ink.right))
                     .unwrap();
                 slot.key.x - (key - guide.metrics.handle_w) / 2.0
@@ -2863,8 +2557,8 @@ mod tests {
             // Capture the actual selected primitives, including the differently
             // sized point keys and every label, without a background/clip hiding ink.
             let mut ink = [
-                crate::render::geometry::GeometrySnapshot::new(&theme).unwrap(),
-                crate::render::geometry::GeometrySnapshot::new(&theme).unwrap(),
+                crate::render::geometry::GeometrySnapshot::new(),
+                crate::render::geometry::GeometrySnapshot::new(),
             ];
             let mut selected_entry = 0;
             guide
@@ -2906,9 +2600,7 @@ mod tests {
     #[test]
     fn vertical_flow_advances_by_the_preceding_occupied_column_width() {
         use crate::layout::fit::{FitOutcome, FitScope};
-        let mut theme = crate::Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let spacing = theme
             .legend
             .spacing()
@@ -2917,13 +2609,13 @@ mod tests {
             .unwrap();
         theme.legend = theme.legend.clone().with_spacing(spacing).unwrap();
         let metrics = LegendMetrics::from_theme(&theme).unwrap();
-        let resources = LegendMetrics::resources(&theme).unwrap();
+
         // Production has uniform columns. Even an independently supplied flow
         // cannot use the incoming narrower width to overlap an occupied column.
         let entries = [80.0, 40.0].map(|width| MeasuredEntry {
-            width: crate::theme::spacing::ExactLength::pixels(width, &resources).unwrap(),
+            width: crate::theme::spacing::ExactLength::pixels(width).unwrap(),
             key: metrics.handle_w,
-            chrome: crate::theme::spacing::ExactLength::pixels(20.0, &resources).unwrap(),
+            chrome: crate::theme::spacing::ExactLength::pixels(20.0).unwrap(),
             ascent: 10.0,
             descent: 10.0,
         });
@@ -2934,7 +2626,6 @@ mod tests {
                 0.0,
                 &metrics,
                 false,
-                &theme,
                 &FitScope::root(),
             )
             .unwrap()
@@ -2946,16 +2637,14 @@ mod tests {
         assert_eq!(flow.slots[0].key.x.to_bits(), 0.0_f64.to_bits());
         assert_eq!(flow.slots[1].key.x.to_bits(), 80.0_f64.to_bits());
         assert_eq!(
-            LegendMetrics::hard(&flow.width, &theme).unwrap().to_bits(),
+            LegendMetrics::hard(&flow.width).unwrap().to_bits(),
             120.0_f64.to_bits()
         );
     }
 
     #[test]
     fn complete_flow_reserve_rounds_fractional_padding_and_row_gap_once() {
-        let mut theme = crate::Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let third = crate::theme::RelativeSpacing::ratio(1, 33_792).unwrap();
         let zero = crate::theme::RelativeSpacing::ratio(0, 1).unwrap();
         let spacing = theme
@@ -2976,15 +2665,12 @@ mod tests {
             .with_frame(None)
             .unwrap();
         let metrics = LegendMetrics::from_theme(&theme).unwrap();
-        let resources = theme
-            .prepared_font_environment()
-            .unwrap()
-            .generation_resources();
-        let reserve = metrics.edge_reserve(true, &theme).unwrap();
+
+        let reserve = metrics.edge_reserve(true);
         let entries = [0, 1].map(|_| MeasuredEntry {
-            width: crate::theme::spacing::ExactLength::pixels(40.0, &resources).unwrap(),
+            width: crate::theme::spacing::ExactLength::pixels(40.0).unwrap(),
             key: metrics.handle_w,
-            chrome: crate::theme::spacing::ExactLength::pixels(20.0, &resources).unwrap(),
+            chrome: crate::theme::spacing::ExactLength::pixels(20.0).unwrap(),
             ascent: 10.0,
             descent: 10.0,
         });
@@ -3001,7 +2687,6 @@ mod tests {
                 40.0,
                 &metrics,
                 false,
-                &theme,
                 &crate::layout::fit::FitScope::root(),
             )
             .unwrap()
@@ -3020,18 +2705,13 @@ mod tests {
     #[test]
     fn entries_in_one_row_share_a_baseline_and_union_their_ink_heights() {
         use crate::layout::fit::{FitOutcome, FitScope};
-        let theme = crate::Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let metrics = LegendMetrics::from_theme(&theme).unwrap();
-        let resources = theme
-            .prepared_font_environment()
-            .unwrap()
-            .generation_resources();
+
         let entries = [(6.0, 4.0), (9.0, 1.0)].map(|(ascent, descent)| MeasuredEntry {
-            width: crate::theme::spacing::ExactLength::pixels(40.0, &resources).unwrap(),
+            width: crate::theme::spacing::ExactLength::pixels(40.0).unwrap(),
             key: metrics.handle_w,
-            chrome: crate::theme::spacing::ExactLength::pixels(20.0, &resources).unwrap(),
+            chrome: crate::theme::spacing::ExactLength::pixels(20.0).unwrap(),
             ascent,
             descent,
         });
@@ -3041,14 +2721,13 @@ mod tests {
             0.0,
             &metrics,
             true,
-            &theme,
             &FitScope::root(),
         )
         .unwrap() else {
             panic!("both entries should share a row");
         };
         assert_eq!(
-            LegendMetrics::hard(&flow.height, &theme).unwrap().to_bits(),
+            LegendMetrics::hard(&flow.height).unwrap().to_bits(),
             13.0_f64.to_bits()
         );
         assert_eq!(flow.columns, 2);
@@ -3060,43 +2739,22 @@ mod tests {
     }
 
     #[test]
-    fn legend_stack_copy_admits_literal_storage_and_work_before_copy() {
-        use crate::font::canonical::{named_stack, FontFamily, OperationGenerationResources};
-        let resources = OperationGenerationResources::new();
+    fn legend_stack_copy_preserves_literal_family_names() {
+        use crate::font::canonical::named_stack;
+
         let stack = named_stack(&["Group, condition"]);
-        let bytes = (size_of::<FontFamily>()
-            + "Group, condition".len()
-            + size_of::<Vec<FontFamily>>()
-            + 2 * size_of::<usize>()) as u64;
-        let visits = stack.byte_work().unwrap() as u128;
-        resources.set_test_limits(visits + 2, bytes);
-        assert_eq!(stack.copy_with_generation(&resources).unwrap(), stack);
-        assert_eq!(resources.usage().unwrap(), (1, visits));
-        assert_eq!(resources.byte_usage().unwrap(), bytes);
-        assert!(named_stack(&["x"])
-            .copy_with_generation(&resources)
-            .unwrap_err()
-            .to_string()
-            .contains("system-font bytes"));
-        assert_eq!(resources.byte_usage().unwrap(), bytes);
+
+        assert_eq!(stack.try_copy().unwrap(), stack);
     }
 
     #[test]
-    fn empty_and_unusable_legend_measurements_admit_their_own_call() {
+    fn empty_and_unusable_legend_measurements_miss_without_shaping() {
         use crate::layout::fit::{FitOutcome, FitScope};
         for empty in [false, true] {
-            for remaining in [0, 1, 2] {
-                let theme = crate::Theme::Publication
-                    .resolve(&OperationGenerationResources::new())
-                    .unwrap();
+            {
+                let theme = crate::Theme::Publication.resolve().unwrap();
                 theme.prepare_font_environment().unwrap();
-                let resources = theme
-                    .prepared_font_environment()
-                    .unwrap()
-                    .generation_resources();
-                resources
-                    .claim_calls(1_000_000 - resources.call_cache_usage().0 - remaining)
-                    .unwrap();
+
                 let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
                 let entries: std::sync::Arc<[LegendEntry]> =
                     if empty { vec![] } else { vec![entry("group")] }.into();
@@ -3111,24 +2769,9 @@ mod tests {
                     &mut compact_changes,
                     &FitScope::root(),
                 );
-                if remaining == 0 {
-                    assert!(result
-                        .err()
-                        .unwrap()
-                        .to_string()
-                        .contains("measurement/intrinsic call attempts"));
-                    assert!(
-                        compact_changes,
-                        "refusal must precede trial output mutation"
-                    );
-                } else {
-                    assert!(matches!(result.unwrap(), FitOutcome::Miss(_)));
-                    assert!(!compact_changes);
-                }
-                assert_eq!(
-                    resources.call_cache_usage().0,
-                    1_000_000 - remaining + u128::from(remaining > 0)
-                );
+                assert!(matches!(result.unwrap(), FitOutcome::Miss(_)));
+                assert!(!compact_changes);
+
                 assert_eq!(
                     crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
                     shapes
@@ -3138,15 +2781,10 @@ mod tests {
     }
 
     #[test]
-    fn repeated_legend_measurement_admits_calls_even_with_cached_text() {
+    fn repeated_legend_measurement_reuses_cached_text() {
         use crate::layout::fit::{self, FitScope};
-        let theme = crate::Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
-        let resources = theme
-            .prepared_font_environment()
-            .unwrap()
-            .generation_resources();
+        let theme = crate::Theme::Publication.resolve().unwrap();
+
         let entries: std::sync::Arc<[LegendEntry]> = vec![entry("first"), entry("second")].into();
         let measure = || {
             fit::measured(Legend::measure_assigned(
@@ -3162,12 +2800,9 @@ mod tests {
             .unwrap()
         };
         let original = measure();
-        let before = resources.call_cache_usage().0;
+
         let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
         let repeated = measure();
-        // One guide call, one title query, and unassigned text + intrinsic +
-        // assigned text queries per entry. Cached text admits all eight calls.
-        assert_eq!(resources.call_cache_usage().0 - before, 8);
         assert_eq!(
             crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
             shapes
@@ -3189,9 +2824,7 @@ mod tests {
     #[test]
     fn assigned_guide_rejects_an_unbreakable_label_before_other_entries_wrap() {
         use crate::layout::fit::{FitOutcome, FitScope};
-        let theme = crate::Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let scope = FitScope::root();
         let entries: std::sync::Arc<[LegendEntry]> =
             vec![entry("first"), entry("M".repeat(40))].into();
@@ -3212,28 +2845,16 @@ mod tests {
         assert_eq!(
             failure.reason.address,
             crate::layout::ComponentAddress::root()
-                .child(
-                    crate::layout::AddressRole::LegendEntry,
-                    1,
-                    &theme
-                        .prepared_font_environment()
-                        .unwrap()
-                        .generation_resources()
-                )
+                .child(crate::layout::AddressRole::LegendEntry, 1)
                 .unwrap()
         );
     }
 
     #[test]
-    fn assigned_guide_admits_long_label_arc_and_slots_before_text_work() {
-        let run = |limits: Option<(u128, u64)>| {
-            let theme = crate::Theme::Publication
-                .resolve(&OperationGenerationResources::new())
-                .unwrap();
-            let resources = theme
-                .prepared_font_environment()
-                .unwrap()
-                .generation_resources();
+    fn assigned_guide_retains_long_labels_and_deterministic_geometry() {
+        let run = || {
+            let theme = crate::Theme::Publication.resolve().unwrap();
+            let resources = theme.prepared_font_environment().unwrap().operation();
             let entries = (0..16)
                 .map(|index| {
                     entry(format!(
@@ -3241,9 +2862,7 @@ mod tests {
                     ))
                 })
                 .collect();
-            if let Some((visits, bytes)) = limits {
-                resources.set_test_limits(visits, bytes);
-            }
+
             let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
             let legend = test_assigned_legend(
                 "Long measurement conditions",
@@ -3257,21 +2876,12 @@ mod tests {
                 crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get) - shapes,
             )
         };
-        let (resources, legend, _) = run(None);
+        let (_, legend, _) = run();
         let legend = legend.unwrap();
         assert_eq!(legend.entry_blocks.len(), 16);
         assert_eq!(legend.layout.columns, 1);
-        let visits = resources.usage().unwrap().1;
-        let bytes = resources.byte_usage().unwrap();
-        for limits in [(visits - 1, bytes), (visits, bytes - 1)] {
-            assert!(run(Some(limits)).1.is_err());
-        }
-        for limits in [(0, bytes), (visits, 0)] {
-            let (_, result, shapes) = run(Some(limits));
-            assert!(result.is_err());
-            assert_eq!(shapes, 0, "entry admission must precede text planning");
-        }
-        let (_, exact, _) = run(Some((visits, bytes)));
+
+        let (_, exact, _) = run();
         let exact = exact.unwrap();
         assert_eq!(exact.layout.columns, legend.layout.columns);
         assert_eq!(exact.layout.width.to_bits(), legend.layout.width.to_bits());
@@ -3282,16 +2892,11 @@ mod tests {
     }
 
     #[test]
-    fn resolved_pair_strings_merge_and_title_obey_exact_limits() {
+    fn resolved_pair_strings_merge_with_their_semantic_title() {
         let plot = crate::Plot::matrix(vec![crate::NumericValues::new("x", [1.0, 2.0])]).erase();
-        let run = |limits: Option<(u128, u64)>| {
-            let theme = crate::Theme::Publication
-                .resolve(&OperationGenerationResources::new())
-                .unwrap();
-            let resources = theme
-                .prepared_font_environment()
-                .unwrap()
-                .generation_resources();
+        let run = || {
+            let theme = crate::Theme::Publication.resolve().unwrap();
+            let resources = theme.prepared_font_environment().unwrap().operation();
             let mut entries = (0..12)
                 .map(|index| {
                     LegendEntry::point(
@@ -3306,28 +2911,15 @@ mod tests {
                 })
                 .collect::<Vec<_>>();
             entries.push(entries[0].clone());
-            if let Some((visits, bytes)) = limits {
-                resources.set_test_limits(visits, bytes);
-            }
-            let result = resolve_entries(&plot, &mut entries, &resources)
-                .and_then(|()| resolved_title(&entries, &resources));
+
+            let result =
+                resolve_entries(&plot, &mut entries).and_then(|()| resolved_title(&entries));
             (resources, entries, result)
         };
-        let (resources, entries, title) = run(None);
+        let (_, entries, title) = run();
         assert_eq!(entries.len(), 12);
         assert_eq!(title.unwrap(), "Long group field × Long hue field");
         assert_eq!(entries[0].label, "Measured group 0, First condition");
-        let visits = resources.usage().unwrap().1;
-        let bytes = resources.byte_usage().unwrap();
-        for limits in [
-            (visits - 1, bytes),
-            (visits, bytes - 1),
-            (0, bytes),
-            (visits, 0),
-        ] {
-            assert!(run(Some(limits)).2.is_err());
-        }
-        run(Some((visits, bytes))).2.unwrap();
     }
 
     fn entry(label: impl Into<String>) -> LegendEntry {
@@ -3342,9 +2934,7 @@ mod tests {
 
     #[test]
     fn absent_discrete_frame_retains_guide_sources_keys_and_exact_padding() {
-        let mut theme = crate::Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         theme.legend = theme.legend.clone().with_frame(None).unwrap();
         let legend = test_assigned_legend(
             "Guide",
@@ -3353,18 +2943,8 @@ mod tests {
             &theme,
         )
         .unwrap();
-        let source = crate::Plot::scatter(
-            crate::NumericValues::new("x", [0.0]),
-            crate::NumericValues::new("y", [0.0]),
-        )
-        .erase();
-        let resources = theme
-            .prepared_font_environment()
-            .unwrap()
-            .generation_resources();
-        let plan = legend
-            .select(20.0, 200.0, source.data().with_axis_resources(&resources))
-            .unwrap();
+
+        let plan = legend.select(20.0, 200.0).unwrap();
         assert!(!plan
             .calls
             .iter()
@@ -3386,48 +2966,35 @@ mod tests {
             .iter()
             .any(|call| matches!(call, LegendCall::Point(_, _))));
         assert_eq!(legend.metrics.edge_pad.to_bits(), 11.0_f64.to_bits());
-        let mut geometry = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+        let mut geometry = crate::render::geometry::GeometrySnapshot::new();
         plan.geometry(&mut geometry).unwrap();
         assert!(!geometry.bounds().is_empty());
     }
 
     #[test]
-    fn entry_compatibility_uses_operation_resources_without_font_discovery() {
+    fn entry_compatibility_is_checked_without_font_discovery() {
         let prepared = |label: &str| {
             let mut entry = entry(label);
             entry.identity = LegendIdentity::literal("group", label);
             entry
         };
-        let run = |limits: Option<(u128, u64)>| {
-            let resources = OperationGenerationResources::new();
-            if let Some((visits, bytes)) = limits {
-                resources.set_test_limits(visits, bytes);
-            }
-            let result = merge_exact_entries(
+        let run = || {
+            merge_exact_entries(
                 [prepared("first"), prepared("second"), prepared("first")],
                 "prepared discrete guide",
-                &resources,
-            );
-            (resources, result)
+            )
         };
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-        let (resources, result) = run(None);
+        let result = run();
         assert_eq!(result.unwrap().len(), 2);
-        let visits = resources.usage().unwrap().1;
-        let bytes = resources.byte_usage().unwrap();
-        assert!(visits > 0 && bytes > 0);
-        assert_eq!(run(Some((visits, bytes))).1.unwrap().len(), 2);
-        assert!(run(Some((visits - 1, bytes))).1.is_err());
-        assert!(run(Some((visits, bytes - 1))).1.is_err());
 
-        let resources = OperationGenerationResources::new();
         let mut conflicting = prepared("first");
         conflicting.glyph = LegendGlyph {
             point: Some(PointStyle::new((255, 0, 0), 3)),
             ..LegendGlyph::default()
         };
         assert!(matches!(
-            merge_exact_entries([prepared("first"), conflicting], "shared guide", &resources),
+            merge_exact_entries([prepared("first"), conflicting], "shared guide"),
             Err(Error::Render(message)) if message.contains("glyphs must match")
         ));
         assert_eq!(
@@ -3443,7 +3010,7 @@ mod tests {
             crate::NumericValues::new("y", [2.0, 3.0]),
         )
         .erase();
-        let resources = OperationGenerationResources::new();
+
         let make = |identity| {
             LegendEntry::fill(
                 identity,
@@ -3460,17 +3027,16 @@ mod tests {
             make(LegendIdentity::bar_sign(false)),
         ];
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-        resolve_entries(&plot, &mut signs, &resources).unwrap();
+        resolve_entries(&plot, &mut signs).unwrap();
         assert_eq!(signs.len(), 2);
         assert_eq!(signs[0].label, "Decreasing");
         assert_eq!(signs[1].label, "Nondecreasing");
         let mut literal = vec![make(LegendIdentity::literal("Change", "Decreasing"))];
-        resolve_entries(&plot, &mut literal, &resources).unwrap();
+        resolve_entries(&plot, &mut literal).unwrap();
         assert!(matches!(
             merge_exact_entries(
                 [signs[0].clone(), literal.remove(0)],
                 "shared guide",
-                &resources,
             ),
             Err(Error::Render(message)) if message.contains("compatible semantic titles")
         ));
@@ -3487,16 +3053,16 @@ mod tests {
             crate::NumericValues::new("y", [2.0, 3.0]),
         )
         .erase();
-        let resources = OperationGenerationResources::new();
+
         let mut entries = vec![LegendEntry::point(
             LegendIdentity::single("study_group", "control_group"),
             PointStyle::new((0, 0, 0), 3),
         )];
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-        resolve_entries(&plot, &mut entries, &resources).unwrap();
+        resolve_entries(&plot, &mut entries).unwrap();
         assert_eq!(entries[0].title, "Study group");
         assert_eq!(entries[0].label, "Control group");
-        assert_eq!(resolved_title(&entries, &resources).unwrap(), "Study group");
+        assert_eq!(resolved_title(&entries).unwrap(), "Study group");
         assert_eq!(
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
             0
@@ -3504,9 +3070,7 @@ mod tests {
     }
 
     fn legend() -> Legend {
-        let theme = crate::Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         test_assigned_legend(
             "group",
             vec![entry("first"), entry("second")],
@@ -3518,9 +3082,7 @@ mod tests {
 
     #[test]
     fn legend_text_roles_do_not_scale_with_assigned_size() {
-        let theme = crate::Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let smaller = test_assigned_legend(
             "group",
             vec![entry("one"), entry("two")],
@@ -3555,9 +3117,7 @@ mod tests {
     #[test]
     fn compact_vertical_flow_remeasures_labels_and_fits_two_columns() {
         use crate::layout::fit::FitOutcome;
-        let theme = crate::Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let entries: std::sync::Arc<[LegendEntry]> =
             vec![entry("longer longer"), entry("a"), entry("b"), entry("c")].into();
         let probe = match Legend::measure_assigned(
@@ -3686,12 +3246,7 @@ mod tests {
                 .entries
                 .last()
                 .unwrap()
-                .glyph_ink(
-                    &legend.metrics,
-                    &crate::Theme::Publication
-                        .resolve(&OperationGenerationResources::new())
-                        .unwrap(),
-                )
+                .glyph_ink(&legend.metrics)
                 .unwrap()
                 .bottom,
         );
@@ -3709,9 +3264,7 @@ mod tests {
         let entries = (1..=8)
             .map(|index| entry(format!("item {index}")))
             .collect();
-        let theme = crate::Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let legend = test_assigned_legend("group", entries, (640.0, 480.0), &theme).unwrap();
 
         assert_eq!(legend.column_count(), 1);
@@ -3719,9 +3272,7 @@ mod tests {
 
     #[test]
     fn overwide_legend_text_returns_the_planning_error() {
-        let theme = crate::Theme::Publication
-            .resolve(&OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let error = test_assigned_legend(
             &"W".repeat(10_000),
             vec![entry("entry")],

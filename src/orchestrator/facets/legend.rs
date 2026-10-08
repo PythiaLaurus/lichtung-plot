@@ -15,9 +15,9 @@ pub(super) fn prepare_discrete_guide(
     kind: PlotKind,
     theme: &ResolvedTheme,
     inputs: &crate::layout::interior::PreparedInteriorInputs,
-    resources: &crate::font::canonical::OperationGenerationResources,
+    resources: &crate::font::canonical::OperationContext,
 ) -> Result<super::PreparedFacetGuide, Error> {
-    let source_data = source.data().with_axis_resources(resources);
+    let source_data = source.data().with_operation(resources);
     let base = super::data::base_plot(source, kind, false, false, resources)?;
     let entries_for = |base: &Plot| -> Result<Vec<crate::decorations::legend::LegendEntry>, Error> {
         if matches!(kind, PlotKind::Heatmap | PlotKind::Beeswarm) {
@@ -31,12 +31,12 @@ pub(super) fn prepare_discrete_guide(
                 Error::Render("facet shared guide has no prepared cell scope".into())
             })?;
             let scoped = base
-                .admitted_clone(source_data)?
-                .with_render_scope(source_data.copy_source_string(scope)?);
+                .clone()
+                .with_render_scope(crate::data::source::copy_source_string(scope)?);
             let mut contribution =
                 inputs.guide_entries(&scoped, theme, source_data, Some(scope))?;
-            crate::decorations::legend::resolve_entries(&scoped, &mut contribution, resources)?;
-            source_data.reserve_source(&mut entries, contribution.len())?;
+            crate::decorations::legend::resolve_entries(&scoped, &mut contribution)?;
+            crate::data::source::reserve_source(&mut entries, contribution.len())?;
             entries.extend(contribution);
         }
         Ok(entries)
@@ -45,13 +45,12 @@ pub(super) fn prepare_discrete_guide(
     if let (Some(field), Some(column)) = (source.hue_dimension_key(), source.hue_col()) {
         let observed = entries_for(&base)?;
         let values = crate::data::strict_strings(source_data, column, "facet hue")?;
-        let levels = source_data.source_levels(&values)?;
+        let levels = crate::data::source::source_levels(&values)?;
         let mut present = Vec::new();
-        source_data.reserve_source(&mut present, levels.len())?;
+        crate::data::source::reserve_source(&mut present, levels.len())?;
         for level in levels {
             let mut found = false;
             for entry in &observed {
-                source_data.claim_source_visits(1)?;
                 if entry.identity().hue_value_for(field) == Some(level.as_str()) {
                     found = true;
                     break;
@@ -69,28 +68,22 @@ pub(super) fn prepare_discrete_guide(
         Vec::new()
     } else {
         let entries = entries_for(&base)?;
-        crate::decorations::legend::merge_exact_entries(entries, "shared facet legend", resources)?
+        crate::decorations::legend::merge_exact_entries(entries, "shared facet legend")?
     };
     let mut entries = entries;
     order_entries(&mut entries, &base, source_data)?;
-    let title = crate::decorations::legend::resolved_title(&entries, resources)?;
+    let title = crate::decorations::legend::resolved_title(&entries)?;
     let hue_levels = base
         .global_hue_levels()
         .map(|levels| {
-            source_data.collect_source(
+            crate::data::source::collect_source(
                 levels
                     .iter()
-                    .map(|level| source_data.copy_source_string(level)),
+                    .map(|level| crate::data::source::copy_source_string(level)),
             )
         })
         .transpose()?;
-    let layout =
-        std::alloc::Layout::array::<crate::decorations::legend::LegendEntry>(entries.len())
-            .and_then(|entries| std::alloc::Layout::new::<[usize; 2]>().extend(entries))
-            .map_err(|_| Error::Render("facet prepared guide storage overflow".into()))?
-            .0
-            .pad_to_align();
-    source_data.claim_source_bytes(layout.size())?;
+
     Ok(super::PreparedFacetGuide {
         entries: entries.into(),
         title,
@@ -139,18 +132,18 @@ fn preflight_panels(
     round: &crate::layout::kernel::FeedbackRound,
     phase: MeasurementPhase,
 ) -> Result<Vec<std::sync::Arc<PlotRenderResult>>, crate::layout::fit::PlanError> {
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = base_plot.data().with_axis_resources(&resources);
+    let resources = theme.prepared_font_environment()?.operation();
+
     let mut preflight = Vec::new();
-    data.reserve_source(&mut preflight, panels.len())?;
+    crate::data::source::reserve_source(&mut preflight, panels.len())?;
     for (index, facet) in panels.iter().enumerate() {
         let panel_plot = base_plot
-            .admitted_clone(data)?
-            .with_render_scope(facet.render_scope(data)?)
+            .clone()
+            .with_render_scope(facet.render_scope()?)
             .with_significance_subset(facet.significance_selectors());
         let context = PlotRenderContext::new(
             crate::data::PlotData::with_rows(&panel_plot, &facet.rows, &facet.source_rows)
-                .with_axis_resources(&resources),
+                .with_operation(&resources),
             facet.panel,
             theme,
         )
@@ -158,10 +151,9 @@ fn preflight_panels(
         let owner = crate::layout::ComponentAddress::root().child(
             crate::layout::AddressRole::FacetCell,
             u32::try_from(index).map_err(|_| Error::Render("facet address overflowed".into()))?,
-            &resources,
         )?;
-        let result = children.measure(&panel_plot, context, &owner, phase, round, |call| {
-            crate::layout::fit::outcome(panel_plot.measure_panel_in_call(kind, context, call))
+        let result = children.measure(&panel_plot, context, &owner, phase, round, || {
+            crate::layout::fit::outcome(panel_plot.measure_panel(kind, context))
         })?;
         preflight.push(crate::layout::fit::measured(Ok(result))?);
     }
@@ -177,36 +169,35 @@ fn order_entries(
     if !entries.is_empty() {
         let identity_order = if let Some(pairs) = shared_plot.global_collective_pairs() {
             let mut identities = Vec::new();
-            data.reserve_source(&mut identities, pairs.len())?;
+            crate::data::source::reserve_source(&mut identities, pairs.len())?;
             for pair in pairs
                 .iter()
                 .filter(|pair| pair.group.is_some() || pair.hue.is_some())
             {
-                identities.push(shared_plot.collective_legend_identity(pair, data)?);
+                identities.push(shared_plot.collective_legend_identity(pair)?);
             }
             identities
         } else {
             shared_plot.global_hue_levels().map_or_else(
                 || Ok(Vec::new()),
                 |levels| {
-                    data.collect_source(
+                    crate::data::source::collect_source(
                         levels
                             .iter()
-                            .map(|level| shared_plot.point_legend_identity(level, data)),
+                            .map(|level| shared_plot.point_legend_identity(level)),
                     )
                 },
             )?
         };
-        let mut positions = data.collect_source(entries.iter().map(|entry| {
+        let mut positions = crate::data::source::collect_source(entries.iter().map(|entry| {
             for (index, identity) in identity_order.iter().enumerate() {
-                data.claim_source_visits(1)?;
-                if identity.same_identity(entry.identity(), data.source_resources()?)? {
+                if identity.same_identity(entry.identity()) {
                     return Ok(index);
                 }
             }
             Ok(usize::MAX)
         }))?;
-        data.claim_source_visits(entries.len())?;
+
         // Stable in-place sorting moves admitted storage; key searches above
         // are the actual variable semantic work, not comparator estimates.
         for index in 1..entries.len() {
@@ -237,7 +228,6 @@ pub(super) fn resolve_shared_facet_axis(
         results[0].y_domain
     };
     for result in results {
-        data.claim_source_visits(1)?;
         let candidate = if x_axis {
             result.x_domain
         } else {
@@ -251,21 +241,13 @@ pub(super) fn resolve_shared_facet_axis(
     }
     if domain == AxisDomain::Categorical {
         for result in &results[1..] {
-            data.claim_source_visits(1)?;
             let mut expected = facet_axis_signature(&results[0], x_axis);
             let mut actual = facet_axis_signature(result, x_axis);
             loop {
                 match (expected.next(), actual.next()) {
                     (None, None) => break,
-                    (Some(a), Some(b)) => {
-                        data.claim_source_visits(1)?;
-                        if crate::decorations::legend::legend_text_eq(
-                            a,
-                            b,
-                            data.source_resources()?,
-                        )? {
-                            continue;
-                        }
+                    (Some(a), Some(b)) if crate::decorations::legend::legend_text_eq(a, b) => {
+                        continue
                     }
                     _ => {}
                 }
@@ -280,7 +262,6 @@ pub(super) fn resolve_shared_facet_axis(
     let mut minimum = f64::INFINITY;
     let mut maximum = f64::NEG_INFINITY;
     for result in results {
-        data.claim_source_visits(1)?;
         let range = if x_axis {
             result.layout.projection.x_range()
         } else {

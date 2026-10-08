@@ -2,7 +2,7 @@ use super::*;
 use crate::layout::kernel::SpatialRounding;
 
 fn source() -> LegendTheme {
-    LegendTheme::builtin(&OperationGenerationResources::new()).unwrap()
+    LegendTheme::builtin().unwrap()
 }
 
 #[test]
@@ -142,30 +142,16 @@ fn construction_rejects_zero_positive_extents_and_revalidates_cross_siblings() {
 #[test]
 fn pinned_binary_sources_and_complete_edge_rounding_are_exact() {
     let source = source();
-    let resources = OperationGenerationResources::new();
-    let lengths = source.lengths(11, 12, &resources).unwrap();
-    let edge = lengths
-        .padding
-        .add(&lengths.glyph_edge_padding, &resources)
-        .unwrap();
+
+    let lengths = source.lengths(11, 12).unwrap();
+    let edge = lengths.padding.add_length(&lengths.glyph_edge_padding);
     assert_eq!(
-        edge.round(SpatialRounding::NearestEven, &resources)
-            .unwrap()
-            .quanta(),
+        edge.round(SpatialRounding::NearestEven).unwrap().quanta(),
         11264
     );
+    assert_eq!(edge.round(SpatialRounding::Ceil).unwrap().quanta(), 11265);
     assert_eq!(
-        edge.round(SpatialRounding::Ceil, &resources)
-            .unwrap()
-            .quanta(),
-        11265
-    );
-    assert_eq!(
-        edge.times(2, &resources)
-            .unwrap()
-            .round(SpatialRounding::Ceil, &resources)
-            .unwrap()
-            .quanta(),
+        edge.times(2).round(SpatialRounding::Ceil).unwrap().quanta(),
         22529
     );
     assert_ne!(
@@ -185,50 +171,19 @@ fn pinned_binary_sources_and_complete_edge_rounding_are_exact() {
 }
 
 #[test]
-fn builtin_admission_matches_independent_dyadic_and_euclidean_certificate() {
-    let (work, bytes) = builtin_resource_oracle();
-    assert_eq!(work, 355); // thirty-six Euclidean steps across the seven pinned P inputs
-    for (visits, limit) in [
-        (0, bytes),
-        (work - 1, bytes),
-        (work, bytes - 1),
-        (work, bytes),
-    ] {
-        let resources = OperationGenerationResources::with_test_limits(visits, limit);
-        let result = LegendTheme::builtin(&resources);
-        assert_eq!(result.is_ok(), visits == work && limit == bytes);
-        if result.is_ok() {
-            assert_eq!(resources.usage().unwrap(), (0, work));
-            assert_eq!(resources.byte_usage().unwrap(), bytes);
-        }
-    }
-}
-
-#[test]
-fn sharing_and_identity_admit_each_actual_relationship_and_never_copy_buffers() {
+fn sharing_and_identity_preserve_all_relationships() {
     let source = source();
-    for remaining in [0, 11, 12] {
-        let resources = OperationGenerationResources::with_test_limits(remaining, 0);
-        let result = source.share(&resources);
-        assert_eq!(result.is_ok(), remaining == 12);
-        assert_eq!(resources.byte_usage().unwrap(), 0);
-        if let Ok(copy) = result {
-            assert_eq!(copy, source);
-        }
-    }
     let copy = source.clone();
-    for remaining in [0, 12, 13] {
-        let resources = OperationGenerationResources::with_test_limits(remaining, 0);
-        let result = source.same(&copy, &resources);
-        assert_eq!(result.is_ok(), remaining == 13);
-        if let Ok(equal) = result {
-            assert!(equal);
-        }
-        assert_eq!(resources.usage().unwrap(), (0, remaining));
-        assert_eq!(resources.byte_usage().unwrap(), 0);
+    assert_eq!(copy, source);
+    assert!(source.same(&copy));
+    for (a, b) in source
+        .retained_relationships()
+        .zip(copy.retained_relationships())
+    {
+        assert!(a.shares_payload_with(b));
     }
     let absent = source.clone().with_frame(None).unwrap();
-    assert_eq!(absent.relationship_count(), 11);
-    let resources = OperationGenerationResources::with_test_limits(1, 0);
-    assert!(!source.same(&absent, &resources).unwrap());
+    assert_eq!(absent.retained_relationships().count(), 11);
+
+    assert!(!source.same(&absent));
 }

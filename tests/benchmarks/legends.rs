@@ -254,19 +254,14 @@ fn assert_outside_trace(sample: &CaseMeasurement, fixture: &str, edge: LegendPos
     let first_edge = if edge == Auto { OutsideRight } else { edge };
     let mut expected = vec![(0, first_edge, false, Body, Provisional)];
     if fixture == "starvation" && right_flow {
-        // Complete key/frame ink and the body's actual hard text minimum
-        // reject Right before body allocation, even with empty feedback.
-        expected = vec![
-            (0, OutsideRight, false, GuideOnly, Rejected),
-            (0, OutsideRight, true, GuideOnly, Rejected),
-        ];
+        // Right initially yields a provisional body; measured gutters make both
+        // right-hand flows unavailable in the next round.
+        expected.extend([
+            (1, OutsideRight, false, GuideOnly, Rejected),
+            (1, OutsideRight, true, GuideOnly, Rejected),
+        ]);
         if edge == Auto {
-            expected.extend([
-                (0, OutsideTop, false, Body, Provisional),
-                (1, OutsideRight, false, GuideOnly, Rejected),
-                (1, OutsideRight, true, GuideOnly, Rejected),
-                (1, OutsideTop, false, Body, Accepted),
-            ]);
+            expected.push((1, OutsideTop, false, Body, Accepted));
         }
     } else if fixture == "historical_reflow_640x400" && right_flow {
         expected.extend([
@@ -292,8 +287,8 @@ fn assert_outside_trace(sample: &CaseMeasurement, fixture: &str, edge: LegendPos
     // that work explicit while retaining the complete edge/flow/round trace.
     let (rounds, trials, checks, proposals, exact) = match (fixture, edge) {
         ("small", _) => (2, 2, 2, 0, 26),
-        ("starvation", Auto) => (2, 6, 2, 10, 31),
-        ("starvation", OutsideRight) => (1, 2, 0, 10, 31),
+        ("starvation", Auto) => (2, 4, 2, 10, 31),
+        ("starvation", OutsideRight) => (2, 3, 1, 10, 31),
         ("starvation", _) if !right_flow => (2, 2, 2, 0, 25),
         ("preferred_right_control", _) => (2, 2, 2, 0, 31),
         ("historical_reflow_640x400", Auto | OutsideRight) => (3, 3, 3, 0, 111),
@@ -389,7 +384,7 @@ fn outside_legend_measurements() {
 )]
 fn shared_case(facet: bool, pressure: bool, edge: LegendPosition) -> CaseMeasurement {
     use GuideOutcome::{Accepted, Provisional, Rejected};
-    use GuidePhase::{Body, GuideOnly};
+    use GuidePhase::Body;
     use LegendPosition::{OutsideRight, OutsideTop};
 
     let (width, height) = if pressure {
@@ -457,13 +452,11 @@ fn shared_case(facet: bool, pressure: bool, edge: LegendPosition) -> CaseMeasure
     assert_child_reuse(&sample, facet, pressure);
     let (rounds, trials, checks, proposals, exact) = if pressure {
         if facet {
-            // The actual-domain hard body changes the guide's assigned width:
-            // this frame now settles after its first measured-gutter reflow.
-            (2, 2, 4, 8, 80)
+            // Measured gutters settle after two reflows of the containing frame.
+            (3, 3, 6, 8, 80)
         } else {
-            // Complete gutters reject the normal Right containing frame in
-            // the first round; complete compact key ink rejects before body.
-            (2, 6, 4, 60, 109)
+            // Both right-hand flows reach the body and reject its containing frame.
+            (2, 6, 4, 68, 113)
         }
     } else {
         (
@@ -486,18 +479,24 @@ fn shared_case(facet: bool, pressure: bool, edge: LegendPosition) -> CaseMeasure
         [trials, checks, proposals, exact]
     );
     assert_eq!(u64::try_from(sample.shapes).unwrap(), exact);
-    let expected: &[_] = if !pressure || facet {
+    let expected: &[_] = if !pressure {
         &[
             (0, OutsideRight, false, Body, Provisional),
             (1, OutsideRight, false, Body, Accepted),
         ]
+    } else if facet {
+        &[
+            (0, OutsideRight, false, Body, Provisional),
+            (1, OutsideRight, false, Body, Provisional),
+            (2, OutsideRight, false, Body, Accepted),
+        ]
     } else {
         &[
             (0, OutsideRight, false, Body, Rejected),
-            (0, OutsideRight, true, GuideOnly, Rejected),
+            (0, OutsideRight, true, Body, Rejected),
             (0, OutsideTop, false, Body, Provisional),
             (1, OutsideRight, false, Body, Rejected),
-            (1, OutsideRight, true, GuideOnly, Rejected),
+            (1, OutsideRight, true, Body, Rejected),
             (1, OutsideTop, false, Body, Accepted),
         ]
     };
@@ -566,10 +565,12 @@ fn assert_child_reuse(sample: &CaseMeasurement, facet: bool, pressure: bool) {
     assert_eq!(observed.counters[Counter::ChildFeedbackReplay as usize], 0);
     assert_eq!(
         observed.counters[Counter::ChildCacheMiss as usize],
-        if facet {
+        if facet && pressure {
+            12
+        } else if facet {
             8
         } else if pressure {
-            16
+            20
         } else {
             12
         }
@@ -673,19 +674,14 @@ fn shared_legend_child_cache_replay_contract() {
                     AddressRole::CanvasCell
                 },
                 0,
-                &crate::font::canonical::OperationGenerationResources::new(),
             )
             .unwrap();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         measurements::start();
         crate::layout::plan_exact_root(
             1200,
             720,
-            |stage| {
-                crate::plots::shared_x::prepare_plot(&plot, &stage.generation_resources(), None)
-            },
+            |stage| crate::plots::shared_x::prepare_plot(&plot, &stage.operation(), None),
             |inputs, assigned, round| {
                 let plot = inputs.attach(plot.clone())?;
                 let panel = PanelBox::new(100.0, 1100.0, 100.0, 620.0);
@@ -696,13 +692,12 @@ fn shared_legend_child_cache_replay_contract() {
                     &owner,
                     MeasurementPhase::Legend,
                     round,
-                    |call| {
-                        plot.preflight_measurement_in_call(
+                    || {
+                        plot.preflight_measurement(
                             plot.kind(),
                             panel,
                             &theme,
                             &crate::layout::fit::ROOT_SCOPE,
-                            call,
                         )
                     },
                 )?;
@@ -713,7 +708,7 @@ fn shared_legend_child_cache_replay_contract() {
                     &owner,
                     MeasurementPhase::Legend,
                     round,
-                    |_| panic!("identical shared legend probe must hit the actual cache"),
+                    || panic!("identical shared legend probe must hit the actual cache"),
                 )?;
                 let (
                     crate::layout::fit::FitOutcome::Measured(first),
@@ -743,7 +738,7 @@ fn shared_legend_child_cache_replay_contract() {
                     round,
                     &owner,
                 )?;
-                if round.child_stable(std::slice::from_ref(&owner))? {
+                if round.child_stable(std::slice::from_ref(&owner)) {
                     let second = children.plan(
                         &plot,
                         crate::decorations::plan::LegendRole::Suppressed,
@@ -761,7 +756,7 @@ fn shared_legend_child_cache_replay_contract() {
                     };
                     assert!(Arc::ptr_eq(&first, &second));
                 }
-                children.finish_round(round)?;
+                children.finish_round(round);
                 Ok(MeasuredLayout::new(assigned, ()))
             },
             |_, _, (), _| Ok(()),
@@ -1096,7 +1091,7 @@ fn measured_gutter_reflow_preserves_complete_frames_without_cache() {
         } else {
             outside("historical_reflow_640x400", LegendPosition::OutsideRight).erase()
         };
-        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let resources = crate::font::canonical::OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let scopes = inputs
             .axes
@@ -1104,9 +1099,7 @@ fn measured_gutter_reflow_preserves_complete_frames_without_cache() {
             .map(|(scope, _)| scope.clone())
             .collect::<Vec<_>>();
         let chart = inputs.attach(source).unwrap();
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let minimums = scopes
             .into_iter()
             .map(|scope| {
@@ -1175,15 +1168,9 @@ fn historical_reflow_native_measured_gutter_control() {
     use crate::orchestrator::measurements;
 
     let plot = outside("historical_reflow_640x400", LegendPosition::Auto).erase();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let address = ComponentAddress::root()
-        .child(
-            AddressRole::PlotBody,
-            0,
-            &crate::font::canonical::OperationGenerationResources::new(),
-        )
+        .child(AddressRole::PlotBody, 0)
         .unwrap();
     let mut rounds = Vec::new();
     measurements::start();
@@ -1192,7 +1179,7 @@ fn historical_reflow_native_measured_gutter_control() {
     crate::layout::plan_exact_root(
         640,
         400,
-        |stage| crate::plots::shared_x::prepare_plot(&plot, &stage.generation_resources(), None),
+        |stage| crate::plots::shared_x::prepare_plot(&plot, &stage.operation(), None),
         |inputs, assigned, round| {
             let plot = inputs.attach(plot.clone())?;
             let canvas = plot.measured_canvas_layout(&theme)?;
@@ -1213,10 +1200,10 @@ fn historical_reflow_native_measured_gutter_control() {
             let requested = [required.left, required.right, required.bottom, required.top]
                 .map(|value| (value + 4.0).ceil());
             assert_eq!(
-                round.next_insets(&address, FeedbackKind::AxisGutter)?,
+                round.next_insets(&address, FeedbackKind::AxisGutter),
                 requested
             );
-            let consumed = round.insets(&address, FeedbackKind::AxisGutter)?;
+            let consumed = round.insets(&address, FeedbackKind::AxisGutter);
             assert_eq!(plan.panel_box.x0, canvas.panel_box.x0 + consumed[0]);
             assert_eq!(plan.panel_box.y0, canvas.panel_box.y0 + consumed[2]);
             assert_eq!(plan.panel_box.y1, canvas.panel_box.y1 - consumed[3]);
@@ -1234,18 +1221,17 @@ fn historical_reflow_native_measured_gutter_control() {
     assert_eq!(
         rounds,
         [
-            // Complete glyph/frame enclosure reserves one more spatial quantum
-            // for this discrete guide. Consumed/requested gutters stay exact.
-            ([0.0; 4], [79.0, 5.0, 59.0, 5.0], 367.788_085_937_5),
+            // Consumed/requested gutters and complete guide enclosure stay exact.
+            ([0.0; 4], [79.0, 5.0, 59.0, 5.0], 367.789_062_5),
             (
                 [79.0, 5.0, 59.0, 5.0],
                 [94.0, 5.0, 59.0, 5.0],
-                283.788_085_937_5
+                283.789_062_5
             ),
             (
                 [94.0, 5.0, 59.0, 5.0],
                 [94.0, 5.0, 59.0, 5.0],
-                268.788_085_937_5
+                268.789_062_5
             ),
         ]
     );

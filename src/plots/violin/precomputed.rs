@@ -1,6 +1,5 @@
 use crate::Error;
 
-use crate::data::PlotData;
 use crate::decorations::legend::LegendEntry;
 use crate::layout::Layout;
 use crate::plots::categorical_distribution::DistributionPayload;
@@ -36,29 +35,23 @@ pub(crate) fn intrinsic_body_minimum(
             "supplied Raincloud groups and category slots differ".into(),
         ));
     }
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    resources
-        .claim_visits(prepared.groups.len() as u128)
-        .map_err(|error| Error::Render(format!("supplied Raincloud slot admission: {error:?}")))?;
+
     let width = 0.8_f64;
     let cloud_style = theme.marks.violin_body.backend_style((0, 0, 0));
-    let cloud = crate::render::geometry::rectangular_fill_ink_bounds(theme, &cloud_style)?;
-    let (_, cloud_numeric) =
-        crate::render::geometry::rectangular_fill_ink_outset(theme, &cloud_style)?;
+    let cloud = crate::render::geometry::rectangular_fill_ink_bounds(&cloud_style)?;
+    let (_, cloud_numeric) = crate::render::geometry::rectangular_fill_ink_outset(&cloud_style)?;
     let box_style = theme.marks.raincloud_box.backend_style();
-    let box_ink = crate::render::geometry::rectangular_fill_ink_bounds(theme, &box_style)?;
-    let (_, box_numeric) = crate::render::geometry::rectangular_fill_ink_outset(theme, &box_style)?;
-    let median_ink = crate::render::geometry::line_ink_bounds(
-        theme,
-        &theme.marks.raincloud_median.backend_style(),
-    )?;
+    let box_ink = crate::render::geometry::rectangular_fill_ink_bounds(&box_style)?;
+    let (_, box_numeric) = crate::render::geometry::rectangular_fill_ink_outset(&box_style)?;
+    let median_ink =
+        crate::render::geometry::line_ink_bounds(&theme.marks.raincloud_median.backend_style())?;
     let median = median_ink.map_or(0.0, |ink| ink.top - ink.bottom);
     let point = theme.marks.raw_overlay_point.backend_style(
         (0, 0, 0),
         theme.marks.raw_overlay_radius,
         true,
     );
-    let (_, point_numeric) = crate::render::geometry::point_ink_dimensions(theme, &point)?;
+    let (_, point_numeric) = crate::render::geometry::point_ink_dimensions(&point)?;
     let mut pitch = crate::plots::violin::raincloud_strip_pitch(theme, width)?
         .max((1.0 / 1024.0) / (0.4 * width))
         .max((1.0 / 1024.0) / (0.16 * width));
@@ -110,14 +103,13 @@ impl PreparedRaincloud {
         &self,
         chart: &Plot,
         theme: &ResolvedTheme,
-        data: PlotData<'_>,
+
         colors: &CategoryColors,
     ) -> Result<Vec<LegendEntry>, Error> {
-        let resources = data.source_resources()?;
-        data.collect_source(self.hues.iter().map(|hue| {
-            let color = colors.color(hue, resources)?;
+        crate::data::source::collect_source(self.hues.iter().map(|hue| {
+            let color = colors.color(hue)?;
             Ok(LegendEntry::point_fill(
-                chart.point_legend_identity(hue, data)?,
+                chart.point_legend_identity(hue)?,
                 crate::plots::distribution_sample::overlay_style(color, theme),
                 theme.marks.violin_body.backend_style(color),
             ))
@@ -135,41 +127,42 @@ thread_local! {
     static HUE_LOOKUP_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-pub(crate) fn prepare(chart: &Plot, data: PlotData<'_>) -> Result<PreparedRaincloud, Error> {
+pub(crate) fn prepare(chart: &Plot) -> Result<PreparedRaincloud, Error> {
     let input = chart
         .raincloud_geometry_input()
         .ok_or_else(|| Error::Render("raincloud requires supplied geometry".into()))?;
-    let range = input.validate(Some(data))?;
-    let categories = data.collect_source(
+    let range = input.validate()?;
+    let categories = crate::data::source::collect_source(
         input
             .groups
             .iter()
-            .map(|group| data.copy_source_string(&group.category)),
+            .map(|group| crate::data::source::copy_source_string(&group.category)),
     )?;
     let mut hues = Vec::new();
-    let groups = data.collect_source(input.groups.iter().map(|group| {
+    let groups = crate::data::source::collect_source(input.groups.iter().map(|group| {
         if let Some(hue) = &group.hue {
-            data.claim_source_visits(hues.len())?;
             #[cfg(test)]
             HUE_LOOKUP_VISITS.with(|count| count.set(count.get() + hues.len()));
             if !hues.iter().any(|level| level == hue) {
-                data.reserve_source(&mut hues, 1)?;
-                hues.push(data.copy_source_string(hue)?);
+                crate::data::source::reserve_source(&mut hues, 1)?;
+                hues.push(crate::data::source::copy_source_string(hue)?);
             }
         }
         Ok(PreparedRaincloudGroup {
             geometry: RaincloudGroup {
-                category: data.copy_source_string(&group.category)?,
+                category: crate::data::source::copy_source_string(&group.category)?,
                 hue: group
                     .hue
                     .as_ref()
-                    .map(|hue| data.copy_source_string(hue))
+                    .map(|hue| crate::data::source::copy_source_string(hue))
                     .transpose()?,
-                density: data.collect_source(group.density.iter().copied().map(Ok))?,
+                density: crate::data::source::collect_source(
+                    group.density.iter().copied().map(Ok),
+                )?,
                 q1: group.q1,
                 median: group.median,
                 q3: group.q3,
-                points: data.collect_source(group.points.iter().copied().map(Ok))?,
+                points: crate::data::source::collect_source(group.points.iter().copied().map(Ok))?,
             },
         })
     }))?;
@@ -188,11 +181,11 @@ pub(super) fn measure_marks(
     layout: Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = context.data.with_axis_resources(&resources);
+    let resources = theme.prepared_font_environment()?.operation();
+    let data = context.data.with_operation(&resources);
     let colors = crate::plots::categorical_distribution::retained(chart)?
         .resolved_colors(chart, theme, data)?;
-    let legend_entries = input.guide_entries(chart, theme, data, &colors)?;
+    let legend_entries = input.guide_entries(chart, theme, &colors)?;
 
     let mut payload = DistributionPayload::new(layout.projection.panel_box(), chart.kind());
     for (index, group) in input.groups.iter().enumerate() {
@@ -202,17 +195,8 @@ pub(super) fn measure_marks(
                 .hue
                 .as_deref()
                 .unwrap_or(&group.geometry.category),
-            &resources,
         )?;
-        project_cloud_and_summary(
-            &layout,
-            &group.geometry,
-            color,
-            index,
-            theme,
-            &mut payload,
-            data,
-        )?;
+        project_cloud_and_summary(&layout, &group.geometry, color, index, theme, &mut payload)?;
     }
     for (index, group) in input.groups.iter().enumerate() {
         let color = colors.color(
@@ -221,7 +205,6 @@ pub(super) fn measure_marks(
                 .hue
                 .as_deref()
                 .unwrap_or(&group.geometry.category),
-            &resources,
         )?;
         project_strip(
             &layout,
@@ -230,7 +213,6 @@ pub(super) fn measure_marks(
             index,
             theme,
             &mut payload,
-            data,
             context.fit_scope(),
         )?;
     }
@@ -248,7 +230,6 @@ fn project_cloud_and_summary(
     index: usize,
     theme: &ResolvedTheme,
     payload: &mut DistributionPayload,
-    data: PlotData<'_>,
 ) -> Result<(), Error> {
     let center = index as f64 + 0.5;
     let width = 0.8;
@@ -256,7 +237,7 @@ fn project_cloud_and_summary(
     let mut cloud = Vec::new();
     let mut left = baseline;
     let mut projected_left = f64::INFINITY;
-    data.reserve_source(&mut cloud, group.density.len() + 2)?;
+    crate::data::source::reserve_source(&mut cloud, group.density.len() + 2)?;
     for point in &group.density {
         let offset = point.normalized_width * width * 0.40;
         let (x, y) = layout.projection.project(baseline - offset, point.y);
@@ -284,7 +265,7 @@ fn project_cloud_and_summary(
     )?;
     cloud.push(Point2D::new(baseline_high_x, baseline_high_y));
     cloud.push(Point2D::new(baseline_low_x, baseline_low_y));
-    payload.polygon(cloud, theme.marks.violin_body.backend_style(color), data)?;
+    payload.polygon(cloud, theme.marks.violin_body.backend_style(color))?;
 
     let box_center = center + width * 0.02;
     let box_half_width = width * 0.08;
@@ -301,7 +282,7 @@ fn project_cloud_and_summary(
         "raincloud box polygon",
     )?;
     payload.polygon(
-        data.collect_source(
+        crate::data::source::collect_source(
             [
                 Point2D::new(box_left, q1),
                 Point2D::new(box_right, q1),
@@ -312,7 +293,6 @@ fn project_cloud_and_summary(
             .map(Ok),
         )?,
         theme.marks.raincloud_box.backend_style(),
-        data,
     )?;
     payload.line(
         &[
@@ -320,14 +300,9 @@ fn project_cloud_and_summary(
             Point2D::new(box_right, median),
         ],
         &theme.marks.raincloud_median.backend_style(),
-        data,
     )
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "borrowed selected projection and styles"
-)]
 fn project_strip(
     layout: &Layout,
     group: &RaincloudGroup,
@@ -335,7 +310,7 @@ fn project_strip(
     index: usize,
     theme: &ResolvedTheme,
     payload: &mut DistributionPayload,
-    data: PlotData<'_>,
+
     scope: &crate::layout::fit::FitScope,
 ) -> Result<(), crate::layout::fit::PlanError> {
     let center = index as f64 + 0.5;
@@ -344,27 +319,25 @@ fn project_strip(
     let (strip_left, _) = layout.projection.project(center + width * 0.24, 0.0);
     let (strip_right, _) = layout.projection.project(center + width * 0.46, 0.0);
     let style = crate::plots::distribution_sample::overlay_style(color, theme);
-    let point_ink = crate::render::geometry::point_ink_bounds(theme, &style)?;
+    let point_ink = crate::render::geometry::point_ink_bounds(&style)?;
     let point_left = point_ink.map_or(0.0, |ink| (-ink.left).max(0.0));
     let point_right = point_ink.map_or(0.0, |ink| ink.right.max(0.0));
     let box_right_ink = crate::render::geometry::rectangular_fill_ink_bounds(
-        theme,
         &theme.marks.raincloud_box.backend_style(),
     )?
     .map_or(0.0, |ink| ink.right.max(0.0));
     let strip_min = strip_left + point_left;
     let strip_max = strip_right - point_right;
     if strip_min - point_left <= box_right + box_right_ink || strip_max < strip_min {
-        return Err(scope.child(crate::layout::AddressRole::CategoricalSeriesSlot, index, &theme.prepared_font_environment()?.generation_resources())?.failure(
+        return Err(scope.child(crate::layout::AddressRole::CategoricalSeriesSlot, index)?.failure(
             crate::layout::fit::FitKind::SpecializedGeometry,
             "raincloud: panel is too narrow to separate the complete observation strip from the IQR box; increase width",
         ).into());
     }
-    let points = data.collect_source(group.points.iter().map(|point| {
-        data.claim_source_visits(1)?;
+    let points = crate::data::source::collect_source(group.points.iter().map(|point| {
         let x = strip_min + point.normalized_strip * (strip_max - strip_min);
         let (_, y) = layout.projection.project(center, point.y);
         Ok(Point2D::new(x, y))
     }))?;
-    Ok(payload.scatter(points, style, data)?)
+    Ok(payload.scatter(points, style)?)
 }

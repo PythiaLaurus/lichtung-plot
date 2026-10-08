@@ -26,9 +26,7 @@ fn grouped_targets_resolve_typed_series_and_category_anchors() {
         SignificanceMark::TwoStars,
     )])
     .erase();
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     let categories = ["a".to_owned(), "b".to_owned()];
     let groups = ["g1".to_owned(), "g2".to_owned()];
     let maxima = [vec![1.0, 2.0], vec![3.0, 4.0]];
@@ -61,9 +59,7 @@ fn centered_label_ink_prevents_disjoint_spans_from_sharing_a_shelf() {
     let categories = ["a", "b", "c", "d", "e", "f"].map(str::to_owned);
     let maxima = [1.0, 2.0, 1.0, 2.0, 1.0, 2.0];
     let panel = PanelBox::new(50.0, 650.0, 40.0, 640.0);
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     for (size, shared) in [(16, true), (140, false)] {
         let mut appearance = theme.typography.annotations.significance_label.clone();
         appearance.font_size = size;
@@ -96,9 +92,7 @@ fn centered_label_ink_prevents_disjoint_spans_from_sharing_a_shelf() {
 
 #[test]
 fn complete_bracket_stroke_cannot_escape_the_category_panel_even_with_exact_limits() {
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     theme.annotations.bracket_stroke.width = 200.0;
     let label = theme.typography.annotations.significance_label.clone();
     for limits in [None, Some((0.0, 10.0))] {
@@ -125,19 +119,17 @@ fn complete_bracket_stroke_cannot_escape_the_category_panel_even_with_exact_limi
             Err(crate::layout::fit::PlanError::Fit(failure))
                 if failure.reason.kind == crate::layout::fit::FitKind::OverlayCollision
                     && failure.reason.address == crate::layout::ComponentAddress::root()
-                        .child(crate::layout::AddressRole::Annotation, 0, &crate::font::canonical::OperationGenerationResources::new()).unwrap()
+                        .child(crate::layout::AddressRole::Annotation, 0).unwrap()
         ));
     }
 }
 
 #[test]
 fn thick_bracket_stroke_expands_only_an_automatic_numeric_window() {
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     theme.annotations.bracket_stroke.width = 24.0;
     let label = theme.typography.annotations.significance_label.clone();
-    let select = |limits| {
+    let select_bounds = |limits| {
         plan_comparisons_at_with_label(
             &[comparison("a", "b", 0.01)],
             &["a".into(), "b".into()],
@@ -157,9 +149,9 @@ fn thick_bracket_stroke_expands_only_an_automatic_numeric_window() {
             &crate::layout::fit::ROOT_SCOPE,
         )
     };
-    assert!(select(None).unwrap().y_range.1 > 10.0);
+    assert!(select_bounds(None).unwrap().y_range.1 > 10.0);
     assert!(matches!(
-        select(Some((0.0, 10.0))),
+        select_bounds(Some((0.0, 10.0))),
         Err(crate::layout::fit::PlanError::Fit(failure))
             if failure.reason.kind == crate::layout::fit::FitKind::OverlayCollision
     ));
@@ -174,27 +166,15 @@ fn default_metrics() -> BracketMetrics {
 fn fit_diagnostic_retains_caller_slot_after_bracket_sorting() {
     use crate::layout::fit::{FitKind, FitScope, PlanError};
     use crate::layout::{AddressRole, ComponentAddress};
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let theme = crate::Theme::Publication.resolve().unwrap();
     theme.prepare_font_environment().unwrap();
     let style = SignificanceMarkStyle::default();
     let label = theme
         .typography
-        .effective_significance_label(
-            Some(style),
-            &theme
-                .prepared_font_environment()
-                .unwrap()
-                .generation_resources(),
-        )
+        .effective_significance_label(Some(style))
         .unwrap();
     let address = ComponentAddress::root()
-        .child(
-            AddressRole::CanvasCell,
-            3,
-            &crate::font::canonical::OperationGenerationResources::new(),
-        )
+        .child(AddressRole::CanvasCell, 3)
         .unwrap();
     let scope = FitScope::new(&address, 7);
     let result = plan_comparisons_with_label(
@@ -221,13 +201,7 @@ fn fit_diagnostic_retains_caller_slot_after_bracket_sorting() {
     assert_eq!(failure.reason.kind, FitKind::Text);
     assert_eq!(
         failure.reason.address,
-        address
-            .child(
-                AddressRole::Annotation,
-                0,
-                &crate::font::canonical::OperationGenerationResources::new()
-            )
-            .unwrap()
+        address.child(AddressRole::Annotation, 0).unwrap()
     );
     assert_eq!(failure.reason.ordinal, 0);
 }
@@ -467,18 +441,10 @@ fn planner_level_maximum_covers_every_category_under_each_span() {
 #[test]
 fn planner_retains_the_exact_effective_significance_label() {
     let style = SignificanceMarkStyle::new(23, crate::TextWeight::Bold, 9.0).unwrap();
-    let plan_theme = crate::Theme::Nature
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let plan_theme = crate::Theme::Nature.resolve().unwrap();
     let label = plan_theme
         .typography
-        .effective_significance_label(
-            Some(style),
-            &plan_theme
-                .prepared_font_environment()
-                .unwrap()
-                .generation_resources(),
-        )
+        .effective_significance_label(Some(style))
         .unwrap();
     let plan = plan_comparisons_with_label(
         &[comparison("a", "b", 0.01)],
@@ -515,9 +481,7 @@ fn planner_retains_the_exact_effective_significance_label() {
     )
     .significance_mark_style(style)
     .erase();
-    let render_theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let render_theme = crate::Theme::Publication.resolve().unwrap();
     let mut backend = crate::render::svg_backend::SvgBackend::in_memory(400, 300);
     backend.begin(400, 300).unwrap();
     render(&chart, &plan, &render_theme, &mut backend).unwrap();

@@ -99,10 +99,9 @@ pub(super) struct RoundState {
     misses: Vec<FitMiss>,
 }
 
-/// A round borrows one operation's budgets. No child can start another round.
+/// One deterministic feedback round. No child can start another round.
 pub(crate) struct FeedbackRound {
     state: RoundState,
-    resources: crate::font::canonical::OperationGenerationResources,
     ordinal: usize,
     guide_trials: Vec<(ComponentAddress, u8, u32)>,
     guide_events: Vec<(ComponentAddress, u8, u32)>,
@@ -141,11 +140,7 @@ fn number(value: f64) -> Result<u64, Error> {
     Ok(if value == 0.0 { 0 } else { value.to_bits() })
 }
 
-fn reserve<T>(
-    resources: &crate::font::canonical::OperationGenerationResources,
-    values: &mut Vec<T>,
-    count: usize,
-) -> Result<(), Error> {
+fn reserve<T>(values: &mut Vec<T>, count: usize) -> Result<(), Error> {
     let needed = values
         .len()
         .checked_add(count)
@@ -153,60 +148,31 @@ fn reserve<T>(
     if needed <= values.capacity() {
         return Ok(());
     }
-    // Unknown feedback streams grow geometrically. Reserving exactly one more
-    // entry repeatedly allocates/reprices every prefix and makes cumulative
-    // storage quadratic even though each payload is retained only once.
+    // Unknown feedback streams grow geometrically instead of reallocating each prefix.
     let capacity = needed.max(values.capacity().saturating_mul(2));
-    let bytes = capacity
-        .checked_mul(std::mem::size_of::<T>())
-        .and_then(|bytes| u64::try_from(bytes).ok())
-        .ok_or_else(|| Error::Render("feedback storage overflow".into()))?;
-    // Admit the complete new buffer, not only its delta. Earlier buffers and
-    // rejected work remain charged; spare capacity creates no record claims.
-    resources.claim_bytes(bytes).map_err(claim_error)?;
+
     values
         .try_reserve_exact(capacity - values.len())
         .map_err(|error| Error::Render(format!("layout feedback allocation failed: {error}")))
 }
 
-fn claim_error(error: impl std::fmt::Debug) -> Error {
-    Error::Render(format!("layout feedback admission: {error:?}"))
-}
-
-fn arc_payload_bytes<T>() -> u64 {
-    (std::mem::size_of::<T>() + 2 * std::mem::size_of::<usize>()) as u64
-}
-
-/// Searches admit only entries actually examined, including a terminating match.
-fn find_index<T>(
-    resources: &crate::font::canonical::OperationGenerationResources,
-    entries: &[T],
-    mut matches: impl FnMut(&T) -> bool,
-) -> Result<Option<usize>, Error> {
+/// Search stops at the first matching entry.
+fn find_index<T>(entries: &[T], mut matches: impl FnMut(&T) -> bool) -> Option<usize> {
     for (index, entry) in entries.iter().enumerate() {
-        resources.claim_visits(1).map_err(claim_error)?;
         if matches(entry) {
-            return Ok(Some(index));
+            return Some(index);
         }
     }
-    Ok(None)
+    None
 }
 
 impl FeedbackRound {
-    pub(crate) fn resources(&self) -> &crate::font::canonical::OperationGenerationResources {
-        &self.resources
-    }
-    fn owned_by(
-        &self,
-        address: &ComponentAddress,
-        owners: &[ComponentAddress],
-    ) -> Result<bool, Error> {
-        Ok(find_index(&self.resources, owners, |owner| address.is_within(owner))?.is_some())
+    fn owned_by(address: &ComponentAddress, owners: &[ComponentAddress]) -> bool {
+        find_index(owners, |owner| address.is_within(owner)).is_some()
     }
 
-    fn relevant(&self, entry: &FeedbackEntry, owners: &[ComponentAddress]) -> Result<bool, Error> {
-        self.resources.claim_visits(1).map_err(claim_error)?;
-        Ok(self.owned_by(&entry.target, owners)? && entry.value != FeedbackValue::Insets([0; 4]))
+    fn relevant(entry: &FeedbackEntry, owners: &[ComponentAddress]) -> bool {
+        Self::owned_by(&entry.target, owners) && entry.value != FeedbackValue::Insets([0; 4])
     }
 
     pub(crate) fn child_inputs(
@@ -215,9 +181,8 @@ impl FeedbackRound {
     ) -> Result<ChildFeedbackInputs, Error> {
         let mut entries = Vec::new();
         for entry in &self.state.consumed {
-            if self.relevant(entry, owners)? {
-                self.resources.claim_slots(1).map_err(claim_error)?;
-                reserve(&self.resources, &mut entries, 1)?;
+            if Self::relevant(entry, owners) {
+                reserve(&mut entries, 1)?;
                 entries.push(FeedbackEntry {
                     target: entry.target.clone(),
                     kind: entry.kind,
@@ -228,61 +193,59 @@ impl FeedbackRound {
         Ok(ChildFeedbackInputs(entries))
     }
 
-    pub(crate) fn child_stable(&self, owners: &[ComponentAddress]) -> Result<bool, Error> {
-        let count = |entries: &[FeedbackEntry]| -> Result<usize, Error> {
-            let mut count = 0;
-            for entry in entries {
-                count += usize::from(self.relevant(entry, owners)?);
-            }
-            Ok(count)
+    pub(crate) fn child_stable(&self, owners: &[ComponentAddress]) -> bool {
+        let count = |entries: &[FeedbackEntry]| {
+            entries
+                .iter()
+                .filter(|entry| Self::relevant(entry, owners))
+                .count()
         };
         // next is not sorted until the round finishes.
-        if count(&self.state.consumed)? != count(&self.state.next)? {
-            return Ok(false);
+        if count(&self.state.consumed) != count(&self.state.next) {
+            return false;
         }
         for entry in &self.state.consumed {
-            if !self.relevant(entry, owners)? {
+            if !Self::relevant(entry, owners) {
                 continue;
             }
             let mut found = false;
             for other in &self.state.next {
-                if self.relevant(other, owners)? && entry == other {
+                if Self::relevant(other, owners) && entry == other {
                     found = true;
                     break;
                 }
             }
             if !found {
-                return Ok(false);
+                return false;
             }
         }
         for miss in &self.state.misses {
-            self.resources.claim_visits(1).map_err(claim_error)?;
-            if self.owned_by(&miss.failure.reason.address, owners)? {
-                return Ok(false);
+            if Self::owned_by(&miss.failure.reason.address, owners) {
+                return false;
             }
         }
-        Ok(true)
+        true
     }
 
     pub(crate) fn child_inputs_equal(
         &self,
         inputs: &ChildFeedbackInputs,
         owners: &[ComponentAddress],
-    ) -> Result<bool, Error> {
+    ) -> bool {
         let mut index = 0;
         for entry in &self.state.consumed {
-            if self.relevant(entry, owners)? {
+            if Self::relevant(entry, owners) {
                 let Some(input) = inputs.0.get(index) else {
-                    return Ok(false);
+                    return false;
                 };
-                self.resources.claim_visits(1).map_err(claim_error)?;
+
                 if entry != input {
-                    return Ok(false);
+                    return false;
                 }
                 index += 1;
             }
         }
-        Ok(index == inputs.0.len())
+        index == inputs.0.len()
     }
 
     pub(crate) fn child_checkpoint(&self) -> ChildCheckpoint {
@@ -302,10 +265,9 @@ impl FeedbackRound {
             return Ok(None);
         }
         for request in &self.state.requests[start.1..] {
-            self.resources.claim_visits(1).map_err(claim_error)?;
-            let prior = find_index(&self.resources, &self.state.consumed, |entry| {
+            let prior = find_index(&self.state.consumed, |entry| {
                 entry.target == request.entry.target && entry.kind == request.entry.kind
-            })?;
+            });
             if prior.map_or(
                 request.entry.value != FeedbackValue::Insets([0; 4]),
                 |index| self.state.consumed[index].value != request.entry.value,
@@ -316,28 +278,10 @@ impl FeedbackRound {
         let mut observations = Vec::new();
         let mut requests = Vec::new();
         let mut guide_events = Vec::new();
-        self.resources
-            .claim_slots(
-                (self.state.observations.len() - start.0 + self.state.requests.len() - start.1
-                    + self.guide_events.len()
-                    - start.3) as u128,
-            )
-            .map_err(claim_error)?;
-        reserve(
-            &self.resources,
-            &mut observations,
-            self.state.observations.len() - start.0,
-        )?;
-        reserve(
-            &self.resources,
-            &mut requests,
-            self.state.requests.len() - start.1,
-        )?;
-        reserve(
-            &self.resources,
-            &mut guide_events,
-            self.guide_events.len() - start.3,
-        )?;
+
+        reserve(&mut observations, self.state.observations.len() - start.0)?;
+        reserve(&mut requests, self.state.requests.len() - start.1)?;
+        reserve(&mut guide_events, self.guide_events.len() - start.3)?;
         observations.extend(self.state.observations[start.0..].iter().cloned());
         requests.extend(self.state.requests[start.1..].iter().cloned());
         for (owner, maximum, ordinal) in &self.guide_events[start.3..] {
@@ -355,7 +299,7 @@ impl FeedbackRound {
             self.claim_guide_trial(owner, *maximum, *ordinal)?;
         }
         for observation in &child.observations {
-            self.admit_observation_reference()?;
+            self.reserve_observation()?;
             self.state
                 .observations
                 .push(std::sync::Arc::clone(observation));
@@ -373,14 +317,13 @@ impl FeedbackRound {
         Ok(())
     }
 
-    pub(crate) fn attempt_ordinal(&self, address: &ComponentAddress) -> Result<u32, Error> {
+    pub(crate) fn attempt_ordinal(&self, address: &ComponentAddress) -> u32 {
         for (owner, _, ordinal) in &self.guide_trials {
-            self.resources.claim_visits(1).map_err(claim_error)?;
             if owner == address {
-                return Ok(*ordinal);
+                return *ordinal;
             }
         }
-        Ok(0)
+        0
     }
     pub(crate) fn claim_guide_trial(
         &mut self,
@@ -390,7 +333,6 @@ impl FeedbackRound {
     ) -> Result<(), Error> {
         let mut found = None;
         for entry in &mut self.guide_trials {
-            self.resources.claim_visits(1).map_err(claim_error)?;
             if entry.0 == *owner {
                 found = Some(entry);
                 break;
@@ -403,22 +345,19 @@ impl FeedbackRound {
             *used += 1;
             *current = ordinal;
         } else {
-            self.resources.claim_slots(1).map_err(claim_error)?;
-            reserve(&self.resources, &mut self.guide_trials, 1)?;
+            reserve(&mut self.guide_trials, 1)?;
             self.guide_trials.push((owner.clone(), 1, ordinal));
         }
-        self.resources.claim_slots(1).map_err(claim_error)?;
-        reserve(&self.resources, &mut self.guide_events, 1)?;
+
+        reserve(&mut self.guide_events, 1)?;
         self.guide_events.push((owner.clone(), maximum, ordinal));
         Ok(())
     }
 
     pub(crate) fn begin_trial(&mut self) -> Result<TrialCheckpoint, Error> {
         let mut next = Vec::new();
-        self.resources
-            .claim_slots(self.state.next.len() as u128)
-            .map_err(claim_error)?;
-        reserve(&self.resources, &mut next, self.state.next.len())?;
+
+        reserve(&mut next, self.state.next.len())?;
         for entry in &self.state.next {
             next.push(FeedbackEntry {
                 target: entry.target.clone(),
@@ -434,13 +373,9 @@ impl FeedbackRound {
         })
     }
 
-    pub(crate) fn finish_trial(
-        &mut self,
-        checkpoint: TrialCheckpoint,
-    ) -> Result<TrialOutcome, Error> {
+    pub(crate) fn finish_trial(&mut self, checkpoint: TrialCheckpoint) -> TrialOutcome {
         let mut least = None;
         for (index, miss) in self.state.misses.iter().enumerate().skip(checkpoint.misses) {
-            self.resources.claim_visits(1).map_err(claim_error)?;
             if miss.feedback.is_empty()
                 && least.is_none_or(|prior: usize| {
                     miss.failure.reason < self.state.misses[prior].failure.reason
@@ -455,11 +390,11 @@ impl FeedbackRound {
             self.state.observations.truncate(checkpoint.observations);
             self.state.requests.truncate(checkpoint.requests);
             self.state.next = checkpoint.next;
-            Ok(TrialOutcome::Miss(miss.failure))
+            TrialOutcome::Miss(miss.failure)
         } else if self.state.misses.len() > checkpoint.misses {
-            Ok(TrialOutcome::Provisional)
+            TrialOutcome::Provisional
         } else {
-            Ok(TrialOutcome::Fit)
+            TrialOutcome::Fit
         }
     }
     #[cfg(test)]
@@ -482,19 +417,12 @@ impl FeedbackRound {
         self.state.requests.clear();
         Ok(())
     }
-    pub(super) fn new(
-        previous: Option<&RoundState>,
-        resources: crate::font::canonical::OperationGenerationResources,
-        ordinal: usize,
-    ) -> Result<Self, Error> {
+    pub(super) fn new(previous: Option<&RoundState>, ordinal: usize) -> Result<Self, Error> {
         let mut consumed = Vec::new();
         let mut next = Vec::new();
         if let Some(previous) = previous {
-            resources
-                .claim_slots((previous.next.len() as u128) * 2)
-                .map_err(claim_error)?;
-            reserve(&resources, &mut consumed, previous.next.len())?;
-            reserve(&resources, &mut next, previous.next.len())?;
+            reserve(&mut consumed, previous.next.len())?;
+            reserve(&mut next, previous.next.len())?;
             for entry in &previous.next {
                 consumed.push(FeedbackEntry {
                     target: entry.target.clone(),
@@ -516,7 +444,6 @@ impl FeedbackRound {
                 observations: Vec::new(),
                 misses: Vec::new(),
             },
-            resources,
             ordinal,
             guide_trials: Vec::new(),
             guide_events: Vec::new(),
@@ -524,7 +451,7 @@ impl FeedbackRound {
     }
 
     pub(crate) fn begin_owner(&mut self, address: &ComponentAddress) -> Result<(), Error> {
-        self.admit_observation()?;
+        self.reserve_observation()?;
         let address = address.clone();
         self.state
             .observations
@@ -533,24 +460,15 @@ impl FeedbackRound {
     }
 
     fn observe(&mut self, observation: Observation) -> Result<(), Error> {
-        self.admit_observation()?;
+        self.reserve_observation()?;
         self.state
             .observations
             .push(std::sync::Arc::new(observation));
         Ok(())
     }
 
-    fn admit_observation(&mut self) -> Result<(), Error> {
-        self.resources.claim_slots(1).map_err(claim_error)?;
-        self.resources
-            .claim_bytes(arc_payload_bytes::<Observation>())
-            .map_err(claim_error)?;
-        self.admit_observation_reference()
-    }
-
-    fn admit_observation_reference(&mut self) -> Result<(), Error> {
-        self.resources.claim_slots(1).map_err(claim_error)?;
-        reserve(&self.resources, &mut self.state.observations, 1)?;
+    fn reserve_observation(&mut self) -> Result<(), Error> {
+        reserve(&mut self.state.observations, 1)?;
         Ok(())
     }
 
@@ -636,7 +554,7 @@ impl FeedbackRound {
     pub(crate) fn observe_text(&mut self, plan: &ResolvedTextPlan) -> Result<(), Error> {
         // The producer admitted the immutable payload. Retaining another handle
         // admits only this observation, before incrementing the shared ownership.
-        self.admit_observation()?;
+        self.reserve_observation()?;
         self.state
             .observations
             .push(std::sync::Arc::new(Observation::TextPlan(plan.clone())));
@@ -667,10 +585,7 @@ impl FeedbackRound {
     }
 
     pub(crate) fn observe_string(&mut self, value: &str) -> Result<(), Error> {
-        self.resources
-            .claim_bytes(u64::try_from(value.len()).map_err(claim_error)?)
-            .map_err(claim_error)?;
-        self.admit_observation()?;
+        self.reserve_observation()?;
         let mut text = String::new();
         text.try_reserve_exact(value.len())
             .map_err(|error| Error::Render(format!("feedback string allocation: {error}")))?;
@@ -723,44 +638,36 @@ impl FeedbackRound {
         clippy::cast_precision_loss,
         reason = "legacy pixel adapters consume exact-root-bounded layout quanta"
     )]
-    pub(crate) fn insets(
-        &self,
-        target: &ComponentAddress,
-        kind: FeedbackKind,
-    ) -> Result<[f64; 4], Error> {
-        let index = find_index(&self.resources, &self.state.consumed, |entry| {
+    pub(crate) fn insets(&self, target: &ComponentAddress, kind: FeedbackKind) -> [f64; 4] {
+        let index = find_index(&self.state.consumed, |entry| {
             entry.target == *target
                 && entry.kind == kind
                 && matches!(entry.value, FeedbackValue::Insets(_))
-        })?;
-        Ok(index.map_or([0.0; 4], |index| {
+        });
+        index.map_or([0.0; 4], |index| {
             let FeedbackValue::Insets(values) = self.state.consumed[index].value else {
                 unreachable!("matched inset feedback")
             };
             values.map(|value| value as f64 / 1024.0)
-        }))
+        })
     }
 
     #[expect(
         clippy::cast_precision_loss,
         reason = "legacy pixel adapters consume exact-root-bounded layout quanta"
     )]
-    pub(crate) fn next_insets(
-        &self,
-        target: &ComponentAddress,
-        kind: FeedbackKind,
-    ) -> Result<[f64; 4], Error> {
-        let index = find_index(&self.resources, &self.state.next, |entry| {
+    pub(crate) fn next_insets(&self, target: &ComponentAddress, kind: FeedbackKind) -> [f64; 4] {
+        let index = find_index(&self.state.next, |entry| {
             entry.target == *target
                 && entry.kind == kind
                 && matches!(entry.value, FeedbackValue::Insets(_))
-        })?;
-        Ok(index.map_or([0.0; 4], |index| {
+        });
+        index.map_or([0.0; 4], |index| {
             let FeedbackValue::Insets(values) = self.state.next[index].value else {
                 unreachable!("matched inset feedback")
             };
             values.map(|value| value as f64 / 1024.0)
-        }))
+        })
     }
 
     pub(crate) fn request_insets(
@@ -791,9 +698,9 @@ impl FeedbackRound {
             *output = LayoutScalar::from_css_pixels(value, SpatialRounding::Ceil)?.0;
         }
         if matches!(kind, FeedbackKind::SharedAlignment | FeedbackKind::OwnedInk) {
-            if let Some(index) = find_index(&self.resources, &self.state.next, |entry| {
+            if let Some(index) = find_index(&self.state.next, |entry| {
                 entry.target == *target && entry.kind == kind
-            })? {
+            }) {
                 if let FeedbackValue::Insets(prior) = self.state.next[index].value {
                     for (value, prior) in normalized.iter_mut().zip(prior) {
                         *value = (*value).max(prior);
@@ -810,7 +717,6 @@ impl FeedbackRound {
             reason = "observer-only gutter coordinates are exact-root-bounded layout quanta"
         )]
         if kind == FeedbackKind::AxisGutter && request.is_some() {
-            // Observer-only reads must not add test-only work to the ledger.
             let consumed = self.state.consumed.iter().find_map(|entry| {
                 (entry.target == *target && entry.kind == kind).then_some(&entry.value)
             });
@@ -827,22 +733,22 @@ impl FeedbackRound {
         Ok(request)
     }
 
-    pub(crate) fn domain(
+    pub(crate) fn feedback_domain(
         &self,
         target: &ComponentAddress,
         kind: FeedbackKind,
-    ) -> Result<Option<(f64, f64)>, Error> {
-        let index = find_index(&self.resources, &self.state.consumed, |entry| {
+    ) -> Option<(f64, f64)> {
+        let index = find_index(&self.state.consumed, |entry| {
             entry.target == *target
                 && entry.kind == kind
                 && matches!(entry.value, FeedbackValue::Domain(_))
-        })?;
-        Ok(index.map(|index| {
+        });
+        index.map(|index| {
             let FeedbackValue::Domain(values) = self.state.consumed[index].value else {
                 unreachable!("matched domain feedback")
             };
             (f64::from_bits(values[0]), f64::from_bits(values[1]))
-        }))
+        })
     }
 
     pub(crate) fn request_domain(
@@ -861,9 +767,9 @@ impl FeedbackRound {
         {
             return Err(Error::Render("invalid automatic domain feedback".into()));
         }
-        if let Some(index) = find_index(&self.resources, &self.state.next, |entry| {
+        if let Some(index) = find_index(&self.state.next, |entry| {
             entry.target == *target && entry.kind == kind
-        })? {
+        }) {
             let entry = &self.state.next[index];
             if let FeedbackValue::Domain(prior) = entry.value {
                 range.0 = range.0.min(f64::from_bits(prior[0]));
@@ -887,11 +793,11 @@ impl FeedbackRound {
         value: FeedbackValue,
     ) -> Result<Option<FeedbackRequestId>, Error> {
         if kind == FeedbackKind::AxisGutter
-            && find_index(&self.resources, &self.state.requests, |request| {
+            && find_index(&self.state.requests, |request| {
                 request.entry.target == *target
                     && request.entry.kind == kind
                     && request.entry.value != value
-            })?
+            })
             .is_some()
         {
             return Err(Error::Render(
@@ -899,30 +805,26 @@ impl FeedbackRound {
             ));
         }
         let absent_zero = value == FeedbackValue::Insets([0; 4])
-            && find_index(&self.resources, &self.state.next, |entry| {
+            && find_index(&self.state.next, |entry| {
                 entry.target == *target && entry.kind == kind
-            })?
+            })
             .is_none();
         // Finish all dependency searches before retaining or applying the
         // request. A refused scan must not publish a partial request identity.
         let (changed, next) = if absent_zero {
             (false, None)
         } else {
-            let consumed = find_index(&self.resources, &self.state.consumed, |entry| {
+            let consumed = find_index(&self.state.consumed, |entry| {
                 entry.target == *target && entry.kind == kind
-            })?;
+            });
             let changed = consumed.is_none_or(|index| self.state.consumed[index].value != value);
-            let next = find_index(&self.resources, &self.state.next, |entry| {
+            let next = find_index(&self.state.next, |entry| {
                 entry.target == *target && entry.kind == kind
-            })?;
+            });
             (changed, next)
         };
-        self.resources.claim_slots(1).map_err(claim_error)?;
-        self.resources
-            .claim_bytes(arc_payload_bytes::<FeedbackRequest>())
-            .map_err(claim_error)?;
-        self.resources.claim_slots(1).map_err(claim_error)?;
-        reserve(&self.resources, &mut self.state.requests, 1)?;
+
+        reserve(&mut self.state.requests, 1)?;
         let id = FeedbackRequestId {
             index: self.state.requests.len(),
             round: self.ordinal,
@@ -944,8 +846,7 @@ impl FeedbackRound {
             let entry = &mut self.state.next[index];
             entry.value = value;
         } else {
-            self.resources.claim_slots(1).map_err(claim_error)?;
-            reserve(&self.resources, &mut self.state.next, 1)?;
+            reserve(&mut self.state.next, 1)?;
             self.state.next.push(FeedbackEntry {
                 target: target.clone(),
                 kind,
@@ -962,15 +863,9 @@ impl FeedbackRound {
         requests: &[Option<FeedbackRequestId>],
         message: impl Into<String>,
     ) -> Result<(), Error> {
-        self.resources
-            .claim_slots(1 + requests.len() as u128)
-            .map_err(claim_error)?;
-        self.resources
-            .claim_visits(requests.len() as u128)
-            .map_err(claim_error)?;
-        reserve(&self.resources, &mut self.state.misses, 1)?;
+        reserve(&mut self.state.misses, 1)?;
         let mut feedback = Vec::new();
-        reserve(&self.resources, &mut feedback, requests.len())?;
+        reserve(&mut feedback, requests.len())?;
         for id in requests.iter().flatten() {
             let request = self
                 .state
@@ -987,7 +882,7 @@ impl FeedbackRound {
             }
             feedback.push(std::sync::Arc::clone(request));
         }
-        let ordinal = self.attempt_ordinal(address)?;
+        let ordinal = self.attempt_ordinal(address);
         self.state.misses.push(FitMiss {
             failure: FitFailure {
                 reason: FitReason {
@@ -1003,8 +898,7 @@ impl FeedbackRound {
     }
 
     pub(crate) fn record_failure(&mut self, failure: FitFailure) -> Result<(), Error> {
-        self.resources.claim_slots(1).map_err(claim_error)?;
-        reserve(&self.resources, &mut self.state.misses, 1)?;
+        reserve(&mut self.state.misses, 1)?;
         self.state.misses.push(FitMiss {
             failure,
             feedback: Vec::new(),
@@ -1012,10 +906,7 @@ impl FeedbackRound {
         Ok(())
     }
 
-    pub(super) fn finish(mut self) -> Result<RoundState, Error> {
-        self.resources
-            .claim_visits((self.state.next.len() + self.state.misses.len()) as u128)
-            .map_err(claim_error)?;
+    pub(super) fn finish(mut self) -> RoundState {
         self.state
             .next
             .sort_by(|a, b| (&a.target, a.kind).cmp(&(&b.target, b.kind)));
@@ -1023,33 +914,25 @@ impl FeedbackRound {
             (&a.failure.reason, !a.feedback.is_empty())
                 .cmp(&(&b.failure.reason, !b.feedback.is_empty()))
         });
-        self.resources
-            .claim_visits(self.state.misses.len() as u128)
-            .map_err(claim_error)?;
+
         self.state
             .misses
             .dedup_by(|a, b| a.failure.reason == b.failure.reason);
-        Ok(self.state)
+        self.state
     }
 }
 
 impl RoundState {
-    pub(super) fn feedback_unchanged(
-        &self,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<bool, Error> {
+    pub(super) fn feedback_unchanged(&self) -> Result<bool, Error> {
         // Insets default to zero when absent; domains default to None. Both
         // vectors are in canonical target/kind order after finishing a round.
         let mut consumed = self.consumed.iter();
         let mut next = self.next.iter();
         loop {
-            match (
-                effective_entry(resources, &mut consumed)?,
-                effective_entry(resources, &mut next)?,
-            ) {
+            match (effective_entry(&mut consumed), effective_entry(&mut next)) {
                 (None, None) => return Ok(true),
                 (Some(left), Some(right)) => {
-                    if !equal_feedback_entry(resources, left, right)? {
+                    if !equal_feedback_entry(left, right)? {
                         return Ok(false);
                     }
                 }
@@ -1058,110 +941,65 @@ impl RoundState {
         }
     }
 
-    pub(super) fn terminal_error(
-        &self,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<Option<Error>, Error> {
-        self.state_error(false, resources)
+    pub(super) fn terminal_error(&self) -> Option<Error> {
+        self.state_error(false)
     }
 
-    pub(super) fn unchanged_error(
-        &self,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<Option<Error>, Error> {
-        self.state_error(true, resources)
+    pub(super) fn unchanged_error(&self) -> Option<Error> {
+        self.state_error(true)
     }
 
-    fn state_error(
-        &self,
-        include_provisional: bool,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<Option<Error>, Error> {
-        let index = find_index(resources, &self.misses, |miss| {
+    fn state_error(&self, include_provisional: bool) -> Option<Error> {
+        let index = find_index(&self.misses, |miss| {
             include_provisional || miss.feedback.is_empty()
-        })?;
-        Ok(index.map(|index| Error::Render(self.misses[index].failure.to_string())))
+        });
+        index.map(|index| Error::Render(self.misses[index].failure.to_string()))
     }
 
-    pub(super) fn repeats_history(
-        &self,
-        history: &[Self],
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<bool, Error> {
+    pub(super) fn repeats_history(&self, history: &[Self]) -> Result<bool, Error> {
         for prior in history {
-            resources.claim_visits(1).map_err(claim_error)?;
-            if self.same_state(prior, resources)? {
+            if self.same_state(prior)? {
                 return Ok(true);
             }
         }
         Ok(false)
     }
 
-    fn same_state(
-        &self,
-        other: &Self,
-        resources: &crate::font::canonical::OperationGenerationResources,
-    ) -> Result<bool, Error> {
-        Ok(
-            equal_entries(resources, &self.consumed, &other.consumed, |a, b| {
-                equal_feedback_entry(resources, a, b)
-            })? && equal_entries(resources, &self.next, &other.next, |a, b| {
-                equal_feedback_entry(resources, a, b)
-            })? && equal_entries(resources, &self.requests, &other.requests, |a, b| {
-                equal_request(resources, a, b)
-            })? && equal_entries(
-                resources,
-                &self.observations,
-                &other.observations,
-                |a, b| {
-                    if std::sync::Arc::ptr_eq(a, b) {
-                        return Ok(true);
-                    }
-                    match (a.as_ref(), b.as_ref()) {
-                        (Observation::Address(a), Observation::Address(b)) => {
-                            equal_address(resources, a, b)
-                        }
-                        (Observation::Text(a), Observation::Text(b)) => {
-                            equal_string(resources, a, b)
-                        }
-                        (Observation::TextPlan(a), Observation::TextPlan(b)) => {
-                            equal_text_plan(resources, a, b)
-                        }
-                        _ => Ok(a == b),
-                    }
-                },
-            )? && equal_entries(resources, &self.misses, &other.misses, |a, b| {
+    fn same_state(&self, other: &Self) -> Result<bool, Error> {
+        Ok(equal_entries(&self.consumed, &other.consumed, |a, b| {
+            equal_feedback_entry(a, b)
+        })? && equal_entries(&self.next, &other.next, equal_feedback_entry)?
+            && equal_entries(&self.requests, &other.requests, equal_request)?
+            && equal_entries(&self.observations, &other.observations, |a, b| {
+                if std::sync::Arc::ptr_eq(a, b) {
+                    return Ok(true);
+                }
+                match (a.as_ref(), b.as_ref()) {
+                    (Observation::Address(a), Observation::Address(b)) => equal_address(a, b),
+                    (Observation::Text(a), Observation::Text(b)) => equal_string(a, b),
+                    (Observation::TextPlan(a), Observation::TextPlan(b)) => equal_text_plan(a, b),
+                    _ => Ok(a == b),
+                }
+            })?
+            && equal_entries(&self.misses, &other.misses, |a, b| {
                 Ok(a.failure.reason.kind == b.failure.reason.kind
                     && a.failure.reason.ordinal == b.failure.reason.ordinal
-                    && equal_address(
-                        resources,
-                        &a.failure.reason.address,
-                        &b.failure.reason.address,
-                    )?
-                    && equal_string(resources, &a.failure.message, &b.failure.message)?
-                    && equal_entries(resources, &a.feedback, &b.feedback, |a, b| {
-                        equal_request(resources, a, b)
-                    })?)
-            })?,
-        )
+                    && equal_address(&a.failure.reason.address, &b.failure.reason.address)?
+                    && equal_string(&a.failure.message, &b.failure.message)?
+                    && equal_entries(&a.feedback, &b.feedback, equal_request)?)
+            })?)
     }
 }
 
 fn effective_entry<'a>(
-    resources: &crate::font::canonical::OperationGenerationResources,
     entries: &mut std::slice::Iter<'a, FeedbackEntry>,
-) -> Result<Option<&'a FeedbackEntry>, Error> {
-    for entry in entries {
-        resources.claim_visits(1).map_err(claim_error)?;
-        if entry.value != FeedbackValue::Insets([0; 4]) {
-            return Ok(Some(entry));
-        }
-    }
-    Ok(None)
+) -> Option<&'a FeedbackEntry> {
+    entries
+        .find(|&entry| entry.value != FeedbackValue::Insets([0; 4]))
+        .map(|v| v as _)
 }
 
 fn equal_entries<T>(
-    resources: &crate::font::canonical::OperationGenerationResources,
     left: &[T],
     right: &[T],
     mut equal: impl FnMut(&T, &T) -> Result<bool, Error>,
@@ -1170,7 +1008,6 @@ fn equal_entries<T>(
         return Ok(false);
     }
     for (left, right) in left.iter().zip(right) {
-        resources.claim_visits(1).map_err(claim_error)?;
         if !equal(left, right)? {
             return Ok(false);
         }
@@ -1178,59 +1015,35 @@ fn equal_entries<T>(
     Ok(true)
 }
 
-fn equal_string(
-    resources: &crate::font::canonical::OperationGenerationResources,
-    left: &str,
-    right: &str,
-) -> Result<bool, Error> {
-    equal_entries(resources, left.as_bytes(), right.as_bytes(), |a, b| {
-        Ok(a == b)
-    })
+fn equal_string(left: &str, right: &str) -> Result<bool, Error> {
+    equal_entries(left.as_bytes(), right.as_bytes(), |a, b| Ok(a == b))
 }
 
-fn equal_address(
-    resources: &crate::font::canonical::OperationGenerationResources,
-    left: &ComponentAddress,
-    right: &ComponentAddress,
-) -> Result<bool, Error> {
+fn equal_address(left: &ComponentAddress, right: &ComponentAddress) -> Result<bool, Error> {
     Ok(left.root == right.root
-        && equal_entries(
-            resources,
-            left.descendants(),
-            right.descendants(),
-            |a, b| Ok(a == b),
-        )?)
+        && equal_entries(left.descendants(), right.descendants(), |a, b| Ok(a == b))?)
 }
 
-fn equal_feedback_entry(
-    resources: &crate::font::canonical::OperationGenerationResources,
-    left: &FeedbackEntry,
-    right: &FeedbackEntry,
-) -> Result<bool, Error> {
-    Ok(equal_address(resources, &left.target, &right.target)?
+fn equal_feedback_entry(left: &FeedbackEntry, right: &FeedbackEntry) -> Result<bool, Error> {
+    Ok(equal_address(&left.target, &right.target)?
         && left.kind == right.kind
         && left.value == right.value)
 }
 
 fn equal_request(
-    resources: &crate::font::canonical::OperationGenerationResources,
     left: &std::sync::Arc<FeedbackRequest>,
     right: &std::sync::Arc<FeedbackRequest>,
 ) -> Result<bool, Error> {
     Ok(std::sync::Arc::ptr_eq(left, right)
-        || (equal_address(resources, &left.source, &right.source)?
-            && equal_feedback_entry(resources, &left.entry, &right.entry)?))
+        || (equal_address(&left.source, &right.source)?
+            && equal_feedback_entry(&left.entry, &right.entry)?))
 }
 
 #[expect(
     clippy::too_many_lines,
     reason = "rendered-plan equality admits each variable string, candidate, line, run, and glyph before its comparison"
 )]
-fn equal_text_plan(
-    resources: &crate::font::canonical::OperationGenerationResources,
-    left: &ResolvedTextPlan,
-    right: &ResolvedTextPlan,
-) -> Result<bool, Error> {
+fn equal_text_plan(left: &ResolvedTextPlan, right: &ResolvedTextPlan) -> Result<bool, Error> {
     if left.shares_payload(right) {
         return Ok(true);
     }
@@ -1258,31 +1071,23 @@ fn equal_text_plan(
         || style(left) != style(right)
         || left.pair_provenance.pair_ordinal != right.pair_provenance.pair_ordinal
         || left.pair_provenance.weight != right.pair_provenance.weight
-        || !equal_string(resources, &left.source, &right.source)?
-        || !equal_string(
-            resources,
-            &left.style.provenance.owner,
-            &right.style.provenance.owner,
-        )?
+        || !equal_string(&left.source, &right.source)?
+        || !equal_string(&left.style.provenance.owner, &right.style.provenance.owner)?
         || !equal_entries(
-            resources,
             &left.pair_provenance.candidates,
             &right.pair_provenance.candidates,
             |a, b| Ok(a == b),
         )?
-        || !equal_entries(
-            resources,
-            &left.style.stack,
-            &right.style.stack,
-            |a, b| match (a.name(), b.name()) {
-                (Some(a), Some(b)) => equal_string(resources, a, b),
+        || !equal_entries(&left.style.stack, &right.style.stack, |a, b| {
+            match (a.name(), b.name()) {
+                (Some(a), Some(b)) => equal_string(a, b),
                 _ => Ok(a == b),
-            },
-        )?
+            }
+        })?
     {
         return Ok(false);
     }
-    equal_entries(resources, &left.lines, &right.lines, |a, b| {
+    equal_entries(&left.lines, &right.lines, |a, b| {
         if (
             a.source_span,
             a.selected_soft_hyphen,
@@ -1304,7 +1109,7 @@ fn equal_text_plan(
         ) {
             return Ok(false);
         }
-        equal_entries(resources, &a.runs, &b.runs, |a, b| {
+        equal_entries(&a.runs, &b.runs, |a, b| {
             if (
                 a.source_span,
                 a.face,
@@ -1342,7 +1147,7 @@ fn equal_text_plan(
             ) {
                 return Ok(false);
             }
-            equal_entries(resources, &a.glyphs, &b.glyphs, |a, b| Ok(a == b))
+            equal_entries(&a.glyphs, &b.glyphs, |a, b| Ok(a == b))
         })
     })
 }
@@ -1418,6 +1223,56 @@ mod tests {
     use super::*;
 
     #[test]
+    fn feedback_reservation_preserves_the_observed_prefix_and_reference_owners() {
+        let mut round = FeedbackRound::new(None, 0).unwrap();
+        round.observe_count(1).unwrap();
+        round.observe_count(2).unwrap();
+        assert_eq!(round.state.observations.capacity(), 2);
+        let first = std::sync::Arc::clone(&round.state.observations[0]);
+        let owners = std::sync::Arc::strong_count(&first);
+        round.reserve_observation().unwrap();
+        assert_eq!(round.state.observations.len(), 2);
+        assert_eq!(round.state.observations.capacity(), 4);
+        assert_eq!(std::sync::Arc::strong_count(&first), owners);
+        assert!(std::sync::Arc::ptr_eq(&first, &round.state.observations[0]));
+    }
+
+    #[test]
+    fn observation_replay_shares_payload_while_fresh_observation_owns_its_value() {
+        for replay in [false, true] {
+            let mut producer = FeedbackRound::new(None, 0).unwrap();
+            let checkpoint = producer.child_checkpoint();
+            producer.observe_count(42).unwrap();
+            let retained = producer.retain_child_feedback(checkpoint).unwrap().unwrap();
+            let mut consumer = FeedbackRound::new(None, 1).unwrap();
+            if replay {
+                consumer.replay_child(&retained).unwrap();
+            } else {
+                consumer.observe_count(42).unwrap();
+            }
+            assert_eq!(consumer.state.observations.len(), 1);
+            assert_eq!(consumer.state.observations[0], retained.observations[0]);
+            assert_eq!(
+                std::sync::Arc::ptr_eq(&consumer.state.observations[0], &retained.observations[0]),
+                replay
+            );
+        }
+    }
+
+    #[test]
+    fn unchanged_inset_request_retains_dependency_without_changed_insets() {
+        let mut round = FeedbackRound::new(None, 0).unwrap();
+        let root = ComponentAddress::root();
+        assert!(round
+            .request_insets(&root, &root, FeedbackKind::AxisGutter, [0.0; 4])
+            .unwrap()
+            .is_none());
+        assert_eq!(round.state.observations.len(), 1);
+        assert_eq!(round.state.requests.len(), 1);
+        assert!(round.state.next.is_empty());
+    }
+
+    #[test]
     fn guide_feedback_retains_exact_ratio_identity_with_only_reference_storage() {
         let mut exact = crate::render::backend::PointStyle::new((0, 0, 0), 3);
         exact.outline.as_mut().unwrap().width_ratio =
@@ -1428,262 +1283,36 @@ mod tests {
         let mut equivalent = exact.clone();
         equivalent.outline.as_mut().unwrap().width_ratio =
             crate::theme::RelativeSpacing::ratio(6, 10).unwrap();
-        let bytes = arc_payload_bytes::<Observation>()
-            + std::mem::size_of::<std::sync::Arc<Observation>>() as u64;
         let observe = |style: &crate::render::backend::PointStyle| {
-            let resources =
-                crate::font::canonical::OperationGenerationResources::with_test_limits(0, bytes);
-            let mut round = FeedbackRound::new(None, resources.clone(), 0).unwrap();
+            let mut round = FeedbackRound::new(None, 0).unwrap();
             round.observe_legend_glyph(Some(style), None, None).unwrap();
-            assert_eq!(resources.byte_usage().unwrap(), bytes);
             round.state.observations.pop().unwrap()
         };
+
         assert_eq!(observe(&exact), observe(&equivalent));
         assert_ne!(observe(&exact), observe(&dyadic));
     }
 
     #[test]
-    fn large_feedback_stream_prices_geometric_buffers_without_quadratic_prefix_storage() {
+    fn large_feedback_stream_grows_geometrically_without_losing_observations() {
         const COUNT: usize = 16_384;
-        let payload_bytes =
-            (std::mem::size_of::<Observation>() + 2 * std::mem::size_of::<usize>()) as u64;
-        let reference_bytes = std::mem::size_of::<std::sync::Arc<Observation>>() as u64;
-        // Capacities 1,2,4,...,16384 retain 32767 reference slots across all
-        // allocations. Exact one-entry growth instead prices 134225920 slots.
-        let buffers = 32_767 * reference_bytes;
-        let bytes = COUNT as u64 * payload_bytes + buffers;
-        let resources =
-            crate::font::canonical::OperationGenerationResources::with_test_limits(0, bytes);
-        let mut round = FeedbackRound::new(None, resources.clone(), 0).unwrap();
+
+        let mut round = FeedbackRound::new(None, 0).unwrap();
         for value in 0..COUNT {
             round.observe_count(value).unwrap();
         }
         assert_eq!(round.state.observations.len(), COUNT);
         assert_eq!(round.state.observations.capacity(), COUNT);
-        assert_eq!(resources.usage().unwrap(), (2 * COUNT as u128, 0));
-        assert_eq!(resources.byte_usage().unwrap(), bytes);
-        assert!((COUNT as u64 * (COUNT as u64 + 1) / 2) * reference_bytes > 536_870_912);
-        let before = resources.usage().unwrap();
-        assert!(round.observe_count(COUNT).is_err());
-        assert_eq!(round.state.observations.len(), COUNT);
-        assert_eq!(round.state.observations.capacity(), COUNT);
-        assert_eq!(resources.usage().unwrap(), (before.0 + 1, 0));
-        assert_eq!(resources.byte_usage().unwrap(), bytes);
-    }
 
-    #[test]
-    fn feedback_growth_refuses_before_buffer_or_reference_mutation_at_the_exact_byte_boundary() {
-        let reference_bytes = std::mem::size_of::<std::sync::Arc<Observation>>() as u64;
-        for available in [
-            4 * reference_bytes - 1,
-            4 * reference_bytes,
-            4 * reference_bytes + 1,
-        ] {
-            let resources = crate::font::canonical::OperationGenerationResources::new();
-            let mut round = FeedbackRound::new(None, resources.clone(), 0).unwrap();
-            round.observe_count(1).unwrap();
-            round.observe_count(2).unwrap();
-            assert_eq!(round.state.observations.capacity(), 2);
-            let before = (resources.usage().unwrap(), resources.byte_usage().unwrap());
-            let first = std::sync::Arc::clone(&round.state.observations[0]);
-            let owners = std::sync::Arc::strong_count(&first);
-            resources.set_test_limits(before.0 .1, before.1 + available);
-            let result = round.admit_observation_reference();
-            assert_eq!(result.is_ok(), available >= 4 * reference_bytes);
-            assert_eq!(resources.usage().unwrap(), (before.0 .0 + 1, before.0 .1));
-            assert_eq!(round.state.observations.len(), 2);
-            assert_eq!(std::sync::Arc::strong_count(&first), owners);
-            assert_eq!(
-                round.state.observations.capacity(),
-                if available >= 4 * reference_bytes {
-                    4
-                } else {
-                    2
-                }
-            );
-            assert_eq!(
-                resources.byte_usage().unwrap() - before.1,
-                if available >= 4 * reference_bytes {
-                    4 * reference_bytes
-                } else {
-                    0
-                }
-            );
-        }
-    }
-
-    #[test]
-    fn observation_replay_admits_only_references_and_fresh_observations_admit_both_classes() {
-        let payload_bytes =
-            (std::mem::size_of::<Observation>() + 2 * std::mem::size_of::<usize>()) as u64;
-        let reference_bytes = std::mem::size_of::<std::sync::Arc<Observation>>() as u64;
-        for replay in [false, true] {
-            let expected = if replay {
-                reference_bytes
-            } else {
-                payload_bytes + reference_bytes
-            };
-            for available in [0, expected - 1, expected, expected + 1] {
-                let resources = crate::font::canonical::OperationGenerationResources::new();
-                let mut producer = FeedbackRound::new(None, resources.clone(), 0).unwrap();
-                let checkpoint = producer.child_checkpoint();
-                producer.observe_count(42).unwrap();
-                let retained = producer.retain_child_feedback(checkpoint).unwrap().unwrap();
-                let before = (resources.usage().unwrap(), resources.byte_usage().unwrap());
-                let owners = std::sync::Arc::strong_count(&retained.observations[0]);
-                resources.set_test_limits(before.0 .1, before.1 + available);
-                let mut consumer = FeedbackRound::new(None, resources.clone(), 1).unwrap();
-                let result = if replay {
-                    consumer.replay_child(&retained)
-                } else {
-                    consumer.observe_count(42)
-                };
-                assert_eq!(result.is_ok(), available >= expected);
-                assert_eq!(
-                    resources.usage().unwrap().0 - before.0 .0,
-                    if replay || available < payload_bytes {
-                        1
-                    } else {
-                        2
-                    }
-                );
-                assert_eq!(
-                    resources.byte_usage().unwrap() - before.1,
-                    if available >= expected {
-                        expected
-                    } else if !replay && available >= payload_bytes {
-                        payload_bytes
-                    } else {
-                        0
-                    }
-                );
-                if available < expected {
-                    assert!(consumer.state.observations.is_empty());
-                    assert_eq!(consumer.state.observations.capacity(), 0);
-                    assert_eq!(
-                        std::sync::Arc::strong_count(&retained.observations[0]),
-                        owners
-                    );
-                } else if replay {
-                    assert!(std::sync::Arc::ptr_eq(
-                        &consumer.state.observations[0],
-                        &retained.observations[0]
-                    ));
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn fresh_request_payload_and_reference_refusals_preserve_admitted_prefix_without_publication() {
-        let observation_bytes = (std::mem::size_of::<Observation>()
-            + 2 * std::mem::size_of::<usize>()
-            + std::mem::size_of::<std::sync::Arc<Observation>>())
-            as u64;
-        let payload_bytes =
-            (std::mem::size_of::<FeedbackRequest>() + 2 * std::mem::size_of::<usize>()) as u64;
-        let reference_bytes = std::mem::size_of::<std::sync::Arc<FeedbackRequest>>() as u64;
-        let expected = observation_bytes + payload_bytes + reference_bytes;
-        for available in [
-            observation_bytes + payload_bytes - 1,
-            expected - 1,
-            expected,
-            expected + 1,
-        ] {
-            let resources = crate::font::canonical::OperationGenerationResources::with_test_limits(
-                0, available,
-            );
-            let mut round = FeedbackRound::new(None, resources.clone(), 0).unwrap();
-            let root = ComponentAddress::root();
-            let result = round.request_insets(&root, &root, FeedbackKind::AxisGutter, [0.0; 4]);
-            assert_eq!(result.is_ok(), available >= expected);
-            assert_eq!(round.state.observations.len(), 1);
-            assert!(round.state.next.is_empty());
-            if available >= expected {
-                assert!(result.unwrap().is_none());
-                assert_eq!(round.state.requests.len(), 1);
-                assert_eq!(resources.byte_usage().unwrap(), expected);
-            } else {
-                assert!(round.state.requests.is_empty());
-                assert_eq!(round.state.requests.capacity(), 0);
-                assert_eq!(
-                    resources.byte_usage().unwrap(),
-                    if available < observation_bytes + payload_bytes {
-                        observation_bytes
-                    } else {
-                        observation_bytes + payload_bytes
-                    }
-                );
-            }
-        }
-        let resources = crate::font::canonical::OperationGenerationResources::new();
-        resources.claim_slots(999_997).unwrap();
-        let mut round = FeedbackRound::new(None, resources.clone(), 0).unwrap();
-        assert!(round
-            .request_insets(
-                &ComponentAddress::root(),
-                &ComponentAddress::root(),
-                FeedbackKind::AxisGutter,
-                [0.0; 4]
-            )
-            .is_err());
-        assert_eq!(resources.usage().unwrap(), (1_000_000, 0));
-        assert_eq!(
-            resources.byte_usage().unwrap(),
-            observation_bytes + payload_bytes
-        );
-        assert!(round.state.requests.is_empty());
-        assert_eq!(round.state.requests.capacity(), 0);
-    }
-
-    #[test]
-    fn observation_payload_and_replay_reference_have_independent_record_boundaries() {
-        for replay in [false, true] {
-            for available in [0, 1, 2] {
-                let resources = crate::font::canonical::OperationGenerationResources::new();
-                let mut producer = FeedbackRound::new(None, resources.clone(), 0).unwrap();
-                let checkpoint = producer.child_checkpoint();
-                producer.observe_count(42).unwrap();
-                let retained = producer.retain_child_feedback(checkpoint).unwrap().unwrap();
-                resources
-                    .claim_slots(1_000_000 - resources.usage().unwrap().0 - available)
-                    .unwrap();
-                let before = (resources.usage().unwrap(), resources.byte_usage().unwrap());
-                let mut consumer = FeedbackRound::new(None, resources.clone(), 1).unwrap();
-                let result = if replay {
-                    consumer.replay_child(&retained)
-                } else {
-                    consumer.observe_count(42)
-                };
-                let expected = if replay { 1 } else { 2 };
-                assert_eq!(result.is_ok(), available >= expected);
-                assert_eq!(
-                    resources.usage().unwrap().0 - before.0 .0,
-                    available.min(expected)
-                );
-                if available < expected {
-                    assert!(consumer.state.observations.is_empty());
-                    assert_eq!(consumer.state.observations.capacity(), 0);
-                    assert_eq!(
-                        resources.byte_usage().unwrap() - before.1,
-                        if replay || available == 0 {
-                            0
-                        } else {
-                            (std::mem::size_of::<Observation>() + 2 * std::mem::size_of::<usize>())
-                                as u64
-                        }
-                    );
-                }
-            }
-        }
+        round.observe_count(COUNT).unwrap();
+        assert_eq!(round.state.observations.len(), COUNT + 1);
+        assert_eq!(round.state.observations.capacity(), 2 * COUNT);
     }
 
     #[test]
     fn content_height_replaces_width_and_height_instead_of_accumulating_ink() {
-        let resources = super::super::ResourceState::new();
         let owner = ComponentAddress::root();
-        let mut first =
-            FeedbackRound::new(None, resources.generation_resources.clone(), 0).unwrap();
+        let mut first = FeedbackRound::new(None, 0).unwrap();
         first
             .request_insets(
                 &owner,
@@ -1692,9 +1321,8 @@ mod tests {
                 [400.0, 0.0, 300.0, 0.0],
             )
             .unwrap();
-        let previous = first.finish().unwrap();
-        let mut second =
-            FeedbackRound::new(Some(&previous), resources.generation_resources.clone(), 1).unwrap();
+        let previous = first.finish();
+        let mut second = FeedbackRound::new(Some(&previous), 1).unwrap();
         second
             .request_insets(
                 &owner,
@@ -1706,7 +1334,6 @@ mod tests {
         assert_eq!(
             second
                 .next_insets(&owner, FeedbackKind::ContentHeight)
-                .unwrap()
                 .map(f64::to_bits),
             [200.0_f64, 0.0, 150.0, 0.0].map(f64::to_bits)
         );
@@ -1721,7 +1348,6 @@ mod tests {
         assert_eq!(
             second
                 .next_insets(&owner, FeedbackKind::ContentHeight)
-                .unwrap()
                 .map(f64::to_bits),
             [180.0_f64, 0.0, 120.0, 0.0].map(f64::to_bits)
         );
@@ -1730,11 +1356,7 @@ mod tests {
     fn scan_entry(slot: u32, value: FeedbackValue) -> FeedbackEntry {
         FeedbackEntry {
             target: ComponentAddress::root()
-                .child(
-                    super::super::AddressRole::CanvasCell,
-                    slot,
-                    &crate::font::canonical::OperationGenerationResources::new(),
-                )
+                .child(super::super::AddressRole::CanvasCell, slot)
                 .unwrap(),
             kind: if matches!(value, FeedbackValue::Domain(_)) {
                 FeedbackKind::AutomaticDomainX
@@ -1746,27 +1368,13 @@ mod tests {
     }
 
     fn empty_state() -> RoundState {
-        FeedbackRound::new(
-            None,
-            crate::font::canonical::OperationGenerationResources::new(),
-            0,
-        )
-        .unwrap()
-        .state
+        FeedbackRound::new(None, 0).unwrap().state
     }
 
     #[test]
-    fn root_convergence_admits_effective_entries_and_stops_at_first_difference() {
+    fn root_convergence_compares_effective_entries() {
         for changed in [false, true] {
-            // Six examined entries, plus two one-step target comparisons for
-            // equality. A first effective mismatch stops after four entries
-            // and its one-step target, leaving both final entries unused.
-            let expected = if changed { 5 } else { 8 };
-            for available in [0, expected - 1, expected, expected + 1] {
-                let resources =
-                    crate::font::canonical::OperationGenerationResources::with_test_limits(
-                        available, 0,
-                    );
+            {
                 let mut state = empty_state();
                 for slot in 0..3 {
                     let value = if slot == 0 { [0; 4] } else { [1024; 4] };
@@ -1782,22 +1390,14 @@ mod tests {
                         }),
                     ));
                 }
-                let result = state.feedback_unchanged(&resources);
-                if available < expected {
-                    assert!(result
-                        .unwrap_err()
-                        .to_string()
-                        .contains("root processing visits"));
-                } else {
-                    assert_eq!(result.unwrap(), !changed);
-                }
-                assert_eq!(resources.usage().unwrap(), (0, available.min(expected)));
+                let result = state.feedback_unchanged();
+                assert_eq!(result.unwrap(), !changed);
             }
         }
     }
 
     #[test]
-    fn root_diagnostic_search_admits_only_examined_misses_and_preserves_least_reason() {
+    fn root_diagnostic_search_preserves_least_reason() {
         let mut state = empty_state();
         let request = std::sync::Arc::new(FeedbackRequest {
             source: ComponentAddress::root(),
@@ -1817,36 +1417,25 @@ mod tests {
             });
         }
         for terminal in [false, true] {
-            let expected = if terminal { 3 } else { 1 };
-            for available in [0, expected - 1, expected, expected + 1] {
-                let resources =
-                    crate::font::canonical::OperationGenerationResources::with_test_limits(
-                        available, 0,
-                    );
+            {
                 let result = if terminal {
-                    state.terminal_error(&resources)
+                    state.terminal_error()
                 } else {
-                    state.unchanged_error(&resources)
+                    state.unchanged_error()
                 };
-                if available < expected {
-                    assert!(result
-                        .unwrap_err()
-                        .to_string()
-                        .contains("root processing visits"));
-                } else {
-                    assert!(result.unwrap().unwrap().to_string().contains(if terminal {
+                {
+                    assert!(result.unwrap().to_string().contains(if terminal {
                         "miss 2"
                     } else {
                         "miss 0"
                     }));
                 }
-                assert_eq!(resources.usage().unwrap(), (0, available.min(expected)));
             }
         }
     }
 
     #[test]
-    fn cycle_history_comparisons_admit_nested_text_and_stop_at_match_or_refusal() {
+    fn cycle_history_compares_nested_text_and_finds_matching_state() {
         let mut state = empty_state();
         state
             .observations
@@ -1864,37 +1453,13 @@ mod tests {
             .observations
             .push(std::sync::Arc::new(Observation::Text("ab".into())));
         let history = [first, matching, unused];
-        // First state: history entry + observation + first differing byte.
-        // Second: history entry + observation + both matching bytes. No tail.
-        for available in [0, 6, 7, 8] {
-            let resources = crate::font::canonical::OperationGenerationResources::with_test_limits(
-                available, 0,
-            );
-            let result = state.repeats_history(&history, &resources);
-            if available < 7 {
-                assert!(result
-                    .unwrap_err()
-                    .to_string()
-                    .contains("root processing visits"));
-            } else {
-                assert!(result.unwrap());
-            }
-            assert_eq!(resources.usage().unwrap(), (0, available.min(7)));
-        }
-        let resources =
-            crate::font::canonical::OperationGenerationResources::with_test_limits(2, 0);
-        assert!(state
-            .repeats_history(std::slice::from_ref(&state), &resources)
-            .unwrap());
-        assert_eq!(
-            resources.usage().unwrap().1,
-            2,
-            "shared observation skips payload comparison"
-        );
+        assert!(state.repeats_history(&history).unwrap());
+
+        assert!(state.repeats_history(std::slice::from_ref(&state)).unwrap());
     }
 
     #[test]
-    fn admitted_text_history_equality_matches_rendered_identity_and_checks_glyphs() {
+    fn text_history_equality_matches_rendered_identity_and_checks_glyphs() {
         let plan = text_plan();
         let independent = text_plan();
         assert!(!plan.shares_payload(&independent));
@@ -1902,52 +1467,22 @@ mod tests {
         assert_eq!(plan.lines.len(), 1);
         assert_eq!(plan.lines[0].runs.len(), 1);
         assert_eq!(plan.lines[0].runs[0].glyphs.len(), 32);
-        // 32 source bytes, 13 owner bytes, one candidate,
-        // one named family + its 9 bytes, one line, one run, and 32 glyph pairs.
-        // Typed stack identity does not compare the former serialized stack source.
-        for available in [0, 89, 90, 91] {
-            let bounded = crate::font::canonical::OperationGenerationResources::with_test_limits(
-                available, 0,
-            );
-            let result = equal_text_plan(&bounded, &plan, &independent);
-            if available < 90 {
-                assert!(result
-                    .unwrap_err()
-                    .to_string()
-                    .contains("root processing visits"));
-            } else {
-                assert!(result.unwrap());
-            }
-            assert_eq!(bounded.usage().unwrap(), (0, available.min(90)));
-        }
-        let resources = crate::font::canonical::OperationGenerationResources::new();
-        assert!(equal_text_plan(&resources, &plan, &independent).unwrap());
+        assert!(equal_text_plan(&plan, &independent).unwrap());
         let mut changed = independent.clone();
         changed.edit_for_test().lines[0].runs[0].glyphs[0].glyph_id += 1;
         assert_ne!(plan, changed);
-        let before = resources.usage().unwrap().1;
-        assert!(!equal_text_plan(&resources, &plan, &changed).unwrap());
-        assert_eq!(
-            resources.usage().unwrap().1 - before,
-            59,
-            "the first differing glyph leaves 31 unexamined glyphs"
-        );
-        resources.set_test_limits(resources.usage().unwrap().1, 536_870_912);
-        assert!(equal_text_plan(&resources, &plan, &plan).unwrap());
-        assert!(equal_text_plan(&resources, &plan, &independent)
-            .unwrap_err()
-            .to_string()
-            .contains("root processing visits"));
+
+        assert!(!equal_text_plan(&plan, &changed).unwrap());
+
+        assert!(equal_text_plan(&plan, &plan).unwrap());
     }
 
     #[test]
-    fn feedback_getters_admit_terminating_matches_and_stop_on_refusal() {
+    fn feedback_getters_preserve_matching_and_missing_owners() {
         for domain in [false, true] {
             for target in [0, 2, 3] {
-                let examined = u128::from((target + 1).min(3));
-                for available in [0, examined - 1, examined, examined + 1] {
-                    let resources = crate::font::canonical::OperationGenerationResources::new();
-                    let mut round = FeedbackRound::new(None, resources.clone(), 0).unwrap();
+                {
+                    let mut round = FeedbackRound::new(None, 0).unwrap();
                     for slot in 0..3 {
                         let value = if domain {
                             FeedbackValue::Domain([0.0_f64.to_bits(), 2.0_f64.to_bits()])
@@ -1958,48 +1493,31 @@ mod tests {
                         round.state.next.push(scan_entry(slot, value));
                     }
                     let owner = scan_entry(target, FeedbackValue::Insets([0; 4])).target;
-                    let before = resources.usage().unwrap();
-                    resources.set_test_limits(available, 536_870_912);
+
                     if domain {
-                        let result = round.domain(&owner, FeedbackKind::AutomaticDomainX);
-                        if available >= examined {
-                            assert_eq!(result.unwrap(), (target < 3).then_some((0.0, 2.0)));
-                        } else {
-                            assert!(result
-                                .unwrap_err()
-                                .to_string()
-                                .contains("root processing visits"));
-                        }
+                        let result = round.feedback_domain(&owner, FeedbackKind::AutomaticDomainX);
+                        assert_eq!(result, (target < 3).then_some((0.0, 2.0)));
                     } else {
                         let result = round.insets(&owner, FeedbackKind::AxisGutter);
-                        if available >= examined {
+                        {
                             assert_eq!(
-                                result.unwrap().map(f64::to_bits),
+                                result.map(f64::to_bits),
                                 if target < 3 {
                                     [1.0_f64.to_bits(); 4]
                                 } else {
                                     [0.0_f64.to_bits(); 4]
                                 }
                             );
-                        } else {
-                            assert!(result
-                                .unwrap_err()
-                                .to_string()
-                                .contains("root processing visits"));
                         }
-                        resources
-                            .set_test_limits(resources.usage().unwrap().1 + available, 536_870_912);
+
                         assert_eq!(
-                            round.next_insets(&owner, FeedbackKind::AxisGutter).is_ok(),
-                            available >= examined
+                            round
+                                .next_insets(&owner, FeedbackKind::AxisGutter)
+                                .map(f64::to_bits),
+                            result.map(f64::to_bits)
                         );
                     }
-                    assert_eq!(resources.usage().unwrap().0, before.0);
-                    let multiplier = if domain { 1 } else { 2 };
-                    assert_eq!(
-                        resources.usage().unwrap().1,
-                        available.min(examined) * multiplier
-                    );
+
                     assert_eq!(round.state.consumed, round.state.next);
                 }
             }
@@ -2007,15 +1525,10 @@ mod tests {
     }
 
     #[test]
-    fn child_dependency_scans_price_quadratic_searches_and_cached_inputs_exactly() {
+    fn child_dependencies_preserve_stability_and_cached_inputs() {
         for owner_count in [1, 2] {
-            // Three consumed + three next entries for the count passes, three
-            // consumed entries for membership, and 1+2+3 next entries searched.
-            // Each entry first admits its scan, then every examined owner.
-            let stability_visits = 15 * (1 + owner_count);
-            for available in [stability_visits - 1, stability_visits, stability_visits + 1] {
-                let resources = crate::font::canonical::OperationGenerationResources::new();
-                let mut round = FeedbackRound::new(None, resources.clone(), 0).unwrap();
+            {
+                let mut round = FeedbackRound::new(None, 0).unwrap();
                 for slot in 0..3 {
                     round
                         .state
@@ -2032,67 +1545,44 @@ mod tests {
                     owners.push(unrelated);
                 }
                 owners.push(ComponentAddress::root());
-                resources.set_test_limits(available, 536_870_912);
+
                 let result = round.child_stable(&owners);
-                if available < stability_visits {
-                    assert!(result
-                        .unwrap_err()
-                        .to_string()
-                        .contains("root processing visits"));
-                } else {
-                    assert!(result.unwrap());
-                }
-                assert_eq!(
-                    resources.usage().unwrap().1,
-                    available.min(stability_visits)
-                );
+                assert!(result);
             }
         }
 
-        let resources = crate::font::canonical::OperationGenerationResources::new();
-        let mut first = FeedbackRound::new(None, resources.clone(), 0).unwrap();
+        let mut first = FeedbackRound::new(None, 0).unwrap();
         for slot in 0..3 {
             first
                 .state
                 .next
                 .push(scan_entry(slot, FeedbackValue::Insets([1024; 4])));
         }
-        let state = first.finish().unwrap();
-        let mut second = FeedbackRound::new(Some(&state), resources.clone(), 1).unwrap();
+        let state = first.finish();
+        let mut second = FeedbackRound::new(Some(&state), 1).unwrap();
         let owners = [ComponentAddress::root()];
-        let before = resources.usage().unwrap().1;
+
         let inputs = second.child_inputs(&owners).unwrap();
-        assert_eq!(resources.usage().unwrap().1 - before, 6);
+
         let checkpoint = second.child_checkpoint();
         second.observe_count(7).unwrap();
         let cached = second.retain_child_feedback(checkpoint).unwrap().unwrap();
-        let state = second.finish().unwrap();
-        let mut third = FeedbackRound::new(Some(&state), resources.clone(), 2).unwrap();
-        let before = resources.usage().unwrap().1;
-        // Three entry scans + three owner matches + three cached comparisons,
-        // followed by the independently counted 30-visit stability check.
-        resources.set_test_limits(before + 39, 536_870_912);
-        assert!(third.child_inputs_equal(&inputs, &owners).unwrap());
-        assert!(third.child_stable(&owners).unwrap());
+        let state = second.finish();
+        let mut third = FeedbackRound::new(Some(&state), 2).unwrap();
+
+        assert!(third.child_inputs_equal(&inputs, &owners));
+        assert!(third.child_stable(&owners));
         third.replay_child(&cached).unwrap();
-        assert_eq!(resources.usage().unwrap().1 - before, 39);
-        assert!(third
-            .child_inputs_equal(&inputs, &owners)
-            .unwrap_err()
-            .to_string()
-            .contains("root processing visits"));
+
+        assert!(third.child_inputs_equal(&inputs, &owners));
         assert_eq!(third.state.observations, state.observations);
     }
 
     #[test]
-    fn feedback_request_searches_refuse_before_publishing_or_changing_dependencies() {
+    fn feedback_requests_update_matching_and_new_dependencies() {
         for target in [0, 2, 3] {
-            // OwnedInk first finds its merge operand in next, then request()
-            // searches consumed and next. Each search stops on its match.
-            let examined = 3 * u128::from((target + 1).min(3));
-            for available in [examined - 1, examined, examined + 1] {
-                let resources = crate::font::canonical::OperationGenerationResources::new();
-                let mut round = FeedbackRound::new(None, resources.clone(), 1).unwrap();
+            {
+                let mut round = FeedbackRound::new(None, 1).unwrap();
                 for slot in 0..3 {
                     let mut consumed = scan_entry(slot, FeedbackValue::Insets([1024; 4]));
                     consumed.kind = FeedbackKind::OwnedInk;
@@ -2102,16 +1592,9 @@ mod tests {
                     round.state.next.push(next);
                 }
                 let owner = scan_entry(target, FeedbackValue::Insets([0; 4])).target;
-                resources.set_test_limits(available, 536_870_912);
+
                 let result = round.request_insets(&owner, &owner, FeedbackKind::OwnedInk, [2.0; 4]);
-                if available < examined {
-                    assert!(result
-                        .unwrap_err()
-                        .to_string()
-                        .contains("root processing visits"));
-                    assert!(round.state.requests.is_empty());
-                    assert_eq!(round.state.consumed, round.state.next);
-                } else {
+                {
                     assert!(result.unwrap().is_some());
                     assert_eq!(round.state.requests.len(), 1);
                     assert_eq!(
@@ -2119,16 +1602,14 @@ mod tests {
                         FeedbackValue::Insets([2048; 4])
                     );
                 }
-                assert_eq!(resources.usage().unwrap().1, available.min(examined));
             }
         }
     }
 
     #[test]
-    fn terminal_trial_scan_admits_every_examined_miss_before_rollback() {
-        for available in [0, 2, 3, 4] {
-            let resources = crate::font::canonical::OperationGenerationResources::new();
-            let mut round = FeedbackRound::new(None, resources.clone(), 1).unwrap();
+    fn terminal_trial_returns_least_miss_and_rolls_back_observations() {
+        {
+            let mut round = FeedbackRound::new(None, 1).unwrap();
             let checkpoint = round.begin_trial().unwrap();
             round.observe_count(7).unwrap();
             let scope = FitScope::root();
@@ -2137,53 +1618,40 @@ mod tests {
                     .record_failure(scope.failure(kind, "trial failure"))
                     .unwrap();
             }
-            resources.set_test_limits(available, 536_870_912);
+
             let result = round.finish_trial(checkpoint);
-            if available < 3 {
-                assert!(result
-                    .err()
-                    .unwrap()
-                    .to_string()
-                    .contains("root processing visits"));
-                assert_eq!(round.state.misses.len(), 3);
-                assert_eq!(round.state.observations.len(), 1);
-            } else {
-                let TrialOutcome::Miss(failure) = result.unwrap() else {
+            {
+                let TrialOutcome::Miss(failure) = result else {
                     panic!("terminal trial must return its least diagnostic")
                 };
                 assert_eq!(failure.reason.kind, FitKind::Constraint);
                 assert!(round.state.misses.is_empty());
                 assert!(round.state.observations.is_empty());
             }
-            assert_eq!(resources.usage().unwrap().1, available.min(3));
         }
     }
 
     #[test]
     fn cached_input_mismatch_stops_before_unused_feedback_tail() {
-        let resources = crate::font::canonical::OperationGenerationResources::new();
-        let mut round = FeedbackRound::new(None, resources.clone(), 1).unwrap();
+        let mut round = FeedbackRound::new(None, 1).unwrap();
         round.state.consumed = (0..3)
             .map(|slot| scan_entry(slot, FeedbackValue::Insets([1024; 4])))
             .collect();
         let inputs = ChildFeedbackInputs(vec![scan_entry(0, FeedbackValue::Insets([2048; 4]))]);
-        resources.set_test_limits(3, 536_870_912);
-        assert!(!round
-            .child_inputs_equal(&inputs, &[ComponentAddress::root()])
-            .unwrap());
-        assert_eq!(resources.usage().unwrap().1, 3);
+
+        assert!(!round.child_inputs_equal(&inputs, &[ComponentAddress::root()]));
     }
 
     #[test]
-    fn interior_consequences_keep_source_target_quantization_and_operation_budget() {
+    fn interior_consequences_keep_source_target_and_quantization_after_rejected_trial() {
         use crate::layout::interior::{ClearanceAxis, DomainExpansion, InteriorReserveRequest};
-        let resources = crate::font::canonical::OperationGenerationResources::new();
-        let mut round = FeedbackRound::new(None, resources.clone(), 0).unwrap();
+
+        let mut round = FeedbackRound::new(None, 0).unwrap();
         let target = ComponentAddress::root();
         let source = target
-            .child(super::super::AddressRole::MarkLayer, 0, &resources)
+            .child(super::super::AddressRole::MarkLayer, 0)
             .unwrap();
-        let before = resources.byte_usage().unwrap();
+
         let request = InteriorReserveRequest::OwnedInk([1.0 / 2048.0, 0.0, 0.0, 0.0])
             .submit(&mut round, &source, &target)
             .unwrap();
@@ -2194,7 +1662,7 @@ mod tests {
             round.state.requests[0].entry.value,
             FeedbackValue::Insets([1, 0, 0, 0])
         );
-        assert!(resources.byte_usage().unwrap() > before);
+
         DomainExpansion {
             axis: ClearanceAxis::X,
             limits: (-1.0, 2.0),
@@ -2226,16 +1694,22 @@ mod tests {
                 "rejected interior trial",
             )
             .unwrap();
-        let charged = resources.byte_usage().unwrap();
+
         assert!(matches!(
-            round.finish_trial(checkpoint).unwrap(),
+            round.finish_trial(checkpoint),
             TrialOutcome::Miss(_)
         ));
-        assert_eq!(resources.byte_usage().unwrap(), charged);
-        resources.claim_bytes(536_870_912 - charged).unwrap();
+
         assert!(InteriorReserveRequest::OwnedInk([3.0; 4])
             .submit(&mut round, &source, &target)
-            .is_err());
+            .unwrap()
+            .is_some());
+        assert_eq!(
+            round
+                .next_insets(&target, FeedbackKind::OwnedInk)
+                .map(f64::to_bits),
+            [3.0_f64.to_bits(); 4]
+        );
     }
 
     #[test]
@@ -2246,18 +1720,15 @@ mod tests {
         )
         .erase();
         let domains = [crate::spec::AxisDomain::Continuous; 2];
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let standard = crate::layout::StandardPanelInputs::new(&theme).unwrap();
         let state = |plot: &crate::Plot, standard: &crate::layout::StandardPanelInputs| {
-            let resources = crate::font::canonical::OperationGenerationResources::new();
-            let mut round = FeedbackRound::new(None, resources, 0).unwrap();
+            let mut round = FeedbackRound::new(None, 0).unwrap();
             for input in plot.axis_semantic_inputs(domains) {
                 input.observe_feedback(&mut round).unwrap();
             }
             standard.observe_feedback(&mut round).unwrap();
-            round.finish().unwrap()
+            round.finish()
         };
         let automatic = state(&plot, &standard);
         let shared = plot.clone().with_resolved_facet_ranges(
@@ -2281,73 +1752,15 @@ mod tests {
     }
 
     #[test]
-    fn guide_lookups_charge_examined_entries_and_refuse_before_mutation() {
-        let owners = [0, 1, 2, 3].map(|slot| {
-            ComponentAddress::root()
-                .child(
-                    super::super::AddressRole::CanvasCell,
-                    slot,
-                    &crate::font::canonical::OperationGenerationResources::new(),
-                )
-                .unwrap()
-        });
-        for target in [0, 2, 3] {
-            let examined = (target + 1).min(3) as u128;
-            for remaining in [0, examined - 1, examined] {
-                let resources = crate::font::canonical::OperationGenerationResources::new();
-                let mut round = FeedbackRound::new(None, resources.clone(), 0).unwrap();
-                for (index, owner) in owners[..3].iter().enumerate() {
-                    let before = resources.usage().unwrap().1;
-                    round.claim_guide_trial(owner, 8, 0).unwrap();
-                    assert_eq!(resources.usage().unwrap().1 - before, index as u128);
-                }
-                let before = resources.usage().unwrap().1;
-                assert_eq!(round.attempt_ordinal(&owners[target]).unwrap(), 0);
-                assert_eq!(resources.usage().unwrap().1 - before, examined);
-                resources
-                    .claim_visits(1_000_000 - resources.usage().unwrap().1 - remaining)
-                    .unwrap();
-                let records = resources.usage().unwrap().0;
-                let trials = round.guide_trials.clone();
-                let events = round.guide_events.clone();
-                let capacities = (round.guide_trials.capacity(), round.guide_events.capacity());
-                let result = round.claim_guide_trial(&owners[target], 8, 1);
-                if remaining == examined {
-                    result.unwrap();
-                } else {
-                    assert!(result
-                        .unwrap_err()
-                        .to_string()
-                        .contains("root processing visits"));
-                    assert_eq!(round.guide_trials, trials);
-                    assert_eq!(round.guide_events, events);
-                    assert_eq!(resources.usage().unwrap().0, records);
-                    assert_eq!(
-                        (round.guide_trials.capacity(), round.guide_events.capacity()),
-                        capacities
-                    );
-                }
-                assert_eq!(resources.usage().unwrap().1, 1_000_000);
-                assert!(round
-                    .attempt_ordinal(&owners[0])
-                    .unwrap_err()
-                    .to_string()
-                    .contains("root processing visits"));
-            }
-        }
-    }
-
-    #[test]
     fn child_replay_retains_exact_observations_but_reissues_current_round_requests() {
-        let resources = crate::font::canonical::OperationGenerationResources::new();
         let owner = ComponentAddress::root()
-            .child(super::super::AddressRole::CanvasCell, 0, &resources)
+            .child(super::super::AddressRole::CanvasCell, 0)
             .unwrap();
-        let mut seed = FeedbackRound::new(None, resources.clone(), 0).unwrap();
+        let mut seed = FeedbackRound::new(None, 0).unwrap();
         seed.request_insets(&owner, &owner, FeedbackKind::AxisGutter, [1.0; 4])
             .unwrap();
-        let seed = seed.finish().unwrap();
-        let mut original = FeedbackRound::new(Some(&seed), resources.clone(), 1).unwrap();
+        let seed = seed.finish();
+        let mut original = FeedbackRound::new(Some(&seed), 1).unwrap();
         let start = original.child_checkpoint();
         original.claim_guide_trial(&owner, 2, 0).unwrap();
         original.claim_guide_trial(&owner, 2, 1).unwrap();
@@ -2359,8 +1772,8 @@ mod tests {
             .request_insets(&owner, &owner, FeedbackKind::AxisGutter, [1.0; 4])
             .unwrap();
         let retained = original.retain_child_feedback(start).unwrap().unwrap();
-        let state = original.finish().unwrap();
-        let mut replay = FeedbackRound::new(Some(&state), resources, 2).unwrap();
+        let state = original.finish();
+        let mut replay = FeedbackRound::new(Some(&state), 2).unwrap();
         replay.replay_child(&retained).unwrap();
         assert!(!std::sync::Arc::ptr_eq(
             &state.requests[0],
@@ -2370,24 +1783,19 @@ mod tests {
             &state.observations[0],
             &replay.state.observations[0]
         ));
-        assert_eq!(replay.attempt_ordinal(&owner).unwrap(), 1);
+        assert_eq!(replay.attempt_ordinal(&owner), 1);
         assert!(replay
             .claim_guide_trial(&owner, 2, 2)
             .unwrap_err()
             .to_string()
             .contains("planning limit"));
-        assert_eq!(state, replay.finish().unwrap());
+        assert_eq!(state, replay.finish());
     }
 
     #[test]
     fn changed_requests_and_provisional_misses_cannot_be_retained_as_child_results() {
         let owner = ComponentAddress::root();
-        let mut round = FeedbackRound::new(
-            None,
-            crate::font::canonical::OperationGenerationResources::new(),
-            0,
-        )
-        .unwrap();
+        let mut round = FeedbackRound::new(None, 0).unwrap();
         let start = round.child_checkpoint();
         let request = round
             .request_insets(&owner, &owner, FeedbackKind::AxisGutter, [1.0; 4])
@@ -2421,9 +1829,8 @@ mod tests {
 
     #[test]
     fn rejected_ancestor_attempts_do_not_reset_child_guide_budget() {
-        let resources = crate::font::canonical::OperationGenerationResources::new();
         let owner = ComponentAddress::root();
-        let mut round = FeedbackRound::new(None, resources, 0).unwrap();
+        let mut round = FeedbackRound::new(None, 0).unwrap();
         for ordinal in 0..8 {
             let checkpoint = round.begin_trial().unwrap();
             round.claim_guide_trial(&owner, 8, ordinal).unwrap();
@@ -2436,7 +1843,7 @@ mod tests {
                 )
                 .unwrap();
             assert!(matches!(
-                round.finish_trial(checkpoint).unwrap(),
+                round.finish_trial(checkpoint),
                 TrialOutcome::Miss(_)
             ));
         }
@@ -2450,13 +1857,12 @@ mod tests {
 
     #[test]
     fn multiple_guide_owners_keep_independent_budgets_through_rejected_trials() {
-        let resources = crate::font::canonical::OperationGenerationResources::new();
         let owners = [0, 1].map(|index| {
             ComponentAddress::root()
-                .child(super::super::AddressRole::CanvasCell, index, &resources)
+                .child(super::super::AddressRole::CanvasCell, index)
                 .unwrap()
         });
-        let mut round = FeedbackRound::new(None, resources.clone(), 0).unwrap();
+        let mut round = FeedbackRound::new(None, 0).unwrap();
         for ordinal in 0..8 {
             for owner in &owners {
                 round.claim_guide_trial(owner, 8, ordinal).unwrap();
@@ -2469,37 +1875,32 @@ mod tests {
                         "containing frame rejected this guide trial",
                     )
                     .unwrap();
-                assert!(matches!(
-                    round.finish_trial(trial).unwrap(),
-                    TrialOutcome::Miss(_)
-                ));
+                assert!(matches!(round.finish_trial(trial), TrialOutcome::Miss(_)));
             }
         }
         assert!(round.state.misses.is_empty());
         for owner in &owners {
-            assert_eq!(round.attempt_ordinal(owner).unwrap(), 7);
+            assert_eq!(round.attempt_ordinal(owner), 7);
             assert!(round
                 .claim_guide_trial(owner, 8, 8)
                 .unwrap_err()
                 .to_string()
                 .contains("planning limit"));
         }
-        let state = round.finish().unwrap();
-        let mut next = FeedbackRound::new(Some(&state), resources, 1).unwrap();
+        let state = round.finish();
+        let mut next = FeedbackRound::new(Some(&state), 1).unwrap();
         for owner in &owners {
             next.claim_guide_trial(owner, 8, 0).unwrap();
-            assert_eq!(next.attempt_ordinal(owner).unwrap(), 0);
+            assert_eq!(next.attempt_ordinal(owner), 0);
         }
     }
 
     #[test]
-    fn text_observations_share_admitted_payload_and_refuse_before_retention() {
+    fn text_observations_share_the_selected_payload() {
         let plan = text_plan();
         let block = crate::layout::TextBlock::from_resolved(plan.clone());
         for as_block in [false, true] {
-            let resources = crate::font::canonical::OperationGenerationResources::new();
-            resources.claim_slots(999_998).unwrap();
-            let mut round = FeedbackRound::new(None, resources, 0).unwrap();
+            let mut round = FeedbackRound::new(None, 0).unwrap();
             if as_block {
                 round.observe_text_block(&block).unwrap();
             } else {
@@ -2509,17 +1910,22 @@ mod tests {
                 panic!("one shared text observation")
             };
             assert!(retained.shares_payload(&plan));
-            assert!(round.observe_text(&plan).is_err());
-            assert!(round.observe_text_block(&block).is_err());
-            assert_eq!(round.state.observations.len(), 1);
+            round.observe_text(&plan).unwrap();
+            round.observe_text_block(&block).unwrap();
+            assert_eq!(round.state.observations.len(), 3);
+            for observation in &round.state.observations {
+                let Observation::TextPlan(retained) = observation.as_ref() else {
+                    panic!("text observation")
+                };
+                assert!(retained.shares_payload(&plan));
+            }
         }
     }
 
     #[test]
     fn effective_feedback_uses_getter_defaults_not_request_or_observation_identity() {
-        let resources = crate::font::canonical::OperationGenerationResources::new();
         let address = ComponentAddress::root();
-        let mut round = FeedbackRound::new(None, resources.clone(), 0).unwrap();
+        let mut round = FeedbackRound::new(None, 0).unwrap();
         for kind in [
             FeedbackKind::AxisGutter,
             FeedbackKind::SharedAlignment,
@@ -2530,21 +1936,21 @@ mod tests {
                 .unwrap()
                 .is_none());
         }
-        let mut state = round.finish().unwrap();
+        let mut state = round.finish();
         assert!(!state.requests.is_empty());
-        assert!(state.feedback_unchanged(&resources).unwrap());
+        assert!(state.feedback_unchanged().unwrap());
         // Explicit zeros are also equivalent to an absent consumed entry.
         state.next.push(FeedbackEntry {
             target: address.clone(),
             kind: FeedbackKind::AxisGutter,
             value: FeedbackValue::Insets([0; 4]),
         });
-        assert!(state.feedback_unchanged(&resources).unwrap());
-        let mut round = FeedbackRound::new(Some(&state), resources.clone(), 1).unwrap();
+        assert!(state.feedback_unchanged().unwrap());
+        let mut round = FeedbackRound::new(Some(&state), 1).unwrap();
         round
             .observe_string("different current observations")
             .unwrap();
-        assert!(round.state.feedback_unchanged(&resources).unwrap());
+        assert!(round.state.feedback_unchanged().unwrap());
         round
             .request_domain(
                 &address,
@@ -2553,18 +1959,13 @@ mod tests {
                 (0.0, 1.0),
             )
             .unwrap();
-        assert!(!round
-            .finish()
-            .unwrap()
-            .feedback_unchanged(&resources)
-            .unwrap());
+        assert!(!round.finish().feedback_unchanged().unwrap());
     }
 
     #[test]
     fn unchanged_effective_feedback_does_not_clear_a_provisional_miss() {
-        let resources = crate::font::canonical::OperationGenerationResources::new();
         let address = ComponentAddress::root();
-        let mut round = FeedbackRound::new(None, resources.clone(), 0).unwrap();
+        let mut round = FeedbackRound::new(None, 0).unwrap();
         let request = round
             .request_insets(&address, &address, FeedbackKind::AxisGutter, [1.0; 4])
             .unwrap();
@@ -2578,12 +1979,11 @@ mod tests {
             .unwrap();
         // Exercise the driver's guard even if net feedback returns to its input.
         round.state.next.clear();
-        let state = round.finish().unwrap();
-        assert!(state.feedback_unchanged(&resources).unwrap());
-        assert!(state.terminal_error(&resources).unwrap().is_none());
+        let state = round.finish();
+        assert!(state.feedback_unchanged().unwrap());
+        assert!(state.terminal_error().is_none());
         assert!(state
-            .unchanged_error(&resources)
-            .unwrap()
+            .unchanged_error()
             .unwrap()
             .to_string()
             .contains("unresolved current ink"));
@@ -2591,9 +1991,8 @@ mod tests {
 
     #[test]
     fn provisional_misses_retain_concrete_requests_and_reject_stale_handles() {
-        let resources = crate::font::canonical::OperationGenerationResources::new();
         let address = ComponentAddress::root();
-        let mut round = FeedbackRound::new(None, resources.clone(), 0).unwrap();
+        let mut round = FeedbackRound::new(None, 0).unwrap();
         let request = round
             .request_insets(
                 &address,
@@ -2609,8 +2008,8 @@ mod tests {
             &round.state.misses[0].feedback[0],
             &round.state.requests[0]
         ));
-        let state = round.finish().unwrap();
-        let mut next = FeedbackRound::new(Some(&state), resources.clone(), 1).unwrap();
+        let state = round.finish();
+        let mut next = FeedbackRound::new(Some(&state), 1).unwrap();
         assert!(next
             .miss(&address, FitKind::Tick, &[request], "stale")
             .unwrap_err()
@@ -2629,9 +2028,7 @@ mod tests {
             .unwrap();
         assert!(next
             .finish()
-            .unwrap()
-            .terminal_error(&resources)
-            .unwrap()
+            .terminal_error()
             .unwrap()
             .to_string()
             .contains("no changed input"));

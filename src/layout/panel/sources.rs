@@ -1,7 +1,6 @@
 //! Ordered, bounded numeric sources. A rejected source never materializes a subset.
 
 use super::{AxisSide, AxisTick, Projection};
-use crate::font::canonical::PreparedFontEnvironment;
 use crate::layout::PhysicalTextAlignment;
 use crate::theme::ResolvedTheme;
 use crate::Error;
@@ -112,34 +111,16 @@ fn indices(range: (f64, f64), step: f64) -> Option<(i64, usize)> {
     (1..=MAX_TICKS).contains(&count).then_some((first, count))
 }
 
-fn reserve<T>(
-    values: &mut Vec<T>,
-    count: usize,
-    environment: Option<&PreparedFontEnvironment>,
-) -> Result<(), Error> {
-    if let Some(environment) = environment {
-        environment
-            .claim_processing_visits(count as u128)
-            .map_err(|error| Error::Render(format!("numeric source work admission: {error:?}")))?;
-        crate::render::backend::reserve_text_records(values, count, environment)?;
-    } else {
-        values
-            .try_reserve_exact(count)
-            .map_err(|error| Error::Render(error.to_string()))?;
-    }
-    Ok(())
+fn reserve<T>(values: &mut Vec<T>, count: usize) -> Result<(), Error> {
+    crate::render::backend::reserve_text_records(values, count)
 }
 
-fn linear_positions(
-    range: (f64, f64),
-    step: f64,
-    environment: Option<&PreparedFontEnvironment>,
-) -> Result<Option<Vec<f64>>, Error> {
+fn linear_positions(range: (f64, f64), step: f64) -> Result<Option<Vec<f64>>, Error> {
     let Some((first, count)) = indices(range, step) else {
         return Ok(None);
     };
     let mut positions = Vec::new();
-    reserve(&mut positions, count, environment)?;
+    reserve(&mut positions, count)?;
     for offset in 0..count {
         let position = ((first + i64::try_from(offset).expect("bounded tick count")) as f64) * step;
         if !position.is_finite()
@@ -156,12 +137,9 @@ fn linear_positions(
     Ok(Some(positions))
 }
 
-fn endpoints(
-    range: (f64, f64),
-    environment: Option<&PreparedFontEnvironment>,
-) -> Result<Option<Vec<f64>>, Error> {
+fn endpoints(range: (f64, f64)) -> Result<Option<Vec<f64>>, Error> {
     let mut positions = Vec::new();
-    reserve(&mut positions, 2, environment)?;
+    reserve(&mut positions, 2)?;
     positions.extend([range.0, range.1]);
     Ok(Some(positions))
 }
@@ -169,10 +147,9 @@ fn endpoints(
 pub(super) fn adaptive_positions(
     range: (f64, f64),
     seed: usize,
-    environment: Option<&PreparedFontEnvironment>,
 ) -> Result<Option<Vec<f64>>, Error> {
     if range.0.next_up() >= range.1 {
-        return endpoints(range, environment);
+        return endpoints(range);
     }
     let direct = range.1 - range.0;
     let raw = if direct.is_finite() {
@@ -186,11 +163,6 @@ pub(super) fn adaptive_positions(
     }
     let mut magnitude = None;
     for exponent in (-323..=308).rev() {
-        if let Some(environment) = environment {
-            environment
-                .claim_processing_visits(1)
-                .map_err(|error| Error::Render(format!("decimal table admission: {error:?}")))?;
-        }
         let power = decimal_power(exponent);
         if power <= raw {
             magnitude = Some(power);
@@ -199,11 +171,6 @@ pub(super) fn adaptive_positions(
     }
     let mut best = None;
     for factor in [10.0, 5.0, 2.5, 2.0, 1.0] {
-        if let Some(environment) = environment {
-            environment
-                .claim_processing_visits(1)
-                .map_err(|error| Error::Render(format!("decimal step admission: {error:?}")))?;
-        }
         let step = magnitude.map_or(raw, |magnitude| factor * magnitude);
         if let Some((_, count)) = indices(range, step) {
             let distance = count.abs_diff(seed);
@@ -218,11 +185,11 @@ pub(super) fn adaptive_positions(
     let Some((step, _)) = best else {
         return Ok(None);
     };
-    let Some(positions) = linear_positions(range, step, environment)? else {
+    let Some(positions) = linear_positions(range, step)? else {
         return Ok(None);
     };
     if positions.len() < 2 {
-        endpoints(range, environment)
+        endpoints(range)
     } else {
         Ok(Some(positions))
     }
@@ -396,10 +363,7 @@ impl Sources {
         Some(SourceKind::Midpoint)
     }
 
-    fn next(
-        &mut self,
-        environment: &PreparedFontEnvironment,
-    ) -> Result<(TickSource, Option<Vec<f64>>), Error> {
+    fn next(&mut self) -> Result<(TickSource, Option<Vec<f64>>), Error> {
         if self.ordinal >= self.cap {
             return Err(Error::Render("numeric axis source cap exhausted".into()));
         }
@@ -408,15 +372,7 @@ impl Sources {
                 "numeric axis source order exhausted after midpoint".into(),
             ));
         }
-        environment
-            .claim_processing_visits(1)
-            .map_err(|error| Error::Render(format!("axis source admission: {error:?}")))?;
-        environment
-            .claim_text_generation_slots(1)
-            .map_err(|error| Error::Render(format!("axis source admission: {error:?}")))?;
-        environment
-            .claim_unicode_bytes(std::mem::size_of::<TickSource>() as u64)
-            .map_err(|error| Error::Render(error.to_string()))?;
+
         let kind = self
             .next_kind()
             .ok_or_else(|| Error::Render("numeric source order exhausted".into()))?;
@@ -432,15 +388,15 @@ impl Sources {
             crate::orchestrator::measurements::Counter::TickSource,
         );
         let positions = match kind {
-            SourceKind::Adaptive(seed) => adaptive_positions(self.range, seed, Some(environment))?,
-            SourceKind::Additive(step) => linear_positions(self.range, step, Some(environment))?,
+            SourceKind::Adaptive(seed) => adaptive_positions(self.range, seed)?,
+            SourceKind::Additive(step) => linear_positions(self.range, step)?,
             SourceKind::LogInterval(step) => {
                 let clamped = (self.range.0.max(-323.0), self.range.1.min(308.0));
                 if clamped.0 > clamped.1 {
                     self.intervals_done = true;
                     None
                 } else {
-                    linear_positions(clamped, step as f64, Some(environment))?
+                    linear_positions(clamped, step as f64)?
                 }
             }
             SourceKind::LogIntegral | SourceKind::LogSubset(_) => {
@@ -452,7 +408,7 @@ impl Sources {
                     count
                 };
                 let mut positions = Vec::new();
-                reserve(&mut positions, desired, Some(environment))?;
+                reserve(&mut positions, desired)?;
                 for index in 0..desired {
                     positions.push(
                         f64::from(first)
@@ -463,7 +419,7 @@ impl Sources {
             }
             SourceKind::Midpoint => {
                 let mut positions = Vec::new();
-                reserve(&mut positions, 1, Some(environment))?;
+                reserve(&mut positions, 1)?;
                 positions.push(f64::midpoint(self.range.0, self.range.1));
                 Some(positions)
             }
@@ -485,18 +441,15 @@ pub(crate) fn numeric_tick_plan(
     scope: &crate::layout::fit::FitScope,
 ) -> Result<NumericTickPlan, crate::layout::fit::PlanError> {
     Sources::new(range, log, interval, 1)?;
-    let admission = theme
-        .prepared_font_environment()?
-        .claim_measurement_call()
-        .map_err(|error| Error::Render(format!("numeric axis call admission: {error:?}")))?;
-    NumericTickPlan::measure_in_call(
-        range, interval, log, projection, side, theme, legacy, scope, &admission,
+
+    NumericTickPlan::measure_selected_source(
+        range, interval, log, projection, side, theme, legacy, scope,
     )
 }
 
 impl NumericTickPlan {
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn measure_in_call(
+    pub(crate) fn measure_selected_source(
         range: (f64, f64),
         interval: Option<TickInterval>,
         log: bool,
@@ -505,7 +458,6 @@ impl NumericTickPlan {
         theme: &ResolvedTheme,
         legacy: bool,
         scope: &crate::layout::fit::FitScope,
-        _admission: &crate::font::canonical::MeasurementCall,
     ) -> Result<Self, crate::layout::fit::PlanError> {
         // Validate semantic inputs before asking for the metric probe or environment.
         Sources::new(range, log, interval, 1)?;
@@ -532,25 +484,21 @@ impl NumericTickPlan {
             AxisSide::Left => super::projection::axis_quanta(y0, y1)?,
         };
         let upper = upper_seed_count(span as f64 / 1024.0, probe.lines[0].logical_advance_quanta)?;
-        let environment = theme.prepared_font_environment()?;
+
         let mut sources = Sources::new(range, log, interval, upper)?;
         loop {
-            let (source, positions) = sources.next(environment)?;
+            let (source, positions) = sources.next()?;
             if let Some(positions) = positions {
                 // Each formatting attempt is admitted before strings or record storage.
                 let mut ticks = Vec::new();
-                reserve(&mut ticks, positions.len(), Some(environment))?;
+                reserve(&mut ticks, positions.len())?;
                 let mut unique = false;
                 for precision in 0..=17 {
                     if precision == 1 {
                         continue;
                     }
                     ticks.clear();
-                    environment
-                        .claim_processing_visits(positions.len() as u128)
-                        .map_err(|error| {
-                            Error::Render(format!("tick label admission: {error:?}"))
-                        })?;
+
                     for &position in &positions {
                         let integral = log
                             && matches!(
@@ -559,8 +507,7 @@ impl NumericTickPlan {
                                     | SourceKind::LogSubset(_)
                                     | SourceKind::LogInterval(_)
                             );
-                        let label =
-                            format_label(position, log, integral, precision, Some(environment))?;
+                        let label = format_label(position, log, integral, precision)?;
                         ticks.push(AxisTick::new(position, label));
                     }
                     // Formatting of an ordered numeric source is monotone. Only
@@ -574,9 +521,7 @@ impl NumericTickPlan {
                 crate::orchestrator::measurements::count(
                     crate::orchestrator::measurements::Counter::TickDistinctList,
                 );
-                environment
-                    .claim_processing_visits(1)
-                    .map_err(|error| Error::Render(format!("axis fit admission: {error:?}")))?;
+
                 if unique && labels_fit(&ticks, projection, side, theme)? {
                     return Ok(NumericTickPlan { ticks, source });
                 }
@@ -593,7 +538,6 @@ impl NumericTickPlan {
                             AxisSide::Left => crate::layout::AddressRole::AxisLeft,
                         },
                         0,
-                        &theme.prepared_font_environment()?.generation_resources(),
                     )?
                     .failure(
                         crate::layout::fit::FitKind::Tick,
@@ -610,7 +554,6 @@ pub(crate) fn format_label(
     log: bool,
     integral: bool,
     precision: usize,
-    environment: Option<&PreparedFontEnvironment>,
 ) -> Result<String, Error> {
     let (buffer, text_len, suffix) = format_label_parts(value, log, integral, precision)?;
     let text = std::str::from_utf8(&buffer[..text_len]).expect("ASCII numeric formatter");
@@ -618,11 +561,7 @@ pub(crate) fn format_label(
         .len()
         .checked_add(suffix.len())
         .ok_or_else(|| Error::Render("numeric label bytes overflow".into()))?;
-    if let Some(environment) = environment {
-        environment
-            .claim_unicode_bytes(length as u64)
-            .map_err(|error| Error::Render(error.to_string()))?;
-    }
+
     let mut label = String::new();
     label
         .try_reserve_exact(length)
@@ -634,18 +573,13 @@ pub(crate) fn format_label(
 
 /// Prepare a guide label before fonts, admitting actual bytes before the only
 /// heap allocation. Both axis and guide roles use the same numeric grammar.
-pub(crate) fn format_guide_label(
-    value: f64,
-    precision: usize,
-    data: crate::data::PlotData<'_>,
-) -> Result<String, Error> {
+pub(crate) fn format_guide_label(value: f64, precision: usize) -> Result<String, Error> {
     let (buffer, text_len, suffix) = format_label_parts(value, false, false, precision)?;
     let text = std::str::from_utf8(&buffer[..text_len]).expect("ASCII numeric formatter");
     let length = text_len
         .checked_add(suffix.len())
         .ok_or_else(|| Error::Render("guide label bytes overflow".into()))?;
-    data.claim_source_records(1)?;
-    data.claim_source_bytes(length)?;
+
     let mut label = String::new();
     label
         .try_reserve_exact(length)
@@ -745,7 +679,6 @@ pub(super) fn labels_fit(
         None,
         projection,
         side,
-        theme,
         &crate::layout::fit::FitScope::root(),
     ) {
         Ok(cells) => cells,

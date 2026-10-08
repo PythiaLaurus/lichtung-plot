@@ -14,7 +14,7 @@ pub(crate) fn continuous_right(
     minimum: f64,
     theme: &ResolvedTheme,
     scope: &crate::layout::fit::FitScope,
-    data: PlotData<'_>,
+
     content_plot: Option<&Plot>,
 ) -> Result<
     (
@@ -30,11 +30,7 @@ pub(crate) fn continuous_right(
     let available = panel.width() - minimum - widths.outside_gap;
     if widths.title_minimum > available {
         return Err(scope
-            .child(
-                crate::layout::AddressRole::GuideTitle,
-                0,
-                &theme.prepared_font_environment()?.generation_resources(),
-            )?
+            .child(crate::layout::AddressRole::GuideTitle, 0)?
             .failure(
                 FitKind::Text,
                 "continuous guide title cannot preserve its text and the hard data tracks",
@@ -91,7 +87,6 @@ pub(crate) fn continuous_right(
         crate::layout::kernel::ceil_spatial_quanta(widths.outside_gap)?,
         None,
         true,
-        data.source_resources()?,
         scope,
     ))?;
     let edge = start
@@ -150,12 +145,12 @@ impl PreparedInteriorInputs {
                     scope,
                     kind,
                 )?;
-                let order = marks.group_order(chart, data)?;
+                let order = marks.group_order(chart)?;
                 marks.guide_entries_in_order(chart, theme, data, &order)
             }
             PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
                 let marks = panel(self.line.as_ref().map(|p| p.panels.as_slice()), scope, kind)?;
-                let order = marks.group_order(chart, data)?;
+                let order = marks.group_order(chart)?;
                 marks.guide_entries_in_order(chart, theme, data, &order)
             }
             PlotKind::Bar
@@ -164,7 +159,7 @@ impl PreparedInteriorInputs {
             | PlotKind::StackedHorizontalBar => {
                 let marks = panel(self.bars.as_ref().map(|p| p.panels.as_slice()), scope, kind)?;
                 let (colors, accents) = marks.resolved_colors(chart, theme, data)?;
-                crate::plots::bar_data::legend_entries(marks, chart, theme, data, &colors, &accents)
+                crate::plots::bar_data::legend_entries(marks, chart, theme, &colors, &accents)
             }
             PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
                 let marks = panel(
@@ -180,7 +175,7 @@ impl PreparedInteriorInputs {
                     scope,
                     kind,
                 )?;
-                let order = marks.group_order(chart, data)?;
+                let order = marks.group_order(chart)?;
                 marks.guide_entries_in_order(chart, theme, data, &order)
             }
             PlotKind::Interaction => {
@@ -204,15 +199,9 @@ impl PreparedInteriorInputs {
                     scope,
                     kind,
                 )?;
-                let color = crate::theme::AccentColors::resolve(
-                    &theme.marks.accents,
-                    1,
-                    data.source_resources()?,
-                )?
-                .color(0)?;
-                crate::plots::regression::PreparedRegression::guide_entries(
-                    chart, theme, data, color,
-                )
+                let color =
+                    crate::theme::AccentColors::resolve(&theme.marks.accents, 1)?.color(0)?;
+                crate::plots::regression::PreparedRegression::guide_entries(chart, theme, color)
             }
             PlotKind::Dumbbell => {
                 panel(
@@ -220,7 +209,7 @@ impl PreparedInteriorInputs {
                     scope,
                     kind,
                 )?;
-                crate::plots::dumbbell::DumbbellData::guide_entries(chart, theme, data)
+                crate::plots::dumbbell::DumbbellData::guide_entries(chart, theme)
             }
             PlotKind::Histogram
             | PlotKind::Qq

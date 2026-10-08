@@ -1,9 +1,7 @@
 use super::*;
 
 fn fractional_prose() -> (ResolvedTheme, i64, i64) {
-    let mut theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     for role in [
         &mut theme.typography.root.title,
         &mut theme.typography.root.subtitle,
@@ -72,7 +70,7 @@ fn root_frame_combines_two_third_quantum_clearances_at_its_real_height_boundary(
         ),
         Err(crate::layout::fit::PlanError::Fit(_))
     ));
-    let mut ink = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+    let mut ink = crate::render::geometry::GeometrySnapshot::new();
     frame.root_text.geometry(&mut ink).unwrap();
     assert!(!ink.bounds().is_empty());
     assert!(ink.bounds().iter().all(|bounds| bounds.left >= 0.0
@@ -84,10 +82,7 @@ fn root_frame_combines_two_third_quantum_clearances_at_its_real_height_boundary(
 #[test]
 fn embedded_frame_combines_two_third_quantum_clearances_without_losing_body_capacity() {
     let (theme, top, bottom) = fractional_prose();
-    let resources = theme
-        .prepared_font_environment()
-        .unwrap()
-        .generation_resources();
+    let resources = theme.prepared_font_environment().unwrap().operation();
     let plot = Plot::scatter(
         crate::NumericValues::new("x", [0.0, 1.0]),
         crate::NumericValues::new("y", [1.0, 0.0]),
@@ -132,7 +127,7 @@ fn embedded_frame_combines_two_third_quantum_clearances_without_losing_body_capa
         panic!("exact embedded clearances must leave the complete scientific body minimum");
     };
     assert!(frame.body.height() >= minimum.1);
-    let mut ink = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+    let mut ink = crate::render::geometry::GeometrySnapshot::new();
     frame.text.geometry(&mut ink).unwrap();
     assert!(ink
         .bounds()
@@ -168,8 +163,8 @@ fn natural_root_height_combines_exact_prose_reserves_before_integral_root_select
 
 #[test]
 fn embedded_prose_uses_plot_owned_padding_only_when_present_and_keeps_body_horizontal_span() {
-    let resources = crate::font::canonical::OperationGenerationResources::new();
-    let mut theme = crate::Theme::Publication.resolve(&resources).unwrap();
+    let resources = crate::font::canonical::OperationContext::new();
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
     let padding = crate::theme::composition::RootPadding::new(
         crate::theme::RelativeSpacing::ratio(32, 17).unwrap(),
         crate::theme::RelativeSpacing::ratio(4, 17).unwrap(),
@@ -217,16 +212,8 @@ fn embedded_prose_uses_plot_owned_padding_only_when_present_and_keeps_body_horiz
             assert_eq!(plan.body.y0.to_bits(), 3.0_f64.to_bits());
             assert_eq!(
                 plan.body.y1.to_bits(),
-                (193.0
-                    - crate::theme::composition::hard(
-                        &plan.text.reserves.top,
-                        &theme
-                            .prepared_font_environment()
-                            .unwrap()
-                            .generation_resources()
-                    )
-                    .unwrap())
-                .to_bits()
+                (193.0 - crate::theme::composition::hard(&plan.text.reserves.top).unwrap())
+                    .to_bits()
             );
             let (placement, text) = plan.text.placed_text().next().unwrap();
             assert_eq!(placement.position.x.to_bits(), 32.0_f64.to_bits());

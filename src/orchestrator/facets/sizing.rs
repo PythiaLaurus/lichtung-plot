@@ -24,19 +24,18 @@ pub(super) fn grid_height(
     width: f64,
     inputs: &crate::layout::interior::PreparedInteriorInputs,
 ) -> Result<fit::FitOutcome<f64>, Error> {
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = plot.data().with_axis_resources(&resources);
-    let owner = ComponentAddress::root().child(AddressRole::FacetGrid, 0, &resources)?;
+    let resources = theme.prepared_font_environment()?.operation();
+    let data = plot.data().with_operation(&resources);
+    let owner = ComponentAddress::root().child(AddressRole::FacetGrid, 0)?;
     let mut gutters = Vec::new();
-    data.reserve_source(&mut gutters, panels.len())?;
+    crate::data::source::reserve_source(&mut gutters, panels.len())?;
     for (index, panel) in panels.iter().enumerate() {
         let address = owner.child(
             AddressRole::FacetCell,
             u32::try_from(index)
                 .map_err(|_| Error::Render("facet content address overflow".into()))?,
-            &resources,
         )?;
-        let [left, right, bottom, top] = round.insets(&address, FeedbackKind::AxisGutter)?;
+        let [left, right, bottom, top] = round.insets(&address, FeedbackKind::AxisGutter);
         gutters.push((
             panel.row,
             panel.column,
@@ -84,14 +83,12 @@ pub(in crate::orchestrator) fn natural_size(
     guide: &PreparedFacetGuide,
     inputs: &crate::layout::interior::PreparedInteriorInputs,
 ) -> Result<RootSize, Error> {
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    resources
-        .claim_calls(1)
-        .map_err(|error| Error::Render(format!("facet content sizing: {error:?}")))?;
-    let data = source.data().with_axis_resources(&resources);
+    let resources = theme.prepared_font_environment()?.operation();
+
+    let data = source.data().with_operation(&resources);
     let selectors = data::facet_selectors(source, data)?;
     let panels = data::extract_panels(source, &selectors, None, data)?;
-    let labels = source.prepare_axis_labels(data, None)?;
+    let labels = source.prepare_axis_labels(None)?;
     let base = data::base_plot(
         source,
         source.kind(),
@@ -100,22 +97,19 @@ pub(in crate::orchestrator) fn natural_size(
         &resources,
     )?;
     let mut minima = Vec::new();
-    data.reserve_source(&mut minima, panels.len())?;
+    crate::data::source::reserve_source(&mut minima, panels.len())?;
     let mut gutters = Vec::new();
-    data.reserve_source(&mut gutters, panels.len())?;
-    let grid_owner = ComponentAddress::root().child(AddressRole::FacetGrid, 0, &resources)?;
+    crate::data::source::reserve_source(&mut gutters, panels.len())?;
+    let grid_owner = ComponentAddress::root().child(AddressRole::FacetGrid, 0)?;
     for (index, panel) in panels.iter().enumerate() {
-        let plot = base
-            .admitted_clone(data)?
-            .with_render_scope(panel.render_scope(data)?);
+        let plot = base.clone().with_render_scope(panel.render_scope()?);
         minima.push(plot.intrinsic_body_minimum(theme)?);
         let owner = grid_owner.child(
             AddressRole::FacetCell,
             u32::try_from(index)
                 .map_err(|_| Error::Render("facet content address overflowed".into()))?,
-            &resources,
         )?;
-        let [left, right, bottom, top] = round.insets(&owner, FeedbackKind::AxisGutter)?;
+        let [left, right, bottom, top] = round.insets(&owner, FeedbackKind::AxisGutter);
         gutters.push((
             panel.row,
             panel.column,
@@ -207,10 +201,10 @@ pub(in crate::orchestrator) fn natural_size(
     }
     let width = requested_width.map_or_else(|| integral(preferred), Ok)?;
     let root_gutters = round.insets(
-        &ComponentAddress::root().child(AddressRole::RootBody, 0, &resources)?,
+        &ComponentAddress::root().child(AddressRole::RootBody, 0)?,
         FeedbackKind::AxisGutter,
-    )?;
-    let grid_gutters = round.insets(&grid_owner, FeedbackKind::AxisGutter)?;
+    );
+    let grid_gutters = round.insets(&grid_owner, FeedbackKind::AxisGutter);
     let grid = allocate(
         Some(theme.root_inner_width(f64::from(width))? - root_gutters[0] - grid_gutters[0]),
         &gutters,
@@ -236,7 +230,6 @@ pub(in crate::orchestrator) fn natural_size(
     .map_err(fit::PlanError::into_error)?;
     let height = integral(theme.root_outer_height(&prose.height_with_body(
         grid.size.1.max(guide_size.1) + root_gutters[2].max(axes[2]) + grid_gutters[2],
-        &resources,
     )?)?)?;
     Ok(RootSize::new(width, height))
 }

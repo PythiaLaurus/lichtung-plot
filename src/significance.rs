@@ -69,10 +69,9 @@ pub(crate) fn plan(
     theme: &crate::theme::ResolvedTheme,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<SignificancePlan, crate::layout::fit::PlanError> {
-    let label = theme.typography.effective_significance_label(
-        chart.significance_mark_style_override(),
-        &theme.prepared_font_environment()?.generation_resources(),
-    )?;
+    let label = theme
+        .typography
+        .effective_significance_label(chart.significance_mark_style_override())?;
     plan_comparisons_with_label(
         chart.significance_annotations(),
         categories,
@@ -106,13 +105,10 @@ fn plan_comparisons(
     legend_constraint: LegendAnnotationConstraint,
     mark_style: SignificanceMarkStyle,
 ) -> Result<SignificancePlan, Error> {
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
-    let label = theme.typography.effective_significance_label(
-        Some(mark_style),
-        &theme.prepared_font_environment()?.generation_resources(),
-    )?;
+    let theme = crate::Theme::Publication.resolve().unwrap();
+    let label = theme
+        .typography
+        .effective_significance_label(Some(mark_style))?;
     plan_comparisons_with_label(
         annotations,
         categories,
@@ -188,13 +184,10 @@ fn plan_comparisons_at(
     horizontal: bool,
     mark_style: SignificanceMarkStyle,
 ) -> Result<SignificancePlan, Error> {
-    let theme = crate::Theme::Publication
-        .resolve(&crate::font::canonical::OperationGenerationResources::new())
-        .unwrap();
-    let label = theme.typography.effective_significance_label(
-        Some(mark_style),
-        &theme.prepared_font_environment()?.generation_resources(),
-    )?;
+    let theme = crate::Theme::Publication.resolve().unwrap();
+    let label = theme
+        .typography
+        .effective_significance_label(Some(mark_style))?;
     plan_comparisons_at_with_label(
         annotations,
         categories,
@@ -405,7 +398,7 @@ fn plan_comparisons_at_with_label(
     // A label can overhang its bracket span. Occupancy therefore follows the
     // complete centered label and bracket ink, not just category indices.
     let mut occupied_levels = Vec::<Vec<(f64, f64)>>::new();
-    let resources = theme.prepared_font_environment()?.generation_resources();
+
     for comparison in &mut resolved {
         let anchor = |index: usize| {
             panel.x0
@@ -429,14 +422,8 @@ fn plan_comparisons_at_with_label(
         );
         let mut first_free = None;
         for (level, occupied) in occupied_levels.iter().enumerate() {
-            resources.claim_visits(1).map_err(|error| {
-                Error::Render(format!("significance shelf level admission: {error:?}"))
-            })?;
             let mut free = true;
             for previous in occupied {
-                resources.claim_visits(1).map_err(|error| {
-                    Error::Render(format!("significance shelf collision admission: {error:?}"))
-                })?;
                 if interval.0 < previous.1 && previous.0 < interval.1 {
                     free = false;
                     break;
@@ -556,7 +543,7 @@ fn plan_comparisons_at_with_label(
             .then_with(|| left.label.plan.source.cmp(&right.label.plan.source))
     });
     let category_width = panel.width() / categories.len() as f64;
-    let brackets = crate::layout::fit::collect(theme, "significance brackets", resolved
+    let brackets = crate::layout::fit::collect( "significance brackets", resolved
         .into_iter()
         .map(|comparison| {
             let anchor = |index: usize| {
@@ -576,7 +563,7 @@ fn plan_comparisons_at_with_label(
             if label_center - label_half_extent < panel.x0
                 || label_center + label_half_extent > panel.x1
             {
-                return Err(scope.child(crate::layout::AddressRole::Annotation, comparison.source_index, &theme.prepared_font_environment()?.generation_resources())?.failure(crate::layout::fit::FitKind::Text,
+                return Err(scope.child(crate::layout::AddressRole::Annotation, comparison.source_index)?.failure(crate::layout::fit::FitKind::Text,
                     "significance bracket label does not fit inside the plot panel; enlarge the chart or reduce mark typography",
                 ).into());
             }
@@ -595,7 +582,7 @@ fn plan_comparisons_at_with_label(
         )?;
 
     for bracket in &brackets {
-        let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+        let mut geometry = crate::render::geometry::GeometrySnapshot::new();
         let label = &bracket.label.plan;
         let style = BracketStyle {
             color: theme.annotations.bracket_stroke.color(),
@@ -628,11 +615,7 @@ fn plan_comparisons_at_with_label(
                 || ink.top > containing.y1
         }) {
             return Err(scope
-                .child(
-                    crate::layout::AddressRole::Annotation,
-                    bracket.source_index,
-                    &theme.prepared_font_environment()?.generation_resources(),
-                )?
+                .child(crate::layout::AddressRole::Annotation, bracket.source_index)?
                 .failure(
                     crate::layout::fit::FitKind::OverlayCollision,
                     "complete significance bracket and label ink exceeds its assigned panel",
@@ -821,10 +804,9 @@ fn plan_grouped_oriented(
             resolve_grouped_endpoint(endpoint_b, categories, groups, rendered_maxima)?;
         }
     }
-    let label = theme.typography.effective_significance_label(
-        chart.significance_mark_style_override(),
-        &theme.prepared_font_environment()?.generation_resources(),
-    )?;
+    let label = theme
+        .typography
+        .effective_significance_label(chart.significance_mark_style_override())?;
     let mut result = plan_comparisons_at_with_label(
         chart.significance_annotations(),
         &labels,

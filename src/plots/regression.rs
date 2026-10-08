@@ -40,30 +40,26 @@ pub(crate) fn axis_ranges(
     )?;
     let mut x = Vec::new();
     let mut y = Vec::new();
-    data.reserve_source(&mut x, points.len())?;
-    data.reserve_source(&mut y, points.len())?;
+    crate::data::source::reserve_source(&mut x, points.len())?;
+    crate::data::source::reserve_source(&mut y, points.len())?;
     for point in points {
         x.push(point.0);
         y.push(point.1);
     }
     // OlsFit has no dynamic scratch: finite validation, scale, mean, centered
     // products and residuals each visit both channels once (ten scalar scans).
-    for _ in 0..10 {
-        data.claim_source_visits(x.len())?;
-    }
+
     let fit = OlsFit::new(&x, &y)?;
-    data.claim_source_visits(x.len())?;
+
     let xr = crate::data::min_max(x.iter().copied(), "regression")?;
-    data.claim_source_visits(y.len())?;
+
     let mut yr = crate::data::min_max(y.iter().copied(), "regression")?;
     for x in [xr.0, xr.1] {
-        data.claim_source_visits(1)?;
         let value = fit.predict(x)?;
         yr = (yr.0.min(value), yr.1.max(value));
     }
     if chart.regression_band_spec() == RegressionBand::PointwiseMean95 {
         for index in 0..BAND_POINTS {
-            data.claim_source_visits(1)?;
             let fraction = index as f64 / (BAND_POINTS - 1) as f64;
             let interval =
                 fit.pointwise_mean_response_95(xr.0 * (1.0 - fraction) + xr.1 * fraction)?;
@@ -71,50 +67,36 @@ pub(crate) fn axis_ranges(
         }
     }
     Ok([
-        crate::layout::continuous_auto_range(xr, chart.x_axis_spec(), data.source_resources()?)?,
-        crate::layout::continuous_auto_range(yr, chart.y_axis_spec(), data.source_resources()?)?,
+        crate::layout::continuous_auto_range(xr, chart.x_axis_spec())?,
+        crate::layout::continuous_auto_range(yr, chart.y_axis_spec())?,
     ])
 }
 
 #[cfg(test)]
 #[test]
-fn regression_axis_channel_and_fit_work_is_admitted_before_preparation() {
-    use crate::font::canonical::OperationGenerationResources;
+fn regression_axis_channel_and_fit_preserve_source_results() {
+    use crate::font::canonical::OperationContext;
     let chart = Plot::regression(
         crate::NumericValues::new("x", [1.0, 2.0, 3.0]),
         crate::NumericValues::new("y", [1.0, 4.0, 2.0]),
     )
     .erase();
-    let baseline_resources = OperationGenerationResources::new();
-    let expected = axis_ranges(
-        &chart,
-        chart.data().with_axis_resources(&baseline_resources),
-    )
-    .unwrap();
-    let resources = OperationGenerationResources::new();
-    let data = chart.data().with_axis_resources(&resources);
+    let baseline_resources = OperationContext::new();
+    let expected = axis_ranges(&chart, chart.data().with_operation(&baseline_resources)).unwrap();
+    let resources = OperationContext::new();
+    let data = chart.data().with_operation(&resources);
     let points =
         crate::data::aligned_finite_f64(data, crate::data::X, crate::data::Y, "regression")
             .unwrap();
-    let pair_bytes = resources.byte_usage().unwrap();
-    let pair_visits = resources.usage().unwrap().1;
+
     let mut x: Vec<f64> = Vec::new();
     let mut y: Vec<f64> = Vec::new();
-    data.reserve_source(&mut x, points.len()).unwrap();
-    data.reserve_source(&mut y, points.len()).unwrap();
-    let channel_visits = resources.usage().unwrap().1;
-    for (visits, bytes, message) in [
-        (u128::MAX, pair_bytes, "storage admission"),
-        (pair_visits, u64::MAX, "work admission"),
-        (channel_visits, u64::MAX, "work admission"),
-    ] {
-        let resources = OperationGenerationResources::with_test_limits(visits, bytes);
-        let error = axis_ranges(&chart, chart.data().with_axis_resources(&resources)).unwrap_err();
-        assert!(error.to_string().contains(message), "{error}");
-    }
-    let resources = OperationGenerationResources::new();
+    crate::data::source::reserve_source(&mut x, points.len()).unwrap();
+    crate::data::source::reserve_source(&mut y, points.len()).unwrap();
+
+    let resources = OperationContext::new();
     assert_eq!(
-        axis_ranges(&chart, chart.data().with_axis_resources(&resources)).unwrap(),
+        axis_ranges(&chart, chart.data().with_operation(&resources)).unwrap(),
         expected
     );
 }
@@ -155,14 +137,10 @@ pub(crate) fn intrinsic_body_minimum(
         ));
     }
     let style = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.regression);
-    let (width, height) = crate::render::geometry::point_ink_dimensions(theme, &style)?;
-    let fit = crate::render::geometry::line_ink_width(
-        theme,
-        &theme.marks.regression_fit.backend_style(),
-    )?;
+    let (width, height) = crate::render::geometry::point_ink_dimensions(&style)?;
+    let fit = crate::render::geometry::line_ink_width(&theme.marks.regression_fit.backend_style())?;
     let band = if prepared.band_values.is_some() {
         crate::render::geometry::rectangular_fill_ink_outset(
-            theme,
             &theme.marks.regression_band.backend_style((0, 0, 0)),
         )?
     } else {
@@ -192,16 +170,16 @@ impl PreparedRegression {
     pub(crate) fn guide_entries(
         chart: &Plot,
         theme: &crate::theme::ResolvedTheme,
-        data: PlotData<'_>,
+
         color: (u8, u8, u8),
     ) -> Result<Vec<LegendEntry>, Error> {
         if !matches!(chart.legend_policy_spec(), crate::LegendPolicy::Visible(_)) {
             return Ok(Vec::new());
         }
         let mut entries = Vec::new();
-        data.reserve_source(&mut entries, 2)?;
+        crate::data::source::reserve_source(&mut entries, 2)?;
         let band = chart.regression_band_spec();
-        let fit_identity = chart.point_legend_identity(band.legend_label(), data)?;
+        let fit_identity = chart.point_legend_identity(band.legend_label())?;
         let line = theme.marks.regression_fit.backend_style();
         let fit_entry = if band == RegressionBand::PointwiseMean95 {
             LegendEntry::line_fill(
@@ -213,7 +191,7 @@ impl PreparedRegression {
             LegendEntry::line(fit_identity, line)
         };
         entries.push(LegendEntry::point(
-            chart.point_legend_identity("Observations", data)?,
+            chart.point_legend_identity("Observations")?,
             chart.point_style(theme, color, theme.marks.point_sizes.regression),
         ));
         entries.push(fit_entry);
@@ -221,7 +199,7 @@ impl PreparedRegression {
     }
 
     pub(crate) fn new(chart: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
-        data.claim_mark_rows()?;
+        data.validate_row_source()?;
         #[cfg(test)]
         crate::layout::interior::distributions::count(3, 0);
         let x_col = chart
@@ -231,8 +209,8 @@ impl PreparedRegression {
             .y_col()
             .ok_or_else(|| Error::Data("regression: y column not set".into()))?;
         let points = crate::data::aligned_finite_f64(data, x_col, y_col, "regression")?;
-        let x = data.collect_source(points.iter().map(|p| Ok(p.0)))?;
-        let y = data.collect_source(points.iter().map(|p| Ok(p.1)))?;
+        let x = crate::data::source::collect_source(points.iter().map(|p| Ok(p.0)))?;
+        let y = crate::data::source::collect_source(points.iter().map(|p| Ok(p.1)))?;
         let band = chart.regression_band_spec();
         let minimum = match band {
             RegressionBand::PointwiseMean95 => 3,
@@ -245,20 +223,17 @@ impl PreparedRegression {
             )));
         }
 
-        for _ in 0..10 {
-            data.claim_source_visits(x.len())?;
-        }
         let fit = OlsFit::new(&x, &y)?;
-        data.claim_source_visits(x.len())?;
+
         let (x_min, x_max) = crate::data::min_max(x.iter().copied(), "regression")?;
-        data.claim_source_visits(2)?;
+
         let y_fit_lo = fit.predict(x_min)?;
         let y_fit_hi = fit.predict(x_max)?;
 
         let band_values = if band == RegressionBand::PointwiseMean95 {
             let mut values = Vec::new();
-            data.reserve_source(&mut values, BAND_POINTS)?;
-            data.claim_source_visits(BAND_POINTS)?;
+            crate::data::source::reserve_source(&mut values, BAND_POINTS)?;
+
             for index in 0..BAND_POINTS {
                 let fraction = index as f64 / (BAND_POINTS - 1) as f64;
                 let x_value = x_min * (1.0 - fraction) + x_max * fraction;
@@ -270,13 +245,11 @@ impl PreparedRegression {
             None
         };
 
-        data.claim_source_visits(y.len())?;
         let (mut y_min, mut y_max) = crate::data::min_max(y.iter().copied(), "regression")?;
         let observation_ranges = [(x_min, x_max), (y_min, y_max)];
         y_min = y_min.min(y_fit_lo).min(y_fit_hi);
         y_max = y_max.max(y_fit_lo).max(y_fit_hi);
         if let Some(values) = &band_values {
-            data.claim_source_visits(values.len())?;
             for (_, lower, upper) in values {
                 y_min = y_min.min(*lower);
                 y_max = y_max.max(*upper);
@@ -284,16 +257,8 @@ impl PreparedRegression {
         }
         let mark_ranges = [(x_min, x_max), (y_min, y_max)];
 
-        let x_range = crate::layout::continuous_auto_range(
-            (x_min, x_max),
-            chart.x_axis_spec(),
-            data.source_resources()?,
-        )?;
-        let y_range = crate::layout::continuous_auto_range(
-            (y_min, y_max),
-            chart.y_axis_spec(),
-            data.source_resources()?,
-        )?;
+        let x_range = crate::layout::continuous_auto_range((x_min, x_max), chart.x_axis_spec())?;
+        let y_range = crate::layout::continuous_auto_range((y_min, y_max), chart.y_axis_spec())?;
         Ok(Self {
             ranges: [x_range, y_range],
             observation_ranges,
@@ -354,25 +319,24 @@ pub(crate) fn measure_marks(
             )
         })?;
     let theme = context.theme;
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = context.data.with_axis_resources(&resources);
+
     let projection = layout.projection.clone();
-    let mut result = project(chart, prepared, layout, theme, data)?;
+    let mut result = project(chart, prepared, layout, theme)?;
     let automatic = [
         chart.user_x_limits().is_none(),
         chart.user_y_limits().is_none(),
     ];
     let mut requests = [None; 2];
-    if let Some(ink) = crate::render::geometry::point_ink_bounds(
+    if let Some(ink) = crate::render::geometry::point_ink_bounds(&chart.point_style(
         theme,
-        &chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.regression),
-    )? {
+        (0, 0, 0),
+        theme.marks.point_sizes.regression,
+    ))? {
         requests = crate::layout::interior::automatic_mark_ink_expansions(
             prepared.observation_ranges,
             &projection,
             ink,
             automatic,
-            data,
             context.fit_scope(),
         )?;
     }
@@ -384,7 +348,7 @@ pub(crate) fn measure_marks(
     else {
         unreachable!("Regression selected its own mark payload")
     };
-    let mut scientific_ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    let mut scientific_ink = crate::render::geometry::GeometrySnapshot::new();
     if let Some(band) = &payload.band {
         scientific_ink.polygon(band, &payload.band_fill, None)?;
     }
@@ -400,7 +364,6 @@ pub(crate) fn measure_marks(
             &projection,
             bounds,
             automatic,
-            data,
             context.fit_scope(),
         )?;
         requests = crate::layout::interior::merge_mark_domain_expansions(requests, additional);
@@ -419,21 +382,17 @@ pub(crate) fn project(
     prepared: &PreparedRegression,
     layout: crate::layout::Layout,
     theme: &crate::theme::ResolvedTheme,
-    data: PlotData<'_>,
 ) -> Result<PlotRenderResult, Error> {
     let projection = &layout.projection;
-    let color =
-        crate::theme::AccentColors::resolve(&theme.marks.accents, 1, data.source_resources()?)?
-            .color(0)?;
+    let color = crate::theme::AccentColors::resolve(&theme.marks.accents, 1)?.color(0)?;
     let point_style = chart.point_style(theme, color, theme.marks.point_sizes.regression);
     let scatter_points =
-        data.collect_source(prepared.points.iter().map(|(x_value, y_value)| {
-            data.claim_source_visits(1)?;
+        crate::data::source::collect_source(prepared.points.iter().map(|(x_value, y_value)| {
             let (x, y) = projection.project(*x_value, *y_value);
             Ok(Point2D::new(x, y))
         }))?;
     let line_style = theme.marks.regression_fit.backend_style();
-    data.claim_source_visits(2)?;
+
     let (fit_x0, fit_y0) = projection.project(prepared.fit_line[0].0, prepared.fit_line[0].1);
     let (fit_x1, fit_y1) = projection.project(prepared.fit_line[1].0, prepared.fit_line[1].1);
     let fit_line = [Point2D::new(fit_x0, fit_y0), Point2D::new(fit_x1, fit_y1)];
@@ -443,9 +402,9 @@ pub(crate) fn project(
         .map(|values| -> Result<_, Error> {
             let mut upper = Vec::new();
             let mut lower = Vec::new();
-            data.reserve_source(&mut upper, BAND_POINTS * 2)?;
-            data.reserve_source(&mut lower, BAND_POINTS)?;
-            data.claim_source_visits(values.len())?;
+            crate::data::source::reserve_source(&mut upper, BAND_POINTS * 2)?;
+            crate::data::source::reserve_source(&mut lower, BAND_POINTS)?;
+
             let mut has_area = false;
             for (x_value, lower_value, upper_value) in values {
                 has_area |= lower_value < upper_value;
@@ -470,16 +429,16 @@ pub(crate) fn project(
                     "regression band polygon width",
                 )?;
             }
-            data.claim_source_visits(lower.len())?;
+
             lower.reverse();
-            data.claim_source_visits(lower.len())?;
+
             upper.extend(lower);
             Ok(upper)
         })
         .transpose()?;
     let band_fill = theme.marks.regression_band.backend_style(color);
 
-    let legend_entries = PreparedRegression::guide_entries(chart, theme, data, color)?;
+    let legend_entries = PreparedRegression::guide_entries(chart, theme, color)?;
     let payload = RegressionPayload {
         clip: projection.panel_box(),
         points: scatter_points,
@@ -490,7 +449,7 @@ pub(crate) fn project(
         band_fill,
         domain_expansions: [None; 2],
     };
-    let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    let mut geometry = crate::render::geometry::GeometrySnapshot::new();
     #[cfg(test)]
     crate::layout::interior::distributions::count(3, 2);
     let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
@@ -500,17 +459,19 @@ pub(crate) fn project(
     geometry.scatter(&payload.points, &payload.point_style, clip)?;
     geometry.line(&payload.fit_line, &payload.line_style, Some(clip))?;
     let mut result = PlotRenderResult::new(layout, legend_entries);
-    result.marks = Some(data.source_arc(crate::layout::interior::SelectedMarkPlan {
-        payload: crate::layout::interior::MarkPayload::Regression(payload),
-        geometry,
-    })?);
+    result.marks = Some(crate::data::source::source_arc(
+        crate::layout::interior::SelectedMarkPlan {
+            payload: crate::layout::interior::MarkPayload::Regression(payload),
+            geometry,
+        },
+    )?);
     Ok(result)
 }
 
 #[cfg(test)]
 mod style_tests {
     use super::*;
-    use crate::font::canonical::OperationGenerationResources;
+    use crate::font::canonical::OperationContext;
 
     #[test]
     fn regression_observation_and_fit_ink_remeasure_with_custom_styles() {
@@ -519,12 +480,10 @@ mod style_tests {
             crate::NumericValues::new("y", [1.0, 2.5, 2.0, 4.0]),
         )
         .erase();
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let before = chart.intrinsic_body_minimum(&theme).unwrap();
         theme.marks.point_sizes.regression = 54;
         let sized = chart.intrinsic_body_minimum(&theme).unwrap();
@@ -557,12 +516,10 @@ mod style_tests {
             crate::LegendPosition::OutsideRight,
         ))
         .erase();
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let panel = crate::layout::PanelBox::new(10.0, 620.0, 20.0, 420.0);
         let old = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
@@ -593,7 +550,6 @@ mod style_tests {
                 changed.legend_entries[1].clone()
             ],
             "custom regression band",
-            &OperationGenerationResources::new(),
         )
         .unwrap_err()
         .to_string()
@@ -610,12 +566,10 @@ mod style_tests {
             crate::LegendPosition::OutsideRight,
         ))
         .erase();
-        let resources = OperationGenerationResources::new();
+        let resources = OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let panel = crate::layout::PanelBox::new(10.0, 620.0, 20.0, 420.0);
         let old = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
@@ -645,7 +599,6 @@ mod style_tests {
                 changed.legend_entries[1].clone()
             ],
             "custom regression fit",
-            &OperationGenerationResources::new(),
         )
         .unwrap_err()
         .to_string()

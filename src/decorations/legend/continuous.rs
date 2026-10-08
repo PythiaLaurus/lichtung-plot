@@ -43,24 +43,21 @@ fn projected_minimum(
     fractions: &[f64],
     gap: &crate::theme::spacing::ExactLength,
     traced: &crate::theme::spacing::ExactLength,
-    resources: &crate::font::canonical::OperationGenerationResources,
 ) -> Result<crate::theme::spacing::ExactLength, Error> {
-    let mut required = traced.times(1, resources)?;
+    let mut required = traced.times(1);
     if let [half_extent] = lengths {
-        let candidate = gap
-            .times(2, resources)?
-            .add_pixels(2.0 * half_extent, resources)?;
-        if required.compare(&candidate, resources)? == std::cmp::Ordering::Less {
+        let candidate = gap.times(2).add_pixels(2.0 * half_extent)?;
+        if required.compare(&candidate) == std::cmp::Ordering::Less {
             required = candidate;
         }
         return Ok(required);
     }
     for (extent, fraction) in lengths.windows(2).zip(fractions.windows(2)) {
         let candidate = gap
-            .add_pixels(extent[0], resources)?
-            .add_pixels(extent[1], resources)?
-            .divided_by(fraction[1] - fraction[0], resources)?;
-        if required.compare(&candidate, resources)? == std::cmp::Ordering::Less {
+            .add_pixels(extent[0])?
+            .add_pixels(extent[1])?
+            .divided_by(fraction[1] - fraction[0])?;
+        if required.compare(&candidate) == std::cmp::Ordering::Less {
             required = candidate;
         }
     }
@@ -75,7 +72,7 @@ impl MeasuredContinuousGuide {
         theme: &ResolvedTheme,
     ) -> Result<ContinuousGuideWidths, Error> {
         let (metrics, frame_minimum) = Self::allocation_metrics(descriptor, theme)?;
-        let resources = LegendMetrics::resources(theme)?;
+
         let (hard_title, _) = fit::intrinsic_widths(
             theme,
             &descriptor.title,
@@ -89,20 +86,15 @@ impl MeasuredContinuousGuide {
             "continuous guide title width",
             false,
         )?;
-        let mut hard = ExactLength::pixels(hard_title, &resources)?;
-        let mut preferred = ExactLength::pixels(
-            hard_title.max(title.width().max(title.fit_width())),
-            &resources,
-        )?;
+        let mut hard = ExactLength::pixels(hard_title)?;
+        let mut preferred =
+            ExactLength::pixels(hard_title.max(title.width().max(title.fit_width())))?;
         for label in descriptor
             .labels
             .iter()
             .map(String::as_str)
             .chain(descriptor.missing.iter().map(|key| key.label.as_str()))
         {
-            resources
-                .claim_visits(1)
-                .map_err(|error| Error::Render(format!("continuous width label: {error:?}")))?;
             let plan = theme.measure_text(
                 label,
                 &theme.typography.guides.legend_label,
@@ -113,21 +105,20 @@ impl MeasuredContinuousGuide {
             let column = metrics
                 .exact
                 .key_width
-                .add(&metrics.exact.key_label_gap, &resources)?
-                .add_pixels(plan.width().max(plan.fit_width()), &resources)?;
-            if hard.compare(&column, &resources)? == std::cmp::Ordering::Less {
-                hard = column.times(1, &resources)?;
+                .add_length(&metrics.exact.key_label_gap)
+                .add_pixels(plan.width().max(plan.fit_width()))?;
+            if hard.compare(&column) == std::cmp::Ordering::Less {
+                hard = column.times(1);
             }
-            if preferred.compare(&column, &resources)? == std::cmp::Ordering::Less {
+            if preferred.compare(&column) == std::cmp::Ordering::Less {
                 preferred = column;
             }
         }
-        let minimum = metrics.outer_width(&hard, theme)?.max(frame_minimum);
+        let minimum = metrics.outer_width(&hard)?.max(frame_minimum);
         Ok(ContinuousGuideWidths {
-            title_minimum: metrics
-                .outer_width(&ExactLength::pixels(hard_title, &resources)?, theme)?,
+            title_minimum: metrics.outer_width(&ExactLength::pixels(hard_title)?)?,
             minimum,
-            preferred: metrics.outer_width(&preferred, theme)?.max(minimum),
+            preferred: metrics.outer_width(&preferred)?.max(minimum),
             outside_gap: metrics.outside_gap,
         })
     }
@@ -142,8 +133,8 @@ impl MeasuredContinuousGuide {
             .missing
             .as_ref()
             .map_or(0.0, |key| f64::from(key.outline.width) / 2.0);
-        let frame_minimum = metrics.allocation_insets(missing_inset, theme)?;
-        metrics.ensure_key_gap(missing_inset, theme)?;
+        let frame_minimum = metrics.allocation_insets(missing_inset)?;
+        metrics.ensure_key_gap(missing_inset)?;
         Ok((metrics, frame_minimum))
     }
 
@@ -160,14 +151,6 @@ impl MeasuredContinuousGuide {
         compact_changes: &mut bool,
         scope: &FitScope,
     ) -> Result<FitOutcome<Self>, Error> {
-        theme
-            .prepared_font_environment()?
-            .claim_measurement_call()
-            .map_err(|error| {
-                Error::Render(format!(
-                    "continuous guide measurement call admission: {error:?}"
-                ))
-            })?;
         theme.prepare_font_environment()?;
         let available = (available.0, available.1.into());
         if !available.0.is_finite() || available.1.is_some_and(|height| !height.is_finite()) {
@@ -176,16 +159,16 @@ impl MeasuredContinuousGuide {
             ));
         }
         let (metrics, frame_minimum) = Self::allocation_metrics(descriptor, theme)?;
-        let resources = LegendMetrics::resources(theme)?;
+
         let missing_inset = descriptor
             .missing
             .as_ref()
             .map_or(0.0, |key| f64::from(key.outline.width) / 2.0);
-        let inset = metrics.edge_reserve(false, theme)?;
-        let inner_width = available.0 - LegendMetrics::hard(&inset, theme)?;
+        let inset = metrics.edge_reserve(false);
+        let inner_width = available.0 - LegendMetrics::hard(&inset)?;
         let inner_height = available
             .1
-            .map(|height| Ok::<_, Error>(height - LegendMetrics::hard(&inset, theme)?))
+            .map(|height| Ok::<_, Error>(height - LegendMetrics::hard(&inset)?))
             .transpose()?;
         if inner_width <= 0.0 || inner_height.is_some_and(|height| height <= 0.0) {
             return Ok(FitOutcome::Miss(scope.failure(
@@ -200,11 +183,7 @@ impl MeasuredContinuousGuide {
             inner_width,
             PhysicalTextAlignment::Start,
             "continuous guide title",
-            &scope.child(
-                AddressRole::GuideTitle,
-                0,
-                &theme.prepared_font_environment()?.generation_resources(),
-            )?,
+            &scope.child(AddressRole::GuideTitle, 0)?,
         )? {
             FitOutcome::Measured(plan) => plan,
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
@@ -212,7 +191,6 @@ impl MeasuredContinuousGuide {
         let title_height = title.height();
         let mut label_plans = Vec::new();
         fit::reserve(
-            theme,
             &mut label_plans,
             descriptor.labels.len(),
             "continuous guide labels",
@@ -227,16 +205,10 @@ impl MeasuredContinuousGuide {
             )?;
             if plan.width().max(plan.fit_width()) > inner_width {
                 return Ok(FitOutcome::Miss(
-                    scope
-                        .child(
-                            AddressRole::GuideLabel,
-                            index,
-                            &theme.prepared_font_environment()?.generation_resources(),
-                        )?
-                        .failure(
-                            FitKind::Text,
-                            "continuous guide number exceeds its assigned width",
-                        ),
+                    scope.child(AddressRole::GuideLabel, index)?.failure(
+                        FitKind::Text,
+                        "continuous guide number exceeds its assigned width",
+                    ),
                 ));
             }
             label_plans.push(plan);
@@ -260,19 +232,16 @@ impl MeasuredContinuousGuide {
             })
             .transpose()?;
         let missing_height = if let Some(plan) = missing.as_ref() {
-            let key = metrics
-                .exact
-                .key_width
-                .add_pixels(missing_inset, &resources)?;
-            let text = ExactLength::pixels(plan.height(), &resources)?;
-            let occupied = if key.compare(&text, &resources)? == std::cmp::Ordering::Less {
+            let key = metrics.exact.key_width.add_pixels(missing_inset)?;
+            let text = ExactLength::pixels(plan.height())?;
+            let occupied = if key.compare(&text) == std::cmp::Ordering::Less {
                 text
             } else {
                 key
             };
-            occupied.add(&metrics.exact.row_gap, &resources)?
+            occupied.add_length(&metrics.exact.row_gap)
         } else {
-            ExactLength::pixels(0.0, &resources)?
+            ExactLength::pixels(0.0)?
         };
         let label_height = label_plans
             .iter()
@@ -285,14 +254,9 @@ impl MeasuredContinuousGuide {
         let mut along = [0.0_f64; 3];
         for (extent, plan) in along.iter_mut().zip(&label_plans) {
             let placed = centered_text(plan.clone(), 0.0, 0.0);
-            let mut ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
+            let mut ink = crate::render::geometry::GeometrySnapshot::new();
             ink.text(placed.placement, &placed.plan, None)?;
-            theme
-                .prepared_font_environment()?
-                .claim_processing_visits(1 + ink.bounds().len() as u128)
-                .map_err(|error| {
-                    Error::Render(format!("continuous label extent visits: {error:?}"))
-                })?;
+
             let painted = ink
                 .bounds()
                 .iter()
@@ -339,73 +303,54 @@ impl MeasuredContinuousGuide {
         let projected = projected_minimum(
             along,
             fractions,
-            &metrics.exact.row_gap.add_pixels(2.0 / 1024.0, &resources)?,
+            &metrics.exact.row_gap.add_pixels(2.0 / 1024.0)?,
             &metrics.exact.minimum,
-            &resources,
         )?;
-        let required = LegendMetrics::hard(&projected, theme)?.max(metrics.minimum);
+        let required = LegendMetrics::hard(&projected)?.max(metrics.minimum);
         let first = along[0];
         let last = along[along.len() - 1];
         let missing_width = if let Some(plan) = missing.as_ref() {
             metrics
                 .exact
                 .key_width
-                .add(&metrics.exact.key_label_gap, &resources)?
-                .add_pixels(plan.width().max(plan.fit_width()), &resources)?
+                .add_length(&metrics.exact.key_label_gap)
+                .add_pixels(plan.width().max(plan.fit_width()))?
         } else {
-            ExactLength::pixels(0.0, &resources)?
+            ExactLength::pixels(0.0)?
         };
-        if metrics.outer_width(&missing_width, theme)? > available.0 {
+        if metrics.outer_width(&missing_width)? > available.0 {
             return Ok(FitOutcome::Miss(
-                scope
-                    .child(
-                        AddressRole::GuideMissingBlock,
-                        0,
-                        &theme.prepared_font_environment()?.generation_resources(),
-                    )?
-                    .failure(
-                        FitKind::Text,
-                        "continuous guide missing label exceeds its assigned width",
-                    ),
+                scope.child(AddressRole::GuideMissingBlock, 0)?.failure(
+                    FitKind::Text,
+                    "continuous guide missing label exceeds its assigned width",
+                ),
             ));
         }
         let label_column = metrics
             .exact
             .key_width
-            .add(&metrics.exact.key_label_gap, &resources)?
-            .add_pixels(label_width, &resources)?;
-        if !horizontal && metrics.outer_width(&label_column, theme)? > available.0 {
+            .add_length(&metrics.exact.key_label_gap)
+            .add_pixels(label_width)?;
+        if !horizontal && metrics.outer_width(&label_column)? > available.0 {
             return Ok(FitOutcome::Miss(
-                scope
-                    .child(
-                        AddressRole::GuideLabel,
-                        0,
-                        &theme.prepared_font_environment()?.generation_resources(),
-                    )?
-                    .failure(
-                        FitKind::Text,
-                        "continuous guide value column exceeds its assigned width",
-                    ),
+                scope.child(AddressRole::GuideLabel, 0)?.failure(
+                    FitKind::Text,
+                    "continuous guide value column exceeds its assigned width",
+                ),
             ));
         }
         let maximum = if horizontal {
-            available.0
-                - LegendMetrics::hard(
-                    &inset
-                        .add_pixels(first, &resources)?
-                        .add_pixels(last, &resources)?,
-                    theme,
-                )?
+            available.0 - LegendMetrics::hard(&inset.add_pixels(first)?.add_pixels(last)?)?
         } else if let Some(height) = available.1 {
             let mut reserve = inset
-                .add_pixels(title_height, &resources)?
-                .add(&missing_height, &resources)?
-                .add_pixels(first, &resources)?
-                .add_pixels(last, &resources)?;
+                .add_pixels(title_height)?
+                .add_length(&missing_height)
+                .add_pixels(first)?
+                .add_pixels(last)?;
             if !descriptor.title.is_empty() {
-                reserve = reserve.add(&metrics.exact.title_gap, &resources)?;
+                reserve = reserve.add_length(&metrics.exact.title_gap);
             }
-            height - LegendMetrics::hard(&reserve, theme)?
+            height - LegendMetrics::hard(&reserve)?
         } else {
             metrics.preferred.max(required)
         };
@@ -429,38 +374,35 @@ impl MeasuredContinuousGuide {
             metrics
                 .exact
                 .key_width
-                .add(&metrics.exact.row_gap, &resources)?
-                .add_pixels(label_height, &resources)?
+                .add_length(&metrics.exact.row_gap)
+                .add_pixels(label_height)?
         } else {
-            ExactLength::pixels(length, &resources)?
-                .add_pixels(first, &resources)?
-                .add_pixels(last, &resources)?
+            ExactLength::pixels(length)?
+                .add_pixels(first)?
+                .add_pixels(last)?
         };
-        let mut content_width =
-            ExactLength::pixels(title.width().max(title.fit_width()), &resources)?;
+        let mut content_width = ExactLength::pixels(title.width().max(title.fit_width()))?;
         let along_width = if horizontal {
-            ExactLength::pixels(length, &resources)?
-                .add_pixels(first, &resources)?
-                .add_pixels(last, &resources)?
+            ExactLength::pixels(length)?
+                .add_pixels(first)?
+                .add_pixels(last)?
         } else {
             label_column
         };
         for candidate in [&missing_width, &along_width] {
-            if content_width.compare(candidate, &resources)? == std::cmp::Ordering::Less {
-                content_width = candidate.times(1, &resources)?;
+            if content_width.compare(candidate) == std::cmp::Ordering::Less {
+                content_width = candidate.times(1);
             }
         }
-        let width = metrics
-            .outer_width(&content_width, theme)?
-            .max(frame_minimum);
+        let width = metrics.outer_width(&content_width)?.max(frame_minimum);
         let mut content_height = body_height
-            .add(&missing_height, &resources)?
-            .add_pixels(title_height, &resources)?;
+            .add_length(&missing_height)
+            .add_pixels(title_height)?;
         if !descriptor.title.is_empty() {
-            content_height = content_height.add(&metrics.exact.title_gap, &resources)?;
+            content_height = content_height.add_length(&metrics.exact.title_gap);
         }
         let height = metrics
-            .outer_height(&content_height, false, theme)?
+            .outer_height(&content_height, false)?
             .max(frame_minimum);
         if width > available.0 || available.1.is_some_and(|available| height > available) {
             return Ok(FitOutcome::Miss(scope.failure(
@@ -470,20 +412,18 @@ impl MeasuredContinuousGuide {
         }
         let mut stops = Vec::new();
         fit::reserve(
-            theme,
             &mut stops,
             descriptor.stops.len(),
             "continuous guide gradient stops",
         )?;
         stops.extend_from_slice(&descriptor.stops);
-        let base_exact = metrics.exact.padding.add(&missing_height, &resources)?;
+        let base_exact = metrics.exact.padding.add_length(&missing_height);
         let (gradient, start, end) = if horizontal {
-            let x0 = metrics.exact.padding.after_pixels(first, &resources)?;
+            let x0 = metrics.exact.padding.after_pixels(first)?;
             let y0 = LegendMetrics::position(
                 &base_exact
-                    .add_pixels(label_height, &resources)?
-                    .add(&metrics.exact.row_gap, &resources)?,
-                theme,
+                    .add_pixels(label_height)?
+                    .add_length(&metrics.exact.row_gap),
             )?;
             (
                 PanelBox::new(x0, x0 + length, y0, y0 + thickness),
@@ -491,7 +431,7 @@ impl MeasuredContinuousGuide {
                 Point2D::new(x0 + length, y0 + thickness / 2.0),
             )
         } else {
-            let y0 = base_exact.after_pixels(first, &resources)?;
+            let y0 = base_exact.after_pixels(first)?;
             (
                 PanelBox::new(metrics.pad, metrics.pad + thickness, y0, y0 + length),
                 Point2D::new(metrics.pad + thickness / 2.0, y0),
@@ -507,7 +447,7 @@ impl MeasuredContinuousGuide {
                     metrics
                         .exact
                         .padding
-                        .before_pixels(height - title_baseline, &resources)?,
+                        .before_pixels(height - title_baseline)?,
                 ),
                 TextAnchor::Start,
                 0.0,
@@ -516,7 +456,6 @@ impl MeasuredContinuousGuide {
         };
         let mut labels = Vec::new();
         fit::reserve(
-            theme,
             &mut labels,
             label_plans.len(),
             "placed continuous guide labels",
@@ -524,18 +463,18 @@ impl MeasuredContinuousGuide {
         let label_x_exact = metrics
             .exact
             .padding
-            .add(&metrics.exact.key_width, &resources)?
-            .add(&metrics.exact.key_label_gap, &resources)?;
+            .add_length(&metrics.exact.key_width)
+            .add_length(&metrics.exact.key_label_gap);
         for (index, plan) in label_plans.into_iter().enumerate() {
             let fraction = fractions[index];
             labels.push(if horizontal {
                 centered_text(
                     plan,
                     gradient.x0 + length * fraction,
-                    base_exact.after_pixels(label_height / 2.0, &resources)?,
+                    base_exact.after_pixels(label_height / 2.0)?,
                 )
             } else {
-                let x = label_x_exact.after_pixels(plan.width() / 2.0, &resources)?;
+                let x = label_x_exact.after_pixels(plan.width() / 2.0)?;
                 centered_text(plan, x, gradient.y0 + length * fraction)
             });
         }
@@ -550,7 +489,7 @@ impl MeasuredContinuousGuide {
                     PlacedText::middle(
                         plan,
                         Point2D::new(
-                            LegendMetrics::position(&label_x_exact, theme)?,
+                            LegendMetrics::position(&label_x_exact)?,
                             y0 + row_height / 2.0,
                         ),
                         TextAnchor::Start,
@@ -571,13 +510,13 @@ impl MeasuredContinuousGuide {
             labels,
             missing,
         };
-        if !measured.labels_have_clearance(theme, horizontal)? {
+        if !measured.labels_have_clearance(horizontal)? {
             return Ok(FitOutcome::Miss(scope.failure(
                 FitKind::LegendOrGuide,
                 "continuous guide projected label ink violates its traced adjacent gap",
             )));
         }
-        if !measured.ink_fits_allocation(theme)? {
+        if !measured.ink_fits_allocation()? {
             return Ok(FitOutcome::Miss(scope.failure(
                 FitKind::LegendOrGuide,
                 "complete continuous guide ink exceeds its assigned allocation",
@@ -586,8 +525,8 @@ impl MeasuredContinuousGuide {
         Ok(FitOutcome::Measured(measured))
     }
 
-    fn ink_fits_allocation(&self, theme: &ResolvedTheme) -> Result<bool, Error> {
-        let mut ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    fn ink_fits_allocation(&self) -> Result<bool, Error> {
+        let mut ink = crate::render::geometry::GeometrySnapshot::new();
         if let Some((frame, style)) = self.frame(0.0, 0.0) {
             ink.rounded_rect(frame, &style, None)?;
         }
@@ -608,27 +547,12 @@ impl MeasuredContinuousGuide {
         }))
     }
 
-    fn labels_have_clearance(
-        &self,
-        theme: &ResolvedTheme,
-        horizontal: bool,
-    ) -> Result<bool, Error> {
+    fn labels_have_clearance(&self, horizontal: bool) -> Result<bool, Error> {
         let mut previous = None;
         for text in &self.labels {
-            theme
-                .prepared_font_environment()?
-                .claim_processing_visits(1)
-                .map_err(|error| {
-                    Error::Render(format!("continuous label clearance visits: {error:?}"))
-                })?;
-            let mut ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
+            let mut ink = crate::render::geometry::GeometrySnapshot::new();
             ink.text(text.placement, &text.plan, None)?;
-            theme
-                .prepared_font_environment()?
-                .claim_processing_visits(ink.bounds().len() as u128)
-                .map_err(|error| {
-                    Error::Render(format!("continuous label ink visits: {error:?}"))
-                })?;
+
             if let Some(bounds) = ink
                 .bounds()
                 .iter()
@@ -721,12 +645,7 @@ impl MeasuredContinuousGuide {
         Ok(())
     }
 
-    pub(crate) fn select(
-        &self,
-        left: f64,
-        bottom: f64,
-        data: crate::data::PlotData<'_>,
-    ) -> Result<LegendDrawPlan, Error> {
+    pub(crate) fn select(&self, left: f64, bottom: f64) -> Result<LegendDrawPlan, Error> {
         let translate = |text: &PlacedText| {
             let mut text = text.clone();
             text.placement.position.x += left;
@@ -734,7 +653,7 @@ impl MeasuredContinuousGuide {
             text
         };
         let mut calls = Vec::new();
-        data.reserve_source(
+        crate::data::source::reserve_source(
             &mut calls,
             self.labels.len()
                 + 2
@@ -753,12 +672,11 @@ impl MeasuredContinuousGuide {
         );
         let start = Point2D::new(self.start.x + left, self.start.y + bottom);
         let end = Point2D::new(self.end.x + left, self.end.y + bottom);
-        data.claim_source_visits(self.stops.len())?;
-        let stops = data.collect_source(self.stops.iter().copied().map(Ok))?;
+
+        let stops = crate::data::source::collect_source(self.stops.iter().copied().map(Ok))?;
         calls.push(LegendCall::Gradient(gradient, start, end, stops));
         calls.push(LegendCall::Text(translate(&self.title)));
         for label in &self.labels {
-            data.claim_source_visits(1)?;
             calls.push(LegendCall::Text(translate(label)));
         }
         if let Some((bounds, fill, text)) = &self.missing {
@@ -810,19 +728,11 @@ mod tests {
     }
 
     #[test]
-    fn unusable_guide_admits_a_call_before_any_measurement_work() {
-        for remaining in [0, 1, 2] {
-            let theme = crate::Theme::Publication
-                .resolve(&crate::font::canonical::OperationGenerationResources::new())
-                .unwrap();
+    fn unusable_guide_misses_without_shaping() {
+        {
+            let theme = crate::Theme::Publication.resolve().unwrap();
             theme.prepare_font_environment().unwrap();
-            let resources = theme
-                .prepared_font_environment()
-                .unwrap()
-                .generation_resources();
-            resources
-                .claim_calls(1_000_000 - resources.call_cache_usage().0 - remaining)
-                .unwrap();
+
             let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
             let mut compact_changes = true;
             let result = MeasuredContinuousGuide::measure(
@@ -834,19 +744,8 @@ mod tests {
                 &mut compact_changes,
                 &FitScope::root(),
             );
-            if remaining == 0 {
-                assert!(result
-                    .err()
-                    .unwrap()
-                    .to_string()
-                    .contains("measurement/intrinsic call attempts"));
-            } else {
-                assert!(matches!(result.unwrap(), FitOutcome::Miss(_)));
-            }
-            assert_eq!(
-                resources.call_cache_usage().0,
-                1_000_000 - remaining + u128::from(remaining > 0)
-            );
+            assert!(matches!(result.unwrap(), FitOutcome::Miss(_)));
+
             assert_eq!(
                 crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
                 shapes
@@ -855,14 +754,9 @@ mod tests {
     }
 
     #[test]
-    fn repeated_continuous_guide_admits_calls_for_cached_text() {
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
-        let resources = theme
-            .prepared_font_environment()
-            .unwrap()
-            .generation_resources();
+    fn repeated_continuous_guide_reuses_cached_text() {
+        let theme = crate::Theme::Publication.resolve().unwrap();
+
         let guide = descriptor();
         let measure = || {
             fit::measured(MeasuredContinuousGuide::measure(
@@ -877,11 +771,10 @@ mod tests {
             .unwrap()
         };
         let original = measure();
-        let before = resources.call_cache_usage().0;
+
         let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
         let repeated = measure();
-        // One guide call, title, three endpoint/center labels, and Missing.
-        assert_eq!(resources.call_cache_usage().0 - before, 6);
+
         assert_eq!(
             crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
             shapes
@@ -894,13 +787,12 @@ mod tests {
 
     #[test]
     fn projected_extents_require_the_exact_center_and_endpoint_clearance() {
-        let resources = crate::font::canonical::OperationGenerationResources::new();
-        let gap = crate::theme::spacing::ExactLength::pixels(5.0, &resources).unwrap();
-        let minimum = crate::theme::spacing::ExactLength::pixels(40.0, &resources).unwrap();
+        let gap = crate::theme::spacing::ExactLength::pixels(5.0).unwrap();
+        let minimum = crate::theme::spacing::ExactLength::pixels(40.0).unwrap();
         let projected = |lengths: &[f64], fractions: &[f64]| {
-            projected_minimum(lengths, fractions, &gap, &minimum, &resources)
+            projected_minimum(lengths, fractions, &gap, &minimum)
                 .unwrap()
-                .pixels_rounded(crate::layout::kernel::SpatialRounding::Ceil, &resources)
+                .pixels_rounded(crate::layout::kernel::SpatialRounding::Ceil)
                 .unwrap()
                 .to_bits()
         };
@@ -922,14 +814,7 @@ mod tests {
         reason = "both orientations compare preferred/compact ink and exact singleton allocation boundaries"
     )]
     fn constant_domain_large_typography_reserves_singleton_length_in_both_flows() {
-        let source = crate::Plot::scatter(
-            crate::NumericValues::new("x", [0.0, 1.0]),
-            crate::NumericValues::new("y", [0.0, 1.0]),
-        )
-        .erase();
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         theme.typography.guides.legend_label.font_size = 96;
         theme.typography.guides.legend_label.weight = crate::TextWeight::Bold;
         let spacing = theme
@@ -953,11 +838,7 @@ mod tests {
             .unwrap()
             .with_gradient_lengths(lengths)
             .unwrap();
-        let resources = theme
-            .prepared_font_environment()
-            .unwrap()
-            .generation_resources();
-        let data = source.data().with_axis_resources(&resources);
+
         let descriptor = ContinuousDescriptor {
             selection: crate::theme::ContinuousColorScale::sequential(
                 Some(
@@ -976,7 +857,7 @@ mod tests {
                 GradientStop::new(0.0, (49, 130, 189)),
                 GradientStop::new(1.0, (49, 130, 189)),
             ],
-            labels: super::super::descriptor::numeric_labels(&[12_345.0], data).unwrap(),
+            labels: super::super::descriptor::numeric_labels(&[12_345.0]).unwrap(),
             missing: None,
             exact: true,
         };
@@ -1021,7 +902,7 @@ mod tests {
                     label.placement.position.y
                 };
                 assert!((anchor - midpoint).abs() <= 1.0 / 1024.0);
-                let mut ink = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+                let mut ink = crate::render::geometry::GeometrySnapshot::new();
                 ink.text(label.placement, &label.plan, None).unwrap();
                 let bounds = ink.bounds()[0];
                 let half = if horizontal {
@@ -1033,8 +914,8 @@ mod tests {
                     length(guide)
                         >= 2.0 * half + 2.0 * LegendMetrics::from_theme(&theme).unwrap().row_gap
                 );
-                let selected = guide.select(20.0, 30.0, data).unwrap();
-                let mut complete = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+                let selected = guide.select(20.0, 30.0).unwrap();
+                let mut complete = crate::render::geometry::GeometrySnapshot::new();
                 selected.geometry(&mut complete).unwrap();
                 assert!(complete.bounds().iter().all(|bounds| {
                     bounds.left >= 20.0
@@ -1062,9 +943,7 @@ mod tests {
 
     #[test]
     fn asymmetric_numeric_centers_keep_their_fraction_or_return_typed_fit() {
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let mut descriptor = descriptor();
         descriptor.missing = None;
         descriptor.domain = (-0.01, 100.0);
@@ -1085,14 +964,7 @@ mod tests {
         ];
         for horizontal in [false, true] {
             let scope = FitScope::root()
-                .child(
-                    AddressRole::OutsideGuideRight,
-                    0,
-                    &theme
-                        .prepared_font_environment()
-                        .unwrap()
-                        .generation_resources(),
-                )
+                .child(AddressRole::OutsideGuideRight, 0)
                 .unwrap();
             let FitOutcome::Miss(failure) = MeasuredContinuousGuide::measure(
                 &descriptor,
@@ -1134,7 +1006,7 @@ mod tests {
                 (if horizontal { position.x } else { position.y }).to_bits(),
                 expected.to_bits()
             );
-            assert!(measured.labels_have_clearance(&theme, horizontal).unwrap());
+            assert!(measured.labels_have_clearance(horizontal).unwrap());
             assert_eq!(measured.stops, descriptor.stops);
             assert_eq!(measured.labels.len(), 3);
         }
@@ -1146,9 +1018,7 @@ mod tests {
         descriptor
             .stops
             .insert(1, GradientStop::new(0.1, (70, 140, 200)));
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let guide = fit::measured(MeasuredContinuousGuide::measure(
             &descriptor,
             (200.0, 400.0),
@@ -1168,9 +1038,7 @@ mod tests {
 
     #[test]
     fn horizontal_and_vertical_guides_freeze_one_gradient_and_missing_block() {
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let guide = descriptor();
         let scope = FitScope::root();
         for horizontal in [false, true] {
@@ -1221,9 +1089,7 @@ mod tests {
 
     #[test]
     fn insufficient_projected_length_is_a_guide_fit_miss() {
-        let theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let theme = crate::Theme::Publication.resolve().unwrap();
         let scope = FitScope::root();
         assert!(matches!(
             MeasuredContinuousGuide::measure(
@@ -1242,14 +1108,7 @@ mod tests {
 
     #[test]
     fn custom_frame_and_owner_missing_strokes_are_allocated_and_retained_unclipped() {
-        let source = crate::Plot::scatter(
-            crate::NumericValues::new("x", [0.0, 1.0]),
-            crate::NumericValues::new("y", [0.0, 1.0]),
-        )
-        .erase();
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let frame = crate::theme::LegendFrameTheme::new(
             crate::theme::Color::rgba(1, 2, 3, 127),
             Some(
@@ -1273,13 +1132,8 @@ mod tests {
                 &FitScope::root(),
             ))
             .unwrap();
-            let resources = theme
-                .prepared_font_environment()
-                .unwrap()
-                .generation_resources();
-            let selected = measured
-                .select(20.0, 30.0, source.data().with_axis_resources(&resources))
-                .unwrap();
+
+            let selected = measured.select(20.0, 30.0).unwrap();
             let LegendCall::Background(rect, fill) = &selected.calls[0] else {
                 panic!("complete frame must be retained first");
             };
@@ -1300,7 +1154,7 @@ mod tests {
                 .unwrap();
             assert_eq!(missing.stroke_width.to_bits(), 40.0_f32.to_bits());
             assert_eq!(missing.color, descriptor.missing.as_ref().unwrap().fill);
-            let mut ink = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+            let mut ink = crate::render::geometry::GeometrySnapshot::new();
             selected.geometry(&mut ink).unwrap();
             assert!(ink.bounds().iter().all(|bounds| {
                 bounds.left >= 20.0
@@ -1326,9 +1180,7 @@ mod tests {
 
     #[test]
     fn custom_text_ink_overhang_cannot_be_hidden_by_the_guide_frame() {
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         theme.typography.guides.legend_title.font_size = 40;
         theme.typography.guides.legend_title.weight = crate::TextWeight::Bold;
         let mut measured = fit::measured(MeasuredContinuousGuide::measure(
@@ -1341,28 +1193,18 @@ mod tests {
             &FitScope::root(),
         ))
         .unwrap();
-        assert!(measured.ink_fits_allocation(&theme).unwrap());
+        assert!(measured.ink_fits_allocation().unwrap());
         // The anchor is still inside the frame, but the required glyph ink is not.
         measured.title.placement.position.x = measured.width - 1.0;
-        assert!(!measured.ink_fits_allocation(&theme).unwrap());
+        assert!(!measured.ink_fits_allocation().unwrap());
     }
 
     #[test]
     fn absent_continuous_frame_retains_gradient_labels_and_missing_key() {
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         theme.legend = theme.legend.clone().with_frame(None).unwrap();
         let descriptor = descriptor();
-        let source = crate::Plot::scatter(
-            crate::NumericValues::new("x", [0.0]),
-            crate::NumericValues::new("y", [0.0]),
-        )
-        .erase();
-        let resources = theme
-            .prepared_font_environment()
-            .unwrap()
-            .generation_resources();
+
         let measured = fit::measured(MeasuredContinuousGuide::measure(
             &descriptor,
             (500.0, 500.0),
@@ -1373,9 +1215,7 @@ mod tests {
             &FitScope::root(),
         ))
         .unwrap();
-        let selected = measured
-            .select(20.0, 30.0, source.data().with_axis_resources(&resources))
-            .unwrap();
+        let selected = measured.select(20.0, 30.0).unwrap();
         assert!(!selected
             .calls
             .iter()
@@ -1413,9 +1253,7 @@ mod tests {
 
     #[test]
     fn compact_gradient_keeps_all_labels_and_skips_duplicate_allocations() {
-        let mut theme = crate::Theme::Publication
-            .resolve(&crate::font::canonical::OperationGenerationResources::new())
-            .unwrap();
+        let mut theme = crate::Theme::Publication.resolve().unwrap();
         let guide = descriptor();
         let scope = FitScope::root();
         let mut changes = false;

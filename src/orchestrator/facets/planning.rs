@@ -41,11 +41,7 @@ pub(super) fn canvas_layout(
         [0.0; 4],
         canvas.panel_box,
         round,
-        &ComponentAddress::root().child(
-            AddressRole::RootBody,
-            0,
-            &theme.prepared_font_environment()?.generation_resources(),
-        )?,
+        &ComponentAddress::root().child(AddressRole::RootBody, 0)?,
     )?;
     canvas.panel_box = panel;
     canvas.insets.left += extra_left;
@@ -74,11 +70,7 @@ pub(super) fn reserve_rewrapped_shared_axis_titles(
         baseline,
         candidate_panel,
         round,
-        &ComponentAddress::root().child(
-            AddressRole::FacetGrid,
-            0,
-            &theme.prepared_font_environment()?.generation_resources(),
-        )?,
+        &ComponentAddress::root().child(AddressRole::FacetGrid, 0)?,
     )
     .map(|(panel, _, _)| panel)
 }
@@ -92,11 +84,10 @@ pub(super) fn shared_axis_requirements(
     panel: PanelBox,
 ) -> Result<[f64; 4], crate::layout::fit::PlanError> {
     let mut insets = [0.0; 4];
-    let resources = theme.prepared_font_environment()?.generation_resources();
+
     let lengths = theme.axes.spacing().lengths(
         theme.typography.axes.tick_label.font_size(),
         theme.typography.axes.axis_title.font_size(),
-        &resources,
     )?;
     for (source, span, index, gap, role) in [
         (
@@ -122,16 +113,9 @@ pub(super) fn shared_axis_requirements(
                 span,
                 PhysicalTextAlignment::Center,
                 "shared facet axis title",
-                &crate::layout::fit::FitScope::root().child(
-                    role,
-                    0,
-                    &theme.prepared_font_environment()?.generation_resources(),
-                )?,
+                &crate::layout::fit::FitScope::root().child(role, 0)?,
             ))?;
-            insets[index] = crate::theme::AxisLengths::hard(
-                &gap.add_pixels(plan.height(), &resources)?,
-                &resources,
-            )?;
+            insets[index] = crate::theme::AxisLengths::hard(&gap.add_pixels(plan.height())?)?;
         }
     }
     Ok(insets)
@@ -146,7 +130,7 @@ fn adjusted_shared_axis_panel(
     round: &mut FeedbackRound,
     address: &ComponentAddress,
 ) -> Result<(PanelBox, f64, f64), crate::layout::fit::PlanError> {
-    let consumed = round.insets(address, FeedbackKind::AxisGutter)?;
+    let consumed = round.insets(address, FeedbackKind::AxisGutter);
     let initial =
         shared_axis_requirements(horizontal_axis_label, vertical_axis_label, theme, candidate)?;
     let mut allocated = consumed;
@@ -220,18 +204,17 @@ pub(super) fn native_parent(
 ) -> Result<crate::layout::fit::FitOutcome<(Plot, Vec<std::sync::Arc<PanelPlan>>)>, Error> {
     use crate::layout::fit::{self, FitOutcome};
     let (rows, columns) = shape;
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = plot.data().with_axis_resources(&resources);
-    let grid = ComponentAddress::root().child(AddressRole::FacetGrid, 0, &resources)?;
+    let resources = theme.prepared_font_environment()?.operation();
+    let data = plot.data().with_operation(&resources);
+    let grid = ComponentAddress::root().child(AddressRole::FacetGrid, 0)?;
     let mut requirements = Vec::new();
-    data.reserve_source(&mut requirements, panels.len())?;
+    crate::data::source::reserve_source(&mut requirements, panels.len())?;
     for (index, facet) in panels.iter().enumerate() {
         let address = grid.child(
             AddressRole::FacetCell,
             u32::try_from(index).map_err(|_| Error::Render("facet address overflowed".into()))?,
-            &resources,
         )?;
-        let [left, right, bottom, top] = round.insets(&address, FeedbackKind::AxisGutter)?;
+        let [left, right, bottom, top] = round.insets(&address, FeedbackKind::AxisGutter);
         let label = facet_label(plot, &facet.cell, data)?;
         let measured = PanelRequirements::measure(
             probes[index]
@@ -241,7 +224,7 @@ pub(super) fn native_parent(
             theme,
             Some(&label),
             probe_cells[facet.row * columns + facet.column],
-            &scope.child(AddressRole::FacetCell, index, &resources)?,
+            &scope.child(AddressRole::FacetCell, index)?,
         )
         .map_err(fit::PlanError::into_error)?;
         requirements.push((
@@ -270,7 +253,7 @@ pub(super) fn native_parent(
         minima,
         &requirements,
         theme,
-        &scope.child(AddressRole::FacetGrid, 0, &resources)?,
+        &scope.child(AddressRole::FacetGrid, 0)?,
         track_sizing.as_ref(),
     )? {
         FitOutcome::Measured(grid) => grid.cells,
@@ -278,25 +261,28 @@ pub(super) fn native_parent(
     };
     let mut child_miss = None;
     let mut panel_plans = Vec::new();
-    data.reserve_source(&mut panel_plans, panels.len())?;
+    crate::data::source::reserve_source(&mut panel_plans, panels.len())?;
     let mut legend_owner = !containing_trial;
     for (index, facet) in panels.iter().enumerate() {
         let mut panel_plot = plot
-            .admitted_clone(data)?
-            .with_render_scope(facet.render_scope(data)?)
+            .clone()
+            .with_render_scope(facet.render_scope()?)
             .with_significance_subset(facet.significance_selectors());
         let domain_address = ComponentAddress::root().child(
             AddressRole::FacetCell,
             u32::try_from(index).map_err(|_| Error::Render("facet address overflowed".into()))?,
-            &resources,
         )?;
         if matches!(facet_scales, FacetScales::Free | FacetScales::FreeX) {
-            if let Some(range) = round.domain(&domain_address, FeedbackKind::AutomaticDomainX)? {
+            if let Some(range) =
+                round.feedback_domain(&domain_address, FeedbackKind::AutomaticDomainX)
+            {
                 panel_plot = panel_plot.with_planned_x_limits(range);
             }
         }
         if matches!(facet_scales, FacetScales::Free | FacetScales::FreeY) {
-            if let Some(range) = round.domain(&domain_address, FeedbackKind::AutomaticDomainY)? {
+            if let Some(range) =
+                round.feedback_domain(&domain_address, FeedbackKind::AutomaticDomainY)
+            {
                 panel_plot = panel_plot.with_planned_y_limits(range);
             }
         }
@@ -308,19 +294,18 @@ pub(super) fn native_parent(
                 probe_cells[facet.row * columns + facet.column],
                 cell,
                 theme,
-                &scope.child(AddressRole::FacetCell, index, &resources)?,
+                &scope.child(AddressRole::FacetCell, index)?,
             )? {
                 fit::FitFailure::retain_least(&mut child_miss, reason);
             }
             let label = facet_label(&panel_plot, &facet.cell, data)?;
             let appearance = &theme.typography.composition.facet_header;
             let strip_scope = scope
-                .child(AddressRole::FacetCell, index, &resources)?
-                .child(AddressRole::FacetHeader, 0, &resources)?;
+                .child(AddressRole::FacetCell, index)?
+                .child(AddressRole::FacetHeader, 0)?;
             let text_width = crate::theme::composition::capacity(
                 cell.width(),
                 &theme.facet_strip_lengths()?.horizontal_inset,
-                &resources,
             )?;
             if text_width <= 0.0 {
                 fit::FitFailure::retain_least(
@@ -339,7 +324,7 @@ pub(super) fn native_parent(
                 fit::FitFailure::retain_least(&mut child_miss, reason);
             }
         }
-        let cell_scope = scope.child(AddressRole::FacetCell, index, &resources)?;
+        let cell_scope = scope.child(AddressRole::FacetCell, index)?;
         let context = PlotRenderContext::new(
             crate::data::PlotData::with_rows(&panel_plot, &facet.rows, &facet.source_rows),
             cell,
@@ -390,7 +375,6 @@ pub(super) fn native_parent(
         let address = grid.child(
             AddressRole::FacetCell,
             u32::try_from(index).map_err(|_| Error::Render("facet address overflowed".into()))?,
-            &resources,
         )?;
         round.begin_owner(&address)?;
         round.observe_box(cell)?;
@@ -421,10 +405,7 @@ pub(super) fn native_parent(
     for facet in panels {
         facet.panel = cells[facet.row * columns + facet.column];
     }
-    Ok(FitOutcome::Measured((
-        plot.admitted_clone(data)?,
-        panel_plans,
-    )))
+    Ok(FitOutcome::Measured((plot.clone(), panel_plans)))
 }
 
 pub(super) fn feedback_plot(
@@ -448,9 +429,8 @@ pub(super) fn feedback_plot(
                 AddressRole::FacetCell,
                 u32::try_from(index)
                     .map_err(|_| Error::Render("facet address overflowed".into()))?,
-                round.resources(),
             )?;
-            if let Some(range) = round.domain(&address, kind)? {
+            if let Some(range) = round.feedback_domain(&address, kind) {
                 shared = Some(
                     shared.map_or(range, |prior| (prior.0.min(range.0), prior.1.max(range.1))),
                 );

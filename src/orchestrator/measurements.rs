@@ -237,12 +237,6 @@ pub(crate) struct Observations {
     pub times: [Duration; 8],
     pub calls: [usize; 8],
     pub producers: usize,
-    pub records: u128,
-    pub visits: u128,
-    pub bytes: u128,
-    pub measurement_calls: u128,
-    pub cache_entries: u128,
-    pub topology_slots: u128,
     pub counters: [u64; Counter::ALL.len()],
     pub capture_counters: [u64; Counter::ALL.len()],
     pub guides: Vec<GuideAttempt>,
@@ -251,7 +245,6 @@ pub(crate) struct Observations {
     pub intrinsics: Vec<IntrinsicEvent>,
     pub gutters: Vec<GutterChange>,
     session: Rc<()>,
-    resources: Vec<crate::font::canonical::OperationFontResources>,
 }
 
 pub(crate) fn count(counter: Counter) {
@@ -390,26 +383,7 @@ pub(crate) fn finish() -> Observations {
     if let Some(root) = observation.roots.last_mut() {
         root.guides.end = observation.guides.len();
     }
-    for resources in observation.resources.drain(..) {
-        let usage = resources.usage().unwrap();
-        observation.records += resources.generation_resources().usage().unwrap().0;
-        observation.visits += usage.processing_visits;
-        observation.bytes += usage.font_bytes;
-        let generation = resources.generation_resources();
-        let (calls, entries) = generation.call_cache_usage();
-        observation.measurement_calls += calls;
-        observation.cache_entries += entries;
-        observation.topology_slots += generation.topology_usage();
-    }
     observation
-}
-
-pub(crate) fn resources(resources: crate::font::canonical::OperationFontResources) {
-    ACTIVE.with(|active| {
-        if let Some(observation) = active.borrow_mut().as_mut() {
-            observation.resources.push(resources);
-        }
-    });
 }
 
 pub(crate) fn producer() {
@@ -497,30 +471,6 @@ fn counters_are_opt_in_reset_and_thread_local() {
     assert!(observation.roots.is_empty());
     count(Counter::GuideTrial);
     assert!(ACTIVE.with(|active| active.borrow().is_none()));
-}
-
-#[test]
-fn resource_audit_observations_report_independent_call_cache_and_topology_totals() {
-    start();
-    let font = crate::font::canonical::OperationFontResources::new();
-    resources(font.clone());
-    let generation = font.generation_resources();
-    generation.claim_calls(3).unwrap();
-    generation.claim_cache_entries(5).unwrap();
-    generation.claim_topology_slots(7).unwrap();
-    let observation = finish();
-    assert_eq!(
-        (
-            observation.measurement_calls,
-            observation.cache_entries,
-            observation.topology_slots
-        ),
-        (3, 5, 7)
-    );
-    assert_eq!(
-        (observation.records, observation.visits, observation.bytes),
-        (0, 0, 0)
-    );
 }
 
 #[test]

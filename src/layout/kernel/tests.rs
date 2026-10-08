@@ -3,37 +3,17 @@ use std::cell::Cell;
 use super::*;
 
 #[test]
-fn address_paths_admit_actual_storage_and_share_scope_and_failure_copies() {
-    let fixture = crate::font::canonical::OperationGenerationResources::new();
+fn address_paths_preserve_scope_and_share_failure_copies() {
     let parent = ComponentAddress::root()
-        .child(AddressRole::CanvasGrid, 0, &fixture)
+        .child(AddressRole::CanvasGrid, 0)
         .unwrap();
-    // Two segments plus one Vec payload header; buffer bytes plus the Vec/Arc
-    // allocation are 2*8 + 24 + 16 on this project's 64-bit test target.
-    let bytes = (2 * std::mem::size_of::<AddressSegment>()
-        + std::mem::size_of::<Vec<AddressSegment>>()
-        + 2 * std::mem::size_of::<usize>()) as u64;
-    for (records, allowance, succeeds) in [
-        (2, bytes, false),
-        (3, bytes - 1, false),
-        (3, bytes, true),
-        (4, bytes + 1, true),
-    ] {
-        let resources =
-            crate::font::canonical::OperationGenerationResources::with_test_limits(0, allowance);
-        resources.claim_slots(1_000_000 - records).unwrap();
-        let result = parent.child(AddressRole::CanvasCell, 7, &resources);
-        if succeeds {
+    {
+        let result = parent.child(AddressRole::CanvasCell, 7);
+        {
             let owner = result.unwrap();
             assert_eq!(owner.leaf_role(), AddressRole::CanvasCell);
             assert_eq!(owner.leaf_slot_index(), 7);
-            assert_eq!(resources.usage().unwrap(), (1_000_003 - records, 0));
-            assert_eq!(resources.byte_usage().unwrap(), bytes);
-            resources
-                .claim_slots(1_000_000 - resources.usage().unwrap().0)
-                .unwrap();
-            resources.set_test_limits(0, bytes);
-            let before = (resources.usage().unwrap(), resources.byte_usage().unwrap());
+
             let scope = crate::layout::fit::FitScope::new(&owner, 6);
             let failure = scope.clone().failure(FitKind::Text, String::new());
             assert_eq!(failure.reason.ordinal, 6);
@@ -41,27 +21,19 @@ fn address_paths_admit_actual_storage_and_share_scope_and_failure_copies() {
                 owner.descendants.as_ref().unwrap(),
                 failure.reason.address.descendants.as_ref().unwrap()
             ));
+
             assert_eq!(
-                (resources.usage().unwrap(), resources.byte_usage().unwrap()),
-                before
+                scope
+                    .child(AddressRole::Annotation, 0)
+                    .unwrap()
+                    .address
+                    .leaf_role(),
+                AddressRole::Annotation
             );
-            assert!(scope.child(AddressRole::Annotation, 0, &resources).is_err());
-            assert_eq!(
-                (resources.usage().unwrap(), resources.byte_usage().unwrap()),
-                before
-            );
-        } else {
-            assert!(result.unwrap_err().to_string().contains(if records < 3 {
-                "address records"
-            } else {
-                "address bytes"
-            }));
-            assert_eq!(resources.byte_usage().unwrap(), 0);
-            assert_eq!(resources.usage().unwrap().1, 0);
         }
     }
     let caption = ComponentAddress::root()
-        .child(AddressRole::RootCaption, 0, &fixture)
+        .child(AddressRole::RootCaption, 0)
         .unwrap();
     assert!(parent.canonical_text_cmp(&caption).is_lt());
     assert_eq!(format!("{parent:?}"), "ComponentAddress { root: AddressSegment { role: Root, slot_index: 0 }, descendants: [AddressSegment { role: CanvasGrid, slot_index: 0 }] }");
@@ -273,77 +245,20 @@ fn capacity_refusal_and_out_of_order_reservation_are_errors() {
 }
 
 #[test]
-fn preparation_retains_shared_font_and_generation_resources_and_topology_limit() {
-    let mut resources = ResourceState::new();
+fn preparation_retains_shared_operation_identity() {
+    let mut resources = crate::font::canonical::OperationContext::new();
     let mut reservations = ReservationDriver::new();
-    let mut stage = PreparedStage {
+    let stage = PreparedStage {
         resources: &mut resources,
         reservations: &mut reservations,
     };
-    stage.claim_topology_slots(TOPOLOGY_SLOT_LIMIT - 1).unwrap();
-    stage.claim_topology_slots(1).unwrap();
-    assert!(stage
-        .claim_topology_slots(1)
-        .unwrap_err()
-        .to_string()
-        .contains("prepared topology slots"));
-    let environment = crate::font::canonical::PreparedFontEnvironment::synthetic();
-    assert!(environment
-        .share_generation_resources(&stage.generation_resources())
-        .is_err());
-    let shared = stage.generation_resources();
-    assert_eq!(shared.topology_usage(), TOPOLOGY_SLOT_LIMIT);
-    assert!(shared.claim_topology_slots(1).is_err());
-    let font = stage.font_resources();
-    let clone = font.generation_resources();
-    clone.claim_slots(TOPOLOGY_SLOT_LIMIT - 1).unwrap();
-    shared.claim_slots(1).unwrap();
-    assert!(clone.claim_slots(1).is_err());
-    font.claim_visits(u64::try_from(TOPOLOGY_SLOT_LIMIT - 1).unwrap())
-        .unwrap();
-    shared.claim_visits(1).unwrap();
-    assert!(font.claim_visits(1).is_err());
-}
 
-#[test]
-fn later_root_round_call_refusal_is_fatal_before_measurement_or_finalization() {
-    for allowance in [1, 2, 3] {
-        let mut calls = 0;
-        let mut finalized = false;
-        let result = plan_exact_root(
-            100,
-            100,
-            |stage| {
-                stage
-                    .generation_resources()
-                    .claim_calls(1_000_000 - allowance)
-                    .map_err(|error| Error::Render(format!("test call admission: {error:?}")))?;
-                Ok(())
-            },
-            |(), assigned, round| {
-                calls += 1;
-                round.request_insets(
-                    &ComponentAddress::root(),
-                    &ComponentAddress::root(),
-                    FeedbackKind::AxisGutter,
-                    [1.0; 4],
-                )?;
-                Ok(MeasuredLayout::new(assigned, ()))
-            },
-            |(), _, (), _| {
-                finalized = true;
-                Ok(())
-            },
-        );
-        assert_eq!(result.is_ok(), allowance >= 2);
-        assert_eq!(calls, if allowance >= 2 { 2 } else { 1 });
-        assert_eq!(finalized, allowance >= 2);
-        if let Err(error) = result {
-            assert!(error
-                .to_string()
-                .contains("measurement/intrinsic call attempts"));
-        }
-    }
+    let environment = crate::font::canonical::PreparedFontEnvironment::synthetic();
+    assert!(environment.validate_operation(&stage.operation()).is_err());
+    let shared = stage.operation();
+
+    assert!(shared.same_operation(&stage.operation()));
+    assert!(!shared.same_operation(&crate::font::canonical::OperationContext::new()));
 }
 
 #[test]
@@ -359,7 +274,7 @@ fn parent_feedback_reallocates_real_geometry_and_converges_on_round_eight() {
         100,
         |_| Ok(()),
         |(), assigned, round| {
-            let consumed = round.insets(&address, FeedbackKind::AxisGutter)?;
+            let consumed = round.insets(&address, FeedbackKind::AxisGutter);
             let panel = crate::layout::fit::measured(frame.assign_fit(
                 crate::layout::PanelBox::new(0.0, 100.0, 0.0, 100.0),
                 consumed,
@@ -392,55 +307,6 @@ fn parent_feedback_reallocates_real_geometry_and_converges_on_round_eight() {
 }
 
 #[test]
-fn root_state_admission_refusals_are_fatal_before_freeze_or_another_round() {
-    for policy in 0..3 {
-        let mut calls = 0;
-        let address = ComponentAddress::root();
-        let result = plan_exact_root(
-            100,
-            100,
-            |stage| Ok(stage.generation_resources()),
-            |resources, assigned, round| {
-                calls += 1;
-                if policy == 1 {
-                    round.record_failure(
-                        crate::layout::fit::FitScope::root()
-                            .failure(FitKind::Text, "terminal fit diagnostic"),
-                    )?;
-                } else {
-                    round.request_insets(
-                        &address,
-                        &address,
-                        FeedbackKind::AxisGutter,
-                        [f64::from(calls); 4],
-                    )?;
-                }
-                if policy != 2 || calls == 2 {
-                    // One admitted feedback sort input precedes convergence;
-                    // a miss also admits the diagnostic deduplication input.
-                    // Round two additionally examines consumed and next before
-                    // the history entry is refused.
-                    let prefix = match policy {
-                        1 => 2,
-                        2 => 3,
-                        _ => 1,
-                    };
-                    resources.set_test_limits(resources.usage().unwrap().1 + prefix, 536_870_912);
-                }
-                Ok(MeasuredLayout::new(assigned, ()))
-            },
-            |_, _, (), _| -> Result<(), Error> { panic!("admission refusal finalized") },
-        );
-        assert!(result
-            .err()
-            .unwrap()
-            .to_string()
-            .contains("root processing visits"));
-        assert_eq!(calls, if policy == 2 { 2 } else { 1 });
-    }
-}
-
-#[test]
 fn feedback_cycles_exhaustion_and_unchanged_misses_never_finalize() {
     for policy in 0..3 {
         let address = ComponentAddress::root();
@@ -451,7 +317,7 @@ fn feedback_cycles_exhaustion_and_unchanged_misses_never_finalize() {
             |_| Ok(()),
             |(), assigned, round| {
                 calls += 1;
-                let consumed = round.insets(&address, FeedbackKind::AxisGutter)?;
+                let consumed = round.insets(&address, FeedbackKind::AxisGutter);
                 let next = match policy {
                     0 => 1.0 - consumed[0],
                     1 => consumed[0] + 1.0,
@@ -510,7 +376,7 @@ fn content_roots_choose_width_once_and_freeze_eighth_round_content_height() {
                         Some(width.unwrap_or(317))
                     }
                 );
-                let consumed = round.insets(&address, FeedbackKind::AxisGutter)?[2];
+                let consumed = round.insets(&address, FeedbackKind::AxisGutter)[2];
                 let next = (consumed + 1.0).min(7.0);
                 round.request_insets(
                     &address,
@@ -585,7 +451,7 @@ fn both_content_modes_reject_feedback_cycles_before_finalization() {
             |_| Ok(()),
             |(), assigned, round| {
                 calls += 1;
-                let previous = round.insets(&owner, FeedbackKind::AxisGutter)?[0];
+                let previous = round.insets(&owner, FeedbackKind::AxisGutter)[0];
                 round.request_insets(
                     &owner,
                     &owner,
@@ -694,8 +560,8 @@ fn feedback_reserves_and_domains_aggregate_without_reapplying_owned_ink() {
                 FeedbackKind::AutomaticDomainX,
                 (0.0, 6.0),
             )?;
-            let insets = round.insets(&address, FeedbackKind::OwnedInk)?;
-            let domain = round.domain(&address, FeedbackKind::AutomaticDomainX)?;
+            let insets = round.insets(&address, FeedbackKind::OwnedInk);
+            let domain = round.feedback_domain(&address, FeedbackKind::AutomaticDomainX);
             Ok(MeasuredLayout::new(assigned, (insets, domain)))
         },
         |(), _, plan, _| Ok(plan),
@@ -706,28 +572,6 @@ fn feedback_reserves_and_domains_aggregate_without_reapplying_owned_ink() {
         [2.0_f64, 0.0, 0.0, 0.0].map(f64::to_bits)
     );
     assert_eq!(root.plan().1, Some((-1.0, 6.0)));
-}
-
-#[test]
-fn feedback_admission_refuses_before_measurement_or_finalization() {
-    let result = plan_exact_root(
-        100,
-        100,
-        |stage| {
-            stage
-                .generation_resources()
-                .claim_slots(1_000_000)
-                .map_err(|error| Error::Render(format!("test admission: {error:?}")))?;
-            Ok(())
-        },
-        |(), _, _| -> Result<MeasuredLayout<()>, Error> { panic!("unadmitted round measured") },
-        |(), _, (), _| -> Result<(), Error> { panic!("unadmitted round finalized") },
-    );
-    assert!(result
-        .err()
-        .unwrap()
-        .to_string()
-        .contains("layout feedback admission"));
 }
 
 #[test]
@@ -750,12 +594,12 @@ fn changed_feedback_remeasures_and_freezes_the_current_plan_for_every_input_kind
             |(), assigned, round| {
                 let consumed = match kind {
                     FeedbackKind::AutomaticDomainX | FeedbackKind::AutomaticDomainY => {
-                        let consumed = round.domain(&address, kind)?.is_some();
+                        let consumed = round.feedback_domain(&address, kind).is_some();
                         round.request_domain(&address, &address, kind, (-1.0, 2.0))?;
                         consumed
                     }
                     _ => {
-                        let consumed = round.insets(&address, kind)?[0] > 0.0;
+                        let consumed = round.insets(&address, kind)[0] > 0.0;
                         round.request_insets(&address, &address, kind, [1.0, 0.0, 0.0, 0.0])?;
                         consumed
                     }
