@@ -129,6 +129,11 @@ integration checks. This localized follow-up did not repeat the full suite.
 
 ## Release output, elapsed time and RSS
 
+The original complete 2,048-word fixture has now also been remeasured in
+[the caption follow-up](caption-cleanup-performance.md), with independent
+preserve/outline timings, full-source checks, scoped timing attribution and
+fresh-process RSS. The nine-case publication study below retains its own boundary.
+
 **Measured 2026-10-08:** `8c6e011` versus `75003b2` plus removal of the unused
 benchmark admission CSV header. No renderer switch or experimental production
 mode was introduced. Both use the same locked dependencies, local fonts and
