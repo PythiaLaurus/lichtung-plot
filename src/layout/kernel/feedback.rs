@@ -923,22 +923,14 @@ impl FeedbackRound {
 }
 
 impl RoundState {
-    pub(super) fn feedback_unchanged(&self) -> Result<bool, Error> {
+    pub(super) fn feedback_unchanged(&self) -> bool {
         // Insets default to zero when absent; domains default to None. Both
         // vectors are in canonical target/kind order after finishing a round.
-        let mut consumed = self.consumed.iter();
-        let mut next = self.next.iter();
-        loop {
-            match (effective_entry(&mut consumed), effective_entry(&mut next)) {
-                (None, None) => return Ok(true),
-                (Some(left), Some(right)) => {
-                    if !equal_feedback_entry(left, right)? {
-                        return Ok(false);
-                    }
-                }
-                _ => return Ok(false),
-            }
-        }
+        let effective = |entries: &&FeedbackEntry| entries.value != FeedbackValue::Insets([0; 4]);
+        self.consumed
+            .iter()
+            .filter(effective)
+            .eq(self.next.iter().filter(effective))
     }
 
     pub(super) fn terminal_error(&self) -> Option<Error> {
@@ -956,96 +948,38 @@ impl RoundState {
         index.map(|index| Error::Render(self.misses[index].failure.to_string()))
     }
 
-    pub(super) fn repeats_history(&self, history: &[Self]) -> Result<bool, Error> {
-        for prior in history {
-            if self.same_state(prior)? {
-                return Ok(true);
-            }
-        }
-        Ok(false)
+    pub(super) fn repeats_history(&self, history: &[Self]) -> bool {
+        history.iter().any(|prior| self.same_state(prior))
     }
 
-    fn same_state(&self, other: &Self) -> Result<bool, Error> {
-        Ok(equal_entries(&self.consumed, &other.consumed, |a, b| {
-            equal_feedback_entry(a, b)
-        })? && equal_entries(&self.next, &other.next, equal_feedback_entry)?
-            && equal_entries(&self.requests, &other.requests, equal_request)?
+    fn same_state(&self, other: &Self) -> bool {
+        self.consumed == other.consumed
+            && self.next == other.next
+            && self.requests == other.requests
             && equal_entries(&self.observations, &other.observations, |a, b| {
                 if std::sync::Arc::ptr_eq(a, b) {
-                    return Ok(true);
+                    return true;
                 }
                 match (a.as_ref(), b.as_ref()) {
-                    (Observation::Address(a), Observation::Address(b)) => equal_address(a, b),
-                    (Observation::Text(a), Observation::Text(b)) => equal_string(a, b),
                     (Observation::TextPlan(a), Observation::TextPlan(b)) => equal_text_plan(a, b),
-                    _ => Ok(a == b),
+                    _ => a == b,
                 }
-            })?
-            && equal_entries(&self.misses, &other.misses, |a, b| {
-                Ok(a.failure.reason.kind == b.failure.reason.kind
-                    && a.failure.reason.ordinal == b.failure.reason.ordinal
-                    && equal_address(&a.failure.reason.address, &b.failure.reason.address)?
-                    && equal_string(&a.failure.message, &b.failure.message)?
-                    && equal_entries(&a.feedback, &b.feedback, equal_request)?)
-            })?)
+            })
+            && self.misses == other.misses
     }
 }
 
-fn effective_entry<'a>(
-    entries: &mut std::slice::Iter<'a, FeedbackEntry>,
-) -> Option<&'a FeedbackEntry> {
-    entries
-        .find(|&entry| entry.value != FeedbackValue::Insets([0; 4]))
-        .map(|v| v as _)
+fn equal_entries<T>(left: &[T], right: &[T], mut equal: impl FnMut(&T, &T) -> bool) -> bool {
+    left.len() == right.len()
+        && left
+            .iter()
+            .zip(right)
+            .all(|(left, right)| equal(left, right))
 }
 
-fn equal_entries<T>(
-    left: &[T],
-    right: &[T],
-    mut equal: impl FnMut(&T, &T) -> Result<bool, Error>,
-) -> Result<bool, Error> {
-    if left.len() != right.len() {
-        return Ok(false);
-    }
-    for (left, right) in left.iter().zip(right) {
-        if !equal(left, right)? {
-            return Ok(false);
-        }
-    }
-    Ok(true)
-}
-
-fn equal_string(left: &str, right: &str) -> Result<bool, Error> {
-    equal_entries(left.as_bytes(), right.as_bytes(), |a, b| Ok(a == b))
-}
-
-fn equal_address(left: &ComponentAddress, right: &ComponentAddress) -> Result<bool, Error> {
-    Ok(left.root == right.root
-        && equal_entries(left.descendants(), right.descendants(), |a, b| Ok(a == b))?)
-}
-
-fn equal_feedback_entry(left: &FeedbackEntry, right: &FeedbackEntry) -> Result<bool, Error> {
-    Ok(equal_address(&left.target, &right.target)?
-        && left.kind == right.kind
-        && left.value == right.value)
-}
-
-fn equal_request(
-    left: &std::sync::Arc<FeedbackRequest>,
-    right: &std::sync::Arc<FeedbackRequest>,
-) -> Result<bool, Error> {
-    Ok(std::sync::Arc::ptr_eq(left, right)
-        || (equal_address(&left.source, &right.source)?
-            && equal_feedback_entry(&left.entry, &right.entry)?))
-}
-
-#[expect(
-    clippy::too_many_lines,
-    reason = "rendered-plan equality admits each variable string, candidate, line, run, and glyph before its comparison"
-)]
-fn equal_text_plan(left: &ResolvedTextPlan, right: &ResolvedTextPlan) -> Result<bool, Error> {
+fn equal_text_plan(left: &ResolvedTextPlan, right: &ResolvedTextPlan) -> bool {
     if left.shares_payload(right) {
-        return Ok(true);
+        return true;
     }
     let metadata = |plan: &ResolvedTextPlan| {
         (
@@ -1071,21 +1005,12 @@ fn equal_text_plan(left: &ResolvedTextPlan, right: &ResolvedTextPlan) -> Result<
         || style(left) != style(right)
         || left.pair_provenance.pair_ordinal != right.pair_provenance.pair_ordinal
         || left.pair_provenance.weight != right.pair_provenance.weight
-        || !equal_string(&left.source, &right.source)?
-        || !equal_string(&left.style.provenance.owner, &right.style.provenance.owner)?
-        || !equal_entries(
-            &left.pair_provenance.candidates,
-            &right.pair_provenance.candidates,
-            |a, b| Ok(a == b),
-        )?
-        || !equal_entries(&left.style.stack, &right.style.stack, |a, b| {
-            match (a.name(), b.name()) {
-                (Some(a), Some(b)) => equal_string(a, b),
-                _ => Ok(a == b),
-            }
-        })?
+        || left.source != right.source
+        || left.style.provenance.owner != right.style.provenance.owner
+        || left.pair_provenance.candidates != right.pair_provenance.candidates
+        || left.style.stack != right.style.stack
     {
-        return Ok(false);
+        return false;
     }
     equal_entries(&left.lines, &right.lines, |a, b| {
         if (
@@ -1107,7 +1032,7 @@ fn equal_text_plan(left: &ResolvedTextPlan, right: &ResolvedTextPlan) -> Result<
             b.ink_quanta,
             b.base_direction,
         ) {
-            return Ok(false);
+            return false;
         }
         equal_entries(&a.runs, &b.runs, |a, b| {
             if (
@@ -1145,9 +1070,9 @@ fn equal_text_plan(left: &ResolvedTextPlan, right: &ResolvedTextPlan) -> Result<
                 b.logical_y_advance_quanta,
                 b.ink_quanta,
             ) {
-                return Ok(false);
+                return false;
             }
-            equal_entries(&a.glyphs, &b.glyphs, |a, b| Ok(a == b))
+            a.glyphs == b.glyphs
         })
     })
 }
@@ -1391,7 +1316,7 @@ mod tests {
                     ));
                 }
                 let result = state.feedback_unchanged();
-                assert_eq!(result.unwrap(), !changed);
+                assert_eq!(result, !changed);
             }
         }
     }
@@ -1453,9 +1378,9 @@ mod tests {
             .observations
             .push(std::sync::Arc::new(Observation::Text("ab".into())));
         let history = [first, matching, unused];
-        assert!(state.repeats_history(&history).unwrap());
+        assert!(state.repeats_history(&history));
 
-        assert!(state.repeats_history(std::slice::from_ref(&state)).unwrap());
+        assert!(state.repeats_history(std::slice::from_ref(&state)));
     }
 
     #[test]
@@ -1467,14 +1392,14 @@ mod tests {
         assert_eq!(plan.lines.len(), 1);
         assert_eq!(plan.lines[0].runs.len(), 1);
         assert_eq!(plan.lines[0].runs[0].glyphs.len(), 32);
-        assert!(equal_text_plan(&plan, &independent).unwrap());
+        assert!(equal_text_plan(&plan, &independent));
         let mut changed = independent.clone();
         changed.edit_for_test().lines[0].runs[0].glyphs[0].glyph_id += 1;
         assert_ne!(plan, changed);
 
-        assert!(!equal_text_plan(&plan, &changed).unwrap());
+        assert!(!equal_text_plan(&plan, &changed));
 
-        assert!(equal_text_plan(&plan, &plan).unwrap());
+        assert!(equal_text_plan(&plan, &plan));
     }
 
     #[test]
@@ -1938,19 +1863,19 @@ mod tests {
         }
         let mut state = round.finish();
         assert!(!state.requests.is_empty());
-        assert!(state.feedback_unchanged().unwrap());
+        assert!(state.feedback_unchanged());
         // Explicit zeros are also equivalent to an absent consumed entry.
         state.next.push(FeedbackEntry {
             target: address.clone(),
             kind: FeedbackKind::AxisGutter,
             value: FeedbackValue::Insets([0; 4]),
         });
-        assert!(state.feedback_unchanged().unwrap());
+        assert!(state.feedback_unchanged());
         let mut round = FeedbackRound::new(Some(&state), 1).unwrap();
         round
             .observe_string("different current observations")
             .unwrap();
-        assert!(round.state.feedback_unchanged().unwrap());
+        assert!(round.state.feedback_unchanged());
         round
             .request_domain(
                 &address,
@@ -1959,7 +1884,7 @@ mod tests {
                 (0.0, 1.0),
             )
             .unwrap();
-        assert!(!round.finish().feedback_unchanged().unwrap());
+        assert!(!round.finish().feedback_unchanged());
     }
 
     #[test]
@@ -1980,7 +1905,7 @@ mod tests {
         // Exercise the driver's guard even if net feedback returns to its input.
         round.state.next.clear();
         let state = round.finish();
-        assert!(state.feedback_unchanged().unwrap());
+        assert!(state.feedback_unchanged());
         assert!(state.terminal_error().is_none());
         assert!(state
             .unchanged_error()

@@ -788,13 +788,13 @@ pub(crate) fn plan_exact_root<Plan, FinalPlan, Prepared>(
         }
         // Measure and validate the current assignment before accepting its plan.
         // Observation equality would require an unconditional duplicate pass.
-        if state.feedback_unchanged()? {
+        if state.feedback_unchanged() {
             if let Some(error) = state.unchanged_error() {
                 return Err(error);
             }
             break result;
         }
-        if state.repeats_history(&history)? {
+        if state.repeats_history(&history) {
             return Err(Error::Render("layout root feedback cycle detected".into()));
         }
         if history.len() == 7 {

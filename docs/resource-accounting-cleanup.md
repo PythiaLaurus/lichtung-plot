@@ -114,6 +114,19 @@ documentation and independently unpacked-package verification also passed.
 The full gate log is `/tmp/opencode/semantic-tests-verify.log`. No snapshot was
 repinned, no Unicode corpus was downloaded and no new test framework was added.
 
+### Remaining interface cleanup
+
+The follow-up removes accounting-era `Result` propagation from feedback/state
+equality and the root's convergence/cycle predicates. Plain string, address,
+request and miss comparisons use their existing equality; rendered-text identity
+still compares complete effective style/provenance, lines, runs and glyphs while
+excluding cached analysis. Real reservation, numerical and fit errors remain.
+The remaining operation-ledger comments/instructions were corrected.
+
+Strict Clippy and formatting passed, together with 45 focused kernel/feedback
+and native-root tests and five representative layout, composition and output-reuse
+integration checks. This localized follow-up did not repeat the full suite.
+
 ## Release output, elapsed time and RSS
 
 **Measured 2026-10-08:** `8c6e011` versus `75003b2` plus removal of the unused

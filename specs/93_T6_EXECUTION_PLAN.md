@@ -44,7 +44,7 @@ after workspace, both adapters, Python interface and first release are complete.
   adapters, Python files, `tools/`, asset provisioning or new dependency is part
   of T6. Existing pinned `num-bigint` is available for certified numeric work.
 - Extend T5e's one measured lifecycle, current prepared sources, scoped domains,
-  source identities, complete ink, operation ledger and immutable capture/replay.
+  source identities, complete ink, operation-local caches and immutable capture/replay.
   No second renderer, local grow-until-fit loop or new resource cap.
 - Split behavioral implementation from mechanical repository-wide API migration.
   Each completed leaf gets focused tests, strict Clippy and its own scoped commit

@@ -121,7 +121,7 @@ pub(crate) struct PointOutline {
 }
 
 impl PointOutline {
-    /// Construct the publication outline on the caller's operation ledger.
+    /// Construct the validated publication outline.
     #[cfg(test)]
     pub(crate) fn publication() -> Result<Self, Error> {
         Ok(crate::theme::PointOutlineTheme::publication()?.backend_style())
