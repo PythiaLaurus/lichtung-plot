@@ -73,42 +73,68 @@ fn svg<K: lichtung_plot::kind::Marker>(plot: Plot<K>) -> String {
 }
 
 #[test]
-fn native_interaction_preserves_exact_root_svg_bytes() {
-    // T5b2a: theme-owned title, entry, and chrome roles replace root-scaled
-    // guide typography. T5c closes complete point/outline alpha and native
-    // mark pitch, so the exact SVG bytes are intentionally repinned. T5a
-    // fingerprints remain attributed in the benchmarks.
-    // T5e guide closure prices complete composite glyph ink and preserves
-    // fractional text baselines. All four inspected prior goldens are retained
-    // with attribution in docs/t5e7-guide-cache-closure.md.
-    for (theme, expected) in [
-        (
-            lichtung_plot::Theme::Publication,
+fn native_interaction_keeps_panel_and_prose_inside_the_requested_root() {
+    use super::visual::{
+        parse_first_clip_rect, parse_text_elements, png_dimensions, text_y, unique_dir, SvgRect,
+    };
+    let directory = unique_dir("native-interaction");
+    let out = directory.join("plot.svg");
+    Plot::interaction(
+        CategoryValues::new(
+            "condition",
             [
-                (11007, 13_027_462_214_619_244_865_u64),
-                (11352, 15_258_619_364_319_190_699),
+                "after_visit",
+                "before_visit",
+                "last_visit",
+                "after_visit",
+                "last_visit",
             ],
+        )
+        .unwrap(),
+        NumericValues::new("estimate", [2.0, 3.0, 4.0, 5.0, 6.0]),
+        CategoryValues::new("group", ["one", "one", "one", "two", "two"]).unwrap(),
+        Bounds::new(
+            NumericValues::new("lower", [1.0, 2.0, 3.0, 4.0, 5.0]),
+            NumericValues::new("upper", [3.0, 4.0, 5.0, 6.0, 7.0]),
         ),
-        (
-            lichtung_plot::Theme::Science,
-            [
-                (10614, 15_450_700_033_276_445_789),
-                (10959, 11_883_049_564_942_211_587),
-            ],
-        ),
-    ] {
-        for (styled, expected) in [false, true].into_iter().zip(expected) {
-            let output = svg(chart(&interaction_data(), styled)
-                .theme(theme)
-                .size(800, 600));
-            let hash = output
-                .bytes()
-                .fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
-                    (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3)
-                });
-            assert_eq!((output.len(), hash), expected, "{theme:?}, styled={styled}");
-        }
+    )
+    .hue(CategoryValues::new("hue", ["first", "first", "first", "second", "second"]).unwrap())
+    .styles([
+        InteractionStyle::new("two")
+            .shape(PointShape::TriangleUp)
+            .pattern(LinePattern::Dashed),
+        InteractionStyle::new("one"),
+    ])
+    .labels(Labels::humanized().alias("after_visit", "A longer follow-up visit"))
+    .size(641, 401)
+    .title("Native interaction profiles")
+    .x_label("First axis line\nSecond axis line\nThird axis line")
+    .caption("Independent caption\nSecond caption line")
+    .svg_preserve_text(&out)
+    .unwrap()
+    .png_preview(out.with_extension("png"))
+    .unwrap();
+    assert_eq!(
+        png_dimensions(&std::fs::read(out.with_extension("png")).unwrap()),
+        (641, 401)
+    );
+    let svg = std::fs::read_to_string(&out).unwrap();
+    let panel = parse_first_clip_rect(&svg);
+    assert!(SvgRect {
+        x: 0.0,
+        y: 0.0,
+        width: 641.0,
+        height: 401.0
     }
+    .contains(panel));
+    let text = parse_text_elements(&svg);
+    assert!(text_y(&text, "Native interaction profiles") < panel.y);
+    let caption = text_y(&text, "Independent caption");
+    for label in ["First axis line", "Second axis line", "Third axis line"] {
+        let y = text_y(&text, label);
+        assert!(y > panel.y + panel.height && y < caption);
+    }
+    std::fs::remove_dir_all(directory).unwrap();
 }
 
 fn triangle_vertices(line: &str) -> Vec<(f64, f64)> {

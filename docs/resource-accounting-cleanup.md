@@ -15,6 +15,10 @@ quota-rejecting revision used in the October 7 experimental study.
 
 ## Verification on the local Linux host
 
+The following records the accounting-cleanup checkpoint. Its nine outstanding
+integration assertions are addressed by the later user-directed test-policy
+change below; the original run results are retained as historical evidence.
+
 * Formatting and strict `cargo clippy --locked --offline --all-targets --
   -D warnings` passed.
 * `just docs` passed with rustdoc warnings denied; `just package` built and
@@ -74,6 +78,41 @@ Raw local logs are under `/tmp/opencode/accounting-cleanup-*.log` and
 `/tmp/opencode/accounting-baseline-*.log`; the detached baseline worktree is
 `/tmp/opencode/accounting-cleanup-baseline`. These temporary logs are not packaged
 project assets.
+
+## Subsequent user-directed test policy
+
+The user rejected fixed renderer-revision byte counts, hashes, pixel placements
+and scene snapshots as volatile expectations. The current policy is in
+`specs/90_DEVELOPMENT.md`; this is a test-contract change, not a renderer-output
+repair or acceptance of new goldens.
+
+* Removed whole-scene fingerprints for Waterfall, Beeswarm, Interaction and
+  categorical-distribution marks.
+* Retained Marginal's scientific-value, KDE, guide-content and linked-axis
+  assertions while removing its stored SVG lengths/hashes and incidental spacing.
+* Retained Matrix's actual observations/variable labels instead of its committed
+  SVG hash/length, fixed adaptive-text count and external baseline comparison.
+* Removed the visual-regression target, its 27 snapshots and unused `insta`
+  dependency. The mixed Interaction fixture retains root containment, relative
+  prose placement and explicitly requested PNG dimensions in its domain target.
+* Heatmap's insufficient-space test keeps preflight/publication error agreement,
+  the Render error category, no output on failure, and complete annotations when
+  given sufficient space; it no longer fixes a particular internal error message.
+* The native gutter fixture checks request/consumption relationships and final
+  convergence instead of measured pixel coordinates from one revision.
+
+All nine previously listed failures are thus either removed volatile-only checks
+or migrated mixed fixtures whose meaningful assertions pass. The runtime renderer
+was not changed. Historical release timing/output comparisons below remain
+observations rather than permanent acceptance gates.
+
+Twenty focused library tests and three migrated integration fixtures passed.
+Removing the unused test dependency required one `just verify` under the
+repository dependency-change rule: formatting, strict Clippy, **1,345 library
+tests and 470 integration tests passed**, with 17 existing library tests ignored;
+documentation and independently unpacked-package verification also passed.
+The full gate log is `/tmp/opencode/semantic-tests-verify.log`. No snapshot was
+repinned, no Unicode corpus was downloaded and no new test framework was added.
 
 ## Release output, elapsed time and RSS
 

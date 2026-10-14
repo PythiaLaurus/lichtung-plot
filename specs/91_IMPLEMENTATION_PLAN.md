@@ -6,15 +6,21 @@
 
 **Current execution checkpoint:** the user-approved resource-accounting cleanup
 is complete. `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` records the retained
-correctness boundaries; `../docs/resource-accounting-cleanup.md` records focused
-and broad verification, nine pre-existing integration failures, and same-source
-release output/time/RSS comparisons. Further public-foundation feature work has
-not resumed.
+correctness boundaries; `../docs/resource-accounting-cleanup.md` records
+verification and same-source release output/time/RSS comparisons. The subsequent
+user-directed semantic test policy retires the volatile baselines responsible for
+the former integration failures; mixed fixtures retain meaningful contracts, and
+`just verify` passes. Further public-foundation feature work has not resumed.
 
 Accounting requirements and quota-specific tests in completed historical entries
 below describe their recorded revisions. Spec95 and the current resource/lifecycle
 contract in spec05 supersede those fees and counters; future work must not restore
 them. Source identity, real allocation/arithmetic checks and coordination remain.
+
+The current testing policy in spec90 also supersedes historical snapshot/hash
+acceptance gates below. Renderer revisions must not be frozen by whole-scene
+byte lengths, hashes, snapshots or incidental automatic geometry; retain the
+semantic contracts and equivalent-current-route comparisons instead.
 
 This document records the active theme-system design and implementation
 sequence. The completed API-boundary and output-contract remediation remains

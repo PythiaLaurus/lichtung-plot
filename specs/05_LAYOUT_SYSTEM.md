@@ -1454,15 +1454,17 @@ Repository callers migrate atomically rather than retaining compatibility aliase
 
 ## Validation And Repair Evidence
 
-Implementation repair phases assign exact datasets, fonts, roots, expected local
-decisions, counters, and snapshots before claiming acceptance. This specification
+Implementation repair phases assign datasets, fonts, roots and meaningful
+semantic/relational checks before claiming acceptance. Whole-scene fingerprints,
+snapshot goldens and incidental automatic coordinates are excluded by the current
+test policy in `90_DEVELOPMENT.md`. This specification
 does not assert that those implementations or fixtures already exist. Measurable
 workload acceptance includes the string `"A ".repeat(144)`, an approximately
 200-word scientific caption in a SINGLE paragraph, the three-paragraph caption
 baseline on ordinary automatic and exact-width/automatic-height Plot/Canvas output, and
 multilingual paragraphs with Arabic joining/bidi, combining marks, CJK breaks,
 and emoji controls under compatible pinned fonts. They must complete within the
-stated logical budgets at adequate assigned widths/heights, with exact-size cases
+actual fit constraints at adequate assigned widths/heights, with exact-size cases
 given sufficient height for the selected wrapped lines. Record proposal visits,
 exact trials, shaped input/output counts, and retained metadata for each fixture;
 the repeated-word narrow-line regression must not reshape all remaining suffixes

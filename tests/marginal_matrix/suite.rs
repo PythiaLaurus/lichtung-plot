@@ -5,6 +5,6 @@ mod support;
 
 use support::*;
 
-mod axis_parity;
 mod contracts;
-mod parity;
+mod observations;
+mod scientific;

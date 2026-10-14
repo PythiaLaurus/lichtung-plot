@@ -454,7 +454,10 @@ mutation of the output namespace during a publication call.
 
 ## Regression Evidence
 
-Renderer behavior is covered by unit and integration tests, deterministic SVG
-snapshots, exact byte/hash assertions where appropriate, PNG tests, and focused
-rendering invariants. A snapshot change is evidence to inspect, not an automatic
-approval of visual quality.
+Renderer behavior is covered by focused semantic unit/integration tests: source
+completeness, scientific transformations, styles, containment, lifecycle, requested
+output dimensions and format validation. Whole-scene SVG sizes/hashes, stored
+scene snapshots and incidental automatic geometry are not acceptance gates.
+Equivalent current routes and frozen replay may compare their actual outputs for
+determinism; numerical rounding and serialization syntax use independent oracles.
+`90_DEVELOPMENT.md` defines the current test-expectation policy.

@@ -43,8 +43,12 @@ T5b, T5c, T5d, or T5e), or a demonstrated cross-cutting failure/invariant that
 cannot be validated with a bounded set of focused tests. State the specific
 reason before running it; do not repeat a full suite after fixing one localized
 failure when its focused test and relevant neighbors suffice. Documentation-only
-changes do not require tests. Inspect snapshot changes and commit them with the
-source change that intentionally alters SVG output.
+changes do not require tests. Test semantic contracts and relationships rather
+than freezing a renderer revision's SVG length/hash, scene snapshot, automatic
+panel size, or internal placement coordinates. Explicit requested output dimensions,
+independently justified numerical rounding, containment, source completeness and
+same-operation replay equality remain meaningful checks. Do not repin whole-scene
+goldens to make a test pass; see `specs/90_DEVELOPMENT.md`.
 
 Compiler validation must use `cargo clippy --locked --offline --all-targets --
 -D warnings` (or `just lint`), never `cargo check`. Pass this requirement to every

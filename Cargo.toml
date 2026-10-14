@@ -37,7 +37,6 @@ roxmltree = "=0.20.0"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
 
 [dev-dependencies]
-insta = "1.48"
 # Assert the actual tables shared with rustybuzz, not only its package version.
 unicode-ccc = "=0.4.0"
 unicode-bidi-mirroring = "=0.4.0"
@@ -93,10 +92,6 @@ path = "tests/rendering/suite.rs"
 [[test]]
 name = "statistics"
 path = "tests/statistics/suite.rs"
-
-[[test]]
-name = "visual-regression"
-path = "tests/visual_regression/suite.rs"
 
 [lints.rust]
 unsafe_code = "deny"

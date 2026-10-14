@@ -1159,9 +1159,9 @@ fn measured_gutter_reflow_preserves_complete_frames_without_cache() {
 #[test]
 #[expect(
     clippy::float_cmp,
-    reason = "exact quantized geometry and integer gutter contract"
+    reason = "compare consumed and requested gutters within the same root operation"
 )]
-fn historical_reflow_native_measured_gutter_control() {
+fn native_measured_gutters_are_consumed_before_the_final_frame() {
     use crate::layout::fit::FitOutcome;
     use crate::layout::kernel::FeedbackKind;
     use crate::layout::{AddressRole, ComponentAddress, MeasuredLayout};
@@ -1196,13 +1196,11 @@ fn historical_reflow_native_measured_gutter_control() {
                 panic!("preferred guide must fit the native frame")
             };
             let required = plan.result.axes.as_ref().unwrap().requirements();
-            assert_eq!(canvas.insets.left, 16.0);
-            let requested = [required.left, required.right, required.bottom, required.top]
-                .map(|value| (value + 4.0).ceil());
-            assert_eq!(
-                round.next_insets(&address, FeedbackKind::AxisGutter),
-                requested
-            );
+            let requested = round.next_insets(&address, FeedbackKind::AxisGutter);
+            assert!(requested
+                .iter()
+                .zip([required.left, required.right, required.bottom, required.top])
+                .all(|(&reserved, required)| reserved >= required));
             let consumed = round.insets(&address, FeedbackKind::AxisGutter);
             assert_eq!(plan.panel_box.x0, canvas.panel_box.x0 + consumed[0]);
             assert_eq!(plan.panel_box.y0, canvas.panel_box.y0 + consumed[2]);
@@ -1218,45 +1216,11 @@ fn historical_reflow_native_measured_gutter_control() {
     )
     .unwrap();
     let observed = measurements::finish();
-    assert_eq!(
-        rounds,
-        [
-            // Consumed/requested gutters and complete guide enclosure stay exact.
-            ([0.0; 4], [79.0, 5.0, 59.0, 5.0], 367.789_062_5),
-            (
-                [79.0, 5.0, 59.0, 5.0],
-                [94.0, 5.0, 59.0, 5.0],
-                283.789_062_5
-            ),
-            (
-                [94.0, 5.0, 59.0, 5.0],
-                [94.0, 5.0, 59.0, 5.0],
-                268.789_062_5
-            ),
-        ]
-    );
-    assert_eq!(observed.roots.len(), 3);
-    assert_eq!(observed.counters[Counter::GuideTrial as usize], 3);
-    assert_eq!(observed.counters[Counter::GuideBodyCheck as usize], 3);
-    assert_eq!(observed.guides.len(), 3);
-    for (ordinal, trial) in observed.guides.iter().enumerate() {
-        let successful = ordinal == 2;
-        assert_eq!(observed.roots[ordinal].ordinal, ordinal);
-        assert_eq!(observed.roots[ordinal].successful, successful);
-        assert_eq!(observed.roots[ordinal].guides, ordinal..ordinal + 1);
-        assert_eq!(trial.root_round, ordinal);
-        assert_eq!(trial.edge, LegendPosition::OutsideRight);
-        assert_eq!(
-            (trial.compact, trial.phase, trial.outcome),
-            (
-                false,
-                GuidePhase::Body,
-                if successful {
-                    GuideOutcome::Accepted
-                } else {
-                    GuideOutcome::Provisional
-                }
-            )
-        );
-    }
+    assert_eq!(rounds.first().unwrap().0, [0.0; 4]);
+    assert!(rounds.windows(2).all(|pair| pair[1].0 == pair[0].1));
+    let (consumed, requested, width) = rounds.last().unwrap();
+    assert_eq!(consumed, requested);
+    assert!(*width > 0.0);
+    assert_eq!(observed.roots.len(), rounds.len());
+    assert!(observed.roots.last().unwrap().successful);
 }

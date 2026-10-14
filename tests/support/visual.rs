@@ -16,64 +16,6 @@ pub(super) fn fixture_values() -> (NumericValues, NumericValues) {
     (NumericValues::new("x", xs), NumericValues::new("y", ys))
 }
 
-pub(super) fn normalize_embedded_font(svg: &str) -> String {
-    let prefix = "data:font/woff2;base64,";
-    let Some(start) = svg.find(prefix) else {
-        return svg.to_owned();
-    };
-    let data_start = start + prefix.len();
-    let Some(length) = svg[data_start..].find('\'') else {
-        return svg.to_owned();
-    };
-    let mut normalized = svg.to_owned();
-    normalized.replace_range(data_start..data_start + length, "<subset>");
-    normalized
-}
-
-pub(super) fn specialized_svg_structure(svg: &str, selected_text: &[&str]) -> String {
-    let mut output = Vec::new();
-    let mut mark_counts: Option<[usize; 5]> = None;
-    for line in svg.lines().map(str::trim) {
-        if let Some(counts) = mark_counts.as_mut() {
-            if line == "</g>" {
-                output.push(format!(
-                    "MARKS circle={} line={} polygon={} polyline={} text={}",
-                    counts[0], counts[1], counts[2], counts[3], counts[4]
-                ));
-                output.push("END MARKS".to_string());
-                mark_counts = None;
-            } else if line.starts_with("<circle ") {
-                counts[0] += 1;
-            } else if line.starts_with("<line ") {
-                counts[1] += 1;
-            } else if line.starts_with("<polygon ") {
-                counts[2] += 1;
-            } else if line.starts_with("<polyline ") {
-                counts[3] += 1;
-            } else if line.starts_with("<text ") {
-                counts[4] += 1;
-            }
-            continue;
-        }
-
-        if line.starts_with("<clipPath id=") {
-            output.push(line.to_string());
-        } else if line.starts_with("<g clip-path=") {
-            output.push(line.to_string());
-            mark_counts = Some([0; 5]);
-        } else if line.starts_with("<g id=\"grid\"")
-            || line.starts_with("<g id=\"axes\"")
-            || line.starts_with("<g id=\"legend\"")
-            || selected_text
-                .iter()
-                .any(|text| line.contains(&format!(">{text}</text>")))
-        {
-            output.push(line.to_string());
-        }
-    }
-    output.join("\n")
-}
-
 pub(super) fn tempdir() -> std::path::PathBuf {
     create_unique_dir("lichtung-plot-test")
 }

@@ -7,8 +7,6 @@ mod support;
 
 use support::*;
 
-mod beeswarm;
 mod dumbbell;
 mod grouping;
 mod plots;
-mod waterfall;

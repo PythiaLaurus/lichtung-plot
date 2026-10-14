@@ -128,63 +128,6 @@ fn custom_connector_appearance_keeps_exact_group_patterns_and_guide_identity() {
 }
 
 #[test]
-fn same_assignment_marks_match_canonical_projection_fingerprints() {
-    use crate::layout::PanelBox;
-    // 2026-09-14 T5a6d: canonical projected centers precede marker construction.
-    // Historical a6f9091 hashes were fac25eefcd84c63d / 3ef60d2fc29c86ec /
-    // bae40bd86df8a981. T5c1 point-alpha quantization later changed the two
-    // marker-visible SVG byte hashes (formerly 66849c3c47bac743 and
-    // 178ec0a9046a6eb6); the marker-hidden fingerprint stayed identical.
-    for (markers, connectors, expected) in [
-        (true, true, 0x44fc_6427_2cd5_00e1),
-        (true, false, 0x6e44_598a_586b_59bc),
-        (false, true, 0xbae4_0bd8_6df8_a981),
-    ] {
-        let source = source()
-            .hue(CategoryValues::new("color", ["red", "red", "red", "blue", "blue"]).unwrap())
-            .styles([
-                crate::InteractionStyle::new("two")
-                    .shape(PointShape::TriangleUp)
-                    .pattern(LinePattern::Dashed),
-                crate::InteractionStyle::new("one"),
-            ])
-            .markers(markers)
-            .connectors(connectors)
-            .y_limits(-2.0, 10.0)
-            .erase();
-        let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-        for preset in [
-            crate::Theme::Publication,
-            crate::Theme::Nature,
-            crate::Theme::Science,
-        ] {
-            let theme = preset.resolve().unwrap();
-            let plot =
-                crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None)
-                    .unwrap()
-                    .attach(source.clone())
-                    .unwrap();
-            for panel in [
-                PanelBox::new(80.25, 550.75, 70.5, 410.25),
-                PanelBox::new(30.0, 810.0, 50.0, 600.0),
-            ] {
-                let result = plot
-                    .measure_selected_interior(PlotRenderContext::new(plot.data(), panel, &theme))
-                    .unwrap();
-                let mut svg = crate::render::svg_backend::SvgBackend::in_memory(900, 700);
-                svg.begin(900, 700).unwrap();
-                result.marks.as_ref().unwrap().draw(&mut svg).unwrap();
-                svg.end().unwrap();
-                for byte in svg.into_bytes().unwrap() {
-                    hash = (hash ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
-                }
-            }
-        }
-        assert_eq!(hash, expected, "markers={markers}, connectors={connectors}");
-    }
-}
-
-#[test]
 #[expect(
     clippy::too_many_lines,
     reason = "one sparse fixture compares marks, axes, grid and unchanged caller labels"

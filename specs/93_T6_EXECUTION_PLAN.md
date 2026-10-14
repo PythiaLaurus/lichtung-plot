@@ -54,8 +54,9 @@ after workspace, both adapters, Python interface and first release are complete.
   current API, but must migrate storage onto one representation. Public cutover
   removes the replaced API and migrates every caller. No aliases, deprecations,
   version selectors, dormant public types or old/new fallback chains.
-- Commit intentional SVG snapshots with the behavior that changes them after
-  inspecting source counts, semantic values, styles and complete geometry.
+- Verify intentional visual changes through source completeness, semantic values,
+  effective styles and complete-geometry relationships. Spec90 excludes frozen
+  whole-scene byte/hash/snapshot and incidental-coordinate test baselines.
 - Record stages as COMPLETE only after actual checks; an approved plan is not
   evidence of an implemented or numerically certified primitive.
 

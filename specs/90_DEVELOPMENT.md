@@ -58,8 +58,9 @@ an internal milestone. Review the complete message before committing.
 ## Visual Changes
 
 Changes to layout, themes, text, SVG serialization, clipping, or marks require
-focused tests and inspection of affected snapshots. Update snapshots only when
-the new output is intentional and consistent with `02_RENDERING_CONTRACT.md`.
+focused semantic checks consistent with `02_RENDERING_CONTRACT.md`. Inspect source
+completeness, scientific values, effective styles, clipping, containment and
+relative text/mark relationships when those contracts are affected.
 
 ## Test Layout
 
@@ -68,8 +69,7 @@ Each target lives in `tests/<domain>/suite.rs`, with sibling modules for one
 cohesive plot family or rendering contract. This keeps targets independently
 runnable without scattering loose Rust files across `tests/` or routing every
 test through one monolithic integration crate. Shared test-only helpers live in
-`tests/support/`. Visual snapshots live beside the visual-regression target that
-owns and reviews them.
+`tests/support/`.
 
 The current focused targets are:
 
@@ -78,33 +78,37 @@ annotations       categorical       composition
 distributions     estimates         heatmap
 interactions      layout            lines
 marginal-matrix   output            rendering
-statistics        visual-regression
+statistics
 ```
 
 Run one target with `cargo test --test <target>`. New tests belong in the target
 whose public behavior they exercise. Add a target only for a genuinely distinct
 contract; do not create chronological, catch-all, or `general` suites.
 
-## Snapshot Tests
+## Stable Test Expectations
 
-The five committed snapshots are generated directly by tests in
-`tests/visual_regression/suite.rs`. Those tests construct fixed data, publish the
-canonical preserve-text SVG with `Plot`, and pass either the bounded SVG or a
-small clipping/layer summary to `insta::assert_snapshot!`. No script, Python
-process, or external plotting library generates them.
+The user rejected whole-scene byte/geometry baselines as volatile implementation
+details. Do not assert a stored SVG byte length/hash, a full SVG or clipping-summary
+snapshot, or incidental automatic panel dimensions and placement coordinates.
+Those tests and the snapshot target/tooling have been removed. Historical output
+hashes and reviewed snapshots in evidence documents describe their recorded
+revisions; they do not impose current test expectations.
 
-Run them with:
+Keep checks with an independent contract:
 
-```text
-cargo test --test visual-regression
-```
+- Explicit caller-requested root/PNG dimensions and output-format limits.
+- Scientific values, source rows, visible mark counts and complete required text.
+- Containment, non-overlap, linked-axis agreement and selected-style ownership.
+- Validation failure categories and absence of published output on failure,
+  without fixing an incidental internal failure location or diagnostic string.
+- Exact numerical transformations/rounding with independent mathematical
+  expectations, and narrowly specified serialization syntax/escaping.
+- Equality of outputs produced by equivalent current routes, cache settings or
+  immutable replay. This compares both sides in the same implementation rather
+  than freezing an old revision's output.
 
-On a missing or changed baseline, Insta writes a `.snap.new` candidate and the
-test fails. Review intentional changes with `cargo insta review`; never accept a
-snapshot merely to make CI green. Snapshots are tracked because CI needs an
-approved expected output to compare against on a fresh checkout.
-
-Snapshots are regression baselines, not independent correctness oracles.
-Semantic behavior, validation errors, geometry bounds, and numeric properties
-remain covered by explicit assertions in the focused targets. Keep snapshots
-small and reviewable; broad multi-plot manifest snapshots are prohibited.
+If a fixture only checked a volatile baseline, remove it. Mixed fixtures keep
+their meaningful assertions. Do not replace deleted goldens with measured
+coordinates, broad tolerances around those coordinates or redundant smoke tests.
+Benchmark hashes/byte sizes may remain observations for a specific comparison;
+they are not permanent cross-revision acceptance gates.

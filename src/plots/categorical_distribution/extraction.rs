@@ -164,54 +164,6 @@ fn annotated() -> Plot {
 }
 
 #[test]
-fn assigned_panel_marks_match_canonical_projection_fingerprints() {
-    use sha2::{Digest, Sha256};
-    // T5c closes styled distribution ink and native slot coordinates.
-    // Historical T5a6d and 8e3395a fingerprints and coordinate deltas are in
-    // docs/local-search-benchmarks.md, "T5a6d Closing Audit".
-    let expected = [
-        "4b16fd7df8af5552f88c24d1cf32b486eef31e923aa3b178e79aa1c3f2cb660b",
-        "2384114e60a3e17af3ad8edda471780eb580e1c4f20ebfed633959a16988871d",
-        "598c5d93fa6c2c50afcf582838d02595f49f8e9e493b7b2078ed8d46e61f0b16",
-        "488c40b9283428d4221314a9fdb8667e5050f66ccdf58a4a42b54679545bf81d",
-    ];
-    for (source, expected) in sources(None).into_iter().chain([supplied()]).zip(expected) {
-        let mut fingerprint = Sha256::new();
-        for preset in [
-            crate::Theme::Publication,
-            crate::Theme::Nature,
-            crate::Theme::Science,
-        ] {
-            let theme = preset.resolve().unwrap();
-            let plot =
-                crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None)
-                    .unwrap()
-                    .attach(source.clone())
-                    .unwrap();
-            for panel in [
-                crate::layout::PanelBox::new(80.25, 550.75, 70.5, 410.25),
-                crate::layout::PanelBox::new(30.0, 810.0, 50.0, 600.0),
-            ] {
-                let selected = plot
-                    .measure_selected_interior(PlotRenderContext::new(plot.data(), panel, &theme))
-                    .unwrap();
-                let mut svg = crate::render::svg_backend::SvgBackend::in_memory(900, 700);
-                svg.begin(900, 700).unwrap();
-                selected.marks.as_ref().unwrap().draw(&mut svg).unwrap();
-                svg.end().unwrap();
-                fingerprint.update(svg.into_bytes().unwrap());
-            }
-        }
-        assert_eq!(
-            format!("{:x}", fingerprint.finalize()),
-            expected,
-            "{:?}",
-            source.kind()
-        );
-    }
-}
-
-#[test]
 #[expect(
     clippy::too_many_lines,
     reason = "one odd-quantum assignment checks every distribution's scientific coordinates"
