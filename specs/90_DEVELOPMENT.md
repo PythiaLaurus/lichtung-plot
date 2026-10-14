@@ -112,3 +112,7 @@ their meaningful assertions. Do not replace deleted goldens with measured
 coordinates, broad tolerances around those coordinates or redundant smoke tests.
 Benchmark hashes/byte sizes may remain observations for a specific comparison;
 they are not permanent cross-revision acceptance gates.
+
+The source-backed test-size/layer audit is `../docs/test-code-audit.md`. Its cleanup
+proposal is `96_TEST_CODE_SIMPLIFICATION_PLAN.md`; planning alone does not authorize
+the proposed deletions or change the current command gates.

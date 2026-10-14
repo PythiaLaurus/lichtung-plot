@@ -1,7 +1,7 @@
 # T6 — Public Foundations And Scientific Presentation
 
 **Status**: IN PROGRESS — planning complete; private implementation partially complete;
-further feature work remains paused after the completed accounting cleanup below.
+further feature work remains paused for review of the test-code cleanup proposal.
 
 **Current execution checkpoint:** private foundation implementation is partially
 complete through guide/composition chrome. Subsequent mark/annotation and public
@@ -11,6 +11,12 @@ not merely disabled quota refusal. Historical admission evidence below describes
 its recorded revisions and is not a requirement to restore fees. Verification,
 baseline failures and release parity/timing/RSS are recorded in
 `../docs/resource-accounting-cleanup.md`.
+
+The user explicitly requested test-code auditing/planning after the cleanup and
+caption measurements, with no automatic return to feature implementation. The
+current proposal is `96_TEST_CODE_SIMPLIFICATION_PLAN.md`; size/E2E/value evidence
+is `../docs/test-code-audit.md`. That proposal is not yet approved for deletion
+or consolidation, and the pending foundation leaves remain pending.
 
 ## Authority And Entry Decisions
 
