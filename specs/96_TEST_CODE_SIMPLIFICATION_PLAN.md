@@ -148,7 +148,7 @@ trait hierarchy、统一 fault injection、测试 backend 框架或 mutation 系
 | 1：删除明确自我确认／残余额度 smoke | 第四节具名目标；检查是否还有同型断言 | 已确认的无独立合同自我对照、额度消失后的丢弃结果重跑清除；混合科学断言保留 | 已完成 |
 | 2：合并生产者及父子重复 | 第五节 capture/route/parent fixtures，按图元／独立语义拆小提交 | 每个去掉的重复有明确保留承担者；25 family 派发、特殊源／图形、关键 cache/feedback/replay 不丢 | 已完成 |
 | 3：简化 schema/witness／基准支持 | 私有地址／容器／counter tuples；相应支持消费者清点 | 不固定内部轨迹，必要诊断还能运行；删尽无人用的 helper/hooks，无新大型 harness | 已完成 |
-| 4：公开 E2E／API 编译归属 | 精简并标注第六节已有骨架；决定 doctest 在 Justfile/checks 中的正确 gate | 正常库编译到文件／部分解码和 API boundary 可定向运行；不能只剩 mock 与编译 smoke | 待开始 |
+| 4：公开 E2E／API 编译归属 | 精简并标注第六节已有骨架；决定 doctest 在 Justfile/checks 中的正确 gate | 正常库编译到文件／部分解码和 API boundary 可定向运行；不能只剩 mock 与编译 smoke | 已完成 |
 | 5：整体收尾 | 当前规范、census、支持删除和针对性的总检查 | 一次有理由的 broad closure、strict Clippy、前后测试相关 SLOC／运行范围报告；保持功能暂停 | 待开始 |
 
 提交标题写长期行为，如 `test(layout): consolidate immutable replay contracts`，不写

@@ -12,9 +12,13 @@ fmt-check:
 lint:
     cargo clippy --locked --offline --all-targets -- -D warnings
 
-# Run the complete test suite.
+# Run library, integration, and example targets (excluding doctests).
 test:
     cargo test --locked --offline --all-targets
+
+# Run public examples and compile-fail API boundaries.
+test-doc:
+    cargo test --locked --offline --doc
 
 # Build API documentation with warnings denied.
 docs:
@@ -25,4 +29,4 @@ package:
     cargo package --locked --offline --allow-dirty
 
 # Run the complete read-only repository verification.
-verify: fmt-check lint test docs package
+verify: fmt-check lint test test-doc docs package

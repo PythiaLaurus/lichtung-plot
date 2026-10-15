@@ -6,17 +6,6 @@ fn scatter() -> Plot<lichtung_plot::kind::Scatter> {
 }
 
 #[test]
-fn scatter_png_smoke() {
-    let directory = tempdir();
-    let output = directory.join("scatter.png");
-    scatter().png(&output).unwrap();
-    let bytes = std::fs::read(output).unwrap();
-    assert_eq!(png_dimensions(&bytes), (1000, 750));
-    assert_eq!(png_phys(&bytes), Some((11_811, 11_811, 1)));
-    std::fs::remove_dir_all(directory).unwrap();
-}
-
-#[test]
 fn png_options_default_to_300_dpi_and_balanced_compression() {
     assert_eq!(
         PngOptions::default(),
@@ -83,21 +72,31 @@ fn png_width_and_height_preserve_aspect_ratio() {
 }
 
 #[test]
-fn png_with_options_rejects_invalid_scale_without_artifact() {
+fn png_options_reject_invalid_sizing_without_artifacts() {
     let directory = tempdir();
-    let output = directory.join("invalid.png");
-    let error = scatter()
-        .png_with_options(
-            &output,
-            PngOptions {
-                sizing: PngSizing::Scale(0.0),
-                ..PngOptions::default()
-            },
-        )
-        .err()
-        .unwrap();
-    assert!(error.to_string().contains("png scale must be positive"));
-    assert!(!output.exists());
+    for (index, sizing) in [
+        PngSizing::Scale(0.0),
+        PngSizing::Dpi(f32::NAN),
+        PngSizing::Dpi(0.0),
+        PngSizing::Scale(1_000_000.0),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let output = directory.join(format!("invalid-{index}.png"));
+        let error = scatter()
+            .png_with_options(
+                &output,
+                PngOptions {
+                    sizing,
+                    ..PngOptions::default()
+                },
+            )
+            .err()
+            .unwrap();
+        assert!(matches!(error, lichtung_plot::Error::Render(_)), "{error}");
+        assert!(!output.exists());
+    }
     std::fs::remove_dir_all(directory).unwrap();
 }
 

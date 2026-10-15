@@ -15,14 +15,18 @@ Use the root recipes:
 just fmt
 just lint
 just test
+just test-doc
 just docs
 just package
 just verify
 ```
 
 `just verify` is the complete read-only gate. It checks formatting, compiles and
-lints every target with warnings denied, runs tests, builds documentation, and
-verifies Cargo's independently unpacked package.
+lints every target with warnings denied, runs target tests and doctests, builds
+documentation, and verifies Cargo's independently unpacked package. `just test`
+uses `--all-targets`, which excludes doctests; `just test-doc` separately executes
+public examples and compile-fail API boundaries. Building docs alone does not
+validate those examples.
 
 Compiler validation uses `just lint`, which runs
 `cargo clippy --locked --offline --all-targets -- -D warnings`. Do not substitute
@@ -85,6 +89,15 @@ Run one target with `cargo test --test <target>`. New tests belong in the target
 whose public behavior they exercise. Add a target only for a genuinely distinct
 contract; do not create chronological, catch-all, or `general` suites.
 
+The public in-process end-to-end owners are `tests/output/` for reusable
+SVG/PNG/file publication, `tests/heatmap/` for decoded pixel/color agreement, and
+the scientific/composition targets for source/mark and parent/owner contracts.
+These compile the normal library without its `cfg(test)` implementation. Public
+constructor, contextual-builder and significance typing belongs to
+`tests/rendering/public_contracts.rs`; negative visibility and exact/Any/capability
+boundaries belong to doctests. Internal frozen-replay tests retain the few
+lifecycle witnesses that external output equality alone cannot establish.
+
 ## Stable Test Expectations
 
 The user rejected whole-scene byte/geometry baselines as volatile implementation
@@ -113,6 +126,6 @@ coordinates, broad tolerances around those coordinates or redundant smoke tests.
 Benchmark hashes/byte sizes may remain observations for a specific comparison;
 they are not permanent cross-revision acceptance gates.
 
-The source-backed test-size/layer audit is `../docs/test-code-audit.md`. Its cleanup
-proposal is `96_TEST_CODE_SIMPLIFICATION_PLAN.md`; planning alone does not authorize
-the proposed deletions or change the current command gates.
+The source-backed baseline test-size/layer audit is `../docs/test-code-audit.md`.
+The user-approved cleanup is `96_TEST_CODE_SIMPLIFICATION_PLAN.md`; implementation
+evidence and retained contract owners are in `../docs/test-code-cleanup.md`.

@@ -10,24 +10,20 @@ fn render<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str) -> String {
 }
 
 #[test]
-fn erased_plot_retains_common_operations_and_exact_output() {
-    use lichtung_plot::{Canvas, PlotKind};
+fn erased_plot_preserves_selected_theme_text_dimensions_and_output() {
+    use lichtung_plot::{PlotKind, Theme};
 
     let (x, y) = fixture_values();
-    let exact = Plot::scatter(x, y).size(321, 234).title("Erasure parity");
+    let exact = Plot::scatter(x, y)
+        .theme(Theme::Nature)
+        .size(321, 234)
+        .title("Erasure parity");
 
     assert_eq!(exact.kind(), PlotKind::Scatter);
     assert_eq!((exact.width(), exact.height()), (321, 234));
-    exact.preflight().unwrap();
-
-    Canvas::grid(1, 1)
-        .unwrap()
-        .panel(0, 0, exact.clone())
-        .unwrap()
-        .preflight()
-        .unwrap();
-
     let exact_svg = render(exact.clone(), "exact-before-erasure");
+    assert!(exact_svg.contains(">Erasure parity</text>"));
+    assert!(exact_svg.contains("width=\"321\" height=\"234\""));
 
     let erased: Plot = exact.erase();
     assert_eq!(erased.kind(), PlotKind::Scatter);
@@ -38,34 +34,23 @@ fn erased_plot_retains_common_operations_and_exact_output() {
 }
 
 #[test]
-fn omitted_and_explicit_publication_themes_render_identically() {
-    let (x, y) = fixture_values();
-    let omitted = render(
-        Plot::scatter(x, y)
-            .size(321, 234)
-            .title("Publication default"),
-        "omitted-publication-theme",
-    );
-    let (x, y) = fixture_values();
-    let explicit = render(
-        Plot::scatter(x, y)
-            .theme(lichtung_plot::Theme::Publication)
-            .size(321, 234)
-            .title("Publication default"),
-        "explicit-publication-theme",
-    );
-
-    assert_eq!(omitted, explicit);
-}
-
-#[test]
-fn contextual_builders_preserve_exact_plot_markers() {
+#[expect(
+    clippy::too_many_lines,
+    reason = "one public inventory checks every constructor with its contextual and placement capabilities"
+)]
+fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
     use lichtung_plot::{
         kind, AxisScale, BarPointLayer, BarSpacing, Bounds, CategoryValues, CoefficientInput,
-        HeatmapAnnotations, HeatmapLayout, HeatmapScale, HistogramBins, HistogramComposite,
-        HistogramInput, HistogramStat, InteractionStyle, LinePathStyle, NumericValues, PointLayer,
-        QqLine, RegressionBand, WaterfallLabels,
+        DumbbellEndpoints, HeatmapAnnotations, HeatmapLayout, HeatmapScale, HistogramBins,
+        HistogramComposite, HistogramDimensions, HistogramGeometry, HistogramInput, HistogramStat,
+        InteractionStyle, LinePathStyle, NumericValues, PlotKind, PointLayer, QqLine,
+        RaincloudDimensions, RaincloudGeometry, RaincloudInput, RegressionBand, WaterfallLabels,
     };
+
+    fn exact<K: kind::ExactFamily>(plot: Plot<K>, expected: PlotKind) {
+        assert_eq!(plot.kind(), expected);
+        assert_eq!(plot.erase().kind(), expected);
+    }
 
     fn numeric(name: &'static str) -> NumericValues {
         NumericValues::new(name, [1.0, 2.0])
@@ -79,77 +64,184 @@ fn contextual_builders_preserve_exact_plot_markers() {
         Bounds::new(numeric("lower"), numeric("upper"))
     }
 
-    let _: Plot<kind::Heatmap> = Plot::heatmap(category("x"), category("y"), numeric("fill"))
-        .scale(HeatmapScale::Sequential)
-        .layout(HeatmapLayout::Cartesian)
-        .annotations(HeatmapAnnotations::Hidden)
-        .color_limits(0.0, 3.0);
-    let _: Plot<kind::Forest> =
-        Plot::forest(category("term"), numeric("estimate"), bounds(), 1.0).scale(AxisScale::Log10);
-    let _: Plot<kind::Beeswarm> =
-        Plot::beeswarm(category("category"), numeric("value"), numeric("color"))
-            .color_limits(0.0, 3.0);
-    let _: Plot<kind::Bar> = Plot::bar(category("category"), BarInput::estimates(numeric("value")))
-        .spacing(BarSpacing::Compact)
-        .point_layer(
-            BarPointLayer::new(
-                category("point category"),
-                None,
-                numeric("point value"),
-                (1, 2, 3),
-                2,
-                0.5,
+    let attached = || Significance::at("a", SignificanceMark::OneStar);
+    let pairwise = || Significance::between("a", "b", SignificanceMark::TwoStars);
+    let bar_points = BarPointLayer::new(
+        category("point category"),
+        None,
+        numeric("point value"),
+        (1, 2, 3),
+        2,
+        0.5,
+    )
+    .unwrap();
+
+    exact::<kind::Scatter>(Plot::scatter(numeric("x"), numeric("y")), PlotKind::Scatter);
+    exact::<kind::Histogram>(
+        Plot::histogram(HistogramInput::samples(numeric("value")))
+            .bins(HistogramBins::Count(4))
+            .stat(HistogramStat::Density)
+            .composite(HistogramComposite::HistogramOnly),
+        PlotKind::Histogram,
+    );
+    exact::<kind::Histogram>(
+        Plot::histogram(HistogramInput::geometry(HistogramGeometry {
+            dimensions: HistogramDimensions {
+                value: "value".into(),
+                density: "density".into(),
+            },
+            bins: Vec::new(),
+            kde: Vec::new(),
+            rugs: Vec::new(),
+        })),
+        PlotKind::Histogram,
+    );
+    exact::<kind::Density>(Plot::density(numeric("value")), PlotKind::Density);
+    exact::<kind::Qq>(
+        Plot::qq(numeric("value")).reference_line(QqLine::Identity),
+        PlotKind::Qq,
+    );
+    exact::<kind::PointInterval>(
+        Plot::point_interval(category("category"), numeric("estimate"), bounds()),
+        PlotKind::PointInterval,
+    );
+    exact::<kind::Line>(
+        Plot::line(numeric("x"), numeric("y"))
+            .point_layer(
+                PointLayer::new(numeric("point x"), numeric("point y"))
+                    .color((1, 2, 3))
+                    .radius(2)
+                    .unwrap()
+                    .opacity(0.5)
+                    .unwrap(),
             )
-            .unwrap(),
-        );
-    let _: Plot<kind::HorizontalBar> =
+            .band(bounds()),
+        PlotKind::Line,
+    );
+    exact::<kind::Trajectory>(
+        Plot::trajectory(numeric("x"), numeric("y"), category("group")),
+        PlotKind::Trajectory,
+    );
+    exact::<kind::LinePath>(
+        Plot::line_path(numeric("x"), numeric("y"), category("group")).style(LinePathStyle::Hue),
+        PlotKind::LinePath,
+    );
+    exact::<kind::Interaction>(
+        Plot::interaction(
+            category("condition"),
+            numeric("estimate"),
+            category("group"),
+            bounds(),
+        )
+        .connectors(false)
+        .styles([InteractionStyle::new("a"), InteractionStyle::new("b")]),
+        PlotKind::Interaction,
+    );
+    exact::<kind::Coefficient>(
+        Plot::coefficient(
+            category("term"),
+            CoefficientInput::estimates(numeric("estimate")),
+        )
+        .reference_line(0.0)
+        .significance([attached()]),
+        PlotKind::Coefficient,
+    );
+    exact::<kind::Forest>(
+        Plot::forest(category("term"), numeric("estimate"), bounds(), 1.0).scale(AxisScale::Log10),
+        PlotKind::Forest,
+    );
+    exact::<kind::Dumbbell>(
+        Plot::dumbbell(
+            category("category"),
+            numeric("left"),
+            numeric("right"),
+            DumbbellEndpoints::new("Left", (20, 80, 140), "Right", (180, 60, 40)).unwrap(),
+        ),
+        PlotKind::Dumbbell,
+    );
+    exact::<kind::Heatmap>(
+        Plot::heatmap(category("x"), category("y"), numeric("fill"))
+            .scale(HeatmapScale::Sequential)
+            .layout(HeatmapLayout::Cartesian)
+            .annotations(HeatmapAnnotations::Hidden)
+            .color_limits(0.0, 3.0),
+        PlotKind::Heatmap,
+    );
+    exact::<kind::Bar>(
+        Plot::bar(category("category"), BarInput::estimates(numeric("value")))
+            .spacing(BarSpacing::Compact)
+            .point_layer(bar_points.clone())
+            .significance([attached()])
+            .significance([pairwise()]),
+        PlotKind::Bar,
+    );
+    exact::<kind::HorizontalBar>(
         Plot::horizontal_bar(category("category"), BarInput::estimates(numeric("value")))
             .spacing(BarSpacing::Comfort)
-            .point_layer(
-                BarPointLayer::new(
-                    category("point category"),
-                    None,
-                    numeric("point value"),
-                    (1, 2, 3),
-                    2,
-                    0.5,
-                )
-                .unwrap(),
-            );
-    let _: Plot<kind::Histogram> = Plot::histogram(HistogramInput::samples(numeric("value")))
-        .bins(HistogramBins::Count(4))
-        .stat(HistogramStat::Density)
-        .composite(HistogramComposite::HistogramOnly);
-    let _: Plot<kind::Qq> = Plot::qq(numeric("value")).reference_line(QqLine::Identity);
-    let _: Plot<kind::Line> = Plot::line(numeric("x"), numeric("y"))
-        .point_layer(
-            PointLayer::new(numeric("point x"), numeric("point y"))
-                .color((1, 2, 3))
-                .radius(2)
-                .unwrap()
-                .opacity(0.5)
-                .unwrap(),
-        )
-        .band(bounds());
-    let _: Plot<kind::Regression> =
-        Plot::regression(numeric("x"), numeric("y")).band(RegressionBand::Hidden);
-    let _: Plot<kind::LinePath> =
-        Plot::line_path(numeric("x"), numeric("y"), category("group")).style(LinePathStyle::Hue);
-    let _: Plot<kind::Coefficient> = Plot::coefficient(
-        category("term"),
-        CoefficientInput::estimates(numeric("estimate")),
-    )
-    .reference_line(0.0);
-    let _: Plot<kind::Interaction> = Plot::interaction(
-        category("condition"),
-        numeric("estimate"),
-        category("group"),
-        bounds(),
-    )
-    .connectors(false)
-    .styles([InteractionStyle::new("a"), InteractionStyle::new("b")]);
-    let _: Plot<kind::Waterfall> = Plot::waterfall(category("label"), numeric("delta"), 0.0)
-        .total_labels(WaterfallLabels::new("Base", "Total").unwrap());
+            .point_layer(bar_points)
+            .significance([attached()])
+            .significance([pairwise()]),
+        PlotKind::HorizontalBar,
+    );
+    exact::<kind::StackedBar>(
+        Plot::stacked_bar(category("category"), numeric("value"), category("group"))
+            .significance([pairwise()]),
+        PlotKind::StackedBar,
+    );
+    exact::<kind::StackedHorizontalBar>(
+        Plot::stacked_horizontal_bar(category("category"), numeric("value"), category("group"))
+            .significance([pairwise()]),
+        PlotKind::StackedHorizontalBar,
+    );
+    exact::<kind::Boxplot>(
+        Plot::boxplot(category("category"), numeric("value")).significance([pairwise()]),
+        PlotKind::Boxplot,
+    );
+    exact::<kind::Violin>(
+        Plot::violin(category("category"), numeric("value")).significance([pairwise()]),
+        PlotKind::Violin,
+    );
+    exact::<kind::Raincloud>(
+        Plot::raincloud(RaincloudInput::samples(
+            category("category"),
+            numeric("value"),
+        ))
+        .significance([pairwise()]),
+        PlotKind::Raincloud,
+    );
+    exact::<kind::Raincloud>(
+        Plot::raincloud(RaincloudInput::geometry(RaincloudGeometry {
+            dimensions: RaincloudDimensions {
+                category: "category".into(),
+                value: "value".into(),
+                hue: None,
+            },
+            groups: Vec::new(),
+        })),
+        PlotKind::Raincloud,
+    );
+    exact::<kind::Regression>(
+        Plot::regression(numeric("x"), numeric("y")).band(RegressionBand::Hidden),
+        PlotKind::Regression,
+    );
+    exact::<kind::Marginal>(
+        Plot::marginal(numeric("x"), numeric("y")),
+        PlotKind::Marginal,
+    );
+    exact::<kind::Matrix>(
+        Plot::matrix(vec![numeric("x"), numeric("y")]),
+        PlotKind::Matrix,
+    );
+    exact::<kind::Beeswarm>(
+        Plot::beeswarm(category("category"), numeric("value"), numeric("color"))
+            .color_limits(0.0, 3.0),
+        PlotKind::Beeswarm,
+    );
+    exact::<kind::Waterfall>(
+        Plot::waterfall(category("label"), numeric("delta"), 0.0)
+            .total_labels(WaterfallLabels::new("Base", "Total").unwrap()),
+        PlotKind::Waterfall,
+    );
 }
 
 #[test]

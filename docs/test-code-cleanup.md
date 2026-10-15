@@ -80,3 +80,35 @@ an axis title selected the axis text. A unique caller-provided header fixed the
 oracle; no renderer behavior changed. Rust cloc: **155,642 → 154,526**, net
 **1,116** code lines removed, **2,410** since baseline. Logs:
 `/tmp/opencode/test-cleanup-{witness,schema}-*.log`.
+
+## Consolidate public output and API compile ownership
+
+`tests/output/multiformat.rs` now owns the combined Plot/Canvas outlined versus
+complete selectable text, explicit dimensions and same-Output replay contract.
+PNG default/repeat equality is part of the call-local preview/custom/publication
+case rather than a separate smoke. Invalid scale, non-finite/zero DPI and
+excessive target size share the existing PNG refusal owner; actual error class
+and no artifact remain checked. Suffix completion, replacement, existing-file
+preservation, staging cleanup and OS-specific cases remain in `output/paths.rs`.
+Removed the extra ScatterData wrapper, temp-directory loop and PNG parsers in
+favor of the existing shared support, and a duplicate default-theme render test
+already owned by `composition/themes.rs`.
+
+Merged constructor, contextual setter and significance compile-pass inventories
+into the normal external `rendering/public_contracts.rs` target. It retains all
+25 exact family markers, both Histogram/Raincloud input forms, all ten supported
+significance family/placement combinations and erasure-kind agreement. Removed
+the internal duplicate inventories and their helpers. Actual erased output now
+also checks a selected nondefault theme, complete title and requested dimensions;
+mixed typed Canvas acceptance is exercised by real composition publication.
+
+`just test-doc` runs `cargo test --locked --offline --doc` and is an explicit
+dependency of `just verify`. `just test` still runs target tests; documentation
+builds are not described as running API examples. Canonical development guidance
+records normal-library E2E, decoded Heatmap output, positive typing, negative
+doctests and the separate internal immutable-replay witness owners.
+
+Formatting and strict Clippy passed. All 21 output checks, two affected public
+typing/erasure checks, the retained default-theme owner and 41 Plot compile-fail
+doctests passed. Rust cloc: **154,526 → 154,243**, net **283** code lines removed,
+**2,693** since baseline. Logs: `/tmp/opencode/test-cleanup-public-*.log`.
