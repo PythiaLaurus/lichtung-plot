@@ -179,7 +179,6 @@ fn semantics_and_label_strings_are_prepared_before_fonts() {
             1
         );
 
-        crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         let attached = inputs.attach(source).unwrap();
         assert!(std::sync::Arc::ptr_eq(
             attached.prepared_estimate.as_ref().unwrap(),

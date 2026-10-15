@@ -3061,9 +3061,7 @@ mod tests {
                 first = Some(plan);
             }
         }
-        let input = indexed_query_input("A", &appearance, "owner 000");
-        let (_, fingerprint) = CachedTextQuery::fingerprints(&input, None, true);
-        let comparisons = {
+        {
             let cache = root.text_queries.lock().unwrap();
             assert_eq!(cache.entries.len(), 128);
             assert_eq!(cache.exact.len(), 128);
@@ -3073,19 +3071,7 @@ mod tests {
                 "one analysis representative per compatible font/source profile"
             );
             assert!(cache.exact.windows(2).all(|pair| pair[0] < pair[1]));
-            let (mut low, mut high, mut comparisons) = (0, cache.exact.len(), 0);
-            while low < high {
-                comparisons += 1;
-                let middle = low + (high - low) / 2;
-                if cache.exact[middle].fingerprint < fingerprint {
-                    low = middle + 1;
-                } else {
-                    high = middle;
-                }
-            }
-            comparisons
-        };
-        assert!(comparisons <= 8);
+        }
 
         let hit = root
             .plan_text(
@@ -3098,9 +3084,6 @@ mod tests {
             )
             .unwrap();
         assert!(first.unwrap().shares_payload(&hit));
-
-        // Profile metadata/source (2), immutable font handle (1), only the
-        // presentation hash (36+9), owner equality (10), and index comparisons.
 
         root.plan_text(
             "AA",

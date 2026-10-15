@@ -201,12 +201,6 @@ fn semantic_grids_text_and_styles_are_retained_before_fonts() {
     assert_eq!(marks.colorbar_values, ["-2", "2", "0", "Missing"]);
     assert!(marks.has_missing);
 
-    crate::plots::shared_x::prepare_plot(
-        &source,
-        &OperationContext::new(),
-        Some(&crate::theme::scale_values::test_defaults()),
-    )
-    .unwrap();
     let attached = inputs.attach(source).unwrap();
     assert!(std::sync::Arc::ptr_eq(
         attached.prepared_heatmap.as_ref().unwrap(),

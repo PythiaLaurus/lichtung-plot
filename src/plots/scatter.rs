@@ -994,8 +994,6 @@ mod tests {
         let resources = OperationContext::new();
         let prepared = PreparedScatter::new(&plot, plot.data().with_operation(&resources)).unwrap();
 
-        let exact = OperationContext::new();
-        PreparedScatter::new(&plot, plot.data().with_operation(&exact)).unwrap();
         let resources = OperationContext::new();
         let payload = prepared
             .project(
@@ -1011,16 +1009,6 @@ mod tests {
         assert_eq!(payload.groups[0].0[1], Point2D::new(210.75, 120.25));
         assert_eq!(payload.groups[1].0, [Point2D::new(10.25, 20.5)]);
         assert_eq!(payload.legends.len(), 2);
-
-        let exact = OperationContext::new();
-        prepared
-            .project(
-                &plot,
-                &projection,
-                &theme,
-                plot.data().with_operation(&exact),
-            )
-            .unwrap();
     }
 
     #[test]

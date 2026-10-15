@@ -185,7 +185,6 @@ fn marginal_root_semantics_and_curves_are_prepared_before_fonts() {
     assert_eq!(marks.curves.x_grid.len(), 80);
     assert_eq!(marks.groups.len(), 2);
 
-    crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
     let attached = inputs.attach(source).unwrap();
     assert!(std::sync::Arc::ptr_eq(
         attached.prepared_marginal.as_ref().unwrap(),

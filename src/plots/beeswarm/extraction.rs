@@ -96,7 +96,6 @@ fn root_semantics_retain_source_order_and_exact_colors_before_fonts() {
     assert_eq!(marks.colors[11].as_rgb(), (49, 130, 189));
     assert_eq!(marks.values, ["1", "0"]);
 
-    crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
     let attached = inputs.attach(source).unwrap();
     assert!(std::sync::Arc::ptr_eq(
         attached.prepared_beeswarm.as_ref().unwrap(),

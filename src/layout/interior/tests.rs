@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn exhaustive_route_census_has_twenty_ordinary_five_specialized_two_parents() {
+fn route_census_covers_every_plot_family() {
     use PlotKind::*;
     let kinds = [
         Scatter,
@@ -50,11 +50,6 @@ fn exhaustive_route_census_has_twenty_ordinary_five_specialized_two_parents() {
         counts[index] += 1;
     }
     assert_eq!(counts, [8, 12, 5]);
-    let parents = [
-        CompositionChildPolicy::Facet,
-        CompositionChildPolicy::Canvas,
-    ];
-    assert_ne!(parents[0], parents[1]);
 }
 
 #[test]

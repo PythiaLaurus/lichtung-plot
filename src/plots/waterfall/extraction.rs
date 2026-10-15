@@ -72,7 +72,6 @@ fn root_semantics_preserve_span_labels_and_exact_deltas_before_fonts() {
         [(10.0, "base 10.000".into()), (13.0, "total 13.000".into())]
     );
 
-    crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
     assert_eq!(
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
         0

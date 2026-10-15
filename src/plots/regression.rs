@@ -72,35 +72,6 @@ pub(crate) fn axis_ranges(
     ])
 }
 
-#[cfg(test)]
-#[test]
-fn regression_axis_channel_and_fit_preserve_source_results() {
-    use crate::font::canonical::OperationContext;
-    let chart = Plot::regression(
-        crate::NumericValues::new("x", [1.0, 2.0, 3.0]),
-        crate::NumericValues::new("y", [1.0, 4.0, 2.0]),
-    )
-    .erase();
-    let baseline_resources = OperationContext::new();
-    let expected = axis_ranges(&chart, chart.data().with_operation(&baseline_resources)).unwrap();
-    let resources = OperationContext::new();
-    let data = chart.data().with_operation(&resources);
-    let points =
-        crate::data::aligned_finite_f64(data, crate::data::X, crate::data::Y, "regression")
-            .unwrap();
-
-    let mut x: Vec<f64> = Vec::new();
-    let mut y: Vec<f64> = Vec::new();
-    crate::data::source::reserve_source(&mut x, points.len()).unwrap();
-    crate::data::source::reserve_source(&mut y, points.len()).unwrap();
-
-    let resources = OperationContext::new();
-    assert_eq!(
-        axis_ranges(&chart, chart.data().with_operation(&resources)).unwrap(),
-        expected
-    );
-}
-
 #[derive(Debug)]
 pub(crate) struct PreparedRegressionInputs {
     pub(crate) panels: Vec<(Option<String>, PreparedRegression)>,

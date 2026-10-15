@@ -894,25 +894,7 @@ mod tests {
     }
 
     #[test]
-    fn histogram_domains_and_kde_maxima_match_mark_preparation() {
-        for values in [&[1.0, 2.0, 3.0][..], &[5.0, 5.0], &[-10.0, 0.0, 1.0, 10.0]] {
-            for bins in [
-                HistogramBins::Auto,
-                HistogramBins::Count(3),
-                HistogramBins::Width(2.0),
-            ] {
-                for stat in [
-                    HistogramStat::Count,
-                    HistogramStat::Probability,
-                    HistogramStat::Density,
-                ] {
-                    let expected = super::prepare_histogram(values, bins, stat).unwrap();
-                    let actual = super::prepare_histogram(values, bins, stat).unwrap();
-                    assert_eq!(actual.edges, expected.edges);
-                    assert_eq!(actual.heights, expected.heights);
-                }
-            }
-        }
+    fn kde_maximum_matches_internal_and_supplied_curves() {
         let values = [1.0, 2.0, 3.0];
         let composite = HistogramComposite::KdeAndRug(HistogramKde::Internal);
         let curve = prepare_density_curve(&composite, &values, (1.0, 3.0))

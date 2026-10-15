@@ -868,38 +868,6 @@ fn categorical_trajectory_retains_bottom_slots_raw_and_display_identity() {
 }
 
 #[test]
-fn every_native_route_admits_intrinsics_and_selected_candidates_at_exact_resource_caps() {
-    for source in all_sources() {
-        let prepare = || {
-            let inputs =
-                crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None)
-                    .unwrap();
-            inputs.attach(source.clone()).unwrap()
-        };
-        for intrinsic_only in [true, false] {
-            let consume =
-                |plot: &Plot, theme: &crate::theme::ResolvedTheme| -> Result<(), PlanError> {
-                    if intrinsic_only {
-                        Intrinsics::prepared(plot, theme)?;
-                    } else {
-                        plot.measure_selected_interior(PlotRenderContext::new(
-                            plot.data(),
-                            PanelBox::new(30.0, 610.0, 50.0, 440.0),
-                            theme,
-                        ))?;
-                    }
-                    Ok(())
-                };
-            let plot = prepare();
-            let theme = crate::Theme::Publication.resolve().unwrap();
-            consume(&plot, &theme).unwrap();
-
-            consume(&plot, &theme).unwrap();
-        }
-    }
-}
-
-#[test]
 fn every_native_root_preserves_default_and_explicit_dimensions_and_avoids_layout_backends() {
     for source in all_sources() {
         let source = source.labels(

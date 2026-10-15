@@ -326,7 +326,6 @@ fn bar_semantics_attach_without_copying() {
             if source.has_facets() { 2 } else { 1 }
         );
 
-        crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         let attached = inputs.attach(source).unwrap();
         assert!(std::sync::Arc::ptr_eq(
             attached.prepared_bars.as_ref().unwrap(),

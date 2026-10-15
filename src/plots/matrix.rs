@@ -1772,7 +1772,6 @@ mod semantic_tests {
         assert_eq!(prepared.groups[0].columns[0], [1.0, 1.2, 1.4]);
         assert_eq!(prepared.groups[1].columns[1], [4.0, 4.2, 4.3]);
 
-        crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         let attached = inputs.attach(source).unwrap();
         assert!(std::sync::Arc::ptr_eq(
             attached.prepared_matrix_axes.as_ref().unwrap(),

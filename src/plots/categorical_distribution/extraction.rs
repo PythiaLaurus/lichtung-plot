@@ -304,7 +304,7 @@ fn canonical_distribution_coordinates_preserve_quartiles_and_observations() {
 }
 
 #[test]
-fn semantics_are_admitted_once_before_fonts_and_shared_on_attachment() {
+fn semantics_are_prepared_before_fonts_and_shared_on_attachment() {
     for source in sources(None)
         .into_iter()
         .chain(sources(Some(crate::FacetScales::Fixed)))
@@ -323,7 +323,6 @@ fn semantics_are_admitted_once_before_fonts_and_shared_on_attachment() {
             if source.has_facets() { 2 } else { 1 }
         );
 
-        crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         let attached = inputs.attach(source).unwrap();
         assert!(std::sync::Arc::ptr_eq(
             attached.prepared_distributions.as_ref().unwrap(),

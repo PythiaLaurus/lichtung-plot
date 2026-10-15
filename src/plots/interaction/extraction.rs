@@ -273,7 +273,6 @@ fn prepared_semantics_preserve_sparse_cells_without_font_discovery() {
         [0, 2]
     );
 
-    crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
     let attached = inputs.attach(source).unwrap();
     assert!(std::sync::Arc::ptr_eq(
         attached.prepared_interaction.as_ref().unwrap(),

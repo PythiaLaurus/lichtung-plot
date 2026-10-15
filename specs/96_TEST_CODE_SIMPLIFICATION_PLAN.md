@@ -145,7 +145,7 @@ trait hierarchy、统一 fault injection、测试 backend 框架或 mutation 系
 
 | 顺序 | 范围 | 完成标准 | 目前状态 |
 | --- | --- | --- | --- |
-| 1：删除明确自我确认／残余额度 smoke | 第四节具名目标；检查是否还有同型断言 | 已确认的无独立合同自我对照、额度消失后的丢弃结果重跑清除；混合科学断言保留 | 实施中 |
+| 1：删除明确自我确认／残余额度 smoke | 第四节具名目标；检查是否还有同型断言 | 已确认的无独立合同自我对照、额度消失后的丢弃结果重跑清除；混合科学断言保留 | 已完成 |
 | 2：合并生产者及父子重复 | 第五节 capture/route/parent fixtures，按图元／独立语义拆小提交 | 每个去掉的重复有明确保留承担者；25 family 派发、特殊源／图形、关键 cache/feedback/replay 不丢 | 待开始 |
 | 3：简化 schema/witness／基准支持 | 私有地址／容器／counter tuples；相应支持消费者清点 | 不固定内部轨迹，必要诊断还能运行；删尽无人用的 helper/hooks，无新大型 harness | 待开始 |
 | 4：公开 E2E／API 编译归属 | 精简并标注第六节已有骨架；决定 doctest 在 Justfile/checks 中的正确 gate | 正常库编译到文件／部分解码和 API boundary 可定向运行；不能只剩 mock 与编译 smoke | 待开始 |
@@ -176,6 +176,10 @@ trait hierarchy、统一 fault injection、测试 backend 框架或 mutation 系
   或另一条 renderer。独立 Unicode 表／标准数据与外部语料既有 ignored 政策保留。
 
 ## 九、此次交付与下一步
+
+实施证据与每段保留的独立合同、实际验证及规模变化记录在
+`../docs/test-code-cleanup.md`。首批 40 个定向测试及严格 Clippy／格式通过，
+净删除 120 行 Rust code；后续按已批准范围继续合并重复。
 
 审计、可复核的行数分类、已有端到端路径和具名删除／合并对象已记录。用户已批准：
 **先删已确认的自我确认，随后有保留承担者地合并重复，收敛支持代码，留下独立

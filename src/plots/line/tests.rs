@@ -619,8 +619,6 @@ fn semantic_order_ranges_and_conditions_are_prepared_before_fonts() {
             assert_eq!(prepared.ranges[0], (0.0, 3.0));
         }
 
-        let exact = OperationContext::new();
-        PreparedLine::new(&plot, plot.data().with_operation(&exact), None).unwrap();
         assert_eq!(
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
             0
