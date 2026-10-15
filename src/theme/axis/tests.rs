@@ -240,7 +240,7 @@ fn all_six_spacing_edits_are_independent_and_resolve_against_their_selected_role
                 if index == $index {
                     assert!(right.is_zero());
                 } else {
-                    assert!(left.shares_payload_with(right));
+                    assert_eq!(left, right);
                 }
             }
         };
@@ -324,24 +324,9 @@ fn whole_positions_round_half_quantum_ties_with_the_final_anchor_parity() {
 }
 
 #[test]
-fn axis_sharing_preserves_handles_and_complete_identity() {
+fn validated_axis_clone_preserves_complete_identity() {
     let source = complete();
-    {
-        let shared = source.validated_clone();
-        assert!(shared.is_ok());
-
-        if let Ok(shared) = shared {
-            for (left, right) in source
-                .spacing()
-                .relationships()
-                .into_iter()
-                .zip(shared.spacing().relationships())
-            {
-                assert!(left.shares_payload_with(right));
-            }
-        }
-    }
-    let shared = source.clone();
+    let shared = source.validated_clone().unwrap();
     let independent = complete();
     for other in [&shared, &independent] {
         assert!(source.same_validated(other).unwrap());

@@ -14,7 +14,6 @@ const MAX_CONVERSION_SCENE_BYTES: usize = 64 * 1024 * 1024;
 #[cfg(test)]
 thread_local! {
     pub(crate) static SCENE_CONSTRUCTION_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    pub(crate) static SCENE_ROUTE_EVIDENCE: std::cell::RefCell<Vec<(&'static str, usize, usize)>> = const { std::cell::RefCell::new(Vec::new()) };
     pub(crate) static PNG_TARGET_VALIDATION_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
@@ -81,12 +80,6 @@ impl RenderedScene {
     /// Borrow the exact canonical SVG bytes.
     #[must_use]
     pub(crate) fn svg_bytes(&self) -> &[u8] {
-        #[cfg(test)]
-        SCENE_ROUTE_EVIDENCE.with(|evidence| {
-            evidence
-                .borrow_mut()
-                .push(("preserve", self.svg.as_ptr().addr(), self.svg.len()));
-        });
         &self.svg
     }
 
@@ -101,12 +94,6 @@ impl RenderedScene {
     /// completed from the retained scene state.
     pub(crate) fn svg_with_text_as_paths(&self) -> Result<Vec<u8>, Error> {
         let outlined = self.outlined_svg_bytes()?;
-        #[cfg(test)]
-        SCENE_ROUTE_EVIDENCE.with(|evidence| {
-            evidence
-                .borrow_mut()
-                .push(("outline", outlined.as_ptr().addr(), outlined.len()));
-        });
         let mut bytes = Vec::new();
         bytes
             .try_reserve_exact(outlined.len())
@@ -156,12 +143,6 @@ impl RenderedScene {
             })
             .as_deref()
             .map_err(|error| Error::Render(error.clone()))?;
-        #[cfg(test)]
-        SCENE_ROUTE_EVIDENCE.with(|evidence| {
-            evidence
-                .borrow_mut()
-                .push(("png", outlined.as_ptr().addr(), outlined.len()));
-        });
         crate::render::svg_backend::rasterize_svg_bytes_to_png(outlined, target, options)
     }
 

@@ -39,10 +39,6 @@ fn assert_one_change(source: &TypographyTheme, edited: &TypographyTheme, index: 
             assert_ne!(before, after);
         } else {
             assert_eq!(before, after);
-            assert_eq!(
-                before.stack().families().as_ptr(),
-                after.stack().families().as_ptr()
-            );
         }
     }
 }
@@ -56,12 +52,6 @@ fn complete_construction_retains_all_eighteen_inputs_once_without_font_discovery
     }
     let cloned = source.clone();
     assert_eq!(cloned, source);
-    for (before, after) in source.roles().into_iter().zip(cloned.roles()) {
-        assert_eq!(
-            before.stack().families().as_ptr(),
-            after.stack().families().as_ptr()
-        );
-    }
     assert_eq!(
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
         before

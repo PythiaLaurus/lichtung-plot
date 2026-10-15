@@ -146,11 +146,6 @@ impl RelativeSpacing {
         self.0.rational.numerator.bits() == 0
     }
 
-    #[cfg(test)]
-    pub(crate) fn shares_payload_with(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0)
-    }
-
     pub(crate) fn product(&self, metric: LocalMetric) -> ExactLength {
         let rational = &self.0.rational;
 

@@ -54,92 +54,6 @@ fn report_work(prefix: &str, name: &str, run: usize, work: &measurements::Observ
     }
 }
 
-fn assert_stable_work(
-    name: &str,
-    work: &measurements::Observations,
-    first: &measurements::Observations,
-) {
-    assert_eq!(work.counters, first.counters, "unstable counters: {name}");
-    assert_eq!(
-        work.capture_counters, first.capture_counters,
-        "capture: {name}"
-    );
-    assert_eq!(work.calls, first.calls, "lifecycle calls: {name}");
-    assert_eq!(
-        work.producers, first.producers,
-        "producer invocations: {name}"
-    );
-    let roots = |work: &measurements::Observations| {
-        work.roots
-            .iter()
-            .map(|root| {
-                (
-                    root.ordinal,
-                    root.heatmap_prefix_trials,
-                    root.guides.clone(),
-                    root.successful,
-                )
-            })
-            .collect::<Vec<_>>()
-    };
-    assert_eq!(roots(work), roots(first), "root trace: {name}");
-    // Durations are observations, not deterministic guide identity.
-    let guides = |work: &measurements::Observations| {
-        work.guides
-            .iter()
-            .map(|guide| {
-                (
-                    guide.owner.clone(),
-                    guide.root_round,
-                    guide.edge,
-                    guide.compact,
-                    guide.phase,
-                    guide.outcome,
-                )
-            })
-            .collect::<Vec<_>>()
-    };
-    assert_eq!(guides(work), guides(first), "guide trace: {name}");
-    let gutters = |work: &measurements::Observations| {
-        work.gutters
-            .iter()
-            .map(|gutter| {
-                (
-                    gutter.owner.clone(),
-                    gutter.consumed.map(f64::to_bits),
-                    gutter.requested.map(f64::to_bits),
-                )
-            })
-            .collect::<Vec<_>>()
-    };
-    assert_eq!(gutters(work), gutters(first), "gutter trace: {name}");
-    let intrinsics = |work: &measurements::Observations| {
-        work.intrinsics
-            .iter()
-            .map(|event| (event.scope.clone(), event.counter, event.root_round))
-            .collect::<Vec<_>>()
-    };
-    assert_eq!(
-        intrinsics(work),
-        intrinsics(first),
-        "intrinsic trace: {name}"
-    );
-    let children = |work: &measurements::Observations| {
-        work.children
-            .iter()
-            .map(|event| {
-                (
-                    event.owner.clone(),
-                    event.phase,
-                    event.root_round,
-                    event.counter,
-                )
-            })
-            .collect::<Vec<_>>()
-    };
-    assert_eq!(children(work), children(first), "child trace: {name}");
-}
-
 /// `publish` must use the root's public outlined SVG terminal.
 /// Semantic checks can inspect retained bytes and the complete observations.
 pub(super) fn measure_case<R>(
@@ -248,16 +162,6 @@ pub(super) fn measure_pair(
                 if let Some(svg) = &bytes.preserved_svg {
                     println!("paired_preserved_hash,{name},{run},{}", hash(svg));
                 }
-            }
-        }
-        if let Some(first) = samples.first() {
-            for (index, sample) in pair.iter().enumerate() {
-                assert_stable_work(
-                    names[index],
-                    &sample.observations,
-                    &first[index].observations,
-                );
-                assert_eq!(sample.shapes, first[index].shapes);
             }
         }
         samples.push(pair);
@@ -392,10 +296,6 @@ fn hash(bytes: &[u8]) -> String {
 }
 
 // Constructors stay generic so Plot, Canvas, and Matrix exercise their real roots.
-#[expect(
-    clippy::too_many_lines,
-    reason = "one publication lifecycle keeps timing separate from work and artifact assertions"
-)]
 fn measure<R>(
     name: &str,
     construct: impl Fn() -> R,
@@ -405,7 +305,6 @@ fn measure<R>(
     let directory = test_directory(name);
     let mut samples = Vec::new();
     let mut expected = None;
-    let mut first_work = None;
     for run in 0..3 {
         let svg = directory.join("scene.svg");
         let png = directory.join("scene.png");
@@ -460,12 +359,6 @@ fn measure<R>(
         );
         samples.push(row);
         report_work("publication", name, run, &observation);
-        if let Some((first, first_shapes)) = &first_work {
-            assert_stable_work(name, &observation, first);
-            assert_eq!(shapes, *first_shapes, "unstable shapes: {name}");
-        } else {
-            first_work = Some((observation, shapes));
-        }
         // File reads, SHA256, and PNG decode are deliberately outside timing.
         let svg_bytes = std::fs::read(&svg).unwrap();
         let png_bytes = std::fs::read(&png).unwrap();

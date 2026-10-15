@@ -291,12 +291,6 @@ fn point_roles_share_the_exact_ratio_and_apply_outline_policy_once() {
     assert_eq!(style.shape, PointShape::TriangleUp);
     assert_eq!(style.outline.as_ref().unwrap().color, paint);
     assert_eq!(&style.outline.as_ref().unwrap().width_ratio, &ratio);
-    assert!(style
-        .outline
-        .as_ref()
-        .unwrap()
-        .width_ratio
-        .shares_payload_with(outline.width_ratio()));
     assert_eq!(
         style.outline.unwrap().width_for_radius(14).unwrap().units(),
         5120

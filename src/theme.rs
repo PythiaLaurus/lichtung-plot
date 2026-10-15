@@ -36,8 +36,6 @@ pub(crate) use mark_paint::{
     PointOutlineTheme, PointTheme, SolidStrokeTheme, StrokeTheme,
 };
 pub use resolved::Theme;
-#[cfg(test)]
-pub(crate) use resolved::THEME_RESOLUTION_CALLS;
 pub(crate) use resolved::{ResolvedTheme, SurfaceTheme, TextTheme, TitleAlignment};
 
 pub(crate) use paint::{Color, OpaqueColor};

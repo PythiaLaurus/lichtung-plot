@@ -284,18 +284,6 @@ impl LegendTheme {
         Self::new(spacing, self.gradient_lengths, self.frame)
     }
 
-    #[cfg(test)]
-    pub(crate) fn retained_relationships(&self) -> impl Iterator<Item = &RelativeSpacing> {
-        self.spacing()
-            .relationships()
-            .into_iter()
-            .chain([
-                self.gradient_lengths().minimum(),
-                self.gradient_lengths().preferred(),
-            ])
-            .chain(self.frame().map(LegendFrameTheme::radius))
-    }
-
     pub(crate) fn same(&self, other: &Self) -> bool {
         match (self.frame(), other.frame()) {
             (None, None) => {}

@@ -26,7 +26,7 @@ fn complete_guide_fields_and_consuming_edits_are_independent() {
                 .enumerate()
             {
                 if index != $index {
-                    assert!(left.shares_payload_with(right));
+                    assert_eq!(left, right);
                 }
             }
         };
@@ -171,19 +171,12 @@ fn pinned_binary_sources_and_complete_edge_rounding_are_exact() {
 }
 
 #[test]
-fn sharing_and_identity_preserve_all_relationships() {
+fn guide_identity_includes_structural_frame_presence() {
     let source = source();
     let copy = source.clone();
     assert_eq!(copy, source);
     assert!(source.same(&copy));
-    for (a, b) in source
-        .retained_relationships()
-        .zip(copy.retained_relationships())
-    {
-        assert!(a.shares_payload_with(b));
-    }
     let absent = source.clone().with_frame(None).unwrap();
-    assert_eq!(absent.retained_relationships().count(), 11);
 
     assert!(!source.same(&absent));
 }

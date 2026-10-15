@@ -36,7 +36,6 @@ const SIGNIFICANCE_FONT_SIZE: u32 = 16;
 
 #[cfg(test)]
 thread_local! {
-    pub(crate) static THEME_RESOLUTION_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static FONT_ENVIRONMENT_DISCOVERIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
@@ -60,8 +59,6 @@ macro_rules! define_themes {
 
         impl Theme {
             pub(crate) fn resolve(self) -> Result<ResolvedTheme, Error> {
-                #[cfg(test)]
-                THEME_RESOLUTION_CALLS.with(|calls| calls.set(calls.get() + 1));
                 match self { $(Self::$variant => $resolver()),+ }
             }
         }

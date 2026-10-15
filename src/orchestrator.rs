@@ -104,7 +104,6 @@ pub(crate) use facets::text_census_panels as facet_text_census_panels;
 thread_local! {
     pub(crate) static SELECTED_INTERIOR_MEASUREMENTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static RENDER_PANEL_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    static RENDER_THEME_ADDRESSES: std::cell::RefCell<Vec<usize>> = const { std::cell::RefCell::new(Vec::new()) };
     static PLOT_PLAN_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static FINAL_PLOT_RENDER_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
@@ -219,11 +218,6 @@ impl Plot {
         #[cfg(test)]
         {
             RENDER_PANEL_CALLS.with(|calls| calls.set(calls.get() + 1));
-            RENDER_THEME_ADDRESSES.with(|addresses| {
-                addresses
-                    .borrow_mut()
-                    .push(std::ptr::from_ref(context.theme).addr());
-            });
         }
         let context = context.with_prepared_axes(self)?;
         match kind {
@@ -274,12 +268,6 @@ impl Plot {
         self.validate_interior_preparation()?;
         #[cfg(test)]
         SELECTED_INTERIOR_MEASUREMENTS.with(|calls| calls.set(calls.get() + 1));
-        #[cfg(test)]
-        RENDER_THEME_ADDRESSES.with(|addresses| {
-            addresses
-                .borrow_mut()
-                .push(std::ptr::from_ref(context.theme).addr());
-        });
         let context = context.with_prepared_axes(self)?;
         let mut result = match R::classify(self.kind()) {
             route @ (R::StandardCoordinate(_) | R::OneCategoricalAxis(_)) => {

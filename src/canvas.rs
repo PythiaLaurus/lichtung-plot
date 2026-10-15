@@ -710,30 +710,8 @@ pub(crate) mod lifecycle_tests;
 
 #[cfg(test)]
 thread_local! {
-    pub(crate) static CANVAS_THEME_EVIDENCE: std::cell::RefCell<Vec<(usize, &'static str, usize)>> = const { std::cell::RefCell::new(Vec::new()) };
-    pub(crate) static CANVAS_SHARED_LEGEND_THEME_EVIDENCE: std::cell::RefCell<Vec<(usize, &'static str)>> = const { std::cell::RefCell::new(Vec::new()) };
     pub(crate) static CANVAS_SCENE_RENDER_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static CANVAS_ASSIGNED_PANEL_EVIDENCE: std::cell::RefCell<Vec<(PanelBox, PanelBox)>> = const { std::cell::RefCell::new(Vec::new()) };
-}
-
-#[cfg(test)]
-fn record_canvas_theme(owner: usize, stage: &'static str, theme: &ResolvedTheme) {
-    CANVAS_THEME_EVIDENCE.with(|evidence| {
-        evidence
-            .borrow_mut()
-            .push((owner, stage, std::ptr::from_ref(theme).addr()));
-    });
-}
-
-#[cfg(test)]
-fn record_shared_legend_theme(owner: usize, theme: &ResolvedPlotTheme) {
-    let provenance = match theme {
-        ResolvedPlotTheme::InheritedRoot => "inherited-root",
-        ResolvedPlotTheme::ExplicitPlot(_) => "explicit-plot",
-    };
-    CANVAS_SHARED_LEGEND_THEME_EVIDENCE.with(|evidence| {
-        evidence.borrow_mut().push((owner, provenance));
-    });
 }
 
 struct PlannedCanvasPanel {
@@ -3727,35 +3705,11 @@ impl Canvas {
             sizing_request.1,
             |prepared_stage| {
                 let themes = Arc::new(ResolvedCanvasThemes::new(self.theme, &self.panels)?);
-                #[cfg(test)]
-                {
-                    record_canvas_theme(usize::MAX, "resolved", themes.root());
-                    for index in 0..themes.plots.len() {
-                        if let Some(theme) = themes.plot(index) {
-                            record_canvas_theme(index, "resolved", theme);
-                        }
-                    }
-                }
                 self.validate_structure()?;
                 let (mut interiors, shared_x) =
                     self.prepare_interiors(prepared_stage, Some(&themes))?;
                 self.validate_shared_guide_kinds(&interiors)?;
                 let point_path_hue_groups = self.prepared_point_path_hue_groups(&interiors)?;
-                #[cfg(test)]
-                if point_path_hue_groups.is_some() {
-                    for (index, plot) in self.panels.iter().enumerate() {
-                        if plot
-                            .as_ref()
-                            .is_some_and(|plot| plot.hue_dimension_key().is_some())
-                        {
-                            record_canvas_theme(
-                                index,
-                                "prepared-shared-hue",
-                                themes.plot(index).expect("configured Canvas theme"),
-                            );
-                        }
-                    }
-                }
                 let discrete_shared_guide = self.prepared_discrete_shared_guide(
                     &themes,
                     &interiors,
@@ -4435,8 +4389,6 @@ impl Canvas {
         measurements: Option<&'a sizing::HeightMeasurements>,
     ) -> Result<PreparedCanvasRound<'a>, Error> {
         let (width, height) = assigned.dimensions()?;
-        #[cfg(test)]
-        record_canvas_theme(usize::MAX, "layout", themes.root());
 
         let canvas_layout = RootFramePlan::measure(
             (width, height),
@@ -4938,12 +4890,6 @@ impl Canvas {
                 let expected_theme = themes
                     .plot(first_index)
                     .expect("configured canvas panel has a resolved theme");
-                #[cfg(test)]
-                record_canvas_theme(
-                    first_index,
-                    "shared-category-label-validation",
-                    expected_theme,
-                );
                 let expected = plot_category_domain(
                     first,
                     provisional[first_index],
@@ -4962,8 +4908,6 @@ impl Canvas {
                     let theme = themes
                         .plot(index)
                         .expect("configured canvas panel has a resolved theme");
-                    #[cfg(test)]
-                    record_canvas_theme(index, "shared-category-label-validation", theme);
                     if plot_category_domain(
                         plot,
                         provisional[index],
@@ -5083,8 +5027,6 @@ impl Canvas {
             let theme = themes
                 .plot(index)
                 .expect("configured canvas panel has a resolved theme");
-            #[cfg(test)]
-            record_canvas_theme(index, "panel-measure", theme);
             let child_scope = scope.child(crate::layout::AddressRole::CanvasCell, index)?;
             let local = match plot_text::PlotLocalTextPlan::measure(
                 plot,
@@ -5274,15 +5216,6 @@ impl Canvas {
                 )?;
             }
         }
-        #[cfg(test)]
-        {
-            if !headers.is_empty() {
-                record_canvas_theme(usize::MAX, "shared-header-plan", themes.root());
-            }
-            if !row_titles.is_empty() {
-                record_canvas_theme(usize::MAX, "row-title-plan", themes.root());
-            }
-        }
 
         let mut text_panels = Vec::new();
         crate::render::backend::reserve_text_records(
@@ -5293,8 +5226,6 @@ impl Canvas {
             let Some(text_panel) = text_panel else {
                 continue;
             };
-            #[cfg(test)]
-            record_canvas_theme(usize::MAX, "text-plan", themes.root());
             let intrinsic = prepared.text_panel_intrinsics[index]
                 .expect("configured TextPanel retains prepared intrinsics");
             match TextPanelPlan::measure(
@@ -5329,14 +5260,6 @@ impl Canvas {
         fit::reserve(&mut panels, measured.len(), "Canvas selected panels")?;
         for (index, kind, panel_plan, local) in measured {
             let cell = cells[index];
-            #[cfg(test)]
-            record_canvas_theme(
-                index,
-                "panel-plan",
-                themes
-                    .plot(index)
-                    .expect("configured canvas panel has a resolved theme"),
-            );
             let mut layers = [String::new(), String::new(), String::new(), String::new()];
             for (layer, suffix) in layers.iter_mut().zip(["grid", "axes", "legend", "title"]) {
                 crate::data::source::reserve_source_string(layer, 40)?;
@@ -5420,10 +5343,6 @@ impl Canvas {
         Ok(())
     }
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "the immutable Canvas plan keeps theme ownership and final draw ordering explicit"
-    )]
     fn render_planned_canvas(
         plan: &CanvasPlan,
         width: u32,
@@ -5431,8 +5350,6 @@ impl Canvas {
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
         let theme = plan.themes.root();
-        #[cfg(test)]
-        record_canvas_theme(usize::MAX, "render", theme);
         backend.draw_surface(
             PanelBox::new(0.0, f64::from(width), 0.0, f64::from(height)),
             theme.surfaces.canvas_root,
@@ -5450,13 +5367,6 @@ impl Canvas {
             )?;
         }
         for panel in &plan.panels {
-            #[cfg(test)]
-            let theme = plan
-                .themes
-                .plot(panel.index)
-                .expect("configured canvas panel has a resolved theme");
-            #[cfg(test)]
-            record_canvas_theme(panel.index, "grid-render", theme);
             crate::render::backend::with_layer_role(
                 backend,
                 &panel.layers[0],
@@ -5482,8 +5392,6 @@ impl Canvas {
                 .themes
                 .plot(panel.index)
                 .expect("configured canvas panel has a resolved theme");
-            #[cfg(test)]
-            record_canvas_theme(panel.index, "panel-render", theme);
             let source_rows = plot.configured_source_rows()?;
             let context = source_rows
                 .map_or_else(
@@ -5523,18 +5431,12 @@ impl Canvas {
             })?;
         }
         for panel in &plan.text_panels {
-            #[cfg(test)]
-            record_canvas_theme(usize::MAX, "text-render", theme);
             draw_text_panel(panel, backend)?;
         }
         if !plan.row_titles.is_empty() {
-            #[cfg(test)]
-            record_canvas_theme(usize::MAX, "row-title-render", theme);
             draw_canvas_row_titles(&plan.row_titles, backend)?;
         }
         if !plan.headers.is_empty() {
-            #[cfg(test)]
-            record_canvas_theme(usize::MAX, "shared-header-render", theme);
             draw_canvas_headers(&plan.headers, backend)?;
         }
         if let Some(legend) = &plan.shared_legend_draw {
@@ -5563,8 +5465,6 @@ impl Canvas {
             let theme = themes
                 .plot(index)
                 .expect("configured canvas panel has a resolved theme");
-            #[cfg(test)]
-            record_canvas_theme(index, "shared-hue-discovery", theme);
             let prepared_scatter = plot
                 .prepared_scatter
                 .as_ref()
@@ -5650,13 +5550,6 @@ impl Canvas {
                 ResolvedPlotTheme::InheritedRoot => themes.root(),
                 ResolvedPlotTheme::ExplicitPlot(theme) => theme.as_ref(),
             };
-            #[cfg(test)]
-            {
-                if plot.legend_policy_spec() != crate::LegendPolicy::Hidden {
-                    record_canvas_theme(index, "shared-legend-preflight", theme);
-                    record_shared_legend_theme(index, selection);
-                }
-            }
             let result = children.canvas_probe(
                 plot,
                 panel,

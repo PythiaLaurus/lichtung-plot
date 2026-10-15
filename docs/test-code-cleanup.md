@@ -49,3 +49,34 @@ Strict Clippy/formatting passed. Eleven focused replay/geometry/root checks
 public Bar/overlay/estimate-status integration checks passed. Rust cloc:
 **156,816 → 155,642**, net **1,174** code lines removed in this change, **1,294**
 since baseline. Logs: `/tmp/opencode/test-cleanup-{replay,parent}-*.log`.
+
+## Remove representation witnesses and fixed benchmark traces
+
+Removed Canvas/Plot theme-address and stage-string logs, the theme-resolution
+counter and their assertion helpers. Mixed-child paints, root/header/TextPanel
+typography, sparse source cells, surface roles, preflight versus publication and
+real public theme-inheritance output remain checked by values rather than object
+addresses. Removed the scene-buffer address/route log; chained SVG/PNG output
+still checks actual bytes, call-local options, one scene and unchanged font work.
+
+Removed the complete-theme Arc/header-sharing inventory and the test-only ratio
+sharing bridge. Component tests retain independent field edits, immutable sibling
+values, validation/absence, exact rounding and effective styles. The unused guide
+relationship inventory and test-only lookup/logging code were deleted with their
+last consumers.
+
+Legend measurement cases retain complete labels/marks, explicit-edge behavior,
+bounded root coordination, cache event consistency and current-route output
+equality. Removed fixed shape/trial/proposal tuples and full historical traces.
+Repeated benchmark observations are reported rather than frozen; output hashes
+and real PNG decoding remain in the measurement owner. Removed redundant decoding
+of a second byte-identical PNG in the equality helper.
+
+Strict Clippy/formatting passed. Thirty-four focused witness/benchmark/schema
+checks passed across the initial run and localized rerun; six public theme-owner
+checks and sixteen additional paint/axis/measurement checks passed. The sole
+localized failure was an ambiguous test label: a row header named identically to
+an axis title selected the axis text. A unique caller-provided header fixed the
+oracle; no renderer behavior changed. Rust cloc: **155,642 → 154,526**, net
+**1,116** code lines removed, **2,410** since baseline. Logs:
+`/tmp/opencode/test-cleanup-{witness,schema}-*.log`.
