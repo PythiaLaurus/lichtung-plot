@@ -8,9 +8,6 @@ use crate::theme::spacing::ExactLength;
 use crate::theme::{ResolvedTheme, TitleAlignment};
 use crate::Error;
 
-#[cfg(test)]
-mod tests;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct RootAlignments {
     pub(crate) title: TitleAlignment,

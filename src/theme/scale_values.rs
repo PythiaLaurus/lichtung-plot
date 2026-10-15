@@ -266,22 +266,6 @@ impl DivergingGradient {
     }
 }
 
-/// The current test-only raw gradient attachment is an API input boundary, not storage.
-#[cfg(test)]
-pub(crate) fn gradient_input(
-    stops: Vec<crate::render::backend::GradientStop>,
-) -> Result<SequentialGradient> {
-    let mut values = Vec::new();
-    for stop in stops {
-        values
-            .try_reserve_exact(1)
-            .map_err(|_| invalid("cannot reserve gradient input"))?;
-        let (r, g, b) = stop.color;
-        values.push(ColorStop::new(stop.offset, OpaqueColor::rgb(r, g, b))?);
-    }
-    SequentialGradient::new(values)
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ColorScales {
     qualitative: QualitativePalette,

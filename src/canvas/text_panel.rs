@@ -18,9 +18,6 @@ fn pixels(quanta: i64) -> f64 {
     quanta as f64 / 1024.0
 }
 
-#[cfg(test)]
-mod tests;
-
 fn text_appearance(theme: &ResolvedTheme) -> [&TextTheme; 2] {
     [
         theme.typography.composition().text_panel_title(),

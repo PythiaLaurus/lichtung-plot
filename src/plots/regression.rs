@@ -19,59 +19,6 @@ use crate::Plot;
 
 const BAND_POINTS: usize = 40;
 
-#[cfg(test)]
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "fixed regression band sample count"
-)]
-pub(crate) fn axis_ranges(
-    chart: &Plot,
-    data: crate::data::PlotData<'_>,
-) -> Result<[(f64, f64); 2], Error> {
-    let points = crate::data::aligned_finite_f64(
-        data,
-        chart
-            .x_col()
-            .ok_or_else(|| Error::Data("regression: x column not set".into()))?,
-        chart
-            .y_col()
-            .ok_or_else(|| Error::Data("regression: y column not set".into()))?,
-        "regression",
-    )?;
-    let mut x = Vec::new();
-    let mut y = Vec::new();
-    crate::data::source::reserve_source(&mut x, points.len())?;
-    crate::data::source::reserve_source(&mut y, points.len())?;
-    for point in points {
-        x.push(point.0);
-        y.push(point.1);
-    }
-    // OlsFit has no dynamic scratch: finite validation, scale, mean, centered
-    // products and residuals each visit both channels once (ten scalar scans).
-
-    let fit = OlsFit::new(&x, &y)?;
-
-    let xr = crate::data::min_max(x.iter().copied(), "regression")?;
-
-    let mut yr = crate::data::min_max(y.iter().copied(), "regression")?;
-    for x in [xr.0, xr.1] {
-        let value = fit.predict(x)?;
-        yr = (yr.0.min(value), yr.1.max(value));
-    }
-    if chart.regression_band_spec() == RegressionBand::PointwiseMean95 {
-        for index in 0..BAND_POINTS {
-            let fraction = index as f64 / (BAND_POINTS - 1) as f64;
-            let interval =
-                fit.pointwise_mean_response_95(xr.0 * (1.0 - fraction) + xr.1 * fraction)?;
-            yr = (yr.0.min(interval.lower), yr.1.max(interval.upper));
-        }
-    }
-    Ok([
-        crate::layout::continuous_auto_range(xr, chart.x_axis_spec())?,
-        crate::layout::continuous_auto_range(yr, chart.y_axis_spec())?,
-    ])
-}
-
 #[derive(Debug)]
 pub(crate) struct PreparedRegressionInputs {
     pub(crate) panels: Vec<(Option<String>, PreparedRegression)>,

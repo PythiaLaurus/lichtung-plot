@@ -33,20 +33,6 @@ const MARGINAL_KDE_GRID_POINTS: usize = 256;
 const MARGINAL_KDE_VISIBLE_FRACTION: f64 = 0.02;
 const MARGINAL_DATA_MARGIN_FRACTION: f64 = 0.06;
 
-#[cfg(test)]
-thread_local! {
-    static STAGES: std::cell::Cell<[usize; 3]> = const { std::cell::Cell::new([0; 3]) };
-}
-
-#[cfg(test)]
-fn count(stage: usize) {
-    STAGES.with(|counts| {
-        let mut next = counts.get();
-        next[stage] += 1;
-        counts.set(next);
-    });
-}
-
 /// One graphical group's data and optional color identity.
 #[derive(Debug)]
 struct HueGroup {
@@ -382,8 +368,6 @@ pub(crate) fn measure(
     chart: &Plot,
     context: PlotRenderContext<'_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    #[cfg(test)]
-    count(2);
     let theme = context.theme;
     let prepared = chart
         .prepared_marginal
@@ -742,9 +726,6 @@ pub(crate) fn prepare(
     chart: &Plot,
     data: crate::data::PlotData<'_>,
 ) -> Result<PreparedMarginal, Error> {
-    #[cfg(test)]
-    count(0);
-
     let (groups, hues) = build_groups(chart, data)?;
     if let Some(exact) = chart.categorical_colors_spec() {
         for hue in &hues {
@@ -768,8 +749,6 @@ pub(crate) fn finish(
     mut prepared: PreparedMarginal,
     x_limits: Option<(f64, f64)>,
 ) -> Result<PreparedMarginal, Error> {
-    #[cfg(test)]
-    count(1);
     if let Some(limits) = x_limits {
         prepared.ranges[0] = limits;
     }

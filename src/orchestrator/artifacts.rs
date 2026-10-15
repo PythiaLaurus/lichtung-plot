@@ -16,7 +16,6 @@ pub(super) static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[cfg(test)]
 thread_local! {
-    pub(crate) static TEMP_RESERVATION_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static REMOVE_FAILURES: std::cell::RefCell<Vec<(PathBuf, usize)>> = const { std::cell::RefCell::new(Vec::new()) };
     static REMOVE_ATTEMPTS: std::cell::RefCell<Vec<PathBuf>> = const { std::cell::RefCell::new(Vec::new()) };
 }
@@ -42,8 +41,6 @@ impl OwnedArtifactStaging {
             .parent()
             .filter(|parent| !parent.as_os_str().is_empty())
             .unwrap_or_else(|| Path::new("."));
-        #[cfg(test)]
-        TEMP_RESERVATION_CALLS.with(|calls| calls.set(calls.get() + 1));
         let staged = create_staging_file(parent)?;
         Ok(Self {
             destination,

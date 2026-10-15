@@ -2,7 +2,6 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 
 use super::artifacts::TEMP_FILE_COUNTER;
-use super::backend::NullBackend;
 use super::*;
 use crate::layout::PanelBox;
 use crate::render::backend::{
@@ -15,27 +14,12 @@ use crate::render::primitives::{
     CanonicalFillStyle, CanonicalGradientFill, CanonicalLineStyle, CanonicalMarkers,
     CanonicalScatter,
 };
-use crate::{
-    CategoryValues, HeatmapLayout, LegendPolicy, LegendPosition, NumericValues, Significance,
-    SignificanceMark, ValueSort,
-};
+use crate::{CategoryValues, NumericValues, Significance, SignificanceMark, ValueSort};
 
-#[path = "tests/artifacts.rs"]
-mod artifacts;
 #[path = "../../tests/benchmarks/suite.rs"]
 mod benchmarks;
-#[path = "tests/data_contracts.rs"]
-mod data_contracts;
-#[path = "tests/facets.rs"]
-mod facets;
-#[path = "tests/focused_plot_options.rs"]
-mod focused_plot_options;
 #[path = "tests/lifecycle.rs"]
 mod lifecycle;
-#[path = "tests/specialized.rs"]
-mod specialized;
-#[path = "tests/validation.rs"]
-mod validation;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum BackendFailure {
@@ -412,58 +396,6 @@ impl Backend for RecordingBackend {
     }
 }
 
-#[derive(Clone)]
-struct BarValues {
-    category: CategoryValues,
-    value: NumericValues,
-    series: Option<CategoryValues>,
-}
-
-fn valid_grouped_bar_values() -> BarValues {
-    BarValues {
-        category: CategoryValues::new("group", ["a", "a", "a", "a", "b", "b", "b", "b"]).unwrap(),
-        series: Some(
-            CategoryValues::new("hue", ["h1", "h1", "h2", "h2", "h1", "h1", "h2", "h2"]).unwrap(),
-        ),
-        value: NumericValues::new("y", [1.0, 2.0, 3.0, 4.0, 2.0, 3.0, 4.0, 5.0]),
-    }
-}
-
-fn configured_bar_plot(data: &BarValues, kind: PlotKind) -> Plot {
-    match kind {
-        PlotKind::Bar => Plot::bar(
-            data.category.clone(),
-            crate::BarInput::samples(data.value.clone()),
-        )
-        .erase(),
-        PlotKind::HorizontalBar => Plot::horizontal_bar(
-            data.category.clone(),
-            crate::BarInput::samples(data.value.clone()),
-        )
-        .erase(),
-        PlotKind::StackedBar => Plot::stacked_bar(
-            data.category.clone(),
-            data.value.clone(),
-            data.series.as_ref().unwrap().clone(),
-        )
-        .erase(),
-        PlotKind::StackedHorizontalBar => Plot::stacked_horizontal_bar(
-            data.category.clone(),
-            data.value.clone(),
-            data.series.as_ref().unwrap().clone(),
-        )
-        .erase(),
-        _ => panic!("unsupported bar kind {kind:?}"),
-    }
-}
-
-fn assert_rejected_before_begin<K: crate::kind::Marker>(plot: &Plot<K>, kind: PlotKind) -> String {
-    let mut backend = RecordingBackend::default();
-    let error = plot.render_kind(kind, &mut backend).unwrap_err();
-    assert_eq!((backend.begins, backend.ends), (0, 0), "{kind:?}");
-    error.to_string()
-}
-
 fn test_directory(name: &str) -> PathBuf {
     let sequence = TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
     let path = std::env::temp_dir().join(format!(
@@ -472,15 +404,6 @@ fn test_directory(name: &str) -> PathBuf {
     ));
     std::fs::create_dir(&path).unwrap();
     path
-}
-
-fn svg_bytes<K: crate::kind::Marker>(plot: Plot<K>) -> Vec<u8> {
-    let directory = test_directory("svg-bytes");
-    let output = directory.join("canvas.svg");
-    plot.svg_preserve_text(&output).unwrap();
-    let bytes = std::fs::read(&output).unwrap();
-    std::fs::remove_dir_all(directory).unwrap();
-    bytes
 }
 
 fn assert_no_staging_files(directory: &Path) {

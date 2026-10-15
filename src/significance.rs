@@ -166,49 +166,6 @@ fn plan_comparisons_with_label(
     )
 }
 
-#[cfg(test)]
-#[expect(
-    clippy::too_many_arguments,
-    reason = "direct planner tests preserve exact anchor and orientation inputs"
-)]
-fn plan_comparisons_at(
-    annotations: &[SignificanceAnnotation],
-    categories: &[String],
-    rendered_maxima: &[f64],
-    anchor_positions: Option<&[f64]>,
-    y_range: (f64, f64),
-    categorical_x_override: Option<(f64, f64)>,
-    y_limits: Option<(f64, f64)>,
-    panel: PanelBox,
-    legend_constraint: LegendAnnotationConstraint,
-    horizontal: bool,
-    mark_style: SignificanceMarkStyle,
-) -> Result<SignificancePlan, Error> {
-    let theme = crate::Theme::Publication.resolve().unwrap();
-    let label = theme
-        .typography
-        .effective_significance_label(Some(mark_style))?;
-    plan_comparisons_at_with_label(
-        annotations,
-        categories,
-        rendered_maxima,
-        anchor_positions,
-        None,
-        y_range,
-        categorical_x_override,
-        y_limits,
-        panel,
-        legend_constraint,
-        horizontal,
-        mark_style,
-        &label,
-        &theme,
-        false,
-        &crate::layout::fit::ROOT_SCOPE,
-    )
-    .map_err(crate::layout::fit::PlanError::into_error)
-}
-
 #[expect(
     clippy::too_many_arguments,
     clippy::too_many_lines,

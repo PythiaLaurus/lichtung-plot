@@ -317,20 +317,6 @@ fn retained_in(chart: &Plot) -> Result<&HeatmapData, Error> {
     crate::layout::interior::preference::panel(&inputs.panels, chart.axis_scope(), "Heatmap")
 }
 
-#[cfg(test)]
-thread_local! {
-    pub(crate) static STAGES: std::cell::Cell<[usize; 3]> = const { std::cell::Cell::new([0; 3]) };
-}
-
-#[cfg(test)]
-fn count(stage: usize) {
-    STAGES.with(|counts| {
-        let mut next = counts.get();
-        next[stage] += 1;
-        counts.set(next);
-    });
-}
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct ResolvedColorDomain {
     minimum: f64,
@@ -946,8 +932,6 @@ pub(crate) fn measure(
     chart: &Plot,
     context: PlotRenderContext<'_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    #[cfg(test)]
-    count(1);
     let prepared = retained_in(chart)?;
     let theme = context.theme;
 
@@ -1248,8 +1232,6 @@ pub(crate) fn prepare<'a>(
     data: impl Into<crate::data::PlotData<'a>>,
     color_scales: &ColorScales,
 ) -> Result<HeatmapData, Error> {
-    #[cfg(test)]
-    count(0);
     let data = data.into();
     validate_options(chart)?;
     let x_col = chart
@@ -1851,8 +1833,6 @@ impl HeatmapPayload {
     }
 
     pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
-        #[cfg(test)]
-        count(2);
         with_clip(backend, self.clip, |backend| {
             for cell in &self.cells {
                 cell.draw(backend, &self.cross_style)?;

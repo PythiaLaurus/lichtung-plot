@@ -353,50 +353,6 @@ pub(crate) fn project(
     Ok(result)
 }
 
-#[cfg(test)]
-pub(crate) fn axis_ranges(
-    chart: &Plot,
-    data: crate::data::PlotData<'_>,
-) -> Result<[(f64, f64); 2], Error> {
-    let (range, maximum) = if let Some(input) = chart.histogram_composite_geometry_input() {
-        let range = input.validate()?;
-
-        (
-            range,
-            input
-                .bins
-                .iter()
-                .map(|bin| bin.density)
-                .chain(input.kde.iter().map(|point| point.y))
-                .chain(input.rugs.iter().map(|rug| rug.top))
-                .fold(0.0_f64, f64::max),
-        )
-    } else {
-        let column = chart
-            .x_col()
-            .ok_or_else(|| Error::Data("histogram: value column not set".into()))?;
-        let values = crate::data::strict_finite_f64(data, column, "histogram")?;
-        let prepared = prepare_histogram(
-            &values,
-            chart.histogram_bins_spec(),
-            chart.histogram_stat_spec(),
-        )?;
-        let range = (prepared.edges[0], prepared.edges[prepared.edges.len() - 1]);
-        let curve_maximum = density_maximum(chart.histogram_composite_spec(), &values, range)?;
-
-        let maximum = prepared
-            .heights
-            .iter()
-            .copied()
-            .fold(curve_maximum, f64::max);
-        (range, maximum)
-    };
-    Ok([
-        chart.x_axis_spec().limits.unwrap_or(range),
-        crate::layout::anchored_auto_range((0.0, maximum), chart.y_axis_spec(), 0.0)?,
-    ])
-}
-
 pub(crate) fn shared_x_domain(
     chart: &Plot,
     data: crate::data::PlotData<'_>,

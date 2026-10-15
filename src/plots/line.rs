@@ -9,26 +9,6 @@ use crate::spec::{AxisDomain, LinePathStyle, PlotRenderContext, PlotRenderResult
 use crate::theme::{AccentColors, CategoryColors};
 use crate::{Error, Plot, PlotKind};
 
-#[cfg(test)]
-thread_local! {
-    pub(crate) static STAGES: std::cell::Cell<[[usize; 4]; 3]> = const { std::cell::Cell::new([[0; 4]; 3]) };
-}
-
-#[cfg(test)]
-fn stage(kind: PlotKind, index: usize) {
-    STAGES.with(|stages| {
-        let mut counts = stages.get();
-        let family = match kind {
-            PlotKind::Line => 0,
-            PlotKind::Trajectory => 1,
-            PlotKind::LinePath => 2,
-            _ => unreachable!(),
-        };
-        counts[family][index] += 1;
-        stages.set(counts);
-    });
-}
-
 #[derive(Debug)]
 pub(crate) struct PreparedLineInputs {
     pub(crate) panels: Vec<(Option<String>, PreparedLine)>,
@@ -69,8 +49,6 @@ struct PointLayer {
 
 #[derive(Debug)]
 pub(crate) struct LinePayload {
-    #[cfg(test)]
-    kind: PlotKind,
     clip: crate::layout::PanelBox,
     pub(crate) marks: Vec<LineMark>,
     layers: Vec<(Vec<Point2D>, PointStyle, Vec<PlacedText>)>,
@@ -356,8 +334,6 @@ impl PreparedLine {
         conditions: Option<&[String]>,
     ) -> Result<Self, Error> {
         data.validate_row_source()?;
-        #[cfg(test)]
-        stage(chart.kind(), 0);
         let kind = chart.kind();
         let family = match kind {
             PlotKind::Line => "line",
@@ -695,8 +671,6 @@ pub(crate) fn measure_marks(
     context: PlotRenderContext<'_>,
     layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    #[cfg(test)]
-    stage(chart.kind(), 1);
     let prepared = chart
         .prepared_line
         .as_ref()
@@ -730,11 +704,7 @@ fn project(
     data: PlotData<'_>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    #[cfg(test)]
-    stage(chart.kind(), 2);
     let mut payload = LinePayload {
-        #[cfg(test)]
-        kind: chart.kind(),
         clip: layout.projection.panel_box(),
         marks: Vec::new(),
         layers: Vec::new(),
@@ -1097,8 +1067,6 @@ fn project(
 
 impl LinePayload {
     pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
-        #[cfg(test)]
-        stage(self.kind, 3);
         with_clip(backend, self.clip, |backend| {
             for mark in &self.marks {
                 match mark {

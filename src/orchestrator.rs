@@ -92,8 +92,6 @@ fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
 }
 
 pub(crate) use artifacts::write_atomic;
-#[cfg(test)]
-pub(crate) use artifacts::TEMP_RESERVATION_CALLS;
 pub(crate) use backend::{capture_text_replay_plan, validate_text_replay_plan, TextReplayPlan};
 #[cfg(test)]
 pub(crate) use backend::{DeferredBackend, TEXT_PLAN_CAPTURE_SESSIONS, TEXT_REPLAY_SESSIONS};

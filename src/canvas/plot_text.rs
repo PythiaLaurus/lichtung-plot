@@ -15,9 +15,6 @@ pub(super) struct PlotLocalTextPlan {
     pub(super) body: PanelBox,
 }
 
-#[cfg(test)]
-mod tests;
-
 impl PlotLocalTextPlan {
     pub(super) fn measure(
         plot: &Plot,

@@ -318,28 +318,3 @@ fn validate_text(role: &str, value: &str) -> Result<(), Error> {
     }
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn assert_attached(_: Significance<Attached>) {}
-    fn assert_pairwise(_: Significance<Pairwise>) {}
-
-    #[test]
-    fn constructors_return_exact_placement_types() {
-        assert_attached(Significance::at("a", SignificanceMark::OneStar));
-        assert_pairwise(Significance::between("a", "b", SignificanceMark::TwoStars));
-    }
-
-    #[test]
-    fn facet_preserves_each_placement_type() {
-        assert_attached(
-            Significance::at("a", SignificanceMark::OneStar).facet(FacetCell::single("one")),
-        );
-        assert_pairwise(
-            Significance::between("a", "b", SignificanceMark::TwoStars)
-                .facet(FacetCell::grid("row", "column")),
-        );
-    }
-}

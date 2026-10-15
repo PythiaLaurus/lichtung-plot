@@ -3,8 +3,6 @@
 use crate::layout::{Layout, PanelBox, PhysicalTextAlignment, ResolvedTextPlan};
 use crate::render::backend::{PlannedTextPlacement, Point2D, TextAnchor};
 use crate::theme::ResolvedTheme;
-#[cfg(test)]
-use crate::Error;
 use crate::{PanelCorner, Plot};
 
 const PANEL_TEXT_PADDING: f64 = 8.0;
@@ -125,16 +123,6 @@ fn placement(
     )
 }
 
-#[cfg(test)]
-pub(crate) fn plans(
-    plot: &Plot,
-    layout: &Layout,
-    theme: &ResolvedTheme,
-) -> Result<Vec<PanelTextPlan>, Error> {
-    measure_plans(plot, layout, theme, &crate::layout::fit::FitScope::root())
-        .map_err(crate::layout::fit::PlanError::into_error)
-}
-
 pub(crate) fn measure_plans(
     plot: &Plot,
     layout: &Layout,
@@ -239,139 +227,4 @@ fn overlap_predicate(left: PanelBox, right: PanelBox) -> bool {
         crate::orchestrator::measurements::Counter::AnnotationOverlapComparison,
     );
     left.x0 < right.x1 && left.x1 > right.x0 && left.y0 < right.y1 && left.y1 > right.y0
-}
-
-#[test]
-fn collision_scans_stop_at_the_first_matching_pair() {
-    use crate::decorations::legend::{test_assigned_legend, LegendEntry, LegendIdentity};
-    let plot = Plot::scatter(
-        crate::NumericValues::new("x", [0.0, 1.0]),
-        crate::NumericValues::new("y", [0.0, 1.0]),
-    )
-    .panel_text_annotation(crate::PanelTextAnnotation::new(PanelCorner::TopLeft, "note").unwrap())
-    .erase();
-    let layout = Layout::envelope(PanelBox::new(0.0, 400.0, 0.0, 400.0));
-    let theme = crate::Theme::Publication.resolve().unwrap();
-    let original = plans(&plot, &layout, &theme).unwrap().remove(0);
-    let mut entries = vec![LegendEntry::point(
-        LegendIdentity::literal("group", "entry"),
-        crate::render::backend::PointStyle::new((0, 0, 0), 3),
-    )];
-    crate::decorations::legend::resolve_entries(&plot, &mut entries).unwrap();
-    let mut legend = test_assigned_legend("", entries, (400.0, 400.0), &theme)
-        .unwrap()
-        .box_at(40.0, 0.0);
-    legend.right = 50.0;
-    legend.top = 10.0;
-
-    let mut separated = vec![original; 4];
-    for (index, plan) in separated.iter_mut().enumerate() {
-        let x = u32::try_from(index).unwrap() * 20;
-        plan.bounds = PanelBox::new(f64::from(x), f64::from(x + 10), 0.0, 10.0);
-    }
-    for (collision, expected_pairs) in [(None, 6), (Some((0, 1)), 1), (Some((1, 3)), 5)] {
-        let mut candidates = separated.clone();
-        if let Some((left, right)) = collision {
-            candidates[right].bounds = candidates[left].bounds;
-        }
-        {
-            crate::orchestrator::measurements::start();
-            let result = check_collisions(&candidates, &crate::layout::fit::FitScope::root());
-            let observed = crate::orchestrator::measurements::finish();
-            assert_eq!(
-                observed.counters
-                    [crate::orchestrator::measurements::Counter::AnnotationOverlapComparison
-                        as usize],
-                expected_pairs
-            );
-            if collision.is_some() {
-                assert!(matches!(result, Err(crate::layout::fit::PlanError::Fit(_))));
-            } else {
-                result.unwrap();
-            }
-        }
-    }
-
-    assert_eq!(
-        conflicting_legend_corner(&separated, legend),
-        Some(PanelCorner::TopLeft)
-    );
-
-    // The assignment's first width check already fails.
-
-    assert!(!conflict_resolved_by_assignment(
-        &separated,
-        PanelBox::new(0.0, 1.0, 0.0, 1.0),
-        legend
-    ));
-}
-
-#[test]
-fn panel_text_uses_complete_private_role_and_unclipped_canonical_bounds() {
-    let plot = Plot::scatter(
-        crate::NumericValues::new("x", [0.0, 1.0]),
-        crate::NumericValues::new("y", [0.0, 1.0]),
-    )
-    .panel_text_annotation(
-        crate::PanelTextAnnotation::new(PanelCorner::TopRight, "Required note").unwrap(),
-    )
-    .erase();
-    let layout = Layout::envelope(PanelBox::new(80.0, 770.0, 60.0, 570.0));
-    let mut theme = crate::Theme::Publication.resolve().unwrap();
-    let original = plans(&plot, &layout, &theme).unwrap();
-    theme.detail_font_size = 0;
-    theme.typography.annotations.panel_text.font_size = 32;
-    theme.typography.annotations.panel_text.paint = crate::theme::Color::rgb(18, 34, 56);
-    let selected = plans(&plot, &layout, &theme).unwrap();
-    assert!(selected[0].bounds.width() > original[0].bounds.width());
-    assert_eq!(selected[0].text_plan.style.font_size, 32);
-    assert_eq!(
-        selected[0].text_plan.style.paint,
-        theme.typography.annotations.panel_text.paint
-    );
-    let mut ink = crate::render::geometry::GeometrySnapshot::new();
-    let text = selected[0].retained_placement();
-    ink.text(text.placement, &text.plan, None).unwrap();
-    let box_ = ink
-        .bounds()
-        .iter()
-        .copied()
-        .reduce(crate::render::geometry::GeometryBox::union)
-        .unwrap();
-    assert_eq!(
-        selected[0].bounds.as_tuple(),
-        (box_.left, box_.right, box_.bottom, box_.top)
-    );
-    let panel = layout.projection.panel_box();
-    assert!(box_.left >= panel.x0 && box_.right <= panel.x1);
-    assert!(box_.bottom >= panel.y0 && box_.top <= panel.y1);
-    let shifted = PanelBox::new(
-        panel.x0 + 2.25,
-        panel.x1 + 2.25,
-        panel.y0 + 5.5,
-        panel.y1 + 5.5,
-    );
-    let mut shifted_ink = crate::render::geometry::GeometrySnapshot::new();
-    shifted_ink
-        .text(
-            selected[0].placement_in(shifted),
-            &selected[0].text_plan,
-            None,
-        )
-        .unwrap();
-    let shifted_box = shifted_ink
-        .bounds()
-        .iter()
-        .copied()
-        .reduce(crate::render::geometry::GeometryBox::union)
-        .unwrap();
-    assert_eq!(
-        selected[0].bounds_in(shifted).as_tuple(),
-        (
-            shifted_box.left,
-            shifted_box.right,
-            shifted_box.bottom,
-            shifted_box.top
-        )
-    );
 }

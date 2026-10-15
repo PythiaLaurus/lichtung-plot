@@ -311,13 +311,6 @@ impl MatrixPayload {
     }
 }
 
-#[cfg(test)]
-thread_local! {
-    static SEMANTIC_STAGES: std::cell::Cell<[usize; 2]> = const { std::cell::Cell::new([0; 2]) };
-    static SELECTIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    static DIAGNOSTIC_CONTEXTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
 pub(crate) fn prepare_axes(
     chart: &Plot,
     data: crate::data::PlotData<'_>,
@@ -368,8 +361,6 @@ pub(crate) fn measure(
     chart: &Plot,
     context: PlotRenderContext<'_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    #[cfg(test)]
-    SELECTIONS.with(|count| count.set(count.get() + 1));
     let theme = context.theme;
     let resources = theme.prepared_font_environment()?.operation();
     let data = context.data.with_operation(&resources);
@@ -880,11 +871,6 @@ fn prepare_density(
     column: &str,
     range: (f64, f64),
 ) -> Result<MatrixDensity, Error> {
-    #[cfg(test)]
-    SEMANTIC_STAGES.with(|counts| {
-        let [groups, densities] = counts.get();
-        counts.set([groups, densities + 1]);
-    });
     let (d_lo, d_hi) = range;
     let grid_pts = crate::data::source::collect_source(
         (0..KDE_POINTS).map(|i| Ok(d_lo + (d_hi - d_lo) * (i as f64 / (KDE_POINTS - 1) as f64))),
@@ -999,11 +985,6 @@ fn build_groups(
     cols: &[&str],
     data: crate::data::PlotData<'_>,
 ) -> Result<(Vec<HueGroup>, Vec<String>), Error> {
-    #[cfg(test)]
-    SEMANTIC_STAGES.with(|counts| {
-        let [groups, densities] = counts.get();
-        counts.set([groups + 1, densities]);
-    });
     let columns = extract_columns_f64(data, cols)?;
     let channels = crate::data::observed_collectives(
         data,
@@ -1150,8 +1131,6 @@ fn matrix_group_context(
     hue_column: Option<&str>,
     group: &HueGroup,
 ) -> String {
-    #[cfg(test)]
-    DIAGNOSTIC_CONTEXTS.with(|calls| calls.set(calls.get() + 1));
     match (
         group_column,
         hue_column,

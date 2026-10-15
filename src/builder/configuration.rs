@@ -373,16 +373,6 @@ impl<K: crate::kind::Marker> Plot<K> {
 }
 
 impl Plot<crate::kind::Heatmap> {
-    #[cfg(test)]
-    pub(crate) fn with_private_gradient(
-        mut self,
-        stops: Vec<crate::render::backend::GradientStop>,
-    ) -> Self {
-        self.heatmap_gradient =
-            Some(crate::theme::scale_values::gradient_input(stops).map_err(|e| e.to_string()));
-        self
-    }
-
     /// Set the heatmap color-scale policy.
     #[must_use]
     pub fn scale(mut self, scale: HeatmapScale) -> Self {
@@ -422,16 +412,6 @@ impl Plot<crate::kind::Forest> {
 }
 
 impl Plot<crate::kind::Beeswarm> {
-    #[cfg(test)]
-    pub(crate) fn with_private_gradient(
-        mut self,
-        stops: Vec<crate::render::backend::GradientStop>,
-    ) -> Self {
-        self.beeswarm_gradient =
-            Some(crate::theme::scale_values::gradient_input(stops).map_err(|e| e.to_string()));
-        self
-    }
-
     /// Set exact continuous-color limits. Values outside them saturate.
     #[must_use]
     pub fn color_limits(mut self, min: f64, max: f64) -> Self {

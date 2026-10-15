@@ -93,26 +93,10 @@ fn quanta_pixels(value: i64) -> f64 {
     value as f64 / 1024.0
 }
 
-#[cfg(test)]
-thread_local! {
-    pub(crate) static STAGES: std::cell::Cell<[usize; 3]> = const { std::cell::Cell::new([0; 3]) };
-}
-
-#[cfg(test)]
-fn count(stage: usize) {
-    STAGES.with(|counts| {
-        let mut next = counts.get();
-        next[stage] += 1;
-        counts.set(next);
-    });
-}
-
 pub(crate) fn prepare(
     chart: &Plot,
     data: crate::data::PlotData<'_>,
 ) -> Result<PreparedBeeswarm, Error> {
-    #[cfg(test)]
-    count(0);
     let category_col = chart
         .y_col()
         .ok_or_else(|| Error::Data("beeswarm: categorical row column not set".into()))?;
@@ -206,15 +190,6 @@ impl PreparedBeeswarm {
         crate::data::source::collect_source(self.colorbar_stops.iter().copied().map(Ok))
     }
 
-    #[cfg(test)]
-    pub(crate) fn color_for_source_value(&self, value: f64) -> Option<(u8, u8, u8)> {
-        self.rows
-            .iter()
-            .zip(&self.colors)
-            .find(|(row, _)| row.2.to_bits() == value.to_bits())
-            .map(|(_, color)| color.as_rgb())
-    }
-
     pub(crate) fn install_shared_domain(
         &mut self,
         descriptor: &crate::decorations::legend::descriptor::ContinuousDescriptor,
@@ -284,8 +259,6 @@ pub(crate) fn measure(
     chart: &Plot,
     context: PlotRenderContext<'_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    #[cfg(test)]
-    count(1);
     let prepared = retained(chart)?;
     let theme = context.theme;
 
@@ -350,8 +323,6 @@ pub(crate) fn measure(
     )?;
     let radius =
         packing::radius(&chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.beeswarm))?;
-    #[cfg(test)]
-    count(2);
     let packed = packing::pack(&prepared.rows, &projection, radius)?;
     let labels = axes.display_categories[1]
         .as_ref()

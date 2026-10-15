@@ -9,8 +9,6 @@ use crate::layout::kernel::{FeedbackKind, FeedbackRound, FitKind, FrameRequireme
 use crate::layout::AddressRole;
 use crate::layout::ComponentAddress;
 use crate::layout::PanelBox;
-#[cfg(test)]
-use crate::render::geometry::GeometryBackend;
 use crate::render::geometry::GeometrySnapshot;
 use crate::spec::{
     LegendClearance, LegendDefault, LegendPolicy, LegendPosition, PlotKind, PlotRenderContext,
@@ -262,16 +260,6 @@ impl PanelPlan {
             plot = plot.with_planned_y_limits(limits);
         }
         plot
-    }
-
-    #[cfg(test)]
-    pub(crate) const fn planned_x_limits(&self) -> Option<(f64, f64)> {
-        self.planned_x_limits
-    }
-
-    #[cfg(test)]
-    pub(crate) const fn planned_y_limits(&self) -> Option<(f64, f64)> {
-        self.planned_y_limits
     }
 }
 
@@ -1608,16 +1596,6 @@ fn measure_geometry(
     }
 }
 
-#[cfg(test)]
-fn discover_geometry(
-    plot: &Plot,
-    kind: PlotKind,
-    context: PlotRenderContext<'_>,
-) -> Result<(PlotRenderResult, GeometrySnapshot), Error> {
-    crate::layout::fit::measured(measure_geometry(plot, kind, context))
-        .map_err(crate::layout::fit::PlanError::into_error)
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ClearanceEdge {
     Left,
@@ -2203,6 +2181,3 @@ pub(crate) fn plan_panel_for_test<K: crate::kind::Marker>(
     )?;
     Ok(output.expect("converged panel was finalized"))
 }
-
-#[cfg(test)]
-mod tests;

@@ -15,20 +15,6 @@ use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::Error;
 use crate::Plot;
 
-#[cfg(test)]
-thread_local! {
-    pub(crate) static STAGES: std::cell::Cell<[usize; 2]> = const { std::cell::Cell::new([0; 2]) };
-}
-
-#[cfg(test)]
-fn count(stage: usize) {
-    STAGES.with(|counts| {
-        let mut next = counts.get();
-        next[stage] += 1;
-        counts.set(next);
-    });
-}
-
 #[derive(Debug)]
 pub(crate) struct PreparedWaterfallInputs {
     pub(crate) panels: Vec<(Option<String>, PreparedWaterfall)>,
@@ -204,8 +190,6 @@ pub(crate) fn prepare(
     data: crate::data::PlotData<'_>,
 ) -> Result<PreparedWaterfall, Error> {
     data.source_resources()?;
-    #[cfg(test)]
-    count(0);
     let label_col = chart
         .x_col()
         .ok_or_else(|| Error::Data("waterfall: label column not set".into()))?;
@@ -292,8 +276,6 @@ pub(crate) fn measure(
     chart: &Plot,
     context: PlotRenderContext<'_>,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    #[cfg(test)]
-    count(1);
     let prepared = retained(chart)?;
     let theme = context.theme;
 

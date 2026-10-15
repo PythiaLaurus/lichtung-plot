@@ -249,21 +249,6 @@ impl DensityPayload {
     }
 }
 
-#[cfg(test)]
-pub(crate) fn axis_ranges(
-    chart: &Plot,
-    data: crate::data::PlotData<'_>,
-) -> Result<[(f64, f64); 2], Error> {
-    let column = chart
-        .x_col()
-        .ok_or_else(|| Error::Data("density: value column not set".into()))?;
-    let prepared = prepare_density_for_chart(chart, data, column)?;
-    Ok([
-        chart.x_axis_spec().limits.unwrap_or(prepared.x_range),
-        crate::layout::anchored_auto_range((0.0, prepared.maximum), chart.y_axis_spec(), 0.0)?,
-    ])
-}
-
 pub(crate) fn measure_marks(
     chart: &Plot,
     context: PlotRenderContext<'_>,
