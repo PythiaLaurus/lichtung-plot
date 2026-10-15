@@ -75,20 +75,21 @@ outside this crate.
 
 ## Development
 
-Font and text processing share one cumulative root limit of 1,000,000 actual
-processing visits. Record and byte admission are independent: copying or hashing
-key bytes does not carry a synthetic processing price. Searches through variable
-candidate, guide-owner, and retained-face lists still admit each examined entry
-before comparison, including the terminating match. See
-[resource admission and release evidence](docs/resource-admission.md) for the
-numeric contract, refusal behavior, 2,048-word workload, and nine-case output and
-timing comparison. Counters are not CPU time or resident memory measurements.
+Rendering retains operation/source ownership, operation-local reuse, checked
+dimensions and allocation, and bounded layout coordination. Current correctness
+boundaries and the historical output/time/RSS comparisons are recorded in
+[the resource-accounting cleanup evidence](docs/resource-accounting-cleanup.md)
+and [the complete caption measurements](docs/caption-cleanup-performance.md).
 
-The repository pins its Rust toolchain and tracks `Cargo.lock`. Run the complete
-read-only verification before committing:
+The repository pins its Rust toolchain and tracks `Cargo.lock`. Use focused
+tests and `just lint` for scoped changes. The complete read-only closure gate is:
 
 ```bash
 just verify
 ```
 
-Focused recipes include `just test` and `just lint`.
+`just test` runs library, integration and example targets; `just test-doc`
+executes public examples and compile-fail API boundaries. `just verify` includes
+both, strict Clippy, formatting, documentation and package verification. See
+[`specs/90_DEVELOPMENT.md`](specs/90_DEVELOPMENT.md) for test ownership and stable
+semantic expectations.

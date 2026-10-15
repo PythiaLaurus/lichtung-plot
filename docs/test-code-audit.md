@@ -3,8 +3,9 @@
 ## Main findings
 
 **Baseline: `f417320`, after the accounting tail cleanup and complete-caption
-performance report.** The new test cleanup is a proposal, not an implemented
-deletion campaign. The preceding volatile-output cleanup is already complete.
+performance report.** Counts and recommendations below preserve that initial
+audit. The subsequently approved cleanup is complete; final results and the
+separate after-census are in [`test-code-cleanup.md`](test-code-cleanup.md).
 
 1. There is substantial test weight: **75,966 Rust code lines**, about **48.4%**
    of tracked Rust code, including test-only helpers and observations.
@@ -20,7 +21,7 @@ deletion campaign. The preceding volatile-output cleanup is already complete.
 
 ## Rust size: what the 157,006-line concern consists of
 
-Current `cloc` 2.06 counts **156,936 Rust code lines in 245 tracked Rust files**.
+Baseline `cloc` 2.06 counts **156,936 Rust code lines in 245 tracked Rust files**.
 This is close to the user's observed 157,006; it excludes comments, blanks,
 `target/`, dependency source and temporary measurement/audit worktrees.
 
@@ -65,8 +66,8 @@ review; it is not an automatic deletion decision.
 
 ## Compilation category versus actual coverage
 
-The latest complete gate ran 1,345 library tests and 470 integration tests
-successfully; 17 library tests are intentionally ignored. Listing the current
+The baseline complete gate ran 1,345 library tests and 470 integration tests
+successfully; 17 library tests were intentionally ignored. Listing the baseline
 library executable reports 1,362 tests including those ignored tests. Static AST
 inventory finds 1,367 library-side and 472 integration `#[test]` functions across
 all platform branches; conditional compilation accounts for the different
@@ -95,11 +96,12 @@ The external Cargo integration targets compile the library **without its
 synthetic fonts, injected backends and relaxed test-only preparation paths.
 Replacing all external output tests with internal mocks would lose that boundary.
 
-There is a real orchestration gap: `Justfile::test` uses
+The audit identified an orchestration gap: `Justfile::test` uses
 `cargo test --all-targets`, which does not run doctests; `just docs` builds docs
 but does not execute their examples. The compile-fail documentation must not be
-described as validated by those two commands. The proposal addresses its place
-in API validation without inventing another test framework.
+described as validated by those two commands. The completed cleanup adds
+`just test-doc` to `just verify`; the original measurements above remain baseline
+observations.
 
 ## Concrete low-value or mixed confirmations
 

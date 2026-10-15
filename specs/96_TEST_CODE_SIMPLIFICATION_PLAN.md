@@ -1,6 +1,6 @@
 # Test Code Simplification
 
-**状态：用户已批准，实施中。**
+**状态：已完成，最终整体验证通过。**
 
 用户要求先完成计费清理尾项和性能结果，再检查测试层级、无意义确认及 Rust
 代码规模，按计费清理的方式规划测试清理。前两项已完成，证据分别在
@@ -10,7 +10,7 @@
 
 ## 一、结论与基线
 
-审计基线为 `f417320`。当前 245 个跟踪 Rust 文件的 cloc code 为 **156,936 行**：
+审计基线为 `f417320`。基线 245 个跟踪 Rust 文件的 cloc code 为 **156,936 行**：
 手写生产实现 67,852；独立 Unicode 生成表 13,017；测试相关 75,966；示例 101。
 测试相关包括 `src/` 内测试／辅助／观察 59,627 行、普通集成目标 13,174 行、
 共享辅助 473 行、现有基准支持 2,692 行，约占全体 **48.4%**。
@@ -149,7 +149,7 @@ trait hierarchy、统一 fault injection、测试 backend 框架或 mutation 系
 | 2：合并生产者及父子重复 | 第五节 capture/route/parent fixtures，按图元／独立语义拆小提交 | 每个去掉的重复有明确保留承担者；25 family 派发、特殊源／图形、关键 cache/feedback/replay 不丢 | 已完成 |
 | 3：简化 schema/witness／基准支持 | 私有地址／容器／counter tuples；相应支持消费者清点 | 不固定内部轨迹，必要诊断还能运行；删尽无人用的 helper/hooks，无新大型 harness | 已完成 |
 | 4：公开 E2E／API 编译归属 | 精简并标注第六节已有骨架；决定 doctest 在 Justfile/checks 中的正确 gate | 正常库编译到文件／部分解码和 API boundary 可定向运行；不能只剩 mock 与编译 smoke | 已完成 |
-| 5：整体收尾 | 当前规范、census、支持删除和针对性的总检查 | 一次有理由的 broad closure、strict Clippy、前后测试相关 SLOC／运行范围报告；保持功能暂停 | 待开始 |
+| 5：整体收尾 | 当前规范、census、支持删除和针对性的总检查 | 一次有理由的 broad closure、strict Clippy、前后测试相关 SLOC／运行范围报告；保持功能暂停 | 已完成 |
 
 提交标题写长期行为，如 `test(layout): consolidate immutable replay contracts`，不写
 本表序号或临时 stage ID。复杂混合阶段按独立 owner 拆分，不能等到最后一个大删除。
@@ -178,12 +178,19 @@ trait hierarchy、统一 fault injection、测试 backend 框架或 mutation 系
 ## 九、此次交付与下一步
 
 实施证据与每段保留的独立合同、实际验证及规模变化记录在
-`../docs/test-code-cleanup.md`。首批 40 个定向测试及严格 Clippy／格式通过，
-净删除 120 行 Rust code；后续按已批准范围继续合并重复。
+`../docs/test-code-cleanup.md`。各段定向检查通过后分别提交，最终一次
+`just verify` 通过：1,332 库测试、462 集成测试、53 doctest，以及严格 Clippy、
+格式、文档和独立打包验证；原有 17 个 ignored 数量和归属不变。
+
+同一 AST/cloc 口径下，全体 Rust code **156,936 → 154,243，净减少 2,693**；
+其中测试／支持 **75,966 → 73,279，净减少 2,687**。其余六行是 lint attribute
+和宏内测试 hook 的语法分类差异，不是生产算法精简。原始逐文件 census 保留，
+最终 245 文件记录在 `../docs/test-code-census-after.csv`，分类与总数精确闭合。
+此前 5k–10k 估计偏高，以这里的实际结果为准。
 
 审计、可复核的行数分类、已有端到端路径和具名删除／合并对象已记录。用户已批准：
 **先删已确认的自我确认，随后有保留承担者地合并重复，收敛支持代码，留下独立
 数学／科学 oracle 与小型真实公开端到端骨架。**
 
-按第七节实施；主题／公开接口功能继续暂停，直至这项测试清理完成后再
-向用户汇报并决定后续工作，不因这里列出原功能阶段而自动开始。
+第七节批准范围已完成；主题／公开接口功能继续暂停，向用户汇报后再决定
+后续工作，不因这里列出原功能阶段而自动开始。

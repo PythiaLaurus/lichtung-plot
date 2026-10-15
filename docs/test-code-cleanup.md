@@ -112,3 +112,74 @@ Formatting and strict Clippy passed. All 21 output checks, two affected public
 typing/erasure checks, the retained default-theme owner and 41 Plot compile-fail
 doctests passed. Rust cloc: **154,526 → 154,243**, net **283** code lines removed,
 **2,693** since baseline. Logs: `/tmp/opencode/test-cleanup-public-*.log`.
+
+## Final census and closure
+
+The approved source-reviewed consolidation is complete. The final Rust state is
+`bf12d23`; subsequent closure edits only document results. The original
+[`test-code-census.csv`](test-code-census.csv) remains the baseline. The separate
+[`test-code-census-after.csv`](test-code-census-after.csv) records all 245 tracked
+Rust files after cleanup, with the same AST-span/cloc 2.06 classification.
+
+| Category | Baseline code | Final code | Net removed |
+| --- | ---: | ---: | ---: |
+| Handwritten implementation, syntactic classification | 67,852 | 67,846 | 6 |
+| Separate generated Unicode tables | 13,017 | 13,017 | 0 |
+| Test-only source, helpers and hooks | 59,627 | 57,263 | 2,364 |
+| Ordinary integration targets | 13,174 | 13,124 | 50 |
+| Shared integration support | 473 | 473 | 0 |
+| Benchmark/diagnostic support | 2,692 | 2,419 | 273 |
+| Examples | 101 | 101 | 0 |
+| **Total** | **156,936** | **154,243** | **2,693** |
+| **Test-related subtotal** | **75,966** | **73,279** | **2,687** |
+
+The six syntactically classified implementation lines were four lines of an
+unfulfilled Canvas lint attribute and two test-only resolution-hook lines inside
+the theme-definition macro. This is not a production algorithm reduction. The
+whole and partition sums reconcile exactly: `154243 == 154243`, difference zero.
+Test-related code is now about 47.5% of Rust code, versus 48.4% at baseline. The
+earlier 5–10k estimate was too high for the completed consolidation; the actual
+net is 2,693 code lines, including 2,687 test/support lines.
+
+| Execution / inventory | Baseline | Final |
+| --- | ---: | ---: |
+| Linux library tests passing | 1,345 | 1,332 |
+| Linux library tests intentionally ignored | 17 | 17 |
+| Linux integration tests passing, 13 targets | 470 | 462 |
+| Doctests executed by complete gate | Not included | 53 passing |
+| AST named library-side cases, all platform branches | 1,367 | 1,354 |
+| AST named integration cases, all platform branches | 472 | 464 |
+
+Final AST library-side cases comprise 1,332 source cases plus 22 benchmark cases.
+The ignored set remains seven external Unicode/regeneration cases and ten
+release measurements. No case was newly ignored. Four example targets compile
+in `--all-targets`; they contain no test bodies. Counts distinguish compilation
+from execution and do not assert a coverage percentage.
+
+One final `just verify` passed: formatting, strict all-target Clippy, all 1,332
+library and 462 integration checks, 53 doctests, warning-denied API docs and
+Cargo's independently unpacked package verification. The 53 doctests comprise
+five executable examples and 48 compile-fail boundaries. This single broad run
+closes the completed cross-owner consolidation and the newly explicit doctest
+gate; earlier changes used focused checks. Final log:
+`/tmp/opencode/test-cleanup-final-verify.log`. The census summary is
+`/tmp/opencode/test-cleanup-final-summary.log`; masked production/testing counts
+and whole-file JSON are `/tmp/opencode/test-cleanup-*-cloc.json`.
+
+### Retained contract owners
+
+| Contract | Current main owner |
+| --- | --- |
+| All 25 families and frozen output without source/preparation work | `orchestrator/tests/lifecycle.rs::every_canonical_plot_kind_renders_through_one_lifecycle`, core frozen-command tests and retained direct Scatter/Line/Heatmap poison fixtures |
+| Independent scientific values, source order/status and special geometry | Existing statistics/numeric/Unicode oracles, producer-specific ink checks and scientific integration targets |
+| Complete text, SVG representations and reusable Plot/Canvas files | `tests/output/multiformat.rs`; internal `chained_terminals_reuse_one_canonical_scene_and_plan_each_png` owns the one-scene/no-new-font-work evidence |
+| PNG options, aspect ratio, limits and actual decoded colors | `tests/output/png.rs`, call-local multiformat case and `tests/heatmap/suite.rs::constant_scale_mark_and_guide_stops_agree_with_decoded_png_pixel` |
+| Suffixes, replacement, failure preservation and staging cleanup | `tests/output/paths.rs` and artifacts unit tests |
+| Parent ownership, sparse cells, shared domains/guides and actual cache invalidation | Composition targets, Canvas/Facet lifecycle checks and child-key/feedback tests |
+| Normal-library exact constructors/contextual capabilities/erasure | `tests/rendering/public_contracts.rs` |
+| Negative visibility, exact/Any and unsupported-neighbor API boundaries | Rustdoc cases executed by `just test-doc`, included in `just verify` |
+
+The current README also replaces the obsolete million-visit admission paragraph
+with the implemented ownership/checked-boundary contract and current evidence.
+Further foundation/public feature implementation remains paused for the user's
+next direction.
