@@ -1,7 +1,7 @@
 # T6 — Public Foundations And Scientific Presentation
 
 **Status**: IN PROGRESS — planning complete; private implementation partially complete;
-further feature work remains paused for review of the test-code cleanup proposal.
+further feature work remains paused during the approved test-code cleanup.
 
 **Current execution checkpoint:** private foundation implementation is partially
 complete through guide/composition chrome. Subsequent mark/annotation and public
@@ -14,9 +14,9 @@ baseline failures and release parity/timing/RSS are recorded in
 
 The user explicitly requested test-code auditing/planning after the cleanup and
 caption measurements, with no automatic return to feature implementation. The
-current proposal is `96_TEST_CODE_SIMPLIFICATION_PLAN.md`; size/E2E/value evidence
-is `../docs/test-code-audit.md`. That proposal is not yet approved for deletion
-or consolidation, and the pending foundation leaves remain pending.
+approved execution plan is `96_TEST_CODE_SIMPLIFICATION_PLAN.md`; size/E2E/value
+evidence is `../docs/test-code-audit.md`. Test cleanup is in progress; the pending
+foundation leaves remain pending.
 
 ## Authority And Entry Decisions
 

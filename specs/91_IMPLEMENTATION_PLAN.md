@@ -12,9 +12,9 @@ user-directed semantic test policy retires the volatile baselines responsible fo
 the former integration failures; mixed fixtures retain meaningful contracts, and
 `just verify` passes. The remaining equality/interface cleanup and complete
 2,048-word caption remeasurement are also complete. The current next checkpoint
-is user review of `96_TEST_CODE_SIMPLIFICATION_PLAN.md`, backed by
-`../docs/test-code-audit.md` and its per-file census. Test-plan implementation
-awaits approval. Further public-foundation feature work has not resumed.
+is implementation of the user-approved `96_TEST_CODE_SIMPLIFICATION_PLAN.md`,
+backed by `../docs/test-code-audit.md` and its per-file census. Further
+public-foundation feature work has not resumed.
 
 Accounting requirements and quota-specific tests in completed historical entries
 below describe their recorded revisions. Spec95 and the current resource/lifecycle
