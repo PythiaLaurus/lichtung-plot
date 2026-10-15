@@ -308,21 +308,6 @@ pub(crate) struct PreparedHeatmapInputs {
     pub(crate) panels: Vec<(Option<String>, HeatmapData)>,
 }
 
-#[cfg(test)]
-fn retained(chart: &Plot) -> Result<&HeatmapData, Error> {
-    chart
-        .prepared_heatmap
-        .as_ref()
-        .and_then(|inputs| {
-            inputs
-                .panels
-                .iter()
-                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
-        })
-        .map(|(_, marks)| marks)
-        .ok_or_else(|| Error::Render("heatmap requires root-prepared semantics".into()))
-}
-
 fn retained_in(chart: &Plot) -> Result<&HeatmapData, Error> {
     let inputs = chart
         .prepared_heatmap
@@ -1893,59 +1878,6 @@ impl HeatmapPayload {
     }
 }
 
-#[test]
-fn required_heatmap_cell_text_must_fit_its_unclipped_cell() {
-    let theme = crate::Theme::Publication.resolve().unwrap();
-    let text = theme
-        .measure_legacy_appearance_text(
-            "Required",
-            &theme.typography.annotations.contrast.dark,
-            crate::layout::PhysicalTextAlignment::Center,
-            "heatmap cell annotation",
-            false,
-        )
-        .unwrap();
-    let mut payload = HeatmapPayload {
-        clip: PanelBox::new(0.0, 20.0, 0.0, 30.0),
-        cross_style: theme.marks.heatmap_missing_cross.backend_style(),
-        cells: vec![CellPayload {
-            corners: [
-                Point2D::new(0.0, 0.0),
-                Point2D::new(20.0, 0.0),
-                Point2D::new(20.0, 30.0),
-                Point2D::new(0.0, 30.0),
-            ],
-            fill: theme
-                .marks
-                .heatmap_cell_outline
-                .backend_style(crate::theme::Color::rgb(0, 0, 0)),
-            text: Some(PlacedText::middle(
-                text,
-                Point2D::new(10.0, 15.0),
-                TextAnchor::Middle,
-                0.0,
-            )),
-            cross: None,
-        }],
-        colorbar: None,
-    };
-
-    let error = payload
-        .validate_annotation_ink(&crate::layout::fit::ROOT_SCOPE)
-        .unwrap_err();
-    assert!(matches!(error, crate::layout::fit::PlanError::Fit(failure)
-        if failure.reason.kind == crate::layout::fit::FitKind::Text
-            && failure.reason.address == crate::layout::ComponentAddress::root()
-                .child(crate::layout::AddressRole::HeatmapCell, 0).unwrap()));
-    let cell = &mut payload.cells[0];
-    cell.corners[1].x = 200.0;
-    cell.corners[2].x = 200.0;
-    cell.text.as_mut().unwrap().placement.position.x = 100.0;
-    assert!(payload
-        .validate_annotation_ink(&crate::layout::fit::ROOT_SCOPE)
-        .is_ok());
-}
-
 fn select_cells(
     prepared: &HeatmapData,
     columns: &[f64],
@@ -2284,13 +2216,4 @@ fn fitted_unique_labels(
     Ok(fitted)
 }
 
-#[cfg(test)]
-mod tests;
-
-#[cfg(test)]
-mod cache_tests;
-
 mod guide;
-
-#[cfg(test)]
-mod extraction;

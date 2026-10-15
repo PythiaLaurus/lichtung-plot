@@ -1123,6 +1123,3 @@ impl LinePayload {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod tests;

@@ -15,9 +15,9 @@ mod typography;
 
 pub(crate) use axis::{AxisLengths, AxisSpacing, AxisTheme, FrameSides, FrameTheme, TickTheme};
 pub(crate) use composition::CompositionTheme;
-pub(crate) use guide::LegendTheme;
 #[cfg(test)]
-pub(crate) use guide::{GradientLengths, LegendFrameTheme, LegendSpacing};
+pub(crate) use guide::LegendFrameTheme;
+pub(crate) use guide::LegendTheme;
 pub(crate) use typography::{
     AnnotationTextRoles, AxisTextRoles, CompositionTextRoles, ContrastTextRoles, GuideTextRoles,
     RootTextRoles, TypographyTheme,

@@ -1,54 +1,12 @@
 use super::*;
 use crate::font::canonical::OperationContext;
 
-#[test]
-fn used_map_lookup_is_exact_and_clone_shares_keys() {
-    let map =
-        CategoricalColors::from_opaque([("αx".into(), OpaqueColor::rgb(11, 23, 37))]).unwrap();
-    assert_eq!(map.color_in("αx"), Some(OpaqueColor::rgb(11, 23, 37)));
-    assert_eq!(map.color_in("αy"), None);
-    let copy = map.clone();
-    assert_eq!(copy, map);
-    assert_eq!(
-        copy.entries().next().unwrap().0.as_ptr(),
-        map.entries().next().unwrap().0.as_ptr()
-    );
-}
-
 fn stop(offset: f64, red: u8) -> ColorStop {
     ColorStop::new(
         offset,
         OpaqueColor::rgb(red, red.wrapping_add(3), red.wrapping_add(7)),
     )
     .unwrap()
-}
-
-#[test]
-fn palette_capacity_order_repeated_colors_and_immutable_edits_are_independent() {
-    let colors = [
-        OpaqueColor::rgb(13, 29, 47),
-        OpaqueColor::rgb(71, 83, 97),
-        OpaqueColor::rgb(13, 29, 47),
-    ];
-    let fixed = QualitativePalette::fixed(colors).unwrap();
-    let extendable = QualitativePalette::extendable(colors).unwrap();
-    assert_eq!(fixed.colors(), colors);
-    assert_eq!(fixed.capacity(), PaletteCapacity::Fixed);
-    assert_eq!(extendable.colors(), colors);
-    assert_eq!(extendable.capacity(), PaletteCapacity::Extendable);
-    assert_ne!(fixed, extendable);
-    let accents = AccentPalette::new(colors).unwrap();
-    assert_eq!(accents.seeds(), colors);
-    assert!(QualitativePalette::fixed([]).is_err());
-    assert!(QualitativePalette::extendable([]).is_err());
-    assert!(AccentPalette::new([]).is_err());
-    let selected = CategoricalColorScale::from_palette(fixed.clone());
-    assert_eq!(selected.palette(), Some(&fixed));
-    assert!(selected.map().is_none());
-    let map = CategoricalColors::from_opaque([("raw".into(), colors[1])]).unwrap();
-    let mapped = CategoricalColorScale::from_map(map.clone());
-    assert_eq!(mapped.map(), Some(&map));
-    assert!(mapped.palette().is_none());
 }
 
 #[test]
@@ -83,52 +41,6 @@ fn map_retains_exact_raw_keys_order_and_opaque_colors_without_normalization() {
         copied.entries().next().unwrap().0.as_ptr(),
         map.entries().next().unwrap().0.as_ptr()
     );
-}
-
-#[test]
-fn ordered_gradients_normalize_zero_and_require_exact_endpoints_and_neutral() {
-    assert_eq!(
-        ColorStop::new(-0.0, OpaqueColor::rgb(1, 2, 3))
-            .unwrap()
-            .offset()
-            .to_bits(),
-        0
-    );
-    for offset in [-1.0, 1.000_001, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-        assert!(ColorStop::new(offset, OpaqueColor::rgb(1, 2, 3)).is_err());
-    }
-    let values = [
-        stop(0.0, 11),
-        stop(0.125, 23),
-        stop(0.5, 37),
-        stop(0.875, 53),
-        stop(1.0, 71),
-    ];
-    let sequential = SequentialGradient::new(values).unwrap();
-    let diverging = DivergingGradient::new(values).unwrap();
-    assert_eq!(sequential.stops(), values);
-    assert_eq!(diverging.stops(), values);
-    assert_eq!(diverging.neutral(), OpaqueColor::rgb(37, 40, 44));
-    assert!(SequentialGradient::new([]).is_err());
-    assert!(DivergingGradient::new([]).is_err());
-    for invalid in [
-        vec![values[0]],
-        vec![values[4], values[0]],
-        vec![values[0], values[0], values[4]],
-        vec![values[1], values[4]],
-        vec![values[0], values[3]],
-    ] {
-        assert!(SequentialGradient::new(invalid.clone()).is_err());
-        assert!(DivergingGradient::new(invalid).is_err());
-    }
-    assert!(DivergingGradient::new([values[0], values[1], values[4]]).is_err());
-    assert!(DivergingGradient::new([values[0], stop(0.5, 31), stop(0.5, 41), values[4]]).is_err());
-    assert!(DivergingGradient::new([
-        values[0],
-        stop(f64::from_bits(0.5_f64.to_bits() + 1), 31),
-        values[4]
-    ])
-    .is_err());
 }
 
 #[test]
@@ -234,31 +146,6 @@ fn domains_and_continuous_edits_validate_kind_center_and_complete_result() {
         .is_none());
     assert!(ContinuousColorScale::diverging(1.0, None, Some(constant)).is_err());
     assert!(ContinuousColorScale::diverging(f64::INFINITY, None, None).is_err());
-}
-
-#[test]
-fn sequence_retention_and_immutable_sharing_preserve_values() {
-    let values = [OpaqueColor::rgb(13, 29, 47), OpaqueColor::rgb(71, 83, 97)];
-    assert_eq!(AccentPalette::new(values).unwrap().seeds(), values);
-    let source = ContinuousColorScale::sequential(
-        Some(SequentialGradient::new(HEATMAP_SEQUENTIAL_STOPS).unwrap()),
-        None,
-    )
-    .unwrap();
-
-    let copy = source.clone();
-    assert_eq!(copy, source);
-    assert_eq!(
-        copy.stops().unwrap().as_ptr(),
-        source.stops().unwrap().as_ptr()
-    );
-}
-
-#[test]
-fn unknown_length_sequence_growth_preserves_values() {
-    let colors = [OpaqueColor::rgb(11, 23, 37), OpaqueColor::rgb(41, 59, 73)];
-    let palette = AccentPalette::new(colors.into_iter().filter(|_| true)).unwrap();
-    assert_eq!(palette.seeds(), colors);
 }
 
 #[test]

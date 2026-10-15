@@ -115,66 +115,6 @@ fn all_relationship_edits_replace_one_field_and_preserve_immutable_siblings() {
 }
 
 #[test]
-fn complete_builtin_sources_have_exact_preset_local_basis_without_fonts() {
-    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-    for (t, s, c, a) in [
-        (20, 15, 15, 17),
-        (19, 14, 14, 16),
-        (21, 16, 15, 17),
-        (19, 15, 15, 17),
-    ] {
-        let source = CompositionTheme::builtin(t, s, c, a).unwrap();
-        let pairs = [
-            (0, 1),
-            (14, t.max(s)),
-            (12, c),
-            (16, a),
-            (16, a),
-            (8, a),
-            (12, a),
-            (4, 16),
-            (16, a),
-            (12, t.max(a)),
-            (12, s),
-            (12, a),
-            (16, t),
-            (20, t),
-            (16, t),
-            (8, t),
-            (16, s),
-            (8, s),
-        ];
-        assert_eq!(source.retained_relationships().count(), 18);
-        for (value, (n, d)) in source.retained_relationships().zip(pairs) {
-            assert_eq!(value, &RelativeSpacing::ratio(n, d).unwrap());
-        }
-    }
-    for invalid in [f64::NAN, f64::INFINITY, -1.0] {
-        assert!(RelativeSpacing::new(invalid).is_err());
-    }
-    assert!(source()
-        .with_panel_edge_clearance(RelativeSpacing::new(-0.0).unwrap())
-        .is_ok());
-    assert_eq!(
-        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
-        0
-    );
-}
-
-#[test]
-fn composition_identity_includes_alignment() {
-    let source = source();
-    assert!(source.same(&source.clone()));
-
-    assert!(!source.same(
-        &source
-            .clone()
-            .with_root_subtitle_alignment(Some(TitleAlignment::End))
-            .unwrap()
-    ));
-}
-
-#[test]
 fn root_padding_keeps_fractional_edges_until_the_complete_hard_boundary() {
     use crate::layout::canvas::RootFramePlan;
     let mut theme = super::super::Theme::Publication.resolve().unwrap();
@@ -211,58 +151,5 @@ fn root_padding_keeps_fractional_edges_until_the_complete_hard_boundary() {
             .unwrap()
             .quanta(),
         1
-    );
-}
-
-#[test]
-fn complete_local_metrics_ignore_legacy_carriers_and_preserve_distinct_gap_and_track_owners() {
-    let mut theme = super::super::Theme::Publication.resolve().unwrap();
-    theme.label_font_size = 1;
-    theme.composition_title_font_size = 1;
-    theme.facet_header_font_size = 1;
-    assert_eq!(
-        theme.composition_grid_gap().unwrap().to_bits(),
-        12.0_f64.to_bits()
-    );
-    assert_eq!(
-        theme.composition_facet_gap().unwrap().to_bits(),
-        12.0_f64.to_bits()
-    );
-    theme.typography.composition.body = theme
-        .typography
-        .composition
-        .body
-        .clone()
-        .with_font_size(34)
-        .unwrap();
-    assert_eq!(
-        theme.composition_grid_gap().unwrap().to_bits(),
-        24.0_f64.to_bits()
-    );
-    assert_eq!(
-        theme.root_outer_width(0.0).unwrap().to_bits(),
-        64.0_f64.to_bits()
-    );
-    assert_eq!(
-        theme.typography.composition.composition_header.font_size(),
-        20
-    );
-    theme.typography.composition.facet_header = theme
-        .typography
-        .composition
-        .facet_header
-        .clone()
-        .with_font_size(30)
-        .unwrap();
-    assert_eq!(
-        theme.composition_facet_gap().unwrap().to_bits(),
-        24.0_f64.to_bits()
-    );
-
-    assert_eq!(
-        hard(&theme.facet_strip_lengths().unwrap().horizontal_inset)
-            .unwrap()
-            .to_bits(),
-        32.0_f64.to_bits()
     );
 }

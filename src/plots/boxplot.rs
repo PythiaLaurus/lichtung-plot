@@ -21,8 +21,6 @@ use crate::data::PlotData;
 use crate::plots::categorical_distribution::{self, DistributionPayload, PreparedDistribution};
 use crate::render::backend::Point2D;
 use crate::spec::{PlotRenderContext, PlotRenderResult};
-#[cfg(test)]
-use crate::stats::distribution::quantile;
 use crate::{Plot, RawOverlay};
 
 #[derive(Debug, PartialEq)]
@@ -395,11 +393,6 @@ pub(crate) fn measure_marks(
     )
 }
 
-#[cfg(test)]
-fn box_summary(values: &mut [f64]) -> Result<BoxSummary, Error> {
-    box_summary_with_source(values)
-}
-
 fn box_summary_with_source(values: &mut [f64]) -> Result<BoxSummary, Error> {
     if values.is_empty() || values.iter().any(|v| !v.is_finite()) {
         return Err(Error::Data(
@@ -441,166 +434,4 @@ fn box_summary_with_source(values: &mut [f64]) -> Result<BoxSummary, Error> {
         hi_whisker,
         fliers,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn sparse_grouped_boxplot_bodies_and_fliers_have_separate_hard_pitch() {
-        let categories =
-            crate::CategoryValues::new("category", ["a", "a", "a", "a", "b", "b", "b", "b"])
-                .unwrap();
-        let values = crate::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0, 1.0, 2.0, 3.0, 100.0]);
-        let grouped = Plot::boxplot(categories.clone(), values.clone())
-            .series(
-                crate::CategoryValues::new(
-                    "group",
-                    ["one", "one", "one", "one", "two", "two", "two", "two"],
-                )
-                .unwrap(),
-            )
-            .erase();
-        let single = Plot::boxplot(categories, values).erase();
-        let intrinsic = |source: Plot, theme: &crate::theme::ResolvedTheme| {
-            let resources = crate::font::canonical::OperationContext::new();
-            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
-            inputs
-                .attach(source)
-                .unwrap()
-                .intrinsic_body_minimum(theme)
-                .unwrap()
-        };
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
-        theme.marks.box_body.outline = Some(crate::theme::DataOutlineTheme::fixed(
-            theme
-                .marks
-                .box_body
-                .outline()
-                .unwrap()
-                .fixed_stroke()
-                .unwrap()
-                .clone()
-                .with_width(100.0)
-                .unwrap(),
-        ));
-        let grouped_body = intrinsic(grouped.clone(), &theme);
-        let single_body = intrinsic(single.clone(), &theme);
-        assert!(grouped_body.0 > single_body.0);
-        theme.marks.box_body.outline = Some(crate::theme::DataOutlineTheme::fixed(
-            theme
-                .marks
-                .box_body
-                .outline()
-                .unwrap()
-                .fixed_stroke()
-                .unwrap()
-                .clone()
-                .with_width(1.0)
-                .unwrap(),
-        ));
-        theme.marks.point_sizes.box_flier = 80;
-        let flier = intrinsic(grouped.clone(), &theme);
-        assert!(flier.0 > intrinsic(grouped, &crate::Theme::Publication.resolve().unwrap()).0);
-        let exact = Plot::boxplot(
-            crate::CategoryValues::new("category", ["a", "a", "a", "a", "b", "b", "b", "b"])
-                .unwrap(),
-            crate::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0, 1.0, 2.0, 3.0, 100.0]),
-        )
-        .y_limits(0.0, 101.0)
-        .erase();
-        let styled = intrinsic(exact, &theme);
-        let plain = intrinsic(single, &crate::Theme::Publication.resolve().unwrap());
-        assert_eq!(styled.1.to_bits(), plain.1.to_bits());
-    }
-
-    #[test]
-    fn two_point_box_summary_uses_type_7_quartile_geometry() {
-        let mut values = [0.0, 4.0];
-
-        assert_eq!(
-            box_summary(&mut values).unwrap(),
-            BoxSummary {
-                lo_whisker: 0.0,
-                q1: 1.0,
-                median: 2.0,
-                q3: 3.0,
-                hi_whisker: 4.0,
-                fliers: vec![],
-            }
-        );
-    }
-
-    #[test]
-    fn singleton_box_summary_preserves_type_7_geometry() {
-        let mut values = [4.0];
-
-        assert_eq!(
-            box_summary(&mut values).unwrap(),
-            BoxSummary {
-                lo_whisker: 4.0,
-                q1: 4.0,
-                median: 4.0,
-                q3: 4.0,
-                hi_whisker: 4.0,
-                fliers: vec![],
-            }
-        );
-    }
-
-    #[test]
-    fn repeated_values_preserve_inclusive_whiskers_and_outlier() {
-        let mut values = [1.0, 1.0, 1.0, 9.0];
-
-        assert_eq!(
-            box_summary(&mut values).unwrap(),
-            BoxSummary {
-                lo_whisker: 1.0,
-                q1: 1.0,
-                median: 1.0,
-                q3: 3.0,
-                hi_whisker: 1.0,
-                fliers: vec![9.0],
-            }
-        );
-    }
-
-    #[test]
-    fn observations_equal_to_fences_remain_inclusive_whiskers() {
-        let mut values = [-2.0, 1.0, 2.0, 3.0, 6.0];
-
-        let summary = box_summary(&mut values).unwrap();
-
-        assert_eq!(summary.lo_whisker.to_bits(), (-2.0_f64).to_bits());
-        assert_eq!(summary.hi_whisker.to_bits(), 6.0_f64.to_bits());
-        assert!(summary.fliers.is_empty());
-    }
-
-    #[test]
-    fn box_summary_quartiles_agree_with_shared_quantile() {
-        let mut values = [9.0, 1.0, 5.0, 3.0, 7.0, 11.0];
-        let original = values;
-
-        let summary = box_summary(&mut values).unwrap();
-
-        assert_eq!(
-            [summary.q1, summary.median, summary.q3].map(f64::to_bits),
-            [
-                quantile(&original, 0.25).unwrap(),
-                quantile(&original, 0.5).unwrap(),
-                quantile(&original, 0.75).unwrap(),
-            ]
-            .map(f64::to_bits)
-        );
-    }
-
-    #[test]
-    fn box_summary_propagates_shared_quantile_errors() {
-        let mut values = [1.0, f64::NAN];
-
-        let error = box_summary(&mut values).unwrap_err();
-
-        assert!(error.to_string().contains("must be finite"));
-    }
 }

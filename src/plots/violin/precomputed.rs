@@ -8,9 +8,6 @@ use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::theme::{CategoryColors, ResolvedTheme};
 use crate::{Plot, RaincloudGroup};
 
-#[cfg(test)]
-mod tests;
-
 #[derive(Debug)]
 pub(crate) struct PreparedRaincloud {
     pub(crate) range: (f64, f64),

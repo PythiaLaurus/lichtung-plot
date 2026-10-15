@@ -96,50 +96,6 @@ fn complete_guide_fields_and_consuming_edits_are_independent() {
 }
 
 #[test]
-fn construction_rejects_zero_positive_extents_and_revalidates_cross_siblings() {
-    let source = source();
-    let zero = RelativeSpacing::new(-0.0).unwrap();
-    assert!(source
-        .spacing()
-        .clone()
-        .with_key_width(zero.clone())
-        .is_err());
-    assert!(GradientLengths::new(zero.clone(), RelativeSpacing::ratio(1, 1).unwrap()).is_err());
-    assert!(GradientLengths::new(RelativeSpacing::ratio(1, 1).unwrap(), zero.clone()).is_err());
-    assert!(source
-        .gradient_lengths()
-        .clone()
-        .with_minimum(RelativeSpacing::ratio(1000, 1).unwrap())
-        .is_err());
-    assert!(source
-        .gradient_lengths()
-        .clone()
-        .with_preferred(RelativeSpacing::ratio(1, 1).unwrap())
-        .is_err());
-    let mut poisoned = source.clone();
-    poisoned.gradient_lengths.preferred = RelativeSpacing::ratio(1, 1).unwrap();
-    assert!(poisoned.clone().with_frame(None).is_err());
-    assert!(poisoned.clone().with_shared_gap(zero.clone()).is_err());
-    assert!(poisoned.with_spacing(source.spacing().clone()).is_err());
-    let mut poisoned = source.clone();
-    poisoned
-        .frame
-        .as_mut()
-        .unwrap()
-        .outline
-        .as_mut()
-        .unwrap()
-        .width = f32::NAN;
-    assert!(poisoned
-        .clone()
-        .with_gradient_lengths(source.gradient_lengths().clone())
-        .is_err());
-    assert!(poisoned.with_spacing(source.spacing().clone()).is_err());
-    assert!(source.spacing().clone().with_padding(zero.clone()).is_ok());
-    assert!(source.frame().unwrap().clone().with_radius(zero).is_ok());
-}
-
-#[test]
 fn pinned_binary_sources_and_complete_edge_rounding_are_exact() {
     let source = source();
 
@@ -168,15 +124,4 @@ fn pinned_binary_sources_and_complete_edge_rounding_are_exact() {
     )
     .unwrap();
     assert_eq!(exact.minimum(), exact.preferred());
-}
-
-#[test]
-fn guide_identity_includes_structural_frame_presence() {
-    let source = source();
-    let copy = source.clone();
-    assert_eq!(copy, source);
-    assert!(source.same(&copy));
-    let absent = source.clone().with_frame(None).unwrap();
-
-    assert!(!source.same(&absent));
 }

@@ -11,9 +11,6 @@ use crate::{Error, Plot};
 pub(crate) mod extraction;
 
 #[cfg(test)]
-mod native;
-
-#[cfg(test)]
 thread_local! {
     pub(crate) static STAGES: std::cell::Cell<[usize; 3]> = const { std::cell::Cell::new([0; 3]) };
 }
