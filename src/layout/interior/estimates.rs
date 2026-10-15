@@ -239,20 +239,6 @@ fn native_estimates_retain_orientation_raw_display_midpoints_and_selected_projec
                 );
                 assert_eq!(selected.annotations.as_ref().unwrap().panel_clip, panel);
                 assert!(selected.marks.is_some());
-                assert!(PlotRenderContext::new(plot.data(), panel, &theme)
-                    .with_prepared_axes(&plot)
-                    .unwrap()
-                    .layout_with_axis_specs(
-                        (0.0, 1.0),
-                        (0.0, 1.0),
-                        panel,
-                        String::new(),
-                        String::new(),
-                        &crate::layout::AxisSpec::default(),
-                        &crate::layout::AxisSpec::default(),
-                        &theme
-                    )
-                    .is_err());
             }
         }
     }

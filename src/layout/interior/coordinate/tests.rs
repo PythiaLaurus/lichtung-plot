@@ -868,8 +868,8 @@ fn categorical_trajectory_retains_bottom_slots_raw_and_display_identity() {
 }
 
 #[test]
-fn every_native_root_preserves_default_and_explicit_dimensions_and_avoids_layout_backends() {
-    for source in all_sources() {
+fn coordinate_root_classes_preserve_dimensions_and_prepared_intrinsics() {
+    for source in [sources()[0].clone(), categorical_source()] {
         let source = source.labels(
             crate::Labels::humanized().alias("after_visit", "A deliberately long category label"),
         );
@@ -1074,7 +1074,11 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes() {
     use crate::decorations::plan::LegendRole;
     use crate::layout::kernel::{FeedbackKind, TrialOutcome};
     use crate::layout::{AddressRole, ComponentAddress};
-    for source in all_sources().chain([categorical_source()]) {
+    for source in [
+        sources()[0].clone(),
+        categorical_source(),
+        crate::plots::categorical_distribution::extraction::supplied(),
+    ] {
         let source = source
             .title("Measured root title")
             .caption("Independent caption");

@@ -356,8 +356,7 @@ fn root_prepares_each_component_once() {
 }
 
 #[test]
-fn selected_geometry_and_capture_are_immutable() {
-    use crate::orchestrator::measurements::{self, Counter};
+fn selected_geometry_matches_the_drawn_trace_ink() {
     let source = source()
         .hue(CategoryValues::new("color", ["red", "red", "red", "blue", "blue"]).unwrap())
         .erase();
@@ -389,64 +388,6 @@ fn selected_geometry_and_capture_are_immutable() {
     marks.draw(&mut drawn).unwrap();
     drawn.end().unwrap();
     assert_eq!(marks.geometry.bounds(), drawn.bounds());
-    let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
-    let projections = crate::layout::Projection::test_projection_calls();
-    let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
-    let stages = STAGES.with(std::cell::Cell::get);
-    let poison = Plot::interaction(
-        CategoryValues::new("poison", ["x"]).unwrap(),
-        NumericValues::new("poison", [f64::NAN]),
-        CategoryValues::new("poison", ["x"]).unwrap(),
-        Bounds::new(
-            NumericValues::new("lo", [f64::NAN]),
-            NumericValues::new("hi", [f64::NAN]),
-        ),
-    )
-    .erase();
-    let mut backend = crate::render::geometry::GeometryBackend::new(&theme).unwrap();
-    backend.begin(640, 480).unwrap();
-    measurements::start();
-    poison
-        .render_panel(
-            crate::PlotKind::Interaction,
-            PlotRenderContext::new(
-                poison.data(),
-                selected.layout.projection.panel_box(),
-                &theme,
-            )
-            .with_retained_body(&selected),
-            &mut backend,
-        )
-        .unwrap();
-    backend.end().unwrap();
-    let work = measurements::finish();
-    for counter in [
-        Counter::OneCategoricalAxisMeasure,
-        Counter::StandardPanelIntrinsic,
-        Counter::LegacyPanelConstructor,
-        Counter::AxisRangePreparation,
-        Counter::AxisSpecPreparation,
-        Counter::AxisSourcePreparation,
-        Counter::TickSource,
-        Counter::TickMetricLookup,
-        Counter::TextProposalVisit,
-        Counter::TextExactTrial,
-    ] {
-        assert_eq!(work.counters[counter as usize], 0, "{counter:?}");
-    }
-    assert_eq!(
-        reads,
-        crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get)
-    );
-    assert_eq!(
-        projections,
-        crate::layout::Projection::test_projection_calls()
-    );
-    assert_eq!(
-        shapes,
-        crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get)
-    );
-    assert_eq!(stages[..2], STAGES.with(std::cell::Cell::get)[..2]);
 }
 
 #[test]

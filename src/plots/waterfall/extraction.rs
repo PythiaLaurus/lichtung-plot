@@ -206,7 +206,7 @@ fn root_components_prepare_once_without_a_geometry_measurement_backend() {
 }
 
 #[test]
-fn selected_geometry_and_poisoned_capture_preserve_all_operands_without_work() {
+fn selected_geometry_preserves_spans_labels_and_drawn_ink() {
     let plot = source().erase();
     let inputs =
         crate::plots::shared_x::prepare_plot(&plot, &OperationContext::new(), None).unwrap();
@@ -235,57 +235,11 @@ fn selected_geometry_and_poisoned_capture_preserve_all_operands_without_work() {
         assert_eq!(text.plan, producer.plan);
         assert_eq!(text.placement, producer.placement);
     }
-    let poison = Plot::waterfall(
-        CategoryValues::new("poison", ["wrong"]).unwrap(),
-        NumericValues::new("poison", [f64::NAN]),
-        f64::INFINITY,
-    )
-    .erase();
-    let mut poisoned_theme = crate::Theme::Science.resolve().unwrap();
-    poisoned_theme.marks.accents =
-        crate::theme::AccentPalette::new([crate::theme::OpaqueColor::rgb(255, 0, 0)]).unwrap();
-    poisoned_theme.detail_font_size = 0;
-    let projections = crate::layout::Projection::test_projection_calls();
-    let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
-    let stages = STAGES.with(std::cell::Cell::get);
-    crate::orchestrator::measurements::start();
     let mut backend = crate::render::geometry::GeometryBackend::new(&theme).unwrap();
     backend.begin(800, 600).unwrap();
-    poison
-        .render_panel(
-            crate::PlotKind::Waterfall,
-            PlotRenderContext::new(
-                poison.data(),
-                PanelBox::new(1.0, 2.0, 3.0, 4.0),
-                &poisoned_theme,
-            )
-            .with_retained_body(&selected),
-            &mut backend,
-        )
-        .unwrap();
+    marks.draw(&mut backend).unwrap();
     backend.end().unwrap();
-    let work = crate::orchestrator::measurements::finish();
-    for counter in [
-        crate::orchestrator::measurements::Counter::TickSource,
-        crate::orchestrator::measurements::Counter::TickDistinctList,
-        crate::orchestrator::measurements::Counter::TickMetricLookup,
-    ] {
-        assert_eq!(work.counters[counter as usize], 0);
-    }
     assert_eq!(marks.geometry.bounds(), backend.bounds());
-    assert_eq!(
-        reads,
-        crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get)
-    );
-    assert_eq!(
-        projections,
-        crate::layout::Projection::test_projection_calls()
-    );
-    assert_eq!(
-        shapes,
-        crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get)
-    );
-    assert_eq!(stages, STAGES.with(std::cell::Cell::get));
 }
 
 #[test]

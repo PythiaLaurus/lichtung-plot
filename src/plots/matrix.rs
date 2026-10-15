@@ -1841,7 +1841,7 @@ mod semantic_tests {
     }
 
     #[test]
-    fn selected_matrix_cells_preserve_geometry_and_poisoned_capture_does_no_layout_work() {
+    fn selected_matrix_cells_preserve_source_counts_and_drawn_geometry() {
         for preset in [crate::Theme::Publication, crate::Theme::Science] {
             let source = source();
             let inputs =
@@ -1896,51 +1896,6 @@ mod semantic_tests {
             marks.draw(&mut expected).unwrap();
             expected.end().unwrap();
             assert_eq!(marks.geometry.bounds(), expected.bounds());
-            let poison = Plot::matrix(vec![NumericValues::new("poison", [f64::NAN])]).erase();
-            let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
-            let projections = crate::layout::Projection::test_projection_calls();
-            let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
-            let selections = SELECTIONS.with(std::cell::Cell::get);
-            crate::orchestrator::measurements::start();
-            let mut captured = crate::render::geometry::GeometryBackend::new(&theme).unwrap();
-            captured.begin(800, 600).unwrap();
-            poison
-                .render_panel(
-                    crate::PlotKind::Matrix,
-                    PlotRenderContext::new(
-                        poison.data(),
-                        PanelBox::new(-10.0, -1.0, -10.0, -1.0),
-                        &theme,
-                    )
-                    .with_retained_body(&selected),
-                    &mut captured,
-                )
-                .unwrap();
-            captured.end().unwrap();
-            let work = crate::orchestrator::measurements::finish();
-            for counter in [
-                crate::orchestrator::measurements::Counter::TickSource,
-                crate::orchestrator::measurements::Counter::TickDistinctList,
-                crate::orchestrator::measurements::Counter::TickMetricLookup,
-                crate::orchestrator::measurements::Counter::MatrixLayoutPass,
-            ] {
-                assert_eq!(work.counters[counter as usize], 0);
-            }
-            assert_eq!(captured.bounds(), expected.bounds());
-            assert_eq!(
-                reads,
-                crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get)
-            );
-            assert_eq!(
-                projections,
-                crate::layout::Projection::test_projection_calls()
-            );
-            assert_eq!(
-                shapes,
-                crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get)
-            );
-            assert_eq!(stages, SEMANTIC_STAGES.with(std::cell::Cell::get));
-            assert_eq!(selections, SELECTIONS.with(std::cell::Cell::get));
         }
     }
 

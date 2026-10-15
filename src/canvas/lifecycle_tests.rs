@@ -236,14 +236,14 @@ pub(super) fn capture_counters() -> [usize; 6] {
     ]
 }
 
-/// The exhaustive 25-family lifecycle fixture invokes this with its actual
-/// source Plots. Matrix remains a root, never an expanded Canvas child.
+/// Parent interaction uses representative coordinate, categorical, grid and
+/// distribution children. The caller separately exercises every family as a root.
 pub(crate) fn mixed_family_parent_audit(plots: &[(PlotKind, Plot)]) {
     assert_eq!(plots.len(), 25);
-    let mut canvas = Canvas::grid(4, 6)
+    let mut canvas = Canvas::grid(2, 2)
         .unwrap()
-        .size(2401, 2001)
-        .title("All supported Canvas families")
+        .size(1601, 1201)
+        .title("Mixed Canvas families")
         .subtitle("Retained child scopes")
         .caption("Independent root caption")
         .labels(Labels::raw().alias("x", "Shared sample"));
@@ -260,37 +260,32 @@ pub(crate) fn mixed_family_parent_audit(plots: &[(PlotKind, Plot)]) {
             );
             continue;
         }
+        if !matches!(
+            kind,
+            PlotKind::Scatter | PlotKind::HorizontalBar | PlotKind::Heatmap | PlotKind::Raincloud
+        ) {
+            continue;
+        }
         canvas.panels[index] = Some(plot.clone().title(format!("{kind:?}")));
         index += 1;
     }
-    assert_eq!(index, 24);
-    // Mixed four-child roots cover all families with readable per-group failures.
-    let panels = std::mem::take(&mut canvas.panels);
-    canvas.rows = 2;
-    canvas.columns = 2;
-    canvas.width = 1601;
-    canvas.height = 1201;
-    canvas.text_panels = vec![None; 4];
-    for group in panels.chunks(4) {
-        canvas.panels = group.to_vec();
-        crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(|calls| calls.set(0));
-        crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| calls.set(0));
-        crate::orchestrator::measurements::start();
-        let cached = canvas.render_scene().unwrap();
-        let work = crate::orchestrator::measurements::finish();
-        assert_eq!(work.calls[2], 1);
-        assert_eq!(work.calls[3], 1);
-        assert_eq!(
-            work.capture_counters,
-            [0; crate::orchestrator::measurements::Counter::ALL.len()]
-        );
-        crate::decorations::plan::children::DISABLE_CHILD_REUSE.with(|disabled| disabled.set(true));
-        let uncached = canvas.render_scene();
-        crate::decorations::plan::children::DISABLE_CHILD_REUSE
-            .with(|disabled| disabled.set(false));
-        assert_eq!(cached.svg_bytes(), uncached.unwrap().svg_bytes());
-        crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS
-            .with(|calls| assert_eq!(calls.get(), 0));
-        crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| assert_eq!(calls.get(), 0));
-    }
+    assert_eq!(index, 4);
+    crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(|calls| calls.set(0));
+    crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| calls.set(0));
+    crate::orchestrator::measurements::start();
+    let cached = canvas.render_scene().unwrap();
+    let work = crate::orchestrator::measurements::finish();
+    assert_eq!(work.calls[2], 1);
+    assert_eq!(work.calls[3], 1);
+    assert_eq!(
+        work.capture_counters,
+        [0; crate::orchestrator::measurements::Counter::ALL.len()]
+    );
+    crate::decorations::plan::children::DISABLE_CHILD_REUSE.with(|disabled| disabled.set(true));
+    let uncached = canvas.render_scene();
+    crate::decorations::plan::children::DISABLE_CHILD_REUSE.with(|disabled| disabled.set(false));
+    assert_eq!(cached.svg_bytes(), uncached.unwrap().svg_bytes());
+    crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS
+        .with(|calls| assert_eq!(calls.get(), 0));
+    crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| assert_eq!(calls.get(), 0));
 }

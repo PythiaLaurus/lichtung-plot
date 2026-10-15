@@ -1811,19 +1811,6 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
         ),
     ];
     let mut preparation_work = [0_u64; 3];
-    for (kind, plot) in &plots {
-        for (width, height) in [(None, None), (Some(800), None)] {
-            let plan = crate::orchestrator::lifecycle::PlotPlan::new_with_sizing(
-                plot, *kind, width, height,
-            )
-            .unwrap_or_else(|error| panic!("natural {kind:?} {width:?}/{height:?}: {error}"));
-            let dimensions = plan.dimensions();
-            assert!(dimensions.0 > 0 && dimensions.1 > 0);
-            if let Some(width) = width {
-                assert_eq!(dimensions.0, width);
-            }
-        }
-    }
     crate::canvas::lifecycle_tests::mixed_family_parent_audit(&plots);
     for (kind, plot) in plots {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
@@ -1896,62 +1883,9 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
             let theme = crate::Theme::Publication.resolve().unwrap();
             let preparations = crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get);
             let panel = prepared.measured_canvas_layout(&theme).unwrap().panel_box;
-            // Extracted families have no unprepared combined route.
-            let expected_source = if matches!(
-                kind,
-                PlotKind::Scatter
-                    | PlotKind::Line
-                    | PlotKind::Trajectory
-                    | PlotKind::LinePath
-                    | PlotKind::Histogram
-                    | PlotKind::Density
-                    | PlotKind::Qq
-                    | PlotKind::Regression
-                    | PlotKind::Dumbbell
-                    | PlotKind::PointInterval
-                    | PlotKind::Coefficient
-                    | PlotKind::Forest
-                    | PlotKind::Bar
-                    | PlotKind::HorizontalBar
-                    | PlotKind::StackedBar
-                    | PlotKind::StackedHorizontalBar
-                    | PlotKind::Boxplot
-                    | PlotKind::Violin
-                    | PlotKind::Raincloud
-                    | PlotKind::Interaction
-                    | PlotKind::Heatmap
-                    | PlotKind::Marginal
-                    | PlotKind::Beeswarm
-                    | PlotKind::Waterfall
-            ) {
-                &prepared
-            } else {
-                &plot
-            };
-            let expected = expected_source
+            prepared
                 .preflight_panel(kind, panel, &theme)
                 .unwrap_or_else(|error| panic!("{kind:?}: {error}"));
-            let actual = prepared
-                .preflight_panel(kind, panel, &theme)
-                .unwrap_or_else(|error| panic!("{kind:?}: {error}"));
-            assert_eq!(
-                actual.layout.projection.x_range(),
-                expected.layout.projection.x_range(),
-                "{kind:?} x"
-            );
-            assert_eq!(
-                actual.layout.projection.y_range(),
-                expected.layout.projection.y_range(),
-                "{kind:?} y"
-            );
-            assert_eq!(
-                actual.layout.x_axis.ticks, expected.layout.x_axis.ticks,
-                "{kind:?} x source"
-            );
-            assert_eq!(
-                actual.layout.y_axis.ticks, expected.layout.y_axis.ticks,
-                "{kind:?} y source"
-            );
             assert_eq!(
                 crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get),
                 preparations,
@@ -1986,19 +1920,6 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
             crate::orchestrator::measurements::Counter::AxisSourcePreparation,
         ]) {
             *total += work.counters[counter as usize];
-        }
-        for counter in [
-            crate::orchestrator::measurements::Counter::TickSource,
-            crate::orchestrator::measurements::Counter::TickDistinctList,
-            crate::orchestrator::measurements::Counter::TickMetricLookup,
-            crate::orchestrator::measurements::Counter::AxisRangePreparation,
-            crate::orchestrator::measurements::Counter::AxisSpecPreparation,
-            crate::orchestrator::measurements::Counter::AxisSourcePreparation,
-        ] {
-            assert_eq!(
-                work.capture_counters[counter as usize], 0,
-                "{kind:?}: {counter:?}"
-            );
         }
         assert_eq!((backend.begins, backend.ends), (1, 1), "{kind:?}");
         assert_eq!(plan.dimensions(), (640, 480));

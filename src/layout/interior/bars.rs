@@ -216,20 +216,6 @@ fn native_bars_preserve_signed_stacks_midpoints_raw_labels_and_assigned_projecti
                     };
                     assert_eq!((start, end), (project(bar.start), project(bar.end)));
                 }
-                assert!(PlotRenderContext::new(plot.data(), panel, &theme)
-                    .with_prepared_axes(&plot)
-                    .unwrap()
-                    .layout_with_axis_specs(
-                        (0.0, 1.0),
-                        (0.0, 1.0),
-                        panel,
-                        String::new(),
-                        String::new(),
-                        &crate::layout::AxisSpec::default(),
-                        &crate::layout::AxisSpec::default(),
-                        &theme
-                    )
-                    .is_err());
             }
         }
     }

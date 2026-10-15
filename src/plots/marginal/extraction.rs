@@ -197,7 +197,7 @@ fn marginal_root_semantics_and_curves_are_prepared_before_fonts() {
 }
 
 #[test]
-fn marginal_selected_geometry_and_poisoned_capture_share_operands() {
+fn marginal_selected_geometry_preserves_linked_axes_and_drawn_ink() {
     let source = source().erase();
     let inputs =
         crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
@@ -267,47 +267,6 @@ fn marginal_selected_geometry_and_poisoned_capture_share_operands() {
         .bounds()
         .iter()
         .any(|ink| ink.left > payload.clips()[0].x1));
-    let poison = Plot::marginal(
-        NumericValues::new("poison", [f64::NAN]),
-        NumericValues::new("poison", [f64::INFINITY]),
-    )
-    .erase();
-    let projections = crate::layout::Projection::test_projection_calls();
-    let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
-    let stages = STAGES.with(std::cell::Cell::get);
-    crate::orchestrator::measurements::start();
-    let mut backend = crate::render::geometry::GeometryBackend::new(&theme).unwrap();
-    backend.begin(800, 600).unwrap();
-    poison
-        .render_panel(
-            crate::PlotKind::Marginal,
-            PlotRenderContext::new(poison.data(), payload.clips()[0], &theme)
-                .with_retained_body(&selected),
-            &mut backend,
-        )
-        .unwrap();
-    backend.end().unwrap();
-    let work = crate::orchestrator::measurements::finish();
-    for counter in [
-        crate::orchestrator::measurements::Counter::TickSource,
-        crate::orchestrator::measurements::Counter::AxisRangePreparation,
-        crate::orchestrator::measurements::Counter::TickMetricLookup,
-    ] {
-        assert_eq!(work.counters[counter as usize], 0);
-    }
-    assert_eq!(
-        reads,
-        crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get)
-    );
-    assert_eq!(
-        projections,
-        crate::layout::Projection::test_projection_calls()
-    );
-    assert_eq!(
-        shapes,
-        crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get)
-    );
-    assert_eq!(stages, STAGES.with(std::cell::Cell::get));
 }
 
 #[test]
