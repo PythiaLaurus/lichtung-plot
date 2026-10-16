@@ -3,7 +3,6 @@
 use crate::Error;
 
 use crate::data::PlotData;
-use crate::render::backend::PointStyle;
 use crate::{Plot, RawOverlay};
 
 #[derive(Debug)]
@@ -190,14 +189,4 @@ const fn splitmix64_source_row(source_row: usize) -> u64 {
     value = (value ^ (value >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
     value ^= value >> 31;
     value
-}
-
-pub(crate) fn overlay_style(
-    color: (u8, u8, u8),
-    theme: &crate::theme::ResolvedTheme,
-) -> PointStyle {
-    theme
-        .marks
-        .raw_overlay_point
-        .backend_style(color, theme.marks.raw_overlay_radius, true)
 }

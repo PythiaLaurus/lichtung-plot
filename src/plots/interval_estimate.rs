@@ -60,15 +60,23 @@ impl PreparedEstimate {
         let mut numeric = 0.0_f64;
         let mut pitch = 1.0_f64 / 1024.0;
         if available {
-            let point =
-                chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.interval_estimate);
+            let point = chart.point_style(
+                theme,
+                (0, 0, 0),
+                theme.marks.points().radii().interval_estimate(),
+            );
             let (width, height) = crate::render::geometry::point_ink_dimensions(&point)?;
             numeric = numeric.max(width);
             pitch = pitch.max(height);
         }
         if interval {
             let stroke = crate::render::geometry::line_ink_width(
-                &theme.marks.estimate_interval.backend_style(),
+                &theme
+                    .marks
+                    .strokes()
+                    .summaries()
+                    .estimate_interval()
+                    .backend_style(),
             )?;
             numeric = numeric.max(stroke);
             pitch = pitch.max(stroke);
@@ -883,15 +891,30 @@ fn project(
         domain_expansions: [None; 2],
         reference,
         reference_style: if prepared.point_interval {
-            theme.marks.point_interval_reference.backend_style()
+            theme
+                .marks
+                .strokes()
+                .references()
+                .point_interval_reference()
+                .backend_style()
         } else {
-            theme.marks.estimate_reference.backend_style()
+            theme
+                .marks
+                .strokes()
+                .references()
+                .estimate_reference()
+                .backend_style()
         },
-        interval_style: theme.marks.estimate_interval.backend_style(),
+        interval_style: theme
+            .marks
+            .strokes()
+            .summaries()
+            .estimate_interval()
+            .backend_style(),
         point_style: chart.point_style(
             theme,
-            crate::theme::AccentColors::resolve(&theme.marks.accents, 1)?.color(0)?,
-            theme.marks.point_sizes.interval_estimate,
+            crate::theme::AccentColors::resolve(theme.marks.accents(), 1)?.color(0)?,
+            theme.marks.points().radii().interval_estimate(),
         ),
         rows: Vec::new(),
         #[cfg(test)]

@@ -48,10 +48,17 @@ pub(crate) fn intrinsic_body_minimum(
             "Qq primary quantile pairs are incomplete".into(),
         ));
     }
-    let style = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.qq);
+    let style = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().qq());
     let (width, height) = crate::render::geometry::point_ink_dimensions(&style)?;
     let reference = if prepared.line.is_some() {
-        crate::render::geometry::line_ink_width(&theme.marks.qq_reference.backend_style())?
+        crate::render::geometry::line_ink_width(
+            &theme
+                .marks
+                .strokes()
+                .references()
+                .qq_reference()
+                .backend_style(),
+        )?
     } else {
         0.0
     };
@@ -168,7 +175,7 @@ pub(crate) fn measure_marks(
     if let Some(ink) = crate::render::geometry::point_ink_bounds(&chart.point_style(
         theme,
         (0, 0, 0),
-        theme.marks.point_sizes.qq,
+        theme.marks.points().radii().qq(),
     ))? {
         let source = [
             (
@@ -210,11 +217,16 @@ pub(crate) fn project(
         clip: layout.projection.panel_box(),
         line: None,
         points: Vec::new(),
-        line_style: theme.marks.qq_reference.backend_style(),
+        line_style: theme
+            .marks
+            .strokes()
+            .references()
+            .qq_reference()
+            .backend_style(),
         point_style: chart.point_style(
             theme,
-            crate::theme::AccentColors::resolve(&theme.marks.accents, 1)?.color(0)?,
-            theme.marks.point_sizes.qq,
+            crate::theme::AccentColors::resolve(theme.marks.accents(), 1)?.color(0)?,
+            theme.marks.points().radii().qq(),
         ),
         domain_expansions: [None; 2],
     };
@@ -539,19 +551,65 @@ mod tests {
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::Publication.resolve().unwrap();
         let before = chart.intrinsic_body_minimum(&theme).unwrap();
-        theme.marks.point_sizes.qq = 54;
+        let radii = theme.marks.points().radii().clone().with_qq(54).unwrap();
+        let points = theme.marks.points().clone().with_radii(radii).unwrap();
+        theme.marks = theme.marks.clone().with_points(points).unwrap();
         let sized = chart.intrinsic_body_minimum(&theme).unwrap();
         assert_eq!(sized.0.to_bits(), before.0.to_bits());
         assert_eq!(sized.1.to_bits(), (108.0_f64 + 5530.0 / 1024.0).to_bits());
-        theme.marks.primary_point.fill_alpha = 0;
-        theme.marks.primary_point.outline.as_mut().unwrap().color =
-            crate::theme::Color::rgba(255, 255, 255, 0);
+        let mut primary = theme.marks.points().primary().clone();
+        primary.fill_alpha = 0;
+        primary.outline.as_mut().unwrap().color = crate::theme::Color::rgba(255, 255, 255, 0);
+        let points = theme.marks.points().clone().with_primary(primary).unwrap();
+        theme.marks = theme.marks.clone().with_points(points).unwrap();
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), before);
-        theme.marks.qq_reference.width = 140.0;
+        let reference = theme
+            .marks
+            .strokes()
+            .references()
+            .qq_reference()
+            .clone()
+            .with_width(140.0)
+            .unwrap();
+        let references = theme
+            .marks
+            .strokes()
+            .references()
+            .clone()
+            .with_qq_reference(reference)
+            .unwrap();
+        let strokes = theme
+            .marks
+            .strokes()
+            .clone()
+            .with_references(references)
+            .unwrap();
+        theme.marks = theme.marks.clone().with_strokes(strokes).unwrap();
         let reference = chart.intrinsic_body_minimum(&theme).unwrap();
         assert_eq!(reference.0.to_bits(), before.0.to_bits());
         assert_eq!(reference.1.to_bits(), 140.0_f64.to_bits());
-        theme.marks.qq_reference.paint = crate::theme::Color::rgba(1, 2, 3, 0);
+        let reference = theme
+            .marks
+            .strokes()
+            .references()
+            .qq_reference()
+            .clone()
+            .with_color(crate::theme::Color::rgba(1, 2, 3, 0))
+            .unwrap();
+        let references = theme
+            .marks
+            .strokes()
+            .references()
+            .clone()
+            .with_qq_reference(reference)
+            .unwrap();
+        let strokes = theme
+            .marks
+            .strokes()
+            .clone()
+            .with_references(references)
+            .unwrap();
+        theme.marks = theme.marks.clone().with_strokes(strokes).unwrap();
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), before);
     }
 

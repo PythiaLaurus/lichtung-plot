@@ -54,12 +54,24 @@ pub(crate) fn intrinsic_body_minimum(
             "Regression has no retained observations".into(),
         ));
     }
-    let style = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.regression);
+    let style = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().regression());
     let (width, height) = crate::render::geometry::point_ink_dimensions(&style)?;
-    let fit = crate::render::geometry::line_ink_width(&theme.marks.regression_fit.backend_style())?;
+    let fit = crate::render::geometry::line_ink_width(
+        &theme
+            .marks
+            .strokes()
+            .curves()
+            .regression_fit()
+            .backend_style(),
+    )?;
     let band = if prepared.band_values.is_some() {
         crate::render::geometry::rectangular_fill_ink_outset(
-            &theme.marks.regression_band.backend_style((0, 0, 0)),
+            &theme
+                .marks
+                .fills()
+                .bands()
+                .regression_band()
+                .backend_style((0, 0, 0)),
         )?
     } else {
         (0.0, 0.0)
@@ -98,19 +110,29 @@ impl PreparedRegression {
         crate::data::source::reserve_source(&mut entries, 2)?;
         let band = chart.regression_band_spec();
         let fit_identity = chart.point_legend_identity(band.legend_label())?;
-        let line = theme.marks.regression_fit.backend_style();
+        let line = theme
+            .marks
+            .strokes()
+            .curves()
+            .regression_fit()
+            .backend_style();
         let fit_entry = if band == RegressionBand::PointwiseMean95 {
             LegendEntry::line_fill(
                 fit_identity,
                 line,
-                theme.marks.regression_band.backend_style(color),
+                theme
+                    .marks
+                    .fills()
+                    .bands()
+                    .regression_band()
+                    .backend_style(color),
             )
         } else {
             LegendEntry::line(fit_identity, line)
         };
         entries.push(LegendEntry::point(
             chart.point_legend_identity("Observations")?,
-            chart.point_style(theme, color, theme.marks.point_sizes.regression),
+            chart.point_style(theme, color, theme.marks.points().radii().regression()),
         ));
         entries.push(fit_entry);
         Ok(entries)
@@ -248,7 +270,7 @@ pub(crate) fn measure_marks(
     if let Some(ink) = crate::render::geometry::point_ink_bounds(&chart.point_style(
         theme,
         (0, 0, 0),
-        theme.marks.point_sizes.regression,
+        theme.marks.points().radii().regression(),
     ))? {
         requests = crate::layout::interior::automatic_mark_ink_expansions(
             prepared.observation_ranges,
@@ -302,14 +324,19 @@ pub(crate) fn project(
     theme: &crate::theme::ResolvedTheme,
 ) -> Result<PlotRenderResult, Error> {
     let projection = &layout.projection;
-    let color = crate::theme::AccentColors::resolve(&theme.marks.accents, 1)?.color(0)?;
-    let point_style = chart.point_style(theme, color, theme.marks.point_sizes.regression);
+    let color = crate::theme::AccentColors::resolve(theme.marks.accents(), 1)?.color(0)?;
+    let point_style = chart.point_style(theme, color, theme.marks.points().radii().regression());
     let scatter_points =
         crate::data::source::collect_source(prepared.points.iter().map(|(x_value, y_value)| {
             let (x, y) = projection.project(*x_value, *y_value);
             Ok(Point2D::new(x, y))
         }))?;
-    let line_style = theme.marks.regression_fit.backend_style();
+    let line_style = theme
+        .marks
+        .strokes()
+        .curves()
+        .regression_fit()
+        .backend_style();
 
     let (fit_x0, fit_y0) = projection.project(prepared.fit_line[0].0, prepared.fit_line[0].1);
     let (fit_x1, fit_y1) = projection.project(prepared.fit_line[1].0, prepared.fit_line[1].1);
@@ -354,7 +381,12 @@ pub(crate) fn project(
             Ok(upper)
         })
         .transpose()?;
-    let band_fill = theme.marks.regression_band.backend_style(color);
+    let band_fill = theme
+        .marks
+        .fills()
+        .bands()
+        .regression_band()
+        .backend_style(color);
 
     let legend_entries = PreparedRegression::guide_entries(chart, theme, color)?;
     let payload = RegressionPayload {
@@ -403,23 +435,82 @@ mod style_tests {
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::Publication.resolve().unwrap();
         let before = chart.intrinsic_body_minimum(&theme).unwrap();
-        theme.marks.point_sizes.regression = 54;
+        let radii = theme
+            .marks
+            .points()
+            .radii()
+            .clone()
+            .with_regression(54)
+            .unwrap();
+        let points = theme.marks.points().clone().with_radii(radii).unwrap();
+        theme.marks = theme.marks.clone().with_points(points).unwrap();
         let sized = chart.intrinsic_body_minimum(&theme).unwrap();
         assert_eq!(sized.0.to_bits(), (108.0_f64 + 5530.0 / 1024.0).to_bits());
         assert_eq!(sized.1.to_bits(), (108.0_f64 + 5530.0 / 1024.0).to_bits());
-        theme.marks.primary_point.fill_alpha = 0;
-        theme.marks.primary_point.outline.as_mut().unwrap().color =
-            crate::theme::Color::rgba(255, 255, 255, 0);
+        let mut primary = theme.marks.points().primary().clone();
+        primary.fill_alpha = 0;
+        primary.outline.as_mut().unwrap().color = crate::theme::Color::rgba(255, 255, 255, 0);
+        let points = theme.marks.points().clone().with_primary(primary).unwrap();
+        theme.marks = theme.marks.clone().with_points(points).unwrap();
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), before);
-        theme.marks.regression_fit.width = 140.0;
+        let fit = theme
+            .marks
+            .strokes()
+            .curves()
+            .regression_fit()
+            .clone()
+            .with_width(140.0)
+            .unwrap();
+        let curves = theme
+            .marks
+            .strokes()
+            .curves()
+            .clone()
+            .with_regression_fit(fit)
+            .unwrap();
+        let strokes = theme.marks.strokes().clone().with_curves(curves).unwrap();
+        theme.marks = theme.marks.clone().with_strokes(strokes).unwrap();
         assert_eq!(
             chart.intrinsic_body_minimum(&theme).unwrap(),
             (140.0, 140.0)
         );
-        theme.marks.regression_fit.paint = crate::theme::Color::rgba(1, 2, 3, 0);
+        let fit = theme
+            .marks
+            .strokes()
+            .curves()
+            .regression_fit()
+            .clone()
+            .with_color(crate::theme::Color::rgba(1, 2, 3, 0))
+            .unwrap();
+        let curves = theme
+            .marks
+            .strokes()
+            .curves()
+            .clone()
+            .with_regression_fit(fit)
+            .unwrap();
+        let strokes = theme.marks.strokes().clone().with_curves(curves).unwrap();
+        theme.marks = theme.marks.clone().with_strokes(strokes).unwrap();
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), before);
-        theme.marks.regression_band.outline =
-            Some(crate::theme::DataOutlineTheme::mapped(140.0, 255).unwrap());
+        let band = theme
+            .marks
+            .fills()
+            .bands()
+            .regression_band()
+            .clone()
+            .with_outline(Some(
+                crate::theme::DataOutlineTheme::mapped(140.0, 255).unwrap(),
+            ))
+            .unwrap();
+        let bands = theme
+            .marks
+            .fills()
+            .bands()
+            .clone()
+            .with_regression_band(band)
+            .unwrap();
+        let fills = theme.marks.fills().clone().with_bands(bands).unwrap();
+        theme.marks = theme.marks.clone().with_fills(fills).unwrap();
         let band = chart.intrinsic_body_minimum(&theme).unwrap();
         assert!(band.0 >= 140.0 && band.1 >= 140.0);
     }
@@ -442,9 +533,27 @@ mod style_tests {
         let old = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
             .unwrap();
-        theme.marks.regression_band.fill_alpha = 128;
-        theme.marks.regression_band.outline =
-            Some(crate::theme::DataOutlineTheme::mapped(2.0, 255).unwrap());
+        let band = theme
+            .marks
+            .fills()
+            .bands()
+            .regression_band()
+            .clone()
+            .with_fill_alpha(128)
+            .unwrap()
+            .with_outline(Some(
+                crate::theme::DataOutlineTheme::mapped(2.0, 255).unwrap(),
+            ))
+            .unwrap();
+        let bands = theme
+            .marks
+            .fills()
+            .bands()
+            .clone()
+            .with_regression_band(band)
+            .unwrap();
+        let fills = theme.marks.fills().clone().with_bands(bands).unwrap();
+        theme.marks = theme.marks.clone().with_fills(fills).unwrap();
         let changed = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
             .unwrap();
@@ -492,8 +601,25 @@ mod style_tests {
         let old = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
             .unwrap();
-        theme.marks.regression_fit.paint = crate::theme::Color::rgb(17, 41, 67);
-        theme.marks.regression_fit.width = 2.5;
+        let fit = theme
+            .marks
+            .strokes()
+            .curves()
+            .regression_fit()
+            .clone()
+            .with_color(crate::theme::Color::rgb(17, 41, 67))
+            .unwrap()
+            .with_width(2.5)
+            .unwrap();
+        let curves = theme
+            .marks
+            .strokes()
+            .curves()
+            .clone()
+            .with_regression_fit(fit)
+            .unwrap();
+        let strokes = theme.marks.strokes().clone().with_curves(curves).unwrap();
+        theme.marks = theme.marks.clone().with_strokes(strokes).unwrap();
         let changed = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
             .unwrap();

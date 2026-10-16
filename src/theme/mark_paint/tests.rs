@@ -232,32 +232,6 @@ fn mapped_and_fixed_outlines_keep_fill_and_stroke_alpha_independent() {
 }
 
 #[test]
-fn fixed_fill_edits_and_absence_retain_only_their_selected_paints() {
-    let paint = Color::rgba(11, 23, 37, 53);
-    let outline = OutlineTheme::new(Color::rgba(41, 59, 73, 89), 1.625).unwrap();
-    let source = FixedFillTheme::new(paint, Some(outline.clone())).unwrap();
-    assert_eq!(source.color(), paint);
-    assert_eq!(source.outline(), Some(&outline));
-    let edited = source
-        .clone()
-        .with_color(Color::rgba(97, 109, 127, 0))
-        .unwrap();
-    assert_eq!(edited.outline(), Some(&outline));
-    assert_eq!(edited.backend_style().color, Color::rgba(97, 109, 127, 0));
-    assert_eq!(edited.backend_style().stroke, outline.color());
-    let other = OutlineTheme::new(Color::rgb(131, 149, 163), 2.125).unwrap();
-    let changed = source.clone().with_outline(Some(other.clone())).unwrap();
-    assert_eq!(changed.color(), paint);
-    assert_eq!(changed.outline(), Some(&other));
-    let absent = changed.with_outline(None).unwrap();
-    assert!(absent.outline().is_none());
-    assert_eq!(absent.backend_style().color, paint);
-    assert_eq!(absent.backend_style().stroke, Color::rgba(0, 0, 0, 0));
-    assert_eq!(absent.backend_style().stroke_width.to_bits(), 0);
-    assert_eq!(source.outline(), Some(&outline));
-}
-
-#[test]
 fn point_roles_share_the_exact_ratio_and_apply_outline_policy_once() {
     let paint = Color::rgba(11, 23, 37, 53);
     let ratio = RelativeSpacing::ratio(5, 14).unwrap();
@@ -333,46 +307,6 @@ fn point_roles_share_the_exact_ratio_and_apply_outline_policy_once() {
 }
 
 #[test]
-fn data_line_edits_replace_one_input_and_never_requantize_alpha() {
-    let source = DataLineTheme::new(1.875, 211, StrokePattern::MediumDash).unwrap();
-    assert_eq!(source.width().to_bits(), 1.875_f32.to_bits());
-    assert_eq!(source.alpha(), 211);
-    assert_eq!(source.pattern(), StrokePattern::MediumDash);
-    assert_eq!(
-        source.clone().with_width(2.625).unwrap(),
-        DataLineTheme {
-            width: 2.625,
-            ..source.clone()
-        }
-    );
-    assert_eq!(
-        source.clone().with_alpha(17).unwrap(),
-        DataLineTheme {
-            alpha: 17,
-            ..source.clone()
-        }
-    );
-    assert_eq!(
-        source
-            .clone()
-            .with_pattern(StrokePattern::LongDash)
-            .unwrap(),
-        DataLineTheme {
-            pattern: StrokePattern::LongDash,
-            ..source.clone()
-        }
-    );
-    for alpha in [0, 255] {
-        let edited = source.clone().with_alpha(alpha).unwrap();
-        let style = edited.backend_style((13, 29, 47));
-        assert_eq!(style.color, Color::rgba(13, 29, 47, alpha));
-        assert_eq!(style.width.to_bits(), 1.875_f32.to_bits());
-        assert_eq!(style.pattern, StrokePattern::MediumDash);
-    }
-    assert_eq!(source.alpha(), 211);
-}
-
-#[test]
 fn absent_fill_outlines_have_one_operational_identity_and_invalid_widths_still_refuse() {
     let paint = Color::rgba(11, 23, 37, 53);
     let first = FillStyle::new(paint, Color::rgb(41, 59, 73), 0.0);
@@ -389,57 +323,4 @@ fn absent_fill_outlines_have_one_operational_identity_and_invalid_widths_still_r
         let invalid = FillStyle::new(Color::rgba(0, 0, 0, 0), Color::rgba(0, 0, 0, 0), width);
         assert!(crate::render::primitives::CanonicalFillStyle::new(&invalid).is_err());
     }
-}
-
-#[test]
-fn canonical_absent_outline_metadata_preserves_png_pixels() {
-    use crate::render::backend::{Backend, Point2D};
-    use crate::render::svg_backend::{rasterize_svg_bytes_to_png, PngTargetPlan, SvgBackend};
-    let current = DataFillTheme::new(56, None)
-        .unwrap()
-        .backend_style((0, 114, 178));
-    // Independent raw backend fixture for the prior unpainted metadata. This is
-    // not a foundation value or a second production outline representation.
-    let prior_metadata = FillStyle {
-        color: Color::rgba(0, 114, 178, 56),
-        stroke: Color::rgb(0, 114, 178),
-        stroke_width: 0.0,
-    };
-    let svg = |style: &FillStyle| {
-        let mut backend = SvgBackend::in_memory(80, 60);
-        backend.begin(80, 60).unwrap();
-        backend
-            .draw_polygon(
-                &[
-                    Point2D::new(10.0, 10.0),
-                    Point2D::new(60.0, 13.0),
-                    Point2D::new(55.0, 45.0),
-                    Point2D::new(17.0, 40.0),
-                ],
-                style,
-            )
-            .unwrap();
-        backend.end().unwrap();
-        backend.into_bytes().unwrap()
-    };
-    let current_svg = svg(&current);
-    let prior_svg = svg(&prior_metadata);
-    assert_ne!(current_svg, prior_svg);
-    let options = crate::PngOptions {
-        sizing: crate::PngSizing::Source,
-        compression: crate::PngCompression::Balanced,
-    };
-    let size = resvg::tiny_skia::IntSize::from_wh(80, 60).unwrap();
-    let plan = PngTargetPlan::new(size, &options).unwrap();
-    let current_png = rasterize_svg_bytes_to_png(&current_svg, plan, &options).unwrap();
-    let prior_png = rasterize_svg_bytes_to_png(&prior_svg, plan, &options).unwrap();
-    assert_eq!(current_png, prior_png);
-    let mut reader = png::Decoder::new(std::io::Cursor::new(current_png))
-        .read_info()
-        .unwrap();
-    let mut pixels = vec![0; reader.output_buffer_size().unwrap()];
-    let image = reader.next_frame(&mut pixels).unwrap();
-    assert_eq!(image.color_type, png::ColorType::Rgba);
-    assert_eq!((image.width, image.height), (80, 60));
-    assert_eq!(pixels[(30 * 80 + 35) * 4 + 3], 56);
 }

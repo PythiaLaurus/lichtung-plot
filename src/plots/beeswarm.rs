@@ -52,7 +52,7 @@ pub(crate) fn intrinsic_body_minimum(
             "Beeswarm source rows and prepared points differ".into(),
         ));
     }
-    let point = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.beeswarm);
+    let point = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().beeswarm());
     let ink = crate::render::geometry::point_ink_bounds(&point)?;
 
     let pitch = 2.0 * quanta_pixels(packing::radius(&point)?);
@@ -74,7 +74,12 @@ pub(crate) fn intrinsic_body_minimum(
     let mut numeric = ink.map_or(0.0, |ink| ink.right - ink.left);
     if chart.zero_line_visible() && prepared.x_data.0 <= 0.0 && prepared.x_data.1 >= 0.0 {
         numeric = numeric.max(crate::render::geometry::line_ink_width(
-            &theme.marks.beeswarm_reference.backend_style(),
+            &theme
+                .marks
+                .strokes()
+                .references()
+                .beeswarm_reference()
+                .backend_style(),
         )?);
     }
     let axes =
@@ -245,8 +250,11 @@ pub(crate) fn natural_body_height(
         .ok_or_else(|| Error::Render("natural Beeswarm axes missing".into()))?;
     let range = chart.x_axis_spec().limits.unwrap_or(axes.ranges[0]);
     let projection = crate::layout::Projection::new(range, (0.0, 1.0), (0.0, width, 0.0, 1.0));
-    let radius =
-        packing::radius(&chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.beeswarm))?;
+    let radius = packing::radius(&chart.point_style(
+        theme,
+        (0, 0, 0),
+        theme.marks.points().radii().beeswarm(),
+    ))?;
     let packed = packing::pack(&marks.rows, &projection, radius)?;
     let hard = intrinsic_body_minimum(chart, theme)?;
     let height = quanta_pixels(packed.hard_pitch)
@@ -321,8 +329,11 @@ pub(crate) fn measure(
         theme,
         context.fit_scope(),
     )?;
-    let radius =
-        packing::radius(&chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.beeswarm))?;
+    let radius = packing::radius(&chart.point_style(
+        theme,
+        (0, 0, 0),
+        theme.marks.points().radii().beeswarm(),
+    ))?;
     let packed = packing::pack(&prepared.rows, &projection, radius)?;
     let labels = axes.display_categories[1]
         .as_ref()
@@ -404,7 +415,12 @@ pub(crate) fn measure(
         let (_, y1) = layout.projection.project(0.0, prepared.levels.len() as f64);
         Some((
             [Point2D::new(x, y0), Point2D::new(x, y1)],
-            theme.marks.beeswarm_reference.backend_style(),
+            theme
+                .marks
+                .strokes()
+                .references()
+                .beeswarm_reference()
+                .backend_style(),
         ))
     } else {
         None
@@ -420,7 +436,11 @@ pub(crate) fn measure(
                     .ok_or_else(|| Error::Render("Beeswarm arranged point overflow".into()))?;
                 Ok((
                     Point2D::new(quanta_pixels(point.x), quanta_pixels(y)),
-                    chart.point_style(theme, color.as_rgb(), theme.marks.point_sizes.beeswarm),
+                    chart.point_style(
+                        theme,
+                        color.as_rgb(),
+                        theme.marks.points().radii().beeswarm(),
+                    ),
                 ))
             },
         ))?;

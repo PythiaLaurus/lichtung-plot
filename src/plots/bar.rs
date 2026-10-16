@@ -147,8 +147,18 @@ pub(crate) fn measure_marks(
         clip: layout.projection.panel_box(),
         domain_expansion,
         zero: None,
-        zero_style: theme.marks.bar_zero.backend_style(),
-        interval_style: theme.marks.uncertainty_stroke.backend_style(),
+        zero_style: theme
+            .marks
+            .strokes()
+            .references()
+            .bar_zero()
+            .backend_style(),
+        interval_style: theme
+            .marks
+            .strokes()
+            .summaries()
+            .uncertainty()
+            .backend_style(),
         bars: Vec::new(),
         text: Vec::new(),
         points: Vec::new(),
@@ -166,7 +176,9 @@ pub(crate) fn measure_marks(
             polygon,
             fill: theme
                 .marks
-                .bar_body
+                .fills()
+                .bodies()
+                .bar_body()
                 .backend_style(prepared.bar_color(chart, bar, &colors, &accents)?),
             interval: bar
                 .interval

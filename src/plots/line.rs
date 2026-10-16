@@ -83,18 +83,18 @@ pub(crate) fn intrinsic_body_minimum(
         ));
     }
     let path_style = if chart.kind() == PlotKind::Line {
-        &theme.marks.series_line
+        theme.marks.data_lines().series_line()
     } else {
-        &theme.marks.path_line
+        theme.marks.data_lines().path_line()
     }
     .backend_style((0, 0, 0));
     let path = crate::render::geometry::line_ink_width(&path_style)?;
     let points_visible = chart.kind() == PlotKind::Trajectory || chart.markers_visible();
     let mark = if points_visible {
         let radius = if chart.kind() == PlotKind::Line {
-            theme.marks.point_sizes.path
+            theme.marks.points().radii().path()
         } else {
-            theme.marks.point_sizes.trajectory
+            theme.marks.points().radii().trajectory()
         };
         let point_style = chart.point_style(theme, (0, 0, 0), radius);
         crate::render::geometry::point_ink_dimensions(&point_style)?
@@ -103,7 +103,12 @@ pub(crate) fn intrinsic_body_minimum(
     };
     let ribbon = if chart.kind() == PlotKind::Line && chart.line_band_configured() {
         crate::render::geometry::rectangular_fill_ink_outset(
-            &theme.marks.line_band.backend_style((0, 0, 0)),
+            &theme
+                .marks
+                .fills()
+                .bands()
+                .line_band()
+                .backend_style((0, 0, 0)),
         )?
     } else {
         (0.0, 0.0)
@@ -147,7 +152,7 @@ impl PreparedLine {
             .primary_accent_slots
             .checked_add(self.layers.len())
             .ok_or_else(|| Error::Render("Line accent slot count overflowed".into()))?;
-        let accent = AccentColors::resolve(&theme.marks.accents, slots)?;
+        let accent = AccentColors::resolve(theme.marks.accents(), slots)?;
         Ok((map, accent))
     }
 
@@ -177,7 +182,7 @@ impl PreparedLine {
             })?;
             map.color(&self.hues[hue])
         } else {
-            Ok(theme.foreground)
+            Ok(theme.marks.neutral_paints().path().as_rgb())
         }
     }
     pub(crate) fn checked_primary_mark_count(&self) -> Result<u128, Error> {
@@ -272,21 +277,21 @@ impl PreparedLine {
             let has_fill = chart.kind() == PlotKind::Line
                 && group.points.iter().all(|point| point.interval.is_some());
             let line = if chart.kind() == PlotKind::Line {
-                &theme.marks.series_line
+                theme.marks.data_lines().series_line()
             } else {
-                &theme.marks.path_line
+                theme.marks.data_lines().path_line()
             }
             .backend_style(color);
             let point = chart.point_style(
                 theme,
                 color,
                 if chart.kind() == PlotKind::Line {
-                    theme.marks.point_sizes.path
+                    theme.marks.points().radii().path()
                 } else {
-                    theme.marks.point_sizes.trajectory
+                    theme.marks.points().radii().trajectory()
                 },
             );
-            let fill = theme.marks.line_band.backend_style(color);
+            let fill = theme.marks.fills().bands().line_band().backend_style(color);
             crate::data::source::reserve_source(&mut entries, 1)?;
             let identity = chart.collective_legend_identity(identity)?;
             entries.push(match (chart.markers_visible(), has_fill) {
@@ -305,7 +310,11 @@ impl PreparedLine {
             for label in levels {
                 entries.push(LegendEntry::point(
                     chart.point_legend_identity(label)?,
-                    chart.point_style(theme, map.color(label)?, theme.marks.point_sizes.trajectory),
+                    chart.point_style(
+                        theme,
+                        map.color(label)?,
+                        theme.marks.points().radii().trajectory(),
+                    ),
                 ));
             }
         }
@@ -723,7 +732,7 @@ fn project(
     for &index in &order {
         let group = &prepared.groups[index];
         let color = prepared.group_color(chart, group, theme, &map, &accent)?;
-        let fill = theme.marks.line_band.backend_style(color);
+        let fill = theme.marks.fills().bands().line_band().backend_style(color);
 
         let has_fill = chart.kind() == PlotKind::Line
             && group.points.iter().all(|point| point.interval.is_some());
@@ -813,18 +822,18 @@ fn project(
             }
         }
         let line = if chart.kind() == PlotKind::Line {
-            &theme.marks.series_line
+            theme.marks.data_lines().series_line()
         } else {
-            &theme.marks.path_line
+            theme.marks.data_lines().path_line()
         }
         .backend_style(color);
         let point_style = chart.point_style(
             theme,
             color,
             if chart.kind() == PlotKind::Line {
-                theme.marks.point_sizes.path
+                theme.marks.points().radii().path()
             } else {
-                theme.marks.point_sizes.trajectory
+                theme.marks.points().radii().trajectory()
             },
         );
         if chart.kind() == PlotKind::Line && chart.markers_visible() {
@@ -861,7 +870,7 @@ fn project(
                     crate::data::source::collect_source(std::iter::once(Ok(project(
                         point.x, point.y,
                     ))))?,
-                    chart.point_style(theme, color, theme.marks.point_sizes.trajectory),
+                    chart.point_style(theme, color, theme.marks.points().radii().trajectory()),
                 ));
             }
         }
@@ -879,7 +888,13 @@ fn project(
             crate::data::source::reserve_source(&mut text, labels.len())?;
             let x_range = layout.projection.x_range();
             let y_range = layout.projection.y_range();
-            let offset = f64::from(style.radius) + theme.annotations.point_label_gap;
+            let offset = f64::from(style.radius)
+                + theme
+                    .annotations
+                    .point_label_gap_length(
+                        theme.typography.annotations.point_layer_label.font_size(),
+                    )?
+                    .pixels_rounded(crate::layout::kernel::SpatialRounding::NearestEven)?;
             for ((&(x, y), point), label) in layer.points.iter().zip(&points).zip(labels) {
                 if x < x_range.0 || x > x_range.1 || y < y_range.0 || y > y_range.1 {
                     continue;
@@ -1011,17 +1026,17 @@ fn project(
         );
     }
     let line_style = if chart.kind() == PlotKind::Line {
-        &theme.marks.series_line
+        theme.marks.data_lines().series_line()
     } else {
-        &theme.marks.path_line
+        theme.marks.data_lines().path_line()
     }
     .backend_style((0, 0, 0));
     let line_ink = crate::render::geometry::line_ink_bounds(&line_style)?;
     let point_ink = if chart.kind() == PlotKind::Trajectory || chart.markers_visible() {
         let radius = if chart.kind() == PlotKind::Line {
-            theme.marks.point_sizes.path
+            theme.marks.points().radii().path()
         } else {
-            theme.marks.point_sizes.trajectory
+            theme.marks.points().radii().trajectory()
         };
         let point_style = chart.point_style(theme, (0, 0, 0), radius);
         crate::render::geometry::point_ink_bounds(&point_style)?

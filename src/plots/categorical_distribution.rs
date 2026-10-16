@@ -83,8 +83,8 @@ impl PreparedDistribution {
                     let color = colors.color(label)?;
                     Ok(LegendEntry::line_fill(
                         chart.point_legend_identity(label)?,
-                        theme.marks.summary_stroke.backend_style(),
-                        theme.marks.box_body.backend_style(color),
+                        theme.marks.strokes().summaries().summary().backend_style(),
+                        theme.marks.fills().bodies().box_body().backend_style(color),
                     ))
                 }),
             ),
@@ -92,13 +92,21 @@ impl PreparedDistribution {
                 prepared.sample.hue_levels.iter().map(|label| {
                     let color = colors.color(label)?;
                     let identity = chart.point_legend_identity(label)?;
-                    let fill = theme.marks.violin_body.backend_style(color);
+                    let fill = theme
+                        .marks
+                        .fills()
+                        .bodies()
+                        .violin_body()
+                        .backend_style(color);
                     Ok(if chart.kind() == PlotKind::Violin {
                         LegendEntry::fill(identity, fill)
                     } else {
                         LegendEntry::point_fill(
                             identity,
-                            crate::plots::distribution_sample::overlay_style(color, theme),
+                            chart.distribution_point_style(
+                                theme.marks.points().mandatory_strip(),
+                                color,
+                            ),
                             fill,
                         )
                     })

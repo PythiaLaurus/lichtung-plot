@@ -57,10 +57,19 @@ pub(crate) fn intrinsic_body_minimum(
     if prepared.curves.is_empty() {
         return Err(Error::Render("Density has no retained group curves".into()));
     }
-    let line = theme.marks.density_line.backend_style((0, 0, 0));
+    let line = theme
+        .marks
+        .data_lines()
+        .density_line()
+        .backend_style((0, 0, 0));
     let ink = crate::render::geometry::line_ink_width(&line)?;
     let area = crate::render::geometry::rectangular_fill_ink_outset(
-        &theme.marks.density_area.backend_style((0, 0, 0)),
+        &theme
+            .marks
+            .fills()
+            .densities()
+            .density_area()
+            .backend_style((0, 0, 0)),
     )?;
     Ok((
         if chart.user_x_limits().is_none() {
@@ -108,7 +117,7 @@ impl PreparedDensity {
             resources,
         )?;
         let accent = AccentColors::resolve(
-            &theme.marks.accents,
+            theme.marks.accents(),
             usize::from(self.curves.iter().any(|curve| curve.identity.hue.is_none())),
         )?;
         Ok((map, accent))
@@ -181,8 +190,13 @@ impl PreparedDensity {
             let color = Self::curve_color(curve, colors, accent)?;
             entries.push(LegendEntry::line_fill(
                 chart.collective_legend_identity(&curve.identity)?,
-                theme.marks.density_line.backend_style(color),
-                theme.marks.density_area.backend_style(color),
+                theme.marks.data_lines().density_line().backend_style(color),
+                theme
+                    .marks
+                    .fills()
+                    .densities()
+                    .density_area()
+                    .backend_style(color),
             ));
         }
         Ok(entries)
@@ -282,7 +296,11 @@ pub(crate) fn measure_marks(
     ];
     let mut requests = [None; 2];
     if let Some(ink) = crate::render::geometry::line_ink_bounds(
-        &theme.marks.density_line.backend_style((0, 0, 0)),
+        &theme
+            .marks
+            .data_lines()
+            .density_line()
+            .backend_style((0, 0, 0)),
     )? {
         requests = crate::layout::interior::automatic_mark_ink_expansions(
             [prepared.x_range, (0.0, prepared.maximum)],
@@ -368,8 +386,13 @@ pub(crate) fn project(
                 Vec::new()
             },
             segments: Vec::new(),
-            fill_style: theme.marks.density_area.backend_style(color),
-            line_style: theme.marks.density_line.backend_style(color),
+            fill_style: theme
+                .marks
+                .fills()
+                .densities()
+                .density_area()
+                .backend_style(color),
+            line_style: theme.marks.data_lines().density_line().backend_style(color),
         };
         crate::data::source::reserve_source(&mut projected.segments, visible.len() - 1)?;
         for pair in visible.windows(2) {
@@ -821,14 +844,62 @@ mod tests {
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::Publication.resolve().unwrap();
         let original = chart.intrinsic_body_minimum(&theme).unwrap();
-        theme.marks.density_line.width = 140.0;
+        let line = theme
+            .marks
+            .data_lines()
+            .density_line()
+            .clone()
+            .with_width(140.0)
+            .unwrap();
+        let lines = theme
+            .marks
+            .data_lines()
+            .clone()
+            .with_density_line(line)
+            .unwrap();
+        theme.marks = theme.marks.clone().with_data_lines(lines).unwrap();
         let thick = chart.intrinsic_body_minimum(&theme).unwrap();
         assert_eq!(thick.0.to_bits(), original.0.to_bits());
         assert_eq!(thick.1.to_bits(), 140.0_f64.to_bits());
-        theme.marks.density_line.alpha = 0;
+        let line = theme
+            .marks
+            .data_lines()
+            .density_line()
+            .clone()
+            .with_alpha(0)
+            .unwrap();
+        let lines = theme
+            .marks
+            .data_lines()
+            .clone()
+            .with_density_line(line)
+            .unwrap();
+        theme.marks = theme.marks.clone().with_data_lines(lines).unwrap();
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), original);
-        theme.marks.density_area.outline =
-            Some(crate::theme::DataOutlineTheme::mapped(140.0, 255).unwrap());
+        let area = theme
+            .marks
+            .fills()
+            .densities()
+            .density_area()
+            .clone()
+            .with_outline(Some(
+                crate::theme::DataOutlineTheme::mapped(140.0, 255).unwrap(),
+            ))
+            .unwrap();
+        let densities = theme
+            .marks
+            .fills()
+            .densities()
+            .clone()
+            .with_density_area(area)
+            .unwrap();
+        let fills = theme
+            .marks
+            .fills()
+            .clone()
+            .with_densities(densities)
+            .unwrap();
+        theme.marks = theme.marks.clone().with_fills(fills).unwrap();
         let area = chart.intrinsic_body_minimum(&theme).unwrap();
         assert_eq!(area.0.to_bits(), original.0.to_bits());
         assert!(area.1 >= 140.0);
@@ -885,8 +956,22 @@ mod tests {
             crate::theme::Color::from(theme.color_scales.qualitative().colors()[1]).with_alpha(56)
         );
         assert!(payload.curves[0].fill[0].x > payload.curves[1].fill[0].x);
-        theme.marks.density_line.width = 2.5;
-        theme.marks.density_line.alpha = 128;
+        let line = theme
+            .marks
+            .data_lines()
+            .density_line()
+            .clone()
+            .with_width(2.5)
+            .unwrap()
+            .with_alpha(128)
+            .unwrap();
+        let lines = theme
+            .marks
+            .data_lines()
+            .clone()
+            .with_density_line(line)
+            .unwrap();
+        theme.marks = theme.marks.clone().with_data_lines(lines).unwrap();
         let changed = chart
             .measure_selected_interior(PlotRenderContext::new(
                 chart.data(),

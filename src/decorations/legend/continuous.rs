@@ -132,7 +132,8 @@ impl MeasuredContinuousGuide {
         let missing_inset = descriptor
             .missing
             .as_ref()
-            .map_or(0.0, |key| f64::from(key.outline.width) / 2.0);
+            .and_then(|key| key.outline.as_ref())
+            .map_or(0.0, |outline| f64::from(outline.width()) / 2.0);
         let frame_minimum = metrics.allocation_insets(missing_inset)?;
         metrics.ensure_key_gap(missing_inset)?;
         Ok((metrics, frame_minimum))
@@ -163,7 +164,8 @@ impl MeasuredContinuousGuide {
         let missing_inset = descriptor
             .missing
             .as_ref()
-            .map_or(0.0, |key| f64::from(key.outline.width) / 2.0);
+            .and_then(|key| key.outline.as_ref())
+            .map_or(0.0, |outline| f64::from(outline.width()) / 2.0);
         let inset = metrics.edge_reserve(false);
         let inner_width = available.0 - LegendMetrics::hard(&inset)?;
         let inner_height = available
@@ -485,7 +487,8 @@ impl MeasuredContinuousGuide {
                 let row_height = plan.height().max(thickness + missing_inset);
                 Ok((
                     PanelBox::new(metrics.pad, metrics.pad + thickness, y0, y0 + thickness),
-                    key.outline.backend_style(key.fill),
+                    crate::theme::FixedFillTheme::new(key.fill, key.outline.clone())?
+                        .backend_style(),
                     PlacedText::middle(
                         plan,
                         Point2D::new(
@@ -715,10 +718,10 @@ mod tests {
             center: Some(0.0),
             missing: Some(MissingKey {
                 fill: crate::theme::Color::rgb(224, 224, 224),
-                outline: crate::theme::OutlineTheme {
+                outline: Some(crate::theme::OutlineTheme {
                     paint: crate::theme::Color::rgb(120, 120, 120),
                     width: 1.0,
-                },
+                }),
                 label: "Missing".into(),
             }),
             domain: (-2.0, 3.0),
@@ -1120,7 +1123,14 @@ mod tests {
         .unwrap();
         theme.legend = theme.legend.clone().with_frame(Some(frame)).unwrap();
         let mut descriptor = descriptor();
-        descriptor.missing.as_mut().unwrap().outline.width = 40.0;
+        descriptor
+            .missing
+            .as_mut()
+            .unwrap()
+            .outline
+            .as_mut()
+            .unwrap()
+            .width = 40.0;
         for horizontal in [false, true] {
             let measured = fit::measured(MeasuredContinuousGuide::measure(
                 &descriptor,
@@ -1203,7 +1213,8 @@ mod tests {
     fn absent_continuous_frame_retains_gradient_labels_and_missing_key() {
         let mut theme = crate::Theme::Publication.resolve().unwrap();
         theme.legend = theme.legend.clone().with_frame(None).unwrap();
-        let descriptor = descriptor();
+        let mut descriptor = descriptor();
+        descriptor.missing.as_mut().unwrap().outline = None;
 
         let measured = fit::measured(MeasuredContinuousGuide::measure(
             &descriptor,
@@ -1227,7 +1238,8 @@ mod tests {
         assert!(selected
             .calls
             .iter()
-            .any(|call| matches!(call, LegendCall::Fill(_, _))));
+            .any(|call| matches!(call, LegendCall::Fill(_, fill)
+                if fill.stroke_width.to_bits() == 0 && fill.stroke.alpha() == 0)));
         let labels = selected
             .calls
             .iter()
@@ -1241,6 +1253,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(labels.len(), descriptor.labels.len() + 2);
         assert_eq!(labels[0], descriptor.title);
+        assert_eq!(labels.last().copied(), Some("Missing"));
         assert_eq!(
             &labels[1..=descriptor.labels.len()],
             descriptor

@@ -78,12 +78,16 @@ pub(crate) fn intrinsic_body_minimum(
     let mut pitch = 1.0_f64 / 1024.0;
     let mut numeric = 0.0_f64;
     let interval = crate::render::geometry::line_ink_width(
-        &theme.marks.interaction_interval.backend_style((0, 0, 0)),
+        &theme
+            .marks
+            .data_lines()
+            .interaction_interval()
+            .backend_style((0, 0, 0)),
     )?;
     for trace in &prepared.traces {
         let marker = if chart.markers_visible() {
             let point = chart
-                .point_style(theme, (0, 0, 0), theme.marks.point_sizes.interaction)
+                .point_style(theme, (0, 0, 0), theme.marks.points().radii().interaction())
                 .with_shape(trace.style.point_shape);
             crate::render::geometry::point_ink_bounds(&point)?
         } else {
@@ -91,7 +95,11 @@ pub(crate) fn intrinsic_body_minimum(
         };
         let connector = if chart.interaction_connectors_visible() && trace.cells.len() > 1 {
             crate::render::geometry::line_ink_width(
-                &theme.marks.interaction_connector.backend_style((0, 0, 0)),
+                &theme
+                    .marks
+                    .data_lines()
+                    .interaction_connector()
+                    .backend_style((0, 0, 0)),
             )?
         } else {
             0.0
@@ -223,9 +231,13 @@ impl PreparedInteraction {
             let color = colors.color(key)?;
             let identity = chart.collective_legend_identity(&trace.identity)?;
             let point = chart
-                .point_style(theme, color, theme.marks.point_sizes.interaction)
+                .point_style(theme, color, theme.marks.points().radii().interaction())
                 .with_shape(trace.style.point_shape);
-            let mut line = theme.marks.interaction_connector.backend_style(color);
+            let mut line = theme
+                .marks
+                .data_lines()
+                .interaction_connector()
+                .backend_style(color);
             line.pattern = trace.style.line_pattern.stroke_pattern();
             entries.push(
                 match (
@@ -533,13 +545,14 @@ pub(crate) fn measure_marks(
             .point_style(
                 context.theme,
                 color,
-                context.theme.marks.point_sizes.interaction,
+                context.theme.marks.points().radii().interaction(),
             )
             .with_shape(trace.style.point_shape);
         let mut line = context
             .theme
             .marks
-            .interaction_connector
+            .data_lines()
+            .interaction_connector()
             .backend_style(color);
         line.pattern = trace.style.line_pattern.stroke_pattern();
         let mut selected = TracePayload {
@@ -548,7 +561,8 @@ pub(crate) fn measure_marks(
             interval: context
                 .theme
                 .marks
-                .interaction_interval
+                .data_lines()
+                .interaction_interval()
                 .backend_style(color),
             connector: (chart.interaction_connectors_visible() && trace.cells.len() > 1)
                 .then(|| line.clone()),

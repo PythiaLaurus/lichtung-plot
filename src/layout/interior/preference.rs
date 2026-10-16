@@ -225,7 +225,7 @@ pub(crate) fn mark_preference(
                 let marks = panel(&inputs.panels, scope, "Scatter")?;
                 (
                     marks.checked_primary_mark_count()?,
-                    point_ink(theme.marks.point_sizes.scatter)?,
+                    point_ink(theme.marks.points().radii().scatter())?,
                 )
             }
             PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
@@ -234,17 +234,17 @@ pub(crate) fn mark_preference(
                 })?;
                 let marks = panel(&inputs.panels, scope, "Line")?;
                 let stroke = if plot.kind() == PlotKind::Line {
-                    &theme.marks.series_line
+                    theme.marks.data_lines().series_line()
                 } else {
-                    &theme.marks.path_line
+                    theme.marks.data_lines().path_line()
                 };
                 let line =
                     crate::render::geometry::line_ink_width(&stroke.backend_style((0, 0, 0)))?;
                 let marker = if plot.kind() == PlotKind::Trajectory || plot.markers_visible() {
                     point_ink(if plot.kind() == PlotKind::Line {
-                        theme.marks.point_sizes.path
+                        theme.marks.points().radii().path()
                     } else {
-                        theme.marks.point_sizes.trajectory
+                        theme.marks.points().radii().trajectory()
                     })?
                 } else {
                     0.0
@@ -257,7 +257,12 @@ pub(crate) fn mark_preference(
                 })?;
                 let marks = panel(&inputs.panels, scope, "Histogram")?;
                 let (x, y) = crate::render::geometry::rectangular_fill_ink_outset(
-                    &theme.marks.histogram_bin.backend_style((0, 0, 0)),
+                    &theme
+                        .marks
+                        .fills()
+                        .bodies()
+                        .histogram_bin()
+                        .backend_style((0, 0, 0)),
                 )?;
                 (marks.primary_mark_count(), x.max(y))
             }
@@ -267,10 +272,19 @@ pub(crate) fn mark_preference(
                 })?;
                 let marks = panel(&inputs.panels, scope, "Density")?;
                 let line = crate::render::geometry::line_ink_width(
-                    &theme.marks.density_line.backend_style((0, 0, 0)),
+                    &theme
+                        .marks
+                        .data_lines()
+                        .density_line()
+                        .backend_style((0, 0, 0)),
                 )?;
                 let (x, y) = crate::render::geometry::rectangular_fill_ink_outset(
-                    &theme.marks.density_area.backend_style((0, 0, 0)),
+                    &theme
+                        .marks
+                        .fills()
+                        .densities()
+                        .density_area()
+                        .backend_style((0, 0, 0)),
                 )?;
                 (marks.primary_mark_count(), line.max(x).max(y))
             }
@@ -282,7 +296,7 @@ pub(crate) fn mark_preference(
                 let marks = panel(&inputs.panels, scope, "Qq")?;
                 (
                     marks.primary_mark_count(),
-                    point_ink(theme.marks.point_sizes.qq)?,
+                    point_ink(theme.marks.points().radii().qq())?,
                 )
             }
             PlotKind::Regression => {
@@ -292,7 +306,7 @@ pub(crate) fn mark_preference(
                 let marks = panel(&inputs.panels, scope, "Regression")?;
                 (
                     marks.primary_mark_count(),
-                    point_ink(theme.marks.point_sizes.regression)?,
+                    point_ink(theme.marks.points().radii().regression())?,
                 )
             }
             PlotKind::Marginal => {
@@ -302,7 +316,7 @@ pub(crate) fn mark_preference(
                     .ok_or_else(|| Error::Render("Marginal preference lacks preparation".into()))?;
                 (
                     marks.checked_primary_mark_count()?,
-                    point_ink(theme.marks.point_sizes.marginal)?,
+                    point_ink(theme.marks.points().radii().marginal())?,
                 )
             }
             _ => {
@@ -467,10 +481,12 @@ mod tests {
         let chart = prepared.attach(source).unwrap();
         let mut theme = crate::Theme::Publication.resolve().unwrap();
         let original = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
-        theme.marks.bar_body.outline = Some(crate::theme::DataOutlineTheme::fixed(
+        let outline = crate::theme::DataOutlineTheme::fixed(
             theme
                 .marks
-                .bar_body
+                .fills()
+                .bodies()
+                .bar_body()
                 .outline()
                 .unwrap()
                 .fixed_stroke()
@@ -478,7 +494,24 @@ mod tests {
                 .clone()
                 .with_width(100.0)
                 .unwrap(),
-        ));
+        );
+        let body = theme
+            .marks
+            .fills()
+            .bodies()
+            .bar_body()
+            .clone()
+            .with_outline(Some(outline))
+            .unwrap();
+        let bodies = theme
+            .marks
+            .fills()
+            .bodies()
+            .clone()
+            .with_bar_body(body)
+            .unwrap();
+        let fills = theme.marks.fills().clone().with_bodies(bodies).unwrap();
+        theme.marks = theme.marks.clone().with_fills(fills).unwrap();
         let styled = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
         assert_eq!(styled.panel_box, original.panel_box);
         assert!(categorical(&styled).hard_pitch_quanta > categorical(&original).hard_pitch_quanta);
@@ -611,7 +644,15 @@ mod tests {
         );
         assert!(preference.body_quanta.1 >= (3 * width + 3) / 4);
 
-        theme.marks.point_sizes.scatter = 80;
+        let radii = theme
+            .marks
+            .points()
+            .radii()
+            .clone()
+            .with_scatter(80)
+            .unwrap();
+        let points = theme.marks.points().clone().with_radii(radii).unwrap();
+        theme.marks = theme.marks.clone().with_points(points).unwrap();
         let styled = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
         let preference = standard(&styled);
         assert_eq!(preference.primary_marks, 25);
@@ -620,9 +661,11 @@ mod tests {
         assert!(preference.body_quanta.0 > width);
         assert_eq!(styled.panel_box, original.panel_box);
 
-        theme.marks.primary_point.fill_alpha = 0;
-        theme.marks.primary_point.outline.as_mut().unwrap().color =
-            crate::theme::Color::rgba(255, 255, 255, 0);
+        let mut primary = theme.marks.points().primary().clone();
+        primary.fill_alpha = 0;
+        primary.outline.as_mut().unwrap().color = crate::theme::Color::rgba(255, 255, 255, 0);
+        let points = theme.marks.points().clone().with_primary(primary).unwrap();
+        theme.marks = theme.marks.clone().with_points(points).unwrap();
         let invisible = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
         assert_eq!(standard(&invisible).primary_marks, 25);
         assert_eq!(

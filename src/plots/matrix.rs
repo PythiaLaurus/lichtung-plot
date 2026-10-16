@@ -68,7 +68,7 @@ impl PreparedMatrixAxes {
             resources,
         )?;
         let accents = AccentColors::resolve(
-            &theme.marks.accents,
+            theme.marks.accents(),
             usize::from(self.groups.iter().any(|group| group.identity.hue.is_none())),
         )?;
         Ok((colors, accents))
@@ -98,7 +98,12 @@ pub(crate) fn intrinsic_body_minimum(
         Error::Render("matrix intrinsic requires prepared variable domains".into())
     })?;
     let n = prepared.labels.len();
-    let density = theme.marks.matrix_density.backend_style((0, 0, 0));
+    let density = theme
+        .marks
+        .fills()
+        .densities()
+        .matrix_density()
+        .backend_style((0, 0, 0));
     let (out_x, out_y) = crate::render::geometry::rectangular_fill_ink_outset(&density)?;
     let mut cell = (
         (2.0 * out_x).max(1.0 / 1024.0),
@@ -106,7 +111,7 @@ pub(crate) fn intrinsic_body_minimum(
     );
 
     for _ in &prepared.groups {
-        let style = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.matrix);
+        let style = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().matrix());
         let (x, y) = crate::render::geometry::point_ink_dimensions(&style)?;
         cell.0 = cell.0.max(x);
         cell.1 = cell.1.max(y);
@@ -138,9 +143,14 @@ pub(crate) fn natural_body_preference(
         .ok_or_else(|| Error::Render("natural Matrix variables missing".into()))?;
     let hard = intrinsic_body_minimum(chart, theme)?;
 
-    let point = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.matrix);
+    let point = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().matrix());
     let point = crate::render::geometry::point_ink_dimensions(&point)?;
-    let density = theme.marks.matrix_density.backend_style((0, 0, 0));
+    let density = theme
+        .marks
+        .fills()
+        .densities()
+        .matrix_density()
+        .backend_style((0, 0, 0));
     let ink = crate::render::geometry::rectangular_fill_ink_outset(&density)?;
     let mut side = theme.composition_grid_gap()? * marks.labels.len().saturating_sub(1) as f64;
     for label in &marks.labels {
@@ -413,9 +423,14 @@ pub(crate) fn measure(
         outer.y1 = outer.y0 + height;
     }
     let gap = theme.composition_grid_gap()?;
-    let density = theme.marks.matrix_density.backend_style((0, 0, 0));
+    let density = theme
+        .marks
+        .fills()
+        .densities()
+        .matrix_density()
+        .backend_style((0, 0, 0));
     let ink = crate::render::geometry::rectangular_fill_ink_outset(&density)?;
-    let point = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.matrix);
+    let point = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().matrix());
     let point = crate::render::geometry::point_ink_dimensions(&point)?;
     let specs = crate::data::source::collect_source(display_cols.iter().map(|label| {
         let hard = layout::fit::intrinsic_widths(
@@ -664,7 +679,7 @@ pub(crate) fn measure(
                 for (group, &color) in groups.iter().zip(&group_colors) {
                     let xs = &group.columns[col];
                     let ys = &group.columns[row];
-                    let ps = chart.point_style(theme, color, theme.marks.point_sizes.matrix);
+                    let ps = chart.point_style(theme, color, theme.marks.points().radii().matrix());
                     let pts = crate::data::source::collect_source(xs.iter().zip(ys.iter()).map(
                         |(&xi, &yi)| {
                             let (px, py) = cell_layout.projection.project(xi, yi);
@@ -856,8 +871,13 @@ fn matrix_guide_entries(
     {
         entries.push(LegendEntry::point_fill(
             chart.collective_legend_identity(&group.identity)?,
-            chart.point_style(theme, color, theme.marks.point_sizes.matrix),
-            theme.marks.matrix_density.backend_style(color),
+            chart.point_style(theme, color, theme.marks.points().radii().matrix()),
+            theme
+                .marks
+                .fills()
+                .densities()
+                .matrix_density()
+                .backend_style(color),
         ));
     }
     crate::decorations::legend::resolve_entries(chart, &mut entries)?;
@@ -973,7 +993,12 @@ fn select_diagonal_kde(
             poly.push(point);
         }
         poly.push(Point2D::new(x1, y0));
-        let fill = theme.marks.matrix_density.backend_style(color);
+        let fill = theme
+            .marks
+            .fills()
+            .densities()
+            .matrix_density()
+            .backend_style(color);
         marks.push(MatrixPrimitive::Polygon(poly, fill));
     }
     Ok(())

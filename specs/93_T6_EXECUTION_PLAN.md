@@ -1,11 +1,13 @@
 # T6 — Public Foundations And Scientific Presentation
 
-**Status**: IN PROGRESS — planning complete; private implementation partially complete;
-further feature work remains paused after the completed test-code cleanup.
+**Status**: IN PROGRESS — validated private foundations complete; complete Theme
+construction and consumer resolution are next.
 
-**Current execution checkpoint:** private foundation implementation is partially
-complete through guide/composition chrome. Subsequent mark/annotation and public
-cutovers have not resumed. The user-approved simplification in
+**Current execution checkpoint:** the user-authorized resumption completed the
+mark/annotation leaf, T6B1d4d, and the private-value umbrella T6B1. Evidence is in
+`../docs/mark-annotation-values.md`. T6B2 owns complete Theme construction and the
+remaining literal-to-component consumer resolution; public cutovers follow it.
+The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
 its recorded revisions and is not a requirement to restore fees. Verification,
@@ -17,7 +19,11 @@ caption measurements, with no automatic return to feature implementation. The
 approved execution plan is `96_TEST_CODE_SIMPLIFICATION_PLAN.md`; its source-backed
 audit is `../docs/test-code-audit.md`. Test cleanup is complete, with retained E2E
 owners, final census and successful complete-gate evidence in
-`../docs/test-code-cleanup.md`. The pending foundation leaves remain pending.
+`../docs/test-code-cleanup.md`. A further user-directed deletion removed 678 of
+1,349 library tests; the complete gate passed with 654 passing and 17 ignored
+library tests, 462 integration tests and 53 doctests. New unit tests must replace
+existing tests in the same logical change; total discovered library-test count
+must not increase (see `AGENTS.md` and spec90).
 
 ## Authority And Entry Decisions
 
@@ -80,21 +86,21 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6A1 | COMPLETE | T6P | Current export/style/owner/caller/deletion census in `docs/t6a1-public-cutover-census.md`; `docs(api): map public cutovers and consumers` |
 | T6A2 | COMPLETE | T6A1 | Validated construction, fields, metrics, owners and future fixtures in `94_T6_FOUNDATION_CONSTRUCTION.md`; `docs(theme): pin validated public component construction` |
 | T6B | IN PROGRESS | T6A | Immutable theme, color, font, scale and exact-style migration |
-| T6B1 | IN PROGRESS | T6A | Validated color/font and component values in the single private representation; `refactor(theme): retain validated foundational values` |
+| T6B1 | COMPLETE | T6A | Validated color/font and component values in the single private representation; `refactor(theme): retain validated foundational values` |
 | T6B1a | COMPLETE | T6A | One Color/OpaqueColor paint representation and private channel/hex validation; `refactor(color): retain validated foundational paint values` |
 | T6B1b | COMPLETE | T6B1a | Typed font preferences and complete role-stack inputs; `refactor(font): retain validated role font stacks` |
 | T6B1c | COMPLETE | T6B1b | Exact relative spacing and bounded local metric operands; `feat(theme): retain exact relative spacing values` |
-| T6B1d | IN PROGRESS | T6B1c | Complete component/role/scale inputs and structural validation; `refactor(theme): retain complete validated components` |
+| T6B1d | COMPLETE | T6B1c | Complete component/role/scale inputs and structural validation; `refactor(theme): retain complete validated components` |
 | T6B1d1 | COMPLETE | T6B1c | Replace live text/surface appearances with validated TextTheme/SurfaceTheme; `refactor(theme): validate text and surface values` |
 | T6B1d2 | COMPLETE | T6B1d1 | Replace live compound stroke/point/fill inputs with validated values and structural absence; `refactor(theme): validate complete mark paints` |
 | T6B1d3 | COMPLETE | T6B1d2 | Retain validated opaque palettes/maps/gradients and domain selection; `refactor(scales): retain validated complete scale values` |
-| T6B1d4 | IN PROGRESS | T6B1d3 | Assemble validated complete role/chrome/annotation groups with actual consumer mappings; `refactor(theme): assemble complete validated components` |
+| T6B1d4 | COMPLETE | T6B1d3 | Assemble validated complete role/chrome/annotation groups with actual consumer mappings; `refactor(theme): assemble complete validated components` |
 | T6B1d4a | COMPLETE | T6B1d3 | Complete nested typography with all eighteen live roles; `refactor(theme): assemble complete typography roles` |
 | T6B1d4b | COMPLETE | T6B1d4a | Complete axis chrome and exact role-local spacing; `refactor(axes): retain validated local chrome` |
 | T6B1d4c | COMPLETE | T6B1d4b | Complete guide and composition chrome; `refactor(theme): retain validated composition chrome` |
 | T6B1d4c1 | COMPLETE | T6B1d4b | Complete measured guide chrome and exact admission; `refactor(legend): retain exact validated guide chrome` |
 | T6B1d4c2 | COMPLETE | T6B1d4c1 | Complete root/embedded composition chrome; `refactor(composition): retain validated local relationships` |
-| T6B1d4d | PENDING | T6B1d4c | Complete mark groups and admitted annotation geometry; `refactor(theme): assemble mark and annotation roles` |
+| T6B1d4d | COMPLETE | T6B1d4c | Complete mark groups and admitted annotation geometry; `refactor(theme): assemble mark and annotation roles` |
 | T6B2 | PENDING | T6B1 | Complete Theme construction/customization and owner resolution using those values; `refactor(theme): construct immutable complete themes` |
 | T6B3 | PENDING | T6B2 | Exact element Color/alpha replacement and repository caller migration; `feat(styles): expose complete RGBA element paints` |
 | T6B4 | PENDING | T6B3 | Public complete Theme/components/fonts/scales, built-in constructors and palette/map/gradient attachments; remove closed selectors and old scale representations; `feat(theme): expose immutable theme and scale foundations` |
@@ -227,6 +233,19 @@ in that evidence. The caption's logical-budget count is not a CPU/time/memory
 measurement or proof of efficiency. At the user's request, subsequent feature
 implementation is paused for a comprehensive resource-accounting analysis after
 this completed component commit; budget thresholds are not optimization targets.
+
+T6B1d4d evidence: `docs/mark-annotation-values.md` records complete validated
+MarkTheme/AnnotationTheme construction, private fields and complete consuming
+edits. The flat mark/annotation/radius records and generic foreground carrier are
+removed; current stored-field consumers, complete identity and Heatmap intrinsic
+keys use the retained components. Sampled/supplied strip planning, marks and guides
+use their independent sized role and the actual outline policy. Point-label and
+Waterfall shelf gaps use exact local text metrics; complete shelf reserves round
+once. Three semantic tests replace three retired fixtures; discovery remains 671
+including 17 ignored. Seventy-six distinct focused library tests and 44 integration
+tests pass, as do strict Clippy and formatting. This completes the private-value
+umbrellas; newly retained literal geometry, significance/backend handoff and
+complete Theme/scale behavior remain the explicit B2 consumer migration.
 
 T6B1d3 evidence: `docs/scale-values.md` records immutable validated opaque
 palettes, gradients/domains and selection values, actual prepared transport and

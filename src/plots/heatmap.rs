@@ -59,8 +59,8 @@ impl HeatmapData {
                     Error::Render("heatmap missing key has no prepared label".into())
                 })?;
                 Ok(crate::decorations::legend::descriptor::MissingKey {
-                    fill: theme.marks.heatmap_missing_fill,
-                    outline: theme.marks.heatmap_missing_key_outline.clone(),
+                    fill: theme.marks.cells().missing_fill(),
+                    outline: theme.marks.cells().missing_key_outline().cloned(),
                     label: crate::data::source::copy_source_string(label)?,
                 })
             })
@@ -468,12 +468,9 @@ pub(crate) struct HeatmapIntrinsicCache {
     plot_panel: crate::theme::Color,
     canvas_root: crate::theme::Color,
     canvas_override: Option<crate::theme::Color>,
-    backdrop: crate::theme::Color,
-    missing_fill: crate::theme::Color,
-    cell_outline: crate::theme::OutlineTheme,
-    highlight_outline: crate::theme::OutlineTheme,
-    missing_row_outline: crate::theme::OutlineTheme,
-    missing_cross: LineStyle,
+    backdrop: OpaqueColor,
+    cell_marks: crate::theme::mark::CellMarkRoles,
+    cell_annotations: crate::theme::annotation::CellAnnotationGeometry,
 }
 
 impl HeatmapIntrinsicCache {
@@ -490,12 +487,9 @@ impl HeatmapIntrinsicCache {
             && self.plot_panel == theme.surfaces.plot_panel
             && self.canvas_root == theme.surfaces.canvas_root
             && self.canvas_override == theme.canvas_surface_override
-            && self.backdrop == theme.annotations.planning_backdrop
-            && self.missing_fill == theme.marks.heatmap_missing_fill
-            && self.cell_outline == theme.marks.heatmap_cell_outline
-            && self.highlight_outline == theme.marks.heatmap_highlight_outline
-            && self.missing_row_outline == theme.marks.heatmap_missing_row_outline
-            && self.missing_cross == theme.marks.heatmap_missing_cross.backend_style()
+            && self.backdrop == theme.annotations.planning_backdrop()
+            && self.cell_marks == *theme.marks.cells()
+            && self.cell_annotations == *theme.annotations.cells()
     }
 
     fn new(
@@ -525,12 +519,9 @@ impl HeatmapIntrinsicCache {
             plot_panel: theme.surfaces.plot_panel,
             canvas_root: theme.surfaces.canvas_root,
             canvas_override: theme.canvas_surface_override,
-            backdrop: theme.annotations.planning_backdrop,
-            missing_fill: theme.marks.heatmap_missing_fill,
-            cell_outline: theme.marks.heatmap_cell_outline.clone(),
-            highlight_outline: theme.marks.heatmap_highlight_outline.clone(),
-            missing_row_outline: theme.marks.heatmap_missing_row_outline.clone(),
-            missing_cross: theme.marks.heatmap_missing_cross.backend_style(),
+            backdrop: theme.annotations.planning_backdrop(),
+            cell_marks: theme.marks.cells().clone(),
+            cell_annotations: theme.annotations.cells().clone(),
         })
     }
 }
@@ -635,8 +626,10 @@ fn intrinsic_cell_ink(prepared: &HeatmapData, theme: &ResolvedTheme) -> Result<(
         ));
     }
     let quantum = 1.0 / 1024.0;
-    let cell = |style: &crate::theme::OutlineTheme| -> Result<_, Error> {
-        let fill = style.backend_style(crate::theme::Color::rgb(0, 0, 0));
+    let cell = |outline: Option<&crate::theme::OutlineTheme>| -> Result<_, Error> {
+        let fill =
+            crate::theme::FixedFillTheme::new(crate::theme::Color::rgb(0, 0, 0), outline.cloned())?
+                .backend_style();
         let (x, y) = crate::render::geometry::rectangular_fill_ink_outset(&fill)?;
         Ok((x + quantum, y + quantum))
     };
@@ -651,7 +644,7 @@ fn intrinsic_cell_ink(prepared: &HeatmapData, theme: &ResolvedTheme) -> Result<(
             let ink = if let Some(ink) = missing_row {
                 ink
             } else {
-                let ink = cell(&theme.marks.heatmap_missing_row_outline)?;
+                let ink = cell(theme.marks.cells().missing_row_outline())?;
                 missing_row = Some(ink);
                 ink
             };
@@ -670,14 +663,14 @@ fn intrinsic_cell_ink(prepared: &HeatmapData, theme: &ResolvedTheme) -> Result<(
                 if let Some(ink) = highlight {
                     ink
                 } else {
-                    let ink = cell(&theme.marks.heatmap_highlight_outline)?;
+                    let ink = cell(Some(theme.annotations.cells().highlight_outline()))?;
                     highlight = Some(ink);
                     ink
                 }
             } else if let Some(ink) = normal {
                 ink
             } else {
-                let ink = cell(&theme.marks.heatmap_cell_outline)?;
+                let ink = cell(theme.marks.cells().cell_outline())?;
                 normal = Some(ink);
                 ink
             };
@@ -688,7 +681,7 @@ fn intrinsic_cell_ink(prepared: &HeatmapData, theme: &ResolvedTheme) -> Result<(
                     stroke
                 } else {
                     let stroke = crate::render::geometry::line_ink_width(
-                        &theme.marks.heatmap_missing_cross.backend_style(),
+                        &theme.marks.cells().missing_cross().backend_style(),
                     )?;
                     cross = Some(stroke);
                     stroke
@@ -846,7 +839,7 @@ fn analyze_intrinsics(
         Ok(next)
     })?;
     minimum.0 = minimum.0.max(total_columns);
-    let appearance = theme.contrasting_text(theme.marks.heatmap_missing_fill)?;
+    let appearance = theme.contrasting_text(theme.marks.cells().missing_fill())?;
     for (row, source) in prepared
         .null_row_annotations
         .iter()
@@ -1137,7 +1130,7 @@ pub(crate) fn measure(
 
     let payload = HeatmapPayload {
         clip: panel,
-        cross_style: theme.marks.heatmap_missing_cross.backend_style(),
+        cross_style: theme.marks.cells().missing_cross().backend_style(),
         cells: select_cells(prepared, columns, rows, theme, &annotations)?,
         colorbar: colorbar
             .as_ref()
@@ -1881,10 +1874,11 @@ fn select_cells(
                     Point2D::new(right, top),
                     Point2D::new(left, top),
                 ],
-                fill: theme
-                    .marks
-                    .heatmap_missing_row_outline
-                    .backend_style(theme.marks.heatmap_missing_fill),
+                fill: crate::theme::FixedFillTheme::new(
+                    theme.marks.cells().missing_fill(),
+                    theme.marks.cells().missing_row_outline().cloned(),
+                )?
+                .backend_style(),
                 cross: None,
                 text: Some(PlacedText {
                     plan: annotation.clone(),
@@ -1907,8 +1901,10 @@ fn select_cells(
             let (left, right) = (columns[x_index], columns[x_index + 1]);
             let value = prepared.cells[y_index * x_count + x_index];
             let highlighted = prepared.highlighted[y_index * x_count + x_index];
-            let color = prepared.fills[y_index * x_count + x_index]
-                .map_or(theme.marks.heatmap_missing_fill, crate::theme::Color::from);
+            let color = prepared.fills[y_index * x_count + x_index].map_or(
+                theme.marks.cells().missing_fill(),
+                crate::theme::Color::from,
+            );
             let mut cell = CellPayload {
                 corners: [
                     Point2D::new(left, bottom),
@@ -1916,12 +1912,15 @@ fn select_cells(
                     Point2D::new(right, top),
                     Point2D::new(left, top),
                 ],
-                fill: if highlighted {
-                    &theme.marks.heatmap_highlight_outline
-                } else {
-                    &theme.marks.heatmap_cell_outline
-                }
-                .backend_style(color),
+                fill: crate::theme::FixedFillTheme::new(
+                    color,
+                    if highlighted {
+                        Some(theme.annotations.cells().highlight_outline().clone())
+                    } else {
+                        theme.marks.cells().cell_outline().cloned()
+                    },
+                )?
+                .backend_style(),
                 text: None,
                 cross: None,
             };
@@ -1942,7 +1941,7 @@ fn select_cells(
                     stroke
                 } else {
                     let stroke = crate::render::geometry::line_ink_width(
-                        &theme.marks.heatmap_missing_cross.backend_style(),
+                        &theme.marks.cells().missing_cross().backend_style(),
                     )?;
                     cross_width = Some(stroke);
                     stroke
@@ -2046,7 +2045,7 @@ fn measure_annotations(
                     fit::measured(fit::text(
                         theme,
                         annotation,
-                        theme.contrasting_text(theme.marks.heatmap_missing_fill)?,
+                        theme.contrasting_text(theme.marks.cells().missing_fill())?,
                         available_width,
                         PhysicalTextAlignment::Center,
                         "heatmap fully-null row annotation",

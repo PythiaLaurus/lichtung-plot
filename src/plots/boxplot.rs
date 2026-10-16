@@ -73,19 +73,26 @@ pub(crate) fn intrinsic_body_minimum(
     } else {
         0.5
     };
-    let fill = theme.marks.box_body.backend_style((0, 0, 0));
+    let fill = theme
+        .marks
+        .fills()
+        .bodies()
+        .box_body()
+        .backend_style((0, 0, 0));
     let body = crate::render::geometry::rectangular_fill_ink_bounds(&fill)?;
     let (_, out_y) = crate::render::geometry::rectangular_fill_ink_outset(&fill)?;
-    let summary =
-        crate::render::geometry::line_ink_width(&theme.marks.summary_stroke.backend_style())?;
+    let summary = crate::render::geometry::line_ink_width(
+        &theme.marks.strokes().summaries().summary().backend_style(),
+    )?;
     let overlay = chart.raw_overlay_spec();
     let point_style = if overlay.is_visible() {
-        theme
-            .marks
-            .raw_overlay_point
-            .backend_style((0, 0, 0), theme.marks.raw_overlay_radius, true)
+        chart.distribution_point_style(theme.marks.points().raw_overlay(), (0, 0, 0))
     } else {
-        chart.point_style(theme, theme.foreground, theme.marks.point_sizes.box_flier)
+        chart.point_style(
+            theme,
+            theme.marks.neutral_paints().box_flier().as_rgb(),
+            theme.marks.points().radii().box_flier(),
+        )
     };
     let point = crate::render::geometry::point_ink_bounds(&point_style)?;
 
@@ -281,8 +288,8 @@ pub(crate) fn measure_marks(
     for (i, stat) in stats.iter().enumerate() {
         let group = &sample.groups[i];
         let color = colors.color(group.hue_label.as_deref().unwrap_or(&group.label))?;
-        let fill = theme.marks.box_body.backend_style(color);
-        let style = theme.marks.summary_stroke.backend_style();
+        let fill = theme.marks.fills().bodies().box_body().backend_style(color);
+        let style = theme.marks.strokes().summaries().summary().backend_style();
 
         let x_center_data =
             crate::plots::distribution_sample::center(&sample.groups[i], group_levels.len());
@@ -351,8 +358,11 @@ pub(crate) fn measure_marks(
         )?;
 
         if overlay == RawOverlay::Hidden {
-            let flier_style =
-                chart.point_style(theme, theme.foreground, theme.marks.point_sizes.box_flier);
+            let flier_style = chart.point_style(
+                theme,
+                theme.marks.neutral_paints().box_flier().as_rgb(),
+                theme.marks.points().radii().box_flier(),
+            );
             let flier_points = crate::data::source::collect_source(stat.fliers.iter().map(|y| {
                 let (x_px, y_px) = proj.project(x_center_data, *y);
                 Ok(Point2D::new(x_px, y_px))
@@ -379,9 +389,9 @@ pub(crate) fn measure_marks(
             ))?;
             payload.scatter(
                 points,
-                crate::plots::distribution_sample::overlay_style(
+                chart.distribution_point_style(
+                    theme.marks.points().raw_overlay(),
                     colors.color(group.hue_label.as_deref().unwrap_or(&group.label))?,
-                    theme,
                 ),
             )?;
         }

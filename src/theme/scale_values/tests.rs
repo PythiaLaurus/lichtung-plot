@@ -165,7 +165,7 @@ fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_own
         .unwrap()
         .with_sequential(gradient.clone())
         .unwrap();
-    assert_eq!(theme.marks.accents, original.marks.accents);
+    assert_eq!(theme.marks.accents(), original.marks.accents());
     let keys = ["one".into(), "two".into()];
     let mapped = super::super::CategoryColors::resolve(
         &keys,

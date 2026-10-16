@@ -1,7 +1,8 @@
 # T6A2 — Authoritative Foundation Construction Design
 
-**Status**: Construction design updated for A2 owner review; both user product
-decisions closed; implementation and public cutovers remain pending.
+**Status**: Approved construction target; both user product decisions closed.
+Private foundational values are complete; complete Theme construction, remaining
+consumer resolution and public cutovers are tracked in spec93.
 
 ## 1. Authority, Scope And Decisions
 
@@ -2036,6 +2037,11 @@ edit those documents or rewrite historical ledger counts.
 These are required **future implementation fixtures**, not tests executed by A2.
 Use the current Rust fixture locations in A1 §11 and their independent expected
 values, adding only focused cases that exercise new contracts.
+
+Execution follows the current AGENTS.md/spec90 policy: every introduced unit test
+replaces an existing unit test in the same logical change, with no increase in
+discovered count or migration/packaging workaround. The families below identify
+semantic contracts, not a requirement to restore deleted getter/default inventories.
 
 | Fixture family | Required independent expectations / owning leaf |
 | --- | --- |

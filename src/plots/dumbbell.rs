@@ -76,14 +76,20 @@ pub(crate) fn intrinsic_body_minimum(
         if let Some(ink) = crate::render::geometry::point_ink_bounds(&chart.point_style(
             theme,
             color,
-            theme.marks.point_sizes.dumbbell,
+            theme.marks.points().radii().dumbbell(),
         ))? {
             outward = outward.max(ink.top.max(-ink.bottom));
             numeric = numeric.max(ink.right - ink.left);
         }
     }
-    let connector =
-        crate::render::geometry::line_ink_width(&theme.marks.dumbbell_connector.backend_style())?;
+    let connector = crate::render::geometry::line_ink_width(
+        &theme
+            .marks
+            .strokes()
+            .connectors()
+            .dumbbell_connector()
+            .backend_style(),
+    )?;
     outward = outward.max(connector / 2.0);
     numeric = numeric.max(connector);
     let pitch = (outward / (0.5 - offset)).max(1.0 / 1024.0);
@@ -127,7 +133,7 @@ impl DumbbellData {
         ] {
             entries.push(LegendEntry::point(
                 chart.point_legend_identity(label)?,
-                chart.point_style(theme, color, theme.marks.point_sizes.dumbbell),
+                chart.point_style(theme, color, theme.marks.points().radii().dumbbell()),
             ));
         }
         Ok(entries)
@@ -232,7 +238,12 @@ fn project(
         .dumbbell_endpoints_spec()
         .expect("dumbbell input owns endpoint metadata");
     let category_count = prepared.categories.len();
-    let connector = theme.marks.dumbbell_connector.backend_style();
+    let connector = theme
+        .marks
+        .strokes()
+        .connectors()
+        .dumbbell_connector()
+        .backend_style();
     let mut payload = DumbbellPayload {
         clip: layout.projection.panel_box(),
         pairs: Vec::new(),
@@ -241,12 +252,12 @@ fn project(
             chart.point_style(
                 theme,
                 endpoints.left_color(),
-                theme.marks.point_sizes.dumbbell,
+                theme.marks.points().radii().dumbbell(),
             ),
             chart.point_style(
                 theme,
                 endpoints.right_color(),
-                theme.marks.point_sizes.dumbbell,
+                theme.marks.points().radii().dumbbell(),
             ),
         ],
         domain_expansions: [None; 2],

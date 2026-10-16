@@ -265,14 +265,19 @@ pub(crate) struct DataFillTheme {
 }
 
 impl DataFillTheme {
-    pub(crate) fn new(fill_alpha: u8, outline: Option<DataOutlineTheme>) -> Result<Self> {
-        if let Some(outline) = &outline {
+    pub(crate) fn validate(&self) -> Result<()> {
+        if let Some(outline) = self.outline() {
             outline.validate()?;
         }
-        Ok(Self {
+        Ok(())
+    }
+    pub(crate) fn new(fill_alpha: u8, outline: Option<DataOutlineTheme>) -> Result<Self> {
+        let value = Self {
             fill_alpha,
             outline,
-        })
+        };
+        value.validate()?;
+        Ok(value)
     }
     pub(crate) fn fill_alpha(&self) -> u8 {
         self.fill_alpha
@@ -319,14 +324,19 @@ pub(crate) struct FixedFillTheme {
 }
 
 impl FixedFillTheme {
-    pub(crate) fn new(color: Color, outline: Option<OutlineTheme>) -> Result<Self> {
-        if let Some(outline) = &outline {
+    pub(crate) fn validate(&self) -> Result<()> {
+        if let Some(outline) = self.outline() {
             outline.validate()?;
         }
-        Ok(Self {
+        Ok(())
+    }
+    pub(crate) fn new(color: Color, outline: Option<OutlineTheme>) -> Result<Self> {
+        let value = Self {
             paint: color,
             outline,
-        })
+        };
+        value.validate()?;
+        Ok(value)
     }
     pub(crate) fn color(&self) -> Color {
         self.paint
@@ -355,12 +365,10 @@ impl FixedFillTheme {
         Self::new(self.paint, outline)
     }
     pub(crate) fn backend_style(&self) -> FillStyle {
-        let (stroke, width) = self
-            .outline()
-            .map_or((Color::rgba(0, 0, 0, 0), 0.0), |outline| {
-                (outline.color(), outline.width())
-            });
-        FillStyle::new(self.color(), stroke, width)
+        self.outline().map_or_else(
+            || FillStyle::new(self.color(), Color::rgba(0, 0, 0, 0), 0.0),
+            |outline| outline.backend_style(self.color()),
+        )
     }
 }
 
@@ -379,31 +387,24 @@ pub(crate) struct PointTheme {
 }
 
 impl PointTheme {
-    pub(crate) fn same(&self, other: &Self) -> bool {
-        if self.fill_alpha() != other.fill_alpha() || self.shape() != other.shape() {
-            return false;
+    pub(crate) fn validate(&self) -> Result<()> {
+        if let Some(outline) = self.outline() {
+            outline.validate()?;
         }
-        match (self.outline(), other.outline()) {
-            (None, None) => true,
-            (Some(left), Some(right)) => {
-                left.color() == right.color() && left.width_ratio().same(right.width_ratio())
-            }
-            _ => false,
-        }
+        Ok(())
     }
     pub(crate) fn new(
         fill_alpha: u8,
         shape: PointShape,
         outline: Option<PointOutlineTheme>,
     ) -> Result<Self> {
-        if let Some(outline) = &outline {
-            outline.validate()?;
-        }
-        Ok(Self {
+        let value = Self {
             fill_alpha,
             shape,
             outline,
-        })
+        };
+        value.validate()?;
+        Ok(value)
     }
     pub(crate) fn fill_alpha(&self) -> u8 {
         self.fill_alpha
@@ -471,13 +472,17 @@ pub(crate) struct DataLineTheme {
 }
 
 impl DataLineTheme {
+    pub(crate) fn validate(&self) -> Result<()> {
+        validate_width(self.width())
+    }
     pub(crate) fn new(width: f32, alpha: u8, pattern: StrokePattern) -> Result<Self> {
-        validate_width(width)?;
-        Ok(Self {
+        let value = Self {
             width,
             alpha,
             pattern,
-        })
+        };
+        value.validate()?;
+        Ok(value)
     }
     pub(crate) fn width(&self) -> f32 {
         self.width

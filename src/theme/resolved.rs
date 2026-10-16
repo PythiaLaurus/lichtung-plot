@@ -11,10 +11,9 @@ use std::sync::{Arc, Mutex, OnceLock};
 use sha2::{Digest, Sha256};
 
 use super::{
-    AnnotationTextRoles, AxisSpacing, AxisTextRoles, AxisTheme, CompositionTextRoles,
-    ContrastTextRoles, DataFillTheme, DataLineTheme, DataOutlineTheme, FixedFillTheme, FrameSides,
-    FrameTheme, GuideTextRoles, LegendTheme, OutlineTheme, PointOutlineTheme, PointTheme,
-    RootTextRoles, SolidStrokeTheme, StrokeTheme, TickTheme, TypographyTheme,
+    AnnotationTextRoles, AnnotationTheme, AxisSpacing, AxisTextRoles, AxisTheme,
+    CompositionTextRoles, ContrastTextRoles, FrameSides, FrameTheme, GuideTextRoles, LegendTheme,
+    MarkTheme, RootTextRoles, StrokeTheme, TickTheme, TypographyTheme,
 };
 use crate::font::canonical::PreparedFontEnvironment;
 use crate::layout::{
@@ -78,8 +77,6 @@ define_themes! {
 pub(crate) struct ResolvedTheme {
     /// Independent categorical palette and continuous scale defaults.
     pub(crate) color_scales: ColorScales,
-    /// Legacy paint source retained for later legend, mark, and annotation roles.
-    pub(crate) foreground: (u8, u8, u8),
     /// Font size in actual CSS pixels for annotations, status text, and color scales.
     pub(crate) detail_font_size: u32,
     /// Legacy label-size source retained for later body and annotation roles.
@@ -98,10 +95,10 @@ pub(crate) struct ResolvedTheme {
     pub(crate) legend: LegendTheme,
     /// Nonsemantic axis chrome and its local spacing.
     pub(crate) axes: AxisTheme,
-    /// Complete stroke roles for currently migrated marks.
-    pub(crate) marks: MarkAppearance,
+    /// Complete validated semantic mark roles.
+    pub(crate) marks: MarkTheme,
     /// Resolved non-text annotation appearance.
-    pub(crate) annotations: AnnotationAppearance,
+    pub(crate) annotations: AnnotationTheme,
     /// Root and panel composition relationships.
     pub(crate) composition: super::CompositionTheme,
     font_environment: Arc<OnceLock<Result<PreparedFontEnvironment, String>>>,
@@ -452,8 +449,6 @@ impl PartialEq for ResolvedTheme {
             && self.axes == other.axes
             && self.legend == other.legend
             && self.composition == other.composition
-            && self.marks.primary_point == other.marks.primary_point
-            && self.marks.raw_overlay_point == other.marks.raw_overlay_point
             && self.typography == other.typography
     }
 }
@@ -461,14 +456,13 @@ impl PartialEq for ResolvedTheme {
 impl ResolvedTheme {
     fn non_text_eq(&self, other: &Self) -> bool {
         self.color_scales == other.color_scales
-            && self.foreground == other.foreground
             && self.detail_font_size == other.detail_font_size
             && self.label_font_size == other.label_font_size
             && self.composition_title_font_size == other.composition_title_font_size
             && self.facet_header_font_size == other.facet_header_font_size
             && self.surfaces == other.surfaces
             && self.canvas_surface_override == other.canvas_surface_override
-            && self.marks.non_point_eq(&other.marks)
+            && self.marks == other.marks
             && self.annotations == other.annotations
     }
 }
@@ -490,14 +484,6 @@ impl ResolvedTheme {
             return Ok(false);
         }
         if !self.composition.same(&other.composition) {
-            return Ok(false);
-        }
-        if !self.marks.primary_point.same(&other.marks.primary_point)
-            || !self
-                .marks
-                .raw_overlay_point
-                .same(&other.marks.raw_overlay_point)
-        {
             return Ok(false);
         }
         if !self.non_text_eq(other) {
@@ -702,7 +688,7 @@ impl ResolvedTheme {
             self.surfaces.plot_panel(),
             self.canvas_surface_override
                 .unwrap_or(self.surfaces.canvas_root()),
-            self.annotations.planning_backdrop,
+            self.annotations.planning_backdrop().into(),
             self.typography.annotations().contrast().light(),
             self.typography.annotations().contrast().dark(),
         )
@@ -1237,175 +1223,6 @@ impl TextTheme {
     }
 }
 
-/// Mark strokes are independent of structurally similar axis chrome.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct MarkAppearance {
-    /// Stable non-categorical mark slots, independent of categorical palette edits.
-    pub(crate) accents: AccentPalette,
-    /// Shared primary-point paint/outline before family-specific size selection.
-    pub(crate) primary_point: PointTheme,
-    /// Ordinary bar bodies in either orientation and originating guide glyphs.
-    pub(crate) bar_body: DataFillTheme,
-    pub(crate) line_band: DataFillTheme,
-    pub(crate) regression_band: DataFillTheme,
-    pub(crate) density_area: DataFillTheme,
-    pub(crate) marginal_density: DataFillTheme,
-    pub(crate) matrix_density: DataFillTheme,
-    pub(crate) box_body: DataFillTheme,
-    pub(crate) violin_body: DataFillTheme,
-    pub(crate) raincloud_box: FixedFillTheme,
-    pub(crate) histogram_bin: DataFillTheme,
-    pub(crate) waterfall_bar: DataFillTheme,
-    /// Boxplot/Violin raw observations and Raincloud strips/guide points.
-    pub(crate) raw_overlay_point: PointTheme,
-    pub(crate) raw_overlay_radius: u32,
-    pub(crate) heatmap_cell_outline: OutlineTheme,
-    pub(crate) heatmap_highlight_outline: OutlineTheme,
-    /// Non-data missing paint shared by Heatmap cells, merged rows and keys.
-    pub(crate) heatmap_missing_fill: Color,
-    pub(crate) heatmap_missing_row_outline: OutlineTheme,
-    pub(crate) heatmap_missing_key_outline: OutlineTheme,
-    pub(crate) heatmap_missing_cross: StrokeTheme,
-    pub(crate) bar_zero: StrokeTheme,
-    pub(crate) waterfall_connector: StrokeTheme,
-    pub(crate) waterfall_reference: StrokeTheme,
-    pub(crate) raincloud_median: StrokeTheme,
-    pub(crate) beeswarm_reference: StrokeTheme,
-    pub(crate) interaction_interval: DataLineTheme,
-    pub(crate) interaction_connector: DataLineTheme,
-    /// Sizes of built-in point roles; plotted groups and their guides share these.
-    pub(crate) point_sizes: PointSizeAppearance,
-    /// Bar uncertainty stems/caps in either orientation.
-    pub(crate) uncertainty_stroke: StrokeTheme,
-    /// Distribution summary and whisker strokes, including their guide glyphs.
-    pub(crate) summary_stroke: StrokeTheme,
-    /// A Line series' data-colored path, reused in its legend glyph.
-    pub(crate) series_line: DataLineTheme,
-    /// A Trajectory or LinePath series' data-colored path.
-    pub(crate) path_line: DataLineTheme,
-    /// Histogram KDE overlay independently resolved from the bin outline.
-    pub(crate) histogram_curve: StrokeTheme,
-    /// Histogram rug ticks independently resolved from the KDE overlay.
-    pub(crate) histogram_rug: StrokeTheme,
-    /// Density group curve, reused exactly by its originating guide glyph.
-    pub(crate) density_line: DataLineTheme,
-    /// Regression fit line independently resolved from its observations/band.
-    pub(crate) regression_fit: StrokeTheme,
-    /// Estimate intervals do not borrow axis or bar uncertainty strokes.
-    pub(crate) estimate_interval: StrokeTheme,
-    /// PointInterval's solid reference at an exact caller value.
-    pub(crate) point_interval_reference: StrokeTheme,
-    /// Coefficient/Forest reference has its own fixed medium-dash grammar.
-    pub(crate) estimate_reference: StrokeTheme,
-    /// Q-Q reference is independent of the estimate-display reference role.
-    pub(crate) qq_reference: StrokeTheme,
-    /// Dumbbell pairs use one neutral connecting stroke.
-    pub(crate) dumbbell_connector: StrokeTheme,
-}
-
-impl MarkAppearance {
-    // The two point relationships have their own exact comparison. Exhaustive
-    // destructuring prevents any retained field escaping theme identity.
-    fn non_point_eq(&self, other: &Self) -> bool {
-        macro_rules! fields {
-            ($($field:ident),+ $(,)?) => {{
-                let Self { primary_point: _, raw_overlay_point: _, $($field),+ } = self;
-                true $(&& *$field == other.$field)+
-            }};
-        }
-        fields!(
-            accents,
-            bar_body,
-            line_band,
-            regression_band,
-            density_area,
-            marginal_density,
-            matrix_density,
-            box_body,
-            violin_body,
-            raincloud_box,
-            histogram_bin,
-            waterfall_bar,
-            raw_overlay_radius,
-            heatmap_cell_outline,
-            heatmap_highlight_outline,
-            heatmap_missing_fill,
-            heatmap_missing_row_outline,
-            heatmap_missing_key_outline,
-            heatmap_missing_cross,
-            bar_zero,
-            waterfall_connector,
-            waterfall_reference,
-            raincloud_median,
-            beeswarm_reference,
-            interaction_interval,
-            interaction_connector,
-            point_sizes,
-            uncertainty_stroke,
-            summary_stroke,
-            series_line,
-            path_line,
-            histogram_curve,
-            histogram_rug,
-            density_line,
-            regression_fit,
-            estimate_interval,
-            point_interval_reference,
-            estimate_reference,
-            qq_reference,
-            dumbbell_connector
-        )
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct PointSizeAppearance {
-    pub(crate) scatter: u32,
-    pub(crate) path: u32,
-    pub(crate) trajectory: u32,
-    pub(crate) regression: u32,
-    pub(crate) qq: u32,
-    pub(crate) marginal: u32,
-    pub(crate) matrix: u32,
-    pub(crate) interval_estimate: u32,
-    pub(crate) dumbbell: u32,
-    pub(crate) interaction: u32,
-    pub(crate) beeswarm: u32,
-    pub(crate) box_flier: u32,
-}
-
-impl PointSizeAppearance {
-    fn publication() -> Self {
-        Self {
-            scatter: 3,
-            path: 3,
-            trajectory: 4,
-            regression: 3,
-            qq: 3,
-            marginal: 3,
-            matrix: 2,
-            interval_estimate: 4,
-            dumbbell: 4,
-            interaction: 4,
-            beeswarm: 3,
-            box_flier: 2,
-        }
-    }
-}
-
-/// Annotation paths resolve independently of axes, marks, and label typography.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct AnnotationAppearance {
-    pub(crate) bracket_stroke: SolidStrokeTheme,
-    /// Clearance from a labeled supplemental point's painted radius.
-    pub(crate) point_label_gap: f64,
-    pub(crate) waterfall_shelf_padding: f64,
-    pub(crate) waterfall_shelf_gap: f64,
-    pub(crate) waterfall_shelf_row_gap: f64,
-    /// Opaque calculation-only backdrop when output surfaces are translucent.
-    pub(crate) planning_backdrop: Color,
-}
-
 /// Physical horizontal alignment of a root text role.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TitleAlignment {
@@ -1455,8 +1272,6 @@ fn resolved_theme(
     axis_title_font_size: u32,
     grid_color: (u8, u8, u8),
 ) -> Result<ResolvedTheme, Error> {
-    let primary_outline = PointOutlineTheme::publication()?;
-    let overlay_outline = PointOutlineTheme::publication()?;
     let stack = crate::font::canonical::builtin_font_stack();
     let foreground_paint = color_from_rgb(foreground);
     let muted_paint = color_from_rgb(MUTED_TEXT);
@@ -1468,15 +1283,6 @@ fn resolved_theme(
     )?;
     let accents = AccentPalette::new(colors.iter().map(opaque))?;
     let stroke = |width, pattern| StrokeTheme::new(foreground_paint, width, pattern);
-    let filled = |alpha, width| {
-        DataFillTheme::new(
-            alpha,
-            Some(DataOutlineTheme::fixed(OutlineTheme::new(
-                foreground_paint,
-                width,
-            )?)),
-        )
-    };
     let text = |paint, font_size, line_height| {
         TextTheme::new(
             stack.clone(),
@@ -1489,7 +1295,6 @@ fn resolved_theme(
 
     Ok(ResolvedTheme {
         color_scales,
-        foreground,
         detail_font_size: 14,
         label_font_size: axis_title_font_size,
         composition_title_font_size: title_font_size,
@@ -1568,69 +1373,8 @@ fn resolved_theme(
                 super::RelativeSpacing::ratio(12, axis_title_font_size)?,
             )?,
         )?,
-        marks: MarkAppearance {
-            accents,
-            primary_point: PointTheme::new(209, crate::PointShape::Circle, Some(primary_outline))?,
-            bar_body: filled(255, 1.0)?,
-            line_band: DataFillTheme::new(46, None)?,
-            regression_band: DataFillTheme::new(64, None)?,
-            density_area: DataFillTheme::new(56, None)?,
-            marginal_density: DataFillTheme::new(115, Some(DataOutlineTheme::mapped(1.0, 255)?))?,
-            matrix_density: DataFillTheme::new(102, Some(DataOutlineTheme::mapped(1.0, 255)?))?,
-            box_body: filled(255, 1.0)?,
-            violin_body: filled(178, 1.0)?,
-            raincloud_box: FixedFillTheme::new(
-                Color::rgb(255, 255, 255),
-                Some(OutlineTheme::new(foreground_paint, 1.0)?),
-            )?,
-            histogram_bin: filled(209, 0.8)?,
-            waterfall_bar: filled(255, 0.8)?,
-            raw_overlay_point: PointTheme::new(
-                209,
-                crate::PointShape::Circle,
-                Some(overlay_outline),
-            )?,
-            raw_overlay_radius: 2,
-            heatmap_cell_outline: OutlineTheme::new(Color::rgb(255, 255, 255), 0.5)?,
-            heatmap_highlight_outline: OutlineTheme::new(foreground_paint, 2.5)?,
-            heatmap_missing_fill: Color::rgb(224, 224, 224),
-            heatmap_missing_row_outline: OutlineTheme::new(Color::rgb(255, 255, 255), 0.5)?,
-            heatmap_missing_key_outline: OutlineTheme::new(Color::rgb(120, 120, 120), 0.8)?,
-            heatmap_missing_cross: StrokeTheme::new(
-                Color::rgb(120, 120, 120),
-                1.0,
-                StrokePattern::Solid,
-            )?,
-            bar_zero: stroke(0.8, StrokePattern::Solid)?,
-            waterfall_connector: stroke(0.7, StrokePattern::ShortDash)?,
-            waterfall_reference: stroke(0.7, StrokePattern::MediumDash)?,
-            raincloud_median: stroke(1.5, StrokePattern::Solid)?,
-            beeswarm_reference: stroke(0.8, StrokePattern::Solid)?,
-            interaction_interval: DataLineTheme::new(1.2, 255, StrokePattern::Solid)?,
-            interaction_connector: DataLineTheme::new(1.8, 255, StrokePattern::Solid)?,
-            point_sizes: PointSizeAppearance::publication(),
-            uncertainty_stroke: stroke(axis_width, StrokePattern::Solid)?,
-            summary_stroke: stroke(axis_width, StrokePattern::Solid)?,
-            series_line: DataLineTheme::new(1.8, 255, StrokePattern::Solid)?,
-            path_line: DataLineTheme::new(1.4, 255, StrokePattern::Solid)?,
-            histogram_curve: stroke(1.0, StrokePattern::Solid)?,
-            histogram_rug: stroke(0.7, StrokePattern::Solid)?,
-            density_line: DataLineTheme::new(1.6, 255, StrokePattern::Solid)?,
-            regression_fit: stroke(1.5, StrokePattern::Solid)?,
-            estimate_interval: stroke(1.4, StrokePattern::Solid)?,
-            point_interval_reference: stroke(0.8, StrokePattern::Solid)?,
-            estimate_reference: stroke(1.0, StrokePattern::MediumDash)?,
-            qq_reference: stroke(1.2, StrokePattern::Solid)?,
-            dumbbell_connector: stroke(1.2, StrokePattern::Solid)?,
-        },
-        annotations: AnnotationAppearance {
-            bracket_stroke: SolidStrokeTheme::new(foreground_paint, bracket_width)?,
-            point_label_gap: 2.0,
-            waterfall_shelf_padding: 4.0,
-            waterfall_shelf_gap: 4.0,
-            waterfall_shelf_row_gap: 4.0,
-            planning_backdrop: Color::rgb(255, 255, 255),
-        },
+        marks: MarkTheme::builtin(accents, opaque(&foreground), axis_width)?,
+        annotations: AnnotationTheme::builtin(foreground_paint, bracket_width)?,
         composition: super::CompositionTheme::builtin(
             title_font_size,
             subtitle_font_size,

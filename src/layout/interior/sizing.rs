@@ -725,10 +725,10 @@ mod tests {
             center: None,
             missing: Some(crate::decorations::legend::descriptor::MissingKey {
                 fill: crate::theme::Color::rgb(224, 224, 224),
-                outline: crate::theme::OutlineTheme {
+                outline: Some(crate::theme::OutlineTheme {
                     paint: crate::theme::Color::rgb(120, 120, 120),
                     width: 40.0,
-                },
+                }),
                 label: "Missing".into(),
             }),
             domain: (0.0, 1.0),

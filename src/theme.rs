@@ -1,10 +1,13 @@
 //! Built-in publication themes and private appearance resolution.
 
+pub(crate) mod annotation;
 pub(crate) mod axis;
 mod color;
+mod component;
 pub(crate) mod composition;
 mod contrast;
 pub(crate) mod guide;
+pub(crate) mod mark;
 mod mark_paint;
 mod paint;
 mod resolved;
@@ -13,11 +16,13 @@ pub(crate) mod scale_values;
 pub(crate) mod spacing;
 mod typography;
 
+pub(crate) use annotation::AnnotationTheme;
 pub(crate) use axis::{AxisLengths, AxisSpacing, AxisTheme, FrameSides, FrameTheme, TickTheme};
 pub(crate) use composition::CompositionTheme;
 #[cfg(test)]
 pub(crate) use guide::LegendFrameTheme;
 pub(crate) use guide::LegendTheme;
+pub(crate) use mark::MarkTheme;
 pub(crate) use typography::{
     AnnotationTextRoles, AxisTextRoles, CompositionTextRoles, ContrastTextRoles, GuideTextRoles,
     RootTextRoles, TypographyTheme,

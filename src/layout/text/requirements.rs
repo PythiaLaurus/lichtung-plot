@@ -1364,7 +1364,7 @@ fn push_deferred_plot_requirements(
                     &mut body_index,
                     annotation.text(),
                     &[],
-                    theme.contrasting_text(theme.marks.heatmap_missing_fill)?,
+                    theme.contrasting_text(theme.marks.cells().missing_fill())?,
                     prepared_stage.as_deref_mut(),
                 )?;
             }
@@ -2545,7 +2545,7 @@ mod tests {
 
     #[test]
     fn transparent_missing_row_census_uses_the_final_fill_and_planning_backdrop() {
-        use crate::theme::Color;
+        use crate::theme::{Color, OpaqueColor};
 
         let plot = crate::Plot::heatmap(
             crate::CategoryValues::new("column", ["a", "b"]).unwrap(),
@@ -2567,7 +2567,13 @@ mod tests {
         let mut theme = crate::Theme::Publication.resolve().unwrap();
         theme.surfaces.plot_panel = Color::rgba(0, 0, 0, 0);
         theme.surfaces.canvas_root = Color::rgba(0, 0, 0, 0);
-        theme.marks.heatmap_missing_fill = Color::rgba(20, 40, 60, 0);
+        let cells = theme
+            .marks
+            .cells()
+            .clone()
+            .with_missing_fill(Color::rgba(20, 40, 60, 0))
+            .unwrap();
+        theme.marks = theme.marks.clone().with_cells(cells).unwrap();
         theme.typography.annotations.contrast.light.stack =
             canonical::named_stack(&["Light missing row"]);
         theme.typography.annotations.contrast.dark.stack =
@@ -2575,10 +2581,14 @@ mod tests {
         theme.typography.annotations.contrast.light.font_size = 39;
         theme.typography.annotations.contrast.dark.font_size = 9;
         for (backdrop, expected) in [
-            (Color::rgb(0, 0, 0), "Light missing row"),
-            (Color::rgb(255, 255, 255), "Dark missing row"),
+            (OpaqueColor::rgb(0, 0, 0), "Light missing row"),
+            (OpaqueColor::rgb(255, 255, 255), "Dark missing row"),
         ] {
-            theme.annotations.planning_backdrop = backdrop;
+            theme.annotations = theme
+                .annotations
+                .clone()
+                .with_planning_backdrop(backdrop)
+                .unwrap();
             let requirements = with_prepared_stage(|stage| {
                 foundational_plot_requirements(
                     Some(&inputs),
@@ -2601,7 +2611,7 @@ mod tests {
             assert_eq!(selected[0].stack, canonical::named_stack(&[expected]));
             assert_eq!(
                 theme
-                    .contrasting_text(theme.marks.heatmap_missing_fill)
+                    .contrasting_text(theme.marks.cells().missing_fill())
                     .unwrap()
                     .font_size,
                 if expected == "Light missing row" {

@@ -54,21 +54,40 @@ pub(crate) fn intrinsic_body_minimum(
             "Histogram has no prepared primary bins".into(),
         ));
     }
-    let style = theme.marks.histogram_bin.backend_style((0, 0, 0));
+    let style = theme
+        .marks
+        .fills()
+        .bodies()
+        .histogram_bin()
+        .backend_style((0, 0, 0));
     let fill = crate::render::geometry::rectangular_fill_ink_outset(&style)?;
     let curve = if prepared
         .curve
         .as_ref()
         .is_some_and(|points| points.len() >= 2)
     {
-        crate::render::geometry::line_ink_width(&theme.marks.histogram_curve.backend_style())?
+        crate::render::geometry::line_ink_width(
+            &theme
+                .marks
+                .strokes()
+                .curves()
+                .histogram_curve()
+                .backend_style(),
+        )?
     } else {
         0.0
     };
     let rug = if prepared.rugs.is_empty() {
         0.0
     } else {
-        crate::render::geometry::line_ink_width(&theme.marks.histogram_rug.backend_style())?
+        crate::render::geometry::line_ink_width(
+            &theme
+                .marks
+                .strokes()
+                .curves()
+                .histogram_rug()
+                .backend_style(),
+        )?
     };
     let span = (fill.0.max(fill.1) + 1.0 / 1024.0).max(curve).max(rug);
     Ok((
@@ -225,23 +244,40 @@ pub(crate) fn measure_marks(
 
     let projection = layout.projection.clone();
     let mut result = project(prepared, layout, theme)?;
-    let fill = theme.marks.histogram_bin.backend_style((0, 0, 0));
+    let fill = theme
+        .marks
+        .fills()
+        .bodies()
+        .histogram_bin()
+        .backend_style((0, 0, 0));
     let mut ink = crate::render::geometry::rectangular_fill_ink_bounds(&fill)?;
     if prepared
         .curve
         .as_ref()
         .is_some_and(|curve| curve.len() >= 2)
     {
-        let curve =
-            crate::render::geometry::line_ink_bounds(&theme.marks.histogram_curve.backend_style())?;
+        let curve = crate::render::geometry::line_ink_bounds(
+            &theme
+                .marks
+                .strokes()
+                .curves()
+                .histogram_curve()
+                .backend_style(),
+        )?;
         ink = match (ink, curve) {
             (Some(fill), Some(curve)) => Some(fill.union(curve)),
             (fill, curve) => fill.or(curve),
         };
     }
     if !prepared.rugs.is_empty() {
-        let rug =
-            crate::render::geometry::line_ink_bounds(&theme.marks.histogram_rug.backend_style())?;
+        let rug = crate::render::geometry::line_ink_bounds(
+            &theme
+                .marks
+                .strokes()
+                .curves()
+                .histogram_rug()
+                .backend_style(),
+        )?;
         ink = match (ink, rug) {
             (Some(ink), Some(rug)) => Some(ink.union(rug)),
             (ink, rug) => ink.or(rug),
@@ -322,12 +358,21 @@ pub(crate) fn project(
             )?;
             Ok(points)
         }))?,
-        fill: theme
+        fill: theme.marks.fills().bodies().histogram_bin().backend_style(
+            crate::theme::AccentColors::resolve(theme.marks.accents(), 1)?.color(0)?,
+        ),
+        curve_style: theme
             .marks
-            .histogram_bin
-            .backend_style(crate::theme::AccentColors::resolve(&theme.marks.accents, 1)?.color(0)?),
-        curve_style: theme.marks.histogram_curve.backend_style(),
-        rug_style: theme.marks.histogram_rug.backend_style(),
+            .strokes()
+            .curves()
+            .histogram_curve()
+            .backend_style(),
+        rug_style: theme
+            .marks
+            .strokes()
+            .curves()
+            .histogram_rug()
+            .backend_style(),
         domain_expansions: [None; 2],
     };
     let mut geometry = crate::render::geometry::GeometrySnapshot::new();
@@ -813,27 +858,75 @@ mod tests {
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::Publication.resolve().unwrap();
         let baseline = chart.intrinsic_body_minimum(&theme).unwrap();
-        theme.marks.histogram_curve.width = 140.0;
-        theme.marks.histogram_rug.width = 140.0;
+        let curve = theme
+            .marks
+            .strokes()
+            .curves()
+            .histogram_curve()
+            .clone()
+            .with_width(140.0)
+            .unwrap();
+        let rug = theme
+            .marks
+            .strokes()
+            .curves()
+            .histogram_rug()
+            .clone()
+            .with_width(140.0)
+            .unwrap();
+        let curves = theme
+            .marks
+            .strokes()
+            .curves()
+            .clone()
+            .with_histogram_curve(curve)
+            .unwrap()
+            .with_histogram_rug(rug)
+            .unwrap();
+        let strokes = theme.marks.strokes().clone().with_curves(curves).unwrap();
+        theme.marks = theme.marks.clone().with_strokes(strokes).unwrap();
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), baseline);
-        theme.marks.histogram_bin.outline = Some(crate::theme::DataOutlineTheme::fixed(
-            theme
-                .marks
-                .histogram_bin
-                .outline()
-                .unwrap()
-                .fixed_stroke()
-                .unwrap()
-                .clone()
-                .with_width(140.0)
-                .unwrap(),
-        ));
+        let outline = crate::theme::DataOutlineTheme::mapped(140.0, 255).unwrap();
+        let bin = theme
+            .marks
+            .fills()
+            .bodies()
+            .histogram_bin()
+            .clone()
+            .with_outline(Some(outline))
+            .unwrap();
+        let bodies = theme
+            .marks
+            .fills()
+            .bodies()
+            .clone()
+            .with_histogram_bin(bin)
+            .unwrap();
+        let fills = theme.marks.fills().clone().with_bodies(bodies).unwrap();
+        theme.marks = theme.marks.clone().with_fills(fills).unwrap();
         let styled = chart.intrinsic_body_minimum(&theme).unwrap();
         assert_eq!(styled.0.to_bits(), baseline.0.to_bits());
         assert!(styled.1 > 140.0);
-        theme.marks.histogram_bin.outline = Some(crate::theme::DataOutlineTheme::fixed(
-            crate::theme::OutlineTheme::new(crate::theme::Color::rgba(1, 2, 3, 0), 140.0).unwrap(),
-        ));
+        let bin = theme
+            .marks
+            .fills()
+            .bodies()
+            .histogram_bin()
+            .clone()
+            .with_outline(Some(crate::theme::DataOutlineTheme::fixed(
+                crate::theme::OutlineTheme::new(crate::theme::Color::rgba(1, 2, 3, 0), 140.0)
+                    .unwrap(),
+            )))
+            .unwrap();
+        let bodies = theme
+            .marks
+            .fills()
+            .bodies()
+            .clone()
+            .with_histogram_bin(bin)
+            .unwrap();
+        let fills = theme.marks.fills().clone().with_bodies(bodies).unwrap();
+        theme.marks = theme.marks.clone().with_fills(fills).unwrap();
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), baseline);
 
         let source = sample()

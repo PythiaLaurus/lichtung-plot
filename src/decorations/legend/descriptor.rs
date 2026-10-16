@@ -20,7 +20,7 @@ pub(crate) enum PreparedGuideDescriptor {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct MissingKey {
     pub fill: Color,
-    pub outline: crate::theme::OutlineTheme,
+    pub outline: Option<crate::theme::OutlineTheme>,
     pub label: String,
 }
 

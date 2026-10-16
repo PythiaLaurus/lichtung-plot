@@ -1067,8 +1067,18 @@ impl<K: crate::kind::Marker> Plot<K> {
     ) -> PointStyle {
         theme
             .marks
-            .primary_point
+            .points()
+            .primary()
             .backend_style(color, radius, self.point_outline_visible)
+    }
+
+    /// Materialize one selected distribution role with the same outline policy as its guide.
+    pub(crate) fn distribution_point_style(
+        &self,
+        role: &crate::theme::mark::SizedPointTheme,
+        color: (u8, u8, u8),
+    ) -> PointStyle {
+        role.backend_style(color, self.point_outline_visible)
     }
 
     /// Selected semantic plot kind.

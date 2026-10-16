@@ -108,11 +108,22 @@ pub(crate) fn intrinsic_body_minimum(
     );
     let mode = mode(chart);
 
-    let body = theme.marks.bar_body.backend_style((0, 0, 0));
+    let body = theme
+        .marks
+        .fills()
+        .bodies()
+        .bar_body()
+        .backend_style((0, 0, 0));
     let body_ink = crate::render::geometry::rectangular_fill_ink_bounds(&body)?;
     let outline = crate::render::geometry::rectangular_fill_ink_outset(&body)?;
-    let interval =
-        crate::render::geometry::line_ink_width(&theme.marks.uncertainty_stroke.backend_style())?;
+    let interval = crate::render::geometry::line_ink_width(
+        &theme
+            .marks
+            .strokes()
+            .summaries()
+            .uncertainty()
+            .backend_style(),
+    )?;
     let mut pitch = 1.0_f64 / 1024.0;
     let mut numeric = if horizontal { outline.0 } else { outline.1 };
 
@@ -313,7 +324,7 @@ impl PreparedBars {
             resources,
         )?;
         let accents = AccentColors::resolve(
-            &theme.marks.accents,
+            theme.marks.accents(),
             if chart.colors_by_sign() { 2 } else { 0 },
         )?;
         Ok((colors, accents))
@@ -601,8 +612,18 @@ impl BarPayload {
             for bracket in &significance.brackets {
                 let label = &bracket.label.plan;
                 let style = crate::render::backend::BracketStyle {
-                    color: context.theme.annotations.bracket_stroke.color(),
-                    width: context.theme.annotations.bracket_stroke.width(),
+                    color: context
+                        .theme
+                        .annotations
+                        .significance()
+                        .bracket_stroke()
+                        .color(),
+                    width: context
+                        .theme
+                        .annotations
+                        .significance()
+                        .bracket_stroke()
+                        .width(),
                     label_color: label.style.paint,
                     font_family: crate::data::source::copy_font_stack(&label.style.stack)?,
                     font_size: label.style.font_size,
@@ -1365,7 +1386,9 @@ pub(crate) fn legend_entries(
                         LegendIdentity::bar_sign(decreasing),
                         theme
                             .marks
-                            .bar_body
+                            .fills()
+                            .bodies()
+                            .bar_body()
                             .backend_style(accents.color(usize::from(decreasing))?),
                     )
                     .without_hue_level(),
@@ -1378,7 +1401,12 @@ pub(crate) fn legend_entries(
     crate::data::source::collect_source(prepared.hues.iter().map(|label| {
         Ok(LegendEntry::fill(
             chart.point_legend_identity(label)?,
-            theme.marks.bar_body.backend_style(colors.color(label)?),
+            theme
+                .marks
+                .fills()
+                .bodies()
+                .bar_body()
+                .backend_style(colors.color(label)?),
         ))
     }))
 }

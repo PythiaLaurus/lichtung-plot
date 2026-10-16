@@ -191,9 +191,9 @@ fn plan_comparisons_at_with_label(
     scope: &crate::layout::fit::FitScope,
 ) -> Result<SignificancePlan, crate::layout::fit::PlanError> {
     let mut metrics = bracket_metrics(mark_style);
-    metrics.panel_padding = metrics
-        .panel_padding
-        .max(f64::from(theme.annotations.bracket_stroke.width()) / 2.0 + 1.0 / 1024.0);
+    metrics.panel_padding = metrics.panel_padding.max(
+        f64::from(theme.annotations.significance().bracket_stroke().width()) / 2.0 + 1.0 / 1024.0,
+    );
     validate_range(y_range, y_limits.is_some())?;
     if categories.len() != rendered_maxima.len()
         || anchor_positions.is_some_and(|positions| positions.len() != categories.len())
@@ -372,7 +372,8 @@ fn plan_comparisons_at_with_label(
         } else {
             comparison.label.plan.width()
         };
-        let clearance = f64::from(theme.annotations.bracket_stroke.width()) / 2.0 + 1.0 / 1024.0;
+        let clearance = f64::from(theme.annotations.significance().bracket_stroke().width()) / 2.0
+            + 1.0 / 1024.0;
         let interval = (
             start.min(center - label_span / 2.0) - clearance,
             end.max(center + label_span / 2.0) + clearance,
@@ -542,8 +543,8 @@ fn plan_comparisons_at_with_label(
         let mut geometry = crate::render::geometry::GeometrySnapshot::new();
         let label = &bracket.label.plan;
         let style = BracketStyle {
-            color: theme.annotations.bracket_stroke.color(),
-            width: theme.annotations.bracket_stroke.width(),
+            color: theme.annotations.significance().bracket_stroke().color(),
+            width: theme.annotations.significance().bracket_stroke().width(),
             label_color: label.style.paint,
             font_family: label
                 .copy_stack()
@@ -1146,8 +1147,8 @@ pub(crate) fn render(
     for bracket in &plan.brackets {
         let label = &bracket.label.plan;
         let style = BracketStyle {
-            color: theme.annotations.bracket_stroke.color(),
-            width: theme.annotations.bracket_stroke.width(),
+            color: theme.annotations.significance().bracket_stroke().color(),
+            width: theme.annotations.significance().bracket_stroke().width(),
             label_color: label.style.paint,
             font_family: label
                 .copy_stack()

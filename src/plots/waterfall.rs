@@ -56,7 +56,12 @@ fn mark_intrinsic_body_minimum(
         ));
     }
 
-    let positive = theme.marks.waterfall_bar.backend_style((0, 0, 0));
+    let positive = theme
+        .marks
+        .fills()
+        .bodies()
+        .waterfall_bar()
+        .backend_style((0, 0, 0));
     let negative = positive.clone();
     let positive_ink = crate::render::geometry::rectangular_fill_ink_bounds(&positive)?;
     let negative_ink = crate::render::geometry::rectangular_fill_ink_bounds(&negative)?;
@@ -78,13 +83,23 @@ fn mark_intrinsic_body_minimum(
     }
     if prepared.spans.len() > 1 {
         let connector = crate::render::geometry::line_ink_width(
-            &theme.marks.waterfall_connector.backend_style(),
+            &theme
+                .marks
+                .strokes()
+                .connectors()
+                .waterfall_connector()
+                .backend_style(),
         )?;
         pitch = pitch.max(connector / 0.4);
         numeric = numeric.max(connector);
     }
     numeric = numeric.max(crate::render::geometry::line_ink_width(
-        &theme.marks.waterfall_reference.backend_style(),
+        &theme
+            .marks
+            .strokes()
+            .references()
+            .waterfall_reference()
+            .backend_style(),
     )?);
     let categories = f64::from(
         u32::try_from(prepared.labels.len())
@@ -134,7 +149,14 @@ pub(crate) fn intrinsic_body_minimum(
         height = height.max(plan.height());
     }
     let shelf = if height > 0.0 {
-        height + 2.0 * theme.annotations.waterfall_shelf_padding
+        theme
+            .annotations
+            .waterfall_shelf()
+            .lengths(theme.typography.annotations.waterfall_total.font_size())?
+            .padding
+            .times(2)
+            .add_pixels(height)?
+            .pixels_rounded(crate::layout::kernel::SpatialRounding::Ceil)?
     } else {
         0.0
     };
@@ -402,7 +424,7 @@ pub(crate) fn measure(
     let mut bars = Vec::new();
     let mut source_rows = Vec::new();
     let mut connectors = Vec::new();
-    let accents = crate::theme::AccentColors::resolve(&theme.marks.accents, 2)?;
+    let accents = crate::theme::AccentColors::resolve(theme.marks.accents(), 2)?;
     crate::data::source::reserve_source(&mut bars, spans.len())?;
     crate::data::source::reserve_source(&mut source_rows, spans.len())?;
     crate::data::source::reserve_source(&mut connectors, spans.len().saturating_sub(1))?;
@@ -437,7 +459,12 @@ pub(crate) fn measure(
                 Point2D::new(right, top),
                 Point2D::new(left, top),
             ],
-            theme.marks.waterfall_bar.backend_style(color),
+            theme
+                .marks
+                .fills()
+                .bodies()
+                .waterfall_bar()
+                .backend_style(color),
         ));
         source_rows.push(span.source_row);
         if index + 1 < spans.len() {
@@ -447,7 +474,12 @@ pub(crate) fn measure(
             let to_y = next.0 + 0.2 * (next.1 - next.0);
             connectors.push((
                 [Point2D::new(x, from_y), Point2D::new(x, to_y)],
-                theme.marks.waterfall_connector.backend_style(),
+                theme
+                    .marks
+                    .strokes()
+                    .connectors()
+                    .waterfall_connector()
+                    .backend_style(),
             ));
         }
     }
@@ -457,7 +489,12 @@ pub(crate) fn measure(
         let (_, y1) = layout.projection.project(value, labels.len() as f64);
         (
             [Point2D::new(x, y0), Point2D::new(x, y1)],
-            theme.marks.waterfall_reference.backend_style(),
+            theme
+                .marks
+                .strokes()
+                .references()
+                .waterfall_reference()
+                .backend_style(),
         )
     });
     let AnnotationPlan {
@@ -728,22 +765,14 @@ fn plan_annotations(
     let mut miss = None;
     crate::data::source::reserve_source(&mut items, 2)?;
     crate::data::source::reserve_source(&mut rows, 2)?;
-    let metrics = &theme.annotations;
-    if [
-        metrics.waterfall_shelf_padding,
-        metrics.waterfall_shelf_gap,
-        metrics.waterfall_shelf_row_gap,
-    ]
-    .into_iter()
-    .any(|value| !value.is_finite() || value < 0.0)
-    {
-        return Err(
-            Error::Render("Waterfall shelf spacing must be finite and nonnegative".into()).into(),
-        );
-    }
-    let padding = crate::layout::kernel::ceil_spatial_quanta(metrics.waterfall_shelf_padding)?;
-    let gap = crate::layout::kernel::ceil_spatial_quanta(metrics.waterfall_shelf_gap)?;
-    let row_gap = crate::layout::kernel::ceil_spatial_quanta(metrics.waterfall_shelf_row_gap)?;
+    let metrics = theme
+        .annotations
+        .waterfall_shelf()
+        .lengths(theme.typography.annotations.waterfall_total.font_size())?;
+    let gap = metrics
+        .gap
+        .round(crate::layout::kernel::SpatialRounding::Ceil)?
+        .quanta();
     let producer = context.producer_text()?;
     for (index, (value, text)) in candidates.iter().enumerate() {
         let target = if index == 0 {
@@ -765,13 +794,18 @@ fn plan_annotations(
             )?)
         })?;
         let width = text_plan.width();
-        if width + 2.0 * metrics.waterfall_shelf_padding > panel.width() {
+        let required_width = metrics
+            .padding
+            .times(2)
+            .add_pixels(width)?
+            .pixels_rounded(crate::layout::kernel::SpatialRounding::Ceil)?;
+        if required_width > panel.width() {
             // Debug escaping can expand each source byte; admit both the text
             // diagnostic before allocation; child paths have their own admission.
 
             crate::layout::fit::FitFailure::retain_least(&mut miss, scope.child(if index == 0 { crate::layout::AddressRole::WaterfallBaseLabel } else { crate::layout::AddressRole::WaterfallTerminalLabel }, 0)?.failure(crate::layout::fit::FitKind::Text, format!(
                 "waterfall: total annotation {text:?} requires {:.0}px but only {:.0}px is available; increase chart width or shorten the configured label",
-                width + 2.0 * metrics.waterfall_shelf_padding,
+                required_width,
                 panel.width()
             )));
             continue;
@@ -854,36 +888,21 @@ fn plan_annotations(
     }
     let mut baselines = Vec::new();
     crate::data::source::reserve_source(&mut baselines, rows.len())?;
-    let mut height = if rows.is_empty() {
-        0_i128
-    } else {
-        i128::from(padding)
-    };
+    let mut height = metrics.padding.times(u32::from(!rows.is_empty()));
     for (index, row) in rows.iter().enumerate() {
-        let baseline = height
-            .checked_add(i128::from(row.below))
-            .ok_or_else(|| Error::Render("Waterfall shelf baseline overflow".into()))?;
-        baselines.push(
-            i64::try_from(baseline).map_err(|_| {
-                Error::Render("Waterfall shelf baseline exceeds spatial range".into())
-            })? as f64
-                / 1024.0,
-        );
+        let baseline =
+            height.add_quanta(crate::layout::kernel::LayoutScalar::from_quanta(row.below))?;
+        baselines
+            .push(baseline.pixels_rounded(crate::layout::kernel::SpatialRounding::NearestEven)?);
         height = baseline
-            .checked_add(i128::from(row.above))
-            .and_then(|value| {
-                value.checked_add(i128::from(if index + 1 == rows.len() {
-                    padding
-                } else {
-                    row_gap
-                }))
-            })
-            .ok_or_else(|| Error::Render("Waterfall shelf height overflow".into()))?;
+            .add_quanta(crate::layout::kernel::LayoutScalar::from_quanta(row.above))?
+            .add_length(if index + 1 == rows.len() {
+                &metrics.padding
+            } else {
+                &metrics.row_gap
+            });
     }
-    let height = i64::try_from(height)
-        .map_err(|_| Error::Render("Waterfall shelf height exceeds spatial range".into()))?
-        as f64
-        / 1024.0;
+    let height = height.pixels_rounded(crate::layout::kernel::SpatialRounding::Ceil)?;
     Ok(AnnotationPlan {
         items,
         height,

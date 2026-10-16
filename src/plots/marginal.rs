@@ -79,7 +79,7 @@ impl PreparedMarginal {
             resources,
         )?;
         let accents = AccentColors::resolve(
-            &theme.marks.accents,
+            theme.marks.accents(),
             usize::from(self.groups.iter().any(|group| group.identity.hue.is_none())),
         )?;
         Ok((colors, accents))
@@ -130,8 +130,13 @@ impl PreparedMarginal {
             let color = Self::group_color(group, colors, accents)?;
             entries.push(LegendEntry::point_fill(
                 chart.collective_legend_identity(&group.identity)?,
-                chart.point_style(theme, color, theme.marks.point_sizes.marginal),
-                theme.marks.marginal_density.backend_style(color),
+                chart.point_style(theme, color, theme.marks.points().radii().marginal()),
+                theme
+                    .marks
+                    .fills()
+                    .densities()
+                    .marginal_density()
+                    .backend_style(color),
             ));
         }
         Ok(entries)
@@ -152,12 +157,17 @@ pub(crate) fn intrinsic_body_minimum(
         crate::layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
 
     for _ in &prepared.groups {
-        let style = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.marginal);
+        let style = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().marginal());
         let (x, y) = crate::render::geometry::point_ink_dimensions(&style)?;
         central.0 = central.0.max(x);
         central.1 = central.1.max(y);
     }
-    let density = theme.marks.marginal_density.backend_style((0, 0, 0));
+    let density = theme
+        .marks
+        .fills()
+        .densities()
+        .marginal_density()
+        .backend_style((0, 0, 0));
     let (out_x, out_y) = crate::render::geometry::rectangular_fill_ink_outset(&density)?;
     // Each filled KDE strip has a positive extent even when its paint is
     // transparent. Its stroke is measured by the same canonical geometry as
@@ -291,7 +301,12 @@ pub(crate) fn natural_body_preference(
 ) -> Result<(f64, f64), Error> {
     let hard = intrinsic_body_minimum(chart, theme)?;
     let gap = theme.composition_grid_gap()?;
-    let density = theme.marks.marginal_density.backend_style((0, 0, 0));
+    let density = theme
+        .marks
+        .fills()
+        .densities()
+        .marginal_density()
+        .backend_style((0, 0, 0));
     let ink = crate::render::geometry::rectangular_fill_ink_outset(&density)?;
     let axes = layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
     let central = (
@@ -319,7 +334,12 @@ pub(crate) fn natural_body_height(
 ) -> Result<f64, Error> {
     let gap = theme.composition_grid_gap()?;
     let hard = intrinsic_body_minimum(chart, theme)?;
-    let density = theme.marks.marginal_density.backend_style((0, 0, 0));
+    let density = theme
+        .marks
+        .fills()
+        .densities()
+        .marginal_density()
+        .backend_style((0, 0, 0));
     let ink = crate::render::geometry::rectangular_fill_ink_outset(&density)?;
     let right_hard = (2.0 * ink.0).max(1.0 / 1024.0);
     let top_hard = (2.0 * ink.1).max(1.0 / 1024.0);
@@ -387,7 +407,12 @@ pub(crate) fn measure(
             "marginal linked strips leave less than the prepared central mark and density ink minimum",
         ).into());
     }
-    let density = theme.marks.marginal_density.backend_style((0, 0, 0));
+    let density = theme
+        .marks
+        .fills()
+        .densities()
+        .marginal_density()
+        .backend_style((0, 0, 0));
     let ink = crate::render::geometry::rectangular_fill_ink_outset(&density)?;
     let right_hard = (2.0 * ink.0).max(1.0 / 1024.0);
     let top_hard = (2.0 * ink.1).max(1.0 / 1024.0);
@@ -572,7 +597,7 @@ pub(crate) fn measure(
     let mut point_ink: Option<crate::render::geometry::GeometryBox> = None;
     for (gi, group) in groups.iter().enumerate() {
         let color = PreparedMarginal::group_color(group, &colors, &accents)?;
-        let point_style = chart.point_style(theme, color, theme.marks.point_sizes.marginal);
+        let point_style = chart.point_style(theme, color, theme.marks.points().radii().marginal());
         if let Some(ink) = crate::render::geometry::point_ink_bounds(&point_style)? {
             point_ink = Some(point_ink.map_or(ink, |previous| previous.union(ink)));
         }
@@ -618,7 +643,12 @@ pub(crate) fn measure(
         let (_, right_end) = panels[2].projection.project(0.0, curves.y_grid[n_grid - 1]);
         top_poly.push(Point2D::new(top_end, baseline_y));
         right_poly.push(Point2D::new(baseline_x, right_end));
-        let fill = theme.marks.marginal_density.backend_style(color);
+        let fill = theme
+            .marks
+            .fills()
+            .densities()
+            .marginal_density()
+            .backend_style(color);
         selected.push(MarginalGroupPayload {
             points: pts,
             source_rows: crate::data::source::collect_source(

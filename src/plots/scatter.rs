@@ -77,7 +77,7 @@ pub(crate) fn intrinsic_body_minimum(
             "Scatter has no retained primary marks".into(),
         ));
     }
-    let style = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.scatter);
+    let style = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().scatter());
     crate::render::backend::validate_point_style(&style)?;
     // Reuse the canonical painted-ink owner on one origin-relative point; no
     // source point is projected or clipped and scratch storage is reserved.
@@ -250,7 +250,7 @@ impl PreparedScatter {
             let color = map.color(label)?;
             entries.push(LegendEntry::point(
                 chart.point_legend_identity(label)?,
-                chart.point_style(theme, color, theme.marks.point_sizes.scatter),
+                chart.point_style(theme, color, theme.marks.points().radii().scatter()),
             ));
         }
         Ok(entries)
@@ -303,7 +303,7 @@ impl PreparedScatter {
             .groups
             .iter()
             .any(|group| group.label.is_none())
-            .then(|| AccentColors::resolve(&theme.marks.accents, 1))
+            .then(|| AccentColors::resolve(theme.marks.accents(), 1))
             .transpose()?;
         for group_index in order {
             let group = &self.groups[group_index];
@@ -315,7 +315,7 @@ impl PreparedScatter {
                     .ok_or_else(|| Error::Render("Scatter accent owner is missing".into()))?
                     .color(0)?
             };
-            let style = chart.point_style(theme, color, theme.marks.point_sizes.scatter);
+            let style = chart.point_style(theme, color, theme.marks.points().radii().scatter());
             let points = crate::data::source::collect_source(group.points.iter().map(|(x, y)| {
                 let (x, y) = projection.project(*x, *y);
                 Ok(Point2D::new(x, y))
@@ -380,7 +380,7 @@ pub(crate) fn measure_marks(
     let resources = theme.prepared_font_environment()?.operation();
     let data = context.data.with_operation(&resources);
     let mut payload = prepared.project(chart, &layout.projection, theme, data)?;
-    let point_style = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.scatter);
+    let point_style = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().scatter());
     if let Some(ink) = crate::render::geometry::point_ink_bounds(&point_style)? {
         payload.domain_expansions = crate::layout::interior::automatic_mark_ink_expansions(
             prepared.ranges,

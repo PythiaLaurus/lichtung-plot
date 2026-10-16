@@ -34,22 +34,24 @@ pub(crate) fn intrinsic_body_minimum(
     }
 
     let width = 0.8_f64;
-    let cloud_style = theme.marks.violin_body.backend_style((0, 0, 0));
+    let cloud_style = theme
+        .marks
+        .fills()
+        .bodies()
+        .violin_body()
+        .backend_style((0, 0, 0));
     let cloud = crate::render::geometry::rectangular_fill_ink_bounds(&cloud_style)?;
     let (_, cloud_numeric) = crate::render::geometry::rectangular_fill_ink_outset(&cloud_style)?;
-    let box_style = theme.marks.raincloud_box.backend_style();
+    let box_style = theme.marks.fills().bodies().inner_summary().backend_style();
     let box_ink = crate::render::geometry::rectangular_fill_ink_bounds(&box_style)?;
     let (_, box_numeric) = crate::render::geometry::rectangular_fill_ink_outset(&box_style)?;
-    let median_ink =
-        crate::render::geometry::line_ink_bounds(&theme.marks.raincloud_median.backend_style())?;
+    let median_ink = crate::render::geometry::line_ink_bounds(
+        &theme.marks.strokes().summaries().median().backend_style(),
+    )?;
     let median = median_ink.map_or(0.0, |ink| ink.top - ink.bottom);
-    let point = theme.marks.raw_overlay_point.backend_style(
-        (0, 0, 0),
-        theme.marks.raw_overlay_radius,
-        true,
-    );
+    let point = chart.distribution_point_style(theme.marks.points().mandatory_strip(), (0, 0, 0));
     let (_, point_numeric) = crate::render::geometry::point_ink_dimensions(&point)?;
-    let mut pitch = crate::plots::violin::raincloud_strip_pitch(theme, width)?
+    let mut pitch = crate::plots::violin::raincloud_strip_pitch(theme, width, &point)?
         .max((1.0 / 1024.0) / (0.4 * width))
         .max((1.0 / 1024.0) / (0.16 * width));
     if let Some(ink) = cloud {
@@ -107,8 +109,13 @@ impl PreparedRaincloud {
             let color = colors.color(hue)?;
             Ok(LegendEntry::point_fill(
                 chart.point_legend_identity(hue)?,
-                crate::plots::distribution_sample::overlay_style(color, theme),
-                theme.marks.violin_body.backend_style(color),
+                chart.distribution_point_style(theme.marks.points().mandatory_strip(), color),
+                theme
+                    .marks
+                    .fills()
+                    .bodies()
+                    .violin_body()
+                    .backend_style(color),
             ))
         }))
     }
@@ -206,7 +213,7 @@ pub(super) fn measure_marks(
         project_strip(
             &layout,
             &group.geometry,
-            color,
+            chart.distribution_point_style(theme.marks.points().mandatory_strip(), color),
             index,
             theme,
             &mut payload,
@@ -262,7 +269,15 @@ fn project_cloud_and_summary(
     )?;
     cloud.push(Point2D::new(baseline_high_x, baseline_high_y));
     cloud.push(Point2D::new(baseline_low_x, baseline_low_y));
-    payload.polygon(cloud, theme.marks.violin_body.backend_style(color))?;
+    payload.polygon(
+        cloud,
+        theme
+            .marks
+            .fills()
+            .bodies()
+            .violin_body()
+            .backend_style(color),
+    )?;
 
     let box_center = center + width * 0.02;
     let box_half_width = width * 0.08;
@@ -289,21 +304,21 @@ fn project_cloud_and_summary(
             .into_iter()
             .map(Ok),
         )?,
-        theme.marks.raincloud_box.backend_style(),
+        theme.marks.fills().bodies().inner_summary().backend_style(),
     )?;
     payload.line(
         &[
             Point2D::new(box_left, median),
             Point2D::new(box_right, median),
         ],
-        &theme.marks.raincloud_median.backend_style(),
+        &theme.marks.strokes().summaries().median().backend_style(),
     )
 }
 
 fn project_strip(
     layout: &Layout,
     group: &RaincloudGroup,
-    color: (u8, u8, u8),
+    style: crate::render::backend::PointStyle,
     index: usize,
     theme: &ResolvedTheme,
     payload: &mut DistributionPayload,
@@ -315,12 +330,11 @@ fn project_strip(
     let (box_right, _) = layout.projection.project(center + width * 0.10, 0.0);
     let (strip_left, _) = layout.projection.project(center + width * 0.24, 0.0);
     let (strip_right, _) = layout.projection.project(center + width * 0.46, 0.0);
-    let style = crate::plots::distribution_sample::overlay_style(color, theme);
     let point_ink = crate::render::geometry::point_ink_bounds(&style)?;
     let point_left = point_ink.map_or(0.0, |ink| (-ink.left).max(0.0));
     let point_right = point_ink.map_or(0.0, |ink| ink.right.max(0.0));
     let box_right_ink = crate::render::geometry::rectangular_fill_ink_bounds(
-        &theme.marks.raincloud_box.backend_style(),
+        &theme.marks.fills().bodies().inner_summary().backend_style(),
     )?
     .map_or(0.0, |ink| ink.right.max(0.0));
     let strip_min = strip_left + point_left;
