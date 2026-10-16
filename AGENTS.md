@@ -28,6 +28,15 @@ Use modern Rust module layout: `foo.rs` plus `foo/` siblings. Do not add
 
 ## Testing
 
+Do not grow the unit-test suite. Every new unit test must be offset by deleting
+an existing unit test in the same logical change. The discovered library-test
+count, including ignored tests, must not exceed its pre-change count on the same
+platform (the current Linux baseline is 671, including 17 ignored). Further
+deletions do not create a budget for later growth. Prefer replacing lower-value
+tests with meaningful coverage of the changed contract, and remove obsolete
+test-only support. Do not evade this rule with ignored tests, merged test
+functions, parameterized-case packaging, or migration into integration suites.
+
 Run the narrowest tests that exercise the changed behavior and its affected
 callers, plus strict Clippy for code changes. A change spanning several modules
 does **not** by itself justify running all tests: identify the affected call

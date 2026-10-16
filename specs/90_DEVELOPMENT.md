@@ -68,6 +68,15 @@ relative text/mark relationships when those contracts are affected.
 
 ## Test Layout
 
+The unit-test suite must not grow. Introducing a unit test requires deleting an
+existing unit test in the same logical change; the discovered library-test count
+(including ignored tests) must not exceed its pre-change count on the same
+platform. The Linux baseline after the approved deletion is 671 tests, including
+17 ignored. A later reduction lowers the ceiling rather than accumulating test
+credits. Replace lower-value coverage with relevant semantic contracts and retire
+unused test support. Ignoring tests, merging functions, packaging parameterized
+cases, or moving tests into integration suites does not satisfy this rule.
+
 Integration tests are independent Cargo test targets declared in `Cargo.toml`.
 Each target lives in `tests/<domain>/suite.rs`, with sibling modules for one
 cohesive plot family or rendering contract. This keeps targets independently
