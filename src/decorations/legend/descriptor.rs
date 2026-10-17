@@ -204,13 +204,10 @@ impl ContinuousContributor {
                     .then(|| crate::theme::ColorDomain::exact(existing.domain.0, existing.domain.1))
                     .transpose()?,
             )?;
-            existing.stops = final_stops(
-                existing.domain,
-                existing.center,
-                existing.selection.stops()?,
-                &samples,
-            )?;
-            existing.labels = generated_labels(existing)?;
+            existing.stops =
+                crate::theme::ContinuousColors::selected(existing.domain, &existing.selection)?
+                    .guide_stops(&samples)?;
+            existing.labels = domain_labels(existing.domain, existing.center)?;
         }
         Ok(combined)
     }
@@ -226,78 +223,6 @@ fn same_stops(left: &[ColorStop], right: &[ColorStop]) -> bool {
         }
     }
     true
-}
-
-fn final_stops(
-    domain: (f64, f64),
-    center: Option<f64>,
-    semantic: &[ColorStop],
-    samples: &[f64],
-) -> Result<Vec<GradientStop>, Error> {
-    if let Some(center) = center {
-        // Validate the supplied semantic gradient before projecting its center
-        // into the selected domain; never repair malformed endpoint offsets.
-        let _ = crate::theme::ContinuousColors::resolve((0.0, 1.0), semantic)?;
-        if !center.is_finite() || center < domain.0 || center > domain.1 {
-            return Err(Error::Data(
-                "shared diverging color domain excludes its center".into(),
-            ));
-        }
-        if semantic.len() != 3 || semantic[1].offset().to_bits() != 0.5_f64.to_bits() {
-            return Err(Error::Data(
-                "shared diverging gradient requires one neutral center stop".into(),
-            ));
-        }
-        let neutral = semantic[1].color();
-        let selected = if same_value(domain.0, domain.1) {
-            [
-                ColorStop::new(0.0, neutral)?,
-                ColorStop::new(1.0, neutral)?,
-                ColorStop::new(1.0, neutral)?,
-            ]
-        } else if same_value(center, domain.0) {
-            [
-                ColorStop::new(0.0, neutral)?,
-                ColorStop::new(1.0, semantic[2].color())?,
-                ColorStop::new(1.0, semantic[2].color())?,
-            ]
-        } else if same_value(center, domain.1) {
-            [
-                ColorStop::new(0.0, semantic[0].color())?,
-                ColorStop::new(1.0, neutral)?,
-                ColorStop::new(1.0, neutral)?,
-            ]
-        } else {
-            let offset = crate::theme::ContinuousColors::normalized_fraction(domain, center)?;
-            if !(0.0..1.0).contains(&offset) || offset.to_bits() == 0 {
-                return Err(Error::Data(
-                    "shared diverging center has no representable gradient stop".into(),
-                ));
-            }
-            [
-                ColorStop::new(0.0, semantic[0].color())?,
-                ColorStop::new(offset, neutral)?,
-                ColorStop::new(1.0, semantic[2].color())?,
-            ]
-        };
-        let count = if center > domain.0 && center < domain.1 {
-            3
-        } else {
-            2
-        };
-        return crate::theme::ContinuousColors::resolve(domain, &selected[..count])?
-            .guide_stops(samples);
-    }
-    if same_value(domain.0, domain.1) {
-        let scale = crate::theme::ContinuousColors::resolve((0.0, 1.0), semantic)?;
-        let midpoint = scale.color(0.5)?;
-        let stops = [
-            ColorStop::new(0.0, midpoint)?,
-            ColorStop::new(1.0, midpoint)?,
-        ];
-        return crate::theme::ContinuousColors::resolve(domain, &stops)?.guide_stops(samples);
-    }
-    crate::theme::ContinuousColors::resolve(domain, semantic)?.guide_stops(samples)
 }
 
 pub(crate) fn same_value(left: f64, right: f64) -> bool {
@@ -316,22 +241,19 @@ fn same_text(left: &str, right: &str) -> bool {
     true
 }
 
-fn generated_labels(descriptor: &ContinuousDescriptor) -> Result<Vec<String>, Error> {
+pub(crate) fn domain_labels(domain: (f64, f64), center: Option<f64>) -> Result<Vec<String>, Error> {
     let mut values = [0.0_f64; 3];
-    let count = if same_value(descriptor.domain.0, descriptor.domain.1) {
-        values[0] = descriptor.domain.0;
+    let count = if same_value(domain.0, domain.1) {
+        values[0] = domain.0;
         1
     } else {
-        values[0] = descriptor.domain.0;
+        values[0] = domain.0;
         let mut count = 1;
-        if let Some(center) = descriptor
-            .center
-            .filter(|center| *center > descriptor.domain.0 && *center < descriptor.domain.1)
-        {
+        if let Some(center) = center.filter(|center| *center > domain.0 && *center < domain.1) {
             values[1] = center;
             count += 1;
         }
-        values[count] = descriptor.domain.1;
+        values[count] = domain.1;
         count + 1
     };
     numeric_labels(&values[..count])

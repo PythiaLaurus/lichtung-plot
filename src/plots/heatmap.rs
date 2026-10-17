@@ -15,12 +15,10 @@ use crate::render::backend::{
     with_clip, Backend, FillStyle, GradientStop, LineStyle, PlacedText, Point2D, TextAnchor,
 };
 use crate::spec::{
-    CategoryOrder, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapScale, LegendPolicy,
+    CategoryOrder, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, LegendPolicy,
     PlotRenderContext, PlotRenderResult,
 };
-use crate::theme::{
-    ColorScales, ColorStop, ContinuousColorScale, DivergingGradient, OpaqueColor, ResolvedTheme,
-};
+use crate::theme::{ContinuousColorScale, OpaqueColor, ResolvedTheme};
 use crate::Plot;
 
 #[cfg(test)]
@@ -92,15 +90,22 @@ impl HeatmapData {
         &mut self,
         descriptor: &crate::decorations::legend::descriptor::ContinuousDescriptor,
     ) -> Result<(), Error> {
-        self.replace_domain(ResolvedColorDomain {
-            minimum: descriptor.domain.0,
-            maximum: descriptor.domain.1,
-            center: descriptor.center,
-        })
+        self.replace_domain(
+            ResolvedColorDomain {
+                minimum: descriptor.domain.0,
+                maximum: descriptor.domain.1,
+                center: descriptor.center,
+            },
+            descriptor.selection.clone(),
+        )
     }
 
-    fn replace_domain(&mut self, domain: ResolvedColorDomain) -> Result<(), Error> {
-        let color = PreparedHeatmapColor::resolve(domain, self.color.selection.clone())?;
+    fn replace_domain(
+        &mut self,
+        domain: ResolvedColorDomain,
+        selection: ContinuousColorScale,
+    ) -> Result<(), Error> {
+        let color = PreparedHeatmapColor::resolve(domain, selection)?;
         let fills = crate::data::source::collect_source(
             self.cells
                 .iter()
@@ -351,106 +356,15 @@ impl PreparedHeatmapColor {
         domain: ResolvedColorDomain,
         selection: ContinuousColorScale,
     ) -> Result<Self, Error> {
-        let semantic_stops = selection.stops()?;
-        if selection.kind() == crate::theme::ContinuousScaleKind::Sequential
-            && selection.sequential_gradient().is_none()
-        {
-            return Err(Error::Render(
-                "prepared sequential Heatmap has no retained gradient".into(),
-            ));
-        }
-        if (selection.kind() == crate::theme::ContinuousScaleKind::Diverging)
-            != domain.center.is_some()
-            || selection.center().map(f64::to_bits) != domain.center.map(f64::to_bits)
-        {
+        if selection.center().map(f64::to_bits) != domain.center.map(f64::to_bits) {
             return Err(Error::Render(
                 "resolved Heatmap domain disagrees with its retained scale selection".into(),
             ));
         }
-        if domain.center.is_some()
-            && (semantic_stops.len() != 3
-                || semantic_stops[1].offset().to_bits() != 0.5_f64.to_bits())
-        {
-            return Err(Error::Data(
-                "heatmap diverging gradient requires one neutral center stop".into(),
-            ));
-        }
-        let low = semantic_stops[0].color();
-        let neutral = selection.diverging_gradient().map_or_else(
-            || semantic_stops[semantic_stops.len() / 2].color(),
-            DivergingGradient::neutral,
-        );
-        let high = semantic_stops[semantic_stops.len() - 1].color();
-        let (stops, count) = if let Some(center) = domain.center {
-            if !center.is_finite() || center < domain.minimum || center > domain.maximum {
-                return Err(Error::Data(
-                    "heatmap diverging domain must contain its finite center".into(),
-                ));
-            }
-            if same_value(domain.minimum, domain.maximum) {
-                (
-                    [
-                        ColorStop::new(0.0, neutral)?,
-                        ColorStop::new(1.0, neutral)?,
-                        ColorStop::new(1.0, neutral)?,
-                    ],
-                    2,
-                )
-            } else if same_value(center, domain.minimum) {
-                (
-                    [
-                        ColorStop::new(0.0, neutral)?,
-                        ColorStop::new(1.0, high)?,
-                        ColorStop::new(1.0, high)?,
-                    ],
-                    2,
-                )
-            } else if same_value(center, domain.maximum) {
-                (
-                    [
-                        ColorStop::new(0.0, low)?,
-                        ColorStop::new(1.0, neutral)?,
-                        ColorStop::new(1.0, neutral)?,
-                    ],
-                    2,
-                )
-            } else {
-                let offset = crate::theme::ContinuousColors::normalized_fraction(
-                    (domain.minimum, domain.maximum),
-                    center,
-                )?;
-                if !(0.0..1.0).contains(&offset) || offset.to_bits() == 0 {
-                    return Err(Error::Data(
-                        "heatmap diverging center has no representable gradient stop".into(),
-                    ));
-                }
-                (
-                    [
-                        ColorStop::new(0.0, low)?,
-                        ColorStop::new(offset, neutral)?,
-                        ColorStop::new(1.0, high)?,
-                    ],
-                    3,
-                )
-            }
-        } else {
-            (
-                [
-                    semantic_stops[0],
-                    semantic_stops[semantic_stops.len() - 1],
-                    semantic_stops[semantic_stops.len() - 1],
-                ],
-                semantic_stops.len(),
-            )
-        };
         Ok(Self {
-            scale: crate::theme::ContinuousColors::resolve(
+            scale: crate::theme::ContinuousColors::selected(
                 (domain.minimum, domain.maximum),
-                if domain.center.is_none() {
-                    semantic_stops
-                } else {
-                    &stops[..count]
-                },
+                &selection,
             )?,
             selection,
         })
@@ -1263,7 +1177,7 @@ fn category_levels(
 pub(crate) fn prepare<'a>(
     chart: &Plot,
     data: impl Into<crate::data::PlotData<'a>>,
-    color_scales: &ColorScales,
+    selection: ContinuousColorScale,
 ) -> Result<HeatmapData, Error> {
     let data = data.into();
     validate_options(chart)?;
@@ -1375,42 +1289,14 @@ pub(crate) fn prepare<'a>(
     crate::data::source::reserve_source(&mut finite, fills.len())?;
 
     finite.extend(fills.iter().flatten().copied());
-    if finite.is_empty() && chart.heatmap_color_limits_spec().is_none() {
+    if finite.is_empty() && selection.domain().is_none() {
         return Err(Error::Data(
             "heatmap: color column must contain at least one finite value unless explicit color limits are set"
                 .into(),
         ));
     }
 
-    let domain = color_domain(
-        &finite,
-        chart.heatmap_scale_spec(),
-        chart.heatmap_color_limits_spec(),
-    )?;
-
-    let exact_domain = chart
-        .heatmap_color_limits_spec()
-        .map(|(minimum, maximum)| crate::theme::ColorDomain::exact(minimum, maximum))
-        .transpose()?;
-    let override_gradient = chart.heatmap_gradient_spec()?;
-
-    let selection = if let Some(center) = domain.center {
-        let gradient = if let Some(gradient) = override_gradient {
-            DivergingGradient::from_sequence(gradient)?
-        } else {
-            color_scales.diverging().clone()
-        };
-        ContinuousColorScale::diverging(center, Some(gradient), exact_domain)?
-    } else {
-        ContinuousColorScale::sequential(
-            Some(
-                override_gradient
-                    .unwrap_or(color_scales.sequential())
-                    .clone(),
-            ),
-            exact_domain,
-        )?
-    };
+    let domain = color_domain(&finite, &selection)?;
     let color = PreparedHeatmapColor::resolve(domain, selection)?;
     let resolved_fills = crate::data::source::collect_source(
         cells
@@ -1471,16 +1357,9 @@ fn prepare_guide_labels(
     domain: ResolvedColorDomain,
     has_missing: bool,
 ) -> Result<Vec<String>, Error> {
-    let center = domain
-        .center
-        .filter(|center| *center > domain.minimum && *center < domain.maximum);
-    let values = [
-        domain.minimum,
-        domain.maximum,
-        center.unwrap_or(domain.minimum),
-    ];
-    let mut labels = crate::decorations::legend::descriptor::numeric_labels(
-        &values[..2 + usize::from(center.is_some())],
+    let mut labels = crate::decorations::legend::descriptor::domain_labels(
+        (domain.minimum, domain.maximum),
+        domain.center,
     )?;
     if has_missing {
         crate::data::source::reserve_source(&mut labels, 1)?;
@@ -1521,13 +1400,6 @@ fn validate_options(chart: &Plot) -> Result<(), Error> {
             "heatmap: legend policy overrides are not supported; the right-side colorbar is mandatory"
                 .into(),
         ));
-    }
-    if let HeatmapScale::Diverging { center } = chart.heatmap_scale_spec() {
-        if !center.is_finite() {
-            return Err(Error::Data(format!(
-                "heatmap: diverging center must be finite, got {center}"
-            )));
-        }
     }
     Ok(())
 }
@@ -1707,78 +1579,13 @@ const fn active_cell(layout: HeatmapLayout, x_index: usize, y_index: usize) -> b
 
 fn color_domain(
     values: &[f64],
-    scale: HeatmapScale,
-    explicit: Option<(f64, f64)>,
+    selection: &ContinuousColorScale,
 ) -> Result<ResolvedColorDomain, Error> {
-    let center = match scale {
-        HeatmapScale::Sequential => None,
-        HeatmapScale::Diverging { center } => {
-            if !center.is_finite() {
-                return Err(Error::Data(format!(
-                    "heatmap: diverging center must be finite, got {center}"
-                )));
-            }
-            Some(if center == 0.0 { 0.0 } else { center })
-        }
-    };
-    if let Some((minimum, maximum)) = explicit {
-        if !minimum.is_finite() || !maximum.is_finite() || minimum > maximum {
-            return Err(Error::Data(format!(
-                "heatmap: color limits must be finite and nondecreasing; got {minimum}..{maximum}"
-            )));
-        }
-        if let Some(center) = center.filter(|center| *center < minimum || *center > maximum) {
-            return Err(Error::Data(format!(
-                "heatmap: diverging color limits {minimum}..{maximum} must contain center {center}"
-            )));
-        }
-        return Ok(ResolvedColorDomain {
-            minimum,
-            maximum,
-            center,
-        });
-    }
-
-    let (minimum, maximum) = crate::data::min_max(values.iter().copied(), "heatmap")?;
-    let Some(center) = center else {
-        return Ok(ResolvedColorDomain {
-            minimum,
-            maximum,
-            center: None,
-        });
-    };
-    let mut radius = 0.0_f64;
-    for value in values {
-        let distance = if *value >= center {
-            *value - center
-        } else {
-            center - *value
-        };
-        if !distance.is_finite() {
-            return Err(Error::Data(format!(
-                "heatmap: cannot form a finite symmetric diverging domain around center {center}; set explicit color limits containing the center"
-            )));
-        }
-        radius = radius.max(distance);
-    }
-    if radius == 0.0 {
-        return Ok(ResolvedColorDomain {
-            minimum: center,
-            maximum: center,
-            center: Some(center),
-        });
-    }
-    let minimum = center - radius;
-    let maximum = center + radius;
-    if !minimum.is_finite() || !maximum.is_finite() || minimum >= center || maximum <= center {
-        return Err(Error::Data(format!(
-            "heatmap: symmetric diverging domain around center {center} exceeds finite f64 bounds; set explicit color limits containing the center"
-        )));
-    }
+    let domain = selection.prepared_domain(values, "heatmap")?;
     Ok(ResolvedColorDomain {
-        minimum,
-        maximum,
-        center: Some(center),
+        minimum: domain.minimum(),
+        maximum: domain.maximum(),
+        center: selection.center(),
     })
 }
 
@@ -2186,10 +1993,6 @@ fn check_annotation_tracks(
         }
     }
     miss.map_or(Ok(()), |failure| Err(failure.into()))
-}
-
-fn same_value(left: f64, right: f64) -> bool {
-    left.total_cmp(&right).is_eq() || (left.abs().to_bits() == 0 && right.abs().to_bits() == 0)
 }
 
 fn fitted_label(theme: &ResolvedTheme, label: &str, maximum_width: f64) -> Result<String, Error> {

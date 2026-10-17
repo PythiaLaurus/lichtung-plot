@@ -4,6 +4,19 @@ use crate::layout::{AxisSpec, AxisTick};
 use crate::spec::{AxisScale, FacetScales, PlotKind};
 use crate::{Error, Plot};
 
+fn continuous_selection(
+    source: &Plot,
+    owner: Option<&crate::theme::ThemeValue>,
+) -> Result<crate::theme::ContinuousColorScale, Error> {
+    source.continuous_selection_in(
+        owner
+            .ok_or_else(|| {
+                Error::Render("continuous preparation requires its owning color scales".into())
+            })?
+            .color_scales(),
+    )
+}
+
 /// Scientific coordinates and raw category sources. Post-font summaries are
 /// initialized by the owning root before allocating its panel, never by preparation.
 #[derive(Debug)]
@@ -50,7 +63,9 @@ impl PreparedReference {
                 source, data,
             )?)),
             PlotKind::Beeswarm => Ok(Self::Beeswarm(crate::plots::beeswarm::prepare(
-                source, data,
+                source,
+                data,
+                continuous_selection(source, owner)?,
             )?)),
             PlotKind::Marginal => Ok(Self::Marginal(crate::plots::marginal::prepare(
                 source, data,
@@ -58,11 +73,7 @@ impl PreparedReference {
             PlotKind::Heatmap => Ok(Self::Heatmap(crate::plots::heatmap::prepare(
                 source,
                 data,
-                owner
-                    .map(crate::theme::ThemeValue::color_scales)
-                    .ok_or_else(|| {
-                        Error::Render("Heatmap preparation requires its owning color scales".into())
-                    })?,
+                continuous_selection(source, owner)?,
             )?)),
             PlotKind::Interaction => Ok(Self::Interaction(crate::plots::interaction::prepare(
                 source, data, None,
@@ -666,18 +677,18 @@ pub(crate) fn prepare_plot(
                     crate::plots::heatmap::prepare(
                         source,
                         data,
-                        owner
-                            .map(crate::theme::ThemeValue::color_scales)
-                            .ok_or_else(|| {
-                                Error::Render(
-                                    "Heatmap preparation requires its owning color scales".into(),
-                                )
-                            })?,
+                        continuous_selection(source, owner)?,
                     )
                 })
                 .transpose()?;
             let beeswarm_marks = (source.kind() == PlotKind::Beeswarm)
-                .then(|| crate::plots::beeswarm::prepare(source, data))
+                .then(|| {
+                    crate::plots::beeswarm::prepare(
+                        source,
+                        data,
+                        continuous_selection(source, owner)?,
+                    )
+                })
                 .transpose()?;
             let waterfall_marks = (source.kind() == PlotKind::Waterfall)
                 .then(|| crate::plots::waterfall::prepare(source, data))

@@ -125,8 +125,8 @@ fn beeswarm_is_deterministic_and_renders_continuous_colorbar() {
             .count(),
         1
     );
-    assert!(first_svg.contains("<stop offset=\"0.000000\" stop-color=\"#3182BD\"/>"));
-    assert!(first_svg.contains("<stop offset=\"1.000000\" stop-color=\"#DE2D26\"/>"));
+    assert!(first_svg.contains("<stop offset=\"0.000000\" stop-color=\"#F7FBFF\"/>"));
+    assert!(first_svg.contains("<stop offset=\"1.000000\" stop-color=\"#08306B\"/>"));
     std::fs::remove_dir_all(dir).unwrap();
 }
 

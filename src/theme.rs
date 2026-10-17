@@ -32,9 +32,8 @@ pub(crate) use typography::{
 pub(crate) use scale::{AccentColors, CategoryColors, ContinuousColors, PaletteCache};
 pub(crate) use scale_values::{
     AccentPalette, CategoricalColorScale, ColorDomain, ColorScales, ColorStop,
-    ContinuousColorScale, ContinuousScaleKind, DivergingGradient, PaletteCapacity,
-    QualitativePalette, SequentialGradient, BEESWARM_SEQUENTIAL_STOPS, HEATMAP_DIVERGING_STOPS,
-    HEATMAP_SEQUENTIAL_STOPS,
+    ContinuousColorScale, DivergingGradient, PaletteCapacity, QualitativePalette,
+    SequentialGradient, HEATMAP_DIVERGING_STOPS, HEATMAP_SEQUENTIAL_STOPS,
 };
 
 pub(crate) use mark_paint::{

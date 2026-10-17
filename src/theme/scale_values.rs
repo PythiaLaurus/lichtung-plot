@@ -184,11 +184,6 @@ pub(crate) const HEATMAP_DIVERGING_STOPS: [ColorStop; 3] = [
     ColorStop::builtin(0.5, OpaqueColor::rgb(247, 247, 247)),
     ColorStop::builtin(1.0, OpaqueColor::rgb(222, 45, 38)),
 ];
-// The family-specific source remains explicit until the approved shared-default cutover.
-pub(crate) const BEESWARM_SEQUENTIAL_STOPS: [ColorStop; 2] = [
-    ColorStop::builtin(0.0, OpaqueColor::rgb(49, 130, 189)),
-    ColorStop::builtin(1.0, OpaqueColor::rgb(222, 45, 38)),
-];
 
 fn validate_stops(stops: &[ColorStop], diverging: bool) -> Result<()> {
     if stops.len() < if diverging { 3 } else { 2 }
@@ -439,7 +434,7 @@ impl ContinuousColorScale {
                     .is_some_and(|domain| center < domain.minimum || center > domain.maximum)
             {
                 return Err(invalid(
-                    "diverging center must be finite and contained by the exact domain",
+                    "diverging center must be finite and the exact domain must contain center",
                 ));
             }
         }

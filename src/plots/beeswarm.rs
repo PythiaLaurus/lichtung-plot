@@ -27,7 +27,7 @@ pub(crate) struct PreparedBeeswarm {
     selection: crate::theme::ContinuousColorScale,
     scale: crate::theme::ContinuousColors,
     colorbar_stops: Vec<GradientStop>,
-    values: [String; 2],
+    values: Vec<String>,
     pub(crate) color_label: String,
 }
 
@@ -101,6 +101,7 @@ fn quanta_pixels(value: i64) -> f64 {
 pub(crate) fn prepare(
     chart: &Plot,
     data: crate::data::PlotData<'_>,
+    selection: crate::theme::ContinuousColorScale,
 ) -> Result<PreparedBeeswarm, Error> {
     let category_col = chart
         .y_col()
@@ -123,16 +124,7 @@ pub(crate) fn prepare(
     data.validate_row_source()?;
 
     let x_data = crate::data::min_max(xs.iter().copied(), "beeswarm")?;
-    let color_range = if let Some((minimum, maximum)) = chart.beeswarm_color_limits_spec() {
-        if !minimum.is_finite() || !maximum.is_finite() || minimum >= maximum {
-            return Err(Error::Data(format!(
-                    "beeswarm: color limits must be finite and strictly ascending; got {minimum}..{maximum}"
-                )));
-        }
-        (minimum, maximum)
-    } else {
-        crate::data::min_max(colors.iter().copied(), "beeswarm")?
-    };
+    let color_range = selection.prepared_domain(&colors, "beeswarm")?.as_pair();
     let mut indices = crate::data::source::collect_source(
         levels.iter().enumerate().map(|(i, s)| Ok((s.as_str(), i))),
     )?;
@@ -152,21 +144,8 @@ pub(crate) fn prepare(
         a.0.cmp(&b.0).then_with(|| a.3.cmp(&b.3))
     });
     let values =
-        crate::decorations::legend::descriptor::numeric_labels(&[color_range.1, color_range.0])?
-            .try_into()
-            .map_err(|_| Error::Render("Beeswarm endpoint label count changed".into()))?;
-
-    let gradient = if let Some(gradient) = chart.beeswarm_gradient_spec()? {
-        gradient.clone()
-    } else {
-        crate::theme::SequentialGradient::new(crate::theme::BEESWARM_SEQUENTIAL_STOPS)?
-    };
-    let domain = chart
-        .beeswarm_color_limits_spec()
-        .map(|(minimum, maximum)| crate::theme::ColorDomain::exact(minimum, maximum))
-        .transpose()?;
-    let selection = crate::theme::ContinuousColorScale::sequential(Some(gradient), domain)?;
-    let scale = crate::theme::ContinuousColors::resolve(color_range, selection.stops()?)?;
+        crate::decorations::legend::descriptor::domain_labels(color_range, selection.center())?;
+    let scale = crate::theme::ContinuousColors::selected(color_range, &selection)?;
     let samples = crate::data::source::collect_source(rows.iter().map(|row| Ok(row.2)))?;
     let colorbar_stops = scale.guide_stops(&samples)?;
     let colors = crate::data::source::collect_source(rows.iter().map(|row| scale.color(row.2)))?;
@@ -199,15 +178,15 @@ impl PreparedBeeswarm {
         &mut self,
         descriptor: &crate::decorations::legend::descriptor::ContinuousDescriptor,
     ) -> Result<(), Error> {
-        let values = crate::decorations::legend::descriptor::numeric_labels(&[
-            descriptor.domain.1,
-            descriptor.domain.0,
-        ])?
-        .try_into()
-        .map_err(|_| Error::Render("Beeswarm endpoint label count changed".into()))?;
-        let scale = self.scale.with_domain(descriptor.domain)?;
+        let values = crate::decorations::legend::descriptor::domain_labels(
+            descriptor.domain,
+            descriptor.center,
+        )?;
+        let scale =
+            crate::theme::ContinuousColors::selected(descriptor.domain, &descriptor.selection)?;
         let colorbar_stops = scale.guide_stops(&self.guide_samples()?)?;
         self.values = values;
+        self.selection = descriptor.selection.clone();
         self.scale = scale;
         self.colorbar_stops = colorbar_stops;
         for (color, &(_, _, value, _)) in self.colors.iter_mut().zip(&self.rows) {
@@ -274,18 +253,9 @@ pub(crate) fn measure(
     let (panel, colorbar) = if chart.continuous_guide_suppressed() {
         (context.panel, None)
     } else {
-        let [high_label, low_label] = &prepared.values;
         let guide_scope = context
             .fit_scope()
             .child(crate::layout::AddressRole::OutsideGuideRight, 0)?;
-        let labels: &[&str] = if crate::decorations::legend::descriptor::same_value(
-            prepared.scale.domain().0,
-            prepared.scale.domain().1,
-        ) {
-            &[low_label]
-        } else {
-            &[low_label, high_label]
-        };
         let descriptor = crate::decorations::legend::descriptor::ContinuousDescriptor {
             field: crate::data::source::copy_source_string(
                 chart.color_dimension_key().unwrap_or(""),
@@ -293,12 +263,13 @@ pub(crate) fn measure(
             title: crate::data::source::copy_source_string(&prepared.color_label)?,
             stops: prepared.guide_stops()?,
             selection: prepared.selection.clone(),
-            center: None,
+            center: prepared.selection.center(),
             missing: None,
             domain: prepared.scale.domain(),
-            exact: chart.beeswarm_color_limits_spec().is_some(),
+            exact: prepared.selection.domain().is_some(),
             labels: crate::data::source::collect_source(
-                labels
+                prepared
+                    .values
                     .iter()
                     .map(|label| crate::data::source::copy_source_string(label)),
             )?,
@@ -604,3 +575,6 @@ fn select_colorbar(
 }
 
 mod packing;
+
+#[cfg(test)]
+mod tests;

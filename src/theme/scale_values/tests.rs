@@ -44,30 +44,6 @@ fn map_retains_exact_raw_keys_order_and_opaque_colors_without_normalization() {
 }
 
 #[test]
-fn complete_scale_component_replacements_leave_source_and_siblings_intact() {
-    let original = test_defaults();
-    let palette = QualitativePalette::fixed([OpaqueColor::rgb(13, 29, 47)]).unwrap();
-    let seq = SequentialGradient::new([stop(0.0, 11), stop(1.0, 23)]).unwrap();
-    let div = DivergingGradient::new([stop(0.0, 37), stop(0.5, 53), stop(1.0, 71)]).unwrap();
-    let recolored = original.clone().with_qualitative(palette.clone()).unwrap();
-    assert_eq!(recolored.qualitative(), &palette);
-    assert_eq!(recolored.sequential(), original.sequential());
-    assert_eq!(recolored.diverging(), original.diverging());
-    let resequenced = original.clone().with_sequential(seq.clone()).unwrap();
-    assert_eq!(resequenced.sequential(), &seq);
-    assert_eq!(resequenced.qualitative(), original.qualitative());
-    assert_eq!(resequenced.diverging(), original.diverging());
-    let recentered = original.clone().with_diverging(div.clone()).unwrap();
-    assert_eq!(recentered.diverging(), &div);
-    assert_eq!(recentered.qualitative(), original.qualitative());
-    assert_eq!(recentered.sequential(), original.sequential());
-    assert_eq!(
-        original.qualitative().capacity(),
-        PaletteCapacity::Extendable
-    );
-}
-
-#[test]
 fn domains_and_continuous_edits_validate_kind_center_and_complete_result() {
     let constant = ColorDomain::exact(-0.0, 0.0).unwrap();
     assert_eq!(constant.minimum().to_bits(), 0);

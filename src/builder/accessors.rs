@@ -520,6 +520,63 @@ impl<K: crate::kind::Marker> Plot<K> {
             .transpose()
     }
 
+    /// Adapt the current public inputs into one complete prepared selection.
+    pub(crate) fn continuous_selection_in(
+        &self,
+        owner: &crate::theme::ColorScales,
+    ) -> Result<crate::theme::ContinuousColorScale, crate::Error> {
+        use crate::theme::{ColorDomain, ContinuousColorScale, DivergingGradient};
+        let family = match self.kind() {
+            crate::PlotKind::Heatmap => "heatmap",
+            crate::PlotKind::Beeswarm => "beeswarm",
+            _ => {
+                return Err(crate::Error::Render(
+                    "continuous selection requires Heatmap or Beeswarm".into(),
+                ))
+            }
+        };
+        let context = |error| match error {
+            crate::Error::Data(message) => crate::Error::Data(format!("{family}: {message}")),
+            error => error,
+        };
+        let (kind, limits, gradient) = if self.kind() == crate::PlotKind::Heatmap {
+            (
+                self.heatmap_scale_spec(),
+                self.heatmap_color_limits_spec(),
+                self.heatmap_gradient_spec()?,
+            )
+        } else {
+            let limits = self.beeswarm_color_limits_spec();
+            if limits.is_some_and(|(minimum, maximum)| minimum >= maximum) {
+                return Err(crate::Error::Data(
+                    "beeswarm: color limits must be finite and strictly ascending".into(),
+                ));
+            }
+            (
+                HeatmapScale::Sequential,
+                limits,
+                self.beeswarm_gradient_spec()?,
+            )
+        };
+        let domain = limits
+            .map(|(minimum, maximum)| ColorDomain::exact(minimum, maximum))
+            .transpose()
+            .map_err(context)?;
+        let selection = match kind {
+            HeatmapScale::Sequential => ContinuousColorScale::sequential(gradient.cloned(), domain),
+            HeatmapScale::Diverging { center } => ContinuousColorScale::diverging(
+                center,
+                gradient
+                    .map(DivergingGradient::from_sequence)
+                    .transpose()
+                    .map_err(context)?,
+                domain,
+            ),
+        }
+        .map_err(context)?;
+        selection.resolved_in(owner).map_err(context)
+    }
+
     /// Requested heatmap annotation policy.
     #[must_use]
     pub(crate) const fn heatmap_annotations_spec(&self) -> &HeatmapAnnotations {

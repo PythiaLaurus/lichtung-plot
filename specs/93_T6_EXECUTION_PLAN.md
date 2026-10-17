@@ -7,8 +7,9 @@ construction and consumer resolution are next.
 mark/annotation leaf, T6B1d4d, and the private-value umbrella T6B1. Evidence is in
 `../docs/mark-annotation-values.md`. T6B2 owns complete Theme construction and the
 remaining literal-to-component consumer resolution; complete construction and
-mark extents and annotation consumers are implemented, with continuous scale
-resolution next. Public cutovers follow it.
+mark extents, annotation consumers and continuous scale resolution are implemented;
+supplemental defaults and remaining owner reconciliation follow. Public cutovers
+follow that consumer migration.
 The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
@@ -109,7 +110,7 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6B2c | COMPLETE | T6B2b | Resolve annotation metrics, exact significance absence and canonical bracket geometry; independently reviewed leaves below |
 | T6B2c1 | COMPLETE | T6B2b | Retain one effective significance value through text, containing fit and canonical capture; `refactor(annotations): retain effective significance geometry` |
 | T6B2c2 | COMPLETE | T6B2c1 | Resolve selected-role cell, estimate and panel-text annotation metrics; `refactor(annotations): resolve selected-role local spacing` |
-| T6B2d | PENDING | T6B2c | General continuous-scale branches, unified presets and common local/shared guides; `refactor(scales): resolve complete continuous mappings` |
+| T6B2d | COMPLETE | T6B2c | General continuous-scale branches, unified presets and common local/shared guides; `refactor(scales): resolve complete continuous mappings` |
 | T6B2e | PENDING | T6B2d | Complete supplemental paint/default resolution and remaining declared-track/cache owners; `refactor(theme): resolve complete owner-local defaults` |
 | T6B2f | PENDING | T6B2e | Reconcile retained components and consumers with focused owner/identity evidence |
 | T6B3 | PENDING | T6B2 | Exact element Color/alpha replacement and repository caller migration; `feat(styles): expose complete RGBA element paints` |
@@ -314,6 +315,16 @@ Estimate text consumes its detail-role inset/clearance/numeric gap and actual
 reference ink. Two semantic tests replace typography inventory/spacing-clone
 fixtures and remove dead support; discovery remains 671. Five focused library
 tests, twenty-one external contracts, formatting and strict Clippy pass.
+
+T6B2d evidence: `../docs/continuous-mapping-resolution.md` records one final-domain
+mapping for arbitrary ordered sequential/diverging stops, both families and Shared
+guides. Beeswarm consumes complete owner-selected inputs, arbitrary diverging
+branches, a real center and one-to-three labels. Shared installation remaps from
+semantic stops rather than a local projection. The approved common sequential
+default replaces the old Beeswarm-only source. One source-to-capture/Shared test
+replaces a scale-component edit fixture; discovery stays 671. Twenty-seven focused
+library tests (including the all-25-family lifecycle), sixteen external contracts,
+formatting and strict all-target Clippy pass.
 
 Use spec03 and spec94's complete `Theme`, `ThemeBuilder`, role components, typed font stack,
 RGBA `Color`, RGB-only `OpaqueColor`, palettes/maps and gradients. Builders are

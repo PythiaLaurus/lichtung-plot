@@ -2,8 +2,8 @@
 //! Prepared family and guide consumers share this opaque mapping.
 
 use super::{
-    AccentPalette, CategoricalColorScale, ColorDomain, ColorStop, OpaqueColor, PaletteCapacity,
-    QualitativePalette, SequentialGradient,
+    AccentPalette, CategoricalColorScale, ColorDomain, ColorScales, ColorStop,
+    ContinuousColorScale, OpaqueColor, PaletteCapacity, QualitativePalette, SequentialGradient,
 };
 use crate::font::canonical::OperationContext;
 use crate::render::backend::GradientStop;
@@ -11,6 +11,66 @@ use crate::spec::CategoricalColors;
 use crate::Error;
 
 type Rgb = (u8, u8, u8);
+
+impl ContinuousColorScale {
+    pub(crate) fn resolved_in(&self, owner: &ColorScales) -> Result<Self, Error> {
+        if let Some(center) = self.center() {
+            Self::diverging(
+                center,
+                Some(
+                    self.diverging_gradient()
+                        .unwrap_or(owner.diverging())
+                        .clone(),
+                ),
+                self.domain().cloned(),
+            )
+        } else {
+            Self::sequential(
+                Some(
+                    self.sequential_gradient()
+                        .unwrap_or(owner.sequential())
+                        .clone(),
+                ),
+                self.domain().cloned(),
+            )
+        }
+    }
+
+    pub(crate) fn prepared_domain(
+        &self,
+        values: &[f64],
+        family: &str,
+    ) -> Result<ColorDomain, Error> {
+        if let Some(domain) = self.domain() {
+            return Ok(domain.clone());
+        }
+        let (minimum, maximum) = crate::data::min_max(values.iter().copied(), family)?;
+        let Some(center) = self.center() else {
+            return ColorDomain::exact(minimum, maximum);
+        };
+        let mut radius = 0.0_f64;
+        for value in values {
+            let distance = if *value >= center {
+                *value - center
+            } else {
+                center - *value
+            };
+            if !distance.is_finite() {
+                return Err(Error::Data(format!("{family}: cannot form a finite symmetric diverging domain around center {center}; set explicit color limits containing the center")));
+            }
+            radius = radius.max(distance);
+        }
+        if radius == 0.0 {
+            return ColorDomain::exact(center, center);
+        }
+        let minimum = center - radius;
+        let maximum = center + radius;
+        if !minimum.is_finite() || !maximum.is_finite() || minimum >= center || maximum <= center {
+            return Err(Error::Data(format!("{family}: symmetric diverging domain around center {center} exceeds finite f64 bounds; set explicit color limits containing the center")));
+        }
+        ColorDomain::exact(minimum, maximum)
+    }
+}
 
 #[derive(Debug, Default)]
 pub(crate) struct PaletteCache {
@@ -189,11 +249,12 @@ impl AccentColors {
 pub(crate) struct ContinuousColors {
     domain: ColorDomain,
     gradient: SequentialGradient,
+    neutral: Option<(f64, OpaqueColor)>,
 }
 
 impl ContinuousColors {
     pub(crate) fn same(&self, other: &Self) -> bool {
-        if self.domain != other.domain {
+        if self.domain != other.domain || self.neutral != other.neutral {
             return false;
         }
         self.gradient.same_in(&other.gradient)
@@ -203,11 +264,69 @@ impl ContinuousColors {
         Ok(Self {
             domain: ColorDomain::exact(domain.0, domain.1)?,
             gradient: SequentialGradient::new(stops.iter().copied())?,
+            neutral: None,
         })
     }
 
-    pub(crate) fn with_domain(&self, domain: (f64, f64)) -> Result<Self, Error> {
-        Self::resolve(domain, self.stops())
+    pub(crate) fn selected(
+        domain: (f64, f64),
+        selection: &ContinuousColorScale,
+    ) -> Result<Self, Error> {
+        let domain = ColorDomain::exact(domain.0, domain.1)?;
+        let pair = domain.as_pair();
+        let semantic = selection.stops()?;
+        let Some(center) = selection.center() else {
+            return Self::resolve(pair, semantic);
+        };
+        if center < pair.0 || center > pair.1 {
+            return Err(Error::Data(
+                "diverging color domain must contain its finite center".into(),
+            ));
+        }
+        let neutral = selection
+            .diverging_gradient()
+            .expect("validated diverging selection")
+            .neutral();
+        let mut stops = Vec::new();
+        crate::data::source::reserve_source(&mut stops, semantic.len())?;
+        if pair.0.to_bits() == pair.1.to_bits() {
+            stops.push(ColorStop::new(0.0, neutral)?);
+            stops.push(ColorStop::new(1.0, neutral)?);
+        } else {
+            let at_low = center.to_bits() == pair.0.to_bits();
+            let at_high = center.to_bits() == pair.1.to_bits();
+            let c = Self::normalized_fraction(pair, center)?;
+            if !(at_low || at_high || c > 0.0 && c < 1.0) {
+                return Err(Error::Data(
+                    "diverging center has no representable gradient stop".into(),
+                ));
+            }
+            for stop in semantic {
+                let u = stop.offset();
+                if (at_low && u < 0.5) || (at_high && u > 0.5) {
+                    continue;
+                }
+                let offset = if at_low {
+                    (u - 0.5) * 2.0
+                } else if at_high {
+                    u * 2.0
+                } else if u == 0.0 {
+                    0.0
+                } else if u.to_bits() == 0.5_f64.to_bits() {
+                    c
+                } else if u.to_bits() == 1.0_f64.to_bits() {
+                    1.0
+                } else if u < 0.5 {
+                    (u * 2.0) * c
+                } else {
+                    c + ((u - 0.5) * 2.0) * (1.0 - c)
+                };
+                stops.push(ColorStop::new(offset, stop.color())?);
+            }
+        }
+        let mut selected = Self::resolve(pair, &stops)?;
+        selected.neutral = Some((center, neutral));
+        Ok(selected)
     }
 
     pub(crate) fn stops(&self) -> &[ColorStop] {
@@ -257,6 +376,11 @@ impl ContinuousColors {
     }
 
     pub(crate) fn color(&self, value: f64) -> Result<OpaqueColor, Error> {
+        if let Some((center, neutral)) = self.neutral {
+            if value.to_bits() == center.to_bits() || (value == 0.0 && center == 0.0) {
+                return Ok(neutral);
+            }
+        }
         let fraction = Self::normalized_fraction(self.domain(), value)?;
         for pair in self.stops().windows(2) {
             if fraction <= pair[1].offset() {
