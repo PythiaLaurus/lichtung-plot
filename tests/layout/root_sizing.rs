@@ -2,8 +2,9 @@ use std::path::Path;
 
 use lichtung_plot::{
     kind, BarInput, Bounds, Canvas, CanvasLegendPolicy, CategoryValues, CoefficientInput, Color,
-    DumbbellEndpoints, Error, FacetSpec, HistogramInput, NumericValues, Output, Plot, PlotKind,
-    PngCompression, PngOptions, PngSizing, RaincloudInput, TextPanel, Theme,
+    DumbbellEndpoints, Error, FacetSpec, HeatmapAnnotations, HistogramInput, NumericFormat,
+    NumericNotation, NumericPrecision, NumericValues, Output, Plot, PlotKind, PngCompression,
+    PngOptions, PngSizing, RaincloudInput, TextPanel, Theme,
 };
 
 use super::support::{png_dimensions, unique_dir};
@@ -150,11 +151,15 @@ fn scatter() -> Plot<kind::Scatter> {
     )
 }
 
-fn assert_family_content_roots<K: kind::ExactFamily>(source: Plot<K>) {
+fn assert_family_content_roots<K: kind::ExactFamily>(source: Plot<K>, markers: &[&str]) {
     let directory = unique_dir("public-family-content-roots");
-    for (sizing, source) in [Sizing::Automatic, Sizing::Width(801)]
-        .into_iter()
-        .zip([source.clone(), source])
+    for (sizing, source) in [
+        Sizing::Automatic,
+        Sizing::Width(801),
+        Sizing::Exact(1001, 901),
+    ]
+    .into_iter()
+    .zip([source.clone(), source.clone(), source])
     {
         let destination = directory.join(format!("{sizing:?}-plot.svg"));
         let output = sizing
@@ -163,7 +168,15 @@ fn assert_family_content_roots<K: kind::ExactFamily>(source: Plot<K>) {
             .unwrap_or_else(|error| panic!("{:?}, {sizing:?}: {error}", source.kind()));
         let dimensions = (output.width(), output.height());
         sizing.assert_dimensions(dimensions);
-        assert_svg_dimensions(&std::fs::read_to_string(destination).unwrap(), dimensions);
+        let svg = std::fs::read_to_string(destination).unwrap();
+        assert_svg_dimensions(&svg, dimensions);
+        for marker in markers {
+            assert!(
+                svg.contains(&format!(">{marker}")),
+                "{:?}, {sizing:?}: missing {marker}",
+                source.kind()
+            );
+        }
         if source.kind() != PlotKind::Matrix {
             let destination = directory.join(format!("{sizing:?}-canvas.svg"));
             let canvas = Canvas::grid(1, 1)
@@ -176,14 +189,47 @@ fn assert_family_content_roots<K: kind::ExactFamily>(source: Plot<K>) {
                 .unwrap_or_else(|error| panic!("Canvas {:?}, {sizing:?}: {error}", source.kind()));
             let dimensions = (output.width(), output.height());
             sizing.assert_dimensions(dimensions);
-            assert_svg_dimensions(&std::fs::read_to_string(destination).unwrap(), dimensions);
+            let svg = std::fs::read_to_string(destination).unwrap();
+            assert_svg_dimensions(&svg, dimensions);
+            for marker in markers {
+                assert!(
+                    svg.contains(&format!(">{marker}")),
+                    "Canvas {:?}, {sizing:?}: missing {marker}",
+                    source.kind()
+                );
+            }
         }
     }
     std::fs::remove_dir_all(directory).unwrap();
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one existing typed family census covers each actual numeric surface in all root modes"
+)]
 fn all_public_families_render_content_requests_with_their_actual_axes_and_chrome() {
+    let format = |prefix| NumericFormat::default().with_prefix(prefix).unwrap();
+    macro_rules! xy {
+        ($plot:expr) => {
+            assert_family_content_roots(
+                $plot
+                    .x_tick_format(format("x="))
+                    .y_tick_format(format("y=")),
+                &["x=", "y="],
+            );
+        };
+    }
+    macro_rules! x {
+        ($plot:expr) => {
+            assert_family_content_roots($plot.x_tick_format(format("x=")), &["x="]);
+        };
+    }
+    macro_rules! y {
+        ($plot:expr) => {
+            assert_family_content_roots($plot.y_tick_format(format("y=")), &["y="]);
+        };
+    }
     let x = NumericValues::new("x", [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
     let y = NumericValues::new("response", [1.0, 3.0, 2.0, 5.0, 4.0, 6.0]);
     let group = CategoryValues::new("group", ["a", "a", "a", "b", "b", "b"]).unwrap();
@@ -195,15 +241,15 @@ fn all_public_families_render_content_requests_with_their_actual_axes_and_chrome
             NumericValues::new("upper", [1.5, 3.0, 4.0, 5.0, 6.0, 7.0]),
         )
     };
-    assert_family_content_roots(Plot::scatter(x.clone(), y.clone()));
-    assert_family_content_roots(Plot::histogram(HistogramInput::samples(x.clone())));
-    assert_family_content_roots(Plot::density(x.clone()));
-    assert_family_content_roots(Plot::qq(x.clone()));
-    assert_family_content_roots(Plot::point_interval(terms.clone(), x.clone(), bounds()));
-    assert_family_content_roots(Plot::line(x.clone(), y.clone()));
-    assert_family_content_roots(Plot::trajectory(x.clone(), y.clone(), group.clone()));
-    assert_family_content_roots(Plot::line_path(x.clone(), y.clone(), group.clone()));
-    assert_family_content_roots(Plot::interaction(
+    xy!(Plot::scatter(x.clone(), y.clone()));
+    xy!(Plot::histogram(HistogramInput::samples(x.clone())));
+    xy!(Plot::density(x.clone()));
+    xy!(Plot::qq(x.clone()));
+    x!(Plot::point_interval(terms.clone(), x.clone(), bounds()));
+    xy!(Plot::line(x.clone(), y.clone()));
+    xy!(Plot::trajectory(x.clone(), y.clone(), group.clone()));
+    xy!(Plot::line_path(x.clone(), y.clone(), group.clone()));
+    y!(Plot::interaction(
         CategoryValues::new(
             "condition",
             ["before", "during", "after", "before", "during", "after"],
@@ -213,12 +259,27 @@ fn all_public_families_render_content_requests_with_their_actual_axes_and_chrome
         group.clone(),
         bounds(),
     ));
-    assert_family_content_roots(Plot::coefficient(
-        terms.clone(),
-        CoefficientInput::estimates_with_intervals(x.clone(), bounds()),
-    ));
-    assert_family_content_roots(Plot::forest(terms.clone(), x.clone(), bounds(), 0.0));
-    assert_family_content_roots(Plot::dumbbell(
+    assert_family_content_roots(
+        Plot::coefficient(terms.clone(), CoefficientInput::estimates(x.clone()))
+            .x_tick_format(format("x="))
+            .estimate_labels(format("v=")),
+        &["x=", "v="],
+    );
+    assert_family_content_roots(
+        Plot::forest(terms.clone(), x.clone(), bounds(), 1.0)
+            .scale(lichtung_plot::AxisScale::Log10)
+            .x_tick_format(
+                NumericFormat::new(
+                    NumericNotation::Scientific,
+                    NumericPrecision::Significant(3),
+                )
+                .unwrap()
+                .with_prefix("x=")
+                .unwrap(),
+            ),
+        &["x="],
+    );
+    x!(Plot::dumbbell(
         terms.clone(),
         x.clone(),
         y.clone(),
@@ -230,37 +291,52 @@ fn all_public_families_render_content_requests_with_their_actual_axes_and_chrome
         )
         .unwrap(),
     ));
-    assert_family_content_roots(Plot::heatmap(
-        CategoryValues::new(
-            "column",
-            ["first", "second", "third", "first", "second", "third"],
+    assert_family_content_roots(
+        Plot::heatmap(
+            CategoryValues::new(
+                "column",
+                ["first", "second", "third", "first", "second", "third"],
+            )
+            .unwrap(),
+            group.clone(),
+            x.clone(),
         )
-        .unwrap(),
-        group.clone(),
-        x.clone(),
-    ));
-    assert_family_content_roots(Plot::bar(group.clone(), BarInput::samples(y.clone())));
-    assert_family_content_roots(Plot::horizontal_bar(
+        .color_label_format(format("c="))
+        .annotations(HeatmapAnnotations::Values(format("v="))),
+        &["c=", "v="],
+    );
+    y!(Plot::bar(group.clone(), BarInput::samples(y.clone())));
+    x!(Plot::horizontal_bar(
         group.clone(),
         BarInput::samples(y.clone()),
     ));
-    assert_family_content_roots(Plot::stacked_bar(group.clone(), y.clone(), hue.clone()));
-    assert_family_content_roots(Plot::stacked_horizontal_bar(group.clone(), y.clone(), hue));
-    assert_family_content_roots(Plot::boxplot(group.clone(), y.clone()));
-    assert_family_content_roots(Plot::violin(group.clone(), y.clone()));
-    assert_family_content_roots(Plot::raincloud(RaincloudInput::samples(
+    y!(Plot::stacked_bar(group.clone(), y.clone(), hue.clone()));
+    x!(Plot::stacked_horizontal_bar(group.clone(), y.clone(), hue));
+    y!(Plot::boxplot(group.clone(), y.clone()));
+    y!(Plot::violin(group.clone(), y.clone()));
+    y!(Plot::raincloud(RaincloudInput::samples(
         group.clone(),
         y.clone(),
     )));
-    assert_family_content_roots(Plot::regression(x.clone(), y.clone()));
-    assert_family_content_roots(Plot::marginal(x.clone(), y.clone()));
-    assert_family_content_roots(Plot::matrix(vec![x.clone(), y]));
-    assert_family_content_roots(Plot::beeswarm(group, x.clone(), x));
-    assert_family_content_roots(Plot::waterfall(
-        terms,
-        NumericValues::new("delta", [1.0, -1.0, 2.0, -2.0, 3.0, 0.0]),
-        10.0,
-    ));
+    xy!(Plot::regression(x.clone(), y.clone()));
+    xy!(Plot::marginal(x.clone(), y.clone()));
+    assert_family_content_roots(Plot::matrix(vec![x.clone(), y]), &[]);
+    assert_family_content_roots(
+        Plot::beeswarm(group, x.clone(), x)
+            .x_tick_format(format("x="))
+            .color_label_format(format("c=")),
+        &["x=", "c="],
+    );
+    assert_family_content_roots(
+        Plot::waterfall(
+            terms,
+            NumericValues::new("delta", [1.0, -1.0, 2.0, -2.0, 3.0, 0.0]),
+            10.0,
+        )
+        .x_tick_format(format("x="))
+        .total_format(format("n=")),
+        &["x=", "base n=", "total n="],
+    );
 }
 
 #[test]
@@ -415,6 +491,11 @@ fn matrix_roots_keep_native_cells_and_their_hue_guide_in_all_public_root_modes()
 fn mixed_canvas(caption: &str, replace_children: bool) -> Canvas {
     let child = |name: &str| {
         let plot = scatter()
+            .x_tick_format(
+                NumericFormat::default()
+                    .with_prefix(format!("{name}:"))
+                    .unwrap(),
+            )
             .hue(
                 CategoryValues::new("treatment", ["Control", "Exposed", "Control", "Exposed"])
                     .unwrap(),
@@ -439,7 +520,7 @@ fn mixed_canvas(caption: &str, replace_children: bool) -> Canvas {
             0,
             TextPanel::new(
                 "Interpretation",
-                "A complete prose cell alongside two scientific panels.",
+                "A complete prose cell alongside two scientific panels. 0.125% remains literal caller text.",
             )
             .unwrap(),
         )
@@ -485,6 +566,7 @@ fn mixed_canvas_owns_all_modes_and_ignores_standalone_child_requests() {
             "Second local caption",
             "Interpretation",
             "A complete prose cell alongside two scientific panels.",
+            "0.125% remains literal caller text.",
             "Shared scientific observations",
             "Treatment",
             "Control",
@@ -494,6 +576,7 @@ fn mixed_canvas_owns_all_modes_and_ignores_standalone_child_requests() {
             assert_complete_source(&scene.svg, source);
         }
         assert_eq!(scene.svg.matches("<clipPath ").count(), 2);
+        assert!(scene.svg.contains(">First:") && scene.svg.contains(">Second:"));
     }
 }
 

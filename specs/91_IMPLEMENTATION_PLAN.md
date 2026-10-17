@@ -6583,8 +6583,8 @@ Acceptance:
 ## Phase T6: Public Foundations And Scientific Presentation
 
 **Status**: IN PROGRESS — public foundations and root sizing/ticks complete;
-ordinary decimal/Forest certification, configured consumers and public numeric
-cutover complete; integrated numeric closure follows.
+scientific numeric presentation and its all-consumer/output closure complete;
+section-aware discrete guide implementation follows.
 
 Dependencies: T5e.
 
@@ -6619,6 +6619,8 @@ refusal is repaired in `../docs/coordinated-canvas-sizing.md` before public
 replacement.
 The atomic public NumericFormat/discriminant/attachment replacement and complete
 caller/current-contract migration are complete in `../docs/public-numeric-formatting.md`.
+All-family/all-root, scoped sets and frozen-output closure are complete in
+`../docs/scientific-numeric-closure.md`; this completes T6N.
 
 ENTRY gate is CLOSED by the user's explicit approval of the current-implementation
 assessment and request to plan T6:

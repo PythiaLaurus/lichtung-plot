@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn shared_numeric_guides_resolve_final_sets_and_reject_equal_text_policy_conflicts_before_fonts() {
     use crate::numeric::{
-        decimal::{NegativeZero, NumericNotation},
+        decimal::{NegativeZero, NumericNotation, TrailingZeros},
         format::{NumericFormat, NumericPrecision},
     };
     let format = NumericFormat::new(NumericNotation::Decimal, NumericPrecision::Fractional(0))
@@ -65,17 +65,35 @@ fn shared_numeric_guides_resolve_final_sets_and_reject_equal_text_policy_conflic
         .unwrap()
         .preflight_plan()
         .unwrap();
-    let different = format.with_negative_zero(NegativeZero::Normalize).unwrap();
-    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-    let error = canvas(different)
-        .preflight_plan()
-        .err()
-        .expect("incompatible complete policy");
-    assert!(error.to_string().contains("numeric format"));
-    assert_eq!(
-        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
-        0
-    );
+    for different in [
+        format
+            .clone()
+            .with_notation(NumericNotation::Engineering)
+            .unwrap(),
+        format
+            .clone()
+            .with_precision(NumericPrecision::AdaptiveFractional { min: 0, max: 2 })
+            .unwrap(),
+        format.clone().with_decimal_scale(2).unwrap(),
+        format.clone().with_prefix("unit ").unwrap(),
+        format.clone().with_suffix(" other").unwrap(),
+        format
+            .clone()
+            .with_negative_zero(NegativeZero::Normalize)
+            .unwrap(),
+        format.with_trailing_zeros(TrailingZeros::Trim).unwrap(),
+    ] {
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        let error = canvas(different)
+            .preflight_plan()
+            .err()
+            .expect("incompatible complete policy");
+        assert!(error.to_string().contains("numeric format"));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
 }
 
 #[test]

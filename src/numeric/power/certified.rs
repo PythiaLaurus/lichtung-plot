@@ -35,6 +35,11 @@ pub(crate) struct PowerFormatter {
 }
 
 impl PowerFormatter {
+    #[cfg(test)]
+    pub(crate) fn certification_work(&self) -> (&[usize], usize, usize) {
+        (&self.attempts, self.constant_hits, self.constant_misses)
+    }
+
     pub(crate) fn format(
         &mut self,
         operand: &Log10Operand,

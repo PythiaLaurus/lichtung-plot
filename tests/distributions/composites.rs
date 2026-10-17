@@ -239,7 +239,16 @@ fn supplied_and_sample_rainclouds_preserve_labels_colors_legend_and_recorded_mar
         ),
     ))
     .series(series);
-    let supplied = Plot::raincloud(RaincloudInput::geometry(parity_raincloud_geometry()));
+    let format = lichtung_plot::NumericFormat::new(
+        lichtung_plot::NumericNotation::Engineering,
+        lichtung_plot::NumericPrecision::Significant(3),
+    )
+    .unwrap()
+    .with_prefix("raw=")
+    .unwrap();
+    let supplied = Plot::raincloud(RaincloudInput::geometry(parity_raincloud_geometry()))
+        .y_tick_format(format.clone());
+    let sample = sample.y_tick_format(format);
 
     let supplied = render(supplied, "supplied-raincloud").unwrap();
     let sample = render(sample, "sample-raincloud").unwrap();
@@ -249,6 +258,7 @@ fn supplied_and_sample_rainclouds_preserve_labels_colors_legend_and_recorded_mar
         assert!(svg.contains(">Control</text>") && svg.contains(">Active</text>"));
         assert!(svg.contains("#0072B2") && svg.contains("#D55E00"));
         assert_eq!(svg.matches("<circle ").count(), 12);
+        assert!(svg.contains(">raw="));
     }
 }
 
@@ -298,6 +308,11 @@ fn precomputed_raincloud_series_type_checks_but_preflight_rejects_it() {
 
 #[test]
 fn supplied_histogram_geometry_matches_sample_labels_and_recorded_marks() {
+    let format = lichtung_plot::NumericFormat::default()
+        .with_decimal_scale(2)
+        .unwrap()
+        .with_suffix("%")
+        .unwrap();
     let values = [0.0_f64, 0.5, 1.5, 2.0];
     let sample = histogram_plot(
         &values,
@@ -321,13 +336,21 @@ fn supplied_histogram_geometry_matches_sample_labels_and_recorded_marks() {
             top: rug_top,
         })
         .collect();
+    let rendered = render(
+        Plot::histogram(HistogramInput::geometry(supplied))
+            .x_tick_format(format.clone())
+            .y_tick_format(format.clone()),
+        "supplied-histogram",
+    )
+    .unwrap();
+    assert!(rendered.contains("%</text>"));
     assert_eq!(
+        rendered,
         render(
-            Plot::histogram(HistogramInput::geometry(supplied)),
-            "supplied-histogram",
+            sample.x_tick_format(format.clone()).y_tick_format(format),
+            "sample-histogram"
         )
-        .unwrap(),
-        render(sample, "sample-histogram").unwrap()
+        .unwrap()
     );
 }
 

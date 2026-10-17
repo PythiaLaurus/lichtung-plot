@@ -661,6 +661,15 @@ mod natural_sizing_tests {
             crate::NumericValues::new("delta", [1.0, 2.0, 3.0, 100.0, 200.0, 300.0]),
             10.0,
         )
+        .total_format(
+            crate::NumericFormat::new(
+                crate::NumericNotation::Decimal,
+                crate::NumericPrecision::AdaptiveFractional { min: 0, max: 2 },
+            )
+            .unwrap()
+            .with_suffix(" u")
+            .unwrap(),
+        )
         .facet(
             crate::FacetSpec::column(
                 crate::CategoryValues::new(
@@ -685,7 +694,7 @@ mod natural_sizing_tests {
                 .retained_text()
                 .iter()
                 .any(|(_, text)| text.source == source.caption_text().unwrap()));
-            for source in ["base 10.000", "total 16.000", "total 610.000"] {
+            for source in ["base 10 u", "total 16 u", "total 610 u"] {
                 assert!(plan
                     .root
                     .plan()
@@ -738,8 +747,10 @@ mod natural_sizing_tests {
     fn nullable_heatmap_facets_keep_independent_guide_domains_and_missing_blocks() {
         let source = Plot::heatmap(crate::CategoryValues::new("x", ["a", "b", "a", "b", "a", "b", "a", "b"]).unwrap(),
             crate::CategoryValues::new("y", ["first", "first", "second", "second", "first", "first", "second", "second"]).unwrap(),
-            crate::NumericValues::nullable("color response with independently measured legal word boundaries", [Some(1.0), None, Some(3.0), Some(4.0), Some(100.0), None, Some(250.0), Some(350.0)]))
-            .facet(crate::FacetSpec::column(crate::CategoryValues::new("panel", ["first", "first", "first", "first", "second", "second", "second", "second"]).unwrap()).scales(crate::FacetScales::Free))
+            crate::NumericValues::nullable("color response with independently measured legal word boundaries", [Some(1.01), None, Some(1.02), Some(1.03), Some(100.1), None, Some(250.2), Some(350.3)]))
+            .annotations(crate::HeatmapAnnotations::Values(crate::NumericFormat::new(crate::NumericNotation::Decimal, crate::NumericPrecision::AdaptiveFractional { min: 0, max: 2 }).unwrap().with_prefix("v=").unwrap()))
+            .color_label_format(crate::NumericFormat::default().with_prefix("g=").unwrap())
+            .facet(crate::FacetSpec::column(crate::CategoryValues::new("panel", ["first", "first", "first", "first", "second", "second", "second", "second"]).unwrap()).scales(crate::FacetScales::Fixed))
             .caption("First complete explanatory caption paragraph.\nSecond complete explanatory caption paragraph.").erase();
         for width in [None, Some(1200)] {
             let source = width.map_or_else(|| source.clone(), |width| source.clone().width(width));
@@ -755,12 +766,16 @@ mod natural_sizing_tests {
                     .count(),
                 2
             );
-            for label in ["1", "4", "100", "350"] {
+            for label in [
+                "g=1.01", "g=1.03", "g=100.10", "g=350.30", "v=1.01", "v=1.02", "v=1.03", "v=100",
+                "v=250", "v=350",
+            ] {
                 assert!(
                     retained.iter().any(|(_, text)| text.source == label),
                     "missing scoped endpoint {label}"
                 );
             }
+            assert!(!retained.iter().any(|(_, text)| text.source == "v=100.10"));
         }
     }
 

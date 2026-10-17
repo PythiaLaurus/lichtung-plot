@@ -5,6 +5,20 @@ fn plot() -> Plot<lichtung_plot::kind::Scatter> {
         NumericValues::new("x", [1.0, 2.0, 3.0]),
         NumericValues::new("y", [3.0, 1.0, 2.0]),
     )
+    .x_tick_format(
+        lichtung_plot::NumericFormat::default()
+            .with_prefix("x=")
+            .unwrap(),
+    )
+    .y_tick_format(
+        lichtung_plot::NumericFormat::new(
+            lichtung_plot::NumericNotation::Engineering,
+            lichtung_plot::NumericPrecision::Significant(3),
+        )
+        .unwrap()
+        .with_prefix("y=")
+        .unwrap(),
+    )
     .title("Selectable scene text")
     .size(320, 240)
 }
@@ -78,6 +92,7 @@ fn plot_and_canvas_svg_operations_keep_complete_text_and_call_local_replay() {
         assert!(!paths.contains("<text") && paths.contains("<path"));
         let selectable = String::from_utf8(selectable).unwrap();
         assert!(selectable.contains(&format!(">{title}</text>")));
+        assert!(selectable.contains(">x=") && selectable.contains(">y="));
         assert!(selectable.contains(&format!("width=\"320\" height=\"{height}\"")));
     }
     std::fs::remove_dir_all(directory).unwrap();

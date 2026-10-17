@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 mod annotations;
 mod fonts;
 mod legends;
+mod numeric;
 mod text;
 
 pub(super) struct ArtifactBytes {
@@ -520,6 +521,7 @@ fn publication_efficiency_measurements() {
     );
     measure("separate10", scatter, publish_plot, true);
     measure("reuse10", scatter, publish_plot, false);
+    numeric::measure();
 
     for run in 0..3 {
         let start = Instant::now();

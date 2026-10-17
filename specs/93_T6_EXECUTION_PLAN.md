@@ -2,7 +2,7 @@
 
 **Status**: IN PROGRESS — immutable public foundations, their complete custom-value
 closure, public preferred tick intervals and root-sizing closure are complete;
-scientific numeric public cutover is complete and its integrated closure is next.
+scientific numeric presentation is complete; section-aware discrete guides follow.
 
 **Current execution checkpoint:** the user-authorized resumption completed the
 mark/annotation leaf, T6B1d4d, and the private-value umbrella T6B1. Evidence is in
@@ -47,6 +47,8 @@ identified an existing automatic shared-header/range-group sizing refusal; the
 separate owning repair is complete in `../docs/coordinated-canvas-sizing.md`.
 The atomic public NumericFormat/discriminant/attachment replacement and complete
 caller/current-contract migration are complete in `../docs/public-numeric-formatting.md`.
+Typed all-family/all-root, independent scoped sets, complete-policy Shared refusal
+and frozen-output closure are complete in `../docs/scientific-numeric-closure.md`.
 The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
@@ -159,7 +161,7 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6C1 | COMPLETE | T6B | Opaque validated TickInterval and sealed numeric-axis setters; `feat(axes): expose preferred numeric tick intervals` |
 | T6C2 | COMPLETE | T6C1 | Automatic defaults, consuming width, exact size and Output dimensions; migrate getters/callers atomically; `feat(layout): expose content-derived root sizing` |
 | T6C3 | COMPLETE | T6C2 | Complete initial axis/chrome preferences, provisional content-height gutters and all-mode parent/output evidence; `fix(layout): compose complete content-sized root frames` |
-| T6N | IN PROGRESS | T6C | Unified scientific numeric formatting; leaves below |
+| T6N | COMPLETE | T6C | Unified scientific numeric formatting; leaves below |
 | T6L | PENDING | T6N | One section-aware discrete guide; leaves below |
 | T6Z | PENDING | T6L | Integrated contract, deferred-decision and phase closure |
 | T6Z1 | PENDING | T6L | Complete public examples/current-spec and property/consumer census reconciliation; `docs(api): reconcile scientific plotting contracts` |
@@ -716,7 +718,7 @@ compatible effective format. No first-contributor-wins or Canvas format override
 | T6N5 | COMPLETE | T6N4c | Complete composed numeric keys, equal-text intrinsic/height misses and feedback; evidence in `docs/composed-numeric-identities.md` |
 | T6N5b | COMPLETE | T6N5 | Natural width retains separate coordinated gutter/body/header requirements; evidence in `docs/coordinated-canvas-sizing.md` |
 | T6N6 | COMPLETE | T6N5b | Public NumericFormat/attachments, retired wrapper/callers and matching current contracts; evidence in `docs/public-numeric-formatting.md` |
-| T6N7 | PENDING | T6N6 | Scientific conversion/admission/all-surface/public-output evidence; `test(numbers): close scientific presentation contracts` |
+| T6N7 | COMPLETE | T6N6 | Complete hard cell text, typed all-surface/all-root and frozen-output evidence; `docs/scientific-numeric-closure.md` |
 
 Tests must independently cover rounding ties/carries, subnormals/finite extremes,
 scale extremes without overflow/underflow, exact versus adaptive collisions,

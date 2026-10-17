@@ -2,7 +2,8 @@
 
 **Status: current configured Forest display contract; exact-power implementation,
 independent executable numerical certification and public consumer cutover are
-complete.** Integrated numeric closure follows spec93's remaining evidence gate.
+complete.** Consumer/scoped/output closure is recorded in
+`docs/scientific-numeric-closure.md`; integrated T6 closure remains with spec93.
 
 **Accounting simplification:** spec95 supersedes every cumulative work/byte
 charging requirement in this design. The pricing schedules in §8 and charge-delta
@@ -20,8 +21,8 @@ and independent executable root/algebraic certification are complete in
 [`docs/certified-log10-conversion.md`](../docs/certified-log10-conversion.md).
 Configured axes and public `NumericFormat` consume this implementation; their
 evidence is in `docs/configured-numeric-axes.md` and
-`docs/public-numeric-formatting.md`. Integrated all-surface closure remains a
-separate gate from numerical certification.
+`docs/public-numeric-formatting.md`. All-surface numeric closure is recorded
+separately in `docs/scientific-numeric-closure.md`.
 
 ## 1. Authority And Evidence Boundary
 

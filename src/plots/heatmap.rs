@@ -805,8 +805,14 @@ fn analyze_intrinsics(
             .annotations
             .cells()
             .value_padding(plan.style.font_size)?;
-        column_hard[index % columns] =
-            column_hard[index % columns].max(padding.width(plan.width())?);
+        let hard_width = crate::layout::fit::intrinsic_widths(
+            theme,
+            source,
+            appearance,
+            "heatmap value intrinsic",
+        )?
+        .0;
+        column_hard[index % columns] = column_hard[index % columns].max(padding.width(hard_width)?);
         row_hard[index / columns] = row_hard[index / columns].max(padding.height(plan.height())?);
     }
     let total_columns = column_hard.into_iter().try_fold(0.0_f64, |total, width| {
