@@ -831,7 +831,7 @@ mod feedback_tests {
                         let inputs = crate::plots::shared_x::prepare_plot(
                             &source,
                             &stage.operation(),
-                            Some(&crate::theme::scale_values::test_defaults()),
+                            Some(&crate::theme::ThemeValue::publication()),
                         )?;
                         let guide = prepare_discrete_guide(
                             &source,
@@ -1022,7 +1022,7 @@ mod feedback_tests {
                 let inputs = crate::plots::shared_x::prepare_plot(
                     &source,
                     &stage.operation(),
-                    Some(&crate::theme::scale_values::test_defaults()),
+                    Some(&crate::theme::ThemeValue::publication()),
                 )?;
                 let guide = prepare_discrete_guide(
                     &source,
@@ -1152,7 +1152,7 @@ mod feedback_tests {
                 let inputs = crate::plots::shared_x::prepare_plot(
                     &source,
                     &stage.operation(),
-                    Some(&crate::theme::scale_values::test_defaults()),
+                    Some(&crate::theme::ThemeValue::publication()),
                 )?;
                 let guide = prepare_discrete_guide(
                     &source,
@@ -1234,7 +1234,7 @@ mod feedback_tests {
                 crate::plots::shared_x::prepare_plot(
                     &source,
                     &stage.operation(),
-                    Some(&crate::theme::scale_values::test_defaults()),
+                    Some(&crate::theme::ThemeValue::publication()),
                 )
             },
             |_, _, _| -> Result<crate::layout::MeasuredLayout<()>, Error> {
@@ -1275,7 +1275,7 @@ mod feedback_tests {
                 let inputs = crate::plots::shared_x::prepare_plot(
                     &source,
                     &stage.operation(),
-                    Some(&crate::theme::scale_values::test_defaults()),
+                    Some(&crate::theme::ThemeValue::publication()),
                 )?;
                 let guide = prepare_discrete_guide(
                     &source,

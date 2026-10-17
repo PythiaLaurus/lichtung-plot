@@ -13,6 +13,26 @@ pub(crate) mod preference;
 pub(crate) mod sizing;
 pub(crate) mod tracks;
 
+/// Required categorical pitch for actual outward ink and its available local room.
+pub(crate) fn ink_pitch(ink: f64, room: f64) -> Result<f64, Error> {
+    if ink <= 0.0 {
+        return Ok(0.0);
+    }
+    if room <= 0.0 {
+        return Err(Error::Render(
+            "mark ink has no containing category room".into(),
+        ));
+    }
+    let pitch = ink / room;
+    if pitch.is_finite() {
+        Ok(pitch)
+    } else {
+        Err(Error::Render(
+            "mark containing pitch exceeds spatial range".into(),
+        ))
+    }
+}
+
 macro_rules! interior_routes {
     ($($class:ident { $($kind:ident),+ $(,)? }),+ $(,)?) => {
         $(#[derive(Debug, Clone, Copy, PartialEq, Eq)]

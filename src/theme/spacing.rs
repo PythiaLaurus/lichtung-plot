@@ -131,13 +131,6 @@ impl RelativeSpacing {
         })))
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "inspection is reserved for the named nonspatial consumers and public cutover"
-        )
-    )]
     pub(crate) fn as_f64(&self) -> f64 {
         self.0.approximate
     }

@@ -807,7 +807,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
         let prepared = crate::plots::shared_x::prepare_plot(
             &plot,
             &crate::font::canonical::OperationContext::new(),
-            Some(&crate::theme::scale_values::test_defaults()),
+            Some(&crate::theme::ThemeValue::publication()),
         )
         .unwrap_or_else(|error| panic!("{kind:?}: {error}"))
         .attach(plot.clone())

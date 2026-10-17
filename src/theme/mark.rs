@@ -242,6 +242,26 @@ validated_component!(MarkExtentTheme {
         value.matrix_density_fraction()] { fraction(extent, &one, true)?; }
 });
 
+impl CategoryMarkGeometry {
+    pub(crate) fn group_span(&self, horizontal: bool) -> f64 {
+        if horizontal {
+            self.horizontal_group_span()
+        } else {
+            self.vertical_group_span()
+        }
+        .as_f64()
+    }
+
+    pub(crate) fn body_breadth(&self, horizontal: bool) -> f64 {
+        if horizontal {
+            self.horizontal_body_breadth()
+        } else {
+            self.vertical_body_breadth()
+        }
+        .as_f64()
+    }
+}
+
 validated_component!(MarkTheme {
     borrow accents: AccentPalette => with_accents,
     borrow points: PointRoles => with_points,

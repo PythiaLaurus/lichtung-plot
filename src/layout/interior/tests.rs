@@ -82,7 +82,7 @@ fn prepared_contract_retains_sources_and_uses_the_callers_operation_limits() {
     let prepared = crate::plots::shared_x::prepare_plot(
         &source,
         &resources,
-        Some(&crate::theme::scale_values::test_defaults()),
+        Some(&crate::theme::ThemeValue::publication()),
     )
     .unwrap();
     assert_eq!(prepared.route, InteriorRoute::classify(PlotKind::Scatter));

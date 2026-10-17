@@ -41,13 +41,13 @@ pub(crate) fn category_center(
     series_index: Option<usize>,
     prepared: &PreparedBars,
     mode: BarMode,
-    horizontal: bool,
+    group_span: f64,
 ) -> f64 {
     let center = category_index as f64 + 0.5;
     if mode != BarMode::Grouped {
         return center;
     }
-    let slot_width = if horizontal { 0.74 } else { 0.76 };
+    let slot_width = group_span;
     let slot = slot_width / prepared.series.len().max(1) as f64;
     center - slot_width / 2.0 + slot * (series_index.unwrap_or(0) as f64 + 0.5)
 }
@@ -58,24 +58,19 @@ pub(crate) fn category_bar_geometry(
     mode: BarMode,
     spacing: BarSpacing,
     horizontal: bool,
+    geometry: &crate::theme::mark::CategoryMarkGeometry,
 ) -> (f64, f64) {
     let center = category_center(
         bar.category_index,
         bar.series_index,
         prepared,
         mode,
-        horizontal,
+        geometry.group_span(horizontal),
     );
     let thickness = match mode {
-        BarMode::Single | BarMode::Stacked => {
-            if horizontal {
-                0.55
-            } else {
-                0.6
-            }
-        }
+        BarMode::Single | BarMode::Stacked => geometry.body_breadth(horizontal),
         BarMode::Grouped => {
-            let slot_width = if horizontal { 0.74 } else { 0.76 };
+            let slot_width = geometry.group_span(horizontal);
             let slot = slot_width / prepared.series.len().max(1) as f64;
             match spacing {
                 BarSpacing::Comfort => slot * 0.82,
@@ -137,8 +132,14 @@ pub(crate) fn intrinsic_body_minimum(
                 "bar occupied slot exceeds prepared category/series".into(),
             ));
         }
-        let (center, thickness) =
-            category_bar_geometry(bar, prepared, mode, chart.bar_spacing_spec(), horizontal);
+        let (center, thickness) = category_bar_geometry(
+            bar,
+            prepared,
+            mode,
+            chart.bar_spacing_spec(),
+            horizontal,
+            theme.marks.extents().categories(),
+        );
         // Distinct source slot edges must survive the canonical pixel quantum
         // even when their paint is transparent or the scientific height is zero.
         pitch = pitch.max((1.0 / 1024.0) / thickness);
@@ -152,16 +153,23 @@ pub(crate) fn intrinsic_body_minimum(
             };
             let left_room = 0.5 + relative - half;
             let right_room = 0.5 - relative - half;
-            if left_room <= 0.0 || right_room <= 0.0 {
-                return Err(Error::Render(
-                    "bar category body exceeds its declared slot".into(),
-                ));
-            }
-            pitch = pitch.max((-low).max(0.0) / left_room);
-            pitch = pitch.max(high.max(0.0) / right_room);
+            pitch = pitch.max(crate::layout::interior::ink_pitch(
+                (-low).max(0.0),
+                left_room,
+            )?);
+            pitch = pitch.max(crate::layout::interior::ink_pitch(
+                high.max(0.0),
+                right_room,
+            )?);
         }
         if bar.interval.is_some() && interval > 0.0 {
-            let cap = thickness * 0.2;
+            let cap = thickness
+                * theme
+                    .marks
+                    .extents()
+                    .categories()
+                    .uncertainty_cap_ratio()
+                    .as_f64();
             pitch = pitch.max((1.0 / 1024.0) / (2.0 * cap));
             let left_room = 0.5 + relative - cap;
             let right_room = 0.5 - relative - cap;
@@ -191,7 +199,7 @@ pub(crate) fn intrinsic_body_minimum(
             point.series_index,
             prepared,
             mode,
-            horizontal,
+            theme.marks.extents().categories().group_span(horizontal),
         );
         let relative = center - (point.category_index as f64 + 0.5);
         if let Some(ink) = crate::render::geometry::point_ink_bounds(&point.style)? {

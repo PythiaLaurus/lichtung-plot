@@ -109,7 +109,11 @@ impl HistogramSemantics {
         self.bins.len() as u128
     }
 
-    pub(crate) fn new(chart: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
+    pub(crate) fn new(
+        chart: &Plot,
+        data: PlotData<'_>,
+        owner: Option<&crate::theme::ThemeValue>,
+    ) -> Result<Self, Error> {
         data.validate_row_source()?;
         #[cfg(test)]
         crate::layout::interior::distributions::count(0, 0);
@@ -155,11 +159,24 @@ impl HistogramSemantics {
                 maximum = curve.iter().map(|p| p.y).fold(maximum, f64::max);
             }
             let rugs = if curve.is_some() {
+                let default;
+                let owner = if let Some(owner) = owner {
+                    owner
+                } else {
+                    default = crate::theme::ThemeValue::publication();
+                    &default
+                };
+                let top = maximum * owner.marks().extents().sampled_rug_height().as_f64();
+                if !top.is_finite() {
+                    return Err(Error::Render(
+                        "sampled rug height exceeds finite geometry".into(),
+                    ));
+                }
                 crate::data::source::collect_source(values.iter().map(|x| {
                     Ok(crate::HistogramRug {
                         x: *x,
                         baseline: 0.0,
-                        top: maximum * 0.035,
+                        top,
                     })
                 }))?
             } else {
@@ -459,34 +476,6 @@ fn prepare_density_curve(
         }
     };
     Ok(Some(curve))
-}
-
-#[cfg(test)]
-fn density_maximum(
-    composite: &HistogramComposite,
-    values: &[f64],
-    range: (f64, f64),
-) -> Result<f64, Error> {
-    let HistogramComposite::KdeAndRug(kde) = composite else {
-        return Ok(0.0);
-    };
-    match kde {
-        HistogramKde::Precomputed(points) => {
-            validate_precomputed_kde(points, range)?;
-
-            Ok(points.iter().map(|point| point.y).fold(0.0, f64::max))
-        }
-        HistogramKde::Internal => {
-            let bandwidth = crate::stats::distribution::strict_scott_bandwidth(values)
-                .map_err(|reason| Error::Data(format!("histogram KDE: {reason}")))?;
-
-            let grid: [f64; KDE_GRID_POINTS] =
-                std::array::from_fn(|index| histogram_grid_coordinate(range, index));
-            let densities = crate::stats::distribution::gaussian_kde(values, &grid, bandwidth)?;
-
-            Ok(densities.into_iter().fold(0.0, f64::max))
-        }
-    }
 }
 
 fn histogram_grid_coordinate(range: (f64, f64), index: usize) -> f64 {
@@ -943,27 +932,48 @@ mod tests {
     }
 
     #[test]
-    fn kde_maximum_matches_internal_and_supplied_curves() {
-        let values = [1.0, 2.0, 3.0];
-        let composite = HistogramComposite::KdeAndRug(HistogramKde::Internal);
-        let curve = prepare_density_curve(&composite, &values, (1.0, 3.0))
-            .unwrap()
+    fn sampled_rugs_use_the_owner_without_changing_bins_or_density() {
+        let source = Plot::histogram(crate::HistogramInput::samples(crate::NumericValues::new(
+            "sample",
+            [1.0, 2.0, 2.0, 3.0],
+        )))
+        .bins(HistogramBins::Count(2))
+        .stat(HistogramStat::Density)
+        .composite(HistogramComposite::KdeAndRug(HistogramKde::Internal))
+        .erase();
+        let original = crate::theme::ThemeValue::publication();
+        let extents = original
+            .marks()
+            .extents()
+            .clone()
+            .with_sampled_rug_height(crate::theme::RelativeSpacing::new(2.0).unwrap())
             .unwrap();
-        let expected = curve.iter().map(|point| point.y).fold(0.0, f64::max);
+        let marks = original.marks().clone().with_extents(extents).unwrap();
+        let edited = original.customize().with_marks(marks).build().unwrap();
+        let before = HistogramSemantics::new(&source, source.data(), Some(&original)).unwrap();
+        let after = HistogramSemantics::new(&source, source.data(), Some(&edited)).unwrap();
+        assert_eq!(before.bins, after.bins);
+        assert_eq!(before.curve, after.curve);
+        let scientific_maximum = before
+            .bins
+            .iter()
+            .map(|bin| bin.density)
+            .chain(before.curve.iter().flatten().map(|point| point.y))
+            .fold(0.0_f64, f64::max);
+        assert_eq!(after.rugs.len(), 4);
         assert_eq!(
-            density_maximum(&composite, &values, (1.0, 3.0))
-                .unwrap()
-                .to_bits(),
-            expected.to_bits()
+            after.rugs.iter().map(|rug| rug.x).collect::<Vec<_>>(),
+            [1.0, 2.0, 2.0, 3.0]
         );
-        let supplied = HistogramComposite::KdeAndRug(HistogramKde::Precomputed(curve));
-
+        assert!(after.rugs.iter().all(|rug| {
+            rug.baseline == 0.0 && rug.top.to_bits() == (2.0 * scientific_maximum).to_bits()
+        }));
         assert_eq!(
-            density_maximum(&supplied, &values, (1.0, 3.0))
-                .unwrap()
-                .to_bits(),
-            expected.to_bits()
+            after.source_ranges[1].1.to_bits(),
+            (2.0 * scientific_maximum).to_bits()
         );
+        assert!(after.source_ranges[1].1 > before.source_ranges[1].1);
+        source.with_theme_value(edited).preflight().unwrap();
     }
 
     fn prepare_histogram(

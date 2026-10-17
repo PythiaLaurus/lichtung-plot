@@ -2507,7 +2507,7 @@ mod tests {
             let inputs = crate::plots::shared_x::prepare_plot(
                 &plot,
                 &resources,
-                Some(&crate::theme::scale_values::test_defaults()),
+                Some(&crate::theme::ThemeValue::publication()),
             )
             .unwrap();
             let mut theme = crate::Theme::Publication.resolve().unwrap();
@@ -2561,7 +2561,7 @@ mod tests {
         let inputs = crate::plots::shared_x::prepare_plot(
             &plot,
             &resources,
-            Some(&crate::theme::scale_values::test_defaults()),
+            Some(&crate::theme::ThemeValue::publication()),
         )
         .unwrap();
         let mut theme = crate::Theme::Publication.resolve().unwrap();
@@ -2638,7 +2638,7 @@ mod tests {
         let mut inputs = crate::plots::shared_x::prepare_plot(
             &plot,
             &resources,
-            Some(&crate::theme::scale_values::test_defaults()),
+            Some(&crate::theme::ThemeValue::publication()),
         )
         .unwrap();
         let mut theme = crate::Theme::Publication.resolve().unwrap();
@@ -2728,7 +2728,7 @@ mod tests {
         let inputs = crate::plots::shared_x::prepare_plot(
             &plot,
             &resources,
-            Some(&crate::theme::scale_values::test_defaults()),
+            Some(&crate::theme::ThemeValue::publication()),
         )
         .unwrap();
         let mut theme = crate::Theme::Publication.resolve().unwrap();
@@ -2799,7 +2799,7 @@ mod tests {
                     let inputs = crate::plots::shared_x::prepare_plot(
                         &plot,
                         &stage.operation(),
-                        Some(&crate::theme::scale_values::test_defaults()),
+                        Some(&crate::theme::ThemeValue::publication()),
                     )?;
                     let requirements = foundational_plot_requirements(
                         Some(&inputs),

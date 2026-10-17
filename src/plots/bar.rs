@@ -119,7 +119,7 @@ pub(crate) fn measure_marks(
             &prepared.categories,
             &prepared.series,
             &grouped_maxima,
-            0.76,
+            theme.marks.extents().categories().group_span(false),
             base_y_range,
             panel,
             mode == BarMode::Stacked,
@@ -136,9 +136,9 @@ pub(crate) fn measure_marks(
     validate_bar_significance_collisions(
         chart,
         prepared,
-        mode,
         &layout,
         &attached_label_plans,
+        theme.marks.extents().categories().group_span(false),
         context.fit_scope(),
         domain_expansion.is_some(),
     )?;
@@ -169,8 +169,14 @@ pub(crate) fn measure_marks(
     crate::data::source::reserve_source(&mut payload.text, prepared.significance.len())?;
     crate::data::source::reserve_source(&mut payload.points, prepared.points.len())?;
     for bar in &prepared.bars {
-        let (x_center, width) =
-            bar_data::category_bar_geometry(bar, prepared, mode, chart.bar_spacing_spec(), false);
+        let (x_center, width) = bar_data::category_bar_geometry(
+            bar,
+            prepared,
+            mode,
+            chart.bar_spacing_spec(),
+            false,
+            theme.marks.extents().categories(),
+        );
         let polygon = project_bar(&layout.projection, x_center, width, bar)?;
         payload.bars.push(bar_data::BarShape {
             polygon,
@@ -183,7 +189,19 @@ pub(crate) fn measure_marks(
             interval: bar
                 .interval
                 .map(|(lower, upper)| {
-                    project_error_bar(&layout.projection, x_center, width, lower, upper)
+                    project_error_bar(
+                        &layout.projection,
+                        x_center,
+                        width,
+                        lower,
+                        upper,
+                        theme
+                            .marks
+                            .extents()
+                            .categories()
+                            .uncertainty_cap_ratio()
+                            .as_f64(),
+                    )
                 })
                 .transpose()?,
         });
@@ -194,8 +212,8 @@ pub(crate) fn measure_marks(
             mark,
             text_plan,
             prepared,
-            mode,
             &layout,
+            theme.marks.extents().categories().group_span(false),
             domain_expansion.is_some(),
         )?);
     }
@@ -205,7 +223,7 @@ pub(crate) fn measure_marks(
             point.series_index,
             prepared,
             mode,
-            false,
+            theme.marks.extents().categories().group_span(false),
         );
         let projected = layout.projection.project(x_center, point.value);
         payload
@@ -264,12 +282,18 @@ fn place_bar_significance(
     mark: &PreparedBarSignificance,
     text_plan: &ResolvedTextPlan,
     prepared: &PreparedBars,
-    mode: BarMode,
     layout: &Layout,
+    group_span: f64,
     pending_domain: bool,
 ) -> Result<PlacedText, Error> {
     let style = chart.significance_mark_style_spec();
-    let x = significance_center(mark.category_index, mark.series_index, prepared, mode);
+    let x = significance_center(
+        mark.category_index,
+        mark.series_index,
+        prepared,
+        bar_data::mode(chart),
+        group_span,
+    );
     let (x, edge_y) = layout.projection.project(x, mark.edge);
     let y = if mark.positive {
         edge_y + style.gap_spec()
@@ -294,9 +318,9 @@ fn place_bar_significance(
 fn validate_bar_significance_collisions(
     chart: &Plot,
     prepared: &PreparedBars,
-    mode: BarMode,
     layout: &Layout,
     text_plans: &[ResolvedTextPlan],
+    group_span: f64,
     scope: &crate::layout::fit::FitScope,
 
     pending_domain: bool,
@@ -306,7 +330,13 @@ fn validate_bar_significance_collisions(
     crate::data::source::reserve_source(&mut bounds, prepared.significance.len())?;
     for (index, (mark, text_plan)) in prepared.significance.iter().zip(text_plans).enumerate() {
         let scope = scope.child(crate::layout::AddressRole::Annotation, index)?;
-        let center = significance_center(mark.category_index, mark.series_index, prepared, mode);
+        let center = significance_center(
+            mark.category_index,
+            mark.series_index,
+            prepared,
+            bar_data::mode(chart),
+            group_span,
+        );
         let (x, edge_y) = layout.projection.project(center, mark.edge);
         let width = text_plan.width();
         let height = text_plan.height();
@@ -346,9 +376,16 @@ fn significance_center(
     series_index: Option<usize>,
     prepared: &PreparedBars,
     mode: BarMode,
+    group_span: f64,
 ) -> f64 {
     series_index.map_or(category_index as f64 + 0.5, |series_index| {
-        bar_data::category_center(category_index, Some(series_index), prepared, mode, false)
+        bar_data::category_center(
+            category_index,
+            Some(series_index),
+            prepared,
+            mode,
+            group_span,
+        )
     })
 }
 
@@ -389,6 +426,7 @@ fn project_error_bar(
     width: f64,
     lower: f64,
     upper: f64,
+    cap_ratio: f64,
 ) -> Result<[[Point2D; 2]; 3], Error> {
     let (x_px, y_top_px) = proj.project(x_center, upper);
     let (_, y_bot_px) = proj.project(x_center, lower);
@@ -399,7 +437,7 @@ fn project_error_bar(
         lower < upper,
         "bar interval",
     )?;
-    let cap_px = (proj.project(width, 0.0).0 - proj.project(0.0, 0.0).0).abs() * 0.2;
+    let cap_px = (proj.project(width, 0.0).0 - proj.project(0.0, 0.0).0).abs() * cap_ratio;
     Ok([
         [Point2D::new(x_px, y_top_px), Point2D::new(x_px, y_bot_px)],
         [

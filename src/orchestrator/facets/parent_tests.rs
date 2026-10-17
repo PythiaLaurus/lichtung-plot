@@ -80,7 +80,7 @@ fn outer_roles_use_one_root_producer_without_changing_centered_strips() {
                 let inputs = crate::plots::shared_x::prepare_plot(
                     &source,
                     &stage.operation(),
-                    Some(&crate::theme::scale_values::test_defaults()),
+                    Some(&crate::theme::ThemeValue::publication()),
                 )?;
                 let guide = prepare_discrete_guide(
                     &source,
@@ -297,7 +297,7 @@ fn impossible_outer_title_returns_typed_fit_before_child_measurement() {
             let inputs = crate::plots::shared_x::prepare_plot(
                 &source,
                 &stage.operation(),
-                Some(&crate::theme::scale_values::test_defaults()),
+                Some(&crate::theme::ThemeValue::publication()),
             )?;
             prepare_discrete_guide(
                 &source,

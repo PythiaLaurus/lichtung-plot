@@ -6,8 +6,8 @@ construction and consumer resolution are next.
 **Current execution checkpoint:** the user-authorized resumption completed the
 mark/annotation leaf, T6B1d4d, and the private-value umbrella T6B1. Evidence is in
 `../docs/mark-annotation-values.md`. T6B2 owns complete Theme construction and the
-remaining literal-to-component consumer resolution; its construction leaf is
-complete and consumer leaves are being executed in order. Public cutovers follow it.
+remaining literal-to-component consumer resolution; complete construction and
+mark extents are implemented, with annotation consumers next. Public cutovers follow it.
 The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
@@ -104,7 +104,7 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6B1d4d | COMPLETE | T6B1d4c | Complete mark groups and admitted annotation geometry; `refactor(theme): assemble mark and annotation roles` |
 | T6B2 | IN PROGRESS | T6B1 | Complete Theme construction/customization and owner resolution using those values; separately committed leaves below |
 | T6B2a | COMPLETE | T6B1 | Retain one complete appearance value and construction-only builder independently of operation state; `refactor(theme): retain complete construction values` |
-| T6B2b | PENDING | T6B2a | Consume mark extents in category, Waterfall, interval, rug and density geometry; `refactor(marks): resolve retained local geometry` |
+| T6B2b | COMPLETE | T6B2a | Consume mark extents in category, Waterfall, interval, rug and density geometry; `refactor(marks): resolve retained local geometry` |
 | T6B2c | PENDING | T6B2b | Resolve annotation metrics, exact significance absence and canonical bracket geometry; `refactor(annotations): retain effective local geometry` |
 | T6B2d | PENDING | T6B2c | General continuous-scale branches, unified presets and common local/shared guides; `refactor(scales): resolve complete continuous mappings` |
 | T6B2e | PENDING | T6B2d | Complete supplemental paint/default resolution and remaining declared-track/cache owners; `refactor(theme): resolve complete owner-local defaults` |
@@ -284,6 +284,15 @@ generic size carriers are removed. One constructor/immutability/font-precedence
 test replaces the old local surface-edit fixture; discovery remains 671. Forty-one
 theme tests, four axis/lifecycle tests (including all 25 canonical families), six
 external theme-owner tests, formatting and strict all-target Clippy pass.
+
+T6B2b evidence: `../docs/mark-geometry-resolution.md` records selected category
+breadths/group spans/caps, independent Waterfall body and connector geometry,
+PointInterval caps, owner-prepared sampled rugs and local density fractions.
+Actual positive ink without containing room refuses; zero ink does not divide by
+zero. Histogram preparation receives the complete owning appearance before fonts
+without changing bins, KDE or supplied geometry. Two semantic tests replace two
+old fixtures and remove their dead support; discovery remains 671. Sixteen focused
+library tests, twenty contract integrations, formatting and strict Clippy pass.
 
 Use spec03 and spec94's complete `Theme`, `ThemeBuilder`, role components, typed font stack,
 RGBA `Color`, RGB-only `OpaqueColor`, palettes/maps and gradients. Builders are

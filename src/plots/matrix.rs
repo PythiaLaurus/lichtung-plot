@@ -960,7 +960,7 @@ fn select_diagonal_kde(
             panel.x0,
             panel.x1,
             panel.y0,
-            panel.y0 + panel.height() * 0.85,
+            panel.y0 + panel.height() * theme.marks.extents().matrix_density_fraction().as_f64(),
         ),
     );
     let (x0, y0) = projection.project(projection.x_range().0, 0.0);

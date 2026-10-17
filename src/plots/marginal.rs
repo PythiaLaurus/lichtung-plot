@@ -633,10 +633,16 @@ pub(crate) fn measure(
         right_poly.push(Point2D::new(baseline_x, right_start));
         for i in 0..n_grid {
             let (x, _) = panels[1].projection.project(curves.x_grid[i], 0.0);
-            let y = baseline_y + x_densities[gi][i] / x_dens_max * 0.90 * top_span;
+            let y = baseline_y
+                + x_densities[gi][i] / x_dens_max
+                    * theme.marks.extents().marginal_density_fraction().as_f64()
+                    * top_span;
             top_poly.push(Point2D::new(x, y));
             let (_, y) = panels[2].projection.project(0.0, y_grid[i]);
-            let x = baseline_x + y_densities[gi][i] / y_dens_max * 0.90 * right_span;
+            let x = baseline_x
+                + y_densities[gi][i] / y_dens_max
+                    * theme.marks.extents().marginal_density_fraction().as_f64()
+                    * right_span;
             right_poly.push(Point2D::new(x, y));
         }
         let (top_end, _) = panels[1].projection.project(curves.x_grid[n_grid - 1], 0.0);

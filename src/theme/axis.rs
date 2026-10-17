@@ -338,13 +338,6 @@ impl AxisTheme {
         Self::new(self.frame, self.cell_frame, self.ticks, self.grid, spacing)
     }
 
-    #[cfg(test)]
-    pub(crate) fn validated_clone(&self) -> Result<Self> {
-        self.validate()?;
-
-        Ok(self.clone())
-    }
-
     pub(crate) fn same_validated(&self, other: &Self) -> Result<bool> {
         self.validate()?;
         other.validate()?;

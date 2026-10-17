@@ -322,24 +322,3 @@ fn whole_positions_round_half_quantum_ties_with_the_final_anchor_parity() {
         );
     }
 }
-
-#[test]
-fn validated_axis_clone_preserves_complete_identity() {
-    let source = complete();
-    let shared = source.validated_clone().unwrap();
-    let independent = complete();
-    for other in [&shared, &independent] {
-        assert!(source.same_validated(other).unwrap());
-    }
-    let changed = source
-        .clone()
-        .with_spacing(
-            source
-                .spacing()
-                .clone()
-                .with_y_title_edge_padding(RelativeSpacing::ratio(1, 1).unwrap())
-                .unwrap(),
-        )
-        .unwrap();
-    assert!(!source.same_validated(&changed).unwrap());
-}

@@ -189,9 +189,7 @@ fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_own
     )
     .erase();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-    let inputs =
-        crate::plots::shared_x::prepare_plot(&source, &resources, Some(&theme.color_scales))
-            .unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, Some(&theme)).unwrap();
     let prepared = &inputs.heatmap.as_ref().unwrap().panels[0].1;
     let semantics = prepared.guide_semantics(&theme).unwrap();
     assert_eq!(semantics.selection.sequential_gradient(), Some(&gradient));

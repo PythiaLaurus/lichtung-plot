@@ -45,6 +45,148 @@ fn retained(chart: &Plot) -> Result<&PreparedWaterfall, Error> {
     crate::layout::interior::preference::panel(&inputs.panels, chart.axis_scope(), "Waterfall")
 }
 
+struct BodyGeometry {
+    breadth: f64,
+    low: f64,
+    high: f64,
+    connector_room: f64,
+}
+
+#[cfg(test)]
+mod geometry_tests {
+    use super::*;
+
+    #[test]
+    fn selected_breadth_controls_polygons_and_refuses_only_positive_ink_without_room() {
+        let source = Plot::waterfall(
+            crate::CategoryValues::new("step", ["first", "second"]).unwrap(),
+            crate::NumericValues::new("delta", [2.0, -1.0]),
+            10.0,
+        )
+        .x_limits(0.0, 20.0)
+        .erase();
+        let operation = crate::font::canonical::OperationContext::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let mut theme = crate::theme::ThemeValue::publication().resolve().unwrap();
+        let default = BodyGeometry::new(&theme);
+        assert_eq!(
+            [
+                default.breadth,
+                default.low,
+                default.high,
+                default.connector_room
+            ]
+            .map(f64::to_bits),
+            [0.6_f64, 0.2, 0.8, 0.4].map(f64::to_bits)
+        );
+        let panel = crate::layout::PanelBox::new(10.0, 810.0, 20.0, 620.0);
+        let measure = |theme: &crate::theme::ResolvedTheme| {
+            chart
+                .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, theme))
+                .unwrap()
+        };
+        let original = measure(&theme);
+        let extents = theme
+            .marks
+            .extents()
+            .clone()
+            .with_waterfall_body_category_breadth(crate::theme::RelativeSpacing::new(0.3).unwrap())
+            .unwrap();
+        theme.marks = theme.marks.clone().with_extents(extents).unwrap();
+        let narrower = measure(&theme);
+        let payload = |plan: &PlotRenderResult| {
+            let crate::layout::interior::MarkPayload::Waterfall(payload) =
+                &plan.marks.as_ref().unwrap().payload
+            else {
+                panic!("Waterfall payload")
+            };
+            (payload.bars.clone(), payload.connectors.clone())
+        };
+        let (before, _) = payload(&original);
+        let (after, connectors) = payload(&narrower);
+        assert_eq!(after.len(), 2);
+        assert_eq!(connectors.len(), 1);
+        for ((before, _), (after, _)) in before.iter().zip(&after) {
+            assert_eq!(before[0].x.to_bits(), after[0].x.to_bits());
+            assert_eq!(before[1].x.to_bits(), after[1].x.to_bits());
+            assert!(after[2].y - after[0].y < before[2].y - before[0].y);
+        }
+        assert_eq!(connectors[0].0[0].y.to_bits(), after[0].0[2].y.to_bits());
+        assert_eq!(connectors[0].0[1].y.to_bits(), after[1].0[0].y.to_bits());
+        let extents = theme
+            .marks
+            .extents()
+            .clone()
+            .with_waterfall_body_category_breadth(
+                crate::theme::RelativeSpacing::ratio(1, 1).unwrap(),
+            )
+            .unwrap();
+        theme.marks = theme.marks.clone().with_extents(extents).unwrap();
+        assert!(mark_intrinsic_body_minimum(&chart, &theme).is_err());
+        let body = theme
+            .marks
+            .fills()
+            .bodies()
+            .waterfall_bar()
+            .clone()
+            .with_outline(None)
+            .unwrap();
+        let bodies = theme
+            .marks
+            .fills()
+            .bodies()
+            .clone()
+            .with_waterfall_bar(body)
+            .unwrap();
+        let fills = theme.marks.fills().clone().with_bodies(bodies).unwrap();
+        theme.marks = theme.marks.clone().with_fills(fills).unwrap();
+        assert!(mark_intrinsic_body_minimum(&chart, &theme).is_err());
+        let connector = theme
+            .marks
+            .strokes()
+            .connectors()
+            .waterfall_connector()
+            .clone()
+            .with_color(crate::theme::Color::rgba(0, 0, 0, 0))
+            .unwrap();
+        let connectors = theme
+            .marks
+            .strokes()
+            .connectors()
+            .clone()
+            .with_waterfall_connector(connector)
+            .unwrap();
+        let strokes = theme
+            .marks
+            .strokes()
+            .clone()
+            .with_connectors(connectors)
+            .unwrap();
+        theme.marks = theme.marks.clone().with_strokes(strokes).unwrap();
+        assert!(mark_intrinsic_body_minimum(&chart, &theme).is_ok());
+    }
+}
+
+impl BodyGeometry {
+    fn new(theme: &crate::theme::ResolvedTheme) -> Self {
+        let breadth = theme
+            .marks
+            .extents()
+            .waterfall_body_category_breadth()
+            .as_f64();
+        let free = 1.0 - breadth;
+        let low = free / 2.0;
+        let high = 1.0 - low;
+        Self {
+            breadth,
+            low,
+            high,
+            connector_room: free,
+        }
+    }
+}
+
 fn mark_intrinsic_body_minimum(
     chart: &Plot,
     theme: &crate::theme::ResolvedTheme,
@@ -65,6 +207,7 @@ fn mark_intrinsic_body_minimum(
     let negative = positive.clone();
     let positive_ink = crate::render::geometry::rectangular_fill_ink_bounds(&positive)?;
     let negative_ink = crate::render::geometry::rectangular_fill_ink_bounds(&negative)?;
+    let geometry = BodyGeometry::new(theme);
     let mut pitch = 1.0_f64 / 1024.0;
     let mut numeric = 0.0_f64;
     for span in &prepared.spans {
@@ -73,11 +216,19 @@ fn mark_intrinsic_body_minimum(
         } else {
             negative_ink
         };
-        // One declared 0.6-category bar must retain distinct canonical edges.
-        pitch = pitch.max((1.0 / 1024.0) / 0.6);
+        pitch = pitch.max(crate::layout::interior::ink_pitch(
+            1.0 / 1024.0,
+            geometry.breadth,
+        )?);
         if let Some(ink) = ink {
-            pitch = pitch.max((-ink.bottom).max(0.0) / 0.2);
-            pitch = pitch.max(ink.top.max(0.0) / 0.2);
+            pitch = pitch.max(crate::layout::interior::ink_pitch(
+                (-ink.bottom).max(0.0),
+                geometry.low,
+            )?);
+            pitch = pitch.max(crate::layout::interior::ink_pitch(
+                ink.top.max(0.0),
+                geometry.low,
+            )?);
             numeric = numeric.max(ink.right - ink.left);
         }
     }
@@ -90,7 +241,10 @@ fn mark_intrinsic_body_minimum(
                 .waterfall_connector()
                 .backend_style(),
         )?;
-        pitch = pitch.max(connector / 0.4);
+        pitch = pitch.max(crate::layout::interior::ink_pitch(
+            connector,
+            geometry.connector_room,
+        )?);
         numeric = numeric.max(connector);
     }
     numeric = numeric.max(crate::render::geometry::line_ink_width(
@@ -428,15 +582,16 @@ pub(crate) fn measure(
     crate::data::source::reserve_source(&mut bars, spans.len())?;
     crate::data::source::reserve_source(&mut source_rows, spans.len())?;
     crate::data::source::reserve_source(&mut connectors, spans.len().saturating_sub(1))?;
+    let geometry = BodyGeometry::new(theme);
     for (index, span) in spans.iter().enumerate() {
         let (start, end, delta) = (&span.start, &span.end, &span.delta);
-        let y0 = index as f64 + 0.2;
-        let y1 = index as f64 + 0.8;
+        let y0 = index as f64 + geometry.low;
+        let y1 = index as f64 + geometry.high;
         let left = layout.projection.project(*start, y0).0;
         let right = layout.projection.project(*end, y1).0;
         let band = bands[index];
-        let bottom = band.0 + 0.2 * (band.1 - band.0);
-        let top = band.0 + 0.8 * (band.1 - band.0);
+        let bottom = band.0 + geometry.low * (band.1 - band.0);
+        let top = band.0 + geometry.high * (band.1 - band.0);
         layout.projection.validate_span(
             crate::layout::AxisSide::Bottom,
             (*start, *end),
@@ -471,7 +626,7 @@ pub(crate) fn measure(
             let x = right;
             let from_y = top;
             let next = bands[index + 1];
-            let to_y = next.0 + 0.2 * (next.1 - next.0);
+            let to_y = next.0 + geometry.low * (next.1 - next.0);
             connectors.push((
                 [Point2D::new(x, from_y), Point2D::new(x, to_y)],
                 theme

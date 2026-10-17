@@ -43,7 +43,7 @@ impl PreparedReference {
     pub(crate) fn new(
         source: &Plot,
         data: PlotData<'_>,
-        color_scales: Option<&crate::theme::ColorScales>,
+        owner: Option<&crate::theme::ThemeValue>,
     ) -> Result<Self, Error> {
         match source.kind() {
             PlotKind::Waterfall => Ok(Self::Waterfall(crate::plots::waterfall::prepare(
@@ -58,9 +58,11 @@ impl PreparedReference {
             PlotKind::Heatmap => Ok(Self::Heatmap(crate::plots::heatmap::prepare(
                 source,
                 data,
-                color_scales.ok_or_else(|| {
-                    Error::Render("Heatmap preparation requires its owning color scales".into())
-                })?,
+                owner
+                    .map(crate::theme::ThemeValue::color_scales)
+                    .ok_or_else(|| {
+                        Error::Render("Heatmap preparation requires its owning color scales".into())
+                    })?,
             )?)),
             PlotKind::Interaction => Ok(Self::Interaction(crate::plots::interaction::prepare(
                 source, data, None,
@@ -93,7 +95,7 @@ impl PreparedReference {
                 source, data,
             )?)),
             PlotKind::Histogram => Ok(Self::Histogram(
-                crate::plots::histogram::HistogramSemantics::new(source, data)?,
+                crate::plots::histogram::HistogramSemantics::new(source, data, owner)?,
             )),
             PlotKind::Density => Ok(Self::Density(crate::plots::density::PreparedDensity::new(
                 source, data,
@@ -425,7 +427,7 @@ pub(crate) fn prepare_reference_plot(
 pub(crate) fn prepare_plot(
     source: &Plot,
     resources: &crate::font::canonical::OperationContext,
-    color_scales: Option<&crate::theme::ColorScales>,
+    owner: Option<&crate::theme::ThemeValue>,
 ) -> Result<PreparedInteriorInputs, Error> {
     let mut matrix = None;
     let mut retained = Vec::new();
@@ -473,7 +475,7 @@ pub(crate) fn prepare_plot(
     {
         return prepare_reference_plot(
             source,
-            PreparedReference::new(source, source_data, color_scales)?,
+            PreparedReference::new(source, source_data, owner)?,
             source.axis_scope(),
             None,
             None,
@@ -644,7 +646,7 @@ pub(crate) fn prepare_plot(
                 None
             };
             let bins = (source.kind() == PlotKind::Histogram)
-                .then(|| crate::plots::histogram::HistogramSemantics::new(source, data))
+                .then(|| crate::plots::histogram::HistogramSemantics::new(source, data, owner))
                 .transpose()?;
             let curves = (source.kind() == PlotKind::Density)
                 .then(|| crate::plots::density::PreparedDensity::new(source, data))
@@ -664,11 +666,13 @@ pub(crate) fn prepare_plot(
                     crate::plots::heatmap::prepare(
                         source,
                         data,
-                        color_scales.ok_or_else(|| {
-                            Error::Render(
-                                "Heatmap preparation requires its owning color scales".into(),
-                            )
-                        })?,
+                        owner
+                            .map(crate::theme::ThemeValue::color_scales)
+                            .ok_or_else(|| {
+                                Error::Render(
+                                    "Heatmap preparation requires its owning color scales".into(),
+                                )
+                            })?,
                     )
                 })
                 .transpose()?;

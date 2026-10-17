@@ -845,7 +845,7 @@ impl PlotPlan {
                 let axes = crate::plots::shared_x::prepare_plot(
                     source,
                     &prepared_stage.operation(),
-                    Some(&theme.color_scales),
+                    Some(&theme),
                 )?;
                 let facet_guide = source
                     .has_facets()

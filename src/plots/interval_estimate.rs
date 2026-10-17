@@ -81,7 +81,10 @@ impl PreparedEstimate {
             numeric = numeric.max(stroke);
             pitch = pitch.max(stroke);
             if self.point_interval && stroke > 0.0 {
-                pitch = pitch.max(8.0 + stroke);
+                pitch = pitch.max(
+                    2.0 * f64::from(theme.marks.extents().point_interval_cap_half_height())
+                        + stroke,
+                );
             }
         }
         if unavailable {
@@ -957,8 +960,10 @@ fn project(
                     for (index, bound) in [lower, upper].into_iter().enumerate() {
                         if bound >= x_range.0 && bound <= x_range.1 {
                             let (x, py) = layout.projection.project(bound, y);
+                            let half =
+                                f64::from(theme.marks.extents().point_interval_cap_half_height());
                             row.caps[index] =
-                                Some([Point2D::new(x, py - 4.0), Point2D::new(x, py + 4.0)]);
+                                Some([Point2D::new(x, py - half), Point2D::new(x, py + half)]);
                         }
                     }
                 }

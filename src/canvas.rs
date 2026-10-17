@@ -1215,7 +1215,7 @@ impl Canvas {
                             data,
                             themes
                                 .and_then(|themes| themes.plot(index))
-                                .map(|theme| &theme.color_scales),
+                                .map(|theme| &**theme),
                         )?)
                     }
                     None => None,
