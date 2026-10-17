@@ -262,7 +262,7 @@ impl AxisTheme {
         value.validate()?;
         Ok(value)
     }
-    fn validate(&self) -> Result<()> {
+    pub(crate) fn validate(&self) -> Result<()> {
         if let Some(value) = self.frame() {
             value.validate()?;
         }

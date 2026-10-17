@@ -120,6 +120,39 @@ text_group! {
 }
 
 impl TypographyTheme {
+    pub(crate) fn with_font_stack(
+        mut self,
+        stack: crate::font::canonical::FontStack,
+    ) -> Result<Self, Error> {
+        let roles = [
+            &mut self.root.title,
+            &mut self.root.subtitle,
+            &mut self.root.caption,
+            &mut self.axes.axis_title,
+            &mut self.axes.tick_label,
+            &mut self.guides.legend_title,
+            &mut self.guides.legend_label,
+            &mut self.composition.facet_header,
+            &mut self.composition.composition_header,
+            &mut self.composition.text_panel_title,
+            &mut self.composition.body,
+            &mut self.annotations.significance_label,
+            &mut self.annotations.estimate_detail,
+            &mut self.annotations.waterfall_total,
+            &mut self.annotations.point_layer_label,
+            &mut self.annotations.panel_text,
+            &mut self.annotations.contrast.light,
+            &mut self.annotations.contrast.dark,
+        ];
+        let stacks =
+            std::iter::repeat_n(stack.clone(), roles.len() - 1).chain(std::iter::once(stack));
+        for (role, stack) in roles.into_iter().zip(stacks) {
+            *role = role.clone().with_stack(stack)?;
+        }
+        self.validate()?;
+        Ok(self)
+    }
+
     /// Stable traversal of each retained font handle, exactly once.
     pub(crate) fn roles(&self) -> [&TextTheme; 18] {
         [

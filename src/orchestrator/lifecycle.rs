@@ -790,14 +790,7 @@ impl PlotPlan {
             source,
             kind,
             (Some(source.width()), Some(source.height())),
-            || {
-                Ok(Box::new(
-                    source
-                        .theme_spec()
-                        .unwrap_or(crate::Theme::Publication)
-                        .resolve()?,
-                ))
-            },
+            || Ok(Box::new(source.resolve_theme()?)),
         )
     }
 
@@ -823,12 +816,7 @@ impl PlotPlan {
         height: Option<u32>,
     ) -> Result<Self, Error> {
         Self::new_with_theme_factory(source, kind, (width, height), || {
-            Ok(Box::new(
-                source
-                    .theme_spec()
-                    .unwrap_or(crate::Theme::Publication)
-                    .resolve()?,
-            ))
+            Ok(Box::new(source.resolve_theme()?))
         })
     }
 

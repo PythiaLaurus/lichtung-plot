@@ -144,7 +144,7 @@ enum ResolvedPlotTheme {
 }
 
 impl ResolvedCanvasThemes {
-    fn new(root: Theme, plots: &[Option<Plot>]) -> Result<Self, Error> {
+    fn new(root: &crate::theme::ThemeValue, plots: &[Option<Plot>]) -> Result<Self, Error> {
         let root = Box::new(root.resolve()?);
         let plots = plots
             .iter()
@@ -312,7 +312,7 @@ pub struct Canvas {
     columns: usize,
     panels: Vec<Option<Plot>>,
     text_panels: Vec<Option<TextPanel>>,
-    theme: Theme,
+    theme: Arc<crate::theme::ThemeValue>,
     legend_policy: CanvasLegendPolicy,
     shared_legend_gap: Option<f64>,
     width: u32,
@@ -371,7 +371,7 @@ impl Canvas {
             columns,
             panels: (0..panel_count).map(|_| None).collect(),
             text_panels: (0..panel_count).map(|_| None).collect(),
-            theme: Theme::Publication,
+            theme: Arc::new(crate::theme::ThemeValue::publication()),
             legend_policy: CanvasLegendPolicy::PerPlot,
             shared_legend_gap: None,
             width: 960,
@@ -588,8 +588,12 @@ impl Canvas {
     /// [`Plot::theme`] completely replaces it for that Plot. If this method is
     /// omitted, the Canvas root uses [`Theme::Publication`].
     #[must_use]
-    pub fn theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
+    pub fn theme(self, theme: Theme) -> Self {
+        self.with_theme_value(theme.into_value())
+    }
+
+    pub(crate) fn with_theme_value(mut self, theme: crate::theme::ThemeValue) -> Self {
+        self.theme = Arc::new(theme);
         self
     }
 
@@ -1360,7 +1364,7 @@ impl Canvas {
             sizing_request.0,
             sizing_request.1,
             |prepared_stage| {
-                let themes = Arc::new(ResolvedCanvasThemes::new(self.theme, &self.panels)?);
+                let themes = Arc::new(ResolvedCanvasThemes::new(&self.theme, &self.panels)?);
                 self.validate_structure()?;
                 let (mut interiors, shared_x) =
                     self.prepare_interiors(prepared_stage, Some(&themes))?;

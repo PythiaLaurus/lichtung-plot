@@ -13,7 +13,7 @@ use sha2::{Digest, Sha256};
 use super::{
     AnnotationTextRoles, AnnotationTheme, AxisSpacing, AxisTextRoles, AxisTheme,
     CompositionTextRoles, ContrastTextRoles, FrameSides, FrameTheme, GuideTextRoles, LegendTheme,
-    MarkTheme, RootTextRoles, StrokeTheme, TickTheme, TypographyTheme,
+    MarkTheme, RootTextRoles, StrokeTheme, ThemeValue, TickTheme, TypographyTheme,
 };
 use crate::font::canonical::PreparedFontEnvironment;
 use crate::layout::{
@@ -57,52 +57,47 @@ macro_rules! define_themes {
         }
 
         impl Theme {
+            #[cfg(test)]
             pub(crate) fn resolve(self) -> Result<ResolvedTheme, Error> {
-                match self { $(Self::$variant => $resolver()),+ }
+                ResolvedTheme::new(self.into_value())
+            }
+
+            pub(crate) fn into_value(self) -> ThemeValue {
+                match self { $(Self::$variant => ThemeValue::$resolver()),+ }
             }
         }
     };
 }
 
 define_themes! {
-    Publication => ("Default clean theme with high contrast and generous whitespace.", publication_theme),
-    Nature => ("Nature-style muted blues and greens without top/right axes.", nature_theme),
-    Science => ("Science-style high-saturation palette with bold axis labels.", science_theme),
-    CHI => ("ACM CHI/HCI pastel palette with accessible contrast.", chi_theme),
+    Publication => ("Default clean theme with high contrast and generous whitespace.", publication),
+    Nature => ("Nature-style muted blues and greens without top/right axes.", nature),
+    Science => ("Science-style high-saturation palette with bold axis labels.", science),
+    CHI => ("ACM CHI/HCI pastel palette with accessible contrast.", chi),
 }
 
 /// A theme's full resolved visual specification. Layout and renderers consume
 /// this value to produce concrete backend styles and layout decisions.
 #[derive(Debug, Clone)]
 pub(crate) struct ResolvedTheme {
-    /// Independent categorical palette and continuous scale defaults.
-    pub(crate) color_scales: ColorScales,
-    /// Font size in actual CSS pixels for annotations, status text, and color scales.
-    pub(crate) detail_font_size: u32,
-    /// Legacy label-size source retained for later body and annotation roles.
-    pub(crate) label_font_size: u32,
-    /// Legacy Canvas-composition title size retained until T5b.
-    pub(crate) composition_title_font_size: u32,
-    /// Legacy facet-header size source retained until T5b composition migration.
-    pub(crate) facet_header_font_size: u32,
-    /// Canvas-root and Plot-panel paints.
-    pub(crate) surfaces: super::SurfaceTheme,
+    appearance: ThemeValue,
     /// An explicit Plot inside Canvas composes over the Canvas owner's surface.
     pub(crate) canvas_surface_override: Option<Color>,
-    /// Complete nested semantic text roles.
-    pub(crate) typography: TypographyTheme,
-    /// Legend typography-adjacent chrome with owner-local lengths.
-    pub(crate) legend: LegendTheme,
-    /// Nonsemantic axis chrome and its local spacing.
-    pub(crate) axes: AxisTheme,
-    /// Complete validated semantic mark roles.
-    pub(crate) marks: MarkTheme,
-    /// Resolved non-text annotation appearance.
-    pub(crate) annotations: AnnotationTheme,
-    /// Root and panel composition relationships.
-    pub(crate) composition: super::CompositionTheme,
     font_environment: Arc<OnceLock<Result<PreparedFontEnvironment, String>>>,
     text_queries: Arc<Mutex<TextQueryCache>>,
+}
+
+impl std::ops::Deref for ResolvedTheme {
+    type Target = ThemeValue;
+    fn deref(&self) -> &ThemeValue {
+        &self.appearance
+    }
+}
+
+impl std::ops::DerefMut for ResolvedTheme {
+    fn deref_mut(&mut self) -> &mut ThemeValue {
+        &mut self.appearance
+    }
 }
 
 #[derive(Debug, Default)]
@@ -454,12 +449,18 @@ impl PartialEq for ResolvedTheme {
 }
 
 impl ResolvedTheme {
+    pub(crate) fn new(appearance: ThemeValue) -> Result<Self, Error> {
+        appearance.validate()?;
+        Ok(Self {
+            appearance,
+            canvas_surface_override: None,
+            font_environment: Arc::new(OnceLock::new()),
+            text_queries: Arc::default(),
+        })
+    }
+
     fn non_text_eq(&self, other: &Self) -> bool {
         self.color_scales == other.color_scales
-            && self.detail_font_size == other.detail_font_size
-            && self.label_font_size == other.label_font_size
-            && self.composition_title_font_size == other.composition_title_font_size
-            && self.facet_header_font_size == other.facet_header_font_size
             && self.surfaces == other.surfaces
             && self.canvas_surface_override == other.canvas_surface_override
             && self.marks == other.marks
@@ -1131,13 +1132,6 @@ impl TextTheme {
         self.line_height_multiplier
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "construction-only stack replacement awaits complete theme customization"
-        )
-    )]
     pub(crate) fn with_stack(
         self,
         stack: crate::font::canonical::FontStack,
@@ -1271,7 +1265,7 @@ fn resolved_theme(
     caption_font_size: u32,
     axis_title_font_size: u32,
     grid_color: (u8, u8, u8),
-) -> Result<ResolvedTheme, Error> {
+) -> Result<ThemeValue, Error> {
     let stack = crate::font::canonical::builtin_font_stack();
     let foreground_paint = color_from_rgb(foreground);
     let muted_paint = color_from_rgb(MUTED_TEXT);
@@ -1293,14 +1287,9 @@ fn resolved_theme(
         )
     };
 
-    Ok(ResolvedTheme {
+    let value = ThemeValue {
         color_scales,
-        detail_font_size: 14,
-        label_font_size: axis_title_font_size,
-        composition_title_font_size: title_font_size,
-        facet_header_font_size: subtitle_font_size,
         surfaces: SurfaceTheme::new(Color::rgb(255, 255, 255), Color::rgb(255, 255, 255))?,
-        canvas_surface_override: None,
         typography: TypographyTheme::new(
             RootTextRoles::new(
                 text(
@@ -1381,16 +1370,24 @@ fn resolved_theme(
             caption_font_size,
             axis_title_font_size,
         )?,
-        font_environment: Arc::new(OnceLock::new()),
-        text_queries: Arc::default(),
-    })
+    };
+    ThemeValue::new(
+        value.surfaces,
+        value.typography,
+        value.axes,
+        value.legend,
+        value.composition,
+        value.marks,
+        value.annotations,
+        value.color_scales,
+    )
 }
 
 fn plus_six_line_height(font_size: u32) -> f64 {
     (f64::from(font_size) + 6.0) / f64::from(font_size)
 }
 
-fn publication_theme() -> Result<ResolvedTheme, Error> {
+pub(super) fn publication_theme() -> Result<ThemeValue, Error> {
     // Okabe-Ito 8-color qualitative palette (colorblind-safe).
     resolved_theme(
         &[
@@ -1414,7 +1411,7 @@ fn publication_theme() -> Result<ResolvedTheme, Error> {
     )
 }
 
-fn nature_theme() -> Result<ResolvedTheme, Error> {
+pub(super) fn nature_theme() -> Result<ThemeValue, Error> {
     resolved_theme(
         &[
             (40, 86, 130),
@@ -1434,7 +1431,7 @@ fn nature_theme() -> Result<ResolvedTheme, Error> {
     )
 }
 
-fn science_theme() -> Result<ResolvedTheme, Error> {
+pub(super) fn science_theme() -> Result<ThemeValue, Error> {
     resolved_theme(
         &[
             (255, 0, 0),
@@ -1454,7 +1451,7 @@ fn science_theme() -> Result<ResolvedTheme, Error> {
     )
 }
 
-fn chi_theme() -> Result<ResolvedTheme, Error> {
+pub(super) fn chi_theme() -> Result<ThemeValue, Error> {
     resolved_theme(
         &[
             (171, 199, 232),
@@ -1551,31 +1548,6 @@ mod tests {
         assert_eq!(repeated.line_height().to_bits(), 1.75_f64.to_bits());
         assert_eq!(source.font_size(), 23);
         assert_eq!(source.stack(), &stack);
-    }
-
-    #[test]
-    fn surface_theme_retains_transparency_and_independent_root_and_panel_edits() {
-        let source =
-            SurfaceTheme::new(Color::rgba(11, 23, 37, 0), Color::rgba(41, 59, 73, 127)).unwrap();
-        assert_eq!(source.canvas_root(), Color::rgba(11, 23, 37, 0));
-        assert_eq!(source.plot_panel(), Color::rgba(41, 59, 73, 127));
-        let root = source
-            .clone()
-            .with_canvas_root(Color::rgb(83, 97, 109))
-            .unwrap();
-        assert_eq!(root.canvas_root(), Color::rgb(83, 97, 109));
-        assert_eq!(root.plot_panel(), source.plot_panel());
-        let panel = source
-            .clone()
-            .with_plot_panel(Color::rgba(113, 131, 149, 255))
-            .unwrap();
-        assert_eq!(panel.canvas_root(), source.canvas_root());
-        assert_eq!(panel.plot_panel(), Color::rgb(113, 131, 149));
-        let repeated = panel
-            .with_plot_panel(Color::rgba(151, 163, 179, 0))
-            .unwrap();
-        assert_eq!(repeated.plot_panel(), Color::rgba(151, 163, 179, 0));
-        assert_eq!(source.plot_panel(), Color::rgba(41, 59, 73, 127));
     }
 
     fn indexed_query_input<'a>(
@@ -1728,7 +1700,8 @@ mod tests {
             .unwrap()
             .typography
             .root
-            .caption;
+            .caption
+            .clone();
         let input = indexed_query_input("A", &appearance, "owner");
 
         let fingerprints = CachedTextQuery::fingerprints(&input, None, true);

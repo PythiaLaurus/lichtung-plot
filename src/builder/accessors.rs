@@ -28,8 +28,15 @@ impl Plot {
 }
 
 impl<K: crate::kind::Marker> Plot<K> {
-    pub(crate) const fn theme_spec(&self) -> Option<crate::Theme> {
-        self.theme
+    pub(crate) fn theme_spec(&self) -> Option<&crate::theme::ThemeValue> {
+        self.theme.as_deref()
+    }
+
+    pub(crate) fn resolve_theme(&self) -> Result<crate::theme::ResolvedTheme, Error> {
+        match self.theme_spec() {
+            Some(theme) => theme.resolve(),
+            None => crate::theme::ThemeValue::publication().resolve(),
+        }
     }
 
     pub(crate) fn source_row_map(&self) -> Option<&[usize]> {

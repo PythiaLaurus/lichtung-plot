@@ -24,7 +24,7 @@ use crate::spec::{
     NumericLabelFormat, PanelTextAnnotation, PlotKind, QqLine, RawOverlay, RegressionBand,
     WaterfallLabels,
 };
-use crate::theme::Theme;
+use crate::theme::ThemeValue;
 use crate::Labels;
 use crate::{
     BarInput, BooleanValues, Bounds, CategoryValues, CoefficientInput, HistogramInput,
@@ -450,7 +450,7 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     x_limits_user_explicit: bool,
     y_axis_spec: AxisSpec,
     y_limits_user_explicit: bool,
-    theme: Option<Theme>,
+    theme: Option<std::sync::Arc<ThemeValue>>,
     significance: Vec<crate::significance::SignificanceAnnotation>,
     width: u32,
     height: u32,

@@ -15,6 +15,7 @@ mod scale;
 pub(crate) mod scale_values;
 pub(crate) mod spacing;
 mod typography;
+mod value;
 
 pub(crate) use annotation::AnnotationTheme;
 pub(crate) use axis::{AxisLengths, AxisSpacing, AxisTheme, FrameSides, FrameTheme, TickTheme};
@@ -45,6 +46,7 @@ pub(crate) use resolved::{ResolvedTheme, SurfaceTheme, TextTheme, TitleAlignment
 
 pub(crate) use paint::{Color, OpaqueColor};
 pub(crate) use spacing::{LocalMetric, RelativeSpacing};
+pub(crate) use value::ThemeValue;
 
 /// Convert the current RGB tuple inputs at their private paint boundary.
 pub(crate) fn color_from_rgb((red, green, blue): (u8, u8, u8)) -> Color {

@@ -501,6 +501,7 @@ pub(crate) fn measure(
     let mut axis_theme = theme.clone();
     axis_theme.axes = axis_theme
         .axes
+        .clone()
         .with_frame(common_chrome.frame.cloned())?
         .with_cell_frame(None)?
         .with_grid(common_chrome.grid.cloned())?;

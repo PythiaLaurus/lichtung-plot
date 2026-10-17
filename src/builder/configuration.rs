@@ -323,8 +323,12 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// If omitted, a standalone Plot uses [`Theme::Publication`] and a Plot in
     /// a [`crate::Canvas`] inherits the Canvas root theme.
     #[must_use]
-    pub fn theme(mut self, theme: Theme) -> Self {
-        self.theme = Some(theme);
+    pub fn theme(self, theme: Theme) -> Self {
+        self.with_theme_value(theme.into_value())
+    }
+
+    pub(crate) fn with_theme_value(mut self, theme: crate::theme::ThemeValue) -> Self {
+        self.theme = Some(std::sync::Arc::new(theme));
         self
     }
 

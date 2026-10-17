@@ -381,7 +381,7 @@ mod tests {
 
     #[test]
     fn complete_mark_edits_validate_nested_siblings_and_fraction_bounds() {
-        let original = crate::Theme::Publication.resolve().unwrap().marks;
+        let original = crate::theme::ThemeValue::publication().marks;
         let summary = original
             .fills()
             .bodies()

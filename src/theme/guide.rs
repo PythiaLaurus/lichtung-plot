@@ -222,7 +222,7 @@ impl LegendTheme {
         value.validate_in()?;
         Ok(value)
     }
-    fn validate_in(&self) -> Result<()> {
+    pub(crate) fn validate_in(&self) -> Result<()> {
         self.spacing().validate()?;
         self.gradient_lengths().validate_in()?;
         if let Some(frame) = self.frame() {

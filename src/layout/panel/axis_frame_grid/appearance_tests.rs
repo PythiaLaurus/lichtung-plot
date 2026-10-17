@@ -21,6 +21,7 @@ fn selected_sides_are_frozen_drawn_and_published_once_with_no_inactive_edge_rese
         let stroke = theme.axes.frame().unwrap().stroke().clone();
         theme.axes = theme
             .axes
+            .clone()
             .with_frame(sides.map(|sides| FrameTheme::new(sides, stroke).unwrap()))
             .unwrap()
             .with_ticks(None)
@@ -66,6 +67,7 @@ fn ordinary_panel_does_not_paint_or_reserve_the_independent_cell_frame() {
         .unwrap();
     theme.axes = theme
         .axes
+        .clone()
         .with_frame(None)
         .unwrap()
         .with_cell_frame(Some(cell))
@@ -112,6 +114,7 @@ fn zero_chrome_keeps_required_text_and_combines_fractional_gaps_before_hard_roun
     .unwrap();
     theme.axes = theme
         .axes
+        .clone()
         .with_frame(None)
         .unwrap()
         .with_ticks(None)
