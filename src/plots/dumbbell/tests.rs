@@ -72,7 +72,7 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
         assert_eq!(stroke, Color::rgba(101, 113, 127, 61));
         assert_eq!(width.units(), 1536);
         expected.push(LegendEntry::point(
-            chart.point_legend_identity(label).unwrap(),
+            crate::decorations::legend::GuideEntryIdentity::endpoint(label).unwrap(),
             style.clone(),
         ));
     }

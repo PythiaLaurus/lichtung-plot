@@ -23,6 +23,8 @@ use crate::render::backend::{
 use crate::Error;
 
 mod continuous;
+mod identity;
+pub(crate) use identity::GuideEntryIdentity;
 pub(crate) mod descriptor;
 pub(crate) use continuous::MeasuredContinuousGuide;
 
@@ -224,176 +226,6 @@ pub(crate) fn address_role(position: crate::LegendPosition) -> crate::layout::Ad
     }
 }
 
-/// Raw semantic identity for one renderer-owned legend entry.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum LegendIdentity {
-    Single {
-        field: String,
-        value: String,
-    },
-    Pair {
-        group_field: String,
-        group_value: String,
-        hue_field: String,
-        hue_value: String,
-    },
-    Literal {
-        title: String,
-        value: String,
-    },
-    /// Renderer-owned sign domain, distinct from caller category/series keys.
-    BarSign {
-        decreasing: bool,
-    },
-}
-
-impl LegendIdentity {
-    pub(crate) fn single(field: impl Into<String>, value: impl Into<String>) -> Self {
-        Self::Single {
-            field: field.into(),
-            value: value.into(),
-        }
-    }
-
-    pub(crate) fn pair(
-        group_field: impl Into<String>,
-        group_value: impl Into<String>,
-        hue_field: impl Into<String>,
-        hue_value: impl Into<String>,
-    ) -> Self {
-        Self::Pair {
-            group_field: group_field.into(),
-            group_value: group_value.into(),
-            hue_field: hue_field.into(),
-            hue_value: hue_value.into(),
-        }
-    }
-
-    pub(crate) fn literal(title: impl Into<String>, value: impl Into<String>) -> Self {
-        Self::Literal {
-            title: title.into(),
-            value: value.into(),
-        }
-    }
-
-    pub(crate) const fn bar_sign(decreasing: bool) -> Self {
-        Self::BarSign { decreasing }
-    }
-
-    fn same_title(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Single { field: left, .. }, Self::Single { field: right, .. })
-            | (Self::Literal { title: left, .. }, Self::Literal { title: right, .. }) => {
-                legend_text_eq(left, right)
-            }
-            (Self::BarSign { .. }, Self::BarSign { .. }) => true,
-            (
-                Self::Pair {
-                    group_field: left_group,
-                    hue_field: left_hue,
-                    ..
-                },
-                Self::Pair {
-                    group_field: right_group,
-                    hue_field: right_hue,
-                    ..
-                },
-            ) => legend_text_eq(left_group, right_group) && legend_text_eq(left_hue, right_hue),
-            _ => false,
-        }
-    }
-
-    pub(crate) fn same_identity(&self, other: &Self) -> bool {
-        if !self.same_title(other) {
-            return false;
-        }
-        match (self, other) {
-            (Self::Single { value: left, .. }, Self::Single { value: right, .. })
-            | (Self::Literal { value: left, .. }, Self::Literal { value: right, .. }) => {
-                legend_text_eq(left, right)
-            }
-            (Self::BarSign { decreasing: left }, Self::BarSign { decreasing: right }) => {
-                left == right
-            }
-            (
-                Self::Pair {
-                    group_value: left_group,
-                    hue_value: left_hue,
-                    ..
-                },
-                Self::Pair {
-                    group_value: right_group,
-                    hue_value: right_hue,
-                    ..
-                },
-            ) => legend_text_eq(left_group, right_group) && legend_text_eq(left_hue, right_hue),
-            _ => false,
-        }
-    }
-
-    pub(crate) fn resolved_text(&self, plot: &crate::Plot) -> Result<(String, String), Error> {
-        let join = |mut first: String, separator: &str, second: String| -> Result<String, Error> {
-            let additional = separator
-                .len()
-                .checked_add(second.len())
-                .ok_or_else(|| Error::Render("legend label length overflow".into()))?;
-            crate::data::source::reserve_source_string(&mut first, additional)?;
-            first.push_str(separator);
-            first.push_str(&second);
-            Ok(first)
-        };
-        match self {
-            Self::Single { field, value } => {
-                Ok((plot.resolve_label(field)?, plot.resolve_label(value)?))
-            }
-            Self::Pair {
-                group_field,
-                group_value,
-                hue_field,
-                hue_value,
-            } => Ok((
-                join(
-                    plot.resolve_label(group_field)?,
-                    " × ",
-                    plot.resolve_label(hue_field)?,
-                )?,
-                join(
-                    plot.resolve_label(group_value)?,
-                    ", ",
-                    plot.resolve_label(hue_value)?,
-                )?,
-            )),
-            Self::Literal { title, value } => Ok((
-                crate::data::source::copy_source_string(title)?,
-                crate::data::source::copy_source_string(value)?,
-            )),
-            Self::BarSign { decreasing } => Ok((
-                crate::data::source::copy_source_string("Change")?,
-                crate::data::source::copy_source_string(if *decreasing {
-                    "Decreasing"
-                } else {
-                    "Nondecreasing"
-                })?,
-            )),
-        }
-    }
-
-    pub(crate) fn hue_value_for(&self, field: &str) -> Option<&str> {
-        match self {
-            Self::Single {
-                field: entry_field,
-                value,
-            } if entry_field == field => Some(value),
-            Self::Pair {
-                hue_field,
-                hue_value,
-                ..
-            } if hue_field == field => Some(hue_value),
-            _ => None,
-        }
-    }
-}
-
 /// Exact visible components of one legend glyph.
 #[derive(Debug, Clone, Default)]
 struct LegendGlyph {
@@ -413,11 +245,10 @@ impl LegendGlyph {
 /// One private renderer-owned legend identity and its exact visible glyph.
 #[derive(Debug, Clone)]
 pub(crate) struct LegendEntry {
-    identity: LegendIdentity,
+    identity: GuideEntryIdentity,
     title: String,
     label: String,
     glyph: LegendGlyph,
-    contributes_hue_level: bool,
 }
 
 impl LegendEntry {
@@ -426,20 +257,19 @@ impl LegendEntry {
     }
 
     pub(crate) fn same_child_input(&self, other: &Self) -> bool {
-        self.exact_eq(other) && self.contributes_hue_level == other.contributes_hue_level
+        self.exact_eq(other)
     }
 
-    fn new(identity: LegendIdentity, glyph: LegendGlyph) -> Self {
+    fn new(identity: GuideEntryIdentity, glyph: LegendGlyph) -> Self {
         Self {
             identity,
             title: String::new(),
             label: String::new(),
             glyph,
-            contributes_hue_level: true,
         }
     }
 
-    pub(crate) fn point(identity: LegendIdentity, point: PointStyle) -> Self {
+    pub(crate) fn point(identity: GuideEntryIdentity, point: PointStyle) -> Self {
         Self::new(
             identity,
             LegendGlyph {
@@ -449,7 +279,7 @@ impl LegendEntry {
         )
     }
 
-    pub(crate) fn line(identity: LegendIdentity, line: LineStyle) -> Self {
+    pub(crate) fn line(identity: GuideEntryIdentity, line: LineStyle) -> Self {
         Self::new(
             identity,
             LegendGlyph {
@@ -459,7 +289,7 @@ impl LegendEntry {
         )
     }
 
-    pub(crate) fn fill(identity: LegendIdentity, fill: FillStyle) -> Self {
+    pub(crate) fn fill(identity: GuideEntryIdentity, fill: FillStyle) -> Self {
         Self::new(
             identity,
             LegendGlyph {
@@ -469,7 +299,11 @@ impl LegendEntry {
         )
     }
 
-    pub(crate) fn point_line(identity: LegendIdentity, point: PointStyle, line: LineStyle) -> Self {
+    pub(crate) fn point_line(
+        identity: GuideEntryIdentity,
+        point: PointStyle,
+        line: LineStyle,
+    ) -> Self {
         Self::new(
             identity,
             LegendGlyph {
@@ -480,7 +314,11 @@ impl LegendEntry {
         )
     }
 
-    pub(crate) fn point_fill(identity: LegendIdentity, point: PointStyle, fill: FillStyle) -> Self {
+    pub(crate) fn point_fill(
+        identity: GuideEntryIdentity,
+        point: PointStyle,
+        fill: FillStyle,
+    ) -> Self {
         Self::new(
             identity,
             LegendGlyph {
@@ -491,7 +329,11 @@ impl LegendEntry {
         )
     }
 
-    pub(crate) fn line_fill(identity: LegendIdentity, line: LineStyle, fill: FillStyle) -> Self {
+    pub(crate) fn line_fill(
+        identity: GuideEntryIdentity,
+        line: LineStyle,
+        fill: FillStyle,
+    ) -> Self {
         Self::new(
             identity,
             LegendGlyph {
@@ -503,7 +345,7 @@ impl LegendEntry {
     }
 
     pub(crate) fn point_line_fill(
-        identity: LegendIdentity,
+        identity: GuideEntryIdentity,
         point: PointStyle,
         line: LineStyle,
         fill: FillStyle,
@@ -518,19 +360,12 @@ impl LegendEntry {
         )
     }
 
-    pub(crate) fn identity(&self) -> &LegendIdentity {
+    pub(crate) fn identity(&self) -> &GuideEntryIdentity {
         &self.identity
     }
 
-    pub(crate) fn without_hue_level(mut self) -> Self {
-        self.contributes_hue_level = false;
-        self
-    }
-
     pub(crate) fn coordinated_hue_value_for(&self, field: &str) -> Option<&str> {
-        self.contributes_hue_level
-            .then(|| self.identity.hue_value_for(field))
-            .flatten()
+        self.identity.hue_value_for(field)
     }
 
     fn exact_eq(&self, other: &Self) -> bool {
@@ -597,51 +432,89 @@ pub(crate) fn resolve_entries(
     Ok(())
 }
 
-pub(crate) fn merge_exact_entries(
-    entries: impl IntoIterator<Item = LegendEntry>,
-    context: &str,
-) -> Result<Vec<LegendEntry>, Error> {
-    let mut merged: Vec<LegendEntry> = Vec::new();
-    for entry in entries {
-        if let Some(first) = merged.first() {
-            if !first.identity.same_title(&entry.identity)
-                || !legend_text_eq(&first.title, &entry.title)
-            {
-                return Err(Error::Render(format!(
-                    "{context} requires compatible semantic titles, labels, and styles; glyphs must match exactly"
-                )));
-            }
-        }
-        let mut duplicate = None;
-        for existing in &merged {
-            if !existing.identity.same_identity(&entry.identity) {
-                if legend_text_eq(&existing.label, &entry.label) {
-                    return Err(Error::Render(format!(
-                        "{context} has distinct raw identities resolving to display label {:?}",
-                        entry.label
-                    )));
-                }
-            } else if duplicate.is_none() {
-                duplicate = Some(existing);
-            }
-        }
-        if let Some(existing) = duplicate {
-            if !legend_text_eq(&existing.title, &entry.title)
-                || !legend_text_eq(&existing.label, &entry.label)
-                || !existing.glyph.exact_eq(&entry.glyph)
-            {
-                return Err(Error::Render(format!(
-                    "{context} requires compatible semantic titles, labels, and styles; glyphs must match exactly"
-                )));
+pub(crate) fn merge_exact_entries<I>(entries: I, context: &str) -> Result<Vec<LegendEntry>, Error>
+where
+    I: IntoIterator<Item = LegendEntry>,
+    I::IntoIter: ExactSizeIterator,
+{
+    let entries = crate::data::source::collect_source(entries.into_iter().map(Ok))?;
+    let mut primary: Option<(identity::PrimaryTitleIdentity, String)> = None;
+    for entry in &entries {
+        let Some(identity) = entry.identity.primary_title() else {
+            continue;
+        };
+        if let Some((expected, title)) = &primary {
+            if expected != &identity || !legend_text_eq(title, &entry.title) {
+                return Err(Error::Render(format!("{context} requires compatible semantic titles, labels, and styles; glyphs must match exactly")));
             }
         } else {
-            merged
-                .try_reserve(1)
-                .map_err(|error| Error::Render(format!("merged legend reservation: {error}")))?;
-            merged.push(entry);
+            primary = Some((
+                identity,
+                crate::data::source::copy_source_string(&entry.title)?,
+            ));
         }
     }
+    let title = primary.map_or_else(
+        || crate::data::source::copy_source_string("series"),
+        |(_, title)| Ok(title),
+    )?;
+    let mut merged: Vec<LegendEntry> = Vec::new();
+    let mut layers = Vec::new();
+    crate::data::source::reserve_source(
+        &mut layers,
+        entries
+            .iter()
+            .filter(|entry| entry.identity.primary_title().is_none())
+            .count(),
+    )?;
+    for mut entry in entries {
+        if entry.identity.primary_title().is_none() {
+            entry.title = crate::data::source::copy_source_string(&title)?;
+            layers.push(entry);
+        } else {
+            merge_entry(&mut merged, entry, context)?;
+        }
+    }
+    for layer in layers {
+        merge_entry(&mut merged, layer, context)?;
+    }
     Ok(merged)
+}
+
+fn merge_entry(
+    merged: &mut Vec<LegendEntry>,
+    entry: LegendEntry,
+    context: &str,
+) -> Result<(), Error> {
+    let mut duplicate = None;
+    for existing in &*merged {
+        if !existing.identity.same_identity(&entry.identity) {
+            if legend_text_eq(&existing.label, &entry.label) {
+                return Err(Error::Render(format!(
+                    "{context} has distinct raw identities resolving to display label {:?}",
+                    entry.label
+                )));
+            }
+        } else if duplicate.is_none() {
+            duplicate = Some(existing);
+        }
+    }
+    if let Some(existing) = duplicate {
+        if !legend_text_eq(&existing.title, &entry.title)
+            || !legend_text_eq(&existing.label, &entry.label)
+            || !existing.glyph.exact_eq(&entry.glyph)
+        {
+            return Err(Error::Render(format!(
+                "{context} requires compatible semantic titles, labels, and styles; glyphs must match exactly"
+            )));
+        }
+    } else {
+        merged
+            .try_reserve(1)
+            .map_err(|error| Error::Render(format!("merged legend reservation: {error}")))?;
+        merged.push(entry);
+    }
+    Ok(())
 }
 
 pub(crate) fn resolved_title(entries: &[LegendEntry]) -> Result<String, Error> {

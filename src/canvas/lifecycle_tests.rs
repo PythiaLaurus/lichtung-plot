@@ -1,6 +1,67 @@
 use super::*;
 
 #[test]
+fn combined_layer_only_contributors_follow_the_primary_domain_in_both_source_orders() {
+    let layers = Plot::line(
+        crate::NumericValues::new("x", [0.0, 1.0]),
+        crate::NumericValues::new("y", [0.0, 1.0]),
+    )
+    .markers(false)
+    .point_layer(
+        crate::PointLayer::new(
+            crate::NumericValues::new("selected x", [0.5]),
+            crate::NumericValues::new("selected y", [0.5]),
+        )
+        .with_color(crate::Color::rgba(80, 40, 120, 180))
+        .legend_label("chosen raw"),
+    );
+    let primary = Plot::scatter(
+        crate::NumericValues::new("x", [0.0, 1.0]),
+        crate::NumericValues::new("y", [1.0, 0.0]),
+    )
+    .hue(crate::CategoryValues::new("treatment", ["control", "treated"]).unwrap());
+    for layer_first in [true, false] {
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .size(1000, 500)
+            .legend_policy(CanvasLegendPolicy::Shared);
+        let canvas = if layer_first {
+            canvas
+                .panel(0, 0, layers.clone())
+                .unwrap()
+                .panel(0, 1, primary.clone())
+                .unwrap()
+        } else {
+            canvas
+                .panel(0, 0, primary.clone())
+                .unwrap()
+                .panel(0, 1, layers.clone())
+                .unwrap()
+        };
+        let root = canvas.preflight_plan().unwrap();
+        let texts = root.plan().retained_text();
+        for source in ["Treatment", "Control", "Treated", "chosen raw"] {
+            assert_eq!(
+                texts
+                    .iter()
+                    .filter(|(_, text)| text.source == source)
+                    .count(),
+                1
+            );
+        }
+        assert!(!texts.iter().any(|(_, text)| text.source == "series"));
+        let position = |source| {
+            texts
+                .iter()
+                .position(|(_, text)| text.source == source)
+                .unwrap()
+        };
+        assert!(position("Treatment") < position("Control"));
+        assert!(position("Treated") < position("chosen raw"));
+    }
+}
+
+#[test]
 fn shared_numeric_guides_resolve_final_sets_and_reject_equal_text_policy_conflicts_before_fonts() {
     use crate::numeric::{
         decimal::{NegativeZero, NumericNotation, TrailingZeros},

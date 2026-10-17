@@ -130,7 +130,7 @@ impl DumbbellData {
             (endpoints.right_label(), endpoints.right_color()),
         ] {
             entries.push(LegendEntry::point(
-                chart.point_legend_identity(label)?,
+                crate::decorations::legend::GuideEntryIdentity::endpoint(label)?,
                 endpoint_style(chart, theme, color),
             ));
         }

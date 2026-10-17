@@ -162,10 +162,9 @@ fn supplemental_defaults_and_explicit_alpha_keep_label_paint_independent_and_gui
     );
     assert_eq!(measured.legend_entries.len(), 2);
     let mut expected = vec![LegendEntry::point(
-        chart.point_legend_identity("Alpha").unwrap(),
+        crate::decorations::legend::GuideEntryIdentity::supplemental("Alpha").unwrap(),
         alpha_style.clone(),
-    )
-    .without_hue_level()];
+    )];
     crate::decorations::legend::resolve_entries(&chart, &mut expected).unwrap();
     assert!(measured.legend_entries[1].same_child_input(&expected[0]));
 }

@@ -109,7 +109,7 @@ impl PreparedRegression {
         let mut entries = Vec::new();
         crate::data::source::reserve_source(&mut entries, 2)?;
         let band = chart.regression_band_spec();
-        let fit_identity = chart.point_legend_identity(band.legend_label())?;
+        let fit_identity = crate::decorations::legend::GuideEntryIdentity::RegressionFit { band };
         let line = theme
             .marks
             .strokes()
@@ -131,7 +131,7 @@ impl PreparedRegression {
             LegendEntry::line(fit_identity, line)
         };
         entries.push(LegendEntry::point(
-            chart.point_legend_identity("Observations")?,
+            crate::decorations::legend::GuideEntryIdentity::RegressionObservation,
             chart.point_style(theme, color, theme.marks.points().radii().regression()),
         ));
         entries.push(fit_entry);

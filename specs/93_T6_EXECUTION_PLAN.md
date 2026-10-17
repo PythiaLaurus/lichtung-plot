@@ -51,6 +51,10 @@ Typed all-family/all-root, independent scoped sets, complete-policy Shared refus
 and frozen-output closure are complete in `../docs/scientific-numeric-closure.md`.
 The post-numeric discrete producer/descriptor/font/key source handoff is complete
 at `3de25e0` in `../docs/discrete-guide-source-handoff.md`.
+Typed raw/category/literal/layer identities and contributor-order-independent
+Combined title authority are complete in `../docs/typed-guide-identities.md`.
+That evidence tracks a width-only Shared feedback cycle for the parent dependency
+audit; the section descriptor and flat-result retirement remain the next leaf.
 The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
@@ -864,7 +868,9 @@ ink/collision bounds. No draw-time factorization or layout reconstruction.
 | --- | --- | --- | --- |
 | T6L0d | COMPLETE | T6A | Complete producer/mapping/title/layer and measured-section design in `08_DISCRETE_GUIDES.md`; `docs(legend): pin discrete guide producer and section contracts` |
 | T6L0 | COMPLETE | T6N, T6L0d | Current producer/descriptor/font/key source handoff at `3de25e0`; evidence in `docs/discrete-guide-source-handoff.md` |
-| T6L1 | PENDING | T6L0 | Typed section descriptor, Combined consumer migration and layer identity; `refactor(legend): retain typed discrete sections` |
+| T6L1 | IN PROGRESS | T6L0 | Typed section descriptor, Combined consumer migration and layer identity; independently committed leaves below |
+| T6L1a | COMPLETE | T6L0 | Typed raw category/literal/layer identities and Combined title authority; evidence in `docs/typed-guide-identities.md` |
+| T6L1b | PENDING | T6L1a | Section descriptor, Combined consumer transport and flat-result retirement; `refactor(legend): retain typed discrete sections` |
 | T6L2 | PENDING | T6L1 | Producer-owned factorized keys and pre-font validation; `feat(legend): prepare factorized channel sections` |
 | T6L3 | PENDING | T6L2 | One bounded section flow/frame/collision plan; `feat(legend): measure bounded section flow` |
 | T6L4 | PENDING | T6L3 | Facet/Canvas authority, exact merging, fonts, cache and feedback; `feat(composition): coordinate sectioned guides` |

@@ -328,10 +328,10 @@ impl PreparedLine {
                     accent.color(self.primary_accent_slots + index)?,
                     theme.marks.points().supplemental(),
                 );
-                entries.push(
-                    LegendEntry::point(chart.point_legend_identity(label)?, style)
-                        .without_hue_level(),
-                );
+                entries.push(LegendEntry::point(
+                    crate::decorations::legend::GuideEntryIdentity::supplemental(label)?,
+                    style,
+                ));
             }
         }
         Ok(entries)

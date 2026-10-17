@@ -892,22 +892,10 @@ impl<K: crate::kind::Marker> Plot<K> {
             .unwrap_or("series")
     }
 
-    pub(crate) fn legend_identity(
-        &self,
-        value: impl Into<String>,
-    ) -> crate::decorations::legend::LegendIdentity {
-        if self.interaction_styles.is_some() || self.hue_dimension_key().is_some() {
-            let field = self.legend_title_key();
-            crate::decorations::legend::LegendIdentity::single(field, value)
-        } else {
-            crate::decorations::legend::LegendIdentity::literal("series", value)
-        }
-    }
-
     pub(crate) fn collective_legend_identity(
         &self,
         pair: &crate::data::CollectivePair,
-    ) -> Result<crate::decorations::legend::LegendIdentity, Error> {
+    ) -> Result<crate::decorations::legend::GuideEntryIdentity, Error> {
         match (
             self.group_name(),
             pair.group.as_deref(),
@@ -922,30 +910,21 @@ impl<K: crate::kind::Marker> Plot<K> {
                         "same-field collective legend identity contains different values".into(),
                     ));
                 }
-                Ok(crate::decorations::legend::LegendIdentity::single(
-                    crate::data::source::copy_source_string(group_field)?,
-                    crate::data::source::copy_source_string(group_value)?,
-                ))
+                crate::decorations::legend::GuideEntryIdentity::category(group_field, group_value)
             }
             (Some(group_field), Some(group_value), Some(hue_field), Some(hue_value)) => {
-                Ok(crate::decorations::legend::LegendIdentity::pair(
-                    crate::data::source::copy_source_string(group_field)?,
-                    crate::data::source::copy_source_string(group_value)?,
-                    crate::data::source::copy_source_string(hue_field)?,
-                    crate::data::source::copy_source_string(hue_value)?,
-                ))
+                crate::decorations::legend::GuideEntryIdentity::pair(
+                    group_field,
+                    group_value,
+                    hue_field,
+                    hue_value,
+                )
             }
             (Some(group_field), Some(group_value), _, None) => {
-                Ok(crate::decorations::legend::LegendIdentity::single(
-                    crate::data::source::copy_source_string(group_field)?,
-                    crate::data::source::copy_source_string(group_value)?,
-                ))
+                crate::decorations::legend::GuideEntryIdentity::category(group_field, group_value)
             }
             (_, None, Some(hue_field), Some(hue_value)) => {
-                Ok(crate::decorations::legend::LegendIdentity::single(
-                    crate::data::source::copy_source_string(hue_field)?,
-                    crate::data::source::copy_source_string(hue_value)?,
-                ))
+                crate::decorations::legend::GuideEntryIdentity::category(hue_field, hue_value)
             }
             _ => Err(Error::Render(
                 "collective legend identity has no resolved group or hue value".into(),
@@ -957,21 +936,13 @@ impl<K: crate::kind::Marker> Plot<K> {
     pub(crate) fn point_legend_identity(
         &self,
         label: &str,
-    ) -> Result<crate::decorations::legend::LegendIdentity, Error> {
-        let value = crate::data::source::copy_source_string(label)?;
-        Ok(
-            if self.interaction_styles.is_some() || self.hue_dimension_key().is_some() {
-                crate::decorations::legend::LegendIdentity::single(
-                    crate::data::source::copy_source_string(self.legend_title_key())?,
-                    value,
-                )
-            } else {
-                crate::decorations::legend::LegendIdentity::literal(
-                    crate::data::source::copy_source_string("series")?,
-                    value,
-                )
-            },
-        )
+    ) -> Result<crate::decorations::legend::GuideEntryIdentity, Error> {
+        if self.interaction_styles.is_none() && self.hue_dimension_key().is_none() {
+            return Err(Error::Render(
+                "categorical guide entry has no prepared field".into(),
+            ));
+        }
+        crate::decorations::legend::GuideEntryIdentity::category(self.legend_title_key(), label)
     }
 
     pub(crate) fn hue_dimension_key(&self) -> Option<&str> {

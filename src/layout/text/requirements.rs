@@ -1003,7 +1003,9 @@ fn push_deferred_plot_requirements(
         }
         if let Some(label) = layer.legend_label_text() {
             if plot.legend_policy_spec() != crate::LegendPolicy::Hidden {
-                let (_, label) = plot.legend_identity(label).resolved_text(plot)?;
+                let (_, label) =
+                    crate::decorations::legend::GuideEntryIdentity::supplemental(label)?
+                        .resolved_text(plot)?;
                 push_deferred_body(
                     requirements,
                     &body_address,

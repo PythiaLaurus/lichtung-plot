@@ -8,7 +8,7 @@ use crate::data::{
 };
 use crate::Error;
 
-use crate::decorations::legend::{LegendEntry, LegendIdentity};
+use crate::decorations::legend::{GuideEntryIdentity, LegendEntry};
 use crate::render::backend::{FillStyle, PointStyle};
 use crate::spec::{
     BarInput, BarSource, BarSpacing, ConfidenceIntervalAlgorithm, ErrorBarKind, PercentileInterval,
@@ -1401,18 +1401,15 @@ pub(crate) fn legend_entries(
         crate::data::source::reserve_source(&mut entries, 2)?;
         for decreasing in [false, true] {
             if present[usize::from(decreasing)] {
-                entries.push(
-                    LegendEntry::fill(
-                        LegendIdentity::bar_sign(decreasing),
-                        theme
-                            .marks
-                            .fills()
-                            .bodies()
-                            .bar_body()
-                            .backend_style(accents.color(usize::from(decreasing))?),
-                    )
-                    .without_hue_level(),
-                );
+                entries.push(LegendEntry::fill(
+                    GuideEntryIdentity::bar_sign(decreasing),
+                    theme
+                        .marks
+                        .fills()
+                        .bodies()
+                        .bar_body()
+                        .backend_style(accents.color(usize::from(decreasing))?),
+                ));
             }
         }
         return Ok(entries);

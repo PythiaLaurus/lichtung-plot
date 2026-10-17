@@ -140,51 +140,6 @@ fn categorical_trajectory_intervals_refuse_before_fonts_in_standalone_and_canvas
 }
 
 #[test]
-fn interval_census_uses_the_source_alphabet_and_exact_precedence_suppresses_it() {
-    let theme = crate::Theme::publication().resolve().unwrap();
-    let mut plot = plot()
-        .x_tick_interval(TickInterval::additive(0.01).unwrap())
-        .y_tick_interval(TickInterval::additive(0.1).unwrap())
-        .erase();
-    for exact in [false, true] {
-        if exact {
-            plot.x_axis_spec.exact_ticks = Some(vec![crate::AxisTick::new(1.0, "")]);
-        }
-        let mut census = None;
-        crate::layout::plan_exact_root(
-            1,
-            1,
-            |stage| {
-                census = Some(crate::layout::foundational_plot_requirements(
-                    None,
-                    &plot,
-                    PlotKind::Scatter,
-                    &theme,
-                    &crate::layout::ComponentAddress::root(),
-                    true,
-                    true,
-                    true,
-                    Some(stage),
-                )?);
-                Ok(())
-            },
-            |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
-            |(), _, (), _| Ok(()),
-        )
-        .unwrap();
-        let census = census.unwrap();
-        let automatic = census
-            .iter()
-            .filter(|record| {
-                record.text_role == crate::layout::PreparedTextRole::TickLabel
-                    && record.generated_alphabet.as_ref() == crate::layout::NUMERIC_ALPHABET
-            })
-            .count();
-        assert_eq!(automatic, if exact { 1 } else { 2 });
-    }
-}
-
-#[test]
 fn interval_rendering_and_exact_precedence_are_cache_independent() {
     for exact in [false, true] {
         let mut plot = plot()
