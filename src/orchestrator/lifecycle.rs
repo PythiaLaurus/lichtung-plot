@@ -685,6 +685,14 @@ mod natural_sizing_tests {
                 .retained_text()
                 .iter()
                 .any(|(_, text)| text.source == source.caption_text().unwrap()));
+            for source in ["base 10.000", "total 16.000", "total 610.000"] {
+                assert!(plan
+                    .root
+                    .plan()
+                    .retained_text()
+                    .iter()
+                    .any(|(_, text)| text.source == source));
+            }
         }
     }
 

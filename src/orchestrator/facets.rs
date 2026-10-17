@@ -63,10 +63,6 @@ pub(crate) struct FacetTextCensusPanel<'a> {
 }
 
 impl FacetTextCensusPanel<'_> {
-    pub(crate) fn plot(&self) -> &Plot {
-        self.plot
-    }
-
     pub(crate) fn data(&self) -> crate::data::PlotData<'_> {
         crate::data::PlotData::with_rows(self.plot, &self.panel.rows, &self.panel.source_rows)
     }

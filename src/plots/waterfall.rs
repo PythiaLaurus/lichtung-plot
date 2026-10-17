@@ -398,15 +398,18 @@ pub(crate) fn prepare(
         });
     let mut totals = [(base, String::new()), (running, String::new())];
     for ((value, text), label) in totals.iter_mut().zip([base_label, terminal_label]) {
-        use std::fmt::Write;
+        let number = crate::numeric::profiles::BuiltinProfile::WaterfallTotal.format(*value)?;
         crate::data::source::reserve_source_string(
             text,
             label
                 .len()
-                .checked_add(316)
+                .checked_add(1)
+                .and_then(|length| length.checked_add(number.len()))
                 .ok_or_else(|| Error::Data("waterfall: label size overflow".into()))?,
         )?;
-        write!(text, "{label} {value:.3}").expect("admitted total label");
+        text.push_str(label);
+        text.push(' ');
+        text.push_str(&number);
     }
     Ok(PreparedWaterfall {
         labels,
@@ -860,31 +863,6 @@ impl WaterfallPayload {
         }
         Ok(())
     }
-}
-
-pub(crate) fn text_census_annotations(
-    chart: &Plot,
-    filter_to_range: bool,
-    mut visit: impl FnMut(crate::font::canonical::CensusSource<'_>) -> Result<(), Error>,
-) -> Result<(), Error> {
-    let inputs = chart
-        .prepared_waterfall
-        .as_ref()
-        .ok_or_else(|| Error::Render("waterfall census requires retained semantics".into()))?;
-    for (scope, marks) in &inputs.panels {
-        if chart.axis_scope().is_some() && scope.as_deref() != chart.axis_scope() {
-            continue;
-        }
-        // Automatic domains contain all totals; only explicit limits can hide one.
-        let range = chart.x_axis_spec().limits;
-        for (value, label) in &marks.totals {
-            if !filter_to_range || range.is_none_or(|range| *value >= range.0 && *value <= range.1)
-            {
-                visit(label.as_str().into())?;
-            }
-        }
-    }
-    Ok(())
 }
 
 struct Annotation {

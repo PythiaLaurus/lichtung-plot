@@ -520,116 +520,28 @@ pub(crate) fn format_label(
     integral: bool,
     precision: usize,
 ) -> Result<String, Error> {
-    let (buffer, text_len, suffix) = format_label_parts(value, log, integral, precision)?;
-    let text = std::str::from_utf8(&buffer[..text_len]).expect("ASCII numeric formatter");
-    let length = text
-        .len()
-        .checked_add(suffix.len())
-        .ok_or_else(|| Error::Render("numeric label bytes overflow".into()))?;
-
-    let mut label = String::new();
-    label
-        .try_reserve_exact(length)
-        .map_err(|error| Error::Render(error.to_string()))?;
-    label.push_str(text);
-    label.push_str(suffix);
-    Ok(label)
-}
-
-/// Prepare a guide label before fonts, admitting actual bytes before the only
-/// heap allocation. Both axis and guide roles use the same numeric grammar.
-pub(crate) fn format_guide_label(value: f64, precision: usize) -> Result<String, Error> {
-    let (buffer, text_len, suffix) = format_label_parts(value, false, false, precision)?;
-    let text = std::str::from_utf8(&buffer[..text_len]).expect("ASCII numeric formatter");
-    let length = text_len
-        .checked_add(suffix.len())
-        .ok_or_else(|| Error::Render("guide label bytes overflow".into()))?;
-
-    let mut label = String::new();
-    label
-        .try_reserve_exact(length)
-        .map_err(|error| Error::Render(format!("guide label reservation: {error}")))?;
-    label.push_str(text);
-    label.push_str(suffix);
-    Ok(label)
-}
-
-fn format_label_parts(
-    value: f64,
-    log: bool,
-    integral: bool,
-    precision: usize,
-) -> Result<([u8; 64], usize, &'static str), Error> {
-    use std::io::Write;
-    let mut buffer = [0_u8; 64];
-    let mut cursor = std::io::Cursor::new(buffer.as_mut_slice());
-    let value = if value == 0.0 { 0.0 } else { value };
-    let mut fixed = false;
-    let mut suffix = "";
-    let write = (|| -> std::io::Result<()> {
-        if integral {
-            let exponent = value as i32;
-            let literal = match exponent {
-                -2 => Some("0.01"),
-                -1 => Some("0.1"),
-                0 => Some("1"),
-                1 => Some("10"),
-                2 => Some("100"),
-                3 => Some("1000"),
-                4 => Some("10k"),
-                5 => Some("100k"),
-                6 => Some("1M"),
-                7 => Some("10M"),
-                8 => Some("100M"),
-                9 => Some("1000M"),
-                10 => Some("10000M"),
-                11 => Some("100000M"),
-                _ => None,
-            };
-            return if let Some(literal) = literal {
-                cursor.write_all(literal.as_bytes())
-            } else {
-                write!(cursor, "1.00e{exponent}")
-            };
-        }
-        if log {
-            cursor.write_all(b"10^")?;
-        }
-        let absolute = value.abs();
-        if precision > 0 {
-            write!(cursor, "{value:.precision$e}")
-        } else if absolute >= 1e12 || (absolute > 0.0 && absolute < 0.01) {
-            write!(cursor, "{value:.2e}")
-        } else {
-            fixed = true;
-            if absolute >= 1_000_000.0 {
-                suffix = "M";
-                write!(cursor, "{:.1}", value / 1_000_000.0)
-            } else if absolute >= 10_000.0 {
-                suffix = "k";
-                write!(cursor, "{:.1}", value / 1000.0)
-            } else if absolute >= 100.0 {
-                fixed = false;
-                write!(cursor, "{value:.0}")
-            } else if absolute >= 1.0 {
-                write!(cursor, "{value:.1}")
-            } else {
-                write!(cursor, "{value:.2}")
-            }
-        }
-    })();
-    write.map_err(|error| Error::Render(format!("bounded numeric formatter: {error}")))?;
-    let length = cursor.position() as usize;
-    let trimmed = if fixed {
-        std::str::from_utf8(&buffer[..length])
-            .expect("ASCII numeric formatter")
-            .trim_end_matches('0')
-            .trim_end_matches('.')
-            .len()
+    use crate::numeric::profiles::BuiltinProfile;
+    let precision = if precision == 0 {
+        None
     } else {
-        length
+        Some(
+            u8::try_from(precision)
+                .map_err(|_| Error::Data("numeric source precision is not representable".into()))?,
+        )
     };
-    Ok((buffer, trimmed, suffix))
+    let profile = if integral {
+        BuiltinProfile::ForestIntegral
+    } else if log {
+        BuiltinProfile::ForestExpression(precision)
+    } else {
+        BuiltinProfile::Automatic(precision)
+    };
+    profile.format(value)
+}
+
+/// Prepare a guide source before fonts through the common automatic profile.
+pub(crate) fn format_guide_label(value: f64, precision: usize) -> Result<String, Error> {
+    format_label(value, false, false, precision)
 }
 
 pub(super) fn labels_fit(

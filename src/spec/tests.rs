@@ -10,24 +10,12 @@ fn counted_numeric_census_formatting_preserves_precision_suffix_and_extreme_valu
             .unwrap();
         for value in [0.0, -0.0, 1.2345, f64::MAX, f64::MIN, f64::from_bits(1)] {
             let expected = format!("{value:.precision$}{suffix}");
-            let actual = crate::font::canonical::format_census_source(
-                format_args!("{}", format.display(value)),
-                None,
-            )
-            .unwrap();
+            let formatted = format.format_source(value).unwrap();
+            let actual =
+                crate::font::canonical::format_census_source(format_args!("{formatted}"), None)
+                    .unwrap();
             assert_eq!(actual, expected);
-            assert_eq!(format.format(value), expected);
-            let exact = crate::numeric::decimal::ResolvedFormat {
-                precision: crate::numeric::decimal::ResolvedPrecision::Fractional(
-                    u8::try_from(precision).unwrap(),
-                ),
-                suffix: Some(suffix),
-                ..crate::numeric::decimal::ResolvedFormat::default()
-            };
-            assert_eq!(
-                crate::numeric::decimal::format_finite(value, &exact).unwrap(),
-                expected
-            );
+            assert_eq!(formatted, expected);
         }
     }
 }

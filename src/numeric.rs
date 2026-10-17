@@ -25,6 +25,13 @@ use num_bigint::BigUint;
 )]
 pub(crate) mod decimal;
 
+#[allow(
+    dead_code,
+    reason = "complete private policy precedes its consumer/public attachments"
+)]
+pub(crate) mod format;
+pub(crate) mod profiles;
+
 #[cfg_attr(
     not(test),
     allow(

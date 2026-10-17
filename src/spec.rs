@@ -216,10 +216,9 @@ pub enum HeatmapLabelFit {
 /// use lichtung_plot::NumericLabelFormat;
 /// let _ = NumericLabelFormat::with_suffix(2, "%");
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct NumericLabelFormat {
-    precision: usize,
-    suffix: Option<String>,
+    format: crate::numeric::format::NumericFormat,
 }
 
 impl NumericLabelFormat {
@@ -235,7 +234,11 @@ impl NumericLabelFormat {
                 "numeric label precision {precision} exceeds the supported maximum of 12"
             )));
         }
-        self.precision = precision;
+        self.format =
+            self.format
+                .with_precision(crate::numeric::format::NumericPrecision::Fractional(
+                    u8::try_from(precision).expect("validated fixed precision"),
+                ))?;
         Ok(self)
     }
 
@@ -249,71 +252,19 @@ impl NumericLabelFormat {
                 "numeric label suffix must be non-empty and contain no control characters".into(),
             ));
         }
-        self.suffix = Some(suffix);
+        self.format = self.format.with_suffix(suffix)?;
         Ok(self)
     }
 
     pub(crate) const fn configured_precision(&self) -> usize {
-        self.precision
-    }
-
-    #[cfg(test)]
-    pub(crate) fn format(&self, value: f64) -> String {
-        self.display(value).to_string()
+        match self.format.precision() {
+            crate::numeric::format::NumericPrecision::Fractional(digits) => digits as usize,
+            _ => unreachable!(),
+        }
     }
 
     pub(crate) fn format_source(&self, value: f64) -> Result<String, crate::Error> {
-        use std::fmt::Write;
-        struct Count(usize);
-        impl Write for Count {
-            fn write_str(&mut self, value: &str) -> std::fmt::Result {
-                self.0 = self.0.checked_add(value.len()).ok_or(std::fmt::Error)?;
-                Ok(())
-            }
-        }
-        // A finite f64 needs at most 309 integral digits and 12 fractional digits.
-
-        let mut count = Count(0);
-        write!(count, "{}", self.display(value))
-            .map_err(|error| crate::Error::Render(format!("estimate label count: {error}")))?;
-        let mut text = String::new();
-        crate::data::source::reserve_source_string(&mut text, count.0)?;
-        write!(text, "{}", self.display(value))
-            .map_err(|error| crate::Error::Render(format!("estimate label: {error}")))?;
-        Ok(text)
-    }
-
-    pub(crate) fn display(&self, value: f64) -> impl std::fmt::Display + '_ {
-        NumericLabelDisplay {
-            format: self,
-            value,
-        }
-    }
-}
-
-struct NumericLabelDisplay<'a> {
-    format: &'a NumericLabelFormat,
-    value: f64,
-}
-
-impl std::fmt::Display for NumericLabelDisplay<'_> {
-    fn fmt(&self, output: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            output,
-            "{:.precision$}",
-            self.value,
-            precision = self.format.precision
-        )?;
-        output.write_str(self.format.suffix.as_deref().unwrap_or_default())
-    }
-}
-
-impl Default for NumericLabelFormat {
-    fn default() -> Self {
-        Self {
-            precision: 2,
-            suffix: None,
-        }
+        self.format.format_ordinary(value)
     }
 }
 

@@ -26,14 +26,15 @@ actual allocation repairs are complete in `../docs/public-sizing-closure.md`.
 This completes T6C. The numeric source refresh is complete in
 `../docs/numeric-source-handoff.md`, against `387b07a`; exact ordinary decimal
 conversion is complete in `../docs/exact-decimal-conversion.md`. The handoff
-records current conversion/copy/font/key owners,
+records baseline conversion/copy/font/key owners,
 retired accounting paths and canonical guide-list versus natural-adapter index
-drift. Numeric public implementation and integrated consumer evidence remain
-pending. Exact Forest exponent/symbolic-power implementation is complete in
+drift. Configured numeric consumers and the public replacement remain pending.
+Exact Forest exponent/symbolic-power implementation is complete in
 `../docs/exact-log10-operands.md`. Private fractional mantissa implementation and
 independent executable certification are complete in
-`../docs/certified-log10-conversion.md`; normalized policy/default consumer
-unification follows.
+`../docs/certified-log10-conversion.md`. Normalized private policy/default
+conversion and retained estimate census unification are complete in
+`../docs/unified-numeric-presentation.md`; configured consumer integration follows.
 The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
@@ -485,8 +486,10 @@ continue validating at preflight. Canvas still owns embedded child dimensions.
 
 `06_NUMERIC_PRESENTATION.md` is the detailed authoritative contract and current
 consumer migration census. `07_LOG10_DISPLAY.md` supplies the complete numerical
-design and document-level proof. The summary below remains the execution handoff;
-their implementation, executable oracle and measured admission tests are pending.
+design and document-level proof. Private ordinary/Forest implementation,
+independent executable certification and normalized policy/default conversion are
+complete in the evidence linked above. The summary below also owns the remaining
+configured consumer, font, identity and public integration handoff.
 
 ### Scope And Ownership
 
@@ -608,8 +611,9 @@ Do not claim inversion of a rounded `log10` recovers every original observation.
 
 The numerical design gate is closed by `07_LOG10_DISPLAY.md`, including exact
 recurrences, accumulated-error/convergence proofs, scratch/capacity bounds and
-independent root-oracle certificates. Implementation/certification remains a
-separate required gate before integration. Its design summary is:
+independent root-oracle certificates. The separate private implementation and
+executable certification gate is complete in
+`../docs/certified-log10-conversion.md`. Its certified design is:
 
 1. Decode the exact dyadic exponent, add decimal scale exactly, and reduce to
    `E=n+f`, `n=floor(E)`, `0<=f<1`. Retain a signed arbitrary-size integer `n`;
@@ -639,8 +643,9 @@ of ten and exact interval products, with separately verified integer-square-root
 bounds, plus exact power comparisons for small-denominator cases. Record exact
 exponent bits, precision/scale, expected decimal results and oracle provenance.
 No Python support files, network or new numeric dependency. The document-level
-proof is complete; executable independent vectors and admission tests must still
-certify the implementation. No mathematical outline is substituted for those tests.
+proof and executable independent vectors/real-storage checks are complete in the
+linked evidence. Consumer-specific integration and its executable contracts remain
+separate required leaves; the mathematical outline does not substitute for them.
 
 All selected finite exponents are covered, including original-domain midpoint
 sources beyond the integral-seed clamp. Scientific output may represent powers
@@ -692,7 +697,7 @@ compatible effective format. No first-contributor-wins or Canvas format override
 | T6N2a | COMPLETE | T6N0d | Mathematical interval/rounding/termination, resource and independent-oracle design in `07_LOG10_DISPLAY.md`; document-level proof only; `docs(numbers): prove logarithmic display rounding and resource bounds` |
 | T6N2b | COMPLETE | T6N1, T6N2a | Exact signed exponent/scale reduction, symbolic integral powers and early real output reservation; evidence in `docs/exact-log10-operands.md` |
 | T6N2c | COMPLETE | T6N2b | Outward mantissa/one-quantum certification, fallible conversion buffers and independent root/algebraic vectors; evidence in `docs/certified-log10-conversion.md` |
-| T6N3 | PENDING | T6N2c | One normalized private format/value implementation; migrate fixed values/default grammar onto it; `refactor(numbers): unify numeric presentation owners` |
+| T6N3 | COMPLETE | T6N2c | One normalized owned private policy, common fixed/default conversion and retained estimate census; evidence in `docs/unified-numeric-presentation.md` |
 | T6N4a | PENDING | T6N3 | Numeric/Forest axes, alphabets, intrinsics and natural width; `feat(axes): measure configured numeric formats` |
 | T6N4b | PENDING | T6N4a | Continuous local/shared guides and policy compatibility; `feat(guides): coordinate scientific numeric formats` |
 | T6N4c | PENDING | T6N4b | Adaptive prepared value sets and total shelves; `feat(annotations): format prepared numeric values and totals` |

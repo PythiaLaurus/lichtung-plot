@@ -96,7 +96,6 @@ pub(crate) use backend::{capture_text_replay_plan, validate_text_replay_plan, Te
 #[cfg(test)]
 pub(crate) use backend::{DeferredBackend, TEXT_PLAN_CAPTURE_SESSIONS, TEXT_REPLAY_SESSIONS};
 pub(crate) use facets::text_census_labels as facet_text_census_labels;
-pub(crate) use facets::text_census_panels as facet_text_census_panels;
 
 #[cfg(test)]
 thread_local! {

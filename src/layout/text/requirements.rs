@@ -1369,61 +1369,31 @@ fn push_deferred_plot_requirements(
                 )?;
             }
         }
-    } else if plot.has_facets()
-        && matches!(
-            kind,
-            PlotKind::Coefficient | PlotKind::Forest | PlotKind::PointInterval
-        )
-    {
-        let resources = prepared_stage.as_ref().map(|stage| stage.operation());
-        let data = resources.as_ref().map_or_else(
-            || plot.data(),
-            |resources| plot.data().with_operation(resources),
-        );
-        for panel in crate::orchestrator::facet_text_census_panels(plot, data)? {
-            specialized_text_census(
-                panel.plot(),
-                kind,
-                panel.data(),
-                filter_point_label_x_to_limits,
-                |source| {
-                    push_deferred_body(
-                        requirements,
-                        &body_address,
-                        &mut body_index,
-                        source,
-                        &[],
-                        &theme.typography.annotations.estimate_detail,
-                        prepared_stage.as_deref_mut(),
-                    )
-                },
-            )?;
-        }
-    } else {
-        specialized_text_census(
-            plot,
-            kind,
-            plot.data(),
-            filter_point_label_x_to_limits,
-            |source| {
+    } else if matches!(
+        kind,
+        PlotKind::Coefficient | PlotKind::Forest | PlotKind::PointInterval
+    ) {
+        let estimates = interiors
+            .and_then(|inputs| inputs.estimate.as_deref())
+            .ok_or_else(|| {
+                Error::Render("estimate detail census requires root-prepared semantics".into())
+            })?;
+        for (scope, marks) in &estimates.panels {
+            if plot.axis_scope().is_some() && scope.as_deref() != plot.axis_scope() {
+                continue;
+            }
+            for source in marks.detail_sources() {
                 push_deferred_body(
                     requirements,
                     &body_address,
                     &mut body_index,
                     source,
                     &[],
-                    if matches!(
-                        kind,
-                        PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest
-                    ) {
-                        &theme.typography.annotations.estimate_detail
-                    } else {
-                        &theme.typography.annotations.waterfall_total
-                    },
+                    &theme.typography.annotations.estimate_detail,
                     prepared_stage.as_deref_mut(),
-                )
-            },
-        )?;
+                )?;
+            }
+        }
     }
 
     Ok(())
@@ -1592,57 +1562,6 @@ fn legend_title_census(
         ]
     };
     Ok(sources.into_iter().flatten())
-}
-
-fn specialized_text_census(
-    plot: &Plot,
-    kind: PlotKind,
-    data: crate::data::PlotData<'_>,
-    filter_x_to_limits: bool,
-    mut visit: impl FnMut(CensusSource<'_>) -> Result<(), Error>,
-) -> Result<(), Error> {
-    use crate::data::DataColumn;
-
-    match kind {
-        PlotKind::Heatmap | PlotKind::Beeswarm => {
-            return Err(Error::Render(
-                "continuous color census requires retained traversal".into(),
-            ));
-        }
-        PlotKind::Coefficient | PlotKind::Forest | PlotKind::PointInterval => {
-            let has_unavailable = data
-                .estimate_statuses()?
-                .is_some_and(|statuses| statuses.contains(&crate::EstimateStatus::NotEstimable))
-                || data
-                    .column(crate::data::X)
-                    .ok()
-                    .and_then(|column| match column {
-                        DataColumn::Numeric(values) => Some(values),
-                        DataColumn::Category(_) | DataColumn::Boolean(_) => None,
-                    })
-                    .is_some_and(|values| {
-                        (0..data.height())
-                            .any(|row| matches!(values.get(data.row_index(row)), Some(None)))
-                    });
-            if has_unavailable {
-                visit("Not estimable".into())?;
-            }
-            if let Some(format) = plot.estimate_labels_spec() {
-                if let Ok(DataColumn::Numeric(values)) = data.column(crate::data::X) {
-                    for row in 0..data.height() {
-                        if let Some(Some(value)) = values.get(data.row_index(row)) {
-                            visit(format_args!("{}", format.display(value)).into())?;
-                        }
-                    }
-                }
-            }
-        }
-        PlotKind::Waterfall => {
-            crate::plots::waterfall::text_census_annotations(plot, filter_x_to_limits, &mut visit)?;
-        }
-        _ => {}
-    }
-    Ok(())
 }
 
 fn push_present(
@@ -2070,7 +1989,7 @@ mod tests {
                             ComponentAddress::root(),
                             PreparedTextRole::Body,
                             0,
-                            format_args!("{}", format.display(1.0)),
+                            format_args!("{}", format.format_source(1.0)?),
                             &[],
                             &appearance,
                             Some(stage),
@@ -2722,14 +2641,18 @@ mod tests {
     }
 
     #[test]
-    fn estimate_detail_census_uses_complete_role_for_required_unavailable_text() {
-        let plot = crate::Plot::point_interval(
+    fn estimate_detail_census_uses_complete_role_for_retained_values_and_unavailable_text() {
+        let plot = crate::Plot::coefficient(
             crate::CategoryValues::new("term", ["available", "unavailable"]).unwrap(),
-            crate::NumericValues::nullable("estimate", [Some(1.0), None]),
-            crate::Bounds::new(
-                crate::NumericValues::nullable("lower", [Some(0.5), None]),
-                crate::NumericValues::nullable("upper", [Some(1.5), None]),
-            ),
+            crate::CoefficientInput::estimates(crate::NumericValues::nullable(
+                "estimate",
+                [Some(1.25), None],
+            )),
+        )
+        .estimate_labels(
+            crate::NumericLabelFormat::default()
+                .suffix("\u{0301} units")
+                .unwrap(),
         )
         .estimate_status([
             crate::EstimateStatus::Estimated,
@@ -2752,7 +2675,7 @@ mod tests {
             foundational_plot_requirements(
                 Some(&inputs),
                 &plot,
-                PlotKind::PointInterval,
+                PlotKind::Coefficient,
                 &theme,
                 &ComponentAddress::root(),
                 true,
@@ -2762,18 +2685,22 @@ mod tests {
             )
         })
         .unwrap();
-        let unavailable = requirements
-            .iter()
-            .find(|requirement| requirement.source == "Not estimable")
-            .unwrap();
+        let prepared = &inputs.estimate.as_ref().unwrap().panels[0].1;
         assert_eq!(
-            unavailable.stack,
-            canonical::named_stack(&["Estimate detail only"])
+            prepared.detail_sources().collect::<Vec<_>>(),
+            ["Not estimable", "1.25\u{0301} units"]
         );
-        assert!(!requirements.iter().any(|requirement| {
-            requirement.source == "Not estimable"
-                && requirement.stack != canonical::named_stack(&["Estimate detail only"])
-        }));
+        for source in prepared.detail_sources() {
+            let selected: Vec<_> = requirements
+                .iter()
+                .filter(|requirement| requirement.source == source)
+                .collect();
+            assert_eq!(selected.len(), 1);
+            assert_eq!(
+                selected[0].stack,
+                canonical::named_stack(&["Estimate detail only"])
+            );
+        }
     }
 
     #[test]

@@ -41,8 +41,12 @@ The private ordinary conversion/emission primitive is implemented with independe
 rational evidence in [`docs/exact-decimal-conversion.md`](../docs/exact-decimal-conversion.md).
 The private Forest exponent/symbolic and fractional certification gates are now
 recorded in `docs/exact-log10-operands.md` and `docs/certified-log10-conversion.md`.
-These do not mark the public policy/consumer cutover complete; the existing public
-numeric contract is still current.
+The subsequent private policy/default migration is complete in
+[`docs/unified-numeric-presentation.md`](../docs/unified-numeric-presentation.md):
+the current public wrapper owns the normalized private policy, existing default
+and fixed-value conversions share the core, and estimate census consumes retained
+sources. Configured consumer attachments and the public replacement follow the
+execution plan; the existing public numeric contract is still current.
 
 **Accounting simplification:** spec95 supersedes every historical ledger, fee,
 comparison-charge, quota and charge-delta instruction here. Keep real checked
@@ -989,7 +993,8 @@ example, root export and repository uses; no alias/deprecation/version selector.
 Private format storage must not become dormant public scope. Unsupported surfaces
 have no binding or a pre-font actual-axis rejection, never an ignored format.
 
-The only outstanding handoff is **implementation/certification evidence**, owned
-by the separate proof and execution specifications. This document introduces no
-unresolved numeric product choice or authorization to widen scope. Documentation
-design closure does not mark an implementation leaf complete.
+Remaining consumer/public implementation and integrated evidence belong to the
+execution plan; the separate proof and executed core certificates own numerical
+certification. This document introduces no unresolved numeric product choice or
+authorization to widen scope. Documentation design closure does not mark an
+implementation leaf complete.

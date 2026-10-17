@@ -32,7 +32,9 @@ cutover is complete in `../docs/content-derived-root-sizing.md`, including remov
 of pre-render getters and the Canvas universal minimum. Public parent/output
 sizing closure is complete in `../docs/public-sizing-closure.md`, including actual
 small-root allocation repairs, every family, frozen formats and real >64 MiB
-payloads. Spec93 records the following scientific numeric source refresh.
+payloads. Scientific numeric source refresh, private exact ordinary/Forest
+certification and normalized policy/default unification are complete; spec93 and
+`../docs/unified-numeric-presentation.md` record the current integration checkpoint.
 `../docs/theme-consumer-closure.md` reconciles actual owners and identities. New unit tests must
 replace existing tests in the same logical change without increasing the
 discovered count; AGENTS.md and spec90 own this continuing repository rule.
@@ -6581,8 +6583,8 @@ Acceptance:
 ## Phase T6: Public Foundations And Scientific Presentation
 
 **Status**: IN PROGRESS — public foundations and root sizing/ticks complete;
-private ordinary decimal and Forest power certification complete; numeric
-policy/default and consumer migration remain in progress.
+private ordinary decimal/Forest certification and normalized policy/default
+unification complete; configured consumer migration remains in progress.
 
 Dependencies: T5e.
 
@@ -6596,13 +6598,16 @@ and sizing migrations. It maps actual default conversions, scoped copies,
 natural/terminal text consumers, pre-font units and retained keys; it does not
 claim numeric API implementation or executable Forest certification.
 The exact private ordinary conversion and common emitter have independent
-rational/default evidence in `../docs/exact-decimal-conversion.md`; current public
-formatters/consumers remain pending their scheduled single-representation cutover.
+rational/default evidence in `../docs/exact-decimal-conversion.md`.
 Exact Forest exponent reduction, symbolic integral powers and real output
 reservation are complete in `../docs/exact-log10-operands.md`. Private fractional
 mantissa/decimal certification with independent integer-root and algebraic
-evidence is complete in `../docs/certified-log10-conversion.md`; normalized
-policy/default and numeric consumer integration follow.
+evidence is complete in `../docs/certified-log10-conversion.md`. Normalized private
+policy/default conversion is complete in `../docs/unified-numeric-presentation.md`:
+the current public name stores the one private representation, existing fixed and
+default conversions share its engine, and estimate census reads retained prepared
+sources. Configured consumer/font/identity integration and public replacement
+follow their scheduled leaves.
 
 ENTRY gate is CLOSED by the user's explicit approval of the current-implementation
 assessment and request to plan T6:

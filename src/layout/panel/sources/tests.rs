@@ -348,11 +348,6 @@ fn source_semantics_reject_before_fonts() {
 }
 
 #[test]
-fn dense_source_returns_a_miss_without_positions() {
-    assert!(linear_positions((0.0, 10_000.0), 1.0).unwrap().is_none());
-}
-
-#[test]
 fn projection_keys_are_exact_at_endpoints_midpoints_and_subnormal_fractions() {
     assert_eq!(projection_key(0.0, (0.0, 1.0)), Some(0));
     assert_eq!(projection_key(1.0, (0.0, 1.0)), Some(u64::MAX));
@@ -534,17 +529,31 @@ fn generated_labels_are_unique_and_covered_by_the_closed_census() {
             }
         }
     }
-    assert_eq!(format_label(-323.0, true, true, 0).unwrap(), "1.00e-323");
-    assert_eq!(format_label(308.0, true, true, 0).unwrap(), "1.00e308");
+    for (exponent, expected) in [
+        (-323.0, "1.00e-323"),
+        (-2.0, "0.01"),
+        (-1.0, "0.1"),
+        (-0.0, "1"),
+        (1.0, "10"),
+        (2.0, "100"),
+        (3.0, "1000"),
+        (4.0, "10k"),
+        (5.0, "100k"),
+        (6.0, "1M"),
+        (7.0, "10M"),
+        (8.0, "100M"),
+        (9.0, "1000M"),
+        (10.0, "10000M"),
+        (11.0, "100000M"),
+        (308.0, "1.00e308"),
+    ] {
+        assert_eq!(format_label(exponent, true, true, 0).unwrap(), expected);
+    }
     assert_eq!(super::super::range_ticks::format_tick(-0.0), "0");
 }
 
 #[test]
 fn numeric_formatting_uses_nearest_even_and_declared_thresholds() {
-    use crate::numeric::decimal::{
-        format_finite, NumericNotation, ResolvedFormat, ResolvedPrecision, TrailingZeros,
-    };
-
     for (value, expected) in [
         (-0.0, "0"),
         (0.01, "0.01"),
@@ -555,11 +564,17 @@ fn numeric_formatting_uses_nearest_even_and_declared_thresholds() {
         (101.5, "102"),
         (9999.0, "9999"),
         (10_000.0, "10k"),
+        (12_350.0, "12.3k"),
+        (999_999.0, "1000k"),
         (1_000_000.0, "1M"),
+        (1_150_000.0, "1.1M"),
         (1e12, "1.00e12"),
         (-1e12, "-1.00e12"),
+        (f64::MAX, "1.80e308"),
+        (f64::from_bits(1), "4.94e-324"),
     ] {
         assert_eq!(format_label(value, false, false, 0).unwrap(), expected);
+        assert_eq!(format_guide_label(value, 0).unwrap(), expected);
     }
     assert_eq!(
         format_label(-0.0, false, false, 17).unwrap(),
@@ -567,34 +582,33 @@ fn numeric_formatting_uses_nearest_even_and_declared_thresholds() {
     );
     assert_eq!(format_label(0.5, true, false, 0).unwrap(), "10^0.5");
 
-    // Independent Rust spelling reference for the future shared conversion
-    // primitive, including the default's prescribed rounded binary64 division.
-    for threshold in [0.01_f64, 1.0, 100.0, 10000.0, 1e6, 1e12] {
-        for magnitude in [threshold.next_down(), threshold, threshold.next_up()] {
-            for value in [magnitude, -magnitude] {
+    // Literal default boundaries and independent Rust scientific spelling verify
+    // the actual axis/guide profiles, including retries through fractional 17.
+    for (threshold, labels) in [
+        (0.01_f64, ["1.00e-2", "0.01", "0.01"]),
+        (1.0, ["1", "1", "1"]),
+        (100.0, ["100", "100", "100"]),
+        (10_000.0, ["10000", "10k", "10k"]),
+        (1_000_000.0, ["1000k", "1M", "1M"]),
+        (1e12, ["1000000M", "1.00e12", "1.00e12"]),
+    ] {
+        for (magnitude, label) in [threshold.next_down(), threshold, threshold.next_up()]
+            .into_iter()
+            .zip(labels)
+        {
+            for (value, expected) in [
+                (magnitude, label.to_owned()),
+                (-magnitude, format!("-{label}")),
+            ] {
+                assert_eq!(format_label(value, false, false, 0).unwrap(), expected);
+                assert_eq!(format_guide_label(value, 0).unwrap(), expected);
                 for precision in 2..=17 {
-                    let format = ResolvedFormat {
-                        notation: NumericNotation::Scientific,
-                        precision: ResolvedPrecision::Fractional(precision),
-                        ..ResolvedFormat::default()
-                    };
+                    let expected = format!("{value:.precision$e}");
                     assert_eq!(
-                        format_finite(value, &format).unwrap(),
-                        format!("{value:.precision$e}", precision = usize::from(precision))
+                        format_label(value, false, false, precision).unwrap(),
+                        expected
                     );
-                }
-                for divisor in [1000.0, 1_000_000.0] {
-                    let divided = value / divisor;
-                    let format = ResolvedFormat {
-                        precision: ResolvedPrecision::Fractional(1),
-                        trailing_zeros: TrailingZeros::Trim,
-                        ..ResolvedFormat::default()
-                    };
-                    let expected = format!("{divided:.1}");
-                    assert_eq!(
-                        format_finite(divided, &format).unwrap(),
-                        expected.trim_end_matches('0').trim_end_matches('.')
-                    );
+                    assert_eq!(format_guide_label(value, precision).unwrap(), expected);
                 }
             }
         }

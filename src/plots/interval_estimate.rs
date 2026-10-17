@@ -26,6 +26,20 @@ pub(crate) struct PreparedEstimateInputs {
 }
 
 impl PreparedEstimate {
+    pub(crate) fn detail_sources(&self) -> impl Iterator<Item = &str> {
+        self.estimates
+            .iter()
+            .any(Option::is_none)
+            .then_some(NOT_ESTIMABLE_TEXT)
+            .into_iter()
+            .chain(self.adjacent.iter().filter_map(|label| {
+                label
+                    .as_ref()
+                    .filter(|(_, significance)| !significance)
+                    .map(|(source, _)| source.as_str())
+            }))
+    }
+
     pub(crate) fn primary_mark_count(&self) -> u128 {
         self.estimates
             .iter()
