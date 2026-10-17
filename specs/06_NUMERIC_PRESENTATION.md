@@ -37,6 +37,11 @@ cutover or executable certification. In particular, `builder/admission.rs` and
 `Plot::admitted_clone` no longer exist; derived Clone and exhaustive `erase` are
 the actual Plot transport sites.
 
+The private ordinary conversion/emission primitive is implemented with independent
+rational evidence in [`docs/exact-decimal-conversion.md`](../docs/exact-decimal-conversion.md).
+It does not mark the public policy/consumer cutover or Forest power certification
+complete; the existing public numeric contract is still current.
+
 **Accounting simplification:** spec95 supersedes every historical ledger, fee,
 comparison-charge, quota and charge-delta instruction here. Keep real checked
 lengths, fallible first-party storage, exact arithmetic/temporary bounds, full

@@ -541,6 +541,10 @@ fn generated_labels_are_unique_and_covered_by_the_closed_census() {
 
 #[test]
 fn numeric_formatting_uses_nearest_even_and_declared_thresholds() {
+    use crate::numeric::decimal::{
+        format_finite, NumericNotation, ResolvedFormat, ResolvedPrecision, TrailingZeros,
+    };
+
     for (value, expected) in [
         (-0.0, "0"),
         (0.01, "0.01"),
@@ -562,6 +566,39 @@ fn numeric_formatting_uses_nearest_even_and_declared_thresholds() {
         "0.00000000000000000e0"
     );
     assert_eq!(format_label(0.5, true, false, 0).unwrap(), "10^0.5");
+
+    // Independent Rust spelling reference for the future shared conversion
+    // primitive, including the default's prescribed rounded binary64 division.
+    for threshold in [0.01_f64, 1.0, 100.0, 10000.0, 1e6, 1e12] {
+        for magnitude in [threshold.next_down(), threshold, threshold.next_up()] {
+            for value in [magnitude, -magnitude] {
+                for precision in 2..=17 {
+                    let format = ResolvedFormat {
+                        notation: NumericNotation::Scientific,
+                        precision: ResolvedPrecision::Fractional(precision),
+                        ..ResolvedFormat::default()
+                    };
+                    assert_eq!(
+                        format_finite(value, &format).unwrap(),
+                        format!("{value:.precision$e}", precision = usize::from(precision))
+                    );
+                }
+                for divisor in [1000.0, 1_000_000.0] {
+                    let divided = value / divisor;
+                    let format = ResolvedFormat {
+                        precision: ResolvedPrecision::Fractional(1),
+                        trailing_zeros: TrailingZeros::Trim,
+                        ..ResolvedFormat::default()
+                    };
+                    let expected = format!("{divided:.1}");
+                    assert_eq!(
+                        format_finite(divided, &format).unwrap(),
+                        expected.trim_end_matches('0').trim_end_matches('.')
+                    );
+                }
+            }
+        }
+    }
 }
 
 #[test]

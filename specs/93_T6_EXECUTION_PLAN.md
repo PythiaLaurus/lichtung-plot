@@ -25,10 +25,11 @@ actual categorical-axis refusal and source/parent evidence in
 actual allocation repairs are complete in `../docs/public-sizing-closure.md`.
 This completes T6C. The numeric source refresh is complete in
 `../docs/numeric-source-handoff.md`, against `387b07a`; exact ordinary decimal
-conversion follows. The handoff records current conversion/copy/font/key owners,
+conversion is complete in `../docs/exact-decimal-conversion.md`. The handoff
+records current conversion/copy/font/key owners,
 retired accounting paths and canonical guide-list versus natural-adapter index
 drift. Numeric public implementation and Forest executable certification remain
-pending.
+pending; exact Forest exponent/symbolic-power implementation follows.
 The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
@@ -683,7 +684,7 @@ compatible effective format. No first-contributor-wins or Canvas format override
 | --- | --- | --- | --- |
 | T6N0d | COMPLETE | T6A | Complete numeric consumer/default/transport/font/key design in `06_NUMERIC_PRESENTATION.md`; `docs(numbers): pin numeric presentation consumers and defaults` |
 | T6N0 | COMPLETE | T6C, T6N0d | Current source/default/transport/font/key refresh at `387b07a` in `docs/numeric-source-handoff.md`; implementation handoff, not new product design |
-| T6N1 | PENDING | T6N0 | Exact finite-binary64 decimal conversion, scaling and admitted rounding; `feat(numbers): implement exact scientific decimal formatting` |
+| T6N1 | COMPLETE | T6N0 | Private exact finite-binary64 conversion/scaling/rounding and common decimal emission; independent rational/default evidence in `docs/exact-decimal-conversion.md` |
 | T6N2a | COMPLETE | T6N0d | Mathematical interval/rounding/termination, resource and independent-oracle design in `07_LOG10_DISPLAY.md`; document-level proof only; `docs(numbers): prove logarithmic display rounding and resource bounds` |
 | T6N2b | PENDING | T6N1, T6N2a | Exact exponent reduction, symbolic powers/output size; `feat(numbers): retain exact Log10 display operands` |
 | T6N2c | PENDING | T6N2b | Outward mantissa bounds and decimal certification with independent vectors; `feat(numbers): certify fractional Log10 labels` |

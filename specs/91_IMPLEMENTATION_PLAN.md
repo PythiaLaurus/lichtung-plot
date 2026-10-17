@@ -6581,7 +6581,8 @@ Acceptance:
 ## Phase T6: Public Foundations And Scientific Presentation
 
 **Status**: IN PROGRESS — public foundations and root sizing/ticks complete;
-numeric implementation follows the refreshed source handoff.
+private ordinary decimal conversion complete; numeric consumers and Forest
+certification remain in progress.
 
 Dependencies: T5e.
 
@@ -6594,6 +6595,9 @@ The current numeric implementation handoff is
 and sizing migrations. It maps actual default conversions, scoped copies,
 natural/terminal text consumers, pre-font units and retained keys; it does not
 claim numeric API implementation or executable Forest certification.
+The exact private ordinary conversion and common emitter have independent
+rational/default evidence in `../docs/exact-decimal-conversion.md`; current public
+formatters/consumers remain pending their scheduled single-representation cutover.
 
 ENTRY gate is CLOSED by the user's explicit approval of the current-implementation
 assessment and request to plan T6:

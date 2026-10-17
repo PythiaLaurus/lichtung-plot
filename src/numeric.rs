@@ -15,6 +15,16 @@
 use crate::Error;
 use num_bigint::BigUint;
 
+// The exact decimal primitive is prepared before its consumer/public cutovers.
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "private decimal core precedes numeric consumer migration"
+    )
+)]
+pub(crate) mod decimal;
+
 #[cfg(test)]
 thread_local! {
     static SERIES_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };

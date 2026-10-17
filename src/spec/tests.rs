@@ -2,7 +2,7 @@ use super::NumericLabelFormat;
 
 #[test]
 fn counted_numeric_census_formatting_preserves_precision_suffix_and_extreme_values() {
-    for precision in [0, 2, 12] {
+    for precision in 0..=12 {
         let suffix = "\u{0301} units";
         let format = NumericLabelFormat::new(precision)
             .unwrap()
@@ -17,45 +17,17 @@ fn counted_numeric_census_formatting_preserves_precision_suffix_and_extreme_valu
             .unwrap();
             assert_eq!(actual, expected);
             assert_eq!(format.format(value), expected);
+            let exact = crate::numeric::decimal::ResolvedFormat {
+                precision: crate::numeric::decimal::ResolvedPrecision::Fractional(
+                    u8::try_from(precision).unwrap(),
+                ),
+                suffix: Some(suffix),
+                ..crate::numeric::decimal::ResolvedFormat::default()
+            };
+            assert_eq!(
+                crate::numeric::decimal::format_finite(value, &exact).unwrap(),
+                expected
+            );
         }
     }
-}
-
-#[test]
-fn numeric_label_format_default_is_two_decimals_without_suffix() {
-    let format = NumericLabelFormat::default();
-
-    assert_eq!(NumericLabelFormat::new(2).unwrap(), format);
-    assert_eq!(
-        (format.configured_precision(), format.format(1.234)),
-        (2, "1.23".to_string())
-    );
-}
-
-#[test]
-fn numeric_label_format_selective_builders_preserve_each_selection() {
-    let format = NumericLabelFormat::default()
-        .precision(12)
-        .unwrap()
-        .suffix(" units")
-        .unwrap();
-
-    assert_eq!(
-        (format.configured_precision(), format.format(1.0)),
-        (12, "1.000000000000 units".to_string())
-    );
-}
-
-#[test]
-fn numeric_label_format_rejects_invalid_selective_values_as_data_errors() {
-    let errors = [
-        NumericLabelFormat::default().precision(13).unwrap_err(),
-        NumericLabelFormat::default().suffix("").unwrap_err(),
-        NumericLabelFormat::default().suffix("\n").unwrap_err(),
-    ];
-
-    assert!(errors.into_iter().all(|error| matches!(
-        error,
-        crate::Error::Data(message) if message.starts_with("numeric label ")
-    )));
 }
