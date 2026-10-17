@@ -6598,6 +6598,9 @@ claim numeric API implementation or executable Forest certification.
 The exact private ordinary conversion and common emitter have independent
 rational/default evidence in `../docs/exact-decimal-conversion.md`; current public
 formatters/consumers remain pending their scheduled single-representation cutover.
+Exact Forest exponent reduction, symbolic integral powers and real output
+reservation are complete in `../docs/exact-log10-operands.md`; fractional
+mantissa certification remains the next numeric implementation gate.
 
 ENTRY gate is CLOSED by the user's explicit approval of the current-implementation
 assessment and request to plan T6:

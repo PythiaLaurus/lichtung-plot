@@ -12,6 +12,14 @@ Keep the exact mathematical bounds, real output/precision/index checks, fallible
 storage and cache identity. Do not implement their old ledger, fees or quota
 tests. The current execution and verification contracts are §9 and §12 below.
 
+Private exact exponent reduction, symbolic integral powers and early output
+reservation are implemented with independent evidence in
+[`docs/exact-log10-operands.md`](../docs/exact-log10-operands.md), using the common
+ordinary decimal emitter from `docs/exact-decimal-conversion.md`. Fractional
+mantissa implementation/executable certification and numeric consumer/public
+cutover remain pending. The mathematical design below is not a report that those
+remaining gates have passed.
+
 ## 1. Authority And Evidence Boundary
 
 [Spec93](93_T6_EXECUTION_PLAN.md), especially “Numeric Conversion And Precision”

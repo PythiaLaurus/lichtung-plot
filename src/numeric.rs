@@ -25,6 +25,15 @@ use num_bigint::BigUint;
 )]
 pub(crate) mod decimal;
 
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "private power operand precedes certified consumer migration"
+    )
+)]
+pub(crate) mod power;
+
 #[cfg(test)]
 thread_local! {
     static SERIES_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };

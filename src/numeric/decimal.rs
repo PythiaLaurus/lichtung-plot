@@ -202,7 +202,22 @@ impl RoundedDecimal {
     /// Serialize an already rounded number. Scale has already been consumed by
     /// its mathematical operand, and must not be applied again at this boundary.
     pub(crate) fn emit(&self, format: &ResolvedFormat<'_>) -> Result<String> {
+        self.emit_reserved(format, String::new())
+    }
+
+    /// A power operand reserves its symbolic output bound before any refinement
+    /// or physical coefficient construction. Reuse that same empty buffer here.
+    pub(crate) fn emit_reserved(
+        &self,
+        format: &ResolvedFormat<'_>,
+        mut text: String,
+    ) -> Result<String> {
         format.validate()?;
+        if !text.is_empty() {
+            return Err(Error::Render(
+                "numeric output reservation must be empty".into(),
+            ));
+        }
         let mut digits = self.coefficient.to_radix_be(10);
         for digit in &mut digits {
             *digit += b'0';
@@ -264,7 +279,6 @@ impl RoundedDecimal {
         .try_fold(0_usize, usize::checked_add)
         .filter(|length| isize::try_from(*length).is_ok())
         .ok_or_else(arithmetic_error)?;
-        let mut text = String::new();
         text.try_reserve_exact(length)
             .map_err(|error| Error::Render(format!("numeric presentation output: {error}")))?;
         text.push_str(prefix);

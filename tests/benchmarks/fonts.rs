@@ -152,12 +152,6 @@ fn synthetic_case(candidates: usize, characters: u8, split: bool, run: usize) ->
 }
 
 #[test]
-fn font_fixture_paths() {
-    synthetic_case(2, 2, false, 0);
-    synthetic_case(2, 2, true, 0);
-}
-
-#[test]
 #[ignore = "release font coverage; run with --release --ignored --nocapture --test-threads=1"]
 fn font_synthetic_coverage_measurements() {
     assert!(

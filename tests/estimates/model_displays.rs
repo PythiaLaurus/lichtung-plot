@@ -169,7 +169,13 @@ fn forest_log_scale_renders_raw_power_ticks_and_rejects_nonpositive_values() {
         )
         .scale(AxisScale::Log10)
     };
-    let svg = render_svg(forest([0.5, 2.0], [0.1, 1.0], [1.0, 10.0]), "forest-log").unwrap();
+    // This fixture checks the default power grammar at these sources, not the
+    // tick density selected by an automatic root's font-dependent natural width.
+    let svg = render_svg(
+        forest([0.5, 2.0], [0.1, 1.0], [1.0, 10.0]).width(1000),
+        "forest-log",
+    )
+    .unwrap();
     assert!(svg.contains(">0.1</text>") && svg.contains(">1</text>") && svg.contains(">10</text>"));
     assert!(forest([0.0, 1.0], [0.0, 0.5], [1.0, 2.0])
         .preflight()
@@ -191,6 +197,7 @@ fn forest_narrow_log_range_uses_expression_labeled_adaptive_exponents() {
             1.0,
         )
         .scale(AxisScale::Log10)
+        .width(1000)
         .x_limits(1.0, 1.6),
         "forest-narrow-log",
     )
@@ -215,6 +222,7 @@ fn forest_log_scale_projects_exact_ticks_from_raw_data_space() {
             1.0,
         )
         .scale(AxisScale::Log10)
+        .width(1000)
         .x_limits(0.1, 10.0)
         .x_ticks(vec![
             AxisTick::new(0.1, "low exact"),

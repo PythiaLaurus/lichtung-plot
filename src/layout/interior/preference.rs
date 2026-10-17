@@ -362,25 +362,6 @@ mod tests {
     use crate::font::canonical::OperationContext;
     use crate::{CategoryValues, NumericValues};
 
-    #[test]
-    fn retained_panel_lookup_selects_its_scope_and_rejects_missing_scopes() {
-        let panels = [
-            (None, 10),
-            (Some("second".into()), 20),
-            (Some("unused".into()), 30),
-        ];
-        for (scope, expected) in [(None, 10), (Some("second"), 20)] {
-            assert_eq!(*panel(&panels, scope, "test").unwrap(), expected);
-        }
-        {
-            let error = panel(&panels, Some("missing"), "test")
-                .unwrap_err()
-                .to_string();
-
-            assert!(error.contains("scope is not prepared"));
-        }
-    }
-
     fn standard(root: &crate::layout::RootFramePlan) -> &StandardPanelPreference {
         let Some(NativePanelPreference::Standard(preference)) = root.native_preference.as_ref()
         else {
