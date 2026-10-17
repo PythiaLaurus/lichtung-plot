@@ -49,6 +49,8 @@ The atomic public NumericFormat/discriminant/attachment replacement and complete
 caller/current-contract migration are complete in `../docs/public-numeric-formatting.md`.
 Typed all-family/all-root, independent scoped sets, complete-policy Shared refusal
 and frozen-output closure are complete in `../docs/scientific-numeric-closure.md`.
+The post-numeric discrete producer/descriptor/font/key source handoff is complete
+at `3de25e0` in `../docs/discrete-guide-source-handoff.md`.
 The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
@@ -162,7 +164,7 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6C2 | COMPLETE | T6C1 | Automatic defaults, consuming width, exact size and Output dimensions; migrate getters/callers atomically; `feat(layout): expose content-derived root sizing` |
 | T6C3 | COMPLETE | T6C2 | Complete initial axis/chrome preferences, provisional content-height gutters and all-mode parent/output evidence; `fix(layout): compose complete content-sized root frames` |
 | T6N | COMPLETE | T6C | Unified scientific numeric formatting; leaves below |
-| T6L | PENDING | T6N | One section-aware discrete guide; leaves below |
+| T6L | IN PROGRESS | T6N | One section-aware discrete guide; leaves below |
 | T6Z | PENDING | T6L | Integrated contract, deferred-decision and phase closure |
 | T6Z1 | PENDING | T6L | Complete public examples/current-spec and property/consumer census reconciliation; `docs(api): reconcile scientific plotting contracts` |
 | T6Z2 | PENDING | T6Z1 | User-approved DF3/DF4 closure dispositions |
@@ -861,7 +863,7 @@ ink/collision bounds. No draw-time factorization or layout reconstruction.
 | Stage | Status | Depends on | Deliverable / scoped commit |
 | --- | --- | --- | --- |
 | T6L0d | COMPLETE | T6A | Complete producer/mapping/title/layer and measured-section design in `08_DISCRETE_GUIDES.md`; `docs(legend): pin discrete guide producer and section contracts` |
-| T6L0 | PENDING | T6N, T6L0d | Refresh actual producer/descriptor/key names after preceding migrations; verify the closed design against those sources, without reopening product choices |
+| T6L0 | COMPLETE | T6N, T6L0d | Current producer/descriptor/font/key source handoff at `3de25e0`; evidence in `docs/discrete-guide-source-handoff.md` |
 | T6L1 | PENDING | T6L0 | Typed section descriptor, Combined consumer migration and layer identity; `refactor(legend): retain typed discrete sections` |
 | T6L2 | PENDING | T6L1 | Producer-owned factorized keys and pre-font validation; `feat(legend): prepare factorized channel sections` |
 | T6L3 | PENDING | T6L2 | One bounded section flow/frame/collision plan; `feat(legend): measure bounded section flow` |
