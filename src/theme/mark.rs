@@ -401,7 +401,7 @@ mod tests {
 
     #[test]
     fn complete_mark_edits_validate_nested_siblings_and_fraction_bounds() {
-        let original = crate::theme::ThemeValue::publication().marks;
+        let original = crate::theme::Theme::publication().marks;
         let summary = original
             .fills()
             .bodies()
@@ -463,7 +463,7 @@ mod tests {
             let operation = crate::font::canonical::OperationContext::new();
             let inputs = crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
             let chart = inputs.attach(source).unwrap();
-            let mut theme = crate::Theme::Publication.resolve().unwrap();
+            let mut theme = crate::Theme::publication().resolve().unwrap();
             let appearance = theme
                 .marks
                 .points()

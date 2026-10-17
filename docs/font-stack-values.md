@@ -1,5 +1,9 @@
 # Retained font-stack values
 
+This is historical evidence for private typed storage and canonical font selection.
+The types are now public and the temporary default-font constants are retired;
+see [complete foundations](complete-theme-foundations.md) for the current API.
+
 ## Construction and identity
 
 The font owner defines crate-private `FontFamily`, `GenericFontFamily`, and

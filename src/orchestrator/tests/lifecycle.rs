@@ -255,7 +255,7 @@ fn standalone_terminal_resolves_and_plans_once_with_one_final_lifecycle() {
         NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
         NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
     )
-    .theme(crate::Theme::Nature);
+    .theme(crate::Theme::nature());
     let mut backend = RecordingBackend::default();
 
     plot.render_with_backend(&mut backend).unwrap();
@@ -296,7 +296,7 @@ fn public_preflight_uses_the_prepared_plan_without_a_final_lifecycle() {
         NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
         NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
     )
-    .theme(crate::Theme::CHI);
+    .theme(crate::Theme::chi());
 
     plot.preflight().unwrap();
 
@@ -812,7 +812,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
         let prepared = crate::plots::shared_x::prepare_plot(
             &plot,
             &crate::font::canonical::OperationContext::new(),
-            Some(&crate::theme::ThemeValue::publication()),
+            Some(&crate::theme::Theme::publication()),
         )
         .unwrap_or_else(|error| panic!("{kind:?}: {error}"))
         .attach(plot.clone())
@@ -873,7 +873,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
                     "{kind:?} {side}: {error}"
                 );
             }
-            let theme = crate::Theme::Publication.resolve().unwrap();
+            let theme = crate::Theme::publication().resolve().unwrap();
             let preparations = crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get);
             let panel = prepared.measured_canvas_layout(&theme).unwrap().panel_box;
             prepared

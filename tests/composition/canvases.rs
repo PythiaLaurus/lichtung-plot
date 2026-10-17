@@ -93,7 +93,7 @@ fn plot_local_and_canvas_captions_coexist_in_their_own_spans() {
         Canvas::grid(1, 2)
             .unwrap()
             .size(1101, 701)
-            .theme(Theme::Nature)
+            .theme(Theme::nature())
             .panel(
                 0,
                 0,
@@ -101,7 +101,7 @@ fn plot_local_and_canvas_captions_coexist_in_their_own_spans() {
                     NumericValues::new("x", [0.0, 1.0]),
                     NumericValues::new("y", [1.0, 2.0]),
                 )
-                .theme(Theme::Science)
+                .theme(Theme::science())
                 .title("Independent Plot title")
                 .subtitle("Independent Plot subtitle")
                 .caption("Local Plot caption"),
@@ -379,7 +379,9 @@ fn shared_diverging_heatmap_keeps_center_and_one_missing_key() {
             CategoryValues::new("row", ["top", "top", "bottom"]).unwrap(),
             NumericValues::new("fill", values),
         )
-        .scale(lichtung_plot::HeatmapScale::Diverging { center: 0.0 })
+        .continuous_color_scale(
+            lichtung_plot::ContinuousColorScale::diverging(0.0, None, None).unwrap(),
+        )
     };
     let svg = render_canvas(
         Canvas::grid(1, 2)
@@ -518,14 +520,18 @@ fn shared_legend_gap_reduces_canvas_legend_separation() {
     let x = NumericValues::new("x", [1.0, 2.0]);
     let y = NumericValues::new("y", [1.0, 2.0]);
     let trace = CategoryValues::new("trace", ["control", "control"]).unwrap();
-    let render = |gap: Option<f64>| {
+    let render = |gap: Option<lichtung_plot::RelativeSpacing>| {
         let canvas = Canvas::grid(1, 1)
             .unwrap()
             .panel(0, 0, hued_line(&x, &y, &trace))
             .unwrap()
             .legend_policy(CanvasLegendPolicy::Shared);
         let canvas = match gap {
-            Some(gap) => canvas.shared_legend_gap(gap).unwrap(),
+            Some(gap) => {
+                let theme = Theme::publication();
+                let legend = theme.legend().clone().with_shared_gap(gap).unwrap();
+                canvas.theme(theme.customize().with_legend(legend).build().unwrap())
+            }
             None => canvas,
         };
         render_canvas(canvas, "shared-legend-gap").unwrap()
@@ -548,11 +554,28 @@ fn shared_legend_gap_reduces_canvas_legend_separation() {
     };
     let default = render(None);
     // Role-local 11px legend typography gives a 17.6px default shared gap.
-    let compact = render(Some(2.0));
+    let compact = render(Some(lichtung_plot::RelativeSpacing::ratio(2, 11).unwrap()));
     assert!(
         legend_x(&compact) - panel_right(&compact) < legend_x(&default) - panel_right(&default)
     );
-    assert!(Canvas::grid(1, 1).unwrap().shared_legend_gap(-1.0).is_err());
+    assert!(lichtung_plot::RelativeSpacing::new(-1.0).is_err());
+    let theme = Theme::publication();
+    let legend = theme
+        .legend()
+        .clone()
+        .with_shared_gap(lichtung_plot::RelativeSpacing::ratio(2, 11).unwrap())
+        .unwrap();
+    let theme = theme.customize().with_legend(legend).build().unwrap();
+    for policy in [CanvasLegendPolicy::PerPlot, CanvasLegendPolicy::Hidden] {
+        Canvas::grid(1, 1)
+            .unwrap()
+            .theme(theme.clone())
+            .panel(0, 0, hued_line(&x, &y, &trace))
+            .unwrap()
+            .legend_policy(policy)
+            .preflight()
+            .unwrap();
+    }
 }
 
 #[test]
@@ -1076,10 +1099,13 @@ fn shared_canvas_equal_color_entries_keep_a_typed_bar_target_in_its_owner() {
             BarInput::estimates(NumericValues::new("value", values)),
         )
         .series(CategoryValues::new("series", ["g1", "g2"]).unwrap())
-        .categorical_colors(
-            CategoricalColors::new([("g1".into(), (20, 40, 60)), ("g2".into(), (20, 40, 60))])
-                .unwrap(),
-        )
+        .categorical_color_scale(CategoricalColorScale::from_map(
+            CategoricalColorMap::new([
+                ("g1".into(), OpaqueColor::rgb(20, 40, 60)),
+                ("g2".into(), OpaqueColor::rgb(20, 40, 60)),
+            ])
+            .unwrap(),
+        ))
     };
     let first = bar([1.0, 2.0]).significance([Significance::between(
         SignificanceTarget::category_series("same", "g1"),

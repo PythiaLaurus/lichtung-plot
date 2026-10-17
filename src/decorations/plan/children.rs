@@ -341,7 +341,7 @@ mod tests {
             crate::NumericValues::new("y", [0.0, 1.0]),
         )
         .erase();
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
         theme.prepare_font_environment().unwrap();
         let root = crate::layout::plan_exact_root(
             800,
@@ -379,7 +379,7 @@ mod tests {
             crate::NumericValues::new("y", [0.0, 1.0]),
         )
         .erase();
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
         theme.prepare_font_environment().unwrap();
         crate::layout::plan_exact_root(
             800,
@@ -428,7 +428,7 @@ mod tests {
             crate::NumericValues::new("y", [0.0, 1.0]),
         )
         .erase();
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
         let owner = ComponentAddress::root()
             .child(AddressRole::FacetCell, 0)
             .unwrap();
@@ -524,7 +524,7 @@ mod tests {
                 crate::NumericValues::new("y", [0.0, 1.0]),
             )
             .erase();
-            let theme = crate::Theme::Publication.resolve().unwrap();
+            let theme = crate::Theme::publication().resolve().unwrap();
             let owner = ComponentAddress::root()
                 .child(AddressRole::FacetCell, 0)
                 .unwrap();
@@ -598,7 +598,7 @@ mod tests {
             crate::NumericValues::new("y", [0.0, 1.0]),
         )
         .erase();
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
         let owner = ComponentAddress::root()
             .child(AddressRole::FacetCell, 0)
             .unwrap();
@@ -685,7 +685,7 @@ mod tests {
             crate::NumericValues::new("y", [0.0, 1.0]),
         )
         .erase();
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
         let owner = ComponentAddress::root()
             .child(AddressRole::CanvasCell, 0)
             .unwrap();

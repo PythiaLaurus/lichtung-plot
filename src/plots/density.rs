@@ -113,7 +113,7 @@ impl PreparedDensity {
         let map = CategoryColors::resolve(
             &keys,
             theme.color_scales.qualitative(),
-            chart.categorical_colors_spec(),
+            chart.categorical_color_scale_spec(),
             resources,
         )?;
         let accent = AccentColors::resolve(
@@ -210,7 +210,7 @@ impl PreparedDensity {
             .x_col()
             .ok_or_else(|| Error::Data("density: value column not set".into()))?;
         let prepared = prepare_density_for_chart(chart, data, column)?;
-        if let Some(exact) = chart.categorical_colors_spec() {
+        if let Some(exact) = chart.categorical_map_spec() {
             for hue in prepared.hue_levels() {
                 if exact.color_in(hue).is_none() {
                     return Err(Error::Data(format!(
@@ -820,7 +820,10 @@ mod tests {
     fn exact_density_color_map_uses_raw_hues_and_refuses_missing_keys_before_fonts() {
         let source = Plot::density(crate::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]))
             .hue(crate::CategoryValues::new("hue", ["a", "a", "b", "b"]).unwrap())
-            .categorical_colors(crate::CategoricalColors::new([("a".into(), (5, 7, 11))]).unwrap())
+            .categorical_color_scale(crate::CategoricalColorScale::from_map(
+                crate::CategoricalColorMap::new([("a".into(), crate::OpaqueColor::rgb(5, 7, 11))])
+                    .unwrap(),
+            ))
             .erase();
         let resources = crate::font::canonical::OperationContext::new();
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
@@ -842,7 +845,7 @@ mod tests {
         let resources = crate::font::canonical::OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         let original = chart.intrinsic_body_minimum(&theme).unwrap();
         let line = theme
             .marks
@@ -929,7 +932,7 @@ mod tests {
                     hue: Some("a".into()),
                 },
             ]);
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
         let selected = chart
             .measure_selected_interior(PlotRenderContext::new(

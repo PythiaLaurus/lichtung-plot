@@ -2,7 +2,7 @@ use crate::theme::{LocalMetric, RelativeSpacing};
 
 #[test]
 fn publication_title_keeps_the_exact_binary64_leading_and_upward_occupancy() {
-    let theme = crate::Theme::Publication.resolve().unwrap();
+    let theme = crate::Theme::publication().resolve().unwrap();
     let title = theme.typography.root().title();
     assert_eq!(title.line_height().to_bits(), 0x3ff4_cccc_cccc_cccd);
     let exact = RelativeSpacing::new(title.line_height())

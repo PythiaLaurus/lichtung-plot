@@ -17,7 +17,7 @@ fn selected_sides_are_frozen_drawn_and_published_once_with_no_inactive_edge_rese
         ),
         (None, 0, false),
     ] {
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         let stroke = theme.axes.frame().unwrap().stroke().clone();
         theme.axes = theme
             .axes
@@ -57,7 +57,7 @@ fn selected_sides_are_frozen_drawn_and_published_once_with_no_inactive_edge_rese
 
 #[test]
 fn ordinary_panel_does_not_paint_or_reserve_the_independent_cell_frame() {
-    let mut theme = crate::Theme::Publication.resolve().unwrap();
+    let mut theme = crate::Theme::publication().resolve().unwrap();
     let cell = theme
         .axes
         .cell_frame()
@@ -99,7 +99,7 @@ fn ordinary_panel_does_not_paint_or_reserve_the_independent_cell_frame() {
 
 #[test]
 fn zero_chrome_keeps_required_text_and_combines_fractional_gaps_before_hard_rounding() {
-    let mut theme = crate::Theme::Publication.resolve().unwrap();
+    let mut theme = crate::Theme::publication().resolve().unwrap();
     let zero = RelativeSpacing::ratio(0, 1).unwrap();
     // Against the actual selected font metrics, each gap is exactly one third
     // of a CSS quantum. Independent upward rounding would over-reserve a quantum.

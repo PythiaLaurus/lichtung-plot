@@ -309,9 +309,9 @@ fn faceted_interactions_keep_sparse_global_pair_styles_and_colors() {
     let estimate = NumericValues::new("estimate", [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5]);
     let lower = NumericValues::new("lower", [0.8, 1.3, 1.8, 2.3, 2.8, 3.3, 3.8, 4.3]);
     let upper = NumericValues::new("upper", [1.2, 1.7, 2.2, 2.7, 3.2, 3.7, 4.2, 4.7]);
-    let colors = CategoricalColors::new([
-        ("h1".to_owned(), (51, 51, 51)),
-        ("h2".to_owned(), (0, 114, 178)),
+    let colors = CategoricalColorMap::new([
+        ("h1".to_owned(), OpaqueColor::rgb(51, 51, 51)),
+        ("h2".to_owned(), OpaqueColor::rgb(0, 114, 178)),
     ])
     .unwrap();
     let output = svg(
@@ -327,7 +327,7 @@ fn faceted_interactions_keep_sparse_global_pair_styles_and_colors() {
                     .with_point_shape(PointShape::TriangleUp)
                     .unwrap(),
             ])
-            .categorical_colors(colors)
+            .categorical_color_scale(CategoricalColorScale::from_map(colors))
             .facet(FacetSpec::column(panel))
             .size(960, 320),
     );
@@ -387,12 +387,13 @@ fn unconfigured_interaction_styles_preserve_circle_solid_defaults() {
 #[test]
 fn categorical_colors_apply_exact_trace_rgb_to_marks_and_legend() {
     let data = interaction_data();
-    let colors = CategoricalColors::new([
-        ("Control".to_owned(), (51, 51, 51)),
-        ("Semantic Agent".to_owned(), (0, 114, 178)),
+    let colors = CategoricalColorMap::new([
+        ("Control".to_owned(), OpaqueColor::rgb(51, 51, 51)),
+        ("Semantic Agent".to_owned(), OpaqueColor::rgb(0, 114, 178)),
     ])
     .unwrap();
-    let output = svg(chart(&data, true).categorical_colors(colors));
+    let output =
+        svg(chart(&data, true).categorical_color_scale(CategoricalColorScale::from_map(colors)));
 
     assert!(output.matches("#333333").count() >= 4);
     assert!(output.matches("#0072B2").count() >= 4);
@@ -410,9 +411,9 @@ fn crossed_group_hue_interactions_render_only_observed_pair_traces() {
     let estimate = NumericValues::new("estimate", [1.0, 1.5, 2.0, 2.5, 3.0, 3.5]);
     let lower = NumericValues::new("lower", [0.8, 1.3, 1.8, 2.3, 2.8, 3.3]);
     let upper = NumericValues::new("upper", [1.2, 1.7, 2.2, 2.7, 3.2, 3.7]);
-    let colors = CategoricalColors::new([
-        ("h1".to_owned(), (51, 51, 51)),
-        ("h2".to_owned(), (0, 114, 178)),
+    let colors = CategoricalColorMap::new([
+        ("h1".to_owned(), OpaqueColor::rgb(51, 51, 51)),
+        ("h2".to_owned(), OpaqueColor::rgb(0, 114, 178)),
     ])
     .unwrap();
     let output = svg(
@@ -428,7 +429,7 @@ fn crossed_group_hue_interactions_render_only_observed_pair_traces() {
                     .with_point_shape(PointShape::TriangleUp)
                     .unwrap(),
             ])
-            .categorical_colors(colors),
+            .categorical_color_scale(CategoricalColorScale::from_map(colors)),
     );
     let marks = output
         .split_once("<g clip-path=")
@@ -507,9 +508,9 @@ fn shared_canvas_legend_preserves_caller_colors_and_composite_trace_glyphs() {
             .with_point_shape(PointShape::TriangleUp)
             .unwrap(),
     );
-    let colors = CategoricalColors::new([
-        ("Control".to_owned(), (51, 51, 51)),
-        ("Semantic Agent".to_owned(), (0, 114, 178)),
+    let colors = CategoricalColorMap::new([
+        ("Control".to_owned(), OpaqueColor::rgb(51, 51, 51)),
+        ("Semantic Agent".to_owned(), OpaqueColor::rgb(0, 114, 178)),
     ])
     .unwrap();
     let output = render_canvas(
@@ -518,10 +519,16 @@ fn shared_canvas_legend_preserves_caller_colors_and_composite_trace_glyphs() {
             .panel(
                 0,
                 0,
-                chart(&control, true).categorical_colors(colors.clone()),
+                chart(&control, true)
+                    .categorical_color_scale(CategoricalColorScale::from_map(colors.clone())),
             )
             .unwrap()
-            .panel(0, 1, chart(&semantic, true).categorical_colors(colors))
+            .panel(
+                0,
+                1,
+                chart(&semantic, true)
+                    .categorical_color_scale(CategoricalColorScale::from_map(colors)),
+            )
             .unwrap()
             .legend_policy(CanvasLegendPolicy::Shared),
         "shared-interaction-legend",
@@ -564,13 +571,23 @@ fn shared_canvas_legend_rejects_conflicting_caller_color_mapping() {
             .with_line_pattern(LinePattern::Dashed)
             .unwrap(),
     );
-    let gray = CategoricalColors::new([("Control".to_owned(), (51, 51, 51))]).unwrap();
-    let blue = CategoricalColors::new([("Control".to_owned(), (0, 114, 178))]).unwrap();
+    let gray =
+        CategoricalColorMap::new([("Control".to_owned(), OpaqueColor::rgb(51, 51, 51))]).unwrap();
+    let blue =
+        CategoricalColorMap::new([("Control".to_owned(), OpaqueColor::rgb(0, 114, 178))]).unwrap();
     let canvas = Canvas::grid(1, 2)
         .unwrap()
-        .panel(0, 0, chart(&data, true).categorical_colors(gray))
+        .panel(
+            0,
+            0,
+            chart(&data, true).categorical_color_scale(CategoricalColorScale::from_map(gray)),
+        )
         .unwrap()
-        .panel(0, 1, chart(&data, true).categorical_colors(blue))
+        .panel(
+            0,
+            1,
+            chart(&data, true).categorical_color_scale(CategoricalColorScale::from_map(blue)),
+        )
         .unwrap()
         .legend_policy(CanvasLegendPolicy::Shared);
 
@@ -602,9 +619,10 @@ fn shared_canvas_legend_rejects_conflicting_point_outline_mapping() {
 #[test]
 fn categorical_colors_reject_missing_trace_mapping() {
     let data = interaction_data();
-    let colors = CategoricalColors::new([("Control".to_owned(), (51, 51, 51))]).unwrap();
+    let colors =
+        CategoricalColorMap::new([("Control".to_owned(), OpaqueColor::rgb(51, 51, 51))]).unwrap();
     let error = chart(&data, true)
-        .categorical_colors(colors)
+        .categorical_color_scale(CategoricalColorScale::from_map(colors))
         .preflight()
         .unwrap_err()
         .to_string();
@@ -614,10 +632,12 @@ fn categorical_colors_reject_missing_trace_mapping() {
 
 #[test]
 fn categorical_colors_reject_duplicate_or_malformed_labels() {
-    assert!(CategoricalColors::new([
-        ("Control".to_owned(), (1, 2, 3)),
-        ("Control".to_owned(), (4, 5, 6)),
+    assert!(CategoricalColorMap::new([
+        ("Control".to_owned(), OpaqueColor::rgb(1, 2, 3)),
+        ("Control".to_owned(), OpaqueColor::rgb(4, 5, 6)),
     ])
     .is_err());
-    assert!(CategoricalColors::new([(" Control".to_owned(), (1, 2, 3))]).is_err());
+    assert!(
+        CategoricalColorMap::new([(" Control".to_owned(), OpaqueColor::rgb(1, 2, 3))]).is_err()
+    );
 }

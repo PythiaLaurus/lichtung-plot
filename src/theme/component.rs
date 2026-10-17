@@ -7,29 +7,20 @@ macro_rules! field_type {
 
 macro_rules! field_getter {
     (borrow $field:ident: $ty:ty) => {
-        #[allow(
-            dead_code,
-            reason = "complete private inspection awaits Theme customization"
-        )]
-        pub(crate) fn $field(&self) -> &$ty {
+        #[doc = concat!("Borrow the complete `", stringify!($field), "` value.")]
+        pub fn $field(&self) -> &$ty {
             &self.$field
         }
     };
     (copy $field:ident: $ty:ty) => {
-        #[allow(
-            dead_code,
-            reason = "complete private inspection awaits Theme customization"
-        )]
-        pub(crate) fn $field(&self) -> $ty {
+        #[doc = concat!("Inspect `", stringify!($field), "`.")]
+        pub fn $field(&self) -> $ty {
             self.$field
         }
     };
     (optional $field:ident: $ty:ty) => {
-        #[allow(
-            dead_code,
-            reason = "complete private inspection awaits Theme customization"
-        )]
-        pub(crate) fn $field(&self) -> Option<&$ty> {
+        #[doc = concat!("Borrow the optional `", stringify!($field), "` value; absence is structural.")]
+        pub fn $field(&self) -> Option<&$ty> {
             self.$field.as_ref()
         }
     };
@@ -39,13 +30,15 @@ macro_rules! validated_component {
     ($name:ident { $($kind:ident $field:ident: $ty:ty => $edit:ident),+ $(,)? }
         validate |$value:ident| $validation:block) => {
         #[derive(Clone, Debug, PartialEq)]
-        pub(crate) struct $name {
+        #[doc = concat!("Complete immutable `", stringify!($name), "` appearance component.")]
+        pub struct $name {
             $($field: super::component::field_type!($kind $ty)),+
         }
 
         impl $name {
             #[allow(clippy::too_many_arguments, reason = "the complete constructor follows the approved typed role schema")]
-            pub(crate) fn new($($field: super::component::field_type!($kind $ty)),+) -> $crate::Result<Self> {
+            /// Construct a complete component, validating all fields and sibling constraints.
+            pub fn new($($field: super::component::field_type!($kind $ty)),+) -> $crate::Result<Self> {
                 let value = Self { $($field),+ };
                 value.validate()?;
                 Ok(value)
@@ -61,8 +54,8 @@ macro_rules! validated_component {
             $(
                 super::component::field_getter!($kind $field: $ty);
 
-                #[allow(dead_code, reason = "complete private construction edits await Theme customization")]
-                pub(crate) fn $edit(mut self, value: super::component::field_type!($kind $ty)) -> $crate::Result<Self> {
+                #[doc = concat!("Replace only `", stringify!($field), "`, validating the complete resulting component.")]
+                pub fn $edit(mut self, value: super::component::field_type!($kind $ty)) -> $crate::Result<Self> {
                     self.$field = value;
                     self.validate()?;
                     Ok(self)

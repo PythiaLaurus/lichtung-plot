@@ -5,8 +5,8 @@
 Crate-root `Color` exposes exact byte RGB/RGBA construction, strict literal hex
 parsing, readonly channels and replacement `with_alpha`. Alpha includes zero and
 255; no floating opacity conversion or alpha multiplication remains in exact
-styles. `OpaqueColor`, complete Theme components, fonts and scale attachments
-retain their next owning public cutover.
+styles. The subsequent [complete foundation cutover](complete-theme-foundations.md)
+exposes `OpaqueColor`, complete Theme components, fonts and scale attachments.
 
 The public migration replaces storage, constructors, inspection, consuming edits
 and repository callers together:

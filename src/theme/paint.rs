@@ -4,42 +4,36 @@ use crate::{Error, Result};
 
 /// Opaque RGB identity; there is no alpha-discarding conversion from `Color`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct OpaqueColor {
+pub struct OpaqueColor {
     red: u8,
     green: u8,
     blue: u8,
 }
 
-#[expect(
-    clippy::trivially_copy_pass_by_ref,
-    reason = "immutable validated color values expose borrowed getters"
-)]
 impl OpaqueColor {
-    pub(crate) const fn rgb(red: u8, green: u8, blue: u8) -> Self {
+    /// Construct an exact opaque RGB identity for data scales.
+    pub const fn rgb(red: u8, green: u8, blue: u8) -> Self {
         Self { red, green, blue }
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "typed hex construction awaits the public scale-input cutover"
-        )
-    )]
-    pub(crate) fn hex(value: &str) -> Result<Self> {
+    /// Parse exactly ASCII `#RRGGBB`, accepting either hex case and no alpha.
+    pub fn hex(value: &str) -> Result<Self> {
         let [red, green, blue, _] = hex_channels(value, false)?;
         Ok(Self::rgb(red, green, blue))
     }
 
-    pub(crate) const fn red(&self) -> u8 {
+    /// Inspect the red channel.
+    pub const fn red(&self) -> u8 {
         self.red
     }
 
-    pub(crate) const fn green(&self) -> u8 {
+    /// Inspect the green channel.
+    pub const fn green(&self) -> u8 {
         self.green
     }
 
-    pub(crate) const fn blue(&self) -> u8 {
+    /// Inspect the blue channel.
+    pub const fn blue(&self) -> u8 {
         self.blue
     }
 

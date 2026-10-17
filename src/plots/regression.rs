@@ -433,7 +433,7 @@ mod style_tests {
         let resources = OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         let before = chart.intrinsic_body_minimum(&theme).unwrap();
         let radii = theme
             .marks
@@ -528,7 +528,7 @@ mod style_tests {
         let resources = OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         let panel = crate::layout::PanelBox::new(10.0, 620.0, 20.0, 420.0);
         let old = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
@@ -596,7 +596,7 @@ mod style_tests {
         let resources = OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         let panel = crate::layout::PanelBox::new(10.0, 620.0, 20.0, 420.0);
         let old = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))

@@ -394,7 +394,7 @@ mod tests {
         .erase();
         let resources = crate::font::canonical::OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources, None).unwrap();
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         theme.composition = theme
             .composition
             .clone()
@@ -486,7 +486,7 @@ mod tests {
         let rows = [1, 3];
         let ids = [7, 29];
         {
-            let theme = crate::Theme::Publication.resolve().unwrap();
+            let theme = crate::Theme::publication().resolve().unwrap();
 
             let foreign = OperationContext::new();
             let data = PlotData::with_rows(&plot, &rows, &ids).with_operation(&foreign);
@@ -524,7 +524,7 @@ mod tests {
             crate::NumericValues::new("y", [3.0, 4.0]),
         )
         .erase();
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
         let panels = [0, 1].map(|index| FacetPanel {
             panel_index: index,
             row: 0,

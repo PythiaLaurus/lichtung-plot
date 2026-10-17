@@ -16,7 +16,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let directory = std::env::temp_dir();
     let base_path = directory.join("quick_start");
     Plot::scatter(NumericValues::new("x", xs), NumericValues::new("y", ys))
-        .theme(Theme::Nature)
+        .theme(Theme::nature())
         .size(640, 480)
         .svg(&base_path)?;
 

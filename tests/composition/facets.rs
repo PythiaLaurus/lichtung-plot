@@ -209,14 +209,14 @@ fn final_equal_series_colors_and_aliases_do_not_replace_typed_facet_targets() {
         BarInput::estimates(NumericValues::new("value", [2.0, 3.0, 4.0, 5.0])),
     )
     .series(series)
-    .categorical_colors(
-        CategoricalColors::new([
-            ("g1".into(), (20, 40, 60)),
-            ("g2".into(), (20, 40, 60)),
-            ("unused".into(), (1, 2, 3)),
+    .categorical_color_scale(CategoricalColorScale::from_map(
+        CategoricalColorMap::new([
+            ("g1".into(), OpaqueColor::rgb(20, 40, 60)),
+            ("g2".into(), OpaqueColor::rgb(20, 40, 60)),
+            ("unused".into(), OpaqueColor::rgb(1, 2, 3)),
         ])
         .unwrap(),
-    )
+    ))
     .labels(
         Labels::raw()
             .alias("g1", "First display")

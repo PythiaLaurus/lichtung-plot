@@ -14,7 +14,7 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
     let operation = crate::font::canonical::OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
     let chart = inputs.attach(source).unwrap();
-    let mut theme = crate::Theme::Publication.resolve().unwrap();
+    let mut theme = crate::Theme::publication().resolve().unwrap();
     let outline = crate::theme::PointOutlineTheme::new(
         Color::rgba(101, 113, 127, 61),
         crate::theme::RelativeSpacing::ratio(1, 4).unwrap(),

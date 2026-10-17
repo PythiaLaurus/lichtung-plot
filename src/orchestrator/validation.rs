@@ -577,13 +577,10 @@ impl Plot {
                 "plot kind {kind:?}: a continuous color label is not supported"
             )));
         }
-        if let Some((minimum, maximum)) = self.beeswarm_color_limits_spec() {
-            if kind != PlotKind::Beeswarm {
-                return Err(Error::Data(format!(
-                    "plot kind {kind:?}: beeswarm color limits are supported only by Beeswarm"
-                )));
-            }
-            validate_beeswarm_color_limits(minimum, maximum)?;
+        if self.continuous_color_scale_spec().is_some() && !supports_color {
+            return Err(Error::Data(format!(
+                "plot kind {kind:?}: a continuous color scale is not supported"
+            )));
         }
         if self.heatmap_highlight_col().is_some() && kind != PlotKind::Heatmap {
             return Err(Error::Data(format!(
@@ -741,15 +738,6 @@ fn validate_matching_triangular_orders(x: &CategoryOrder, y: &CategoryOrder) -> 
             "heatmap: triangular x and y category orders must resolve to the same family order"
                 .into(),
         ));
-    }
-    Ok(())
-}
-
-fn validate_beeswarm_color_limits(minimum: f64, maximum: f64) -> Result<(), Error> {
-    if !minimum.is_finite() || !maximum.is_finite() || minimum >= maximum {
-        return Err(Error::Data(format!(
-            "beeswarm: color limits must be finite and strictly ascending; got {minimum}..{maximum}"
-        )));
     }
     Ok(())
 }

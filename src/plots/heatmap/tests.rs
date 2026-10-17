@@ -16,7 +16,13 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
         crate::CategoryValues::new("row", ["one"]).unwrap(),
         crate::NumericValues::new("value", [1.0]),
     )
-    .color_limits(0.0, 1.0)
+    .continuous_color_scale(
+        crate::ContinuousColorScale::sequential(
+            None,
+            Some(crate::ColorDomain::exact(0.0, 1.0).unwrap()),
+        )
+        .unwrap(),
+    )
     .annotations(HeatmapAnnotations::Values(
         crate::NumericLabelFormat::default(),
     ))
@@ -25,11 +31,11 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
     let inputs = crate::plots::shared_x::prepare_plot(
         &source,
         &operation,
-        Some(&crate::theme::ThemeValue::publication()),
+        Some(&crate::theme::Theme::publication()),
     )
     .unwrap();
     let chart = inputs.attach(source).unwrap();
-    let mut theme = crate::Theme::Publication.resolve().unwrap();
+    let mut theme = crate::Theme::publication().resolve().unwrap();
     theme.typography.annotations.contrast.light.font_size = 22;
     theme.typography.annotations.contrast.dark.font_size = 11;
     let panel = PanelBox::new(0.0, 400.0, 0.0, 300.0);

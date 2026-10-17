@@ -42,26 +42,18 @@ impl From<ValueSort> for CategoryOrder {
 
 /// Exact caller-owned colors for categorical plot levels.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CategoricalColors {
+pub struct CategoricalColorMap {
     entries: Arc<Vec<(String, crate::theme::OpaqueColor)>>,
 }
 
-impl CategoricalColors {
+impl CategoricalColorMap {
     /// Constructs a non-empty color map with unique, exact category labels.
     ///
     /// # Errors
     ///
     /// Returns an error when a label is empty, has surrounding whitespace or
     /// control characters, or appears more than once.
-    pub fn new(entries: impl IntoIterator<Item = (String, (u8, u8, u8))>) -> Result<Self, Error> {
-        Self::from_opaque(
-            entries
-                .into_iter()
-                .map(|(key, (r, g, b))| (key, crate::theme::OpaqueColor::rgb(r, g, b))),
-        )
-    }
-
-    pub(crate) fn from_opaque(
+    pub fn new(
         input: impl IntoIterator<Item = (String, crate::theme::OpaqueColor)>,
     ) -> Result<Self, Error> {
         let mut entries: Vec<(String, crate::theme::OpaqueColor)> = Vec::new();
@@ -93,22 +85,15 @@ impl CategoricalColors {
         })
     }
 
-    pub(crate) fn entries(
-        &self,
-    ) -> impl ExactSizeIterator<Item = (&str, crate::theme::OpaqueColor)> + '_ {
+    /// Inspect supplied raw keys and opaque colors in construction order.
+    pub fn entries(&self) -> impl ExactSizeIterator<Item = (&str, crate::theme::OpaqueColor)> + '_ {
         self.entries
             .iter()
             .map(|(key, color)| (key.as_str(), *color))
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "readonly opaque map inspection awaits the categorical public cutover"
-        )
-    )]
-    pub(crate) fn color(&self, label: &str) -> Option<crate::theme::OpaqueColor> {
+    /// Look up one exact raw key without trimming, display aliases or normalization.
+    pub fn color(&self, label: &str) -> Option<crate::theme::OpaqueColor> {
         self.entries
             .iter()
             .find(|(key, _)| key == label)

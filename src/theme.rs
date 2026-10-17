@@ -17,36 +17,48 @@ pub(crate) mod spacing;
 mod typography;
 mod value;
 
-pub(crate) use annotation::AnnotationTheme;
-pub(crate) use axis::{AxisLengths, AxisSpacing, AxisTheme, FrameSides, FrameTheme, TickTheme};
-pub(crate) use composition::CompositionTheme;
-#[cfg(test)]
-pub(crate) use guide::LegendFrameTheme;
-pub(crate) use guide::LegendTheme;
-pub(crate) use mark::MarkTheme;
-pub(crate) use typography::{
+pub use annotation::{
+    AnnotationTheme, CellAnnotationGeometry, EstimateAnnotationGeometry, SignificanceGeometry,
+    ValueShelfSpacing,
+};
+pub(crate) use axis::AxisLengths;
+pub use axis::{AxisSpacing, AxisTheme, FrameSides, FrameTheme, TickTheme};
+pub use composition::{
+    CompositionTheme, FacetStripSpacing, HeaderSpacing, RootPadding, RootTitleSpacing,
+    TextPanelSpacing,
+};
+pub use guide::{GradientLengths, LegendFrameTheme, LegendSpacing, LegendTheme};
+pub use mark::{
+    BandFillRoles, BodyFillRoles, CategoryMarkGeometry, CellMarkRoles, ConnectorStrokeRoles,
+    CurveStrokeRoles, DataLineRoles, DensityFillRoles, FillRoles, MarkExtentTheme, MarkTheme,
+    NeutralPaintRoles, PointRadii, PointRoles, ReferenceStrokeRoles, SizedPointTheme, StrokeRoles,
+    SummaryStrokeRoles, SupplementalPointTheme,
+};
+pub use typography::{
     AnnotationTextRoles, AxisTextRoles, CompositionTextRoles, ContrastTextRoles, GuideTextRoles,
     RootTextRoles, TypographyTheme,
 };
 
 pub(crate) use scale::{AccentColors, CategoryColors, ContinuousColors, PaletteCache};
-pub(crate) use scale_values::{
+pub use scale_values::{
     AccentPalette, CategoricalColorScale, ColorDomain, ColorScales, ColorStop,
-    ContinuousColorScale, DivergingGradient, PaletteCapacity, QualitativePalette,
-    SequentialGradient, HEATMAP_DIVERGING_STOPS, HEATMAP_SEQUENTIAL_STOPS,
+    ContinuousColorScale, ContinuousScaleKind, DivergingGradient, PaletteCapacity,
+    QualitativePalette, SequentialGradient,
 };
+pub(crate) use scale_values::{HEATMAP_DIVERGING_STOPS, HEATMAP_SEQUENTIAL_STOPS};
 
-pub(crate) use mark_paint::{
+pub use mark_paint::{
     DataFillTheme, DataLineTheme, DataOutlineTheme, FixedFillTheme, OutlineTheme,
     PointOutlineTheme, PointTheme, SolidStrokeTheme, StrokeTheme,
 };
-pub use resolved::Theme;
-pub(crate) use resolved::{ResolvedTheme, SurfaceTheme, TextTheme, TitleAlignment};
+pub(crate) use resolved::ResolvedTheme;
+pub use resolved::{SurfaceTheme, TextTheme, TitleAlignment};
 
 pub use paint::Color;
-pub(crate) use paint::OpaqueColor;
-pub(crate) use spacing::{LocalMetric, RelativeSpacing};
-pub(crate) use value::ThemeValue;
+pub use paint::OpaqueColor;
+pub(crate) use spacing::LocalMetric;
+pub use spacing::RelativeSpacing;
+pub use value::{Theme, ThemeBuilder};
 
 /// Convert the current RGB tuple inputs at their private paint boundary.
 pub(crate) fn color_from_rgb((red, green, blue): (u8, u8, u8)) -> Color {

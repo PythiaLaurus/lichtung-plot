@@ -314,10 +314,14 @@ impl RequestedWeight {
     }
 }
 
+/// Closed host-resolved generic font preferences, distinct from literal names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum GenericFontFamily {
+pub enum GenericFontFamily {
+    /// Host serif preference.
     Serif,
+    /// Host sans-serif preference.
     SansSerif,
+    /// Host monospace preference.
     Monospace,
 }
 
@@ -329,12 +333,14 @@ enum FontFamilyKind {
 
 /// A literal family identity or one of the three host generic preferences.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct FontFamily {
+pub struct FontFamily {
     kind: FontFamilyKind,
 }
 
 impl FontFamily {
-    pub(crate) fn named(name: impl Into<String>) -> crate::Result<Self> {
+    /// Construct a nonempty, already trimmed, control-free literal family name.
+    /// Punctuation and CSS generic spellings remain part of this one literal name.
+    pub fn named(name: impl Into<String>) -> crate::Result<Self> {
         let name = name.into();
         if name.is_empty() {
             return Err(crate::Error::Data("font family name is empty".into()));
@@ -353,18 +359,21 @@ impl FontFamily {
             kind: FontFamilyKind::Named(name),
         })
     }
-    pub(crate) const fn generic(family: GenericFontFamily) -> Self {
+    /// Construct a host generic preference without parsing a string.
+    pub const fn generic(family: GenericFontFamily) -> Self {
         Self {
             kind: FontFamilyKind::Generic(family),
         }
     }
-    pub(crate) fn name(&self) -> Option<&str> {
+    /// Borrow the literal name, or None for a generic preference.
+    pub fn name(&self) -> Option<&str> {
         match &self.kind {
             FontFamilyKind::Named(name) => Some(name),
             FontFamilyKind::Generic(_) => None,
         }
     }
-    pub(crate) const fn generic_family(&self) -> Option<GenericFontFamily> {
+    /// Inspect the generic preference, or None for a literal name.
+    pub const fn generic_family(&self) -> Option<GenericFontFamily> {
         match self.kind {
             FontFamilyKind::Generic(family) => Some(family),
             FontFamilyKind::Named(_) => None,
@@ -373,13 +382,38 @@ impl FontFamily {
 }
 
 /// Nonempty, ordered preferences; original named bytes and duplicates are retained.
+///
+/// Obtain a built-in profile from a complete text role, or construct typed entries:
+/// ```
+/// use lichtung_plot::{FontFamily, FontStack, GenericFontFamily, Theme};
+/// let profile = Theme::publication().typography().root().title().stack().clone();
+/// assert_eq!(profile.families()[0].name(), Some("Noto Sans"));
+/// let stack = FontStack::new([
+///     FontFamily::named("A, B")?, // One literal identity, not two CSS entries.
+///     FontFamily::generic(GenericFontFamily::SansSerif),
+/// ])?;
+/// assert_eq!(stack.families().len(), 2);
+/// # Ok::<(), lichtung_plot::Error>(())
+/// ```
+///
+/// No raw stack parser or default-font constant is public:
+/// ```compile_fail
+/// let _ = lichtung_plot::FontStack::new(["Arial, sans-serif"]);
+/// ```
+/// ```compile_fail
+/// use lichtung_plot::DEFAULT_FONT_FAMILY;
+/// ```
+/// ```compile_fail
+/// use lichtung_plot::DEFAULT_FONT_FAMILY_STACK;
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct FontStack {
+pub struct FontStack {
     families: Arc<Vec<FontFamily>>,
 }
 
 impl FontStack {
-    pub(crate) fn new(families: impl IntoIterator<Item = FontFamily>) -> crate::Result<Self> {
+    /// Retain a nonempty ordered sequence, preserving literal bytes and duplicates.
+    pub fn new(families: impl IntoIterator<Item = FontFamily>) -> crate::Result<Self> {
         let mut retained = Vec::new();
         for family in families {
             retained
@@ -394,7 +428,8 @@ impl FontStack {
             families: Arc::new(retained),
         })
     }
-    pub(crate) fn families(&self) -> &[FontFamily] {
+    /// Borrow the complete ordered preference sequence.
+    pub fn families(&self) -> &[FontFamily] {
         &self.families
     }
 
@@ -4075,7 +4110,7 @@ mod tests {
         );
         assert_eq!(
             builtin_font_stack().css().unwrap(),
-            crate::DEFAULT_FONT_FAMILY_STACK
+            "Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif"
         );
         assert_eq!(
             named_stack(&["-Font", "--Font", "-16 Font", "sans-serif Display", "emoji"])

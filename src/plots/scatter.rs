@@ -170,7 +170,7 @@ impl PreparedScatter {
                 )?,
             });
         }
-        if let Some(exact) = chart.categorical_colors_spec() {
+        if let Some(exact) = chart.categorical_map_spec() {
             for group in &groups {
                 if let Some(label) = &group.label {
                     if exact.color_in(label).is_none() {
@@ -211,7 +211,7 @@ impl PreparedScatter {
         CategoryColors::resolve(
             &keys,
             theme.color_scales.qualitative(),
-            chart.categorical_colors_spec(),
+            chart.categorical_color_scale_spec(),
             resources,
         )
     }

@@ -1645,7 +1645,7 @@ mod tests {
         )
         .erase();
         let domains = [crate::spec::AxisDomain::Continuous; 2];
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
         let standard = crate::layout::StandardPanelInputs::new(&theme).unwrap();
         let state = |plot: &crate::Plot, standard: &crate::layout::StandardPanelInputs| {
             let mut round = FeedbackRound::new(None, 0).unwrap();

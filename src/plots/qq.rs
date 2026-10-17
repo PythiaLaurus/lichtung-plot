@@ -549,7 +549,7 @@ mod tests {
         let resources = crate::font::canonical::OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         let before = chart.intrinsic_body_minimum(&theme).unwrap();
         let radii = theme.marks.points().radii().clone().with_qq(54).unwrap();
         let points = theme.marks.points().clone().with_radii(radii).unwrap();

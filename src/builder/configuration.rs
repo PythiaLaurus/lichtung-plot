@@ -2,10 +2,10 @@ use super::Plot;
 use crate::layers::{BarPointLayer, GuideSpec, PointLayer};
 use crate::layout::AxisTick;
 use crate::spec::{
-    AxisScale, BarSpacing, CategoricalColors, CategoryOrder, HeatmapAnnotations, HeatmapLabelFit,
-    HeatmapLayout, HeatmapNullRowAnnotation, HeatmapScale, HistogramBins, HistogramComposite,
-    HistogramStat, InteractionStyle, LegendPolicy, LinePathStyle, NumericLabelFormat,
-    PanelTextAnnotation, QqLine, RawOverlay, RegressionBand, WaterfallLabels,
+    AxisScale, BarSpacing, CategoryOrder, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout,
+    HeatmapNullRowAnnotation, HistogramBins, HistogramComposite, HistogramStat, InteractionStyle,
+    LegendPolicy, LinePathStyle, NumericLabelFormat, PanelTextAnnotation, QqLine, RawOverlay,
+    RegressionBand, WaterfallLabels,
 };
 use crate::theme::Theme;
 use crate::Labels;
@@ -288,13 +288,64 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    /// Sets exact caller-owned colors for every categorical level used by the plot.
+    /// Replace the complete categorical palette/map selection for active raw identities.
     #[must_use]
-    pub fn categorical_colors(mut self, colors: CategoricalColors) -> Self
+    ///
+    /// The retired map-only setter is unavailable:
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, CategoricalColorScale, Plot};
+    /// fn old_setter(plot: Plot<kind::Scatter>, scale: CategoricalColorScale) {
+    ///     let _ = plot.categorical_colors(scale);
+    /// }
+    /// ```
+    /// This attachment is not an accent-only or erased-family capability:
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, CategoricalColorScale, Plot};
+    /// fn wrong_family(plot: Plot<kind::Regression>, scale: CategoricalColorScale) {
+    ///     let _ = plot.categorical_color_scale(scale);
+    /// }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{CategoricalColorScale, Plot};
+    /// fn erased(plot: Plot, scale: CategoricalColorScale) {
+    ///     let _ = plot.categorical_color_scale(scale);
+    /// }
+    /// ```
+    pub fn categorical_color_scale(mut self, scale: crate::CategoricalColorScale) -> Self
     where
-        K: crate::kind::CategoricalColors,
+        K: crate::kind::CategoricalScale,
     {
-        self.categorical_colors = Some(colors);
+        self.categorical_color_scale = Some(scale);
+        self
+    }
+
+    /// Replace the complete continuous kind, optional gradient and optional exact domain.
+    #[must_use]
+    ///
+    /// Exact limits belong to the complete typed selection:
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, Plot};
+    /// fn old_limits(plot: Plot<kind::Heatmap>) {
+    ///     let _ = plot.color_limits(0.0, 1.0);
+    /// }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, Plot};
+    /// fn old_limits(plot: Plot<kind::Beeswarm>) {
+    ///     let _ = plot.color_limits(0.0, 1.0);
+    /// }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, ContinuousColorScale, Plot};
+    /// fn old_selector(plot: Plot<kind::Heatmap>, scale: ContinuousColorScale) {
+    ///     let _ = plot.scale(scale);
+    /// }
+    /// ```
+    pub fn continuous_color_scale(mut self, scale: crate::ContinuousColorScale) -> Self
+    where
+        K: crate::kind::ContinuousColor,
+    {
+        self.continuous_color_scale = Some(scale);
         self
     }
 
@@ -320,14 +371,10 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// Set a complete explicit Plot theme.
     ///
-    /// If omitted, a standalone Plot uses [`Theme::Publication`] and a Plot in
+    /// If omitted, a standalone Plot uses [`Theme::publication`] and a Plot in
     /// a [`crate::Canvas`] inherits the Canvas root theme.
     #[must_use]
-    pub fn theme(self, theme: Theme) -> Self {
-        self.with_theme_value(theme.into_value())
-    }
-
-    pub(crate) fn with_theme_value(mut self, theme: crate::theme::ThemeValue) -> Self {
+    pub fn theme(mut self, theme: Theme) -> Self {
         self.theme = Some(std::sync::Arc::new(theme));
         self
     }
@@ -377,13 +424,6 @@ impl<K: crate::kind::Marker> Plot<K> {
 }
 
 impl Plot<crate::kind::Heatmap> {
-    /// Set the heatmap color-scale policy.
-    #[must_use]
-    pub fn scale(mut self, scale: HeatmapScale) -> Self {
-        self.heatmap_scale = scale;
-        self
-    }
-
     /// Select Cartesian or structural triangular heatmap cells.
     #[must_use]
     pub fn layout(mut self, layout: HeatmapLayout) -> Self {
@@ -397,13 +437,6 @@ impl Plot<crate::kind::Heatmap> {
         self.heatmap_annotations = annotations;
         self
     }
-
-    /// Set exact heatmap color-domain limits. Values outside them saturate.
-    #[must_use]
-    pub fn color_limits(mut self, min: f64, max: f64) -> Self {
-        self.heatmap_color_limits = Some((min, max));
-        self
-    }
 }
 
 impl Plot<crate::kind::Forest> {
@@ -411,15 +444,6 @@ impl Plot<crate::kind::Forest> {
     #[must_use]
     pub fn scale(mut self, scale: AxisScale) -> Self {
         self.axis_scale = scale;
-        self
-    }
-}
-
-impl Plot<crate::kind::Beeswarm> {
-    /// Set exact continuous-color limits. Values outside them saturate.
-    #[must_use]
-    pub fn color_limits(mut self, min: f64, max: f64) -> Self {
-        self.beeswarm_color_limits = Some((min, max));
         self
     }
 }

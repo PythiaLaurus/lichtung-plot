@@ -12,13 +12,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ys: Vec<f64> = (0..20)
         .map(|i| (f64::from(i) * 0.5).cos() * 3.0 + 7.0)
         .collect();
-    for theme in [
-        Theme::Publication,
-        Theme::Nature,
-        Theme::Science,
-        Theme::CHI,
+    for (name, theme) in [
+        ("publication", Theme::publication()),
+        ("nature", Theme::nature()),
+        ("science", Theme::science()),
+        ("chi", Theme::chi()),
     ] {
-        let path = std::env::temp_dir().join(format!("theme_{theme:?}.svg"));
+        let path = std::env::temp_dir().join(format!("theme_{name}.svg"));
         Plot::scatter(
             NumericValues::new("x", xs.clone()),
             NumericValues::new("y", ys.clone()),

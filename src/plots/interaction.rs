@@ -138,6 +138,17 @@ pub(crate) fn intrinsic_body_minimum(
 }
 
 impl PreparedInteraction {
+    pub(crate) fn color_keys(&self) -> impl Iterator<Item = &str> {
+        let has_hue = self.traces.iter().any(|trace| trace.identity.hue.is_some());
+        self.traces.iter().filter_map(move |trace| {
+            if has_hue {
+                trace.identity.hue.as_deref()
+            } else {
+                trace.identity.group.as_deref()
+            }
+        })
+    }
+
     fn resolved_colors(
         &self,
         chart: &Plot,
@@ -160,13 +171,7 @@ impl PreparedInteraction {
             let mut observed = Vec::new();
             crate::data::source::reserve_source(&mut observed, self.traces.len())?;
 
-            for trace in &self.traces {
-                let raw = if has_hue {
-                    trace.identity.hue.as_ref()
-                } else {
-                    trace.identity.group.as_ref()
-                }
-                .ok_or_else(|| Error::Render("Interaction color identity is missing".into()))?;
+            for raw in self.color_keys() {
                 observed.push(crate::data::source::copy_source_string(raw)?);
             }
             crate::data::source::source_levels(&observed)?
@@ -174,7 +179,7 @@ impl PreparedInteraction {
         CategoryColors::resolve(
             &keys,
             theme.color_scales.qualitative(),
-            chart.categorical_colors_spec(),
+            chart.categorical_color_scale_spec(),
             data.source_resources()?,
         )
     }
@@ -385,7 +390,7 @@ pub(crate) fn prepare(
             cells,
         });
     }
-    if let Some(exact) = chart.categorical_colors_spec() {
+    if let Some(exact) = chart.categorical_map_spec() {
         for trace in &traces {
             let key = trace
                 .identity

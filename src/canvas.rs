@@ -144,7 +144,7 @@ enum ResolvedPlotTheme {
 }
 
 impl ResolvedCanvasThemes {
-    fn new(root: &crate::theme::ThemeValue, plots: &[Option<Plot>]) -> Result<Self, Error> {
+    fn new(root: &crate::theme::Theme, plots: &[Option<Plot>]) -> Result<Self, Error> {
         let root = Box::new(root.resolve()?);
         let plots = plots
             .iter()
@@ -305,16 +305,15 @@ fn validate_header_overlap(
 
 /// A typed grid of independently configured charts rendered on one canvas.
 ///
-/// Canvas owns one root theme, which defaults to [`Theme::Publication`]. Plots
+/// Canvas owns one root theme, which defaults to [`Theme::publication`]. Plots
 /// without an explicit theme inherit that root.
 pub struct Canvas {
     rows: usize,
     columns: usize,
     panels: Vec<Option<Plot>>,
     text_panels: Vec<Option<TextPanel>>,
-    theme: Arc<crate::theme::ThemeValue>,
+    theme: Arc<crate::theme::Theme>,
     legend_policy: CanvasLegendPolicy,
-    shared_legend_gap: Option<f64>,
     width: u32,
     height: u32,
     title: Option<String>,
@@ -371,9 +370,8 @@ impl Canvas {
             columns,
             panels: (0..panel_count).map(|_| None).collect(),
             text_panels: (0..panel_count).map(|_| None).collect(),
-            theme: Arc::new(crate::theme::ThemeValue::publication()),
+            theme: Arc::new(crate::theme::Theme::publication()),
             legend_policy: CanvasLegendPolicy::PerPlot,
-            shared_legend_gap: None,
             width: 960,
             height: 640,
             title: None,
@@ -454,17 +452,6 @@ impl Canvas {
     pub fn legend_policy(mut self, policy: CanvasLegendPolicy) -> Self {
         self.legend_policy = policy;
         self
-    }
-
-    /// Set the exact CSS-pixel gap between the panel grid and a shared legend.
-    pub fn shared_legend_gap(mut self, gap: f64) -> Result<Self, Error> {
-        if !gap.is_finite() || gap < 0.0 {
-            return Err(Error::Data(
-                "canvas shared legend gap must be finite and nonnegative".into(),
-            ));
-        }
-        self.shared_legend_gap = Some(gap);
-        Ok(self)
     }
 
     /// Add one measured header spanning contiguous canvas columns.
@@ -586,13 +573,14 @@ impl Canvas {
     ///
     /// Plots without an explicit theme inherit this theme. A theme selected with
     /// [`Plot::theme`] completely replaces it for that Plot. If this method is
-    /// omitted, the Canvas root uses [`Theme::Publication`].
+    /// omitted, the Canvas root uses [`Theme::publication`].
     #[must_use]
-    pub fn theme(self, theme: Theme) -> Self {
-        self.with_theme_value(theme.into_value())
-    }
-
-    pub(crate) fn with_theme_value(mut self, theme: crate::theme::ThemeValue) -> Self {
+    ///
+    /// Shared legend spacing is configured only in the complete theme:
+    /// ```compile_fail
+    /// let _ = lichtung_plot::Canvas::grid(1, 1).unwrap().shared_legend_gap(8.0);
+    /// ```
+    pub fn theme(mut self, theme: Theme) -> Self {
         self.theme = Arc::new(theme);
         self
     }
@@ -683,11 +671,6 @@ impl Canvas {
         if self.panels.iter().all(Option::is_none) && self.text_panels.iter().all(Option::is_none) {
             return Err(Error::Data(
                 "canvas requires at least one configured panel".into(),
-            ));
-        }
-        if self.shared_legend_gap.is_some() && self.legend_policy != CanvasLegendPolicy::Shared {
-            return Err(Error::Data(
-                "canvas shared legend gap requires CanvasLegendPolicy::Shared".into(),
             ));
         }
         for plot in self.panels.iter().flatten() {
@@ -1370,6 +1353,21 @@ impl Canvas {
                     self.prepare_interiors(prepared_stage, Some(&themes))?;
                 self.validate_shared_guide_kinds(&interiors)?;
                 let point_path_hue_groups = self.prepared_point_path_hue_groups(&interiors)?;
+                for (index, plot) in self.panels.iter().enumerate() {
+                    if let (Some(plot), Some(inputs)) = (plot, interiors[index].as_ref()) {
+                        let global_hues = point_path_hue_groups.as_ref().and_then(|groups| {
+                            groups
+                                .iter()
+                                .find(|(field, _)| Some(field.as_str()) == plot.hue_dimension_key())
+                                .map(|(_, levels)| levels.as_slice())
+                        });
+                        inputs.validate_categorical_scale(
+                            plot,
+                            themes.plot(index).expect("configured Canvas theme"),
+                            global_hues,
+                        )?;
+                    }
+                }
                 let discrete_shared_guide = self.prepared_discrete_shared_guide(
                     &themes,
                     &interiors,
@@ -2365,11 +2363,7 @@ impl Canvas {
                 edge,
                 crate::LegendPosition::OutsideTop | crate::LegendPosition::OutsideBottom
             );
-            let gap = if let Some(gap) = self.shared_legend_gap {
-                gap
-            } else {
-                themes.root().legend_shared_gap()?
-            };
+            let gap = themes.root().legend_shared_gap()?;
             let grid_gap = themes.root().composition_grid_gap()?;
             let positive_span = crate::layout::canvas::MINIMUM_PANEL_SPAN;
             let mut columns = Vec::new();

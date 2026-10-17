@@ -75,7 +75,7 @@ impl PreparedMarginal {
         let colors = CategoryColors::resolve(
             keys,
             theme.color_scales.qualitative(),
-            chart.categorical_colors_spec(),
+            chart.categorical_color_scale_spec(),
             resources,
         )?;
         let accents = AccentColors::resolve(
@@ -763,7 +763,7 @@ pub(crate) fn prepare(
     data: crate::data::PlotData<'_>,
 ) -> Result<PreparedMarginal, Error> {
     let (groups, hues) = build_groups(chart, data)?;
-    if let Some(exact) = chart.categorical_colors_spec() {
+    if let Some(exact) = chart.categorical_map_spec() {
         for hue in &hues {
             if exact.color_in(hue).is_none() {
                 return Err(Error::Data(format!(

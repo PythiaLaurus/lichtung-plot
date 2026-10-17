@@ -105,7 +105,7 @@ fn plan_comparisons(
     legend_constraint: LegendAnnotationConstraint,
     mark_style: SignificanceMarkStyle,
 ) -> Result<SignificancePlan, Error> {
-    let theme = crate::Theme::Publication.resolve().unwrap();
+    let theme = crate::Theme::publication().resolve().unwrap();
     let effective = theme.effective_significance(Some(mark_style))?;
     plan_comparisons_with_label(
         annotations,

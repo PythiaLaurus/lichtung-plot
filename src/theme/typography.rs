@@ -15,12 +15,13 @@ macro_rules! text_group {
     ) => {
         $(#[$attribute])*
         #[derive(Clone, Debug, PartialEq)]
-        pub(crate) struct $name {
+        pub struct $name {
             $(pub(crate) $field: $type),+
         }
 
         impl $name {
-            pub(crate) fn new($($field: $type),+) -> Result<Self, Error> {
+            /// Construct all complete text roles and validate their invariants.
+            pub fn new($($field: $type),+) -> Result<Self, Error> {
                 let value = Self { $($field),+ };
                 value.validate()?;
                 Ok(value)
@@ -33,12 +34,13 @@ macro_rules! text_group {
             }
 
             $(
-                pub(crate) fn $field(&self) -> &$type {
+                #[doc = concat!("Borrow the independent `", stringify!($field), "` text role.")]
+                pub fn $field(&self) -> &$type {
                     &self.$field
                 }
 
-                #[allow(dead_code, reason = "private complete construction edits await Theme exposure")]
-                pub(crate) fn $edit(mut self, value: $type) -> Result<Self, Error> {
+                #[doc = concat!("Replace only `", stringify!($field), "`, validating the complete role group.")]
+                pub fn $edit(mut self, value: $type) -> Result<Self, Error> {
                     self.$field = value;
                     self.validate()?;
                     Ok(self)

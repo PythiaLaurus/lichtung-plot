@@ -11,7 +11,7 @@ fn selected_role_padding_is_retained_for_fit_and_reassignment() {
     let operation = crate::font::canonical::OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
     let chart = inputs.attach(source).unwrap();
-    let mut theme = crate::Theme::Publication.resolve().unwrap();
+    let mut theme = crate::Theme::publication().resolve().unwrap();
     theme.typography.annotations.panel_text.font_size = 28;
     theme.annotations = theme
         .annotations

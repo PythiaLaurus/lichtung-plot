@@ -148,7 +148,7 @@ impl PreparedLine {
         let map = CategoryColors::resolve(
             chart.global_hue_levels().unwrap_or(&self.hues),
             theme.color_scales.qualitative(),
-            chart.categorical_colors_spec(),
+            chart.categorical_color_scale_spec(),
             resources,
         )?;
         let slots = self
@@ -386,7 +386,7 @@ impl PreparedLine {
                 .iter()
                 .map(|label| crate::data::source::copy_source_string(label)),
         )?;
-        if let Some(exact) = chart.categorical_colors_spec() {
+        if let Some(exact) = chart.categorical_map_spec() {
             for hue in &hues {
                 if exact.color_in(hue).is_none() {
                     return Err(Error::Data(format!(

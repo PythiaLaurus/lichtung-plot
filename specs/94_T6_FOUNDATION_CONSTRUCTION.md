@@ -1,8 +1,9 @@
 # T6A2 — Authoritative Foundation Construction Design
 
 **Status**: Approved construction target; both user product decisions closed.
-Private foundational values are complete; complete Theme construction, remaining
-consumer resolution and public cutovers are tracked in spec93.
+Private foundational values and consumer resolution are complete. Public exact
+styles and complete Theme/font/scale exposure are complete. Spec93 tracks the
+remaining narrow instruction and presentation cutovers.
 
 ## 1. Authority, Scope And Decisions
 
@@ -12,7 +13,8 @@ approved foundations. It derives from the committed T6A1 census
 (`6ef761f`), [spec03](03_THEME_SYSTEM.md), [spec05](05_LAYOUT_SYSTEM.md),
 [spec93](93_T6_EXECUTION_PLAN.md), and the active adjudication overlay in
 [spec04](04_VISUAL_PROPERTY_OWNERSHIP.md). It specifies the replacement API;
-it does not claim that API is implemented or currently exported.
+implementation and current exposure are recorded by spec93 and the current
+architecture/rendering contracts rather than inferred from signature sketches.
 
 Source inspection includes `src/theme/{resolved,scale,color,contrast}.rs`,
 `src/layers.rs`, `src/spec{,/estimate,/categorical}.rs`, `src/font/canonical.rs`,

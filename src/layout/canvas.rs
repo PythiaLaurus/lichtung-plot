@@ -268,7 +268,7 @@ mod tests {
 
     #[test]
     fn root_padding_has_no_axis_estimate_or_unconditional_top_minimum() {
-        let theme = Theme::Publication.resolve().unwrap();
+        let theme = Theme::publication().resolve().unwrap();
         let frame = RootFramePlan::measure(
             (100, 80),
             &theme,
@@ -298,7 +298,7 @@ mod tests {
         reason = "positive built-in insets plus the measured child minimum fit u32 after ceiling"
     )]
     fn measured_child_root_frame_rejects_residual_fit_without_clamping_or_text_fallback() {
-        let theme = Theme::Publication.resolve().unwrap();
+        let theme = Theme::publication().resolve().unwrap();
         let insets = CanvasInsets {
             left: 16.0,
             right: 16.0,
@@ -332,7 +332,7 @@ mod tests {
 
     #[test]
     fn measured_caption_wraps_without_shortening_and_rejects_impossible_fit() {
-        let theme = Theme::Publication.resolve().unwrap();
+        let theme = Theme::publication().resolve().unwrap();
         let caption =
             "diagnostic provenance with a deliberately long model and adjustment description";
         let alignments = crate::decorations::title_block::plan::RootAlignments::resolve(
@@ -367,7 +367,7 @@ mod tests {
 
     #[test]
     fn root_title_subtitle_gap_affects_reservation_and_position() {
-        let base = Theme::Publication.resolve().unwrap();
+        let base = Theme::publication().resolve().unwrap();
         let mut spaced = base.clone();
         spaced.composition = spaced
             .composition
@@ -408,7 +408,7 @@ mod tests {
 
     #[test]
     fn facet_measurement_uses_the_complete_selected_role_occupancy() {
-        let mut theme = Theme::Publication.resolve().unwrap();
+        let mut theme = Theme::publication().resolve().unwrap();
         theme.typography.root.subtitle.font_size = 7;
         theme.typography.composition.facet_header = theme
             .typography
@@ -471,7 +471,7 @@ mod tests {
 
     #[test]
     fn wrapping_uses_shared_measurement_for_wide_combining_and_newline_text() {
-        let theme = Theme::Publication.resolve().unwrap();
+        let theme = Theme::publication().resolve().unwrap();
         let mut appearance = theme.typography.annotations.panel_text.clone();
         appearance.font_size = 12;
 

@@ -12,7 +12,7 @@ fn stop(offset: f64, red: u8) -> ColorStop {
 #[test]
 fn map_retains_exact_raw_keys_order_and_opaque_colors_without_normalization() {
     let rgb = OpaqueColor::rgb(13, 29, 47);
-    let map = CategoricalColors::from_opaque([
+    let map = CategoricalColorMap::new([
         ("A  B".into(), rgb),
         ("a b".into(), rgb),
         ("é".into(), rgb),
@@ -28,13 +28,12 @@ fn map_retains_exact_raw_keys_order_and_opaque_colors_without_normalization() {
     assert_eq!(map.color("é"), Some(rgb));
     assert_eq!(map.color("A B"), None);
     assert_eq!(map.color("unused"), None);
-    assert!(CategoricalColors::from_opaque([]).is_err());
+    assert!(CategoricalColorMap::new([]).is_err());
     for key in ["", " leading", "trailing ", "control\n", "\u{0000}"] {
-        assert!(CategoricalColors::from_opaque([(key.into(), rgb)]).is_err());
+        assert!(CategoricalColorMap::new([(key.into(), rgb)]).is_err());
     }
     assert!(
-        CategoricalColors::from_opaque([("duplicate".into(), rgb), ("duplicate".into(), rgb)])
-            .is_err()
+        CategoricalColorMap::new([("duplicate".into(), rgb), ("duplicate".into(), rgb)]).is_err()
     );
     let copied = map.clone();
     assert_eq!(
@@ -125,10 +124,97 @@ fn domains_and_continuous_edits_validate_kind_center_and_complete_result() {
 }
 
 #[test]
+fn fixed_plot_palette_capacity_is_checked_before_fonts_even_with_hidden_legend() {
+    let theme = crate::Theme::publication()
+        .customize()
+        .with_font_stack(
+            crate::FontStack::new([crate::FontFamily::named(
+                "Absent fixed palette preflight font",
+            )
+            .unwrap()])
+            .unwrap(),
+        )
+        .unwrap()
+        .build()
+        .unwrap();
+    let plot = crate::Plot::scatter(
+        crate::NumericValues::new("x", [1.0, 2.0]),
+        crate::NumericValues::new("y", [2.0, 1.0]),
+    )
+    .hue(crate::CategoryValues::new("raw", ["A  B", "A B"]).unwrap())
+    .theme(theme)
+    .legend(crate::LegendPolicy::Hidden)
+    .categorical_color_scale(CategoricalColorScale::from_palette(
+        QualitativePalette::fixed([OpaqueColor::rgb(13, 29, 47)]).unwrap(),
+    ));
+    let discoveries = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
+    let error = plot.preflight().unwrap_err();
+    assert!(matches!(error, crate::Error::Data(_)), "{error}");
+    assert!(
+        error.to_string().contains("1 colors for 2 used identities"),
+        "{error}"
+    );
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        discoveries,
+    );
+}
+
+#[test]
+fn hidden_shared_plots_validate_the_final_palette_domain_before_fonts() {
+    let base = crate::Theme::publication();
+    let scales = base
+        .color_scales()
+        .clone()
+        .with_qualitative(QualitativePalette::fixed([OpaqueColor::rgb(13, 29, 47)]).unwrap())
+        .unwrap();
+    let theme = base
+        .customize()
+        .with_color_scales(scales)
+        .with_font_stack(
+            crate::FontStack::new([crate::FontFamily::named(
+                "Absent shared palette preflight font",
+            )
+            .unwrap()])
+            .unwrap(),
+        )
+        .unwrap()
+        .build()
+        .unwrap();
+    let scatter = |key| {
+        crate::Plot::scatter(
+            crate::NumericValues::new("x", [1.0, 2.0]),
+            crate::NumericValues::new("y", [2.0, 1.0]),
+        )
+        .hue(crate::CategoryValues::new("raw", [key, key]).unwrap())
+        .legend(crate::LegendPolicy::Hidden)
+    };
+    let canvas = crate::Canvas::grid(1, 2)
+        .unwrap()
+        .theme(theme)
+        .panel(0, 0, scatter("A  B"))
+        .unwrap()
+        .panel(0, 1, scatter("A B"))
+        .unwrap()
+        .legend_policy(crate::CanvasLegendPolicy::Shared);
+    let discoveries = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
+    let error = canvas.preflight().unwrap_err();
+    assert!(matches!(error, crate::Error::Data(_)), "{error}");
+    assert!(
+        error.to_string().contains("1 colors for 2 used identities"),
+        "{error}"
+    );
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        discoveries,
+    );
+}
+
+#[test]
 fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_owner() {
     use crate::render::backend::Backend;
     let resources = OperationContext::new();
-    let mut theme = crate::Theme::Publication.resolve().unwrap();
+    let mut theme = crate::Theme::publication().resolve().unwrap();
     let original = theme.clone();
     let palette =
         QualitativePalette::fixed([OpaqueColor::rgb(11, 23, 37), OpaqueColor::rgb(41, 59, 73)])

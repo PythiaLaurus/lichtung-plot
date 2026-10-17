@@ -18,21 +18,20 @@ pub(crate) fn stroke_style(stroke: &StrokeTheme) -> Result<crate::render::backen
     Ok(stroke.backend_style())
 }
 
+/// Nonempty set of physical coordinate-frame sides.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct FrameSides {
+pub struct FrameSides {
     bits: u8,
 }
 
 macro_rules! side_field {
     ($field:ident, $edit:ident, $bit:literal) => {
-        pub(crate) fn $field(&self) -> bool {
+        #[doc = concat!("Inspect whether the physical `", stringify!($field), "` side is present.")]
+        pub fn $field(&self) -> bool {
             self.bits & $bit != 0
         }
-        #[cfg_attr(
-            not(test),
-            expect(dead_code, reason = "private side edits await complete Theme exposure")
-        )]
-        pub(crate) fn $edit(mut self, value: bool) -> Result<Self> {
+        #[doc = concat!("Replace only the `", stringify!($field), "` side; at least one side must remain.")]
+        pub fn $edit(mut self, value: bool) -> Result<Self> {
             self.bits = if value {
                 self.bits | $bit
             } else {
@@ -49,7 +48,8 @@ impl FrameSides {
         clippy::fn_params_excessive_bools,
         reason = "the complete constructor explicitly names the four independent frame sides"
     )]
-    pub(crate) fn new(top: bool, right: bool, bottom: bool, left: bool) -> Result<Self> {
+    /// Construct a present frame's physical side set; at least one must be true.
+    pub fn new(top: bool, right: bool, bottom: bool, left: bool) -> Result<Self> {
         let value = Self {
             bits: u8::from(top)
                 | (u8::from(right) << 1)
@@ -81,14 +81,16 @@ impl FrameSides {
     }
 }
 
+/// Complete frame sides and independent stroke appearance.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct FrameTheme {
+pub struct FrameTheme {
     pub(crate) sides: FrameSides,
     pub(crate) stroke: StrokeTheme,
 }
 
 impl FrameTheme {
-    pub(crate) fn new(sides: FrameSides, stroke: StrokeTheme) -> Result<Self> {
+    /// Construct a nonempty side set and complete stroke.
+    pub fn new(sides: FrameSides, stroke: StrokeTheme) -> Result<Self> {
         let value = Self { sides, stroke };
         value.validate()?;
         Ok(value)
@@ -97,42 +99,34 @@ impl FrameTheme {
         self.sides.validate()?;
         self.stroke.validate()
     }
-    pub(crate) fn sides(&self) -> &FrameSides {
+    /// Borrow the physical side set.
+    pub fn sides(&self) -> &FrameSides {
         &self.sides
     }
-    pub(crate) fn stroke(&self) -> &StrokeTheme {
+    /// Borrow the complete frame stroke.
+    pub fn stroke(&self) -> &StrokeTheme {
         &self.stroke
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "private frame edits await complete Theme exposure"
-        )
-    )]
-    pub(crate) fn with_sides(self, sides: FrameSides) -> Result<Self> {
+    /// Replace only the nonempty physical side set.
+    pub fn with_sides(self, sides: FrameSides) -> Result<Self> {
         Self::new(sides, self.stroke)
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "private frame edits await complete Theme exposure"
-        )
-    )]
-    pub(crate) fn with_stroke(self, stroke: StrokeTheme) -> Result<Self> {
+    /// Replace only the complete frame stroke.
+    pub fn with_stroke(self, stroke: StrokeTheme) -> Result<Self> {
         Self::new(self.sides, stroke)
     }
 }
 
+/// Complete tick stroke and positive integral CSS length.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct TickTheme {
+pub struct TickTheme {
     pub(crate) stroke: StrokeTheme,
     pub(crate) length: u32,
 }
 
 impl TickTheme {
-    pub(crate) fn new(stroke: StrokeTheme, length: u32) -> Result<Self> {
+    /// Construct the tick stroke and positive CSS length.
+    pub fn new(stroke: StrokeTheme, length: u32) -> Result<Self> {
         let value = Self { stroke, length };
         value.validate()?;
         Ok(value)
@@ -146,24 +140,20 @@ impl TickTheme {
         }
         Ok(())
     }
-    pub(crate) fn stroke(&self) -> &StrokeTheme {
+    /// Borrow the complete tick stroke.
+    pub fn stroke(&self) -> &StrokeTheme {
         &self.stroke
     }
-    pub(crate) fn length(&self) -> u32 {
+    /// Inspect the positive tick length in CSS pixels.
+    pub fn length(&self) -> u32 {
         self.length
     }
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "private tick edits await complete Theme exposure")
-    )]
-    pub(crate) fn with_stroke(self, stroke: StrokeTheme) -> Result<Self> {
+    /// Replace only the complete tick stroke.
+    pub fn with_stroke(self, stroke: StrokeTheme) -> Result<Self> {
         Self::new(stroke, self.length)
     }
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "private tick edits await complete Theme exposure")
-    )]
-    pub(crate) fn with_length(self, length: u32) -> Result<Self> {
+    /// Replace only the positive CSS tick length.
+    pub fn with_length(self, length: u32) -> Result<Self> {
         Self::new(self.stroke, length)
     }
 }
@@ -171,14 +161,17 @@ impl TickTheme {
 macro_rules! axis_spacing {
     ($($field:ident => $edit:ident : $metric:literal),+ $(,)?) => {
         #[derive(Clone, Debug, PartialEq, Eq)]
-        pub(crate) struct AxisSpacing { $(pub(crate) $field: RelativeSpacing),+ }
+        /// Exact independent axis gaps, resolved from tick-label or axis-title em.
+        pub struct AxisSpacing { $(pub(crate) $field: RelativeSpacing),+ }
 
         impl AxisSpacing {
-            pub(crate) fn new($($field: RelativeSpacing),+) -> Result<Self> { Ok(Self { $($field),+ }) }
+            /// Construct all six nonnegative local spacing relationships.
+            pub fn new($($field: RelativeSpacing),+) -> Result<Self> { Ok(Self { $($field),+ }) }
             $(
-                pub(crate) fn $field(&self) -> &RelativeSpacing { &self.$field }
-                #[allow(dead_code, reason = "private spacing edits await complete Theme exposure")]
-                pub(crate) fn $edit(mut self, value: RelativeSpacing) -> Result<Self> {
+                #[doc = concat!("Borrow the exact `", stringify!($field), "` relationship.")]
+                pub fn $field(&self) -> &RelativeSpacing { &self.$field }
+                #[doc = concat!("Replace only the `", stringify!($field), "` relationship.")]
+                pub fn $edit(mut self, value: RelativeSpacing) -> Result<Self> {
                     self.$field = value;
                     self.revalidated()
                 }
@@ -206,8 +199,9 @@ axis_spacing! {
     y_title_edge_padding => with_y_title_edge_padding: 1,
 }
 
+/// Complete coordinate/cell frame, tick, grid and local spacing appearance.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct AxisTheme {
+pub struct AxisTheme {
     pub(crate) frame: Option<FrameTheme>,
     pub(crate) cell_frame: Option<FrameTheme>,
     pub(crate) ticks: Option<TickTheme>,
@@ -245,7 +239,8 @@ impl AxisChrome<'_> {
 }
 
 impl AxisTheme {
-    pub(crate) fn new(
+    /// Construct complete axis chrome, using None for absent frame/ticks/grid.
+    pub fn new(
         frame: Option<FrameTheme>,
         cell_frame: Option<FrameTheme>,
         ticks: Option<TickTheme>,
@@ -277,19 +272,24 @@ impl AxisTheme {
         }
         Ok(())
     }
-    pub(crate) fn frame(&self) -> Option<&FrameTheme> {
+    /// Borrow the optional ordinary coordinate frame.
+    pub fn frame(&self) -> Option<&FrameTheme> {
         self.frame.as_ref()
     }
-    pub(crate) fn cell_frame(&self) -> Option<&FrameTheme> {
+    /// Borrow the independent optional variable-grid cell frame.
+    pub fn cell_frame(&self) -> Option<&FrameTheme> {
         self.cell_frame.as_ref()
     }
-    pub(crate) fn ticks(&self) -> Option<&TickTheme> {
+    /// Borrow the optional tick appearance.
+    pub fn ticks(&self) -> Option<&TickTheme> {
         self.ticks.as_ref()
     }
-    pub(crate) fn grid(&self) -> Option<&StrokeTheme> {
+    /// Borrow the optional grid stroke.
+    pub fn grid(&self) -> Option<&StrokeTheme> {
         self.grid.as_ref()
     }
-    pub(crate) fn spacing(&self) -> &AxisSpacing {
+    /// Borrow all independent exact axis relationships.
+    pub fn spacing(&self) -> &AxisSpacing {
         &self.spacing
     }
     pub(crate) fn coordinate_chrome(&self) -> AxisChrome<'_> {
@@ -308,33 +308,24 @@ impl AxisTheme {
             ticks: self.ticks(),
         }
     }
-    pub(crate) fn with_frame(self, frame: Option<FrameTheme>) -> Result<Self> {
+    /// Replace only the optional coordinate frame.
+    pub fn with_frame(self, frame: Option<FrameTheme>) -> Result<Self> {
         Self::new(frame, self.cell_frame, self.ticks, self.grid, self.spacing)
     }
-    pub(crate) fn with_cell_frame(self, cell_frame: Option<FrameTheme>) -> Result<Self> {
+    /// Replace only the optional variable-grid cell frame.
+    pub fn with_cell_frame(self, cell_frame: Option<FrameTheme>) -> Result<Self> {
         Self::new(self.frame, cell_frame, self.ticks, self.grid, self.spacing)
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "private tick replacement awaits complete Theme exposure"
-        )
-    )]
-    pub(crate) fn with_ticks(self, ticks: Option<TickTheme>) -> Result<Self> {
+    /// Replace only the optional tick appearance.
+    pub fn with_ticks(self, ticks: Option<TickTheme>) -> Result<Self> {
         Self::new(self.frame, self.cell_frame, ticks, self.grid, self.spacing)
     }
-    pub(crate) fn with_grid(self, grid: Option<StrokeTheme>) -> Result<Self> {
+    /// Replace only the optional grid stroke.
+    pub fn with_grid(self, grid: Option<StrokeTheme>) -> Result<Self> {
         Self::new(self.frame, self.cell_frame, self.ticks, grid, self.spacing)
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "private spacing replacement awaits complete Theme exposure"
-        )
-    )]
-    pub(crate) fn with_spacing(self, spacing: AxisSpacing) -> Result<Self> {
+    /// Replace only the complete local axis relationships.
+    pub fn with_spacing(self, spacing: AxisSpacing) -> Result<Self> {
         Self::new(self.frame, self.cell_frame, self.ticks, self.grid, spacing)
     }
 

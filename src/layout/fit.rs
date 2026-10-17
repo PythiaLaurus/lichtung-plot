@@ -231,7 +231,7 @@ mod tests {
 
     #[test]
     fn sibling_collection_preserves_later_fatal_and_canonical_child_identity() {
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
         theme.prepare_font_environment().unwrap();
         let first = FitScope::root().child(AddressRole::CanvasCell, 0).unwrap();
         let result = collect::<()>(

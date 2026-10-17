@@ -20,9 +20,11 @@ library tests from 1,349 to 671, with the complete gate passing. The user has no
 authorized resuming T6. Validated private foundations and the complete immutable
 Theme construction/consumer-resolution umbrellas T6B1/T6B2 are complete. The public
 exact-style cutover T6B3 is also complete; `../docs/exact-element-styles.md` records
-typed RGBA/selector behavior and actual verification. Spec93 records the next
-complete Theme API cutover; `../docs/theme-consumer-closure.md` reconciles actual
-owners and identities. New unit tests must
+typed RGBA/selector behavior and actual verification. Complete public Theme/font/
+scale construction is now complete; `../docs/complete-theme-foundations.md`
+records the atomic caller retirement, pre-font capacity and public API evidence.
+Spec93 records the following narrow heading-instruction leaf;
+`../docs/theme-consumer-closure.md` reconciles actual owners and identities. New unit tests must
 replace existing tests in the same logical change without increasing the
 discovered count; AGENTS.md and spec90 own this continuing repository rule.
 
@@ -44,9 +46,10 @@ plan.
 `01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` remain authoritative for the
 implemented renderer. `03_THEME_SYSTEM.md` is the approved replacement theme
 architecture. Phase T4 established its built-in Canvas/Plot ownership and
-inheritance subset using the current closed `Theme` selector and updated the
+inheritance subset using the former closed `Theme` selector and updated the
 current contracts atomically when that public behavior landed. Its replacement
-theme values, components, colors, and scales remain non-current until Phase T6.
+theme values, components, colors and scales become current in their owning T6
+cutovers recorded by spec93.
 `05_LAYOUT_SYSTEM.md` is the approved replacement layout architecture; its
 automatic layout, exact-width/automatic-height sizing, and rendered-dimension behavior remain
 non-current until Phase T6. Neither target specification is a second current

@@ -75,17 +75,17 @@ display values.
   family marker `K`; sealed capability traits expose only configuration
   supported by that family. A publicly constructible plot never has an
   unselected family state.
-- `Plot` also owns an optional explicit built-in theme selection. The standalone
-  owner selects Publication when it is absent; a Canvas owner instead supplies
-  its root selection.
+- `Plot` also owns an optional explicit complete immutable `Theme`. The standalone
+  owner supplies `Theme::publication()` when it is absent; a Canvas owner instead
+  supplies its complete root value.
 - `Plot::erase` is the sole public transition from an exact family marker to
   `Plot<kind::Any>`. Omitting `K` denotes this erased form, which retains common,
   introspection, preflight, and terminal-output operations but no family-specific
   configuration.
 - `Canvas` owns a heterogeneous grid of internally erased plots and `TextPanel`
   values. `Canvas::panel` accepts any exact `Plot<K>` and erases it at the storage
-  boundary. Canvas also owns one root built-in theme selection, initialized to
-  Publication and replaceable through `Canvas::theme`.
+  boundary. Canvas also owns one complete root theme, initialized with
+  `Theme::publication()` and replaceable through `Canvas::theme`.
 - `Significance<Attached>` and `Significance<Pairwise>` own placement-typed
   display annotations. Plots erase admitted annotations only at their private
   storage boundary.
@@ -120,21 +120,30 @@ The current stable plot introspection surface is limited to `kind()`, `width()`,
 `height()`, and `preflight()`. Family configuration remains available through
 exact marker-gated builders, not broad getters that return irrelevant defaults.
 
-`Theme` is the public built-in visual selection. Resolved theme data is
-private. `03_THEME_SYSTEM.md` is the approved replacement architecture for the
-staged migration tracked in `91_IMPLEMENTATION_PLAN.md`. `Canvas::theme(Theme)`
-and `Plot::theme(Theme)` are the sole current owner attachments. The Canvas call
-is optional and Publication is its default root. An unthemed composed Plot
-inherits that root; an explicit Plot selection completely replaces it locally.
-An unthemed standalone Plot selects Publication, and facets add no theme scope.
-Internally those attachments retain complete immutable appearance values, with
-per-operation font/query state alongside the single resolved appearance. Retained
-component values drive measurement, source preparation and frozen draw operands.
-`Color` is already public for complete exact RGBA guides, supplemental points and
-Dumbbell endpoints. Exact styles have readonly inspection and `with_*` edits;
-Interaction selectors validate raw identity at construction. The complete public
-Theme/component/font/scale construction surface becomes current at its owning
-T6 public cutover.
+`Theme` is one complete immutable public appearance value. Its eight components
+and nested roles have private fields, validated construction, readonly inspection
+and typed consuming edits. `ThemeBuilder` is construction-only; built-ins are
+ordinary `publication()`, `nature()`, `science()` and `chi()` constructors, with
+no retained selector identity. `03_THEME_SYSTEM.md` and spec94 define their
+component and construction contracts. `Canvas::theme(Theme)` and
+`Plot::theme(Theme)` are the sole owner attachments. The Canvas call is optional
+and Publication is its default root. An unthemed composed Plot inherits that root;
+an explicit Plot theme completely replaces it locally. An unthemed standalone
+Plot selects Publication, and facets add no theme scope.
+
+All eighteen text roles own typed `FontStack` values. Literal `FontFamily` names
+and closed generic preferences are distinct; no raw CSS stack parser or default
+font constant is public. Plot-local `CategoricalColorScale` selects a palette or
+exact raw-key `CategoricalColorMap`; `ContinuousColorScale` selects kind, optional
+gradient and automatic/exact `ColorDomain` on both Heatmap and Beeswarm. Their data
+colors are opaque `OpaqueColor`, independent of role alpha and non-data accents.
+Canvas shared-guide spacing belongs only to its `LegendTheme`.
+
+Resolution remains private, with operation font/query state alongside the single
+complete appearance. Retained components drive measurement, source preparation
+and frozen draw operands. `Color` supplies complete exact RGBA guides,
+supplemental points and Dumbbell endpoints. Exact styles have readonly inspection
+and `with_*` edits; Interaction selectors validate raw identity at construction.
 
 `05_LAYOUT_SYSTEM.md` is the approved replacement layout architecture for that
 same migration. T5a through T5e implement its private parent-constraint

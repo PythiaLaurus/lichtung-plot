@@ -305,7 +305,7 @@ mod tests {
         )
         .labels(crate::Labels::raw())
         .erase();
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         theme.typography.composition.facet_header = theme
             .typography
             .composition

@@ -9,15 +9,18 @@ macro_rules! spacing_group {
     ($name:ident, $lengths:ident; $($field:ident => $edit:ident: $metric:literal),+ $(,)?) => {
         #[derive(Clone, Debug, PartialEq, Eq)]
         #[allow(clippy::struct_field_names, reason = "field names follow the authoritative complete composition schema")]
-        pub(crate) struct $name { $($field: RelativeSpacing),+ }
+        #[doc = concat!("Complete nonnegative owner-local `", stringify!($name), "` relationships.")]
+        pub struct $name { $($field: RelativeSpacing),+ }
         impl $name {
             #[allow(clippy::unnecessary_wraps, reason = "all supplied immutable relationships already validate nonnegative spacing")]
-            pub(crate) fn new($($field: RelativeSpacing),+) -> Result<Self> { Ok(Self { $($field),+ }) }
+            /// Construct all complete nonnegative local relationships.
+            pub fn new($($field: RelativeSpacing),+) -> Result<Self> { Ok(Self { $($field),+ }) }
             $(
-                pub(crate) fn $field(&self) -> &RelativeSpacing { &self.$field }
-                #[allow(dead_code, reason = "private complete component edits await theme exposure")]
+                #[doc = concat!("Borrow the exact `", stringify!($field), "` relationship.")]
+                pub fn $field(&self) -> &RelativeSpacing { &self.$field }
                 #[allow(clippy::unnecessary_wraps, reason = "immutable nonnegative relationships have no additional sibling constraint")]
-                pub(crate) fn $edit(mut self, value: RelativeSpacing) -> Result<Self> {
+                #[doc = concat!("Replace only the exact `", stringify!($field), "` relationship.")]
+                pub fn $edit(mut self, value: RelativeSpacing) -> Result<Self> {
                     self.$field = value; Ok(self)
                 }
             )+
@@ -48,8 +51,9 @@ spacing_group!(HeaderSpacing, HeaderLengths;
 spacing_group!(FacetStripSpacing, FacetStripLengths;
     horizontal_inset => with_horizontal_inset: 0, content_clearance => with_content_clearance: 0);
 
+/// Complete owner-local composition, header, facet and root-prose appearance.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct CompositionTheme {
+pub struct CompositionTheme {
     root_title_alignment: TitleAlignment,
     root_subtitle_alignment: Option<TitleAlignment>,
     root_caption_alignment: TitleAlignment,
@@ -65,28 +69,30 @@ pub(crate) struct CompositionTheme {
 
 macro_rules! owned_fields {
     ($($field:ident => $edit:ident: $ty:ty),+ $(,)?) => { $(
-        pub(crate) fn $field(&self) -> &$ty { &self.$field }
-        #[allow(dead_code, reason = "private complete component edits await theme exposure")]
+        #[doc = concat!("Borrow the complete `", stringify!($field), "` relationship value.")]
+        pub fn $field(&self) -> &$ty { &self.$field }
         #[allow(clippy::unnecessary_wraps, reason = "complete validated inputs have no additional cross-field constraint")]
-        pub(crate) fn $edit(mut self, value: $ty) -> Result<Self> { self.$field = value; Ok(self) }
+        #[doc = concat!("Replace only `", stringify!($field), "`.")]
+        pub fn $edit(mut self, value: $ty) -> Result<Self> { self.$field = value; Ok(self) }
     )+ };
 }
 macro_rules! copy_fields {
     ($($field:ident => $edit:ident: $ty:ty),+ $(,)?) => { $(
-        pub(crate) fn $field(&self) -> $ty { self.$field }
-        #[allow(dead_code, reason = "private complete component edits await theme exposure")]
+        #[doc = concat!("Inspect `", stringify!($field), "`.")]
+        pub fn $field(&self) -> $ty { self.$field }
         #[allow(clippy::unnecessary_wraps, reason = "closed alignment inputs have no invalid states")]
-        pub(crate) fn $edit(mut self, value: $ty) -> Result<Self> { self.$field = value; Ok(self) }
+        #[doc = concat!("Replace only `", stringify!($field), "`.")]
+        pub fn $edit(mut self, value: $ty) -> Result<Self> { self.$field = value; Ok(self) }
     )+ };
 }
 
 impl CompositionTheme {
     #[expect(
         clippy::too_many_arguments,
-        clippy::unnecessary_wraps,
         reason = "the authoritative constructor accepts complete validated role groups and closed alignment values"
     )]
-    pub(crate) fn new(
+    /// Construct all root alignments and independently owned local relationships.
+    pub fn new(
         root_title_alignment: TitleAlignment,
         root_subtitle_alignment: Option<TitleAlignment>,
         root_caption_alignment: TitleAlignment,

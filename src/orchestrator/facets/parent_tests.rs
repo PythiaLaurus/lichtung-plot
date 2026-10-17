@@ -70,7 +70,7 @@ fn outer_roles_use_one_root_producer_without_changing_centered_strips() {
         .erase();
         source.title_alignment = alignments[0];
         source.subtitle_alignment = alignments[1];
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
         theme.prepare_font_environment().unwrap();
         let mut children = crate::decorations::plan::children::ChildPlans::facets(&source);
         crate::layout::plan_exact_root(
@@ -80,7 +80,7 @@ fn outer_roles_use_one_root_producer_without_changing_centered_strips() {
                 let inputs = crate::plots::shared_x::prepare_plot(
                     &source,
                     &stage.operation(),
-                    Some(&crate::theme::ThemeValue::publication()),
+                    Some(&crate::theme::Theme::publication()),
                 )?;
                 let guide = prepare_discrete_guide(
                     &source,
@@ -195,7 +195,7 @@ fn measured_facet_tracks_keep_exact_fit_and_typed_owner() {
     let scope = FitScope::root()
         .child(crate::layout::AddressRole::FacetGrid, 0)
         .unwrap();
-    let theme = crate::Theme::Publication.resolve().unwrap();
+    let theme = crate::Theme::publication().resolve().unwrap();
     for width in [80.0, 80.0 - 1.0 / 1024.0] {
         let outcome = tracks::allocate(
             plot.data(),
@@ -239,7 +239,7 @@ fn parent_tracks_accept_a_fitting_retry_after_a_miss() {
     .erase();
     let scope = FitScope::root();
     let run = |repeat: bool| {
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
         theme.prepare_font_environment().unwrap();
         let resources = theme.prepared_font_environment().unwrap().operation();
 
@@ -288,7 +288,7 @@ fn impossible_outer_title_returns_typed_fit_before_child_measurement() {
     .title("M".repeat(200))
     .size(160, 120)
     .erase();
-    let theme = crate::Theme::Publication.resolve().unwrap();
+    let theme = crate::Theme::publication().resolve().unwrap();
     theme.prepare_font_environment().unwrap();
     crate::layout::plan_exact_root(
         source.width(),
@@ -297,7 +297,7 @@ fn impossible_outer_title_returns_typed_fit_before_child_measurement() {
             let inputs = crate::plots::shared_x::prepare_plot(
                 &source,
                 &stage.operation(),
-                Some(&crate::theme::ThemeValue::publication()),
+                Some(&crate::theme::Theme::publication()),
             )?;
             prepare_discrete_guide(
                 &source,

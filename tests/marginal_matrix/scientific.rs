@@ -97,7 +97,7 @@ fn audit_density_values(
     clippy::too_many_lines,
     reason = "audit source values, density curves, linked axes and guide content in each scientific scene"
 )]
-fn audit_scientific_svg(svg: &str, theme: lichtung_plot::Theme, case: usize) {
+fn audit_scientific_svg(svg: &str, name: &str, palette: [&str; 2], case: usize) {
     let document = roxmltree::Document::parse(svg).unwrap();
     let root = document.root_element();
     assert_eq!(root.attribute("viewBox"), Some("0 0 800 600"));
@@ -153,11 +153,6 @@ fn audit_scientific_svg(svg: &str, theme: lichtung_plot::Theme, case: usize) {
     };
     let marks = scientific("circle").collect::<Vec<_>>();
     assert_eq!(marks.len(), 6);
-    let palette = match theme {
-        lichtung_plot::Theme::Publication => ["#0072B2", "#D55E00"],
-        lichtung_plot::Theme::Science => ["#FF0000", "#0000FF"],
-        lichtung_plot::Theme::Nature | lichtung_plot::Theme::CHI => panic!("not an audited theme"),
-    };
     let values = [
         [1.0, 2.0],
         [1.2, 2.1],
@@ -271,22 +266,30 @@ fn audit_scientific_svg(svg: &str, theme: lichtung_plot::Theme, case: usize) {
             .unwrap();
         assert!(attribute(frame, "x") > right[0] + right[2]);
         assert!(attribute(frame, "x") + attribute(frame, "width") + 0.5 <= 800.0);
-        println!("{theme:?}/{case}: central={central:?}, top={top:?}, right={right:?}, guide={}x{}, labels={labels:?}", attribute(frame, "width"), attribute(frame, "height"));
+        println!("{name}/{case}: central={central:?}, top={top:?}, right={right:?}, guide={}x{}, labels={labels:?}", attribute(frame, "width"), attribute(frame, "height"));
     }
 }
 
 #[test]
 fn marginal_preserves_scientific_values_and_linked_axes() {
-    for theme in [
-        lichtung_plot::Theme::Publication,
-        lichtung_plot::Theme::Science,
+    for (name, theme, palette) in [
+        (
+            "publication",
+            lichtung_plot::Theme::publication(),
+            ["#0072B2", "#D55E00"],
+        ),
+        (
+            "science",
+            lichtung_plot::Theme::science(),
+            ["#FF0000", "#0000FF"],
+        ),
     ] {
         for case in 0..4 {
             let mut plot = Plot::marginal(
                 NumericValues::new("x", [1.0, 1.2, 1.4, 3.0, 3.2, 3.4]),
                 NumericValues::new("y", [2.0, 2.1, 2.3, 4.0, 4.2, 4.3]),
             )
-            .theme(theme)
+            .theme(theme.clone())
             .size(800, 600);
             if case > 0 {
                 plot =
@@ -307,15 +310,12 @@ fn marginal_preserves_scientific_values_and_linked_axes() {
             let output = directory.join("plot.svg");
             plot.svg_preserve_text(&output).unwrap();
             let svg = std::fs::read(&output).unwrap();
-            audit_scientific_svg(std::str::from_utf8(&svg).unwrap(), theme, case);
+            audit_scientific_svg(std::str::from_utf8(&svg).unwrap(), name, palette, case);
             if let Some(directory) = std::env::var_os("LICHTUNG_MARGINAL_AUDIT_DIR") {
                 let directory = std::path::PathBuf::from(directory);
                 std::fs::create_dir_all(&directory).unwrap();
-                std::fs::write(
-                    directory.join(format!("marginal-{theme:?}-{case}.svg")),
-                    &svg,
-                )
-                .unwrap();
+                std::fs::write(directory.join(format!("marginal-{name}-{case}.svg")), &svg)
+                    .unwrap();
             }
             std::fs::remove_dir_all(directory).unwrap();
         }

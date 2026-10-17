@@ -42,57 +42,6 @@ fn complete() -> AxisTheme {
 }
 
 #[test]
-fn frame_sides_validate_all_fifteen_present_choices_and_every_consuming_edit() {
-    assert!(FrameSides::new(false, false, false, false).is_err());
-    for mask in 1..16 {
-        let flags = [mask & 1 != 0, mask & 2 != 0, mask & 4 != 0, mask & 8 != 0];
-        let sides = FrameSides::new(flags[0], flags[1], flags[2], flags[3]).unwrap();
-        assert_eq!(
-            [sides.top(), sides.right(), sides.bottom(), sides.left()],
-            flags
-        );
-        assert_eq!(
-            sides.drawing_order(),
-            [flags[2], flags[1], flags[0], flags[3]]
-        );
-    }
-    let sides = FrameSides::new(true, true, true, true).unwrap();
-    for (index, edited) in [
-        sides.clone().with_top(false).unwrap(),
-        sides.clone().with_right(false).unwrap(),
-        sides.clone().with_bottom(false).unwrap(),
-        sides.clone().with_left(false).unwrap(),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        let mut expected = [true; 4];
-        expected[index] = false;
-        assert_eq!(
-            [edited.top(), edited.right(), edited.bottom(), edited.left()],
-            expected
-        );
-    }
-    assert!(FrameSides::new(true, false, false, false)
-        .unwrap()
-        .with_top(false)
-        .is_err());
-    assert!(FrameSides::new(false, true, false, false)
-        .unwrap()
-        .with_right(false)
-        .is_err());
-    assert!(FrameSides::new(false, false, true, false)
-        .unwrap()
-        .with_bottom(false)
-        .is_err());
-    assert!(FrameSides::new(false, false, false, true)
-        .unwrap()
-        .with_left(false)
-        .is_err());
-    assert_eq!(sides, FrameSides::new(true, true, true, true).unwrap());
-}
-
-#[test]
 fn frame_tick_and_axis_edits_revalidate_complete_siblings_and_preserve_absence() {
     let source = complete();
     let frame = source.frame().unwrap();
@@ -167,55 +116,6 @@ fn frame_tick_and_axis_edits_revalidate_complete_siblings_and_preserve_absence()
     poisoned.sides = FrameSides { bits: 0 };
     assert!(poisoned.clone().with_stroke(stroke(3.0)).is_err());
     assert!(AxisTheme::new(Some(poisoned), None, None, None, spacing()).is_err());
-}
-
-#[test]
-fn ordinary_and_cell_frames_are_independent_complete_roles_with_cross_sibling_validation() {
-    let source = complete();
-    let cell = source.cell_frame().unwrap();
-    assert_eq!(cell.sides().drawing_order(), [true, false, false, true]);
-    let no_ordinary = source.clone().with_frame(None).unwrap();
-    assert_eq!(no_ordinary.cell_frame(), source.cell_frame());
-    let no_cell = source.clone().with_cell_frame(None).unwrap();
-    assert_eq!(no_cell.frame(), source.frame());
-    let changed = source
-        .clone()
-        .with_cell_frame(Some(
-            FrameTheme::new(
-                FrameSides::new(true, true, true, true).unwrap(),
-                stroke(2.5),
-            )
-            .unwrap(),
-        ))
-        .unwrap();
-    assert_eq!(changed.frame(), source.frame());
-    assert_eq!(changed.ticks(), source.ticks());
-    assert_eq!(changed.grid(), source.grid());
-    assert_eq!(changed.spacing(), source.spacing());
-    assert_eq!(
-        changed.cell_frame().unwrap().sides().drawing_order(),
-        [true; 4]
-    );
-    assert_eq!(changed.cell_frame().unwrap().stroke(), &stroke(2.5));
-    let mut poisoned = source.clone();
-    poisoned.cell_frame.as_mut().unwrap().stroke.width = 0.0;
-    assert!(poisoned.clone().with_frame(None).is_err());
-    assert!(poisoned.clone().with_ticks(None).is_err());
-    assert!(poisoned.clone().with_grid(None).is_err());
-    assert!(poisoned.clone().with_spacing(spacing()).is_err());
-    assert!(AxisTheme::new(
-        poisoned.frame,
-        poisoned.cell_frame,
-        poisoned.ticks,
-        poisoned.grid,
-        poisoned.spacing
-    )
-    .is_err());
-    let mut poisoned = source.clone();
-    poisoned.frame.as_mut().unwrap().stroke.width = f32::NAN;
-    assert!(poisoned.with_cell_frame(None).is_err());
-
-    assert!(!source.same_validated(&changed).unwrap());
 }
 
 #[test]

@@ -89,7 +89,7 @@ fn prepared_intrinsic_hits_reuse_the_summary_without_reanalysis() {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
         0
     );
-    let theme = crate::Theme::Publication.resolve().unwrap();
+    let theme = crate::Theme::publication().resolve().unwrap();
     inputs.prepare_intrinsics(&source, &theme).unwrap();
     let plot = inputs.attach(source).unwrap();
     let summary = Intrinsics::prepared(&plot, &theme).unwrap();
@@ -141,7 +141,7 @@ fn native_root_producers_obey_eighth_round_and_cycle_limits_under_parent_feedbac
             .caption("Independent caption")
             .with_suppressed_legend();
         for policy in 0..3 {
-            let theme = crate::Theme::Publication.resolve().unwrap();
+            let theme = crate::Theme::publication().resolve().unwrap();
             let parent = ComponentAddress::root()
                 .child(AddressRole::RootBody, 0)
                 .unwrap();
@@ -267,7 +267,7 @@ fn native_multiline_axis_gutters_cannot_consume_root_caption_or_title_reserves()
             .caption("First caption line\nSecond caption line\nThird caption line")
             .with_suppressed_legend()
             .size(401, 401);
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
         let inputs =
             crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         let plot = inputs.attach(source).unwrap();
@@ -362,7 +362,7 @@ fn native_narrow_root_selects_actual_ticks_and_automatic_painted_domains() {
             .y_label("")
             .with_suppressed_legend()
             .size(175, 300);
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
         let inputs =
             crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         let plot = inputs.attach(source).unwrap();
@@ -421,7 +421,7 @@ fn native_absolute_gutter_feedback_contracts_independently_of_multiline_caption(
         let source = source
             .caption("First caption line\nSecond caption line")
             .with_suppressed_legend();
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
         let owner = ComponentAddress::root()
             .child(AddressRole::PlotBody, 0)
             .unwrap();
@@ -473,7 +473,7 @@ fn native_absolute_gutter_feedback_contracts_independently_of_multiline_caption(
 
 #[test]
 fn native_hard_title_spans_and_category_slots_come_from_shaped_text() {
-    let theme = crate::Theme::Publication.resolve().unwrap();
+    let theme = crate::Theme::publication().resolve().unwrap();
     let word = "W".repeat(20);
     let category = Plot::trajectory(
         CategoryValues::new("condition", [word.as_str(), "middle", "last"]).unwrap(),
@@ -694,7 +694,7 @@ fn native_real_compositions_remeasure_gutters_and_select_guides_identically_with
 
 #[test]
 fn every_native_route_uses_exact_assigned_projection_and_frozen_axes_without_legacy_constructors() {
-    let theme = crate::Theme::Publication.resolve().unwrap();
+    let theme = crate::Theme::publication().resolve().unwrap();
     for source in sources() {
         let inputs =
             crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
@@ -745,7 +745,7 @@ fn every_native_route_uses_exact_assigned_projection_and_frozen_axes_without_leg
 
 #[test]
 fn every_native_route_reports_intrinsic_fit_before_mark_projection_or_backend_creation() {
-    let theme = crate::Theme::Publication.resolve().unwrap();
+    let theme = crate::Theme::publication().resolve().unwrap();
     for source in sources() {
         let source = source.x_label("").y_label("");
         let inputs =
@@ -800,7 +800,7 @@ fn exact_scatter_marks_fit_below_the_retired_generic_panel_floor() {
     let inputs =
         crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
     let plot = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication.resolve().unwrap();
+    let theme = crate::Theme::publication().resolve().unwrap();
     let hard = plot.intrinsic_body_minimum(&theme).unwrap();
     assert!(hard.0 < 80.0 && hard.1 < 60.0);
     let panel = PanelBox::new(5.0, 75.0, 5.0, 63.0);
@@ -823,7 +823,7 @@ fn categorical_trajectory_retains_bottom_slots_raw_and_display_identity() {
     let inputs =
         crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
     let plot = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication.resolve().unwrap();
+    let theme = crate::Theme::publication().resolve().unwrap();
     let panel = PanelBox::new(30.0, 810.0, 50.0, 600.0);
     let selected = plot
         .measure_selected_interior(PlotRenderContext::new(plot.data(), panel, &theme))
@@ -957,7 +957,7 @@ fn native_exact_sources_are_indivisible_and_missing_axes_never_fall_back() {
             axes.specs[1].exact_ticks = Some(vec![crate::layout::AxisTick::new(2.0, "")]);
         }
         let plot = inputs.attach(source).unwrap();
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
         let context =
             PlotRenderContext::new(plot.data(), PanelBox::new(30.0, 610.0, 50.0, 440.0), &theme);
         let selected = plot.measure_selected_interior(context).unwrap();
@@ -1026,7 +1026,7 @@ fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks()
             axes.specs[1].exact_ticks = Some(vec![crate::layout::AxisTick::new(2.0, "")]);
         }
         let plot = inputs.attach(source).unwrap();
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
         let scope = fit::FitScope::new(
             &crate::layout::ComponentAddress::root()
                 .child(crate::layout::AddressRole::PlotBody, 0)
@@ -1085,7 +1085,7 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes() {
         let mut outputs = Vec::new();
         for disabled in [false, true] {
             DISABLE_CHILD_REUSE.with(|flag| flag.set(disabled));
-            let theme = crate::Theme::Publication.resolve().unwrap();
+            let theme = crate::Theme::publication().resolve().unwrap();
             let owner = ComponentAddress::root()
                 .child(AddressRole::FacetCell, 0)
                 .unwrap();

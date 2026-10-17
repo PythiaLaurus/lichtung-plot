@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn root_padding_keeps_fractional_edges_until_the_complete_hard_boundary() {
     use crate::layout::canvas::RootFramePlan;
-    let mut theme = super::super::Theme::Publication.resolve().unwrap();
+    let mut theme = super::super::Theme::publication().resolve().unwrap();
     let third = RelativeSpacing::ratio(1, 17 * 3072).unwrap();
     let zero = RelativeSpacing::ratio(0, 1).unwrap();
     theme.composition = theme

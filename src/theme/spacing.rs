@@ -29,8 +29,12 @@ impl PartialEq for SpacingPayload {
 
 impl Eq for SpacingPayload {}
 
+/// Exact nonnegative dimensionless spacing, resolved against its consuming role's metric.
+///
+/// `new` retains the represented binary64 rational; `ratio` retains the reduced
+/// mathematical integer ratio. Approximate inspection is never a layout operand.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct RelativeSpacing(Arc<SpacingPayload>);
+pub struct RelativeSpacing(Arc<SpacingPayload>);
 
 impl RelativeSpacing {
     pub(crate) fn compare(&self, other: &Self) -> Ordering {
@@ -79,7 +83,8 @@ impl RelativeSpacing {
         Ok(())
     }
 
-    pub(crate) fn new(value: f64) -> Result<Self> {
+    /// Retain a finite nonnegative binary64 ratio, normalizing signed zero.
+    pub fn new(value: f64) -> Result<Self> {
         validate(value)?;
 
         let rational = dyadic(value);
@@ -89,7 +94,8 @@ impl RelativeSpacing {
         })))
     }
 
-    pub(crate) fn ratio(numerator: u32, denominator: u32) -> Result<Self> {
+    /// Retain a mathematical integer ratio; denominator must be positive.
+    pub fn ratio(numerator: u32, denominator: u32) -> Result<Self> {
         if denominator == 0 {
             return Err(invalid("ratio denominator must be positive"));
         }
@@ -131,7 +137,8 @@ impl RelativeSpacing {
         })))
     }
 
-    pub(crate) fn as_f64(&self) -> f64 {
+    /// Inspect the nearest binary64 approximation without changing exact identity.
+    pub fn as_f64(&self) -> f64 {
         self.0.approximate
     }
 

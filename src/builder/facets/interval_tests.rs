@@ -96,7 +96,7 @@ fn invalid_intervals_reject_before_font_discovery() {
 
 #[test]
 fn interval_census_uses_the_source_alphabet_and_exact_precedence_suppresses_it() {
-    let theme = crate::Theme::Publication.resolve().unwrap();
+    let theme = crate::Theme::publication().resolve().unwrap();
     let mut plot = plot().erase();
     plot.x_axis_spec.interval = Some(TickInterval::Additive(0.01));
     plot.y_axis_spec.interval = Some(TickInterval::Additive(0.1));

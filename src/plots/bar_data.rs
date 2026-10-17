@@ -334,7 +334,7 @@ pub(crate) struct PreparedBars {
 }
 
 impl PreparedBars {
-    fn color_keys(&self) -> &[String] {
+    pub(crate) fn color_keys(&self) -> &[String] {
         if self.hues.is_empty() {
             &self.categories
         } else {
@@ -360,7 +360,7 @@ impl PreparedBars {
             if chart.colors_by_sign() {
                 None
             } else {
-                chart.categorical_colors_spec()
+                chart.categorical_color_scale_spec()
             },
             resources,
         )?;
@@ -812,7 +812,7 @@ pub(crate) fn prepare_scoped<'a>(
         prepared.value_range.1 = prepared.value_range.1.max(point.value);
     }
     if let Some(exact) = chart
-        .categorical_colors_spec()
+        .categorical_map_spec()
         .filter(|_| !chart.colors_by_sign())
     {
         for key in prepared.color_keys() {

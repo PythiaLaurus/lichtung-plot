@@ -12,12 +12,11 @@ use crate::layout::AxisSpec;
 use crate::layout::AxisTick;
 use crate::render::backend::PointStyle;
 use crate::spec::{
-    AxisScale, BarInput, BarSpacing, Bootstrap, CategoricalColors, CategoryOrder,
-    ConfidenceIntervalAlgorithm, DumbbellEndpoints, ErrorBarKind, HeatmapAnnotations,
-    HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation, HeatmapScale, HistogramBins,
-    HistogramComposite, HistogramStat, LegendPolicy, LegendPosition, LinePathStyle,
-    NumericLabelFormat, PanelTextAnnotation, PlotKind, QqLine, RawOverlay, RegressionBand,
-    WaterfallLabels,
+    AxisScale, BarInput, BarSpacing, Bootstrap, CategoryOrder, ConfidenceIntervalAlgorithm,
+    DumbbellEndpoints, ErrorBarKind, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout,
+    HeatmapNullRowAnnotation, HistogramBins, HistogramComposite, HistogramStat, LegendPolicy,
+    LegendPosition, LinePathStyle, NumericLabelFormat, PanelTextAnnotation, PlotKind, QqLine,
+    RawOverlay, RegressionBand, WaterfallLabels,
 };
 use crate::{HistogramGeometry, RaincloudGeometry};
 
@@ -28,14 +27,14 @@ impl Plot {
 }
 
 impl<K: crate::kind::Marker> Plot<K> {
-    pub(crate) fn theme_spec(&self) -> Option<&crate::theme::ThemeValue> {
+    pub(crate) fn theme_spec(&self) -> Option<&crate::theme::Theme> {
         self.theme.as_deref()
     }
 
     pub(crate) fn resolve_theme(&self) -> Result<crate::theme::ResolvedTheme, Error> {
         match self.theme_spec() {
             Some(theme) => theme.resolve(),
-            None => crate::theme::ThemeValue::publication().resolve(),
+            None => crate::theme::Theme::publication().resolve(),
         }
     }
 
@@ -472,21 +471,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.color_label.as_deref()
     }
 
-    /// Requested heatmap color scale.
-    #[must_use]
-    pub(crate) fn heatmap_scale_spec(&self) -> HeatmapScale {
-        self.heatmap_scale
-    }
-
-    pub(crate) fn heatmap_gradient_spec(
-        &self,
-    ) -> Result<Option<&crate::theme::SequentialGradient>, crate::Error> {
-        self.heatmap_gradient
-            .as_ref()
-            .map(|input| input.as_ref().map_err(|e| crate::Error::Data(e.clone())))
-            .transpose()
-    }
-
     /// Requested heatmap coordinate layout.
     #[must_use]
     pub(crate) fn heatmap_layout_spec(&self) -> HeatmapLayout {
@@ -499,33 +483,16 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.heatmap_label_fit
     }
 
-    /// Exact heatmap color limits, if configured.
-    #[must_use]
-    pub(crate) fn heatmap_color_limits_spec(&self) -> Option<(f64, f64)> {
-        self.heatmap_color_limits
+    pub(crate) fn continuous_color_scale_spec(&self) -> Option<&crate::ContinuousColorScale> {
+        self.continuous_color_scale.as_ref()
     }
 
-    /// Exact beeswarm continuous-color limits, if configured.
-    #[must_use]
-    pub(crate) const fn beeswarm_color_limits_spec(&self) -> Option<(f64, f64)> {
-        self.beeswarm_color_limits
-    }
-
-    pub(crate) fn beeswarm_gradient_spec(
-        &self,
-    ) -> Result<Option<&crate::theme::SequentialGradient>, crate::Error> {
-        self.beeswarm_gradient
-            .as_ref()
-            .map(|input| input.as_ref().map_err(|e| crate::Error::Data(e.clone())))
-            .transpose()
-    }
-
-    /// Adapt the current public inputs into one complete prepared selection.
+    /// Resolve the complete caller selection against its owning default mapping.
     pub(crate) fn continuous_selection_in(
         &self,
         owner: &crate::theme::ColorScales,
     ) -> Result<crate::theme::ContinuousColorScale, crate::Error> {
-        use crate::theme::{ColorDomain, ContinuousColorScale, DivergingGradient};
+        use crate::theme::ContinuousColorScale;
         let family = match self.kind() {
             crate::PlotKind::Heatmap => "heatmap",
             crate::PlotKind::Beeswarm => "beeswarm",
@@ -539,41 +506,13 @@ impl<K: crate::kind::Marker> Plot<K> {
             crate::Error::Data(message) => crate::Error::Data(format!("{family}: {message}")),
             error => error,
         };
-        let (kind, limits, gradient) = if self.kind() == crate::PlotKind::Heatmap {
-            (
-                self.heatmap_scale_spec(),
-                self.heatmap_color_limits_spec(),
-                self.heatmap_gradient_spec()?,
-            )
+        let default;
+        let selection = if let Some(selection) = self.continuous_color_scale_spec() {
+            selection
         } else {
-            let limits = self.beeswarm_color_limits_spec();
-            if limits.is_some_and(|(minimum, maximum)| minimum >= maximum) {
-                return Err(crate::Error::Data(
-                    "beeswarm: color limits must be finite and strictly ascending".into(),
-                ));
-            }
-            (
-                HeatmapScale::Sequential,
-                limits,
-                self.beeswarm_gradient_spec()?,
-            )
+            default = ContinuousColorScale::sequential(None, None)?;
+            &default
         };
-        let domain = limits
-            .map(|(minimum, maximum)| ColorDomain::exact(minimum, maximum))
-            .transpose()
-            .map_err(context)?;
-        let selection = match kind {
-            HeatmapScale::Sequential => ContinuousColorScale::sequential(gradient.cloned(), domain),
-            HeatmapScale::Diverging { center } => ContinuousColorScale::diverging(
-                center,
-                gradient
-                    .map(DivergingGradient::from_sequence)
-                    .transpose()
-                    .map_err(context)?,
-                domain,
-            ),
-        }
-        .map_err(context)?;
         selection.resolved_in(owner).map_err(context)
     }
 
@@ -756,8 +695,13 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.interaction_styles.as_deref()
     }
 
-    pub(crate) const fn categorical_colors_spec(&self) -> Option<&CategoricalColors> {
-        self.categorical_colors.as_ref()
+    pub(crate) fn categorical_color_scale_spec(&self) -> Option<&crate::CategoricalColorScale> {
+        self.categorical_color_scale.as_ref()
+    }
+
+    pub(crate) fn categorical_map_spec(&self) -> Option<&crate::CategoricalColorMap> {
+        self.categorical_color_scale_spec()
+            .and_then(crate::CategoricalColorScale::map)
     }
 
     /// Caller-owned panel-corner text annotations.

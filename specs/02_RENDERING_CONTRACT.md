@@ -133,8 +133,9 @@ an observed pair that cannot independently produce its required geometry.
 
 Interaction cells are unique by `(condition, group, hue)`. `InteractionStyle`
 is keyed only by group and supplies every hue-specific mark for that group with
-the same point shape and connector pattern. `CategoricalColors` is keyed only by
-hue. A group-only styled interaction still emits the complete configured group
+the same point shape and connector pattern. A `CategoricalColorMap` is keyed by
+hue when present and otherwise by the actual color-owning raw group. A group-only
+styled interaction still emits the complete configured group
 glyph. Plain grouping without hue or group-specific visible style partitions
 geometry but creates no legend identity.
 The style constructor is fallible and requires a nonempty, already trimmed,
@@ -227,32 +228,62 @@ values happen to be equal. The multiplication sign and comma are display
 separators only; raw pair identity remains typed and is never encoded by joining
 strings.
 
-## Built-In Theme Ownership
+## Complete Theme And Scale Ownership
 
-`Theme` is the closed current selection of Publication, Nature, Science, or CHI.
+`Theme` is a complete immutable value with eight independently constructed
+components. Publication, Nature, Science and CHI are ordinary validated
+constructors, not selector identities. `ThemeBuilder` starts complete and returns
+a complete value; it is never a runtime sparse override. All component fields are
+private and exposed through readonly getters and validated `with_*` edits.
 `Canvas::theme(Theme)` and `Plot::theme(Theme)` are the only theme-owner
-attachments. A Canvas always owns one root selection and initializes it to
-Publication, so callers are not required to call `Canvas::theme`.
+attachments. A Canvas always owns one complete root theme initialized with
+`Theme::publication()`, so callers are not required to call `Canvas::theme`.
 
 A Plot records whether the caller made an explicit selection. An unthemed
 standalone Plot selects Publication at its lifecycle boundary. An unthemed Plot
-inside a Canvas inherits that Canvas's root selection. An explicit Plot selection
+inside a Canvas inherits that Canvas's root value. An explicit Plot theme
 completely replaces the inherited root for that Plot; values are not merged.
 Facets use their owning Plot's one selected theme and introduce no additional
 scope.
 
 Theme state is immutable and owner-local. There is no global, thread-local,
 environment-selected, backend-selected, or sticky theme state. The render owner
-resolves each selected built-in before canonical validation and measurement. The
+resolves the selected complete value before canonical validation and measurement. The
 same private resolved value is reused through preflight, planning, null-backend
 validation, and final rendering; renderers do not reconstruct a preset late.
 
-Canvas root ownership currently covers existing theme-aware title blocks, shared
-headers, row titles, text panels, and spacing consumers. Plot and facet consumers
-use their selected Plot value. Backend surfaces, replacement component
-properties, legend typography and chrome, and custom immutable theme construction
-remain assigned to the staged T5/T6 migration and are not implied by this current
-contract.
+Canvas surfaces, title blocks, shared headers, row titles, text panels and
+shared-guide chrome use the Canvas root value. Plot and facet marks, axes,
+annotations, panel surfaces and prose use their selected Plot value. All eighteen
+text roles retain their own stack, color, CSS size, weight and leading.
+Construction does not discover fonts. A bulk `ThemeBuilder::with_font_stack`
+replaces the stacks once; later role replacement takes precedence normally.
+`FontFamily::named` preserves one trimmed, control-free literal identity, including
+punctuation, while closed generics have explicit typed semantics. `FontStack`
+preserves order and duplicates. Default-font constants and a raw CSS parser are
+not public.
+
+`Plot::categorical_color_scale` replaces one complete palette-or-map selection on
+the fifteen `kind::CategoricalScale` families. Fixed palettes must cover the active
+prepared raw domain before fonts, even with hidden legends; extendable palettes
+use deterministic first-party extension without cycling. Exact maps require every
+used raw key before fonts, permit unused entries and never fall back to a palette.
+Display aliases are not keys. Qualitative mappings and MarkTheme accents are
+independent.
+
+Heatmap and Beeswarm share `Plot::continuous_color_scale`, one typed kind, optional
+gradient and automatic/exact `ColorDomain`. Exact domains may be constant; a
+diverging center is finite and inclusively contained in an exact domain. Wrong-kind
+gradient/center edits reject immediately. Ordered opaque gradients have exact zero
+and one endpoints; diverging gradients also have one explicit neutral at 0.5.
+Both marks and guides consume the same final-domain mapping, including Shared
+installation. All built-ins use `#F7FBFF -> #08306B` sequentially. Color scales use
+`OpaqueColor`; final marks install their own role alpha. The old categorical map
+setter, Heatmap selector and separate color-limit routes are removed.
+
+Shared Canvas legend gap is exclusively `LegendTheme::shared_gap`, resolved
+against its selected legend-label em. There is no Canvas override or policy
+compatibility exception for a theme with custom spacing.
 
 The crate computes display statistics needed to draw a requested plot, such as
 histogram bins, KDE curves, quantiles, confidence geometry for explicitly

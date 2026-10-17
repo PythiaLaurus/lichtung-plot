@@ -16,7 +16,7 @@ pub use bar::{
     StandardDeviation, StandardError,
 };
 pub(crate) use bar::{BarSource, ConfidenceIntervalAlgorithm, ErrorBarKind};
-pub use categorical::{CategoricalColors, CategoryOrder, ValueSort};
+pub use categorical::{CategoricalColorMap, CategoryOrder, ValueSort};
 pub use estimate::{
     AxisScale, Bounds, CoefficientInput, EstimateStatus, InteractionStyle, LinePathStyle,
     LinePattern, PointShape, QqLine, RegressionBand, SignificanceMarkStyle, TextWeight,
@@ -173,19 +173,6 @@ impl RawOverlay {
     pub const fn is_visible(self) -> bool {
         !matches!(self, Self::Hidden)
     }
-}
-
-/// Continuous color-scale policy for heatmap cells.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub enum HeatmapScale {
-    /// Interpolate from a light low-value color to a dark high-value color.
-    #[default]
-    Sequential,
-    /// Interpolate through a neutral midpoint at `center`.
-    Diverging {
-        /// Finite value represented by the neutral midpoint color.
-        center: f64,
-    },
 }
 
 /// Coordinate layout for a categorical heatmap grid.

@@ -36,7 +36,7 @@ fn measure_layer(
 
 #[test]
 fn exact_supplemental_color_and_alpha_edits_freeze_identically_in_either_order() {
-    let theme = crate::Theme::Publication.resolve().unwrap();
+    let theme = crate::Theme::publication().resolve().unwrap();
     let paint = crate::Color::rgba(13, 29, 47, 53);
     let layer = labeled_layer(1.0, "Exact").with_radius(9).unwrap();
     let color_then_alpha = measure_layer(layer.clone().with_color(paint).with_alpha(131), &theme);
@@ -92,7 +92,7 @@ fn supplemental_defaults_and_explicit_alpha_keep_label_paint_independent_and_gui
     let operation = crate::font::canonical::OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
     let chart = inputs.attach(source).unwrap();
-    let mut theme = crate::Theme::Publication.resolve().unwrap();
+    let mut theme = crate::Theme::publication().resolve().unwrap();
     let defaults = theme
         .marks
         .points()

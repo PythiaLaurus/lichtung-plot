@@ -129,6 +129,89 @@ fn panel<'a, T>(
 }
 
 impl PreparedInteriorInputs {
+    /// Capacity is a semantic requirement even when no legend will be shown.
+    /// Facets share the union of their prepared raw identities, not a per-cell
+    /// supply that would silently recolor or fail after fonts have been prepared.
+    pub(crate) fn validate_categorical_scale(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::Theme,
+        global_hues: Option<&[String]>,
+    ) -> Result<(), Error> {
+        let global_hues = global_hues.or_else(|| chart.global_hue_levels());
+        let palette = if let Some(scale) = chart.categorical_color_scale_spec() {
+            let Some(palette) = scale.palette() else {
+                if !chart.colors_by_sign() {
+                    for key in global_hues.into_iter().flatten() {
+                        if scale
+                            .map()
+                            .expect("validated map selection")
+                            .color(key)
+                            .is_none()
+                        {
+                            return Err(Error::Data(format!(
+                                "categorical color map has no color for used raw key {key:?}"
+                            )));
+                        }
+                    }
+                }
+                return Ok(());
+            };
+            palette
+        } else {
+            theme.color_scales().qualitative()
+        };
+        if palette.capacity() != crate::theme::PaletteCapacity::Fixed || chart.colors_by_sign() {
+            return Ok(());
+        }
+        let mut keys = Vec::new();
+        if let Some(global) = global_hues {
+            include_keys(&mut keys, global.iter().map(String::as_str))?;
+        }
+        if let Some(inputs) = &self.scatter {
+            for (_, marks) in &inputs.panels {
+                include_keys(&mut keys, marks.hue_levels())?;
+            }
+        }
+        if let Some(inputs) = &self.line {
+            for (_, marks) in &inputs.panels {
+                include_keys(&mut keys, marks.hue_levels())?;
+            }
+        }
+        if let Some(inputs) = &self.density {
+            for (_, marks) in &inputs.panels {
+                include_keys(&mut keys, marks.hue_levels())?;
+            }
+        }
+        if let Some(inputs) = &self.bars {
+            for (_, marks) in &inputs.panels {
+                include_keys(&mut keys, marks.color_keys().iter().map(String::as_str))?;
+            }
+        }
+        if let Some(inputs) = &self.distributions {
+            for (_, marks) in &inputs.panels {
+                let domain = if marks.hue_levels().is_empty() {
+                    marks.categories()
+                } else {
+                    marks.hue_levels()
+                };
+                include_keys(&mut keys, domain.iter().map(String::as_str))?;
+            }
+        }
+        if let Some(inputs) = &self.interaction {
+            for (_, marks) in &inputs.panels {
+                include_keys(&mut keys, marks.color_keys())?;
+            }
+        }
+        if let Some(marks) = &self.marginal {
+            include_keys(&mut keys, marks.hue_levels())?;
+        }
+        if let Some(marks) = &self.matrix {
+            include_keys(&mut keys, marks.hue_levels().iter().map(String::as_str))?;
+        }
+        palette.validate_capacity(keys.len())
+    }
+
     pub(crate) fn guide_entries(
         &self,
         chart: &Plot,
@@ -225,4 +308,17 @@ impl PreparedInteriorInputs {
             )),
         }
     }
+}
+
+fn include_keys<'a>(
+    keys: &mut Vec<&'a str>,
+    domain: impl IntoIterator<Item = &'a str>,
+) -> Result<(), Error> {
+    for key in domain {
+        if !keys.contains(&key) {
+            crate::data::source::reserve_source(keys, 1)?;
+            keys.push(key);
+        }
+    }
+    Ok(())
 }

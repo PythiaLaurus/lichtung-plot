@@ -1864,7 +1864,7 @@ mod tests {
             crate::NumericValues::new("y", [2.0]),
         )
         .erase();
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
         let discoveries = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
         let error = foundational_plot_requirements(
             None,
@@ -2454,7 +2454,7 @@ mod tests {
         )
         .x_ticks(vec![crate::layout::AxisTick::new(1.0, "exact")])
         .erase();
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
         let requirements = with_prepared_stage(|stage| {
             foundational_plot_requirements(
                 None,
@@ -2497,8 +2497,14 @@ mod tests {
                 crate::CategoryValues::new("row", ["one"]).unwrap(),
                 crate::NumericValues::new("fill", [value]),
             )
-            .scale(crate::HeatmapScale::Diverging { center: 0.0 })
-            .color_limits(-1.0, 1.0)
+            .continuous_color_scale(
+                crate::ContinuousColorScale::diverging(
+                    0.0,
+                    None,
+                    Some(crate::ColorDomain::exact(-1.0, 1.0).unwrap()),
+                )
+                .unwrap(),
+            )
             .annotations(crate::HeatmapAnnotations::Values(
                 crate::NumericLabelFormat::default(),
             ))
@@ -2507,10 +2513,10 @@ mod tests {
             let inputs = crate::plots::shared_x::prepare_plot(
                 &plot,
                 &resources,
-                Some(&crate::theme::ThemeValue::publication()),
+                Some(&crate::theme::Theme::publication()),
             )
             .unwrap();
-            let mut theme = crate::Theme::Publication.resolve().unwrap();
+            let mut theme = crate::Theme::publication().resolve().unwrap();
             theme.typography.annotations.contrast.light.stack =
                 canonical::named_stack(&["Light contrast font"]);
             theme.typography.annotations.contrast.dark.stack =
@@ -2552,7 +2558,13 @@ mod tests {
             crate::CategoryValues::new("row", ["absent", "absent"]).unwrap(),
             crate::NumericValues::nullable("fill", [None, None]),
         )
-        .color_limits(0.0, 1.0)
+        .continuous_color_scale(
+            crate::ContinuousColorScale::sequential(
+                None,
+                Some(crate::ColorDomain::exact(0.0, 1.0).unwrap()),
+            )
+            .unwrap(),
+        )
         .heatmap_null_row_annotation(
             crate::HeatmapNullRowAnnotation::new("absent", "Unavailable").unwrap(),
         )
@@ -2561,10 +2573,10 @@ mod tests {
         let inputs = crate::plots::shared_x::prepare_plot(
             &plot,
             &resources,
-            Some(&crate::theme::ThemeValue::publication()),
+            Some(&crate::theme::Theme::publication()),
         )
         .unwrap();
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         theme.surfaces.plot_panel = Color::rgba(0, 0, 0, 0);
         theme.surfaces.canvas_root = Color::rgba(0, 0, 0, 0);
         let cells = theme
@@ -2638,10 +2650,10 @@ mod tests {
         let mut inputs = crate::plots::shared_x::prepare_plot(
             &plot,
             &resources,
-            Some(&crate::theme::ThemeValue::publication()),
+            Some(&crate::theme::Theme::publication()),
         )
         .unwrap();
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         theme.typography.annotations.contrast.light.stack =
             canonical::named_stack(&["Selected light contrast"]);
         theme.typography.annotations.contrast.dark.stack =
@@ -2728,10 +2740,10 @@ mod tests {
         let inputs = crate::plots::shared_x::prepare_plot(
             &plot,
             &resources,
-            Some(&crate::theme::ThemeValue::publication()),
+            Some(&crate::theme::Theme::publication()),
         )
         .unwrap();
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         theme.typography.annotations.estimate_detail.stack =
             canonical::named_stack(&["Estimate detail only"]);
         theme.typography.annotations.estimate_detail.font_size = 20;
@@ -2772,13 +2784,19 @@ mod tests {
                 crate::CategoryValues::new("row", ["one"]).unwrap(),
                 crate::NumericValues::new("fill", [value]),
             )
-            .scale(crate::HeatmapScale::Diverging { center: 0.0 })
-            .color_limits(-1.0, 1.0)
+            .continuous_color_scale(
+                crate::ContinuousColorScale::diverging(
+                    0.0,
+                    None,
+                    Some(crate::ColorDomain::exact(-1.0, 1.0).unwrap()),
+                )
+                .unwrap(),
+            )
             .annotations(crate::HeatmapAnnotations::Values(
                 crate::NumericLabelFormat::default(),
             ))
             .erase();
-            let mut theme = crate::Theme::Publication.resolve().unwrap();
+            let mut theme = crate::Theme::publication().resolve().unwrap();
             let available = theme.typography.annotations.contrast.light.stack.clone();
             let missing = canonical::named_stack(&["No Such Contrast Face In This Operation"]);
             theme.typography.annotations.contrast.light.stack = if light_selected {
@@ -2799,7 +2817,7 @@ mod tests {
                     let inputs = crate::plots::shared_x::prepare_plot(
                         &plot,
                         &stage.operation(),
-                        Some(&crate::theme::ThemeValue::publication()),
+                        Some(&crate::theme::Theme::publication()),
                     )?;
                     let requirements = foundational_plot_requirements(
                         Some(&inputs),

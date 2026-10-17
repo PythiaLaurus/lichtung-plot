@@ -6,7 +6,7 @@ use crate::{Error, Plot};
 
 fn continuous_selection(
     source: &Plot,
-    owner: Option<&crate::theme::ThemeValue>,
+    owner: Option<&crate::theme::Theme>,
 ) -> Result<crate::theme::ContinuousColorScale, Error> {
     source.continuous_selection_in(
         owner
@@ -56,7 +56,7 @@ impl PreparedReference {
     pub(crate) fn new(
         source: &Plot,
         data: PlotData<'_>,
-        owner: Option<&crate::theme::ThemeValue>,
+        owner: Option<&crate::theme::Theme>,
     ) -> Result<Self, Error> {
         match source.kind() {
             PlotKind::Waterfall => Ok(Self::Waterfall(crate::plots::waterfall::prepare(
@@ -438,7 +438,7 @@ pub(crate) fn prepare_reference_plot(
 pub(crate) fn prepare_plot(
     source: &Plot,
     resources: &crate::font::canonical::OperationContext,
-    owner: Option<&crate::theme::ThemeValue>,
+    owner: Option<&crate::theme::Theme>,
 ) -> Result<PreparedInteriorInputs, Error> {
     let mut matrix = None;
     let mut retained = Vec::new();

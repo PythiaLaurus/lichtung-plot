@@ -40,14 +40,14 @@ impl PreparedDistribution {
             return CategoryColors::resolve(
                 &parent,
                 theme.color_scales.qualitative(),
-                chart.categorical_colors_spec(),
+                chart.categorical_color_scale_spec(),
                 resources,
             );
         };
         CategoryColors::resolve(
             keys,
             theme.color_scales.qualitative(),
-            chart.categorical_colors_spec(),
+            chart.categorical_color_scale_spec(),
             resources,
         )
     }
@@ -145,7 +145,7 @@ impl PreparedDistribution {
                 "categorical distribution preparation requires its family".into(),
             )),
         }?;
-        if let Some(exact) = chart.categorical_colors_spec() {
+        if let Some(exact) = chart.categorical_map_spec() {
             let keys = if prepared.hue_levels().is_empty() {
                 prepared.categories()
             } else {

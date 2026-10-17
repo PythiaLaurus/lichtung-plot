@@ -23,12 +23,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let inherited_path = directory.join("canvas_theme_inheritance.svg");
     Canvas::grid(1, 2)?
-        .theme(Theme::Nature)
+        .theme(Theme::nature())
         .panel(0, 0, scatter("Inherited Nature", [1.0, 3.0, 2.0]))?
         .panel(
             0,
             1,
-            scatter("Explicit Science", [2.0, 1.0, 3.0]).theme(Theme::Science),
+            scatter("Explicit Science", [2.0, 1.0, 3.0]).theme(Theme::science()),
         )?
         .svg(&inherited_path)?;
     println!("wrote {}", inherited_path.display());

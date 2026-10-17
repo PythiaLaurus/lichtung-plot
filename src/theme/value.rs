@@ -8,8 +8,34 @@ use super::{
     ResolvedTheme, SurfaceTheme, TypographyTheme,
 };
 
+/// Complete immutable appearance, independent of fonts discovered during rendering.
+///
+/// Built-in constructors return ordinary complete values. Customize a cloned
+/// value with [`Theme::customize`] and attach the built result to a Plot or Canvas.
+///
+/// ```
+/// use lichtung_plot::{Color, Theme};
+/// let base = Theme::publication();
+/// let title = base.typography().root().title().clone()
+///     .with_color(Color::hex("#194A75")?)?;
+/// let root = base.typography().root().clone().with_title(title)?;
+/// let typography = base.typography().clone().with_root(root)?;
+/// let custom = base.customize().with_typography(typography).build()?;
+/// assert_ne!(custom.typography(), base.typography());
+/// # Ok::<(), lichtung_plot::Error>(())
+/// ```
+///
+/// Built-ins are complete values, not closed selector variants:
+/// ```compile_fail
+/// let _ = lichtung_plot::Theme::Publication;
+/// ```
+///
+/// Resolution is private:
+/// ```compile_fail
+/// let _ = lichtung_plot::Theme::publication().resolve();
+/// ```
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct ThemeValue {
+pub struct Theme {
     pub(crate) surfaces: SurfaceTheme,
     pub(crate) typography: TypographyTheme,
     pub(crate) axes: AxisTheme,
@@ -20,24 +46,27 @@ pub(crate) struct ThemeValue {
     pub(crate) color_scales: ColorScales,
 }
 
+/// Construction-only working copy of a complete [`Theme`].
 #[derive(Clone, Debug)]
-pub(crate) struct ThemeBuilder {
-    value: ThemeValue,
+pub struct ThemeBuilder {
+    value: Theme,
 }
 
 macro_rules! components {
     ($($field:ident: $ty:ty => $edit:ident),+ $(,)?) => {
-        impl ThemeValue {
+        impl Theme {
             $(
-                #[allow(dead_code, reason = "complete private inspection precedes public Theme exposure")]
-                pub(crate) fn $field(&self) -> &$ty { &self.$field }
+                #[doc = concat!("Borrow the complete `", stringify!($field), "` component.")]
+                pub fn $field(&self) -> &$ty { &self.$field }
             )+
         }
-        #[allow(dead_code, reason = "private complete construction precedes the public customization cutover")]
         impl ThemeBuilder {
             $(
-                pub(crate) fn $field(&self) -> &$ty { self.value.$field() }
-                pub(crate) fn $edit(mut self, value: $ty) -> Self {
+                #[doc = concat!("Borrow the current complete `", stringify!($field), "` component.")]
+                pub fn $field(&self) -> &$ty { self.value.$field() }
+                #[doc = concat!("Replace the complete `", stringify!($field), "` construction input.")]
+                #[must_use]
+                pub fn $edit(mut self, value: $ty) -> Self {
                     self.value.$field = value;
                     self
                 }
@@ -52,12 +81,13 @@ components!(surfaces: SurfaceTheme => with_surfaces,
     marks: MarkTheme => with_marks, annotations: AnnotationTheme => with_annotations,
     color_scales: ColorScales => with_color_scales);
 
-impl ThemeValue {
+impl Theme {
     #[expect(
         clippy::too_many_arguments,
         reason = "the complete constructor retains eight independently owned components"
     )]
-    pub(crate) fn new(
+    /// Construct all eight complete components without discovering fonts or data domains.
+    pub fn new(
         surfaces: SurfaceTheme,
         typography: TypographyTheme,
         axes: AxisTheme,
@@ -89,19 +119,23 @@ impl ThemeValue {
         self.annotations().validate()
     }
 
-    pub(crate) fn publication() -> Self {
+    /// Clean high-contrast publication appearance with generous whitespace.
+    pub fn publication() -> Self {
         super::resolved::publication_theme().expect("validated publication constructor")
     }
 
-    pub(crate) fn nature() -> Self {
+    /// Muted blues and greens with bottom/left coordinate frame sides.
+    pub fn nature() -> Self {
         super::resolved::nature_theme().expect("validated nature constructor")
     }
 
-    pub(crate) fn science() -> Self {
+    /// High-saturation scientific palette and emphasized axes.
+    pub fn science() -> Self {
         super::resolved::science_theme().expect("validated science constructor")
     }
 
-    pub(crate) fn chi() -> Self {
+    /// Accessible pastel appearance for HCI publications.
+    pub fn chi() -> Self {
         super::resolved::chi_theme().expect("validated CHI constructor")
     }
 
@@ -109,30 +143,26 @@ impl ThemeValue {
         ResolvedTheme::new(self.clone())
     }
 
-    #[allow(
-        dead_code,
-        reason = "private complete customization precedes public Theme exposure"
-    )]
-    pub(crate) fn customize(&self) -> ThemeBuilder {
+    /// Start a complete construction-only working copy, leaving this value unchanged.
+    pub fn customize(&self) -> ThemeBuilder {
         ThemeBuilder::new(self.clone())
     }
 }
 
-#[allow(
-    dead_code,
-    reason = "private complete construction precedes the public customization cutover"
-)]
 impl ThemeBuilder {
-    pub(crate) fn new(value: ThemeValue) -> Self {
+    /// Consume a complete initial theme for construction edits.
+    pub fn new(value: Theme) -> Self {
         Self { value }
     }
 
-    pub(crate) fn with_font_stack(mut self, stack: FontStack) -> Result<Self> {
+    /// Replace the stack in all eighteen roles once; later role edits take precedence normally.
+    pub fn with_font_stack(mut self, stack: FontStack) -> Result<Self> {
         self.value.typography = self.value.typography.with_font_stack(stack)?;
         Ok(self)
     }
 
-    pub(crate) fn build(self) -> Result<ThemeValue> {
+    /// Validate and return the complete immutable appearance.
+    pub fn build(self) -> Result<Theme> {
         self.value.validate()?;
         Ok(self.value)
     }
@@ -145,7 +175,7 @@ mod tests {
 
     #[test]
     fn construction_edits_preserve_source_and_bulk_font_is_not_a_runtime_override() {
-        let source = ThemeValue::publication();
+        let source = Theme::publication();
         let saved = source.clone();
         let discoveries = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
         let stack = crate::font::canonical::named_stack(&["Complete construction font"]);
@@ -161,14 +191,21 @@ mod tests {
             .with_surfaces(surfaces)
             .with_font_stack(stack.clone())
             .unwrap();
-        let mut typography = builder.typography().clone();
         let local = crate::font::canonical::named_stack(&["Later title replacement"]);
-        typography.root.title = typography
-            .root
-            .title
+        let title = builder
+            .typography()
+            .root()
+            .title()
             .clone()
             .with_stack(local.clone())
             .unwrap();
+        let root = builder
+            .typography()
+            .root()
+            .clone()
+            .with_title(title)
+            .unwrap();
+        let typography = builder.typography().clone().with_root(root).unwrap();
         let customized = builder.with_typography(typography).build().unwrap();
         assert_eq!(source, saved);
         assert_eq!(

@@ -449,11 +449,7 @@ pub(super) fn measure(
         )?;
     }
     let guide_gap = if guide.0 > 0.0 {
-        if let Some(gap) = source.shared_legend_gap {
-            gap
-        } else {
-            theme.legend_shared_gap()?
-        }
+        theme.legend_shared_gap()?
     } else {
         0.0
     };

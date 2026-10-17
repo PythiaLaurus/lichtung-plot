@@ -65,7 +65,7 @@ Plot.
 use lichtung_plot::{Canvas, NumericValues, Plot, Theme};
 
 let canvas = Canvas::grid(1, 2)?
-    .theme(Theme::Nature)
+    .theme(Theme::nature())
     .panel(0, 0, Plot::scatter(
         NumericValues::new("x", [1.0, 2.0]),
         NumericValues::new("inherited", [1.0, 2.0]),
@@ -73,13 +73,21 @@ let canvas = Canvas::grid(1, 2)?
     .panel(0, 1, Plot::scatter(
         NumericValues::new("x", [1.0, 2.0]),
         NumericValues::new("replacement", [2.0, 1.0]),
-    ).theme(Theme::Science))?;
+    ).theme(Theme::science()))?;
 # let _ = canvas;
 # Ok::<(), lichtung_plot::Error>(())
 ```
 
 The Canvas call remains optional: omitting it selects Publication for the root.
 Theme state is owner-local and never global or sticky across render calls.
+
+Presets are complete immutable `Theme` values, with eight fully typed components.
+Use `theme.customize()`, validated component `with_*` edits, and `build()` to
+construct a replacement. Each text role has its own typed `FontStack`; named
+families are literal identities, not comma-separated CSS input. Plot-local
+`categorical_color_scale` and `continuous_color_scale` attach complete typed
+mappings independently of the theme. See [complete theme and scale
+construction](complete-theme-foundations.md) for the current boundaries.
 
 To attach caller-computed pairwise results, construct plot-owned
 `Significance<Pairwise>` display data. The placement marker is inferred from

@@ -25,7 +25,7 @@ fn selected_theme_gap_and_tick_height_survive_canonical_capture_with_exact_prece
         SignificanceMark::PValue(0.01),
     )])
     .erase();
-    let mut theme = crate::Theme::Publication.resolve().unwrap();
+    let mut theme = crate::Theme::publication().resolve().unwrap();
     let label = theme
         .typography
         .annotations()
@@ -120,7 +120,7 @@ fn selected_theme_gap_and_tick_height_survive_canonical_capture_with_exact_prece
 fn fractional_significance_levels_reserve_the_complete_exact_requirement_once() {
     use crate::theme::RelativeSpacing;
 
-    let mut theme = crate::Theme::Publication.resolve().unwrap();
+    let mut theme = crate::Theme::publication().resolve().unwrap();
     // Each selected gap/tick/padding is its integral default plus one quarter
     // quantum. Two occupied levels and three edge clearances contribute eight
     // such fractions: reserve two quanta, not zero or eight.

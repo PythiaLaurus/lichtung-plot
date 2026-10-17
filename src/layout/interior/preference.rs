@@ -454,7 +454,7 @@ mod tests {
             let resources = OperationContext::new();
             let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
             let chart = prepared.attach(source).unwrap();
-            let theme = crate::Theme::Publication.resolve().unwrap();
+            let theme = crate::Theme::publication().resolve().unwrap();
             let root = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
             let preference = categorical(&root);
             assert_eq!(preference.axis, axis);
@@ -485,7 +485,7 @@ mod tests {
         let resources = OperationContext::new();
         let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = prepared.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         let original = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
         let outline = crate::theme::DataOutlineTheme::fixed(
             theme
@@ -595,7 +595,7 @@ mod tests {
             let resources = OperationContext::new();
             let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
             let chart = inputs.attach(source).unwrap();
-            let theme = crate::Theme::Publication.resolve().unwrap();
+            let theme = crate::Theme::publication().resolve().unwrap();
             let root = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
             let preference = categorical(&root);
             assert_eq!(preference.axis, crate::layout::AxisSide::Bottom);
@@ -638,7 +638,7 @@ mod tests {
         let resources = OperationContext::new();
         let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = prepared.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         let original = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
         let preference = standard(&original);
         assert_eq!(preference.primary_marks, 25);
@@ -704,7 +704,7 @@ mod tests {
             let chart = prepared.attach(source).unwrap();
             let root = super::super::coordinate::canvas_layout(
                 &chart,
-                &crate::Theme::Publication.resolve().unwrap(),
+                &crate::Theme::publication().resolve().unwrap(),
             )
             .unwrap();
             assert_eq!(standard(&root).primary_marks, expected);
@@ -722,7 +722,7 @@ mod tests {
         let chart = prepared.attach(source).unwrap();
         let root = super::super::coordinate::canvas_layout(
             &chart,
-            &crate::Theme::Publication.resolve().unwrap(),
+            &crate::Theme::publication().resolve().unwrap(),
         )
         .unwrap();
         assert_eq!(standard(&root).primary_marks, 4);

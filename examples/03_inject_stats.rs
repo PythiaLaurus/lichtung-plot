@@ -42,7 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         CategoryValues::new("group", group_col)?,
         NumericValues::new("value", value_col),
     )
-    .theme(Theme::Nature)
+    .theme(Theme::nature())
     .size(640, 480)
     .significance(comparisons)
     .svg(&path)?;

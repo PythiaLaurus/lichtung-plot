@@ -15,7 +15,7 @@ fn erased_plot_preserves_selected_theme_text_dimensions_and_output() {
 
     let (x, y) = fixture_values();
     let exact = Plot::scatter(x, y)
-        .theme(Theme::Nature)
+        .theme(Theme::nature())
         .size(321, 234)
         .title("Erasure parity");
 
@@ -41,10 +41,11 @@ fn erased_plot_preserves_selected_theme_text_dimensions_and_output() {
 fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
     use lichtung_plot::{
         kind, AxisScale, BarPointLayer, BarSpacing, Bounds, CategoryValues, CoefficientInput,
-        Color, DumbbellEndpoints, HeatmapAnnotations, HeatmapLayout, HeatmapScale, HistogramBins,
-        HistogramComposite, HistogramDimensions, HistogramGeometry, HistogramInput, HistogramStat,
-        InteractionStyle, LinePathStyle, NumericValues, PlotKind, PointLayer, QqLine,
-        RaincloudDimensions, RaincloudGeometry, RaincloudInput, RegressionBand, WaterfallLabels,
+        Color, ColorDomain, ContinuousColorScale, DumbbellEndpoints, HeatmapAnnotations,
+        HeatmapLayout, HistogramBins, HistogramComposite, HistogramDimensions, HistogramGeometry,
+        HistogramInput, HistogramStat, InteractionStyle, LinePathStyle, NumericValues, PlotKind,
+        PointLayer, QqLine, RaincloudDimensions, RaincloudGeometry, RaincloudInput, RegressionBand,
+        WaterfallLabels,
     };
 
     fn exact<K: kind::ExactFamily>(plot: Plot<K>, expected: PlotKind) {
@@ -168,10 +169,12 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
     );
     exact::<kind::Heatmap>(
         Plot::heatmap(category("x"), category("y"), numeric("fill"))
-            .scale(HeatmapScale::Sequential)
             .layout(HeatmapLayout::Cartesian)
             .annotations(HeatmapAnnotations::Hidden)
-            .color_limits(0.0, 3.0),
+            .continuous_color_scale(
+                ContinuousColorScale::sequential(None, Some(ColorDomain::exact(0.0, 3.0).unwrap()))
+                    .unwrap(),
+            ),
         PlotKind::Heatmap,
     );
     exact::<kind::Bar>(
@@ -241,7 +244,10 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
     );
     exact::<kind::Beeswarm>(
         Plot::beeswarm(category("category"), numeric("value"), numeric("color"))
-            .color_limits(0.0, 3.0),
+            .continuous_color_scale(
+                ContinuousColorScale::sequential(None, Some(ColorDomain::exact(0.0, 3.0).unwrap()))
+                    .unwrap(),
+            ),
         PlotKind::Beeswarm,
     );
     exact::<kind::Waterfall>(
@@ -298,10 +304,7 @@ fn chinese_text_uses_system_font_fallback_stack_without_embedding() {
     }
     let svg = render(plot, "chinese-text");
 
-    assert!(svg.contains(&format!(
-        "font-family=\"{}\"",
-        lichtung_plot::DEFAULT_FONT_FAMILY_STACK
-    )));
+    assert!(svg.contains("font-family=\"Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif\""));
     assert!(svg.contains("中文分析"));
     assert!(!svg.contains("data:font/woff2;base64,"));
 }

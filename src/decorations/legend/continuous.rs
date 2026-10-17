@@ -733,7 +733,7 @@ mod tests {
     #[test]
     fn unusable_guide_misses_without_shaping() {
         {
-            let theme = crate::Theme::Publication.resolve().unwrap();
+            let theme = crate::Theme::publication().resolve().unwrap();
             theme.prepare_font_environment().unwrap();
 
             let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
@@ -758,7 +758,7 @@ mod tests {
 
     #[test]
     fn repeated_continuous_guide_reuses_cached_text() {
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
 
         let guide = descriptor();
         let measure = || {
@@ -817,7 +817,7 @@ mod tests {
         reason = "both orientations compare preferred/compact ink and exact singleton allocation boundaries"
     )]
     fn constant_domain_large_typography_reserves_singleton_length_in_both_flows() {
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         theme.typography.guides.legend_label.font_size = 96;
         theme.typography.guides.legend_label.weight = crate::TextWeight::Bold;
         let spacing = theme
@@ -946,7 +946,7 @@ mod tests {
 
     #[test]
     fn asymmetric_numeric_centers_keep_their_fraction_or_return_typed_fit() {
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
         let mut descriptor = descriptor();
         descriptor.missing = None;
         descriptor.domain = (-0.01, 100.0);
@@ -1021,7 +1021,7 @@ mod tests {
         descriptor
             .stops
             .insert(1, GradientStop::new(0.1, (70, 140, 200)));
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
         let guide = fit::measured(MeasuredContinuousGuide::measure(
             &descriptor,
             (200.0, 400.0),
@@ -1041,7 +1041,7 @@ mod tests {
 
     #[test]
     fn horizontal_and_vertical_guides_freeze_one_gradient_and_missing_block() {
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
         let guide = descriptor();
         let scope = FitScope::root();
         for horizontal in [false, true] {
@@ -1092,7 +1092,7 @@ mod tests {
 
     #[test]
     fn insufficient_projected_length_is_a_guide_fit_miss() {
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
         let scope = FitScope::root();
         assert!(matches!(
             MeasuredContinuousGuide::measure(
@@ -1111,7 +1111,7 @@ mod tests {
 
     #[test]
     fn custom_frame_and_owner_missing_strokes_are_allocated_and_retained_unclipped() {
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         let frame = crate::theme::LegendFrameTheme::new(
             crate::theme::Color::rgba(1, 2, 3, 127),
             Some(
@@ -1190,7 +1190,7 @@ mod tests {
 
     #[test]
     fn custom_text_ink_overhang_cannot_be_hidden_by_the_guide_frame() {
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         theme.typography.guides.legend_title.font_size = 40;
         theme.typography.guides.legend_title.weight = crate::TextWeight::Bold;
         let mut measured = fit::measured(MeasuredContinuousGuide::measure(
@@ -1211,7 +1211,7 @@ mod tests {
 
     #[test]
     fn absent_continuous_frame_retains_gradient_labels_and_missing_key() {
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         theme.legend = theme.legend.clone().with_frame(None).unwrap();
         let mut descriptor = descriptor();
         descriptor.missing.as_mut().unwrap().outline = None;
@@ -1266,7 +1266,7 @@ mod tests {
 
     #[test]
     fn compact_gradient_keeps_all_labels_and_skips_duplicate_allocations() {
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         let guide = descriptor();
         let scope = FitScope::root();
         let mut changes = false;

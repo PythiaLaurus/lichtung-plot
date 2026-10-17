@@ -1,26 +1,27 @@
 # Theme System
 
-**Status**: Built-in ownership current; replacement value model approved for T6
+**Status**: Complete immutable foundations current; narrow heading instructions
+and numeric/sectioned-guide presentation remain staged targets
 
 ## Purpose
 
-This specification defines the approved replacement theme, color, and
+This specification defines the complete theme, color, and
 data-color-scale model for `lichtung-plot`. `05_LAYOUT_SYSTEM.md` defines the
 approved coordinated replacement layout model.
 `01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` remain authoritative for the
 implemented public API. Phase T4 in `91_IMPLEMENTATION_PLAN.md` made the
 Canvas/Plot ownership and complete built-in inheritance subset current using the
-closed `Theme` selector. Phase T6 performs the atomic replacement-value
-migration. Other target names and behaviors below are not a second current API
-and must not be introduced as aliases or dormant placeholders before their
-owning phase.
+closed `Theme` selector. The complete immutable Theme/component/font/scale
+construction cutover replaces that selector and its callers. The narrow heading
+instruction setters and later presentation policies become current only in their
+owning phases; no alias or dormant placeholder is a second API.
 
 T5a0s in `91_IMPLEMENTATION_PLAN.md` records accepted layout-related behavior:
 strict Unicode-legal wrapping, the three-mode sizing surface, format-local PNG
 limits, compatible base-and-mark font fallback, and independent caption alignment.
-These are implementation targets, not claims that the current renderer already
-satisfies them. Independent title/subtitle alignment and the narrow Plot/Canvas
-overrides below are also user-approved T6 targets. Remaining broader text controls
+The public sizing cutover remains an implementation target. Complete theme caption
+and heading alignment defaults are current; the narrow Plot/Canvas instruction
+setters below are user-approved pending targets. Remaining broader text controls
 remain deferred with explicit review gates.
 
 The completed T6 ENTRY review additionally admits one locale-free scientific
@@ -33,12 +34,12 @@ Their refined architectural contracts and consumer/proof designs are closed in
 implementation and executable acceptance evidence remain pending.
 
 T6A2's authoritative validated construction, fields, metrics and migration
-signatures are in `94_T6_FOUNDATION_CONSTRUCTION.md`. They complete this target's
-role taxonomy without making it current early. The user chose theme-only Shared
+signatures are in `94_T6_FOUNDATION_CONSTRUCTION.md`. They specify the complete
+current foundation taxonomy. The user chose theme-only Shared
 legend spacing and one shared `#F7FBFF -> #08306B` sequential default; the latter
 intentionally replaces Beeswarm's different built-in sequence at T6B2.
 
-After that migration, this model governs standalone plots, facets, composed
+This model governs standalone plots, facets, composed
 canvases, shared legends, text panels, SVG, and PNG. It does not authorize
 mutable global configuration, dynamic style plugins, backend-specific
 properties, or a second theme representation.
@@ -72,7 +73,7 @@ properties, or a second theme representation.
   resolved against the local text, glyph, mark, or composition metrics it
   separates. It is not a root-canvas scale factor or output-size policy.
 
-## Target Public Model
+## Public Foundation Model
 
 The public foundations consist of these roles:
 
@@ -127,11 +128,10 @@ effective value. All four built-in themes use `Center` for root title, `None` fo
 root subtitle, and `Start` for caption. A subtitle with no applicable instruction
 uses the final effective title alignment, as resolved below.
 
-Phase T6 replaces the current closed `Theme` enum, `CategoricalColors`,
-`HeatmapScale`, RGB tuple inputs, and multiplicative opacity naming atomically
-with the target types that own those responsibilities. It migrates every
-repository caller and deletes the replaced representations; target names are not
-compatibility wrappers around the current API.
+The public cutovers replace the closed `Theme` enum, map-only categorical control,
+Heatmap-only color selector, RGB tuple inputs and floating opacity routes. Every
+repository caller uses the complete values that own those responsibilities;
+replaced representations and spellings are deleted, without compatibility wrappers.
 
 Spec94 assigns the current exact-style, root font-export, palette/map/gradient
 attachment and consuming-edit cutovers explicitly. `TitleAlignment` is public
@@ -200,18 +200,10 @@ Plot/Canvas configuration or input.
 
 ## Ownership And Inheritance
 
-`Canvas::theme(Theme)` and `Plot::theme(Theme)` are the sole current owner
-attachments using the closed built-in selector. The Canvas call is optional
-because Canvas selects `Theme::Publication` as its default root. Omission of the
-Plot call represents inheritance when composed and owner-local Publication
-default selection when standalone. T4 routes existing theme-aware Canvas and
-Plot consumers; backend surfaces, legend chrome, and replacement component
-properties remain assigned to T5.
-
-Phase T6 retains these attachment names while replacing the closed selector with
-the complete immutable value defined by this specification. The constructor
-spelling below is the T6 target; the current built-in spelling is
-`Theme::Publication`.
+`Canvas::theme(Theme)` and `Plot::theme(Theme)` are the sole owner attachments for
+complete immutable values. The Canvas call is optional because Canvas constructs
+`Theme::publication()` as its default root. Omission of the Plot call represents
+inheritance when composed and owner-local Publication when standalone.
 
 `Plot` stores an optional complete explicit theme. Absence has two meanings
 selected only by the render owner:
@@ -226,13 +218,12 @@ An explicit Plot theme completely replaces the inherited theme for that plot;
 components are not merged. Facets inherit their owning Plot's one resolved
 theme and introduce no additional theme scope.
 
-In the complete target, Canvas-owned title blocks, shared headers, row titles,
+Canvas-owned title blocks, shared headers, row titles,
 text panels, surfaces, and shared-legend chrome use the Canvas root theme. Plot
 titles, plot subtitles, plot captions, axes, marks, annotations, and panel chrome
 use the resolved Plot theme, subject only to the narrow title/subtitle alignment
 overrides below. A composed Plot's panel surface comes from its Plot theme;
-it never repaints the Canvas root surface. The current T4 subset is limited to
-the existing theme-aware consumers stated above.
+it never repaints the Canvas root surface.
 
 A Canvas's own title uses its theme's `root_title_alignment`; its own subtitle
 uses that theme's `root_subtitle_alignment` when present, otherwise its own final
@@ -249,9 +240,9 @@ theme.
 
 ## Resolution And Precedence
 
-The current T4 owner precedence is explicit Plot selection, inherited Canvas
-selection, then owner-local Publication default selection. The broader component
-and scale precedence below is the T6 target.
+Owner precedence is explicit complete Plot value, inherited Canvas value, then
+owner-local Publication. Component, scale and exact-element precedence below
+governs the current retained foundations.
 
 For a property admitted at multiple scopes, precedence from highest to lowest is:
 

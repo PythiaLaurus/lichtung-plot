@@ -20,28 +20,44 @@ macro_rules! solid_paint {
     ($name:ident, $documentation:literal) => {
         #[doc = $documentation]
         #[derive(Debug, Clone, PartialEq)]
-        pub(crate) struct $name {
+        pub struct $name {
             pub(crate) paint: Color,
             pub(crate) width: f32,
         }
 
         impl $name {
-            pub(crate) fn new(color: Color, width: f32) -> Result<Self> {
-                let value = Self { paint: color, width };
+            /// Construct a complete paint and positive finite CSS stroke width.
+            pub fn new(color: Color, width: f32) -> Result<Self> {
+                let value = Self {
+                    paint: color,
+                    width,
+                };
                 value.validate()?;
                 Ok(value)
             }
 
-            pub(crate) fn validate(&self) -> Result<()> { validate_width(self.width()) }
+            pub(crate) fn validate(&self) -> Result<()> {
+                validate_width(self.width())
+            }
 
-            pub(crate) fn color(&self) -> Color { self.paint }
-            pub(crate) fn width(&self) -> f32 { self.width }
+            /// Inspect the complete stroke paint.
+            pub fn color(&self) -> Color {
+                self.paint
+            }
+            /// Inspect the positive width in CSS pixels.
+            pub fn width(&self) -> f32 {
+                self.width
+            }
 
-            #[cfg_attr(not(test), expect(dead_code, reason = "construction-only compound paint edits await complete theme customization"))]
-            pub(crate) fn with_color(self, color: Color) -> Result<Self> { Self::new(color, self.width) }
+            /// Replace only the complete stroke paint.
+            pub fn with_color(self, color: Color) -> Result<Self> {
+                Self::new(color, self.width)
+            }
 
-            #[cfg_attr(not(test), expect(dead_code, reason = "construction-only compound paint edits await complete theme customization"))]
-            pub(crate) fn with_width(self, width: f32) -> Result<Self> { Self::new(self.paint, width) }
+            /// Replace only the positive CSS width.
+            pub fn with_width(self, width: f32) -> Result<Self> {
+                Self::new(self.paint, width)
+            }
         }
     };
 }
@@ -57,7 +73,7 @@ solid_paint!(
 
 /// Complete stroke with the renderer's one closed dash vocabulary.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct StrokeTheme {
+pub struct StrokeTheme {
     pub(crate) paint: Color,
     pub(crate) width: f32,
     pub(crate) pattern: StrokePattern,
@@ -67,7 +83,8 @@ impl StrokeTheme {
     pub(crate) fn validate(&self) -> Result<()> {
         validate_width(self.width())
     }
-    pub(crate) fn new(color: Color, width: f32, pattern: StrokePattern) -> Result<Self> {
+    /// Construct a complete stroke with positive finite CSS width and a closed pattern.
+    pub fn new(color: Color, width: f32, pattern: StrokePattern) -> Result<Self> {
         validate_width(width)?;
         Ok(Self {
             paint: color,
@@ -76,41 +93,29 @@ impl StrokeTheme {
         })
     }
 
-    pub(crate) fn color(&self) -> Color {
+    /// Inspect the complete stroke paint.
+    pub fn color(&self) -> Color {
         self.paint
     }
-    pub(crate) fn width(&self) -> f32 {
+    /// Inspect the positive CSS width.
+    pub fn width(&self) -> f32 {
         self.width
     }
-    pub(crate) fn pattern(&self) -> StrokePattern {
+    /// Inspect the closed stroke pattern.
+    pub fn pattern(&self) -> StrokePattern {
         self.pattern
     }
 
-    #[allow(
-        dead_code,
-        reason = "construction-only compound paint edits await complete theme customization"
-    )]
-    pub(crate) fn with_color(self, color: Color) -> Result<Self> {
+    /// Replace only the complete stroke paint.
+    pub fn with_color(self, color: Color) -> Result<Self> {
         Self::new(color, self.width, self.pattern)
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "construction-only compound paint edits await complete theme customization"
-        )
-    )]
-    pub(crate) fn with_width(self, width: f32) -> Result<Self> {
+    /// Replace only the positive CSS width.
+    pub fn with_width(self, width: f32) -> Result<Self> {
         Self::new(self.paint, width, self.pattern)
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "construction-only compound paint edits await complete theme customization"
-        )
-    )]
-    pub(crate) fn with_pattern(self, pattern: StrokePattern) -> Result<Self> {
+    /// Replace only the closed stroke pattern.
+    pub fn with_pattern(self, pattern: StrokePattern) -> Result<Self> {
         Self::new(self.paint, self.width, pattern)
     }
 
@@ -125,13 +130,14 @@ impl StrokeTheme {
 
 /// A point outline owns one exact relationship to the selected point radius.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct PointOutlineTheme {
+pub struct PointOutlineTheme {
     pub(crate) color: Color,
     pub(crate) width_ratio: RelativeSpacing,
 }
 
 impl PointOutlineTheme {
-    pub(crate) fn new(color: Color, width_ratio: RelativeSpacing) -> Result<Self> {
+    /// Construct independent outline paint and a positive radius-relative width.
+    pub fn new(color: Color, width_ratio: RelativeSpacing) -> Result<Self> {
         if width_ratio.is_zero() {
             return Err(Error::Data(
                 "point outline width ratio must be positive".into(),
@@ -150,30 +156,20 @@ impl PointOutlineTheme {
         }
     }
 
-    pub(crate) fn color(&self) -> Color {
+    /// Inspect the independent outline paint.
+    pub fn color(&self) -> Color {
         self.color
     }
-    pub(crate) fn width_ratio(&self) -> &RelativeSpacing {
+    /// Borrow the exact positive width-to-radius ratio.
+    pub fn width_ratio(&self) -> &RelativeSpacing {
         &self.width_ratio
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "construction-only point outline edits await complete theme customization"
-        )
-    )]
-    pub(crate) fn with_color(self, color: Color) -> Result<Self> {
+    /// Replace only the independent outline paint.
+    pub fn with_color(self, color: Color) -> Result<Self> {
         Self::new(color, self.width_ratio)
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "construction-only point outline edits await complete theme customization"
-        )
-    )]
-    pub(crate) fn with_width_ratio(self, width_ratio: RelativeSpacing) -> Result<Self> {
+    /// Replace only the positive radius-relative width.
+    pub fn with_width_ratio(self, width_ratio: RelativeSpacing) -> Result<Self> {
         Self::new(self.color, width_ratio)
     }
 
@@ -192,7 +188,7 @@ impl PointOutlineTheme {
 
 /// Fixed paint or mapped RGB with an independent outline alpha.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct DataOutlineTheme {
+pub struct DataOutlineTheme {
     choice: DataOutline,
 }
 
@@ -203,32 +199,37 @@ enum DataOutline {
 }
 
 impl DataOutlineTheme {
-    pub(crate) fn fixed(stroke: OutlineTheme) -> Self {
+    /// Select a complete independent fixed outline.
+    pub fn fixed(stroke: OutlineTheme) -> Self {
         Self {
             choice: DataOutline::Fixed(stroke),
         }
     }
 
-    pub(crate) fn mapped(width: f32, alpha: u8) -> Result<Self> {
+    /// Select mapped RGB with positive CSS width and an independent byte alpha.
+    pub fn mapped(width: f32, alpha: u8) -> Result<Self> {
         validate_width(width)?;
         Ok(Self {
             choice: DataOutline::Mapped { width, alpha },
         })
     }
 
-    pub(crate) fn fixed_stroke(&self) -> Option<&OutlineTheme> {
+    /// Borrow the fixed outline, or None for mapped RGB.
+    pub fn fixed_stroke(&self) -> Option<&OutlineTheme> {
         match &self.choice {
             DataOutline::Fixed(stroke) => Some(stroke),
             DataOutline::Mapped { .. } => None,
         }
     }
-    pub(crate) fn mapped_width(&self) -> Option<f32> {
+    /// Inspect the mapped width, or None for a fixed outline.
+    pub fn mapped_width(&self) -> Option<f32> {
         match self.choice {
             DataOutline::Fixed(_) => None,
             DataOutline::Mapped { width, .. } => Some(width),
         }
     }
-    pub(crate) fn mapped_alpha(&self) -> Option<u8> {
+    /// Inspect mapped alpha, or None for a fixed outline.
+    pub fn mapped_alpha(&self) -> Option<u8> {
         match self.choice {
             DataOutline::Fixed(_) => None,
             DataOutline::Mapped { alpha, .. } => Some(alpha),
@@ -256,7 +257,7 @@ impl DataOutlineTheme {
 
 /// Mapped fill alpha and a structural optional outline.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct DataFillTheme {
+pub struct DataFillTheme {
     pub(crate) fill_alpha: u8,
     pub(crate) outline: Option<DataOutlineTheme>,
 }
@@ -268,7 +269,8 @@ impl DataFillTheme {
         }
         Ok(())
     }
-    pub(crate) fn new(fill_alpha: u8, outline: Option<DataOutlineTheme>) -> Result<Self> {
+    /// Construct mapped fill alpha and its independently owned optional outline.
+    pub fn new(fill_alpha: u8, outline: Option<DataOutlineTheme>) -> Result<Self> {
         let value = Self {
             fill_alpha,
             outline,
@@ -276,30 +278,20 @@ impl DataFillTheme {
         value.validate()?;
         Ok(value)
     }
-    pub(crate) fn fill_alpha(&self) -> u8 {
+    /// Inspect fill alpha, including transparent and opaque endpoints.
+    pub fn fill_alpha(&self) -> u8 {
         self.fill_alpha
     }
-    pub(crate) fn outline(&self) -> Option<&DataOutlineTheme> {
+    /// Borrow the optional independent outline.
+    pub fn outline(&self) -> Option<&DataOutlineTheme> {
         self.outline.as_ref()
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "construction-only fill edits await complete theme customization"
-        )
-    )]
-    pub(crate) fn with_fill_alpha(self, fill_alpha: u8) -> Result<Self> {
+    /// Replace only fill alpha.
+    pub fn with_fill_alpha(self, fill_alpha: u8) -> Result<Self> {
         Self::new(fill_alpha, self.outline)
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "construction-only fill edits await complete theme customization"
-        )
-    )]
-    pub(crate) fn with_outline(self, outline: Option<DataOutlineTheme>) -> Result<Self> {
+    /// Replace the complete optional outline without changing fill alpha.
+    pub fn with_outline(self, outline: Option<DataOutlineTheme>) -> Result<Self> {
         Self::new(self.fill_alpha, outline)
     }
     pub(crate) fn backend_style(&self, rgb: (u8, u8, u8)) -> FillStyle {
@@ -315,7 +307,7 @@ impl DataFillTheme {
 
 /// Complete fixed fill paint and an independent structural optional outline.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct FixedFillTheme {
+pub struct FixedFillTheme {
     pub(crate) paint: Color,
     pub(crate) outline: Option<OutlineTheme>,
 }
@@ -327,7 +319,8 @@ impl FixedFillTheme {
         }
         Ok(())
     }
-    pub(crate) fn new(color: Color, outline: Option<OutlineTheme>) -> Result<Self> {
+    /// Construct complete fixed fill and independent optional outline paints.
+    pub fn new(color: Color, outline: Option<OutlineTheme>) -> Result<Self> {
         let value = Self {
             paint: color,
             outline,
@@ -335,30 +328,20 @@ impl FixedFillTheme {
         value.validate()?;
         Ok(value)
     }
-    pub(crate) fn color(&self) -> Color {
+    /// Inspect the complete fill paint.
+    pub fn color(&self) -> Color {
         self.paint
     }
-    pub(crate) fn outline(&self) -> Option<&OutlineTheme> {
+    /// Borrow the optional independent outline.
+    pub fn outline(&self) -> Option<&OutlineTheme> {
         self.outline.as_ref()
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "construction-only fill edits await complete theme customization"
-        )
-    )]
-    pub(crate) fn with_color(self, color: Color) -> Result<Self> {
+    /// Replace only the complete fill paint.
+    pub fn with_color(self, color: Color) -> Result<Self> {
         Self::new(color, self.outline)
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "construction-only fill edits await complete theme customization"
-        )
-    )]
-    pub(crate) fn with_outline(self, outline: Option<OutlineTheme>) -> Result<Self> {
+    /// Replace the complete optional outline without changing fill paint.
+    pub fn with_outline(self, outline: Option<OutlineTheme>) -> Result<Self> {
         Self::new(self.paint, outline)
     }
     pub(crate) fn backend_style(&self) -> FillStyle {
@@ -377,7 +360,7 @@ impl OutlineTheme {
 
 /// Shared point appearance before selecting its final integral radius.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct PointTheme {
+pub struct PointTheme {
     pub(crate) fill_alpha: u8,
     pub(crate) shape: PointShape,
     pub(crate) outline: Option<PointOutlineTheme>,
@@ -390,7 +373,8 @@ impl PointTheme {
         }
         Ok(())
     }
-    pub(crate) fn new(
+    /// Construct mapped fill alpha, closed shape and an independent optional outline.
+    pub fn new(
         fill_alpha: u8,
         shape: PointShape,
         outline: Option<PointOutlineTheme>,
@@ -403,43 +387,28 @@ impl PointTheme {
         value.validate()?;
         Ok(value)
     }
-    pub(crate) fn fill_alpha(&self) -> u8 {
+    /// Inspect the mapped point fill alpha.
+    pub fn fill_alpha(&self) -> u8 {
         self.fill_alpha
     }
-    pub(crate) fn shape(&self) -> PointShape {
+    /// Inspect the closed point shape.
+    pub fn shape(&self) -> PointShape {
         self.shape
     }
-    pub(crate) fn outline(&self) -> Option<&PointOutlineTheme> {
+    /// Borrow the optional independent outline.
+    pub fn outline(&self) -> Option<&PointOutlineTheme> {
         self.outline.as_ref()
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "construction-only point edits await complete theme customization"
-        )
-    )]
-    pub(crate) fn with_fill_alpha(self, fill_alpha: u8) -> Result<Self> {
+    /// Replace only mapped fill alpha.
+    pub fn with_fill_alpha(self, fill_alpha: u8) -> Result<Self> {
         Self::new(fill_alpha, self.shape, self.outline)
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "construction-only point edits await complete theme customization"
-        )
-    )]
-    pub(crate) fn with_shape(self, shape: PointShape) -> Result<Self> {
+    /// Replace only the closed point shape.
+    pub fn with_shape(self, shape: PointShape) -> Result<Self> {
         Self::new(self.fill_alpha, shape, self.outline)
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "construction-only point edits await complete theme customization"
-        )
-    )]
-    pub(crate) fn with_outline(self, outline: Option<PointOutlineTheme>) -> Result<Self> {
+    /// Replace the optional independent outline without changing fill or shape.
+    pub fn with_outline(self, outline: Option<PointOutlineTheme>) -> Result<Self> {
         Self::new(self.fill_alpha, self.shape, outline)
     }
     pub(crate) fn backend_style(
@@ -462,7 +431,7 @@ impl PointTheme {
 
 /// Data-colored line with one independent alpha and the closed pattern input.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct DataLineTheme {
+pub struct DataLineTheme {
     pub(crate) width: f32,
     pub(crate) alpha: u8,
     pub(crate) pattern: StrokePattern,
@@ -472,7 +441,8 @@ impl DataLineTheme {
     pub(crate) fn validate(&self) -> Result<()> {
         validate_width(self.width())
     }
-    pub(crate) fn new(width: f32, alpha: u8, pattern: StrokePattern) -> Result<Self> {
+    /// Construct positive finite CSS width, mapped byte alpha and a closed pattern.
+    pub fn new(width: f32, alpha: u8, pattern: StrokePattern) -> Result<Self> {
         let value = Self {
             width,
             alpha,
@@ -481,43 +451,28 @@ impl DataLineTheme {
         value.validate()?;
         Ok(value)
     }
-    pub(crate) fn width(&self) -> f32 {
+    /// Inspect the positive CSS width.
+    pub fn width(&self) -> f32 {
         self.width
     }
-    pub(crate) fn alpha(&self) -> u8 {
+    /// Inspect mapped stroke alpha.
+    pub fn alpha(&self) -> u8 {
         self.alpha
     }
-    pub(crate) fn pattern(&self) -> StrokePattern {
+    /// Inspect the closed stroke pattern.
+    pub fn pattern(&self) -> StrokePattern {
         self.pattern
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "construction-only data line edits await complete theme customization"
-        )
-    )]
-    pub(crate) fn with_width(self, width: f32) -> Result<Self> {
+    /// Replace only the positive CSS width.
+    pub fn with_width(self, width: f32) -> Result<Self> {
         Self::new(width, self.alpha, self.pattern)
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "construction-only data line edits await complete theme customization"
-        )
-    )]
-    pub(crate) fn with_alpha(self, alpha: u8) -> Result<Self> {
+    /// Replace only mapped stroke alpha.
+    pub fn with_alpha(self, alpha: u8) -> Result<Self> {
         Self::new(self.width, alpha, self.pattern)
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "construction-only data line edits await complete theme customization"
-        )
-    )]
-    pub(crate) fn with_pattern(self, pattern: StrokePattern) -> Result<Self> {
+    /// Replace only the closed stroke pattern.
+    pub fn with_pattern(self, pattern: StrokePattern) -> Result<Self> {
         Self::new(self.width, self.alpha, pattern)
     }
     pub(crate) fn backend_style(&self, rgb: (u8, u8, u8)) -> LineStyle {

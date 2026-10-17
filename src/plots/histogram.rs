@@ -112,7 +112,7 @@ impl HistogramSemantics {
     pub(crate) fn new(
         chart: &Plot,
         data: PlotData<'_>,
-        owner: Option<&crate::theme::ThemeValue>,
+        owner: Option<&crate::theme::Theme>,
     ) -> Result<Self, Error> {
         data.validate_row_source()?;
         #[cfg(test)]
@@ -163,7 +163,7 @@ impl HistogramSemantics {
                 let owner = if let Some(owner) = owner {
                     owner
                 } else {
-                    default = crate::theme::ThemeValue::publication();
+                    default = crate::theme::Theme::publication();
                     &default
                 };
                 let top = maximum * owner.marks().extents().sampled_rug_height().as_f64();
@@ -845,7 +845,7 @@ mod tests {
         let resources = crate::font::canonical::OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
         let chart = inputs.attach(source).unwrap();
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         let baseline = chart.intrinsic_body_minimum(&theme).unwrap();
         let curve = theme
             .marks
@@ -941,7 +941,7 @@ mod tests {
         .stat(HistogramStat::Density)
         .composite(HistogramComposite::KdeAndRug(HistogramKde::Internal))
         .erase();
-        let original = crate::theme::ThemeValue::publication();
+        let original = crate::theme::Theme::publication();
         let extents = original
             .marks()
             .extents()
@@ -973,7 +973,7 @@ mod tests {
             (2.0 * scientific_maximum).to_bits()
         );
         assert!(after.source_ranges[1].1 > before.source_ranges[1].1);
-        source.with_theme_value(edited).preflight().unwrap();
+        source.theme(edited).preflight().unwrap();
     }
 
     fn prepare_histogram(

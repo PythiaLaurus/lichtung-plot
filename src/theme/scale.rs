@@ -7,7 +7,6 @@ use super::{
 };
 use crate::font::canonical::OperationContext;
 use crate::render::backend::GradientStop;
-use crate::spec::CategoricalColors;
 use crate::Error;
 
 type Rgb = (u8, u8, u8);
@@ -84,6 +83,16 @@ struct CachedPalette {
 }
 
 impl QualitativePalette {
+    pub(crate) fn validate_capacity(&self, required: usize) -> Result<(), Error> {
+        if self.capacity() == PaletteCapacity::Fixed && self.colors().len() < required {
+            return Err(Error::Data(format!(
+                "fixed categorical palette has {} colors for {required} used identities",
+                self.colors().len(),
+            )));
+        }
+        Ok(())
+    }
+
     fn extend_categorical_palette(
         &self,
         requested: usize,
@@ -144,15 +153,14 @@ impl CategoryColors {
     pub(crate) fn resolve(
         identities: &[String],
         palette: &QualitativePalette,
-        exact: Option<&CategoricalColors>,
+        exact: Option<&CategoricalColorScale>,
         resources: &OperationContext,
     ) -> Result<Self, Error> {
         // Selection retains the current immutable map/palette, never another key table.
 
-        let selected = exact.map_or_else(
-            || CategoricalColorScale::from_palette(palette.clone()),
-            |map| CategoricalColorScale::from_map(map.clone()),
-        );
+        let selected = exact
+            .cloned()
+            .unwrap_or_else(|| CategoricalColorScale::from_palette(palette.clone()));
         let colors = if let Some(exact) = selected.map() {
             let mut colors = Vec::new();
             reserve(&mut colors, identities.len())?;
@@ -169,13 +177,7 @@ impl CategoryColors {
             match palette.capacity() {
                 PaletteCapacity::Fixed => {
                     let seeds = palette.colors();
-                    if seeds.len() < identities.len() {
-                        return Err(Error::Data(format!(
-                            "fixed categorical palette has {} colors for {} used identities",
-                            seeds.len(),
-                            identities.len()
-                        )));
-                    }
+                    palette.validate_capacity(identities.len())?;
                     let mut colors = Vec::new();
                     reserve(&mut colors, identities.len())?;
                     colors.extend_from_slice(&seeds[..identities.len()]);

@@ -1,7 +1,8 @@
 # T6 — Public Foundations And Scientific Presentation
 
-**Status**: IN PROGRESS — private foundations, consumer resolution and public
-exact styles are complete; complete Theme construction is next.
+**Status**: IN PROGRESS — private foundations, consumer resolution, public exact
+styles and complete public Theme construction are complete; heading instructions
+are next.
 
 **Current execution checkpoint:** the user-authorized resumption completed the
 mark/annotation leaf, T6B1d4d, and the private-value umbrella T6B1. Evidence is in
@@ -10,8 +11,10 @@ remaining literal-to-component consumer resolution. Complete construction, mark
 extents, annotations, continuous mappings and supplemental defaults are complete;
 `../docs/theme-consumer-closure.md` records the final owner/identity reconciliation.
 The public exact-style cutover is complete, with current RGBA/selector and caller
-evidence in `../docs/exact-element-styles.md`. Complete public Theme construction
-follows.
+evidence in `../docs/exact-element-styles.md`. The complete public Theme/font/scale
+cutover is complete, with typed construction, retirement and pre-font capacity
+evidence in `../docs/complete-theme-foundations.md`. Narrow heading instructions
+follow.
 The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
@@ -116,7 +119,7 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6B2e | COMPLETE | T6B2d | Complete supplemental paint/default resolution and remaining declared-track/cache owners; `refactor(theme): resolve complete owner-local defaults` |
 | T6B2f | COMPLETE | T6B2e | Reconcile retained components and consumers with focused owner/identity evidence |
 | T6B3 | COMPLETE | T6B2 | Exact element Color/alpha replacement and repository caller migration; `feat(styles): expose complete RGBA element paints` |
-| T6B4 | PENDING | T6B3 | Public complete Theme/components/fonts/scales, built-in constructors and palette/map/gradient attachments; remove closed selectors and old scale representations; `feat(theme): expose immutable theme and scale foundations` |
+| T6B4 | COMPLETE | T6B3 | Public complete Theme/components/fonts/scales, built-in constructors and palette/map/gradient attachments; remove closed selectors and old scale representations; `feat(theme): expose immutable theme and scale foundations` |
 | T6B5 | PENDING | T6B4 | Expose already implemented title/subtitle instructions and theme caption alignment; `feat(composition): expose independent heading alignment` |
 | T6B6 | PENDING | T6B5 | Public custom-value inheritance, contrast, scale and style evidence; `test(theme): close public foundation precedence` |
 | T6C | PENDING | T6B | Public root sizing and preferred tick intervals |
@@ -362,6 +365,17 @@ routes are removed. Three behavioral replacements retire three inventories;
 discovery remains 671, including 17 ignored. Eleven focused library tests,
 sixty-one existing external contracts, sixty-six doctests, strict Clippy,
 formatting, warning-denied docs and package verification pass.
+
+T6B4 evidence: `../docs/complete-theme-foundations.md` records the single public
+complete Theme, construction-only builder, all typed components/roles/fonts and
+palette/map/gradient/domain attachments. Every caller migrates with deletion of
+the selector, old scale fields/setters, raw font constants and Canvas shared-gap
+override. Hidden standalone and Shared-final-domain capacity errors now precede
+fonts; two regressions replace two axis inventories. Discovery remains 671,
+including 17 ignored. Forty-seven distinct current focused library tests,
+eighty-six existing external contracts, eighty-four doctests, strict Clippy,
+formatting, warning-denied docs and package verification pass. Narrow heading
+instructions and the public custom-owner closure remain the following leaves.
 
 Use spec03 and spec94's complete `Theme`, `ThemeBuilder`, role components, typed font stack,
 RGBA `Color`, RGB-only `OpaqueColor`, palettes/maps and gradients. Builders are

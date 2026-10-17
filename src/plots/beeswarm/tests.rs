@@ -18,7 +18,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
             .map(|(u, color)| ColorStop::new(u, color).unwrap()),
     )
     .unwrap();
-    let owner = crate::theme::ThemeValue::publication()
+    let owner = crate::theme::Theme::publication()
         .color_scales()
         .clone()
         .with_diverging(gradient)
@@ -89,7 +89,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
     )
     .unwrap();
     let chart = inputs.attach(source).unwrap();
-    let theme = crate::Theme::Publication.resolve().unwrap();
+    let theme = crate::Theme::publication().resolve().unwrap();
     let measured = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),

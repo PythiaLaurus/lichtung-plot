@@ -33,7 +33,7 @@ Plot.
 use lichtung_plot::{Canvas, NumericValues, Plot, Theme};
 
 let canvas = Canvas::grid(1, 2)?
-    .theme(Theme::Nature)
+    .theme(Theme::nature())
     .panel(0, 0, Plot::scatter(
         NumericValues::new("x", [1.0, 2.0]),
         NumericValues::new("inherited", [1.0, 2.0]),
@@ -41,10 +41,31 @@ let canvas = Canvas::grid(1, 2)?
     .panel(0, 1, Plot::scatter(
         NumericValues::new("x", [1.0, 2.0]),
         NumericValues::new("replacement", [2.0, 1.0]),
-    ).theme(Theme::Science))?;
+    ).theme(Theme::science()))?;
 # let _ = canvas;
 # Ok::<(), lichtung_plot::Error>(())
 ```
+
+Built-in constructors return complete immutable values. Customize any component
+through its validated `with_*` edits, then build a new theme:
+
+```rust
+use lichtung_plot::{Color, Theme};
+
+let base = Theme::publication();
+let surfaces = base.surfaces().clone()
+    .with_canvas_root(Color::hex("#FAFAFA")?)?;
+let custom = base.customize().with_surfaces(surfaces).build()?;
+# let _ = custom;
+# Ok::<(), lichtung_plot::Error>(())
+```
+
+Categorical mappings use `CategoricalColorScale` with an ordered
+`QualitativePalette` or exact raw-key `CategoricalColorMap`. Heatmap and Beeswarm
+both accept one `ContinuousColorScale`, containing kind, optional gradient and
+optional exact `ColorDomain`. Data-scale colors use opaque `OpaqueColor`; mark
+roles supply alpha independently. See [complete theme and scale
+construction](docs/complete-theme-foundations.md).
 
 ## Exact Element Paint
 
@@ -76,11 +97,20 @@ let plot = Plot::line(
 ## Fonts
 
 Outlined SVG and PNG generation resolve installed system fonts from this
-ordered stack and never download or embed font files:
+default ordered stack and never download or embed font files:
 
 ```text
 Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif
 ```
+
+Each of the eighteen complete text roles owns a typed `FontStack`. Inspect a
+built-in profile through
+`Theme::publication().typography().root().title().stack()`, or construct ordered
+`FontFamily::named` and `FontFamily::generic` entries. A named value is one literal
+family, including any punctuation; it is not a CSS stack expression.
+`ThemeBuilder::with_font_stack` edits all roles once during construction. A later
+single-role replacement takes precedence normally. Font coverage is checked only
+when a render operation consumes the selected roles.
 
 The normal `.svg(path)` publication method converts all text to vector glyph
 paths. Recipients therefore do not need the generation fonts, but the exact

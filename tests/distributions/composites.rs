@@ -1,9 +1,9 @@
 use lichtung_plot::{
-    Canvas, CanvasLegendPolicy, CategoricalColors, FacetSpec, HistogramBin, HistogramBins,
-    HistogramComposite, HistogramDimensions, HistogramGeometry, HistogramInput, HistogramKde,
-    HistogramKdePoint, HistogramRug, HistogramStat, Labels, Plot, RaincloudDensityPoint,
-    RaincloudDimensions, RaincloudGeometry, RaincloudGroup, RaincloudInput, RaincloudPoint,
-    Significance, SignificanceMark, SourceRows,
+    Canvas, CanvasLegendPolicy, CategoricalColorMap, CategoricalColorScale, FacetSpec,
+    HistogramBin, HistogramBins, HistogramComposite, HistogramDimensions, HistogramGeometry,
+    HistogramInput, HistogramKde, HistogramKdePoint, HistogramRug, HistogramStat, Labels,
+    OpaqueColor, Plot, RaincloudDensityPoint, RaincloudDimensions, RaincloudGeometry,
+    RaincloudGroup, RaincloudInput, RaincloudPoint, Significance, SignificanceMark, SourceRows,
 };
 
 use super::{parse_circle_bounds, parse_polygon_bounds, unique_dir};
@@ -333,9 +333,9 @@ fn supplied_histogram_geometry_matches_sample_labels_and_recorded_marks() {
 
 #[test]
 fn embedded_raincloud_hues_coordinate_with_sample_series_in_shared_canvas_legend() {
-    let colors = CategoricalColors::new([
-        ("control".to_owned(), (51, 51, 51)),
-        ("active".to_owned(), (0, 114, 178)),
+    let colors = CategoricalColorMap::new([
+        ("control".to_owned(), OpaqueColor::rgb(51, 51, 51)),
+        ("active".to_owned(), OpaqueColor::rgb(0, 114, 178)),
     ])
     .unwrap();
     let sample = Plot::raincloud(RaincloudInput::samples(
@@ -343,10 +343,11 @@ fn embedded_raincloud_hues_coordinate_with_sample_series_in_shared_canvas_legend
         lichtung_plot::NumericValues::new("score", [1.0, 2.0, 3.0, 4.0, 5.0]),
     ))
     .series(lichtung_plot::CategoryValues::new("treatment", ["control"; 5]).unwrap())
-    .categorical_colors(colors.clone());
+    .categorical_color_scale(CategoricalColorScale::from_map(colors.clone()));
     let mut input = parity_raincloud_geometry();
     input.groups.remove(0);
-    let supplied = Plot::raincloud(RaincloudInput::geometry(input)).categorical_colors(colors);
+    let supplied = Plot::raincloud(RaincloudInput::geometry(input))
+        .categorical_color_scale(CategoricalColorScale::from_map(colors));
     let canvas = Canvas::grid(1, 2)
         .unwrap()
         .panel(0, 0, sample)
@@ -539,9 +540,9 @@ fn raincloud_strip_retains_every_source_observation_without_sampling() {
 
 #[test]
 fn raincloud_uses_exact_categorical_colors_for_bodies_points_and_legend() {
-    let colors = CategoricalColors::new([
-        ("Control".to_owned(), (51, 51, 51)),
-        ("Semantic Agent".to_owned(), (0, 114, 178)),
+    let colors = CategoricalColorMap::new([
+        ("Control".to_owned(), OpaqueColor::rgb(51, 51, 51)),
+        ("Semantic Agent".to_owned(), OpaqueColor::rgb(0, 114, 178)),
     ])
     .unwrap();
     let plot = Plot::raincloud(RaincloudInput::samples(
@@ -565,7 +566,7 @@ fn raincloud_uses_exact_categorical_colors_for_bodies_points_and_legend() {
         )
         .unwrap(),
     )
-    .categorical_colors(colors);
+    .categorical_color_scale(CategoricalColorScale::from_map(colors));
     let svg = render(plot, "raincloud-colors").unwrap();
     assert!(svg.contains("#333333") && svg.contains("#0072B2"));
 }

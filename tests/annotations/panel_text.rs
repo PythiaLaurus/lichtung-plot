@@ -45,7 +45,7 @@ fn panel_text_renders_in_named_clipped_layer_with_theme_style_and_corner_anchors
         .panel_text_annotation(
             PanelTextAnnotation::new(PanelCorner::BottomRight, "Lower note").unwrap(),
         )
-        .theme(Theme::Nature);
+        .theme(Theme::nature());
     let output = svg(&chart);
     let layer = output
         .split_once("<g id=\"panel-text\">")

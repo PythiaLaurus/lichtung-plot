@@ -7,7 +7,7 @@ use super::*;
 
 #[test]
 fn repeated_numeric_axis_selection_preserves_ticks_without_reshaping() {
-    let theme = crate::Theme::Publication.resolve().unwrap();
+    let theme = crate::Theme::publication().resolve().unwrap();
 
     let projection = Projection::new((0.0, 1.0), (0.0, 1.0), (0.0, 1000.0, 0.0, 1000.0));
     let scope = crate::layout::fit::FitScope::root();
@@ -306,7 +306,7 @@ fn source_semantics_reject_before_fonts() {
         ((0.0, 1.0), true, Some(TickInterval::Additive(1.0))),
         ((0.0, 1.0), false, Some(TickInterval::Log10Decades(1))),
     ] {
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let projection = Projection::new(range, range, (0.0, 1000.0, 0.0, 1000.0));
         assert!(numeric_tick_plan(
@@ -364,7 +364,7 @@ fn projection_keys_are_exact_at_endpoints_midpoints_and_subnormal_fractions() {
 
 #[test]
 fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
-    let theme = crate::Theme::Publication.resolve().unwrap();
+    let theme = crate::Theme::publication().resolve().unwrap();
     let projection = Projection::new((0.0, 100.0), (0.0, 100.0), (0.0, 1000.0, 0.0, 1000.0));
     let plan = numeric_tick_plan(
         (0.0, 100.0),
@@ -407,7 +407,7 @@ fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
 
 #[test]
 fn midpoint_is_conditional_and_must_itself_fit() {
-    let theme = crate::Theme::Publication.resolve().unwrap();
+    let theme = crate::Theme::publication().resolve().unwrap();
     let scope = crate::layout::fit::FitScope::root()
         .child(crate::layout::AddressRole::FacetCell, 3)
         .unwrap();
@@ -445,7 +445,7 @@ fn midpoint_is_conditional_and_must_itself_fit() {
 fn numeric_source_invalid_range_and_font_failures_remain_fatal() {
     use crate::layout::fit::{PlanError, ROOT_SCOPE};
     let projection = Projection::new((1.1, 1.2), (0.0, 1.0), (0.0, 1.0, 0.0, 100.0));
-    let mut theme = crate::Theme::Publication.resolve().unwrap();
+    let mut theme = crate::Theme::publication().resolve().unwrap();
     theme.typography.axes.tick_label.font_size = 0;
     assert!(matches!(
         numeric_tick_plan(
@@ -477,7 +477,7 @@ fn numeric_source_invalid_range_and_font_failures_remain_fatal() {
 
 #[test]
 fn generated_labels_are_unique_and_covered_by_the_closed_census() {
-    let theme = crate::Theme::Publication.resolve().unwrap();
+    let theme = crate::Theme::publication().resolve().unwrap();
     for (range, log) in [
         ((1.000_000_000_000_01, 1.000_000_000_000_09), false),
         ((-400.0, 400.0), true),
@@ -546,7 +546,7 @@ fn numeric_formatting_uses_nearest_even_and_declared_thresholds() {
 
 #[test]
 fn exact_source_overrides_intervals_and_provenance_survives_layout_cloning() {
-    let theme = crate::Theme::Publication.resolve().unwrap();
+    let theme = crate::Theme::publication().resolve().unwrap();
     let x = super::super::AxisSpec {
         provenance: super::super::RangeProvenance::Configured,
         limits: Some((0.0, 10.0)),

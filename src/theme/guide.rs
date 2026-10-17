@@ -19,17 +19,20 @@ fn positive(value: &RelativeSpacing, field: &str) -> Result<()> {
 macro_rules! legend_spacing {
     ($($field:ident => $edit:ident: $metric:literal),+ $(,)?) => {
         #[derive(Clone, Debug, PartialEq, Eq)]
-        pub(crate) struct LegendSpacing { $($field: RelativeSpacing),+ }
+        /// Complete independent exact guide relationships, resolved against selected guide text em.
+        pub struct LegendSpacing { $($field: RelativeSpacing),+ }
         impl LegendSpacing {
             #[expect(clippy::too_many_arguments, reason = "the authoritative complete spacing constructor names all nine independent relationships")]
-            pub(crate) fn new($($field: RelativeSpacing),+) -> Result<Self> {
+            /// Construct complete nonnegative relationships with a strictly positive key width.
+            pub fn new($($field: RelativeSpacing),+) -> Result<Self> {
                 let value = Self { $($field),+ }; value.validate()?; Ok(value)
             }
             fn validate(&self) -> Result<()> { positive(self.key_width(), "key width") }
             $(
-                pub(crate) fn $field(&self) -> &RelativeSpacing { &self.$field }
-                #[allow(dead_code, reason = "private guide construction edits await complete Theme exposure")]
-                pub(crate) fn $edit(mut self, value: RelativeSpacing) -> Result<Self> { self.$field = value; self.validate()?; Ok(self) }
+                #[doc = concat!("Borrow the exact `", stringify!($field), "` relationship.")]
+                pub fn $field(&self) -> &RelativeSpacing { &self.$field }
+                #[doc = concat!("Replace only `", stringify!($field), "`, validating the complete spacing value.")]
+                pub fn $edit(mut self, value: RelativeSpacing) -> Result<Self> { self.$field = value; self.validate()?; Ok(self) }
             )+
             fn relationships(&self) -> [&RelativeSpacing; 9] { [$(&self.$field),+] }
         }
@@ -60,14 +63,16 @@ legend_spacing! {
     glyph_edge_padding => with_glyph_edge_padding: 0,
 }
 
+/// Positive minimum and at-least-minimum preferred continuous-guide lengths.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct GradientLengths {
+pub struct GradientLengths {
     minimum: RelativeSpacing,
     preferred: RelativeSpacing,
 }
 
 impl GradientLengths {
-    pub(crate) fn new(minimum: RelativeSpacing, preferred: RelativeSpacing) -> Result<Self> {
+    /// Construct positive lengths with preferred at least minimum under exact comparison.
+    pub fn new(minimum: RelativeSpacing, preferred: RelativeSpacing) -> Result<Self> {
         let value = Self { minimum, preferred };
         value.validate_in()?;
         Ok(value)
@@ -82,37 +87,35 @@ impl GradientLengths {
         }
         Ok(())
     }
-    pub(crate) fn minimum(&self) -> &RelativeSpacing {
+    /// Borrow the exact minimum relationship.
+    pub fn minimum(&self) -> &RelativeSpacing {
         &self.minimum
     }
-    pub(crate) fn preferred(&self) -> &RelativeSpacing {
+    /// Borrow the exact preferred relationship.
+    pub fn preferred(&self) -> &RelativeSpacing {
         &self.preferred
     }
-    #[allow(
-        dead_code,
-        reason = "private gradient edits await complete Theme exposure"
-    )]
-    pub(crate) fn with_minimum(self, minimum: RelativeSpacing) -> Result<Self> {
+    /// Replace minimum, preserving the positive ordered length invariant.
+    pub fn with_minimum(self, minimum: RelativeSpacing) -> Result<Self> {
         Self::new(minimum, self.preferred)
     }
-    #[allow(
-        dead_code,
-        reason = "private gradient edits await complete Theme exposure"
-    )]
-    pub(crate) fn with_preferred(self, preferred: RelativeSpacing) -> Result<Self> {
+    /// Replace preference, preserving the positive ordered length invariant.
+    pub fn with_preferred(self, preferred: RelativeSpacing) -> Result<Self> {
         Self::new(self.minimum, preferred)
     }
 }
 
+/// Complete guide-container paint, optional independent outline and local corner radius.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct LegendFrameTheme {
+pub struct LegendFrameTheme {
     fill: Color,
     outline: Option<OutlineTheme>,
     radius: RelativeSpacing,
 }
 
 impl LegendFrameTheme {
-    pub(crate) fn new(
+    /// Construct a complete container with a nonnegative local corner radius.
+    pub fn new(
         fill: Color,
         outline: Option<OutlineTheme>,
         radius: RelativeSpacing,
@@ -131,40 +134,35 @@ impl LegendFrameTheme {
         }
         Ok(())
     }
-    pub(crate) fn fill(&self) -> Color {
+    /// Inspect the complete container fill.
+    pub fn fill(&self) -> Color {
         self.fill
     }
-    pub(crate) fn outline(&self) -> Option<&OutlineTheme> {
+    /// Borrow the optional independent outline.
+    pub fn outline(&self) -> Option<&OutlineTheme> {
         self.outline.as_ref()
     }
-    pub(crate) fn radius(&self) -> &RelativeSpacing {
+    /// Borrow the nonnegative legend-label-em corner-radius relationship.
+    pub fn radius(&self) -> &RelativeSpacing {
         &self.radius
     }
-    #[allow(
-        dead_code,
-        reason = "private frame edits await complete Theme exposure"
-    )]
-    pub(crate) fn with_fill(self, fill: Color) -> Result<Self> {
+    /// Replace only the container fill.
+    pub fn with_fill(self, fill: Color) -> Result<Self> {
         Self::new(fill, self.outline, self.radius)
     }
-    #[allow(
-        dead_code,
-        reason = "private frame edits await complete Theme exposure"
-    )]
-    pub(crate) fn with_outline(self, outline: Option<OutlineTheme>) -> Result<Self> {
+    /// Replace only the optional independent outline.
+    pub fn with_outline(self, outline: Option<OutlineTheme>) -> Result<Self> {
         Self::new(self.fill, outline, self.radius)
     }
-    #[allow(
-        dead_code,
-        reason = "private frame edits await complete Theme exposure"
-    )]
-    pub(crate) fn with_radius(self, radius: RelativeSpacing) -> Result<Self> {
+    /// Replace only the nonnegative local corner-radius relationship.
+    pub fn with_radius(self, radius: RelativeSpacing) -> Result<Self> {
         Self::new(self.fill, self.outline, radius)
     }
 }
 
+/// Complete measured guide chrome, independent of guide content or placement policy.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct LegendTheme {
+pub struct LegendTheme {
     spacing: LegendSpacing,
     gradient_lengths: GradientLengths,
     frame: Option<LegendFrameTheme>,
@@ -194,7 +192,8 @@ impl LegendTheme {
         )?;
         Self::new(spacing, lengths, Some(frame))
     }
-    pub(crate) fn new(
+    /// Construct complete spacing, continuous lengths and an optional container frame.
+    pub fn new(
         spacing: LegendSpacing,
         gradient_lengths: GradientLengths,
         frame: Option<LegendFrameTheme>,
@@ -215,44 +214,36 @@ impl LegendTheme {
         }
         Ok(())
     }
-    pub(crate) fn spacing(&self) -> &LegendSpacing {
+    /// Borrow all complete exact guide relationships.
+    pub fn spacing(&self) -> &LegendSpacing {
         &self.spacing
     }
-    pub(crate) fn gradient_lengths(&self) -> &GradientLengths {
+    /// Borrow the continuous-guide minimum and preference.
+    pub fn gradient_lengths(&self) -> &GradientLengths {
         &self.gradient_lengths
     }
-    pub(crate) fn frame(&self) -> Option<&LegendFrameTheme> {
+    /// Borrow the optional guide-container appearance.
+    pub fn frame(&self) -> Option<&LegendFrameTheme> {
         self.frame.as_ref()
     }
-    pub(crate) fn shared_gap(&self) -> &RelativeSpacing {
+    /// Borrow the Canvas-owned shared-guide gap relationship.
+    pub fn shared_gap(&self) -> &RelativeSpacing {
         self.spacing().shared_gap()
     }
-    #[allow(
-        dead_code,
-        reason = "private guide edits await complete Theme exposure"
-    )]
-    pub(crate) fn with_spacing(self, spacing: LegendSpacing) -> Result<Self> {
+    /// Replace the complete guide-spacing value.
+    pub fn with_spacing(self, spacing: LegendSpacing) -> Result<Self> {
         Self::new(spacing, self.gradient_lengths, self.frame)
     }
-    #[allow(
-        dead_code,
-        reason = "private guide edits await complete Theme exposure"
-    )]
-    pub(crate) fn with_gradient_lengths(self, value: GradientLengths) -> Result<Self> {
+    /// Replace the complete continuous-guide length value.
+    pub fn with_gradient_lengths(self, value: GradientLengths) -> Result<Self> {
         Self::new(self.spacing, value, self.frame)
     }
-    #[allow(
-        dead_code,
-        reason = "private guide edits await complete Theme exposure"
-    )]
-    pub(crate) fn with_frame(self, frame: Option<LegendFrameTheme>) -> Result<Self> {
+    /// Replace only the optional guide-container appearance.
+    pub fn with_frame(self, frame: Option<LegendFrameTheme>) -> Result<Self> {
         Self::new(self.spacing, self.gradient_lengths, frame)
     }
-    #[allow(
-        dead_code,
-        reason = "private guide edits await complete Theme exposure"
-    )]
-    pub(crate) fn with_shared_gap(self, value: RelativeSpacing) -> Result<Self> {
+    /// Replace only the Canvas-owned shared-guide gap relationship.
+    pub fn with_shared_gap(self, value: RelativeSpacing) -> Result<Self> {
         let spacing = self.spacing.with_shared_gap(value)?;
         Self::new(spacing, self.gradient_lengths, self.frame)
     }

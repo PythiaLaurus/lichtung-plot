@@ -54,6 +54,10 @@ pub(crate) struct PreparedMatrixAxes {
 }
 
 impl PreparedMatrixAxes {
+    pub(crate) fn hue_levels(&self) -> &[String] {
+        &self.hues
+    }
+
     fn resolved_colors(
         &self,
         chart: &Plot,
@@ -64,7 +68,7 @@ impl PreparedMatrixAxes {
         let colors = CategoryColors::resolve(
             chart.global_hue_levels().unwrap_or(&self.hues),
             theme.color_scales.qualitative(),
-            chart.categorical_colors_spec(),
+            chart.categorical_color_scale_spec(),
             resources,
         )?;
         let accents = AccentColors::resolve(
@@ -333,7 +337,7 @@ pub(crate) fn prepare_axes(
     cols.extend(chart.matrix_variable_names().iter().map(String::as_str));
     let labels = chart.resolve_axis_label_domain("matrix variables", cols.iter().copied())?;
     let (groups, hues) = build_groups(chart, &cols, data)?;
-    if let Some(exact) = chart.categorical_colors_spec() {
+    if let Some(exact) = chart.categorical_map_spec() {
         for hue in &hues {
             if exact.color_in(hue).is_none() {
                 return Err(Error::Data(format!(

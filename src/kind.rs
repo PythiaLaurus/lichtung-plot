@@ -137,7 +137,7 @@ capability!(Markers, "Line-like plots with configurable estimate markers." => [L
 capability!(CoefficientOptions, "Coefficient-specific estimate-label configuration." => [
     Coefficient,
 ]);
-capability!(CategoricalColors, "Plots that consume caller-owned categorical colors." => [
+capability!(CategoricalScale, "Plots that consume a complete caller-owned categorical scale." => [
     Scatter, Line, Trajectory, LinePath, Density, Bar, HorizontalBar, StackedBar,
     StackedHorizontalBar, Boxplot, Interaction, Violin, Raincloud, Marginal, Matrix,
 ]);

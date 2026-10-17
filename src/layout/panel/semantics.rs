@@ -173,7 +173,7 @@ mod tests {
 
     #[test]
     fn standard_panel_owns_complete_typography_and_four_to_three_preference() {
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         let standard = StandardPanelInputs::new(&theme).unwrap();
 
         assert_eq!(standard.preferred_aspect, [4, 3]);
@@ -206,7 +206,7 @@ mod tests {
     #[test]
     fn standard_panel_stack_matching_includes_the_complete_utf8_name() {
         use crate::font::canonical::named_stack;
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         theme.typography.axes.tick_label.stack = named_stack(&["αZ"]);
         let standard = StandardPanelInputs::new(&theme).unwrap();
         theme.typography.axes.tick_label.stack = named_stack(&["αY"]);

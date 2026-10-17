@@ -17,7 +17,7 @@ fn text_line<'a>(svg: &'a str, text: &str) -> &'a str {
 fn omitted_theme_calls_select_publication_for_plot_and_canvas() {
     let omitted_plot = render_svg(scatter(), "theme-default-plot").unwrap();
     let explicit_plot = render_svg(
-        scatter().theme(Theme::Publication),
+        scatter().theme(Theme::publication()),
         "theme-publication-plot",
     )
     .unwrap();
@@ -31,7 +31,7 @@ fn omitted_theme_calls_select_publication_for_plot_and_canvas() {
     let explicit_canvas = render_canvas(
         Canvas::grid(1, 1)
             .unwrap()
-            .theme(Theme::Publication)
+            .theme(Theme::publication())
             .panel(0, 0, scatter())
             .unwrap(),
         "theme-publication-canvas",
@@ -45,7 +45,7 @@ fn unthemed_canvas_child_inherits_the_root_theme() {
     let inherited = render_canvas(
         Canvas::grid(1, 1)
             .unwrap()
-            .theme(Theme::Nature)
+            .theme(Theme::nature())
             .panel(0, 0, scatter())
             .unwrap(),
         "theme-inherited-nature",
@@ -54,8 +54,8 @@ fn unthemed_canvas_child_inherits_the_root_theme() {
     let explicit = render_canvas(
         Canvas::grid(1, 1)
             .unwrap()
-            .theme(Theme::Nature)
-            .panel(0, 0, scatter().theme(Theme::Nature))
+            .theme(Theme::nature())
+            .panel(0, 0, scatter().theme(Theme::nature()))
             .unwrap(),
         "theme-explicit-nature",
     )
@@ -76,11 +76,11 @@ fn explicit_plot_theme_completely_replaces_only_its_inherited_root() {
     let svg = render_canvas(
         Canvas::grid(1, 2)
             .unwrap()
-            .theme(Theme::Nature)
+            .theme(Theme::nature())
             .panel(
                 0,
                 0,
-                scatter().theme(Theme::Science).title("Explicit Science"),
+                scatter().theme(Theme::science()).title("Explicit Science"),
             )
             .unwrap()
             .panel(0, 1, scatter().title("Inherited Nature"))
@@ -106,8 +106,8 @@ fn mixed_children_keep_t4_canvas_consumers_on_the_root_theme() {
     let svg = render_canvas(
         Canvas::grid(2, 2)
             .unwrap()
-            .theme(Theme::Nature)
-            .panel(0, 0, scatter().theme(Theme::Science))
+            .theme(Theme::nature())
+            .panel(0, 0, scatter().theme(Theme::science()))
             .unwrap()
             .panel(0, 1, scatter())
             .unwrap()
@@ -142,12 +142,12 @@ fn facets_use_their_owning_plot_theme_without_a_new_scope() {
         || FacetSpec::column(CategoryValues::new("panel", ["first", "first", "second"]).unwrap());
     let omitted = render_svg(scatter().facet(facets()), "theme-facet-default").unwrap();
     let explicit = render_svg(
-        scatter().theme(Theme::Publication).facet(facets()),
+        scatter().theme(Theme::publication()).facet(facets()),
         "theme-facet-publication",
     )
     .unwrap();
     let nature = render_svg(
-        scatter().theme(Theme::Nature).facet(facets()),
+        scatter().theme(Theme::nature()).facet(facets()),
         "theme-facet-nature",
     )
     .unwrap();
@@ -167,15 +167,15 @@ fn theme_owners_are_isolated_across_render_calls() {
             .unwrap()
     };
     let first_nature =
-        render_canvas(canvas(Theme::Nature), "theme-isolation-nature-first").unwrap();
-    let science = render_canvas(canvas(Theme::Science), "theme-isolation-science").unwrap();
+        render_canvas(canvas(Theme::nature()), "theme-isolation-nature-first").unwrap();
+    let science = render_canvas(canvas(Theme::science()), "theme-isolation-science").unwrap();
     let publication = render_canvas(
         Canvas::grid(1, 1).unwrap().panel(0, 0, scatter()).unwrap(),
         "theme-isolation-publication",
     )
     .unwrap();
     let second_nature =
-        render_canvas(canvas(Theme::Nature), "theme-isolation-nature-second").unwrap();
+        render_canvas(canvas(Theme::nature()), "theme-isolation-nature-second").unwrap();
 
     assert_eq!(first_nature, second_nature);
     assert_ne!(first_nature, science);

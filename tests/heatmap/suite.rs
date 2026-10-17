@@ -1,9 +1,9 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use lichtung_plot::{
-    BooleanValues, Canvas, CategoryOrder, CategoryValues, HeatmapAnnotations, HeatmapLabelFit,
-    HeatmapLayout, HeatmapNullRowAnnotation, HeatmapScale, NumericLabelFormat, NumericValues, Plot,
-    ValueSort,
+    BooleanValues, Canvas, CategoryOrder, CategoryValues, ColorDomain, ContinuousColorScale,
+    HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation,
+    NumericLabelFormat, NumericValues, Plot, ValueSort,
 };
 
 static TEST_DIRECTORY_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -74,8 +74,14 @@ fn heatmap_constructor_accepts_typed_configuration() {
     let svg = render(&data, |plot| {
         plot.color_label("Response")
             .layout(HeatmapLayout::UpperTriangle { diagonal: true })
-            .scale(HeatmapScale::Diverging { center: 0.5 })
-            .color_limits(-1.0, 2.0)
+            .continuous_color_scale(
+                ContinuousColorScale::diverging(
+                    0.5,
+                    None,
+                    Some(ColorDomain::exact(-1.0, 2.0).unwrap()),
+                )
+                .unwrap(),
+            )
             .annotations(HeatmapAnnotations::Values(NumericLabelFormat::default()))
     })
     .unwrap();
@@ -390,7 +396,7 @@ fn canvas_heatmap_aliases_disambiguate_both_category_axes() {
 }
 
 #[test]
-fn legacy_signed_zero_diverging_centers_render_identically_for_automatic_and_exact_domains() {
+fn signed_zero_diverging_centers_render_identically_for_automatic_and_exact_domains() {
     let data = HeatmapData::new(
         CategoryValues::new("column", ["low", "neutral", "high"]).unwrap(),
         CategoryValues::new("row", ["one"; 3]).unwrap(),
@@ -399,12 +405,11 @@ fn legacy_signed_zero_diverging_centers_render_identically_for_automatic_and_exa
     for explicit in [None, Some((-2.0, 3.0))] {
         let render_center = |center| {
             render(&data, |chart| {
-                let chart = chart.scale(HeatmapScale::Diverging { center });
-                if let Some((minimum, maximum)) = explicit {
-                    chart.color_limits(minimum, maximum)
-                } else {
-                    chart
-                }
+                let domain = explicit
+                    .map(|(minimum, maximum)| ColorDomain::exact(minimum, maximum).unwrap());
+                chart.continuous_color_scale(
+                    ContinuousColorScale::diverging(center, None, domain).unwrap(),
+                )
             })
             .unwrap()
         };
@@ -430,7 +435,7 @@ fn heatmap_sequential_and_diverging_scales_use_pinned_endpoint_colors() {
         NumericValues::new("value", [-1.0, 0.0, 1.0]),
     );
     let diverging = render(&diverging_data, |chart| {
-        chart.scale(HeatmapScale::Diverging { center: 0.0 })
+        chart.continuous_color_scale(ContinuousColorScale::diverging(0.0, None, None).unwrap())
     })
     .unwrap();
 
@@ -448,7 +453,13 @@ fn heatmap_explicit_color_limits_are_exact_and_saturate_values() {
         CategoryValues::new("row", ["row", "row"]).unwrap(),
         NumericValues::new("value", [-10.0, 10.0]),
     );
-    let svg = render(&data, |chart| chart.color_limits(0.0, 1.0)).unwrap();
+    let svg = render(&data, |chart| {
+        chart.continuous_color_scale(
+            ContinuousColorScale::sequential(None, Some(ColorDomain::exact(0.0, 1.0).unwrap()))
+                .unwrap(),
+        )
+    })
+    .unwrap();
     let marks = clipped_marks(&svg);
 
     assert!(marks.contains("fill=\"#F7FBFF\""));
@@ -464,9 +475,10 @@ fn heatmap_endpoint_diverging_center_is_neutral() {
         NumericValues::new("value", [0.0, 1.0]),
     );
     let svg = render(&data, |chart| {
-        chart
-            .scale(HeatmapScale::Diverging { center: 0.0 })
-            .color_limits(0.0, 1.0)
+        chart.continuous_color_scale(
+            ContinuousColorScale::diverging(0.0, None, Some(ColorDomain::exact(0.0, 1.0).unwrap()))
+                .unwrap(),
+        )
     })
     .unwrap();
 
@@ -480,7 +492,13 @@ fn heatmap_all_missing_grid_renders_with_explicit_color_limits() {
         CategoryValues::new("row", ["row", "row"]).unwrap(),
         NumericValues::nullable("value", [None, None]),
     );
-    let svg = render(&data, |chart| chart.color_limits(0.0, 1.0)).unwrap();
+    let svg = render(&data, |chart| {
+        chart.continuous_color_scale(
+            ContinuousColorScale::sequential(None, Some(ColorDomain::exact(0.0, 1.0).unwrap()))
+                .unwrap(),
+        )
+    })
+    .unwrap();
 
     assert_eq!(clipped_marks(&svg).matches("<polygon ").count(), 2);
     assert!(svg.contains(">Missing</text>"));
@@ -522,7 +540,13 @@ fn exact_constant_color_domain_saturates_to_sequential_midpoint_or_diverging_neu
         CategoryValues::new("row", ["row", "row"]).unwrap(),
         NumericValues::new("value", [-10.0, 10.0]),
     );
-    let sequential = render(&data, |chart| chart.color_limits(5.0, 5.0)).unwrap();
+    let sequential = render(&data, |chart| {
+        chart.continuous_color_scale(
+            ContinuousColorScale::sequential(None, Some(ColorDomain::exact(5.0, 5.0).unwrap()))
+                .unwrap(),
+        )
+    })
+    .unwrap();
     assert_eq!(
         clipped_marks(&sequential)
             .matches("fill=\"#7A92B5\"")
@@ -531,9 +555,10 @@ fn exact_constant_color_domain_saturates_to_sequential_midpoint_or_diverging_neu
     );
     assert_eq!(sequential.matches("stop-color=\"#7A92B5\"").count(), 2);
     let diverging = render(&data, |chart| {
-        chart
-            .scale(HeatmapScale::Diverging { center: 5.0 })
-            .color_limits(5.0, 5.0)
+        chart.continuous_color_scale(
+            ContinuousColorScale::diverging(5.0, None, Some(ColorDomain::exact(5.0, 5.0).unwrap()))
+                .unwrap(),
+        )
     })
     .unwrap();
     assert_eq!(
@@ -543,12 +568,10 @@ fn exact_constant_color_domain_saturates_to_sequential_midpoint_or_diverging_neu
         2
     );
     assert_eq!(diverging.matches("stop-color=\"#F7F7F7\"").count(), 2);
-    let error = render(&data, |chart| {
-        chart
-            .scale(HeatmapScale::Diverging { center: 0.0 })
-            .color_limits(5.0, 5.0)
-    })
-    .unwrap_err();
+    let error =
+        ContinuousColorScale::diverging(0.0, None, Some(ColorDomain::exact(5.0, 5.0).unwrap()))
+            .unwrap_err()
+            .to_string();
     assert!(error.contains("must contain center"), "{error}");
 }
 
@@ -560,7 +583,7 @@ fn heatmap_handles_signed_zero_subnormal_and_opposite_extremes() {
         NumericValues::new("value", [-f64::MAX, -0.0, f64::from_bits(1), f64::MAX]),
     );
     let svg = render(&data, |chart| {
-        chart.scale(HeatmapScale::Diverging { center: 0.0 })
+        chart.continuous_color_scale(ContinuousColorScale::diverging(0.0, None, None).unwrap())
     })
     .unwrap();
 
@@ -594,9 +617,14 @@ fn heatmap_diverging_colorbar_places_neutral_stop_at_normalized_center() {
         NumericValues::new("value", [-1.0, 0.0, 3.0]),
     );
     let svg = render(&data, |chart| {
-        chart
-            .scale(HeatmapScale::Diverging { center: 0.0 })
-            .color_limits(-1.0, 3.0)
+        chart.continuous_color_scale(
+            ContinuousColorScale::diverging(
+                0.0,
+                None,
+                Some(ColorDomain::exact(-1.0, 3.0).unwrap()),
+            )
+            .unwrap(),
+        )
     })
     .unwrap();
 
@@ -620,8 +648,14 @@ fn asymmetric_diverging_guide_preserves_numeric_center_clearance_and_raster_colo
     let png_path = directory.join("plot.png");
     chart(&data)
         .size(560, 600)
-        .scale(HeatmapScale::Diverging { center: 0.0 })
-        .color_limits(-1.0, 19.0)
+        .continuous_color_scale(
+            ContinuousColorScale::diverging(
+                0.0,
+                None,
+                Some(ColorDomain::exact(-1.0, 19.0).unwrap()),
+            )
+            .unwrap(),
+        )
         .svg_preserve_text(&svg_path)
         .unwrap()
         .png_preview(&png_path)
@@ -657,9 +691,14 @@ fn asymmetric_diverging_guide_preserves_numeric_center_clearance_and_raster_colo
         NumericValues::new("value", [-0.01, 0.0, 100.0]),
     );
     let failure = render(&close, |chart| {
-        chart
-            .scale(HeatmapScale::Diverging { center: 0.0 })
-            .color_limits(-0.01, 100.0)
+        chart.continuous_color_scale(
+            ContinuousColorScale::diverging(
+                0.0,
+                None,
+                Some(ColorDomain::exact(-0.01, 100.0).unwrap()),
+            )
+            .unwrap(),
+        )
     })
     .unwrap_err();
     assert!(failure.contains("LegendOrGuide"), "{failure}");
@@ -765,8 +804,14 @@ fn diverging_cells_choose_complete_light_or_dark_text_before_paint() {
     );
     let svg = render(&data, |chart| {
         chart
-            .scale(HeatmapScale::Diverging { center: 0.0 })
-            .color_limits(-1.0, 1.0)
+            .continuous_color_scale(
+                ContinuousColorScale::diverging(
+                    0.0,
+                    None,
+                    Some(ColorDomain::exact(-1.0, 1.0).unwrap()),
+                )
+                .unwrap(),
+            )
             .annotations(HeatmapAnnotations::Values(NumericLabelFormat::default()))
     })
     .unwrap();
@@ -1028,25 +1073,15 @@ fn heatmap_rejects_value_sorted_category_order() {
 }
 
 #[test]
-fn heatmap_rejects_invalid_scale_options() {
-    let data = standard_data();
-    let errors = [
-        render(&data, |chart| chart.color_limits(2.0, 1.0)).unwrap_err(),
-        render(&data, |chart| {
-            chart
-                .scale(HeatmapScale::Diverging { center: 0.0 })
-                .color_limits(0.5, 1.0)
-        })
-        .unwrap_err(),
-        render(&data, |chart| {
-            chart.scale(HeatmapScale::Diverging {
-                center: f64::INFINITY,
-            })
-        })
-        .unwrap_err(),
-    ];
-
-    assert!(errors.iter().all(|error| error.contains("heatmap:")));
+fn continuous_color_construction_rejects_invalid_domain_and_center_before_attachment() {
+    let domain = ColorDomain::exact(2.0, 1.0).unwrap_err();
+    assert!(domain.to_string().contains("finite and ascending"));
+    let outside =
+        ContinuousColorScale::diverging(0.0, None, Some(ColorDomain::exact(0.5, 1.0).unwrap()))
+            .unwrap_err();
+    assert!(outside.to_string().contains("must contain center"));
+    let nonfinite = ContinuousColorScale::diverging(f64::INFINITY, None, None).unwrap_err();
+    assert!(nonfinite.to_string().contains("center must be finite"));
 }
 
 #[test]
@@ -1121,7 +1156,10 @@ fn constant_scale_mark_and_guide_stops_agree_with_decoded_png_pixel() {
     let svg_path = directory.join("plot.svg");
     let png_path = directory.join("plot.png");
     chart(&data)
-        .color_limits(0.5, 0.5)
+        .continuous_color_scale(
+            ContinuousColorScale::sequential(None, Some(ColorDomain::exact(0.5, 0.5).unwrap()))
+                .unwrap(),
+        )
         .svg_preserve_text(&svg_path)
         .unwrap()
         .png_preview(&png_path)

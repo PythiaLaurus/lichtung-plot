@@ -37,7 +37,7 @@ fn violin_smoke() {
     let dir = unique_dir("violin-smoke");
     let out = dir.join("violin.svg");
     let chart = Plot::violin(species, value)
-        .theme(Theme::Publication)
+        .theme(Theme::publication())
         .size(640, 480);
     chart
         .svg_preserve_text(&out)

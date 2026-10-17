@@ -135,7 +135,7 @@ mod soft_hyphen_tests {
             .y_ticks(vec![crate::layout::AxisTick::new(0.0, "A")])
             .size(width, 1000)
             .erase();
-            let mut theme = crate::Theme::Publication.resolve().unwrap();
+            let mut theme = crate::Theme::publication().resolve().unwrap();
             theme.typography.root.title.font_size = 240;
             theme.typography.root.title.weight = crate::TextWeight::Bold;
             assert_ne!(
@@ -243,7 +243,7 @@ mod natural_sizing_tests {
         edit: impl FnOnce(&mut ResolvedTheme) -> Result<(), Error>,
     ) -> Result<NaturalScene, Error> {
         let plan = PlotPlan::new_with_theme_factory(source, source.kind(), (width, None), || {
-            let mut theme = crate::Theme::Publication.resolve()?;
+            let mut theme = crate::Theme::publication().resolve()?;
             edit(&mut theme)?;
             Ok(Box::new(theme))
         })?;
@@ -393,7 +393,7 @@ mod natural_sizing_tests {
         )
         .erase();
         for gap in [12.0, 280.0] {
-            let mut theme = crate::Theme::Publication.resolve().unwrap();
+            let mut theme = crate::Theme::publication().resolve().unwrap();
             theme.composition = theme
                 .composition
                 .clone()
@@ -497,7 +497,7 @@ mod natural_sizing_tests {
         )
         .title("A complete title with independently bold typography and legal boundaries")
         .erase();
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         theme.typography.root.title.weight = crate::TextWeight::Bold;
         let plan = PlotPlan::new_with_theme_factory(&plot, plot.kind(), (None, None), || {
             Ok(Box::new(theme))
@@ -847,6 +847,7 @@ impl PlotPlan {
                     &prepared_stage.operation(),
                     Some(&theme),
                 )?;
+                axes.validate_categorical_scale(source, &theme, None)?;
                 let facet_guide = source
                     .has_facets()
                     .then(|| {
@@ -1282,7 +1283,7 @@ mod root_title_tests {
         let mut reserves = Vec::new();
         for caption in ["", "Independent caption\nSecond caption line"] {
             let source = source.clone().caption(caption);
-            let theme = crate::Theme::Publication.resolve().unwrap();
+            let theme = crate::Theme::publication().resolve().unwrap();
             let root = crate::layout::plan_exact_root(
                 800,
                 600,
@@ -1332,7 +1333,7 @@ mod root_title_tests {
 
     #[test]
     fn matrix_root_uses_one_title_producer_with_independent_odd_size_alignments() {
-        for preset in [crate::Theme::Publication, crate::Theme::Science] {
+        for preset in [crate::Theme::publication(), crate::Theme::science()] {
             for explicit in [false, true] {
                 let mut plot = Plot::matrix(vec![
                     crate::NumericValues::new("x", [0.0, 1.0, 2.0, 3.0]),
@@ -1425,10 +1426,10 @@ mod root_title_tests {
     #[test]
     fn standalone_root_freezes_independent_alignment_before_null_and_svg() {
         for preset in [
-            crate::Theme::Publication,
-            crate::Theme::Nature,
-            crate::Theme::Science,
-            crate::Theme::CHI,
+            crate::Theme::publication(),
+            crate::Theme::nature(),
+            crate::Theme::science(),
+            crate::Theme::chi(),
         ] {
             let mut plot = Plot::scatter(
                 crate::NumericValues::new("x", [0.0, 1.0]),
@@ -1438,7 +1439,7 @@ mod root_title_tests {
             .subtitle("Subtitle\ny")
             .caption("Caption\nz")
             .size(333, 481)
-            .theme(preset)
+            .theme(preset.clone())
             .erase();
             plot.title_alignment = Some(End);
             plot.subtitle_alignment = Some(Start);
@@ -1497,7 +1498,7 @@ mod retained_legend_tests {
         .size(800, 600)
         .erase()
         .with_legend_position(crate::LegendPosition::OutsideRight);
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
         measurements::start();
         let root = crate::layout::plan_exact_root(
             800,

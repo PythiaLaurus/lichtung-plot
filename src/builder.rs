@@ -18,13 +18,12 @@ use crate::input::{AxisValues, PlotInput};
 use crate::layers::{BarPointLayer, GuideSpec, PointLayer};
 use crate::layout::AxisSpec;
 use crate::spec::{
-    AxisScale, BarSpacing, CategoricalColors, CategoryOrder, DumbbellEndpoints, FacetSpec,
-    HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation, HeatmapScale,
-    HistogramBins, HistogramComposite, HistogramStat, LegendPolicy, LinePathStyle,
-    NumericLabelFormat, PanelTextAnnotation, PlotKind, QqLine, RawOverlay, RegressionBand,
-    WaterfallLabels,
+    AxisScale, BarSpacing, CategoryOrder, DumbbellEndpoints, FacetSpec, HeatmapAnnotations,
+    HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation, HistogramBins, HistogramComposite,
+    HistogramStat, LegendPolicy, LinePathStyle, NumericLabelFormat, PanelTextAnnotation, PlotKind,
+    QqLine, RawOverlay, RegressionBand, WaterfallLabels,
 };
-use crate::theme::ThemeValue;
+use crate::theme::Theme;
 use crate::Labels;
 use crate::{
     BarInput, BooleanValues, Bounds, CategoryValues, CoefficientInput, HistogramInput,
@@ -109,12 +108,12 @@ use crate::{
 /// ```
 ///
 /// ```compile_fail
-/// use lichtung_plot::{BarInput, CategoryValues, HeatmapScale, NumericValues, Plot};
+/// use lichtung_plot::{BarInput, CategoryValues, ContinuousColorScale, NumericValues, Plot};
 /// let plot = Plot::bar(
 ///     CategoryValues::new("category", ["a"]).unwrap(),
 ///     BarInput::estimates(NumericValues::new("value", [1.0])),
 /// );
-/// let _ = plot.scale(HeatmapScale::Sequential);
+/// let _ = plot.continuous_color_scale(ContinuousColorScale::sequential(None, None).unwrap());
 /// ```
 ///
 /// ```compile_fail
@@ -450,7 +449,7 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     x_limits_user_explicit: bool,
     y_axis_spec: AxisSpec,
     y_limits_user_explicit: bool,
-    theme: Option<std::sync::Arc<ThemeValue>>,
+    theme: Option<std::sync::Arc<Theme>>,
     significance: Vec<crate::significance::SignificanceAnnotation>,
     width: u32,
     height: u32,
@@ -466,14 +465,9 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     /// Canvas Shared owns the continuous color guide for this prepared child.
     suppress_continuous_guide: bool,
     color_label: Option<String>,
-    heatmap_scale: HeatmapScale,
-    /// Plot-local private data-gradient replacement; public scale API is T6.
-    heatmap_gradient: Option<std::result::Result<crate::theme::SequentialGradient, String>>,
+    continuous_color_scale: Option<crate::theme::ContinuousColorScale>,
     heatmap_layout: HeatmapLayout,
     heatmap_label_fit: HeatmapLabelFit,
-    heatmap_color_limits: Option<(f64, f64)>,
-    beeswarm_color_limits: Option<(f64, f64)>,
-    beeswarm_gradient: Option<std::result::Result<crate::theme::SequentialGradient, String>>,
     heatmap_annotations: HeatmapAnnotations,
     heatmap_null_row_annotations: Vec<HeatmapNullRowAnnotation>,
     heatmap_highlight: Option<BooleanValues>,
@@ -499,7 +493,7 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     global_collective_pairs: Option<Vec<crate::data::CollectivePair>>,
     global_line_condition_levels: Option<Vec<String>>,
     interaction_styles: Option<Vec<crate::InteractionStyle>>,
-    categorical_colors: Option<CategoricalColors>,
+    categorical_color_scale: Option<crate::theme::CategoricalColorScale>,
     render_scope: Option<String>,
     pub(crate) prepared_axes:
         std::sync::Arc<Vec<(Option<String>, crate::plots::shared_x::PreparedAxes)>>,
@@ -609,13 +603,9 @@ impl Plot<crate::kind::Any> {
             legend_policy: LegendPolicy::Automatic,
             suppress_continuous_guide: false,
             color_label: None,
-            heatmap_scale: HeatmapScale::default(),
-            heatmap_gradient: None,
+            continuous_color_scale: None,
             heatmap_layout: HeatmapLayout::default(),
             heatmap_label_fit: HeatmapLabelFit::default(),
-            heatmap_color_limits: None,
-            beeswarm_color_limits: None,
-            beeswarm_gradient: None,
             heatmap_annotations: HeatmapAnnotations::default(),
             heatmap_null_row_annotations: Vec::new(),
             heatmap_highlight: None,
@@ -641,7 +631,7 @@ impl Plot<crate::kind::Any> {
             global_collective_pairs: None,
             global_line_condition_levels: None,
             interaction_styles: None,
-            categorical_colors: None,
+            categorical_color_scale: None,
             render_scope: None,
             prepared_axes: std::sync::Arc::new(Vec::new()),
             prepared_scatter: None,
@@ -1026,13 +1016,9 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             legend_policy,
             suppress_continuous_guide,
             color_label,
-            heatmap_scale,
-            heatmap_gradient,
+            continuous_color_scale,
             heatmap_layout,
             heatmap_label_fit,
-            heatmap_color_limits,
-            beeswarm_color_limits,
-            beeswarm_gradient,
             heatmap_annotations,
             heatmap_null_row_annotations,
             heatmap_highlight,
@@ -1058,7 +1044,7 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             global_collective_pairs,
             global_line_condition_levels,
             interaction_styles,
-            categorical_colors,
+            categorical_color_scale,
             render_scope,
             axis_gutter_owner,
             y_tick_labels_visible,
@@ -1138,13 +1124,9 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             legend_policy,
             suppress_continuous_guide,
             color_label,
-            heatmap_scale,
-            heatmap_gradient,
+            continuous_color_scale,
             heatmap_layout,
             heatmap_label_fit,
-            heatmap_color_limits,
-            beeswarm_color_limits,
-            beeswarm_gradient,
             heatmap_annotations,
             heatmap_null_row_annotations,
             heatmap_highlight,
@@ -1170,7 +1152,7 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             global_collective_pairs,
             global_line_condition_levels,
             interaction_styles,
-            categorical_colors,
+            categorical_color_scale,
             render_scope,
             axis_gutter_owner,
             y_tick_labels_visible,

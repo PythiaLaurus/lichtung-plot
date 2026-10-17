@@ -1,5 +1,9 @@
 # Immutable validated scale values
 
+This is historical evidence for the private scale-value migration. The complete
+public Theme/font/scale cutover supersedes the temporary public map and selector
+spellings described below; see [complete foundations](complete-theme-foundations.md).
+
 ## Live representations and owner boundaries
 
 `src/theme/scale_values.rs` defines crate-private `QualitativePalette`,

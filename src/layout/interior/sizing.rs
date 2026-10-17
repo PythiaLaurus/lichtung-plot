@@ -172,7 +172,10 @@ pub(crate) fn guided_preference(
                         selection: semantics.selection,
                         missing: semantics.missing,
                         domain: semantics.domain,
-                        exact: plot.heatmap_color_limits_spec().is_some(),
+                        exact: plot
+                            .continuous_color_scale_spec()
+                            .and_then(crate::ContinuousColorScale::domain)
+                            .is_some(),
                         labels: crate::data::source::collect_source(indices.iter().map(
                             |&index| crate::data::source::copy_source_string(&values[index]),
                         ))?,
@@ -207,7 +210,10 @@ pub(crate) fn guided_preference(
                         selection: semantics.selection,
                         missing: semantics.missing,
                         domain: semantics.domain,
-                        exact: plot.beeswarm_color_limits_spec().is_some(),
+                        exact: plot
+                            .continuous_color_scale_spec()
+                            .and_then(crate::ContinuousColorScale::domain)
+                            .is_some(),
                         labels: crate::data::source::collect_source(indices.iter().map(
                             |&index| crate::data::source::copy_source_string(&values[index]),
                         ))?,
@@ -599,7 +605,7 @@ mod tests {
             fit::{FitOutcome, FitScope},
             PanelBox,
         };
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         let half = crate::theme::RelativeSpacing::ratio(1, 22_528).unwrap();
         let spacing = theme
             .legend
@@ -692,7 +698,7 @@ mod tests {
 
     #[test]
     fn continuous_intrinsic_width_admits_broad_frame_and_missing_key_chrome() {
-        let mut theme = crate::Theme::Publication.resolve().unwrap();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
         let frame = crate::theme::LegendFrameTheme::new(
             theme.legend.frame().unwrap().fill(),
             Some(

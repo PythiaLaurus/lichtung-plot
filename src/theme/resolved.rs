@@ -1,8 +1,4 @@
-//! Publication-grade visual themes.
-//!
-//! Every theme is hardcoded so visual regressions remain reviewable and
-//! re-renders are byte-stable under the same font environment.
-//! Each built-in theme resolves privately to colors, fonts, and layout style.
+//! Built-in construction data and private operation-local appearance resolution.
 
 #![deny(missing_docs)]
 
@@ -13,7 +9,7 @@ use sha2::{Digest, Sha256};
 use super::{
     AnnotationTextRoles, AnnotationTheme, AxisSpacing, AxisTextRoles, AxisTheme,
     CompositionTextRoles, ContrastTextRoles, FrameSides, FrameTheme, GuideTextRoles, LegendTheme,
-    MarkTheme, RootTextRoles, StrokeTheme, ThemeValue, TickTheme, TypographyTheme,
+    MarkTheme, RootTextRoles, StrokeTheme, Theme, TickTheme, TypographyTheme,
 };
 use crate::font::canonical::PreparedFontEnvironment;
 use crate::layout::{
@@ -38,49 +34,11 @@ thread_local! {
     static FONT_ENVIRONMENT_DISCOVERIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-macro_rules! define_themes {
-    ($($variant:ident => ($documentation:literal, $resolver:ident)),+ $(,)?) => {
-        /// Predefined publication themes with hardcoded journal/venue palettes.
-        ///
-        /// Attach one complete selection with [`crate::Plot::theme`] or
-        /// [`crate::Canvas::theme`].
-        ///
-        /// ```compile_fail
-        /// let _ = lichtung_plot::Theme::Publication.resolve();
-        /// ```
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-        pub enum Theme {
-            $(
-                #[doc = $documentation]
-                $variant,
-            )+
-        }
-
-        impl Theme {
-            #[cfg(test)]
-            pub(crate) fn resolve(self) -> Result<ResolvedTheme, Error> {
-                ResolvedTheme::new(self.into_value())
-            }
-
-            pub(crate) fn into_value(self) -> ThemeValue {
-                match self { $(Self::$variant => ThemeValue::$resolver()),+ }
-            }
-        }
-    };
-}
-
-define_themes! {
-    Publication => ("Default clean theme with high contrast and generous whitespace.", publication),
-    Nature => ("Nature-style muted blues and greens without top/right axes.", nature),
-    Science => ("Science-style high-saturation palette with bold axis labels.", science),
-    CHI => ("ACM CHI/HCI pastel palette with accessible contrast.", chi),
-}
-
 /// A theme's full resolved visual specification. Layout and renderers consume
 /// this value to produce concrete backend styles and layout decisions.
 #[derive(Debug, Clone)]
 pub(crate) struct ResolvedTheme {
-    appearance: ThemeValue,
+    appearance: Theme,
     /// An explicit Plot inside Canvas composes over the Canvas owner's surface.
     pub(crate) canvas_surface_override: Option<Color>,
     font_environment: Arc<OnceLock<Result<PreparedFontEnvironment, String>>>,
@@ -88,14 +46,14 @@ pub(crate) struct ResolvedTheme {
 }
 
 impl std::ops::Deref for ResolvedTheme {
-    type Target = ThemeValue;
-    fn deref(&self) -> &ThemeValue {
+    type Target = Theme;
+    fn deref(&self) -> &Theme {
         &self.appearance
     }
 }
 
 impl std::ops::DerefMut for ResolvedTheme {
-    fn deref_mut(&mut self) -> &mut ThemeValue {
+    fn deref_mut(&mut self) -> &mut Theme {
         &mut self.appearance
     }
 }
@@ -449,7 +407,7 @@ impl PartialEq for ResolvedTheme {
 }
 
 impl ResolvedTheme {
-    pub(crate) fn new(appearance: ThemeValue) -> Result<Self, Error> {
+    pub(crate) fn new(appearance: Theme) -> Result<Self, Error> {
         appearance.validate()?;
         Ok(Self {
             appearance,
@@ -1011,7 +969,7 @@ const fn pair_ordinal(weight: TextWeight) -> u32 {
 
 /// Paints applied to renderer-owned drawing surfaces.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct SurfaceTheme {
+pub struct SurfaceTheme {
     /// Canvas root paint.
     pub(crate) canvas_root: Color,
     /// Plot panel paint.
@@ -1020,51 +978,37 @@ pub(crate) struct SurfaceTheme {
 
 impl SurfaceTheme {
     /// Construct complete surface paints; transparent paints are valid.
-    #[expect(
-        clippy::unnecessary_wraps,
-        reason = "complete component construction uniformly returns Result; Color already validates every surface operand"
-    )]
-    pub(crate) fn new(canvas_root: Color, plot_panel: Color) -> Result<Self, Error> {
+    pub fn new(canvas_root: Color, plot_panel: Color) -> Result<Self, Error> {
         Ok(Self {
             canvas_root,
             plot_panel,
         })
     }
 
-    pub(crate) fn canvas_root(&self) -> Color {
+    /// Inspect the complete Canvas root paint.
+    pub fn canvas_root(&self) -> Color {
         self.canvas_root
     }
 
-    pub(crate) fn plot_panel(&self) -> Color {
+    /// Inspect the complete Plot panel paint.
+    pub fn plot_panel(&self) -> Color {
         self.plot_panel
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "construction-only surface edits await complete theme customization"
-        )
-    )]
-    pub(crate) fn with_canvas_root(self, canvas_root: Color) -> Result<Self, Error> {
+    /// Replace only the Canvas root paint.
+    pub fn with_canvas_root(self, canvas_root: Color) -> Result<Self, Error> {
         Self::new(canvas_root, self.plot_panel)
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "construction-only surface edits await complete theme customization"
-        )
-    )]
-    pub(crate) fn with_plot_panel(self, plot_panel: Color) -> Result<Self, Error> {
+    /// Replace only the Plot panel paint.
+    pub fn with_plot_panel(self, plot_panel: Color) -> Result<Self, Error> {
         Self::new(self.canvas_root, plot_panel)
     }
 }
 
 /// Complete text appearance for one semantic typography role.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct TextTheme {
+pub struct TextTheme {
     /// Ordered literal named and host-generic family preferences.
     pub(crate) stack: crate::font::canonical::FontStack,
     /// Text paint.
@@ -1079,7 +1023,7 @@ pub(crate) struct TextTheme {
 
 impl TextTheme {
     /// Construct one complete text role, using actual CSS pixels and a multiplier.
-    pub(crate) fn new(
+    pub fn new(
         stack: crate::font::canonical::FontStack,
         color: Color,
         font_size: u32,
@@ -1111,31 +1055,33 @@ impl TextTheme {
         Ok(())
     }
 
-    pub(crate) fn stack(&self) -> &crate::font::canonical::FontStack {
+    /// Borrow this role's complete ordered font preferences.
+    pub fn stack(&self) -> &crate::font::canonical::FontStack {
         &self.stack
     }
 
-    pub(crate) fn color(&self) -> Color {
+    /// Inspect the complete text paint.
+    pub fn color(&self) -> Color {
         self.paint
     }
 
-    pub(crate) fn font_size(&self) -> u32 {
+    /// Inspect the positive font size in actual CSS pixels.
+    pub fn font_size(&self) -> u32 {
         self.font_size
     }
 
-    pub(crate) fn weight(&self) -> TextWeight {
+    /// Inspect the closed font weight.
+    pub fn weight(&self) -> TextWeight {
         self.weight
     }
 
     /// Inspect the retained multiplier, without multiplying by the font size.
-    pub(crate) fn line_height(&self) -> f64 {
+    pub fn line_height(&self) -> f64 {
         self.line_height_multiplier
     }
 
-    pub(crate) fn with_stack(
-        self,
-        stack: crate::font::canonical::FontStack,
-    ) -> Result<Self, Error> {
+    /// Replace only the complete font stack.
+    pub fn with_stack(self, stack: crate::font::canonical::FontStack) -> Result<Self, Error> {
         Self::new(
             stack,
             self.paint,
@@ -1145,7 +1091,8 @@ impl TextTheme {
         )
     }
 
-    pub(crate) fn with_color(self, color: Color) -> Result<Self, Error> {
+    /// Replace only the complete text paint.
+    pub fn with_color(self, color: Color) -> Result<Self, Error> {
         Self::new(
             self.stack,
             color,
@@ -1155,7 +1102,8 @@ impl TextTheme {
         )
     }
 
-    pub(crate) fn with_font_size(self, font_size: u32) -> Result<Self, Error> {
+    /// Replace only the positive CSS font size.
+    pub fn with_font_size(self, font_size: u32) -> Result<Self, Error> {
         Self::new(
             self.stack,
             self.paint,
@@ -1165,7 +1113,8 @@ impl TextTheme {
         )
     }
 
-    pub(crate) fn with_weight(self, weight: TextWeight) -> Result<Self, Error> {
+    /// Replace only the font weight.
+    pub fn with_weight(self, weight: TextWeight) -> Result<Self, Error> {
         Self::new(
             self.stack,
             self.paint,
@@ -1175,11 +1124,8 @@ impl TextTheme {
         )
     }
 
-    #[allow(
-        dead_code,
-        reason = "construction-only leading edits await complete theme customization"
-    )]
-    pub(crate) fn with_line_height(self, line_height: f64) -> Result<Self, Error> {
+    /// Replace only the finite positive line-height multiplier.
+    pub fn with_line_height(self, line_height: f64) -> Result<Self, Error> {
         Self::new(
             self.stack,
             self.paint,
@@ -1216,20 +1162,12 @@ impl TextTheme {
 
 /// Physical horizontal alignment of a root text role.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum TitleAlignment {
+pub enum TitleAlignment {
     /// Align to the physical left edge of the local span.
-    #[allow(
-        dead_code,
-        reason = "private alignment is activated by future public themes"
-    )]
     Start,
     /// Align to the physical midpoint of the local span.
     Center,
     /// Align to the physical right edge of the local span.
-    #[allow(
-        dead_code,
-        reason = "private alignment is activated by future public themes"
-    )]
     End,
 }
 
@@ -1262,7 +1200,7 @@ fn resolved_theme(
     caption_font_size: u32,
     axis_title_font_size: u32,
     grid_color: (u8, u8, u8),
-) -> Result<ThemeValue, Error> {
+) -> Result<Theme, Error> {
     let stack = crate::font::canonical::builtin_font_stack();
     let foreground_paint = color_from_rgb(foreground);
     let muted_paint = color_from_rgb(MUTED_TEXT);
@@ -1284,7 +1222,7 @@ fn resolved_theme(
         )
     };
 
-    let value = ThemeValue {
+    let value = Theme {
         color_scales,
         surfaces: SurfaceTheme::new(Color::rgb(255, 255, 255), Color::rgb(255, 255, 255))?,
         typography: TypographyTheme::new(
@@ -1368,7 +1306,7 @@ fn resolved_theme(
             axis_title_font_size,
         )?,
     };
-    ThemeValue::new(
+    Theme::new(
         value.surfaces,
         value.typography,
         value.axes,
@@ -1384,7 +1322,7 @@ fn plus_six_line_height(font_size: u32) -> f64 {
     (f64::from(font_size) + 6.0) / f64::from(font_size)
 }
 
-pub(super) fn publication_theme() -> Result<ThemeValue, Error> {
+pub(super) fn publication_theme() -> Result<Theme, Error> {
     // Okabe-Ito 8-color qualitative palette (colorblind-safe).
     resolved_theme(
         &[
@@ -1408,7 +1346,7 @@ pub(super) fn publication_theme() -> Result<ThemeValue, Error> {
     )
 }
 
-pub(super) fn nature_theme() -> Result<ThemeValue, Error> {
+pub(super) fn nature_theme() -> Result<Theme, Error> {
     resolved_theme(
         &[
             (40, 86, 130),
@@ -1428,7 +1366,7 @@ pub(super) fn nature_theme() -> Result<ThemeValue, Error> {
     )
 }
 
-pub(super) fn science_theme() -> Result<ThemeValue, Error> {
+pub(super) fn science_theme() -> Result<Theme, Error> {
     resolved_theme(
         &[
             (255, 0, 0),
@@ -1448,7 +1386,7 @@ pub(super) fn science_theme() -> Result<ThemeValue, Error> {
     )
 }
 
-pub(super) fn chi_theme() -> Result<ThemeValue, Error> {
+pub(super) fn chi_theme() -> Result<Theme, Error> {
     resolved_theme(
         &[
             (171, 199, 232),
@@ -1500,7 +1438,7 @@ mod tests {
         reason = "one root verifies indexed lookup, stable collision order, and complete matching"
     )]
     fn indexed_text_queries_preserve_matching_and_collision_order() {
-        let root = Theme::Publication.resolve().unwrap();
+        let root = Theme::publication().resolve().unwrap();
         root.font_environment
             .set(Ok(PreparedFontEnvironment::synthetic()))
             .unwrap();
@@ -1617,7 +1555,7 @@ mod tests {
 
     #[test]
     fn indexed_query_fingerprints_include_exact_presentation_and_provenance() {
-        let appearance = Theme::Publication
+        let appearance = Theme::publication()
             .resolve()
             .unwrap()
             .typography
@@ -1668,7 +1606,7 @@ mod tests {
 
     #[test]
     fn retained_profile_does_not_trust_a_reused_mutable_input_address() {
-        let theme = Theme::Publication.resolve().unwrap();
+        let theme = Theme::publication().resolve().unwrap();
         theme
             .font_environment
             .set(Ok(PreparedFontEnvironment::synthetic_faces(&[(
@@ -1713,7 +1651,7 @@ mod tests {
 
     #[test]
     fn text_cache_stops_optional_insertion_without_refusing_rendering() {
-        let root = Theme::Publication.resolve().unwrap();
+        let root = Theme::publication().resolve().unwrap();
         root.font_environment
             .set(Ok(PreparedFontEnvironment::synthetic()))
             .unwrap();

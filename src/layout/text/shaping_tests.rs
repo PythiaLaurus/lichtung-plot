@@ -15,7 +15,7 @@ fn typography_reuses_analysis_and_keeps_complete_sources() {
         workloads.push((format!("words{count}"), "Measured ".repeat(count)));
     }
     for (name, source) in workloads {
-        let theme = crate::Theme::Publication.resolve().unwrap();
+        let theme = crate::Theme::publication().resolve().unwrap();
         let environment = theme.prepared_font_environment().unwrap();
         let resources = environment.operation();
         environment.validate_operation(&resources).unwrap();
