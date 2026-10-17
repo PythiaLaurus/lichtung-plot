@@ -17,9 +17,11 @@ consolidated, the complete gate includes doctests, and final `just verify` passe
 `../docs/test-code-cleanup.md` records retained contract owners, actual execution
 and separate before/after censuses. The subsequent user-directed deletion reduced
 library tests from 1,349 to 671, with the complete gate passing. The user has now
-authorized resuming T6. The mark/annotation foundation leaf and the private-value
-umbrella T6B1 are now complete; spec93 records their focused verification and the
-next complete-Theme construction/consumer-resolution work. New unit tests must
+authorized resuming T6. Validated private foundations and the complete immutable
+Theme construction/consumer-resolution umbrellas T6B1/T6B2 are complete. Spec93
+records their focused verification and the next public exact-style and complete
+Theme API cutovers; `../docs/theme-consumer-closure.md` reconciles actual owners
+and identities. New unit tests must
 replace existing tests in the same logical change without increasing the
 discovered count; AGENTS.md and spec90 own this continuing repository rule.
 

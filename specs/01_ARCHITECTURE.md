@@ -127,8 +127,11 @@ and `Plot::theme(Theme)` are the sole current owner attachments. The Canvas call
 is optional and Publication is its default root. An unthemed composed Plot
 inherits that root; an explicit Plot selection completely replaces it locally.
 An unthemed standalone Plot selects Publication, and facets add no theme scope.
-The replacement Theme values, components, colors, and scales remain non-current
-until Phase T6 completes.
+Internally those attachments retain complete immutable appearance values, with
+per-operation font/query state alongside the single resolved appearance. Retained
+component values drive measurement, source preparation and frozen draw operands.
+The complete public Theme/component/color/scale construction surface becomes
+current at its owning T6 public cutover.
 
 `05_LAYOUT_SYSTEM.md` is the approved replacement layout architecture for that
 same migration. T5a through T5e implement its private parent-constraint

@@ -73,6 +73,13 @@ even when it has an explicit color. Palette cycling and repeated explicit colors
 are allowed. Optional point labels annotate individual points, while one optional
 legend label identifies the complete layer.
 
+Heatmap and Beeswarm use the owning theme's common sequential gradient. All four
+built-ins select `#F7FBFF -> #08306B`; the former Beeswarm-only default is removed.
+Local and Shared continuous guides consume the final prepared domain and the
+same chromatic mapping as marks, with independent mark alpha. Constant domains
+have one required numeric label; an interior diverging center contributes its
+required label without making every gradient stop a numeric label.
+
 `Plot::trajectory` requires an explicit graphical group, sorts points within
 each group, and always draws an observation marker. `Plot::line_path` requires
 numeric x values and an explicit group, preserves source-row order and repeated

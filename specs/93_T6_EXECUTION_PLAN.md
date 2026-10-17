@@ -1,15 +1,15 @@
 # T6 — Public Foundations And Scientific Presentation
 
-**Status**: IN PROGRESS — validated private foundations complete; complete Theme
-construction and consumer resolution are next.
+**Status**: IN PROGRESS — complete private foundations and consumer resolution;
+public exact-style and Theme construction cutovers are next.
 
 **Current execution checkpoint:** the user-authorized resumption completed the
 mark/annotation leaf, T6B1d4d, and the private-value umbrella T6B1. Evidence is in
 `../docs/mark-annotation-values.md`. T6B2 owns complete Theme construction and the
-remaining literal-to-component consumer resolution; complete construction and
-mark extents, annotation consumers and continuous scale resolution are implemented;
-supplemental defaults and remaining owner reconciliation follow. Public cutovers
-follow that consumer migration.
+remaining literal-to-component consumer resolution. Complete construction, mark
+extents, annotations, continuous mappings and supplemental defaults are complete;
+`../docs/theme-consumer-closure.md` records the final owner/identity reconciliation.
+Public exact-style and Theme construction cutovers follow.
 The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
@@ -104,7 +104,7 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6B1d4c1 | COMPLETE | T6B1d4b | Complete measured guide chrome and exact admission; `refactor(legend): retain exact validated guide chrome` |
 | T6B1d4c2 | COMPLETE | T6B1d4c1 | Complete root/embedded composition chrome; `refactor(composition): retain validated local relationships` |
 | T6B1d4d | COMPLETE | T6B1d4c | Complete mark groups and admitted annotation geometry; `refactor(theme): assemble mark and annotation roles` |
-| T6B2 | IN PROGRESS | T6B1 | Complete Theme construction/customization and owner resolution using those values; separately committed leaves below |
+| T6B2 | COMPLETE | T6B1 | Complete Theme construction/customization and owner resolution using those values; separately committed leaves below |
 | T6B2a | COMPLETE | T6B1 | Retain one complete appearance value and construction-only builder independently of operation state; `refactor(theme): retain complete construction values` |
 | T6B2b | COMPLETE | T6B2a | Consume mark extents in category, Waterfall, interval, rug and density geometry; `refactor(marks): resolve retained local geometry` |
 | T6B2c | COMPLETE | T6B2b | Resolve annotation metrics, exact significance absence and canonical bracket geometry; independently reviewed leaves below |
@@ -112,7 +112,7 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6B2c2 | COMPLETE | T6B2c1 | Resolve selected-role cell, estimate and panel-text annotation metrics; `refactor(annotations): resolve selected-role local spacing` |
 | T6B2d | COMPLETE | T6B2c | General continuous-scale branches, unified presets and common local/shared guides; `refactor(scales): resolve complete continuous mappings` |
 | T6B2e | COMPLETE | T6B2d | Complete supplemental paint/default resolution and remaining declared-track/cache owners; `refactor(theme): resolve complete owner-local defaults` |
-| T6B2f | PENDING | T6B2e | Reconcile retained components and consumers with focused owner/identity evidence |
+| T6B2f | COMPLETE | T6B2e | Reconcile retained components and consumers with focused owner/identity evidence |
 | T6B3 | PENDING | T6B2 | Exact element Color/alpha replacement and repository caller migration; `feat(styles): expose complete RGBA element paints` |
 | T6B4 | PENDING | T6B3 | Public complete Theme/components/fonts/scales, built-in constructors and palette/map/gradient attachments; remove closed selectors and old scale representations; `feat(theme): expose immutable theme and scale foundations` |
 | T6B5 | PENDING | T6B4 | Expose already implemented title/subtitle instructions and theme caption alignment; `feat(composition): expose independent heading alignment` |
@@ -335,6 +335,14 @@ ink. Declared Canvas/facet em and complete cache dependencies are source-checked
 One selected-payload/guide contract replaces the composition edit inventory and
 its helper; discovery stays 671. Four focused library tests, twenty numeric-layer
 contracts, formatting and strict all-target Clippy pass.
+
+T6B2f evidence: `../docs/theme-consumer-closure.md` reconciles all eight complete
+components, eighteen text roles, local metrics, prepared/scoped/canonical owners
+and immutable/cache identity. Forty-one final focused theme/child-key tests and
+six explicit/inherited/default owner integrations pass; discovery remains 671.
+Preceding behavioral leaves provide actual selected geometry, continuous branch,
+font-census and frozen replay evidence with strict Clippy. This closes private
+consumer resolution without claiming the later public API or presentation phases.
 
 Use spec03 and spec94's complete `Theme`, `ThemeBuilder`, role components, typed font stack,
 RGBA `Color`, RGB-only `OpaqueColor`, palettes/maps and gradients. Builders are
