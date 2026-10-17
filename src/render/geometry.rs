@@ -1731,6 +1731,7 @@ mod tests {
                     line_height: 14.4,
                     weight: crate::TextWeight::Normal,
                     label_gap: 4.0,
+                    tick_height: 7.0,
                 },
             ),
             "polygon" => geometry.draw_polygon(
@@ -1976,6 +1977,7 @@ mod tests {
             line_height: 14.4,
             weight: crate::TextWeight::Normal,
             label_gap: 4.0,
+            tick_height: 7.0,
         };
         geometry
             .begin_clip(PanelBox::new(9.0, 10.0, 29.0, 30.0))
@@ -2861,6 +2863,7 @@ mod tests {
             line_height: 24.0,
             weight: crate::TextWeight::Normal,
             label_gap: 5.0,
+            tick_height: 7.0,
         };
         let mut backend = begun_backend();
         backend

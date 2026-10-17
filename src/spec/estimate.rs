@@ -95,7 +95,7 @@ pub struct SignificanceMarkStyle {
 }
 
 impl SignificanceMarkStyle {
-    /// Default significance mark style used without an exact caller override.
+    /// Built-in values for an explicitly constructed default exact style.
     pub(crate) const DEFAULT: Self = Self {
         font_size: 16,
         weight: TextWeight::Normal,

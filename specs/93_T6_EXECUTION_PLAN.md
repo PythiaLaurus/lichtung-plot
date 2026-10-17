@@ -105,7 +105,9 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6B2 | IN PROGRESS | T6B1 | Complete Theme construction/customization and owner resolution using those values; separately committed leaves below |
 | T6B2a | COMPLETE | T6B1 | Retain one complete appearance value and construction-only builder independently of operation state; `refactor(theme): retain complete construction values` |
 | T6B2b | COMPLETE | T6B2a | Consume mark extents in category, Waterfall, interval, rug and density geometry; `refactor(marks): resolve retained local geometry` |
-| T6B2c | PENDING | T6B2b | Resolve annotation metrics, exact significance absence and canonical bracket geometry; `refactor(annotations): retain effective local geometry` |
+| T6B2c | IN PROGRESS | T6B2b | Resolve annotation metrics, exact significance absence and canonical bracket geometry; independently reviewed leaves below |
+| T6B2c1 | COMPLETE | T6B2b | Retain one effective significance value through text, containing fit and canonical capture; `refactor(annotations): retain effective significance geometry` |
+| T6B2c2 | PENDING | T6B2c1 | Resolve selected-role cell, estimate and panel-text annotation metrics; `refactor(annotations): resolve selected-role local spacing` |
 | T6B2d | PENDING | T6B2c | General continuous-scale branches, unified presets and common local/shared guides; `refactor(scales): resolve complete continuous mappings` |
 | T6B2e | PENDING | T6B2d | Complete supplemental paint/default resolution and remaining declared-track/cache owners; `refactor(theme): resolve complete owner-local defaults` |
 | T6B2f | PENDING | T6B2e | Reconcile retained components and consumers with focused owner/identity evidence |
@@ -293,6 +295,15 @@ zero. Histogram preparation receives the complete owning appearance before fonts
 without changing bins, KDE or supplied geometry. Two semantic tests replace two
 old fixtures and remove their dead support; discovery remains 671. Sixteen focused
 library tests, twenty contract integrations, formatting and strict Clippy pass.
+
+T6B2c1 evidence: `../docs/significance-geometry-resolution.md` records one effective
+significance appearance with actual absent/exact provenance and selected-role
+geometry. Frozen brackets retain their complete style, including the tick height
+consumed by canonical validation. The default-materializing accessor, backend
+geometry constant and duplicate selected-style/fallback reconstruction are gone.
+One semantic planner/canonical test replaces a typography group-edit fixture;
+discovery remains 671. Ten focused library tests, twenty-four annotation/estimate/
+parent integrations, formatting and strict all-target Clippy pass.
 
 Use spec03 and spec94's complete `Theme`, `ThemeBuilder`, role components, typed font stack,
 RGBA `Color`, RGB-only `OpaqueColor`, palettes/maps and gradients. Builders are

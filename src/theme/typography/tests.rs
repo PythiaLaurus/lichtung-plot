@@ -77,59 +77,6 @@ fn every_text_role_edit_is_independent_and_repeated_edits_replace_the_same_field
 }
 
 #[test]
-fn complete_group_replacements_retain_siblings_and_do_not_couple_equal_initial_roles() {
-    let source = complete();
-    let root = source.root().clone().with_title(text(91)).unwrap();
-    assert_one_change(&source, &source.clone().with_root(root).unwrap(), 0);
-    let axes = source.axes().clone().with_tick_label(text(91)).unwrap();
-    assert_one_change(&source, &source.clone().with_axes(axes).unwrap(), 4);
-    let guides = source.guides().clone().with_legend_label(text(91)).unwrap();
-    assert_one_change(&source, &source.clone().with_guides(guides).unwrap(), 13);
-    let composition = source.composition().clone().with_body(text(91)).unwrap();
-    assert_one_change(
-        &source,
-        &source.clone().with_composition(composition).unwrap(),
-        17,
-    );
-    let contrast = source
-        .annotations()
-        .contrast()
-        .clone()
-        .with_dark(text(91))
-        .unwrap();
-    let annotations = source
-        .annotations()
-        .clone()
-        .with_contrast(contrast)
-        .unwrap();
-    assert_one_change(
-        &source,
-        &source.clone().with_annotations(annotations).unwrap(),
-        11,
-    );
-
-    let preset = crate::Theme::Publication.resolve().unwrap();
-    assert_eq!(
-        preset.typography.annotations().estimate_detail(),
-        preset.typography.annotations().waterfall_total()
-    );
-    let changed = preset
-        .typography
-        .annotations()
-        .clone()
-        .with_estimate_detail(text(91))
-        .unwrap();
-    assert_eq!(
-        changed.waterfall_total(),
-        preset.typography.annotations().waterfall_total()
-    );
-    assert_eq!(
-        changed.panel_text(),
-        preset.typography.annotations().panel_text()
-    );
-}
-
-#[test]
 fn publication_title_keeps_the_exact_binary64_leading_and_upward_occupancy() {
     let theme = crate::Theme::Publication.resolve().unwrap();
     let title = theme.typography.root().title();

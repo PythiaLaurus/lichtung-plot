@@ -1,6 +1,6 @@
 //! Complete immutable typography construction and semantic role ownership.
 
-use crate::{Error, SignificanceMarkStyle};
+use crate::Error;
 
 use super::TextTheme;
 
@@ -37,7 +37,7 @@ macro_rules! text_group {
                     &self.$field
                 }
 
-                #[cfg_attr(not(test), expect(dead_code, reason = "private construction edits await complete Theme exposure"))]
+                #[allow(dead_code, reason = "private complete construction edits await Theme exposure")]
                 pub(crate) fn $edit(mut self, value: $type) -> Result<Self, Error> {
                     self.$field = value;
                     self.validate()?;
@@ -175,20 +175,6 @@ impl TypographyTheme {
             self.composition().text_panel_title(),
             self.composition().body(),
         ]
-    }
-
-    /// Apply exact significance size and weight over the selected complete role.
-    pub(crate) fn effective_significance_label(
-        &self,
-        exact: Option<SignificanceMarkStyle>,
-    ) -> Result<TextTheme, Error> {
-        let mut effective = self.annotations().significance_label().try_copy()?;
-        if let Some(exact) = exact {
-            effective = effective
-                .with_font_size(exact.font_size_spec())?
-                .with_weight(exact.weight_spec())?;
-        }
-        Ok(effective)
     }
 }
 

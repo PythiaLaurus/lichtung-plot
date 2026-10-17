@@ -1160,6 +1160,7 @@ fn same_bracket_style(left: &BracketStyle, right: &BracketStyle) -> bool {
         && left.line_height.to_bits() == right.line_height.to_bits()
         && left.weight == right.weight
         && left.label_gap.to_bits() == right.label_gap.to_bits()
+        && left.tick_height.to_bits() == right.tick_height.to_bits()
 }
 
 #[derive(Default)]
@@ -1766,6 +1767,7 @@ mod tests {
                         line_height: 14.4,
                         weight: crate::TextWeight::Normal,
                         label_gap: 4.125,
+                        tick_height: 7.0,
                     },
                 )?;
             }
@@ -1962,6 +1964,7 @@ mod tests {
                 line_height: 14.4,
                 weight: crate::TextWeight::Normal,
                 label_gap: 4.0,
+                tick_height: 7.0,
             },
         )?;
         backend.end_clip()?;
@@ -2112,6 +2115,7 @@ mod tests {
                                         line_height: 14.4,
                                         weight: crate::TextWeight::Normal,
                                         label_gap: 4.0,
+                                        tick_height: 7.0,
                                     },
                                 )
                             } else {
@@ -2520,6 +2524,7 @@ mod tests {
             line_height: deferred.plan.line_height(),
             weight: deferred.plan.style.weight,
             label_gap: 4.0,
+            tick_height: 11.125,
         };
         let plan = capture_test_plan(&theme, |backend| {
             backend.draw_planned_bracket(PlannedSignificanceCall {
@@ -2546,6 +2551,19 @@ mod tests {
             })
             .unwrap();
         replay.end().unwrap();
+
+        let mut changed = style.clone();
+        changed.tick_height = 12.0;
+        let mut null = NullBackend::default();
+        let mut replay = TextReplayBackend::new(&mut null, plan);
+        replay.begin(100, 100).unwrap();
+        assert!(replay
+            .draw_planned_bracket(PlannedSignificanceCall {
+                bracket: &bracket,
+                style: &changed,
+                label: &deferred,
+            })
+            .is_err());
     }
 
     #[test]
@@ -2577,6 +2595,7 @@ mod tests {
             line_height: deferred.plan.line_height(),
             weight: deferred.plan.style.weight,
             label_gap: 4.0,
+            tick_height: 7.0,
         };
         for absolute in [false, true] {
             if absolute {
@@ -2618,6 +2637,7 @@ mod tests {
             line_height: 14.4,
             weight: crate::TextWeight::Semibold,
             label_gap: 4.0,
+            tick_height: 7.0,
         };
         let plan = capture_test_plan(&theme, |backend| backend.draw_bracket(&bracket, &style));
         let plan = plan.plan();
@@ -2803,6 +2823,7 @@ mod tests {
             line_height: 14.4,
             weight: crate::TextWeight::Normal,
             label_gap: 4.0,
+            tick_height: 7.0,
         };
 
         let mut invalid_geometry = bracket.clone();

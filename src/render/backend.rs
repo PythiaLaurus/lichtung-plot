@@ -323,21 +323,6 @@ pub enum BracketOrientation {
     Horizontal,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct BracketGeometryMetrics {
-    pub(crate) tick_height: f64,
-    pub(crate) data_gap: f64,
-    pub(crate) level_step: f64,
-    pub(crate) panel_padding: f64,
-}
-
-pub(crate) const SIGNIFICANCE_BRACKET_GEOMETRY: BracketGeometryMetrics = BracketGeometryMetrics {
-    tick_height: 7.0,
-    data_gap: 6.0,
-    level_step: 26.0,
-    panel_padding: 2.0,
-};
-
 pub(crate) const POLYGON_MITER_LIMIT: f64 = 4.0;
 
 /// Visual style for a significance bracket.
@@ -359,6 +344,8 @@ pub struct BracketStyle {
     pub weight: crate::TextWeight,
     /// Gap between the bracket line and its label.
     pub label_gap: f64,
+    /// Retained selected tick height; canonical validation has no default.
+    pub(crate) tick_height: f64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -961,17 +948,15 @@ pub(crate) fn validate_bracket(
         || style.line_height <= 0.0
         || !style.label_gap.is_finite()
         || style.label_gap < 0.0
+        || !style.tick_height.is_finite()
+        || style.tick_height < 0.0
     {
         return Err(Error::Render(
-            "bracket label style requires positive font size and line height and finite nonnegative gap"
+            "bracket style requires positive font size and line height and finite nonnegative gap and tick height"
                 .into(),
         ));
     }
-    coordinates::canonical_bracket(
-        bracket,
-        SIGNIFICANCE_BRACKET_GEOMETRY.tick_height,
-        style.label_gap,
-    )
+    coordinates::canonical_bracket(bracket, style.tick_height, style.label_gap)
 }
 
 pub(crate) fn planned_bracket_placement(canonical: CanonicalBracket) -> PlannedTextPlacement {

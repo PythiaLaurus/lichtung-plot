@@ -576,10 +576,9 @@ impl SelectedMarkPlan {
     }
 }
 
-/// Selected guide, panel-text, and significance styles with frozen geometry.
+/// Selected guide and panel-text operands with frozen annotation geometry.
 #[derive(Debug)]
 pub(crate) struct SelectedAnnotationPlan {
-    pub(crate) significance_styles: Option<Vec<crate::render::backend::BracketStyle>>,
     pub(crate) guides: crate::orchestrator::layers::GuideSnapshot,
     pub(crate) panel_layer: Option<String>,
     pub(crate) panel_clip: crate::layout::PanelBox,

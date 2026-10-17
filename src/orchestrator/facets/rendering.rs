@@ -83,7 +83,7 @@ pub(super) fn render_scene(
         .with_facet_scales(source.facet_scales_spec())
         .with_retained_body(&panel_plan.result);
         panel_plot.render_panel(kind, context, backend)?;
-        crate::significance::render_selected(panel_plot, &panel_plan.result, theme, backend)?;
+        crate::significance::render_selected(&panel_plan.result, backend)?;
         crate::render::backend::with_layer(backend, &panel_layers[index][1], |backend| {
             panel_plan
                 .result

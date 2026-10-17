@@ -869,9 +869,7 @@ impl PreparedTextRequirement {
             }
         }
 
-        let significance_appearance = theme
-            .typography
-            .effective_significance_label(plot.significance_mark_style_override())?;
+        let significance = theme.effective_significance(plot.significance_mark_style_override())?;
         for (index, annotation) in plot.significance_annotations().iter().enumerate() {
             let address = prepared_address_child(
                 base,
@@ -887,7 +885,7 @@ impl PreparedTextRequirement {
                 0,
                 annotation.mark().glyph()?,
                 &[],
-                &significance_appearance,
+                &significance.label,
                 prepared_stage.as_deref_mut(),
             )?;
         }

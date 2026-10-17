@@ -2,8 +2,107 @@
 
 use super::component::validated_component;
 use super::spacing::ExactLength;
-use super::{LocalMetric, OpaqueColor, OutlineTheme, RelativeSpacing, SolidStrokeTheme};
+use super::{
+    LocalMetric, OpaqueColor, OutlineTheme, RelativeSpacing, ResolvedTheme, SolidStrokeTheme,
+    TextTheme,
+};
+use crate::layout::kernel::SpatialRounding;
 use crate::Result;
+
+/// One selected significance appearance, including exact-override provenance.
+pub(crate) struct EffectiveSignificance {
+    pub(crate) label: TextTheme,
+    pub(crate) exact_override: bool,
+    pub(crate) gap: ExactLength,
+    geometry: SignificanceGeometry,
+}
+
+impl ResolvedTheme {
+    pub(crate) fn effective_significance(
+        &self,
+        exact: Option<crate::SignificanceMarkStyle>,
+    ) -> Result<EffectiveSignificance> {
+        let mut label = self
+            .typography
+            .annotations()
+            .significance_label()
+            .try_copy()?;
+        if let Some(exact) = exact {
+            label = label
+                .with_font_size(exact.font_size_spec())?
+                .with_weight(exact.weight_spec())?;
+        }
+        let geometry = self.annotations.significance();
+        let em = LocalMetric::css_pixels(label.font_size())?;
+        Ok(EffectiveSignificance {
+            gap: exact.map_or_else(
+                || Ok(geometry.label_gap().product(em)),
+                |exact| ExactLength::pixels(exact.gap_spec()),
+            )?,
+            geometry: geometry.clone(),
+            label,
+            exact_override: exact.is_some(),
+        })
+    }
+}
+
+impl EffectiveSignificance {
+    fn length(&self, spacing: &RelativeSpacing) -> Result<ExactLength> {
+        Ok(spacing.product(LocalMetric::css_pixels(self.label.font_size())?))
+    }
+
+    pub(crate) fn tick_height(&self) -> Result<f64> {
+        self.length(self.geometry.tick_height())?
+            .pixels_rounded(SpatialRounding::NearestEven)
+    }
+
+    pub(crate) fn data_gap(&self) -> Result<f64> {
+        self.length(self.geometry.data_gap())?
+            .pixels_rounded(SpatialRounding::NearestEven)
+    }
+
+    pub(crate) fn level_step(&self) -> Result<f64> {
+        self.length(self.geometry.level_step())?
+            .pixels_rounded(SpatialRounding::NearestEven)
+    }
+
+    pub(crate) fn panel_padding(&self) -> Result<f64> {
+        Ok(self
+            .length(self.geometry.panel_padding())?
+            .pixels_rounded(SpatialRounding::NearestEven)?
+            .max(f64::from(self.geometry.bracket_stroke().width()) / 2.0 + 1.0 / 1024.0))
+    }
+
+    pub(crate) fn gap_pixels(&self) -> Result<f64> {
+        self.gap.pixels_rounded(SpatialRounding::NearestEven)
+    }
+
+    pub(crate) fn attached_reserve(&self, extent: f64) -> Result<f64> {
+        self.gap
+            .add_length(&self.length(self.geometry.attached_extra_clearance())?)
+            .add_pixels(extent)?
+            .pixels_rounded(SpatialRounding::Ceil)
+    }
+
+    pub(crate) fn bracket_style(
+        &self,
+        label: &crate::layout::ResolvedTextPlan,
+    ) -> Result<crate::render::backend::BracketStyle> {
+        Ok(crate::render::backend::BracketStyle {
+            color: self.geometry.bracket_stroke().color(),
+            width: self.geometry.bracket_stroke().width(),
+            label_color: label.style.paint,
+            font_family: label
+                .copy_stack()
+                .map_err(|error| crate::Error::Render(error.to_string()))?,
+            font_size: label.style.font_size,
+            line_height: label.line_height(),
+            weight: label.style.weight,
+            label_gap: self.gap_pixels()?,
+            tick_height: self.tick_height()?,
+        })
+    }
+}
 
 validated_component!(SignificanceGeometry {
     borrow bracket_stroke: SolidStrokeTheme => with_bracket_stroke,

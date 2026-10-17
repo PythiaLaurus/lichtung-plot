@@ -33,14 +33,11 @@ pub(crate) fn measure_marks(
     let legend_entries = bar_data::legend_entries(prepared, chart, theme, &colors, &accents)?;
     let y_count = prepared.categories.len() as f64;
     let panel_box = context.panel;
-    let mark_style = chart.significance_mark_style_spec();
-    let significance_label = theme
-        .typography
-        .effective_significance_label(chart.significance_mark_style_override())?;
+    let attached = bar_data::BarSignificance::new(chart, theme, true)?;
     let attached_label_plans = bar_data::attached_significance_text_plans(
         context,
         &prepared.significance,
-        &significance_label,
+        &attached.appearance.label,
         |mark| {
             if mark.positive {
                 PhysicalTextAlignment::Start
@@ -49,7 +46,7 @@ pub(crate) fn measure_marks(
             }
         },
         "horizontal bar attached significance label",
-        chart.significance_mark_style_override().is_some(),
+        attached.appearance.exact_override,
     )?;
     let base_x_range = layout.projection.x_range();
     let mark_range = range_for_bar_marks(
@@ -58,7 +55,8 @@ pub(crate) fn measure_marks(
         panel_box,
         base_x_range,
         &attached_label_plans,
-    );
+        &attached,
+    )?;
     let anchor_count = prepared.series.len().max(1);
     let mut rendered_maxima =
         crate::data::source::collect_source((0..prepared.categories.len()).map(|_| {
@@ -89,7 +87,7 @@ pub(crate) fn measure_marks(
         .filter(|(mark, _)| mark.positive)
     {
         let width = text_plan.width();
-        let clearance = mark.edge + (mark_style.gap_spec() + width + 2.0) * value_per_pixel;
+        let clearance = mark.edge + attached.appearance.attached_reserve(width)? * value_per_pixel;
         if let Some(series_index) = mark.series_index {
             rendered_maxima[mark.category_index][series_index] =
                 rendered_maxima[mark.category_index][series_index].max(clearance);
@@ -126,11 +124,10 @@ pub(crate) fn measure_marks(
         crate::layout::interior::ClearanceAxis::X,
     )?;
     validate_bar_significance_collisions(
-        chart,
+        &attached,
         prepared,
         &layout,
         &attached_label_plans,
-        theme.marks.extents().categories().group_span(true),
         context.fit_scope(),
         domain_expansion.is_some(),
     )?;
@@ -201,12 +198,11 @@ pub(crate) fn measure_marks(
     }
     for (mark, text_plan) in prepared.significance.iter().zip(&attached_label_plans) {
         payload.text.push(place_bar_significance(
-            chart,
+            &attached,
             mark,
             text_plan,
             prepared,
             &layout,
-            theme.marks.extents().categories().group_span(true),
             domain_expansion.is_some(),
         )?);
     }
@@ -249,16 +245,16 @@ fn range_for_bar_marks(
     panel: PanelBox,
     range: (f64, f64),
     text_plans: &[ResolvedTextPlan],
-) -> (f64, f64) {
+    attached: &bar_data::BarSignificance,
+) -> Result<(f64, f64), Error> {
     if prepared.significance.is_empty() || chart.user_x_limits().is_some() {
-        return range;
+        return Ok(range);
     }
-    let style = chart.significance_mark_style_spec();
     let units_per_pixel = (range.1 - range.0) / panel.width();
     let mut extent = prepared.value_range;
     for (mark, text_plan) in prepared.significance.iter().zip(text_plans) {
         let width = text_plan.width();
-        let clearance = (style.gap_spec() + width + 2.0) * units_per_pixel;
+        let clearance = attached.appearance.attached_reserve(width)? * units_per_pixel;
         if mark.positive {
             extent.1 = extent.1.max(mark.edge + clearance);
         } else {
@@ -266,36 +262,29 @@ fn range_for_bar_marks(
         }
     }
     if extent.0 >= range.0 && extent.1 <= range.1 {
-        return range;
+        return Ok(range);
     }
-    (range.0.min(extent.0), range.1.max(extent.1))
+    Ok((range.0.min(extent.0), range.1.max(extent.1)))
 }
 
 fn place_bar_significance(
-    chart: &Plot,
+    attached: &bar_data::BarSignificance,
     mark: &PreparedBarSignificance,
     text_plan: &ResolvedTextPlan,
     prepared: &PreparedBars,
     layout: &Layout,
-    group_span: f64,
     pending_domain: bool,
 ) -> Result<PlacedText, Error> {
-    let style = chart.significance_mark_style_spec();
-    let y = significance_center(
-        mark.category_index,
-        mark.series_index,
-        prepared,
-        bar_data::mode(chart),
-        group_span,
-    );
+    let gap = attached.appearance.gap_pixels()?;
+    let y = attached.center(mark, prepared);
     let (edge_x, y) = layout.projection.project(mark.edge, y);
     let width = text_plan.width();
     let panel = layout.projection.panel_box();
     let (x, anchor, fits) = if mark.positive {
-        let x = edge_x + style.gap_spec();
+        let x = edge_x + gap;
         (x, TextAnchor::Start, x + width <= panel.x1)
     } else {
-        let x = edge_x - style.gap_spec();
+        let x = edge_x - gap;
         (x, TextAnchor::End, x - width >= panel.x0)
     };
     if !pending_domain && !fits {
@@ -313,34 +302,30 @@ fn place_bar_significance(
 }
 
 fn validate_bar_significance_collisions(
-    chart: &Plot,
+    attached: &bar_data::BarSignificance,
     prepared: &PreparedBars,
     layout: &Layout,
     text_plans: &[ResolvedTextPlan],
-    group_span: f64,
     scope: &crate::layout::fit::FitScope,
 
     pending_domain: bool,
 ) -> Result<(), crate::layout::fit::PlanError> {
-    let style = chart.significance_mark_style_spec();
+    if prepared.significance.is_empty() {
+        return Ok(());
+    }
+    let gap = attached.appearance.gap_pixels()?;
     let mut bounds = Vec::new();
     crate::data::source::reserve_source(&mut bounds, prepared.significance.len())?;
     for (index, (mark, text_plan)) in prepared.significance.iter().zip(text_plans).enumerate() {
         let scope = scope.child(crate::layout::AddressRole::Annotation, index)?;
-        let y = significance_center(
-            mark.category_index,
-            mark.series_index,
-            prepared,
-            bar_data::mode(chart),
-            group_span,
-        );
+        let y = attached.center(mark, prepared);
         let (edge_x, y) = layout.projection.project(mark.edge, y);
         let width = text_plan.width();
         let height = text_plan.height();
         let (x0, x1) = if mark.positive {
-            (edge_x + style.gap_spec(), edge_x + style.gap_spec() + width)
+            (edge_x + gap, edge_x + gap + width)
         } else {
-            (edge_x - style.gap_spec() - width, edge_x - style.gap_spec())
+            (edge_x - gap - width, edge_x - gap)
         };
         let candidate = (x0, x1, y - height / 2.0, y + height / 2.0);
         let panel = layout.projection.panel_box();
@@ -358,24 +343,6 @@ fn validate_bar_significance_collisions(
         bounds.push(candidate);
     }
     Ok(())
-}
-
-fn significance_center(
-    category_index: usize,
-    series_index: Option<usize>,
-    prepared: &PreparedBars,
-    mode: BarMode,
-    group_span: f64,
-) -> f64 {
-    series_index.map_or(category_index as f64 + 0.5, |series_index| {
-        bar_data::category_center(
-            category_index,
-            Some(series_index),
-            prepared,
-            mode,
-            group_span,
-        )
-    })
 }
 
 fn project_bar(

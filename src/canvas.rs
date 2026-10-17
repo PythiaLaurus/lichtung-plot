@@ -3062,7 +3062,7 @@ impl Canvas {
                 )
                 .with_retained_body(&panel.panel_plan.result);
             plot.render_panel(panel.kind, context, backend)?;
-            crate::significance::render_selected(plot, &panel.panel_plan.result, theme, backend)?;
+            crate::significance::render_selected(&panel.panel_plan.result, backend)?;
             with_layer(backend, &panel.layers[1], |backend| {
                 panel
                     .panel_plan

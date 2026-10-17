@@ -279,47 +279,20 @@ impl Plot {
         };
 
         let mut geometry = crate::render::geometry::GeometrySnapshot::new();
-        let significance_styles = if matches!(
+        if matches!(
             self.kind(),
             PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud
         ) {
-            let mut styles = Vec::new();
             if let Some(significance) = &result.significance {
-                crate::data::source::reserve_source(&mut styles, significance.brackets.len())?;
                 for bracket in &significance.brackets {
-                    let label = &bracket.label.plan;
-                    let style = crate::render::backend::BracketStyle {
-                        color: context
-                            .theme
-                            .annotations
-                            .significance()
-                            .bracket_stroke()
-                            .color(),
-                        width: context
-                            .theme
-                            .annotations
-                            .significance()
-                            .bracket_stroke()
-                            .width(),
-                        label_color: label.style.paint,
-                        font_family: crate::data::source::copy_font_stack(&label.style.stack)?,
-                        font_size: label.style.font_size,
-                        line_height: label.line_height(),
-                        weight: label.style.weight,
-                        label_gap: self.significance_mark_style_spec().gap_spec(),
-                    };
                     geometry.bracket(crate::render::backend::PlannedSignificanceCall {
                         bracket: &bracket.geometry,
-                        style: &style,
+                        style: &bracket.style,
                         label: &bracket.label,
                     })?;
-                    styles.push(style);
                 }
             }
-            Some(styles)
-        } else {
-            None
-        };
+        }
         let guides = layers::GuideSnapshot::measure(self, &result, &mut geometry)?;
         validate_frozen_axes_and_guides(self, &mut result, context)?;
         result.panel_text = crate::decorations::panel_text::measure_plans(
@@ -353,7 +326,6 @@ impl Plot {
         };
         result.annotations = Some(crate::data::source::source_arc(
             crate::layout::interior::SelectedAnnotationPlan {
-                significance_styles,
                 guides,
                 panel_layer,
                 panel_clip,

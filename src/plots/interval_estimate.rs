@@ -103,12 +103,11 @@ impl PreparedEstimate {
             ));
         }
 
-        let significance = theme
-            .typography
-            .effective_significance_label(chart.significance_mark_style_override())?;
+        let significance =
+            theme.effective_significance(chart.significance_mark_style_override())?;
         for adjacent in self.adjacent.iter().flatten() {
             let appearance = if adjacent.1 {
-                &significance
+                &significance.label
             } else {
                 &theme.typography.annotations.estimate_detail
             };
@@ -762,18 +761,7 @@ fn project(
         .reference
         .filter(|value| *value >= x_range.0 && *value <= x_range.1)
         .map(|value| layout.projection.project(value, 0.0).0);
-    let base = &theme.typography.annotations.significance_label;
-    let exact = chart.significance_mark_style_override();
-    let significance_label = crate::theme::TextTheme::new(
-        crate::data::source::copy_font_stack(base.stack())?,
-        base.color(),
-        exact.map_or(
-            base.font_size(),
-            crate::SignificanceMarkStyle::font_size_spec,
-        ),
-        exact.map_or(base.weight(), crate::SignificanceMarkStyle::weight_spec),
-        base.line_height(),
-    )?;
+    let significance = theme.effective_significance(chart.significance_mark_style_override())?;
     let detail_role = &theme.typography.annotations.estimate_detail;
     let detail_label = crate::theme::TextTheme::new(
         crate::data::source::copy_font_stack(detail_role.stack())?,
@@ -813,10 +801,10 @@ fn project(
                 .project(tuple.estimate, row_count - index as f64 - 0.5);
             let (appearance, gap, owner, exact_override) = if is_significance {
                 (
-                    &significance_label,
-                    chart.significance_mark_style_spec().gap_spec(),
+                    &significance.label,
+                    significance.gap_pixels()?,
                     "coefficient attached significance label",
-                    chart.significance_mark_style_override().is_some(),
+                    significance.exact_override,
                 )
             } else {
                 (&detail_label, 7.0, "coefficient estimate label", false)

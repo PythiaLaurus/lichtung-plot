@@ -34,6 +34,39 @@ pub(crate) enum BarMode {
     Stacked,
 }
 
+pub(crate) struct BarSignificance {
+    pub(crate) appearance: crate::theme::annotation::EffectiveSignificance,
+    mode: BarMode,
+    group_span: f64,
+}
+
+impl BarSignificance {
+    pub(crate) fn new(
+        chart: &Plot,
+        theme: &ResolvedTheme,
+        horizontal: bool,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            appearance: theme.effective_significance(chart.significance_mark_style_override())?,
+            mode: mode(chart),
+            group_span: theme.marks.extents().categories().group_span(horizontal),
+        })
+    }
+
+    pub(crate) fn center(&self, mark: &PreparedBarSignificance, prepared: &PreparedBars) -> f64 {
+        mark.series_index
+            .map_or(mark.category_index as f64 + 0.5, |series| {
+                category_center(
+                    mark.category_index,
+                    Some(series),
+                    prepared,
+                    self.mode,
+                    self.group_span,
+                )
+            })
+    }
+}
+
 /// The same categorical occupancy grammar drives selected polygons, attached
 /// points/significance anchors and pre-selection mark pitch in both directions.
 pub(crate) fn category_center(
@@ -618,30 +651,9 @@ impl BarPayload {
         }
         if let Some(significance) = &result.significance {
             for bracket in &significance.brackets {
-                let label = &bracket.label.plan;
-                let style = crate::render::backend::BracketStyle {
-                    color: context
-                        .theme
-                        .annotations
-                        .significance()
-                        .bracket_stroke()
-                        .color(),
-                    width: context
-                        .theme
-                        .annotations
-                        .significance()
-                        .bracket_stroke()
-                        .width(),
-                    label_color: label.style.paint,
-                    font_family: crate::data::source::copy_font_stack(&label.style.stack)?,
-                    font_size: label.style.font_size,
-                    line_height: label.line_height(),
-                    weight: label.style.weight,
-                    label_gap: chart.significance_mark_style_spec().gap_spec(),
-                };
                 geometry.bracket(crate::render::backend::PlannedSignificanceCall {
                     bracket: &bracket.geometry,
-                    style: &style,
+                    style: &bracket.style,
                     label: &bracket.label,
                 })?;
             }
