@@ -49,6 +49,27 @@ public API/package gate is needed for this private identity leaf.
 An exploratory width-only version of the new Shared fixture (`width(1000)`)
 reported `layout root feedback cycle detected`. Its explicit `size(1000, 500)`
 version isolates and passes the identity contract; it does not repair or certify
-width-only parent feedback. The unresolved case is tracked for the consumed-guide
-dependency/content-height audit during parent integration, before integrated
-closure. No grow/fallback policy or root-size repin was introduced as a repair.
+width-only parent feedback. The subsequent audit below distinguishes the actual
+bounded refusal from an invalid cache hit.
+
+## Width-Only Feedback Audit
+
+Temporary actual-owner diagnostics at `2b37cd4` show an ordinary axis/gutter cycle:
+the narrower data body selects y ticks `[0, 0.5, 1]`, whose complete left gutter
+is 83.79296875px. That smaller gutter widens the next body and its 4:3 natural
+height enough to select `[0, 0.25, 0.5, 0.75, 1]`, requiring a 93.97265625px left
+gutter. The larger gutter narrows/shortens the next body and selects the former
+source again. The exact canonical feedback state repeats; only AxisGutter entries
+change. Shared children do not publish PerPlot ContentHeight measurements here.
+
+Disabling actual child reuse reproduces the same assignments, sources, gutter
+values and repeated state. This is not evidence of stale HeightInputs or a lost
+guide dependency. Spec05's bounded root policy requires refusal on a repeated
+nonadjacent state and forbids publishing a previous best plan; spec08 does not
+authorize a joint tick/section search. Adequate fixed-height input can fit while
+this exact-width/content-height policy refuses. The diagnostic coordinates are
+evidence of this revision's refusal, not new asserted placement/size baselines.
+Temporary instrumentation and reuse overrides were removed, and the fixed-size
+identity contract passes again. Parent integration still owes the specified
+effective-descriptor/dependency and all-root-mode coverage; no speculative layout
+repair is justified by this audited case.

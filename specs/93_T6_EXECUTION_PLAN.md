@@ -53,8 +53,9 @@ The post-numeric discrete producer/descriptor/font/key source handoff is complet
 at `3de25e0` in `../docs/discrete-guide-source-handoff.md`.
 Typed raw/category/literal/layer identities and contributor-order-independent
 Combined title authority are complete in `../docs/typed-guide-identities.md`.
-That evidence tracks a width-only Shared feedback cycle for the parent dependency
-audit; the section descriptor and flat-result retirement remain the next leaf.
+Its width-only Shared audit records a real tick/gutter cycle with identical cached
+and uncached behavior under the bounded refusal contract; section descriptors and
+flat-result retirement remain the next leaf.
 The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
