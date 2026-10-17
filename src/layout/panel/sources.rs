@@ -3,7 +3,7 @@
 use super::{AxisSide, AxisTick, Projection};
 use crate::layout::PhysicalTextAlignment;
 use crate::theme::ResolvedTheme;
-use crate::Error;
+use crate::{Error, TickInterval};
 
 pub(super) const MAX_TICKS: usize = 10_000;
 pub(crate) const NUMERIC_ALPHABET: &[char] = &[
@@ -11,29 +11,6 @@ pub(crate) const NUMERIC_ALPHABET: &[char] = &[
 ];
 const MAX_INDEX: f64 = 9_007_199_254_740_992.0;
 const FACTORS: [f64; 4] = [1.0, 2.0, 3.0, 5.0];
-
-// The input stays private until T6 exposes interval setters.
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) enum TickInterval {
-    Additive(f64),
-    Log10Decades(u64),
-}
-
-impl TickInterval {
-    pub(crate) fn validate(self) -> Result<(), Error> {
-        if match self {
-            Self::Additive(step) => step.is_finite() && step > 0.0,
-            Self::Log10Decades(step) => step > 0,
-        } {
-            Ok(())
-        } else {
-            Err(Error::Data(
-                "tick interval must be finite and strictly positive".into(),
-            ))
-        }
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum SourceKind {
@@ -250,11 +227,7 @@ impl Sources {
             ));
         }
         if let Some(interval) = interval {
-            interval.validate()?;
-            if !matches!(
-                (log, interval),
-                (false, TickInterval::Additive(_)) | (true, TickInterval::Log10Decades(_))
-            ) {
+            if log != interval.decade_step().is_some() {
                 return Err(Error::Data(
                     "tick interval does not match the axis scale".into(),
                 ));
@@ -265,8 +238,8 @@ impl Sources {
         let integral_count =
             (range.1.min(308.0).floor() - range.0.max(-323.0).ceil() + 1.0).max(0.0) as usize;
         let cap = match interval {
-            Some(TickInterval::Additive(_)) => 4 * 633 + 1,
-            Some(TickInterval::Log10Decades(_)) => 4 * 20 + 1,
+            Some(_) if log => 4 * 20 + 1,
+            Some(_) => 4 * 633 + 1,
             None if log && integral_count >= 2 => upper.min(integral_count) + 1,
             None => upper + 1,
         };
@@ -277,16 +250,12 @@ impl Sources {
             upper,
             ordinal: 0,
             cap,
-            base: if let Some(TickInterval::Additive(step)) = interval {
-                step
-            } else {
-                0.0
-            },
-            log_base: if let Some(TickInterval::Log10Decades(step)) = interval {
-                step
-            } else {
-                0
-            },
+            base: interval
+                .and_then(|interval| interval.additive_step())
+                .unwrap_or(0.0),
+            log_base: interval
+                .and_then(|interval| interval.decade_step())
+                .map_or(0, u64::from),
             factor: 0,
             previous_step: None,
             intervals_done: false,
@@ -294,7 +263,7 @@ impl Sources {
         })
     }
 
-    fn next_kind(&mut self) -> Option<SourceKind> {
+    fn next_kind(&mut self) -> SourceKind {
         if self.interval.is_some() && !self.intervals_done {
             loop {
                 let maximum = if self.log {
@@ -308,20 +277,18 @@ impl Sources {
                 };
                 let factor = self.factor;
                 self.factor += 1;
-                let kind = match self.interval? {
-                    TickInterval::Additive(_) => {
-                        let step = self.base * FACTORS[factor];
-                        let kind = (step.is_finite() && self.previous_step != Some(step))
-                            .then_some(SourceKind::Additive(step));
-                        if kind.is_some() {
-                            self.previous_step = Some(step);
-                        }
-                        kind
-                    }
-                    TickInterval::Log10Decades(_) => self
-                        .log_base
+                let kind = if self.log {
+                    self.log_base
                         .checked_mul([1, 2, 3, 5][factor])
-                        .map(SourceKind::LogInterval),
+                        .map(SourceKind::LogInterval)
+                } else {
+                    let step = self.base * FACTORS[factor];
+                    let kind = (step.is_finite() && self.previous_step != Some(step))
+                        .then_some(SourceKind::Additive(step));
+                    if kind.is_some() {
+                        self.previous_step = Some(step);
+                    }
+                    kind
                 };
                 if self.factor == 4 {
                     self.factor = 0;
@@ -338,7 +305,7 @@ impl Sources {
                     }
                 }
                 if let Some(kind) = kind {
-                    return Some(kind);
+                    return kind;
                 }
                 if self.intervals_done {
                     break;
@@ -350,17 +317,17 @@ impl Sources {
                 .max(0.0) as usize;
             if self.log && count >= 2 {
                 if self.ordinal == 0 {
-                    return Some(SourceKind::LogIntegral);
+                    return SourceKind::LogIntegral;
                 }
                 let desired = self.upper.min(count).saturating_sub(self.ordinal - 1);
                 if desired >= 2 {
-                    return Some(SourceKind::LogSubset(desired));
+                    return SourceKind::LogSubset(desired);
                 }
             } else if self.ordinal < self.upper {
-                return Some(SourceKind::Adaptive(self.upper - self.ordinal));
+                return SourceKind::Adaptive(self.upper - self.ordinal);
             }
         }
-        Some(SourceKind::Midpoint)
+        SourceKind::Midpoint
     }
 
     fn next(&mut self) -> Result<(TickSource, Option<Vec<f64>>), Error> {
@@ -373,9 +340,7 @@ impl Sources {
             ));
         }
 
-        let kind = self
-            .next_kind()
-            .ok_or_else(|| Error::Render("numeric source order exhausted".into()))?;
+        let kind = self.next_kind();
         self.terminal_emitted = kind == SourceKind::Midpoint;
         let source = TickSource {
             kind,

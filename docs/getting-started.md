@@ -127,6 +127,16 @@ The caller supplies the exact display p-value after any desired adjustment. The
 renderer validates and displays it but does not perform or choose a statistical
 test.
 
+## Preferred Numeric Tick Spacing
+
+`TickInterval::additive(2.0)?` requests a positive linear spacing and
+`TickInterval::log10_decades(2)?` requests a positive integral exponent spacing on
+Forest Log10. Attach through `x_tick_interval` or `y_tick_interval` on the admitted
+numeric-axis families. This is the first complete source to try; dense labels can
+coarsen locally. Exact `AxisTick` lists win in either setter order. A dynamically
+categorical Trajectory x axis rejects an interval before fonts. See
+[preferred tick intervals](preferred-tick-intervals.md) for validation and evidence.
+
 ## Bars
 
 Ordinary bars make the value source explicit. Raw samples render cell means and

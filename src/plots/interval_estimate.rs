@@ -1104,7 +1104,7 @@ fn project(
 
 pub(crate) fn log_tick_plan(
     range: (f64, f64),
-    interval: Option<crate::layout::TickInterval>,
+    interval: Option<crate::TickInterval>,
     panel: crate::layout::PanelBox,
     theme: &ResolvedTheme,
     scope: &crate::layout::fit::FitScope,

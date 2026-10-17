@@ -205,12 +205,31 @@ Automatic numeric tick positions and density are deterministic renderer-owned
 layout decisions based on resolved range, available panel space, and measured
 labels. The current API exposes no caller-selected automatic tick count.
 
+`TickInterval::additive(step)` accepts finite positive binary64 spacing and
+`TickInterval::log10_decades(decades)` accepts positive `u32` exponent spacing.
+The immutable choice/payload is private; readonly `additive_step` and
+`decade_step` inspect the selected input. `Plot::x_tick_interval` and
+`Plot::y_tick_interval` use the existing sealed NumericX/Y capabilities; Any has
+neither. Repeated calls replace only the selected axis interval.
+
+The requested complete source is tried first. If it cannot fit, the existing
+bounded `(1,2,3,5)` decimal coarsenings and final midpoint remain available; no
+subsequence or target-count interpretation is introduced. Logarithmic intervals
+select divisible integral exponents, not spacing between transformed raw values.
+Actual categorical axes and linear/logarithmic kind mismatches reject before
+fonts. Prepared sources, parent copies, identity and feedback retain the complete
+interval input.
+
 `Plot::x_ticks` and `Plot::y_ticks` accept complete exact `AxisTick` lists. An
 exact list replaces all generated ticks on that axis; generated and exact ticks
 are never merged. Positions are finite, strictly ascending data-space values
 inside the resolved range. Preflight projects the requested positions, measures
 their labels, and rejects collisions rather than omitting, moving, or rotating
 caller-owned ticks.
+
+Exact lists suppress generated interval text and selection regardless of setter
+order. They do not suppress semantic axis-kind validation or permit categorical
+axes to accept numeric instructions.
 
 ## Numeric Value Labels
 

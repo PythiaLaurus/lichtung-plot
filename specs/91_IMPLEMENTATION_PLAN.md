@@ -26,7 +26,9 @@ records the atomic caller retirement, pre-font capacity and public API evidence.
 The narrow heading-instruction leaf is complete with frozen-scope evidence in
 `../docs/heading-alignment.md`. Public custom-value closure is complete in
 `../docs/public-foundation-closure.md`, closing the immutable foundation umbrella.
-Spec93 records the following public interval and sizing cutovers.
+Public preferred tick intervals are complete with source/pre-font/parent evidence
+in `../docs/preferred-tick-intervals.md`. Spec93 records the following root-sizing
+cutover.
 `../docs/theme-consumer-closure.md` reconciles actual owners and identities. New unit tests must
 replace existing tests in the same logical change without increasing the
 discovered count; AGENTS.md and spec90 own this continuing repository rule.

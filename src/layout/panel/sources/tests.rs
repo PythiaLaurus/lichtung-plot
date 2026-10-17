@@ -171,8 +171,13 @@ fn adaptive_source_order_is_seed_descending_then_one_midpoint() {
 
 #[test]
 fn additive_sources_are_requested_first_then_complete_decimal_coarsenings() {
-    let mut sources =
-        Sources::new((-7.0, 9.0), false, Some(TickInterval::Additive(1.0)), 100).unwrap();
+    let mut sources = Sources::new(
+        (-7.0, 9.0),
+        false,
+        Some(TickInterval::additive(1.0).unwrap()),
+        100,
+    )
+    .unwrap();
     for (ordinal, step) in [1.0, 2.0, 3.0, 5.0, 10.0, 20.0, 30.0, 50.0]
         .into_iter()
         .enumerate()
@@ -189,13 +194,24 @@ fn additive_sources_are_requested_first_then_complete_decimal_coarsenings() {
 
 #[test]
 fn dense_and_empty_interval_misses_do_not_poison_coarser_sources() {
-    let mut dense =
-        Sources::new((0.0, 10_000.0), false, Some(TickInterval::Additive(1.0)), 2).unwrap();
+    let mut dense = Sources::new(
+        (0.0, 10_000.0),
+        false,
+        Some(TickInterval::additive(1.0).unwrap()),
+        2,
+    )
+    .unwrap();
     assert!(dense.next().unwrap().1.is_none());
     let (source, positions) = dense.next().unwrap();
     assert_eq!(source.kind, SourceKind::Additive(2.0));
     assert_eq!(positions.unwrap().len(), 5001);
-    let mut empty = Sources::new((1.1, 1.2), false, Some(TickInterval::Additive(1.0)), 2).unwrap();
+    let mut empty = Sources::new(
+        (1.1, 1.2),
+        false,
+        Some(TickInterval::additive(1.0).unwrap()),
+        2,
+    )
+    .unwrap();
     loop {
         let (source, positions) = empty.next().unwrap();
         if source.kind == SourceKind::Midpoint {
@@ -211,7 +227,7 @@ fn additive_full_binary64_span_stays_within_declared_cap() {
     let mut sources = Sources::new(
         (1.0, f64::MAX),
         false,
-        Some(TickInterval::Additive(f64::from_bits(1))),
+        Some(TickInterval::additive(f64::from_bits(1)).unwrap()),
         2,
     )
     .unwrap();
@@ -235,7 +251,7 @@ fn logarithmic_interval_vectors_are_divisible_integral_exponents_not_subsequence
     let mut sources = Sources::new(
         (-400.0, 400.0),
         true,
-        Some(TickInterval::Log10Decades(2)),
+        Some(TickInterval::log10_decades(2).unwrap()),
         2,
     )
     .unwrap();
@@ -255,7 +271,7 @@ fn logarithmic_empty_intersection_falls_back_to_the_original_midpoint() {
     let mut sources = Sources::new(
         (400.0, 500.0),
         true,
-        Some(TickInterval::Log10Decades(1)),
+        Some(TickInterval::log10_decades(1).unwrap()),
         100,
     )
     .unwrap();
@@ -267,15 +283,22 @@ fn logarithmic_empty_intersection_falls_back_to_the_original_midpoint() {
 }
 
 #[test]
-fn logarithmic_integer_overflow_terminates_without_wrapping() {
+fn maximum_public_decade_step_widens_and_terminates_without_wrapping() {
     let mut sources = Sources::new(
         (-3.0, 3.0),
         true,
-        Some(TickInterval::Log10Decades(u64::MAX)),
+        Some(TickInterval::log10_decades(u32::MAX).unwrap()),
         100,
     )
     .unwrap();
-    assert_eq!(sources.next().unwrap().1.unwrap(), [0.0]);
+    for factor in [1, 2, 3, 5] {
+        let (source, positions) = sources.next().unwrap();
+        assert_eq!(
+            source.kind,
+            SourceKind::LogInterval(u64::from(u32::MAX) * factor)
+        );
+        assert_eq!(positions.unwrap(), [0.0]);
+    }
     assert_eq!(sources.next().unwrap().0.kind, SourceKind::Midpoint);
 }
 
@@ -296,15 +319,12 @@ fn source_semantics_reject_before_fonts() {
     for (range, log, interval) in [
         ((f64::NAN, 1.0), false, None),
         ((1.0, 1.0), false, None),
-        ((0.0, 1.0), false, Some(TickInterval::Additive(0.0))),
+        ((0.0, 1.0), true, Some(TickInterval::additive(1.0).unwrap())),
         (
             (0.0, 1.0),
             false,
-            Some(TickInterval::Additive(f64::INFINITY)),
+            Some(TickInterval::log10_decades(1).unwrap()),
         ),
-        ((0.0, 1.0), true, Some(TickInterval::Log10Decades(0))),
-        ((0.0, 1.0), true, Some(TickInterval::Additive(1.0))),
-        ((0.0, 1.0), false, Some(TickInterval::Log10Decades(1))),
     ] {
         let theme = crate::Theme::publication().resolve().unwrap();
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
@@ -368,7 +388,7 @@ fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
     let projection = Projection::new((0.0, 100.0), (0.0, 100.0), (0.0, 1000.0, 0.0, 1000.0));
     let plan = numeric_tick_plan(
         (0.0, 100.0),
-        Some(TickInterval::Additive(10.0)),
+        Some(TickInterval::additive(10.0).unwrap()),
         false,
         &projection,
         AxisSide::Bottom,
@@ -382,7 +402,7 @@ fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
     assert_eq!(plan.ticks.len(), 11);
     let dense = numeric_tick_plan(
         (0.0, 100.0),
-        Some(TickInterval::Additive(0.001)),
+        Some(TickInterval::additive(0.001).unwrap()),
         false,
         &projection,
         AxisSide::Bottom,
@@ -415,7 +435,7 @@ fn midpoint_is_conditional_and_must_itself_fit() {
         let projection = Projection::new((1.1, 1.2), (0.0, 1.0), (0.0, width, 0.0, 100.0));
         let result = numeric_tick_plan(
             (1.1, 1.2),
-            Some(TickInterval::Additive(1.0)),
+            Some(TickInterval::additive(1.0).unwrap()),
             false,
             &projection,
             AxisSide::Bottom,
@@ -550,13 +570,13 @@ fn exact_source_overrides_intervals_and_provenance_survives_layout_cloning() {
     let x = super::super::AxisSpec {
         provenance: super::super::RangeProvenance::Configured,
         limits: Some((0.0, 10.0)),
-        interval: Some(TickInterval::Additive(1.0)),
+        interval: Some(TickInterval::additive(1.0).unwrap()),
         exact_ticks: Some(vec![AxisTick::new(1.0, ""), AxisTick::new(9.0, "same")]),
     };
     let y = super::super::AxisSpec {
         provenance: super::super::RangeProvenance::Configured,
         limits: Some((0.0, 10.0)),
-        interval: Some(TickInterval::Additive(2.0)),
+        interval: Some(TickInterval::additive(2.0).unwrap()),
         exact_ticks: None,
     };
     let layout = super::super::Layout::new_with_axis_specs_in_panel_box(

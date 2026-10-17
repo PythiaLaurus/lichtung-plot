@@ -10,6 +10,7 @@ mod categorical;
 mod estimate;
 mod facet;
 mod output;
+mod ticks;
 
 pub use bar::{
     BarInput, BarSamples, Bootstrap, ConfidenceInterval, ErrorBar, PercentileInterval,
@@ -24,6 +25,7 @@ pub use estimate::{
 pub use facet::{FacetScales, FacetSpec};
 pub(crate) use output::SVG_CSS_DPI;
 pub use output::{PngCompression, PngOptions, PngSizing};
+pub use ticks::TickInterval;
 
 /// Spacing preset for multiple series within one bar category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

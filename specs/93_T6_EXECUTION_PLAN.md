@@ -1,7 +1,7 @@
 # T6 — Public Foundations And Scientific Presentation
 
-**Status**: IN PROGRESS — immutable public foundations and their complete
-custom-value closure are complete; public tick intervals and root sizing follow.
+**Status**: IN PROGRESS — immutable public foundations, their complete custom-value
+closure and public preferred tick intervals are complete; public root sizing is next.
 
 **Current execution checkpoint:** the user-authorized resumption completed the
 mark/annotation leaf, T6B1d4d, and the private-value umbrella T6B1. Evidence is in
@@ -17,6 +17,9 @@ are complete, with precedence and frozen-root evidence in
 `../docs/heading-alignment.md`. Public custom-value foundation closure is complete
 with external construction/owner/contrast/scale evidence in
 `../docs/public-foundation-closure.md`. This completes T6B.
+Public preferred tick intervals are also complete, with validated construction,
+actual categorical-axis refusal and source/parent evidence in
+`../docs/preferred-tick-intervals.md`. The root-sizing cutover follows.
 The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
@@ -124,8 +127,8 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6B4 | COMPLETE | T6B3 | Public complete Theme/components/fonts/scales, built-in constructors and palette/map/gradient attachments; remove closed selectors and old scale representations; `feat(theme): expose immutable theme and scale foundations` |
 | T6B5 | COMPLETE | T6B4 | Expose already implemented title/subtitle instructions and theme caption alignment; `feat(composition): expose independent heading alignment` |
 | T6B6 | COMPLETE | T6B5 | Public custom-value inheritance, contrast, scale and style evidence; `test(theme): close public foundation precedence` |
-| T6C | PENDING | T6B | Public root sizing and preferred tick intervals |
-| T6C1 | PENDING | T6B | Opaque validated TickInterval and sealed numeric-axis setters; `feat(axes): expose preferred numeric tick intervals` |
+| T6C | IN PROGRESS | T6B | Public root sizing and preferred tick intervals |
+| T6C1 | COMPLETE | T6B | Opaque validated TickInterval and sealed numeric-axis setters; `feat(axes): expose preferred numeric tick intervals` |
 | T6C2 | PENDING | T6C1 | Automatic defaults, consuming width, exact size and Output dimensions; migrate getters/callers atomically; `feat(layout): expose content-derived root sizing` |
 | T6C3 | PENDING | T6C2 | All modes/parents/setter order/PNG-local output evidence; `test(layout): close public sizing contracts` |
 | T6N | PENDING | T6C | Unified scientific numeric formatting; leaves below |
@@ -398,6 +401,16 @@ tests, thirty-five distinct external contracts, eighty-six doctests, strict
 Clippy, formatting, warning-denied docs and package verification pass. No library
 tests are added or moved; discovery remains 671, including 17 ignored. This closes
 the public foundation umbrella; interval and sizing cutovers follow.
+
+T6C1 evidence: `../docs/preferred-tick-intervals.md` records opaque public
+TickInterval, immediate constructor validation, NumericX/Y attachments and atomic
+retirement of the raw private choice. Scientific categorical-axis refusal occurs
+before fonts in standalone/Canvas, with one behavior test replacing a default
+field inventory. Existing complete source ordering, checked widened logarithmic
+coarsening, exact precedence, census, cache and quantum-fit fixtures use the public
+values. Thirty-one focused library tests, six external contracts, ninety-two
+doctests, strict Clippy, formatting, warning-denied docs and package verification
+pass. Discovery remains 671, including 17 ignored. Root sizing remains next.
 
 Use spec03 and spec94's complete `Theme`, `ThemeBuilder`, role components, typed font stack,
 RGBA `Color`, RGB-only `OpaqueColor`, palettes/maps and gradients. Builders are

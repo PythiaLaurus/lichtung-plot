@@ -1,4 +1,5 @@
 use super::*;
+use crate::TickInterval;
 
 #[test]
 fn empty_axis_measurement_does_not_shape_text() {
@@ -578,7 +579,7 @@ fn canonical_label_fit_accepts_touching_ink_and_rejects_one_quantum_beyond() {
 
 #[test]
 fn automatic_selection_and_frozen_axis_agree_at_quantum_fit_boundary() {
-    use super::super::sources::{labels_fit, numeric_tick_plan, TickInterval};
+    use super::super::sources::{labels_fit, numeric_tick_plan};
     let theme = crate::Theme::publication().resolve().unwrap();
     let ticks = [
         AxisTick::new(0.0, "0"),
@@ -612,7 +613,7 @@ fn automatic_selection_and_frozen_axis_agree_at_quantum_fit_boundary() {
             let projection = projection(span);
             let selected = numeric_tick_plan(
                 (0.0, 2.0),
-                Some(TickInterval::Additive(1.0)),
+                Some(TickInterval::additive(1.0).unwrap()),
                 false,
                 &projection,
                 side,

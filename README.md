@@ -100,6 +100,15 @@ let plot = Plot::line(
 # Ok::<(), lichtung_plot::Error>(())
 ```
 
+## Preferred Tick Intervals
+
+Numeric axes can request a first-tried complete spacing with
+`x_tick_interval(TickInterval::additive(2.0)?)` or `y_tick_interval(...)`.
+Forest Log10 uses `TickInterval::log10_decades(2)?` for divisible integral exponent
+steps. If the source cannot fit, bounded local coarsening still applies. Exact
+`x_ticks`/`y_ticks` take precedence in either setter order; categorical axes reject
+numeric interval instructions.
+
 ## Fonts
 
 Outlined SVG and PNG generation resolve installed system fonts from this

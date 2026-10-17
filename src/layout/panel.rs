@@ -37,7 +37,7 @@ pub(crate) use semantics::{AxisSemanticInputs, RangeProvenance, StandardPanelInp
 pub(crate) use sources::format_guide_label;
 pub(crate) use sources::format_label;
 pub(crate) use sources::NUMERIC_ALPHABET;
-pub(crate) use sources::{numeric_tick_plan, NumericTickPlan, TickInterval, TickSource};
+pub(crate) use sources::{numeric_tick_plan, NumericTickPlan, TickSource};
 
 pub(crate) use axis_frame_grid::PanelAxisPlan;
 pub(crate) use cells::LABEL_CLEARANCE;
@@ -56,7 +56,7 @@ pub struct AxisSpec {
     pub limits: Option<(f64, f64)>,
     /// Exact numeric tick source, selected before any automatic text is measured.
     pub(crate) exact_ticks: Option<Vec<AxisTick>>,
-    pub(crate) interval: Option<TickInterval>,
+    pub(crate) interval: Option<crate::TickInterval>,
 }
 
 /// A single tick on an axis: a data-space position and the

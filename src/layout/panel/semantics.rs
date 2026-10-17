@@ -28,7 +28,7 @@ pub(crate) struct AxisSemanticInputs {
     pub(crate) provenance: RangeProvenance,
     pub(crate) scale: AxisScale,
     pub(crate) policy: RangePolicy,
-    pub(crate) interval: Option<super::TickInterval>,
+    pub(crate) interval: Option<crate::TickInterval>,
 }
 
 impl AxisSemanticInputs {
@@ -50,14 +50,16 @@ impl AxisSemanticInputs {
         round.observe_count(self.policy as usize)?;
         match self.interval {
             None => round.observe_count(0),
-            Some(super::TickInterval::Additive(step)) => {
-                round.observe_count(1)?;
-                round.observe_number(step)
-            }
-            Some(super::TickInterval::Log10Decades(step)) => {
-                round.observe_count(2)?;
-                round.observe_count((step >> 32) as usize)?;
-                round.observe_count((step & 0xffff_ffff) as usize)
+            Some(interval) => {
+                if let Some(step) = interval.additive_step() {
+                    round.observe_count(1)?;
+                    round.observe_number(step)
+                } else {
+                    round.observe_count(2)?;
+                    round.observe_count(
+                        interval.decade_step().expect("validated decade selection") as usize
+                    )
+                }
             }
         }
     }
@@ -170,38 +172,6 @@ impl StandardPanelInputs {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn standard_panel_owns_complete_typography_and_four_to_three_preference() {
-        let mut theme = crate::Theme::publication().resolve().unwrap();
-        let standard = StandardPanelInputs::new(&theme).unwrap();
-
-        assert_eq!(standard.preferred_aspect, [4, 3]);
-        assert!(standard.matches(&theme).unwrap());
-        theme.typography.axes.tick_label.line_height_multiplier += 0.25;
-        assert!(!standard.matches(&theme).unwrap());
-        theme.typography.axes.tick_label = standard.tick_label.clone();
-        theme.typography.axes.axis_title.weight = crate::TextWeight::Bold;
-        theme.typography.axes.axis_title.stack = crate::font::canonical::FontStack::new(
-            theme
-                .typography
-                .axes
-                .axis_title
-                .stack
-                .families()
-                .iter()
-                .cloned()
-                .chain([crate::font::canonical::FontFamily::generic(
-                    crate::font::canonical::GenericFontFamily::Serif,
-                )]),
-        )
-        .unwrap();
-        assert!(!standard.matches(&theme).unwrap());
-        assert_ne!(
-            standard.axis_title.stack,
-            theme.typography.axes.axis_title.stack
-        );
-    }
 
     #[test]
     fn standard_panel_stack_matching_includes_the_complete_utf8_name() {

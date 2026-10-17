@@ -171,6 +171,12 @@ contracts; `AxisTick` is exported only from the crate root. Public geometry uses
 Canvas terminology and concise geometry nouns rather than renderer-internal
 `Figure*` or redundant `*Input` names.
 
+Opaque crate-root `TickInterval` constructs finite positive additive steps or
+positive `u32` logarithmic decade steps. `x_tick_interval` and `y_tick_interval`
+use the existing sealed NumericX/Y gates. They select a first-tried generated
+source, not a tick count; exact AxisTick lists remain authoritative. Actual
+categorical axes and scale-kind mismatches reject before fonts.
+
 `PointLayer` is an optional ordinary-line overlay with renderer-owned visual
 defaults and selective caller overrides. `NumericLabelFormat` remains a narrow
 fixed-decimal value-label format rather than a general axis, colorbar, or

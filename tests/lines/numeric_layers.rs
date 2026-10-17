@@ -299,6 +299,56 @@ fn conflicting_duplicate_point_layer_legend_identity_is_rejected() {
 }
 
 #[test]
+fn public_tick_interval_preferences_yield_to_exact_labels_in_both_setter_orders() {
+    use lichtung_plot::TickInterval;
+    let base = Plot::scatter(
+        NumericValues::new("x", [0.0, 10.0]),
+        NumericValues::new("y", [100.0, 105.0]),
+    )
+    .x_limits(0.0, 10.0)
+    .y_limits(100.0, 105.0)
+    .size(700, 500);
+    let intervals = |plot: Plot<lichtung_plot::kind::Scatter>| {
+        plot.x_tick_interval(TickInterval::additive(5.0).unwrap())
+            .x_tick_interval(TickInterval::additive(2.0).unwrap())
+            .y_tick_interval(TickInterval::additive(1.0).unwrap())
+    };
+    let preferred = svg(intervals(base.clone()));
+    let labels = |svg: &str| {
+        let mut labels = svg
+            .lines()
+            .filter(|line| line.starts_with("<text ") && line.contains("font-size=\"16\""))
+            .map(|line| {
+                line.split_once('>')
+                    .unwrap()
+                    .1
+                    .split_once('<')
+                    .unwrap()
+                    .0
+                    .to_owned()
+            })
+            .collect::<Vec<_>>();
+        labels.sort_unstable();
+        labels
+    };
+    let mut expected = [
+        "0", "2", "4", "6", "8", "10", "100", "101", "102", "103", "104", "105",
+    ]
+    .map(str::to_owned)
+    .to_vec();
+    expected.sort_unstable();
+    assert_eq!(labels(&preferred), expected);
+    let exact = |plot: Plot<lichtung_plot::kind::Scatter>| {
+        plot.x_ticks(vec![AxisTick::new(1.0, "exact x")])
+            .y_ticks(vec![AxisTick::new(103.0, "exact y")])
+    };
+    let before = svg(exact(intervals(base.clone())));
+    let after = svg(intervals(exact(base)));
+    assert_eq!(before, after);
+    assert_eq!(labels(&before), ["exact x", "exact y"]);
+}
+
+#[test]
 fn explicit_numeric_ticks_replace_generated_labels_at_caller_positions_on_both_axes() {
     let frame = line_data();
     let output = svg(line_plot(&frame)

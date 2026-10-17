@@ -230,6 +230,61 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
+    /// Prefer a complete generated x-tick spacing before bounded local coarsening.
+    ///
+    /// Exact [`Self::x_ticks`] override generated intervals in either setter order.
+    /// The actual axis must be numeric and match the interval's linear/logarithmic
+    /// kind; semantic mismatch rejects before fonts. Repeated calls replace only
+    /// this axis's interval.
+    /// ```
+    /// use lichtung_plot::{NumericValues, Plot, TickInterval};
+    /// let plot = Plot::scatter(NumericValues::new("x", [0.0, 10.0]),
+    ///     NumericValues::new("y", [0.0, 4.0]))
+    ///     .x_tick_interval(TickInterval::additive(2.0)?)
+    ///     .y_tick_interval(TickInterval::additive(1.0)?);
+    /// # let _ = plot;
+    /// # Ok::<(), lichtung_plot::Error>(())
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, Plot, TickInterval};
+    /// fn categorical(plot: Plot<kind::Bar>, interval: TickInterval) {
+    ///     let _ = plot.x_tick_interval(interval);
+    /// }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{Plot, TickInterval};
+    /// fn erased(plot: Plot, interval: TickInterval) {
+    ///     let _ = plot.x_tick_interval(interval);
+    /// }
+    /// ```
+    #[must_use]
+    pub fn x_tick_interval(mut self, interval: crate::TickInterval) -> Self
+    where
+        K: crate::kind::NumericX,
+    {
+        self.x_axis_spec.interval = Some(interval);
+        self
+    }
+
+    /// Prefer a complete generated y-tick spacing before bounded local coarsening.
+    ///
+    /// Exact [`Self::y_ticks`] take precedence in either setter order. Only the
+    /// existing sealed numeric-y families admit this instruction.
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, Plot, TickInterval};
+    /// fn categorical(plot: Plot<kind::Beeswarm>, interval: TickInterval) {
+    ///     let _ = plot.y_tick_interval(interval);
+    /// }
+    /// ```
+    #[must_use]
+    pub fn y_tick_interval(mut self, interval: crate::TickInterval) -> Self
+    where
+        K: crate::kind::NumericY,
+    {
+        self.y_axis_spec.interval = Some(interval);
+        self
+    }
+
     /// Append a numeric guide rendered in data space.
     #[must_use]
     pub fn guide(mut self, guide: GuideSpec) -> Self

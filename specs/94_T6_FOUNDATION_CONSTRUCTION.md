@@ -1890,8 +1890,9 @@ are **B3**, not a late unassigned B4/L task. No Color input is invented.
 
 ## 12. Adjacent Approved Policy Signature Handoff
 
-These policies are not theme fields. Their later implementation/actual-input
-closure gates remain spec93; this section closes getter naming and validated
+These policies are not theme fields. TickInterval is public and complete; the
+remaining implementation/actual-input closure gates stay with spec93. This
+section closes getter naming and validated
 construction inputs without claiming numerical certification or section evidence.
 Detailed design is closed in `06_NUMERIC_PRESENTATION.md`,
 `07_LOG10_DISPLAY.md` and `08_DISCRETE_GUIDES.md`. Later source refreshes verify

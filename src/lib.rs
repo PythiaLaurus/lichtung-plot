@@ -92,7 +92,7 @@ pub use spec::{
     HistogramStat, InteractionStyle, LegendPolicy, LegendPosition, LinePathStyle, LinePattern,
     NumericLabelFormat, PanelCorner, PanelTextAnnotation, PercentileInterval, PlotKind, PointShape,
     QqLine, RawOverlay, RegressionBand, SignificanceMarkStyle, StandardDeviation, StandardError,
-    TextWeight, ValueSort, WaterfallLabels,
+    TextWeight, TickInterval, ValueSort, WaterfallLabels,
 };
 pub use spec::{PngCompression, PngOptions, PngSizing};
 pub use theme::{

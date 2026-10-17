@@ -28,9 +28,6 @@ impl AxisSpec {
     }
 
     pub(crate) fn validate(&self, axis: &str) -> Result<(), Error> {
-        if let Some(interval) = self.interval {
-            interval.validate()?;
-        }
         if let Some((minimum, maximum)) = self.limits {
             if !minimum.is_finite() || !maximum.is_finite() || minimum >= maximum {
                 return Err(Error::Data(format!(

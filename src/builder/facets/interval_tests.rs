@@ -1,5 +1,5 @@
 use super::*;
-use crate::layout::TickInterval;
+use crate::TickInterval;
 
 fn plot() -> Plot<crate::kind::Scatter> {
     Plot::scatter(
@@ -12,15 +12,16 @@ fn plot() -> Plot<crate::kind::Scatter> {
 
 #[test]
 fn interval_copy_and_composed_identity_include_both_axes() {
-    let mut plot = plot().erase();
-    plot.x_axis_spec.interval = Some(TickInterval::Additive(2.0));
-    plot.y_axis_spec.interval = Some(TickInterval::Additive(1.0));
+    let mut plot = plot()
+        .x_tick_interval(TickInterval::additive(2.0).unwrap())
+        .y_tick_interval(TickInterval::additive(1.0).unwrap())
+        .erase();
 
     let retained = plot.retain_composed_inputs().unwrap();
     assert_eq!(retained.x_axis_spec.interval, plot.x_axis_spec.interval);
     assert_eq!(retained.y_axis_spec.interval, plot.y_axis_spec.interval);
     assert!(plot.same_composed_inputs(&retained));
-    plot.x_axis_spec.interval = Some(TickInterval::Additive(3.0));
+    plot.x_axis_spec.interval = Some(TickInterval::additive(3.0).unwrap());
     assert!(!plot.same_composed_inputs(&retained));
     plot.x_axis_spec.interval = retained.x_axis_spec.interval;
     plot.y_axis_spec.interval = None;
@@ -75,31 +76,71 @@ fn composed_key_copy_preserves_complete_comparison_inputs() {
 
 #[test]
 fn invalid_intervals_reject_before_font_discovery() {
-    for interval in [
-        TickInterval::Additive(0.0),
-        TickInterval::Additive(-1.0),
-        TickInterval::Additive(f64::NAN),
-        TickInterval::Additive(f64::INFINITY),
-        TickInterval::Log10Decades(0),
-        TickInterval::Log10Decades(2),
-    ] {
-        let mut plot = plot();
-        plot.x_axis_spec.interval = Some(interval);
-        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-        assert!(matches!(plot.preflight(), Err(crate::Error::Data(_))));
-        assert_eq!(
-            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
-            0
-        );
+    let discoveries = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
+    for step in [0.0, -0.0, -1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        assert!(matches!(
+            TickInterval::additive(step),
+            Err(crate::Error::Data(_))
+        ));
     }
+    assert!(TickInterval::log10_decades(0).is_err());
+    let plot = plot().x_tick_interval(TickInterval::log10_decades(2).unwrap());
+    assert!(matches!(plot.preflight(), Err(crate::Error::Data(_))));
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        discoveries
+    );
+}
+
+#[test]
+fn categorical_trajectory_intervals_refuse_before_fonts_in_standalone_and_canvas() {
+    let theme = crate::Theme::publication()
+        .customize()
+        .with_font_stack(
+            crate::FontStack::new([
+                crate::FontFamily::named("Absent categorical interval font").unwrap()
+            ])
+            .unwrap(),
+        )
+        .unwrap()
+        .build()
+        .unwrap();
+    let trajectory = Plot::trajectory(
+        crate::CategoryValues::new("condition", ["first", "second"]).unwrap(),
+        crate::NumericValues::new("value", [1.0, 2.0]),
+        crate::CategoryValues::new("group", ["a", "a"]).unwrap(),
+    )
+    .x_tick_interval(TickInterval::additive(1.0).unwrap())
+    .theme(theme);
+    let discoveries = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
+    let error = trajectory.preflight().unwrap_err();
+    assert!(matches!(error, crate::Error::Data(_)), "{error}");
+    assert!(error
+        .to_string()
+        .contains("x-axis categories do not support a numeric tick interval"));
+    let error = crate::Canvas::grid(1, 1)
+        .unwrap()
+        .panel(0, 0, trajectory)
+        .unwrap()
+        .preflight()
+        .unwrap_err();
+    assert!(matches!(error, crate::Error::Data(_)), "{error}");
+    assert!(error
+        .to_string()
+        .contains("x-axis categories do not support a numeric tick interval"));
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        discoveries
+    );
 }
 
 #[test]
 fn interval_census_uses_the_source_alphabet_and_exact_precedence_suppresses_it() {
     let theme = crate::Theme::publication().resolve().unwrap();
-    let mut plot = plot().erase();
-    plot.x_axis_spec.interval = Some(TickInterval::Additive(0.01));
-    plot.y_axis_spec.interval = Some(TickInterval::Additive(0.1));
+    let mut plot = plot()
+        .x_tick_interval(TickInterval::additive(0.01).unwrap())
+        .y_tick_interval(TickInterval::additive(0.1).unwrap())
+        .erase();
     for exact in [false, true] {
         if exact {
             plot.x_axis_spec.exact_ticks = Some(vec![crate::AxisTick::new(1.0, "")]);
@@ -141,9 +182,9 @@ fn interval_census_uses_the_source_alphabet_and_exact_precedence_suppresses_it()
 #[test]
 fn interval_rendering_and_exact_precedence_are_cache_independent() {
     for exact in [false, true] {
-        let mut plot = plot();
-        plot.x_axis_spec.interval = Some(TickInterval::Additive(2.0));
-        plot.y_axis_spec.interval = Some(TickInterval::Additive(1.0));
+        let mut plot = plot()
+            .x_tick_interval(TickInterval::additive(2.0).unwrap())
+            .y_tick_interval(TickInterval::additive(1.0).unwrap());
         if exact {
             plot = plot.x_ticks(vec![
                 crate::AxisTick::new(1.0, "one exact"),
@@ -184,8 +225,8 @@ fn forest_log_interval_is_applied_in_exponent_space_and_exact_ticks_override_it(
         1.0,
     )
     .scale(AxisScale::Log10)
-    .x_limits(0.01, 100.0);
-    forest.x_axis_spec.interval = Some(TickInterval::Log10Decades(2));
+    .x_limits(0.01, 100.0)
+    .x_tick_interval(TickInterval::log10_decades(2).unwrap());
     for exact in [false, true] {
         if exact {
             forest = forest.x_ticks(vec![crate::AxisTick::new(1.0, "raw exact")]);
