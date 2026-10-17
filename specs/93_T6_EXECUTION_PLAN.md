@@ -7,7 +7,8 @@ construction and consumer resolution are next.
 mark/annotation leaf, T6B1d4d, and the private-value umbrella T6B1. Evidence is in
 `../docs/mark-annotation-values.md`. T6B2 owns complete Theme construction and the
 remaining literal-to-component consumer resolution; complete construction and
-mark extents are implemented, with annotation consumers next. Public cutovers follow it.
+mark extents and annotation consumers are implemented, with continuous scale
+resolution next. Public cutovers follow it.
 The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
@@ -105,9 +106,9 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6B2 | IN PROGRESS | T6B1 | Complete Theme construction/customization and owner resolution using those values; separately committed leaves below |
 | T6B2a | COMPLETE | T6B1 | Retain one complete appearance value and construction-only builder independently of operation state; `refactor(theme): retain complete construction values` |
 | T6B2b | COMPLETE | T6B2a | Consume mark extents in category, Waterfall, interval, rug and density geometry; `refactor(marks): resolve retained local geometry` |
-| T6B2c | IN PROGRESS | T6B2b | Resolve annotation metrics, exact significance absence and canonical bracket geometry; independently reviewed leaves below |
+| T6B2c | COMPLETE | T6B2b | Resolve annotation metrics, exact significance absence and canonical bracket geometry; independently reviewed leaves below |
 | T6B2c1 | COMPLETE | T6B2b | Retain one effective significance value through text, containing fit and canonical capture; `refactor(annotations): retain effective significance geometry` |
-| T6B2c2 | PENDING | T6B2c1 | Resolve selected-role cell, estimate and panel-text annotation metrics; `refactor(annotations): resolve selected-role local spacing` |
+| T6B2c2 | COMPLETE | T6B2c1 | Resolve selected-role cell, estimate and panel-text annotation metrics; `refactor(annotations): resolve selected-role local spacing` |
 | T6B2d | PENDING | T6B2c | General continuous-scale branches, unified presets and common local/shared guides; `refactor(scales): resolve complete continuous mappings` |
 | T6B2e | PENDING | T6B2d | Complete supplemental paint/default resolution and remaining declared-track/cache owners; `refactor(theme): resolve complete owner-local defaults` |
 | T6B2f | PENDING | T6B2e | Reconcile retained components and consumers with focused owner/identity evidence |
@@ -304,6 +305,15 @@ geometry constant and duplicate selected-style/fallback reconstruction are gone.
 One semantic planner/canonical test replaces a typography group-edit fixture;
 discovery remains 671. Ten focused library tests, twenty-four annotation/estimate/
 parent integrations, formatting and strict all-target Clippy pass.
+
+T6B2c2 evidence: `../docs/annotation-local-spacing.md` records distinct selected-role
+cell/value and merged-row padding through intrinsics, assignment, wrapping and
+final fit; final cell alpha selects the same role before fonts and in capture.
+Panel text retains its selected padding and complete minima for reassignment.
+Estimate text consumes its detail-role inset/clearance/numeric gap and actual
+reference ink. Two semantic tests replace typography inventory/spacing-clone
+fixtures and remove dead support; discovery remains 671. Five focused library
+tests, twenty-one external contracts, formatting and strict Clippy pass.
 
 Use spec03 and spec94's complete `Theme`, `ThemeBuilder`, role components, typed font stack,
 RGBA `Color`, RGB-only `OpaqueColor`, palettes/maps and gradients. Builders are

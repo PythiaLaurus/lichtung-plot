@@ -416,11 +416,12 @@ pub(crate) fn estimate_data_range<'a>(
         })
 }
 
-pub(crate) fn plan_not_estimable(
+fn plan_not_estimable(
     theme: &ResolvedTheme,
     appearance: &crate::theme::TextTheme,
     layout: &Layout,
     vertical_guide_x: Option<f64>,
+    reference_style: &LineStyle,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<(ResolvedTextPlan, f64), crate::layout::fit::PlanError> {
     let text_plan = theme.measure_legacy_appearance_text(
@@ -434,6 +435,15 @@ pub(crate) fn plan_not_estimable(
         layout.projection.panel_box(),
         text_plan.width(),
         vertical_guide_x,
+        &theme
+            .annotations
+            .estimates()
+            .lengths(appearance.font_size())?,
+        if vertical_guide_x.is_some() {
+            crate::render::geometry::line_ink_width(reference_style)?
+        } else {
+            0.0
+        },
         scope,
     )?;
     Ok((text_plan, x))
@@ -443,24 +453,30 @@ fn not_estimable_text_x(
     panel: crate::layout::PanelBox,
     text_width: f64,
     vertical_guide_x: Option<f64>,
+    spacing: &crate::theme::annotation::EstimateAnnotationLengths,
+    guide_ink: f64,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<f64, crate::layout::fit::PlanError> {
-    const PANEL_PADDING: f64 = 6.0;
-    const GUIDE_CLEARANCE: f64 = 6.0;
-
-    let left_edge = panel.x0 + PANEL_PADDING;
-    let right_edge = panel.x1 - PANEL_PADDING;
-    if right_edge - left_edge < text_width {
+    use crate::layout::kernel::SpatialRounding;
+    let left_edge = spacing.panel_inset.after_pixels(panel.x0)?;
+    let right_edge = spacing.panel_inset.before_pixels(panel.x1)?;
+    let required = spacing
+        .panel_inset
+        .times(2)
+        .add_pixels(text_width)?
+        .pixels_rounded(SpatialRounding::Ceil)?;
+    if required > panel.width() {
         return Err(scope.failure(crate::layout::fit::FitKind::Text, format!(
             "Not estimable row text requires {text_width:.1}px but the chart panel provides {:.1}px after padding; increase chart width",
             (right_edge - left_edge).max(0.0)
         )).into());
     }
-    let Some(guide_x) = vertical_guide_x else {
+    let Some(guide_x) = vertical_guide_x.filter(|_| guide_ink > 0.0) else {
         return Ok(f64::midpoint(left_edge, right_edge));
     };
-    let left_right = guide_x - GUIDE_CLEARANCE;
-    let right_left = guide_x + GUIDE_CLEARANCE;
+    let clearance = spacing.guide_clearance.add_pixels(guide_ink / 2.0)?;
+    let left_right = clearance.before_pixels(guide_x)?;
+    let right_left = clearance.after_pixels(guide_x)?;
     let left_width = left_right - left_edge;
     let right_width = right_edge - right_left;
     let left_fits = left_width >= text_width;
@@ -762,6 +778,21 @@ fn project(
         .filter(|value| *value >= x_range.0 && *value <= x_range.1)
         .map(|value| layout.projection.project(value, 0.0).0);
     let significance = theme.effective_significance(chart.significance_mark_style_override())?;
+    let reference_style = if prepared.point_interval {
+        theme
+            .marks
+            .strokes()
+            .references()
+            .point_interval_reference()
+            .backend_style()
+    } else {
+        theme
+            .marks
+            .strokes()
+            .references()
+            .estimate_reference()
+            .backend_style()
+    };
     let detail_role = &theme.typography.annotations.estimate_detail;
     let detail_label = crate::theme::TextTheme::new(
         crate::data::source::copy_font_stack(detail_role.stack())?,
@@ -780,6 +811,7 @@ fn project(
                 &detail_label,
                 &layout,
                 reference_line_x,
+                &reference_style,
                 &context
                     .fit_scope()
                     .child(crate::layout::AddressRole::CategoricalValueLabel, index)?,
@@ -807,7 +839,10 @@ fn project(
                     significance.exact_override,
                 )
             } else {
-                (&detail_label, 7.0, "coefficient estimate label", false)
+                (&detail_label, theme.annotations.estimates().numeric_label_gap()
+                    .product(crate::theme::LocalMetric::css_pixels(detail_label.font_size())?)
+                    .pixels_rounded(crate::layout::kernel::SpatialRounding::NearestEven)?,
+                    "coefficient estimate label", false)
             };
             let panel = layout.projection.panel_box();
             let (position, anchor, plan) = {
@@ -881,21 +916,7 @@ fn project(
         clip: layout.projection.panel_box(),
         domain_expansions: [None; 2],
         reference,
-        reference_style: if prepared.point_interval {
-            theme
-                .marks
-                .strokes()
-                .references()
-                .point_interval_reference()
-                .backend_style()
-        } else {
-            theme
-                .marks
-                .strokes()
-                .references()
-                .estimate_reference()
-                .backend_style()
-        },
+        reference_style,
         interval_style: theme
             .marks
             .strokes()

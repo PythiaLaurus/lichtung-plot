@@ -1330,7 +1330,7 @@ fn push_deferred_plot_requirements(
                 }
                 Some(guide)
             };
-            for (label, fill) in marks.annotation_labels() {
+            for (label, fill) in marks.annotation_labels(theme.marks.cells().fill_alpha()) {
                 push_deferred_body(
                     requirements,
                     &body_address,

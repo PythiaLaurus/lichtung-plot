@@ -122,11 +122,71 @@ validated_component!(CellAnnotationGeometry {
     borrow null_row_vertical_padding: RelativeSpacing => with_null_row_vertical_padding,
 } validate |value| { value.highlight_outline().validate()?; });
 
+pub(crate) struct CellTextPadding {
+    horizontal: ExactLength,
+    vertical: ExactLength,
+}
+
+impl CellAnnotationGeometry {
+    pub(crate) fn value_padding(&self, em: u32) -> Result<CellTextPadding> {
+        let em = LocalMetric::css_pixels(em)?;
+        Ok(CellTextPadding {
+            horizontal: self.value_horizontal_padding().product(em),
+            vertical: self.value_vertical_padding().product(em),
+        })
+    }
+
+    pub(crate) fn null_row_padding(&self, em: u32) -> Result<CellTextPadding> {
+        let em = LocalMetric::css_pixels(em)?;
+        Ok(CellTextPadding {
+            horizontal: self.null_row_horizontal_padding().product(em),
+            vertical: self.null_row_vertical_padding().product(em),
+        })
+    }
+}
+
+impl CellTextPadding {
+    pub(crate) fn width(&self, text_width: f64) -> Result<f64> {
+        self.horizontal
+            .add_pixels(text_width)?
+            .pixels_rounded(SpatialRounding::Ceil)
+    }
+
+    pub(crate) fn height(&self, text_height: f64) -> Result<f64> {
+        self.vertical
+            .add_pixels(text_height)?
+            .pixels_rounded(SpatialRounding::Ceil)
+    }
+
+    pub(crate) fn available_width(&self, assigned: f64) -> Result<f64> {
+        ExactLength::pixels(assigned)?
+            .subtract(&self.horizontal)
+            .map_or(Ok(0.0), |remaining| {
+                remaining.pixels_rounded(SpatialRounding::Floor)
+            })
+    }
+}
+
 validated_component!(EstimateAnnotationGeometry {
     borrow panel_inset: RelativeSpacing => with_panel_inset,
     borrow guide_clearance: RelativeSpacing => with_guide_clearance,
     borrow numeric_label_gap: RelativeSpacing => with_numeric_label_gap,
 } validate |_value| {});
+
+pub(crate) struct EstimateAnnotationLengths {
+    pub(crate) panel_inset: ExactLength,
+    pub(crate) guide_clearance: ExactLength,
+}
+
+impl EstimateAnnotationGeometry {
+    pub(crate) fn lengths(&self, em: u32) -> Result<EstimateAnnotationLengths> {
+        let em = LocalMetric::css_pixels(em)?;
+        Ok(EstimateAnnotationLengths {
+            panel_inset: self.panel_inset().product(em),
+            guide_clearance: self.guide_clearance().product(em),
+        })
+    }
+}
 
 validated_component!(ValueShelfSpacing {
     borrow padding: RelativeSpacing => with_padding,

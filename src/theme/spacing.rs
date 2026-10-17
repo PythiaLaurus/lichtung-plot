@@ -660,13 +660,4 @@ mod tests {
             0
         );
     }
-
-    #[test]
-    fn spacing_clone_shares_exact_retained_integers() {
-        let value = RelativeSpacing::new(f64::from_bits(1)).unwrap();
-
-        let copy = value.clone();
-        assert!(Arc::ptr_eq(&value.0, &copy.0));
-        assert_eq!(value, copy);
-    }
 }

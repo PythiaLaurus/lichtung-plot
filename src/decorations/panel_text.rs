@@ -1,11 +1,14 @@
 //! Caller-owned text anchored inside one standard chart panel.
 
+use crate::layout::kernel::SpatialRounding;
 use crate::layout::{Layout, PanelBox, PhysicalTextAlignment, ResolvedTextPlan};
 use crate::render::backend::{PlannedTextPlacement, Point2D, TextAnchor};
+use crate::theme::spacing::ExactLength;
 use crate::theme::ResolvedTheme;
 use crate::{PanelCorner, Plot};
 
-const PANEL_TEXT_PADDING: f64 = 8.0;
+#[cfg(test)]
+mod tests;
 
 #[derive(Debug, Clone)]
 pub(crate) struct PanelTextPlan {
@@ -14,6 +17,8 @@ pub(crate) struct PanelTextPlan {
     anchor: TextAnchor,
     bounds: PanelBox,
     corner: PanelCorner,
+    padding: f64,
+    minimum_size: (f64, f64),
 }
 
 impl PanelTextPlan {
@@ -24,7 +29,7 @@ impl PanelTextPlan {
         }
     }
     pub(crate) fn bounds_in(&self, panel: PanelBox) -> PanelBox {
-        let (position, _, _) = placement(panel, self.corner, &self.text_plan);
+        let (position, _, _) = placement(panel, self.corner, &self.text_plan, self.padding);
         let dx = position.x - self.position.x;
         let dy = position.y - self.position.y;
         PanelBox::new(
@@ -39,8 +44,8 @@ impl PanelTextPlan {
         panel: PanelBox,
         legend: crate::decorations::legend::LegendBox,
     ) -> bool {
-        self.text_plan.width() + 2.0 * PANEL_TEXT_PADDING <= panel.width()
-            && self.text_plan.height() + 2.0 * PANEL_TEXT_PADDING <= panel.height()
+        self.minimum_size.0 <= panel.width()
+            && self.minimum_size.1 <= panel.height()
             && !overlap_predicate(
                 self.bounds_in(panel),
                 PanelBox::new(legend.left, legend.right, legend.bottom, legend.top),
@@ -48,7 +53,7 @@ impl PanelTextPlan {
     }
 
     pub(crate) fn placement_in(&self, panel: PanelBox) -> PlannedTextPlacement {
-        let (position, anchor, _) = placement(panel, self.corner, &self.text_plan);
+        let (position, anchor, _) = placement(panel, self.corner, &self.text_plan, self.padding);
         PlannedTextPlacement::middle(position, anchor, 0.0)
     }
 }
@@ -87,21 +92,16 @@ fn placement(
     panel: PanelBox,
     corner: PanelCorner,
     text: &ResolvedTextPlan,
+    padding: f64,
 ) -> (Point2D, TextAnchor, PanelBox) {
     let (x, anchor) = match corner {
-        PanelCorner::TopLeft | PanelCorner::BottomLeft => {
-            (panel.x0 + PANEL_TEXT_PADDING, TextAnchor::Start)
-        }
-        PanelCorner::TopRight | PanelCorner::BottomRight => {
-            (panel.x1 - PANEL_TEXT_PADDING, TextAnchor::End)
-        }
+        PanelCorner::TopLeft | PanelCorner::BottomLeft => (panel.x0 + padding, TextAnchor::Start),
+        PanelCorner::TopRight | PanelCorner::BottomRight => (panel.x1 - padding, TextAnchor::End),
     };
     let y = match corner {
-        PanelCorner::TopLeft | PanelCorner::TopRight => {
-            panel.y1 - PANEL_TEXT_PADDING - text.height() / 2.0
-        }
+        PanelCorner::TopLeft | PanelCorner::TopRight => panel.y1 - padding - text.height() / 2.0,
         PanelCorner::BottomLeft | PanelCorner::BottomRight => {
-            panel.y0 + PANEL_TEXT_PADDING + text.height() / 2.0
+            panel.y0 + padding + text.height() / 2.0
         }
     };
     let x = x.round();
@@ -130,8 +130,24 @@ pub(crate) fn measure_plans(
     scope: &crate::layout::fit::FitScope,
 ) -> Result<Vec<PanelTextPlan>, crate::layout::fit::PlanError> {
     use crate::layout::{kernel::FitKind, AddressRole};
+    if plot.panel_text_annotations().is_empty() {
+        return Ok(Vec::new());
+    }
     let panel = layout.projection.panel_box();
-    let available_width = panel.width() - PANEL_TEXT_PADDING * 2.0;
+    let padding =
+        theme
+            .annotations
+            .panel_text_padding()
+            .product(crate::theme::LocalMetric::css_pixels(
+                theme.typography.annotations.panel_text.font_size(),
+            )?);
+    let inset = padding.pixels_rounded(SpatialRounding::NearestEven)?;
+    let both_edges = padding.times(2);
+    let available_width = ExactLength::pixels(panel.width())?
+        .subtract(&both_edges)
+        .map_or(Ok(0.0), |width| {
+            width.pixels_rounded(SpatialRounding::Floor)
+        })?;
     let plans = crate::layout::fit::collect( "panel annotations", plot
         .panel_text_annotations()
         .iter()
@@ -154,16 +170,20 @@ pub(crate) fn measure_plans(
             )?;
             let width = text_plan.width();
             let text_height = text_plan.height();
-            if width > available_width {
+            let minimum_size = (
+                both_edges.add_pixels(width)?.pixels_rounded(SpatialRounding::Ceil)?,
+                both_edges.add_pixels(text_height)?.pixels_rounded(SpatialRounding::Ceil)?,
+            );
+            if minimum_size.0 > panel.width() {
                 return Err(crate::layout::fit::PlanError::Fit(scope.failure(FitKind::Text, format!(
                     "panel text {:?} requires {width:.1}px but only {available_width:.1}px is available; increase chart width or shorten the annotation",
                     annotation.text()
                 ))));
             }
-            if text_height + PANEL_TEXT_PADDING * 2.0 > panel.height() {
+            if minimum_size.1 > panel.height() {
                 return Err(crate::layout::fit::PlanError::Fit(scope.failure(FitKind::Text, "panel text has no usable space inside the resolved chart panel; increase the canvas")));
             }
-            let (position, anchor, nominal) = placement(panel, annotation.corner(), &text_plan);
+            let (position, anchor, nominal) = placement(panel, annotation.corner(), &text_plan, inset);
             let mut ink = crate::render::geometry::GeometrySnapshot::new();
             ink.text(
                 PlannedTextPlacement::middle(position, anchor, 0.0),
@@ -184,6 +204,8 @@ pub(crate) fn measure_plans(
                 anchor,
                 bounds,
                 corner: annotation.corner(),
+                padding: inset,
+                minimum_size,
             })
         })
         )?;
