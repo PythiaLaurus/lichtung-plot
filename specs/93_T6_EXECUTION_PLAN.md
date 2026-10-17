@@ -28,9 +28,12 @@ This completes T6C. The numeric source refresh is complete in
 conversion is complete in `../docs/exact-decimal-conversion.md`. The handoff
 records current conversion/copy/font/key owners,
 retired accounting paths and canonical guide-list versus natural-adapter index
-drift. Numeric public implementation and Forest executable certification remain
+drift. Numeric public implementation and integrated consumer evidence remain
 pending. Exact Forest exponent/symbolic-power implementation is complete in
-`../docs/exact-log10-operands.md`; fractional mantissa certification follows.
+`../docs/exact-log10-operands.md`. Private fractional mantissa implementation and
+independent executable certification are complete in
+`../docs/certified-log10-conversion.md`; normalized policy/default consumer
+unification follows.
 The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
@@ -688,7 +691,7 @@ compatible effective format. No first-contributor-wins or Canvas format override
 | T6N1 | COMPLETE | T6N0 | Private exact finite-binary64 conversion/scaling/rounding and common decimal emission; independent rational/default evidence in `docs/exact-decimal-conversion.md` |
 | T6N2a | COMPLETE | T6N0d | Mathematical interval/rounding/termination, resource and independent-oracle design in `07_LOG10_DISPLAY.md`; document-level proof only; `docs(numbers): prove logarithmic display rounding and resource bounds` |
 | T6N2b | COMPLETE | T6N1, T6N2a | Exact signed exponent/scale reduction, symbolic integral powers and early real output reservation; evidence in `docs/exact-log10-operands.md` |
-| T6N2c | PENDING | T6N2b | Outward mantissa bounds and decimal certification with independent vectors; `feat(numbers): certify fractional Log10 labels` |
+| T6N2c | COMPLETE | T6N2b | Outward mantissa/one-quantum certification, fallible conversion buffers and independent root/algebraic vectors; evidence in `docs/certified-log10-conversion.md` |
 | T6N3 | PENDING | T6N2c | One normalized private format/value implementation; migrate fixed values/default grammar onto it; `refactor(numbers): unify numeric presentation owners` |
 | T6N4a | PENDING | T6N3 | Numeric/Forest axes, alphabets, intrinsics and natural width; `feat(axes): measure configured numeric formats` |
 | T6N4b | PENDING | T6N4a | Continuous local/shared guides and policy compatibility; `feat(guides): coordinate scientific numeric formats` |

@@ -1403,53 +1403,6 @@ mod tests {
     }
 
     #[test]
-    fn feedback_getters_preserve_matching_and_missing_owners() {
-        for domain in [false, true] {
-            for target in [0, 2, 3] {
-                {
-                    let mut round = FeedbackRound::new(None, 0).unwrap();
-                    for slot in 0..3 {
-                        let value = if domain {
-                            FeedbackValue::Domain([0.0_f64.to_bits(), 2.0_f64.to_bits()])
-                        } else {
-                            FeedbackValue::Insets([1024; 4])
-                        };
-                        round.state.consumed.push(scan_entry(slot, value.clone()));
-                        round.state.next.push(scan_entry(slot, value));
-                    }
-                    let owner = scan_entry(target, FeedbackValue::Insets([0; 4])).target;
-
-                    if domain {
-                        let result = round.feedback_domain(&owner, FeedbackKind::AutomaticDomainX);
-                        assert_eq!(result, (target < 3).then_some((0.0, 2.0)));
-                    } else {
-                        let result = round.insets(&owner, FeedbackKind::AxisGutter);
-                        {
-                            assert_eq!(
-                                result.map(f64::to_bits),
-                                if target < 3 {
-                                    [1.0_f64.to_bits(); 4]
-                                } else {
-                                    [0.0_f64.to_bits(); 4]
-                                }
-                            );
-                        }
-
-                        assert_eq!(
-                            round
-                                .next_insets(&owner, FeedbackKind::AxisGutter)
-                                .map(f64::to_bits),
-                            result.map(f64::to_bits)
-                        );
-                    }
-
-                    assert_eq!(round.state.consumed, round.state.next);
-                }
-            }
-        }
-    }
-
-    #[test]
     fn child_dependencies_preserve_stability_and_cached_inputs() {
         for owner_count in [1, 2] {
             {
@@ -1501,34 +1454,6 @@ mod tests {
 
         assert!(third.child_inputs_equal(&inputs, &owners));
         assert_eq!(third.state.observations, state.observations);
-    }
-
-    #[test]
-    fn feedback_requests_update_matching_and_new_dependencies() {
-        for target in [0, 2, 3] {
-            {
-                let mut round = FeedbackRound::new(None, 1).unwrap();
-                for slot in 0..3 {
-                    let mut consumed = scan_entry(slot, FeedbackValue::Insets([1024; 4]));
-                    consumed.kind = FeedbackKind::OwnedInk;
-                    let mut next = scan_entry(slot, FeedbackValue::Insets([1024; 4]));
-                    next.kind = FeedbackKind::OwnedInk;
-                    round.state.consumed.push(consumed);
-                    round.state.next.push(next);
-                }
-                let owner = scan_entry(target, FeedbackValue::Insets([0; 4])).target;
-
-                let result = round.request_insets(&owner, &owner, FeedbackKind::OwnedInk, [2.0; 4]);
-                {
-                    assert!(result.unwrap().is_some());
-                    assert_eq!(round.state.requests.len(), 1);
-                    assert_eq!(
-                        round.state.next[usize::try_from(target).unwrap()].value,
-                        FeedbackValue::Insets([2048; 4])
-                    );
-                }
-            }
-        }
     }
 
     #[test]

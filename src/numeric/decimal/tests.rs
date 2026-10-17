@@ -233,6 +233,10 @@ fn finite_extremes_keep_exact_scaled_values_and_refuse_unrepresentable_output() 
     for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
         assert!(matches!(format_finite(value, &format), Err(Error::Data(_))));
     }
+    assert!(matches!(
+        DecimalBuffer::reserve(usize::MAX, 0),
+        Err(Error::Render(_))
+    ));
     for invalid in [
         ResolvedFormat {
             decimal_scale: -325,

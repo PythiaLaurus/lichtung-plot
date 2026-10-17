@@ -97,6 +97,73 @@ pub(crate) struct RoundedDecimal {
     pub(crate) exponent: BigInt,
 }
 
+/// One output allocation and a reusable, fallible base-10^9 conversion buffer.
+#[derive(Debug, Default)]
+pub(crate) struct DecimalBuffer {
+    text: String,
+    chunks: Vec<u32>,
+}
+
+impl DecimalBuffer {
+    pub(crate) fn reserve(output_bytes: usize, integer_bits: usize) -> Result<Self> {
+        let mut buffer = Self::default();
+        buffer.reserve_chunks(u64::try_from(integer_bits).map_err(|_| arithmetic_error())?)?;
+        buffer
+            .text
+            .try_reserve_exact(output_bytes)
+            .map_err(|error| Error::Render(format!("numeric presentation output: {error}")))?;
+        Ok(buffer)
+    }
+
+    fn reserve_chunks(&mut self, bits: u64) -> Result<()> {
+        // 2^29 < 10^9, so ceil(bits/29) bounds the exact division count.
+        let count = usize::try_from(bits.div_ceil(29).max(1)).map_err(|_| arithmetic_error())?;
+        let additional = count.saturating_sub(self.chunks.len());
+        crate::data::source::reserve_source(&mut self.chunks, additional)
+    }
+
+    fn convert(&mut self, value: &BigUint) -> Result<()> {
+        self.chunks.clear();
+        self.reserve_chunks(value.bits())?;
+        let mut remaining = value.clone();
+        loop {
+            let quotient = &remaining / 1_000_000_000_u32;
+            let remainder =
+                u32::try_from(&remaining % 1_000_000_000_u32).expect("decimal chunk below 10^9");
+            if self.chunks.len() == self.chunks.capacity() {
+                return Err(arithmetic_error());
+            }
+            self.chunks.push(remainder);
+            if quotient.bits() == 0 {
+                break;
+            }
+            remaining = quotient;
+        }
+        Ok(())
+    }
+
+    fn digit_count(&self) -> Result<usize> {
+        let leading = *self.chunks.last().ok_or_else(arithmetic_error)?;
+        (self.chunks.len() - 1)
+            .checked_mul(9)
+            .and_then(|length| length.checked_add(chunk_width(leading)))
+            .ok_or_else(arithmetic_error)
+    }
+
+    fn append_exponent(&mut self, exponent: &BigInt) -> Result<()> {
+        self.convert(exponent.magnitude())?;
+        self.text.push('e');
+        if exponent.sign() == Sign::Minus {
+            self.text.push('-');
+        }
+        visit_digits(&self.chunks, 0..self.digit_count()?, |digits| {
+            self.text
+                .push_str(std::str::from_utf8(digits).expect("ASCII decimal digits"));
+        });
+        Ok(())
+    }
+}
+
 struct FiniteDecimal {
     negative: bool,
     coefficient: BigUint,
@@ -146,8 +213,9 @@ impl FiniteDecimal {
             )
         };
         let exponent = decimal_exponent + i32::from(scale);
-        let digits =
-            i32::try_from(coefficient.to_radix_be(10).len()).map_err(|_| arithmetic_error())?;
+        let mut digits = DecimalBuffer::default();
+        digits.convert(&coefficient)?;
+        let digits = i32::try_from(digits.digit_count()?).map_err(|_| arithmetic_error())?;
         Ok(Self {
             negative: value.is_sign_negative(),
             coefficient,
@@ -175,13 +243,7 @@ impl FiniteDecimal {
             self.coefficient * BigUint::from(10_u8).pow(shift.unsigned_abs())
         } else {
             let denominator = BigUint::from(10_u8).pow(shift.unsigned_abs());
-            let mut quotient = &self.coefficient / &denominator;
-            let twice_remainder = (&self.coefficient % &denominator) << 1_usize;
-            if twice_remainder > denominator || (twice_remainder == denominator && quotient.bit(0))
-            {
-                quotient += 1_u8;
-            }
-            quotient
+            nearest_integer(&self.coefficient, &denominator)
         };
         RoundedDecimal {
             negative: self.negative,
@@ -189,6 +251,16 @@ impl FiniteDecimal {
             exponent: quantum.into(),
         }
     }
+}
+
+/// One exact nearest-even quantizer for ordinary rationals and power endpoints.
+pub(super) fn nearest_integer(numerator: &BigUint, denominator: &BigUint) -> BigUint {
+    let mut quotient = numerator / denominator;
+    let twice_remainder = (numerator % denominator) << 1_usize;
+    if twice_remainder > *denominator || (twice_remainder == *denominator && quotient.bit(0)) {
+        quotient += 1_u8;
+    }
+    quotient
 }
 
 pub(crate) fn format_finite(value: f64, format: &ResolvedFormat<'_>) -> Result<String> {
@@ -202,7 +274,7 @@ impl RoundedDecimal {
     /// Serialize an already rounded number. Scale has already been consumed by
     /// its mathematical operand, and must not be applied again at this boundary.
     pub(crate) fn emit(&self, format: &ResolvedFormat<'_>) -> Result<String> {
-        self.emit_reserved(format, String::new())
+        self.emit_reserved(format, DecimalBuffer::default())
     }
 
     /// A power operand reserves its symbolic output bound before any refinement
@@ -210,24 +282,22 @@ impl RoundedDecimal {
     pub(crate) fn emit_reserved(
         &self,
         format: &ResolvedFormat<'_>,
-        mut text: String,
+        mut buffer: DecimalBuffer,
     ) -> Result<String> {
         format.validate()?;
-        if !text.is_empty() {
+        if !buffer.text.is_empty() {
             return Err(Error::Render(
                 "numeric output reservation must be empty".into(),
             ));
         }
-        let mut digits = self.coefficient.to_radix_be(10);
-        for digit in &mut digits {
-            *digit += b'0';
-        }
+        buffer.convert(&self.coefficient)?;
+        let digits = buffer.digit_count()?;
         let zero = self.coefficient.bits() == 0;
         let negative = self.negative && (!zero || format.negative_zero == NegativeZero::Preserve);
         let decade = if zero {
             BigInt::ZERO
         } else {
-            &self.exponent + BigInt::from(digits.len() - 1)
+            &self.exponent + BigInt::from(digits - 1)
         };
         let display_exponent = match format.notation {
             NumericNotation::Decimal => BigInt::ZERO,
@@ -243,7 +313,7 @@ impl RoundedDecimal {
         let point = if zero {
             BigInt::from(1_u8)
         } else {
-            BigInt::from(digits.len()) + &self.exponent - &display_exponent
+            BigInt::from(digits) + &self.exponent - &display_exponent
         };
         let fractional = match format.precision {
             ResolvedPrecision::Fractional(count) => usize::from(count),
@@ -262,8 +332,18 @@ impl RoundedDecimal {
         };
         let point = isize::try_from(point).map_err(|_| arithmetic_error())?;
         let integral = usize::try_from(point.max(1)).map_err(|_| arithmetic_error())?;
-        let exponent = (format.notation != NumericNotation::Decimal)
-            .then(|| display_exponent.to_str_radix(10));
+        let exponent = format.notation != NumericNotation::Decimal;
+        let exponent_length = if exponent {
+            // 2^3 < 10; this is a checked capacity bound, not spelling.
+            let digits = usize::try_from(display_exponent.bits().div_ceil(3).max(1))
+                .map_err(|_| arithmetic_error())?;
+            digits
+                .checked_add(1 + usize::from(display_exponent.sign() == Sign::Minus))
+                .ok_or_else(arithmetic_error)?
+        } else {
+            0
+        };
+        buffer.reserve_chunks(display_exponent.bits())?;
         let prefix = format.prefix.unwrap_or_default();
         let suffix = format.suffix.unwrap_or_default();
         let length = [
@@ -272,20 +352,23 @@ impl RoundedDecimal {
             integral,
             usize::from(fractional > 0),
             fractional,
-            exponent.as_ref().map_or(0, |text| 1 + text.len()),
+            exponent_length,
             suffix.len(),
         ]
         .into_iter()
         .try_fold(0_usize, usize::checked_add)
         .filter(|length| isize::try_from(*length).is_ok())
         .ok_or_else(arithmetic_error)?;
-        text.try_reserve_exact(length)
+        buffer
+            .text
+            .try_reserve_exact(length)
             .map_err(|error| Error::Render(format!("numeric presentation output: {error}")))?;
+        let text = &mut buffer.text;
         text.push_str(prefix);
         if negative {
             text.push('-');
         }
-        emit_magnitude(&mut text, &digits, point, fractional)?;
+        emit_magnitude(text, &buffer.chunks, digits, point, fractional)?;
         if fractional > 0 && format.trailing_zeros == TrailingZeros::Trim {
             while text.ends_with('0') {
                 text.pop();
@@ -294,41 +377,87 @@ impl RoundedDecimal {
                 text.pop();
             }
         }
-        if let Some(exponent) = exponent {
-            text.push('e');
-            text.push_str(&exponent);
+        if exponent {
+            buffer.append_exponent(&display_exponent)?;
         }
-        text.push_str(suffix);
-        Ok(text)
+        buffer.text.push_str(suffix);
+        Ok(buffer.text)
     }
 }
 
-fn emit_magnitude(text: &mut String, digits: &[u8], point: isize, fractional: usize) -> Result<()> {
+fn emit_magnitude(
+    text: &mut String,
+    chunks: &[u32],
+    digits: usize,
+    point: isize,
+    fractional: usize,
+) -> Result<()> {
     let integral_digits = usize::try_from(point.max(0)).map_err(|_| arithmetic_error())?;
-    let taken = integral_digits.min(digits.len());
+    let taken = integral_digits.min(digits);
     if integral_digits == 0 {
         text.push('0');
     } else {
-        text.push_str(std::str::from_utf8(&digits[..taken]).expect("ASCII decimal digits"));
+        visit_digits(chunks, 0..taken, |digits| {
+            text.push_str(std::str::from_utf8(digits).expect("ASCII decimal digits"));
+        });
         push_zeroes(text, integral_digits - taken);
     }
     let leading = if point < 0 { point.unsigned_abs() } else { 0 };
     let leading = fractional.min(leading);
-    let copied = (fractional - leading).min(digits.len() - taken);
+    let copied = (fractional - leading).min(digits - taken);
     if fractional > 0 {
         text.push('.');
         push_zeroes(text, leading);
-        text.push_str(
-            std::str::from_utf8(&digits[taken..taken + copied]).expect("ASCII decimal digits"),
-        );
+        visit_digits(chunks, taken..taken + copied, |digits| {
+            text.push_str(std::str::from_utf8(digits).expect("ASCII decimal digits"));
+        });
         push_zeroes(text, fractional - leading - copied);
     }
-    if digits[taken + copied..].iter().any(|digit| *digit != b'0') {
+    let mut discarded_nonzero = false;
+    visit_digits(chunks, taken + copied..digits, |digits| {
+        discarded_nonzero |= digits.iter().any(|digit| *digit != b'0');
+    });
+    if discarded_nonzero {
         return Err(Error::Render(
             "numeric decimal emission would discard nonzero digits".into(),
         ));
     }
     Ok(())
+}
+
+fn chunk_width(value: u32) -> usize {
+    if value == 0 {
+        1
+    } else {
+        value.ilog10() as usize + 1
+    }
+}
+
+/// View ordinary decimal digit spans without allocating a reversed digit string.
+fn visit_digits(chunks: &[u32], range: std::ops::Range<usize>, mut visit: impl FnMut(&[u8])) {
+    if range.is_empty() {
+        return;
+    }
+    let mut offset = 0;
+    for (index, &chunk) in chunks.iter().rev().enumerate() {
+        let width = if index == 0 { chunk_width(chunk) } else { 9 };
+        let end = offset + width;
+        if range.start < end && range.end > offset {
+            let mut bytes = [b'0'; 9];
+            let mut value = chunk;
+            for byte in bytes.iter_mut().rev() {
+                *byte += u8::try_from(value % 10).expect("decimal digit");
+                value /= 10;
+            }
+            let start = range.start.max(offset) - offset;
+            let finish = range.end.min(end) - offset;
+            visit(&bytes[9 - width + start..9 - width + finish]);
+        }
+        offset = end;
+        if offset >= range.end {
+            break;
+        }
+    }
 }
 
 fn push_zeroes(text: &mut String, mut count: usize) {

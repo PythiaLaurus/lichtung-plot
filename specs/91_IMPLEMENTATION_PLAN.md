@@ -6581,8 +6581,8 @@ Acceptance:
 ## Phase T6: Public Foundations And Scientific Presentation
 
 **Status**: IN PROGRESS — public foundations and root sizing/ticks complete;
-private ordinary decimal conversion complete; numeric consumers and Forest
-certification remain in progress.
+private ordinary decimal and Forest power certification complete; numeric
+policy/default and consumer migration remain in progress.
 
 Dependencies: T5e.
 
@@ -6599,8 +6599,10 @@ The exact private ordinary conversion and common emitter have independent
 rational/default evidence in `../docs/exact-decimal-conversion.md`; current public
 formatters/consumers remain pending their scheduled single-representation cutover.
 Exact Forest exponent reduction, symbolic integral powers and real output
-reservation are complete in `../docs/exact-log10-operands.md`; fractional
-mantissa certification remains the next numeric implementation gate.
+reservation are complete in `../docs/exact-log10-operands.md`. Private fractional
+mantissa/decimal certification with independent integer-root and algebraic
+evidence is complete in `../docs/certified-log10-conversion.md`; normalized
+policy/default and numeric consumer integration follow.
 
 ENTRY gate is CLOSED by the user's explicit approval of the current-implementation
 assessment and request to plan T6:
@@ -6616,8 +6618,10 @@ The user separately selected mathematical raw-value formatting for configured
 Forest Log10 ticks: exponent `0.5` with fractional precision 2 displays `3.16`.
 The numerical/guide refinement is design-closed in
 `06_NUMERIC_PRESENTATION.md`, `07_LOG10_DISPLAY.md` and `08_DISCRETE_GUIDES.md`.
-The Forest mathematical design/proof/resource/oracle gate is complete at document
-level; its code implementation and executable certification gates remain pending.
+The Forest mathematical design/proof/resource/oracle gate is complete, and its
+private implementation/executable numerical certification is recorded in
+`../docs/certified-log10-conversion.md`. Consumer/public and integrated output
+gates remain pending.
 Exponent precision is not substituted for value precision.
 Existing unconfigured power labels remain unchanged. This admission adds no
 platform `powf`, dependency, resource-cap increase or alternate rendering route.

@@ -1,9 +1,9 @@
 # Certified Forest Log10 Display
 
-**Status: approved architectural target; mathematical design specified and proved
-below; implementation and executable validation pending.** This document does
-not describe a current public API or mark a code implementation/executable
-certification gate complete.
+**Status: approved architectural target; private exact-power implementation and
+independent executable numerical certification complete; consumer/public cutover
+pending.** This document does not describe a current public numeric-format API
+or mark its remaining integration gates complete.
 
 **Accounting simplification:** spec95 supersedes every cumulative work/byte
 charging requirement in this design. The pricing schedules in §8 and charge-delta
@@ -16,9 +16,12 @@ Private exact exponent reduction, symbolic integral powers and early output
 reservation are implemented with independent evidence in
 [`docs/exact-log10-operands.md`](../docs/exact-log10-operands.md), using the common
 ordinary decimal emitter from `docs/exact-decimal-conversion.md`. Fractional
-mantissa implementation/executable certification and numeric consumer/public
-cutover remain pending. The mathematical design below is not a report that those
-remaining gates have passed.
+mantissa implementation, shared exact quantization, fallible conversion storage
+and independent executable root/algebraic certification are complete in
+[`docs/certified-log10-conversion.md`](../docs/certified-log10-conversion.md).
+Numeric consumer/public cutover and integrated font/cache/refusal/replay gates
+remain pending. The source/evidence records distinguish those remaining gates
+from private numerical certification.
 
 ## 1. Authority And Evidence Boundary
 
@@ -45,10 +48,11 @@ Source inspection at repository revision `e6febe3` establishes that:
 * The project already pins `num-bigint = 0.4.8`. No new dependency, network
   access, asset provisioning, Python support or separate tool project is needed.
 
-All pseudocode below is a target algorithm. The proofs and algebraic fixture
-certificates are document-level mathematics; no new oracle run, MPFR result,
-test, benchmark, allocation trace or implementation certification is claimed.
-The existing logarithm scratch constant is not a bound for this algorithm.
+The pseudocode and proofs below define the mathematical algorithm; the current
+private source and executable certificates are mapped by the evidence links
+above. Document-level mathematics alone is not a test run or certification, and
+no new MPFR result, benchmark or allocation trace is claimed here. The existing
+logarithm scratch constant is not a bound for this algorithm.
 
 ## 2. Exact Operand And Display Contract
 
@@ -1008,8 +1012,10 @@ All policies below default to scale 0, Keep trailing zeros, absent affixes.
 `D/S/E` mean Decimal/Scientific/Engineering; `F(d)` fractional and `G(a)`
 significant. Hex words are the exact `f64::from_bits` input, not approximate
 decimal exponents. These are **mathematically specified golden expectations**,
-with certificates below; executable root-oracle cross-checks remain pending.
-They are not fresh MPFR-generated data.
+with certificates below. The implemented exact/symbolic vectors and 23 fractional
+root/algebraic cross-checks are recorded in `docs/certified-log10-conversion.md`;
+owner-set/font/composition/public-output integration remains separately staged.
+These are not MPFR-generated inverse-power data.
 
 ### 11.1 Fractional Values, Scaling And Whole-Value Precision
 
@@ -1146,7 +1152,8 @@ At `p=512`, `C4<2^30`, giving a one-sided physical error below
 rejecting 128; a source realization reaching another successful precision would
 contradict its stated interval bounds. A budget refusal before that decision is
 still fatal and supplies no label. This is an analytic precision certificate,
-not a report of an executed refinement trace.
+not by itself an executed refinement trace. The current observed `128 -> 256`
+trace is recorded separately in `docs/certified-log10-conversion.md`.
 
 ### 11.5 Historical Actual-Visit Boundary Fixtures (Superseded)
 
@@ -1235,9 +1242,11 @@ specified. There is no unresolved product choice or deferred “prove it” step
 The stated third-party allocation boundary is the existing resource-contract
 boundary, not an invented promise to make an infallible dependency fallible.
 
-What remains is implementation and observation: source realizing this schedule,
-its allocation/materialization census, independently executable certificates,
-focused caller tests, intentional output review and actual compiler evidence.
+The private source, real buffer/materialization census, independently executable
+certificates and scoped compiler/test evidence are now recorded in
+`docs/certified-log10-conversion.md`. Consumer/default transport, public policy,
+font/cache/refusal propagation and integrated frozen-output evidence remain the
+spec93 integration owners.
 An implementation that changes a recurrence, precision rule, first-party loop,
 capacity policy or dependency boundary must reconcile its proof and admissions
 with this document before claiming certification. Code validation must use the

@@ -6,8 +6,12 @@
 
 use num_bigint::{BigInt, BigUint, Sign};
 
-use super::decimal::{NumericNotation, ResolvedFormat, ResolvedPrecision, RoundedDecimal};
+use super::decimal::{
+    DecimalBuffer, NumericNotation, ResolvedFormat, ResolvedPrecision, RoundedDecimal,
+};
 use crate::{Error, Result};
+
+pub(crate) mod certified;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Log10Operand {
@@ -25,7 +29,7 @@ pub(crate) struct PowerPlan {
     pub(crate) quantum: BigInt,
     pub(crate) multiplier: BigInt,
     pub(crate) zero: bool,
-    pub(crate) output: String,
+    pub(crate) output: DecimalBuffer,
 }
 
 impl Log10Operand {
@@ -154,10 +158,20 @@ impl Log10Operand {
             .ok_or_else(|| {
                 Error::Render("Log10 presentation output length is not representable".into())
             })?;
-        let mut output = String::new();
-        output.try_reserve_exact(capacity).map_err(|error| {
-            Error::Render(format!("Log10 presentation output reservation: {error}"))
-        })?;
+        let integer_bits = if self.fraction.bits() == 0 || zero || multiplier.sign() == Sign::Minus
+        {
+            1025
+        } else {
+            usize::try_from(&multiplier)
+                .ok()
+                .and_then(|power| power.checked_mul(4))
+                .and_then(|bits| bits.checked_add(5))
+                .map(|bits| bits.max(1025))
+                .ok_or_else(|| {
+                    Error::Render("Log10 coefficient bit length is not representable".into())
+                })?
+        };
+        let output = DecimalBuffer::reserve(capacity, integer_bits)?;
         Ok(PowerPlan {
             quantum,
             multiplier,
@@ -166,25 +180,16 @@ impl Log10Operand {
         })
     }
 
-    pub(crate) fn format_integral(&self, format: &ResolvedFormat<'_>) -> Result<String> {
-        if self.fraction.bits() != 0 {
-            return Err(Error::Render(
-                "nonintegral Log10 presentation requires certified mantissa bounds".into(),
-            ));
-        }
-        let plan = self.plan(format)?;
-        // A one and a symbolic zero run represent the exact physical power.
-        // Never construct 10^abs(n), even after a successful output reservation.
-        RoundedDecimal {
+    pub(super) fn symbolic(&self, plan: &PowerPlan) -> Option<RoundedDecimal> {
+        (self.fraction.bits() == 0 || plan.zero).then(|| RoundedDecimal {
             negative: false,
             coefficient: BigUint::from(u8::from(!plan.zero)),
             exponent: if plan.zero {
-                plan.quantum
+                plan.quantum.clone()
             } else {
                 self.decade.clone()
             },
-        }
-        .emit_reserved(format, plan.output)
+        })
     }
 }
 
