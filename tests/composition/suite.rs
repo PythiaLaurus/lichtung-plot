@@ -13,4 +13,5 @@ use support::*;
 
 mod canvases;
 mod facets;
+mod foundations;
 mod themes;

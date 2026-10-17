@@ -24,7 +24,9 @@ typed RGBA/selector behavior and actual verification. Complete public Theme/font
 scale construction is now complete; `../docs/complete-theme-foundations.md`
 records the atomic caller retirement, pre-font capacity and public API evidence.
 The narrow heading-instruction leaf is complete with frozen-scope evidence in
-`../docs/heading-alignment.md`; spec93 records the public custom-value closure.
+`../docs/heading-alignment.md`. Public custom-value closure is complete in
+`../docs/public-foundation-closure.md`, closing the immutable foundation umbrella.
+Spec93 records the following public interval and sizing cutovers.
 `../docs/theme-consumer-closure.md` reconciles actual owners and identities. New unit tests must
 replace existing tests in the same logical change without increasing the
 discovered count; AGENTS.md and spec90 own this continuing repository rule.

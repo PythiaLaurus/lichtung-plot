@@ -1,8 +1,7 @@
 # T6 — Public Foundations And Scientific Presentation
 
-**Status**: IN PROGRESS — private foundations, consumer resolution, public exact
-styles, complete public Theme construction and heading instructions are complete;
-public custom-value foundation closure is next.
+**Status**: IN PROGRESS — immutable public foundations and their complete
+custom-value closure are complete; public tick intervals and root sizing follow.
 
 **Current execution checkpoint:** the user-authorized resumption completed the
 mark/annotation leaf, T6B1d4d, and the private-value umbrella T6B1. Evidence is in
@@ -15,7 +14,9 @@ evidence in `../docs/exact-element-styles.md`. The complete public Theme/font/sc
 cutover is complete, with typed construction, retirement and pre-font capacity
 evidence in `../docs/complete-theme-foundations.md`. Narrow heading instructions
 are complete, with precedence and frozen-root evidence in
-`../docs/heading-alignment.md`. Public custom-value foundation closure follows.
+`../docs/heading-alignment.md`. Public custom-value foundation closure is complete
+with external construction/owner/contrast/scale evidence in
+`../docs/public-foundation-closure.md`. This completes T6B.
 The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
@@ -94,7 +95,7 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6A | COMPLETE | T6P | Public foundation/caller/ledger census and construction design |
 | T6A1 | COMPLETE | T6P | Current export/style/owner/caller/deletion census in `docs/t6a1-public-cutover-census.md`; `docs(api): map public cutovers and consumers` |
 | T6A2 | COMPLETE | T6A1 | Validated construction, fields, metrics, owners and future fixtures in `94_T6_FOUNDATION_CONSTRUCTION.md`; `docs(theme): pin validated public component construction` |
-| T6B | IN PROGRESS | T6A | Immutable theme, color, font, scale and exact-style migration |
+| T6B | COMPLETE | T6A | Immutable theme, color, font, scale and exact-style migration |
 | T6B1 | COMPLETE | T6A | Validated color/font and component values in the single private representation; `refactor(theme): retain validated foundational values` |
 | T6B1a | COMPLETE | T6A | One Color/OpaqueColor paint representation and private channel/hex validation; `refactor(color): retain validated foundational paint values` |
 | T6B1b | COMPLETE | T6B1a | Typed font preferences and complete role-stack inputs; `refactor(font): retain validated role font stacks` |
@@ -122,7 +123,7 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6B3 | COMPLETE | T6B2 | Exact element Color/alpha replacement and repository caller migration; `feat(styles): expose complete RGBA element paints` |
 | T6B4 | COMPLETE | T6B3 | Public complete Theme/components/fonts/scales, built-in constructors and palette/map/gradient attachments; remove closed selectors and old scale representations; `feat(theme): expose immutable theme and scale foundations` |
 | T6B5 | COMPLETE | T6B4 | Expose already implemented title/subtitle instructions and theme caption alignment; `feat(composition): expose independent heading alignment` |
-| T6B6 | PENDING | T6B5 | Public custom-value inheritance, contrast, scale and style evidence; `test(theme): close public foundation precedence` |
+| T6B6 | COMPLETE | T6B5 | Public custom-value inheritance, contrast, scale and style evidence; `test(theme): close public foundation precedence` |
 | T6C | PENDING | T6B | Public root sizing and preferred tick intervals |
 | T6C1 | PENDING | T6B | Opaque validated TickInterval and sealed numeric-axis setters; `feat(axes): expose preferred numeric tick intervals` |
 | T6C2 | PENDING | T6C1 | Automatic defaults, consuming width, exact size and Output dimensions; migrate getters/callers atomically; `feat(layout): expose content-derived root sizing` |
@@ -386,6 +387,17 @@ Five focused library tests, eight existing external contracts, eighty-six
 doctests, strict Clippy, formatting, warning-denied docs and package verification
 pass. Discovery remains 671, including 17 ignored. Public custom-value foundation
 closure is the remaining foundation leaf.
+
+T6B6 evidence: `../docs/public-foundation-closure.md` records public eight-component
+construction, distinct Canvas/facet/TextPanel roles, exact replacement/inheritance,
+independent palette/accents, five-stop mixed-family Shared mapping and complete
+custom contrast through identical same-operation SVG and decoded transparent PNG.
+All fifteen categorical gates compile through actual attachments; custom outline
+alpha conflicts refuse before unavailable fonts. Three existing focused library
+tests, thirty-five distinct external contracts, eighty-six doctests, strict
+Clippy, formatting, warning-denied docs and package verification pass. No library
+tests are added or moved; discovery remains 671, including 17 ignored. This closes
+the public foundation umbrella; interval and sizing cutovers follow.
 
 Use spec03 and spec94's complete `Theme`, `ThemeBuilder`, role components, typed font stack,
 RGBA `Color`, RGB-only `OpaqueColor`, palettes/maps and gradients. Builders are

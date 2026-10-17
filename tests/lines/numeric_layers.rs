@@ -110,10 +110,32 @@ fn point_layer_edits_validate_radius_and_preserve_exact_alpha_endpoints() {
 
 #[test]
 fn automatic_point_layers_follow_an_independent_accent_sequence() {
+    use lichtung_plot::{
+        AccentPalette, CategoricalColorScale, OpaqueColor, QualitativePalette, Theme,
+    };
+    let base = Theme::publication();
+    let marks = base
+        .marks()
+        .clone()
+        .with_accents(
+            AccentPalette::new([OpaqueColor::rgb(19, 43, 71), OpaqueColor::rgb(127, 59, 31)])
+                .unwrap(),
+        )
+        .unwrap();
+    let theme = base.customize().with_marks(marks).build().unwrap();
+    let palette = CategoricalColorScale::from_palette(
+        QualitativePalette::fixed([
+            OpaqueColor::rgb(29, 137, 59),
+            OpaqueColor::rgb(173, 41, 109),
+        ])
+        .unwrap(),
+    );
     let plot = Plot::line(
         lichtung_plot::NumericValues::new("x", [0.0, 1.0, 0.0, 1.0]),
         lichtung_plot::NumericValues::new("y", [1.0, 2.0, 2.0, 3.0]),
     )
+    .theme(theme)
+    .categorical_color_scale(palette)
     .hue(lichtung_plot::CategoryValues::new("cohort", ["a", "a", "b", "b"]).unwrap())
     .markers(false)
     .point_layer(supplemental_point(0.25, 1.5))
@@ -125,7 +147,8 @@ fn automatic_point_layers_follow_an_independent_accent_sequence() {
         .collect::<Vec<_>>();
 
     assert_eq!(points.len(), 2);
-    assert!(points[0].contains("fill=\"#0072B2\"") && points[1].contains("fill=\"#D55E00\""));
+    assert!(points[0].contains("fill=\"#132B47\"") && points[1].contains("fill=\"#7F3B1F\""));
+    assert!(output.contains("stroke=\"#1D893B\"") && output.contains("stroke=\"#AD296D\""));
 }
 
 #[test]

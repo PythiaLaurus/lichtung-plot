@@ -3,7 +3,8 @@
 The renderer retains one complete immutable appearance independently of operation
 state. The following is a source-backed reconciliation of implemented private
 owners, with behavioral evidence in the linked leaf records. Public complete
-construction and exact-style spellings follow their owning API cutovers.
+construction and exact-style spellings were completed by their subsequent
+cutovers; `public-foundation-closure.md` records the external custom-value closure.
 
 ## Complete Component And Consumer Census
 
@@ -84,6 +85,6 @@ Final bounded closure checks pass:
   passes `git diff --check`. No full-suite command or golden repinning is needed
   for this private consumer-reconciliation closure.
 
-Current closed public theme/legacy exact-input spellings remain only until their
-specified atomic public migrations. This closure does not claim public custom
-Theme exposure, new sizing/ticks, numeric certification or sectioned guides.
+This private reconciliation predates the completed public foundation cutovers;
+its test counts describe that recorded revision. The subsequent public evidence
+does not claim new sizing/ticks, numeric certification or sectioned guides.

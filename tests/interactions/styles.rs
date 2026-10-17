@@ -597,21 +597,52 @@ fn shared_canvas_legend_rejects_conflicting_caller_color_mapping() {
 }
 
 #[test]
-fn shared_canvas_legend_rejects_conflicting_point_outline_mapping() {
+fn shared_canvas_legend_rejects_conflicting_custom_outline_alpha_before_fonts() {
+    use lichtung_plot::{Color, FontFamily, FontStack, PointOutlineTheme, RelativeSpacing, Theme};
+    let custom = |alpha| {
+        let base = Theme::publication();
+        let outline = PointOutlineTheme::new(
+            Color::rgba(19, 53, 91, alpha),
+            RelativeSpacing::ratio(3, 10).unwrap(),
+        )
+        .unwrap();
+        let primary = base
+            .marks()
+            .points()
+            .primary()
+            .clone()
+            .with_outline(Some(outline))
+            .unwrap();
+        let points = base.marks().points().clone().with_primary(primary).unwrap();
+        let marks = base.marks().clone().with_points(points).unwrap();
+        base.customize()
+            .with_marks(marks)
+            .with_font_stack(
+                FontStack::new([FontFamily::named("Absent shared-key preflight font").unwrap()])
+                    .unwrap(),
+            )
+            .unwrap()
+            .build()
+            .unwrap()
+    };
     let x = NumericValues::new("x", [1.0, 2.0]);
     let y = NumericValues::new("y", [2.0, 3.0]);
     let series = CategoryValues::new("series", ["Control", "Control"]).unwrap();
-    let outlined = Plot::scatter(x.clone(), y.clone()).hue(series.clone());
-    let plain = Plot::scatter(x, y).hue(series).hide_point_outline();
+    let first = Plot::scatter(x.clone(), y.clone())
+        .hue(series.clone())
+        .theme(custom(73));
+    let second = Plot::scatter(x, y).hue(series).theme(custom(109));
     let canvas = Canvas::grid(1, 2)
         .unwrap()
-        .panel(0, 0, outlined)
+        .panel(0, 0, first)
         .unwrap()
-        .panel(0, 1, plain)
+        .panel(0, 1, second)
         .unwrap()
         .legend_policy(CanvasLegendPolicy::Shared);
 
-    let error = canvas.preflight().unwrap_err().to_string();
+    let error = canvas.preflight().unwrap_err();
+    assert!(matches!(error, lichtung_plot::Error::Render(_)), "{error}");
+    let error = error.to_string();
 
     assert!(error.contains("compatible semantic titles, labels, and styles"));
 }

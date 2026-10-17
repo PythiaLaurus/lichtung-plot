@@ -40,17 +40,27 @@ fn erased_plot_preserves_selected_theme_text_dimensions_and_output() {
 )]
 fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
     use lichtung_plot::{
-        kind, AxisScale, BarPointLayer, BarSpacing, Bounds, CategoryValues, CoefficientInput,
-        Color, ColorDomain, ContinuousColorScale, DumbbellEndpoints, HeatmapAnnotations,
-        HeatmapLayout, HistogramBins, HistogramComposite, HistogramDimensions, HistogramGeometry,
-        HistogramInput, HistogramStat, InteractionStyle, LinePathStyle, NumericValues, PlotKind,
-        PointLayer, QqLine, RaincloudDimensions, RaincloudGeometry, RaincloudInput, RegressionBand,
-        WaterfallLabels,
+        kind, AxisScale, BarPointLayer, BarSpacing, Bounds, CategoricalColorScale, CategoryValues,
+        CoefficientInput, Color, ColorDomain, ContinuousColorScale, DumbbellEndpoints,
+        HeatmapAnnotations, HeatmapLayout, HistogramBins, HistogramComposite, HistogramDimensions,
+        HistogramGeometry, HistogramInput, HistogramStat, InteractionStyle, LinePathStyle,
+        NumericValues, OpaqueColor, PlotKind, PointLayer, QqLine, QualitativePalette,
+        RaincloudDimensions, RaincloudGeometry, RaincloudInput, RegressionBand, WaterfallLabels,
     };
 
     fn exact<K: kind::ExactFamily>(plot: Plot<K>, expected: PlotKind) {
         assert_eq!(plot.kind(), expected);
         assert_eq!(plot.erase().kind(), expected);
+    }
+
+    fn categorical<K: kind::ExactFamily + kind::CategoricalScale>(
+        plot: Plot<K>,
+        expected: PlotKind,
+    ) {
+        let scale = CategoricalColorScale::from_palette(
+            QualitativePalette::fixed([OpaqueColor::rgb(13, 29, 47)]).unwrap(),
+        );
+        exact(plot.categorical_color_scale(scale), expected);
     }
 
     fn numeric(name: &'static str) -> NumericValues {
@@ -76,7 +86,7 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
     )
     .unwrap();
 
-    exact::<kind::Scatter>(Plot::scatter(numeric("x"), numeric("y")), PlotKind::Scatter);
+    categorical::<kind::Scatter>(Plot::scatter(numeric("x"), numeric("y")), PlotKind::Scatter);
     exact::<kind::Histogram>(
         Plot::histogram(HistogramInput::samples(numeric("value")))
             .bins(HistogramBins::Count(4))
@@ -96,7 +106,7 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
         })),
         PlotKind::Histogram,
     );
-    exact::<kind::Density>(Plot::density(numeric("value")), PlotKind::Density);
+    categorical::<kind::Density>(Plot::density(numeric("value")), PlotKind::Density);
     exact::<kind::Qq>(
         Plot::qq(numeric("value")).reference_line(QqLine::Identity),
         PlotKind::Qq,
@@ -105,7 +115,7 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
         Plot::point_interval(category("category"), numeric("estimate"), bounds()),
         PlotKind::PointInterval,
     );
-    exact::<kind::Line>(
+    categorical::<kind::Line>(
         Plot::line(numeric("x"), numeric("y"))
             .point_layer(
                 PointLayer::new(numeric("point x"), numeric("point y"))
@@ -117,15 +127,15 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
             .band(bounds()),
         PlotKind::Line,
     );
-    exact::<kind::Trajectory>(
+    categorical::<kind::Trajectory>(
         Plot::trajectory(numeric("x"), numeric("y"), category("group")),
         PlotKind::Trajectory,
     );
-    exact::<kind::LinePath>(
+    categorical::<kind::LinePath>(
         Plot::line_path(numeric("x"), numeric("y"), category("group")).style(LinePathStyle::Hue),
         PlotKind::LinePath,
     );
-    exact::<kind::Interaction>(
+    categorical::<kind::Interaction>(
         Plot::interaction(
             category("condition"),
             numeric("estimate"),
@@ -177,7 +187,7 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
             ),
         PlotKind::Heatmap,
     );
-    exact::<kind::Bar>(
+    categorical::<kind::Bar>(
         Plot::bar(category("category"), BarInput::estimates(numeric("value")))
             .spacing(BarSpacing::Compact)
             .point_layer(bar_points.clone())
@@ -185,7 +195,7 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
             .significance([pairwise()]),
         PlotKind::Bar,
     );
-    exact::<kind::HorizontalBar>(
+    categorical::<kind::HorizontalBar>(
         Plot::horizontal_bar(category("category"), BarInput::estimates(numeric("value")))
             .spacing(BarSpacing::Comfort)
             .point_layer(bar_points)
@@ -193,25 +203,25 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
             .significance([pairwise()]),
         PlotKind::HorizontalBar,
     );
-    exact::<kind::StackedBar>(
+    categorical::<kind::StackedBar>(
         Plot::stacked_bar(category("category"), numeric("value"), category("group"))
             .significance([pairwise()]),
         PlotKind::StackedBar,
     );
-    exact::<kind::StackedHorizontalBar>(
+    categorical::<kind::StackedHorizontalBar>(
         Plot::stacked_horizontal_bar(category("category"), numeric("value"), category("group"))
             .significance([pairwise()]),
         PlotKind::StackedHorizontalBar,
     );
-    exact::<kind::Boxplot>(
+    categorical::<kind::Boxplot>(
         Plot::boxplot(category("category"), numeric("value")).significance([pairwise()]),
         PlotKind::Boxplot,
     );
-    exact::<kind::Violin>(
+    categorical::<kind::Violin>(
         Plot::violin(category("category"), numeric("value")).significance([pairwise()]),
         PlotKind::Violin,
     );
-    exact::<kind::Raincloud>(
+    categorical::<kind::Raincloud>(
         Plot::raincloud(RaincloudInput::samples(
             category("category"),
             numeric("value"),
@@ -219,7 +229,7 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
         .significance([pairwise()]),
         PlotKind::Raincloud,
     );
-    exact::<kind::Raincloud>(
+    categorical::<kind::Raincloud>(
         Plot::raincloud(RaincloudInput::geometry(RaincloudGeometry {
             dimensions: RaincloudDimensions {
                 category: "category".into(),
@@ -234,11 +244,11 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
         Plot::regression(numeric("x"), numeric("y")).band(RegressionBand::Hidden),
         PlotKind::Regression,
     );
-    exact::<kind::Marginal>(
+    categorical::<kind::Marginal>(
         Plot::marginal(numeric("x"), numeric("y")),
         PlotKind::Marginal,
     );
-    exact::<kind::Matrix>(
+    categorical::<kind::Matrix>(
         Plot::matrix(vec![numeric("x"), numeric("y")]),
         PlotKind::Matrix,
     );
