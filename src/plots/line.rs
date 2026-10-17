@@ -9,6 +9,9 @@ use crate::spec::{AxisDomain, LinePathStyle, PlotRenderContext, PlotRenderResult
 use crate::theme::{AccentColors, CategoryColors};
 use crate::{Error, Plot, PlotKind};
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug)]
 pub(crate) struct PreparedLineInputs {
     pub(crate) panels: Vec<(Option<String>, PreparedLine)>,
@@ -321,8 +324,10 @@ impl PreparedLine {
         for (index, layer) in self.layers.iter().enumerate() {
             if let Some(label) = &layer.legend {
                 crate::data::source::reserve_source(&mut entries, 1)?;
-                let style = chart.point_layers()[index]
-                    .point_style(accent.color(self.primary_accent_slots + index)?)?;
+                let style = chart.point_layers()[index].point_style(
+                    accent.color(self.primary_accent_slots + index)?,
+                    theme.marks.points().supplemental(),
+                );
                 entries.push(
                     LegendEntry::point(chart.point_legend_identity(label)?, style)
                         .without_hue_level(),
@@ -878,13 +883,17 @@ fn project(
     crate::data::source::reserve_source(&mut payload.layers, prepared.layers.len())?;
     let mut label_source: Option<[(f64, f64); 2]> = None;
     for (index, layer) in prepared.layers.iter().enumerate() {
-        let style = chart.point_layers()[index]
-            .point_style(accent.color(prepared.primary_accent_slots + index)?)?;
+        let style = chart.point_layers()[index].point_style(
+            accent.color(prepared.primary_accent_slots + index)?,
+            theme.marks.points().supplemental(),
+        );
         let points = crate::data::source::collect_source(
             layer.points.iter().map(|&(x, y)| Ok(project(x, y))),
         )?;
         let mut text = Vec::new();
         if let Some(labels) = &layer.labels {
+            let appearance = chart.point_layers()[index]
+                .label_appearance(&theme.typography.annotations.point_layer_label)?;
             crate::data::source::reserve_source(&mut text, labels.len())?;
             let x_range = layout.projection.x_range();
             let y_range = layout.projection.y_range();
@@ -912,15 +921,6 @@ fn project(
                 .expect("bounded layer index");
                 let length = usize::try_from(cursor.position()).expect("bounded layer index");
                 let owner = std::str::from_utf8(&buffer[..length]).expect("ASCII layer index");
-                let label_role = &theme.typography.annotations.point_layer_label;
-                let appearance = crate::theme::TextTheme::new(
-                    crate::data::source::copy_font_stack(label_role.stack())?,
-                    label_role.color(),
-                    label_role.font_size(),
-                    label_role.weight(),
-                    label_role.line_height(),
-                )?
-                .with_color(style.color)?;
                 let plan = theme.measure_legacy_appearance_text(
                     label,
                     &appearance,

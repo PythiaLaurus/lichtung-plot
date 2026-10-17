@@ -57,8 +57,13 @@ an independent nonempty aligned numeric x/y dataset; it may represent raw
 observations or any other caller-selected supplemental coordinates and need not
 align with the primary line input. Multiple layers append in call order and
 render over primary ribbons, lines, and markers. Generic faceting rejects them.
-The renderer assigns a deterministic theme-coordinated color and defaults to
-radius 4 and opacity 0.8; callers may selectively override those values. The
+The renderer assigns a deterministic theme-coordinated color and selects the
+theme's supplemental radius and byte alpha (built-ins use 4 and 204). An explicit
+RGB color replaces the mark paint with that opaque color; a separate opacity
+instruction replaces its alpha after one byte quantization. Radius replaces only
+geometry. Point-label text retains its complete theme text role: automatic mark
+color/alpha do not recolor it, explicit color replaces its paint, and explicit
+opacity replaces only its alpha. The
 primary line occupies one palette slot without hue, or one slot per level in its
 resolved hue domain with hue. A Canvas shared legend therefore reserves every
 Canvas-coordinated hue level, including a level absent from that local plot. An

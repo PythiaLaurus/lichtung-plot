@@ -115,9 +115,9 @@ pub struct PointLayer {
     y: NumericValues,
     labels: Option<CategoryValues>,
     legend_label: Option<String>,
-    color: Option<(u8, u8, u8)>,
-    radius: u32,
-    opacity: f64,
+    color: Option<crate::theme::Color>,
+    radius: Option<u32>,
+    alpha: Option<u8>,
 }
 
 /// A complete strict point layer positioned at prepared ordinary-bar centers.
@@ -201,11 +201,12 @@ impl BarPointLayer {
 }
 
 impl PointLayer {
-    /// Construct an owned point layer with renderer-owned styling.
+    /// Construct an owned point layer with owner-theme styling.
     ///
     /// The x/y values may describe raw observations or any other supplemental
     /// coordinates and need not align with the primary line input. They default
-    /// to the next theme-coordinated color, radius 4, and opacity 0.8. Nonempty,
+    /// to the next theme-coordinated color and the theme's supplemental radius
+    /// and alpha (built-ins use radius 4 and alpha 204). Nonempty,
     /// aligned, finite values are validated during chart preflight.
     #[must_use]
     pub fn new(x: NumericValues, y: NumericValues) -> Self {
@@ -215,15 +216,16 @@ impl PointLayer {
             labels: None,
             legend_label: None,
             color: None,
-            radius: 4,
-            opacity: 0.8,
+            radius: None,
+            alpha: None,
         }
     }
 
-    /// Override the automatic theme color with one fixed RGB color.
+    /// Override the automatic theme paint with one opaque RGB color.
+    /// An explicit opacity instruction replaces this color's alpha.
     #[must_use]
     pub fn color(mut self, color: (u8, u8, u8)) -> Self {
-        self.color = Some(color);
+        self.color = Some(crate::theme::color_from_rgb(color));
         self
     }
 
@@ -234,7 +236,7 @@ impl PointLayer {
     /// Returns an error when `radius` is zero.
     pub fn radius(mut self, radius: u32) -> Result<Self, Error> {
         validate_point_radius("point-layer", radius)?;
-        self.radius = radius;
+        self.radius = Some(radius);
         Ok(self)
     }
 
@@ -249,7 +251,7 @@ impl PointLayer {
                 "point-layer opacity must be finite, greater than zero, and at most one; got {opacity}"
             )));
         }
-        self.opacity = opacity;
+        self.alpha = Some(crate::render::backend::quantize_legacy_opacity(opacity)?);
         Ok(self)
     }
 
@@ -292,12 +294,26 @@ impl PointLayer {
     pub(crate) fn point_style(
         &self,
         automatic_color: (u8, u8, u8),
-    ) -> Result<crate::render::backend::PointStyle, Error> {
-        crate::render::backend::PointStyle::plain(
-            self.color.unwrap_or(automatic_color),
-            self.radius,
-        )
-        .with_opacity(self.opacity)
+        defaults: &crate::theme::mark::SupplementalPointTheme,
+    ) -> crate::render::backend::PointStyle {
+        let color = self.color.unwrap_or_else(|| {
+            crate::theme::color_from_rgb(automatic_color).with_alpha(defaults.fill_alpha())
+        });
+        crate::render::backend::PointStyle {
+            color: self.alpha.map_or(color, |alpha| color.with_alpha(alpha)),
+            radius: self.radius.unwrap_or(defaults.radius()),
+            outline: None,
+            shape: crate::PointShape::Circle,
+        }
+    }
+
+    pub(crate) fn label_appearance(
+        &self,
+        role: &crate::theme::TextTheme,
+    ) -> Result<crate::theme::TextTheme, Error> {
+        let paint = self.color.unwrap_or(role.color());
+        role.try_copy()?
+            .with_color(self.alpha.map_or(paint, |alpha| paint.with_alpha(alpha)))
     }
 }
 

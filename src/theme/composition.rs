@@ -15,7 +15,7 @@ macro_rules! spacing_group {
             pub(crate) fn new($($field: RelativeSpacing),+) -> Result<Self> { Ok(Self { $($field),+ }) }
             $(
                 pub(crate) fn $field(&self) -> &RelativeSpacing { &self.$field }
-                #[cfg_attr(not(test), allow(dead_code, reason = "private complete component edits await theme exposure"))]
+                #[allow(dead_code, reason = "private complete component edits await theme exposure")]
                 #[allow(clippy::unnecessary_wraps, reason = "immutable nonnegative relationships have no additional sibling constraint")]
                 pub(crate) fn $edit(mut self, value: RelativeSpacing) -> Result<Self> {
                     self.$field = value; Ok(self)
@@ -66,7 +66,7 @@ pub(crate) struct CompositionTheme {
 macro_rules! owned_fields {
     ($($field:ident => $edit:ident: $ty:ty),+ $(,)?) => { $(
         pub(crate) fn $field(&self) -> &$ty { &self.$field }
-        #[cfg_attr(not(test), allow(dead_code, reason = "private complete component edits await theme exposure"))]
+        #[allow(dead_code, reason = "private complete component edits await theme exposure")]
         #[allow(clippy::unnecessary_wraps, reason = "complete validated inputs have no additional cross-field constraint")]
         pub(crate) fn $edit(mut self, value: $ty) -> Result<Self> { self.$field = value; Ok(self) }
     )+ };
@@ -74,7 +74,7 @@ macro_rules! owned_fields {
 macro_rules! copy_fields {
     ($($field:ident => $edit:ident: $ty:ty),+ $(,)?) => { $(
         pub(crate) fn $field(&self) -> $ty { self.$field }
-        #[cfg_attr(not(test), allow(dead_code, reason = "private complete component edits await theme exposure"))]
+        #[allow(dead_code, reason = "private complete component edits await theme exposure")]
         #[allow(clippy::unnecessary_wraps, reason = "closed alignment inputs have no invalid states")]
         pub(crate) fn $edit(mut self, value: $ty) -> Result<Self> { self.$field = value; Ok(self) }
     )+ };

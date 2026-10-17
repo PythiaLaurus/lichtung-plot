@@ -974,6 +974,8 @@ fn push_deferred_plot_requirements(
     }
     for layer in plot.point_layers() {
         if let Some(labels) = layer.label_values() {
+            let appearance =
+                layer.label_appearance(&theme.typography.annotations.point_layer_label)?;
             for row in 0..labels.len() {
                 let Some(Some(label)) = labels.get(row) else {
                     continue;
@@ -991,7 +993,7 @@ fn push_deferred_plot_requirements(
                         &mut body_index,
                         label,
                         &[],
-                        &theme.typography.annotations.point_layer_label,
+                        &appearance,
                         prepared_stage.as_deref_mut(),
                     )?;
                 }

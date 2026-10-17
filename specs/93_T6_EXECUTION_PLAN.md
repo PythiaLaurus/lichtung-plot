@@ -111,7 +111,7 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6B2c1 | COMPLETE | T6B2b | Retain one effective significance value through text, containing fit and canonical capture; `refactor(annotations): retain effective significance geometry` |
 | T6B2c2 | COMPLETE | T6B2c1 | Resolve selected-role cell, estimate and panel-text annotation metrics; `refactor(annotations): resolve selected-role local spacing` |
 | T6B2d | COMPLETE | T6B2c | General continuous-scale branches, unified presets and common local/shared guides; `refactor(scales): resolve complete continuous mappings` |
-| T6B2e | PENDING | T6B2d | Complete supplemental paint/default resolution and remaining declared-track/cache owners; `refactor(theme): resolve complete owner-local defaults` |
+| T6B2e | COMPLETE | T6B2d | Complete supplemental paint/default resolution and remaining declared-track/cache owners; `refactor(theme): resolve complete owner-local defaults` |
 | T6B2f | PENDING | T6B2e | Reconcile retained components and consumers with focused owner/identity evidence |
 | T6B3 | PENDING | T6B2 | Exact element Color/alpha replacement and repository caller migration; `feat(styles): expose complete RGBA element paints` |
 | T6B4 | PENDING | T6B3 | Public complete Theme/components/fonts/scales, built-in constructors and palette/map/gradient attachments; remove closed selectors and old scale representations; `feat(theme): expose immutable theme and scale foundations` |
@@ -325,6 +325,16 @@ default replaces the old Beeswarm-only source. One source-to-capture/Shared test
 replaces a scale-component edit fixture; discovery stays 671. Twenty-seven focused
 library tests (including the all-25-family lifecycle), sixteen external contracts,
 formatting and strict all-target Clippy pass.
+
+T6B2e evidence: `../docs/supplemental-owner-resolution.md` records optional exact
+PointLayer instructions, theme supplemental defaults, selective complete label
+paint and identical mark/guide styles. Floating opacity storage is removed; the
+current caller setter quantizes once. Font census and final text select the same
+role while preserving radius-relative whole-pixel placement and complete uncut
+ink. Declared Canvas/facet em and complete cache dependencies are source-checked.
+One selected-payload/guide contract replaces the composition edit inventory and
+its helper; discovery stays 671. Four focused library tests, twenty numeric-layer
+contracts, formatting and strict all-target Clippy pass.
 
 Use spec03 and spec94's complete `Theme`, `ThemeBuilder`, role components, typed font stack,
 RGBA `Color`, RGB-only `OpaqueColor`, palettes/maps and gradients. Builders are
