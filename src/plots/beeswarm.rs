@@ -27,7 +27,8 @@ pub(crate) struct PreparedBeeswarm {
     selection: crate::theme::ContinuousColorScale,
     scale: crate::theme::ContinuousColors,
     colorbar_stops: Vec<GradientStop>,
-    values: Vec<String>,
+    values: Option<crate::numeric::set::FormattedSet>,
+    format: Option<std::sync::Arc<crate::numeric::format::NumericFormat>>,
     pub(crate) color_label: String,
 }
 
@@ -143,8 +144,16 @@ pub(crate) fn prepare(
     crate::data::source::sort_source_by(&mut rows, |a, b| {
         a.0.cmp(&b.0).then_with(|| a.3.cmp(&b.3))
     });
-    let values =
-        crate::decorations::legend::descriptor::domain_labels(color_range, selection.center())?;
+    let format = chart.color_label_format_spec().cloned();
+    let values = if chart.continuous_guide_suppressed() {
+        None
+    } else {
+        Some(crate::decorations::legend::descriptor::domain_presentation(
+            color_range,
+            selection.center(),
+            format.as_deref(),
+        )?)
+    };
     let scale = crate::theme::ContinuousColors::selected(color_range, &selection)?;
     let samples = crate::data::source::collect_source(rows.iter().map(|row| Ok(row.2)))?;
     let colorbar_stops = scale.guide_stops(&samples)?;
@@ -155,6 +164,7 @@ pub(crate) fn prepare(
         rows,
         colors,
         values,
+        format,
         scale,
         selection,
         colorbar_stops,
@@ -164,7 +174,9 @@ pub(crate) fn prepare(
 
 impl PreparedBeeswarm {
     pub(crate) fn guide_values(&self) -> &[String] {
-        &self.values
+        self.values
+            .as_ref()
+            .map_or(&[], |numeric| numeric.labels.as_slice())
     }
     pub(crate) fn guide_samples(&self) -> Result<Vec<f64>, Error> {
         crate::data::source::collect_source(self.rows.iter().map(|row| Ok(row.2)))
@@ -178,10 +190,7 @@ impl PreparedBeeswarm {
         &mut self,
         descriptor: &crate::decorations::legend::descriptor::ContinuousDescriptor,
     ) -> Result<(), Error> {
-        let values = crate::decorations::legend::descriptor::domain_labels(
-            descriptor.domain,
-            descriptor.center,
-        )?;
+        let values = Some(descriptor.numeric.try_copy()?);
         let scale =
             crate::theme::ContinuousColors::selected(descriptor.domain, &descriptor.selection)?;
         let colorbar_stops = scale.guide_stops(&self.guide_samples()?)?;
@@ -202,11 +211,38 @@ impl PreparedBeeswarm {
             domain: self.scale.domain(),
             selection: self.selection.clone(),
             missing: None,
+            format: self.format.clone(),
         }
     }
 
     pub(crate) fn guide_labels(&self) -> impl Iterator<Item = &str> {
-        self.values.iter().map(String::as_str)
+        self.guide_values().iter().map(String::as_str)
+    }
+
+    pub(crate) fn guide_descriptor(
+        &self,
+        field: &str,
+    ) -> Result<crate::decorations::legend::descriptor::ContinuousDescriptor, Error> {
+        Ok(
+            crate::decorations::legend::descriptor::ContinuousDescriptor {
+                field: crate::data::source::copy_source_string(field)?,
+                title: crate::data::source::copy_source_string(&self.color_label)?,
+                stops: self.guide_stops()?,
+                selection: self.selection.clone(),
+                center: self.selection.center(),
+                missing: None,
+                domain: self.scale.domain(),
+                exact: self.selection.domain().is_some(),
+                format: self.format.clone(),
+                numeric: self
+                    .values
+                    .as_ref()
+                    .ok_or_else(|| {
+                        Error::Render("Beeswarm guide presentation was suppressed".into())
+                    })?
+                    .try_copy()?,
+            },
+        )
     }
 }
 
@@ -256,24 +292,7 @@ pub(crate) fn measure(
         let guide_scope = context
             .fit_scope()
             .child(crate::layout::AddressRole::OutsideGuideRight, 0)?;
-        let descriptor = crate::decorations::legend::descriptor::ContinuousDescriptor {
-            field: crate::data::source::copy_source_string(
-                chart.color_dimension_key().unwrap_or(""),
-            )?,
-            title: crate::data::source::copy_source_string(&prepared.color_label)?,
-            stops: prepared.guide_stops()?,
-            selection: prepared.selection.clone(),
-            center: prepared.selection.center(),
-            missing: None,
-            domain: prepared.scale.domain(),
-            exact: prepared.selection.domain().is_some(),
-            labels: crate::data::source::collect_source(
-                prepared
-                    .values
-                    .iter()
-                    .map(|label| crate::data::source::copy_source_string(label)),
-            )?,
-        };
+        let descriptor = prepared.guide_descriptor(chart.color_dimension_key().unwrap_or(""))?;
         let (body, guide) = crate::layout::interior::guide::continuous_right(
             &descriptor,
             context.panel,

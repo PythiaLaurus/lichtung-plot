@@ -2712,7 +2712,13 @@ mod tests {
             missing: None,
             domain: (0.0, 20.0),
             exact: false,
-            labels: Vec::new(),
+            format: None,
+            numeric: crate::decorations::legend::descriptor::domain_presentation(
+                (0.0, 20.0),
+                None,
+                None,
+            )
+            .unwrap(),
         };
         std::sync::Arc::get_mut(inputs.heatmap.as_mut().unwrap())
             .unwrap()

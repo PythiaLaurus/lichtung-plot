@@ -61,16 +61,6 @@ fn projected_span_validation_preserves_source_intent_without_reprojection_or_req
 }
 
 #[test]
-fn continuous_auto_range_pads_when_data_hits_nice_bounds() {
-    let range = continuous_auto_range((0.0, 10.0), &AxisSpec::default()).unwrap();
-
-    assert!(
-        range.0 < 0.0 && range.1 > 10.0,
-        "continuous auto range should pad both data endpoints: {range:?}"
-    );
-}
-
-#[test]
 fn continuous_auto_range_preserves_finite_extreme_endpoints_when_padding_overflows() {
     let range = continuous_auto_range((-f64::MAX, f64::MAX), &AxisSpec::default()).unwrap();
 

@@ -6608,8 +6608,10 @@ the current public name stores the one private representation, existing fixed an
 default conversions share its engine, and estimate census reads retained prepared
 sources. Configured private axes and their semantic sets, pre-font units and
 terminal/natural intrinsics are complete in `../docs/configured-numeric-axes.md`.
-Guide/value consumers, remaining identity evidence and public replacement follow
-their scheduled leaves.
+Local/final-Shared guide policy/set coordination is complete in
+`../docs/coordinated-numeric-guides.md`, including early suppressed-child handling
+and canonical natural/local descriptors. Value/total consumers, remaining identity
+evidence and public replacement follow their scheduled leaves.
 
 ENTRY gate is CLOSED by the user's explicit approval of the current-implementation
 assessment and request to plan T6:

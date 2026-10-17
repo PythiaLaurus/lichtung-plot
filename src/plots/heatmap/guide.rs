@@ -16,22 +16,7 @@ pub(super) fn measure(
 
     content_plot: Option<&crate::Plot>,
 ) -> Result<(PanelBox, MeasuredContinuousGuide), PlanError> {
-    let semantics = marks.guide_semantics(theme)?;
-    let descriptor = crate::decorations::legend::descriptor::ContinuousDescriptor {
-        field: crate::data::source::copy_source_string(&marks.color_label)?,
-        title: crate::data::source::copy_source_string(&marks.color_label)?,
-        stops: crate::data::source::collect_source(marks.colorbar_stops.iter().copied().map(Ok))?,
-        center: semantics.selection.center(),
-        selection: semantics.selection,
-        missing: semantics.missing,
-        domain: semantics.domain,
-        exact: true,
-        labels: crate::data::source::collect_source(
-            marks
-                .guide_labels()
-                .map(crate::data::source::copy_source_string),
-        )?,
-    };
+    let descriptor = marks.guide_descriptor(&marks.color_label, theme)?;
     crate::layout::interior::guide::continuous_right(
         &descriptor,
         panel,

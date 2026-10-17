@@ -1,6 +1,84 @@
 use super::*;
 
 #[test]
+fn shared_numeric_guides_resolve_final_sets_and_reject_equal_text_policy_conflicts_before_fonts() {
+    use crate::numeric::{
+        decimal::{NegativeZero, NumericNotation},
+        format::{NumericFormat, NumericPrecision},
+    };
+    let format = NumericFormat::new(NumericNotation::Decimal, NumericPrecision::Fractional(0))
+        .unwrap()
+        .with_suffix(" u")
+        .unwrap();
+    let plot = |values, format| {
+        Plot::heatmap(
+            crate::CategoryValues::new("x", ["a", "b"]).unwrap(),
+            crate::CategoryValues::new("y", ["row", "row"]).unwrap(),
+            crate::NumericValues::new("value", values),
+        )
+        .color_label_format(format)
+    };
+    let first = plot([1.01, 1.02], format.clone());
+    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+    assert!(first
+        .preflight()
+        .unwrap_err()
+        .to_string()
+        .contains("not unique"));
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        0
+    );
+    let canvas = |second| {
+        Canvas::grid(1, 2)
+            .unwrap()
+            .size(1000, 500)
+            .legend_policy(CanvasLegendPolicy::Shared)
+            .panel(0, 0, first.clone())
+            .unwrap()
+            .panel(0, 1, plot([3.1, 3.2], second))
+            .unwrap()
+    };
+    let root = canvas(format.clone()).preflight_plan().unwrap();
+    for source in ["1 u", "3 u"] {
+        assert_eq!(
+            root.plan()
+                .retained_text()
+                .iter()
+                .filter(|(_, text)| text.source == source)
+                .count(),
+            1
+        );
+    }
+    Canvas::grid(1, 1)
+        .unwrap()
+        .size(600, 400)
+        .legend_policy(CanvasLegendPolicy::Hidden)
+        .panel(
+            0,
+            0,
+            plot(
+                [1.01, 1.02],
+                format.clone().with_suffix("\u{10ffff}").unwrap(),
+            ),
+        )
+        .unwrap()
+        .preflight_plan()
+        .unwrap();
+    let different = format.with_negative_zero(NegativeZero::Normalize).unwrap();
+    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+    let error = canvas(different)
+        .preflight_plan()
+        .err()
+        .expect("incompatible complete policy");
+    assert!(error.to_string().contains("numeric format"));
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        0
+    );
+}
+
+#[test]
 #[expect(
     clippy::too_many_lines,
     reason = "one composed scene verifies role-local precedence, construction order and frozen replay"

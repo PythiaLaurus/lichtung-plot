@@ -1204,6 +1204,21 @@ impl Canvas {
             "Canvas distribution/reference semantics",
         )?;
         for (index, plot) in self.panels.iter().enumerate() {
+            let suppressed = plot
+                .as_ref()
+                .filter(|plot| {
+                    matches!(plot.kind(), PlotKind::Heatmap | PlotKind::Beeswarm)
+                        && matches!(
+                            self.legend_policy,
+                            CanvasLegendPolicy::Shared | CanvasLegendPolicy::Hidden
+                        )
+                })
+                .map(|plot| plot.clone().with_suppressed_continuous_guide());
+            let plot = if suppressed.is_some() {
+                &suppressed
+            } else {
+                plot
+            };
             reference.push(
                 match plot.as_ref().filter(|plot| {
                     matches!(
@@ -1408,7 +1423,9 @@ impl Canvas {
                     self.prepare_continuous_shared_guide(&themes, &interiors)?;
                 let shared_guide = match (discrete_shared_guide, continuous_shared_guide) {
                     (Some(guide), None) => Some(PreparedGuideDescriptor::Discrete(guide)),
-                    (None, Some(guide)) => Some(PreparedGuideDescriptor::Continuous(guide)),
+                    (None, Some(guide)) => Some(PreparedGuideDescriptor::Continuous(
+                        crate::data::source::source_arc(guide)?,
+                    )),
                     (None, None) => None,
                     (Some(_), Some(_)) => {
                         return Err(Error::Data(
@@ -1690,7 +1707,7 @@ impl Canvas {
             }
             let (discrete, continuous) = match guide {
                 PreparedGuideDescriptor::Discrete((_, entries)) => (Some(entries), None),
-                PreparedGuideDescriptor::Continuous(guide) => (None, Some(&guide.labels)),
+                PreparedGuideDescriptor::Continuous(guide) => (None, Some(&guide.numeric.labels)),
             };
             let labels = discrete
                 .into_iter()

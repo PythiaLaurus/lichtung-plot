@@ -121,10 +121,6 @@ fn scoped_guide<'a, T>(panels: &'a [(Option<String>, T)], plot: &Plot) -> Result
 
 /// The prepared scope owns the guide. No panel assignment or edge trial occurs
 /// while this intrinsic input is retained.
-#[expect(
-    clippy::too_many_lines,
-    reason = "both continuous families transport their complete retained selection and owner-local guide operands"
-)]
 pub(crate) fn guided_preference(
     plot: &Plot,
     inputs: &super::PreparedInteriorInputs,
@@ -137,92 +133,27 @@ pub(crate) fn guided_preference(
         if plot.continuous_guide_suppressed() {
             return Ok(None);
         }
-        let descriptor =
-            match plot.kind() {
-                PlotKind::Heatmap => {
-                    let prepared = inputs.heatmap.as_ref().ok_or_else(|| {
-                        Error::Render("scoped Heatmap guide preference is missing".into())
-                    })?;
-                    let marks = scoped_guide(&prepared.panels, plot)?;
-                    let semantics = marks.guide_semantics(theme)?;
-                    let values = marks.guide_values();
-                    let indices: &[usize] =
-                        if semantics.domain.0.to_bits() == semantics.domain.1.to_bits() {
-                            &[0]
-                        } else if semantics.selection.center().is_some_and(|center| {
-                            center > semantics.domain.0 && center < semantics.domain.1
-                        }) {
-                            &[0, 2, 1]
-                        } else {
-                            &[0, 1]
-                        };
-                    ContinuousDescriptor {
-                        field: crate::data::source::copy_source_string(
-                            plot.color_dimension_key().unwrap_or(""),
-                        )?,
-                        title: crate::data::source::copy_source_string(&marks.color_label)?,
-                        stops: crate::data::source::collect_source(
-                            semantics
-                                .selection
-                                .stops()?
-                                .iter()
-                                .map(|s| Ok(s.backend_stop())),
-                        )?,
-                        center: semantics.selection.center(),
-                        selection: semantics.selection,
-                        missing: semantics.missing,
-                        domain: semantics.domain,
-                        exact: plot
-                            .continuous_color_scale_spec()
-                            .and_then(crate::ContinuousColorScale::domain)
-                            .is_some(),
-                        labels: crate::data::source::collect_source(indices.iter().map(
-                            |&index| crate::data::source::copy_source_string(&values[index]),
-                        ))?,
-                    }
-                }
-                PlotKind::Beeswarm => {
-                    let prepared = inputs.beeswarm.as_ref().ok_or_else(|| {
-                        Error::Render("scoped Beeswarm guide preference is missing".into())
-                    })?;
-                    let marks = scoped_guide(&prepared.panels, plot)?;
-                    let semantics = marks.continuous_semantics();
-                    let values = marks.guide_values();
-                    let indices: &[usize] =
-                        if semantics.domain.0.to_bits() == semantics.domain.1.to_bits() {
-                            &[1]
-                        } else {
-                            &[1, 0]
-                        };
-                    ContinuousDescriptor {
-                        field: crate::data::source::copy_source_string(
-                            plot.color_dimension_key().unwrap_or(""),
-                        )?,
-                        title: crate::data::source::copy_source_string(&marks.color_label)?,
-                        stops: crate::data::source::collect_source(
-                            semantics
-                                .selection
-                                .stops()?
-                                .iter()
-                                .map(|s| Ok(s.backend_stop())),
-                        )?,
-                        center: semantics.selection.center(),
-                        selection: semantics.selection,
-                        missing: semantics.missing,
-                        domain: semantics.domain,
-                        exact: plot
-                            .continuous_color_scale_spec()
-                            .and_then(crate::ContinuousColorScale::domain)
-                            .is_some(),
-                        labels: crate::data::source::collect_source(indices.iter().map(
-                            |&index| crate::data::source::copy_source_string(&values[index]),
-                        ))?,
-                    }
-                }
-                _ => unreachable!("continuous kind selected"),
-            };
+        let descriptor = match plot.kind() {
+            PlotKind::Heatmap => {
+                let prepared = inputs.heatmap.as_ref().ok_or_else(|| {
+                    Error::Render("scoped Heatmap guide preference is missing".into())
+                })?;
+                let marks = scoped_guide(&prepared.panels, plot)?;
+                marks.guide_descriptor(plot.color_dimension_key().unwrap_or(""), theme)?
+            }
+            PlotKind::Beeswarm => {
+                let prepared = inputs.beeswarm.as_ref().ok_or_else(|| {
+                    Error::Render("scoped Beeswarm guide preference is missing".into())
+                })?;
+                let marks = scoped_guide(&prepared.panels, plot)?;
+                marks.guide_descriptor(plot.color_dimension_key().unwrap_or(""))?
+            }
+            _ => unreachable!("continuous kind selected"),
+        };
         return Ok(Some(GuidedPreference {
-            descriptor: PreparedGuideDescriptor::Continuous(descriptor),
+            descriptor: PreparedGuideDescriptor::Continuous(crate::data::source::source_arc(
+                descriptor,
+            )?),
             position: crate::LegendPosition::OutsideRight,
         }));
     }
@@ -643,6 +574,10 @@ impl Plot {
 #[cfg(test)]
 mod tests {
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the one-quantum width oracle includes complete configured label and native-guide operands"
+    )]
     fn continuous_natural_and_native_right_width_keep_half_quantum_reserves_exact() {
         use crate::decorations::legend::{
             descriptor::ContinuousDescriptor, MeasuredContinuousGuide,
@@ -672,7 +607,7 @@ mod tests {
             field: "Value".into(),
             title: "Value".into(),
             selection: crate::theme::ContinuousColorScale::sequential(None, None).unwrap(),
-            domain: (0.0, 1.0),
+            domain: (0.000_000_000_012_345, 0.000_000_000_098_765),
             center: None,
             exact: true,
             missing: None,
@@ -680,9 +615,24 @@ mod tests {
                 crate::render::backend::GradientStop::new(0.0, (0, 0, 0)),
                 crate::render::backend::GradientStop::new(1.0, (255, 255, 255)),
             ],
-            labels: vec!["0.000000000012345".into(), "0.000000000098765".into()],
+            format: Some(std::sync::Arc::new(
+                crate::numeric::format::NumericFormat::new(
+                    crate::numeric::decimal::NumericNotation::Decimal,
+                    crate::numeric::format::NumericPrecision::Fractional(15),
+                )
+                .unwrap(),
+            )),
+            numeric: crate::numeric::set::FormattedSet {
+                members: vec![
+                    0.000_000_000_012_345_f64.to_bits(),
+                    0.000_000_000_098_765_f64.to_bits(),
+                ],
+                labels: vec!["0.000000000012345".into(), "0.000000000098765".into()],
+                precision: 15,
+            },
         };
         let label_width = descriptor
+            .numeric
             .labels
             .iter()
             .map(|label| {
@@ -785,7 +735,13 @@ mod tests {
             }),
             domain: (0.0, 1.0),
             exact: false,
-            labels: vec!["0".into(), "1".into()],
+            format: None,
+            numeric: crate::decorations::legend::descriptor::domain_presentation(
+                (0.0, 1.0),
+                None,
+                None,
+            )
+            .unwrap(),
         };
         let (width, height) = super::continuous_preference(
             &descriptor,

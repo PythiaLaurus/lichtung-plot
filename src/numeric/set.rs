@@ -12,6 +12,20 @@ pub(crate) struct FormattedSet {
     pub(crate) precision: u8,
 }
 
+impl FormattedSet {
+    pub(crate) fn try_copy(&self) -> Result<Self> {
+        Ok(Self {
+            members: crate::data::source::collect_source(self.members.iter().copied().map(Ok))?,
+            labels: crate::data::source::collect_source(
+                self.labels
+                    .iter()
+                    .map(|text| crate::data::source::copy_source_string(text)),
+            )?,
+            precision: self.precision,
+        })
+    }
+}
+
 impl NumericFormat {
     pub(crate) fn format_singleton(&self, value: f64, power: bool) -> Result<String> {
         self.format_selected(

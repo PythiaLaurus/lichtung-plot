@@ -4,6 +4,15 @@ use crate::theme::{ColorDomain, ColorStop, ContinuousColorScale, DivergingGradie
 
 #[test]
 fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() {
+    let format = crate::numeric::format::NumericFormat::default()
+        .with_precision(
+            crate::numeric::format::NumericPrecision::AdaptiveFractional { min: 0, max: 2 },
+        )
+        .unwrap()
+        .with_decimal_scale(2)
+        .unwrap()
+        .with_suffix("%")
+        .unwrap();
     let colors = [
         OpaqueColor::rgb(10, 20, 30),
         OpaqueColor::rgb(20, 90, 160),
@@ -33,10 +42,11 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
         crate::NumericValues::new("color", [-2.0, -1.0, 0.0, 1.0, 2.0]),
     )
     .x_limits(-1.0, 5.0)
+    .color_label_format(format.clone())
     .erase();
     let mut prepared = prepare(&source, source.data(), selection.clone()).unwrap();
     assert_eq!(prepared.colors, colors);
-    assert_eq!(prepared.guide_values(), ["-2", "0", "2"]);
+    assert_eq!(prepared.guide_values(), ["-200%", "0%", "200%"]);
     let contributor = ContinuousContributor {
         field: "color".into(),
         title: "color".into(),
@@ -45,6 +55,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
         missing: None,
         domain: prepared.scale.domain(),
         exact: false,
+        format: Some(std::sync::Arc::new(format.clone())),
     };
     let sibling = ContinuousContributor {
         field: "color".into(),
@@ -56,12 +67,13 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
         missing: None,
         domain: (-4.0, 12.0),
         exact: true,
+        format: Some(std::sync::Arc::new(format)),
     };
     let shared = ContinuousContributor::merge([contributor, sibling])
         .unwrap()
         .unwrap();
     prepared.install_shared_domain(&shared).unwrap();
-    assert_eq!(prepared.guide_values(), ["-4", "0", "12"]);
+    assert_eq!(prepared.guide_values(), ["-400%", "0%", "1200%"]);
     assert_eq!(prepared.colors[0], colors[1]);
     assert_eq!(prepared.colors[2], colors[2]);
     assert_eq!(prepared.rows.len(), 5);
@@ -120,5 +132,5 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
         .calls
         .iter()
         .any(|call| matches!(call,
-        crate::decorations::legend::LegendCall::Text(text) if text.plan.source == "0")));
+        crate::decorations::legend::LegendCall::Text(text) if text.plan.source == "0%")));
 }

@@ -2,6 +2,7 @@
 //! measures one assigned guide only after semantic compatibility is established.
 
 use crate::decorations::legend::LegendEntry;
+use crate::numeric::{format::NumericFormat, set::FormattedSet};
 use crate::render::backend::GradientStop;
 use crate::theme::{Color, ColorStop, ContinuousColorScale};
 use crate::{Error, Plot};
@@ -14,7 +15,7 @@ pub(crate) type PreparedDiscreteGuide = (String, Arc<[LegendEntry]>);
 #[derive(Debug)]
 pub(crate) enum PreparedGuideDescriptor {
     Discrete(PreparedDiscreteGuide),
-    Continuous(ContinuousDescriptor),
+    Continuous(Arc<ContinuousDescriptor>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -29,6 +30,7 @@ pub(crate) struct ContinuousSemantics {
     pub domain: (f64, f64),
     pub selection: ContinuousColorScale,
     pub missing: Option<MissingKey>,
+    pub format: Option<Arc<NumericFormat>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -40,6 +42,7 @@ pub(crate) struct ContinuousContributor {
     pub missing: Option<MissingKey>,
     pub domain: (f64, f64),
     pub exact: bool,
+    pub format: Option<Arc<NumericFormat>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -53,7 +56,8 @@ pub(crate) struct ContinuousDescriptor {
     pub missing: Option<MissingKey>,
     pub domain: (f64, f64),
     pub exact: bool,
-    pub labels: Vec<String>,
+    pub format: Option<Arc<NumericFormat>>,
+    pub numeric: FormattedSet,
 }
 
 impl ContinuousContributor {
@@ -119,6 +123,7 @@ impl ContinuousContributor {
             missing: semantics.missing,
             domain: semantics.domain,
             exact,
+            format: semantics.format,
         }))
     }
 
@@ -141,9 +146,10 @@ impl ContinuousContributor {
                     || !same_stops(existing.selection.stops()?, contributor.selection.stops()?)
                     || !same_center
                     || existing.missing != contributor.missing
+                    || existing.format != contributor.format
                 {
                     return Err(Error::Data(
-                        "shared continuous guide contributors have incompatible identity, title, scale, or missing block".into(),
+                        "shared continuous guide contributors have incompatible identity, title, scale, numeric format, or missing block".into(),
                     ));
                 }
                 if contributor.exact {
@@ -184,7 +190,12 @@ impl ContinuousContributor {
                     missing: contributor.missing,
                     domain: contributor.domain,
                     exact: contributor.exact,
-                    labels: Vec::new(),
+                    format: contributor.format,
+                    numeric: FormattedSet {
+                        members: Vec::new(),
+                        labels: Vec::new(),
+                        precision: 0,
+                    },
                 });
             }
             crate::data::source::reserve_source(&mut samples, contributor.samples.len())?;
@@ -207,7 +218,8 @@ impl ContinuousContributor {
             existing.stops =
                 crate::theme::ContinuousColors::selected(existing.domain, &existing.selection)?
                     .guide_stops(&samples)?;
-            existing.labels = domain_labels(existing.domain, existing.center)?;
+            existing.numeric =
+                domain_presentation(existing.domain, existing.center, existing.format.as_deref())?;
         }
         Ok(combined)
     }
@@ -241,7 +253,11 @@ fn same_text(left: &str, right: &str) -> bool {
     true
 }
 
-pub(crate) fn domain_labels(domain: (f64, f64), center: Option<f64>) -> Result<Vec<String>, Error> {
+pub(crate) fn domain_presentation(
+    domain: (f64, f64),
+    center: Option<f64>,
+    format: Option<&NumericFormat>,
+) -> Result<FormattedSet, Error> {
     let mut values = [0.0_f64; 3];
     let count = if same_value(domain.0, domain.1) {
         values[0] = domain.0;
@@ -256,17 +272,25 @@ pub(crate) fn domain_labels(domain: (f64, f64), center: Option<f64>) -> Result<V
         values[count] = domain.1;
         count + 1
     };
-    numeric_labels(&values[..count])
+    numeric_presentation(&values[..count], format)
 }
 
 /// One pre-font numeric grammar and precision search for every continuous guide.
 /// Equal scientific values (including signed zero) may repeat in a family's
 /// retained census; distinct scientific values must have distinct labels.
-pub(crate) fn numeric_labels(values: &[f64]) -> Result<Vec<String>, Error> {
+fn numeric_presentation(
+    values: &[f64],
+    format: Option<&NumericFormat>,
+) -> Result<FormattedSet, Error> {
     if !matches!(values.len(), 1..=3) || values.iter().any(|value| !value.is_finite()) {
         return Err(Error::Data(
             "continuous guide needs one to three finite numeric values".into(),
         ));
+    }
+    if let Some(format) = format {
+        return format.format_set(values, false, true)?.ok_or_else(|| {
+            Error::Data("continuous guide labels are not unique at configured precision".into())
+        });
     }
     for precision in std::iter::once(0).chain(2..=17) {
         let mut labels: Vec<String> = Vec::new();
@@ -283,7 +307,13 @@ pub(crate) fn numeric_labels(values: &[f64]) -> Result<Vec<String>, Error> {
             labels.push(label);
         }
         if unique {
-            return Ok(labels);
+            return Ok(FormattedSet {
+                labels,
+                members: crate::data::source::collect_source(
+                    values.iter().map(|value| Ok(value.to_bits())),
+                )?,
+                precision: u8::try_from(precision).expect("bounded guide precision"),
+            });
         }
     }
     Err(Error::Data(

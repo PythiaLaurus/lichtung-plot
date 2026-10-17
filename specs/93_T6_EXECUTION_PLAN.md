@@ -37,6 +37,8 @@ conversion and retained estimate census unification are complete in
 `../docs/unified-numeric-presentation.md`; configured consumer integration follows.
 Configured private axes, semantic precision sets, pre-font boundary units and
 terminal/natural intrinsics are complete in `../docs/configured-numeric-axes.md`.
+Local/final-Shared guide policies, canonical member lists, suppression and numeric
+set transport are complete in `../docs/coordinated-numeric-guides.md`.
 The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
@@ -701,7 +703,7 @@ compatible effective format. No first-contributor-wins or Canvas format override
 | T6N2c | COMPLETE | T6N2b | Outward mantissa/one-quantum certification, fallible conversion buffers and independent root/algebraic vectors; evidence in `docs/certified-log10-conversion.md` |
 | T6N3 | COMPLETE | T6N2c | One normalized owned private policy, common fixed/default conversion and retained estimate census; evidence in `docs/unified-numeric-presentation.md` |
 | T6N4a | COMPLETE | T6N3 | Numeric/Forest axes, semantic precision sets, alphabets/boundary units, retained intrinsics and natural width; evidence in `docs/configured-numeric-axes.md` |
-| T6N4b | PENDING | T6N4a | Continuous local/shared guides and policy compatibility; `feat(guides): coordinate scientific numeric formats` |
+| T6N4b | COMPLETE | T6N4a | Continuous local/final-Shared policy compatibility, canonical sets, early suppression and retained text; evidence in `docs/coordinated-numeric-guides.md` |
 | T6N4c | PENDING | T6N4b | Adaptive prepared value sets and total shelves; `feat(annotations): format prepared numeric values and totals` |
 | T6N5 | PENDING | T6N4c | Facet/Canvas/cache/domain-feedback identities; `test(numbers): close composed format identities` |
 | T6N6 | PENDING | T6N5 | Public NumericFormat/attachments, remove NumericLabelFormat and migrate callers/current contracts; `feat(api): expose unified scientific numeric formatting` |

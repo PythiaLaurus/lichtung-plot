@@ -63,6 +63,24 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
+    #[cfg_attr(
+        not(test),
+        allow(
+            dead_code,
+            reason = "private guide preparation precedes public numeric cutover"
+        )
+    )]
+    pub(crate) fn color_label_format(
+        mut self,
+        format: crate::numeric::format::NumericFormat,
+    ) -> Self
+    where
+        K: crate::kind::ContinuousColor,
+    {
+        self.color_label_format = Some(std::sync::Arc::new(format));
+        self
+    }
+
     /// Configure whether crowded heatmap category labels are elided or wrapped.
     #[must_use]
     pub fn heatmap_label_fit(mut self, fit: HeatmapLabelFit) -> Self

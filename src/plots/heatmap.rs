@@ -40,13 +40,16 @@ pub(crate) struct HeatmapData {
     label_fit: HeatmapLabelFit,
     value_labels: Vec<Option<String>>,
     value_owners: Vec<Option<String>>,
-    colorbar_values: Vec<String>,
+    colorbar_values: Option<crate::numeric::set::FormattedSet>,
+    color_format: Option<std::sync::Arc<crate::numeric::format::NumericFormat>>,
     pub(crate) color_label: String,
 }
 
 impl HeatmapData {
     pub(crate) fn guide_values(&self) -> &[String] {
-        &self.colorbar_values
+        self.colorbar_values
+            .as_ref()
+            .map_or(&[], |numeric| numeric.labels.as_slice())
     }
     pub(crate) fn guide_semantics(
         &self,
@@ -56,13 +59,10 @@ impl HeatmapData {
         let missing = self
             .has_missing
             .then(|| -> Result<_, Error> {
-                let label = self.colorbar_values.last().ok_or_else(|| {
-                    Error::Render("heatmap missing key has no prepared label".into())
-                })?;
                 Ok(crate::decorations::legend::descriptor::MissingKey {
                     fill: theme.marks.cells().missing_fill(),
                     outline: theme.marks.cells().missing_key_outline().cloned(),
-                    label: crate::data::source::copy_source_string(label)?,
+                    label: crate::data::source::copy_source_string("Missing")?,
                 })
             })
             .transpose()?;
@@ -71,6 +71,7 @@ impl HeatmapData {
                 domain: (domain.minimum, domain.maximum),
                 selection: self.color.selection.clone(),
                 missing,
+                format: self.color_format.clone(),
             },
         )
     }
@@ -97,6 +98,7 @@ impl HeatmapData {
                 center: descriptor.center,
             },
             descriptor.selection.clone(),
+            &descriptor.numeric,
         )
     }
 
@@ -104,6 +106,7 @@ impl HeatmapData {
         &mut self,
         domain: ResolvedColorDomain,
         selection: ContinuousColorScale,
+        numeric: &crate::numeric::set::FormattedSet,
     ) -> Result<(), Error> {
         let color = PreparedHeatmapColor::resolve(domain, selection)?;
         let fills = crate::data::source::collect_source(
@@ -112,12 +115,42 @@ impl HeatmapData {
                 .map(|value| value.map(|value| color.scale.color(value)).transpose()),
         )?;
         let colorbar_stops = color.guide_stops(&self.guide_samples()?)?;
-        let colorbar_values = prepare_guide_labels(domain, self.has_missing)?;
+        let colorbar_values = Some(numeric.try_copy()?);
         self.color = color;
         self.fills = fills;
         self.colorbar_stops = colorbar_stops;
         self.colorbar_values = colorbar_values;
         Ok(())
+    }
+
+    pub(crate) fn guide_descriptor(
+        &self,
+        field: &str,
+        theme: &ResolvedTheme,
+    ) -> Result<crate::decorations::legend::descriptor::ContinuousDescriptor, Error> {
+        let semantics = self.guide_semantics(theme)?;
+        Ok(
+            crate::decorations::legend::descriptor::ContinuousDescriptor {
+                field: crate::data::source::copy_source_string(field)?,
+                title: crate::data::source::copy_source_string(&self.color_label)?,
+                stops: crate::data::source::collect_source(
+                    self.colorbar_stops.iter().copied().map(Ok),
+                )?,
+                center: semantics.selection.center(),
+                selection: semantics.selection,
+                missing: semantics.missing,
+                domain: semantics.domain,
+                exact: self.color.selection.domain().is_some(),
+                format: semantics.format,
+                numeric: self
+                    .colorbar_values
+                    .as_ref()
+                    .ok_or_else(|| {
+                        Error::Render("Heatmap guide presentation was suppressed".into())
+                    })?
+                    .try_copy()?,
+            },
+        )
     }
 }
 
@@ -847,15 +880,11 @@ fn analyze_intrinsics(
 
 impl HeatmapData {
     pub(crate) fn guide_labels(&self) -> impl ExactSizeIterator<Item = &str> {
-        self.colorbar_values[..self.colorbar_values.len() - usize::from(self.has_missing)]
-            .iter()
-            .map(String::as_str)
+        self.guide_values().iter().map(String::as_str)
     }
 
     pub(crate) fn missing_guide_label(&self) -> Option<&str> {
-        self.has_missing
-            .then(|| self.colorbar_values.last().map(String::as_str))
-            .flatten()
+        self.has_missing.then_some("Missing")
     }
 
     pub(crate) fn annotation_labels(
@@ -1331,7 +1360,16 @@ pub(crate) fn prepare<'a>(
             Ok(Some(owner))
         },
     ))?;
-    let colorbar_values = prepare_guide_labels(domain, has_missing)?;
+    let color_format = chart.color_label_format_spec().cloned();
+    let colorbar_values = if chart.continuous_guide_suppressed() {
+        None
+    } else {
+        Some(crate::decorations::legend::descriptor::domain_presentation(
+            (domain.minimum, domain.maximum),
+            domain.center,
+            color_format.as_deref(),
+        )?)
+    };
     let mut prepared = HeatmapData {
         color_label: chart.prepare_color_label(None)?,
         layout: heatmap_layout,
@@ -1339,6 +1377,7 @@ pub(crate) fn prepare<'a>(
         value_labels,
         value_owners,
         colorbar_values,
+        color_format,
         x_levels,
         y_levels,
         cells,
@@ -1351,21 +1390,6 @@ pub(crate) fn prepare<'a>(
     };
     prepared.colorbar_stops = prepared.color.guide_stops(&prepared.guide_samples()?)?;
     Ok(prepared)
-}
-
-fn prepare_guide_labels(
-    domain: ResolvedColorDomain,
-    has_missing: bool,
-) -> Result<Vec<String>, Error> {
-    let mut labels = crate::decorations::legend::descriptor::domain_labels(
-        (domain.minimum, domain.maximum),
-        domain.center,
-    )?;
-    if has_missing {
-        crate::data::source::reserve_source(&mut labels, 1)?;
-        labels.push(crate::data::source::copy_source_string("Missing")?);
-    }
-    Ok(labels)
 }
 
 fn validate_options(chart: &Plot) -> Result<(), Error> {

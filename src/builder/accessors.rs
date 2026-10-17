@@ -1112,6 +1112,12 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.suppress_continuous_guide
     }
 
+    pub(crate) fn color_label_format_spec(
+        &self,
+    ) -> Option<&std::sync::Arc<crate::numeric::format::NumericFormat>> {
+        self.color_label_format.as_ref()
+    }
+
     pub(crate) const fn parent_owns_axis_gutters(&self) -> bool {
         matches!(self.axis_gutter_owner, super::AxisGutterOwner::Composition)
     }

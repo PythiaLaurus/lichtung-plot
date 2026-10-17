@@ -24,6 +24,9 @@ pub(crate) struct MeasuredContinuousGuide {
     title: PlacedText,
     labels: Vec<PlacedText>,
     missing: Option<(PanelBox, FillStyle, PlacedText)>,
+    format: Option<std::sync::Arc<crate::numeric::format::NumericFormat>>,
+    members: Vec<u64>,
+    precision: u8,
 }
 
 /// Canonical consequences of complete exact vertical-guide width requirements.
@@ -90,6 +93,7 @@ impl MeasuredContinuousGuide {
         let mut preferred =
             ExactLength::pixels(hard_title.max(title.width().max(title.fit_width())))?;
         for label in descriptor
+            .numeric
             .labels
             .iter()
             .map(String::as_str)
@@ -194,10 +198,10 @@ impl MeasuredContinuousGuide {
         let mut label_plans = Vec::new();
         fit::reserve(
             &mut label_plans,
-            descriptor.labels.len(),
+            descriptor.numeric.labels.len(),
             "continuous guide labels",
         )?;
-        for (index, label) in descriptor.labels.iter().enumerate() {
+        for (index, label) in descriptor.numeric.labels.iter().enumerate() {
             let plan = theme.measure_legacy_appearance_text(
                 label,
                 &theme.typography.guides.legend_label,
@@ -512,6 +516,11 @@ impl MeasuredContinuousGuide {
             title,
             labels,
             missing,
+            format: descriptor.format.clone(),
+            members: crate::data::source::collect_source(
+                descriptor.numeric.members.iter().copied().map(Ok),
+            )?,
+            precision: descriptor.numeric.precision,
         };
         if !measured.labels_have_clearance(horizontal)? {
             return Ok(FitOutcome::Miss(scope.failure(
@@ -595,6 +604,15 @@ impl MeasuredContinuousGuide {
         round: &mut crate::layout::kernel::FeedbackRound,
     ) -> Result<(), Error> {
         self.metrics.source.observe_feedback(round)?;
+        round.observe_count(usize::from(self.format.is_some()))?;
+        if let Some(format) = &self.format {
+            format.observe_feedback(round)?;
+        }
+        round.observe_count(usize::from(self.precision))?;
+        round.observe_count(self.members.len())?;
+        for &value in &self.members {
+            round.observe_number(f64::from_bits(value))?;
+        }
         for value in [
             self.width,
             self.height,
@@ -726,7 +744,9 @@ mod tests {
             }),
             domain: (-2.0, 3.0),
             exact: false,
-            labels: vec!["-2".into(), "0".into(), "3".into()],
+            format: None,
+            numeric: super::super::descriptor::domain_presentation((-2.0, 3.0), Some(0.0), None)
+                .unwrap(),
         }
     }
 
@@ -860,7 +880,13 @@ mod tests {
                 GradientStop::new(0.0, (49, 130, 189)),
                 GradientStop::new(1.0, (49, 130, 189)),
             ],
-            labels: super::super::descriptor::numeric_labels(&[12_345.0]).unwrap(),
+            format: None,
+            numeric: super::super::descriptor::domain_presentation(
+                (12_345.0, 12_345.0),
+                None,
+                None,
+            )
+            .unwrap(),
             missing: None,
             exact: true,
         };
@@ -890,7 +916,7 @@ mod tests {
             assert!(length(&preferred) > length(&compact));
             for guide in [&preferred, &compact] {
                 assert_eq!(guide.labels.len(), 1);
-                assert_eq!(guide.labels[0].plan.source, descriptor.labels[0]);
+                assert_eq!(guide.labels[0].plan.source, descriptor.numeric.labels[0]);
                 assert_eq!(guide.labels[0].plan.style.font_size, 96);
                 assert_eq!(guide.stops, descriptor.stops);
                 let label = &guide.labels[0];
@@ -951,7 +977,12 @@ mod tests {
         descriptor.missing = None;
         descriptor.domain = (-0.01, 100.0);
         descriptor.center = Some(0.0);
-        descriptor.labels = vec!["-0.01".into(), "0".into(), "100".into()];
+        descriptor.numeric = super::super::descriptor::domain_presentation(
+            descriptor.domain,
+            descriptor.center,
+            None,
+        )
+        .unwrap();
         // Sampled gradient stop positions deliberately do not identify the
         // center. Even a stop at one half cannot move scientific value zero.
         descriptor.stops = vec![
@@ -985,7 +1016,12 @@ mod tests {
             assert_eq!(failure.reason.address, scope.address);
         }
         descriptor.domain = (-1.0, 9.0);
-        descriptor.labels = vec!["-1".into(), "0".into(), "9".into()];
+        descriptor.numeric = super::super::descriptor::domain_presentation(
+            descriptor.domain,
+            descriptor.center,
+            None,
+        )
+        .unwrap();
         descriptor.stops[1].offset = 0.05;
         descriptor.stops[2].offset = 0.1;
         for horizontal in [false, true] {
@@ -1251,12 +1287,13 @@ mod tests {
                 }
             })
             .collect::<Vec<_>>();
-        assert_eq!(labels.len(), descriptor.labels.len() + 2);
+        assert_eq!(labels.len(), descriptor.numeric.labels.len() + 2);
         assert_eq!(labels[0], descriptor.title);
         assert_eq!(labels.last().copied(), Some("Missing"));
         assert_eq!(
-            &labels[1..=descriptor.labels.len()],
+            &labels[1..=descriptor.numeric.labels.len()],
             descriptor
+                .numeric
                 .labels
                 .iter()
                 .map(String::as_str)
