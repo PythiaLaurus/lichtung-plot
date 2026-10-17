@@ -2,8 +2,8 @@
 //!
 //! Run with:  cargo run --example 01_quick_start -p lichtung-plot
 //!
-//! Writes `quick_start.svg` to the system temporary directory from an
-//! extensionless base destination.
+//! Writes a content-sized `quick_start.svg` to the system temporary directory
+//! from an extensionless base destination, then reports its frozen dimensions.
 
 use lichtung_plot::{NumericValues, Plot, Theme};
 
@@ -15,11 +15,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .collect();
     let directory = std::env::temp_dir();
     let base_path = directory.join("quick_start");
-    Plot::scatter(NumericValues::new("x", xs), NumericValues::new("y", ys))
+    let output = Plot::scatter(NumericValues::new("x", xs), NumericValues::new("y", ys))
         .theme(Theme::nature())
-        .size(640, 480)
         .svg(&base_path)?;
 
-    println!("wrote {}", directory.join("quick_start.svg").display());
+    println!(
+        "wrote {} ({}×{} CSS pixels)",
+        directory.join("quick_start.svg").display(),
+        output.width(),
+        output.height()
+    );
     Ok(())
 }

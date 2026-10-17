@@ -67,6 +67,25 @@ scene. PNG options can choose different raster dimensions without changing those
 values or redoing layout. Embedded Plot requests do not control Canvas cells;
 only the Canvas root request assigns the composed dimensions.
 
+```rust
+use lichtung_plot::{Canvas, NumericValues, Plot};
+
+let plot = || Plot::scatter(
+    NumericValues::new("dose", [0.0, 1.0, 2.0]),
+    NumericValues::new("response", [1.0, 3.0, 2.0]),
+);
+let output = plot().size(600, 400).width(300).svg("width-controlled")?;
+assert_eq!(output.width(), 300);
+assert!(output.height() > 0);
+let output = Canvas::grid(1, 1)?
+    .panel(0, 0, plot())?
+    .width(300)
+    .size(600, 400)
+    .svg("exact-canvas")?;
+assert_eq!((output.width(), output.height()), (600, 400));
+# Ok::<(), lichtung_plot::Error>(())
+```
+
 ## Themes And Canvases
 
 Canvas owns one root theme and defaults it to Publication, so callers do not

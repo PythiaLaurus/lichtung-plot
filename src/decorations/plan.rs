@@ -1224,9 +1224,9 @@ fn plan_panel_attempt(
     )? {
         crate::layout::fit::FitOutcome::Measured(panel) => panel,
         crate::layout::fit::FitOutcome::Miss(reason) => {
-            // Outside flow is measured against consumed insets. A changed parent
-            // assignment must remeasure that flow before its residual is final.
-            if is_outside(position) && resolved.is_some() {
+            // Content height and outside flow use consumed insets. Changed
+            // gutters must reach their parent before residual height is final.
+            if context.content_height || (is_outside(position) && resolved.is_some()) {
                 round.miss(
                     address,
                     reason.reason.kind,

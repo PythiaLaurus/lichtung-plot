@@ -398,11 +398,87 @@ pub(crate) fn body_preference(
     }
 }
 
+/// Intrinsic horizontal axis/chrome preference before a root chooses its width.
+/// Actual selected-source gutters subsequently replace this estimate via feedback.
+pub(crate) fn horizontal_gutter_preference(
+    plot: &Plot,
+    theme: &ResolvedTheme,
+) -> Result<(f64, f64), Error> {
+    let lengths = theme.axes.spacing().lengths(
+        theme.typography.axes.tick_label.font_size(),
+        theme.typography.axes.axis_title.font_size(),
+    )?;
+    let chrome = if plot.kind() == PlotKind::Matrix {
+        theme.axes.cell_axis_chrome()
+    } else {
+        theme.axes.coordinate_chrome()
+    };
+    let mut label_width = 0.0_f64;
+    let mut include_label = |label: &str| -> Result<(), Error> {
+        if !label.is_empty() {
+            let plan = theme.measure_text(
+                label,
+                &theme.typography.axes.tick_label,
+                PhysicalTextAlignment::End,
+                "natural vertical gutter",
+                false,
+            )?;
+            label_width = label_width.max(plan.width().max(plan.fit_width()));
+        }
+        Ok(())
+    };
+    if let Some(axes) = plot
+        .prepared_axis_inputs()
+        .filter(|_| plot.y_tick_labels_visible())
+    {
+        if let Some(labels) = &axes.display_categories[1] {
+            for label in labels {
+                include_label(label)?;
+            }
+        } else if let Some(ticks) = &axes.specs[1].exact_ticks {
+            for tick in ticks {
+                include_label(&tick.label)?;
+            }
+        } else {
+            for value in [
+                axes.ranges[1].0,
+                f64::midpoint(axes.ranges[1].0, axes.ranges[1].1),
+                axes.ranges[1].1,
+            ] {
+                include_label(&crate::layout::format_guide_label(value, 0)?)?;
+            }
+        }
+    }
+    let edge = theme.panel_edge_length()?;
+    let left = lengths
+        .y_tick_label_gap
+        .add_length(&lengths.y_title_tick_label_gap)
+        .add_length(&lengths.y_title_edge_padding)
+        .add_pixels(theme.typography.axes.axis_title.line_pitch_pixels())?
+        .add_length(&chrome.outward(crate::layout::AxisSide::Left, true)?)
+        .add_length(&edge)
+        .add_pixels(label_width)?;
+    // Matrix's native variable Grid owns its trailing horizontal edge. Its
+    // outer preference estimates only the leading axis column here.
+    if plot.kind() == PlotKind::Matrix {
+        return Ok((crate::theme::AxisLengths::hard(&left)?, 0.0));
+    }
+    let frame = chrome
+        .frame
+        .filter(|frame| frame.sides().right())
+        .map_or(0.0, |frame| f64::from(frame.stroke().width()) / 2.0);
+    let tick = theme
+        .axes
+        .ticks()
+        .map_or(0.0, |ticks| f64::from(ticks.stroke().width()) / 2.0);
+    let right = edge.add_pixels(frame.max(tick))?;
+    Ok((
+        crate::theme::AxisLengths::hard(&left)?,
+        crate::theme::AxisLengths::hard(&right)?,
+    ))
+}
+
 /// Measure natural outer height after width selection, under consumed root feedback.
-#[expect(
-    clippy::too_many_lines,
-    reason = "root text, axes, guide and scientific body compose one sizing request"
-)]
 pub(crate) fn plot_size(
     plot: &Plot,
     inputs: &super::PreparedInteriorInputs,
@@ -417,7 +493,6 @@ pub(crate) fn plot_size(
 
     let hard = plot.intrinsic_body_minimum(theme)?;
     let preference = body_preference(plot, theme, hard)?;
-    let axes = plot.prepared_axis_inputs();
     let lengths = theme.axes.spacing().lengths(
         theme.typography.axes.tick_label.font_size(),
         theme.typography.axes.axis_title.font_size(),
@@ -428,54 +503,8 @@ pub(crate) fn plot_size(
         theme.axes.coordinate_chrome()
     };
     let panel_edge = theme.panel_edge_length()?;
-    let left_outward = common_chrome.outward(crate::layout::AxisSide::Left, true)?;
     let bottom_outward = common_chrome.outward(crate::layout::AxisSide::Bottom, true)?;
-    let chrome = crate::theme::AxisLengths::hard(
-        &lengths
-            .y_tick_label_gap
-            .add_length(&lengths.y_title_tick_label_gap)
-            .add_length(&lengths.y_title_edge_padding)
-            .add_pixels(theme.typography.axes.axis_title.line_pitch_pixels())?
-            .add_length(&left_outward)
-            .add_length(&panel_edge),
-    )?;
-    let mut y_width = 0.0_f64;
-    if let Some(axes) = axes {
-        if let Some(labels) = &axes.display_categories[1] {
-            for label in labels {
-                y_width = y_width.max(
-                    theme
-                        .measure_text(
-                            label,
-                            &theme.typography.axes.tick_label,
-                            PhysicalTextAlignment::End,
-                            "natural category gutter",
-                            false,
-                        )?
-                        .width(),
-                );
-            }
-        } else {
-            for value in [
-                axes.ranges[1].0,
-                f64::midpoint(axes.ranges[1].0, axes.ranges[1].1),
-                axes.ranges[1].1,
-            ] {
-                let label = crate::layout::format_guide_label(value, 0)?;
-                y_width = y_width.max(
-                    theme
-                        .measure_text(
-                            &label,
-                            &theme.typography.axes.tick_label,
-                            PhysicalTextAlignment::End,
-                            "natural numeric gutter",
-                            false,
-                        )?
-                        .width(),
-                );
-            }
-        }
-    }
+    let (initial_left, initial_right) = horizontal_gutter_preference(plot, theme)?;
     let guide = guided_preference(plot, inputs, theme)?;
     let (guide_width, guide_height) = if plot.kind() == PlotKind::Matrix {
         crate::plots::matrix::natural_guide_preference(plot, theme)?
@@ -492,7 +521,7 @@ pub(crate) fn plot_size(
         };
     let horizontal = guide.as_ref().is_some_and(GuidedPreference::horizontal);
     let mut outer_width = theme.root_outer_width(
-        preference.0 + y_width + chrome + if horizontal { 0.0 } else { guide_width },
+        preference.0 + initial_left + initial_right + if horizontal { 0.0 } else { guide_width },
     )?;
     if horizontal {
         outer_width = outer_width.max(theme.root_outer_width(guide_width)?);
@@ -517,13 +546,17 @@ pub(crate) fn plot_size(
     let left = if gutters[0] > 0.0 {
         gutters[0]
     } else {
-        y_width + chrome
+        initial_left
+    };
+    let right = if gutters[1] > 0.0 {
+        gutters[1]
+    } else {
+        initial_right
     };
     // This initial content proposal is not a guide placement. The owning panel
     // trial derives its height from the selected guide edge at this fixed width.
     let body_width =
-        (theme.root_inner_width(f64::from(width))? - left - gutters[1] - ink[0] - ink[1])
-            .max(hard.0);
+        (theme.root_inner_width(f64::from(width))? - left - right - ink[0] - ink[1]).max(hard.0);
     let body_height = plot.natural_body_height(theme, body_width, preference.1)?;
     let sources = [plot.title_text(), plot.subtitle_text(), plot.caption_text()];
     let prose = crate::decorations::title_block::plan::RootTitleBlockPlan::content_reserves(

@@ -2039,8 +2039,10 @@ The C1/C2 implementation checkpoint is now complete: opaque preferred intervals
 are recorded in `../docs/preferred-tick-intervals.md`; one private root request,
 automatic defaults, consuming width and frozen Output dimensions are recorded in
 `../docs/content-derived-root-sizing.md`. Pre-render Plot getters and the Canvas
-universal minimum are retired. The separate C3 leaf owns expanded public
-parent/mode/output closure, without reopening these construction signatures.
+universal minimum are retired. C3's public parent/mode/output closure is complete
+in `../docs/public-sizing-closure.md`, including actual horizontal preference and
+provisional-height repairs. Numeric/sectioned-guide consumers remain the following
+stages, without reopening these construction signatures.
 
 ### Exhaustive Construction And Consumer Fixture Design
 

@@ -9,3 +9,4 @@ mod support;
 use support::*;
 
 mod layout_and_legends;
+mod root_sizing;

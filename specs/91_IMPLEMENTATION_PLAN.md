@@ -29,8 +29,10 @@ The narrow heading-instruction leaf is complete with frozen-scope evidence in
 Public preferred tick intervals are complete with source/pre-font/parent evidence
 in `../docs/preferred-tick-intervals.md`. The public automatic/width/exact root-size
 cutover is complete in `../docs/content-derived-root-sizing.md`, including removal
-of pre-render getters and the Canvas universal minimum. Spec93 records the
-following public parent/output sizing closure.
+of pre-render getters and the Canvas universal minimum. Public parent/output
+sizing closure is complete in `../docs/public-sizing-closure.md`, including actual
+small-root allocation repairs, every family, frozen formats and real >64 MiB
+payloads. Spec93 records the following scientific numeric source refresh.
 `../docs/theme-consumer-closure.md` reconciles actual owners and identities. New unit tests must
 replace existing tests in the same logical change without increasing the
 discovered count; AGENTS.md and spec90 own this continuing repository rule.

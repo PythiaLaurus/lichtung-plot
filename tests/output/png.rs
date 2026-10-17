@@ -148,12 +148,16 @@ fn histogram_density_and_qq_share_svg_png_paths() {
     ] {
         let svg = directory.join(format!("{name}.svg"));
         let png = directory.join(format!("{name}.png"));
-        plot.svg_preserve_text(&svg)
+        let output = plot
+            .svg_preserve_text(&svg)
             .unwrap()
             .png_preview(&png)
             .unwrap();
         assert!(std::fs::read_to_string(svg).unwrap().contains("<svg"));
-        assert_eq!(png_dimensions(&std::fs::read(png).unwrap()), (640, 480));
+        assert_eq!(
+            png_dimensions(&std::fs::read(png).unwrap()),
+            (output.width(), output.height())
+        );
     }
     std::fs::remove_dir_all(directory).unwrap();
 }

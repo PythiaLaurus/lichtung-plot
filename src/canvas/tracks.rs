@@ -211,6 +211,14 @@ pub(super) fn allocate(
                     plot.intrinsic_body_minimum(child_theme)?,
                 )?;
                 let mut width = body.0;
+                if content.is_some_and(|content| content.natural_width) {
+                    let (left, right) =
+                        crate::layout::interior::sizing::horizontal_gutter_preference(
+                            plot,
+                            child_theme,
+                        )?;
+                    width += left + right;
+                }
                 if let Some(content) = content.filter(|content| {
                     content.source.legend_policy == crate::CanvasLegendPolicy::PerPlot
                 }) {

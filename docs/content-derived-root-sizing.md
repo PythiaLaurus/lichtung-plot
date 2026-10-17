@@ -73,6 +73,7 @@ automatic fixtures do not assert an incidental panel or root size.
 Strict Clippy, formatting/whitespace checks, warning-denied docs and offline
 package staging compilation pass (`root-sizing-lint.log`, `root-sizing-docs.log`,
 `root-sizing-package.log`; the formatting and whitespace commands report success).
-The following public sizing closure leaf owns the expanded all-mode parent,
-setter-order and format-local evidence; scientific numeric and sectioned-guide
+The subsequent [public sizing closure](public-sizing-closure.md) completes the
+expanded all-mode parent, setter-order and format-local evidence, including actual
+small-root allocation repairs. Scientific numeric and sectioned-guide
 implementation remain subsequent stages.

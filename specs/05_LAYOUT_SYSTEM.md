@@ -259,6 +259,14 @@ dimensions; an embedded Plot's standalone sizing request does not become a cell
 preference. Facets belong to their one owning Plot. Constraint intervals remain
 private implementation machinery, not additional public sizing modes.
 
+The public root cutover and focused all-mode closure are recorded in
+`docs/content-derived-root-sizing.md` and `docs/public-sizing-closure.md`.
+Standalone and Canvas natural columns share initial horizontal axis/chrome
+preferences; Matrix retains its native trailing-edge owner. A content-height
+residual miss caused by changed measured gutters consumes that named parent
+feedback before becoming terminal. Width remains the one initially chosen value;
+exact-height roots continue to require their actual assigned fit.
+
 Natural preference is bottom-up composition of summaries with traced insets,
 gaps, guide requirements, and scientific panel preferences. For prose, preferred
 width is `max(hard_unbroken_width,min(natural_unwrapped_width,66ch))` in its text

@@ -1,7 +1,8 @@
 # T6 — Public Foundations And Scientific Presentation
 
 **Status**: IN PROGRESS — immutable public foundations, their complete custom-value
-closure and public preferred tick intervals are complete; public root sizing is next.
+closure, public preferred tick intervals and root-sizing closure are complete;
+scientific numeric presentation is next.
 
 **Current execution checkpoint:** the user-authorized resumption completed the
 mark/annotation leaf, T6B1d4d, and the private-value umbrella T6B1. Evidence is in
@@ -19,7 +20,10 @@ with external construction/owner/contrast/scale evidence in
 `../docs/public-foundation-closure.md`. This completes T6B.
 Public preferred tick intervals are also complete, with validated construction,
 actual categorical-axis refusal and source/parent evidence in
-`../docs/preferred-tick-intervals.md`. The root-sizing cutover follows.
+`../docs/preferred-tick-intervals.md`. Public root sizing is complete in
+`../docs/content-derived-root-sizing.md`; all-mode parent/output evidence and the
+actual allocation repairs are complete in `../docs/public-sizing-closure.md`.
+This completes T6C; numeric source refresh follows.
 The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
@@ -42,7 +46,8 @@ must not increase (see `AGENTS.md` and spec90).
 
 `91_IMPLEMENTATION_PLAN.md` owns the umbrella status. This document owns T6's
 substage dependencies, public cutovers, deletion targets and acceptance evidence.
-`03_THEME_SYSTEM.md` and `05_LAYOUT_SYSTEM.md` remain the architectural targets;
+`03_THEME_SYSTEM.md` and `05_LAYOUT_SYSTEM.md` own the current foundations and
+coordinated layout, with remaining presentation work explicitly staged;
 `01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` describe implemented public
 behavior and change with the relevant implementation commit, not this plan.
 
@@ -127,10 +132,10 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6B4 | COMPLETE | T6B3 | Public complete Theme/components/fonts/scales, built-in constructors and palette/map/gradient attachments; remove closed selectors and old scale representations; `feat(theme): expose immutable theme and scale foundations` |
 | T6B5 | COMPLETE | T6B4 | Expose already implemented title/subtitle instructions and theme caption alignment; `feat(composition): expose independent heading alignment` |
 | T6B6 | COMPLETE | T6B5 | Public custom-value inheritance, contrast, scale and style evidence; `test(theme): close public foundation precedence` |
-| T6C | IN PROGRESS | T6B | Public root sizing and preferred tick intervals |
+| T6C | COMPLETE | T6B | Public root sizing and preferred tick intervals |
 | T6C1 | COMPLETE | T6B | Opaque validated TickInterval and sealed numeric-axis setters; `feat(axes): expose preferred numeric tick intervals` |
 | T6C2 | COMPLETE | T6C1 | Automatic defaults, consuming width, exact size and Output dimensions; migrate getters/callers atomically; `feat(layout): expose content-derived root sizing` |
-| T6C3 | PENDING | T6C2 | All modes/parents/setter order/PNG-local output evidence; `test(layout): close public sizing contracts` |
+| T6C3 | COMPLETE | T6C2 | Complete initial axis/chrome preferences, provisional content-height gutters and all-mode parent/output evidence; `fix(layout): compose complete content-sized root frames` |
 | T6N | PENDING | T6C | Unified scientific numeric formatting; leaves below |
 | T6L | PENDING | T6N | One section-aware discrete guide; leaves below |
 | T6Z | PENDING | T6L | Integrated contract, deferred-decision and phase closure |
@@ -423,6 +428,21 @@ Thirty-five focused library tests, four external contracts, ninety-five doctests
 strict Clippy, formatting, warning-denied docs and offline package verification
 pass. Discovery remains 671, including 17 ignored. Expanded public parent/mode
 and PNG-local closure follows in T6C3.
+
+T6C3 evidence: `../docs/public-sizing-closure.md` records complete public roots for
+all twenty-five families and automatic/exact-width Canvas roots for all twenty-four
+admitted children. Actual Forest/Bar failures close shared initial horizontal
+axis/chrome preference and provisional content-height gutter consumption, retaining
+Matrix's native trailing-edge owner. All modes preserve sparse facets, native
+Matrix, separate local/root prose, mixed/all-text Canvas and frozen multi-format
+dimensions. Actual canonical and outlined SVG exceed 64 MiB in all modes while
+retaining all 900,000 coincident points; PNG independently refuses the outlined
+parser payload. Source-axis/area and default target boundaries also pass.
+Twenty-five focused library tests, sixteen distinct external contracts,
+ninety-five doctests, both sizing examples, strict Clippy, formatting,
+warning-denied docs and offline package verification pass. No unit tests are added
+or moved; discovery remains 671, including 17 ignored. T6C is complete; T6N0 owns
+the following actual-input numeric source refresh.
 
 Use spec03 and spec94's complete `Theme`, `ThemeBuilder`, role components, typed font stack,
 RGBA `Color`, RGB-only `OpaqueColor`, palettes/maps and gradients. Builders are

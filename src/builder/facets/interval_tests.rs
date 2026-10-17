@@ -197,7 +197,7 @@ fn interval_rendering_and_exact_precedence_are_cache_independent() {
             .unwrap()
             .panel(0, 1, plot.title("Interval source identity"))
             .unwrap()
-            .size(1000, 480);
+            .width(1000);
         let mut outputs = Vec::new();
         for disabled in [false, true] {
             crate::decorations::plan::children::DISABLE_CHILD_REUSE.with(|flag| flag.set(disabled));
@@ -243,7 +243,12 @@ fn forest_log_interval_is_applied_in_exponent_space_and_exact_ticks_override_it(
             let result = canvas.render_with_backend(&mut backend);
             let work = crate::orchestrator::measurements::finish();
             crate::decorations::plan::children::DISABLE_CHILD_REUSE.with(|flag| flag.set(false));
-            result.unwrap();
+            result.unwrap_or_else(|error| {
+                panic!(
+                    "exact={exact}, disabled={disabled}: {error}; roots={:?}; gutters={:?}",
+                    work.roots, work.gutters
+                )
+            });
             for counter in [
                 crate::orchestrator::measurements::Counter::TickSource,
                 crate::orchestrator::measurements::Counter::TickDistinctList,
@@ -262,12 +267,11 @@ fn forest_log_interval_is_applied_in_exponent_space_and_exact_ticks_override_it(
             assert!(svg.contains("raw exact"));
             assert!(!svg.contains(">0.01</text>"));
         } else {
-            assert!(
-                svg.contains(">0.01</text>")
-                    && svg.contains(">1</text>")
-                    && svg.contains(">100</text>")
-            );
+            // Automatic width may coarsen the complete two-decade preference.
+            // Its integral coarsenings retain exponent zero, never odd decades.
+            assert!(svg.contains(">1</text>"));
             assert!(!svg.contains(">0.1</text>"));
+            assert!(!svg.contains(">10</text>"));
         }
     }
 }
