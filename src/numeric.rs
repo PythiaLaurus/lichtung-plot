@@ -15,32 +15,12 @@
 use crate::Error;
 use num_bigint::BigUint;
 
-// The exact decimal primitive is prepared before its consumer/public cutovers.
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "private decimal core precedes numeric consumer migration"
-    )
-)]
 pub(crate) mod decimal;
-
-#[allow(
-    dead_code,
-    reason = "complete private policy precedes its consumer/public attachments"
-)]
 pub(crate) mod format;
 pub(crate) mod inputs;
 pub(crate) mod profiles;
 pub(crate) mod set;
 
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "private power operand precedes certified consumer migration"
-    )
-)]
 pub(crate) mod power;
 
 #[cfg(test)]

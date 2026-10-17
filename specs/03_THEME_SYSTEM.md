@@ -481,9 +481,8 @@ composition's exact section/entry rule; layer labels never become hue values.
 
 ## Scientific Numeric Presentation
 
-The admitted T6 `NumericFormat` controls numeric labels independently of Theme
-appearance. It replaces current `NumericLabelFormat` at its implementation
-cutover. Fixed fractional/significant precision, scientific/engineering notation,
+The public `NumericFormat` controls numeric labels independently of Theme
+appearance. Fixed fractional/significant precision, scientific/engineering notation,
 decimal-power display scaling including percentage, literal affixes, explicit
 negative-zero/trailing-zero handling and bounded adaptive precision are in scope.
 `06_NUMERIC_PRESENTATION.md` owns construction/attachment/default/set/identity

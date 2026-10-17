@@ -2007,17 +2007,20 @@ mod tests {
                 240,
                 |stage| {
                     let appearance = appearance("Test Sans", TextWeight::Normal);
-                    let format = crate::NumericLabelFormat::new(0)
-                        .unwrap()
-                        .suffix("\u{0301}")
-                        .unwrap();
+                    let format = crate::NumericFormat::new(
+                        crate::NumericNotation::Decimal,
+                        crate::NumericPrecision::Fractional(0),
+                    )
+                    .unwrap()
+                    .with_suffix("\u{0301}")
+                    .unwrap();
                     let mut requirements = Vec::new();
                     let source = if formatted {
                         PreparedTextRequirement::new_with_stage(
                             ComponentAddress::root(),
                             PreparedTextRole::Body,
                             0,
-                            format_args!("{}", format.policy().format_singleton(1.0, false)?),
+                            format_args!("{}", format.format_singleton(1.0, false)?),
                             &[],
                             &appearance,
                             Some(stage),
@@ -2508,16 +2511,9 @@ mod tests {
                 .unwrap(),
             )
             .annotations(crate::HeatmapAnnotations::Values(
-                crate::NumericLabelFormat::from_policy(
-                    crate::numeric::format::NumericFormat::default()
-                        .with_precision(
-                            crate::numeric::format::NumericPrecision::AdaptiveFractional {
-                                min: 0,
-                                max: 2,
-                            },
-                        )
-                        .unwrap(),
-                ),
+                crate::NumericFormat::default()
+                    .with_precision(crate::NumericPrecision::AdaptiveFractional { min: 0, max: 2 })
+                    .unwrap(),
             ))
             .erase();
             let resources = crate::font::canonical::OperationContext::new();
@@ -2654,7 +2650,9 @@ mod tests {
             crate::NumericValues::new("fill", [0.0, 1.0]),
         )
         .annotations(crate::HeatmapAnnotations::Values(
-            crate::NumericLabelFormat::default().precision(2).unwrap(),
+            crate::NumericFormat::default()
+                .with_precision(crate::NumericPrecision::Fractional(2))
+                .unwrap(),
         ))
         .erase();
         let resources = crate::font::canonical::OperationContext::new();
@@ -2748,18 +2746,11 @@ mod tests {
             )),
         )
         .estimate_labels(
-            crate::NumericLabelFormat::from_policy(
-                crate::numeric::format::NumericFormat::default()
-                    .with_precision(
-                        crate::numeric::format::NumericPrecision::AdaptiveFractional {
-                            min: 0,
-                            max: 2,
-                        },
-                    )
-                    .unwrap(),
-            )
-            .suffix("\u{0301} units")
-            .unwrap(),
+            crate::NumericFormat::default()
+                .with_precision(crate::NumericPrecision::AdaptiveFractional { min: 0, max: 2 })
+                .unwrap()
+                .with_suffix("\u{0301} units")
+                .unwrap(),
         )
         .estimate_status([
             crate::EstimateStatus::Estimated,
@@ -2829,7 +2820,7 @@ mod tests {
                 .unwrap(),
             )
             .annotations(crate::HeatmapAnnotations::Values(
-                crate::NumericLabelFormat::default(),
+                crate::NumericFormat::default(),
             ))
             .erase();
             let mut theme = crate::Theme::publication().resolve().unwrap();

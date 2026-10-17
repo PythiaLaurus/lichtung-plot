@@ -2,7 +2,7 @@
 
 **Status**: IN PROGRESS — immutable public foundations, their complete custom-value
 closure, public preferred tick intervals and root-sizing closure are complete;
-scientific numeric presentation is in progress.
+scientific numeric public cutover is complete and its integrated closure is next.
 
 **Current execution checkpoint:** the user-authorized resumption completed the
 mark/annotation leaf, T6B1d4d, and the private-value umbrella T6B1. Evidence is in
@@ -28,13 +28,13 @@ This completes T6C. The numeric source refresh is complete in
 conversion is complete in `../docs/exact-decimal-conversion.md`. The handoff
 records baseline conversion/copy/font/key owners,
 retired accounting paths and canonical guide-list versus natural-adapter index
-drift. Configured numeric consumers and the public replacement remain pending.
+drift. Subsequent evidence below records the configured and public cutovers.
 Exact Forest exponent/symbolic-power implementation is complete in
 `../docs/exact-log10-operands.md`. Private fractional mantissa implementation and
 independent executable certification are complete in
 `../docs/certified-log10-conversion.md`. Normalized private policy/default
 conversion and retained estimate census unification are complete in
-`../docs/unified-numeric-presentation.md`; configured consumer integration follows.
+`../docs/unified-numeric-presentation.md`.
 Configured private axes, semantic precision sets, pre-font boundary units and
 terminal/natural intrinsics are complete in `../docs/configured-numeric-axes.md`.
 Local/final-Shared guide policies, canonical member lists, suppression and numeric
@@ -45,6 +45,8 @@ Complete composed numeric keys and equal-text invalidation are complete in
 `../docs/composed-numeric-identities.md`. Its additional external parent check
 identified an existing automatic shared-header/range-group sizing refusal; the
 separate owning repair is complete in `../docs/coordinated-canvas-sizing.md`.
+The atomic public NumericFormat/discriminant/attachment replacement and complete
+caller/current-contract migration are complete in `../docs/public-numeric-formatting.md`.
 The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
@@ -713,7 +715,7 @@ compatible effective format. No first-contributor-wins or Canvas format override
 | T6N4c | COMPLETE | T6N4b | Adaptive prepared value sets and retained total-window results/refusals; evidence in `docs/prepared-numeric-annotations.md` |
 | T6N5 | COMPLETE | T6N4c | Complete composed numeric keys, equal-text intrinsic/height misses and feedback; evidence in `docs/composed-numeric-identities.md` |
 | T6N5b | COMPLETE | T6N5 | Natural width retains separate coordinated gutter/body/header requirements; evidence in `docs/coordinated-canvas-sizing.md` |
-| T6N6 | PENDING | T6N5b | Public NumericFormat/attachments, remove NumericLabelFormat and migrate callers/current contracts; `feat(api): expose unified scientific numeric formatting` |
+| T6N6 | COMPLETE | T6N5b | Public NumericFormat/attachments, retired wrapper/callers and matching current contracts; evidence in `docs/public-numeric-formatting.md` |
 | T6N7 | PENDING | T6N6 | Scientific conversion/admission/all-surface/public-output evidence; `test(numbers): close scientific presentation contracts` |
 
 Tests must independently cover rounding ties/carries, subnormals/finite extremes,

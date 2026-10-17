@@ -42,10 +42,10 @@ and significant precision, scientific/engineering notation, exact decimal-power
 display scaling including percentage, literal affixes, negative-zero/trailing-zero
 policies and bounded adaptive precision across the actual numeric consumers.
 Configured Forest Log10 ticks format the underlying mathematical value, as
-explicitly selected by the user. This admitted scope is now planned in
-`93_T6_EXECUTION_PLAN.md` T6N and is removed from active deferral immediately.
-The current public `NumericLabelFormat` remains current until its implementation
-cutover; admission does not expose the replacement API early.
+explicitly selected by the user. This admitted scope is implemented by public
+`NumericFormat` and its closed discriminants/attachments; evidence is in
+`../docs/public-numeric-formatting.md`. It is separate from the residual deferred
+capabilities above.
 
 **Review checkpoint**: T7 CLOSURE, before successor planning.
 

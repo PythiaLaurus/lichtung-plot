@@ -729,7 +729,7 @@ fn prepare_model<'a>(
     let value_presentation = chart
         .estimate_labels_spec()
         .map(|format| -> Result<_, Error> {
-            let format = crate::data::source::source_arc(format.policy().try_copy()?)?;
+            let format = crate::data::source::source_arc(format.try_copy()?)?;
             let mut members = Vec::new();
             crate::data::source::reserve_source(&mut members, estimates.iter().flatten().count())?;
             members.extend(estimates.iter().flatten().map(|tuple| tuple.estimate));

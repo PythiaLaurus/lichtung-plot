@@ -1,6 +1,8 @@
 # Numeric Presentation
 
-**Status**: Approved architectural target; non-current until its public cutover.
+**Status**: Current public numeric presentation contract. Exact ordinary and
+certified power conversion, configured consumers and the atomic public replacement
+are implemented; integrated closure evidence follows spec93.
 
 ## Authority And Source Basis
 
@@ -12,10 +14,10 @@ owns the already closed constructor/getter/`with_field` vocabulary. The separate
 `07_LOG10_DISPLAY.md` specification owns the Forest power theorem,
 interval algorithm, termination proof, temporary bounds and independent oracle.
 This document states that primitive's required mathematical interface, not a
-claim that its certification gate has passed.
+substitute for its independent executable certification evidence.
 
-`01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` remain the current public
-contract until the implementation cutover. Appearance and layout authority remain
+`01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` describe the matching public
+contract. Appearance and layout authority remain
 with `03_THEME_SYSTEM.md` and `05_LAYOUT_SYSTEM.md`. Numeric policy is semantic
 presentation, not an appearance component or a new scientific transformation.
 
@@ -43,10 +45,12 @@ The private Forest exponent/symbolic and fractional certification gates are now
 recorded in `docs/exact-log10-operands.md` and `docs/certified-log10-conversion.md`.
 The subsequent private policy/default migration is complete in
 [`docs/unified-numeric-presentation.md`](../docs/unified-numeric-presentation.md):
-the current public wrapper owns the normalized private policy, existing default
-and fixed-value conversions share the core, and estimate census consumes retained
-sources. Configured consumer attachments and the public replacement follow the
-execution plan; the existing public numeric contract is still current.
+the historical public wrapper moved onto one normalized policy and default/value
+conversion core. Configured axes, guides and prepared annotations subsequently
+landed with complete scoped identity; the public replacement now exports that
+same `NumericFormat` directly and removes the wrapper and all repository callers.
+Current API/evidence is in `docs/public-numeric-formatting.md`; earlier documents
+describe their recorded implementation checkpoints.
 
 **Accounting simplification:** spec95 supersedes every historical ledger, fee,
 comparison-charge, quota and charge-delta instruction here. Keep real checked
@@ -339,8 +343,8 @@ the certified mathematical power, through the same presentation engine.
 
 ### Fixed Values And Waterfall Names
 
-Current fixed values delegate to Rust `"{value:.precision$}"` and append a literal
-suffix; migration reproduces this result at the old accepted precisions 0..=12,
+Historical fixed values delegated to Rust `"{value:.precision$}"` and appended a
+literal suffix; the exact engine reproduces that result at precisions 0..=12,
 including -0, subnormals rounded to zero and finite extremes. Public maximum 17
 is a deliberate extension, not an alias for the old usize constructor.
 
@@ -564,9 +568,10 @@ reselection.
 Storage order is not inferred from drawn geometry. At the refreshed baseline,
 `descriptor::domain_labels` already prepares canonical lo/interior-center/hi or a
 single scientific constant for both families; Heatmap appends optional `Missing`
-separately. Native local guides copy those numeric lists in order. Natural
-`guided_preference` still has historical reindexing adapters; the source handoff
-records their required reconciliation. No stop sample, projected label position
+separately. Native local guides copied those numeric lists in order. The historical
+natural `guided_preference` reindexing adapters have since been removed; both
+consumers use the canonical retained descriptor (`docs/coordinated-numeric-guides.md`).
+No stop sample, projected label position
 or arbitrary child label chooses the scientific list. Preserve explicit
 occurrence/index relationships and attribute changed census order/content to its
 actual source migration, not to the old baseline's storage claim.
@@ -993,8 +998,8 @@ example, root export and repository uses; no alias/deprecation/version selector.
 Private format storage must not become dormant public scope. Unsupported surfaces
 have no binding or a pre-font actual-axis rejection, never an ignored format.
 
-Remaining consumer/public implementation and integrated evidence belong to the
-execution plan; the separate proof and executed core certificates own numerical
+The public consumer replacement is complete; integrated evidence closure belongs
+to the execution plan. The separate proof and executed core certificates own numerical
 certification. This document introduces no unresolved numeric product choice or
 authorization to widen scope. Documentation design closure does not mark an
 implementation leaf complete.

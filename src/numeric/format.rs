@@ -2,16 +2,32 @@
 //! views borrow its affixes; adaptive precision is selected by a semantic set.
 
 use super::decimal::{
-    self, NegativeZero, NumericNotation, ResolvedFormat, ResolvedPrecision, TrailingZeros,
+    NegativeZero, NumericNotation, ResolvedFormat, ResolvedPrecision, TrailingZeros,
 };
 use crate::{Error, Result};
 
+/// Exact precision or one uniformly selected precision for a complete numeric set.
+/// Construction through [`NumericFormat`] validates all bounds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum NumericPrecision {
+pub enum NumericPrecision {
+    /// Exactly this many fractional digits, from zero through seventeen.
     Fractional(u8),
+    /// Exactly this many significant digits, from one through seventeen.
     Significant(u8),
-    AdaptiveFractional { min: u8, max: u8 },
-    AdaptiveSignificant { min: u8, max: u8 },
+    /// The smallest common fractional precision distinguishing the complete set.
+    AdaptiveFractional {
+        /// Inclusive lower bound, from zero through seventeen.
+        min: u8,
+        /// Inclusive upper bound, at least `min` and at most seventeen.
+        max: u8,
+    },
+    /// The smallest common significant precision distinguishing the complete set.
+    AdaptiveSignificant {
+        /// Inclusive lower bound, from one through seventeen.
+        min: u8,
+        /// Inclusive upper bound, at least `min` and at most seventeen.
+        max: u8,
+    },
 }
 
 impl NumericPrecision {
@@ -48,8 +64,42 @@ impl NumericPrecision {
     }
 }
 
+/// Immutable, locale-free scientific numeric presentation.
+///
+/// Rounding is nearest with ties to even, after exact decimal scaling. Affixes
+/// are literal: a percent suffix alone does not scale the scientific value.
+/// Adaptive precision is selected uniformly for each complete semantic set,
+/// independently of geometric fit. The default is Decimal/Fractional(2), scale
+/// zero, absent affixes, preserved negative zero and retained trailing zeros.
+///
+/// ```
+/// use lichtung_plot::{NumericFormat, NumericNotation, NumericPrecision, NumericValues, Plot};
+/// let percent = NumericFormat::new(NumericNotation::Decimal, NumericPrecision::Fractional(1))?
+///     .with_decimal_scale(2)?
+///     .with_suffix("%")?;
+/// assert_eq!(percent.decimal_scale(), 2);
+/// let plot = Plot::scatter(NumericValues::new("x", [1.0, 2.0]),
+///                          NumericValues::new("rate", [0.125, 0.875]))
+///     .y_tick_format(percent);
+/// # let _ = plot;
+/// # Ok::<(), lichtung_plot::Error>(())
+/// ```
+///
+/// Fields and the implementation module stay private:
+/// ```compile_fail
+/// use lichtung_plot::NumericFormat;
+/// let _ = NumericFormat::default().decimal_scale;
+/// ```
+/// ```compile_fail
+/// use lichtung_plot::numeric::format::NumericFormat;
+/// ```
+/// Construction edits use `with_field`; inspection does not mutate the value:
+/// ```compile_fail
+/// use lichtung_plot::NumericFormat;
+/// let _ = NumericFormat::default().precision(2);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct NumericFormat {
+pub struct NumericFormat {
     notation: NumericNotation,
     precision: NumericPrecision,
     decimal_scale: i16,
@@ -94,7 +144,8 @@ impl NumericFormat {
         })
     }
 
-    pub(crate) fn new(notation: NumericNotation, precision: NumericPrecision) -> Result<Self> {
+    /// Construct a validated format with scale zero, no affixes, Preserve and Keep.
+    pub fn new(notation: NumericNotation, precision: NumericPrecision) -> Result<Self> {
         let value = Self {
             notation,
             precision,
@@ -104,65 +155,83 @@ impl NumericFormat {
         Ok(value)
     }
 
-    pub(crate) const fn notation(&self) -> NumericNotation {
+    /// The selected decimal/exponent notation.
+    pub const fn notation(&self) -> NumericNotation {
         self.notation
     }
-    pub(crate) const fn precision(&self) -> NumericPrecision {
+    /// The exact precision or complete adaptive bounds.
+    pub const fn precision(&self) -> NumericPrecision {
         self.precision
     }
-    pub(crate) const fn decimal_scale(&self) -> i16 {
+    /// The exact signed decimal display shift, from -324 through 324.
+    pub const fn decimal_scale(&self) -> i16 {
         self.decimal_scale
     }
-    pub(crate) fn prefix(&self) -> Option<&str> {
+    /// Literal text before the sign and number, or absence.
+    pub fn prefix(&self) -> Option<&str> {
         self.prefix.as_deref()
     }
-    pub(crate) fn suffix(&self) -> Option<&str> {
+    /// Literal text immediately after the number, or absence.
+    pub fn suffix(&self) -> Option<&str> {
         self.suffix.as_deref()
     }
-    pub(crate) const fn negative_zero(&self) -> NegativeZero {
+    /// Actual and rounded negative-zero handling.
+    pub const fn negative_zero(&self) -> NegativeZero {
         self.negative_zero
     }
-    pub(crate) const fn trailing_zeros(&self) -> TrailingZeros {
+    /// Fractional trailing-zero handling.
+    pub const fn trailing_zeros(&self) -> TrailingZeros {
         self.trailing_zeros
     }
 
-    pub(crate) fn with_notation(mut self, value: NumericNotation) -> Result<Self> {
+    /// Replace notation while retaining and validating every other field.
+    pub fn with_notation(mut self, value: NumericNotation) -> Result<Self> {
         self.notation = value;
         self.validate()?;
         Ok(self)
     }
 
-    pub(crate) fn with_precision(mut self, value: NumericPrecision) -> Result<Self> {
+    /// Replace precision; fractional bounds are 0..=17 and significant bounds 1..=17.
+    /// Adaptive `min` must not exceed `max`.
+    pub fn with_precision(mut self, value: NumericPrecision) -> Result<Self> {
         self.precision = value;
         self.validate()?;
         Ok(self)
     }
 
-    pub(crate) fn with_decimal_scale(mut self, value: i16) -> Result<Self> {
+    /// Replace the exact decimal display shift within -324..=324.
+    /// This never changes scientific coordinates or color mapping.
+    pub fn with_decimal_scale(mut self, value: i16) -> Result<Self> {
         self.decimal_scale = value;
         self.validate()?;
         Ok(self)
     }
 
-    pub(crate) fn with_prefix(mut self, value: impl Into<String>) -> Result<Self> {
+    /// Replace the literal prefix with nonempty, control-free text.
+    /// Spaces and combining marks are preserved exactly.
+    pub fn with_prefix(mut self, value: impl Into<String>) -> Result<Self> {
         self.prefix = Some(value.into());
         self.validate()?;
         Ok(self)
     }
 
-    pub(crate) fn with_suffix(mut self, value: impl Into<String>) -> Result<Self> {
+    /// Replace the literal suffix with nonempty, control-free text.
+    /// No scaling or spacing is inferred from its contents.
+    pub fn with_suffix(mut self, value: impl Into<String>) -> Result<Self> {
         self.suffix = Some(value.into());
         self.validate()?;
         Ok(self)
     }
 
-    pub(crate) fn with_negative_zero(mut self, value: NegativeZero) -> Result<Self> {
+    /// Replace handling of actual or rounded negative zero.
+    pub fn with_negative_zero(mut self, value: NegativeZero) -> Result<Self> {
         self.negative_zero = value;
         self.validate()?;
         Ok(self)
     }
 
-    pub(crate) fn with_trailing_zeros(mut self, value: TrailingZeros) -> Result<Self> {
+    /// Replace fractional zero trimming; integral place-value zeros are retained.
+    pub fn with_trailing_zeros(mut self, value: TrailingZeros) -> Result<Self> {
         self.trailing_zeros = value;
         self.validate()?;
         Ok(self)
@@ -183,19 +252,6 @@ impl NumericFormat {
             negative_zero: self.negative_zero,
             trailing_zeros: self.trailing_zeros,
         })
-    }
-
-    pub(crate) fn format_ordinary(&self, value: f64) -> Result<String> {
-        let digits = match self.precision {
-            NumericPrecision::Fractional(digits) | NumericPrecision::Significant(digits) => digits,
-            NumericPrecision::AdaptiveFractional { .. }
-            | NumericPrecision::AdaptiveSignificant { .. } => {
-                return Err(Error::Render(
-                    "adaptive numeric formatting requires its complete semantic set".into(),
-                ));
-            }
-        };
-        decimal::format_finite(value, &self.resolve_at(digits)?)
     }
 
     pub(crate) fn generated_alphabet(&self) -> &'static [char] {
@@ -270,7 +326,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn owned_policy_edits_preserve_literal_affixes_and_require_resolved_precision() {
+    fn owned_policy_edits_preserve_literal_affixes_and_semantic_precision_bounds() {
         let format = NumericFormat::new(NumericNotation::Decimal, NumericPrecision::Fractional(2))
             .unwrap()
             .with_decimal_scale(2)
@@ -280,7 +336,7 @@ mod tests {
             .with_suffix("\u{0301} units]")
             .unwrap();
         assert_eq!(
-            format.format_ordinary(0.125).unwrap(),
+            format.format_singleton(0.125, false).unwrap(),
             "[12.50\u{0301} units]"
         );
         let normalized = format
@@ -289,11 +345,11 @@ mod tests {
             .unwrap();
         assert_ne!(format, normalized);
         assert_eq!(
-            format.format_ordinary(0.125).unwrap(),
-            normalized.format_ordinary(0.125).unwrap()
+            format.format_singleton(0.125, false).unwrap(),
+            normalized.format_singleton(0.125, false).unwrap()
         );
         assert_eq!(
-            normalized.format_ordinary(-0.000_001).unwrap(),
+            normalized.format_singleton(-0.000_001, false).unwrap(),
             "[0.00\u{0301} units]"
         );
         let engineering = normalized
@@ -306,11 +362,11 @@ mod tests {
             .with_trailing_zeros(TrailingZeros::Trim)
             .unwrap();
         assert_eq!(
-            engineering.format_ordinary(999.5).unwrap(),
+            engineering.format_singleton(999.5, false).unwrap(),
             "[1e3\u{0301} units]"
         );
         assert_eq!(
-            format.format_ordinary(-0.0).unwrap(),
+            format.format_singleton(-0.0, false).unwrap(),
             "[-0.00\u{0301} units]"
         );
 
@@ -318,14 +374,10 @@ mod tests {
             .clone()
             .with_precision(NumericPrecision::AdaptiveFractional { min: 1, max: 3 })
             .unwrap();
-        assert!(matches!(
-            adaptive.format_ordinary(0.125),
-            Err(Error::Render(_))
-        ));
         assert!(adaptive.resolve_at(0).is_err());
         assert!(adaptive.resolve_at(4).is_err());
         assert_eq!(
-            decimal::format_finite(0.125, &adaptive.resolve_at(1).unwrap()).unwrap(),
+            adaptive.format_singleton(0.125, false).unwrap(),
             "[12.5\u{0301} units]"
         );
 

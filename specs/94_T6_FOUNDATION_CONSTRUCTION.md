@@ -1890,14 +1890,15 @@ are **B3**, not a late unassigned B4/L task. No Color input is invented.
 
 ## 12. Adjacent Approved Policy Signature Handoff
 
-These policies are not theme fields. TickInterval is public and complete; the
-remaining implementation/actual-input closure gates stay with spec93. This
+These policies are not theme fields. TickInterval and NumericFormat are public;
+remaining section/integrated closure gates stay with spec93. This
 section closes getter naming and validated
 construction inputs without claiming numerical certification or section evidence.
 Detailed design is closed in `06_NUMERIC_PRESENTATION.md`,
 `07_LOG10_DISPLAY.md` and `08_DISCRETE_GUIDES.md`. Later source refreshes verify
-their transport/mapping to migrated foundations; mathematical implementation and
-new output/test evidence remain pending.
+their transport/mapping to migrated foundations. Exact numeric implementation and
+independent certification are complete; current public evidence is in
+`../docs/public-numeric-formatting.md`. Legend composition remains separately staged.
 
 ```rust,ignore
 impl TickInterval {

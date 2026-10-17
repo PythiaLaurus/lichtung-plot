@@ -109,6 +109,34 @@ steps. If the source cannot fit, bounded local coarsening still applies. Exact
 `x_ticks`/`y_ticks` take precedence in either setter order; categorical axes reject
 numeric interval instructions.
 
+## Scientific Numeric Labels
+
+`NumericFormat` controls generated numeric ticks, continuous guide numbers,
+Heatmap cell values, point-only Coefficient estimate labels and Waterfall totals.
+Choose Decimal/Scientific/Engineering notation, exact or adaptive fractional/
+significant precision, literal affixes and zero handling. Decimal scaling is
+explicit; a percent suffix alone only appends `%`.
+
+```rust
+use lichtung_plot::{NumericFormat, NumericNotation, NumericPrecision, NumericValues, Plot};
+
+let percent = NumericFormat::new(NumericNotation::Decimal, NumericPrecision::Fractional(1))?
+    .with_decimal_scale(2)?
+    .with_suffix("%")?;
+let plot = Plot::scatter(
+    NumericValues::new("time", [1.0, 2.0]),
+    NumericValues::new("fraction", [0.125, 0.875]),
+).y_tick_format(percent);
+# let _ = plot;
+# Ok::<(), lichtung_plot::Error>(())
+```
+
+Adaptive precision is uniform for a complete semantic set, independently of fit.
+Exact tick strings take precedence. Scientific values and colors are unchanged;
+configured Forest Log10 labels use certified mathematical powers of their tick
+exponents. See [numeric format construction and consumers](docs/public-numeric-formatting.md)
+and [`examples/05_numeric_formats.rs`](examples/05_numeric_formats.rs).
+
 ## Fonts
 
 Outlined SVG and PNG generation resolve installed system fonts from this

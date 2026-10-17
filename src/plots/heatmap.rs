@@ -1347,7 +1347,7 @@ pub(crate) fn prepare<'a>(
 
     let value_presentation =
         if let HeatmapAnnotations::Values(format) = chart.heatmap_annotations_spec() {
-            let format = crate::data::source::source_arc(format.policy().try_copy()?)?;
+            let format = crate::data::source::source_arc(format.try_copy()?)?;
             let mut members = Vec::new();
             crate::data::source::reserve_source(&mut members, cells.iter().flatten().count())?;
             members.extend(cells.iter().flatten().copied());

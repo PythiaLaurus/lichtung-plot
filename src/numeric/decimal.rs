@@ -10,10 +10,14 @@ use num_bigint::{BigInt, BigUint, Sign};
 
 use crate::{Error, Result};
 
+/// Decimal-point and exponent spelling for numeric presentation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum NumericNotation {
+pub enum NumericNotation {
+    /// Plain decimal notation, without an exponent.
     Decimal,
+    /// One leading integral digit and a decimal exponent.
     Scientific,
+    /// One to three integral digits and an exponent divisible by three.
     Engineering,
 }
 
@@ -24,15 +28,22 @@ pub(crate) enum ResolvedPrecision {
     Significant(u8),
 }
 
+/// Whether actual or rounded negative zero retains its minus sign.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum NegativeZero {
+pub enum NegativeZero {
+    /// Preserve the source sign, including when rounding produces zero.
     Preserve,
+    /// Display every zero without a minus sign.
     Normalize,
 }
 
+/// Fractional trailing-zero handling after numeric rounding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum TrailingZeros {
+pub enum TrailingZeros {
+    /// Retain the digits required by the selected precision.
     Keep,
+    /// Remove fractional trailing zeros and an empty decimal point.
+    /// Integral place-value zeros are never removed.
     Trim,
 }
 

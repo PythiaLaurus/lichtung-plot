@@ -1,10 +1,12 @@
 # Unified Numeric Presentation Owners
 
-The private normalized policy and existing default/fixed-value consumers now use
+At this recorded private migration checkpoint, the normalized policy and default/fixed-value consumers moved onto
 the exact decimal conversion and common emitter in `src/numeric/decimal.rs`.
-`specs/06_NUMERIC_PRESENTATION.md` owns their semantics. The current public
-`NumericLabelFormat` stores only this private policy: accepted precision remains
-`0..=12`, the default is fixed two decimals, and suffixes remain literal.
+`specs/06_NUMERIC_PRESENTATION.md` owns their semantics. The then-public
+`NumericLabelFormat` stored only this private policy: accepted precision remained
+`0..=12`, the default was fixed two decimals, and suffixes remained literal.
+The later public replacement and wrapper retirement are recorded in
+`public-numeric-formatting.md`.
 
 ## One Owned Policy And Resolved View
 

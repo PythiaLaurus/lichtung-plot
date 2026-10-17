@@ -20,14 +20,14 @@ use crate::layout::AxisSpec;
 use crate::spec::{
     AxisScale, BarSpacing, CategoryOrder, DumbbellEndpoints, FacetSpec, HeatmapAnnotations,
     HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation, HistogramBins, HistogramComposite,
-    HistogramStat, LegendPolicy, LinePathStyle, NumericLabelFormat, PanelTextAnnotation, PlotKind,
-    QqLine, RawOverlay, RegressionBand, WaterfallLabels,
+    HistogramStat, LegendPolicy, LinePathStyle, PanelTextAnnotation, PlotKind, QqLine, RawOverlay,
+    RegressionBand, WaterfallLabels,
 };
 use crate::theme::Theme;
 use crate::Labels;
 use crate::{
     BarInput, BooleanValues, Bounds, CategoryValues, CoefficientInput, HistogramInput,
-    NumericValues, RaincloudInput, SourceRows,
+    NumericFormat, NumericValues, RaincloudInput, SourceRows,
 };
 
 /// One configured semantic plot backed by immutable Rust-native values.
@@ -489,7 +489,7 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     heatmap_annotations: HeatmapAnnotations,
     heatmap_null_row_annotations: Vec<HeatmapNullRowAnnotation>,
     heatmap_highlight: Option<BooleanValues>,
-    estimate_labels: Option<NumericLabelFormat>,
+    estimate_labels: Option<NumericFormat>,
     significance_mark_style: Option<crate::SignificanceMarkStyle>,
     category_orders: CategoryOrders,
     color_by_sign: bool,

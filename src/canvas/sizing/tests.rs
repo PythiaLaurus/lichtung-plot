@@ -11,9 +11,7 @@ fn recorded_heights_require_complete_numeric_policy_at_equal_width_and_domain() 
             crate::NumericValues::new("value", [1.0]),
         )
         .color_label_format(guide)
-        .annotations(crate::HeatmapAnnotations::Values(
-            crate::NumericLabelFormat::from_policy(values),
-        ))
+        .annotations(crate::HeatmapAnnotations::Values(values))
         .erase()
     };
     let operation = crate::font::canonical::OperationContext::new();

@@ -3,12 +3,12 @@
 The private `src/numeric/decimal.rs` primitive converts an exact finite binary64
 operand with a resolved precision into Decimal, Scientific or Engineering text.
 It implements the ordinary-number mathematical/emission contract in spec06.
-The existing public `NumericLabelFormat` and renderer consumers remain current
-until their owning migrations; the primitive has no public export or mode selector.
+At this recorded private-primitive checkpoint, the public `NumericLabelFormat`
+and consumers had not yet migrated. The subsequent public replacement is recorded
+in `public-numeric-formatting.md`; the primitive remains an implementation detail.
 Subsequent Forest certification is recorded in `certified-log10-conversion.md`;
-the current wrapper/default conversion and retained-source integration are
-recorded in `unified-numeric-presentation.md`. Adaptive owner-set integration
-follows the execution plan. The checks below record the ordinary primitive's own
+the intermediate wrapper/default conversion and retained-source integration are
+recorded in `unified-numeric-presentation.md`. The checks below record the ordinary primitive's own
 implementation checkpoint.
 
 ## Exact Operand And One Rounding

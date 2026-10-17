@@ -27,13 +27,11 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
         .annotations(HeatmapAnnotations::Values(format))
         .erase()
     };
-    let policy = crate::NumericLabelFormat::from_policy(
-        crate::numeric::format::NumericFormat::new(
-            crate::numeric::decimal::NumericNotation::Decimal,
-            crate::numeric::format::NumericPrecision::AdaptiveFractional { min: 2, max: 3 },
-        )
-        .unwrap(),
-    );
+    let policy = crate::NumericFormat::new(
+        crate::NumericNotation::Decimal,
+        crate::NumericPrecision::AdaptiveFractional { min: 2, max: 3 },
+    )
+    .unwrap();
     let original_source = source(policy.clone());
     let operation = crate::font::canonical::OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(
@@ -72,14 +70,13 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
     let marks = retained_in(&chart).unwrap();
     let axes = chart.prepared_axis_inputs().unwrap();
     let original = prepare_intrinsics(marks, axes, &theme, None).unwrap();
-    let changed_source = source(crate::NumericLabelFormat::from_policy(
+    let changed_source = source(
         policy
-            .policy()
             .try_copy()
             .unwrap()
             .with_negative_zero(crate::numeric::decimal::NegativeZero::Normalize)
             .unwrap(),
-    ));
+    );
     let changed_inputs = crate::plots::shared_x::prepare_plot(
         &changed_source,
         &operation,

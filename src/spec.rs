@@ -3,7 +3,7 @@
 use crate::decorations::legend::LegendEntry;
 use crate::layout::{Layout, PanelBox};
 use crate::significance::SignificancePlan;
-use crate::HistogramKdePoint;
+use crate::{HistogramKdePoint, NumericFormat};
 
 mod bar;
 mod categorical;
@@ -205,75 +205,14 @@ pub enum HeatmapLabelFit {
     Wrap,
 }
 
-/// Fixed-decimal formatting for opt-in heatmap cell values and point-only
-/// coefficient estimate labels.
-///
-/// An optional suffix is appended literally and does not scale or otherwise
-/// transform the value. This format does not control axis ticks, colorbars,
-/// waterfall totals, point-layer labels, or legends.
-///
-/// ```compile_fail
-/// use lichtung_plot::NumericLabelFormat;
-/// let _ = NumericLabelFormat::with_suffix(2, "%");
-/// ```
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct NumericLabelFormat {
-    format: crate::numeric::format::NumericFormat,
-}
-
-impl NumericLabelFormat {
-    /// Construct fixed decimal formatting without a suffix.
-    pub fn new(precision: usize) -> Result<Self, crate::Error> {
-        Self::default().precision(precision)
-    }
-
-    /// Set the number of digits rendered after the decimal point.
-    pub fn precision(mut self, precision: usize) -> Result<Self, crate::Error> {
-        if precision > 12 {
-            return Err(crate::Error::Data(format!(
-                "numeric label precision {precision} exceeds the supported maximum of 12"
-            )));
-        }
-        self.format =
-            self.format
-                .with_precision(crate::numeric::format::NumericPrecision::Fractional(
-                    u8::try_from(precision).expect("validated fixed precision"),
-                ))?;
-        Ok(self)
-    }
-
-    /// Set non-empty verbatim text rendered immediately after the number.
-    ///
-    /// The suffix does not scale or otherwise transform the numeric value.
-    pub fn suffix(mut self, suffix: impl Into<String>) -> Result<Self, crate::Error> {
-        let suffix = suffix.into();
-        if suffix.is_empty() || suffix.chars().any(char::is_control) {
-            return Err(crate::Error::Data(
-                "numeric label suffix must be non-empty and contain no control characters".into(),
-            ));
-        }
-        self.format = self.format.with_suffix(suffix)?;
-        Ok(self)
-    }
-
-    pub(crate) fn policy(&self) -> &crate::numeric::format::NumericFormat {
-        &self.format
-    }
-
-    #[cfg(test)]
-    pub(crate) fn from_policy(format: crate::numeric::format::NumericFormat) -> Self {
-        Self { format }
-    }
-}
-
 /// In-cell value-label policy for heatmaps.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum HeatmapAnnotations {
     /// Draw no values inside cells.
     #[default]
     Hidden,
-    /// Draw finite raw values with validated fixed decimal formatting.
-    Values(NumericLabelFormat),
+    /// Draw finite raw values using one complete panel-local numeric format set.
+    Values(NumericFormat),
 }
 
 /// Caller-owned annotation for one fully-null Cartesian heatmap row.

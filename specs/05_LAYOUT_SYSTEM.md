@@ -757,7 +757,7 @@ at scientific precisions `2..=17`, retaining first unique; otherwise source miss
 
 ### Configured Scientific Numeric Presentation
 
-T6 exposes one normalized `NumericFormat` separately from typography and data
+The public API exposes one normalized `NumericFormat` separately from typography and data
 scales. Its exact construction/application contract is in
 `06_NUMERIC_PRESENTATION.md`, with logarithmic conversion proved in
 `07_LOG10_DISPLAY.md`. Ordinary finite values are converted from the exact
@@ -780,14 +780,15 @@ the unconfigured power-label grammar. Certified outward integer intervals must
 prove identical endpoint rounding before accepting a fractional-power label;
 no platform `powf`, approximate midpoint or intermediate binary64 output value.
 Selected original-domain midpoints are not newly clamped. Exact symbolic powers,
-output representability and cumulative scratch/work admission precede materialization.
+output representability and real scratch/precision bounds precede materialization.
 
 Continuous guides format required values once after final-domain merging and
 require numeric distinguishability; incompatible effective policies reject
 before fonts. Exact value/totals formatting may repeat rounded strings; adaptive
 value/totals sets follow admitted semantic membership and either produce a
 uniform distinct set or reject before fonts. Caller-owned names/strings are not
-parsed as numbers. All set comparisons and precision attempts remain priced.
+parsed as numbers. Set ordering retains full deterministic comparisons and
+fallibly allocated buffers, without accounting quotas or comparison fees.
 
 The same policy and numeric operand drive terminal-label hard intrinsics, natural
 gutter preferences, constrained labels/guides, cell/attached/shelf requirements,

@@ -1,7 +1,7 @@
 use super::*;
 use lichtung_plot::{
     Color, ColorDomain, ColorStop, ContinuousColorScale, ContrastTextRoles, DivergingGradient,
-    FontFamily, FontStack, GenericFontFamily, HeatmapAnnotations, NumericLabelFormat, TextTheme,
+    FontFamily, FontStack, GenericFontFamily, HeatmapAnnotations, NumericFormat, TextTheme,
     TextWeight,
 };
 
@@ -285,7 +285,7 @@ fn transparent_cells_select_complete_custom_contrast_roles_before_frozen_svg_and
     .theme(theme)
     .size(700, 500)
     .continuous_color_scale(ContinuousColorScale::diverging(0.0, Some(gradient), None).unwrap())
-    .annotations(HeatmapAnnotations::Values(NumericLabelFormat::default()))
+    .annotations(HeatmapAnnotations::Values(NumericFormat::default()))
     .svg_preserve_text(&first)
     .unwrap()
     .png_preview(&png)

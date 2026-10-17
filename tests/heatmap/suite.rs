@@ -2,8 +2,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use lichtung_plot::{
     BooleanValues, Canvas, CategoryOrder, CategoryValues, ColorDomain, ContinuousColorScale,
-    HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation,
-    NumericLabelFormat, NumericValues, Plot, ValueSort,
+    HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation, NumericFormat,
+    NumericPrecision, NumericValues, Plot, ValueSort,
 };
 
 static TEST_DIRECTORY_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -82,7 +82,7 @@ fn heatmap_constructor_accepts_typed_configuration() {
                 )
                 .unwrap(),
             )
-            .annotations(HeatmapAnnotations::Values(NumericLabelFormat::default()))
+            .annotations(HeatmapAnnotations::Values(NumericFormat::default()))
     })
     .unwrap();
     assert!(svg.contains(">Response</text>"));
@@ -772,15 +772,15 @@ fn heatmap_annotations_use_default_and_chained_formats_with_contrasting_text() {
         NumericValues::new("value", [0.125, 9.875]),
     );
     let default_svg = render(&data, |chart| {
-        chart.annotations(HeatmapAnnotations::Values(NumericLabelFormat::default()))
+        chart.annotations(HeatmapAnnotations::Values(NumericFormat::default()))
     })
     .unwrap();
     let configured_svg = render(&data, |chart| {
         chart.annotations(HeatmapAnnotations::Values(
-            NumericLabelFormat::default()
-                .precision(1)
+            NumericFormat::default()
+                .with_precision(NumericPrecision::Fractional(1))
                 .unwrap()
-                .suffix("%")
+                .with_suffix("%")
                 .unwrap(),
         ))
     })
@@ -812,7 +812,7 @@ fn diverging_cells_choose_complete_light_or_dark_text_before_paint() {
                 )
                 .unwrap(),
             )
-            .annotations(HeatmapAnnotations::Values(NumericLabelFormat::default()))
+            .annotations(HeatmapAnnotations::Values(NumericFormat::default()))
     })
     .unwrap();
     let marks = clipped_marks(&svg);
@@ -857,7 +857,7 @@ fn heatmap_merges_annotated_fully_null_row_and_preserves_finite_value_labels() {
     let svg = render(&data, |chart| {
         chart
             .size(480, 300)
-            .annotations(HeatmapAnnotations::Values(NumericLabelFormat::default()))
+            .annotations(HeatmapAnnotations::Values(NumericFormat::default()))
             .heatmap_null_row_annotation(annotation)
     })
     .unwrap();
@@ -974,10 +974,10 @@ fn heatmap_annotations_append_suffix_and_border_only_selected_cells() {
         chart
             .heatmap_highlight(data.highlight.clone().unwrap())
             .annotations(HeatmapAnnotations::Values(
-                NumericLabelFormat::default()
-                    .precision(1)
+                NumericFormat::default()
+                    .with_precision(NumericPrecision::Fractional(1))
                     .unwrap()
-                    .suffix("%")
+                    .with_suffix("%")
                     .unwrap(),
             ))
     })
@@ -1006,23 +1006,25 @@ fn heatmap_highlight_requires_complete_boolean_values() {
 }
 
 #[test]
-fn numeric_label_format_rejects_invalid_precision_and_suffix() {
+fn numeric_format_rejects_invalid_precision_and_suffix() {
     let errors = [
-        NumericLabelFormat::default()
-            .precision(13)
+        NumericFormat::default()
+            .with_precision(NumericPrecision::Fractional(18))
             .unwrap_err()
             .to_string(),
-        NumericLabelFormat::default()
-            .suffix("")
+        NumericFormat::default()
+            .with_suffix("")
             .unwrap_err()
             .to_string(),
-        NumericLabelFormat::default()
-            .suffix("\n")
+        NumericFormat::default()
+            .with_suffix("\n")
             .unwrap_err()
             .to_string(),
     ];
 
-    assert!(errors.iter().all(|error| error.contains("numeric label")));
+    assert!(errors
+        .iter()
+        .all(|error| error.contains("numeric presentation")));
 }
 
 #[test]
@@ -1038,7 +1040,9 @@ fn heatmap_annotations_error_when_cells_cannot_fit_values() {
     let plot = chart(&data)
         .size(360, 220)
         .annotations(HeatmapAnnotations::Values(
-            NumericLabelFormat::default().precision(4).unwrap(),
+            NumericFormat::default()
+                .with_precision(NumericPrecision::Fractional(4))
+                .unwrap(),
         ));
     let directory = tempfile::tempdir().unwrap();
     let output = directory.path().join("plot.svg");
@@ -1055,7 +1059,9 @@ fn heatmap_annotations_error_when_cells_cannot_fit_values() {
         chart
             .size(3000, 220)
             .annotations(HeatmapAnnotations::Values(
-                NumericLabelFormat::default().precision(4).unwrap(),
+                NumericFormat::default()
+                    .with_precision(NumericPrecision::Fractional(4))
+                    .unwrap(),
             ))
     })
     .unwrap();

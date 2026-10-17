@@ -15,10 +15,10 @@ use crate::spec::{
     AxisScale, BarInput, BarSpacing, Bootstrap, CategoryOrder, ConfidenceIntervalAlgorithm,
     DumbbellEndpoints, ErrorBarKind, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout,
     HeatmapNullRowAnnotation, HistogramBins, HistogramComposite, HistogramStat, LegendPolicy,
-    LegendPosition, LinePathStyle, NumericLabelFormat, PanelTextAnnotation, PlotKind, QqLine,
-    RawOverlay, RegressionBand, WaterfallLabels,
+    LegendPosition, LinePathStyle, PanelTextAnnotation, PlotKind, QqLine, RawOverlay,
+    RegressionBand, WaterfallLabels,
 };
-use crate::{HistogramGeometry, RaincloudGeometry};
+use crate::{HistogramGeometry, NumericFormat, RaincloudGeometry};
 
 impl Plot {
     pub(crate) const fn data(&self) -> crate::data::PlotData<'_> {
@@ -534,7 +534,7 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// Fixed numeric labels configured for point-only coefficient estimates.
     #[must_use]
-    pub(crate) const fn estimate_labels_spec(&self) -> Option<&NumericLabelFormat> {
+    pub(crate) const fn estimate_labels_spec(&self) -> Option<&NumericFormat> {
         self.estimate_labels.as_ref()
     }
 

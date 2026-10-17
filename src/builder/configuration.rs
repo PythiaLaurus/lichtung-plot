@@ -4,12 +4,14 @@ use crate::layout::AxisTick;
 use crate::spec::{
     AxisScale, BarSpacing, CategoryOrder, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout,
     HeatmapNullRowAnnotation, HistogramBins, HistogramComposite, HistogramStat, InteractionStyle,
-    LegendPolicy, LinePathStyle, NumericLabelFormat, PanelTextAnnotation, QqLine, RawOverlay,
-    RegressionBand, WaterfallLabels,
+    LegendPolicy, LinePathStyle, PanelTextAnnotation, QqLine, RawOverlay, RegressionBand,
+    WaterfallLabels,
 };
 use crate::theme::Theme;
 use crate::Labels;
-use crate::{BooleanValues, Bounds, CategoryValues, EstimateStatus, Significance, SourceRows};
+use crate::{
+    BooleanValues, Bounds, CategoryValues, EstimateStatus, NumericFormat, Significance, SourceRows,
+};
 
 impl<K: crate::kind::Marker> Plot<K> {
     /// Set original source-row identities aligned one-to-one with the chart data.
@@ -63,17 +65,16 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    #[cfg_attr(
-        not(test),
-        allow(
-            dead_code,
-            reason = "private guide preparation precedes public numeric cutover"
-        )
-    )]
-    pub(crate) fn color_label_format(
-        mut self,
-        format: crate::numeric::format::NumericFormat,
-    ) -> Self
+    /// Replace numeric presentation for this Plot's continuous color guide.
+    /// Shared Canvas guides require identical complete effective formats before fonts.
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, NumericFormat, Plot};
+    /// fn unsupported(plot: Plot<kind::Scatter>, format: NumericFormat) {
+    ///     let _ = plot.color_label_format(format);
+    /// }
+    /// ```
+    #[must_use]
+    pub fn color_label_format(mut self, format: NumericFormat) -> Self
     where
         K: crate::kind::ContinuousColor,
     {
@@ -111,9 +112,16 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    /// Draw fixed-format numeric labels beside point-only coefficient estimates.
+    /// Draw numeric labels beside point-only Coefficient estimates.
+    /// One precision is selected from every available prepared estimate in the panel.
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, NumericFormat, Plot};
+    /// fn unsupported(plot: Plot<kind::Forest>, format: NumericFormat) {
+    ///     let _ = plot.estimate_labels(format);
+    /// }
+    /// ```
     #[must_use]
-    pub fn estimate_labels(mut self, format: NumericLabelFormat) -> Self
+    pub fn estimate_labels(mut self, format: NumericFormat) -> Self
     where
         K: crate::kind::CoefficientOptions,
     {
@@ -303,14 +311,17 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    #[cfg_attr(
-        not(test),
-        allow(
-            dead_code,
-            reason = "private axis preparation precedes public format cutover"
-        )
-    )]
-    pub(crate) fn x_tick_format(mut self, format: crate::numeric::format::NumericFormat) -> Self
+    /// Replace generated numeric x-tick presentation; exact tick text takes precedence.
+    /// Forest Log10 ticks format mathematical powers, retaining exponent-space positions.
+    /// An actual categorical axis rejects this instruction before fonts.
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, NumericFormat, Plot};
+    /// fn unsupported(plot: Plot<kind::Matrix>, format: NumericFormat) {
+    ///     let _ = plot.x_tick_format(format);
+    /// }
+    /// ```
+    #[must_use]
+    pub fn x_tick_format(mut self, format: NumericFormat) -> Self
     where
         K: crate::kind::NumericX,
     {
@@ -318,14 +329,16 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    #[cfg_attr(
-        not(test),
-        allow(
-            dead_code,
-            reason = "private axis preparation precedes public format cutover"
-        )
-    )]
-    pub(crate) fn y_tick_format(mut self, format: crate::numeric::format::NumericFormat) -> Self
+    /// Replace generated numeric y-tick presentation; exact tick text takes precedence.
+    /// This changes displayed numbers without changing scientific coordinates.
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, NumericFormat, Plot};
+    /// fn unsupported(plot: Plot<kind::Waterfall>, format: NumericFormat) {
+    ///     let _ = plot.y_tick_format(format);
+    /// }
+    /// ```
+    #[must_use]
+    pub fn y_tick_format(mut self, format: NumericFormat) -> Self
     where
         K: crate::kind::NumericY,
     {
@@ -741,14 +754,16 @@ impl Plot<crate::kind::Interaction> {
 }
 
 impl Plot<crate::kind::Waterfall> {
-    #[cfg_attr(
-        not(test),
-        allow(
-            dead_code,
-            reason = "private total preparation precedes public numeric cutover"
-        )
-    )]
-    pub(crate) fn total_format(mut self, format: crate::numeric::format::NumericFormat) -> Self {
+    /// Replace numeric presentation for window-eligible base and terminal totals.
+    /// Verbatim names from [`Self::total_labels`] join the formatted number with one space.
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, NumericFormat, Plot};
+    /// fn unsupported(plot: Plot<kind::HorizontalBar>, format: NumericFormat) {
+    ///     let _ = plot.total_format(format);
+    /// }
+    /// ```
+    #[must_use]
+    pub fn total_format(mut self, format: NumericFormat) -> Self {
         self.total_format = Some(std::sync::Arc::new(format));
         self
     }

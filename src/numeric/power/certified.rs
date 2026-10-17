@@ -9,6 +9,7 @@ use crate::numeric::decimal::{nearest_integer, ResolvedFormat, RoundedDecimal};
 use crate::{Error, Result};
 
 pub(crate) struct CertifiedPower {
+    #[cfg(test)]
     pub(crate) rounded: RoundedDecimal,
     pub(crate) text: String,
 }
@@ -86,7 +87,11 @@ impl PowerFormatter {
             }
         };
         let text = rounded.emit_reserved(format, plan.output)?;
-        Ok(CertifiedPower { rounded, text })
+        Ok(CertifiedPower {
+            #[cfg(test)]
+            rounded,
+            text,
+        })
     }
 
     fn constants(&mut self, precision: usize) -> Result<&ConstantBounds> {

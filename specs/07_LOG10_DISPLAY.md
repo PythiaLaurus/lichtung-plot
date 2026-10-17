@@ -1,9 +1,8 @@
 # Certified Forest Log10 Display
 
-**Status: approved architectural target; private exact-power implementation and
-independent executable numerical certification complete; consumer/public cutover
-pending.** This document does not describe a current public numeric-format API
-or mark its remaining integration gates complete.
+**Status: current configured Forest display contract; exact-power implementation,
+independent executable numerical certification and public consumer cutover are
+complete.** Integrated numeric closure follows spec93's remaining evidence gate.
 
 **Accounting simplification:** spec95 supersedes every cumulative work/byte
 charging requirement in this design. The pricing schedules in §8 and charge-delta
@@ -19,9 +18,10 @@ ordinary decimal emitter from `docs/exact-decimal-conversion.md`. Fractional
 mantissa implementation, shared exact quantization, fallible conversion storage
 and independent executable root/algebraic certification are complete in
 [`docs/certified-log10-conversion.md`](../docs/certified-log10-conversion.md).
-Numeric consumer/public cutover and integrated font/cache/refusal/replay gates
-remain pending. The source/evidence records distinguish those remaining gates
-from private numerical certification.
+Configured axes and public `NumericFormat` consume this implementation; their
+evidence is in `docs/configured-numeric-axes.md` and
+`docs/public-numeric-formatting.md`. Integrated all-surface closure remains a
+separate gate from numerical certification.
 
 ## 1. Authority And Evidence Boundary
 

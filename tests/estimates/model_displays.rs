@@ -72,7 +72,7 @@ fn coefficient_fixed_value_labels_are_point_only_and_default_is_inert() {
     };
     let default = render_svg(base(), "coefficient-default-labels").unwrap();
     let labeled = render_svg(
-        base().estimate_labels(NumericLabelFormat::default().suffix(" units").unwrap()),
+        base().estimate_labels(NumericFormat::default().with_suffix(" units").unwrap()),
         "coefficient-value-labels",
     )
     .unwrap();
@@ -89,7 +89,7 @@ fn coefficient_fixed_value_labels_are_point_only_and_default_is_inert() {
             Bounds::new(data.lower.clone(), data.upper.clone()),
         ),
     )
-    .estimate_labels(NumericLabelFormat::default())
+    .estimate_labels(NumericFormat::default())
     .preflight()
     .unwrap_err()
     .to_string()

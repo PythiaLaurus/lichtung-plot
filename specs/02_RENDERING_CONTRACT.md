@@ -227,23 +227,54 @@ inside the resolved range. Preflight projects the requested positions, measures
 their labels, and rejects collisions rather than omitting, moving, or rotating
 caller-owned ticks.
 
-Exact lists suppress generated interval text and selection regardless of setter
+Exact lists suppress generated interval/format text and selection regardless of setter
 order. They do not suppress semantic axis-kind validation or permit categorical
 axes to accept numeric instructions.
 
-## Numeric Value Labels
+## Scientific Numeric Presentation
 
-`NumericLabelFormat` is fixed-decimal formatting with validated precision and
-an optional literal suffix. It applies only to opt-in heatmap cell values and
-point-only coefficient estimate labels. A suffix does not scale or otherwise
-transform the numeric value.
+`NumericFormat` is one immutable validated seven-field policy: notation,
+precision, decimal scale, literal prefix/suffix, negative zero and trailing zeros.
+Crate-root `NumericNotation` selects Decimal/Scientific/Engineering;
+`NumericPrecision` selects fractional 0..=17, significant 1..=17, or adaptive
+min/max within those bounds. Scale is an exact decimal-power shift -324..=324.
+Affixes are nonempty/control-free literal text; `%` alone never scales a value.
+`new` supplies zero scale, absent affixes, Preserve/Keep. `Default` adds
+Decimal/Fractional(2). Readonly field getters and consuming validated `with_field`
+edits preserve one normalized value.
 
-It does not configure automatic or exact axis ticks, heatmap or beeswarm
-colorbars, waterfall totals, point-layer labels, or legends. Broader scientific,
-engineering, compact, percentage and cross-surface controls are not current API.
-The admitted locale-free scientific replacement is planned in
-`93_T6_EXECUTION_PLAN.md`; residual scope remains in `99_DEFERRED_FEATURES.md`.
-Planning does not expose a notation enum, callback or format-string surface.
+NumericX/Y-gated `x_tick_format`/`y_tick_format` replace generated axis presentation.
+ContinuousColor-gated `color_label_format` controls guide numbers.
+`HeatmapAnnotations::Values(NumericFormat)`, Coefficient-only `estimate_labels`,
+and Waterfall-only `total_format` consume the same policy. Any and Matrix gain no
+format extension. Actual categorical axes reject before fonts; exact tick text
+suppresses the generated format in either setter order.
+
+Exact ordinary binary64 values are scaled and rounded once, nearest with ties to
+even. Configured Forest ticks format mathematical `10^(exact(exponent)+scale)`
+through certified outward integer intervals, retaining exponent-space positions.
+Omitted policies retain consumer-specific default Automatic, Forest and fixed
+Waterfall grammars of this same engine.
+
+Adaptive precision distinguishes complete semantic sets before geometric fitting:
+one axis candidate, final continuous guide, active finite Heatmap panel cells,
+all available raw point-only Coefficient panel estimates (including outside an
+exact window), or closed-window-eligible Waterfall totals. Equal scientific
+values may repeat. Exhaustion misses a generated axis source or refuses a
+required guide/value set. Fixed value annotations may intentionally repeat rounded
+text. Real arithmetic/storage failures remain fatal.
+
+Shared continuous guides require identical complete effective policies before
+fonts and resolve one final merged-domain set. Canvas range groups permit
+different panel formats. Prepared Waterfall masks retain reachable successful
+sets/refusals before fonts. Full policies, member/occurrence bits and selected
+precision participate in their upstream cache/feedback identities; frozen output
+reuses completed sources. Scientific values, domains, colors and transforms,
+exact ticks, categories and caller annotation/name strings keep their own owners.
+
+See `06_NUMERIC_PRESENTATION.md` and `07_LOG10_DISPLAY.md`. Locale, caller compact
+rules, arbitrary multipliers, rounding controls and general format strings or
+callbacks remain excluded under `99_DEFERRED_FEATURES.md`.
 
 ## Legends
 

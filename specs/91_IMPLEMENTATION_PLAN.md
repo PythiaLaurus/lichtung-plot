@@ -6583,8 +6583,8 @@ Acceptance:
 ## Phase T6: Public Foundations And Scientific Presentation
 
 **Status**: IN PROGRESS — public foundations and root sizing/ticks complete;
-private ordinary decimal/Forest certification and normalized policy/default
-unification complete; configured consumer migration remains in progress.
+ordinary decimal/Forest certification, configured consumers and public numeric
+cutover complete; integrated numeric closure follows.
 
 Dependencies: T5e.
 
@@ -6617,6 +6617,8 @@ equal-text invalidation are complete in `../docs/composed-numeric-identities.md`
 The demonstrated pre-existing automatic Canvas shared-header/range-group sizing
 refusal is repaired in `../docs/coordinated-canvas-sizing.md` before public
 replacement.
+The atomic public NumericFormat/discriminant/attachment replacement and complete
+caller/current-contract migration are complete in `../docs/public-numeric-formatting.md`.
 
 ENTRY gate is CLOSED by the user's explicit approval of the current-implementation
 assessment and request to plan T6:

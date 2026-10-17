@@ -180,10 +180,18 @@ use the existing sealed NumericX/Y gates. They select a first-tried generated
 source, not a tick count; exact AxisTick lists remain authoritative. Actual
 categorical axes and scale-kind mismatches reject before fonts.
 
+Opaque crate-root `NumericFormat` and its closed notation/precision/zero policies
+configure generated numeric axes, continuous guide numbers, existing Heatmap and
+point-only Coefficient value labels, and Waterfall totals. One exact decimal
+rounding/emission engine handles ordinary binary64 operands and certified
+mathematical Forest powers. Full normalized policies and semantic sets travel
+through scoped preparation, fonts, intrinsic/cache identity and frozen replay.
+`06_NUMERIC_PRESENTATION.md` and `07_LOG10_DISPLAY.md` own those current contracts.
+Exact ticks and caller-owned strings remain verbatim; numeric policies are not
+Theme components or Canvas overrides.
+
 `PointLayer` is an optional ordinary-line overlay with renderer-owned visual
-defaults and selective caller overrides. `NumericLabelFormat` remains a narrow
-fixed-decimal value-label format rather than a general axis, colorbar, or
-scientific-notation extension point.
+defaults and selective caller overrides.
 
 ## Excluded Responsibilities
 
