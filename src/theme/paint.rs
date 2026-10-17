@@ -50,57 +50,69 @@ impl OpaqueColor {
 }
 
 /// Complete RGBA paint with one opaque RGB identity and one byte alpha.
+///
+/// Channels are exact bytes, including fully transparent and opaque alpha.
+/// Use [`Color::with_alpha`] to replace alpha without multiplying it.
+///
+/// ```
+/// use lichtung_plot::Color;
+/// let paint = Color::hex("#12345680")?;
+/// assert_eq!(paint.alpha(), 128);
+/// assert_eq!(paint.with_alpha(255), Color::rgb(18, 52, 86));
+/// # Ok::<(), lichtung_plot::Error>(())
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Color {
+pub struct Color {
     rgb: OpaqueColor,
     alpha: u8,
 }
 
-#[expect(
-    clippy::trivially_copy_pass_by_ref,
-    reason = "immutable validated color values expose borrowed getters"
-)]
 impl Color {
-    pub(crate) const fn rgb(red: u8, green: u8, blue: u8) -> Self {
+    /// Construct an opaque paint from exact RGB channels.
+    pub const fn rgb(red: u8, green: u8, blue: u8) -> Self {
         Self::rgba(red, green, blue, 255)
     }
 
-    pub(crate) const fn rgba(red: u8, green: u8, blue: u8, alpha: u8) -> Self {
+    /// Construct a paint from exact RGB and alpha channels.
+    pub const fn rgba(red: u8, green: u8, blue: u8, alpha: u8) -> Self {
         Self {
             rgb: OpaqueColor::rgb(red, green, blue),
             alpha,
         }
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "typed hex construction awaits the public exact-paint cutover"
-        )
-    )]
-    pub(crate) fn hex(value: &str) -> Result<Self> {
+    /// Parse exactly `#RRGGBB` or `#RRGGBBAA`, accepting either ASCII hex case.
+    ///
+    /// Six-digit input is opaque. Surrounding whitespace, shorthand, named
+    /// colors and other CSS syntax are rejected.
+    pub fn hex(value: &str) -> Result<Self> {
         let [red, green, blue, alpha] = hex_channels(value, true)?;
         Ok(Self::rgba(red, green, blue, alpha))
     }
 
-    pub(crate) const fn red(&self) -> u8 {
+    /// Inspect the red channel.
+    pub const fn red(&self) -> u8 {
         self.rgb.red()
     }
 
-    pub(crate) const fn green(&self) -> u8 {
+    /// Inspect the green channel.
+    pub const fn green(&self) -> u8 {
         self.rgb.green()
     }
 
-    pub(crate) const fn blue(&self) -> u8 {
+    /// Inspect the blue channel.
+    pub const fn blue(&self) -> u8 {
         self.rgb.blue()
     }
 
-    pub(crate) const fn alpha(&self) -> u8 {
+    /// Inspect alpha: zero is transparent and 255 is opaque.
+    pub const fn alpha(&self) -> u8 {
         self.alpha
     }
 
-    pub(crate) const fn with_alpha(self, alpha: u8) -> Self {
+    /// Replace alpha, retaining all RGB channels exactly.
+    #[must_use]
+    pub const fn with_alpha(self, alpha: u8) -> Self {
         Self { alpha, ..self }
     }
 }
@@ -151,7 +163,7 @@ mod tests {
     }
 
     #[test]
-    fn encoded_hex_vectors_preserve_channel_order_case_and_alpha_endpoints() {
+    fn encoded_hex_vectors_preserve_channels_and_reject_nonliteral_syntax() {
         for (encoded, expected) in [
             ("#000000", [0, 0, 0, 255]),
             ("#FFFFFF", [255, 255, 255, 255]),
@@ -174,6 +186,20 @@ mod tests {
             } else {
                 assert!(OpaqueColor::hex(encoded).is_err(), "{encoded}");
             }
+        }
+        for invalid in [
+            "",
+            "#123",
+            "#12345G",
+            " #123456",
+            "#123456 ",
+            "#1234567",
+            "red",
+            "rgb(1,2,3)",
+            "＃123456",
+        ] {
+            assert!(Color::hex(invalid).is_err(), "{invalid:?}");
+            assert!(OpaqueColor::hex(invalid).is_err(), "{invalid:?}");
         }
     }
 }

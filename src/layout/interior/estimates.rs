@@ -17,7 +17,13 @@ pub(crate) fn sources() -> [Plot; 4] {
             terms,
             estimate,
             NumericValues::new("right", [15.0, 18.0, 34.0]),
-            DumbbellEndpoints::new("Before", (20, 80, 140), "After", (180, 60, 40)).unwrap(),
+            DumbbellEndpoints::new(
+                "Before",
+                crate::Color::rgb(20, 80, 140),
+                "After",
+                crate::Color::rgb(180, 60, 40),
+            )
+            .unwrap(),
         )
         .erase(),
     ]

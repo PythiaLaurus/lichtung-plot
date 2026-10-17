@@ -9,7 +9,9 @@
 
 #![deny(missing_docs)]
 
-use crate::theme::{color_from_rgb, Color};
+#[cfg(test)]
+use crate::theme::color_from_rgb;
+use crate::theme::Color;
 use crate::Error;
 
 use super::primitives::{
@@ -45,21 +47,6 @@ impl Point2D {
     }
 }
 
-/// Quantize a validated floating-opacity input to one canonical byte alpha.
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "finite validated unit opacity rounds to an integral value in 0..=255"
-)]
-pub(crate) fn quantize_legacy_opacity(opacity: f64) -> Result<u8, Error> {
-    if !opacity.is_finite() || !(0.0..=1.0).contains(&opacity) {
-        return Err(Error::Render(format!(
-            "paint opacity must be finite and in [0, 1]; got {opacity}"
-        )));
-    }
-    Ok((opacity * 255.0).round_ties_even() as u8)
-}
-
 /// Visual style for a scatter point.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct PointStyle {
@@ -87,6 +74,7 @@ impl PointStyle {
     }
 
     /// Construct a filled point without an outline.
+    #[cfg(test)]
     #[must_use]
     pub(crate) fn plain(color: (u8, u8, u8), radius: u32) -> Self {
         Self {
@@ -102,12 +90,6 @@ impl PointStyle {
     pub const fn with_shape(mut self, shape: PointShape) -> Self {
         self.shape = shape;
         self
-    }
-
-    /// Set the point fill opacity.
-    pub(crate) fn with_opacity(mut self, opacity: f64) -> Result<Self, Error> {
-        self.color = self.color.with_alpha(quantize_legacy_opacity(opacity)?);
-        Ok(self)
     }
 }
 

@@ -86,12 +86,9 @@ impl StrokeTheme {
         self.pattern
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "construction-only compound paint edits await complete theme customization"
-        )
+    #[allow(
+        dead_code,
+        reason = "construction-only compound paint edits await complete theme customization"
     )]
     pub(crate) fn with_color(self, color: Color) -> Result<Self> {
         Self::new(color, self.width, self.pattern)

@@ -130,8 +130,11 @@ An unthemed standalone Plot selects Publication, and facets add no theme scope.
 Internally those attachments retain complete immutable appearance values, with
 per-operation font/query state alongside the single resolved appearance. Retained
 component values drive measurement, source preparation and frozen draw operands.
-The complete public Theme/component/color/scale construction surface becomes
-current at its owning T6 public cutover.
+`Color` is already public for complete exact RGBA guides, supplemental points and
+Dumbbell endpoints. Exact styles have readonly inspection and `with_*` edits;
+Interaction selectors validate raw identity at construction. The complete public
+Theme/component/font/scale construction surface becomes current at its owning
+T6 public cutover.
 
 `05_LAYOUT_SYSTEM.md` is the approved replacement layout architecture for that
 same migration. T5a through T5e implement its private parent-constraint

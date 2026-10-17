@@ -43,7 +43,8 @@ pub(crate) use mark_paint::{
 pub use resolved::Theme;
 pub(crate) use resolved::{ResolvedTheme, SurfaceTheme, TextTheme, TitleAlignment};
 
-pub(crate) use paint::{Color, OpaqueColor};
+pub use paint::Color;
+pub(crate) use paint::OpaqueColor;
 pub(crate) use spacing::{LocalMetric, RelativeSpacing};
 pub(crate) use value::ThemeValue;
 

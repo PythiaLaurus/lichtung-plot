@@ -41,7 +41,7 @@ fn erased_plot_preserves_selected_theme_text_dimensions_and_output() {
 fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
     use lichtung_plot::{
         kind, AxisScale, BarPointLayer, BarSpacing, Bounds, CategoryValues, CoefficientInput,
-        DumbbellEndpoints, HeatmapAnnotations, HeatmapLayout, HeatmapScale, HistogramBins,
+        Color, DumbbellEndpoints, HeatmapAnnotations, HeatmapLayout, HeatmapScale, HistogramBins,
         HistogramComposite, HistogramDimensions, HistogramGeometry, HistogramInput, HistogramStat,
         InteractionStyle, LinePathStyle, NumericValues, PlotKind, PointLayer, QqLine,
         RaincloudDimensions, RaincloudGeometry, RaincloudInput, RegressionBand, WaterfallLabels,
@@ -70,9 +70,8 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
         category("point category"),
         None,
         numeric("point value"),
-        (1, 2, 3),
+        Color::rgba(1, 2, 3, 128),
         2,
-        0.5,
     )
     .unwrap();
 
@@ -109,11 +108,10 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
         Plot::line(numeric("x"), numeric("y"))
             .point_layer(
                 PointLayer::new(numeric("point x"), numeric("point y"))
-                    .color((1, 2, 3))
-                    .radius(2)
+                    .with_color(Color::rgb(1, 2, 3))
+                    .with_radius(2)
                     .unwrap()
-                    .opacity(0.5)
-                    .unwrap(),
+                    .with_alpha(128),
             )
             .band(bounds()),
         PlotKind::Line,
@@ -134,7 +132,10 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
             bounds(),
         )
         .connectors(false)
-        .styles([InteractionStyle::new("a"), InteractionStyle::new("b")]),
+        .styles([
+            InteractionStyle::new("a").unwrap(),
+            InteractionStyle::new("b").unwrap(),
+        ]),
         PlotKind::Interaction,
     );
     exact::<kind::Coefficient>(
@@ -155,7 +156,13 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
             category("category"),
             numeric("left"),
             numeric("right"),
-            DumbbellEndpoints::new("Left", (20, 80, 140), "Right", (180, 60, 40)).unwrap(),
+            DumbbellEndpoints::new(
+                "Left",
+                Color::rgb(20, 80, 140),
+                "Right",
+                Color::rgb(180, 60, 40),
+            )
+            .unwrap(),
         ),
         PlotKind::Dumbbell,
     );

@@ -1231,7 +1231,12 @@ fn canvas_and_plot_reject_misaligned_estimate_status_with_the_same_error() {
 
 #[test]
 fn canvas_and_plot_reject_incompatible_guides_with_the_same_error() {
-    let style = GuideStyle::new((31, 73, 125), 1.0, LinePattern::Solid).unwrap();
+    let style = GuideStyle::new(
+        lichtung_plot::Color::rgb(31, 73, 125),
+        1.0,
+        LinePattern::Solid,
+    )
+    .unwrap();
     let plot = Plot::bar(
         lichtung_plot::CategoryValues::new("category", ["a", "b"]).unwrap(),
         BarInput::samples(lichtung_plot::NumericValues::new("value", [1.0, 2.0])),
@@ -1252,7 +1257,12 @@ fn canvas_and_plot_reject_incompatible_guides_with_the_same_error() {
 
 #[test]
 fn canvas_renders_valid_supplemental_numeric_geometry() {
-    let style = GuideStyle::new((123, 45, 67), 1.5, LinePattern::Dashed).unwrap();
+    let style = GuideStyle::new(
+        lichtung_plot::Color::rgb(123, 45, 67),
+        1.5,
+        LinePattern::Dashed,
+    )
+    .unwrap();
     let plot = Plot::line(
         lichtung_plot::NumericValues::new("x", [0.0, 1.0, 2.0]),
         lichtung_plot::NumericValues::new("y", [1.0, 2.0, 3.0]),

@@ -1707,7 +1707,8 @@ mod tests {
                 &LineStyle::solid(Color::rgb(0, 0, 0), width),
             ),
             "circle" => {
-                let mut style = PointStyle::new((0, 0, 0), 1).with_opacity(0.0).unwrap();
+                let mut style = PointStyle::new((0, 0, 0), 1);
+                style.color = style.color.with_alpha(0);
                 style.outline = Some(backend::PointOutline {
                     color: Color::rgb(0, 0, 0),
                     width_ratio: crate::theme::RelativeSpacing::new(f64::from(width)).unwrap(),
@@ -1741,10 +1742,10 @@ mod tests {
                     Point2D::new(x + 2.0, 20.0),
                     Point2D::new(x, 20.0),
                 ],
-                &test_fill_style(0.0, width),
+                &test_fill_style(0, width),
             ),
             "rectangle" => {
-                geometry.draw_rounded_rect(x, 10.0, 2.0, 10.0, 0.0, &test_fill_style(0.0, width))
+                geometry.draw_rounded_rect(x, 10.0, 2.0, 10.0, 0.0, &test_fill_style(0, width))
             }
             _ => unreachable!("test primitive"),
         }
@@ -1855,7 +1856,7 @@ mod tests {
                     Point2D::new(x + 10.0, 0.0),
                     Point2D::new(x + 6.0, 3.0),
                 ],
-                &test_fill_style(0.0, 2.0),
+                &test_fill_style(0, 2.0),
             )
             .unwrap();
             // The 3-4-5 edge produces an exact three-pixel miter at the right tip.
@@ -1922,14 +1923,10 @@ mod tests {
             geometry
                 .begin_clip(PanelBox::new(8.0, 12.0, 12.0, 13.0))
                 .unwrap();
+            let mut style = PointStyle::new((0, 0, 0), 2).with_shape(shape);
+            style.color = style.color.with_alpha(0);
             geometry
-                .draw_scatter(
-                    &[Point2D::new(10.0, 10.0)],
-                    &PointStyle::new((0, 0, 0), 2)
-                        .with_shape(shape)
-                        .with_opacity(0.0)
-                        .unwrap(),
-                )
+                .draw_scatter(&[Point2D::new(10.0, 10.0)], &style)
                 .unwrap();
             let bounds = geometry.bounds()[0];
             assert_eq!(bounds.bottom, 12.0);
@@ -1960,7 +1957,7 @@ mod tests {
         assert_eq!(bounds.left, 1.0 - 1.0 / 1024.0);
         assert_eq!(bounds.top, 2.0 + 1.0 / 1024.0);
         geometry
-            .draw_rounded_rect(1.0, 1.0, 2.0, 2.0, 0.0, &test_fill_style(0.0, 1.0 / 1024.0))
+            .draw_rounded_rect(1.0, 1.0, 2.0, 2.0, 0.0, &test_fill_style(0, 1.0 / 1024.0))
             .unwrap();
         assert_eq!(geometry.bounds()[1].left, bounds.left);
     }
@@ -2194,10 +2191,9 @@ mod tests {
         }
     }
 
-    fn test_fill_style(opacity: f64, stroke_width: f32) -> FillStyle {
+    fn test_fill_style(alpha: u8, stroke_width: f32) -> FillStyle {
         FillStyle::new(
-            Color::rgb(0, 0, 0)
-                .with_alpha(crate::render::backend::quantize_legacy_opacity(opacity).unwrap()),
+            Color::rgba(0, 0, 0, alpha),
             Color::rgb(0, 0, 0),
             stroke_width,
         )
@@ -2285,7 +2281,7 @@ mod tests {
     #[test]
     fn nested_noncontained_clips_use_their_full_positive_area_intersection() {
         let mut backend = begun_backend();
-        let style = test_fill_style(1.0, 0.0);
+        let style = test_fill_style(255, 0.0);
         backend
             .begin_clip(PanelBox::new(0.0, 10.0, 0.0, 10.0))
             .unwrap();
@@ -2506,9 +2502,9 @@ mod tests {
             Point2D::new(10.0, 0.0),
             Point2D::new(0.0, 10.0),
         ];
-        let fill = recorded_polygon(&triangle, &test_fill_style(1.0, 0.0)).unwrap();
-        let stroke = recorded_polygon(&triangle, &test_fill_style(0.0, 2.0)).unwrap();
-        let union = recorded_polygon(&triangle, &test_fill_style(1.0, 2.0)).unwrap();
+        let fill = recorded_polygon(&triangle, &test_fill_style(255, 0.0)).unwrap();
+        let stroke = recorded_polygon(&triangle, &test_fill_style(0, 2.0)).unwrap();
+        let union = recorded_polygon(&triangle, &test_fill_style(255, 2.0)).unwrap();
 
         assert_eq!(
             fill,
@@ -2523,7 +2519,7 @@ mod tests {
         assert_eq!(stroke, union);
         assert!(stroke.left < -0.9 && stroke.right > 12.4);
         assert!(stroke.bottom < -0.9 && stroke.top > 12.4);
-        assert!(recorded_polygon(&triangle, &test_fill_style(0.0, 0.0)).is_none());
+        assert!(recorded_polygon(&triangle, &test_fill_style(0, 0.0)).is_none());
         let fill_only = FillStyle::new(Color::rgb(0, 0, 0), Color::rgba(0, 0, 0, 0), 2.0);
         let stroke_only = FillStyle::new(Color::rgba(0, 0, 0, 0), Color::rgba(0, 0, 0, 128), 2.0);
         let invisible = FillStyle::new(fill_only.stroke, fill_only.stroke, 2.0);
@@ -2536,7 +2532,7 @@ mod tests {
                 Point2D::new(5.0, 0.0),
                 Point2D::new(10.0, 0.0),
             ],
-            &test_fill_style(1.0, 0.0),
+            &test_fill_style(255, 0.0),
         )
         .is_none());
     }
@@ -2549,7 +2545,7 @@ mod tests {
                 Point2D::new(10.0, 0.0),
                 Point2D::new(6.0, 3.0),
             ],
-            &test_fill_style(0.0, 2.0),
+            &test_fill_style(0, 2.0),
         )
         .unwrap();
         let limited = recorded_polygon(
@@ -2558,7 +2554,7 @@ mod tests {
                 Point2D::new(12.0, 0.0),
                 Point2D::new(0.0, 5.0),
             ],
-            &test_fill_style(0.0, 2.0),
+            &test_fill_style(0, 2.0),
         )
         .unwrap();
 
@@ -2601,9 +2597,9 @@ mod tests {
             backend.end().unwrap();
             backend.bounds().first().copied()
         };
-        let fill = record(30.0, 20.0, 0.0, test_fill_style(1.0, 0.0)).unwrap();
-        let stroke = record(30.0, 20.0, 0.0, test_fill_style(0.0, 2.0)).unwrap();
-        let union = record(30.0, 20.0, 10.0, test_fill_style(1.0, 2.0)).unwrap();
+        let fill = record(30.0, 20.0, 0.0, test_fill_style(255, 0.0)).unwrap();
+        let stroke = record(30.0, 20.0, 0.0, test_fill_style(0, 2.0)).unwrap();
+        let union = record(30.0, 20.0, 10.0, test_fill_style(255, 2.0)).unwrap();
 
         assert_eq!(
             fill,
@@ -2626,9 +2622,9 @@ mod tests {
                 weight: 1.0,
             }
         );
-        assert!(record(30.0, 20.0, 0.0, test_fill_style(0.0, 0.0)).is_none());
-        assert!(record(0.0, 20.0, 0.0, test_fill_style(1.0, 2.0)).is_none());
-        assert!(record(30.0, 0.0, 0.0, test_fill_style(1.0, 2.0)).is_none());
+        assert!(record(30.0, 20.0, 0.0, test_fill_style(0, 0.0)).is_none());
+        assert!(record(0.0, 20.0, 0.0, test_fill_style(255, 2.0)).is_none());
+        assert!(record(30.0, 0.0, 0.0, test_fill_style(255, 2.0)).is_none());
     }
 
     #[test]

@@ -177,7 +177,7 @@ macro_rules! axis_spacing {
             pub(crate) fn new($($field: RelativeSpacing),+) -> Result<Self> { Ok(Self { $($field),+ }) }
             $(
                 pub(crate) fn $field(&self) -> &RelativeSpacing { &self.$field }
-                #[cfg_attr(not(test), expect(dead_code, reason = "private spacing edits await complete Theme exposure"))]
+                #[allow(dead_code, reason = "private spacing edits await complete Theme exposure")]
                 pub(crate) fn $edit(mut self, value: RelativeSpacing) -> Result<Self> {
                     self.$field = value;
                     self.revalidated()

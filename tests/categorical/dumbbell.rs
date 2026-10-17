@@ -1,4 +1,4 @@
-use lichtung_plot::{CategoryValues, DumbbellEndpoints, NumericValues, Plot};
+use lichtung_plot::{CategoryValues, Color, DumbbellEndpoints, NumericValues, Plot};
 
 use super::unique_dir;
 
@@ -13,9 +13,9 @@ struct DumbbellData {
 fn endpoints() -> DumbbellEndpoints {
     DumbbellEndpoints::new(
         "Lower is preferred",
-        (20, 90, 150),
+        Color::rgb(20, 90, 150),
         "Higher is preferred",
-        (190, 65, 45),
+        Color::rgb(190, 65, 45),
     )
     .unwrap()
 }
@@ -173,18 +173,23 @@ fn dumbbell_endpoint_labels_are_caller_owned_not_inferred_direction() {
 #[test]
 fn dumbbell_endpoint_type_rejects_empty_or_duplicate_labels() {
     let errors = [
-        DumbbellEndpoints::new(" ", (0, 0, 0), "After", (1, 1, 1))
+        DumbbellEndpoints::new(" ", Color::rgb(0, 0, 0), "After", Color::rgb(1, 1, 1))
             .unwrap_err()
             .to_string(),
-        DumbbellEndpoints::new("Same", (0, 0, 0), "Same", (1, 1, 1))
+        DumbbellEndpoints::new("Same", Color::rgb(0, 0, 0), "Same", Color::rgb(1, 1, 1))
             .unwrap_err()
             .to_string(),
-        DumbbellEndpoints::new("Same", (0, 0, 0), " Same ", (1, 1, 1))
+        DumbbellEndpoints::new("Same", Color::rgb(0, 0, 0), " Same ", Color::rgb(1, 1, 1))
             .unwrap_err()
             .to_string(),
-        DumbbellEndpoints::new("Before\n", (0, 0, 0), "After", (1, 1, 1))
-            .unwrap_err()
-            .to_string(),
+        DumbbellEndpoints::new(
+            "Before\n",
+            Color::rgb(0, 0, 0),
+            "After",
+            Color::rgb(1, 1, 1),
+        )
+        .unwrap_err()
+        .to_string(),
     ];
 
     assert!(errors

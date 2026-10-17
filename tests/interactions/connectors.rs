@@ -111,8 +111,8 @@ fn hidden_interaction_connectors_reject_configured_styles() {
     let frame = interaction_data();
     let invalid = chart(&frame)
         .styles([
-            InteractionStyle::new("Control"),
-            InteractionStyle::new("Active"),
+            InteractionStyle::new("Control").unwrap(),
+            InteractionStyle::new("Active").unwrap(),
         ])
         .connectors(false);
     assert!(invalid

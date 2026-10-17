@@ -383,21 +383,38 @@ fn validate_heatmap_annotation_label(value: &str, role: &str) -> Result<(), crat
 }
 
 /// Explicit endpoint identities and colors for a dumbbell plot.
+///
+/// Each exact Color replaces the entire endpoint fill and its literal guide
+/// paint. Theme marker geometry and the independent outline still apply.
+/// ```
+/// use lichtung_plot::{Color, DumbbellEndpoints};
+/// let endpoints = DumbbellEndpoints::new(
+///     "Before", Color::rgba(20, 80, 140, 128), "After", Color::rgb(180, 60, 40),
+/// )?;
+/// assert_eq!(endpoints.left_color().alpha(), 128);
+/// assert_eq!(endpoints.right_color().alpha(), 255);
+/// # Ok::<(), lichtung_plot::Error>(())
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::DumbbellEndpoints;
+/// let _ = DumbbellEndpoints::new("Before", (20, 80, 140), "After", (180, 60, 40));
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DumbbellEndpoints {
     left_label: String,
-    left_color: (u8, u8, u8),
+    left_color: crate::Color,
     right_label: String,
-    right_color: (u8, u8, u8),
+    right_color: crate::Color,
 }
 
 impl DumbbellEndpoints {
     /// Construct two explicitly labeled and colored endpoint identities.
     pub fn new(
         left_label: impl Into<String>,
-        left_color: (u8, u8, u8),
+        left_color: crate::Color,
         right_label: impl Into<String>,
-        right_color: (u8, u8, u8),
+        right_color: crate::Color,
     ) -> Result<Self, crate::Error> {
         let endpoints = Self {
             left_label: left_label.into(),
@@ -434,9 +451,9 @@ impl DumbbellEndpoints {
         &self.left_label
     }
 
-    /// RGB color for the left-value endpoint.
+    /// Complete exact RGBA paint for the left-value endpoint and its guide key.
     #[must_use]
-    pub const fn left_color(&self) -> (u8, u8, u8) {
+    pub const fn left_color(&self) -> crate::Color {
         self.left_color
     }
 
@@ -446,9 +463,9 @@ impl DumbbellEndpoints {
         &self.right_label
     }
 
-    /// RGB color for the right-value endpoint.
+    /// Complete exact RGBA paint for the right-value endpoint and its guide key.
     #[must_use]
-    pub const fn right_color(&self) -> (u8, u8, u8) {
+    pub const fn right_color(&self) -> crate::Color {
         self.right_color
     }
 }

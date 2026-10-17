@@ -18,10 +18,11 @@ consolidated, the complete gate includes doctests, and final `just verify` passe
 and separate before/after censuses. The subsequent user-directed deletion reduced
 library tests from 1,349 to 671, with the complete gate passing. The user has now
 authorized resuming T6. Validated private foundations and the complete immutable
-Theme construction/consumer-resolution umbrellas T6B1/T6B2 are complete. Spec93
-records their focused verification and the next public exact-style and complete
-Theme API cutovers; `../docs/theme-consumer-closure.md` reconciles actual owners
-and identities. New unit tests must
+Theme construction/consumer-resolution umbrellas T6B1/T6B2 are complete. The public
+exact-style cutover T6B3 is also complete; `../docs/exact-element-styles.md` records
+typed RGBA/selector behavior and actual verification. Spec93 records the next
+complete Theme API cutover; `../docs/theme-consumer-closure.md` reconciles actual
+owners and identities. New unit tests must
 replace existing tests in the same logical change without increasing the
 discovered count; AGENTS.md and spec90 own this continuing repository rule.
 

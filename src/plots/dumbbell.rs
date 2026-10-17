@@ -73,11 +73,9 @@ pub(crate) fn intrinsic_body_minimum(
     let mut outward = 0.0_f64;
     let mut numeric = 0.0_f64;
     for color in [endpoints.left_color(), endpoints.right_color()] {
-        if let Some(ink) = crate::render::geometry::point_ink_bounds(&chart.point_style(
-            theme,
-            color,
-            theme.marks.points().radii().dumbbell(),
-        ))? {
+        if let Some(ink) =
+            crate::render::geometry::point_ink_bounds(&endpoint_style(chart, theme, color))?
+        {
             outward = outward.max(ink.top.max(-ink.bottom));
             numeric = numeric.max(ink.right - ink.left);
         }
@@ -133,7 +131,7 @@ impl DumbbellData {
         ] {
             entries.push(LegendEntry::point(
                 chart.point_legend_identity(label)?,
-                chart.point_style(theme, color, theme.marks.points().radii().dumbbell()),
+                endpoint_style(chart, theme, color),
             ));
         }
         Ok(entries)
@@ -249,16 +247,8 @@ fn project(
         pairs: Vec::new(),
         connector,
         points: [
-            chart.point_style(
-                theme,
-                endpoints.left_color(),
-                theme.marks.points().radii().dumbbell(),
-            ),
-            chart.point_style(
-                theme,
-                endpoints.right_color(),
-                theme.marks.points().radii().dumbbell(),
-            ),
+            endpoint_style(chart, theme, endpoints.left_color()),
+            endpoint_style(chart, theme, endpoints.right_color()),
         ],
         domain_expansions: [None; 2],
     };
@@ -433,6 +423,22 @@ pub(crate) fn prepare<'a>(
     })
 }
 
+fn endpoint_style(
+    chart: &Plot,
+    theme: &crate::theme::ResolvedTheme,
+    color: crate::Color,
+) -> crate::render::backend::PointStyle {
+    let mut point = chart.point_style(
+        theme,
+        (color.red(), color.green(), color.blue()),
+        theme.marks.points().radii().dumbbell(),
+    );
+    // Exact endpoint paint replaces the entire fill. Theme geometry and the
+    // independent outline policy still apply to both marks and literal keys.
+    point.color = color;
+    point
+}
+
 fn resolved_level_index(
     levels: &[String],
     value: &str,
@@ -477,3 +483,6 @@ fn replicate_y(
     let slot = 0.72 / group_count as f64;
     center + 0.36 - slot * (group_index as f64 + 0.5)
 }
+
+#[cfg(test)]
+mod tests;

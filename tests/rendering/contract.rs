@@ -1,5 +1,5 @@
 use lichtung_plot::{
-    BarInput, BarPointLayer, Bounds, Canvas, CategoryValues, FacetSpec, NumericValues, Plot,
+    BarInput, BarPointLayer, Bounds, Canvas, CategoryValues, Color, FacetSpec, NumericValues, Plot,
     TextPanel,
 };
 
@@ -103,9 +103,8 @@ fn bar_point_layers_retain_rows_at_exact_grouped_centers_in_both_orientations() 
             point_category.clone(),
             Some(point_group.clone()),
             point_value.clone(),
-            (123, 45, 200),
+            Color::rgba(123, 45, 200, 102),
             5,
-            0.4,
         )
         .unwrap()
     };
@@ -147,9 +146,8 @@ fn unknown_bar_point_category_rejects_during_preflight() {
         CategoryValues::new("category", ["missing"]).unwrap(),
         None,
         NumericValues::new("value", [3.0]),
-        (1, 2, 3),
+        Color::rgba(1, 2, 3, 128),
         3,
-        0.5,
     )
     .unwrap();
     let plot = Plot::bar(
@@ -176,18 +174,16 @@ fn bar_point_layers_reject_nonfinite_mismatch_and_facets() {
         point_category.clone(),
         None,
         NumericValues::new("value", [f64::NAN]),
-        (1, 2, 3),
+        Color::rgba(1, 2, 3, 128),
         3,
-        0.5,
     )
     .unwrap();
     let grouped = BarPointLayer::new(
         point_category.clone(),
         Some(point_group),
         point_value.clone(),
-        (1, 2, 3),
+        Color::rgba(1, 2, 3, 128),
         3,
-        0.5,
     )
     .unwrap();
     let nonfinite_plot =
@@ -195,7 +191,14 @@ fn bar_point_layers_reject_nonfinite_mismatch_and_facets() {
     let mismatch_plot = Plot::bar(category.clone(), BarInput::estimates(value.clone()))
         .series(group.clone())
         .point_layer(
-            BarPointLayer::new(point_category, None, point_value, (1, 2, 3), 3, 0.5).unwrap(),
+            BarPointLayer::new(
+                point_category,
+                None,
+                point_value,
+                Color::rgba(1, 2, 3, 128),
+                3,
+            )
+            .unwrap(),
         );
     let faceted_plot = Plot::bar(category, BarInput::estimates(value))
         .series(group)

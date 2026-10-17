@@ -231,7 +231,13 @@ fn configured_dumbbell_plot(data: &DumbbellGroupingData) -> Plot {
         data.category.clone(),
         data.left.clone(),
         data.right.clone(),
-        DumbbellEndpoints::new("Left", (20, 80, 140), "Right", (180, 60, 40)).unwrap(),
+        DumbbellEndpoints::new(
+            "Left",
+            lichtung_plot::Color::rgb(20, 80, 140),
+            "Right",
+            lichtung_plot::Color::rgb(180, 60, 40),
+        )
+        .unwrap(),
     )
     .group(data.group.clone())
     .erase()

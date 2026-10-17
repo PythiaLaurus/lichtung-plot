@@ -2,12 +2,12 @@
 
 ## Optional Instructions And Selected Defaults
 
-PointLayer now retains optional complete color, radius and byte-alpha
-instructions. Construction leaves each absent. The current RGB input constructs
-an opaque paint; the current floating-opacity setter validates and quantizes once
-into the retained byte instruction. It no longer stores a default radius or a
-floating opacity that obscures absence. Typed public edits/getters remain the
-following atomic style API cutover.
+PointLayer retains optional complete color, radius and byte-alpha instructions.
+Construction leaves each absent. At this private-resolution checkpoint, the old
+RGB and floating-opacity inputs adapted once to these retained instructions,
+without storing defaults that obscure absence. The subsequent public cutover
+removed those adapters and exposed typed edits/getters;
+`exact-element-styles.md` records the current API and its verification.
 
 Final mark resolution selects the stable append-slot accent and the owning
 `points.supplemental` radius/alpha, then applies complete color, alpha replacement

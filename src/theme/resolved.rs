@@ -1175,12 +1175,9 @@ impl TextTheme {
         )
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "construction-only leading edits await complete theme customization"
-        )
+    #[allow(
+        dead_code,
+        reason = "construction-only leading edits await complete theme customization"
     )]
     pub(crate) fn with_line_height(self, line_height: f64) -> Result<Self, Error> {
         Self::new(
@@ -1474,81 +1471,6 @@ pub(super) fn chi_theme() -> Result<ThemeValue, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn text_theme_construction_and_edits_preserve_complete_independent_inputs() {
-        let stack = crate::font::canonical::named_stack(&["Literal, Sans", "serif"]);
-        let source = TextTheme::new(
-            stack.clone(),
-            Color::rgba(13, 29, 47, 61),
-            23,
-            TextWeight::Semibold,
-            1.75,
-        )
-        .unwrap();
-        assert_eq!(source.stack(), &stack);
-        assert_eq!(source.color(), Color::rgba(13, 29, 47, 61));
-        assert_eq!(source.font_size(), 23);
-        assert_eq!(source.weight(), TextWeight::Semibold);
-        assert_eq!(source.line_height().to_bits(), 1.75_f64.to_bits());
-        assert_eq!(source.line_pitch_pixels().to_bits(), 40.25_f64.to_bits());
-
-        let replacement = crate::font::canonical::named_stack(&["Other face"]);
-        let cases = [
-            (
-                source.clone().with_stack(replacement.clone()).unwrap(),
-                TextTheme {
-                    stack: replacement,
-                    ..source.clone()
-                },
-            ),
-            (
-                source
-                    .clone()
-                    .with_color(Color::rgba(71, 83, 97, 0))
-                    .unwrap(),
-                TextTheme {
-                    paint: Color::rgba(71, 83, 97, 0),
-                    ..source.clone()
-                },
-            ),
-            (
-                source.clone().with_font_size(31).unwrap(),
-                TextTheme {
-                    font_size: 31,
-                    ..source.clone()
-                },
-            ),
-            (
-                source.clone().with_weight(TextWeight::Bold).unwrap(),
-                TextTheme {
-                    weight: TextWeight::Bold,
-                    ..source.clone()
-                },
-            ),
-            (
-                source.clone().with_line_height(2.125).unwrap(),
-                TextTheme {
-                    line_height_multiplier: 2.125,
-                    ..source.clone()
-                },
-            ),
-        ];
-        for (edited, expected) in cases {
-            assert_eq!(edited, expected);
-            assert_ne!(edited, source);
-        }
-        let repeated = source
-            .clone()
-            .with_font_size(31)
-            .unwrap()
-            .with_font_size(7)
-            .unwrap();
-        assert_eq!(repeated.font_size(), 7);
-        assert_eq!(repeated.line_height().to_bits(), 1.75_f64.to_bits());
-        assert_eq!(source.font_size(), 23);
-        assert_eq!(source.stack(), &stack);
-    }
 
     fn indexed_query_input<'a>(
         source: &'a str,

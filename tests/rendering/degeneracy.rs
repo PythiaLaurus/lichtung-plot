@@ -272,7 +272,13 @@ fn intervals(extent: f64) -> [Plot; 7] {
             category(),
             estimate(),
             NumericValues::new("right", [extent]),
-            lichtung_plot::DumbbellEndpoints::new("left", (1, 2, 3), "right", (4, 5, 6)).unwrap(),
+            lichtung_plot::DumbbellEndpoints::new(
+                "left",
+                lichtung_plot::Color::rgb(1, 2, 3),
+                "right",
+                lichtung_plot::Color::rgb(4, 5, 6),
+            )
+            .unwrap(),
         )
         .x_limits(-1.0, 1.0)
         .erase(),

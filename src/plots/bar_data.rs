@@ -1183,7 +1183,7 @@ fn prepare_point_layers(
                 category_index,
                 series_index,
                 value: values[row],
-                style: layer.point_style()?,
+                style: layer.point_style(),
             });
         }
     }

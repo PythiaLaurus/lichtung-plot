@@ -57,17 +57,16 @@ fn text_line<'a>(svg: &'a str, text: &str) -> &'a str {
         .unwrap()
 }
 
-fn style(color: (u8, u8, u8), pattern: LinePattern) -> GuideStyle {
+fn style(color: lichtung_plot::Color, pattern: LinePattern) -> GuideStyle {
     GuideStyle::new(color, 1.25, pattern).unwrap()
 }
 
-fn point_layer(values: &PointValues, radius: u32, opacity: f64) -> PointLayer {
+fn point_layer(values: &PointValues, radius: u32, alpha: u8) -> PointLayer {
     PointLayer::new(values.x.clone(), values.y.clone())
-        .color((123, 45, 200))
-        .radius(radius)
+        .with_color(lichtung_plot::Color::rgb(123, 45, 200))
+        .with_radius(radius)
         .unwrap()
-        .opacity(opacity)
-        .unwrap()
+        .with_alpha(alpha)
 }
 
 fn supplemental_point(x: f64, y: f64) -> PointLayer {
@@ -97,15 +96,16 @@ fn automatic_point_layers_use_defaults_and_stable_no_hue_palette_order() {
 }
 
 #[test]
-fn point_layer_builders_validate_radius_and_opacity_immediately() {
+fn point_layer_edits_validate_radius_and_preserve_exact_alpha_endpoints() {
     let layer = supplemental_point(1.0, 2.0);
 
-    assert!(layer.clone().radius(1).is_ok());
-    assert!(layer.clone().radius(0).is_err());
-    assert!(layer.clone().opacity(1.0).is_ok());
-    assert!(layer.clone().opacity(0.0).is_err());
-    assert!(layer.clone().opacity(f64::NAN).is_err());
-    assert!(layer.opacity(f64::INFINITY).is_err());
+    assert!(layer.clone().with_radius(1).is_ok());
+    assert!(layer.clone().with_radius(0).is_err());
+    assert_eq!(layer.color(), None);
+    assert_eq!(layer.radius(), None);
+    assert_eq!(layer.alpha(), None);
+    assert_eq!(layer.clone().with_alpha(255).alpha(), Some(255));
+    assert_eq!(layer.with_alpha(0).alpha(), Some(0));
 }
 
 #[test]
@@ -170,7 +170,9 @@ fn explicit_point_layer_consumes_its_automatic_palette_position() {
     let frame = line_data();
     let output = svg(line_plot(&frame)
         .markers(false)
-        .point_layer(supplemental_point(0.25, 1.25).color((123, 45, 200)))
+        .point_layer(
+            supplemental_point(0.25, 1.25).with_color(lichtung_plot::Color::rgb(123, 45, 200)),
+        )
         .point_layer(supplemental_point(1.75, 2.75)));
     let points = output
         .lines()
@@ -188,7 +190,7 @@ fn point_labels_and_whole_layer_legend_identity_remain_distinct() {
         lichtung_plot::NumericValues::new("selected x", [0.5, 1.5]),
         lichtung_plot::NumericValues::new("selected y", [1.5, 2.5]),
     )
-    .color((123, 45, 200))
+    .with_color(lichtung_plot::Color::rgb(123, 45, 200))
     .labels(lichtung_plot::CategoryValues::new("annotations", ["first", "second"]).unwrap())
     .legend_label("Selected coordinates");
     let output = svg(line_plot(&frame).markers(false).point_layer(layer));
@@ -233,7 +235,7 @@ fn repeated_explicit_colors_and_exact_duplicate_legend_entries_are_accepted() {
     let frame = line_data();
     let layer = |x, y| {
         supplemental_point(x, y)
-            .color((123, 45, 200))
+            .with_color(lichtung_plot::Color::rgb(123, 45, 200))
             .legend_label("Selected")
     };
     let output = svg(line_plot(&frame)
@@ -258,12 +260,12 @@ fn conflicting_duplicate_point_layer_legend_identity_is_rejected() {
     let error = line_plot(&frame)
         .point_layer(
             supplemental_point(0.5, 1.5)
-                .color((123, 45, 200))
+                .with_color(lichtung_plot::Color::rgb(123, 45, 200))
                 .legend_label("Selected"),
         )
         .point_layer(
             supplemental_point(1.5, 2.5)
-                .color((0, 114, 178))
+                .with_color(lichtung_plot::Color::rgb(0, 114, 178))
                 .legend_label("Selected"),
         )
         .preflight()
@@ -359,32 +361,59 @@ fn explicit_y_ticks_reject_projected_neighboring_label_collisions() {
 #[test]
 fn horizontal_vertical_and_diagonal_guides_render_closed_styles() {
     let frame = line_data();
+    let diagonal = GuideStyle::new(lichtung_plot::Color::rgb(0, 0, 0), 2.0, LinePattern::Solid)
+        .unwrap()
+        .with_color(lichtung_plot::Color::rgba(34, 51, 204, 149))
+        .unwrap()
+        .with_width(1.25)
+        .unwrap()
+        .with_pattern(LinePattern::Dashed)
+        .unwrap();
+    assert_eq!(
+        diagonal.color(),
+        lichtung_plot::Color::rgba(34, 51, 204, 149)
+    );
+    assert_eq!(diagonal.width().to_bits(), 1.25_f32.to_bits());
+    assert_eq!(diagonal.pattern(), LinePattern::Dashed);
     let output = svg(line_plot(&frame)
         .x_limits(0.0, 2.0)
         .y_limits(0.0, 4.0)
         .guide(GuideSpec::horizontal(
             2.0,
-            style((200, 17, 34), LinePattern::Dashed),
+            style(
+                lichtung_plot::Color::rgba(200, 17, 34, 73),
+                LinePattern::Dashed,
+            ),
         ))
         .guide(GuideSpec::vertical(
             1.0,
-            style((17, 180, 51), LinePattern::Solid),
+            style(lichtung_plot::Color::rgb(17, 180, 51), LinePattern::Solid),
         ))
-        .guide(GuideSpec::segment(
-            0.0,
-            0.5,
-            2.0,
-            3.5,
-            style((34, 51, 204), LinePattern::Dashed),
-        )));
+        .guide(GuideSpec::segment(0.0, 0.5, 2.0, 3.5, diagonal)));
     assert!(["#C81122", "#11B433", "#2233CC"]
         .iter()
         .all(|color| output.contains(color)));
     assert_eq!(output.matches("stroke-dasharray=\"5 3\"").count(), 2);
+    let horizontal = output
+        .lines()
+        .find(|line| line.contains("stroke=\"#C81122\""))
+        .unwrap();
+    let diagonal = output
+        .lines()
+        .find(|line| line.contains("stroke=\"#2233CC\""))
+        .unwrap();
+    assert_eq!(
+        attribute(horizontal, "stroke-opacity").to_bits(),
+        (73.0_f64 / 255.0).to_bits()
+    );
+    assert_eq!(
+        attribute(diagonal, "stroke-opacity").to_bits(),
+        (149.0_f64 / 255.0).to_bits()
+    );
 }
 
 #[test]
-fn separate_point_layers_preserve_row_count_radius_and_opacity() {
+fn separate_point_layers_preserve_row_count_radius_and_alpha() {
     let frame = line_data();
     let first = observations();
     let second = PointValues {
@@ -393,8 +422,8 @@ fn separate_point_layers_preserve_row_count_radius_and_opacity() {
     };
     let output = svg(line_plot(&frame)
         .markers(false)
-        .point_layer(point_layer(&first, 5, 0.35))
-        .point_layer(point_layer(&second, 5, 0.35)));
+        .point_layer(point_layer(&first, 5, 89))
+        .point_layer(point_layer(&second, 5, 89)));
     let count = output
         .lines()
         .filter(|line| {
@@ -416,7 +445,7 @@ fn point_layer_and_line_ribbon_share_one_projection() {
     };
     let output = svg(line_plot(&frame)
         .markers(false)
-        .point_layer(point_layer(&raw, 4, 0.4)));
+        .point_layer(point_layer(&raw, 4, 102)));
     let point = output
         .lines()
         .find(|line| line.starts_with("<circle ") && line.contains("#7B2DC8"))
@@ -455,7 +484,7 @@ fn out_of_range_ticks_and_guides_are_rejected() {
             1.0,
             3.0,
             2.0,
-            style((0, 0, 0), LinePattern::Solid),
+            style(lichtung_plot::Color::rgb(0, 0, 0), LinePattern::Solid),
         ))
         .preflight()
         .unwrap_err()
@@ -482,7 +511,7 @@ fn point_layers_reject_incomplete_or_non_finite_rows() {
 fn supplemental_geometry_rejects_facets_and_incompatible_guides() {
     let frame = line_data();
     let observed = observations();
-    let layer = point_layer(&observed, 3, 0.5);
+    let layer = point_layer(&observed, 3, 128);
     let faceted = line_plot(&frame)
         .facet(FacetSpec::column(frame.panel.clone()))
         .point_layer(layer)
@@ -498,7 +527,7 @@ fn supplemental_geometry_rejects_facets_and_incompatible_guides() {
         1.0,
         1.0,
         2.0,
-        style((0, 0, 0), LinePattern::Solid),
+        style(lichtung_plot::Color::rgb(0, 0, 0), LinePattern::Solid),
     ))
     .preflight()
     .unwrap_err()
@@ -516,9 +545,9 @@ fn configured_numeric_layers_emit_deterministic_bytes() {
             .x_ticks(vec![AxisTick::new(0.0, "start"), AxisTick::new(2.0, "end")])
             .guide(GuideSpec::vertical(
                 1.0,
-                style((200, 17, 34), LinePattern::Dashed),
+                style(lichtung_plot::Color::rgb(200, 17, 34), LinePattern::Dashed),
             ))
-            .point_layer(point_layer(&observed, 3, 0.35))
+            .point_layer(point_layer(&observed, 3, 89))
     };
     assert_eq!(svg(build()), svg(build()));
 }

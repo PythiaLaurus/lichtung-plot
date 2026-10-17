@@ -27,8 +27,14 @@ fn interaction_data() -> StyledInteractionData {
         upper: NumericValues::new("upper", [1.2, 1.7, 1.4, 2.2]),
         panel: None,
         styles: vec![
-            InteractionStyle::new("Control").pattern(LinePattern::Dashed),
-            InteractionStyle::new("Semantic Agent").shape(PointShape::TriangleUp),
+            InteractionStyle::new("Control")
+                .unwrap()
+                .with_line_pattern(LinePattern::Dashed)
+                .unwrap(),
+            InteractionStyle::new("Semantic Agent")
+                .unwrap()
+                .with_point_shape(PointShape::TriangleUp)
+                .unwrap(),
         ],
     }
 }
@@ -101,9 +107,12 @@ fn native_interaction_keeps_panel_and_prose_inside_the_requested_root() {
     .hue(CategoryValues::new("hue", ["first", "first", "first", "second", "second"]).unwrap())
     .styles([
         InteractionStyle::new("two")
-            .shape(PointShape::TriangleUp)
-            .pattern(LinePattern::Dashed),
-        InteractionStyle::new("one"),
+            .unwrap()
+            .with_point_shape(PointShape::TriangleUp)
+            .unwrap()
+            .with_line_pattern(LinePattern::Dashed)
+            .unwrap(),
+        InteractionStyle::new("one").unwrap(),
     ])
     .labels(Labels::humanized().alias("after_visit", "A longer follow-up visit"))
     .size(641, 401)
@@ -220,7 +229,7 @@ fn interaction_style_legend_matches_each_trace_glyph() {
 fn interaction_styles_reject_unknown_groups() {
     let data = interaction_data();
     let error = chart(&data, false)
-        .styles([InteractionStyle::new("Unknown")])
+        .styles([InteractionStyle::new("Unknown").unwrap()])
         .preflight()
         .unwrap_err()
         .to_string();
@@ -232,7 +241,7 @@ fn interaction_styles_reject_unknown_groups() {
 fn interaction_styles_require_one_style_per_group() {
     let data = interaction_data();
     let error = chart(&data, false)
-        .styles([InteractionStyle::new("Control")])
+        .styles([InteractionStyle::new("Control").unwrap()])
         .preflight()
         .unwrap_err()
         .to_string();
@@ -245,8 +254,11 @@ fn interaction_styles_reject_duplicate_groups() {
     let data = interaction_data();
     let error = chart(&data, false)
         .styles([
-            InteractionStyle::new("Control"),
-            InteractionStyle::new("Control").pattern(LinePattern::Dashed),
+            InteractionStyle::new("Control").unwrap(),
+            InteractionStyle::new("Control")
+                .unwrap()
+                .with_line_pattern(LinePattern::Dashed)
+                .unwrap(),
         ])
         .preflight()
         .unwrap_err()
@@ -306,8 +318,14 @@ fn faceted_interactions_keep_sparse_global_pair_styles_and_colors() {
         Plot::interaction(condition, estimate, group, Bounds::new(lower, upper))
             .hue(hue)
             .styles([
-                InteractionStyle::new("g1").pattern(LinePattern::Dashed),
-                InteractionStyle::new("g2").shape(PointShape::TriangleUp),
+                InteractionStyle::new("g1")
+                    .unwrap()
+                    .with_line_pattern(LinePattern::Dashed)
+                    .unwrap(),
+                InteractionStyle::new("g2")
+                    .unwrap()
+                    .with_point_shape(PointShape::TriangleUp)
+                    .unwrap(),
             ])
             .categorical_colors(colors)
             .facet(FacetSpec::column(panel))
@@ -401,8 +419,14 @@ fn crossed_group_hue_interactions_render_only_observed_pair_traces() {
         Plot::interaction(condition, estimate, group, Bounds::new(lower, upper))
             .hue(hue)
             .styles([
-                InteractionStyle::new("g1").pattern(LinePattern::Dashed),
-                InteractionStyle::new("g2").shape(PointShape::TriangleUp),
+                InteractionStyle::new("g1")
+                    .unwrap()
+                    .with_line_pattern(LinePattern::Dashed)
+                    .unwrap(),
+                InteractionStyle::new("g2")
+                    .unwrap()
+                    .with_point_shape(PointShape::TriangleUp)
+                    .unwrap(),
             ])
             .categorical_colors(colors),
     );
@@ -468,14 +492,20 @@ fn shared_canvas_legend_preserves_caller_colors_and_composite_trace_glyphs() {
         NumericValues::new("estimate", [1.0, 1.5]),
         NumericValues::new("lower", [0.8, 1.3]),
         NumericValues::new("upper", [1.2, 1.7]),
-        InteractionStyle::new("Control").pattern(LinePattern::Dashed),
+        InteractionStyle::new("Control")
+            .unwrap()
+            .with_line_pattern(LinePattern::Dashed)
+            .unwrap(),
     );
     let semantic = single_series_data(
         CategoryValues::new("series", ["Semantic Agent", "Semantic Agent"]).unwrap(),
         NumericValues::new("estimate", [1.2, 2.0]),
         NumericValues::new("lower", [1.0, 1.8]),
         NumericValues::new("upper", [1.4, 2.2]),
-        InteractionStyle::new("Semantic Agent").shape(PointShape::TriangleUp),
+        InteractionStyle::new("Semantic Agent")
+            .unwrap()
+            .with_point_shape(PointShape::TriangleUp)
+            .unwrap(),
     );
     let colors = CategoricalColors::new([
         ("Control".to_owned(), (51, 51, 51)),
@@ -529,7 +559,10 @@ fn shared_canvas_legend_rejects_conflicting_caller_color_mapping() {
         NumericValues::new("estimate", [1.0, 1.5]),
         NumericValues::new("lower", [0.8, 1.3]),
         NumericValues::new("upper", [1.2, 1.7]),
-        InteractionStyle::new("Control").pattern(LinePattern::Dashed),
+        InteractionStyle::new("Control")
+            .unwrap()
+            .with_line_pattern(LinePattern::Dashed)
+            .unwrap(),
     );
     let gray = CategoricalColors::new([("Control".to_owned(), (51, 51, 51))]).unwrap();
     let blue = CategoricalColors::new([("Control".to_owned(), (0, 114, 178))]).unwrap();

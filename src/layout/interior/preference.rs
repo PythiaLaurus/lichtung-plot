@@ -434,7 +434,13 @@ mod tests {
             CategoryValues::new("category", ["a", "b", "a", "b"]).unwrap(),
             NumericValues::new("left", [1.0, 2.0, 3.0, 4.0]),
             NumericValues::new("right", [4.0, 3.0, 2.0, 1.0]),
-            crate::DumbbellEndpoints::new("Before", (1, 2, 3), "After", (4, 5, 6)).unwrap(),
+            crate::DumbbellEndpoints::new(
+                "Before",
+                crate::Color::rgb(1, 2, 3),
+                "After",
+                crate::Color::rgb(4, 5, 6),
+            )
+            .unwrap(),
         )
         .group(CategoryValues::new("series", ["one", "one", "two", "two"]).unwrap())
         .size(1200, 900)

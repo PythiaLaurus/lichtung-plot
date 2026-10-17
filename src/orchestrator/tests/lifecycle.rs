@@ -739,8 +739,13 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
                 group.clone(),
                 x.clone(),
                 y.clone(),
-                crate::DumbbellEndpoints::new("Left", (20, 80, 140), "Right", (180, 60, 40))
-                    .unwrap(),
+                crate::DumbbellEndpoints::new(
+                    "Left",
+                    crate::Color::rgb(20, 80, 140),
+                    "Right",
+                    crate::Color::rgb(180, 60, 40),
+                )
+                .unwrap(),
             )
             .group(interval_group.clone())
             .erase(),

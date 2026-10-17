@@ -87,7 +87,15 @@ fn selected_theme_gap_and_tick_height_survive_canonical_capture_with_exact_prece
         captured.points[2].y.units() - captured.points[0].y.units(),
         12 * 1024
     );
-    let exact = SignificanceMarkStyle::new(12, crate::TextWeight::Bold, 3.0).unwrap();
+    let exact = SignificanceMarkStyle::default()
+        .with_font_size(12)
+        .unwrap()
+        .with_weight(crate::TextWeight::Bold)
+        .unwrap()
+        .with_gap(-0.0)
+        .unwrap();
+    assert_eq!(exact.gap().to_bits(), 0);
+    let exact = exact.with_gap(3.0).unwrap();
     let effective = theme.effective_significance(Some(exact)).unwrap();
     assert!(effective.exact_override);
     assert_eq!(effective.label.font_size(), 12);

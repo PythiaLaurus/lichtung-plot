@@ -87,6 +87,24 @@ impl TextWeight {
 }
 
 /// Independent typography and clearance for exact significance marks.
+///
+/// An explicit default is 16 CSS pixels, Normal weight and an 8px gap. Omitting
+/// the style lets the owning theme supply those properties instead.
+/// ```
+/// use lichtung_plot::{SignificanceMarkStyle, TextWeight};
+/// let style = SignificanceMarkStyle::default()
+///     .with_font_size(18)?.with_weight(TextWeight::Semibold)?.with_gap(9.0)?;
+/// assert_eq!(style.font_size(), 18);
+/// assert_eq!(style.weight(), TextWeight::Semibold);
+/// assert_eq!(style.gap(), 9.0);
+/// # Ok::<(), lichtung_plot::Error>(())
+/// ```
+///
+/// Bare property names inspect; consuming edits use `with_`:
+/// ```compile_fail
+/// use lichtung_plot::SignificanceMarkStyle;
+/// let _ = SignificanceMarkStyle::default().gap(9.0);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SignificanceMarkStyle {
     font_size: u32,
@@ -112,44 +130,49 @@ impl SignificanceMarkStyle {
         .validate()
     }
 
-    /// Set the positive mark font size.
-    pub fn font_size(mut self, font_size: u32) -> Result<Self, Error> {
+    /// Replace the positive mark font size in CSS pixels.
+    pub fn with_font_size(mut self, font_size: u32) -> Result<Self, Error> {
         self.font_size = font_size;
         self.validate()
     }
 
-    /// Set the mark font weight.
-    #[must_use]
-    pub const fn weight(mut self, weight: TextWeight) -> Self {
+    /// Replace the mark font weight.
+    pub fn with_weight(mut self, weight: TextWeight) -> Result<Self, Error> {
         self.weight = weight;
-        self
+        self.validate()
     }
 
-    /// Set the finite nonnegative mark-to-data gap in pixels.
-    pub fn gap(mut self, gap: f64) -> Result<Self, Error> {
+    /// Replace the finite nonnegative mark-to-data gap in CSS pixels.
+    pub fn with_gap(mut self, gap: f64) -> Result<Self, Error> {
         self.gap = gap;
         self.validate()
     }
 
-    fn validate(self) -> Result<Self, Error> {
+    fn validate(mut self) -> Result<Self, Error> {
         if self.font_size == 0 || !self.gap.is_finite() || self.gap < 0.0 {
             return Err(Error::Data(
                 "significance mark style requires positive font size and finite nonnegative gap"
                     .into(),
             ));
         }
+        if self.gap == 0.0 {
+            self.gap = 0.0;
+        }
         Ok(self)
     }
 
-    pub(crate) const fn font_size_spec(self) -> u32 {
+    /// Inspect the exact positive font size in CSS pixels.
+    pub const fn font_size(&self) -> u32 {
         self.font_size
     }
 
-    pub(crate) const fn weight_spec(self) -> TextWeight {
+    /// Inspect the exact font weight.
+    pub const fn weight(&self) -> TextWeight {
         self.weight
     }
 
-    pub(crate) const fn gap_spec(self) -> f64 {
+    /// Inspect the exact finite nonnegative gap in CSS pixels.
+    pub const fn gap(&self) -> f64 {
         self.gap
     }
 }
@@ -229,21 +252,23 @@ impl LinePattern {
             Self::Dashed => crate::render::backend::StrokePattern::LongDash,
         }
     }
-
-    pub(crate) fn line_style(
-        self,
-        color: (u8, u8, u8),
-        width: f32,
-    ) -> crate::render::backend::LineStyle {
-        crate::render::backend::LineStyle {
-            color: crate::theme::color_from_rgb(color),
-            width,
-            pattern: self.stroke_pattern(),
-        }
-    }
 }
 
 /// One exact point and connector style owned by an interaction group.
+///
+/// ```
+/// use lichtung_plot::{InteractionStyle, LinePattern, PointShape};
+/// let style = InteractionStyle::new("Control")?
+///     .with_point_shape(PointShape::TriangleUp)?
+///     .with_line_pattern(LinePattern::Dashed)?;
+/// assert_eq!(style.group(), "Control");
+/// # Ok::<(), lichtung_plot::Error>(())
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{InteractionStyle, PointShape};
+/// let _ = InteractionStyle::new("Control").unwrap().shape(PointShape::TriangleUp);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InteractionStyle {
     group: String,
@@ -253,27 +278,40 @@ pub struct InteractionStyle {
 
 impl InteractionStyle {
     /// Construct a circle-and-solid style for one exact graphical group label.
-    #[must_use]
-    pub fn new(group: impl Into<String>) -> Self {
+    ///
+    /// The raw selector must be nonempty, already trimmed and control-free.
+    /// Its bytes, including interior whitespace, are retained for exact lookup.
+    pub fn new(group: impl Into<String>) -> Result<Self, Error> {
         Self {
             group: group.into(),
             shape: PointShape::default(),
             pattern: LinePattern::default(),
         }
+        .validate()
     }
 
     /// Select the point shape for this group.
-    #[must_use]
-    pub const fn shape(mut self, shape: PointShape) -> Self {
+    pub fn with_point_shape(mut self, shape: PointShape) -> Result<Self, Error> {
         self.shape = shape;
-        self
+        self.validate()
     }
 
     /// Select the connector pattern for this group.
-    #[must_use]
-    pub const fn pattern(mut self, pattern: LinePattern) -> Self {
+    pub fn with_line_pattern(mut self, pattern: LinePattern) -> Result<Self, Error> {
         self.pattern = pattern;
-        self
+        self.validate()
+    }
+
+    fn validate(self) -> Result<Self, Error> {
+        if self.group.is_empty()
+            || self.group.trim() != self.group
+            || self.group.chars().any(char::is_control)
+        {
+            return Err(Error::Data(
+                "interaction style group must be nonempty, already trimmed, and contain no control characters".into(),
+            ));
+        }
+        Ok(self)
     }
 
     /// Exact graphical group label that owns this style.

@@ -59,11 +59,11 @@ align with the primary line input. Multiple layers append in call order and
 render over primary ribbons, lines, and markers. Generic faceting rejects them.
 The renderer assigns a deterministic theme-coordinated color and selects the
 theme's supplemental radius and byte alpha (built-ins use 4 and 204). An explicit
-RGB color replaces the mark paint with that opaque color; a separate opacity
-instruction replaces its alpha after one byte quantization. Radius replaces only
+`Color` replaces the complete mark RGBA; a separate byte-alpha
+instruction replaces its alpha without multiplication or floating conversion. Radius replaces only
 geometry. Point-label text retains its complete theme text role: automatic mark
 color/alpha do not recolor it, explicit color replaces its paint, and explicit
-opacity replaces only its alpha. The
+alpha replaces only its alpha. The
 primary line occupies one palette slot without hue, or one slot per level in its
 resolved hue domain with hue. A Canvas shared legend therefore reserves every
 Canvas-coordinated hue level, including a level absent from that local plot. An
@@ -87,7 +87,10 @@ x values, and alone accepts `LinePathStyle`. Marker visibility is configurable
 for ordinary lines and line paths, but not trajectories.
 
 Dumbbell construction atomically consumes both numeric endpoints and their
-explicit labels and colors. Waterfall construction consumes a finite base;
+explicit labels and complete `Color` paints. Each endpoint's exact RGBA also
+supplies its literal guide key; theme radius/shape and independent outline apply
+without multiplying the exact fill alpha by a theme alpha. The neutral connector
+is independent. Waterfall construction consumes a finite base;
 rendering derives every span and the terminal through one ordered cumulative
 pass. Every intermediate endpoint must be finite. The final cumulative endpoint
 is the sole terminal used by ranges, guides, and labels; a separately associated
@@ -134,6 +137,11 @@ the same point shape and connector pattern. `CategoricalColors` is keyed only by
 hue. A group-only styled interaction still emits the complete configured group
 glyph. Plain grouping without hue or group-specific visible style partitions
 geometry but creates no legend identity.
+The style constructor is fallible and requires a nonempty, already trimmed,
+control-free raw group selector, retaining interior whitespace and Unicode bytes
+for exact group lookup. Prepared resolution rejects unknown, duplicate or
+incomplete supplied mappings before fonts. `with_point_shape` and
+`with_line_pattern` replace only their own glyph fields.
 
 Trajectory and neutral line-path grouping remain different: group owns the
 connector while hue may vary point by point inside that group. Their legends
@@ -144,6 +152,30 @@ If group and hue have the same semantic name, their aligned categorical values
 must be identical and they collapse to one semantic dimension. Same-named but
 different values reject. Distinct semantic fields remain distinct even when one
 observed pair contains equal display values.
+
+## Exact Element Styles
+
+`Color` is an immutable crate-root RGBA byte value with `rgb`, `rgba` and strict
+`hex` constructors, readonly channel getters and replacement `with_alpha`.
+Hex accepts exactly ASCII `#RRGGBB` or `#RRGGBBAA`, with no trimming, shorthand or
+CSS expression syntax. All alpha values, including 0 and 255, are valid.
+
+`GuideStyle` consumes a complete Color, positive finite width and closed
+`LinePattern`; readonly properties and fallible `with_color`, `with_width` and
+`with_pattern` edits retain one complete style. Guide geometry is unchanged.
+`PointLayer` exposes optional color/alpha/radius instructions through getters and
+`with_color`, `with_alpha`, and positive-radius `with_radius` edits. Independent
+alpha wins in either edit order. `BarPointLayer` instead requires complete Color
+and positive radius in its constructor, retains plain Circle/no-outline geometry
+and prepared bar centers, and creates no layer legend.
+
+`SignificanceMarkStyle` consumes positive CSS font size, closed weight and finite
+nonnegative CSS gap, normalizing signed zero. Getters inspect the exact value;
+fallible `with_font_size`, `with_weight` and `with_gap` replace their own fields.
+An explicit default is 16px/Normal/8px; absence reads the complete theme role and
+theme-owned gap. Exact style never replaces role stack/color/leading or bracket
+geometry. Old tuple-paint, floating-opacity and consuming bare-field style routes
+are removed rather than retained as aliases.
 
 ## Numeric Ticks
 

@@ -93,5 +93,5 @@ pub use spec::{
     StandardDeviation, StandardError, TextWeight, ValueSort, WaterfallLabels,
 };
 pub use spec::{PngCompression, PngOptions, PngSizing};
-pub use theme::Theme;
+pub use theme::{Color, Theme};
 pub use values::{BooleanValues, CategoryValues, NumericValues, SourceRows};

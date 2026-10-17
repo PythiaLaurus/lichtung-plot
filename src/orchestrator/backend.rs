@@ -2037,7 +2037,10 @@ mod tests {
             )?;
             backend.draw_scatter(
                 &[Point2D::new(10.0, 20.0)],
-                &PointStyle::plain((1, 2, 3), 2).with_opacity(1.0).unwrap(),
+                &PointStyle {
+                    color: Color::rgb(1, 2, 3),
+                    ..PointStyle::plain((1, 2, 3), 2)
+                },
             )
         });
         let plan = root.plan();

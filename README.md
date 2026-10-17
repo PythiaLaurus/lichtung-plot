@@ -46,6 +46,33 @@ let canvas = Canvas::grid(1, 2)?
 # Ok::<(), lichtung_plot::Error>(())
 ```
 
+## Exact Element Paint
+
+Exact styles accept a complete `Color`, including its byte alpha. An independent
+point-layer alpha replaces that color's alpha in either edit order; omitted
+color, alpha and radius instructions use the owning theme's defaults.
+
+```rust
+use lichtung_plot::{Color, GuideSpec, GuideStyle, LinePattern, NumericValues, Plot, PointLayer};
+
+let points = PointLayer::new(
+    NumericValues::new("selected x", [1.0]),
+    NumericValues::new("selected y", [2.0]),
+)
+.with_color(Color::hex("#14508C80")?)
+.with_alpha(192)
+.with_radius(5)?;
+let guide = GuideStyle::new(Color::rgba(180, 60, 40, 128), 1.5, LinePattern::Dashed)?;
+let plot = Plot::line(
+    NumericValues::new("x", [0.0, 1.0, 2.0]),
+    NumericValues::new("y", [1.0, 2.0, 3.0]),
+)
+.point_layer(points)
+.guide(GuideSpec::horizontal(2.0, guide));
+# let _ = plot;
+# Ok::<(), lichtung_plot::Error>(())
+```
+
 ## Fonts
 
 Outlined SVG and PNG generation resolve installed system fonts from this
