@@ -10,6 +10,9 @@ use crate::layout::{AddressRole, ComponentAddress, PanelBox};
 use crate::theme::ResolvedTheme;
 use crate::{Error, Plot};
 
+#[cfg(test)]
+mod tests;
+
 /// Root-local measured consequences. Source data, labels, typography and guide
 /// semantics are immutable under this owner; coordinated inputs below are not.
 #[derive(Default)]
@@ -26,6 +29,7 @@ struct HeightInputs {
     y_labels: bool,
     legend: crate::LegendPolicy,
     continuous_hidden: bool,
+    numeric: crate::numeric::inputs::NumericInputs,
     scope: Option<String>,
 }
 
@@ -45,6 +49,7 @@ impl HeightInputs {
             || self.y_labels != other.y_labels
             || self.legend != other.legend
             || self.continuous_hidden != other.continuous_hidden
+            || self.numeric != other.numeric
         {
             return false;
         }
@@ -100,6 +105,7 @@ impl HeightInputs {
             y_labels: plot.y_tick_labels_visible(),
             legend: plot.legend_policy_spec(),
             continuous_hidden: plot.continuous_guide_suppressed(),
+            numeric: crate::numeric::inputs::NumericInputs::new(plot)?,
             scope: plot
                 .axis_scope()
                 .map(crate::data::source::copy_source_string)

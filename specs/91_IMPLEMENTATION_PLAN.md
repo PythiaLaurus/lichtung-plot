@@ -6612,8 +6612,10 @@ Local/final-Shared guide policy/set coordination is complete in
 `../docs/coordinated-numeric-guides.md`, including early suppressed-child handling
 and canonical natural/local descriptors. Prepared value sets and retained Waterfall
 total-window results/refusals are complete in
-`../docs/prepared-numeric-annotations.md`. Remaining composed identity evidence and
-public replacement follow their scheduled leaves.
+`../docs/prepared-numeric-annotations.md`. Complete composed numeric keys and
+equal-text invalidation are complete in `../docs/composed-numeric-identities.md`.
+The demonstrated pre-existing automatic Canvas shared-header/range-group sizing
+refusal receives a separate owning repair before public replacement.
 
 ENTRY gate is CLOSED by the user's explicit approval of the current-implementation
 assessment and request to plan T6:

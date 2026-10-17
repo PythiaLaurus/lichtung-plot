@@ -30,6 +30,7 @@ pub(crate) mod decimal;
     reason = "complete private policy precedes its consumer/public attachments"
 )]
 pub(crate) mod format;
+pub(crate) mod inputs;
 pub(crate) mod profiles;
 pub(crate) mod set;
 

@@ -32,6 +32,8 @@ impl NumericPresentation {
         round.observe_count(usize::from(self.set.precision))?;
         round.observe_count(self.set.members.len())?;
         for &value in &self.set.members {
+            // Spatial feedback normalizes zero; scientific occurrences retain its sign.
+            round.observe_count(usize::from(value >> 63 != 0))?;
             round.observe_number(f64::from_bits(value))?;
         }
         for label in &self.set.labels {

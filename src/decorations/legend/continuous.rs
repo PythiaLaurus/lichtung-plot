@@ -611,6 +611,7 @@ impl MeasuredContinuousGuide {
         round.observe_count(usize::from(self.precision))?;
         round.observe_count(self.members.len())?;
         for &value in &self.members {
+            round.observe_count(usize::from(value >> 63 != 0))?;
             round.observe_number(f64::from_bits(value))?;
         }
         for value in [

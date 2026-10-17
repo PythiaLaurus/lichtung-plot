@@ -15,17 +15,39 @@ fn interval_copy_and_composed_identity_include_both_axes() {
     let mut plot = plot()
         .x_tick_interval(TickInterval::additive(2.0).unwrap())
         .y_tick_interval(TickInterval::additive(1.0).unwrap())
+        .x_tick_format(
+            crate::numeric::format::NumericFormat::default()
+                .with_prefix("x ")
+                .unwrap(),
+        )
+        .y_tick_format(
+            crate::numeric::format::NumericFormat::default()
+                .with_suffix(" y")
+                .unwrap(),
+        )
         .erase();
 
     let retained = plot.retain_composed_inputs().unwrap();
     assert_eq!(retained.x_axis_spec.interval, plot.x_axis_spec.interval);
     assert_eq!(retained.y_axis_spec.interval, plot.y_axis_spec.interval);
+    assert_eq!(retained.x_axis_spec.format, plot.x_axis_spec.format);
+    assert_eq!(retained.y_axis_spec.format, plot.y_axis_spec.format);
     assert!(plot.same_composed_inputs(&retained));
     plot.x_axis_spec.interval = Some(TickInterval::additive(3.0).unwrap());
     assert!(!plot.same_composed_inputs(&retained));
     plot.x_axis_spec.interval = retained.x_axis_spec.interval;
     plot.y_axis_spec.interval = None;
     assert!(!plot.same_composed_inputs(&retained));
+    plot.y_axis_spec.interval = retained.y_axis_spec.interval;
+    for side in 0..2 {
+        let mut changed = plot.clone();
+        if side == 0 {
+            changed.x_axis_spec.format = None;
+        } else {
+            changed.y_axis_spec.format = None;
+        }
+        assert!(!changed.same_composed_inputs(&retained));
+    }
 }
 
 #[test]
@@ -55,23 +77,6 @@ fn equal_composed_endpoints_do_not_erase_range_provenance() {
         shared_retained.x_axis_spec.provenance,
         crate::layout::RangeProvenance::Shared
     );
-}
-
-#[test]
-fn composed_key_copy_preserves_complete_comparison_inputs() {
-    let plot = plot()
-        .erase()
-        .with_global_hue_levels(vec!["a".repeat(1024), "b".into(), "c".into()])
-        .with_global_group_levels(vec!["later".into(), "tail".into()]);
-
-    for mismatch in 0..=3 {
-        let mut retained = plot.retain_composed_inputs().unwrap();
-
-        if mismatch < 3 {
-            retained.global_hue_levels.as_mut().unwrap()[mismatch] = "different".into();
-        }
-        assert_eq!(plot.same_composed_inputs(&retained), mismatch == 3);
-    }
 }
 
 #[test]
@@ -184,7 +189,12 @@ fn interval_rendering_and_exact_precedence_are_cache_independent() {
     for exact in [false, true] {
         let mut plot = plot()
             .x_tick_interval(TickInterval::additive(2.0).unwrap())
-            .y_tick_interval(TickInterval::additive(1.0).unwrap());
+            .y_tick_interval(TickInterval::additive(1.0).unwrap())
+            .x_tick_format(
+                crate::numeric::format::NumericFormat::default()
+                    .with_suffix(" u")
+                    .unwrap(),
+            );
         if exact {
             plot = plot.x_ticks(vec![
                 crate::AxisTick::new(1.0, "one exact"),

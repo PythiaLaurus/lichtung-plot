@@ -570,7 +570,7 @@ enum AxisGutterOwner {
     Composition,
 }
 
-/// Only the values that parent coordination may replace for a fixed child owner.
+/// Coordinated replacements and complete numeric policies for a fixed child owner.
 pub(crate) struct ComposedInputs {
     x_axis_spec: AxisSpec,
     y_axis_spec: AxisSpec,
@@ -585,6 +585,7 @@ pub(crate) struct ComposedInputs {
     legend_policy: LegendPolicy,
     suppress_continuous_guide: bool,
     root_size: crate::layout::RootSize,
+    numeric: crate::numeric::inputs::NumericInputs,
 }
 
 impl Plot<crate::kind::Any> {

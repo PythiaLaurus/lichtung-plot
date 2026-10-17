@@ -123,7 +123,6 @@ impl<K: crate::kind::Marker> Plot<K> {
             if axis.limits != other.limits
                 || axis.provenance != other.provenance
                 || axis.interval != other.interval
-                || axis.format != other.format
                 || !same_values(axis.exact_ticks.as_deref(), other.exact_ticks.as_deref())
             {
                 return false;
@@ -155,6 +154,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             && self.legend_policy == other.legend_policy
             && self.suppress_continuous_guide == other.suppress_continuous_guide
             && self.root_size == other.root_size
+            && other.numeric.matches(self)
     }
 
     pub(crate) fn retain_composed_inputs(&self) -> Result<ComposedInputs, crate::Error> {
@@ -231,6 +231,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             legend_policy: self.legend_policy,
             suppress_continuous_guide: self.suppress_continuous_guide,
             root_size: self.root_size,
+            numeric: crate::numeric::inputs::NumericInputs::new(self)?,
         })
     }
 

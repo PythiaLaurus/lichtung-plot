@@ -1155,6 +1155,27 @@ fn reconcile_facet_axis(
         }
     }
     if first.categories[side].is_none() {
+        fn presentation(
+            axes: &PreparedAxes,
+            side: usize,
+        ) -> (bool, Option<&crate::numeric::format::NumericFormat>) {
+            (
+                axes.logarithmic && side == 0,
+                if axes.specs[side].exact_ticks.is_some() {
+                    None
+                } else {
+                    axes.specs[side].format.as_deref()
+                },
+            )
+        }
+        for (_, axes) in &*retained {
+            if presentation(axes, side) != presentation(first, side) {
+                return Err(Error::Data(
+                    "fixed facet numeric axes require identical numeric formats and operand contexts"
+                        .into(),
+                ));
+            }
+        }
         let union = retained
             .iter()
             .map(|(_, axes)| axes.ranges[side])

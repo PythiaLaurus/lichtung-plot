@@ -11,36 +11,38 @@ fn payload(result: &PlotRenderResult) -> &HeatmapPayload {
 
 #[test]
 fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
-    let source = Plot::heatmap(
-        crate::CategoryValues::new("column", ["a"]).unwrap(),
-        crate::CategoryValues::new("row", ["one"]).unwrap(),
-        crate::NumericValues::new("value", [1.0]),
-    )
-    .continuous_color_scale(
-        crate::ContinuousColorScale::sequential(
-            None,
-            Some(crate::ColorDomain::exact(0.0, 1.0).unwrap()),
+    let source = |format| {
+        Plot::heatmap(
+            crate::CategoryValues::new("column", ["a"]).unwrap(),
+            crate::CategoryValues::new("row", ["one"]).unwrap(),
+            crate::NumericValues::new("value", [1.0]),
         )
-        .unwrap(),
-    )
-    .annotations(HeatmapAnnotations::Values(
-        crate::NumericLabelFormat::from_policy(
-            crate::numeric::format::NumericFormat::new(
-                crate::numeric::decimal::NumericNotation::Decimal,
-                crate::numeric::format::NumericPrecision::AdaptiveFractional { min: 2, max: 3 },
+        .continuous_color_scale(
+            crate::ContinuousColorScale::sequential(
+                None,
+                Some(crate::ColorDomain::exact(0.0, 1.0).unwrap()),
             )
             .unwrap(),
-        ),
-    ))
-    .erase();
+        )
+        .annotations(HeatmapAnnotations::Values(format))
+        .erase()
+    };
+    let policy = crate::NumericLabelFormat::from_policy(
+        crate::numeric::format::NumericFormat::new(
+            crate::numeric::decimal::NumericNotation::Decimal,
+            crate::numeric::format::NumericPrecision::AdaptiveFractional { min: 2, max: 3 },
+        )
+        .unwrap(),
+    );
+    let original_source = source(policy.clone());
     let operation = crate::font::canonical::OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(
-        &source,
+        &original_source,
         &operation,
         Some(&crate::theme::Theme::publication()),
     )
     .unwrap();
-    let chart = inputs.attach(source).unwrap();
+    let chart = inputs.attach(original_source).unwrap();
     let mut theme = crate::Theme::publication().resolve().unwrap();
     theme.typography.annotations.contrast.light.font_size = 22;
     theme.typography.annotations.contrast.dark.font_size = 11;
@@ -70,6 +72,27 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
     let marks = retained_in(&chart).unwrap();
     let axes = chart.prepared_axis_inputs().unwrap();
     let original = prepare_intrinsics(marks, axes, &theme, None).unwrap();
+    let changed_source = source(crate::NumericLabelFormat::from_policy(
+        policy
+            .policy()
+            .try_copy()
+            .unwrap()
+            .with_negative_zero(crate::numeric::decimal::NegativeZero::Normalize)
+            .unwrap(),
+    ));
+    let changed_inputs = crate::plots::shared_x::prepare_plot(
+        &changed_source,
+        &operation,
+        Some(&crate::Theme::publication()),
+    )
+    .unwrap();
+    let changed_marks = &changed_inputs.heatmap.as_ref().unwrap().panels[0].1;
+    assert_eq!(marks.value_labels, changed_marks.value_labels);
+    assert!(!axes
+        .heatmap_intrinsics
+        .get()
+        .unwrap()
+        .matches_inputs(changed_marks, &theme));
     let padding = theme
         .annotations
         .cells()

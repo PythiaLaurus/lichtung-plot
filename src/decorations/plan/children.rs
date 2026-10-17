@@ -517,13 +517,51 @@ mod tests {
     }
 
     #[test]
-    fn child_measurement_reuses_hits_and_replaces_changed_inputs() {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one actual child cache verifies hits and full normalized policy invalidation"
+    )]
+    fn child_measurement_reuses_hits_and_replaces_changed_numeric_policies() {
+        use crate::numeric::{
+            decimal::{NegativeZero, NumericNotation, TrailingZeros},
+            format::{NumericFormat, NumericPrecision},
+        };
         {
-            let source = Plot::scatter(
-                crate::NumericValues::new("x", [0.0, 1.0]),
-                crate::NumericValues::new("y", [0.0, 1.0]),
-            )
-            .erase();
+            let format = NumericFormat::default();
+            let make = |format| {
+                Plot::scatter(
+                    crate::NumericValues::new("x", [0.0, 1.0]),
+                    crate::NumericValues::new("y", [0.0, 1.0]),
+                )
+                .x_tick_format(format)
+                .erase()
+            };
+            let source = make(format.clone());
+            let variants = [
+                format
+                    .clone()
+                    .with_notation(NumericNotation::Scientific)
+                    .unwrap(),
+                format
+                    .clone()
+                    .with_precision(NumericPrecision::Significant(2))
+                    .unwrap(),
+                format
+                    .clone()
+                    .with_precision(NumericPrecision::AdaptiveFractional { min: 2, max: 3 })
+                    .unwrap(),
+                format.clone().with_decimal_scale(1).unwrap(),
+                format.clone().with_prefix("raw ").unwrap(),
+                format.clone().with_suffix(" u").unwrap(),
+                format
+                    .clone()
+                    .with_negative_zero(NegativeZero::Normalize)
+                    .unwrap(),
+                format
+                    .clone()
+                    .with_trailing_zeros(TrailingZeros::Trim)
+                    .unwrap(),
+            ];
             let theme = crate::Theme::publication().resolve().unwrap();
             let owner = ComponentAddress::root()
                 .child(AddressRole::FacetCell, 0)
@@ -582,12 +620,24 @@ mod tests {
                     assert_eq!(children.measurements.len(), 1);
                     assert!(!Arc::ptr_eq(&first, &changed));
                     assert!(Arc::ptr_eq(&changed, &children.measurements[0].result));
+                    for format in &variants {
+                        let plot = make(format.clone());
+                        let changed = crate::layout::fit::measured(children.measure(
+                            &plot, context, &owner, MeasurementPhase::Probe, round, &mut produce,
+                        )).map_err(crate::layout::fit::PlanError::into_error)?;
+                        let hit = crate::layout::fit::measured(children.measure(
+                            &plot, context, &owner, MeasurementPhase::Probe, round, &mut produce,
+                        )).map_err(crate::layout::fit::PlanError::into_error)?;
+                        assert!(!Arc::ptr_eq(&first, &changed));
+                        assert!(Arc::ptr_eq(&changed, &hit));
+                        assert!(!source.same_composed_inputs(&children.measurements[0].inputs.plot));
+                    }
                     Ok(crate::layout::MeasuredLayout::new(assigned, ()))
                 },
                 |(), _, (), _| Ok(()),
             )
             .unwrap();
-            assert_eq!(produced, 2);
+            assert_eq!(produced, 2 + variants.len());
         }
     }
 

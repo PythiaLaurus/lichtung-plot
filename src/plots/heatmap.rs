@@ -435,6 +435,7 @@ pub(crate) struct HeatmapIntrinsicCache {
     backdrop: OpaqueColor,
     cell_marks: crate::theme::mark::CellMarkRoles,
     cell_annotations: crate::theme::annotation::CellAnnotationGeometry,
+    value_presentation: Option<std::sync::Arc<crate::numeric::set::NumericPresentation>>,
 }
 
 impl HeatmapIntrinsicCache {
@@ -454,6 +455,7 @@ impl HeatmapIntrinsicCache {
             && self.backdrop == theme.annotations.planning_backdrop()
             && self.cell_marks == *theme.marks.cells()
             && self.cell_annotations == *theme.annotations.cells()
+            && self.value_presentation == prepared.value_presentation
     }
 
     fn new(
@@ -486,6 +488,7 @@ impl HeatmapIntrinsicCache {
             backdrop: theme.annotations.planning_backdrop(),
             cell_marks: theme.marks.cells().clone(),
             cell_annotations: theme.annotations.cells().clone(),
+            value_presentation: prepared.value_presentation.clone(),
         })
     }
 }
