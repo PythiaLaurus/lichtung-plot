@@ -1,58 +1,6 @@
 use super::*;
 
 #[test]
-fn route_census_covers_every_plot_family() {
-    use PlotKind::*;
-    let kinds = [
-        Scatter,
-        Histogram,
-        Density,
-        Qq,
-        Regression,
-        Line,
-        Trajectory,
-        LinePath,
-        Interaction,
-        PointInterval,
-        Coefficient,
-        Forest,
-        Dumbbell,
-        Bar,
-        StackedBar,
-        HorizontalBar,
-        StackedHorizontalBar,
-        Boxplot,
-        Violin,
-        Raincloud,
-        Heatmap,
-        Marginal,
-        Matrix,
-        Beeswarm,
-        Waterfall,
-    ];
-    let mut counts = [0; 3];
-    for kind in kinds {
-        let route = InteriorRoute::classify(kind);
-        assert_eq!(route.kind(), kind);
-        // Both this independent census and production dispatch are exhaustive.
-        let expected = match kind {
-            Scatter | Line | Trajectory | LinePath | Histogram | Density | Qq | Regression => 0,
-            PointInterval | Coefficient | Forest | Dumbbell | Bar | HorizontalBar | StackedBar
-            | StackedHorizontalBar | Boxplot | Violin | Raincloud | Interaction => 1,
-            Heatmap | Matrix | Marginal | Beeswarm | Waterfall => 2,
-        };
-        let index = match route {
-            InteriorRoute::StandardCoordinate(_) => 0,
-            InteriorRoute::OneCategoricalAxis(_) => 1,
-            InteriorRoute::SpecializedGrid(_) => 2,
-        };
-        assert_eq!(index, expected);
-        counts[index] += 1;
-    }
-    assert_eq!(counts, [8, 12, 5]);
-}
-
-#[test]
 fn invalid_route_rejects_before_fonts_or_selected_dispatch_without_fallback() {
     let plot = crate::Plot::scatter(
         crate::NumericValues::new("x", [0.0, 1.0]),

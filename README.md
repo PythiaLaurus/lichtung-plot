@@ -29,6 +29,12 @@ root. `Canvas::theme` replaces that root; child Plots without their own theme
 inherit it. `Plot::theme` completely replaces the inherited theme for only that
 Plot.
 
+`Plot::title_alignment` and `Plot::subtitle_alignment` set independent physical
+Start/Center/End instructions. Canvas panel alignment setters supply defaults for
+embedded Plot headings; explicit Plot instructions win. Captions use their
+theme's independent `root_caption_alignment`. Panel instructions do not change
+Canvas-owned prose, headers or TextPanel text.
+
 ```rust
 use lichtung_plot::{Canvas, NumericValues, Plot, Theme};
 

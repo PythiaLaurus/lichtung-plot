@@ -127,6 +127,39 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
+    /// Align this Plot's title and each of its lines to a physical edge or center.
+    ///
+    /// Overrides the Canvas panel default and this Plot's complete theme. Repeated
+    /// calls replace only this instruction; theme attachment order is independent.
+    /// Start and End are physical left and right after the owning content insets.
+    /// ```
+    /// use lichtung_plot::{NumericValues, Plot, Theme, TitleAlignment};
+    /// let plot = Plot::scatter(
+    ///     NumericValues::new("x", [1.0, 2.0]),
+    ///     NumericValues::new("y", [2.0, 1.0]),
+    /// ).title("Title").subtitle("Independent subtitle")
+    ///  .title_alignment(TitleAlignment::End)
+    ///  .subtitle_alignment(TitleAlignment::Start)
+    ///  .theme(Theme::nature());
+    /// # let _ = plot;
+    /// ```
+    #[must_use]
+    pub const fn title_alignment(mut self, alignment: crate::TitleAlignment) -> Self {
+        self.title_alignment = Some(alignment);
+        self
+    }
+
+    /// Align this Plot's subtitle independently of its title.
+    ///
+    /// Overrides the Canvas panel subtitle default, then the optional theme
+    /// subtitle alignment, then the final effective title alignment. Omitting this
+    /// call contributes no instruction; it does not bypass those lower owners.
+    #[must_use]
+    pub const fn subtitle_alignment(mut self, alignment: crate::TitleAlignment) -> Self {
+        self.subtitle_alignment = Some(alignment);
+        self
+    }
+
     /// Set the chart caption.
     #[must_use]
     pub fn caption(mut self, caption: impl Into<String>) -> Self {

@@ -68,8 +68,12 @@ fn outer_roles_use_one_root_producer_without_changing_centered_strips() {
         .legend(crate::LegendPolicy::Hidden)
         .size(960, 640)
         .erase();
-        source.title_alignment = alignments[0];
-        source.subtitle_alignment = alignments[1];
+        if let Some(alignment) = alignments[0] {
+            source = source.title_alignment(alignment);
+        }
+        if let Some(alignment) = alignments[1] {
+            source = source.subtitle_alignment(alignment);
+        }
         let theme = crate::Theme::publication().resolve().unwrap();
         theme.prepare_font_environment().unwrap();
         let mut children = crate::decorations::plan::children::ChildPlans::facets(&source);

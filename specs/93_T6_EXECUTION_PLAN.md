@@ -1,8 +1,8 @@
 # T6 — Public Foundations And Scientific Presentation
 
 **Status**: IN PROGRESS — private foundations, consumer resolution, public exact
-styles and complete public Theme construction are complete; heading instructions
-are next.
+styles, complete public Theme construction and heading instructions are complete;
+public custom-value foundation closure is next.
 
 **Current execution checkpoint:** the user-authorized resumption completed the
 mark/annotation leaf, T6B1d4d, and the private-value umbrella T6B1. Evidence is in
@@ -14,7 +14,8 @@ The public exact-style cutover is complete, with current RGBA/selector and calle
 evidence in `../docs/exact-element-styles.md`. The complete public Theme/font/scale
 cutover is complete, with typed construction, retirement and pre-font capacity
 evidence in `../docs/complete-theme-foundations.md`. Narrow heading instructions
-follow.
+are complete, with precedence and frozen-root evidence in
+`../docs/heading-alignment.md`. Public custom-value foundation closure follows.
 The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
@@ -120,7 +121,7 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6B2f | COMPLETE | T6B2e | Reconcile retained components and consumers with focused owner/identity evidence |
 | T6B3 | COMPLETE | T6B2 | Exact element Color/alpha replacement and repository caller migration; `feat(styles): expose complete RGBA element paints` |
 | T6B4 | COMPLETE | T6B3 | Public complete Theme/components/fonts/scales, built-in constructors and palette/map/gradient attachments; remove closed selectors and old scale representations; `feat(theme): expose immutable theme and scale foundations` |
-| T6B5 | PENDING | T6B4 | Expose already implemented title/subtitle instructions and theme caption alignment; `feat(composition): expose independent heading alignment` |
+| T6B5 | COMPLETE | T6B4 | Expose already implemented title/subtitle instructions and theme caption alignment; `feat(composition): expose independent heading alignment` |
 | T6B6 | PENDING | T6B5 | Public custom-value inheritance, contrast, scale and style evidence; `test(theme): close public foundation precedence` |
 | T6C | PENDING | T6B | Public root sizing and preferred tick intervals |
 | T6C1 | PENDING | T6B | Opaque validated TickInterval and sealed numeric-axis setters; `feat(axes): expose preferred numeric tick intervals` |
@@ -376,6 +377,15 @@ including 17 ignored. Forty-seven distinct current focused library tests,
 eighty-six existing external contracts, eighty-four doctests, strict Clippy,
 formatting, warning-denied docs and package verification pass. Narrow heading
 instructions and the public custom-owner closure remain the following leaves.
+
+T6B5 evidence: `../docs/heading-alignment.md` records the four independent public
+Plot/Canvas panel instructions, theme-owned caption/Canvas root alignment and
+frozen concrete precedence. One real composed-scope/replay test replaces a route
+inventory; existing standalone/Matrix/facet fixtures migrate to the public API.
+Five focused library tests, eight existing external contracts, eighty-six
+doctests, strict Clippy, formatting, warning-denied docs and package verification
+pass. Discovery remains 671, including 17 ignored. Public custom-value foundation
+closure is the remaining foundation leaf.
 
 Use spec03 and spec94's complete `Theme`, `ThemeBuilder`, role components, typed font stack,
 RGBA `Color`, RGB-only `OpaqueColor`, palettes/maps and gradients. Builders are

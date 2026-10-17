@@ -89,6 +89,14 @@ families are literal identities, not comma-separated CSS input. Plot-local
 mappings independently of the theme. See [complete theme and scale
 construction](complete-theme-foundations.md) for the current boundaries.
 
+Use `Plot::title_alignment(TitleAlignment::Start)` and
+`Plot::subtitle_alignment(TitleAlignment::End)` for independent heading
+instructions. Canvas's `panel_title_alignment` and `panel_subtitle_alignment`
+provide defaults for embedded Plots; explicit Plot instructions take precedence.
+Start and End are physical left/right after content insets. A subtitle with no
+instruction uses its optional theme default, then the effective title alignment;
+captions always use their independent complete theme field.
+
 To attach caller-computed pairwise results, construct plot-owned
 `Significance<Pairwise>` display data. The placement marker is inferred from
 `Significance::between`:

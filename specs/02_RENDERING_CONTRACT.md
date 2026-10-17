@@ -178,6 +178,27 @@ theme-owned gap. Exact style never replaces role stack/color/leading or bracket
 geometry. Old tuple-paint, floating-opacity and consuming bare-field style routes
 are removed rather than retained as aliases.
 
+## Independent Heading Alignment
+
+Common `Plot::title_alignment` and `Plot::subtitle_alignment` store independent
+optional instructions, including on erased Plots. `Canvas::panel_title_alignment`
+and `Canvas::panel_subtitle_alignment` supply independent defaults for embedded
+Plot prose. Repeated calls replace only their input; theme attachment order does
+not change them. No supplied instruction means no override at that scope.
+
+Title resolves explicit Plot instruction, Canvas panel default when composed,
+then the complete Plot theme's root-title default. Subtitle resolves its explicit
+Plot instruction, Canvas panel subtitle default, the optional Plot-theme subtitle
+default, then the final effective title alignment. An explicit Plot Theme does
+not erase a Canvas panel instruction. Caption independently uses its owning
+theme's root-caption alignment. Canvas's own title/subtitle/caption use only
+Canvas theme fields; panel defaults do not affect headers or TextPanel text.
+
+Start and End are physical left and right edges of the owning post-inset content
+span, independent of bidi direction. Both block placement and individual lines
+use the selected alignment. Concrete choices are retained before measurement and
+frozen replay does not resolve the optional chains again.
+
 ## Numeric Ticks
 
 Automatic numeric tick positions and density are deterministic renderer-owned

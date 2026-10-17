@@ -318,9 +318,7 @@ pub struct Canvas {
     height: u32,
     title: Option<String>,
     subtitle: Option<String>,
-    pub(crate) title_alignment: Option<crate::theme::TitleAlignment>,
-    pub(crate) subtitle_alignment: Option<crate::theme::TitleAlignment>,
-    // Stored independently of root headings; composition consumes these at T5b.
+    // Parent defaults apply only to embedded Plot prose, never Canvas root headings.
     pub(crate) panel_title_alignment: Option<crate::theme::TitleAlignment>,
     pub(crate) panel_subtitle_alignment: Option<crate::theme::TitleAlignment>,
     caption: Option<String>,
@@ -376,8 +374,6 @@ impl Canvas {
             height: 640,
             title: None,
             subtitle: None,
-            title_alignment: None,
-            subtitle_alignment: None,
             panel_title_alignment: None,
             panel_subtitle_alignment: None,
             caption: None,
@@ -451,6 +447,42 @@ impl Canvas {
     #[must_use]
     pub fn legend_policy(mut self, policy: CanvasLegendPolicy) -> Self {
         self.legend_policy = policy;
+        self
+    }
+
+    /// Set the title alignment default for embedded Plots, independently of Canvas prose.
+    ///
+    /// An explicit Plot title instruction wins; otherwise this wins over that
+    /// Plot's theme default. Start and End mean the physical left and right edges
+    /// of each Plot's inset content span. Headers and TextPanel text are unaffected.
+    /// ```
+    /// use lichtung_plot::{Canvas, NumericValues, Plot, Theme, TitleAlignment};
+    /// let canvas = Canvas::grid(1, 1)?
+    ///     .panel_title_alignment(TitleAlignment::Start)
+    ///     .panel_subtitle_alignment(TitleAlignment::End)
+    ///     .theme(Theme::nature())
+    ///     .panel(0, 0, Plot::scatter(
+    ///         NumericValues::new("x", [1.0, 2.0]),
+    ///         NumericValues::new("y", [2.0, 1.0]),
+    ///     ).title("Panel title").subtitle("Panel subtitle"))?;
+    /// # let _ = canvas;
+    /// # Ok::<(), lichtung_plot::Error>(())
+    /// ```
+    #[must_use]
+    pub const fn panel_title_alignment(mut self, alignment: crate::TitleAlignment) -> Self {
+        self.panel_title_alignment = Some(alignment);
+        self
+    }
+
+    /// Set the subtitle alignment default for embedded Plots only.
+    ///
+    /// An explicit Plot subtitle instruction wins; otherwise this wins over the
+    /// optional Plot-theme subtitle default and final effective title alignment.
+    /// Theme and alignment attachment order is independent. Canvas-owned prose
+    /// and all captions keep their complete theme alignment.
+    #[must_use]
+    pub const fn panel_subtitle_alignment(mut self, alignment: crate::TitleAlignment) -> Self {
+        self.panel_subtitle_alignment = Some(alignment);
         self
     }
 
@@ -2052,7 +2084,7 @@ impl Canvas {
             ],
             crate::decorations::title_block::plan::RootAlignments::resolve(
                 themes.root(),
-                [self.title_alignment, self.subtitle_alignment],
+                [None; 2],
                 [None; 2],
             ),
             (

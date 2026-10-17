@@ -145,6 +145,13 @@ and frozen draw operands. `Color` supplies complete exact RGBA guides,
 supplemental points and Dumbbell endpoints. Exact styles have readonly inspection
 and `with_*` edits; Interaction selectors validate raw identity at construction.
 
+Common Plot title/subtitle alignment setters retain independent instructions.
+Canvas panel title/subtitle setters supply defaults for embedded Plots only;
+explicit Plot instructions win, then the complete Plot theme. A subtitle falls
+back through its own optional theme default before following the effective title.
+Caption alignment and Canvas-owned root prose remain complete-theme properties.
+Physical Start/End and all concrete resolved alignments are frozen before capture.
+
 `05_LAYOUT_SYSTEM.md` is the approved replacement layout architecture for that
 same migration. T5a through T5e implement its private parent-constraint
 allocation, deterministic component measurement, and immutable arrangement

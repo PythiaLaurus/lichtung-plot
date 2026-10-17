@@ -42,8 +42,8 @@ LegendTheme owns that relationship, in both natural and assigned guide layout.
 Custom spacing is valid with PerPlot or Hidden policies too.
 
 `TitleAlignment` and consumed CompositionTheme alignment defaults are public.
-The four narrow Plot/Canvas heading-instruction setters belong to the following
-cutover; this change does not claim their public availability.
+The four narrow Plot/Canvas heading-instruction setters were exposed by the
+subsequent [independent heading cutover](heading-alignment.md).
 
 ## Typed Fonts And Exact Local Relationships
 
@@ -163,5 +163,5 @@ Validation passed:
 
 Execution logs are `/tmp/opencode/complete-theme-*.log`. Discovery-only commands
 confirm the library ceiling; no complete library/integration suite or scene
-golden repinning was used. The next foundation leaves expose narrow heading
-instructions and close public custom-owner/contrast/scale precedence evidence.
+golden repinning was used. Subsequent leaves record narrow heading instructions
+and public custom-owner/contrast/scale precedence evidence separately.

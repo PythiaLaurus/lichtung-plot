@@ -1,7 +1,7 @@
 # Theme System
 
-**Status**: Complete immutable foundations current; narrow heading instructions
-and numeric/sectioned-guide presentation remain staged targets
+**Status**: Complete immutable foundations and narrow heading instructions current;
+numeric/sectioned-guide presentation remains a staged target
 
 ## Purpose
 
@@ -12,16 +12,16 @@ approved coordinated replacement layout model.
 implemented public API. Phase T4 in `91_IMPLEMENTATION_PLAN.md` made the
 Canvas/Plot ownership and complete built-in inheritance subset current using the
 closed `Theme` selector. The complete immutable Theme/component/font/scale
-construction cutover replaces that selector and its callers. The narrow heading
-instruction setters and later presentation policies become current only in their
-owning phases; no alias or dormant placeholder is a second API.
+construction cutover replaces that selector and its callers. Narrow heading
+instructions are current; later presentation policies become current only in
+their owning phases. No alias or dormant placeholder is a second API.
 
 T5a0s in `91_IMPLEMENTATION_PLAN.md` records accepted layout-related behavior:
 strict Unicode-legal wrapping, the three-mode sizing surface, format-local PNG
 limits, compatible base-and-mark font fallback, and independent caption alignment.
 The public sizing cutover remains an implementation target. Complete theme caption
-and heading alignment defaults are current; the narrow Plot/Canvas instruction
-setters below are user-approved pending targets. Remaining broader text controls
+and heading alignment defaults and the narrow Plot/Canvas instruction setters
+below are current. Remaining broader text controls
 remain deferred with explicit review gates.
 
 The completed T6 ENTRY review additionally admits one locale-free scientific
@@ -257,8 +257,8 @@ mutate that owner. A Plot scale replaces only the relevant scale and leaves all
 other theme components unchanged. A complete explicit Plot theme does not merge
 with its Canvas theme.
 
-Title/subtitle alignment has a narrow, separately resolved override surface,
-public only at T6: `Plot::title_alignment`, `Plot::subtitle_alignment`,
+Title/subtitle alignment has a narrow, separately resolved public override surface:
+`Plot::title_alignment`, `Plot::subtitle_alignment`,
 `Canvas::panel_title_alignment`, and `Canvas::panel_subtitle_alignment`. Each
 sets its own optional `TitleAlignment` override input; absence is `None`.
 The public word `panel` identifies the composed Plot semantic scope, not a data

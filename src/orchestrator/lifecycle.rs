@@ -1343,12 +1343,12 @@ mod root_title_tests {
                 .subtitle("Subtitle\ny")
                 .caption("Caption\nz")
                 .size(533, 681)
+                .theme(preset.clone())
                 .erase();
                 if explicit {
-                    plot.title_alignment = Some(End);
-                    plot.subtitle_alignment = Some(Start);
+                    plot = plot.title_alignment(End).subtitle_alignment(Start);
                 }
-                let theme = preset.resolve().unwrap();
+                let theme = plot.resolve_theme().unwrap();
                 assert_eq!(theme.composition.root_title_alignment(), Center);
                 assert_eq!(theme.composition.root_subtitle_alignment(), None);
                 assert_eq!(theme.composition.root_caption_alignment(), Start);
@@ -1431,7 +1431,17 @@ mod root_title_tests {
             crate::Theme::science(),
             crate::Theme::chi(),
         ] {
-            let mut plot = Plot::scatter(
+            let composition = preset
+                .composition()
+                .clone()
+                .with_root_caption_alignment(Center)
+                .unwrap();
+            let theme = preset
+                .customize()
+                .with_composition(composition)
+                .build()
+                .unwrap();
+            let plot = Plot::scatter(
                 crate::NumericValues::new("x", [0.0, 1.0]),
                 crate::NumericValues::new("y", [0.0, 1.0]),
             )
@@ -1439,16 +1449,11 @@ mod root_title_tests {
             .subtitle("Subtitle\ny")
             .caption("Caption\nz")
             .size(333, 481)
-            .theme(preset.clone())
-            .erase();
-            plot.title_alignment = Some(End);
-            plot.subtitle_alignment = Some(Start);
-            let mut theme = preset.resolve().unwrap();
-            theme.composition = theme
-                .composition
-                .clone()
-                .with_root_caption_alignment(Center)
-                .unwrap();
+            .theme(theme)
+            .erase()
+            .title_alignment(End)
+            .subtitle_alignment(Start);
+            let theme = plot.resolve_theme().unwrap();
             let plan = PlotPlan::new_with_resolved_theme(&plot, PlotKind::Scatter, theme).unwrap();
             let retained = plan.root.plan().retained_text();
             for (source, alignment) in [

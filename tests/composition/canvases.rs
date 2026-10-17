@@ -1040,6 +1040,8 @@ fn composed_panel_titles_and_subtitles_keep_distinct_measured_positions() {
     let svg = render_canvas(
         Canvas::grid(1, 1)
             .unwrap()
+            .panel_title_alignment(lichtung_plot::TitleAlignment::Start)
+            .panel_subtitle_alignment(lichtung_plot::TitleAlignment::End)
             .panel(
                 0,
                 0,
@@ -1065,6 +1067,10 @@ fn composed_panel_titles_and_subtitles_keep_distinct_measured_positions() {
     assert_eq!(attribute(title, "text-anchor"), "start");
     assert_eq!(attribute(title, "font-size"), "20");
     assert_eq!(attribute(subtitle, "font-size"), "15");
+    assert!(
+        attribute(title, "x").parse::<f64>().unwrap()
+            < attribute(subtitle, "x").parse::<f64>().unwrap()
+    );
     assert!(subtitle_y - title_y > 15.5 && subtitle_y + 7.5 < panel_y);
 }
 

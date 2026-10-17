@@ -326,11 +326,7 @@ pub(super) fn content_frame(
         source.subtitle.as_deref(),
         source.caption.as_deref(),
     ];
-    let alignments = RootAlignments::resolve(
-        theme,
-        [source.title_alignment, source.subtitle_alignment],
-        [None; 2],
-    );
+    let alignments = RootAlignments::resolve(theme, [None; 2], [None; 2]);
     let prose = RootTitleBlockPlan::content_reserves(
         theme,
         sources,
@@ -507,11 +503,7 @@ pub(super) fn measure(
         theme,
         sources,
         theme.root_inner_width(f64::from(width))?,
-        RootAlignments::resolve(
-            theme,
-            [source.title_alignment, source.subtitle_alignment],
-            [None; 2],
-        ),
+        RootAlignments::resolve(theme, [None; 2], [None; 2]),
         &FitScope::root(),
     )
     .map_err(fit::PlanError::into_error)?;
