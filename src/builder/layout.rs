@@ -61,7 +61,7 @@ impl Plot {
                 .map_err(crate::layout::fit::PlanError::into_error);
         }
         RootFramePlan::measure(
-            (self.width, self.height),
+            self.canvas_dimensions()?,
             theme,
             [
                 self.title.as_deref(),

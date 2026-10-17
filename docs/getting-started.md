@@ -54,6 +54,19 @@ so `response.v1` becomes `response.v1.svg`. No runtime initialization or asset
 provisioning is required. The destination parent must already exist. Outlined
 SVG and PNG generation use installed system fonts.
 
+## Content-Derived Dimensions
+
+Omitting sizing calls derives both root dimensions from content. On Plot and
+Canvas, `.width(600)` allocates exactly 600 CSS pixels and derives height after
+reflow; `.size(600, 400)` allocates the exact pair and refuses content that cannot
+fit. Every call replaces the full request, so `.size(600, 1).width(600)` clears the
+earlier height. Zero dimensions reject during preflight, without setter panics.
+
+The returned `Output` exposes `.width()` and `.height()` for the frozen canonical
+scene. PNG options can choose different raster dimensions without changing those
+values or redoing layout. Embedded Plot requests do not control Canvas cells;
+only the Canvas root request assigns the composed dimensions.
+
 ## Themes And Canvases
 
 Canvas owns one root theme and defaults it to Publication, so callers do not

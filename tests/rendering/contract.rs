@@ -309,6 +309,20 @@ fn canvas_text_cells_enforce_occupancy_and_fitting() {
 }
 
 #[test]
+fn small_positive_canvas_dimensions_use_content_fit_not_a_global_floor() {
+    let canvas = Canvas::grid(1, 1)
+        .unwrap()
+        .text_panel(0, 0, TextPanel::new("A", "B").unwrap())
+        .unwrap()
+        // One pixel below the retired universal width floor, with enough height
+        // for the unchanged complete title/body typography and local spacing.
+        .size(159, 240);
+    let svg = svg_canvas(canvas, "small-positive-canvas");
+    assert!(svg.contains("width=\"159\" height=\"240\""));
+    assert!(svg.contains(">A</text>") && svg.contains(">B</text>"));
+}
+
+#[test]
 fn all_text_canvas_renders_one_svg_document() {
     let canvas = Canvas::grid(1, 1)
         .unwrap()

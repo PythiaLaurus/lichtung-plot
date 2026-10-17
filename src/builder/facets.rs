@@ -153,7 +153,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             && self.render_scope == other.render_scope
             && self.legend_policy == other.legend_policy
             && self.suppress_continuous_guide == other.suppress_continuous_guide
-            && (self.width, self.height) == (other.width, other.height)
+            && self.root_size == other.root_size
     }
 
     pub(crate) fn retain_composed_inputs(&self) -> Result<ComposedInputs, crate::Error> {
@@ -228,8 +228,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             render_scope: self.render_scope.as_deref().map(copy).transpose()?,
             legend_policy: self.legend_policy,
             suppress_continuous_guide: self.suppress_continuous_guide,
-            width: self.width,
-            height: self.height,
+            root_size: self.root_size,
         })
     }
 
@@ -289,8 +288,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     pub(crate) fn with_canvas_size(mut self, width: u32, height: u32) -> Self {
-        self.width = width;
-        self.height = height;
+        self.root_size = crate::layout::RootSize::new(width, height);
         self
     }
 }

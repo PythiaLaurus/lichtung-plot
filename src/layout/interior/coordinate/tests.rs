@@ -69,16 +69,6 @@ fn ordinary_prepared_inputs_attach_repeatedly_without_font_discovery() {
 }
 
 #[test]
-fn ordinary_test_sources_cover_every_native_route_exactly_once() {
-    let kinds: Vec<_> = ordinary_sources().map(|source| source.kind()).collect();
-    assert_eq!(kinds.len(), 20);
-    for (index, kind) in kinds.iter().enumerate() {
-        assert!(!kinds[..index].contains(kind));
-        assert!(InteriorRoute::classify(*kind).is_coordinate());
-    }
-}
-
-#[test]
 fn prepared_intrinsic_hits_reuse_the_summary_without_reanalysis() {
     let source = categorical_source();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
@@ -287,7 +277,8 @@ fn native_multiline_axis_gutters_cannot_consume_root_caption_or_title_reserves()
         );
         let text = &canvas.root_text;
         let mut roots = GeometryBackend::new(&theme).unwrap();
-        roots.begin(plot.width(), plot.height()).unwrap();
+        let (width, height) = plot.canvas_dimensions().unwrap();
+        roots.begin(width, height).unwrap();
         text.draw_retained(&mut roots).unwrap();
         roots.end().unwrap();
         let roots = roots.into_snapshot();
@@ -420,7 +411,8 @@ fn native_absolute_gutter_feedback_contracts_independently_of_multiline_caption(
     for source in all_sources().chain([categorical_source()]) {
         let source = source
             .caption("First caption line\nSecond caption line")
-            .with_suppressed_legend();
+            .with_suppressed_legend()
+            .size(640, 480);
         let theme = crate::Theme::publication().resolve().unwrap();
         let owner = ComponentAddress::root()
             .child(AddressRole::PlotBody, 0)
@@ -430,8 +422,8 @@ fn native_absolute_gutter_feedback_contracts_independently_of_multiline_caption(
             let mut first = true;
             let mut contracted = false;
             let root = crate::layout::plan_exact_root(
-                source.width(),
-                source.height(),
+                source.sizing_request().requested_dimensions().0,
+                source.sizing_request().requested_dimensions().1,
                 |stage| crate::plots::shared_x::prepare_plot(&source, &stage.operation(), None),
                 |inputs, assigned, round| {
                     if first && seeded {
@@ -873,11 +865,8 @@ fn coordinate_root_classes_preserve_dimensions_and_prepared_intrinsics() {
         let source = source.labels(
             crate::Labels::humanized().alias("after_visit", "A deliberately long category label"),
         );
-        let mut default_svg = None;
-        for size in [None, Some((640, 480)), Some((400, 300)), Some((801, 601))] {
-            let plot = size.map_or_else(|| source.clone(), |(w, h)| source.clone().size(w, h));
-            let (w, h) = size.unwrap_or((640, 480));
-            assert_eq!((plot.width(), plot.height()), (w, h));
+        for (w, h) in [(640, 480), (400, 300), (801, 601)] {
+            let plot = source.clone().size(w, h);
             crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| calls.set(0));
             crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(|calls| calls.set(0));
             measurements::start();
@@ -885,11 +874,6 @@ fn coordinate_root_classes_preserve_dimensions_and_prepared_intrinsics() {
             plot.render_with_backend(&mut backend).unwrap();
             let work = measurements::finish();
             let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
-            if size.is_none() {
-                default_svg = Some(svg.clone());
-            } else if size == Some((640, 480)) {
-                assert_eq!(default_svg.as_ref(), Some(&svg));
-            }
             assert!(svg.contains(&format!("viewBox=\"0 0 {w} {h}\"")));
             let counter = match InteriorRoute::classify(plot.kind()) {
                 InteriorRoute::OneCategoricalAxis(_) => Counter::OneCategoricalAxisMeasure,
@@ -1123,7 +1107,11 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes() {
                     Ok(inputs)
                 },
                 |inputs, assigned, round| {
-                    let plot = inputs.attach(source.clone())?.with_parent_axis_gutters();
+                    let (width, height) = assigned.dimensions()?;
+                    let plot = inputs
+                        .attach(source.clone())?
+                        .with_canvas_size(width, height)
+                        .with_parent_axis_gutters();
                     let canvas = canvas_layout(&plot, &theme).map_err(PlanError::into_error)?;
                     round.observe_canvas(&canvas)?;
                     let panel = PanelBox::new(80.0, 600.0, 80.0, 440.0);

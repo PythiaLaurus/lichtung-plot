@@ -1,14 +1,15 @@
 # Layout System
 
-**Status**: Approved D1-D6 target; non-current until Phase T6
+**Status**: Implemented coordinated layout and root sizing; staged numeric/guide
+presentation extensions remain targets
 
 ## Purpose And Boundary
 
-This is the single target layout architecture for `lichtung-plot`. The current
-exact-size public API in `01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md`
-remains unchanged until the atomic Phase T6 migration in
-`91_IMPLEMENTATION_PLAN.md`. Target names are not aliases, dormant public types,
-or a second rendering route. This specification also defines the corrected T5a3
+This is the single coordinated layout architecture for `lichtung-plot`.
+`01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` describe the current public
+three-mode root sizing API installed during Phase T6. Staged presentation targets
+are not aliases, dormant public types or a second rendering route. This
+specification also defines the corrected T5a3
 resource and workload target; historical global-search acceptance is superseded.
 
 The D1-D6 user-visible behavior decisions are approved: bounded containing-frame
@@ -32,8 +33,10 @@ has since completed native guides and composition tracks; T5c–T5e have complet
 mark/annotation consequences, resolved scales, native specialized packing and
 the private three-mode root engine. Current ownership and closure evidence are
 in `docs/t5e7-producer-census.md` and `docs/t5e-closure.md`.
-Public automatic sizing and theme/layout APIs remain T6 work. Existing public
-defaults remain exact 640x480 Plot and 960x640 Canvas until the atomic T6 switch.
+The complete theme and public three-mode sizing cutovers are now current. Omitted
+Plot/Canvas sizing derives content dimensions; consuming width replaces the
+complete request; Output reports frozen canonical dimensions. There are no hidden
+historical root defaults or public pre-render dimension getters.
 
 T6 ENTRY decisions are complete in `93_T6_EXECUTION_PLAN.md`: the user admitted
 one scientific numeric presentation core and combined/separate discrete guide
@@ -1405,16 +1408,16 @@ layout. Chained publication preserves the canonical scene and same-byte path
 extraction source. `Output::width/height` always report the frozen canonical
 scene, never raster target dimensions.
 
-## Target Public Surface
+## Public Surface
 
-Phase T6 atomically installs automatic no-sizing behavior, Plot/Canvas
+The public sizing cutover atomically installs automatic no-sizing behavior, Plot/Canvas
 consuming `width(self, width: u32) -> Self` for exact width with automatic height,
 retained exact `size(self, width: u32, height: u32) -> Self`, and final
 `Output::width()` / `height()`, removing pre-render Plot dimension getters.
-The target `width` builder replaces the current getter at T6, not an overload or
+The `width` builder replaces the former getter, not an overload or
 compatibility alias. Each sizing call completely replaces the one stored request;
 `width` after `size` clears height, and zero dimensions fail preflight without a
-setter panic. Until then the current exact API remains the sole public contract.
+setter panic.
 There is no public maximum-width builder. Broad public constraints are deferred
 for T7 closure; internal intervals remain private.
 

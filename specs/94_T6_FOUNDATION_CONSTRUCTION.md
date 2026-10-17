@@ -2035,6 +2035,13 @@ No replaced public caller first migrates at B6/Z1. Documentation status and
 ledger/current-spec reconciliation are the phase owner's work; this file does not
 edit those documents or rewrite historical ledger counts.
 
+The C1/C2 implementation checkpoint is now complete: opaque preferred intervals
+are recorded in `../docs/preferred-tick-intervals.md`; one private root request,
+automatic defaults, consuming width and frozen Output dimensions are recorded in
+`../docs/content-derived-root-sizing.md`. Pre-render Plot getters and the Canvas
+universal minimum are retired. The separate C3 leaf owns expanded public
+parent/mode/output closure, without reopening these construction signatures.
+
 ### Exhaustive Construction And Consumer Fixture Design
 
 These are required **future implementation fixtures**, not tests executed by A2.

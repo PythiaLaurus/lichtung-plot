@@ -380,6 +380,7 @@ fn chained_terminals_reuse_one_canonical_scene_and_plan_each_png() {
     .title("Canonical scene")
     .svg_preserve_text(&first)
     .unwrap();
+    assert_eq!((output.width(), output.height()), (320, 240));
     let font_terminal_counts = (
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
         crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
@@ -391,7 +392,7 @@ fn chained_terminals_reuse_one_canonical_scene_and_plan_each_png() {
         crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
         crate::font::canonical::FONT_OUTLINE_GLYPHS.with(|glyphs| glyphs.borrow().len()),
     );
-    output
+    let output = output
         .png_preview(&preview)
         .unwrap()
         .png_with_options(
@@ -406,6 +407,7 @@ fn chained_terminals_reuse_one_canonical_scene_and_plan_each_png() {
         .unwrap()
         .svg_preserve_text(&second)
         .unwrap();
+    assert_eq!((output.width(), output.height()), (320, 240));
 
     assert_eq!(
         std::fs::read(&first).unwrap(),
@@ -465,7 +467,7 @@ fn chained_terminals_reuse_one_canonical_scene_and_plan_each_png() {
     let canvas_preview = directory.join("canvas-preview.png");
     let canvas_custom = directory.join("canvas-custom.png");
     let canvas_publication = directory.join("canvas-publication.png");
-    crate::Canvas::grid(1, 1)
+    let output = crate::Canvas::grid(1, 1)
         .unwrap()
         .panel(
             0,
@@ -493,6 +495,7 @@ fn chained_terminals_reuse_one_canonical_scene_and_plan_each_png() {
         .unwrap()
         .png(&canvas_publication)
         .unwrap();
+    assert_eq!((output.width(), output.height()), (320, 240));
     assert_eq!(
         std::fs::read(canvas_first).unwrap(),
         std::fs::read(canvas_second).unwrap()
@@ -573,11 +576,58 @@ fn invalid_canvas_alignment_fails_before_backend_begin() {
 }
 
 #[test]
+fn zero_sizing_requests_refuse_before_font_discovery_or_backend_begin() {
+    let source = Plot::scatter(
+        NumericValues::new("x", [0.0, 1.0]),
+        NumericValues::new("y", [1.0, 0.0]),
+    );
+    for plot in [
+        source.clone().width(0),
+        source.clone().size(0, 240),
+        source.clone().size(320, 0),
+    ] {
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        let mut backend = RecordingBackend::default();
+        let error = plot.render_with_backend(&mut backend).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("dimensions must be finite and positive"));
+        assert_eq!((backend.begins, backend.ends), (0, 0));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+    for (width, height) in [(0, None), (0, Some(240)), (320, Some(0))] {
+        let canvas = crate::Canvas::grid(1, 1)
+            .unwrap()
+            .panel(0, 0, source.clone())
+            .unwrap();
+        let canvas = match height {
+            Some(height) => canvas.size(width, height),
+            None => canvas.width(width),
+        };
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        let mut backend = RecordingBackend::default();
+        let error = canvas.render_with_backend(&mut backend).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("dimensions must be finite and positive"));
+        assert_eq!((backend.begins, backend.ends), (0, 0));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+}
+
+#[test]
 fn orchestration_begins_and_ends_once_and_projects_into_offset_panel() {
     let plot = Plot::scatter(
         NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
         NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
-    );
+    )
+    .size(640, 480);
     let expected_panel = crate::layout::fit::measured(
         crate::layout::kernel::FrameRequirements {
             minimum_body: (1.0, 1.0),
@@ -806,6 +856,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
     let mut preparation_work = [0_u64; 3];
     crate::canvas::lifecycle_tests::mixed_family_parent_audit(&plots);
     for (kind, plot) in plots {
+        let plot = plot.size(640, 480);
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let domain =
             crate::plots::shared_x::domain(&plot, &crate::font::canonical::OperationContext::new());

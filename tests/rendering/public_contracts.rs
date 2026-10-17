@@ -3,8 +3,13 @@ use super::*;
 fn render<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str) -> String {
     let directory = unique_dir(name);
     let output = directory.join("plot.svg");
-    plot.svg_preserve_text(&output).unwrap();
+    let scene = plot.svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
+    assert!(svg.contains(&format!(
+        "width=\"{}\" height=\"{}\"",
+        scene.width(),
+        scene.height()
+    )));
     std::fs::remove_dir_all(directory).unwrap();
     svg
 }
@@ -20,14 +25,12 @@ fn erased_plot_preserves_selected_theme_text_dimensions_and_output() {
         .title("Erasure parity");
 
     assert_eq!(exact.kind(), PlotKind::Scatter);
-    assert_eq!((exact.width(), exact.height()), (321, 234));
     let exact_svg = render(exact.clone(), "exact-before-erasure");
     assert!(exact_svg.contains(">Erasure parity</text>"));
     assert!(exact_svg.contains("width=\"321\" height=\"234\""));
 
     let erased: Plot = exact.erase();
     assert_eq!(erased.kind(), PlotKind::Scatter);
-    assert_eq!((erased.width(), erased.height()), (321, 234));
     erased.preflight().unwrap();
 
     assert_eq!(render(erased, "erased-terminal-output"), exact_svg);

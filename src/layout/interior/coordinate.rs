@@ -458,7 +458,7 @@ pub(crate) fn canvas_layout(
     // measured from selected sources at the assigned span by the root round;
     // endpoint estimates must not reject a body before tick selection.
     let mut root = crate::layout::RootFramePlan::measure(
-        (plot.width(), plot.height()),
+        plot.canvas_dimensions()?,
         theme,
         [plot.title_text(), plot.subtitle_text(), plot.caption_text()],
         RootAlignments::resolve(

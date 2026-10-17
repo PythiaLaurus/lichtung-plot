@@ -21,7 +21,7 @@ pub(super) fn canvas_layout(
     round: &mut FeedbackRound,
 ) -> Result<RootFramePlan, crate::layout::fit::PlanError> {
     let mut canvas = RootFramePlan::measure(
-        (plot.width(), plot.height()),
+        plot.canvas_dimensions()?,
         theme,
         [plot.title_text(), plot.subtitle_text(), plot.caption_text()],
         crate::decorations::title_block::plan::RootAlignments::resolve(

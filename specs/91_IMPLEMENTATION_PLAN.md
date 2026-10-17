@@ -27,8 +27,10 @@ The narrow heading-instruction leaf is complete with frozen-scope evidence in
 `../docs/heading-alignment.md`. Public custom-value closure is complete in
 `../docs/public-foundation-closure.md`, closing the immutable foundation umbrella.
 Public preferred tick intervals are complete with source/pre-font/parent evidence
-in `../docs/preferred-tick-intervals.md`. Spec93 records the following root-sizing
-cutover.
+in `../docs/preferred-tick-intervals.md`. The public automatic/width/exact root-size
+cutover is complete in `../docs/content-derived-root-sizing.md`, including removal
+of pre-render getters and the Canvas universal minimum. Spec93 records the
+following public parent/output sizing closure.
 `../docs/theme-consumer-closure.md` reconciles actual owners and identities. New unit tests must
 replace existing tests in the same logical change without increasing the
 discovered count; AGENTS.md and spec90 own this continuing repository rule.
@@ -112,10 +114,11 @@ discussion:
   measured height, exact width with automatic height, and an exact width-height
   pair. No width search, maximum-width target, public Flutter bounds, hidden root,
   font shrink, content omission, or universal panel multiplier is admitted.
-- Current defaults, `.size(width,height)`, and getters remain current until T6.
-  T6 introduces consuming Plot/Canvas `width(u32) -> Self`; every sizing setter
+- T6 installs automatic omitted sizing and consuming Plot/Canvas
+  `width(u32) -> Self`; every sizing setter
   completely replaces the request, so width after size clears the exact height.
-  Positive-dimension validation remains at preflight, matching current timing.
+  Positive-dimension validation remains at preflight. Frozen dimensions belong
+  to `Output::width/height`; pre-render Plot dimension getters are removed.
 - All PNG limits are format-local in every sizing mode, including source/target
   dimensions, backing storage, actual parser bytes, and requested DPI. Remove
   hypothetical default-PNG checks and the automatic-only 64 MiB canonical SVG

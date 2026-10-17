@@ -1163,6 +1163,7 @@ fn plan_panel_attempt(
         payload.observe_sources(round)?;
     }
     if let Some(chrome) = &chrome {
+        let (width, height) = plot.canvas_dimensions()?;
         let mut overflow = [0.0_f64; 4];
         for bounds in chrome.bounds() {
             round.observe_box(PanelBox::new(
@@ -1172,9 +1173,9 @@ fn plan_panel_attempt(
                 bounds.top,
             ))?;
             overflow[0] = overflow[0].max(-bounds.left);
-            overflow[1] = overflow[1].max(bounds.right - f64::from(plot.width()));
+            overflow[1] = overflow[1].max(bounds.right - f64::from(width));
             overflow[2] = overflow[2].max(-bounds.bottom);
-            overflow[3] = overflow[3].max(bounds.top - f64::from(plot.height()));
+            overflow[3] = overflow[3].max(bounds.top - f64::from(height));
         }
         // Measured composition axes are reserved by their parent grid, including
         // overflow from its provisional cell. A child reserve would count it twice.
@@ -1439,6 +1440,7 @@ fn plan_panel_attempt(
         }
     }
     round.observe_count(geometry.bounds().len())?;
+    let (width, height) = plot.canvas_dimensions()?;
     for bounds in geometry.bounds() {
         round.observe_box(PanelBox::new(
             bounds.left,
@@ -1448,9 +1450,9 @@ fn plan_panel_attempt(
         ))?;
         round.observe_number(bounds.weight)?;
         if bounds.left < 0.0
-            || bounds.right > f64::from(plot.width())
+            || bounds.right > f64::from(width)
             || bounds.bottom < 0.0
-            || (!context.content_height && bounds.top > f64::from(plot.height()))
+            || (!context.content_height && bounds.top > f64::from(height))
         {
             if result.grid_axis_gutters.is_some()
                 && chrome
@@ -1479,7 +1481,7 @@ fn plan_panel_attempt(
                 );
             let resolved_by_projection = geometry.text_overflow_resolved(
                 *bounds,
-                PanelBox::new(0.0, f64::from(plot.width()), 0.0, f64::from(plot.height())),
+                PanelBox::new(0.0, f64::from(width), 0.0, f64::from(height)),
                 &result.layout.projection,
                 &next_projection,
                 declared,
@@ -2155,8 +2157,8 @@ pub(crate) fn plan_panel_for_test<K: crate::kind::Marker>(
     let mut output = None;
     let source = crate::kind::into_erased(plot.clone());
     crate::layout::plan_exact_root(
-        plot.width(),
-        plot.height(),
+        plot.canvas_dimensions()?.0,
+        plot.canvas_dimensions()?.1,
         |stage| crate::plots::shared_x::prepare_plot(&source, &stage.operation(), None),
         |inputs, assigned, round| {
             let plot = inputs.attach(source.clone())?;

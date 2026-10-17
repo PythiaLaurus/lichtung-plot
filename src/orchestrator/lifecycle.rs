@@ -36,7 +36,7 @@ impl PreparedPlotInputs {
         &self,
         source: &Plot,
     ) -> Result<std::sync::Arc<crate::layout::RootFramePlan>, Error> {
-        let dimensions = (source.width(), source.height());
+        let dimensions = source.canvas_dimensions()?;
         let minimum = source.intrinsic_body_minimum(&self.theme)?;
         let minimum = [minimum.0.to_bits(), minimum.1.to_bits()];
 
@@ -242,7 +242,8 @@ mod natural_sizing_tests {
         width: Option<u32>,
         edit: impl FnOnce(&mut ResolvedTheme) -> Result<(), Error>,
     ) -> Result<NaturalScene, Error> {
-        let plan = PlotPlan::new_with_theme_factory(source, source.kind(), (width, None), || {
+        let source = width.map_or_else(|| source.clone(), |width| source.clone().width(width));
+        let plan = PlotPlan::new_with_theme_factory(&source, source.kind(), || {
             let mut theme = crate::Theme::publication().resolve()?;
             edit(&mut theme)?;
             Ok(Box::new(theme))
@@ -391,6 +392,7 @@ mod natural_sizing_tests {
                 .alias("left", "l")
                 .alias("right", "r"),
         )
+        .width(550)
         .erase();
         for gap in [12.0, 280.0] {
             let mut theme = crate::Theme::publication().resolve().unwrap();
@@ -401,9 +403,7 @@ mod natural_sizing_tests {
                 .unwrap();
             crate::orchestrator::measurements::start();
             let result =
-                PlotPlan::new_with_theme_factory(&source, source.kind(), (Some(550), None), || {
-                    Ok(Box::new(theme))
-                });
+                PlotPlan::new_with_theme_factory(&source, source.kind(), || Ok(Box::new(theme)));
             let work = crate::orchestrator::measurements::finish();
             let plan = result.unwrap_or_else(|error| panic!("gap {gap}: {error}"));
             assert_eq!(plan.dimensions().0, 550);
@@ -422,27 +422,27 @@ mod natural_sizing_tests {
     }
 
     #[test]
-    fn private_width_and_automatic_roots_use_content_and_keep_public_defaults_exact() {
+    fn public_root_requests_measure_complete_content_and_replace_both_dimensions() {
         let source = Plot::scatter(crate::NumericValues::new("x", [0.0, 1.0, 2.0]),
             crate::NumericValues::new("y", [0.0, 1.0, 2.0])).caption(
             "A complete explanatory caption with legal word boundaries that must reflow at the assigned width and contribute its complete measured height.").erase();
-        let exact = PlotPlan::new(&source, source.kind()).unwrap();
+        let exact_source = source.clone().width(300).size(640, 480);
+        let exact = PlotPlan::new(&exact_source, exact_source.kind()).unwrap();
         assert_eq!(exact.root.dimensions(), (640, 480));
-        let width = PlotPlan::new_with_sizing(&source, source.kind(), Some(300), None).unwrap();
+        let width_source = source.clone().size(0, 0).width(300);
+        let width = PlotPlan::new(&width_source, width_source.kind()).unwrap();
         assert_eq!(width.root.dimensions().0, 300);
         assert!(width.root.dimensions().1 > 0);
-        let automatic = PlotPlan::new_with_sizing(&source, source.kind(), None, None).unwrap();
+        let automatic = PlotPlan::new(&source, source.kind()).unwrap();
         assert!(automatic.root.dimensions().0 > 0 && automatic.root.dimensions().1 > 0);
-        assert_ne!(automatic.root.dimensions(), (640, 480));
         assert!(width
             .root
             .plan()
             .retained_text()
             .iter()
             .any(|(_, text)| text.source == source.caption_text().unwrap()));
-        let short_source = source.clone().caption("Short caption.");
-        let short =
-            PlotPlan::new_with_sizing(&short_source, short_source.kind(), Some(300), None).unwrap();
+        let short_source = source.clone().caption("Short caption.").width(300);
+        let short = PlotPlan::new(&short_source, short_source.kind()).unwrap();
         assert!(width.dimensions().1 > short.dimensions().1);
         assert!(
             width
@@ -472,9 +472,10 @@ mod natural_sizing_tests {
             )
             .unwrap(),
         )
+        .width(300)
         .erase();
         crate::orchestrator::measurements::start();
-        let plan = PlotPlan::new_with_sizing(&plot, plot.kind(), Some(300), None).unwrap();
+        let plan = PlotPlan::new(&plot, plot.kind()).unwrap();
         let observed = crate::orchestrator::measurements::finish();
         assert_eq!(plan.dimensions().0, 300);
         assert!(observed
@@ -499,10 +500,8 @@ mod natural_sizing_tests {
         .erase();
         let mut theme = crate::Theme::publication().resolve().unwrap();
         theme.typography.root.title.weight = crate::TextWeight::Bold;
-        let plan = PlotPlan::new_with_theme_factory(&plot, plot.kind(), (None, None), || {
-            Ok(Box::new(theme))
-        })
-        .unwrap();
+        let plan =
+            PlotPlan::new_with_theme_factory(&plot, plot.kind(), || Ok(Box::new(theme))).unwrap();
         assert!(plan
             .root
             .prepared()
@@ -525,8 +524,9 @@ mod natural_sizing_tests {
             )
             .caption("A complete explanatory caption that is retained at the chosen width.")
             .erase();
+            let plot = width.map_or_else(|| plot.clone(), |width| plot.clone().width(width));
             crate::scene::PNG_TARGET_VALIDATION_CALLS.with(|calls| calls.set(0));
-            let plan = PlotPlan::new_with_sizing(&plot, plot.kind(), width, None).unwrap();
+            let plan = PlotPlan::new(&plot, plot.kind()).unwrap();
             assert_eq!(
                 crate::scene::PNG_TARGET_VALIDATION_CALLS.with(std::cell::Cell::get),
                 0
@@ -570,7 +570,8 @@ mod natural_sizing_tests {
             .caption("First complete explanatory paragraph with legal breaks.\nSecond complete explanatory paragraph.")
             .erase();
         for width in [None, Some(800)] {
-            let plan = PlotPlan::new_with_sizing(&plot, plot.kind(), width, None).unwrap();
+            let plot = width.map_or_else(|| plot.clone(), |width| plot.clone().width(width));
+            let plan = PlotPlan::new(&plot, plot.kind()).unwrap();
             if let Some(width) = width {
                 assert_eq!(plan.dimensions().0, width);
             }
@@ -608,7 +609,7 @@ mod natural_sizing_tests {
         ] {
             let source = source.clone().legend(policy).erase();
             widths.push(
-                PlotPlan::new_with_sizing(&source, source.kind(), None, None)
+                PlotPlan::new(&source, source.kind())
                     .unwrap()
                     .dimensions()
                     .0,
@@ -632,7 +633,8 @@ mod natural_sizing_tests {
         .caption("A complete explanatory caption for the native variable matrix.")
         .erase();
         for width in [None, Some(800)] {
-            let plan = PlotPlan::new_with_sizing(&source, source.kind(), width, None).unwrap();
+            let source = width.map_or_else(|| source.clone(), |width| source.clone().width(width));
+            let plan = PlotPlan::new(&source, source.kind()).unwrap();
             if let Some(width) = width {
                 assert_eq!(plan.dimensions().0, width);
             }
@@ -672,7 +674,8 @@ mod natural_sizing_tests {
         .caption("Complete explanatory caption for two independently scaled shelves.")
         .erase();
         for width in [None, Some(800)] {
-            let plan = PlotPlan::new_with_sizing(&source, source.kind(), width, None).unwrap();
+            let source = width.map_or_else(|| source.clone(), |width| source.clone().width(width));
+            let plan = PlotPlan::new(&source, source.kind()).unwrap();
             if let Some(width) = width {
                 assert_eq!(plan.dimensions().0, width);
             }
@@ -707,7 +710,8 @@ mod natural_sizing_tests {
         .caption("A complete explanatory caption for independently scoped continuous guides.")
         .erase();
         for width in [None, Some(1600)] {
-            let plan = PlotPlan::new_with_sizing(&source, source.kind(), width, None).unwrap();
+            let source = width.map_or_else(|| source.clone(), |width| source.clone().width(width));
+            let plan = PlotPlan::new(&source, source.kind()).unwrap();
             if let Some(width) = width {
                 assert_eq!(plan.dimensions().0, width);
             }
@@ -730,7 +734,8 @@ mod natural_sizing_tests {
             .facet(crate::FacetSpec::column(crate::CategoryValues::new("panel", ["first", "first", "first", "first", "second", "second", "second", "second"]).unwrap()).scales(crate::FacetScales::Free))
             .caption("First complete explanatory caption paragraph.\nSecond complete explanatory caption paragraph.").erase();
         for width in [None, Some(1200)] {
-            let plan = PlotPlan::new_with_sizing(&source, source.kind(), width, None).unwrap();
+            let source = width.map_or_else(|| source.clone(), |width| source.clone().width(width));
+            let plan = PlotPlan::new(&source, source.kind()).unwrap();
             if let Some(width) = width {
                 assert_eq!(plan.dimensions().0, width);
             }
@@ -768,12 +773,7 @@ mod natural_sizing_tests {
             crate::LegendPolicy::Visible(crate::LegendPosition::OutsideRight),
         ] {
             let plot = source.clone().legend(policy).erase();
-            widths.push(
-                PlotPlan::new_with_sizing(&plot, plot.kind(), None, None)
-                    .unwrap()
-                    .dimensions()
-                    .0,
-            );
+            widths.push(PlotPlan::new(&plot, plot.kind()).unwrap().dimensions().0);
         }
         assert_eq!(widths[0], widths[1]);
         assert!(widths[2] > widths[0]);
@@ -786,12 +786,7 @@ mod natural_sizing_tests {
 
 impl PlotPlan {
     pub(super) fn new(source: &Plot, kind: PlotKind) -> Result<Self, Error> {
-        Self::new_with_theme_factory(
-            source,
-            kind,
-            (Some(source.width()), Some(source.height())),
-            || Ok(Box::new(source.resolve_theme()?)),
-        )
+        Self::new_with_theme_factory(source, kind, || Ok(Box::new(source.resolve_theme()?)))
     }
 
     #[cfg(test)]
@@ -800,24 +795,7 @@ impl PlotPlan {
         kind: PlotKind,
         theme: ResolvedTheme,
     ) -> Result<Self, Error> {
-        Self::new_with_theme_factory(
-            source,
-            kind,
-            (Some(source.width()), Some(source.height())),
-            || Ok(Box::new(theme)),
-        )
-    }
-
-    #[cfg(test)]
-    pub(crate) fn new_with_sizing(
-        source: &Plot,
-        kind: PlotKind,
-        width: Option<u32>,
-        height: Option<u32>,
-    ) -> Result<Self, Error> {
-        Self::new_with_theme_factory(source, kind, (width, height), || {
-            Ok(Box::new(source.resolve_theme()?))
-        })
+        Self::new_with_theme_factory(source, kind, || Ok(Box::new(theme)))
     }
 
     #[expect(
@@ -827,12 +805,9 @@ impl PlotPlan {
     fn new_with_theme_factory(
         source: &Plot,
         kind: PlotKind,
-        sizing: (Option<u32>, Option<u32>),
         resolve_theme: impl FnOnce() -> Result<Box<ResolvedTheme>, Error>,
     ) -> Result<Self, Error> {
-        if source.width() == 0 || source.height() == 0 {
-            source.validate_configuration(kind)?;
-        }
+        let sizing = source.sizing_request().requested_dimensions();
         #[cfg(test)]
         super::PLOT_PLAN_CALLS.with(|calls| calls.set(calls.get() + 1));
         let mut children = crate::decorations::plan::children::ChildPlans::facets(source);
@@ -987,7 +962,8 @@ impl PlotPlan {
                 children.finish_round(round);
                 let assigned = match &plan {
                     PlotLayoutPlan::Unfaceted(plan) => {
-                        crate::layout::RootSize::new(plan.plot.width(), plan.plot.height())
+                        let (width, height) = plan.plot.canvas_dimensions()?;
+                        crate::layout::RootSize::new(width, height)
                     }
                     PlotLayoutPlan::Faceted(plan) => {
                         crate::layout::RootSize::new(plan.dimensions.0, plan.dimensions.1)
@@ -1096,7 +1072,7 @@ impl UnfacetedPlotPlan {
             let height = crate::layout::interior::sizing::integral(
                 canvas_layout.height_for_body(panel_plan.frame_box.height(), theme)?,
             )?;
-            plot = plot.with_canvas_size(source.width(), height);
+            plot = plot.with_canvas_size(source.canvas_dimensions()?.0, height);
             let mut resized = plot.measured_canvas_layout(theme)?;
             resized.panel_box = panel_plan.frame_box;
             canvas_layout = resized.into_shared();
@@ -1117,11 +1093,12 @@ impl UnfacetedPlotPlan {
                         crate::decorations::legend::address_role(source.legend_position_spec()),
                         0,
                     )?;
+                let (width, height) = plot.canvas_dimensions()?;
                 if geometry.bounds().iter().any(|ink| {
                     ink.left < 0.0
-                        || ink.right > f64::from(source.width())
+                        || ink.right > f64::from(width)
                         || ink.bottom < 0.0
-                        || ink.top > f64::from(plot.height())
+                        || ink.top > f64::from(height)
                 }) {
                     round.record_failure(scope.failure(
                         crate::layout::fit::FitKind::LegendOrGuide,

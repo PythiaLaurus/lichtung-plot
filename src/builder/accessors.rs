@@ -1034,16 +1034,13 @@ impl<K: crate::kind::Marker> Plot<K> {
         &self.significance
     }
 
-    /// Output width in pixels.
-    #[must_use]
-    pub fn width(&self) -> u32 {
-        self.width
+    pub(crate) const fn sizing_request(&self) -> crate::layout::RootSize {
+        self.root_size
     }
 
-    /// Output height in pixels.
-    #[must_use]
-    pub fn height(&self) -> u32 {
-        self.height
+    /// Assigned geometry is available only after the root or parent allocates it.
+    pub(crate) fn canvas_dimensions(&self) -> Result<(u32, u32), Error> {
+        self.root_size.dimensions()
     }
 
     /// Borrow the ordered variable names for `PlotKind::Matrix`.

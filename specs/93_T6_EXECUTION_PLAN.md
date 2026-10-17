@@ -129,7 +129,7 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6B6 | COMPLETE | T6B5 | Public custom-value inheritance, contrast, scale and style evidence; `test(theme): close public foundation precedence` |
 | T6C | IN PROGRESS | T6B | Public root sizing and preferred tick intervals |
 | T6C1 | COMPLETE | T6B | Opaque validated TickInterval and sealed numeric-axis setters; `feat(axes): expose preferred numeric tick intervals` |
-| T6C2 | PENDING | T6C1 | Automatic defaults, consuming width, exact size and Output dimensions; migrate getters/callers atomically; `feat(layout): expose content-derived root sizing` |
+| T6C2 | COMPLETE | T6C1 | Automatic defaults, consuming width, exact size and Output dimensions; migrate getters/callers atomically; `feat(layout): expose content-derived root sizing` |
 | T6C3 | PENDING | T6C2 | All modes/parents/setter order/PNG-local output evidence; `test(layout): close public sizing contracts` |
 | T6N | PENDING | T6C | Unified scientific numeric formatting; leaves below |
 | T6L | PENDING | T6N | One section-aware discrete guide; leaves below |
@@ -411,6 +411,18 @@ coarsening, exact precedence, census, cache and quantum-fit fixtures use the pub
 values. Thirty-one focused library tests, six external contracts, ninety-two
 doctests, strict Clippy, formatting, warning-denied docs and package verification
 pass. Discovery remains 671, including 17 ignored. Root sizing remains next.
+
+T6C2 evidence: `../docs/content-derived-root-sizing.md` records one retained private
+request, automatic Plot/Canvas defaults, consuming exact width, full replacement
+semantics and Output inspection from canonical scene dimensions. Pre-render Plot
+getters, nominal fixed-default fields, test-only sizing entry points and the
+Canvas universal minimum are removed. Zero requests refuse before fonts/backend
+begin; actual complete-content fit remains mandatory. One behavioral unit test
+replaces a source inventory; explicit-root fixtures request their actual sizes.
+Thirty-five focused library tests, four external contracts, ninety-five doctests,
+strict Clippy, formatting, warning-denied docs and offline package verification
+pass. Discovery remains 671, including 17 ignored. Expanded public parent/mode
+and PNG-local closure follows in T6C3.
 
 Use spec03 and spec94's complete `Theme`, `ThemeBuilder`, role components, typed font stack,
 RGBA `Color`, RGB-only `OpaqueColor`, palettes/maps and gradients. Builders are

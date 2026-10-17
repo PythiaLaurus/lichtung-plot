@@ -481,11 +481,40 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    /// Set the output pixel size. Default 640x480.
+    /// Allocate exactly this width in CSS pixels and derive height from content.
+    ///
+    /// Without a sizing call, both dimensions are derived from content. This
+    /// replaces the complete request, clearing any height set by [`Self::size`].
+    /// Zero is rejected during preflight, without a setter panic. An embedded
+    /// Plot's standalone request does not control its Canvas cell.
+    ///
+    /// ```no_run
+    /// use lichtung_plot::{NumericValues, Plot};
+    /// let output = Plot::scatter(
+    ///     NumericValues::new("x", [0.0, 1.0]),
+    ///     NumericValues::new("y", [1.0, 0.0]),
+    /// )
+    /// .size(600, 1)
+    /// .width(600)
+    /// .svg_preserve_text("figure")?;
+    /// assert_eq!(output.width(), 600);
+    /// assert!(output.height() > 0);
+    /// # Ok::<(), lichtung_plot::Error>(())
+    /// ```
     #[must_use]
-    pub fn size(mut self, width: u32, height: u32) -> Self {
-        self.width = width;
-        self.height = height;
+    pub const fn width(mut self, width: u32) -> Self {
+        self.root_size = crate::layout::RootSize::width(width);
+        self
+    }
+
+    /// Allocate exactly this width and height in CSS pixels.
+    ///
+    /// This replaces the complete sizing request. Content must fit without
+    /// changing either dimension; zero dimensions reject during preflight.
+    /// Final canonical dimensions are available on [`crate::Output`].
+    #[must_use]
+    pub const fn size(mut self, width: u32, height: u32) -> Self {
+        self.root_size = crate::layout::RootSize::new(width, height);
         self
     }
 

@@ -78,8 +78,8 @@ fn outer_roles_use_one_root_producer_without_changing_centered_strips() {
         theme.prepare_font_environment().unwrap();
         let mut children = crate::decorations::plan::children::ChildPlans::facets(&source);
         crate::layout::plan_exact_root(
-            source.width(),
-            source.height(),
+            source.sizing_request().requested_dimensions().0,
+            source.sizing_request().requested_dimensions().1,
             |stage| {
                 let inputs = crate::plots::shared_x::prepare_plot(
                     &source,
@@ -295,8 +295,8 @@ fn impossible_outer_title_returns_typed_fit_before_child_measurement() {
     let theme = crate::Theme::publication().resolve().unwrap();
     theme.prepare_font_environment().unwrap();
     crate::layout::plan_exact_root(
-        source.width(),
-        source.height(),
+        source.sizing_request().requested_dimensions().0,
+        source.sizing_request().requested_dimensions().1,
         |stage| {
             let inputs = crate::plots::shared_x::prepare_plot(
                 &source,

@@ -19,9 +19,9 @@ their owning phases. No alias or dormant placeholder is a second API.
 T5a0s in `91_IMPLEMENTATION_PLAN.md` records accepted layout-related behavior:
 strict Unicode-legal wrapping, the three-mode sizing surface, format-local PNG
 limits, compatible base-and-mark font fallback, and independent caption alignment.
-The public sizing cutover remains an implementation target. Complete theme caption
-and heading alignment defaults and the narrow Plot/Canvas instruction setters
-below are current. Remaining broader text controls
+The public three-mode sizing cutover is current. Complete theme caption and
+heading alignment defaults and the narrow Plot/Canvas instruction setters below
+are current. Remaining broader text controls
 remain deferred with explicit review gates.
 
 The completed T6 ENTRY review additionally admits one locale-free scientific

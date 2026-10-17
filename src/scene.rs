@@ -77,6 +77,10 @@ impl RenderedScene {
         })
     }
 
+    pub(crate) fn dimensions(&self) -> (u32, u32) {
+        (self.size.dimensions.width(), self.size.dimensions.height())
+    }
+
     /// Borrow the exact canonical SVG bytes.
     #[must_use]
     pub(crate) fn svg_bytes(&self) -> &[u8] {

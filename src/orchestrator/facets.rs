@@ -412,7 +412,9 @@ impl FacetPlan {
                         let height = crate::layout::interior::sizing::integral(
                             canvas_layout.height_for_body(height, theme)?,
                         )?;
-                        let owner = source.clone().with_canvas_size(source.width(), height);
+                        let owner = source
+                            .clone()
+                            .with_canvas_size(source.canvas_dimensions()?.0, height);
                         canvas_layout = planning::canvas_layout(
                             &owner,
                             theme,
@@ -453,7 +455,9 @@ impl FacetPlan {
                         let height = crate::layout::interior::sizing::integral(
                             canvas_layout.height_for_body(height, theme)?,
                         )?;
-                        let owner = source.clone().with_canvas_size(source.width(), height);
+                        let owner = source
+                            .clone()
+                            .with_canvas_size(source.canvas_dimensions()?.0, height);
                         canvas_layout = planning::canvas_layout(
                             &owner,
                             theme,
@@ -640,7 +644,7 @@ impl FacetPlan {
                 }
                 let plan = Self {
                     dimensions: (
-                        source.width(),
+                        source.canvas_dimensions()?.0,
                         crate::layout::interior::sizing::integral(
                             canvas_layout.panel_box.y1 + canvas_layout.insets.top,
                         )?,
@@ -825,8 +829,8 @@ mod feedback_tests {
                 let mut calls = 0;
                 let mut retained_neighbor = None;
                 let root = crate::layout::plan_exact_root(
-                    source.width(),
-                    source.height(),
+                    source.sizing_request().requested_dimensions().0,
+                    source.sizing_request().requested_dimensions().1,
                     |stage| {
                         let inputs = crate::plots::shared_x::prepare_plot(
                             &source,
@@ -1016,8 +1020,8 @@ mod feedback_tests {
         .erase();
         let theme = crate::Theme::publication().resolve().unwrap();
         crate::layout::plan_exact_root(
-            source.width(),
-            source.height(),
+            source.sizing_request().requested_dimensions().0,
+            source.sizing_request().requested_dimensions().1,
             |stage| {
                 let inputs = crate::plots::shared_x::prepare_plot(
                     &source,
@@ -1146,8 +1150,8 @@ mod feedback_tests {
         .erase();
         let theme = crate::Theme::publication().resolve().unwrap();
         let root = crate::layout::plan_exact_root(
-            source.width(),
-            source.height(),
+            source.sizing_request().requested_dimensions().0,
+            source.sizing_request().requested_dimensions().1,
             |stage| {
                 let inputs = crate::plots::shared_x::prepare_plot(
                     &source,
@@ -1228,8 +1232,8 @@ mod feedback_tests {
         .erase();
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let result = crate::layout::plan_exact_root(
-            source.width(),
-            source.height(),
+            source.sizing_request().requested_dimensions().0,
+            source.sizing_request().requested_dimensions().1,
             |stage| {
                 crate::plots::shared_x::prepare_plot(
                     &source,
@@ -1269,8 +1273,8 @@ mod feedback_tests {
         theme.prepare_font_environment().unwrap();
         let mut arranged = None;
         crate::layout::plan_exact_root(
-            source.width(),
-            source.height(),
+            source.sizing_request().requested_dimensions().0,
+            source.sizing_request().requested_dimensions().1,
             |stage| {
                 let inputs = crate::plots::shared_x::prepare_plot(
                     &source,
@@ -1314,8 +1318,8 @@ mod feedback_tests {
         for change_legend in [true, false] {
             let mut calls = 0;
             crate::layout::plan_exact_root(
-                source.width(),
-                source.height(),
+                source.sizing_request().requested_dimensions().0,
+                source.sizing_request().requested_dimensions().1,
                 |_| Ok(()),
                 |(), assigned, round| {
                     calls += 1;

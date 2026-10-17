@@ -332,23 +332,22 @@ does not select scientific tests or infer caller intent.
 
 ## Size And Layout Boundary
 
-The current implemented Plot stores one exact output width and height, defaults
-to `640x480`, and exposes those values through `width()` and `height()`. The
-current Canvas stores one exact composed width and height and defaults to
-`960x640`. `size(width, height)` replaces the complete pair. Canvas owns the
-composed dimensions and replaces child Plot dimensions for its render context.
-
-`05_LAYOUT_SYSTEM.md` defines the approved replacement contract. After the
-atomic Phase T6 migration, absence of a sizing call selects automatic layout,
+Plot and Canvas each retain one complete private sizing request. Absence of a
+sizing call selects automatic layout,
 consuming `width(u32)` requests exact width with automatic height, and
 `size(width, height)` remains exact. Sizing calls replace the complete request:
 `width` after `size` discards the prior exact height; `size` after `width` replaces
 both dimensions. Zero dimensions fail at preflight. No public maximum-width or
-general bounds object is admitted. Final canonical dimensions then belong
-to the immutable root plan and rendered `Output`, not infallible pre-render Plot
-getters. None of those target behaviors or names is current before T6.
+general bounds object is admitted. Canvas owns composed dimensions; an embedded
+Plot's standalone sizing request is not a cell preference. Canvas has no universal
+minimum-size gate: positive roots must preserve the actual complete content or
+refuse for its concrete fit requirements.
 
-The target protocol keeps scientific layout private. Parents use intrinsic
+Final canonical dimensions belong to the immutable root plan and rendered
+`Output::width()`/`height()`, never pre-render Plot getters or PNG raster targets.
+`05_LAYOUT_SYSTEM.md` defines the shared private sizing and allocation contract.
+
+The protocol keeps scientific layout private. Parents use intrinsic
 requirements to allocate child constraints; each child returns one immutable
 measured local plan or a typed fit miss. Parents assign final positions. Named
 bounded local choices and root-coordinated feedback replace exhaustive
@@ -365,8 +364,8 @@ may therefore be followed by a PNG refusal without relayout or scene mutation.
 T5a0s records user approval of these target behaviors. Automatic placement must
 validate the affected plot-plus-guide layout, not accept guide-only fit. Bounded
 supported edge/reflow attempts may remeasure affected children, but explicit
-placements, typography, and content remain fixed. Current sizing and publication
-methods are unchanged until their scheduled implementation and public migration.
+placements, typography, and content remain fixed. The public sizing cutover uses
+that same prepared root lifecycle for all three requests.
 
 ## Scene Lifecycle
 

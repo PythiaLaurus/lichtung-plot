@@ -306,7 +306,8 @@ fn validate_header_overlap(
 /// A typed grid of independently configured charts rendered on one canvas.
 ///
 /// Canvas owns one root theme, which defaults to [`Theme::publication`]. Plots
-/// without an explicit theme inherit that root.
+/// without an explicit theme inherit that root. Dimensions are derived from
+/// content unless [`Self::width`] or [`Self::size`] replaces the sizing request.
 pub struct Canvas {
     rows: usize,
     columns: usize,
@@ -314,8 +315,7 @@ pub struct Canvas {
     text_panels: Vec<Option<TextPanel>>,
     theme: Arc<crate::theme::Theme>,
     legend_policy: CanvasLegendPolicy,
-    width: u32,
-    height: u32,
+    root_size: crate::layout::RootSize,
     title: Option<String>,
     subtitle: Option<String>,
     // Parent defaults apply only to embedded Plot prose, never Canvas root headings.
@@ -370,8 +370,7 @@ impl Canvas {
             text_panels: (0..panel_count).map(|_| None).collect(),
             theme: Arc::new(crate::theme::Theme::publication()),
             legend_policy: CanvasLegendPolicy::PerPlot,
-            width: 960,
-            height: 640,
+            root_size: crate::layout::RootSize::natural(),
             title: None,
             subtitle: None,
             panel_title_alignment: None,
@@ -565,11 +564,25 @@ impl Canvas {
         Ok(self)
     }
 
-    /// Set the composed canvas dimensions.
+    /// Allocate exactly this width in CSS pixels and derive height from content.
+    ///
+    /// This replaces the complete request, clearing any height set by
+    /// [`Self::size`]. Without a sizing call, both dimensions derive from content.
+    /// Zero is rejected during preflight, without a setter panic.
     #[must_use]
-    pub fn size(mut self, width: u32, height: u32) -> Self {
-        self.width = width;
-        self.height = height;
+    pub const fn width(mut self, width: u32) -> Self {
+        self.root_size = crate::layout::RootSize::width(width);
+        self
+    }
+
+    /// Allocate exactly this width and height in CSS pixels.
+    ///
+    /// This replaces the complete sizing request. All content must fit without
+    /// changing either dimension; zero dimensions reject during preflight.
+    /// Embedded Plots do not contribute standalone sizing requests.
+    #[must_use]
+    pub const fn size(mut self, width: u32, height: u32) -> Self {
+        self.root_size = crate::layout::RootSize::new(width, height);
         self
     }
 
@@ -697,9 +710,6 @@ impl Canvas {
     }
 
     fn validate_structure(&self) -> Result<(), Error> {
-        if self.width < 160 || self.height < 120 {
-            return Err(Error::Data("canvas must be at least 160x120 pixels".into()));
-        }
         if self.panels.iter().all(Option::is_none) && self.text_panels.iter().all(Option::is_none) {
             return Err(Error::Data(
                 "canvas requires at least one configured panel".into(),
@@ -1350,29 +1360,17 @@ impl Canvas {
         Ok((interiors, shared_x))
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one ordered semantic, font, intrinsic, allocation, and capture lifecycle"
+    )]
     fn preflight_plan(
         &self,
     ) -> Result<
         crate::layout::FrozenRoot<crate::orchestrator::TextReplayPlan, PreparedCanvasInputs>,
         Error,
     > {
-        self.preflight_plan_with_sizing((Some(self.width), Some(self.height)))
-    }
-
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one ordered semantic, font, intrinsic, allocation, and capture lifecycle"
-    )]
-    fn preflight_plan_with_sizing(
-        &self,
-        sizing_request: (Option<u32>, Option<u32>),
-    ) -> Result<
-        crate::layout::FrozenRoot<crate::orchestrator::TextReplayPlan, PreparedCanvasInputs>,
-        Error,
-    > {
-        if self.width == 0 || self.height == 0 {
-            self.validate_structure()?;
-        }
+        let sizing_request = self.root_size.requested_dimensions();
         let mut children = crate::decorations::plan::children::ChildPlans::canvas(self);
         let measurements = sizing::HeightMeasurements::default();
         let root = crate::layout::plan_exact_root(

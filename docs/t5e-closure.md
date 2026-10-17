@@ -2,7 +2,10 @@
 
 T5e is COMPLETE. The five specialized migrations, private three-mode root
 engine, all-producer resource/feedback audit and final deletion review are closed.
-Public exact defaults remain Plot 640×480 and Canvas 960×640. T6 is PENDING.
+At this historical checkpoint, public exact defaults remained Plot 640×480 and
+Canvas 960×640. The later [public root-sizing cutover](content-derived-root-sizing.md)
+installs automatic defaults, consuming width and frozen Output dimensions through
+the same private engine; this record describes the earlier implementation gate.
 
 ## Delivered Architecture
 

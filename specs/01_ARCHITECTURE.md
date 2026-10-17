@@ -116,8 +116,9 @@ and private rendering path as terminal output through a null backend.
 
 ## Public Surface
 
-The current stable plot introspection surface is limited to `kind()`, `width()`,
-`height()`, and `preflight()`. Family configuration remains available through
+The current stable plot introspection surface is limited to `kind()` and
+`preflight()`. Frozen canonical CSS-pixel dimensions belong to `Output::width()`
+and `Output::height()`. Family configuration remains available through
 exact marker-gated builders, not broad getters that return irrelevant defaults.
 
 `Theme` is one complete immutable public appearance value. Its eight components
@@ -155,16 +156,18 @@ Physical Start/End and all concrete resolved alignments are frozen before captur
 `05_LAYOUT_SYSTEM.md` is the approved replacement layout architecture for that
 same migration. T5a through T5e implement its private parent-constraint
 allocation, deterministic component measurement, and immutable arrangement
-protocol while preserving current exact public sizing behavior. The reopened
+protocol. The reopened
 T5a1 and T5a3 phases repair the existing implementation against that target;
 historical completion does not establish revised-target conformance.
 T5a0s records the accepted observable layout, label, sizing, output, font, and
 alignment behavior; its documentation closure precedes implementation.
-Automatic root sizing, consuming exact-width/automatic-height `width(u32)`,
-rendered-output dimension accessors, and removal of pre-render Plot dimension
-getters are not current behavior or public API until Phase T6 completes. The
-target keeps exact `size(width,height)` and does not add public maximum-width
-or general constraint objects.
+Plot and Canvas now derive dimensions from content when no sizing call is made.
+Consuming `width(u32)` fixes width and derives content height;
+`size(width,height)` fixes both dimensions. Each call replaces the complete
+request, so `width` clears an earlier explicit height. Zero dimensions reject at
+preflight. Canvas owns embedded dimensions independently of each child's
+standalone request. There are no pre-render Plot dimension getters, public
+maximum-width builders or general constraint objects.
 
 The public layout module remains removed in both the current and target
 contracts; `AxisTick` is exported only from the crate root. Public geometry uses

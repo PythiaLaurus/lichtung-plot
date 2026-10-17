@@ -31,6 +31,24 @@ impl Output {
         Self { scene }
     }
 
+    /// Frozen canonical scene width in integral CSS pixels.
+    ///
+    /// This is the SVG root width, independent of PNG raster sizing. Inspecting
+    /// it does not measure, render, or alter the retained scene.
+    #[must_use]
+    pub fn width(&self) -> u32 {
+        self.scene.dimensions().0
+    }
+
+    /// Frozen canonical scene height in integral CSS pixels.
+    ///
+    /// This is the SVG root height, independent of PNG raster sizing. All
+    /// chained publications retain the same canonical dimensions.
+    #[must_use]
+    pub fn height(&self) -> u32 {
+        self.scene.dimensions().1
+    }
+
     /// Publish a self-contained outlined SVG atomically.
     ///
     /// After text outlining succeeds, the final native filename is completed

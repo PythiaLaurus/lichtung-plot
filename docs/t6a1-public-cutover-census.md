@@ -10,6 +10,12 @@ The subsequent construction decisions are closed in
 `specs/94_T6_FOUNDATION_CONSTRUCTION.md`. Open A2 items below record this census's
 handoff checkpoint, not remaining product decisions after that adjudication.
 
+The root-size inventory below is historical: the subsequent public cutover in
+[content-derived root sizing](content-derived-root-sizing.md) replaces the fixed
+Plot/Canvas defaults and pre-render getters with one complete private request,
+consuming width and frozen Output dimension inspection. The Canvas 160×120
+validation gate is removed; actual complete-content fit remains mandatory.
+
 Authority: [spec93](../specs/93_T6_EXECUTION_PLAN.md), especially T6A1/A2,
 the stage map, T6N and T6L;
 [spec03](../specs/03_THEME_SYSTEM.md), including public foundations, component

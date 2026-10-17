@@ -36,6 +36,24 @@ use crate::{
 /// means [`crate::kind::Any`], the erased form used by heterogeneous storage.
 /// Family-specific methods are available only through exact-marker inherent
 /// implementations or a corresponding sealed capability.
+/// Without a sizing call, dimensions derive from content. [`Self::width`] fixes
+/// width with content-derived height; [`Self::size`] fixes both dimensions.
+/// The latest sizing call replaces the complete request. Final dimensions are
+/// inspected on [`crate::Output`], after the scene has been frozen.
+///
+/// ```compile_fail
+/// use lichtung_plot::{kind, Plot};
+/// fn removed_width_getter(plot: &Plot<kind::Scatter>) {
+///     let _ = plot.width();
+/// }
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{kind, Plot};
+/// fn removed_height_getter(plot: &Plot<kind::Scatter>) {
+///     let _ = plot.height();
+/// }
+/// ```
 ///
 /// ```compile_fail
 /// use lichtung_plot::{kind, Plot};
@@ -451,8 +469,7 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     y_limits_user_explicit: bool,
     theme: Option<std::sync::Arc<Theme>>,
     significance: Vec<crate::significance::SignificanceAnnotation>,
-    width: u32,
-    height: u32,
+    root_size: crate::layout::RootSize,
     /// Ordered variable names for `PlotKind::Matrix` (pairplot).
     matrix_variables: Vec<String>,
     bar_spacing: BarSpacing,
@@ -565,8 +582,7 @@ pub(crate) struct ComposedInputs {
     render_scope: Option<String>,
     legend_policy: LegendPolicy,
     suppress_continuous_guide: bool,
-    width: u32,
-    height: u32,
+    root_size: crate::layout::RootSize,
 }
 
 impl Plot<crate::kind::Any> {
@@ -591,8 +607,7 @@ impl Plot<crate::kind::Any> {
             y_limits_user_explicit: false,
             theme: None,
             significance: Vec::new(),
-            width: 640,
-            height: 480,
+            root_size: crate::layout::RootSize::natural(),
             matrix_variables: Vec::new(),
             bar_spacing: BarSpacing::default(),
             histogram_bins: HistogramBins::default(),
@@ -1004,8 +1019,7 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             y_limits_user_explicit,
             theme,
             significance,
-            width,
-            height,
+            root_size,
             matrix_variables,
             bar_spacing,
             histogram_bins,
@@ -1112,8 +1126,7 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             y_limits_user_explicit,
             theme,
             significance,
-            width,
-            height,
+            root_size,
             matrix_variables,
             bar_spacing,
             histogram_bins,
