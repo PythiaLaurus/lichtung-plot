@@ -214,6 +214,7 @@ impl AxisSpec {
                 side,
                 theme,
                 false,
+                self.format.as_deref(),
                 scope,
             )
         } else {

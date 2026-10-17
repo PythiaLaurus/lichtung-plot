@@ -1464,6 +1464,7 @@ fn prepare(
                 source.limits
             },
             interval: source.interval,
+            format: source.format.clone(),
             exact_ticks: if logarithmic && side == 0 {
                 chart.projected_explicit_x_ticks()?
             } else {
@@ -1491,6 +1492,12 @@ fn prepare(
     for side in 0..2 {
         validate_range(ranges[side])?;
         if let Some(levels) = categories[side].take() {
+            if specs[side].format.is_some() {
+                return Err(Error::Data(format!(
+                    "{}-axis categories do not support a numeric tick format",
+                    if side == 0 { "x" } else { "y" },
+                )));
+            }
             if specs[side].interval.is_some() {
                 return Err(Error::Data(format!(
                     "{}-axis categories do not support a numeric tick interval",

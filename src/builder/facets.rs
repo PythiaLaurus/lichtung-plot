@@ -123,6 +123,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             if axis.limits != other.limits
                 || axis.provenance != other.provenance
                 || axis.interval != other.interval
+                || axis.format != other.format
                 || !same_values(axis.exact_ticks.as_deref(), other.exact_ticks.as_deref())
             {
                 return false;
@@ -173,6 +174,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             target.limits = source.limits;
             target.provenance = source.provenance;
             target.interval = source.interval;
+            target.format.clone_from(&source.format);
             if let Some(ticks) = &source.exact_ticks {
                 let mut retained = Vec::new();
                 crate::render::backend::reserve_text_records(&mut retained, ticks.len())?;

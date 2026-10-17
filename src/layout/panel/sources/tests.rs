@@ -19,6 +19,7 @@ fn repeated_numeric_axis_selection_preserves_ticks_without_reshaping() {
         AxisSide::Bottom,
         &theme,
         false,
+        None,
         &scope,
     )
     .unwrap();
@@ -31,6 +32,7 @@ fn repeated_numeric_axis_selection_preserves_ticks_without_reshaping() {
         AxisSide::Bottom,
         &theme,
         false,
+        None,
         &scope,
     )
     .unwrap();
@@ -45,6 +47,7 @@ fn repeated_numeric_axis_selection_preserves_ticks_without_reshaping() {
         AxisSide::Bottom,
         &theme,
         false,
+        None,
         &scope,
     );
     assert_eq!(result.unwrap().ticks, first.ticks);
@@ -158,7 +161,8 @@ fn adaptive_source_order_is_seed_descending_then_one_midpoint() {
             TickSource {
                 kind,
                 ordinal,
-                cap: 5
+                cap: 5,
+                precision: None,
             }
         );
     }
@@ -337,6 +341,7 @@ fn source_semantics_reject_before_fonts() {
             AxisSide::Bottom,
             &theme,
             false,
+            None,
             &crate::layout::fit::ROOT_SCOPE,
         )
         .is_err());
@@ -345,6 +350,22 @@ fn source_semantics_reject_before_fonts() {
             0
         );
     }
+    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+    let error = crate::Plot::trajectory(
+        crate::CategoryValues::new("condition", ["a", "b"]).unwrap(),
+        crate::NumericValues::new("response", [1.0, 2.0]),
+        crate::CategoryValues::new("group", ["g", "g"]).unwrap(),
+    )
+    .x_tick_format(crate::numeric::format::NumericFormat::default())
+    .preflight()
+    .unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("categories do not support a numeric tick format"));
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        0
+    );
 }
 
 #[test]
@@ -379,6 +400,10 @@ fn projection_keys_are_exact_at_endpoints_midpoints_and_subnormal_fractions() {
 
 #[test]
 fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
+    use crate::numeric::{
+        decimal::NumericNotation,
+        format::{NumericFormat, NumericPrecision},
+    };
     let theme = crate::Theme::publication().resolve().unwrap();
     let projection = Projection::new((0.0, 100.0), (0.0, 100.0), (0.0, 1000.0, 0.0, 1000.0));
     let plan = numeric_tick_plan(
@@ -389,6 +414,7 @@ fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
         AxisSide::Bottom,
         &theme,
         false,
+        None,
         &crate::layout::fit::ROOT_SCOPE,
     )
     .unwrap();
@@ -403,6 +429,7 @@ fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
         AxisSide::Bottom,
         &theme,
         false,
+        None,
         &crate::layout::fit::ROOT_SCOPE,
     )
     .unwrap();
@@ -418,6 +445,41 @@ fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
             .collect::<Vec<_>>(),
         linear_positions((0.0, 100.0), step).unwrap().unwrap()
     );
+    let projection = Projection::new((0.0, 0.04), (0.0, 1.0), (0.0, 1000.0, 0.0, 1000.0));
+    for (precision, expected_ordinal, expected_digits) in [
+        (NumericPrecision::Fractional(0), false, 0),
+        (
+            NumericPrecision::AdaptiveFractional { min: 0, max: 2 },
+            true,
+            2,
+        ),
+    ] {
+        let format = NumericFormat::new(NumericNotation::Decimal, precision).unwrap();
+        let selected = numeric_tick_plan(
+            (0.0, 0.04),
+            Some(TickInterval::additive(0.01).unwrap()),
+            false,
+            &projection,
+            AxisSide::Bottom,
+            &theme,
+            false,
+            Some(&format),
+            &crate::layout::fit::ROOT_SCOPE,
+        )
+        .unwrap();
+        assert_eq!(selected.source.ordinal == 0, expected_ordinal);
+        assert_eq!(selected.source.precision, Some(expected_digits));
+        if expected_ordinal {
+            assert_eq!(
+                selected
+                    .ticks
+                    .iter()
+                    .map(|tick| tick.label.as_str())
+                    .collect::<Vec<_>>(),
+                ["0.00", "0.01", "0.02", "0.03", "0.04"]
+            );
+        }
+    }
 }
 
 #[test]
@@ -436,6 +498,7 @@ fn midpoint_is_conditional_and_must_itself_fit() {
             AxisSide::Bottom,
             &theme,
             false,
+            None,
             &scope,
         );
         if width == 1.0 {
@@ -471,6 +534,7 @@ fn numeric_source_invalid_range_and_font_failures_remain_fatal() {
             AxisSide::Bottom,
             &theme,
             false,
+            None,
             &ROOT_SCOPE
         ),
         Err(PlanError::Fatal(_))
@@ -484,6 +548,7 @@ fn numeric_source_invalid_range_and_font_failures_remain_fatal() {
             AxisSide::Bottom,
             &theme,
             false,
+            None,
             &ROOT_SCOPE
         ),
         Err(PlanError::Fatal(_))
@@ -508,14 +573,17 @@ fn generated_labels_are_unique_and_covered_by_the_closed_census() {
             AxisSide::Bottom,
             &theme,
             false,
+            None,
             &crate::layout::fit::ROOT_SCOPE,
         )
         .unwrap();
         for (index, tick) in plan.ticks.iter().enumerate() {
-            assert!(tick
-                .label
-                .chars()
-                .all(|scalar| NUMERIC_ALPHABET.contains(&scalar)));
+            assert!(tick.label.chars().all(|scalar| if log {
+                FOREST_NUMERIC_ALPHABET
+            } else {
+                NUMERIC_ALPHABET
+            }
+            .contains(&scalar)));
             assert!(plan.ticks[..index]
                 .iter()
                 .all(|previous| previous.label != tick.label));
@@ -550,6 +618,23 @@ fn generated_labels_are_unique_and_covered_by_the_closed_census() {
         assert_eq!(format_label(exponent, true, true, 0).unwrap(), expected);
     }
     assert_eq!(super::super::range_ticks::format_tick(-0.0), "0");
+    let range = (0.5_f64.next_down(), 0.5_f64.next_up());
+    let projection = Projection::new(range, (0.0, 1.0), (0.0, 800.0, 0.0, 100.0));
+    let configured = crate::numeric::format::NumericFormat::default();
+    let selected = numeric_tick_plan(
+        range,
+        None,
+        true,
+        &projection,
+        AxisSide::Bottom,
+        &theme,
+        false,
+        Some(&configured),
+        &crate::layout::fit::ROOT_SCOPE,
+    )
+    .unwrap();
+    assert_eq!(selected.source.kind, SourceKind::Midpoint);
+    assert_eq!(selected.ticks[0].label, "3.16");
 }
 
 #[test]
@@ -622,12 +707,14 @@ fn exact_source_overrides_intervals_and_provenance_survives_layout_cloning() {
         provenance: super::super::RangeProvenance::Configured,
         limits: Some((0.0, 10.0)),
         interval: Some(TickInterval::additive(1.0).unwrap()),
+        format: None,
         exact_ticks: Some(vec![AxisTick::new(1.0, ""), AxisTick::new(9.0, "same")]),
     };
     let y = super::super::AxisSpec {
         provenance: super::super::RangeProvenance::Configured,
         limits: Some((0.0, 10.0)),
         interval: Some(TickInterval::additive(2.0).unwrap()),
+        format: None,
         exact_ticks: None,
     };
     let layout = super::super::Layout::new_with_axis_specs_in_panel_box(

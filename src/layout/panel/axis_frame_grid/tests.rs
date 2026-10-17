@@ -40,7 +40,7 @@ fn selected_axis_plan_retains_semantics_beside_projection_and_sources() {
     .with_resolved_facet_ranges(crate::spec::PlotKind::Scatter, Some((0.0, 3.0)), None);
     let inputs = plot.axis_semantic_inputs([crate::spec::AxisDomain::Continuous; 2]);
     let plan = layout
-        .measure_axes(&theme, &FitScope::root(), inputs)
+        .measure_axes(&theme, &FitScope::root(), inputs.clone())
         .unwrap();
     let retained = plan.clone();
     assert_eq!(retained.semantics, inputs);
@@ -211,6 +211,7 @@ fn frozen_axis_retains_projection_source_and_unlabeled_positions() {
         kind: SourceKind::LogInterval(3),
         ordinal: 2,
         cap: 81,
+        precision: None,
     };
     let layout = layout(
         PanelBox::new(80.0, 680.0, 80.0, 480.0),
@@ -578,6 +579,10 @@ fn canonical_label_fit_accepts_touching_ink_and_rejects_one_quantum_beyond() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "the independent one-quantum fit oracle includes complete source and frozen placement checks"
+)]
 fn automatic_selection_and_frozen_axis_agree_at_quantum_fit_boundary() {
     use super::super::sources::{labels_fit, numeric_tick_plan};
     let theme = crate::Theme::publication().resolve().unwrap();
@@ -619,6 +624,7 @@ fn automatic_selection_and_frozen_axis_agree_at_quantum_fit_boundary() {
                 side,
                 &theme,
                 false,
+                None,
                 &FitScope::root(),
             )
             .unwrap();

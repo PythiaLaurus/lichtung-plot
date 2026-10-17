@@ -7,6 +7,9 @@ use crate::{Error, TickInterval};
 
 pub(super) const MAX_TICKS: usize = 10_000;
 pub(crate) const NUMERIC_ALPHABET: &[char] = &[
+    '-', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'M', 'e', 'k',
+];
+pub(crate) const FOREST_NUMERIC_ALPHABET: &[char] = &[
     '-', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'M', '^', 'e', 'k',
 ];
 const MAX_INDEX: f64 = 9_007_199_254_740_992.0;
@@ -29,6 +32,7 @@ pub(crate) struct TickSource {
     pub(crate) kind: SourceKind,
     pub(crate) ordinal: usize,
     pub(crate) cap: usize,
+    pub(crate) precision: Option<u8>,
 }
 
 impl TickSource {
@@ -36,11 +40,13 @@ impl TickSource {
         kind: SourceKind::Supplied,
         ordinal: 0,
         cap: 1,
+        precision: None,
     };
     pub(crate) const EXACT: Self = Self {
         kind: SourceKind::Exact,
         ordinal: 0,
         cap: 1,
+        precision: None,
     };
 }
 
@@ -346,6 +352,7 @@ impl Sources {
             kind,
             ordinal: self.ordinal,
             cap: self.cap,
+            precision: None,
         };
         self.ordinal += 1;
         #[cfg(test)]
@@ -403,12 +410,13 @@ pub(crate) fn numeric_tick_plan(
     side: AxisSide,
     theme: &ResolvedTheme,
     legacy: bool,
+    format: Option<&crate::numeric::format::NumericFormat>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<NumericTickPlan, crate::layout::fit::PlanError> {
     Sources::new(range, log, interval, 1)?;
 
     NumericTickPlan::measure_selected_source(
-        range, interval, log, projection, side, theme, legacy, scope,
+        range, interval, log, projection, side, theme, legacy, format, scope,
     )
 }
 
@@ -422,6 +430,7 @@ impl NumericTickPlan {
         side: AxisSide,
         theme: &ResolvedTheme,
         legacy: bool,
+        format: Option<&crate::numeric::format::NumericFormat>,
         scope: &crate::layout::fit::FitScope,
     ) -> Result<Self, crate::layout::fit::PlanError> {
         // Validate semantic inputs before asking for the metric probe or environment.
@@ -452,34 +461,46 @@ impl NumericTickPlan {
 
         let mut sources = Sources::new(range, log, interval, upper)?;
         loop {
-            let (source, positions) = sources.next()?;
+            let (mut source, positions) = sources.next()?;
             if let Some(positions) = positions {
                 // Each formatting attempt is admitted before strings or record storage.
                 let mut ticks = Vec::new();
                 reserve(&mut ticks, positions.len())?;
                 let mut unique = false;
-                for precision in 0..=17 {
-                    if precision == 1 {
-                        continue;
+                if let Some(format) = format {
+                    if let Some(set) = format.format_set(&positions, log, true)? {
+                        source.precision = Some(set.precision);
+                        for (position, label) in positions.iter().copied().zip(set.labels) {
+                            ticks.push(AxisTick::new(position, label));
+                        }
+                        unique = true;
                     }
-                    ticks.clear();
+                } else {
+                    for precision in 0..=17 {
+                        if precision == 1 {
+                            continue;
+                        }
+                        ticks.clear();
 
-                    for &position in &positions {
-                        let integral = log
-                            && matches!(
-                                source.kind,
-                                SourceKind::LogIntegral
-                                    | SourceKind::LogSubset(_)
-                                    | SourceKind::LogInterval(_)
-                            );
-                        let label = format_label(position, log, integral, precision)?;
-                        ticks.push(AxisTick::new(position, label));
-                    }
-                    // Formatting of an ordered numeric source is monotone. Only
-                    // adjacent labels can coincide, including SI boundary rounding.
-                    unique = ticks.windows(2).all(|pair| pair[0].label != pair[1].label);
-                    if unique {
-                        break;
+                        for &position in &positions {
+                            let integral = log
+                                && matches!(
+                                    source.kind,
+                                    SourceKind::LogIntegral
+                                        | SourceKind::LogSubset(_)
+                                        | SourceKind::LogInterval(_)
+                                );
+                            let label = format_label(position, log, integral, precision)?;
+                            ticks.push(AxisTick::new(position, label));
+                        }
+                        // Formatting of an ordered numeric source is monotone. Only
+                        // adjacent labels can coincide, including SI boundary rounding.
+                        unique = ticks.windows(2).all(|pair| pair[0].label != pair[1].label);
+                        if unique {
+                            source.precision =
+                                Some(u8::try_from(precision).expect("bounded precision"));
+                            break;
+                        }
                     }
                 }
                 #[cfg(test)]

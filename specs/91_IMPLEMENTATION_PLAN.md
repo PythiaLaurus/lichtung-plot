@@ -6606,8 +6606,10 @@ evidence is complete in `../docs/certified-log10-conversion.md`. Normalized priv
 policy/default conversion is complete in `../docs/unified-numeric-presentation.md`:
 the current public name stores the one private representation, existing fixed and
 default conversions share its engine, and estimate census reads retained prepared
-sources. Configured consumer/font/identity integration and public replacement
-follow their scheduled leaves.
+sources. Configured private axes and their semantic sets, pre-font units and
+terminal/natural intrinsics are complete in `../docs/configured-numeric-axes.md`.
+Guide/value consumers, remaining identity evidence and public replacement follow
+their scheduled leaves.
 
 ENTRY gate is CLOSED by the user's explicit approval of the current-implementation
 assessment and request to plan T6:

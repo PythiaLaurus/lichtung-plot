@@ -888,6 +888,7 @@ impl<'a> PlotRenderContext<'a> {
                 provenance: source.provenance,
                 limits: source.limits,
                 interval: source.interval,
+                format: source.format.clone(),
                 exact_ticks: source
                     .exact_ticks
                     .as_ref()

@@ -814,7 +814,7 @@ fn matrix_ticks<'a>(
     };
     if !matches {
         let plan = layout::NumericTickPlan::measure_selected_source(
-            range, None, false, projection, side, theme, false, scope,
+            range, None, false, projection, side, theme, false, None, scope,
         )?;
 
         *cached = Some(MatrixTickCache {

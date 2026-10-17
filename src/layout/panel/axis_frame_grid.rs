@@ -220,7 +220,7 @@ impl PanelAxisPlan {
         round: &mut crate::layout::kernel::FeedbackRound,
     ) -> Result<(), Error> {
         self.standard.observe_feedback(round)?;
-        for input in self.semantics {
+        for input in &self.semantics {
             input.observe_feedback(round)?;
         }
         for range in [self.projection.x_range(), self.projection.y_range()] {
@@ -230,6 +230,11 @@ impl PanelAxisPlan {
         for axis in [&self.x_axis, &self.y_axis] {
             round.observe_count(axis.source.ordinal)?;
             round.observe_count(axis.source.cap)?;
+            round.observe_count(
+                axis.source
+                    .precision
+                    .map_or(0, |digits| usize::from(digits) + 1),
+            )?;
             let (kind, parameter) = match axis.source.kind {
                 SourceKind::Supplied => (0, 0.0),
                 SourceKind::Exact => (1, 0.0),

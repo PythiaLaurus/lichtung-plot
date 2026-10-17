@@ -23,12 +23,13 @@ pub(crate) enum RangePolicy {
     CategorySlots,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct AxisSemanticInputs {
     pub(crate) provenance: RangeProvenance,
     pub(crate) scale: AxisScale,
     pub(crate) policy: RangePolicy,
     pub(crate) interval: Option<crate::TickInterval>,
+    pub(crate) format: Option<std::sync::Arc<crate::numeric::format::NumericFormat>>,
 }
 
 impl AxisSemanticInputs {
@@ -38,16 +39,25 @@ impl AxisSemanticInputs {
             scale,
             policy,
             interval: spec.interval,
+            format: if spec.exact_ticks.is_some() || policy == RangePolicy::CategorySlots {
+                None
+            } else {
+                spec.format.clone()
+            },
         }
     }
 
     pub(crate) fn observe_feedback(
-        self,
+        &self,
         round: &mut crate::layout::kernel::FeedbackRound,
     ) -> Result<(), crate::Error> {
         round.observe_count(self.provenance as usize)?;
         round.observe_count(self.scale as usize)?;
         round.observe_count(self.policy as usize)?;
+        round.observe_count(usize::from(self.format.is_some()))?;
+        if let Some(format) = &self.format {
+            format.observe_feedback(round)?;
+        }
         match self.interval {
             None => round.observe_count(0),
             Some(interval) => {

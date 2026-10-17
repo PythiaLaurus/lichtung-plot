@@ -14,6 +14,9 @@ use crate::{Error, Plot};
 #[derive(Debug)]
 pub(crate) struct Intrinsics {
     standard: StandardPanelInputs,
+    formats: [Option<std::sync::Arc<crate::numeric::format::NumericFormat>>; 2],
+    base_ranges: [(u64, u64); 2],
+    logarithmic: bool,
     minimum_body: (f64, f64),
     without_y_categories: f64,
 }
@@ -42,6 +45,14 @@ impl Intrinsics {
             let _ = axes.intrinsics.set(summary);
         }
         let summary = axes.intrinsics.get().expect("initialized panel intrinsics");
+        if summary.formats != axes.specs.each_ref().map(|spec| spec.format.clone())
+            || summary.base_ranges != axes.ranges.map(|(lo, hi)| (lo.to_bits(), hi.to_bits()))
+            || summary.logarithmic != axes.logarithmic
+        {
+            return Err(Error::Render(
+                "prepared panel intrinsic numeric context changed".into(),
+            ));
+        }
         if !summary.standard.matches(theme)? {
             return Err(Error::Render(
                 "prepared panel intrinsic typography changed".into(),
@@ -61,6 +72,10 @@ impl Intrinsics {
         )
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one traversal owns title, category and formatted terminal intrinsics"
+    )]
     fn analyze(
         axes: &crate::plots::shared_x::PreparedAxes,
         theme: &crate::theme::ResolvedTheme,
@@ -136,12 +151,13 @@ impl Intrinsics {
             } else if axes.specs[side].exact_ticks.is_none() {
                 // The terminal source is derived from this scientific domain,
                 // using the same indivisible numeric formatter as tick selection.
-                let label = crate::layout::panel::format_label(
-                    f64::midpoint(axes.ranges[side].0, axes.ranges[side].1),
-                    axes.logarithmic && side == 0,
-                    false,
-                    0,
-                )?;
+                let value = f64::midpoint(axes.ranges[side].0, axes.ranges[side].1);
+                let power = axes.logarithmic && side == 0;
+                let label = if let Some(format) = &axes.specs[side].format {
+                    format.format_singleton(value, power)?
+                } else {
+                    crate::layout::panel::format_label(value, power, false, 0)?
+                };
                 let plan = theme.measure_text(
                     &label,
                     &standard.tick_label,
@@ -167,6 +183,9 @@ impl Intrinsics {
         }
         Ok(Self {
             standard,
+            formats: axes.specs.each_ref().map(|spec| spec.format.clone()),
+            base_ranges: axes.ranges.map(|(lo, hi)| (lo.to_bits(), hi.to_bits())),
+            logarithmic: axes.logarithmic,
             minimum_body,
             without_y_categories,
         })
@@ -350,6 +369,7 @@ impl InteriorRoute {
                     crate::plots::interval_estimate::log_tick_plan(
                         projection.x_range(),
                         inputs.specs[side].interval,
+                        inputs.specs[side].format.as_deref(),
                         panel,
                         context.theme,
                         context.fit_scope(),
@@ -540,6 +560,7 @@ mod intrinsic_tests {
                     side,
                     &theme,
                     false,
+                    None,
                     &fit::ROOT_SCOPE,
                 )
                 .unwrap();
@@ -553,7 +574,11 @@ mod intrinsic_tests {
 
     #[test]
     fn numeric_intrinsic_uses_the_actual_indivisible_terminal_domain_source() {
-        for range in [(-1.0, 1.0), (1e100, 3e100)] {
+        use crate::numeric::{
+            decimal::NumericNotation,
+            format::{NumericFormat, NumericPrecision},
+        };
+        for (range, label) in [((-1.0, 1.0), "[0.00e0]"), ((1e100, 3e100), "[2.00e100]")] {
             let source = Plot::scatter(
                 crate::NumericValues::new("x", [range.0, range.1]),
                 crate::NumericValues::new("y", [0.0, 1.0]),
@@ -561,21 +586,32 @@ mod intrinsic_tests {
             .x_limits(range.0, range.1)
             .x_label("")
             .y_label("")
+            .x_tick_format(
+                NumericFormat::new(
+                    NumericNotation::Scientific,
+                    NumericPrecision::AdaptiveFractional { min: 2, max: 4 },
+                )
+                .unwrap()
+                .with_prefix("[")
+                .unwrap()
+                .with_suffix("]")
+                .unwrap(),
+            )
+            .y_tick_format(
+                NumericFormat::new(
+                    NumericNotation::Decimal,
+                    NumericPrecision::AdaptiveFractional { min: 0, max: 17 },
+                )
+                .unwrap(),
+            )
             .erase();
             let resources = crate::font::canonical::OperationContext::new();
             let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
             let chart = inputs.attach(source).unwrap();
             let theme = crate::Theme::publication().resolve().unwrap();
-            let label = crate::layout::panel::format_label(
-                f64::midpoint(range.0, range.1),
-                false,
-                false,
-                0,
-            )
-            .unwrap();
             let measured = theme
                 .measure_text(
-                    &label,
+                    label,
                     &theme.typography.axes.tick_label,
                     crate::layout::PhysicalTextAlignment::Center,
                     "independent numeric terminal source",
@@ -595,6 +631,21 @@ mod intrinsic_tests {
                 .to_bits()
             );
             assert_eq!(chart.prepared_axis_inputs().unwrap().ranges[0], range);
+            let widest_probe = theme
+                .measure_text(
+                    "0.50000000000000000",
+                    &theme.typography.axes.tick_label,
+                    crate::layout::PhysicalTextAlignment::End,
+                    "independent maximum-precision gutter probe",
+                    false,
+                )
+                .unwrap();
+            assert!(
+                crate::layout::interior::sizing::horizontal_gutter_preference(&chart, &theme)
+                    .unwrap()
+                    .0
+                    >= widest_probe.width()
+            );
         }
     }
 }

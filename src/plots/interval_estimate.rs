@@ -1119,6 +1119,7 @@ fn project(
 pub(crate) fn log_tick_plan(
     range: (f64, f64),
     interval: Option<crate::TickInterval>,
+    format: Option<&crate::numeric::format::NumericFormat>,
     panel: crate::layout::PanelBox,
     theme: &ResolvedTheme,
     scope: &crate::layout::fit::FitScope,
@@ -1132,6 +1133,7 @@ pub(crate) fn log_tick_plan(
         crate::layout::AxisSide::Bottom,
         theme,
         false,
+        format,
         scope,
     )
 }

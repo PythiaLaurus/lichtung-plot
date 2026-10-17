@@ -31,6 +31,7 @@ pub(crate) mod decimal;
 )]
 pub(crate) mod format;
 pub(crate) mod profiles;
+pub(crate) mod set;
 
 #[cfg_attr(
     not(test),

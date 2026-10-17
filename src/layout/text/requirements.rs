@@ -811,7 +811,8 @@ impl PreparedTextRequirement {
             push_axis_ticks(
                 requirements,
                 &x_axis,
-                plot.explicit_x_ticks(),
+                plot.x_axis_spec(),
+                kind == PlotKind::Forest && plot.axis_scale_spec() == crate::AxisScale::Log10,
                 automatic_category_labels(plot, kind, true)?,
                 (kind == PlotKind::Heatmap
                     && plot.heatmap_label_fit_spec() == crate::HeatmapLabelFit::Elide)
@@ -822,7 +823,8 @@ impl PreparedTextRequirement {
             push_axis_ticks(
                 requirements,
                 &y_axis,
-                plot.explicit_y_ticks(),
+                plot.y_axis_spec(),
+                false,
                 automatic_category_labels(plot, kind, false)?,
                 (kind == PlotKind::Heatmap
                     && plot.heatmap_label_fit_spec() == crate::HeatmapLabelFit::Elide)
@@ -1587,15 +1589,22 @@ fn push_present(
     Ok(())
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the axis source includes scale, exact precedence, categories and complete typography"
+)]
 fn push_axis_ticks(
     requirements: &mut Vec<PreparedTextRequirement>,
     axis: &ComponentAddress,
-    exact: Option<&[crate::layout::AxisTick]>,
+    spec: &crate::layout::AxisSpec,
+    power: bool,
     automatic_categories: Option<Vec<String>>,
     category_generated_alphabet: Option<&[char]>,
     appearance: &TextTheme,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), Error> {
+    let exact = spec.exact_ticks.as_deref();
+    let format = spec.format.as_deref();
     if let Some(ticks) = exact {
         for (index, tick) in ticks.iter().enumerate() {
             let address = axis.clone();
@@ -1635,10 +1644,32 @@ fn push_axis_ticks(
             PreparedTextRole::TickLabel,
             0,
             String::new(),
-            AUTOMATIC_NUMERIC_ALPHABET,
+            format.map_or(
+                if power {
+                    crate::layout::panel::FOREST_NUMERIC_ALPHABET
+                } else {
+                    AUTOMATIC_NUMERIC_ALPHABET
+                },
+                |value| value.generated_alphabet(),
+            ),
             appearance,
-            prepared_stage,
+            prepared_stage.as_deref_mut(),
         )?;
+        if let Some(format) = format {
+            for (index, source) in format.boundary_sources()?.into_iter().enumerate() {
+                push_owned(
+                    requirements,
+                    axis.clone(),
+                    PreparedTextRole::TickLabel,
+                    u32::try_from(index + 1)
+                        .map_err(|_| Error::Render("numeric boundary index overflow".into()))?,
+                    source,
+                    &[],
+                    appearance,
+                    prepared_stage.as_deref_mut(),
+                )?;
+            }
+        }
     }
     Ok(())
 }
@@ -2355,14 +2386,61 @@ mod tests {
     }
 
     #[test]
-    fn automatic_numeric_alphabet_is_the_exact_sorted_closed_grammar() {
+    fn generated_numeric_affix_units_choose_whole_faces_before_sealing() {
+        let format = crate::numeric::format::NumericFormat::default()
+            .with_suffix("\u{0301}")
+            .unwrap();
+        let mut appearance = appearance("Digits", TextWeight::Normal);
+        appearance.stack = canonical::named_stack(&["Digits", "Marks", "Whole"]);
+        let spec = crate::layout::AxisSpec {
+            format: Some(std::sync::Arc::new(format.clone())),
+            ..Default::default()
+        };
+        let requirements = with_prepared_stage(|stage| {
+            let mut requirements = Vec::new();
+            push_axis_ticks(
+                &mut requirements,
+                &ComponentAddress::root(),
+                &spec,
+                false,
+                None,
+                None,
+                &appearance,
+                Some(stage),
+            )?;
+            Ok(requirements)
+        })
+        .unwrap();
         assert_eq!(
-            AUTOMATIC_NUMERIC_ALPHABET,
-            ['-', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'M', '^', 'e', 'k']
+            requirements[0].generated_alphabet.as_ref(),
+            ['-', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
         );
-        assert!(AUTOMATIC_NUMERIC_ALPHABET
-            .windows(2)
-            .all(|pair| pair[0] < pair[1]));
+        let mut complete = format.generated_alphabet().to_vec();
+        complete.push('\u{0301}');
+        let environment = PreparedFontEnvironment::synthetic_faces(&[
+            ("Digits", format.generated_alphabet()),
+            ("Marks", &['\u{0301}']),
+            ("Whole", &complete),
+        ]);
+        let mut census = PreparedTextCensus::materialize(requirements, None, None).unwrap();
+        census
+            .prepare_fonts_in(&environment, &mut vec![0; SCALAR_MAP_WORDS])
+            .unwrap();
+        let pair = environment
+            .prepared_pair(&appearance.stack, RequestedWeight::Normal)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            pair.selection_for_unit("0", '0').unwrap(),
+            canonical::ScalarFaceSelection::Face(pair.primary)
+        );
+        for digit in '0'..='9' {
+            assert_eq!(
+                pair.selection_for_unit(&format!("{digit}\u{0301}"), digit)
+                    .unwrap(),
+                canonical::ScalarFaceSelection::Face(pair.provenance.candidates[2])
+            );
+        }
     }
 
     #[test]
@@ -2370,6 +2448,11 @@ mod tests {
         let plot = crate::Plot::scatter(
             crate::NumericValues::new("x", [1.0, 2.0]),
             crate::NumericValues::new("y", [3.0, 4.0]),
+        )
+        .x_tick_format(
+            crate::numeric::format::NumericFormat::default()
+                .with_suffix("\u{10ffff}")
+                .unwrap(),
         )
         .x_ticks(vec![crate::layout::AxisTick::new(1.0, "exact")])
         .erase();
@@ -2403,6 +2486,9 @@ mod tests {
                 && requirement.source == "exact"
                 && requirement.generated_alphabet.is_empty()
         }));
+        assert!(requirements
+            .iter()
+            .all(|requirement| !requirement.source.contains('\u{10ffff}')));
     }
 
     #[test]

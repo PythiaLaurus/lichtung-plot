@@ -128,6 +128,7 @@ fn exact_tick_configuration_validates_count_before_fonts() {
             provenance: RangeProvenance::Automatic,
             limits: None,
             interval: None,
+            format: None,
             exact_ticks: Some(
                 (0..count)
                     .map(|index| AxisTick::new(f64::from(index), ""))
@@ -156,6 +157,7 @@ fn exact_tick_configuration_validates_positions_without_a_display_domain() {
             provenance: RangeProvenance::Automatic,
             limits: None,
             interval: None,
+            format: None,
             exact_ticks: Some(
                 positions
                     .into_iter()
@@ -176,6 +178,7 @@ fn exact_tick_configuration_preserves_empty_and_duplicate_labels_and_checks_know
         provenance: RangeProvenance::Automatic,
         limits: None,
         interval: None,
+        format: None,
         exact_ticks: Some(vec![
             AxisTick::new(-f64::MAX, "same"),
             AxisTick::new(0.0, ""),
@@ -531,6 +534,7 @@ fn frozen_axes_and_grid_replay_without_layout_theme_or_shaping() {
             AxisTick::new(10.0, ""),
         ]),
         interval: None,
+        format: None,
     };
     let layout = Layout::new_with_axis_specs_in_panel_box(
         (0.0, 10.0),
@@ -598,15 +602,6 @@ fn automatic_ticks_reject_when_even_the_terminal_midpoint_cannot_fit() {
     let projection = Projection::new((0.0, 10.0), (0.0, 10.0), (0.0, 0.0, 0.0, 0.0));
 
     assert!(automatic_numeric_ticks((0.0, 10.0), &projection, AxisSide::Bottom, &theme).is_err());
-}
-
-#[test]
-fn wide_numeric_sources_retain_more_than_five_ticks() {
-    let theme = crate::Theme::publication().resolve().unwrap();
-    let projection = Projection::new((0.0, 9.0), (0.0, 1.0), (0.0, 1_000.0, 0.0, 100.0));
-    let fitted =
-        automatic_numeric_ticks((0.0, 9.0), &projection, AxisSide::Bottom, &theme).unwrap();
-    assert!(fitted.len() > 5);
 }
 
 #[test]

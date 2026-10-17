@@ -285,6 +285,36 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
+    #[cfg_attr(
+        not(test),
+        allow(
+            dead_code,
+            reason = "private axis preparation precedes public format cutover"
+        )
+    )]
+    pub(crate) fn x_tick_format(mut self, format: crate::numeric::format::NumericFormat) -> Self
+    where
+        K: crate::kind::NumericX,
+    {
+        self.x_axis_spec.format = Some(std::sync::Arc::new(format));
+        self
+    }
+
+    #[cfg_attr(
+        not(test),
+        allow(
+            dead_code,
+            reason = "private axis preparation precedes public format cutover"
+        )
+    )]
+    pub(crate) fn y_tick_format(mut self, format: crate::numeric::format::NumericFormat) -> Self
+    where
+        K: crate::kind::NumericY,
+    {
+        self.y_axis_spec.format = Some(std::sync::Arc::new(format));
+        self
+    }
+
     /// Append a numeric guide rendered in data space.
     #[must_use]
     pub fn guide(mut self, guide: GuideSpec) -> Self

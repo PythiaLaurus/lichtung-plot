@@ -167,6 +167,7 @@ pub(crate) fn automatic_numeric_ticks(
         side,
         theme,
         false,
+        None,
         &crate::layout::fit::ROOT_SCOPE,
     )
     .map_err(crate::layout::fit::PlanError::into_error)?

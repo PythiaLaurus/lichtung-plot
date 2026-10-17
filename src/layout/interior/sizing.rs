@@ -445,7 +445,20 @@ pub(crate) fn horizontal_gutter_preference(
                 f64::midpoint(axes.ranges[1].0, axes.ranges[1].1),
                 axes.ranges[1].1,
             ] {
-                include_label(&crate::layout::format_guide_label(value, 0)?)?;
+                if let Some(format) = &axes.specs[1].format {
+                    let (min, max) = format.precision().bounds()?;
+                    let mut formatter = crate::numeric::power::certified::PowerFormatter::default();
+                    for digits in min..=max {
+                        include_label(&format.format_selected(
+                            value,
+                            digits,
+                            false,
+                            &mut formatter,
+                        )?)?;
+                    }
+                } else {
+                    include_label(&crate::layout::format_guide_label(value, 0)?)?;
+                }
             }
         }
     }
