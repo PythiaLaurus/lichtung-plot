@@ -51,26 +51,27 @@ impl EffectiveSignificance {
         Ok(spacing.product(LocalMetric::css_pixels(self.label.font_size())?))
     }
 
-    pub(crate) fn tick_height(&self) -> Result<f64> {
-        self.length(self.geometry.tick_height())?
-            .pixels_rounded(SpatialRounding::NearestEven)
+    pub(crate) fn tick_height(&self) -> Result<ExactLength> {
+        self.length(self.geometry.tick_height())
     }
 
-    pub(crate) fn data_gap(&self) -> Result<f64> {
-        self.length(self.geometry.data_gap())?
-            .pixels_rounded(SpatialRounding::NearestEven)
+    pub(crate) fn data_gap(&self) -> Result<ExactLength> {
+        self.length(self.geometry.data_gap())
     }
 
-    pub(crate) fn level_step(&self) -> Result<f64> {
-        self.length(self.geometry.level_step())?
-            .pixels_rounded(SpatialRounding::NearestEven)
+    pub(crate) fn level_step(&self) -> Result<ExactLength> {
+        self.length(self.geometry.level_step())
     }
 
-    pub(crate) fn panel_padding(&self) -> Result<f64> {
-        Ok(self
-            .length(self.geometry.panel_padding())?
-            .pixels_rounded(SpatialRounding::NearestEven)?
-            .max(f64::from(self.geometry.bracket_stroke().width()) / 2.0 + 1.0 / 1024.0))
+    pub(crate) fn panel_padding(&self) -> Result<ExactLength> {
+        let selected = self.length(self.geometry.panel_padding())?;
+        let ink = ExactLength::pixels(f64::from(self.geometry.bracket_stroke().width()) / 2.0)?
+            .add_pixels(1.0 / 1024.0)?;
+        Ok(if selected.compare(&ink).is_lt() {
+            ink
+        } else {
+            selected
+        })
     }
 
     pub(crate) fn gap_pixels(&self) -> Result<f64> {
@@ -99,7 +100,9 @@ impl EffectiveSignificance {
             line_height: label.line_height(),
             weight: label.style.weight,
             label_gap: self.gap_pixels()?,
-            tick_height: self.tick_height()?,
+            tick_height: self
+                .tick_height()?
+                .pixels_rounded(SpatialRounding::NearestEven)?,
         })
     }
 }

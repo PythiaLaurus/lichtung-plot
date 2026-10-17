@@ -306,6 +306,13 @@ geometry constant and duplicate selected-style/fallback reconstruction are gone.
 One semantic planner/canonical test replaces a typography group-edit fixture;
 discovery remains 671. Ten focused library tests, twenty-four annotation/estimate/
 parent integrations, formatting and strict all-target Clippy pass.
+The subsequent closure review corrected comparison hard-space aggregation:
+selected geometry remains exact through level occupancy, complete reserves and
+range/ceiling fit, with one upward boundary and only final position rounding.
+A two-level fractional-quantum boundary regression replaces the guide field/edit
+inventory; discovery remains 671. Eleven focused library tests and twenty-six
+annotation/facet/estimate integrations, formatting and strict Clippy pass; the
+same evidence document records the correction and actual checks.
 
 T6B2c2 evidence: `../docs/annotation-local-spacing.md` records distinct selected-role
 cell/value and merged-row padding through intrinsics, assignment, wrapping and

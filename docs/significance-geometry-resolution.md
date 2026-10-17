@@ -56,5 +56,38 @@ Validation passed:
 - Six parent/estimate integrations: typed facet targets, horizontal Canvas
   composition and Coefficient marks with/without bounds.
 
-Cell, estimate-detail and panel-text local spacing are the next annotation
-consumer leaf; public component exposure remains a later owning cutover.
+## Exact Hard-Space Boundary Follow-Up
+
+The consumer-closure review found that comparison planning still added separately
+nearest-rounded tick, gap, level and padding operands. `BracketMetrics` now retains
+exact lengths. Initial data clearance, complete inter-level text/tick occupancy,
+minimum panel height, top-ceiling checks and automatic-range search aggregate
+those exact operands before a single upward boundary. Assigned capacity rounds
+downward. The existing three-padding minimum-height cardinality is one complete
+sum, not a padding subtraction rounded separately from the remaining reserve.
+Actual half-stroke plus one quantum remains an exact lower bound on panel padding.
+
+Only after exact level packing and hard fit are complete does planning freeze
+whole line positions nearest-even. Canonical capture continues to receive the
+selected tick-height and label-gap operands. Attached reserves and lazy unused
+geometry resolution retain their existing behavior.
+
+One real two-level planner regression replaces the guide component's field/edit
+inventory fixture. Eight quarter-quantum contributions reserve exactly two
+quanta in the complete requirement; the strict minimum refuses at that boundary
+and succeeds with one additional quantum. Both final brackets pass canonical
+validation with the selected tick and gap. No scene snapshot or incidental
+automatic size is pinned. Library discovery remains **671**.
+
+Follow-up validation passed:
+
+- Strict `just lint`, formatting and `git diff --check`.
+- Four significance planner tests and seven bracket-filtered library tests,
+  including canonical geometry, malformed operands and frozen replay.
+- Nineteen external significance contracts, four facet-ownership contracts and
+  three Coefficient significance contracts.
+- Library discovery only (`-- --list`), not a complete test-suite execution.
+
+Logs: `/tmp/opencode/significance-exact-{lint,planner,brackets,integration,parents,
+estimates,census}.log`. Public exact-style and component exposure remain the
+following owning cutovers.

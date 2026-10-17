@@ -8,7 +8,7 @@ use num_bigint::BigUint;
 use crate::layout::kernel::{LayoutScalar, SpatialRounding};
 use crate::{Error, Result};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Rational {
     numerator: BigUint,
     denominator: BigUint,
@@ -167,7 +167,7 @@ impl LocalMetric {
 }
 
 /// Unrounded nonnegative quanta. Aggregate before selecting a spatial boundary.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct ExactLength(Rational);
 
 // Test oracles may compare independently measured exact consequences. Runtime

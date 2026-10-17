@@ -28,7 +28,7 @@ macro_rules! legend_spacing {
             fn validate(&self) -> Result<()> { positive(self.key_width(), "key width") }
             $(
                 pub(crate) fn $field(&self) -> &RelativeSpacing { &self.$field }
-                #[cfg_attr(not(test), allow(dead_code, reason = "private guide construction edits await complete Theme exposure"))]
+                #[allow(dead_code, reason = "private guide construction edits await complete Theme exposure")]
                 pub(crate) fn $edit(mut self, value: RelativeSpacing) -> Result<Self> { self.$field = value; self.validate()?; Ok(self) }
             )+
             fn relationships(&self) -> [&RelativeSpacing; 9] { [$(&self.$field),+] }
@@ -88,22 +88,16 @@ impl GradientLengths {
     pub(crate) fn preferred(&self) -> &RelativeSpacing {
         &self.preferred
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "private gradient edits await complete Theme exposure"
-        )
+    #[allow(
+        dead_code,
+        reason = "private gradient edits await complete Theme exposure"
     )]
     pub(crate) fn with_minimum(self, minimum: RelativeSpacing) -> Result<Self> {
         Self::new(minimum, self.preferred)
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "private gradient edits await complete Theme exposure"
-        )
+    #[allow(
+        dead_code,
+        reason = "private gradient edits await complete Theme exposure"
     )]
     pub(crate) fn with_preferred(self, preferred: RelativeSpacing) -> Result<Self> {
         Self::new(self.minimum, preferred)
@@ -146,32 +140,23 @@ impl LegendFrameTheme {
     pub(crate) fn radius(&self) -> &RelativeSpacing {
         &self.radius
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "private frame edits await complete Theme exposure"
-        )
+    #[allow(
+        dead_code,
+        reason = "private frame edits await complete Theme exposure"
     )]
     pub(crate) fn with_fill(self, fill: Color) -> Result<Self> {
         Self::new(fill, self.outline, self.radius)
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "private frame edits await complete Theme exposure"
-        )
+    #[allow(
+        dead_code,
+        reason = "private frame edits await complete Theme exposure"
     )]
     pub(crate) fn with_outline(self, outline: Option<OutlineTheme>) -> Result<Self> {
         Self::new(self.fill, outline, self.radius)
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "private frame edits await complete Theme exposure"
-        )
+    #[allow(
+        dead_code,
+        reason = "private frame edits await complete Theme exposure"
     )]
     pub(crate) fn with_radius(self, radius: RelativeSpacing) -> Result<Self> {
         Self::new(self.fill, self.outline, radius)
@@ -242,42 +227,30 @@ impl LegendTheme {
     pub(crate) fn shared_gap(&self) -> &RelativeSpacing {
         self.spacing().shared_gap()
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "private guide edits await complete Theme exposure"
-        )
+    #[allow(
+        dead_code,
+        reason = "private guide edits await complete Theme exposure"
     )]
     pub(crate) fn with_spacing(self, spacing: LegendSpacing) -> Result<Self> {
         Self::new(spacing, self.gradient_lengths, self.frame)
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "private guide edits await complete Theme exposure"
-        )
+    #[allow(
+        dead_code,
+        reason = "private guide edits await complete Theme exposure"
     )]
     pub(crate) fn with_gradient_lengths(self, value: GradientLengths) -> Result<Self> {
         Self::new(self.spacing, value, self.frame)
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "private guide edits await complete Theme exposure"
-        )
+    #[allow(
+        dead_code,
+        reason = "private guide edits await complete Theme exposure"
     )]
     pub(crate) fn with_frame(self, frame: Option<LegendFrameTheme>) -> Result<Self> {
         Self::new(self.spacing, self.gradient_lengths, frame)
     }
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "private guide edits await complete Theme exposure"
-        )
+    #[allow(
+        dead_code,
+        reason = "private guide edits await complete Theme exposure"
     )]
     pub(crate) fn with_shared_gap(self, value: RelativeSpacing) -> Result<Self> {
         let spacing = self.spacing.with_shared_gap(value)?;

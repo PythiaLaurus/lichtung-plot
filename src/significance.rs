@@ -7,11 +7,13 @@ pub use spec::{Attached, FacetCell, Pairwise, Significance, SignificanceMark, Si
 
 use crate::Error;
 
+use crate::layout::kernel::SpatialRounding;
 use crate::layout::{DeferredAnnotationTextPlan, PanelBox, PhysicalTextAlignment};
 use crate::render::backend::{
     Backend, BracketOrientation, BracketStyle, PlannedSignificanceCall, SignificanceBracket,
 };
 use crate::theme::annotation::EffectiveSignificance;
+use crate::theme::spacing::ExactLength;
 use crate::Plot;
 #[cfg(test)]
 use crate::SignificanceMarkStyle;
@@ -30,13 +32,13 @@ pub(crate) struct PlannedSignificanceBracket {
     pub(crate) style: BracketStyle,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 struct BracketMetrics {
-    tick_height: f64,
-    label_gap: f64,
-    data_gap: f64,
-    level_step: f64,
-    panel_padding: f64,
+    tick_height: ExactLength,
+    label_gap: ExactLength,
+    data_gap: ExactLength,
+    level_step: ExactLength,
+    panel_padding: ExactLength,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -305,7 +307,7 @@ fn plan_comparisons_at_with_label(
                 panel,
                 rendered_maxima,
                 ceiling,
-                bracket_metrics(effective)?,
+                &bracket_metrics(effective)?,
             )?,
             _ => y_range,
         };
@@ -406,19 +408,20 @@ fn plan_comparisons_at_with_label(
             level_label_extents[comparison.level].max(label_extent);
     }
 
-    let annotation_top = annotation_ceiling.unwrap_or(panel.y1) - metrics.panel_padding;
-    let annotation_top = annotation_top.min(panel.y1 - metrics.panel_padding);
-    let available_height = annotation_top - panel.y0;
-    let minimum_height = metrics.data_gap
-        + metrics.tick_height
-        + level_label_extents
-            .iter()
-            .take(level_label_extents.len().saturating_sub(1))
-            .map(|extent| significance_level_spacing(*extent, metrics))
-            .sum::<f64>()
-        + level_label_extents.last().copied().unwrap_or_default()
-        + metrics.label_gap
-        + 2.0 * metrics.panel_padding;
+    let available_height =
+        annotation_capacity(panel, annotation_ceiling)?.pixels_rounded(SpatialRounding::Floor)?;
+    let mut minimum_height = metrics.data_gap.add_length(&metrics.tick_height);
+    for extent in level_label_extents
+        .iter()
+        .take(level_label_extents.len().saturating_sub(1))
+    {
+        minimum_height = minimum_height.add_length(&significance_level_spacing(*extent, &metrics)?);
+    }
+    let minimum_height = minimum_height
+        .add_pixels(level_label_extents.last().copied().unwrap_or_default())?
+        .add_length(&metrics.label_gap)
+        .add_length(&metrics.panel_padding.times(3))
+        .pixels_rounded(SpatialRounding::Ceil)?;
     if available_height <= minimum_height {
         return Err(scope.failure(crate::layout::fit::FitKind::TrackOrResidual, format!(
             "plot panel space below the inside legend is too short for {} significance level(s): {:.1}px available, more than {:.1}px required; increase chart height, move/hide the legend, or reduce comparisons",
@@ -436,7 +439,7 @@ fn plan_comparisons_at_with_label(
             &level_label_extents,
             annotation_ceiling,
             global_maximum,
-            metrics,
+            &metrics,
         )?
         else {
             let suggested = expand_upper_limit(
@@ -446,7 +449,7 @@ fn plan_comparisons_at_with_label(
                 &level_label_extents,
                 annotation_ceiling,
                 global_maximum,
-                metrics,
+                &metrics,
             )?
             .0;
             let remedy = if annotation_ceiling.is_some() {
@@ -467,7 +470,7 @@ fn plan_comparisons_at_with_label(
         &level_label_extents,
         annotation_ceiling,
         global_maximum,
-        metrics,
+        &metrics,
     )? {
         (y_range, lines)
     } else {
@@ -478,7 +481,7 @@ fn plan_comparisons_at_with_label(
             &level_label_extents,
             annotation_ceiling,
             global_maximum,
-            metrics,
+            &metrics,
         )?
     };
 
@@ -871,19 +874,19 @@ fn place_lines(
     level_label_extents: &[f64],
     annotation_ceiling: Option<f64>,
     global_maximum: f64,
-    metrics: BracketMetrics,
+    metrics: &BracketMetrics,
 ) -> Result<Option<Vec<f64>>, Error> {
-    if annotation_ceiling.is_some_and(|ceiling| {
-        !data_fits_below_ceiling(range, panel, global_maximum, ceiling, metrics)
-    }) {
-        return Ok(None);
+    if let Some(ceiling) = annotation_ceiling {
+        if !data_fits_below_ceiling(range, panel, global_maximum, ceiling, metrics)? {
+            return Ok(None);
+        }
     }
     if level_maxima.len() != level_label_extents.len() {
         return Err(render_error("significance level/label counts differ"));
     }
-    let annotation_edge =
-        annotation_ceiling.unwrap_or(panel.y1).min(panel.y1) - metrics.panel_padding;
-    let mut lines = Vec::with_capacity(level_maxima.len());
+    let capacity =
+        annotation_capacity(panel, annotation_ceiling)?.pixels_rounded(SpatialRounding::Floor)?;
+    let mut lines = Vec::<ExactLength>::with_capacity(level_maxima.len());
     for (level, maximum) in level_maxima.iter().enumerate() {
         #[cfg(test)]
         crate::orchestrator::measurements::count(
@@ -901,30 +904,55 @@ fn place_lines(
             return Err(render_error("significance projection ratio is not finite"));
         }
         let fraction = fraction.clamp(0.0, 1.0);
-        let data_y = panel.y0 + fraction * panel.height();
-        let clearance_y = data_y + metrics.tick_height + metrics.data_gap;
-        let line = lines.last().map_or(clearance_y, |previous| {
-            clearance_y
-                .max(previous + significance_level_spacing(level_label_extents[level - 1], metrics))
-        });
-        let label_edge = line + metrics.label_gap + level_label_extents[level];
-        if !line.is_finite() || !label_edge.is_finite() || !annotation_edge.is_finite() {
-            return Err(render_error(
-                "significance placement arithmetic is not finite",
-            ));
+        let mut line = metrics
+            .tick_height
+            .add_length(&metrics.data_gap)
+            .add_pixels(fraction * panel.height())?;
+        if let Some(previous) = lines.last() {
+            let next = previous.add_length(&significance_level_spacing(
+                level_label_extents[level - 1],
+                metrics,
+            )?);
+            if line.compare(&next).is_lt() {
+                line = next;
+            }
         }
-        if label_edge > annotation_edge {
+        let required = line
+            .add_length(&metrics.label_gap)
+            .add_pixels(level_label_extents[level])?
+            .add_length(&metrics.panel_padding)
+            .pixels_rounded(SpatialRounding::Ceil)?;
+        if required > capacity {
             return Ok(None);
         }
         lines.push(line);
     }
-    Ok(Some(lines))
+    // Freeze whole positions only after exact level packing and hard fit. The
+    // backend still receives its independently selected canonical tick/gap.
+    lines
+        .iter()
+        .map(|line| line.after_pixels(panel.y0))
+        .collect::<Result<Vec<_>, _>>()
+        .map(Some)
 }
 
-fn significance_level_spacing(label_extent: f64, metrics: BracketMetrics) -> f64 {
-    metrics
-        .level_step
-        .max(metrics.label_gap + label_extent + metrics.tick_height)
+fn significance_level_spacing(
+    label_extent: f64,
+    metrics: &BracketMetrics,
+) -> Result<ExactLength, Error> {
+    let occupancy = metrics
+        .label_gap
+        .add_pixels(label_extent)?
+        .add_length(&metrics.tick_height);
+    Ok(if metrics.level_step.compare(&occupancy).is_lt() {
+        occupancy
+    } else {
+        metrics.level_step.clone()
+    })
+}
+
+fn annotation_capacity(panel: PanelBox, ceiling: Option<f64>) -> Result<ExactLength, Error> {
+    ExactLength::pixels((ceiling.unwrap_or(panel.y1).min(panel.y1) - panel.y0).max(0.0))
 }
 
 fn expand_upper_limit(
@@ -934,7 +962,7 @@ fn expand_upper_limit(
     level_label_extents: &[f64],
     annotation_ceiling: Option<f64>,
     global_maximum: f64,
-    metrics: BracketMetrics,
+    metrics: &BracketMetrics,
 ) -> Result<((f64, f64), Vec<f64>), Error> {
     let lower = range.0;
     let mut failing_upper = range.1;
@@ -1004,7 +1032,7 @@ fn fit_data_below_ceiling(
     panel: PanelBox,
     rendered_maxima: &[f64],
     ceiling: f64,
-    metrics: BracketMetrics,
+    metrics: &BracketMetrics,
 ) -> Result<(f64, f64), Error> {
     let maximum = rendered_maxima
         .iter()
@@ -1012,10 +1040,16 @@ fn fit_data_below_ceiling(
         .fold(f64::NEG_INFINITY, f64::max);
     let fits =
         |upper: f64| data_fits_below_ceiling((range.0, upper), panel, maximum, ceiling, metrics);
-    if fits(range.1) {
+    if fits(range.1)? {
         return Ok(range);
     }
-    if ceiling - panel.y0 <= metrics.data_gap + metrics.panel_padding {
+    let available =
+        annotation_capacity(panel, Some(ceiling))?.pixels_rounded(SpatialRounding::Floor)?;
+    let required = metrics
+        .data_gap
+        .add_length(&metrics.panel_padding)
+        .pixels_rounded(SpatialRounding::Ceil)?;
+    if available <= required {
         return Err(render_error(
             "inside legend leaves no vertical room for categorical data; increase chart height or move/hide the legend",
         ));
@@ -1035,7 +1069,7 @@ fn fit_data_below_ceiling(
                 "could not find a finite automatic y range below the inside legend; check data magnitudes and chart height",
             ));
         }
-        if fits(passing_upper) {
+        if fits(passing_upper)? {
             break;
         }
         failing_upper = passing_upper;
@@ -1047,7 +1081,7 @@ fn fit_data_below_ceiling(
         crate::orchestrator::measurements::count(
             crate::orchestrator::measurements::Counter::SignificanceBisection,
         );
-        if fits(midpoint) {
+        if fits(midpoint)? {
             passing_upper = midpoint;
         } else {
             failing_upper = midpoint;
@@ -1061,17 +1095,23 @@ fn data_fits_below_ceiling(
     panel: PanelBox,
     maximum: f64,
     ceiling: f64,
-    metrics: BracketMetrics,
-) -> bool {
+    metrics: &BracketMetrics,
+) -> Result<bool, Error> {
     let fraction = ((maximum - range.0) / (range.1 - range.0)).clamp(0.0, 1.0);
-    let data_top = panel.y0 + fraction * panel.height();
-    data_top + metrics.data_gap <= ceiling - metrics.panel_padding
+    let required = metrics
+        .data_gap
+        .add_length(&metrics.panel_padding)
+        .add_pixels(fraction * panel.height())?
+        .pixels_rounded(SpatialRounding::Ceil)?;
+    let available =
+        annotation_capacity(panel, Some(ceiling))?.pixels_rounded(SpatialRounding::Floor)?;
+    Ok(required <= available)
 }
 
 fn bracket_metrics(effective: &EffectiveSignificance) -> Result<BracketMetrics, Error> {
     Ok(BracketMetrics {
         tick_height: effective.tick_height()?,
-        label_gap: effective.gap_pixels()?,
+        label_gap: effective.gap.clone(),
         data_gap: effective.data_gap()?,
         level_step: effective.level_step()?,
         panel_padding: effective.panel_padding()?,

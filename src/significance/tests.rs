@@ -94,13 +94,95 @@ fn selected_theme_gap_and_tick_height_survive_canonical_capture_with_exact_prece
     assert_eq!(effective.label.weight(), crate::TextWeight::Bold);
     assert_eq!(effective.gap_pixels().unwrap().to_bits(), 3.0_f64.to_bits());
     assert_eq!(
-        effective.tick_height().unwrap().to_bits(),
+        effective
+            .tick_height()
+            .unwrap()
+            .pixels_rounded(SpatialRounding::NearestEven)
+            .unwrap()
+            .to_bits(),
         6.0_f64.to_bits()
     );
     assert_eq!(bracket.style.tick_height.to_bits(), 12.0_f64.to_bits());
     let mut malformed = bracket.style.clone();
     malformed.tick_height = -1.0;
     assert!(crate::render::backend::validate_bracket(&bracket.geometry, &malformed).is_err());
+}
+
+#[test]
+fn fractional_significance_levels_reserve_the_complete_exact_requirement_once() {
+    use crate::theme::RelativeSpacing;
+
+    let mut theme = crate::Theme::Publication.resolve().unwrap();
+    // Each selected gap/tick/padding is its integral default plus one quarter
+    // quantum. Two occupied levels and three edge clearances contribute eight
+    // such fractions: reserve two quanta, not zero or eight.
+    let spacing = |pixels: u32| RelativeSpacing::ratio(pixels * 4096 + 1, 16 * 4096).unwrap();
+    let geometry = theme
+        .annotations
+        .significance()
+        .clone()
+        .with_label_gap(spacing(8))
+        .unwrap()
+        .with_tick_height(spacing(7))
+        .unwrap()
+        .with_data_gap(spacing(6))
+        .unwrap()
+        .with_panel_padding(spacing(2))
+        .unwrap()
+        .with_level_step(RelativeSpacing::ratio(0, 1).unwrap())
+        .unwrap();
+    theme.annotations = theme
+        .annotations
+        .clone()
+        .with_significance(geometry)
+        .unwrap();
+    let effective = theme.effective_significance(None).unwrap();
+    let annotations = [comparison("a", "b", 0.01), comparison("a", "c", 0.01)];
+    let label = theme
+        .measure_text(
+            annotations[0].mark().glyph().unwrap(),
+            &effective.label,
+            PhysicalTextAlignment::Center,
+            "significance bracket label",
+            false,
+        )
+        .unwrap();
+    let quantum = 1.0 / 1024.0;
+    // Existing cardinality: initial 7+6, intermediate 8+label+7,
+    // final 8+label, and three 2px panel clearances.
+    let minimum = 2.0 * label.height() + 42.0 + 2.0 * quantum;
+    let plan_at = |height| {
+        plan_comparisons_with_label(
+            &annotations,
+            &categories(),
+            &[0.0; 4],
+            (0.0, 10.0),
+            None,
+            Some((0.0, 10.0)),
+            PanelBox::new(0.0, 400.0, 0.0, height),
+            LegendAnnotationConstraint::NoObstacle,
+            &effective,
+            &theme,
+            &crate::layout::fit::ROOT_SCOPE,
+        )
+    };
+    let error = plan_at(minimum).unwrap_err();
+    assert!(error
+        .into_error()
+        .to_string()
+        .contains("too short for 2 significance level(s)"));
+    let selected = plan_at(minimum + quantum).unwrap();
+    assert_eq!(selected.brackets.len(), 2);
+    for bracket in &selected.brackets {
+        assert_eq!(bracket.style.tick_height.to_bits(), 7.0_f64.to_bits());
+        assert_eq!(bracket.style.label_gap.to_bits(), 8.0_f64.to_bits());
+        crate::render::backend::validate_planned_bracket(PlannedSignificanceCall {
+            bracket: &bracket.geometry,
+            style: &bracket.style,
+            label: &bracket.label,
+        })
+        .unwrap();
+    }
 }
 
 #[test]
