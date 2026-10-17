@@ -19,7 +19,7 @@ contract until the implementation cutover. Appearance and layout authority remai
 with `03_THEME_SYSTEM.md` and `05_LAYOUT_SYSTEM.md`. Numeric policy is semantic
 presentation, not an appearance component or a new scientific transformation.
 
-The source-backed migration census below was inspected at **`e6febe3`**. That
+The original source-backed migration census below was inspected at **`e6febe3`**. That
 baseline includes the paint-value migration: complete paints are
 `theme::{Color,OpaqueColor}` from `theme/paint.rs`; backend `Rgba` has already been
 deleted. It still has the closed public Theme, exact default root dimensions,
@@ -28,11 +28,25 @@ raw role-stack inputs and `NumericLabelFormat`. The historical A1 census in
 `docs/t6b1a-paint-values.md`, not as evidence that its earlier paint carriers still
 exist. Source symbols take precedence over historical line numbers.
 
+The post-foundation source refresh at **`387b07a`** is complete in
+[`docs/numeric-source-handoff.md`](../docs/numeric-source-handoff.md). It maps the
+historical tables to current complete Theme/role/font/scale values, opaque
+TickInterval, root requests, actual conversion/copy/cache/font paths and guide
+index drift. It is the current implementation handoff, not a numeric public
+cutover or executable certification. In particular, `builder/admission.rs` and
+`Plot::admitted_clone` no longer exist; derived Clone and exhaustive `erase` are
+the actual Plot transport sites.
+
+**Accounting simplification:** spec95 supersedes every historical ledger, fee,
+comparison-charge, quota and charge-delta instruction here. Keep real checked
+lengths, fallible first-party storage, exact arithmetic/temporary bounds, full
+identity and lifecycle. Do not recreate accounting-only helpers or parameters.
+
 The numeric public signatures and product choices are **design-closed here**.
-The execution plan's later actual-input census refresh occurs after the theme,
-font, scale, spacing, tick-interval and sizing migrations. That refresh must map
-the same contracts to their then-current fields/callers and record source drift;
-it does not reopen signatures or defer today's consumer/default design. Design
+The execution plan's actual-input census refresh followed the theme,
+font, scale, spacing, tick-interval and sizing migrations. It maps
+the same contracts to current fields/callers and records source drift;
+it does not reopen signatures or defer the consumer/default design. Design
 closure is not implementation, numerical certification or test closure.
 
 ## Scope And Single Ownership
@@ -536,54 +550,49 @@ Known value sets retain their raw members; domain-sensitive Waterfall eligibilit
 is the narrow rule above. Formatting is never a new feedback kind or root-width
 reselection.
 
-Current storage order is not inferred from drawn geometry. Heatmap stores lo,
-hi, optional center, then optional `Missing`; its local guide selects indices to
-paint lo/center/hi. Beeswarm stores hi/lo and its descriptor presents lo/hi. A
-constant local domain can retain duplicate endpoint strings while painting one
-required value. The final Shared descriptor retains the canonical required list
-lo/center/hi or its single constant value. Keep explicit occurrence/index maps
-when migrating these arrays to the common descriptor; no stop sample, projected
-label position or arbitrary child label chooses the scientific list. Preserve
-existing default content and account for every changed census occurrence/order
-explicitly rather than treating duplicate strings as free processing.
+Storage order is not inferred from drawn geometry. At the refreshed baseline,
+`descriptor::domain_labels` already prepares canonical lo/interior-center/hi or a
+single scientific constant for both families; Heatmap appends optional `Missing`
+separately. Native local guides copy those numeric lists in order. Natural
+`guided_preference` still has historical reindexing adapters; the source handoff
+records their required reconciliation. No stop sample, projected label position
+or arbitrary child label chooses the scientific list. Preserve explicit
+occurrence/index relationships and attribute changed census order/content to its
+actual source migration, not to the old baseline's storage claim.
 
 Source: `src/plots/heatmap.rs:1543-1563`, `src/plots/heatmap/guide.rs:19-44`,
 `src/plots/beeswarm.rs:177-182,229-239`,
 `src/decorations/legend/descriptor.rs:330-352`.
 
-### Fallible Distinctness And Comparison Work
+### Deterministic Distinctness And Comparison Work
 
 Build a retained occurrence map and sorted distinct scientific members without
 changing paint/source order. Normalize signed-zero equality for distinctness only;
-keep occurrence sign/provenance for Preserve output. Use a fallible comparison
-ordering operation whose comparator returns Result and charges each actual
-comparison before it executes. Comparisons of strings charge each examined byte
-and stop at mismatch/refusal; lengths and fixed scalar comparisons have explicit
-bounded prices. Deduplication charges each adjacent scientific comparison.
-
-The existing `data::source::sort_source_by` explicitly prices **input once**, not
-comparisons (`src/data/source.rs:43-72`). It is not sufficient by itself for this
-new adaptive distinctness contract. Introduce a narrow fallible numeric-set
-ordering helper or extend the relevant interface deliberately; do not silently
-change every unrelated scientific sort's pricing. A standard comparator that
-stores an error and fabricates an Ordering is not fallible admission.
+keep occurrence sign/provenance for Preserve output. Use bounded deterministic
+ordering and full comparisons, with checked lengths and fallible retained
+buffers. The current `data::source::sort_source_by` is a nonallocating heapsort;
+it has no comparison pricing or quota failure. Spec95 removes the former
+accounting-only requirement for a Result-returning comparator. If a comparison
+actually performs fallible conversion/arithmetic, propagate that real failure;
+never store an error and fabricate an Ordering.
 
 For explicit notation, equal numeric output can be checked using its canonical
-rounded coefficient/exponent identity or admitted text comparisons. Prove any
+rounded coefficient/exponent identity or full text comparisons. Prove any
 adjacent-only optimization for the whole configured grammar; do not reuse a
 default monotonicity comment as evidence for arbitrary future conversions. A
-bounded label-index ordering with actual comparisons is valid if that proof is
-not used. Default guides' at-most-three pair checks remain small and charged.
-No unpriced HashSet, hash-collision bucket scan, sorting pass, or quadratic search
-is an adaptive shortcut. Failed precisions, buffers and comparisons stay charged.
+bounded label-index ordering with full comparisons is valid if that proof is
+not used. Default guides' at-most-three pair checks remain small. Hash-only
+identity, omitted collisions and an unbounded quadratic distinctness scan are
+not adaptive shortcuts. Failed precisions retain their real failure/uniqueness
+meaning without cumulative accounting scores.
 
 ## Field-Level Transport And Deletion Census
 
-This table identifies actual fields at the source baseline and the required
+This table identifies historical fields at `e6febe3` and the required
 replacement responsibility. New private field spellings below describe owners,
-not additional public setters. Affix storage may be immutably shared where the
-existing ledger counts that actual storage once; any copied bytes/records and
-examined comparisons are admitted.
+not additional public setters. The refreshed handoff above supplies current
+names/copy paths and deletions. Affix storage may be immutably shared; copied
+bytes/records retain checked lengths, fallible storage and complete equality.
 
 | Current field/call path | Required transport and retained identity | Source anchor |
 | --- | --- | --- |
@@ -594,7 +603,7 @@ examined comparisons are admitted.
 | `Plot.color_label`, continuous scale fields | Add independent optional guide-number format; do not fold it into title or gradient/domain selection; B-stage scale replacement is consumed under its then-current name | `src/builder.rs:469-477` |
 | `Plot.waterfall_labels` | Add independent optional total-number format; names and literal space remain separate owners | `src/builder.rs:537`, `src/builder/configuration.rs:568-574` |
 | `Plot::new` and explicit `erase` destructure/reconstruction | Initialize absence consistently and move every new field, without capability changes on Any | `src/builder.rs:580-604,999-1150` |
-| `Plot::admitted_clone` exhaustive destructure and heap admission | Classify every new field; claim format prefix/suffix bytes before derived Clone, including both axis formats, guide format and totals; replace old suffix-only helper | `src/builder/admission.rs:15-110,126-133,191-196` |
+| Derived `Plot::clone` and exhaustive `erase` (refreshed owner) | Retain every complete policy/affix; checked explicit copies remain fallible. The historical admitted_clone/suffix-only accounting helper was deleted under spec95 | `src/builder.rs`, refreshed handoff |
 | `ComposedInputs.{x_axis_spec,y_axis_spec,resolved_facet_x_range,...}` | Include retained normalized x/y formats and any per-child effective presentation replacement; admit copies/affix comparisons; do not rely on equal endpoints | `src/builder.rs:561-577`, `src/builder/facets.rs:128-174,196-218` |
 | `with_resolved_facet_ranges`, planned-domain edits | Preserve format while replacing only range/provenance; Log10 resolved_x is transformed domain context, not decimal display scale | `src/builder/facets.rs:73-95`, `src/decorations/plan.rs:602-606` |
 | `PreparedAxes.{ranges,categories,display_categories,labels,specs,logarithmic}` plus scope tuple | Retain effective numeric format/operand and exact/category suppression under each scope; no formatting during category-key normalization | `src/plots/shared_x/prepared.rs:10-20` |
@@ -954,8 +963,8 @@ without accumulating unfinished owners into a repository-wide closure patch:
 | Atomic public replacement | Export NumericFormat/discriminants and fully consumed attachments; migrate every repository NumericLabelFormat caller and remove that type/old methods/display implementation; update current contracts/examples in the same owning cutover |
 | Evidence closure | Audit the two consumer matrices, seven policy fields, twenty-six dependency classes and concrete fixtures; inspect default attribution and affected snapshots; required broad execution gate runs once at its owner |
 
-The source refresh is actual-input confirmation after other approved implementation,
-not remaining product design. In particular, spec94's getter/with_field signatures,
+The completed source refresh is actual-input confirmation after other approved
+implementation, not remaining product design. In particular, spec94's getter/with_field signatures,
 numeric limits, raw-value Forest choice, actual capability sets, lack of Matrix
 global binding and default profile ownership are not still unresolved.
 

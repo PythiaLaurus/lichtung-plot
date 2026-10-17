@@ -6580,13 +6580,20 @@ Acceptance:
 
 ## Phase T6: Public Foundations And Scientific Presentation
 
-**Status**: IN PROGRESS — planning/entry decisions complete; implementation pending.
+**Status**: IN PROGRESS — public foundations and root sizing/ticks complete;
+numeric implementation follows the refreshed source handoff.
 
 Dependencies: T5e.
 
 Execution: `93_T6_EXECUTION_PLAN.md` T6P/T6A/T6B/T6C/T6N/T6L/T6Z. Complete and
 commit independently verified leaves; separate behavior from mechanical public
 cutovers instead of accumulating one large source/closure bundle.
+
+The current numeric implementation handoff is
+`../docs/numeric-source-handoff.md` at `387b07a`, after complete Theme/font/scale
+and sizing migrations. It maps actual default conversions, scoped copies,
+natural/terminal text consumers, pre-font units and retained keys; it does not
+claim numeric API implementation or executable Forest certification.
 
 ENTRY gate is CLOSED by the user's explicit approval of the current-implementation
 assessment and request to plan T6:

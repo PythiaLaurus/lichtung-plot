@@ -2,7 +2,7 @@
 
 **Status**: IN PROGRESS — immutable public foundations, their complete custom-value
 closure, public preferred tick intervals and root-sizing closure are complete;
-scientific numeric presentation is next.
+scientific numeric presentation is in progress.
 
 **Current execution checkpoint:** the user-authorized resumption completed the
 mark/annotation leaf, T6B1d4d, and the private-value umbrella T6B1. Evidence is in
@@ -23,7 +23,12 @@ actual categorical-axis refusal and source/parent evidence in
 `../docs/preferred-tick-intervals.md`. Public root sizing is complete in
 `../docs/content-derived-root-sizing.md`; all-mode parent/output evidence and the
 actual allocation repairs are complete in `../docs/public-sizing-closure.md`.
-This completes T6C; numeric source refresh follows.
+This completes T6C. The numeric source refresh is complete in
+`../docs/numeric-source-handoff.md`, against `387b07a`; exact ordinary decimal
+conversion follows. The handoff records current conversion/copy/font/key owners,
+retired accounting paths and canonical guide-list versus natural-adapter index
+drift. Numeric public implementation and Forest executable certification remain
+pending.
 The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
@@ -136,7 +141,7 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6C1 | COMPLETE | T6B | Opaque validated TickInterval and sealed numeric-axis setters; `feat(axes): expose preferred numeric tick intervals` |
 | T6C2 | COMPLETE | T6C1 | Automatic defaults, consuming width, exact size and Output dimensions; migrate getters/callers atomically; `feat(layout): expose content-derived root sizing` |
 | T6C3 | COMPLETE | T6C2 | Complete initial axis/chrome preferences, provisional content-height gutters and all-mode parent/output evidence; `fix(layout): compose complete content-sized root frames` |
-| T6N | PENDING | T6C | Unified scientific numeric formatting; leaves below |
+| T6N | IN PROGRESS | T6C | Unified scientific numeric formatting; leaves below |
 | T6L | PENDING | T6N | One section-aware discrete guide; leaves below |
 | T6Z | PENDING | T6L | Integrated contract, deferred-decision and phase closure |
 | T6Z1 | PENDING | T6L | Complete public examples/current-spec and property/consumer census reconciliation; `docs(api): reconcile scientific plotting contracts` |
@@ -677,7 +682,7 @@ compatible effective format. No first-contributor-wins or Canvas format override
 | Stage | Status | Depends on | Deliverable / scoped commit |
 | --- | --- | --- | --- |
 | T6N0d | COMPLETE | T6A | Complete numeric consumer/default/transport/font/key design in `06_NUMERIC_PRESENTATION.md`; `docs(numbers): pin numeric presentation consumers and defaults` |
-| T6N0 | PENDING | T6C, T6N0d | Refresh source names/callers and verify the closed contract against implemented foundations/sizing; implementation handoff, not new product design |
+| T6N0 | COMPLETE | T6C, T6N0d | Current source/default/transport/font/key refresh at `387b07a` in `docs/numeric-source-handoff.md`; implementation handoff, not new product design |
 | T6N1 | PENDING | T6N0 | Exact finite-binary64 decimal conversion, scaling and admitted rounding; `feat(numbers): implement exact scientific decimal formatting` |
 | T6N2a | COMPLETE | T6N0d | Mathematical interval/rounding/termination, resource and independent-oracle design in `07_LOG10_DISPLAY.md`; document-level proof only; `docs(numbers): prove logarithmic display rounding and resource bounds` |
 | T6N2b | PENDING | T6N1, T6N2a | Exact exponent reduction, symbolic powers/output size; `feat(numbers): retain exact Log10 display operands` |

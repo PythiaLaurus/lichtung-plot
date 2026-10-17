@@ -1968,6 +1968,12 @@ exponent 0.5/Fractional(2) means certified mathematical `3.16`; exact scale 2 an
 suffix `%` gives `316.23%`. N2's proof/oracle/resource gates remain mandatory.
 Private omitted-policy profiles preserve existing default grammars of one engine.
 
+The post-foundation source handoff is complete at `387b07a` in
+`../docs/numeric-source-handoff.md`. Its actual copy/cache/font/natural-sizing
+owners replace historical admission names, without changing these signatures or
+marking numeric implementation/certification complete. Spec95 removes historical
+numeric work/byte fees; exact arithmetic and real storage/length checks remain.
+
 LegendComposition defaults Combined and is exposed at L5 with
 `Plot<K: kind::Legend>::legend_composition(self, LegendComposition) -> Self` and
 `Canvas::legend_composition(self, LegendComposition) -> Self`. Current seventeen
