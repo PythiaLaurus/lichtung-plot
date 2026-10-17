@@ -24,7 +24,13 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
         .unwrap(),
     )
     .annotations(HeatmapAnnotations::Values(
-        crate::NumericLabelFormat::default(),
+        crate::NumericLabelFormat::from_policy(
+            crate::numeric::format::NumericFormat::new(
+                crate::numeric::decimal::NumericNotation::Decimal,
+                crate::numeric::format::NumericPrecision::AdaptiveFractional { min: 2, max: 3 },
+            )
+            .unwrap(),
+        ),
     ))
     .erase();
     let operation = crate::font::canonical::OperationContext::new();
@@ -87,7 +93,6 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
         rows: vec![None],
     };
     check_annotation_tracks(
-        &chart,
         marks,
         &annotations,
         &[0.0, required.0],
@@ -97,7 +102,6 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
     )
     .unwrap();
     assert!(check_annotation_tracks(
-        &chart,
         marks,
         &annotations,
         &[0.0, required.0 - 1.0 / 1024.0],

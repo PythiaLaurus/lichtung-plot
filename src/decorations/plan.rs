@@ -1137,6 +1137,10 @@ fn plan_panel_attempt(
     let mut ink_request = None;
     round.observe_box(panel_box)?;
     round.observe_layout(&result.layout)?;
+    round.observe_count(usize::from(result.numeric_presentation.is_some()))?;
+    if let Some(presentation) = &result.numeric_presentation {
+        presentation.observe_feedback(round)?;
+    }
     if let Some(text) = &panel_axes {
         text.observe_feedback(round)?;
     }

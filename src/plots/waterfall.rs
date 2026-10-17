@@ -26,8 +26,12 @@ pub(crate) struct PreparedWaterfall {
     pub(crate) range: (f64, f64),
     // Keep the source delta: subtracting rounded cumulative endpoints can lose its sign.
     spans: Vec<WaterfallSpan>,
-    pub(crate) totals: [(f64, String); 2],
+    total_candidates: [(f64, String); 2],
+    total_format: Option<std::sync::Arc<crate::numeric::format::NumericFormat>>,
+    total_variants: [Option<totals::TotalVariant>; 4],
 }
+
+mod totals;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct WaterfallSpan {
@@ -286,11 +290,16 @@ pub(crate) fn intrinsic_body_minimum(
     let prepared = retained(chart)?;
 
     let mut height = 0.0_f64;
-    for (value, text) in &prepared.totals {
-        if chart
-            .user_x_limits()
-            .is_some_and(|range| *value < range.0 || *value > range.1)
-        {
+    let input = chart
+        .prepared_axis_inputs()
+        .ok_or_else(|| Error::Render("Waterfall total axes missing".into()))?;
+    let projection = crate::layout::Projection::new(
+        chart.x_axis_spec().limits.unwrap_or(input.ranges[0]),
+        chart.y_axis_spec().limits.unwrap_or(input.ranges[1]),
+        (0.0, 1.0, 0.0, 1.0),
+    );
+    for (_, text) in &prepared.selected_totals(&projection)?.totals {
+        if text.is_empty() {
             continue;
         }
         let plan = theme.measure_text(
@@ -337,14 +346,17 @@ pub(crate) fn natural_body_height(
         .ok_or_else(|| Error::Render("natural Waterfall axes missing".into()))?;
     let range = chart.x_axis_spec().limits.unwrap_or(axes.ranges[0]);
     let panel = PanelBox::new(0.0, width, 0.0, 1.0);
-    let projection =
-        crate::layout::Projection::new(range, (0.0, marks.labels.len() as f64), panel.as_tuple());
+    let projection = crate::layout::Projection::new(
+        range,
+        chart.y_axis_spec().limits.unwrap_or(axes.ranges[1]),
+        panel.as_tuple(),
+    );
     let data = chart.data().with_operation(&resources);
     let plan = plan_annotations(
         &projection,
         panel,
         marks.labels.len() as f64,
-        &marks.totals,
+        &marks.selected_totals(&projection)?.totals,
         PlotRenderContext::new(data, panel, theme),
     )
     .map_err(crate::layout::fit::PlanError::into_error)?;
@@ -396,26 +408,20 @@ pub(crate) fn prepare(
         .map_or(("base", "total"), |labels| {
             (labels.base(), labels.terminal())
         });
-    let mut totals = [(base, String::new()), (running, String::new())];
-    for ((value, text), label) in totals.iter_mut().zip([base_label, terminal_label]) {
-        let number = crate::numeric::profiles::BuiltinProfile::WaterfallTotal.format(*value)?;
-        crate::data::source::reserve_source_string(
-            text,
-            label
-                .len()
-                .checked_add(1)
-                .and_then(|length| length.checked_add(number.len()))
-                .ok_or_else(|| Error::Data("waterfall: label size overflow".into()))?,
-        )?;
-        text.push_str(label);
-        text.push(' ');
-        text.push_str(&number);
-    }
+    let total_candidates = [
+        (base, crate::data::source::copy_source_string(base_label)?),
+        (
+            running,
+            crate::data::source::copy_source_string(terminal_label)?,
+        ),
+    ];
     Ok(PreparedWaterfall {
         labels,
         range,
         spans,
-        totals,
+        total_candidates,
+        total_format: chart.total_format_spec().cloned(),
+        total_variants: std::array::from_fn(|_| None),
     })
 }
 
@@ -461,8 +467,8 @@ pub(crate) fn measure(
     let labels = &prepared.labels;
     let spans = &prepared.spans;
     let range = prepared.range;
-    let base = prepared.totals[0].0;
-    let terminal = prepared.totals[1].0;
+    let base = prepared.total_candidates[0].0;
+    let terminal = prepared.total_candidates[1].0;
     let x_range = context.axis_range(crate::layout::AxisSide::Bottom, || {
         crate::layout::continuous_auto_range(range, chart.x_axis_spec())
     })?;
@@ -475,11 +481,12 @@ pub(crate) fn measure(
     })?;
     let annotation_projection = crate::layout::Projection::new(x_range, y_range, panel.as_tuple())
         .with_categories([None, Some(labels.len())]);
+    let selected_totals = prepared.selected_totals(&annotation_projection)?;
     let annotations = plan_annotations(
         &annotation_projection,
         panel,
         labels.len() as f64,
-        &prepared.totals,
+        &selected_totals.totals,
         context,
     )?;
     let mark_minimum = mark_intrinsic_body_minimum(chart, theme)?;
@@ -762,8 +769,12 @@ pub(crate) fn measure(
             .reduce(crate::render::geometry::GeometryBox::union)
         {
             let totals = (
-                prepared.totals[0].0.min(prepared.totals[1].0),
-                prepared.totals[0].0.max(prepared.totals[1].0),
+                prepared.total_candidates[0]
+                    .0
+                    .min(prepared.total_candidates[1].0),
+                prepared.total_candidates[0]
+                    .0
+                    .max(prepared.total_candidates[1].0),
             );
             let requests = crate::layout::interior::automatic_absolute_ink_expansions(
                 [totals, (0.0, labels.len() as f64)],
@@ -800,6 +811,7 @@ pub(crate) fn measure(
         }
     }
     let mut result = PlotRenderResult::new(layout, Vec::new());
+    result.numeric_presentation = Some(selected_totals.numeric.clone());
     result.y_domain = crate::spec::AxisDomain::Categorical;
     result.y_tick_keys =
         Some(crate::data::source::collect_source(labels.iter().map(

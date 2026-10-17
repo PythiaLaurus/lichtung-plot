@@ -723,6 +723,12 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.waterfall_labels.as_ref()
     }
 
+    pub(crate) fn total_format_spec(
+        &self,
+    ) -> Option<&std::sync::Arc<crate::numeric::format::NumericFormat>> {
+        self.total_format.as_ref()
+    }
+
     pub(crate) fn dumbbell_right_col(&self) -> Option<&'static str> {
         matches!(self.input.as_ref(), PlotInput::Dumbbell { .. }).then_some(DUMBBELL_RIGHT)
     }

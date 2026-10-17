@@ -741,6 +741,18 @@ impl Plot<crate::kind::Interaction> {
 }
 
 impl Plot<crate::kind::Waterfall> {
+    #[cfg_attr(
+        not(test),
+        allow(
+            dead_code,
+            reason = "private total preparation precedes public numeric cutover"
+        )
+    )]
+    pub(crate) fn total_format(mut self, format: crate::numeric::format::NumericFormat) -> Self {
+        self.total_format = Some(std::sync::Arc::new(format));
+        self
+    }
+
     /// Set caller-owned labels for base and terminal annotations.
     #[must_use]
     pub fn total_labels(mut self, labels: WaterfallLabels) -> Self {

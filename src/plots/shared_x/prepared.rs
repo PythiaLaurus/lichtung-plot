@@ -291,6 +291,9 @@ pub(crate) fn prepare_reference_plot(
             estimate_fallback: None,
         }),
     )?;
+    if let Some(marks) = waterfall.as_mut() {
+        marks.prepare_totals(&axes, false)?;
+    }
     if let Some(quantiles) = &quantiles {
         quantiles.validate_ranges(axes.ranges)?;
     }
@@ -862,6 +865,9 @@ pub(crate) fn prepare_plot(
                 continue;
             }
             reconcile_facet_axis(&mut retained, side)?;
+        }
+        for ((_, marks), (_, axes)) in waterfall.iter_mut().zip(&retained) {
+            marks.prepare_totals(axes, false)?;
         }
         for ((_, quantiles), (_, axes)) in qq.iter().zip(&retained) {
             quantiles.validate_ranges(axes.ranges)?;

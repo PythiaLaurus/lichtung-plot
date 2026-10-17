@@ -1372,6 +1372,37 @@ impl Canvas {
                 },
             );
         }
+        for group in &self.x_range_groups {
+            if !group.iter().any(|&index| {
+                self.panels[index]
+                    .as_ref()
+                    .is_some_and(|plot| plot.user_x_limits().is_none())
+            }) {
+                continue;
+            }
+            for &index in group {
+                let Some(inputs) = interiors[index].as_mut() else {
+                    continue;
+                };
+                let Some(waterfall) = inputs.waterfall.as_mut() else {
+                    continue;
+                };
+                let waterfall = Arc::get_mut(waterfall).ok_or_else(|| {
+                    Error::Render("Waterfall totals were aliased before window preparation".into())
+                })?;
+                for (scope, marks) in &mut waterfall.panels {
+                    let axes = inputs
+                        .axes
+                        .iter()
+                        .find(|(candidate, _)| candidate == scope)
+                        .map(|(_, axes)| axes)
+                        .ok_or_else(|| {
+                            Error::Render("Waterfall total window scope missing".into())
+                        })?;
+                    marks.prepare_totals(axes, true)?;
+                }
+            }
+        }
         Ok((interiors, shared_x))
     }
 

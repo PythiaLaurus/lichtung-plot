@@ -256,15 +256,13 @@ impl NumericLabelFormat {
         Ok(self)
     }
 
-    pub(crate) const fn configured_precision(&self) -> usize {
-        match self.format.precision() {
-            crate::numeric::format::NumericPrecision::Fractional(digits) => digits as usize,
-            _ => unreachable!(),
-        }
+    pub(crate) fn policy(&self) -> &crate::numeric::format::NumericFormat {
+        &self.format
     }
 
-    pub(crate) fn format_source(&self, value: f64) -> Result<String, crate::Error> {
-        self.format.format_ordinary(value)
+    #[cfg(test)]
+    pub(crate) fn from_policy(format: crate::numeric::format::NumericFormat) -> Self {
+        Self { format }
     }
 }
 
@@ -993,6 +991,8 @@ pub(crate) struct PlotRenderResult {
     pub(crate) matrix_axes: Option<std::sync::Arc<crate::plots::matrix::MatrixAxisPlan>>,
     pub(crate) marks: Option<std::sync::Arc<crate::layout::interior::SelectedMarkPlan>>,
     pub(crate) annotations: Option<std::sync::Arc<crate::layout::interior::SelectedAnnotationPlan>>,
+    pub(crate) numeric_presentation:
+        Option<std::sync::Arc<crate::numeric::set::NumericPresentation>>,
 }
 
 /// Semantic kind of one renderer-resolved axis domain.
@@ -1028,6 +1028,7 @@ impl PlotRenderResult {
             matrix_axes: None,
             marks: None,
             annotations: None,
+            numeric_presentation: None,
         }
     }
 
@@ -1065,6 +1066,3 @@ impl PlotRenderResult {
         self
     }
 }
-
-#[cfg(test)]
-mod tests;

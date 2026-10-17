@@ -1218,19 +1218,16 @@ fn push_deferred_plot_requirements(
             .ok_or_else(|| {
                 Error::Render("waterfall census requires root-prepared semantics".into())
             })?;
-        for (_, marks) in &waterfall.panels {
-            let range = plot.x_axis_spec().limits;
-            for (value, label) in &marks.totals {
-                if filter_point_label_x_to_limits
-                    && range.is_some_and(|range| *value < range.0 || *value > range.1)
-                {
-                    continue;
-                }
+        for (scope, marks) in &waterfall.panels {
+            if plot.axis_scope().is_some() && scope.as_deref() != plot.axis_scope() {
+                continue;
+            }
+            for label in marks.total_font_sources() {
                 push_deferred_body(
                     requirements,
                     &body_address,
                     &mut body_index,
-                    label.as_str(),
+                    label,
                     &[],
                     &theme.typography.annotations.waterfall_total,
                     prepared_stage.as_deref_mut(),
@@ -2020,7 +2017,7 @@ mod tests {
                             ComponentAddress::root(),
                             PreparedTextRole::Body,
                             0,
-                            format_args!("{}", format.format_source(1.0)?),
+                            format_args!("{}", format.policy().format_singleton(1.0, false)?),
                             &[],
                             &appearance,
                             Some(stage),
@@ -2498,9 +2495,9 @@ mod tests {
             (1.0, "1.00", "Light contrast font"),
         ] {
             let plot = crate::Plot::heatmap(
-                crate::CategoryValues::new("column", ["a"]).unwrap(),
-                crate::CategoryValues::new("row", ["one"]).unwrap(),
-                crate::NumericValues::new("fill", [value]),
+                crate::CategoryValues::new("column", ["a", "b"]).unwrap(),
+                crate::CategoryValues::new("row", ["one", "one"]).unwrap(),
+                crate::NumericValues::new("fill", [value, value + 0.01]),
             )
             .continuous_color_scale(
                 crate::ContinuousColorScale::diverging(
@@ -2511,7 +2508,16 @@ mod tests {
                 .unwrap(),
             )
             .annotations(crate::HeatmapAnnotations::Values(
-                crate::NumericLabelFormat::default(),
+                crate::NumericLabelFormat::from_policy(
+                    crate::numeric::format::NumericFormat::default()
+                        .with_precision(
+                            crate::numeric::format::NumericPrecision::AdaptiveFractional {
+                                min: 0,
+                                max: 2,
+                            },
+                        )
+                        .unwrap(),
+                ),
             ))
             .erase();
             let resources = crate::font::canonical::OperationContext::new();
@@ -2735,21 +2741,32 @@ mod tests {
     #[test]
     fn estimate_detail_census_uses_complete_role_for_retained_values_and_unavailable_text() {
         let plot = crate::Plot::coefficient(
-            crate::CategoryValues::new("term", ["available", "unavailable"]).unwrap(),
+            crate::CategoryValues::new("term", ["available", "outside", "unavailable"]).unwrap(),
             crate::CoefficientInput::estimates(crate::NumericValues::nullable(
                 "estimate",
-                [Some(1.25), None],
+                [Some(1.01), Some(1.02), None],
             )),
         )
         .estimate_labels(
-            crate::NumericLabelFormat::default()
-                .suffix("\u{0301} units")
-                .unwrap(),
+            crate::NumericLabelFormat::from_policy(
+                crate::numeric::format::NumericFormat::default()
+                    .with_precision(
+                        crate::numeric::format::NumericPrecision::AdaptiveFractional {
+                            min: 0,
+                            max: 2,
+                        },
+                    )
+                    .unwrap(),
+            )
+            .suffix("\u{0301} units")
+            .unwrap(),
         )
         .estimate_status([
             crate::EstimateStatus::Estimated,
+            crate::EstimateStatus::Estimated,
             crate::EstimateStatus::NotEstimable,
         ])
+        .x_limits(1.0, 1.015)
         .erase();
         let resources = crate::font::canonical::OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(
@@ -2780,7 +2797,7 @@ mod tests {
         let prepared = &inputs.estimate.as_ref().unwrap().panels[0].1;
         assert_eq!(
             prepared.detail_sources().collect::<Vec<_>>(),
-            ["Not estimable", "1.25\u{0301} units"]
+            ["Not estimable", "1.01\u{0301} units", "1.02\u{0301} units"]
         );
         for source in prepared.detail_sources() {
             let selected: Vec<_> = requirements

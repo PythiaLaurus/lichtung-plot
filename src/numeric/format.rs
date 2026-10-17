@@ -74,6 +74,26 @@ impl Default for NumericFormat {
 }
 
 impl NumericFormat {
+    pub(crate) fn try_copy(&self) -> Result<Self> {
+        Ok(Self {
+            notation: self.notation,
+            precision: self.precision,
+            decimal_scale: self.decimal_scale,
+            prefix: self
+                .prefix
+                .as_deref()
+                .map(crate::data::source::copy_source_string)
+                .transpose()?,
+            suffix: self
+                .suffix
+                .as_deref()
+                .map(crate::data::source::copy_source_string)
+                .transpose()?,
+            negative_zero: self.negative_zero,
+            trailing_zeros: self.trailing_zeros,
+        })
+    }
+
     pub(crate) fn new(notation: NumericNotation, precision: NumericPrecision) -> Result<Self> {
         let value = Self {
             notation,

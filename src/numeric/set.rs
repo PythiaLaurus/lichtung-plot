@@ -12,6 +12,35 @@ pub(crate) struct FormattedSet {
     pub(crate) precision: u8,
 }
 
+/// Immutable policy, scientific occurrences and selected text for a value owner.
+/// None denotes the owning consumer's prescribed omitted-policy profile.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct NumericPresentation {
+    pub(crate) format: Option<std::sync::Arc<NumericFormat>>,
+    pub(crate) set: FormattedSet,
+}
+
+impl NumericPresentation {
+    pub(crate) fn observe_feedback(
+        &self,
+        round: &mut crate::layout::kernel::FeedbackRound,
+    ) -> Result<()> {
+        round.observe_count(usize::from(self.format.is_some()))?;
+        if let Some(format) = &self.format {
+            format.observe_feedback(round)?;
+        }
+        round.observe_count(usize::from(self.set.precision))?;
+        round.observe_count(self.set.members.len())?;
+        for &value in &self.set.members {
+            round.observe_number(f64::from_bits(value))?;
+        }
+        for label in &self.set.labels {
+            round.observe_string(label)?;
+        }
+        Ok(())
+    }
+}
+
 impl FormattedSet {
     pub(crate) fn try_copy(&self) -> Result<Self> {
         Ok(Self {
@@ -71,21 +100,59 @@ impl NumericFormat {
         );
         let mut formatter = PowerFormatter::default();
         let mut order = crate::data::source::collect_source((0..values.len()).map(Ok))?;
+        crate::data::source::sort_source_by(&mut order, |a, b| values[*a].total_cmp(&values[*b]));
+        let mut occurrences =
+            crate::data::source::collect_source(values.iter().map(|_| Ok(0_usize)))?;
+        let mut distinct: Vec<f64> = Vec::new();
+        let distinct_count = order
+            .windows(2)
+            .filter(|pair| values[pair[0]].to_bits() != values[pair[1]].to_bits())
+            .count()
+            + usize::from(!values.is_empty());
+        crate::data::source::reserve_source(&mut distinct, distinct_count)?;
+        for &index in &order {
+            if distinct
+                .last()
+                .is_none_or(|value| value.to_bits() != values[index].to_bits())
+            {
+                distinct.push(values[index]);
+            }
+            occurrences[index] = distinct.len() - 1;
+        }
+        order.truncate(distinct.len());
+        for (index, slot) in order.iter_mut().enumerate() {
+            *slot = index;
+        }
         for digits in min..=max {
-            let labels = crate::data::source::collect_source(
-                values
+            let mut unique_labels = crate::data::source::collect_source(
+                distinct
                     .iter()
                     .map(|value| self.format_selected(*value, digits, power, &mut formatter)),
             )?;
             if adaptive || require_distinct {
-                crate::data::source::sort_source_by(&mut order, |a, b| labels[*a].cmp(&labels[*b]));
+                crate::data::source::sort_source_by(&mut order, |a, b| {
+                    unique_labels[*a].cmp(&unique_labels[*b])
+                });
                 if order.windows(2).any(|pair| {
                     let [a, b] = [pair[0], pair[1]];
-                    labels[a] == labels[b] && !scientifically_equal(values[a], values[b])
+                    unique_labels[a] == unique_labels[b]
+                        && !scientifically_equal(distinct[a], distinct[b])
                 }) {
                     continue;
                 }
             }
+            order.fill(0);
+            for &index in &occurrences {
+                order[index] += 1;
+            }
+            let labels = crate::data::source::collect_source(occurrences.iter().map(|&index| {
+                order[index] -= 1;
+                if order[index] == 0 {
+                    Ok(std::mem::take(&mut unique_labels[index]))
+                } else {
+                    crate::data::source::copy_source_string(&unique_labels[index])
+                }
+            }))?;
             return Ok(Some(FormattedSet {
                 members: crate::data::source::collect_source(
                     values.iter().map(|v| Ok(v.to_bits())),

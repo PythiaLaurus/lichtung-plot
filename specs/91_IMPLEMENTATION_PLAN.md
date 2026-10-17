@@ -6610,8 +6610,10 @@ sources. Configured private axes and their semantic sets, pre-font units and
 terminal/natural intrinsics are complete in `../docs/configured-numeric-axes.md`.
 Local/final-Shared guide policy/set coordination is complete in
 `../docs/coordinated-numeric-guides.md`, including early suppressed-child handling
-and canonical natural/local descriptors. Value/total consumers, remaining identity
-evidence and public replacement follow their scheduled leaves.
+and canonical natural/local descriptors. Prepared value sets and retained Waterfall
+total-window results/refusals are complete in
+`../docs/prepared-numeric-annotations.md`. Remaining composed identity evidence and
+public replacement follow their scheduled leaves.
 
 ENTRY gate is CLOSED by the user's explicit approval of the current-implementation
 assessment and request to plan T6:

@@ -40,6 +40,7 @@ pub(crate) struct HeatmapData {
     label_fit: HeatmapLabelFit,
     value_labels: Vec<Option<String>>,
     value_owners: Vec<Option<String>>,
+    value_presentation: Option<std::sync::Arc<crate::numeric::set::NumericPresentation>>,
     colorbar_values: Option<crate::numeric::set::FormattedSet>,
     color_format: Option<std::sync::Arc<crate::numeric::format::NumericFormat>>,
     pub(crate) color_label: String,
@@ -1022,7 +1023,6 @@ pub(crate) fn measure(
             context.with_panel(panel),
         )?;
         check_annotation_tracks(
-            chart,
             prepared,
             &measured,
             column_edges,
@@ -1138,6 +1138,9 @@ pub(crate) fn measure(
         )?,
     );
     result.x_domain = crate::spec::AxisDomain::Categorical;
+    result
+        .numeric_presentation
+        .clone_from(&prepared.value_presentation);
     result.y_domain = crate::spec::AxisDomain::Categorical;
     result.axes = Some(result.layout.measure_axes_with_inputs(
         theme,
@@ -1339,12 +1342,36 @@ pub(crate) fn prepare<'a>(
         active_cell(heatmap_layout, x_index, y_index) && value.is_none()
     });
 
+    let value_presentation =
+        if let HeatmapAnnotations::Values(format) = chart.heatmap_annotations_spec() {
+            let format = crate::data::source::source_arc(format.policy().try_copy()?)?;
+            let mut members = Vec::new();
+            crate::data::source::reserve_source(&mut members, cells.iter().flatten().count())?;
+            members.extend(cells.iter().flatten().copied());
+            let set = format.format_set(&members, false, false)?.ok_or_else(|| {
+                Error::Data("Heatmap value labels are not unique at configured precision".into())
+            })?;
+            Some(crate::data::source::source_arc(
+                crate::numeric::set::NumericPresentation {
+                    format: Some(format),
+                    set,
+                },
+            )?)
+        } else {
+            None
+        };
+    let mut selected = value_presentation
+        .as_ref()
+        .map(|presentation| presentation.set.labels.iter());
     let value_labels = crate::data::source::collect_source(cells.iter().map(|value| {
-        match (value, chart.heatmap_annotations_spec()) {
-            (Some(value), HeatmapAnnotations::Values(format)) => {
-                format.format_source(*value).map(Some)
-            }
-            _ => Ok(None),
+        if value.is_some() && value_presentation.is_some() {
+            let label = selected
+                .as_mut()
+                .and_then(Iterator::next)
+                .ok_or_else(|| Error::Render("prepared Heatmap numeric source missing".into()))?;
+            crate::data::source::copy_source_string(label).map(Some)
+        } else {
+            Ok(None)
         }
     }))?;
     let value_owners = crate::data::source::collect_source(value_labels.iter().enumerate().map(
@@ -1376,6 +1403,7 @@ pub(crate) fn prepare<'a>(
         label_fit: chart.heatmap_label_fit_spec(),
         value_labels,
         value_owners,
+        value_presentation,
         colorbar_values,
         color_format,
         x_levels,
@@ -1970,7 +1998,6 @@ fn measure_annotations(
 }
 
 fn check_annotation_tracks(
-    chart: &Plot,
     prepared: &HeatmapData,
     annotations: &AnnotationPlans,
     columns: &[f64],
@@ -1994,10 +2021,12 @@ fn check_annotation_tracks(
             .cells()
             .value_padding(plan.style.font_size)?;
         if width < padding.width(plan.width())? || height < padding.height(plan.height())? {
-            let precision = match chart.heatmap_annotations_spec() {
-                HeatmapAnnotations::Values(format) => format.configured_precision(),
-                HeatmapAnnotations::Hidden => 0,
-            };
+            let precision = prepared
+                .value_presentation
+                .as_ref()
+                .ok_or_else(|| Error::Render("heatmap value presentation missing".into()))?
+                .set
+                .precision;
             FitFailure::retain_least(&mut miss, scope.child(AddressRole::HeatmapValueLabel, index)?.failure(FitKind::Text, format!(
                 "heatmap: cell {col},{row} is too small for required value annotation at precision {precision}; increase chart size or hide annotations"
             )));

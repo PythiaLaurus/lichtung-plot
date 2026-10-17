@@ -18,6 +18,7 @@ pub(crate) struct PreparedEstimate {
     pub(crate) range: Option<(f64, f64)>,
     family: &'static str,
     point_interval: bool,
+    value_presentation: Option<std::sync::Arc<crate::numeric::set::NumericPresentation>>,
 }
 
 #[derive(Debug)]
@@ -196,6 +197,7 @@ impl PreparedEstimate {
             range,
             family: "point_interval",
             point_interval: true,
+            value_presentation: None,
         })
     }
 
@@ -724,11 +726,38 @@ fn prepare_model<'a>(
             })
             .transpose()?
     };
+    let value_presentation = chart
+        .estimate_labels_spec()
+        .map(|format| -> Result<_, Error> {
+            let format = crate::data::source::source_arc(format.policy().try_copy()?)?;
+            let mut members = Vec::new();
+            crate::data::source::reserve_source(&mut members, estimates.iter().flatten().count())?;
+            members.extend(estimates.iter().flatten().map(|tuple| tuple.estimate));
+            let set = format.format_set(&members, false, false)?.ok_or_else(|| {
+                Error::Data(
+                    "Coefficient estimate labels are not unique at configured precision".into(),
+                )
+            })?;
+            crate::data::source::source_arc(crate::numeric::set::NumericPresentation {
+                format: Some(format),
+                set,
+            })
+        })
+        .transpose()?;
+    let mut selected = value_presentation
+        .as_ref()
+        .map(|presentation| presentation.set.labels.iter());
     let adjacent =
         crate::data::source::collect_source(estimates.iter().zip(coefficient_significance).map(
             |(estimate, mark)| {
-                if let (Some(tuple), Some(format)) = (estimate, chart.estimate_labels_spec()) {
-                    Ok(Some((format.format_source(tuple.estimate)?, false)))
+                if estimate.is_some() && value_presentation.is_some() {
+                    let label = selected.as_mut().and_then(Iterator::next).ok_or_else(|| {
+                        Error::Render("prepared estimate numeric source missing".into())
+                    })?;
+                    Ok(Some((
+                        crate::data::source::copy_source_string(label)?,
+                        false,
+                    )))
                 } else {
                     Ok(mark.map(|mark| (mark, true)))
                 }
@@ -743,6 +772,7 @@ fn prepare_model<'a>(
         range,
         family,
         point_interval: false,
+        value_presentation,
     })
 }
 
@@ -1106,6 +1136,9 @@ fn project(
     count(chart.kind(), 2);
     let mut result = PlotRenderResult::new(layout, Vec::new())
         .with_deferred_annotation_text(deferred_annotation_text);
+    result
+        .numeric_presentation
+        .clone_from(&prepared.value_presentation);
     result.y_domain = crate::spec::AxisDomain::Categorical;
     result.marks = Some(crate::data::source::source_arc(
         crate::layout::interior::SelectedMarkPlan {
