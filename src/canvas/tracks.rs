@@ -151,6 +151,28 @@ pub(super) fn allocate(
     crate::layout::fit::reserve(&mut row_insets, rows, "Canvas row gutters")?;
     column_insets.resize(columns, [0_i64; 2]);
     row_insets.resize(rows, [0_i64; 2]);
+    if let Some(content) = content.filter(|value| value.natural_width) {
+        // Natural selection uses the same external gutter columns as assigned
+        // layout. Header/body requirements remain inner-track requirements.
+        for (index, plot) in plots.iter().enumerate() {
+            let Some(plot) = plot else { continue };
+            let theme = themes.plot(index).expect("prepared Plot theme");
+            let (left, right) =
+                crate::layout::interior::sizing::horizontal_gutter_preference(plot, theme)?;
+            let insets = &mut column_insets[index % columns];
+            insets[0] = insets[0].max(required(left)?);
+            insets[1] = insets[1].max(required(right)?);
+        }
+        for group in &content.source.x_range_groups {
+            let aligned = group.iter().fold([0_i64; 2], |maximum, &index| {
+                let insets = column_insets[index % columns];
+                [maximum[0].max(insets[0]), maximum[1].max(insets[1])]
+            });
+            for &index in group {
+                column_insets[index % columns] = aligned;
+            }
+        }
+    }
     for &(row, column, requirement) in gutters {
         if row >= rows || column >= columns {
             return Err(Error::Render(
@@ -211,14 +233,6 @@ pub(super) fn allocate(
                     plot.intrinsic_body_minimum(child_theme)?,
                 )?;
                 let mut width = body.0;
-                if content.is_some_and(|content| content.natural_width) {
-                    let (left, right) =
-                        crate::layout::interior::sizing::horizontal_gutter_preference(
-                            plot,
-                            child_theme,
-                        )?;
-                    width += left + right;
-                }
                 if let Some(content) = content.filter(|content| {
                     content.source.legend_policy == crate::CanvasLegendPolicy::PerPlot
                 }) {

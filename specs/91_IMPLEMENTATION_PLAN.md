@@ -6615,7 +6615,8 @@ total-window results/refusals are complete in
 `../docs/prepared-numeric-annotations.md`. Complete composed numeric keys and
 equal-text invalidation are complete in `../docs/composed-numeric-identities.md`.
 The demonstrated pre-existing automatic Canvas shared-header/range-group sizing
-refusal receives a separate owning repair before public replacement.
+refusal is repaired in `../docs/coordinated-canvas-sizing.md` before public
+replacement.
 
 ENTRY gate is CLOSED by the user's explicit approval of the current-implementation
 assessment and request to plan T6:

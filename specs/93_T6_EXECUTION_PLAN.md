@@ -44,7 +44,7 @@ presentations are complete in `../docs/prepared-numeric-annotations.md`.
 Complete composed numeric keys and equal-text invalidation are complete in
 `../docs/composed-numeric-identities.md`. Its additional external parent check
 identified an existing automatic shared-header/range-group sizing refusal; the
-separate owning repair follows before public numeric cutover.
+separate owning repair is complete in `../docs/coordinated-canvas-sizing.md`.
 The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
@@ -712,7 +712,7 @@ compatible effective format. No first-contributor-wins or Canvas format override
 | T6N4b | COMPLETE | T6N4a | Continuous local/final-Shared policy compatibility, canonical sets, early suppression and retained text; evidence in `docs/coordinated-numeric-guides.md` |
 | T6N4c | COMPLETE | T6N4b | Adaptive prepared value sets and retained total-window results/refusals; evidence in `docs/prepared-numeric-annotations.md` |
 | T6N5 | COMPLETE | T6N4c | Complete composed numeric keys, equal-text intrinsic/height misses and feedback; evidence in `docs/composed-numeric-identities.md` |
-| T6N5b | PENDING | T6N5 | Repair the demonstrated pre-existing automatic shared-header/range-group Canvas hard-track refusal; `fix(layout): preserve coordinated canvas sizing requirements` |
+| T6N5b | COMPLETE | T6N5 | Natural width retains separate coordinated gutter/body/header requirements; evidence in `docs/coordinated-canvas-sizing.md` |
 | T6N6 | PENDING | T6N5b | Public NumericFormat/attachments, remove NumericLabelFormat and migrate callers/current contracts; `feat(api): expose unified scientific numeric formatting` |
 | T6N7 | PENDING | T6N6 | Scientific conversion/admission/all-surface/public-output evidence; `test(numbers): close scientific presentation contracts` |
 
