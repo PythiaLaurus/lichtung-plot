@@ -19,6 +19,7 @@
     clippy::unnecessary_cast
 )]
 
+use crate::decorations::legend::source::{FillRole, PointRole};
 use crate::decorations::legend::GuideSourceKey;
 use crate::layout::{self, AxisSpec, PanelBox};
 use crate::render::backend::{with_clip, Backend, FillStyle, Point2D};
@@ -128,16 +129,22 @@ impl PreparedMarginal {
                 continue;
             }
             let color = Self::group_color(group, colors, accents)?;
-            entries.push(GuideSourceKey::point_fill(
-                chart.collective_legend_identity(&group.identity)?,
-                chart.point_style(theme, color, theme.marks.points().radii().marginal()),
-                theme
-                    .marks
-                    .fills()
-                    .densities()
-                    .marginal_density()
-                    .backend_style(color),
-            ));
+            entries.push(
+                GuideSourceKey::collective(
+                    chart.collective_legend_identity(&group.identity)?,
+                    chart,
+                    false,
+                )?
+                .with_point(
+                    chart.point_style(theme, color, theme.marks.points().radii().marginal()),
+                    PointRole::Primary,
+                )
+                .with_fill(
+                    theme.marks.fills().densities().marginal_density(),
+                    color,
+                    FillRole::MarginalDensity,
+                ),
+            );
         }
         Ok(entries)
     }

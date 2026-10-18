@@ -135,6 +135,7 @@ impl PreparedInteriorInputs {
     /// Scientific color membership is independent of guide visibility, display
     /// aliases and eventual section projection. No body probe participates.
     pub(crate) fn observed_color_levels(&self, chart: &Plot) -> Result<Vec<String>, Error> {
+        self.route.validate(chart)?;
         if chart.categorical_color_field().is_none() {
             return Ok(Vec::new());
         }
@@ -162,14 +163,14 @@ impl PreparedInteriorInputs {
         }
         if let Some(inputs) = &self.bars {
             for (_, marks) in &inputs.panels {
-                for value in &marks.hues {
+                for value in marks.observed_hue_levels() {
                     include(value)?;
                 }
             }
         }
         if let Some(inputs) = &self.distributions {
             for (_, marks) in &inputs.panels {
-                for value in marks.hue_levels() {
+                for value in marks.observed_hue_levels() {
                     include(value)?;
                 }
             }
@@ -197,6 +198,11 @@ impl PreparedInteriorInputs {
             for value in marks.hue_levels() {
                 include(value)?;
             }
+        }
+        if levels.is_empty() {
+            return Err(Error::Render(
+                "categorical color domain has no prepared observed source".into(),
+            ));
         }
         Ok(levels)
     }

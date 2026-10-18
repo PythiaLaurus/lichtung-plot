@@ -25,7 +25,9 @@ use crate::Error;
 mod continuous;
 pub(crate) mod discrete;
 mod identity;
+pub(crate) mod source;
 pub(crate) use identity::GuideEntryIdentity;
+pub(crate) use source::GuideSourceKey;
 pub(crate) mod descriptor;
 pub(crate) use continuous::MeasuredContinuousGuide;
 use discrete::{PreparedDiscreteGuide, PreparedGuideEntry};
@@ -169,111 +171,15 @@ impl PartialEq for ResolvedGuideKey {
 }
 impl Eq for ResolvedGuideKey {}
 
-/// One private renderer-owned legend identity and its exact visible glyph.
-#[derive(Debug, Clone)]
-pub(crate) struct GuideSourceKey {
-    pub(crate) identity: GuideEntryIdentity,
-    pub(crate) key: ResolvedGuideKey,
-}
-
-impl GuideSourceKey {
-    fn new(identity: GuideEntryIdentity, key: ResolvedGuideKey) -> Self {
-        Self { identity, key }
-    }
-
-    pub(crate) fn point(identity: GuideEntryIdentity, point: PointStyle) -> Self {
-        Self::new(
-            identity,
-            ResolvedGuideKey {
-                point: Some(point),
-                ..ResolvedGuideKey::default()
-            },
-        )
-    }
-
-    pub(crate) fn line(identity: GuideEntryIdentity, line: LineStyle) -> Self {
-        Self::new(
-            identity,
-            ResolvedGuideKey {
-                line: Some(line),
-                ..ResolvedGuideKey::default()
-            },
-        )
-    }
-
-    pub(crate) fn fill(identity: GuideEntryIdentity, fill: FillStyle) -> Self {
-        Self::new(
-            identity,
-            ResolvedGuideKey {
-                fill: Some(fill),
-                ..ResolvedGuideKey::default()
-            },
-        )
-    }
-
-    pub(crate) fn point_line(
-        identity: GuideEntryIdentity,
-        point: PointStyle,
-        line: LineStyle,
-    ) -> Self {
-        Self::new(
-            identity,
-            ResolvedGuideKey {
-                point: Some(point),
-                line: Some(line),
-                fill: None,
-            },
-        )
-    }
-
-    pub(crate) fn point_fill(
-        identity: GuideEntryIdentity,
-        point: PointStyle,
-        fill: FillStyle,
-    ) -> Self {
-        Self::new(
-            identity,
-            ResolvedGuideKey {
-                point: Some(point),
-                line: None,
-                fill: Some(fill),
-            },
-        )
-    }
-
-    pub(crate) fn line_fill(
-        identity: GuideEntryIdentity,
-        line: LineStyle,
-        fill: FillStyle,
-    ) -> Self {
-        Self::new(
-            identity,
-            ResolvedGuideKey {
-                point: None,
-                line: Some(line),
-                fill: Some(fill),
-            },
-        )
-    }
-
-    pub(crate) fn point_line_fill(
-        identity: GuideEntryIdentity,
-        point: PointStyle,
-        line: LineStyle,
-        fill: FillStyle,
-    ) -> Self {
-        Self::new(
-            identity,
-            ResolvedGuideKey {
-                point: Some(point),
-                line: Some(line),
-                fill: Some(fill),
-            },
-        )
-    }
-}
-
 impl ResolvedGuideKey {
+    #[cfg(test)]
+    pub(crate) fn point(point: PointStyle) -> Self {
+        Self {
+            point: Some(point),
+            ..Self::default()
+        }
+    }
+
     fn glyph_ink(
         &self,
         metrics: &LegendMetrics,

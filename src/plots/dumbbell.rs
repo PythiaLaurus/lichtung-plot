@@ -7,6 +7,7 @@
 
 use crate::Error;
 
+use crate::decorations::legend::source::{LiteralDomain, PointRole};
 use crate::decorations::legend::GuideSourceKey;
 use crate::layout::AxisSpec;
 use crate::render::backend::{with_clip, Backend, LineStyle, Point2D};
@@ -129,10 +130,13 @@ impl DumbbellData {
             (endpoints.left_label(), endpoints.left_color()),
             (endpoints.right_label(), endpoints.right_color()),
         ] {
-            entries.push(GuideSourceKey::point(
-                crate::decorations::legend::GuideEntryIdentity::endpoint(label)?,
-                endpoint_style(chart, theme, color),
-            ));
+            entries.push(
+                GuideSourceKey::literal(
+                    crate::decorations::legend::GuideEntryIdentity::endpoint(label)?,
+                    LiteralDomain::DumbbellEndpoints,
+                )
+                .with_exact_point(endpoint_style(chart, theme, color), PointRole::Primary),
+            );
         }
         Ok(entries)
     }

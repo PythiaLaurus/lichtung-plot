@@ -1,6 +1,7 @@
 //! Root-owned categorical distribution semantics and selected display operands.
 
 use crate::data::PlotData;
+use crate::decorations::legend::source::{FillRole, LineRole, PointRole};
 use crate::decorations::legend::GuideSourceKey;
 use crate::render::backend::{Backend, FillStyle, LineStyle, Point2D, PointStyle};
 use crate::theme::CategoryColors;
@@ -77,43 +78,47 @@ impl PreparedDistribution {
 
         colors: &CategoryColors,
     ) -> Result<Vec<GuideSourceKey>, Error> {
-        match self {
-            Self::Boxplot(prepared) => crate::data::source::collect_source(
-                prepared.sample.hue_levels.iter().map(|label| {
-                    let color = colors.color(label)?;
-                    Ok(GuideSourceKey::line_fill(
-                        chart.point_legend_identity(label)?,
-                        theme.marks.strokes().summaries().summary().backend_style(),
-                        theme.marks.fills().bodies().box_body().backend_style(color),
-                    ))
-                }),
-            ),
-            Self::Violin(prepared) => crate::data::source::collect_source(
-                prepared.sample.hue_levels.iter().map(|label| {
-                    let color = colors.color(label)?;
-                    let identity = chart.point_legend_identity(label)?;
-                    let fill = theme
-                        .marks
-                        .fills()
-                        .bodies()
-                        .violin_body()
-                        .backend_style(color);
-                    Ok(if chart.kind() == PlotKind::Violin {
-                        GuideSourceKey::fill(identity, fill)
-                    } else {
-                        GuideSourceKey::point_fill(
-                            identity,
-                            chart.distribution_point_style(
-                                theme.marks.points().mandatory_strip(),
-                                color,
-                            ),
-                            fill,
-                        )
-                    })
-                }),
-            ),
-            Self::Supplied(prepared) => prepared.guide_entries(chart, theme, colors),
+        let (sample, boxplot) = match self {
+            Self::Boxplot(prepared) => (&prepared.sample, true),
+            Self::Violin(prepared) => (&prepared.sample, false),
+            Self::Supplied(prepared) => return prepared.guide_entries(chart, theme, colors),
+        };
+        let mut entries = Vec::new();
+        crate::data::source::reserve_source(&mut entries, sample.hue_levels.len())?;
+        for label in sample.observed_hue_levels() {
+            let color = colors.color(label)?;
+            let key = GuideSourceKey::hue_only(chart.point_legend_identity(label)?)?;
+            let key = if boxplot {
+                key.with_role_line(
+                    theme.marks.strokes().summaries().summary().backend_style(),
+                    LineRole::SummaryStroke,
+                )
+                .with_fill(
+                    theme.marks.fills().bodies().box_body(),
+                    color,
+                    FillRole::BoxBody,
+                )
+            } else {
+                let key = key.with_fill(
+                    theme.marks.fills().bodies().violin_body(),
+                    color,
+                    FillRole::ViolinBody,
+                );
+                if chart.kind() == PlotKind::Violin {
+                    key
+                } else {
+                    key.with_point(
+                        chart.distribution_point_style(
+                            theme.marks.points().mandatory_strip(),
+                            color,
+                        ),
+                        PointRole::MandatoryStrip,
+                    )
+                }
+            };
+            entries.push(key);
         }
+        Ok(entries)
     }
 
     pub(crate) fn hue_levels(&self) -> &[String] {
@@ -122,6 +127,17 @@ impl PreparedDistribution {
             Self::Violin(prepared) => &prepared.sample.hue_levels,
             Self::Supplied(prepared) => prepared.hue_levels(),
         }
+    }
+
+    pub(crate) fn observed_hue_levels(&self) -> impl Iterator<Item = &str> {
+        self.hue_levels().iter().filter_map(|hue| {
+            let present = match self {
+                Self::Boxplot(prepared) => prepared.sample.observes_hue(hue),
+                Self::Violin(prepared) => prepared.sample.observes_hue(hue),
+                Self::Supplied(_) => true,
+            };
+            present.then_some(hue.as_str())
+        })
     }
     pub(crate) fn new(
         chart: &Plot,

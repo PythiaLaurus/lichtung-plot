@@ -69,16 +69,16 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
         let (stroke, width) = captured.outline.unwrap();
         assert_eq!(stroke, Color::rgba(101, 113, 127, 61));
         assert_eq!(width.units(), 1536);
-        expected.push(GuideSourceKey::point(
+        expected.push((
             crate::decorations::legend::GuideEntryIdentity::endpoint(label).unwrap(),
-            style.clone(),
+            crate::decorations::legend::ResolvedGuideKey::point(style.clone()),
         ));
     }
     let guide = measured.discrete_guide.as_ref().unwrap();
     assert_eq!(guide.counts.entries, 2);
-    for (actual, expected) in guide.sections[0].entries.iter().zip(expected) {
-        assert_eq!(actual.identity, expected.identity);
-        assert_eq!(actual.key, expected.key);
+    for (actual, (identity, key)) in guide.sections[0].entries.iter().zip(expected) {
+        assert_eq!(actual.identity, identity);
+        assert_eq!(actual.key, key);
     }
     assert_eq!(
         payload.connector,

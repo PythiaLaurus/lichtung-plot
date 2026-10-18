@@ -457,7 +457,8 @@ mod tests {
         ))
         .series(CategoryValues::new("hue", ["series"; 4]).unwrap())
         .hide_point_outline()
-        .erase();
+        .erase()
+        .with_global_hue_levels(vec!["\u{10FFFF}".into(), "series".into()]);
         let supplied = crate::plots::categorical_distribution::extraction::supplied();
         for (source, count, outlined) in [(sampled, 4, false), (supplied, 2, true)] {
             let operation = crate::font::canonical::OperationContext::new();
@@ -504,6 +505,7 @@ mod tests {
             assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), minimum);
             let after = measure(&theme);
             assert!(before.discrete_guide.is_some());
+            assert_eq!(before.discrete_guide.as_ref().unwrap().counts.entries, 1);
             assert_eq!(before.discrete_guide, after.discrete_guide);
             let crate::layout::interior::MarkPayload::Distribution(payload) =
                 &after.marks.as_ref().unwrap().payload

@@ -167,11 +167,13 @@ fn supplemental_defaults_and_explicit_alpha_keep_label_paint_independent_and_gui
     );
     let guide = measured.discrete_guide.as_ref().unwrap();
     assert_eq!(guide.counts.entries, 2);
-    let expected = GuideSourceKey::point(
-        crate::decorations::legend::GuideEntryIdentity::supplemental("Alpha").unwrap(),
-        alpha_style.clone(),
+    assert_eq!(
+        guide.sections[0].entries[1].identity,
+        crate::decorations::legend::GuideEntryIdentity::supplemental("Alpha").unwrap()
     );
-    assert_eq!(guide.sections[0].entries[1].identity, expected.identity);
-    assert_eq!(guide.sections[0].entries[1].key, expected.key);
+    assert_eq!(
+        guide.sections[0].entries[1].key,
+        crate::decorations::legend::ResolvedGuideKey::point(alpha_style.clone())
+    );
     assert_eq!(guide.sections[0].entries[1].display_label.as_ref(), "Alpha");
 }

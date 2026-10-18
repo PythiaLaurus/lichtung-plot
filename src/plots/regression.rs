@@ -11,6 +11,7 @@
 use crate::data::PlotData;
 use crate::Error;
 
+use crate::decorations::legend::source::{FillRole, LineRole, LiteralDomain, PointRole};
 use crate::decorations::legend::GuideSourceKey;
 use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D, PointStyle};
 use crate::spec::{PlotRenderContext, PlotRenderResult, RegressionBand};
@@ -116,24 +117,26 @@ impl PreparedRegression {
             .curves()
             .regression_fit()
             .backend_style();
-        let fit_entry = if band == RegressionBand::PointwiseMean95 {
-            GuideSourceKey::line_fill(
-                fit_identity,
-                line,
-                theme
-                    .marks
-                    .fills()
-                    .bands()
-                    .regression_band()
-                    .backend_style(color),
+        let mut fit_entry =
+            GuideSourceKey::literal(fit_identity, LiteralDomain::RegressionReference)
+                .with_role_line(line, LineRole::RegressionFit);
+        if band == RegressionBand::PointwiseMean95 {
+            fit_entry = fit_entry.with_fill(
+                theme.marks.fills().bands().regression_band(),
+                color,
+                FillRole::RegressionBand,
+            );
+        }
+        entries.push(
+            GuideSourceKey::literal(
+                crate::decorations::legend::GuideEntryIdentity::RegressionObservation,
+                LiteralDomain::RegressionReference,
             )
-        } else {
-            GuideSourceKey::line(fit_identity, line)
-        };
-        entries.push(GuideSourceKey::point(
-            crate::decorations::legend::GuideEntryIdentity::RegressionObservation,
-            chart.point_style(theme, color, theme.marks.points().radii().regression()),
-        ));
+            .with_point(
+                chart.point_style(theme, color, theme.marks.points().radii().regression()),
+                PointRole::Primary,
+            ),
+        );
         entries.push(fit_entry);
         Ok(entries)
     }

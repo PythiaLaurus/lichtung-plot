@@ -21,6 +21,7 @@
     clippy::if_not_else
 )]
 
+use crate::decorations::legend::source::{FillRole, PointRole};
 use crate::decorations::legend::{GuideSourceKey, Legend};
 use crate::layout::{self, Layout, PanelBox};
 use crate::render::backend::{
@@ -870,16 +871,22 @@ fn matrix_guide_entries(
         .zip(group_colors)
         .filter(|(group, _)| group.identity.hue.is_some())
     {
-        entries.push(GuideSourceKey::point_fill(
-            chart.collective_legend_identity(&group.identity)?,
-            chart.point_style(theme, color, theme.marks.points().radii().matrix()),
-            theme
-                .marks
-                .fills()
-                .densities()
-                .matrix_density()
-                .backend_style(color),
-        ));
+        entries.push(
+            GuideSourceKey::collective(
+                chart.collective_legend_identity(&group.identity)?,
+                chart,
+                false,
+            )?
+            .with_point(
+                chart.point_style(theme, color, theme.marks.points().radii().matrix()),
+                PointRole::Primary,
+            )
+            .with_fill(
+                theme.marks.fills().densities().matrix_density(),
+                color,
+                FillRole::MatrixDensity,
+            ),
+        );
     }
     Ok(entries)
 }

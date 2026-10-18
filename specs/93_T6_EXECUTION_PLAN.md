@@ -57,7 +57,9 @@ Its width-only Shared audit records a real tick/gutter cycle with identical cach
 and uncached behavior under the bounded refusal contract. Combined typed section
 storage, authoritative pre-font transport/census, stable guide slots, selected
 descriptor identity and flat-result retirement are complete in
-`../docs/prepared-discrete-sections.md`. Producer factorization follows.
+`../docs/prepared-discrete-sections.md`. Producer encoding/paint/style bindings,
+source label contexts and actual membership are complete in
+`../docs/discrete-producer-bindings.md`. Separate projection follows.
 The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
@@ -874,7 +876,9 @@ ink/collision bounds. No draw-time factorization or layout reconstruction.
 | T6L1 | COMPLETE | T6L0 | Typed section descriptor, Combined consumer migration and layer identity; independently committed leaves below |
 | T6L1a | COMPLETE | T6L0 | Typed raw category/literal/layer identities and Combined title authority; evidence in `docs/typed-guide-identities.md` |
 | T6L1b | COMPLETE | T6L1a | Section descriptor, authoritative Combined transport/census and flat-result retirement; evidence in `docs/prepared-discrete-sections.md` |
-| T6L2 | PENDING | T6L1 | Producer-owned factorized keys and pre-font validation; `feat(legend): prepare factorized channel sections` |
+| T6L2 | IN PROGRESS | T6L1 | Producer-owned factorized keys and pre-font validation; independently verified leaves below |
+| T6L2a | COMPLETE | T6L1 | Retain exact producer encoding, paint/style bindings and observed membership; evidence in `docs/discrete-producer-bindings.md` |
+| T6L2b | PENDING | T6L2a | Validate/project Separate sections and their explanatory identities before fonts; `feat(legend): prepare factorized channel sections` |
 | T6L3 | PENDING | T6L2 | One bounded section flow/frame/collision plan; `feat(legend): measure bounded section flow` |
 | T6L4 | PENDING | T6L3 | Facet/Canvas authority, exact merging, fonts, cache and feedback; `feat(composition): coordinate sectioned guides` |
 | T6L5 | PENDING | T6L4 | Public selection and atomic current-contract/examples migration; `feat(api): expose legend composition policy` |

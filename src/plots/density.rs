@@ -5,6 +5,7 @@
 use crate::data::PlotData;
 use crate::Error;
 
+use crate::decorations::legend::source::{FillRole, LineRole};
 use crate::decorations::legend::GuideSourceKey;
 use crate::layout::Layout;
 use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D};
@@ -188,16 +189,22 @@ impl PreparedDensity {
                 continue;
             }
             let color = Self::curve_color(curve, colors, accent)?;
-            entries.push(GuideSourceKey::line_fill(
-                chart.collective_legend_identity(&curve.identity)?,
-                theme.marks.data_lines().density_line().backend_style(color),
-                theme
-                    .marks
-                    .fills()
-                    .densities()
-                    .density_area()
-                    .backend_style(color),
-            ));
+            entries.push(
+                GuideSourceKey::collective(
+                    chart.collective_legend_identity(&curve.identity)?,
+                    chart,
+                    false,
+                )?
+                .with_line(
+                    theme.marks.data_lines().density_line().backend_style(color),
+                    LineRole::DensityLine,
+                )
+                .with_fill(
+                    theme.marks.fills().densities().density_area(),
+                    color,
+                    FillRole::DensityArea,
+                ),
+            );
         }
         Ok(entries)
     }

@@ -8,6 +8,7 @@ use crate::data::{
 };
 use crate::Error;
 
+use crate::decorations::legend::source::{FillRole, LiteralDomain};
 use crate::decorations::legend::{GuideEntryIdentity, GuideSourceKey};
 use crate::render::backend::{FillStyle, PointStyle};
 use crate::spec::{
@@ -334,6 +335,15 @@ pub(crate) struct PreparedBars {
 }
 
 impl PreparedBars {
+    pub(crate) fn observed_hue_levels(&self) -> impl Iterator<Item = &str> {
+        self.hues.iter().enumerate().filter_map(|(index, hue)| {
+            self.bars
+                .iter()
+                .any(|bar| bar.hue_index == Some(index))
+                .then_some(hue.as_str())
+        })
+    }
+
     pub(crate) fn color_keys(&self) -> &[String] {
         if self.hues.is_empty() {
             &self.categories
@@ -1401,31 +1411,34 @@ pub(crate) fn guide_sources(
         crate::data::source::reserve_source(&mut entries, 2)?;
         for decreasing in [false, true] {
             if present[usize::from(decreasing)] {
-                entries.push(GuideSourceKey::fill(
-                    GuideEntryIdentity::bar_sign(decreasing),
-                    theme
-                        .marks
-                        .fills()
-                        .bodies()
-                        .bar_body()
-                        .backend_style(accents.color(usize::from(decreasing))?),
-                ));
+                entries.push(
+                    GuideSourceKey::literal(
+                        GuideEntryIdentity::bar_sign(decreasing),
+                        LiteralDomain::BarSign,
+                    )
+                    .with_fill(
+                        theme.marks.fills().bodies().bar_body(),
+                        accents.color(usize::from(decreasing))?,
+                        FillRole::BarBody,
+                    ),
+                );
             }
         }
         return Ok(entries);
     }
 
-    crate::data::source::collect_source(prepared.hues.iter().map(|label| {
-        Ok(GuideSourceKey::fill(
-            chart.point_legend_identity(label)?,
-            theme
-                .marks
-                .fills()
-                .bodies()
-                .bar_body()
-                .backend_style(colors.color(label)?),
-        ))
-    }))
+    let mut entries = Vec::new();
+    crate::data::source::reserve_source(&mut entries, prepared.hues.len())?;
+    for label in prepared.observed_hue_levels() {
+        entries.push(
+            GuideSourceKey::hue_only(chart.point_legend_identity(label)?)?.with_fill(
+                theme.marks.fills().bodies().bar_body(),
+                colors.color(label)?,
+                FillRole::BarBody,
+            ),
+        );
+    }
+    Ok(entries)
 }
 
 fn prepare_single(

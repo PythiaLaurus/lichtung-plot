@@ -1,5 +1,6 @@
 use crate::Error;
 
+use crate::decorations::legend::source::{FillRole, PointRole};
 use crate::decorations::legend::GuideSourceKey;
 use crate::layout::Layout;
 use crate::plots::categorical_distribution::DistributionPayload;
@@ -107,16 +108,16 @@ impl PreparedRaincloud {
     ) -> Result<Vec<GuideSourceKey>, Error> {
         crate::data::source::collect_source(self.hues.iter().map(|hue| {
             let color = colors.color(hue)?;
-            Ok(GuideSourceKey::point_fill(
-                chart.point_legend_identity(hue)?,
-                chart.distribution_point_style(theme.marks.points().mandatory_strip(), color),
-                theme
-                    .marks
-                    .fills()
-                    .bodies()
-                    .violin_body()
-                    .backend_style(color),
-            ))
+            Ok(GuideSourceKey::hue_only(chart.point_legend_identity(hue)?)?
+                .with_point(
+                    chart.distribution_point_style(theme.marks.points().mandatory_strip(), color),
+                    PointRole::MandatoryStrip,
+                )
+                .with_fill(
+                    theme.marks.fills().bodies().violin_body(),
+                    color,
+                    FillRole::ViolinBody,
+                ))
         }))
     }
 }

@@ -12,6 +12,7 @@
 
 use crate::Error;
 
+use crate::decorations::legend::source::PointRole;
 use crate::decorations::legend::GuideSourceKey;
 use crate::render::backend::{with_clip, Backend, Point2D, PointStyle};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
@@ -247,10 +248,12 @@ impl PreparedScatter {
                 continue;
             };
             let color = map.color(label)?;
-            entries.push(GuideSourceKey::point(
-                chart.point_legend_identity(label)?,
-                chart.point_style(theme, color, theme.marks.points().radii().scatter()),
-            ));
+            entries.push(
+                GuideSourceKey::hue_only(chart.point_legend_identity(label)?)?.with_point(
+                    chart.point_style(theme, color, theme.marks.points().radii().scatter()),
+                    PointRole::Primary,
+                ),
+            );
         }
         Ok(entries)
     }

@@ -155,11 +155,7 @@ fn native_categorical_trajectory_installs_band_projection_before_mark_capture() 
             );
             assert_eq!(
                 guide.sections[0].entries[0].key,
-                crate::decorations::legend::GuideSourceKey::point(
-                    guide.sections[0].entries[0].identity.clone(),
-                    style.clone(),
-                )
-                .key
+                crate::decorations::legend::ResolvedGuideKey::point(style.clone())
             );
         }
     }

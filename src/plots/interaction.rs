@@ -1,6 +1,7 @@
 //! Root-prepared interaction cells and immutable selected trace operands.
 
 use crate::data::{ObservedCollectives, PlotData};
+use crate::decorations::legend::source::{LineRole, PointRole};
 use crate::decorations::legend::GuideSourceKey;
 use crate::render::backend::{Backend, LineStyle, Point2D, PointStyle};
 use crate::spec::{LinePattern, PlotRenderContext, PlotRenderResult, PointShape};
@@ -232,21 +233,18 @@ impl PreparedInteraction {
                 .interaction_connector()
                 .backend_style(color);
             line.pattern = trace.style.line_pattern.stroke_pattern();
-            entries.push(
-                match (
-                    chart.markers_visible(),
-                    chart.interaction_connectors_visible(),
-                ) {
-                    (true, true) => GuideSourceKey::point_line(identity, point, line),
-                    (true, false) => GuideSourceKey::point(identity, point),
-                    (false, true) => GuideSourceKey::line(identity, line),
-                    (false, false) => {
-                        return Err(Error::Render(
-                            "interaction legend has no visible glyph component".into(),
-                        ));
-                    }
-                },
-            );
+            let mapped_styles = chart.interaction_styles_spec().is_some();
+            let mut key = GuideSourceKey::collective(identity, chart, mapped_styles)?;
+            if chart.markers_visible() {
+                key = key.with_point(point, PointRole::Primary);
+            }
+            if chart.interaction_connectors_visible() {
+                key = key.with_line(line, LineRole::InteractionConnector);
+            }
+            if mapped_styles {
+                key = key.with_interaction_group_style()?;
+            }
+            entries.push(key);
         }
         Ok(entries)
     }

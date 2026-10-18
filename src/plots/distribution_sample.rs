@@ -29,6 +29,20 @@ pub(crate) struct DistributionSample {
     pub(crate) groups: Vec<DistributionGroup>,
 }
 
+impl DistributionSample {
+    pub(crate) fn observes_hue(&self, hue: &str) -> bool {
+        self.groups
+            .iter()
+            .any(|group| group.hue_label.as_deref() == Some(hue))
+    }
+
+    pub(crate) fn observed_hue_levels(&self) -> impl Iterator<Item = &str> {
+        self.hue_levels
+            .iter()
+            .filter_map(|hue| self.observes_hue(hue).then_some(hue.as_str()))
+    }
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "ordered grouping admits nested source buffers"

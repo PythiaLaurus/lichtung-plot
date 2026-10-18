@@ -1,9 +1,13 @@
 //! The single immutable discrete guide: semantic sections, resolved keys and
 //! actual source occurrences, prepared before fonts or panel assignment.
 
+#[cfg(test)]
+mod source_tests;
+
 use std::sync::Arc;
 
 use super::identity::PrimaryTitleIdentity;
+use super::source::{Projection, SourceMapping};
 use super::{GuideEntryIdentity, GuideSourceKey, ResolvedGuideKey};
 use crate::layout::{AddressRole, ComponentAddress, PreparedTextRequirement, PreparedTextRole};
 use crate::{Error, Plot, Result};
@@ -24,6 +28,8 @@ pub(crate) struct GuideKeySource {
     producer: crate::PlotKind,
     contributor_address: ComponentAddress,
     source_ordinal: u32,
+    mapping: SourceMapping,
+    projection: Projection,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -111,6 +117,7 @@ impl PreparedDiscreteGuide {
         let mut entries = Vec::new();
         crate::data::source::reserve_source(&mut entries, keys.len())?;
         for (ordinal, source) in keys.into_iter().enumerate() {
+            source.validate(plot)?;
             if let Some(title) = source.identity.primary_title() {
                 if primary.as_ref().is_some_and(|expected| *expected != title) {
                     return Err(incompatible("plot legend"));
@@ -123,7 +130,9 @@ impl PreparedDiscreteGuide {
             if matches!(source.identity, GuideEntryIdentity::Pair { .. }) {
                 add(&mut counts.observed_pair_source_keys, 1)?;
             }
-            let label = source.identity.resolved_label(plot)?;
+            let label = source
+                .identity
+                .resolved_label(plot, source.mapping.layer_label_context)?;
             entries.push(PreparedGuideEntry {
                 identity: source.identity,
                 display_label: super::identity::shared_text(&label)?,
@@ -133,6 +142,8 @@ impl PreparedDiscreteGuide {
                         producer: plot.kind(),
                         contributor_address: owner.clone(),
                         source_ordinal: count(ordinal)?,
+                        mapping: source.mapping,
+                        projection: Projection::Complete,
                     },
                 )))?)?,
             });

@@ -142,7 +142,11 @@ impl GuideEntryIdentity {
         })
     }
 
-    pub(crate) fn resolved_label(&self, plot: &Plot) -> Result<String> {
+    pub(crate) fn resolved_label(
+        &self,
+        plot: &Plot,
+        layer_context: Option<super::source::LayerLabelContext>,
+    ) -> Result<String> {
         let literal = crate::data::source::copy_source_string;
         match self {
             Self::Category { value, .. } => plot.resolve_label(value.as_str()),
@@ -163,13 +167,15 @@ impl GuideEntryIdentity {
             Self::DumbbellEndpoint { label } => literal(label),
             Self::RegressionObservation => literal("Observations"),
             Self::RegressionFit { band } => literal(band.legend_label()),
-            Self::SupplementalLayer { label } => {
-                if plot.hue_dimension_key().is_some() || plot.interaction_styles_spec().is_some() {
+            Self::SupplementalLayer { label } => match layer_context {
+                Some(super::source::LayerLabelContext::Categorical) => {
                     plot.resolve_label(label.as_str())
-                } else {
-                    crate::data::source::copy_source_string(label.as_str())
                 }
-            }
+                Some(super::source::LayerLabelContext::LiteralSeries) => literal(label.as_str()),
+                None => Err(Error::Render(
+                    "supplemental guide requires its source label context".into(),
+                )),
+            },
         }
     }
 }

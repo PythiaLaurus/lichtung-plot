@@ -1,6 +1,7 @@
 //! Root-prepared ordered series, trajectories, and source-ordered paths.
 
 use crate::data::{CollectivePair, PlotData};
+use crate::decorations::legend::source::{FillRole, LayerLabelContext, LineRole, PointRole};
 use crate::decorations::legend::GuideSourceKey;
 use crate::render::backend::{
     with_clip, Backend, FillStyle, LineStyle, PlacedText, Point2D, PointStyle, TextAnchor,
@@ -268,30 +269,37 @@ impl PreparedLine {
 
             let has_fill = chart.kind() == PlotKind::Line
                 && group.points.iter().all(|point| point.interval.is_some());
-            let line = if chart.kind() == PlotKind::Line {
-                theme.marks.data_lines().series_line()
+            let (line, line_role) = if chart.kind() == PlotKind::Line {
+                (theme.marks.data_lines().series_line(), LineRole::SeriesLine)
             } else {
-                theme.marks.data_lines().path_line()
-            }
-            .backend_style(color);
-            let point = chart.point_style(
-                theme,
-                color,
-                if chart.kind() == PlotKind::Line {
-                    theme.marks.points().radii().path()
-                } else {
-                    theme.marks.points().radii().trajectory()
-                },
-            );
-            let fill = theme.marks.fills().bands().line_band().backend_style(color);
+                (theme.marks.data_lines().path_line(), LineRole::PathLine)
+            };
             crate::data::source::reserve_source(&mut entries, 1)?;
             let identity = chart.collective_legend_identity(identity)?;
-            entries.push(match (chart.markers_visible(), has_fill) {
-                (true, true) => GuideSourceKey::point_line_fill(identity, point, line, fill),
-                (true, false) => GuideSourceKey::point_line(identity, point, line),
-                (false, true) => GuideSourceKey::line_fill(identity, line, fill),
-                (false, false) => GuideSourceKey::line(identity, line),
-            });
+            let mut key = GuideSourceKey::collective(identity, chart, false)?
+                .with_line(line.backend_style(color), line_role);
+            if chart.markers_visible() {
+                key = key.with_point(
+                    chart.point_style(
+                        theme,
+                        color,
+                        if chart.kind() == PlotKind::Line {
+                            theme.marks.points().radii().path()
+                        } else {
+                            theme.marks.points().radii().trajectory()
+                        },
+                    ),
+                    PointRole::Primary,
+                );
+            }
+            if has_fill {
+                key = key.with_fill(
+                    theme.marks.fills().bands().line_band(),
+                    color,
+                    FillRole::LineBand,
+                );
+            }
+            entries.push(key);
         }
         if chart.kind() != PlotKind::Line
             && (chart.kind() == PlotKind::Trajectory || chart.markers_visible())
@@ -300,14 +308,16 @@ impl PreparedLine {
             let levels = chart.global_hue_levels().unwrap_or(&self.hues);
             crate::data::source::reserve_source(&mut entries, levels.len())?;
             for label in levels.iter().filter(|label| self.hues.contains(label)) {
-                entries.push(GuideSourceKey::point(
-                    chart.point_legend_identity(label)?,
-                    chart.point_style(
-                        theme,
-                        map.color(label)?,
-                        theme.marks.points().radii().trajectory(),
+                entries.push(
+                    GuideSourceKey::row_hue(chart.point_legend_identity(label)?)?.with_point(
+                        chart.point_style(
+                            theme,
+                            map.color(label)?,
+                            theme.marks.points().radii().trajectory(),
+                        ),
+                        PointRole::Primary,
                     ),
-                ));
+                );
             }
         }
         for (index, layer) in self.layers.iter().enumerate() {
@@ -317,10 +327,15 @@ impl PreparedLine {
                     accent.color(self.primary_accent_slots + index)?,
                     theme.marks.points().supplemental(),
                 );
-                entries.push(GuideSourceKey::point(
+                let key = GuideSourceKey::supplemental(
                     crate::decorations::legend::GuideEntryIdentity::supplemental(label)?,
-                    style,
-                ));
+                    LayerLabelContext::for_plot(chart),
+                );
+                entries.push(if chart.point_layers()[index].color().is_some() {
+                    key.with_exact_point(style, PointRole::Supplemental)
+                } else {
+                    key.with_point(style, PointRole::Supplemental)
+                });
             }
         }
         Ok(entries)

@@ -43,7 +43,7 @@ struct PlannedCanvasPanel {
     layers: [String; 3],
 }
 
-type PreparedHueGroups = Vec<(String, Vec<String>)>;
+type PreparedColorDomains = Vec<(String, Vec<String>)>;
 use crate::decorations::legend::descriptor::{PreparedDiscreteGuide, PreparedGuideDescriptor};
 
 struct CanvasPlan {
@@ -63,7 +63,7 @@ struct PreparedCanvasInputs {
     text_census: crate::layout::PreparedTextCensus,
     root_text: crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
     shared_x: Vec<Option<(f64, f64)>>,
-    point_path_hue_groups: Option<Arc<PreparedHueGroups>>,
+    color_domains: Option<Arc<PreparedColorDomains>>,
     shared_guide: Option<PreparedGuideDescriptor>,
     interiors: Vec<Option<crate::layout::interior::PreparedInteriorInputs>>,
     text_panel_intrinsics: Vec<Option<text_panel::TextPanelIntrinsics>>,
@@ -880,42 +880,13 @@ impl Canvas {
 
     /// Coordinate scientific categorical color identities before fonts,
     /// independently of guide visibility and section contribution.
-    #[expect(
-        clippy::too_many_lines,
-        reason = "shared domain coordinates all currently prepared discrete family hue sources"
-    )]
-    fn prepared_point_path_hue_groups(
+    fn prepare_color_domains(
         &self,
         interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
-    ) -> Result<Option<Arc<PreparedHueGroups>>, Error> {
+    ) -> Result<Option<Arc<PreparedColorDomains>>, Error> {
         if self.legend_policy != CanvasLegendPolicy::Shared {
             return Ok(None);
         }
-        if self.panels.iter().flatten().any(|plot| {
-            plot.categorical_color_field().is_some()
-                && !matches!(
-                    plot.kind(),
-                    PlotKind::Scatter
-                        | PlotKind::Line
-                        | PlotKind::Trajectory
-                        | PlotKind::LinePath
-                        | PlotKind::Bar
-                        | PlotKind::HorizontalBar
-                        | PlotKind::StackedBar
-                        | PlotKind::StackedHorizontalBar
-                        | PlotKind::Boxplot
-                        | PlotKind::Violin
-                        | PlotKind::Raincloud
-                        | PlotKind::Density
-                        | PlotKind::Regression
-                        | PlotKind::Dumbbell
-                        | PlotKind::Interaction
-                        | PlotKind::Marginal
-                )
-        }) {
-            return Ok(None);
-        }
-
         let mut groups = Vec::new();
         crate::data::source::reserve_source(&mut groups, self.panels.len())?;
         for (index, plot) in self.panels.iter().enumerate() {
@@ -928,53 +899,8 @@ impl Canvas {
                 .get(index)
                 .and_then(Option::as_ref)
                 .ok_or_else(|| {
-                    Error::Render("Canvas hue guide is missing prepared semantics".into())
+                    Error::Render("Canvas color domain is missing prepared semantics".into())
                 })?;
-            let scatter = inputs
-                .scatter
-                .as_ref()
-                .and_then(|inputs| inputs.panels.first())
-                .map(|(_, prepared)| prepared);
-            let line = inputs
-                .line
-                .as_ref()
-                .and_then(|inputs| inputs.panels.first())
-                .map(|(_, prepared)| prepared);
-            let bars = inputs
-                .bars
-                .as_ref()
-                .and_then(|inputs| inputs.panels.first())
-                .map(|(_, prepared)| prepared);
-            let distribution = inputs
-                .distributions
-                .as_ref()
-                .and_then(|inputs| inputs.panels.first())
-                .map(|(_, prepared)| prepared);
-            let density = inputs
-                .density
-                .as_ref()
-                .and_then(|inputs| inputs.panels.first())
-                .map(|(_, prepared)| prepared);
-            let interaction = inputs
-                .interaction
-                .as_ref()
-                .and_then(|inputs| inputs.panels.first())
-                .map(|(_, prepared)| prepared);
-            let marginal = inputs.marginal.as_deref();
-            if scatter.is_none()
-                && line.is_none()
-                && bars.is_none()
-                && distribution.is_none()
-                && density.is_none()
-                && interaction.is_none()
-                && inputs.regression.is_none()
-                && inputs.dumbbell.is_none()
-                && marginal.is_none()
-            {
-                return Err(Error::Render(
-                    "Canvas guide has no prepared color source".into(),
-                ));
-            }
             let group_index =
                 crate::data::source::source_position(&groups, |(field, _)| field == dimension);
             let levels = if let Some(group_index) = group_index {
@@ -986,43 +912,12 @@ impl Canvas {
                 ));
                 &mut groups.last_mut().expect("new guide field").1
             };
-            for level in scatter
-                .into_iter()
-                .flat_map(crate::plots::scatter::PreparedScatter::hue_levels)
-                .chain(
-                    line.into_iter()
-                        .flat_map(crate::plots::line::PreparedLine::hue_levels),
-                )
-                .chain(
-                    bars.into_iter()
-                        .flat_map(|bars| bars.hues.iter().map(String::as_str)),
-                )
-                .chain(
-                    distribution
-                        .into_iter()
-                        .flat_map(|marks| marks.hue_levels().iter().map(String::as_str)),
-                )
-                .chain(
-                    density
-                        .into_iter()
-                        .flat_map(crate::plots::density::PreparedDensity::hue_levels),
-                )
-                .chain(
-                    interaction
-                        .into_iter()
-                        .flat_map(crate::plots::interaction::PreparedInteraction::color_keys),
-                )
-                .chain(
-                    marginal
-                        .into_iter()
-                        .flat_map(crate::plots::marginal::PreparedMarginal::hue_levels),
-                )
-            {
-                if crate::data::source::source_position(levels, |existing| existing == level)
+            for level in inputs.observed_color_levels(plot)? {
+                if crate::data::source::source_position(levels, |existing| existing == &level)
                     .is_none()
                 {
                     crate::data::source::reserve_source(levels, 1)?;
-                    levels.push(crate::data::source::copy_source_string(level)?);
+                    levels.push(level);
                 }
             }
         }
@@ -1420,10 +1315,10 @@ impl Canvas {
                 self.validate_structure()?;
                 let (mut interiors, shared_x) =
                     self.prepare_interiors(prepared_stage, Some(&themes))?;
-                let point_path_hue_groups = self.prepared_point_path_hue_groups(&interiors)?;
+                let color_domains = self.prepare_color_domains(&interiors)?;
                 for (index, plot) in self.panels.iter().enumerate() {
                     if let (Some(plot), Some(inputs)) = (plot, interiors[index].as_ref()) {
-                        let global_hues = point_path_hue_groups.as_ref().and_then(|groups| {
+                        let global_hues = color_domains.as_ref().and_then(|groups| {
                             groups
                                 .iter()
                                 .find(|(field, _)| {
@@ -1441,7 +1336,7 @@ impl Canvas {
                 let discrete_shared_guide = self.prepare_discrete_guides(
                     &themes,
                     &interiors,
-                    point_path_hue_groups.as_deref().map(Vec::as_slice),
+                    color_domains.as_deref().map(Vec::as_slice),
                     &prepared_stage.operation(),
                 )?;
                 self.validate_shared_guide_kinds(&interiors)?;
@@ -1476,7 +1371,7 @@ impl Canvas {
                     text_census: census,
                     root_text,
                     shared_x,
-                    point_path_hue_groups,
+                    color_domains,
                     shared_guide,
                     interiors,
                     text_panel_intrinsics,
@@ -1519,7 +1414,7 @@ impl Canvas {
                     round,
                     &mut children,
                     &prepared.shared_x,
-                    prepared.point_path_hue_groups.as_deref().map(Vec::as_slice),
+                    prepared.color_domains.as_deref().map(Vec::as_slice),
                     prepared.shared_guide.as_ref(),
                     &prepared.text_panel_intrinsics,
                     &prepared.plot_intrinsics,
@@ -1930,7 +1825,7 @@ impl Canvas {
         round: &mut crate::layout::kernel::FeedbackRound,
         children: &mut crate::decorations::plan::children::ChildPlans,
         shared_x: &[Option<(f64, f64)>],
-        prepared_scatter_hues: Option<&[(String, Vec<String>)]>,
+        color_domains: Option<&[(String, Vec<String>)]>,
         prepared_guide: Option<&PreparedGuideDescriptor>,
         text_panel_intrinsics: &[Option<text_panel::TextPanelIntrinsics>],
         plot_intrinsics: &[Option<
@@ -1948,7 +1843,7 @@ impl Canvas {
             round,
             children,
             shared_x,
-            prepared_scatter_hues,
+            color_domains,
             prepared_guide,
             text_panel_intrinsics,
             plot_intrinsics,
@@ -2073,7 +1968,7 @@ impl Canvas {
         round: &mut crate::layout::kernel::FeedbackRound,
         children: &mut crate::decorations::plan::children::ChildPlans<'_>,
         shared_x: &'a [Option<(f64, f64)>],
-        prepared_scatter_hues: Option<&[(String, Vec<String>)]>,
+        color_domains: Option<&[(String, Vec<String>)]>,
         prepared_guide: Option<&'a PreparedGuideDescriptor>,
         text_panel_intrinsics: &'a [Option<text_panel::TextPanelIntrinsics>],
         plot_intrinsics: &'a [Option<
@@ -2140,7 +2035,7 @@ impl Canvas {
         let hue_groups: &[(String, Vec<String>)] =
             if self.legend_policy != CanvasLegendPolicy::Shared {
                 &[]
-            } else if let Some(hues) = prepared_scatter_hues {
+            } else if let Some(hues) = color_domains {
                 hues
             } else {
                 return Err(Error::Render(
