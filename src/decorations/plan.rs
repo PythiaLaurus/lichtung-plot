@@ -278,7 +278,20 @@ pub(crate) fn plan_panel(
         || PlotRenderContext::new(plot.data(), cell, theme),
         |rows| PlotRenderContext::with_source_rows(plot.data(), rows, cell, theme),
     );
-    plan_panel_with_context(plot, kind, role, context, None, round, address)
+    let guide = if role == LegendRole::Panel && kind != PlotKind::Matrix {
+        plot.prepared_discrete_guide()?
+            .map(|descriptor| {
+                crate::decorations::legend::discrete::DiscreteGuideSlot::new(
+                    descriptor,
+                    address,
+                    plot.legend_position_spec(),
+                )
+            })
+            .transpose()?
+    } else {
+        None
+    };
+    plan_panel_with_context(plot, kind, role, context, guide.as_ref(), round, address)
 }
 
 #[expect(
@@ -290,7 +303,7 @@ pub(crate) fn plan_panel_with_context(
     kind: PlotKind,
     role: LegendRole,
     mut context: PlotRenderContext<'_>,
-    legend_entries: Option<&[crate::decorations::legend::LegendEntry]>,
+    discrete_guide: Option<&crate::decorations::legend::discrete::DiscreteGuideSlot>,
     round: &mut FeedbackRound,
     address: &ComponentAddress,
 ) -> Result<crate::layout::fit::FitOutcome<PanelPlan>, Error> {
@@ -300,6 +313,7 @@ pub(crate) fn plan_panel_with_context(
     let minimum = plot.intrinsic_body_minimum(context.theme)?;
     let position = plot.legend_position_spec();
     let bypass_outside_guide = role == LegendRole::Suppressed
+        || discrete_guide.is_none()
         || plot.legend_policy_spec() == LegendPolicy::Hidden
         || (position != LegendPosition::Auto && !is_outside(position));
     if context.content_height
@@ -324,7 +338,7 @@ pub(crate) fn plan_panel_with_context(
             kind,
             role,
             context,
-            legend_entries,
+            discrete_guide,
             round,
             address,
             None,
@@ -332,18 +346,12 @@ pub(crate) fn plan_panel_with_context(
         );
     }
     let initial_scope = FitScope::new(address, 0);
-    let (mut discovered, discovery) =
+    let (discovered, discovery) =
         match measure_geometry(plot, kind, context.with_fit_scope(&initial_scope))? {
             FitOutcome::Measured(value) => value,
             FitOutcome::Miss(failure) => return Ok(FitOutcome::Miss(failure)),
         };
-    if let Some(entries) = legend_entries {
-        discovered.legend_entries =
-            crate::data::source::collect_source(entries.iter().map(|entry| Ok(entry.clone())))?;
-    }
-    if discovered.legend_entries.is_empty()
-        || discovered.decoration_mode == crate::spec::DecorationMode::SelfManaged
-    {
+    if discovered.decoration_mode == crate::spec::DecorationMode::SelfManaged {
         if context.content_height && context.fill_content_height {
             let (_, preference) = content_frame(plot, context, round, address, None)?;
             context.content_preference = Some(preference);
@@ -353,16 +361,13 @@ pub(crate) fn plan_panel_with_context(
             kind,
             role,
             context,
-            legend_entries,
+            discrete_guide,
             round,
             address,
             None,
             Some((discovered, discovery)),
         );
     }
-    let title = crate::decorations::legend::resolved_title(&discovered.legend_entries)?;
-    let entries: std::sync::Arc<[crate::decorations::legend::LegendEntry]> =
-        std::mem::take(&mut discovered.legend_entries).into();
     let automatic_edges = [
         LegendPosition::OutsideRight,
         LegendPosition::OutsideTop,
@@ -408,9 +413,10 @@ pub(crate) fn plan_panel_with_context(
             #[cfg(test)]
             let guide_trial =
                 crate::orchestrator::measurements::GuideTrial::new(address, edge, compact);
-            let mut guide_scope =
-                scope.child(crate::decorations::legend::address_role(position), 0)?;
-            guide_scope.ordinal = scope.ordinal;
+            let guide_scope = FitScope::new(
+                &discrete_guide.expect("contributing panel guide").owner,
+                scope.ordinal,
+            );
             let gutters = round.insets(address, FeedbackKind::AxisGutter);
             let ink = round.insets(address, FeedbackKind::OwnedInk);
             let gap = context.theme.legend_outside_gap()?;
@@ -425,8 +431,9 @@ pub(crate) fn plan_panel_with_context(
                 ],
             );
             let guide = match Legend::measure_assigned(
-                &title,
-                std::sync::Arc::clone(&entries),
+                std::sync::Arc::clone(
+                    &discrete_guide.expect("contributing panel guide").descriptor,
+                ),
                 (
                     available.0,
                     (!context.content_height).then_some(available.1),
@@ -498,7 +505,7 @@ pub(crate) fn plan_panel_with_context(
                 kind,
                 role,
                 trial_context,
-                legend_entries,
+                discrete_guide,
                 round,
                 address,
                 Some(guide),
@@ -722,7 +729,7 @@ fn plan_panel_attempt(
     kind: PlotKind,
     role: LegendRole,
     context: PlotRenderContext<'_>,
-    legend_entries: Option<&[crate::decorations::legend::LegendEntry]>,
+    discrete_guide: Option<&crate::decorations::legend::discrete::DiscreteGuideSlot>,
     round: &mut FeedbackRound,
     address: &ComponentAddress,
     assigned_guide: Option<Legend>,
@@ -794,7 +801,7 @@ fn plan_panel_attempt(
             && (result.y_domain == crate::spec::AxisDomain::Categorical
                 || planned_y_limits.is_none_or(|range| range == result.layout.projection.y_range()))
     });
-    let (mut discovered, discovery) = if let Some(initial) = initial {
+    let (discovered, discovery) = if let Some(initial) = initial {
         initial
     } else {
         let width = if assigned_guide.is_some() {
@@ -816,27 +823,18 @@ fn plan_panel_attempt(
             FitOutcome::Miss(failure) => return Ok(FitOutcome::Miss(failure)),
         }
     };
-    if let Some(entries) = legend_entries {
-        discovered.legend_entries =
-            crate::data::source::collect_source(entries.iter().map(|entry| Ok(entry.clone())))?;
-    }
     let visible = role == LegendRole::Panel
         && planning_plot.legend_policy_spec() != LegendPolicy::Hidden
-        && !discovered.legend_entries.is_empty();
+        && discrete_guide.is_some();
     let legend = if let Some(guide) = assigned_guide {
         Some(guide)
     } else if visible {
-        let title = crate::decorations::legend::resolved_title(&discovered.legend_entries)?;
-        let entries = Legend::share_entries(crate::data::source::collect_source(
-            discovered
-                .legend_entries
-                .iter()
-                .map(|entry| Ok(entry.clone())),
-        )?)?;
-        let guide_scope = scope.child(AddressRole::InsideGuide, 0)?;
+        let guide_scope = FitScope::new(
+            &discrete_guide.expect("visible panel guide").owner,
+            scope.ordinal,
+        );
         match Legend::measure_assigned(
-            &title,
-            entries,
+            std::sync::Arc::clone(&discrete_guide.expect("visible panel guide").descriptor),
             (discovery_panel.width(), discovery_panel.height()),
             false,
             false,
@@ -2163,7 +2161,18 @@ pub(crate) fn plan_panel_for_test<K: crate::kind::Marker>(
     crate::layout::plan_exact_root(
         plot.canvas_dimensions()?.0,
         plot.canvas_dimensions()?.1,
-        |stage| crate::plots::shared_x::prepare_plot(&source, &stage.operation(), None),
+        |stage| {
+            let inputs =
+                crate::plots::shared_x::prepare_plot(&source, &stage.operation(), Some(theme))?;
+            inputs.prepare_discrete_guides(
+                &source,
+                theme,
+                &stage.operation(),
+                &ComponentAddress::root(),
+                false,
+            )?;
+            Ok(inputs)
+        },
         |inputs, assigned, round| {
             let plot = inputs.attach(source.clone())?;
             Ok(crate::layout::MeasuredLayout::new(

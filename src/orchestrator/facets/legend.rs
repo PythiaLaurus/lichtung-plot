@@ -5,7 +5,7 @@ use crate::Error;
 use super::data::FacetPanel;
 use crate::builder::Plot;
 use crate::decorations::plan::children::MeasurementPhase;
-use crate::spec::{AxisDomain, LegendPolicy, PlotKind, PlotRenderContext, PlotRenderResult};
+use crate::spec::{AxisDomain, PlotKind, PlotRenderContext, PlotRenderResult};
 use crate::theme::ResolvedTheme;
 
 /// Prepare the real shared discrete identity and glyph set at the root's
@@ -18,45 +18,15 @@ pub(super) fn prepare_discrete_guide(
     resources: &crate::font::canonical::OperationContext,
 ) -> Result<super::PreparedFacetGuide, Error> {
     let source_data = source.data().with_operation(resources);
-    let base = super::data::base_plot(source, kind, false, false, resources)?;
-    let entries_for = |base: &Plot| -> Result<Vec<crate::decorations::legend::LegendEntry>, Error> {
-        if matches!(kind, PlotKind::Heatmap | PlotKind::Beeswarm) {
-            // Continuous contributors retain their specialized guide until
-            // the kind-discriminated shared descriptor lands in T5b1c.
-            return Ok(Vec::new());
-        }
-        let mut entries = Vec::new();
-        for (scope, _) in inputs.axes.iter() {
-            let scope = scope.as_deref().ok_or_else(|| {
-                Error::Render("facet shared guide has no prepared cell scope".into())
-            })?;
-            let scoped = base
-                .clone()
-                .with_render_scope(crate::data::source::copy_source_string(scope)?);
-            let mut contribution =
-                inputs.guide_entries(&scoped, theme, source_data, Some(scope))?;
-            crate::decorations::legend::resolve_entries(&scoped, &mut contribution)?;
-            crate::data::source::reserve_source(&mut entries, contribution.len())?;
-            entries.extend(contribution);
-        }
-        Ok(entries)
-    };
-    let mut base = base;
-    if let (Some(field), Some(column)) = (source.hue_dimension_key(), source.hue_col()) {
-        let observed = entries_for(&base)?;
+    let mut base = super::data::base_plot(source, kind, false, false, resources)?;
+    if let Some(column) = source.hue_col() {
+        let observed = inputs.observed_color_levels(&base)?;
         let values = crate::data::strict_strings(source_data, column, "facet hue")?;
         let levels = crate::data::source::source_levels(&values)?;
         let mut present = Vec::new();
         crate::data::source::reserve_source(&mut present, levels.len())?;
         for level in levels {
-            let mut found = false;
-            for entry in &observed {
-                if entry.identity().hue_value_for(field) == Some(level.as_str()) {
-                    found = true;
-                    break;
-                }
-            }
-            if found {
+            if observed.contains(&level) {
                 present.push(level);
             }
         }
@@ -64,15 +34,19 @@ pub(super) fn prepare_discrete_guide(
             base = base.with_global_hue_levels(present);
         }
     }
-    let entries = if source.legend_policy_spec() == LegendPolicy::Hidden {
-        Vec::new()
-    } else {
-        let entries = entries_for(&base)?;
-        crate::decorations::legend::merge_exact_entries(entries, "shared facet legend")?
-    };
-    let mut entries = entries;
-    order_entries(&mut entries, &base, source_data)?;
-    let title = crate::decorations::legend::resolved_title(&entries)?;
+    inputs.prepare_discrete_guides(
+        &base,
+        theme,
+        resources,
+        &crate::layout::ComponentAddress::root(),
+        true,
+    )?;
+    let descriptor = inputs
+        .discrete_guides
+        .get()
+        .expect("prepared facet guide")
+        .root
+        .clone();
     let hue_levels = base
         .global_hue_levels()
         .map(|levels| {
@@ -85,8 +59,7 @@ pub(super) fn prepare_discrete_guide(
         .transpose()?;
 
     Ok(super::PreparedFacetGuide {
-        entries: entries.into(),
-        title,
+        descriptor,
         hue_levels,
     })
 }
@@ -158,58 +131,6 @@ fn preflight_panels(
         preflight.push(crate::layout::fit::measured(Ok(result))?);
     }
     Ok(preflight)
-}
-
-fn order_entries(
-    entries: &mut [crate::decorations::legend::LegendEntry],
-    shared_plot: &Plot,
-    data: crate::data::PlotData<'_>,
-) -> Result<(), Error> {
-    data.source_resources()?;
-    if !entries.is_empty() {
-        let identity_order = if let Some(pairs) = shared_plot.global_collective_pairs() {
-            let mut identities = Vec::new();
-            crate::data::source::reserve_source(&mut identities, pairs.len())?;
-            for pair in pairs
-                .iter()
-                .filter(|pair| pair.group.is_some() || pair.hue.is_some())
-            {
-                identities.push(shared_plot.collective_legend_identity(pair)?);
-            }
-            identities
-        } else {
-            shared_plot.global_hue_levels().map_or_else(
-                || Ok(Vec::new()),
-                |levels| {
-                    crate::data::source::collect_source(
-                        levels
-                            .iter()
-                            .map(|level| shared_plot.point_legend_identity(level)),
-                    )
-                },
-            )?
-        };
-        let mut positions = crate::data::source::collect_source(entries.iter().map(|entry| {
-            for (index, identity) in identity_order.iter().enumerate() {
-                if identity.same_identity(entry.identity()) {
-                    return Ok(index);
-                }
-            }
-            Ok(usize::MAX)
-        }))?;
-
-        // Stable in-place sorting moves admitted storage; key searches above
-        // are the actual variable semantic work, not comparator estimates.
-        for index in 1..entries.len() {
-            let mut current = index;
-            while current > 0 && positions[current - 1] > positions[current] {
-                positions.swap(current - 1, current);
-                entries.swap(current - 1, current);
-                current -= 1;
-            }
-        }
-    }
-    Ok(())
 }
 
 pub(super) fn resolve_shared_facet_axis(

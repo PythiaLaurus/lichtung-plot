@@ -1,6 +1,6 @@
 use crate::Error;
 
-use crate::decorations::legend::LegendEntry;
+use crate::decorations::legend::GuideSourceKey;
 use crate::layout::Layout;
 use crate::plots::categorical_distribution::DistributionPayload;
 use crate::render::backend::Point2D;
@@ -104,10 +104,10 @@ impl PreparedRaincloud {
         theme: &ResolvedTheme,
 
         colors: &CategoryColors,
-    ) -> Result<Vec<LegendEntry>, Error> {
+    ) -> Result<Vec<GuideSourceKey>, Error> {
         crate::data::source::collect_source(self.hues.iter().map(|hue| {
             let color = colors.color(hue)?;
-            Ok(LegendEntry::point_fill(
+            Ok(GuideSourceKey::point_fill(
                 chart.point_legend_identity(hue)?,
                 chart.distribution_point_style(theme.marks.points().mandatory_strip(), color),
                 theme
@@ -189,7 +189,6 @@ pub(super) fn measure_marks(
     let data = context.data.with_operation(&resources);
     let colors = crate::plots::categorical_distribution::retained(chart)?
         .resolved_colors(chart, theme, data)?;
-    let legend_entries = input.guide_entries(chart, theme, &colors)?;
 
     let mut payload = DistributionPayload::new(layout.projection.panel_box(), chart.kind());
     for (index, group) in input.groups.iter().enumerate() {
@@ -221,7 +220,7 @@ pub(super) fn measure_marks(
         )?;
     }
     payload.retain(
-        PlotRenderResult::new(layout, legend_entries),
+        PlotRenderResult::new(layout, chart.prepared_discrete_guide()?),
         context,
         chart,
     )

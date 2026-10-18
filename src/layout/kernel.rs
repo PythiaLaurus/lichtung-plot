@@ -264,6 +264,7 @@ pub(crate) enum AddressRole {
     WaterfallConnector,
     WaterfallBaseLabel,
     WaterfallTerminalLabel,
+    LegendSection,
     LegendTitle,
     LegendEntry,
     LegendKey,

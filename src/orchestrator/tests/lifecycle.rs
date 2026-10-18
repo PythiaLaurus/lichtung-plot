@@ -860,14 +860,23 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let domain =
             crate::plots::shared_x::domain(&plot, &crate::font::canonical::OperationContext::new());
+        let resources = crate::font::canonical::OperationContext::new();
         let prepared = crate::plots::shared_x::prepare_plot(
             &plot,
-            &crate::font::canonical::OperationContext::new(),
+            &resources,
             Some(&crate::theme::Theme::publication()),
         )
-        .unwrap_or_else(|error| panic!("{kind:?}: {error}"))
-        .attach(plot.clone())
-        .unwrap();
+        .unwrap_or_else(|error| panic!("{kind:?}: {error}"));
+        prepared
+            .prepare_discrete_guides(
+                &plot,
+                &crate::Theme::publication().resolve().unwrap(),
+                &resources,
+                &crate::layout::ComponentAddress::root(),
+                false,
+            )
+            .unwrap();
+        let prepared = prepared.attach(plot.clone()).unwrap();
         if matches!(
             kind,
             PlotKind::Interaction

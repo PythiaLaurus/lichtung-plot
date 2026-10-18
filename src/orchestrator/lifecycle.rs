@@ -858,6 +858,16 @@ impl PlotPlan {
                         )
                     })
                     .transpose()?;
+                if !source.has_facets() {
+                    axes.prepare_discrete_guides(
+                        source,
+                        &theme,
+                        &prepared_stage.operation(),
+                        &crate::layout::ComponentAddress::root()
+                            .child(crate::layout::AddressRole::PlotBody, 0)?,
+                        false,
+                    )?;
+                }
                 let mut requirements = crate::layout::foundational_plot_requirements(
                     Some(&axes),
                     source,
@@ -1077,13 +1087,28 @@ impl UnfacetedPlotPlan {
         );
         context.content_height = content_height;
         source.validate_interior_preparation()?;
+        let discrete_guide = if kind == PlotKind::Matrix {
+            None
+        } else {
+            source
+                .prepared_discrete_guide()?
+                .map(|descriptor| {
+                    crate::decorations::legend::discrete::DiscreteGuideSlot::new(
+                        descriptor,
+                        &crate::layout::ComponentAddress::root()
+                            .child(crate::layout::AddressRole::PlotBody, 0)?,
+                        source.legend_position_spec(),
+                    )
+                })
+                .transpose()?
+        };
         let panel_plan =
             crate::layout::fit::measured(crate::decorations::plan::plan_panel_with_context(
                 source,
                 kind,
                 crate::decorations::plan::LegendRole::Panel,
                 context,
-                None,
+                discrete_guide.as_ref(),
                 round,
                 &crate::layout::ComponentAddress::root()
                     .child(crate::layout::AddressRole::PlotBody, 0)?,
@@ -1287,7 +1312,21 @@ mod root_title_tests {
             let root = crate::layout::plan_exact_root(
                 800,
                 600,
-                |stage| crate::plots::shared_x::prepare_plot(&source, &stage.operation(), None),
+                |stage| {
+                    let inputs = crate::plots::shared_x::prepare_plot(
+                        &source,
+                        &stage.operation(),
+                        Some(&theme),
+                    )?;
+                    inputs.prepare_discrete_guides(
+                        &source,
+                        &theme,
+                        &stage.operation(),
+                        &crate::layout::ComponentAddress::root(),
+                        false,
+                    )?;
+                    Ok(inputs)
+                },
                 |inputs, assigned, round| {
                     let plot = inputs.attach(source.clone())?;
                     let plan = UnfacetedPlotPlan::new(
@@ -1508,7 +1547,19 @@ mod retained_legend_tests {
         let root = crate::layout::plan_exact_root(
             800,
             600,
-            |stage| crate::plots::shared_x::prepare_plot(&source, &stage.operation(), None),
+            |stage| {
+                let inputs =
+                    crate::plots::shared_x::prepare_plot(&source, &stage.operation(), None)?;
+                inputs.prepare_discrete_guides(
+                    &source,
+                    &theme,
+                    &stage.operation(),
+                    &crate::layout::ComponentAddress::root()
+                        .child(crate::layout::AddressRole::PlotBody, 0)?,
+                    false,
+                )?;
+                Ok(inputs)
+            },
             |inputs, assigned, round| {
                 let plot = inputs.attach(source.clone())?;
                 Ok(crate::layout::MeasuredLayout::new(

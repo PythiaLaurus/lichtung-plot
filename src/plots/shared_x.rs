@@ -9,6 +9,18 @@ pub(crate) use prepared::{
 use crate::spec::PlotKind;
 use crate::{Error, Plot};
 
+/// Producer-only tests establish the root's source/guide boundary explicitly;
+/// changing theme inputs starts a fresh prepared operation.
+#[cfg(test)]
+pub(crate) fn prepare_panel_for_test(
+    plot: &Plot,
+    theme: &crate::theme::ResolvedTheme,
+) -> Result<Plot, Error> {
+    let resources = crate::font::canonical::OperationContext::new();
+    let inputs = prepare_plot(plot, &resources, Some(theme))?;
+    inputs.attach_with_guides_for_test(plot.clone(), theme)
+}
+
 #[cfg(test)]
 thread_local! {
     pub(crate) static DOMAIN_PREPARATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };

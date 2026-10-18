@@ -114,8 +114,8 @@ pub(crate) fn text_census_panels<'a>(
 }
 
 pub(super) struct PreparedFacetGuide {
-    pub(super) entries: std::sync::Arc<[crate::decorations::legend::LegendEntry]>,
-    pub(super) title: String,
+    pub(super) descriptor:
+        Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedDiscreteGuide>>,
     pub(super) hue_levels: Option<Vec<String>>,
 }
 
@@ -246,10 +246,9 @@ impl FacetPlan {
             .with_resolved_facet_ranges(kind, horizontal_domain, vertical_domain)
             .with_parent_axis_gutters();
         let shared_plot = planning::feedback_plot(shared_plot, &panels, facet_scales, round)?;
-        let legend_entries = std::sync::Arc::clone(&prepared_guide.entries);
-        let title = prepared_guide.title.as_str();
+        let discrete_guide = prepared_guide.descriptor.as_ref();
         let position = source.legend_position_spec();
-        let automatic = position == LegendPosition::Auto && !legend_entries.is_empty();
+        let automatic = position == LegendPosition::Auto && discrete_guide.is_some();
         let automatic_edges = [
             LegendPosition::OutsideRight,
             LegendPosition::OutsideTop,
@@ -308,7 +307,7 @@ impl FacetPlan {
         minimum.0 += columns.iter().flatten().sum::<f64>();
         minimum.1 += rows.iter().flatten().sum::<f64>();
         let baseline = if automatic
-            || (!legend_entries.is_empty() && crate::decorations::plan::is_outside(position))
+            || (discrete_guide.is_some() && crate::decorations::plan::is_outside(position))
         {
             planning::shared_axis_requirements(
                 horizontal_axis_label.as_deref(),
@@ -321,7 +320,7 @@ impl FacetPlan {
         };
         let mut first_miss = None;
         for (edge_index, &edge) in edges.iter().enumerate() {
-            let outside = !legend_entries.is_empty() && crate::decorations::plan::is_outside(edge);
+            let outside = discrete_guide.is_some() && crate::decorations::plan::is_outside(edge);
             let mut compact_changes = true;
             'trial: for compact in [false, true] {
                 if compact && (!outside || !compact_changes) {
@@ -354,8 +353,7 @@ impl FacetPlan {
                         crate::decorations::plan::AssignedGuideFrame::new(edge, minimum, gap);
                     let available = frame.available(canvas_layout.panel_box, [0.0; 4]);
                     let guide = match crate::decorations::legend::Legend::measure_assigned(
-                        title,
-                        std::sync::Arc::clone(&legend_entries),
+                        std::sync::Arc::clone(discrete_guide.expect("contributing facet guide")),
                         (available.0, (!content_sizing).then_some(available.1)),
                         horizontal,
                         compact,
@@ -544,7 +542,7 @@ impl FacetPlan {
                     &provisional,
                     &minima,
                     outside,
-                    &legend_entries,
+                    discrete_guide,
                     &scope,
                     children,
                     content_sizing,

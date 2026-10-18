@@ -30,7 +30,6 @@ pub(crate) fn measure_marks(
     let resources = theme.prepared_font_environment()?.operation();
     let data = context.data.with_operation(&resources);
     let (colors, accents) = prepared.resolved_colors(chart, theme, data)?;
-    let legend_entries = bar_data::legend_entries(prepared, chart, theme, &colors, &accents)?;
     let y_count = prepared.categories.len() as f64;
     let panel_box = context.panel;
     let attached = bar_data::BarSignificance::new(chart, theme, true)?;
@@ -226,7 +225,7 @@ pub(crate) fn measure_marks(
         &layout.projection,
         context.fit_scope(),
     )?;
-    let mut result = PlotRenderResult::new(layout, legend_entries)
+    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?)
         .with_significance_plan(significance)
         .with_deferred_annotation_text(crate::data::source::collect_source(
             attached_label_plans.into_iter().map(|plan| {

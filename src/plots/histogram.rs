@@ -405,7 +405,7 @@ pub(crate) fn project(
     for rug in &payload.rugs {
         geometry.line(rug, &payload.rug_style, Some(clip))?;
     }
-    let mut result = PlotRenderResult::new(layout, Vec::new());
+    let mut result = PlotRenderResult::new(layout, None);
     result.marks = Some(crate::data::source::source_arc(
         crate::layout::interior::SelectedMarkPlan {
             payload: crate::layout::interior::MarkPayload::Histogram(payload),

@@ -648,6 +648,16 @@ fn shared_canvas_legend_skips_plot_local_hidden_entries() {
 
 #[test]
 fn hidden_discrete_guide_still_coordinates_visible_mark_colors() {
+    let hidden = Plot::interaction(
+        CategoryValues::new("condition", ["before", "after"]).unwrap(),
+        NumericValues::new("estimate", [2.0, 3.0]),
+        CategoryValues::new("cohort", ["hidden", "hidden"]).unwrap(),
+        lichtung_plot::Bounds::new(
+            NumericValues::new("lower", [1.0, 2.0]),
+            NumericValues::new("upper", [3.0, 4.0]),
+        ),
+    )
+    .legend(LegendPolicy::Hidden);
     let scatter = |hue: &str| {
         Plot::scatter(
             NumericValues::new("x", [1.0, 2.0]),
@@ -658,7 +668,7 @@ fn hidden_discrete_guide_still_coordinates_visible_mark_colors() {
     let svg = render_canvas(
         Canvas::grid(1, 2)
             .unwrap()
-            .panel(0, 0, scatter("hidden").legend(LegendPolicy::Hidden))
+            .panel(0, 0, hidden)
             .unwrap()
             .panel(0, 1, scatter("visible"))
             .unwrap()
@@ -669,8 +679,9 @@ fn hidden_discrete_guide_still_coordinates_visible_mark_colors() {
     let guide = svg.split_once("<g id=\"canvas-shared-legend\">").unwrap().1;
     assert!(guide.contains(">Visible</text>"));
     assert!(!guide.contains(">Hidden</text>"));
-    // The hidden panel contributes the first color identity. The visible panel
-    // retains the second color, not a fresh local slot zero.
+    // Group-only Interaction has no hue list or guide contribution, yet its
+    // marks own the first categorical color. Scatter retains the second slot.
+    assert!(svg.contains("fill=\"#0072B2\""));
     assert!(svg.contains("fill=\"#D55E00\""));
 }
 

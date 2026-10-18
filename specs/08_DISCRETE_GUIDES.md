@@ -1,7 +1,8 @@
 # Discrete Guides
 
-**Status**: Approved architectural target; non-current. Implementation and new
-acceptance evidence are pending.
+**Status**: Approved architectural target. Private Combined typed identities,
+section storage and authoritative pre-font transport/census are implemented;
+Separate projection, multiple-section flow and public selection remain pending.
 
 ## 1. Authority And Boundary
 
@@ -13,8 +14,10 @@ spacing. [`05_LAYOUT_SYSTEM.md`](05_LAYOUT_SYSTEM.md) owns root constraints,
 containing-frame recovery, Unicode text, canonical arithmetic and resources.
 [`01_ARCHITECTURE.md`](01_ARCHITECTURE.md) and
 [`02_RENDERING_CONTRACT.md`](02_RENDERING_CONTRACT.md) remain the implemented
-public contract until the corresponding atomic cutover. This target does not
-claim that Separate, the section descriptor or the tests proposed below exist.
+public contract until the corresponding atomic cutover. Combined implementation
+evidence is in `../docs/typed-guide-identities.md` and
+`../docs/prepared-discrete-sections.md`; this target does not claim Separate or
+the full acceptance matrix proposed below is implemented.
 
 The source census is taken after the private Color/OpaqueColor carrier migration.
 `docs/t6a1-public-cutover-census.md` is useful historical consumer evidence; its

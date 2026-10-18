@@ -58,6 +58,7 @@ enum Observation {
     Count(usize),
     Text(String),
     TextPlan(ResolvedTextPlan),
+    DiscreteGuide(std::sync::Arc<crate::decorations::legend::discrete::PreparedDiscreteGuide>),
     TextPlacement {
         position: [i64; 2],
         rotation: u64,
@@ -478,6 +479,15 @@ impl FeedbackRound {
 
     pub(crate) fn observe_count(&mut self, value: usize) -> Result<(), Error> {
         self.observe(Observation::Count(value))
+    }
+
+    pub(crate) fn observe_discrete_guide(
+        &mut self,
+        descriptor: &std::sync::Arc<crate::decorations::legend::discrete::PreparedDiscreteGuide>,
+    ) -> Result<(), Error> {
+        self.observe(Observation::DiscreteGuide(std::sync::Arc::clone(
+            descriptor,
+        )))
     }
 
     pub(crate) fn observe_placement(

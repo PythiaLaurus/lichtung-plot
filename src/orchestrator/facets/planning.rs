@@ -196,7 +196,9 @@ pub(super) fn native_parent(
     probe_cells: &[PanelBox],
     minima: &[(f64, f64)],
     containing_trial: bool,
-    legend_entries: &std::sync::Arc<[crate::decorations::legend::LegendEntry]>,
+    discrete_guide: Option<
+        &std::sync::Arc<crate::decorations::legend::discrete::PreparedDiscreteGuide>,
+    >,
     scope: &crate::layout::fit::FitScope,
     children: &mut crate::decorations::plan::children::ChildPlans,
     content_sizing: bool,
@@ -263,6 +265,15 @@ pub(super) fn native_parent(
     let mut panel_plans = Vec::new();
     crate::data::source::reserve_source(&mut panel_plans, panels.len())?;
     let mut legend_owner = !containing_trial;
+    let guide_slot = discrete_guide
+        .map(|descriptor| {
+            crate::decorations::legend::discrete::DiscreteGuideSlot::new(
+                std::sync::Arc::clone(descriptor),
+                &ComponentAddress::root(),
+                plot.legend_position_spec(),
+            )
+        })
+        .transpose()?;
     for (index, facet) in panels.iter().enumerate() {
         let mut panel_plot = plot
             .clone()
@@ -341,7 +352,11 @@ pub(super) fn native_parent(
             &panel_plot,
             role,
             context,
-            (role == LegendRole::Panel).then_some(legend_entries),
+            if role == LegendRole::Panel {
+                guide_slot.as_ref()
+            } else {
+                None
+            },
             round,
             &domain_address,
         )? {

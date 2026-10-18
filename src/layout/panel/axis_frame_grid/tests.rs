@@ -117,16 +117,11 @@ fn native_categorical_trajectory_installs_band_projection_before_mark_capture() 
         crate::NumericValues::new("y", [1.0, 2.0, 3.0]),
         crate::CategoryValues::new("group", ["g", "g", "g"]).unwrap(),
     )
-    .erase();
-    let plot = crate::plots::shared_x::prepare_plot(
-        &source,
-        &crate::font::canonical::OperationContext::new(),
-        None,
-    )
-    .unwrap()
-    .attach(source)
-    .unwrap();
+    .hue(crate::CategoryValues::new("cohort", ["seen"; 3]).unwrap())
+    .erase()
+    .with_global_hue_levels(vec!["unobserved".into(), "seen".into()]);
     let theme = crate::Theme::publication().resolve().unwrap();
+    let plot = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
     let selected = plot
         .measure_selected_interior(crate::spec::PlotRenderContext::new(
             plot.data(),
@@ -141,6 +136,33 @@ fn native_categorical_trajectory_installs_band_projection_before_mark_capture() 
     let axes = selected.axes.as_ref().unwrap();
     let x = axes.x_axis.ticks[1].segment[0].x;
     assert_eq!(x.to_bits(), 230.0_f64.to_bits());
+    let guide = selected.discrete_guide.as_ref().unwrap();
+    assert_eq!(guide.counts.entries, 1);
+    assert_eq!(
+        guide.sections[0].entries[0].identity,
+        crate::decorations::legend::GuideEntryIdentity::category("cohort", "seen").unwrap()
+    );
+    let crate::layout::interior::MarkPayload::Line(payload) =
+        &selected.marks.as_ref().unwrap().payload
+    else {
+        panic!("selected Trajectory marks")
+    };
+    for mark in &payload.marks {
+        if let crate::plots::line::LineMark::Points(_, style) = mark {
+            assert_eq!(
+                (style.color.red(), style.color.green(), style.color.blue()),
+                (213, 94, 0)
+            );
+            assert_eq!(
+                guide.sections[0].entries[0].key,
+                crate::decorations::legend::GuideSourceKey::point(
+                    guide.sections[0].entries[0].identity.clone(),
+                    style.clone(),
+                )
+                .key
+            );
+        }
+    }
     let mut svg = crate::render::svg_backend::SvgBackend::in_memory(500, 500);
     svg.begin(500, 500).unwrap();
     selected.marks.as_ref().unwrap().draw(&mut svg).unwrap();

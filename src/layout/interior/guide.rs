@@ -3,7 +3,10 @@
 
 use super::PreparedInteriorInputs;
 use crate::data::PlotData;
-use crate::decorations::legend::LegendEntry;
+use crate::decorations::legend::discrete::{
+    PreparedDiscreteGuide, PreparedDiscreteGuides, ScopedDiscreteGuide,
+};
+use crate::decorations::legend::GuideSourceKey;
 use crate::theme::ResolvedTheme;
 use crate::{Error, Plot, PlotKind};
 
@@ -129,6 +132,75 @@ fn panel<'a, T>(
 }
 
 impl PreparedInteriorInputs {
+    /// Scientific color membership is independent of guide visibility, display
+    /// aliases and eventual section projection. No body probe participates.
+    pub(crate) fn observed_color_levels(&self, chart: &Plot) -> Result<Vec<String>, Error> {
+        if chart.categorical_color_field().is_none() {
+            return Ok(Vec::new());
+        }
+        let mut levels = Vec::new();
+        let mut include = |value: &str| -> Result<(), Error> {
+            if !levels.iter().any(|existing| existing == value) {
+                crate::data::source::reserve_source(&mut levels, 1)?;
+                levels.push(crate::data::source::copy_source_string(value)?);
+            }
+            Ok(())
+        };
+        if let Some(inputs) = &self.scatter {
+            for (_, marks) in &inputs.panels {
+                for value in marks.hue_levels() {
+                    include(value)?;
+                }
+            }
+        }
+        if let Some(inputs) = &self.line {
+            for (_, marks) in &inputs.panels {
+                for value in marks.hue_levels() {
+                    include(value)?;
+                }
+            }
+        }
+        if let Some(inputs) = &self.bars {
+            for (_, marks) in &inputs.panels {
+                for value in &marks.hues {
+                    include(value)?;
+                }
+            }
+        }
+        if let Some(inputs) = &self.distributions {
+            for (_, marks) in &inputs.panels {
+                for value in marks.hue_levels() {
+                    include(value)?;
+                }
+            }
+        }
+        if let Some(inputs) = &self.density {
+            for (_, marks) in &inputs.panels {
+                for value in marks.hue_levels() {
+                    include(value)?;
+                }
+            }
+        }
+        if let Some(inputs) = &self.interaction {
+            for (_, marks) in &inputs.panels {
+                for value in marks.color_keys() {
+                    include(value)?;
+                }
+            }
+        }
+        if let Some(marks) = &self.marginal {
+            for value in marks.hue_levels() {
+                include(value)?;
+            }
+        }
+        if let Some(marks) = &self.matrix {
+            for value in marks.hue_levels() {
+                include(value)?;
+            }
+        }
+        Ok(levels)
+    }
+
     /// Capacity is a semantic requirement even when no legend will be shown.
     /// Facets share the union of their prepared raw identities, not a per-cell
     /// supply that would silently recolor or fail after fonts have been prepared.
@@ -212,13 +284,13 @@ impl PreparedInteriorInputs {
         palette.validate_capacity(keys.len())
     }
 
-    pub(crate) fn guide_entries(
+    pub(crate) fn guide_sources(
         &self,
         chart: &Plot,
         theme: &ResolvedTheme,
         data: PlotData<'_>,
         scope: Option<&str>,
-    ) -> Result<Vec<LegendEntry>, Error> {
+    ) -> Result<Vec<GuideSourceKey>, Error> {
         self.route.validate(chart)?;
         let kind = chart.kind();
         match kind {
@@ -242,7 +314,7 @@ impl PreparedInteriorInputs {
             | PlotKind::StackedHorizontalBar => {
                 let marks = panel(self.bars.as_ref().map(|p| p.panels.as_slice()), scope, kind)?;
                 let (colors, accents) = marks.resolved_colors(chart, theme, data)?;
-                crate::plots::bar_data::legend_entries(marks, chart, theme, &colors, &accents)
+                crate::plots::bar_data::guide_sources(marks, chart, theme, &colors, &accents)
             }
             PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
                 let marks = panel(
@@ -307,6 +379,100 @@ impl PreparedInteriorInputs {
                 "self-managed Matrix has no parent-owned guide entry".into(),
             )),
         }
+    }
+
+    pub(crate) fn prepare_discrete_guides(
+        &self,
+        chart: &Plot,
+        theme: &ResolvedTheme,
+        resources: &crate::font::canonical::OperationContext,
+        owner: &crate::layout::ComponentAddress,
+        facet_cells: bool,
+    ) -> Result<(), Error> {
+        if self.discrete_guides.get().is_some() {
+            return Err(Error::Render(
+                "discrete guides were prepared more than once".into(),
+            ));
+        }
+        let data = chart.data().with_operation(resources);
+        let mut components = crate::data::source::collect_source(
+            self.axes.iter().map(|(scope, _)| Ok(scope.as_deref())),
+        )?;
+        if self.matrix.is_some() && components.is_empty() {
+            crate::data::source::reserve_source(&mut components, 1)?;
+            components.push(chart.axis_scope());
+        }
+        let mut panels = Vec::new();
+        crate::data::source::reserve_source(&mut panels, components.len())?;
+        for (index, scope) in components.into_iter().enumerate() {
+            let scoped = if let Some(scope) = scope {
+                chart
+                    .clone()
+                    .with_render_scope(crate::data::source::copy_source_string(scope)?)
+            } else {
+                chart.clone()
+            };
+            let contributor = if facet_cells {
+                owner.child(
+                    crate::layout::AddressRole::FacetCell,
+                    u32::try_from(index)
+                        .map_err(|_| Error::Render("facet guide source address overflow".into()))?,
+                )?
+            } else {
+                owner.clone()
+            };
+            let descriptor = if chart.legend_policy_spec() == crate::LegendPolicy::Hidden
+                || matches!(chart.kind(), PlotKind::Heatmap | PlotKind::Beeswarm)
+            {
+                None
+            } else {
+                let keys = if chart.kind() == PlotKind::Matrix {
+                    self.matrix
+                        .as_ref()
+                        .ok_or_else(|| Error::Render("Matrix guide preparation missing".into()))?
+                        .guide_sources(&scoped, theme, data)?
+                } else {
+                    self.guide_sources(&scoped, theme, data, scope)?
+                };
+                PreparedDiscreteGuide::prepare(&scoped, &contributor, keys)?
+            };
+            panels.push(ScopedDiscreteGuide {
+                scope: scope
+                    .map(crate::data::source::copy_source_string)
+                    .transpose()?,
+                descriptor,
+            });
+        }
+        let mut order = Vec::new();
+        if let Some(pairs) = chart.global_collective_pairs() {
+            crate::data::source::reserve_source(&mut order, pairs.len())?;
+            for pair in pairs
+                .iter()
+                .filter(|pair| pair.group.is_some() || pair.hue.is_some())
+            {
+                order.push(chart.collective_legend_identity(pair)?);
+            }
+        } else if let Some(hues) = chart.global_hue_levels() {
+            crate::data::source::reserve_source(&mut order, hues.len())?;
+            for hue in hues {
+                order.push(chart.point_legend_identity(hue)?);
+            }
+        }
+        let root = if panels.len() == 1 && order.is_empty() {
+            panels[0].descriptor.clone()
+        } else {
+            PreparedDiscreteGuide::merge(
+                panels.iter().filter_map(|panel| panel.descriptor.as_ref()),
+                &order,
+                "prepared discrete guide",
+            )?
+        };
+        self.discrete_guides
+            .set(crate::data::source::source_arc(PreparedDiscreteGuides {
+                root,
+                panels,
+            })?)
+            .map_err(|_| Error::Render("discrete guide preparation was replaced".into()))
     }
 }
 

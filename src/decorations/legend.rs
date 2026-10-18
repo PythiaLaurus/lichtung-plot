@@ -23,10 +23,12 @@ use crate::render::backend::{
 use crate::Error;
 
 mod continuous;
+pub(crate) mod discrete;
 mod identity;
 pub(crate) use identity::GuideEntryIdentity;
 pub(crate) mod descriptor;
 pub(crate) use continuous::MeasuredContinuousGuide;
+use discrete::{PreparedDiscreteGuide, PreparedGuideEntry};
 
 /// The semantic kind of a contributing guide, determined before font discovery.
 /// Entry and glyph compatibility is resolved by the prepared descriptor owner.
@@ -48,91 +50,15 @@ impl GuideKind {
         if plot.legend_policy_spec() == crate::LegendPolicy::Hidden {
             return Ok(None);
         }
-        let missing = || {
-            Error::Render(format!(
-                "{:?} guide has no prepared semantic input",
-                plot.kind()
-            ))
-        };
-        let contributes = match plot.kind() {
-            PlotKind::Scatter => inputs
-                .scatter
-                .as_ref()
-                .and_then(|p| p.panels.first())
-                .ok_or_else(missing)?
-                .1
-                .hue_levels()
-                .next()
-                .is_some(),
-            PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => inputs
-                .line
-                .as_ref()
-                .and_then(|p| p.panels.first())
-                .ok_or_else(missing)?
-                .1
-                .has_guide_entries(plot),
-            PlotKind::Bar
-            | PlotKind::HorizontalBar
-            | PlotKind::StackedBar
-            | PlotKind::StackedHorizontalBar => !inputs
-                .bars
-                .as_ref()
-                .and_then(|p| p.panels.first())
-                .ok_or_else(missing)?
-                .1
-                .hues
-                .is_empty(),
-            PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => !inputs
-                .distributions
-                .as_ref()
-                .and_then(|p| p.panels.first())
-                .ok_or_else(missing)?
-                .1
-                .hue_levels()
-                .is_empty(),
-            PlotKind::Density => inputs
-                .density
-                .as_ref()
-                .and_then(|p| p.panels.first())
-                .ok_or_else(missing)?
-                .1
-                .hue_levels()
-                .next()
-                .is_some(),
-            PlotKind::Regression => {
-                matches!(plot.legend_policy_spec(), crate::LegendPolicy::Visible(_))
-            }
-            PlotKind::Dumbbell => true,
-            PlotKind::Interaction => inputs
-                .interaction
-                .as_ref()
-                .and_then(|p| p.panels.first())
-                .ok_or_else(missing)?
-                .1
-                .has_guide_entries(plot),
-            PlotKind::Marginal => inputs
-                .marginal
-                .as_ref()
-                .ok_or_else(missing)?
-                .hue_levels()
-                .next()
-                .is_some(),
-            PlotKind::Histogram
-            | PlotKind::Qq
-            | PlotKind::PointInterval
-            | PlotKind::Coefficient
-            | PlotKind::Forest
-            | PlotKind::Waterfall => false,
-            PlotKind::Heatmap | PlotKind::Beeswarm => {
-                unreachable!("continuous guides handled above")
-            }
-            PlotKind::Matrix => {
-                return Err(Error::Render(
-                    "Matrix cannot contribute a Canvas guide".into(),
-                ))
-            }
-        };
-        Ok(contributes.then_some(Self::Discrete))
+        if plot.kind() == PlotKind::Matrix {
+            return Err(Error::Render(
+                "Matrix cannot contribute a Canvas guide".into(),
+            ));
+        }
+        let guides = inputs.discrete_guides.get().ok_or_else(|| {
+            Error::Render("guide kind requires prepared discrete contribution or absence".into())
+        })?;
+        Ok(guides.root.is_some().then_some(Self::Discrete))
     }
 }
 
@@ -228,53 +154,39 @@ pub(crate) fn address_role(position: crate::LegendPosition) -> crate::layout::Ad
 
 /// Exact visible components of one legend glyph.
 #[derive(Debug, Clone, Default)]
-struct LegendGlyph {
+pub(crate) struct ResolvedGuideKey {
     point: Option<PointStyle>,
     line: Option<LineStyle>,
     fill: Option<FillStyle>,
 }
 
-impl LegendGlyph {
-    fn exact_eq(&self, other: &Self) -> bool {
+impl PartialEq for ResolvedGuideKey {
+    fn eq(&self, other: &Self) -> bool {
         optional_point_style_eq(self.point.as_ref(), other.point.as_ref())
             && optional_line_style_eq(self.line.as_ref(), other.line.as_ref())
             && optional_fill_style_eq(self.fill.as_ref(), other.fill.as_ref())
     }
 }
+impl Eq for ResolvedGuideKey {}
 
 /// One private renderer-owned legend identity and its exact visible glyph.
 #[derive(Debug, Clone)]
-pub(crate) struct LegendEntry {
-    identity: GuideEntryIdentity,
-    title: String,
-    label: String,
-    glyph: LegendGlyph,
+pub(crate) struct GuideSourceKey {
+    pub(crate) identity: GuideEntryIdentity,
+    pub(crate) key: ResolvedGuideKey,
 }
 
-impl LegendEntry {
-    pub(crate) fn display_label(&self) -> &str {
-        &self.label
-    }
-
-    pub(crate) fn same_child_input(&self, other: &Self) -> bool {
-        self.exact_eq(other)
-    }
-
-    fn new(identity: GuideEntryIdentity, glyph: LegendGlyph) -> Self {
-        Self {
-            identity,
-            title: String::new(),
-            label: String::new(),
-            glyph,
-        }
+impl GuideSourceKey {
+    fn new(identity: GuideEntryIdentity, key: ResolvedGuideKey) -> Self {
+        Self { identity, key }
     }
 
     pub(crate) fn point(identity: GuideEntryIdentity, point: PointStyle) -> Self {
         Self::new(
             identity,
-            LegendGlyph {
+            ResolvedGuideKey {
                 point: Some(point),
-                ..LegendGlyph::default()
+                ..ResolvedGuideKey::default()
             },
         )
     }
@@ -282,9 +194,9 @@ impl LegendEntry {
     pub(crate) fn line(identity: GuideEntryIdentity, line: LineStyle) -> Self {
         Self::new(
             identity,
-            LegendGlyph {
+            ResolvedGuideKey {
                 line: Some(line),
-                ..LegendGlyph::default()
+                ..ResolvedGuideKey::default()
             },
         )
     }
@@ -292,9 +204,9 @@ impl LegendEntry {
     pub(crate) fn fill(identity: GuideEntryIdentity, fill: FillStyle) -> Self {
         Self::new(
             identity,
-            LegendGlyph {
+            ResolvedGuideKey {
                 fill: Some(fill),
-                ..LegendGlyph::default()
+                ..ResolvedGuideKey::default()
             },
         )
     }
@@ -306,7 +218,7 @@ impl LegendEntry {
     ) -> Self {
         Self::new(
             identity,
-            LegendGlyph {
+            ResolvedGuideKey {
                 point: Some(point),
                 line: Some(line),
                 fill: None,
@@ -321,7 +233,7 @@ impl LegendEntry {
     ) -> Self {
         Self::new(
             identity,
-            LegendGlyph {
+            ResolvedGuideKey {
                 point: Some(point),
                 line: None,
                 fill: Some(fill),
@@ -336,7 +248,7 @@ impl LegendEntry {
     ) -> Self {
         Self::new(
             identity,
-            LegendGlyph {
+            ResolvedGuideKey {
                 point: None,
                 line: Some(line),
                 fill: Some(fill),
@@ -352,29 +264,16 @@ impl LegendEntry {
     ) -> Self {
         Self::new(
             identity,
-            LegendGlyph {
+            ResolvedGuideKey {
                 point: Some(point),
                 line: Some(line),
                 fill: Some(fill),
             },
         )
     }
+}
 
-    pub(crate) fn identity(&self) -> &GuideEntryIdentity {
-        &self.identity
-    }
-
-    pub(crate) fn coordinated_hue_value_for(&self, field: &str) -> Option<&str> {
-        self.identity.hue_value_for(field)
-    }
-
-    fn exact_eq(&self, other: &Self) -> bool {
-        self.identity == other.identity
-            && self.title == other.title
-            && self.label == other.label
-            && self.glyph.exact_eq(&other.glyph)
-    }
-
+impl ResolvedGuideKey {
     fn glyph_ink(
         &self,
         metrics: &LegendMetrics,
@@ -382,7 +281,7 @@ impl LegendEntry {
         let half_width = metrics.handle_w / 2.0;
         let half_height = metrics.font_size * 0.32;
         let mut ink = crate::render::geometry::GeometrySnapshot::new();
-        if let Some(fill) = &self.glyph.fill {
+        if let Some(fill) = &self.fill {
             ink.polygon(
                 &[
                     Point2D::new(-half_width, -half_height),
@@ -394,7 +293,7 @@ impl LegendEntry {
                 None,
             )?;
         }
-        if let Some(line) = &self.glyph.line {
+        if let Some(line) = &self.line {
             ink.line(
                 &[
                     Point2D::new(-half_width, 0.0),
@@ -404,7 +303,7 @@ impl LegendEntry {
                 None,
             )?;
         }
-        if let Some(point) = &self.glyph.point {
+        if let Some(point) = &self.point {
             ink.scatter_with_clip(&[Point2D::new(0.0, 0.0)], point, None)?;
         }
 
@@ -419,125 +318,6 @@ impl LegendEntry {
             crate::render::geometry::GeometryBox::union,
         ))
     }
-}
-
-pub(crate) fn resolve_entries(
-    plot: &crate::Plot,
-    entries: &mut Vec<LegendEntry>,
-) -> Result<(), Error> {
-    for entry in entries.iter_mut() {
-        (entry.title, entry.label) = entry.identity.resolved_text(plot)?;
-    }
-    *entries = merge_exact_entries(std::mem::take(entries), "plot legend")?;
-    Ok(())
-}
-
-pub(crate) fn merge_exact_entries<I>(entries: I, context: &str) -> Result<Vec<LegendEntry>, Error>
-where
-    I: IntoIterator<Item = LegendEntry>,
-    I::IntoIter: ExactSizeIterator,
-{
-    let entries = crate::data::source::collect_source(entries.into_iter().map(Ok))?;
-    let mut primary: Option<(identity::PrimaryTitleIdentity, String)> = None;
-    for entry in &entries {
-        let Some(identity) = entry.identity.primary_title() else {
-            continue;
-        };
-        if let Some((expected, title)) = &primary {
-            if expected != &identity || !legend_text_eq(title, &entry.title) {
-                return Err(Error::Render(format!("{context} requires compatible semantic titles, labels, and styles; glyphs must match exactly")));
-            }
-        } else {
-            primary = Some((
-                identity,
-                crate::data::source::copy_source_string(&entry.title)?,
-            ));
-        }
-    }
-    let title = primary.map_or_else(
-        || crate::data::source::copy_source_string("series"),
-        |(_, title)| Ok(title),
-    )?;
-    let mut merged: Vec<LegendEntry> = Vec::new();
-    let mut layers = Vec::new();
-    crate::data::source::reserve_source(
-        &mut layers,
-        entries
-            .iter()
-            .filter(|entry| entry.identity.primary_title().is_none())
-            .count(),
-    )?;
-    for mut entry in entries {
-        if entry.identity.primary_title().is_none() {
-            entry.title = crate::data::source::copy_source_string(&title)?;
-            layers.push(entry);
-        } else {
-            merge_entry(&mut merged, entry, context)?;
-        }
-    }
-    for layer in layers {
-        merge_entry(&mut merged, layer, context)?;
-    }
-    Ok(merged)
-}
-
-fn merge_entry(
-    merged: &mut Vec<LegendEntry>,
-    entry: LegendEntry,
-    context: &str,
-) -> Result<(), Error> {
-    let mut duplicate = None;
-    for existing in &*merged {
-        if !existing.identity.same_identity(&entry.identity) {
-            if legend_text_eq(&existing.label, &entry.label) {
-                return Err(Error::Render(format!(
-                    "{context} has distinct raw identities resolving to display label {:?}",
-                    entry.label
-                )));
-            }
-        } else if duplicate.is_none() {
-            duplicate = Some(existing);
-        }
-    }
-    if let Some(existing) = duplicate {
-        if !legend_text_eq(&existing.title, &entry.title)
-            || !legend_text_eq(&existing.label, &entry.label)
-            || !existing.glyph.exact_eq(&entry.glyph)
-        {
-            return Err(Error::Render(format!(
-                "{context} requires compatible semantic titles, labels, and styles; glyphs must match exactly"
-            )));
-        }
-    } else {
-        merged
-            .try_reserve(1)
-            .map_err(|error| Error::Render(format!("merged legend reservation: {error}")))?;
-        merged.push(entry);
-    }
-    Ok(())
-}
-
-pub(crate) fn resolved_title(entries: &[LegendEntry]) -> Result<String, Error> {
-    let Some(first) = entries.first() else {
-        return Ok(String::new());
-    };
-
-    for entry in entries {
-        if !entry.identity.same_title(&first.identity)
-            || !legend_text_eq(&entry.title, &first.title)
-        {
-            return Err(Error::Render(
-                "legend entries require one compatible semantic title".into(),
-            ));
-        }
-    }
-
-    let mut title = String::new();
-    title
-        .try_reserve_exact(first.title.len())
-        .map_err(|error| Error::Render(format!("legend title reservation: {error}")))?;
-    title.push_str(&first.title);
-    Ok(title)
 }
 
 pub(crate) fn legend_text_eq(left: &str, right: &str) -> bool {
@@ -810,8 +590,8 @@ impl LegendMetrics {
 /// A plot legend.
 #[derive(Debug)]
 pub(crate) struct Legend {
-    /// The entries in the legend.
-    entries: std::sync::Arc<[LegendEntry]>,
+    /// The sole prepared semantic guide retained by the measured plan.
+    descriptor: std::sync::Arc<PreparedDiscreteGuide>,
     /// Resolved theme-owned metrics retained for selection and frozen drawing.
     pub(crate) metrics: LegendMetrics,
     available_width: f64,
@@ -862,7 +642,7 @@ struct DiscreteGuideIntrinsics {
 }
 
 fn discrete_guide_intrinsics(
-    entries: &[LegendEntry],
+    entries: &[PreparedGuideEntry],
     theme: &crate::theme::ResolvedTheme,
     metrics: &LegendMetrics,
 ) -> Result<DiscreteGuideIntrinsics, Error> {
@@ -873,11 +653,11 @@ fn discrete_guide_intrinsics(
     for entry in entries {
         let (hard, natural) = crate::layout::fit::intrinsic_widths(
             theme,
-            &entry.label,
+            &entry.display_label,
             &theme.typography.guides.legend_label,
             "legend entry intrinsic",
         )?;
-        let ink = entry.glyph_ink(metrics)?;
+        let ink = entry.key.glyph_ink(metrics)?;
         let key = crate::layout::kernel::required_length(2.0 * (-ink.left).max(ink.right))?;
         let chrome_exact = metrics.chrome(key)?;
         let minimum = chrome_exact.add_pixels(hard)?;
@@ -1157,10 +937,12 @@ impl Legend {
     }
 
     pub(crate) fn natural_preference(
-        title: &str,
-        entries: &[LegendEntry],
+        descriptor: &PreparedDiscreteGuide,
         theme: &crate::theme::ResolvedTheme,
     ) -> Result<(f64, f64), Error> {
+        let section = &descriptor.sections[0];
+        let title = section.display_title.as_ref();
+        let entries = section.entries.as_ref();
         let (metrics, frame_minimum) = Self::allocation_metrics(theme)?;
         let intrinsic = discrete_guide_intrinsics(entries, theme, &metrics)?;
         let mut width = crate::layout::interior::sizing::text_width(
@@ -1172,7 +954,7 @@ impl Legend {
             width = width.max(
                 crate::layout::interior::sizing::text_width(
                     theme,
-                    &entry.label,
+                    &entry.display_label,
                     &theme.typography.guides.legend_label,
                 )? + LegendMetrics::position(&requirement.chrome)?,
             );
@@ -1198,7 +980,7 @@ impl Legend {
         for (index, entry) in entries.iter().enumerate() {
             let plan = crate::layout::fit::measured(crate::layout::fit::text(
                 theme,
-                &entry.label,
+                &entry.display_label,
                 &theme.typography.guides.legend_label,
                 width - LegendMetrics::position(&intrinsic.entries[index].chrome)?,
                 crate::layout::PhysicalTextAlignment::Start,
@@ -1230,13 +1012,11 @@ impl Legend {
     }
 
     #[expect(
-        clippy::too_many_arguments,
         clippy::too_many_lines,
         reason = "one assigned edge/flow measurement retains all entry geometry"
     )]
     pub(crate) fn measure_assigned(
-        title: &str,
-        entries: std::sync::Arc<[LegendEntry]>,
+        descriptor: std::sync::Arc<PreparedDiscreteGuide>,
         available: (f64, impl Into<Option<f64>>),
         horizontal: bool,
         compact: bool,
@@ -1247,6 +1027,10 @@ impl Legend {
         use crate::layout::fit::{self, FitOutcome};
         use crate::layout::{kernel::FitKind, AddressRole};
 
+        let section = &descriptor.sections[0];
+        let title = section.display_title.as_ref();
+        let entries = section.entries.as_ref();
+        let section_scope = scope.child(AddressRole::LegendSection, 0)?;
         let available = (available.0, available.1.into());
         theme.prepare_font_environment()?;
 
@@ -1294,7 +1078,7 @@ impl Legend {
             inner_width,
             PhysicalTextAlignment::Start,
             "outside legend title",
-            &scope.child(AddressRole::LegendTitle, 0)?,
+            &section_scope.child(AddressRole::LegendTitle, 0)?,
         )? {
             FitOutcome::Measured(plan) => plan,
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
@@ -1313,7 +1097,7 @@ impl Legend {
                 "outside legend title leaves no entry height",
             )));
         }
-        let intrinsic = discrete_guide_intrinsics(&entries, theme, &metrics)?;
+        let intrinsic = discrete_guide_intrinsics(entries, theme, &metrics)?;
         let preferred_column = &intrinsic.preferred_column;
         let compact_cap = inner_exact
             .subtract(&metrics.exact.column_gap)
@@ -1355,10 +1139,12 @@ impl Legend {
                 || metrics.outer_width(&entry.minimum)? > available.0
             {
                 return Ok(FitOutcome::Miss(
-                    scope.child(AddressRole::LegendEntry, index)?.failure(
-                        FitKind::Text,
-                        "guide entry allocation is below its hard unbroken requirement",
-                    ),
+                    section_scope
+                        .child(AddressRole::LegendEntry, index)?
+                        .failure(
+                            FitKind::Text,
+                            "guide entry allocation is below its hard unbroken requirement",
+                        ),
                 ));
             }
         }
@@ -1385,16 +1171,18 @@ impl Legend {
                 text_capacity.pixels_rounded(crate::layout::kernel::SpatialRounding::Floor)?;
             let plan = match fit::text(
                 theme,
-                &entry.label,
+                &entry.display_label,
                 appearance,
-                if entry.label.is_empty() {
+                if entry.display_label.is_empty() {
                     inner_width
                 } else {
                     text_width
                 },
                 PhysicalTextAlignment::Start,
                 "outside legend entry",
-                &scope.child(AddressRole::LegendEntry, index)?,
+                &section_scope
+                    .child(AddressRole::LegendEntry, index)?
+                    .child(AddressRole::LegendLabel, 0)?,
             )? {
                 FitOutcome::Measured(plan) => plan,
                 FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
@@ -1471,7 +1259,7 @@ impl Legend {
             )));
         }
         let legend = Self {
-            entries,
+            descriptor,
             metrics,
             available_width: available.0,
             available_height: available.1.unwrap_or(layout.height),
@@ -1509,6 +1297,7 @@ impl Legend {
         &self,
         round: &mut crate::layout::kernel::FeedbackRound,
     ) -> Result<(), Error> {
+        round.observe_discrete_guide(&self.descriptor)?;
         self.metrics.source.observe_feedback(round)?;
         round.observe_number(self.compute_box_width())?;
         round.observe_number(self.compute_box_height())?;
@@ -1555,11 +1344,11 @@ impl Legend {
         }
         round.observe_count(self.entry_blocks.len())?;
         round.observe_font_stack(&self.font_family)?;
-        for entry in self.entries.iter() {
+        for entry in self.descriptor.sections[0].entries.iter() {
             round.observe_legend_glyph(
-                entry.glyph.point.as_ref(),
-                entry.glyph.line.as_ref(),
-                entry.glyph.fill.as_ref(),
+                entry.key.point.as_ref(),
+                entry.key.line.as_ref(),
+                entry.key.fill.as_ref(),
             )?;
         }
         round.observe_text_block(&self.title_block)?;
@@ -1576,19 +1365,6 @@ impl Legend {
         }
         Ok(())
     }
-    /// Check the represented shared allocation before retaining measured entries.
-    pub(crate) fn share_entries(
-        entries: Vec<LegendEntry>,
-    ) -> Result<std::sync::Arc<[LegendEntry]>, Error> {
-        std::alloc::Layout::new::<[std::sync::atomic::AtomicUsize; 2]>()
-            .extend(
-                std::alloc::Layout::array::<LegendEntry>(entries.len())
-                    .map_err(|_| Error::Render("legend entry storage overflow".into()))?,
-            )
-            .map_err(|_| Error::Render("legend entry Arc layout overflow".into()))?;
-        Ok(entries.into())
-    }
-
     /// Compute the total bounding box width based on entry labels.
     pub fn compute_box_width(&self) -> f64 {
         self.layout.width
@@ -1667,14 +1443,14 @@ impl Legend {
             crate::orchestrator::measurements::Counter::LegendSelection,
         );
 
-        let count = self.entries.iter().try_fold(
+        let count = self.descriptor.sections[0].entries.iter().try_fold(
             1 + usize::from(self.metrics.frame.is_some()),
             |count, entry| {
                 count
                     .checked_add(
-                        1 + usize::from(entry.glyph.fill.is_some())
-                            + usize::from(entry.glyph.line.is_some())
-                            + usize::from(entry.glyph.point.is_some()),
+                        1 + usize::from(entry.key.fill.is_some())
+                            + usize::from(entry.key.line.is_some())
+                            + usize::from(entry.key.point.is_some()),
                     )
                     .ok_or_else(|| Error::Render("legend call count overflow".into()))
             },
@@ -1720,13 +1496,13 @@ impl Legend {
             plan: title_block.plan().clone(),
         }))?;
         // ─── Entries (top to bottom = decreasing y) ───
-        for (index, entry) in self.entries.iter().enumerate() {
+        for (index, entry) in self.descriptor.sections[0].entries.iter().enumerate() {
             let slot = &self.layout.entries[index];
             let column_x = x + slot.key.x;
             let row_y = y + slot.key.y;
             // Renderer-owned fill, line, and point components share one handle.
             let marker_x = column_x + m.handle_w * 0.5;
-            if let Some(fill_style) = &entry.glyph.fill {
+            if let Some(fill_style) = &entry.key.fill {
                 let half_height = self.entry_font_size() * 0.32;
                 emit(LegendCall::Fill(
                     [
@@ -1738,7 +1514,7 @@ impl Legend {
                     fill_style.clone(),
                 ))?;
             }
-            if let Some(line_style) = &entry.glyph.line {
+            if let Some(line_style) = &entry.key.line {
                 emit(LegendCall::Line(
                     [
                         Point2D::new(column_x, row_y),
@@ -1747,7 +1523,7 @@ impl Legend {
                     line_style.clone(),
                 ))?;
             }
-            if let Some(point_style) = &entry.glyph.point {
+            if let Some(point_style) = &entry.key.point {
                 emit(LegendCall::Point(
                     [Point2D::new(marker_x, row_y)],
                     point_style.clone(),

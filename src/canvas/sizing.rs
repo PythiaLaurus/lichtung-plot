@@ -30,6 +30,8 @@ struct HeightInputs {
     legend: crate::LegendPolicy,
     continuous_hidden: bool,
     numeric: crate::numeric::inputs::NumericInputs,
+    local_guide:
+        Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedDiscreteGuide>>,
     scope: Option<String>,
 }
 
@@ -50,6 +52,7 @@ impl HeightInputs {
             || self.legend != other.legend
             || self.continuous_hidden != other.continuous_hidden
             || self.numeric != other.numeric
+            || self.local_guide != other.local_guide
         {
             return false;
         }
@@ -72,6 +75,7 @@ impl HeightInputs {
         parent_insets: [i64; 4],
         round: &FeedbackRound,
         owner: &ComponentAddress,
+        per_plot: bool,
     ) -> Result<Self, Error> {
         let axes = plot.prepared_axis_inputs().ok_or_else(|| {
             Error::Render("height measurement requires prepared cell axes".into())
@@ -106,6 +110,11 @@ impl HeightInputs {
             legend: plot.legend_policy_spec(),
             continuous_hidden: plot.continuous_guide_suppressed(),
             numeric: crate::numeric::inputs::NumericInputs::new(plot)?,
+            local_guide: if per_plot {
+                plot.prepared_discrete_guide()?
+            } else {
+                None
+            },
             scope: plot
                 .axis_scope()
                 .map(crate::data::source::copy_source_string)
@@ -142,7 +151,7 @@ impl HeightMeasurements {
         round: &FeedbackRound,
         owner: &ComponentAddress,
     ) -> Result<(), Error> {
-        let inputs = HeightInputs::new(plot, width, parent_insets, round, owner)?;
+        let inputs = HeightInputs::new(plot, width, parent_insets, round, owner, true)?;
         let index = usize::try_from(owner.leaf_slot_index())
             .map_err(|_| Error::Render("content height slot overflowed".into()))?;
         let mut entries = self.0.borrow_mut();
@@ -234,7 +243,7 @@ pub(super) fn cell_height(
         &FitScope::root(),
     )
     .map_err(fit::PlanError::into_error)?;
-    let identity = HeightInputs::new(plot, width, parent_insets, round, owner)?;
+    let identity = HeightInputs::new(plot, width, parent_insets, round, owner, per_plot)?;
     if let Some(measurements) = measurements {
         if let Some(height) = measurements.measured(&identity, owner)? {
             return Ok(height);
@@ -441,8 +450,8 @@ pub(super) fn measure(
         }
     }
     let mut guide = (0.0, 0.0);
-    if let Some(PreparedGuideDescriptor::Discrete((title, entries))) = &prepared.shared_guide {
-        guide = crate::decorations::legend::Legend::natural_preference(title, entries, theme)?;
+    if let Some(PreparedGuideDescriptor::Discrete(descriptor)) = &prepared.shared_guide {
+        guide = crate::decorations::legend::Legend::natural_preference(descriptor, theme)?;
     } else if let Some(PreparedGuideDescriptor::Continuous(descriptor)) = &prepared.shared_guide {
         guide = crate::layout::interior::sizing::continuous_preference(
             descriptor,

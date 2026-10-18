@@ -114,6 +114,9 @@ impl CompositionChildPolicy {
 /// storage; no prepared Plot clone or alternate preparation route is retained.
 /// Trajectory retains its condition order.
 pub(crate) struct PreparedInteriorInputs {
+    pub(crate) discrete_guides: std::sync::OnceLock<
+        std::sync::Arc<crate::decorations::legend::discrete::PreparedDiscreteGuides>,
+    >,
     pub(crate) waterfall: Option<std::sync::Arc<crate::plots::waterfall::PreparedWaterfallInputs>>,
     pub(crate) beeswarm: Option<std::sync::Arc<crate::plots::beeswarm::PreparedBeeswarmInputs>>,
     pub(crate) marginal: Option<std::sync::Arc<crate::plots::marginal::PreparedMarginal>>,
@@ -139,6 +142,22 @@ pub(crate) struct PreparedInteriorInputs {
 }
 
 impl PreparedInteriorInputs {
+    #[cfg(test)]
+    pub(crate) fn attach_with_guides_for_test(
+        &self,
+        plot: Plot,
+        theme: &crate::theme::ResolvedTheme,
+    ) -> Result<Plot, Error> {
+        self.prepare_discrete_guides(
+            &plot,
+            theme,
+            &crate::font::canonical::OperationContext::new(),
+            &ComponentAddress::root(),
+            false,
+        )?;
+        self.attach(plot)
+    }
+
     /// Semantic attachment does not discover fonts. Each attached panel obtains
     /// its post-font summary before the parent starts width allocation.
     pub(crate) fn prepare_intrinsics(
@@ -171,6 +190,7 @@ impl PreparedInteriorInputs {
 
     pub(crate) fn attach(&self, mut plot: Plot) -> Result<Plot, Error> {
         self.route.validate(&plot)?;
+        plot.prepared_discrete_guides = self.discrete_guides.get().cloned();
         plot.prepared_axes = self.axes.clone();
         plot.prepared_waterfall.clone_from(&self.waterfall);
         plot.prepared_beeswarm.clone_from(&self.beeswarm);

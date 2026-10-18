@@ -356,7 +356,6 @@ pub(crate) fn measure_marks(
     let overlay = chart.raw_overlay_spec();
     let panel = context.panel;
     let colors = retained.resolved_colors(chart, theme, data)?;
-    let legend_entries = retained.guide_entries_with_colors(chart, theme, &colors)?;
     let significance = if group_levels.is_empty() {
         crate::significance::plan(
             chart,
@@ -642,7 +641,8 @@ pub(crate) fn measure_marks(
         }
     }
     payload.retain(
-        PlotRenderResult::new(layout, legend_entries).with_significance_plan(significance),
+        PlotRenderResult::new(layout, chart.prepared_discrete_guide()?)
+            .with_significance_plan(significance),
         context,
         chart,
     )

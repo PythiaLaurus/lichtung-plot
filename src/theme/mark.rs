@@ -482,6 +482,7 @@ mod tests {
             let minimum = chart.intrinsic_body_minimum(&theme).unwrap();
             let panel = crate::layout::PanelBox::new(10.0, 610.0, 20.0, 420.0);
             let measure = |theme: &super::super::ResolvedTheme| {
+                let chart = crate::plots::shared_x::prepare_panel_for_test(&chart, theme).unwrap();
                 chart
                     .measure_selected_interior(crate::spec::PlotRenderContext::new(
                         chart.data(),
@@ -502,11 +503,8 @@ mod tests {
             theme.marks = theme.marks.clone().with_points(points).unwrap();
             assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), minimum);
             let after = measure(&theme);
-            assert!(!before.legend_entries.is_empty());
-            assert_eq!(before.legend_entries.len(), after.legend_entries.len());
-            for (left, right) in before.legend_entries.iter().zip(&after.legend_entries) {
-                assert!(left.same_child_input(right));
-            }
+            assert!(before.discrete_guide.is_some());
+            assert_eq!(before.discrete_guide, after.discrete_guide);
             let crate::layout::interior::MarkPayload::Distribution(payload) =
                 &after.marks.as_ref().unwrap().payload
             else {

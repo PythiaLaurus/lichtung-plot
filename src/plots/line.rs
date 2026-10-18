@@ -1,7 +1,7 @@
 //! Root-prepared ordered series, trajectories, and source-ordered paths.
 
 use crate::data::{CollectivePair, PlotData};
-use crate::decorations::legend::LegendEntry;
+use crate::decorations::legend::GuideSourceKey;
 use crate::render::backend::{
     with_clip, Backend, FillStyle, LineStyle, PlacedText, Point2D, PointStyle, TextAnchor,
 };
@@ -200,17 +200,6 @@ impl PreparedLine {
         self.hues.iter().map(String::as_str)
     }
 
-    pub(crate) fn has_guide_entries(&self, chart: &Plot) -> bool {
-        self.groups
-            .iter()
-            .any(|group| group.identity.as_ref().is_some_and(|id| id.hue.is_some()))
-            || (chart.kind() != PlotKind::Line
-                && (chart.kind() == PlotKind::Trajectory || chart.markers_visible())
-                && chart.line_path_style_spec() != LinePathStyle::Hue
-                && !self.hues.is_empty())
-            || self.layers.iter().any(|layer| layer.legend.is_some())
-    }
-
     pub(crate) fn group_order(&self, chart: &Plot) -> Result<Vec<usize>, Error> {
         let hue_paths = chart.kind() == PlotKind::LinePath
             && chart.line_path_style_spec() == LinePathStyle::Hue;
@@ -249,7 +238,7 @@ impl PreparedLine {
         theme: &crate::theme::ResolvedTheme,
         data: PlotData<'_>,
         order: &[usize],
-    ) -> Result<Vec<LegendEntry>, Error> {
+    ) -> Result<Vec<GuideSourceKey>, Error> {
         let (map, accent) = self.resolved_colors(chart, theme, data)?;
         self.guide_entries_with_colors(chart, theme, order, &map, &accent)
     }
@@ -262,7 +251,7 @@ impl PreparedLine {
         order: &[usize],
         map: &CategoryColors,
         accent: &AccentColors,
-    ) -> Result<Vec<LegendEntry>, Error> {
+    ) -> Result<Vec<GuideSourceKey>, Error> {
         let mut entries = Vec::new();
         let hue_paths = chart.kind() == PlotKind::LinePath
             && chart.line_path_style_spec() == LinePathStyle::Hue;
@@ -298,10 +287,10 @@ impl PreparedLine {
             crate::data::source::reserve_source(&mut entries, 1)?;
             let identity = chart.collective_legend_identity(identity)?;
             entries.push(match (chart.markers_visible(), has_fill) {
-                (true, true) => LegendEntry::point_line_fill(identity, point, line, fill),
-                (true, false) => LegendEntry::point_line(identity, point, line),
-                (false, true) => LegendEntry::line_fill(identity, line, fill),
-                (false, false) => LegendEntry::line(identity, line),
+                (true, true) => GuideSourceKey::point_line_fill(identity, point, line, fill),
+                (true, false) => GuideSourceKey::point_line(identity, point, line),
+                (false, true) => GuideSourceKey::line_fill(identity, line, fill),
+                (false, false) => GuideSourceKey::line(identity, line),
             });
         }
         if chart.kind() != PlotKind::Line
@@ -310,8 +299,8 @@ impl PreparedLine {
         {
             let levels = chart.global_hue_levels().unwrap_or(&self.hues);
             crate::data::source::reserve_source(&mut entries, levels.len())?;
-            for label in levels {
-                entries.push(LegendEntry::point(
+            for label in levels.iter().filter(|label| self.hues.contains(label)) {
+                entries.push(GuideSourceKey::point(
                     chart.point_legend_identity(label)?,
                     chart.point_style(
                         theme,
@@ -328,7 +317,7 @@ impl PreparedLine {
                     accent.color(self.primary_accent_slots + index)?,
                     theme.marks.points().supplemental(),
                 );
-                entries.push(LegendEntry::point(
+                entries.push(GuideSourceKey::point(
                     crate::decorations::legend::GuideEntryIdentity::supplemental(label)?,
                     style,
                 ));
@@ -379,10 +368,11 @@ impl PreparedLine {
             None,
             family,
         )?;
+        // Indices and membership belong to observed scientific rows. The
+        // owning chart supplies a separate coordinated palette order later.
         let hues = crate::data::source::collect_source(
-            chart
-                .global_hue_levels()
-                .unwrap_or(&channels.hue_levels)
+            channels
+                .hue_levels
                 .iter()
                 .map(|label| crate::data::source::copy_source_string(label)),
         )?;
@@ -732,7 +722,6 @@ fn project(
         chart.kind() == PlotKind::LinePath && chart.line_path_style_spec() == LinePathStyle::Hue;
     let order = prepared.group_order(chart)?;
     let (map, accent) = prepared.resolved_colors(chart, theme, data)?;
-    let legends = prepared.guide_entries_with_colors(chart, theme, &order, &map, &accent)?;
 
     for &index in &order {
         let group = &prepared.groups[index];
@@ -1063,14 +1052,15 @@ fn project(
             additional,
         );
     }
-    let mut result = PlotRenderResult::new(layout, legends).with_axis_domains(
-        if prepared.conditions.is_some() {
-            AxisDomain::Categorical
-        } else {
-            AxisDomain::Continuous
-        },
-        AxisDomain::Continuous,
-    );
+    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?)
+        .with_axis_domains(
+            if prepared.conditions.is_some() {
+                AxisDomain::Categorical
+            } else {
+                AxisDomain::Continuous
+            },
+            AxisDomain::Continuous,
+        );
     result.marks = Some(crate::data::source::source_arc(
         crate::layout::interior::SelectedMarkPlan {
             payload: crate::layout::interior::MarkPayload::Line(payload),

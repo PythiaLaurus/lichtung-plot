@@ -54,8 +54,10 @@ at `3de25e0` in `../docs/discrete-guide-source-handoff.md`.
 Typed raw/category/literal/layer identities and contributor-order-independent
 Combined title authority are complete in `../docs/typed-guide-identities.md`.
 Its width-only Shared audit records a real tick/gutter cycle with identical cached
-and uncached behavior under the bounded refusal contract; section descriptors and
-flat-result retirement remain the next leaf.
+and uncached behavior under the bounded refusal contract. Combined typed section
+storage, authoritative pre-font transport/census, stable guide slots, selected
+descriptor identity and flat-result retirement are complete in
+`../docs/prepared-discrete-sections.md`. Producer factorization follows.
 The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
@@ -869,9 +871,9 @@ ink/collision bounds. No draw-time factorization or layout reconstruction.
 | --- | --- | --- | --- |
 | T6L0d | COMPLETE | T6A | Complete producer/mapping/title/layer and measured-section design in `08_DISCRETE_GUIDES.md`; `docs(legend): pin discrete guide producer and section contracts` |
 | T6L0 | COMPLETE | T6N, T6L0d | Current producer/descriptor/font/key source handoff at `3de25e0`; evidence in `docs/discrete-guide-source-handoff.md` |
-| T6L1 | IN PROGRESS | T6L0 | Typed section descriptor, Combined consumer migration and layer identity; independently committed leaves below |
+| T6L1 | COMPLETE | T6L0 | Typed section descriptor, Combined consumer migration and layer identity; independently committed leaves below |
 | T6L1a | COMPLETE | T6L0 | Typed raw category/literal/layer identities and Combined title authority; evidence in `docs/typed-guide-identities.md` |
-| T6L1b | PENDING | T6L1a | Section descriptor, Combined consumer transport and flat-result retirement; `refactor(legend): retain typed discrete sections` |
+| T6L1b | COMPLETE | T6L1a | Section descriptor, authoritative Combined transport/census and flat-result retirement; evidence in `docs/prepared-discrete-sections.md` |
 | T6L2 | PENDING | T6L1 | Producer-owned factorized keys and pre-font validation; `feat(legend): prepare factorized channel sections` |
 | T6L3 | PENDING | T6L2 | One bounded section flow/frame/collision plan; `feat(legend): measure bounded section flow` |
 | T6L4 | PENDING | T6L3 | Facet/Canvas authority, exact merging, fonts, cache and feedback; `feat(composition): coordinate sectioned guides` |

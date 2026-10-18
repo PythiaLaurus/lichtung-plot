@@ -22,6 +22,15 @@ fn recorded_heights_require_complete_numeric_policy_at_equal_width_and_domain() 
         Some(&crate::Theme::publication()),
     )
     .unwrap();
+    inputs
+        .prepare_discrete_guides(
+            &source,
+            &crate::Theme::publication().resolve().unwrap(),
+            &operation,
+            &ComponentAddress::root(),
+            false,
+        )
+        .unwrap();
     let source = inputs.attach(source).unwrap();
     let normalized = format
         .clone()
@@ -41,10 +50,10 @@ fn recorded_heights_require_complete_numeric_policy_at_equal_width_and_domain() 
         |(), assigned, round| {
             let owner = ComponentAddress::root().child(AddressRole::CanvasCell, 0)?;
             measurements.record(&source, 400.0, 120.0, [0; 4], round, &owner)?;
-            let same = HeightInputs::new(&source, 400.0, [0; 4], round, &owner)?;
+            let same = HeightInputs::new(&source, 400.0, [0; 4], round, &owner, true)?;
             assert_eq!(measurements.measured(&same, &owner)?, Some(120.0));
             for changed in &variants {
-                let different = HeightInputs::new(changed, 400.0, [0; 4], round, &owner)?;
+                let different = HeightInputs::new(changed, 400.0, [0; 4], round, &owner, true)?;
                 assert_eq!(same.width, different.width);
                 assert_eq!(same.ranges, different.ranges);
                 assert_eq!(measurements.measured(&different, &owner)?, None);

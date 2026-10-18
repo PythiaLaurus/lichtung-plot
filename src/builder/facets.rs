@@ -155,6 +155,14 @@ impl<K: crate::kind::Marker> Plot<K> {
             && self.suppress_continuous_guide == other.suppress_continuous_guide
             && self.root_size == other.root_size
             && other.numeric.matches(self)
+            && self.prepared_discrete_guides.is_some() == other.guides_prepared
+            && match &self.prepared_discrete_guides {
+                Some(guides) => match guides.for_scope(self.axis_scope()) {
+                    Ok(guide) => guide == other.discrete_guide.as_ref(),
+                    Err(_) => false,
+                },
+                None => other.discrete_guide.is_none(),
+            }
     }
 
     pub(crate) fn retain_composed_inputs(&self) -> Result<ComposedInputs, crate::Error> {
@@ -232,12 +240,28 @@ impl<K: crate::kind::Marker> Plot<K> {
             suppress_continuous_guide: self.suppress_continuous_guide,
             root_size: self.root_size,
             numeric: crate::numeric::inputs::NumericInputs::new(self)?,
+            discrete_guide: self
+                .prepared_discrete_guides
+                .as_ref()
+                .map(|guides| guides.for_scope(self.axis_scope()))
+                .transpose()?
+                .flatten()
+                .cloned(),
+            guides_prepared: self.prepared_discrete_guides.is_some(),
         })
     }
 
     pub(crate) fn with_global_hue_levels(mut self, levels: Vec<String>) -> Self {
         self.global_hue_levels = Some(levels);
         self
+    }
+
+    pub(crate) fn with_global_color_levels(self, levels: Vec<String>) -> Self {
+        if self.kind() == PlotKind::Interaction && self.hue_dimension_key().is_none() {
+            self.with_global_group_levels(levels)
+        } else {
+            self.with_global_hue_levels(levels)
+        }
     }
 
     pub(crate) fn global_hue_levels(&self) -> Option<&[String]> {

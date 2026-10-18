@@ -264,7 +264,7 @@ fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_own
         0
     );
     assert!(crate::plots::shared_x::prepare_plot(&source, &resources, None).is_err());
-    let chart = inputs.attach(source).unwrap();
+    let chart = inputs.attach_with_guides_for_test(source, &theme).unwrap();
     let selected = chart
         .measure_selected_interior(crate::spec::PlotRenderContext::new(
             chart.data(),

@@ -1,6 +1,5 @@
 //! Shared plot specification and render-result types.
 
-use crate::decorations::legend::LegendEntry;
 use crate::layout::{Layout, PanelBox};
 use crate::significance::SignificancePlan;
 use crate::{HistogramKdePoint, NumericFormat};
@@ -919,7 +918,8 @@ pub(crate) struct PlotRenderResult {
     pub(crate) x_domain: AxisDomain,
     pub(crate) y_domain: AxisDomain,
     pub(crate) significance: Option<SignificancePlan>,
-    pub(crate) legend_entries: Vec<LegendEntry>,
+    pub(crate) discrete_guide:
+        Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedDiscreteGuide>>,
     pub(crate) decoration_mode: DecorationMode,
     pub(crate) x_tick_keys: Option<Vec<String>>,
     pub(crate) y_tick_keys: Option<Vec<String>>,
@@ -948,7 +948,12 @@ pub(crate) enum DecorationMode {
 }
 
 impl PlotRenderResult {
-    pub(crate) fn new(layout: Layout, legend_entries: Vec<LegendEntry>) -> Self {
+    pub(crate) fn new(
+        layout: Layout,
+        discrete_guide: Option<
+            std::sync::Arc<crate::decorations::legend::discrete::PreparedDiscreteGuide>,
+        >,
+    ) -> Self {
         Self {
             layout,
             axes: None,
@@ -956,7 +961,7 @@ impl PlotRenderResult {
             x_domain: AxisDomain::Continuous,
             y_domain: AxisDomain::Continuous,
             significance: None,
-            legend_entries,
+            discrete_guide,
             decoration_mode: DecorationMode::Standard,
             x_tick_keys: None,
             y_tick_keys: None,

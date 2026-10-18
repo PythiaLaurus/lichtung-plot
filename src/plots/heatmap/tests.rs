@@ -40,10 +40,12 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
         Some(&crate::theme::Theme::publication()),
     )
     .unwrap();
-    let chart = inputs.attach(original_source).unwrap();
     let mut theme = crate::Theme::publication().resolve().unwrap();
     theme.typography.annotations.contrast.light.font_size = 22;
     theme.typography.annotations.contrast.dark.font_size = 11;
+    let chart = inputs
+        .attach_with_guides_for_test(original_source, &theme)
+        .unwrap();
     let panel = PanelBox::new(0.0, 400.0, 0.0, 300.0);
     let opaque = chart
         .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))

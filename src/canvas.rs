@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use crate::Error;
 
-use crate::decorations::legend::{Legend, LegendEntry, MeasuredContinuousGuide};
+use crate::decorations::legend::{Legend, MeasuredContinuousGuide};
 use crate::decorations::plan::children::MeasurementPhase;
 use crate::layout::canvas::PanelRequirements;
 use crate::layout::fit::{FitFailure, FitScope};
@@ -77,7 +77,7 @@ struct PreparedCanvasRound<'a> {
     themes: Arc<ResolvedCanvasThemes>,
     canvas_layout: RootFramePlan,
     plots: Vec<Option<Plot>>,
-    shared_legend: Option<(String, Arc<[LegendEntry]>)>,
+    shared_legend: Option<Arc<PreparedDiscreteGuide>>,
     shared_guide: Option<&'a PreparedGuideDescriptor>,
     body_probes: Vec<Option<Arc<crate::spec::PlotRenderResult>>>,
     shared_x: &'a [Option<(f64, f64)>],
@@ -878,8 +878,8 @@ impl Canvas {
         Ok(())
     }
 
-    /// Prepare point/path hue identities from retained semantics before fonts.
-    /// Further categorical families migrate to this same owner in T5b1b2b.
+    /// Coordinate scientific categorical color identities before fonts,
+    /// independently of guide visibility and section contribution.
     #[expect(
         clippy::too_many_lines,
         reason = "shared domain coordinates all currently prepared discrete family hue sources"
@@ -892,7 +892,7 @@ impl Canvas {
             return Ok(None);
         }
         if self.panels.iter().flatten().any(|plot| {
-            plot.hue_dimension_key().is_some()
+            plot.categorical_color_field().is_some()
                 && !matches!(
                     plot.kind(),
                     PlotKind::Scatter
@@ -920,7 +920,7 @@ impl Canvas {
         crate::data::source::reserve_source(&mut groups, self.panels.len())?;
         for (index, plot) in self.panels.iter().enumerate() {
             let Some(plot) = plot else { continue };
-            let Some(dimension) = plot.hue_dimension_key() else {
+            let Some(dimension) = plot.categorical_color_field() else {
                 continue;
             };
 
@@ -1010,7 +1010,7 @@ impl Canvas {
                 .chain(
                     interaction
                         .into_iter()
-                        .flat_map(crate::plots::interaction::PreparedInteraction::hue_levels),
+                        .flat_map(crate::plots::interaction::PreparedInteraction::color_keys),
                 )
                 .chain(
                     marginal
@@ -1029,45 +1029,34 @@ impl Canvas {
         crate::data::source::source_arc(groups).map(Some)
     }
 
-    /// Prepare one shared point/path guide without measuring bodies or fonts.
-    /// An empty retained set is still a prepared result.
-    fn prepared_discrete_shared_guide(
+    /// Prepare every local contribution or explicit absence, then retain the
+    /// one Shared union when selected. No body or font work determines presence.
+    fn prepare_discrete_guides(
         &self,
         themes: &ResolvedCanvasThemes,
         interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
         hue_groups: Option<&[(String, Vec<String>)]>,
         resources: &crate::font::canonical::OperationContext,
-    ) -> Result<Option<PreparedDiscreteGuide>, Error> {
-        if self.legend_policy != CanvasLegendPolicy::Shared
-            || self.panels.iter().flatten().any(|plot| {
-                !crate::layout::interior::InteriorRoute::classify(plot.kind()).is_coordinate()
-                    && !matches!(plot.kind(), PlotKind::Marginal | PlotKind::Waterfall)
-            })
-        {
-            return Ok(None);
-        }
-        let mut entries = Vec::new();
+    ) -> Result<Option<Arc<PreparedDiscreteGuide>>, Error> {
+        let mut contributions = Vec::new();
+        crate::data::source::reserve_source(&mut contributions, self.panels.len())?;
         for (index, plot) in self.panels.iter().enumerate() {
             let Some(source) = plot else { continue };
-            if source.legend_policy_spec() == crate::LegendPolicy::Hidden {
-                continue;
-            }
-            let data = source.data().with_operation(resources);
-            let mut plot = source.clone();
+            let mut plot = self.cell_visibility(source.clone(), index);
             if let Some(labels) = &self.labels {
                 plot = plot.labels(labels.clone());
             }
             if let Some((_, levels)) = hue_groups.and_then(|groups| {
                 groups
                     .iter()
-                    .find(|(field, _)| Some(field.as_str()) == plot.hue_dimension_key())
+                    .find(|(field, _)| Some(field.as_str()) == plot.categorical_color_field())
             }) {
                 let levels = crate::data::source::collect_source(
                     levels
                         .iter()
                         .map(|level| crate::data::source::copy_source_string(level)),
                 )?;
-                plot = plot.with_global_hue_levels(levels);
+                plot = plot.with_global_color_levels(levels);
             }
             let theme = themes
                 .plot(index)
@@ -1078,21 +1067,25 @@ impl Canvas {
                 .ok_or_else(|| {
                     Error::Render("Canvas point/path guide is missing prepared semantics".into())
                 })?;
-            let mut contribution = inputs.guide_entries(
-                &plot,
-                theme,
-                data,
-                inputs.axes.first().and_then(|(scope, _)| scope.as_deref()),
+            let owner = crate::layout::ComponentAddress::root().child(
+                crate::layout::AddressRole::CanvasCell,
+                u32::try_from(index).map_err(|_| {
+                    Error::Render("Canvas guide contributor address overflow".into())
+                })?,
             )?;
-            crate::decorations::legend::resolve_entries(&plot, &mut contribution)?;
-            crate::data::source::reserve_source(&mut entries, contribution.len())?;
-            entries.extend(contribution);
+            inputs.prepare_discrete_guides(&plot, theme, resources, &owner, false)?;
+            if self.legend_policy == CanvasLegendPolicy::Shared {
+                if let Some(descriptor) = &inputs
+                    .discrete_guides
+                    .get()
+                    .expect("prepared Canvas guide")
+                    .root
+                {
+                    contributions.push(Arc::clone(descriptor));
+                }
+            }
         }
-        let entries =
-            crate::decorations::legend::merge_exact_entries(entries, "shared canvas legend")?;
-        let title = crate::decorations::legend::resolved_title(&entries)?;
-
-        Ok(Some((title, entries.into())))
+        PreparedDiscreteGuide::merge(&contributions, &[], "shared canvas legend")
     }
 
     fn prepare_shared_x(
@@ -1427,14 +1420,15 @@ impl Canvas {
                 self.validate_structure()?;
                 let (mut interiors, shared_x) =
                     self.prepare_interiors(prepared_stage, Some(&themes))?;
-                self.validate_shared_guide_kinds(&interiors)?;
                 let point_path_hue_groups = self.prepared_point_path_hue_groups(&interiors)?;
                 for (index, plot) in self.panels.iter().enumerate() {
                     if let (Some(plot), Some(inputs)) = (plot, interiors[index].as_ref()) {
                         let global_hues = point_path_hue_groups.as_ref().and_then(|groups| {
                             groups
                                 .iter()
-                                .find(|(field, _)| Some(field.as_str()) == plot.hue_dimension_key())
+                                .find(|(field, _)| {
+                                    Some(field.as_str()) == plot.categorical_color_field()
+                                })
                                 .map(|(_, levels)| levels.as_slice())
                         });
                         inputs.validate_categorical_scale(
@@ -1444,12 +1438,13 @@ impl Canvas {
                         )?;
                     }
                 }
-                let discrete_shared_guide = self.prepared_discrete_shared_guide(
+                let discrete_shared_guide = self.prepare_discrete_guides(
                     &themes,
                     &interiors,
                     point_path_hue_groups.as_deref().map(Vec::as_slice),
                     &prepared_stage.operation(),
                 )?;
+                self.validate_shared_guide_kinds(&interiors)?;
                 let continuous_shared_guide =
                     self.prepare_continuous_shared_guide(&themes, &interiors)?;
                 let shared_guide = match (discrete_shared_guide, continuous_shared_guide) {
@@ -1706,26 +1701,21 @@ impl Canvas {
             }
         }
 
-        if let Some(guide) = shared_guide {
+        if let Some(PreparedGuideDescriptor::Discrete(guide)) = shared_guide {
+            guide.append_requirements(
+                &mut requirements,
+                themes.root(),
+                &root.child(crate::layout::AddressRole::CanvasSharedLegend, 0)?,
+                Some(prepared_stage),
+            )?;
+        }
+        if let Some(PreparedGuideDescriptor::Continuous(guide)) = shared_guide {
             let guide_owner = root.child(crate::layout::AddressRole::CanvasSharedLegend, 0)?;
             let title_appearance = &themes.root().typography.guides.legend_title;
             let label_appearance = &themes.root().typography.guides.legend_label;
-            let title = match guide {
-                PreparedGuideDescriptor::Discrete((title, _)) => title.as_str(),
-                PreparedGuideDescriptor::Continuous(guide) => guide.title.as_str(),
-            };
+            let title = guide.title.as_str();
             if !title.is_empty() {
-                let address = guide_owner.child(
-                    match guide {
-                        PreparedGuideDescriptor::Discrete(_) => {
-                            crate::layout::AddressRole::LegendTitle
-                        }
-                        PreparedGuideDescriptor::Continuous(_) => {
-                            crate::layout::AddressRole::GuideTitle
-                        }
-                    },
-                    0,
-                )?;
+                let address = guide_owner.child(crate::layout::AddressRole::GuideTitle, 0)?;
                 push_text_requirement(
                     &mut requirements,
                     address,
@@ -1736,36 +1726,11 @@ impl Canvas {
                     prepared_stage,
                 )?;
             }
-            let (discrete, continuous) = match guide {
-                PreparedGuideDescriptor::Discrete((_, entries)) => (Some(entries), None),
-                PreparedGuideDescriptor::Continuous(guide) => (None, Some(&guide.numeric.labels)),
-            };
-            let labels = discrete
-                .into_iter()
-                .flat_map(|entries| {
-                    entries
-                        .iter()
-                        .map(crate::decorations::legend::LegendEntry::display_label)
-                })
-                .chain(
-                    continuous
-                        .into_iter()
-                        .flat_map(|labels| labels.iter().map(String::as_str)),
-                );
+            let labels = guide.numeric.labels.iter().map(String::as_str);
             for (index, label) in labels.enumerate() {
                 let ordinal = u32::try_from(index)
                     .map_err(|_| Error::Render("shared guide label ordinal overflow".into()))?;
-                let address = guide_owner.child(
-                    match guide {
-                        PreparedGuideDescriptor::Discrete(_) => {
-                            crate::layout::AddressRole::LegendLabel
-                        }
-                        PreparedGuideDescriptor::Continuous(_) => {
-                            crate::layout::AddressRole::GuideLabel
-                        }
-                    },
-                    ordinal,
-                )?;
+                let address = guide_owner.child(crate::layout::AddressRole::GuideLabel, ordinal)?;
                 push_text_requirement(
                     &mut requirements,
                     address,
@@ -1776,10 +1741,7 @@ impl Canvas {
                     prepared_stage,
                 )?;
             }
-            if let Some(missing) = match guide {
-                PreparedGuideDescriptor::Discrete(_) => None,
-                PreparedGuideDescriptor::Continuous(guide) => guide.missing.as_ref(),
-            } {
+            if let Some(missing) = guide.missing.as_ref() {
                 let address =
                     guide_owner.child(crate::layout::AddressRole::GuideMissingBlock, 0)?;
                 push_text_requirement(
@@ -1884,7 +1846,10 @@ impl Canvas {
             if let Some(labels) = &self.labels {
                 plot = plot.labels(labels.clone());
             }
-            let plot = self.cell_visibility(plot, index);
+            let mut plot = self.cell_visibility(plot, index);
+            if self.legend_policy == CanvasLegendPolicy::Shared {
+                plot = plot.with_suppressed_legend();
+            }
             let theme = themes
                 .plot(index)
                 .expect("configured canvas panel has a resolved theme");
@@ -2172,29 +2137,28 @@ impl Canvas {
             plot = self.cell_visibility(plot, index);
             plots.push(Some(plot));
         }
-        let fallback_hues;
-        let hue_groups: &[(String, Vec<String>)] = if self.legend_policy
-            != CanvasLegendPolicy::Shared
-        {
-            &[]
-        } else if let Some(hues) = prepared_scatter_hues {
-            hues
-        } else {
-            fallback_hues = Self::canvas_hue_groups(&plots, full_outer, &themes, children, round)?;
-            &fallback_hues
-        };
+        let hue_groups: &[(String, Vec<String>)] =
+            if self.legend_policy != CanvasLegendPolicy::Shared {
+                &[]
+            } else if let Some(hues) = prepared_scatter_hues {
+                hues
+            } else {
+                return Err(Error::Render(
+                    "Canvas shared color domains were not prepared".into(),
+                ));
+            };
         for slot in &mut plots {
             if let Some(plot) = slot.take() {
-                let levels = hue_groups
-                    .iter()
-                    .find(|(dimension, _)| Some(dimension.as_str()) == plot.hue_dimension_key());
+                let levels = hue_groups.iter().find(|(dimension, _)| {
+                    Some(dimension.as_str()) == plot.categorical_color_field()
+                });
                 let plot = if let Some((_, levels)) = levels {
                     let levels = crate::data::source::collect_source(
                         levels
                             .iter()
                             .map(|level| crate::data::source::copy_source_string(level)),
                     )?;
-                    plot.with_global_hue_levels(levels)
+                    plot.with_global_color_levels(levels)
                 } else {
                     plot
                 };
@@ -2498,13 +2462,12 @@ impl Canvas {
                     }
                 }
                 Some(PreparedGuideDescriptor::Discrete(_)) | None => {
-                    let (title, entries) = prepared
+                    let descriptor = prepared
                         .shared_legend
                         .as_ref()
                         .expect("prepared discrete guide");
                     match Legend::measure_assigned(
-                        title,
-                        Arc::clone(entries),
+                        Arc::clone(descriptor),
                         (
                             available.0,
                             (!prepared.content_sizing).then_some(available.1),
@@ -2814,13 +2777,27 @@ impl Canvas {
             } else {
                 crate::decorations::plan::LegendRole::Suppressed
             };
-            let panel_plan = match children.plan(plot, role, context, None, round, &owner)? {
-                FitOutcome::Measured(result) => result,
-                FitOutcome::Miss(failure) => {
-                    FitFailure::retain_least(&mut child_miss, failure);
-                    continue;
-                }
+            let guide = if role == crate::decorations::plan::LegendRole::Panel {
+                plot.prepared_discrete_guide()?
+                    .map(|descriptor| {
+                        crate::decorations::legend::discrete::DiscreteGuideSlot::new(
+                            descriptor,
+                            &owner,
+                            plot.legend_position_spec(),
+                        )
+                    })
+                    .transpose()?
+            } else {
+                None
             };
+            let panel_plan =
+                match children.plan(plot, role, context, guide.as_ref(), round, &owner)? {
+                    FitOutcome::Measured(result) => result,
+                    FitOutcome::Miss(failure) => {
+                        FitFailure::retain_least(&mut child_miss, failure);
+                        continue;
+                    }
+                };
             if context.fill_content_height {
                 let target = grid_address.child(
                     crate::layout::AddressRole::CanvasCell,
@@ -3168,77 +3145,6 @@ impl Canvas {
         plan.canvas_layout.root_text.draw_retained(backend)
     }
 
-    fn canvas_hue_groups(
-        plots: &[Option<Plot>],
-        panel: PanelBox,
-        themes: &ResolvedCanvasThemes,
-        children: &mut crate::decorations::plan::children::ChildPlans<'_>,
-        round: &crate::layout::kernel::FeedbackRound,
-    ) -> Result<Vec<(String, Vec<String>)>, Error> {
-        let mut groups: Vec<(String, Vec<String>)> = Vec::new();
-        crate::layout::fit::reserve(&mut groups, plots.len(), "Canvas hue groups")?;
-        for (index, plot) in plots.iter().enumerate() {
-            let Some(plot) = plot else { continue };
-
-            let Some(dimension) = plot.hue_dimension_key() else {
-                continue;
-            };
-            let theme = themes
-                .plot(index)
-                .expect("configured canvas panel has a resolved theme");
-            let prepared_scatter = plot
-                .prepared_scatter
-                .as_ref()
-                .and_then(|inputs| {
-                    inputs
-                        .panels
-                        .iter()
-                        .find(|(scope, _)| scope.as_deref() == plot.axis_scope())
-                })
-                .map(|(_, prepared)| prepared);
-            let observed = if prepared_scatter.is_none() {
-                Some(children.canvas_probe(
-                    plot,
-                    panel,
-                    theme,
-                    index,
-                    MeasurementPhase::Hue,
-                    round,
-                )?)
-            } else {
-                None
-            };
-
-            let levels =
-                if let Some((_, levels)) = groups.iter_mut().find(|(name, _)| name == dimension) {
-                    levels
-                } else {
-                    let index = groups.len();
-                    groups.push((
-                        crate::data::source::copy_source_string(dimension)?,
-                        Vec::new(),
-                    ));
-                    &mut groups[index].1
-                };
-            let observed_levels = prepared_scatter
-                .into_iter()
-                .flat_map(crate::plots::scatter::PreparedScatter::hue_levels)
-                .chain(observed.iter().flat_map(|result| {
-                    result
-                        .legend_entries
-                        .iter()
-                        .filter_map(|entry| entry.coordinated_hue_value_for(dimension))
-                }));
-            for level in observed_levels {
-                if !levels.iter().any(|value| value == level) {
-                    crate::data::source::reserve_source(levels, 1)?;
-                    levels.push(crate::data::source::copy_source_string(level)?);
-                }
-            }
-        }
-        Ok(groups)
-    }
-
     #[expect(
         clippy::type_complexity,
         reason = "shared descriptor preparation also retains the exact full-body probes used by frame attempts"
@@ -3249,15 +3155,14 @@ impl Canvas {
         panel: PanelBox,
         children: &mut crate::decorations::plan::children::ChildPlans<'_>,
         round: &crate::layout::kernel::FeedbackRound,
-        prepared_discrete_guide: Option<&PreparedDiscreteGuide>,
+        prepared_discrete_guide: Option<&Arc<PreparedDiscreteGuide>>,
     ) -> Result<
         (
-            Option<PreparedDiscreteGuide>,
+            Option<Arc<PreparedDiscreteGuide>>,
             Vec<Option<Arc<crate::spec::PlotRenderResult>>>,
         ),
         Error,
     > {
-        let mut entries = Vec::new();
         let mut probes = Vec::new();
 
         crate::layout::fit::reserve(&mut probes, plots.len(), "shared guide body probes")?;
@@ -3279,37 +3184,9 @@ impl Canvas {
                 MeasurementPhase::Legend,
                 round,
             )?;
-            if prepared_discrete_guide.is_none()
-                && plot.legend_policy_spec() != crate::LegendPolicy::Hidden
-            {
-                crate::data::source::reserve_source(&mut entries, result.legend_entries.len())?;
-                for entry in &result.legend_entries {
-                    entries.push(entry.clone());
-                }
-            }
             probes[index] = Some(result);
         }
-        if let Some((title, entries)) = prepared_discrete_guide {
-            if entries.is_empty() {
-                return Ok((None, probes));
-            }
-
-            let title = crate::data::source::copy_source_string(title)?;
-            return Ok((Some((title, Arc::clone(entries))), probes));
-        }
-        let entries =
-            crate::decorations::legend::merge_exact_entries(entries, "shared canvas legend")?;
-        if entries.is_empty() {
-            Ok((None, probes))
-        } else {
-            Ok((
-                Some((
-                    crate::decorations::legend::resolved_title(&entries)?,
-                    entries.into(),
-                )),
-                probes,
-            ))
-        }
+        Ok((prepared_discrete_guide.cloned(), probes))
     }
 }
 

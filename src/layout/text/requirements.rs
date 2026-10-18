@@ -891,6 +891,32 @@ impl PreparedTextRequirement {
                 prepared_stage.as_deref_mut(),
             )?;
         }
+        if plot.legend_policy_spec() != crate::LegendPolicy::Hidden {
+            if let Some(interiors) = interiors {
+                let guides = interiors.discrete_guides.get().ok_or_else(|| {
+                    Error::Render("discrete guide font census requires prepared semantics".into())
+                })?;
+                if let Some(guide) = &guides.root {
+                    let guide_parent =
+                        if plot.has_facets() || base.leaf_role() == AddressRole::CanvasCell {
+                            base.clone()
+                        } else {
+                            base.child(AddressRole::PlotBody, 0)?
+                        };
+                    let role = if kind == PlotKind::Matrix {
+                        AddressRole::InsideGuide
+                    } else {
+                        crate::decorations::legend::address_role(plot.legend_position_spec())
+                    };
+                    guide.append_requirements(
+                        requirements,
+                        theme,
+                        &guide_parent.child(role, 0)?,
+                        prepared_stage.as_deref_mut(),
+                    )?;
+                }
+            }
+        }
         push_deferred_plot_requirements(
             interiors,
             requirements,
@@ -939,7 +965,6 @@ fn push_deferred_plot_requirements(
     filter_point_label_y_to_limits: bool,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), Error> {
-    use crate::data::DataColumn;
     use crate::layout::kernel::AddressRole;
 
     let body_address = prepared_address_child(
@@ -996,188 +1021,6 @@ fn push_deferred_plot_requirements(
                         label,
                         &[],
                         &appearance,
-                        prepared_stage.as_deref_mut(),
-                    )?;
-                }
-            }
-        }
-        if let Some(label) = layer.legend_label_text() {
-            if plot.legend_policy_spec() != crate::LegendPolicy::Hidden {
-                let (_, label) =
-                    crate::decorations::legend::GuideEntryIdentity::supplemental(label)?
-                        .resolved_text(plot)?;
-                push_deferred_body(
-                    requirements,
-                    &body_address,
-                    &mut body_index,
-                    label,
-                    &[],
-                    &theme.typography.guides.legend_label,
-                    prepared_stage.as_deref_mut(),
-                )?;
-            }
-        }
-    }
-
-    if plot_data_legend_is_visible(plot, kind) {
-        for source in legend_title_census(plot, kind)? {
-            push_deferred_body(
-                requirements,
-                &body_address,
-                &mut body_index,
-                source,
-                &[],
-                &theme.typography.guides.legend_title,
-                prepared_stage.as_deref_mut(),
-            )?;
-        }
-        if kind == PlotKind::HorizontalBar && plot.colors_by_sign() {
-            let bars = interiors
-                .and_then(|inputs| inputs.bars.as_deref())
-                .ok_or_else(|| {
-                    Error::Render("signed Bar guide census requires prepared bars".into())
-                })?;
-            for decreasing in [false, true] {
-                if bars.panels.iter().any(|(_, marks)| {
-                    marks
-                        .bars
-                        .iter()
-                        .any(|bar| (bar.end < bar.start) == decreasing)
-                }) {
-                    push_deferred_body(
-                        requirements,
-                        &body_address,
-                        &mut body_index,
-                        if decreasing {
-                            "Decreasing"
-                        } else {
-                            "Nondecreasing"
-                        },
-                        &[],
-                        &theme.typography.guides.legend_label,
-                        prepared_stage.as_deref_mut(),
-                    )?;
-                }
-            }
-        }
-        for column in plot.aligned_columns() {
-            if kind == PlotKind::HorizontalBar && plot.colors_by_sign() {
-                continue;
-            }
-            if let DataColumn::Category(values) = column {
-                if !legend_dimension_is_visible(plot, kind, values.name()) {
-                    continue;
-                }
-                push_deferred_body(
-                    requirements,
-                    &body_address,
-                    &mut body_index,
-                    plot.resolve_label(values.name())?,
-                    &[],
-                    &theme.typography.guides.legend_title,
-                    prepared_stage.as_deref_mut(),
-                )?;
-                let levels = if matches!(kind, PlotKind::Scatter | PlotKind::Marginal)
-                    && Some(values.name()) == plot.hue_name()
-                {
-                    let family = if kind == PlotKind::Scatter {
-                        "scatter"
-                    } else {
-                        "marginal"
-                    };
-                    let x = plot
-                        .x_col()
-                        .ok_or_else(|| Error::Data(format!("{family}: x column not set")))?;
-                    let y = plot
-                        .y_col()
-                        .ok_or_else(|| Error::Data(format!("{family}: y column not set")))?;
-                    let hue = plot
-                        .hue_col()
-                        .ok_or_else(|| Error::Data(format!("{family}: hue column not set")))?;
-                    if kind == PlotKind::Scatter {
-                        Cow::Owned(crate::data::observed_levels_for_finite_pairs(
-                            plot.data(),
-                            x,
-                            y,
-                            hue,
-                            "scatter",
-                        )?)
-                    } else {
-                        Cow::Owned(crate::data::observed_levels_for_retained_finite_pairs(
-                            plot.data(),
-                            x,
-                            y,
-                            hue,
-                            "marginal",
-                        )?)
-                    }
-                } else {
-                    Cow::Borrowed(values.levels())
-                };
-                for value in levels.iter() {
-                    push_deferred_body(
-                        requirements,
-                        &body_address,
-                        &mut body_index,
-                        plot.resolve_label(value)?,
-                        &[],
-                        &theme.typography.guides.legend_label,
-                        prepared_stage.as_deref_mut(),
-                    )?;
-                }
-            }
-        }
-        if legend_uses_pair_identity(plot, kind) {
-            push_deferred_body(
-                requirements,
-                &body_address,
-                &mut body_index,
-                " × , ",
-                &[],
-                &theme.typography.guides.legend_label,
-                prepared_stage.as_deref_mut(),
-            )?;
-        }
-        if kind == PlotKind::Regression
-            && matches!(plot.legend_policy_spec(), crate::LegendPolicy::Visible(_))
-        {
-            for source in ["Observations", plot.regression_band_spec().legend_label()] {
-                push_deferred_body(
-                    requirements,
-                    &body_address,
-                    &mut body_index,
-                    source,
-                    &[],
-                    &theme.typography.guides.legend_label,
-                    prepared_stage.as_deref_mut(),
-                )?;
-            }
-        }
-        if let Some(endpoints) = plot.dumbbell_endpoints_spec() {
-            for source in [endpoints.left_label(), endpoints.right_label()] {
-                push_deferred_body(
-                    requirements,
-                    &body_address,
-                    &mut body_index,
-                    source,
-                    &[],
-                    &theme.typography.guides.legend_label,
-                    prepared_stage.as_deref_mut(),
-                )?;
-            }
-        }
-        if let Some(input) = plot.raincloud_geometry_input() {
-            let mut hues = Vec::new();
-            for hue in input.groups.iter().filter_map(|group| group.hue.as_deref()) {
-                if !hues.contains(&hue) {
-                    hues.push(hue);
-                    push_deferred_body(
-                        requirements,
-                        &body_address,
-                        &mut body_index,
-                        plot.resolve_label(hue)?,
-                        &[],
-                        &theme.typography.guides.legend_label,
                         prepared_stage.as_deref_mut(),
                     )?;
                 }
@@ -1454,115 +1297,6 @@ fn point_layer_row_is_visible(
                     .limits
                     .is_none_or(|limits| y >= limits.0 && y <= limits.1))
     })
-}
-
-fn plot_data_legend_is_visible(plot: &Plot, kind: PlotKind) -> bool {
-    if plot.legend_policy_spec() == crate::LegendPolicy::Hidden {
-        return false;
-    }
-    if kind == PlotKind::HorizontalBar && plot.colors_by_sign() {
-        return true;
-    }
-    match kind {
-        PlotKind::Scatter
-        | PlotKind::Density
-        | PlotKind::Bar
-        | PlotKind::HorizontalBar
-        | PlotKind::StackedBar
-        | PlotKind::StackedHorizontalBar
-        | PlotKind::Boxplot
-        | PlotKind::Violin
-        | PlotKind::Raincloud
-        | PlotKind::Marginal
-        | PlotKind::Matrix => plot.hue_dimension_key().is_some(),
-        PlotKind::Line => {
-            plot.hue_name().is_some()
-                || plot
-                    .point_layers()
-                    .iter()
-                    .any(|layer| layer.legend_label_text().is_some())
-        }
-        PlotKind::Trajectory => plot.hue_name().is_some(),
-        PlotKind::LinePath => {
-            plot.hue_name().is_some()
-                && (plot.markers_visible()
-                    || plot.line_path_style_spec() == crate::LinePathStyle::Hue)
-        }
-        PlotKind::Interaction => {
-            plot.hue_name().is_some() || plot.interaction_styles_spec().is_some()
-        }
-        PlotKind::Dumbbell => true,
-        PlotKind::Regression => {
-            matches!(plot.legend_policy_spec(), crate::LegendPolicy::Visible(_))
-        }
-        PlotKind::Histogram
-        | PlotKind::Qq
-        | PlotKind::PointInterval
-        | PlotKind::Coefficient
-        | PlotKind::Forest
-        | PlotKind::Heatmap
-        | PlotKind::Beeswarm
-        | PlotKind::Waterfall => false,
-    }
-}
-
-fn legend_dimension_is_visible(plot: &Plot, kind: PlotKind, name: &str) -> bool {
-    if kind == PlotKind::LinePath && plot.line_path_style_spec() == crate::LinePathStyle::Hue {
-        Some(name) == plot.group_name() || Some(name) == plot.hue_name()
-    } else {
-        Some(name) == plot.hue_dimension_key()
-            || (kind == PlotKind::Interaction
-                && plot.interaction_styles_spec().is_some()
-                && Some(name) == plot.group_name())
-            || (legend_uses_pair_identity(plot, kind) && Some(name) == plot.group_name())
-    }
-}
-
-fn legend_uses_pair_identity(plot: &Plot, kind: PlotKind) -> bool {
-    (matches!(
-        kind,
-        PlotKind::Density
-            | PlotKind::Line
-            | PlotKind::Interaction
-            | PlotKind::Marginal
-            | PlotKind::Matrix
-    ) || (kind == PlotKind::LinePath && plot.line_path_style_spec() == crate::LinePathStyle::Hue))
-        && matches!(
-            (plot.group_name(), plot.hue_name()),
-            (Some(group), Some(hue)) if group != hue
-        )
-}
-
-fn legend_title_census(
-    plot: &Plot,
-    kind: PlotKind,
-) -> Result<impl Iterator<Item = Cow<'_, str>>, Error> {
-    let sources = if kind == PlotKind::HorizontalBar && plot.colors_by_sign() {
-        [Some(Cow::Borrowed("Change")), None, None]
-    } else if legend_uses_pair_identity(plot, kind) {
-        [
-            Some(Cow::Owned(plot.resolve_label(
-                plot.group_name().expect("pair identity has a group"),
-            )?)),
-            Some(Cow::Owned(plot.resolve_label(
-                plot.hue_name().expect("pair identity has a hue"),
-            )?)),
-            Some(Cow::Borrowed(" × ")),
-        ]
-    } else {
-        let literal = matches!(kind, PlotKind::Dumbbell | PlotKind::Regression)
-            || (kind == PlotKind::Line && plot.hue_dimension_key().is_none());
-        [
-            Some(if literal {
-                Cow::Borrowed("series")
-            } else {
-                Cow::Owned(plot.resolve_label(plot.legend_title_key())?)
-            }),
-            None,
-            None,
-        ]
-    };
-    Ok(sources.into_iter().flatten())
 }
 
 fn push_present(
@@ -2532,6 +2266,15 @@ mod tests {
                 canonical::named_stack(&["Dark contrast font"]);
             theme.typography.annotations.contrast.light.font_size = 19;
             theme.typography.annotations.contrast.dark.font_size = 9;
+            inputs
+                .prepare_discrete_guides(
+                    &plot,
+                    &theme,
+                    &resources,
+                    &ComponentAddress::root(),
+                    false,
+                )
+                .unwrap();
             let requirements = with_prepared_stage(|stage| {
                 foundational_plot_requirements(
                     Some(&inputs),
@@ -2601,6 +2344,9 @@ mod tests {
             canonical::named_stack(&["Dark missing row"]);
         theme.typography.annotations.contrast.light.font_size = 39;
         theme.typography.annotations.contrast.dark.font_size = 9;
+        inputs
+            .prepare_discrete_guides(&plot, &theme, &resources, &ComponentAddress::root(), false)
+            .unwrap();
         for (backdrop, expected) in [
             (OpaqueColor::rgb(0, 0, 0), "Light missing row"),
             (OpaqueColor::rgb(255, 255, 255), "Dark missing row"),
@@ -2671,6 +2417,9 @@ mod tests {
             canonical::named_stack(&["Selected dark contrast"]);
         theme.typography.annotations.contrast.light.font_size = 39;
         theme.typography.annotations.contrast.dark.font_size = 9;
+        inputs
+            .prepare_discrete_guides(&plot, &theme, &resources, &ComponentAddress::root(), false)
+            .unwrap();
         let selected_stack = |inputs: &crate::layout::interior::PreparedInteriorInputs| {
             let requirements = with_prepared_stage(|stage| {
                 foundational_plot_requirements(
@@ -2773,6 +2522,9 @@ mod tests {
             canonical::named_stack(&["Estimate detail only"]);
         theme.typography.annotations.estimate_detail.font_size = 20;
         theme.typography.annotations.estimate_detail.paint = crate::theme::Color::rgb(5, 7, 9);
+        inputs
+            .prepare_discrete_guides(&plot, &theme, &resources, &ComponentAddress::root(), false)
+            .unwrap();
         let requirements = with_prepared_stage(|stage| {
             foundational_plot_requirements(
                 Some(&inputs),
@@ -2847,6 +2599,13 @@ mod tests {
                         &plot,
                         &stage.operation(),
                         Some(&crate::theme::Theme::publication()),
+                    )?;
+                    inputs.prepare_discrete_guides(
+                        &plot,
+                        &theme,
+                        &stage.operation(),
+                        &ComponentAddress::root(),
+                        false,
                     )?;
                     let requirements = foundational_plot_requirements(
                         Some(&inputs),

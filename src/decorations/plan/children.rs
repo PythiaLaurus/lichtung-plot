@@ -115,7 +115,7 @@ impl MeasurementPhase {
 struct Panel {
     inputs: Inputs,
     role: LegendRole,
-    legend_entries: Option<Arc<[crate::decorations::legend::LegendEntry]>>,
+    discrete_guide: Option<crate::decorations::legend::discrete::DiscreteGuideSlot>,
     result: Arc<PanelPlan>,
     feedback: ChildFeedback,
 }
@@ -245,7 +245,7 @@ impl<'a> ChildPlans<'a> {
         plot: &Plot,
         role: LegendRole,
         context: PlotRenderContext<'_>,
-        legend_entries: Option<&Arc<[crate::decorations::legend::LegendEntry]>>,
+        discrete_guide: Option<&crate::decorations::legend::discrete::DiscreteGuideSlot>,
         round: &mut FeedbackRound,
         owner: &ComponentAddress,
     ) -> Result<FitOutcome<Arc<PanelPlan>>, Error> {
@@ -254,25 +254,7 @@ impl<'a> ChildPlans<'a> {
         if reuse_enabled() {
             for entry in &self.panels {
                 if entry.role == role
-                    && match (
-                        entry.legend_entries.as_deref(),
-                        legend_entries.map(AsRef::as_ref),
-                    ) {
-                        (None, None) => true,
-                        (Some(a), Some(b)) => {
-                            let mut equal = a.len() == b.len();
-                            if equal {
-                                for (a, b) in a.iter().zip(b) {
-                                    if !a.same_child_input(b) {
-                                        equal = false;
-                                        break;
-                                    }
-                                }
-                            }
-                            equal
-                        }
-                        _ => false,
-                    }
+                    && entry.discrete_guide.as_ref() == discrete_guide
                     && entry.inputs.matches(plot, context, owner, round)?
                 {
                     #[cfg(test)]
@@ -294,7 +276,7 @@ impl<'a> ChildPlans<'a> {
             plot.kind(),
             role,
             context,
-            legend_entries.map(AsRef::as_ref),
+            discrete_guide,
             round,
             owner,
         )? {
@@ -312,7 +294,7 @@ impl<'a> ChildPlans<'a> {
                 self.panels.push(Panel {
                     inputs,
                     role,
-                    legend_entries: legend_entries.map(Arc::clone),
+                    discrete_guide: discrete_guide.cloned(),
                     result: Arc::clone(&result),
                     feedback,
                 });
@@ -445,7 +427,7 @@ mod tests {
                     produced += 1;
                     Ok(FitOutcome::Measured(PlotRenderResult::new(
                         crate::layout::Layout::envelope(panel),
-                        Vec::new(),
+                        None,
                     )))
                 };
                 let first = crate::layout::fit::measured(children.measure(
@@ -584,7 +566,7 @@ mod tests {
                             crate::layout::Layout::envelope(crate::layout::PanelBox::new(
                                 80.0, 770.0, 60.0, 570.0,
                             )),
-                            Vec::new(),
+                            None,
                         )))
                     };
                     let first = crate::layout::fit::measured(children.measure(
@@ -676,7 +658,7 @@ mod tests {
                     children.panels.push(Panel {
                         inputs: Inputs::new(&source, context, &owner, round)?,
                         role: LegendRole::Suppressed,
-                        legend_entries: None,
+                        discrete_guide: None,
                         result: Arc::new(PanelPlan {
                             frame_box: context.panel,
                             panel_box: context.panel,
@@ -684,7 +666,7 @@ mod tests {
                                 crate::layout::Layout::envelope(crate::layout::PanelBox::new(
                                     80.0, 770.0, 60.0, 570.0,
                                 )),
-                                Vec::new(),
+                                None,
                             ),
                             legend: None,
                             planned_x_limits: None,

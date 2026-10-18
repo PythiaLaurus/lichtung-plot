@@ -71,8 +71,8 @@ mod geometry_tests {
         .erase();
         let operation = crate::font::canonical::OperationContext::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
-        let chart = inputs.attach(source).unwrap();
         let mut theme = crate::theme::Theme::publication().resolve().unwrap();
+        let chart = inputs.attach_with_guides_for_test(source, &theme).unwrap();
         let default = BodyGeometry::new(&theme);
         assert_eq!(
             [
@@ -810,7 +810,7 @@ pub(crate) fn measure(
             );
         }
     }
-    let mut result = PlotRenderResult::new(layout, Vec::new());
+    let mut result = PlotRenderResult::new(layout, None);
     result.numeric_presentation = Some(selected_totals.numeric.clone());
     result.y_domain = crate::spec::AxisDomain::Categorical;
     result.y_tick_keys =

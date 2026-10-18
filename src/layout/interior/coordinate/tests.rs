@@ -80,8 +80,8 @@ fn prepared_intrinsic_hits_reuse_the_summary_without_reanalysis() {
         0
     );
     let theme = crate::Theme::publication().resolve().unwrap();
-    inputs.prepare_intrinsics(&source, &theme).unwrap();
-    let plot = inputs.attach(source).unwrap();
+    let plot = inputs.attach_with_guides_for_test(source, &theme).unwrap();
+    inputs.prepare_intrinsics(&plot, &theme).unwrap();
     let summary = Intrinsics::prepared(&plot, &theme).unwrap();
     measurements::start();
     for width in [400.0, 580.0] {
@@ -141,7 +141,18 @@ fn native_root_producers_obey_eighth_round_and_cycle_limits_under_parent_feedbac
             let root = crate::layout::plan_exact_root(
                 640,
                 480,
-                |stage| crate::plots::shared_x::prepare_plot(&source, &stage.operation(), None),
+                |stage| {
+                    let inputs =
+                        crate::plots::shared_x::prepare_plot(&source, &stage.operation(), None)?;
+                    inputs.prepare_discrete_guides(
+                        &source,
+                        &theme,
+                        &stage.operation(),
+                        &owner,
+                        false,
+                    )?;
+                    Ok(inputs)
+                },
                 |inputs, assigned, round| {
                     let (width, height) = assigned.dimensions()?;
                     let plot = inputs
@@ -260,7 +271,7 @@ fn native_multiline_axis_gutters_cannot_consume_root_caption_or_title_reserves()
         let theme = crate::Theme::publication().resolve().unwrap();
         let inputs =
             crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
-        let plot = inputs.attach(source).unwrap();
+        let plot = inputs.attach_with_guides_for_test(source, &theme).unwrap();
         let canvas = canvas_layout(&plot, &theme).unwrap();
         let plan = plan_panel_for_test(
             &plot,
@@ -356,7 +367,7 @@ fn native_narrow_root_selects_actual_ticks_and_automatic_painted_domains() {
         let theme = crate::Theme::publication().resolve().unwrap();
         let inputs =
             crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
-        let plot = inputs.attach(source).unwrap();
+        let plot = inputs.attach_with_guides_for_test(source, &theme).unwrap();
         let canvas = canvas_layout(&plot, &theme).unwrap();
         let endpoint = fit::intrinsic_widths(
             &theme,
@@ -424,7 +435,18 @@ fn native_absolute_gutter_feedback_contracts_independently_of_multiline_caption(
             let root = crate::layout::plan_exact_root(
                 source.sizing_request().requested_dimensions().0,
                 source.sizing_request().requested_dimensions().1,
-                |stage| crate::plots::shared_x::prepare_plot(&source, &stage.operation(), None),
+                |stage| {
+                    let inputs =
+                        crate::plots::shared_x::prepare_plot(&source, &stage.operation(), None)?;
+                    inputs.prepare_discrete_guides(
+                        &source,
+                        &theme,
+                        &stage.operation(),
+                        &owner,
+                        false,
+                    )?;
+                    Ok(inputs)
+                },
                 |inputs, assigned, round| {
                     if first && seeded {
                         round.seed_insets_for_test(&owner, [180.0, 20.0, 160.0, 20.0])?;
@@ -484,7 +506,7 @@ fn native_hard_title_spans_and_category_slots_come_from_shaped_text() {
     {
         let inputs =
             crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
-        let plot = inputs.attach(source).unwrap();
+        let plot = inputs.attach_with_guides_for_test(source, &theme).unwrap();
         let minimum = Intrinsics::prepared(&plot, &theme).unwrap().minimum(&plot);
         let is_category = plot.prepared_axis_inputs().unwrap().display_categories[0]
             .as_ref()
@@ -691,7 +713,7 @@ fn every_native_route_uses_exact_assigned_projection_and_frozen_axes_without_leg
         let inputs =
             crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
         assert!(inputs.route.is_coordinate());
-        let plot = inputs.attach(source).unwrap();
+        let plot = inputs.attach_with_guides_for_test(source, &theme).unwrap();
         for panel in [
             PanelBox::new(80.25, 550.75, 70.5, 410.25),
             PanelBox::new(30.0, 810.0, 50.0, 600.0),
@@ -742,7 +764,7 @@ fn every_native_route_reports_intrinsic_fit_before_mark_projection_or_backend_cr
         let source = source.x_label("").y_label("");
         let inputs =
             crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
-        let plot = inputs.attach(source).unwrap();
+        let plot = inputs.attach_with_guides_for_test(source, &theme).unwrap();
         let axes = Intrinsics::prepared(&plot, &theme).unwrap().minimum(&plot);
         let minimum = plot.intrinsic_body_minimum(&theme).unwrap();
         assert!(minimum.0 >= axes.0 && minimum.1 >= axes.1);
@@ -791,8 +813,8 @@ fn exact_scatter_marks_fit_below_the_retired_generic_panel_floor() {
     .erase();
     let inputs =
         crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
-    let plot = inputs.attach(source).unwrap();
     let theme = crate::Theme::publication().resolve().unwrap();
+    let plot = inputs.attach_with_guides_for_test(source, &theme).unwrap();
     let hard = plot.intrinsic_body_minimum(&theme).unwrap();
     assert!(hard.0 < 80.0 && hard.1 < 60.0);
     let panel = PanelBox::new(5.0, 75.0, 5.0, 63.0);
@@ -814,8 +836,8 @@ fn categorical_trajectory_retains_bottom_slots_raw_and_display_identity() {
     .erase();
     let inputs =
         crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
-    let plot = inputs.attach(source).unwrap();
     let theme = crate::Theme::publication().resolve().unwrap();
+    let plot = inputs.attach_with_guides_for_test(source, &theme).unwrap();
     let panel = PanelBox::new(30.0, 810.0, 50.0, 600.0);
     let selected = plot
         .measure_selected_interior(PlotRenderContext::new(plot.data(), panel, &theme))
@@ -940,8 +962,8 @@ fn native_exact_sources_are_indivisible_and_missing_axes_never_fall_back() {
         if axes.categories[1].is_none() {
             axes.specs[1].exact_ticks = Some(vec![crate::layout::AxisTick::new(2.0, "")]);
         }
-        let plot = inputs.attach(source).unwrap();
         let theme = crate::Theme::publication().resolve().unwrap();
+        let plot = inputs.attach_with_guides_for_test(source, &theme).unwrap();
         let context =
             PlotRenderContext::new(plot.data(), PanelBox::new(30.0, 610.0, 50.0, 440.0), &theme);
         let selected = plot.measure_selected_interior(context).unwrap();
@@ -1009,8 +1031,8 @@ fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks()
         if axes.categories[1].is_none() {
             axes.specs[1].exact_ticks = Some(vec![crate::layout::AxisTick::new(2.0, "")]);
         }
-        let plot = inputs.attach(source).unwrap();
         let theme = crate::Theme::publication().resolve().unwrap();
+        let plot = inputs.attach_with_guides_for_test(source, &theme).unwrap();
         let scope = fit::FitScope::new(
             &crate::layout::ComponentAddress::root()
                 .child(crate::layout::AddressRole::PlotBody, 0)
@@ -1085,6 +1107,13 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes() {
                 |stage| {
                     let inputs =
                         crate::plots::shared_x::prepare_plot(&source, &stage.operation(), None)?;
+                    inputs.prepare_discrete_guides(
+                        &source,
+                        &theme,
+                        &stage.operation(),
+                        &owner,
+                        false,
+                    )?;
                     let requirements = crate::layout::foundational_plot_requirements(
                         Some(&inputs),
                         &source,

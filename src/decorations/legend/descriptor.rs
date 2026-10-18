@@ -1,20 +1,18 @@
 //! Font-independent shared continuous guide semantics. The containing frame
 //! measures one assigned guide only after semantic compatibility is established.
 
-use crate::decorations::legend::LegendEntry;
+pub(crate) use super::discrete::PreparedDiscreteGuide;
 use crate::numeric::{format::NumericFormat, set::FormattedSet};
 use crate::render::backend::GradientStop;
 use crate::theme::{Color, ColorStop, ContinuousColorScale};
 use crate::{Error, Plot};
 use std::sync::Arc;
 
-pub(crate) type PreparedDiscreteGuide = (String, Arc<[LegendEntry]>);
-
 /// The sole prepared Canvas guide descriptor. Placement and geometry are owned
 /// by its containing frame and never selected during semantic preparation.
 #[derive(Debug)]
 pub(crate) enum PreparedGuideDescriptor {
-    Discrete(PreparedDiscreteGuide),
+    Discrete(Arc<PreparedDiscreteGuide>),
     Continuous(Arc<ContinuousDescriptor>),
 }
 

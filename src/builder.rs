@@ -513,6 +513,8 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     interaction_styles: Option<Vec<crate::InteractionStyle>>,
     categorical_color_scale: Option<crate::theme::CategoricalColorScale>,
     render_scope: Option<String>,
+    pub(crate) prepared_discrete_guides:
+        Option<Arc<crate::decorations::legend::discrete::PreparedDiscreteGuides>>,
     pub(crate) prepared_axes:
         std::sync::Arc<Vec<(Option<String>, crate::plots::shared_x::PreparedAxes)>>,
     pub(crate) prepared_matrix_axes:
@@ -586,6 +588,8 @@ pub(crate) struct ComposedInputs {
     suppress_continuous_guide: bool,
     root_size: crate::layout::RootSize,
     numeric: crate::numeric::inputs::NumericInputs,
+    discrete_guide: Option<Arc<crate::decorations::legend::discrete::PreparedDiscreteGuide>>,
+    guides_prepared: bool,
 }
 
 impl Plot<crate::kind::Any> {
@@ -652,6 +656,7 @@ impl Plot<crate::kind::Any> {
             interaction_styles: None,
             categorical_color_scale: None,
             render_scope: None,
+            prepared_discrete_guides: None,
             prepared_axes: std::sync::Arc::new(Vec::new()),
             prepared_scatter: None,
             prepared_qq: None,
@@ -1080,6 +1085,7 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             subtitle_alignment,
             prepared_axes,
             prepared_matrix_axes,
+            prepared_discrete_guides,
             prepared_scatter,
             prepared_line,
             prepared_histogram,
@@ -1114,6 +1120,7 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             prepared_line,
             prepared_axes,
             prepared_matrix_axes,
+            prepared_discrete_guides,
             title_alignment,
             subtitle_alignment,
             input,

@@ -952,6 +952,18 @@ impl<K: crate::kind::Marker> Plot<K> {
         })
     }
 
+    pub(crate) fn categorical_color_field(&self) -> Option<&str> {
+        if self.colors_by_sign() {
+            None
+        } else {
+            self.hue_dimension_key().or_else(|| {
+                (self.kind() == crate::PlotKind::Interaction)
+                    .then(|| self.group_name())
+                    .flatten()
+            })
+        }
+    }
+
     /// Borrow x-axis scale configuration.
     #[must_use]
     pub(crate) fn x_axis_spec(&self) -> &AxisSpec {
@@ -963,6 +975,19 @@ impl<K: crate::kind::Marker> Plot<K> {
             .iter()
             .find(|(scope, _)| scope == &self.render_scope)
             .map(|(_, axes)| axes)
+    }
+
+    pub(crate) fn prepared_discrete_guide(
+        &self,
+    ) -> Result<
+        Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedDiscreteGuide>>,
+        Error,
+    > {
+        self.prepared_discrete_guides
+            .as_ref()
+            .ok_or_else(|| Error::Render("discrete guide semantics were not prepared".into()))?
+            .for_scope(self.axis_scope())
+            .map(Option::<&_>::cloned)
     }
 
     #[cfg(test)]

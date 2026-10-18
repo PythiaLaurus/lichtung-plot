@@ -8,7 +8,7 @@ use crate::data::{
 };
 use crate::Error;
 
-use crate::decorations::legend::{GuideEntryIdentity, LegendEntry};
+use crate::decorations::legend::{GuideEntryIdentity, GuideSourceKey};
 use crate::render::backend::{FillStyle, PointStyle};
 use crate::spec::{
     BarInput, BarSource, BarSpacing, ConfidenceIntervalAlgorithm, ErrorBarKind, PercentileInterval,
@@ -1384,14 +1384,14 @@ fn sort_single_values(prepared: &mut PreparedBars, sort: ValueSort) -> Result<()
 }
 
 /// Legend entries for positioned series.
-pub(crate) fn legend_entries(
+pub(crate) fn guide_sources(
     prepared: &PreparedBars,
     chart: &Plot,
     theme: &ResolvedTheme,
 
     colors: &CategoryColors,
     accents: &AccentColors,
-) -> Result<Vec<LegendEntry>, Error> {
+) -> Result<Vec<GuideSourceKey>, Error> {
     if chart.colors_by_sign() {
         let mut present = [false; 2];
         for bar in &prepared.bars {
@@ -1401,7 +1401,7 @@ pub(crate) fn legend_entries(
         crate::data::source::reserve_source(&mut entries, 2)?;
         for decreasing in [false, true] {
             if present[usize::from(decreasing)] {
-                entries.push(LegendEntry::fill(
+                entries.push(GuideSourceKey::fill(
                     GuideEntryIdentity::bar_sign(decreasing),
                     theme
                         .marks
@@ -1416,7 +1416,7 @@ pub(crate) fn legend_entries(
     }
 
     crate::data::source::collect_source(prepared.hues.iter().map(|label| {
-        Ok(LegendEntry::fill(
+        Ok(GuideSourceKey::fill(
             chart.point_legend_identity(label)?,
             theme
                 .marks

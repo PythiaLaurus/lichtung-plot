@@ -22,9 +22,7 @@ fn measure_layer(
     .y_limits(-2.0, 4.0)
     .point_layer(layer)
     .erase();
-    let operation = crate::font::canonical::OperationContext::new();
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
-    let chart = inputs.attach(source).unwrap();
+    let chart = crate::plots::shared_x::prepare_panel_for_test(&source, theme).unwrap();
     chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
@@ -66,9 +64,18 @@ fn exact_supplemental_color_and_alpha_edits_freeze_identically_in_either_order()
     let captured =
         crate::render::primitives::CanonicalScatter::new(points, style, 400, None).unwrap();
     assert_eq!(captured.color, paint.with_alpha(131));
-    assert_eq!(color_then_alpha.legend_entries.len(), 1);
-    assert!(
-        color_then_alpha.legend_entries[0].same_child_input(&alpha_then_color.legend_entries[0])
+    assert_eq!(
+        color_then_alpha
+            .discrete_guide
+            .as_ref()
+            .unwrap()
+            .counts
+            .entries,
+        1
+    );
+    assert_eq!(
+        color_then_alpha.discrete_guide,
+        alpha_then_color.discrete_guide
     );
 }
 
@@ -89,9 +96,6 @@ fn supplemental_defaults_and_explicit_alpha_keep_label_paint_independent_and_gui
     .point_layer(automatic)
     .point_layer(alpha)
     .erase();
-    let operation = crate::font::canonical::OperationContext::new();
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
-    let chart = inputs.attach(source).unwrap();
     let mut theme = crate::Theme::publication().resolve().unwrap();
     let defaults = theme
         .marks
@@ -121,6 +125,7 @@ fn supplemental_defaults_and_explicit_alpha_keep_label_paint_independent_and_gui
         .unwrap()
         .with_weight(crate::TextWeight::Semibold)
         .unwrap();
+    let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
     let measured = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
@@ -160,11 +165,13 @@ fn supplemental_defaults_and_explicit_alpha_keep_label_paint_independent_and_gui
         placement.origin,
         crate::render::backend::PlannedTextOrigin::Middle
     );
-    assert_eq!(measured.legend_entries.len(), 2);
-    let mut expected = vec![LegendEntry::point(
+    let guide = measured.discrete_guide.as_ref().unwrap();
+    assert_eq!(guide.counts.entries, 2);
+    let expected = GuideSourceKey::point(
         crate::decorations::legend::GuideEntryIdentity::supplemental("Alpha").unwrap(),
         alpha_style.clone(),
-    )];
-    crate::decorations::legend::resolve_entries(&chart, &mut expected).unwrap();
-    assert!(measured.legend_entries[1].same_child_input(&expected[0]));
+    );
+    assert_eq!(guide.sections[0].entries[1].identity, expected.identity);
+    assert_eq!(guide.sections[0].entries[1].key, expected.key);
+    assert_eq!(guide.sections[0].entries[1].display_label.as_ref(), "Alpha");
 }

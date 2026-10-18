@@ -27,8 +27,8 @@ impl GuidedPreference {
 
     pub(crate) fn preference(&self, theme: &ResolvedTheme) -> Result<(f64, f64), Error> {
         match &self.descriptor {
-            PreparedGuideDescriptor::Discrete((title, entries)) => {
-                crate::decorations::legend::Legend::natural_preference(title, entries, theme)
+            PreparedGuideDescriptor::Discrete(descriptor) => {
+                crate::decorations::legend::Legend::natural_preference(descriptor, theme)
             }
             PreparedGuideDescriptor::Continuous(descriptor) => {
                 continuous_preference(descriptor, theme, &FitScope::root())
@@ -43,10 +43,9 @@ impl GuidedPreference {
         scope: &FitScope,
     ) -> Result<(f64, f64), Error> {
         let outcome = match &self.descriptor {
-            PreparedGuideDescriptor::Discrete((title, entries)) => {
+            PreparedGuideDescriptor::Discrete(descriptor) => {
                 let legend = fit::measured(crate::decorations::legend::Legend::measure_assigned(
-                    title,
-                    std::sync::Arc::clone(entries),
+                    std::sync::Arc::clone(descriptor),
                     (width, None),
                     self.horizontal(),
                     false,
@@ -126,9 +125,6 @@ pub(crate) fn guided_preference(
     inputs: &super::PreparedInteriorInputs,
     theme: &ResolvedTheme,
 ) -> Result<Option<GuidedPreference>, Error> {
-    let resources = theme.prepared_font_environment()?.operation();
-
-    let data = plot.data().with_operation(&resources);
     if matches!(plot.kind(), PlotKind::Heatmap | PlotKind::Beeswarm) {
         if plot.continuous_guide_suppressed() {
             return Ok(None);
@@ -165,15 +161,11 @@ pub(crate) fn guided_preference(
     {
         return Ok(None);
     }
-    let mut entries = inputs.guide_entries(plot, theme, data, plot.axis_scope())?;
-    crate::decorations::legend::resolve_entries(plot, &mut entries)?;
-    if entries.is_empty() {
+    let Some(descriptor) = plot.prepared_discrete_guide()? else {
         return Ok(None);
-    }
-    let title = crate::decorations::legend::resolved_title(&entries)?;
-    let entries = crate::decorations::legend::Legend::share_entries(entries)?;
+    };
     Ok(Some(GuidedPreference {
-        descriptor: PreparedGuideDescriptor::Discrete((title, entries)),
+        descriptor: PreparedGuideDescriptor::Discrete(descriptor),
         position,
     }))
 }

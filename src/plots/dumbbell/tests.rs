@@ -11,9 +11,6 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
         DumbbellEndpoints::new("Left", colors[0], "Right", colors[1]).unwrap(),
     )
     .erase();
-    let operation = crate::font::canonical::OperationContext::new();
-    let inputs = crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
-    let chart = inputs.attach(source).unwrap();
     let mut theme = crate::Theme::publication().resolve().unwrap();
     let outline = crate::theme::PointOutlineTheme::new(
         Color::rgba(101, 113, 127, 61),
@@ -37,6 +34,7 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
         .with_radii(radii)
         .unwrap();
     theme.marks = theme.marks.clone().with_points(points).unwrap();
+    let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
     let measured = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
@@ -71,15 +69,16 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
         let (stroke, width) = captured.outline.unwrap();
         assert_eq!(stroke, Color::rgba(101, 113, 127, 61));
         assert_eq!(width.units(), 1536);
-        expected.push(LegendEntry::point(
+        expected.push(GuideSourceKey::point(
             crate::decorations::legend::GuideEntryIdentity::endpoint(label).unwrap(),
             style.clone(),
         ));
     }
-    crate::decorations::legend::resolve_entries(&chart, &mut expected).unwrap();
-    assert_eq!(measured.legend_entries.len(), 2);
-    for (actual, expected) in measured.legend_entries.iter().zip(expected) {
-        assert!(actual.same_child_input(&expected));
+    let guide = measured.discrete_guide.as_ref().unwrap();
+    assert_eq!(guide.counts.entries, 2);
+    for (actual, expected) in guide.sections[0].entries.iter().zip(expected) {
+        assert_eq!(actual.identity, expected.identity);
+        assert_eq!(actual.key, expected.key);
     }
     assert_eq!(
         payload.connector,

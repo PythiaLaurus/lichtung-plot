@@ -307,6 +307,7 @@ pub(crate) fn prepare_reference_plot(
     crate::data::source::reserve_source(&mut retained, 1)?;
     retained.push((scope()?, axes));
     Ok(PreparedInteriorInputs {
+        discrete_guides: std::sync::OnceLock::new(),
         waterfall: waterfall
             .map(|marks| {
                 let mut panels = Vec::new();
@@ -909,6 +910,7 @@ pub(crate) fn prepare_plot(
     }
     Ok(PreparedInteriorInputs {
         marginal: None,
+        discrete_guides: std::sync::OnceLock::new(),
         waterfall: if source.kind() == PlotKind::Waterfall {
             Some(crate::data::source::source_arc(
                 crate::plots::waterfall::PreparedWaterfallInputs { panels: waterfall },
@@ -1066,6 +1068,7 @@ pub(crate) fn prepare_scatter_plot(
     panels.push((scope()?, marks));
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::classify(PlotKind::Scatter),
+        discrete_guides: std::sync::OnceLock::new(),
         beeswarm: None,
         waterfall: None,
         marginal: None,
@@ -1120,6 +1123,7 @@ pub(crate) fn prepare_line_plot(
     panels.push((scope()?, marks));
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::classify(source.kind()),
+        discrete_guides: std::sync::OnceLock::new(),
         beeswarm: None,
         waterfall: None,
         marginal: None,

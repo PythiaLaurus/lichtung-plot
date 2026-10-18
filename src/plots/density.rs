@@ -5,7 +5,7 @@
 use crate::data::PlotData;
 use crate::Error;
 
-use crate::decorations::legend::LegendEntry;
+use crate::decorations::legend::GuideSourceKey;
 use crate::layout::Layout;
 use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
@@ -166,7 +166,7 @@ impl PreparedDensity {
         theme: &crate::theme::ResolvedTheme,
         data: PlotData<'_>,
         order: &[(usize, usize)],
-    ) -> Result<Vec<LegendEntry>, Error> {
+    ) -> Result<Vec<GuideSourceKey>, Error> {
         let (colors, accent) = self.resolved_colors(chart, theme, data)?;
         self.guide_entries_with_colors(chart, theme, order, &colors, &accent)
     }
@@ -179,7 +179,7 @@ impl PreparedDensity {
         order: &[(usize, usize)],
         colors: &CategoryColors,
         accent: &AccentColors,
-    ) -> Result<Vec<LegendEntry>, Error> {
+    ) -> Result<Vec<GuideSourceKey>, Error> {
         let mut entries = Vec::new();
         crate::data::source::reserve_source(&mut entries, order.len())?;
         for &(_, index) in order {
@@ -188,7 +188,7 @@ impl PreparedDensity {
                 continue;
             }
             let color = Self::curve_color(curve, colors, accent)?;
-            entries.push(LegendEntry::line_fill(
+            entries.push(GuideSourceKey::line_fill(
                 chart.collective_legend_identity(&curve.identity)?,
                 theme.marks.data_lines().density_line().backend_style(color),
                 theme
@@ -363,8 +363,6 @@ pub(crate) fn project(
     crate::data::source::reserve_source(&mut payload.curves, prepared.curves.len())?;
     let order = prepared.group_order(chart)?;
     let (colors, accent) = prepared.resolved_colors(chart, theme, data)?;
-    let legend_entries =
-        prepared.guide_entries_with_colors(chart, theme, &order, &colors, &accent)?;
 
     for &(_, index) in &order {
         let curve = &prepared.curves[index];
@@ -415,7 +413,7 @@ pub(crate) fn project(
             geometry.line(segment, &curve.line_style, clip)?;
         }
     }
-    let mut result = PlotRenderResult::new(layout, legend_entries);
+    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?);
     result.marks = Some(crate::data::source::source_arc(
         crate::layout::interior::SelectedMarkPlan {
             payload: crate::layout::interior::MarkPayload::Density(payload),
@@ -916,11 +914,7 @@ mod tests {
         ))
         .hue(CategoryValues::new("series", ["a", "a", "a", "b", "b", "b"]).unwrap())
         .erase();
-        let resources = crate::font::canonical::OperationContext::new();
-        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
-        let chart = inputs
-            .attach(source)
-            .unwrap()
+        let chart = source
             .with_global_hue_levels(vec!["b".into(), "a".into()])
             .with_global_collective_pairs(vec![
                 crate::data::CollectivePair {
@@ -933,6 +927,7 @@ mod tests {
                 },
             ]);
         let mut theme = crate::Theme::publication().resolve().unwrap();
+        let chart = crate::plots::shared_x::prepare_panel_for_test(&chart, &theme).unwrap();
         let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
         let selected = chart
             .measure_selected_interior(PlotRenderContext::new(
@@ -975,6 +970,7 @@ mod tests {
             .with_density_line(line)
             .unwrap();
         theme.marks = theme.marks.clone().with_data_lines(lines).unwrap();
+        let chart = crate::plots::shared_x::prepare_panel_for_test(&chart, &theme).unwrap();
         let changed = chart
             .measure_selected_interior(PlotRenderContext::new(
                 chart.data(),
@@ -996,16 +992,19 @@ mod tests {
             2.5_f32.to_bits()
         );
         assert_eq!(changed_payload.curves[0].line_style.color.alpha(), 128);
-        assert!(crate::decorations::legend::merge_exact_entries(
-            [
-                selected.legend_entries[0].clone(),
-                changed.legend_entries[0].clone()
-            ],
-            "custom Density line",
-        )
-        .unwrap_err()
-        .to_string()
-        .contains("glyphs must match exactly"));
+        assert!(
+            crate::decorations::legend::discrete::PreparedDiscreteGuide::merge(
+                [
+                    selected.discrete_guide.as_ref().unwrap(),
+                    changed.discrete_guide.as_ref().unwrap()
+                ],
+                &[],
+                "custom Density line",
+            )
+            .unwrap_err()
+            .to_string()
+            .contains("glyphs must match exactly")
+        );
     }
 
     struct DensityValues {

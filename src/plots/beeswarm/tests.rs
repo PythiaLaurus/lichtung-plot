@@ -100,8 +100,8 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
         None,
     )
     .unwrap();
-    let chart = inputs.attach(source).unwrap();
     let theme = crate::Theme::publication().resolve().unwrap();
+    let chart = inputs.attach_with_guides_for_test(source, &theme).unwrap();
     let measured = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),

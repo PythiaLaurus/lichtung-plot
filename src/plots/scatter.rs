@@ -12,7 +12,7 @@
 
 use crate::Error;
 
-use crate::decorations::legend::LegendEntry;
+use crate::decorations::legend::GuideSourceKey;
 use crate::render::backend::{with_clip, Backend, Point2D, PointStyle};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::theme::{AccentColors, CategoryColors};
@@ -44,7 +44,6 @@ struct ScatterGroup {
 pub(crate) struct ScatterPayload {
     clip: crate::layout::PanelBox,
     pub(crate) groups: Vec<(Vec<Point2D>, PointStyle)>,
-    legends: Vec<LegendEntry>,
     pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
 }
 
@@ -222,7 +221,7 @@ impl PreparedScatter {
         theme: &crate::theme::ResolvedTheme,
         data: crate::data::PlotData<'_>,
         order: &[usize],
-    ) -> Result<Vec<LegendEntry>, Error> {
+    ) -> Result<Vec<GuideSourceKey>, Error> {
         let map = self.resolved_colors(chart, theme, data)?;
         self.guide_entries_with_colors(chart, theme, order, &map)
     }
@@ -234,7 +233,7 @@ impl PreparedScatter {
 
         order: &[usize],
         map: &CategoryColors,
-    ) -> Result<Vec<LegendEntry>, Error> {
+    ) -> Result<Vec<GuideSourceKey>, Error> {
         let mut entries = Vec::new();
         crate::data::source::reserve_source(
             &mut entries,
@@ -248,7 +247,7 @@ impl PreparedScatter {
                 continue;
             };
             let color = map.color(label)?;
-            entries.push(LegendEntry::point(
+            entries.push(GuideSourceKey::point(
                 chart.point_legend_identity(label)?,
                 chart.point_style(theme, color, theme.marks.points().radii().scatter()),
             ));
@@ -297,7 +296,6 @@ impl PreparedScatter {
         crate::data::source::reserve_source(&mut groups, self.groups.len())?;
         let order = self.group_order(chart)?;
         let map = self.resolved_colors(chart, theme, data)?;
-        let legends = self.guide_entries_with_colors(chart, theme, &order, &map)?;
 
         let accent = self
             .groups
@@ -325,7 +323,6 @@ impl PreparedScatter {
         Ok(ScatterPayload {
             clip: projection.panel_box(),
             groups,
-            legends,
             domain_expansions: [None; 2],
         })
     }
@@ -398,7 +395,7 @@ pub(crate) fn measure_marks(
     for (points, style) in &payload.groups {
         geometry.scatter(points, style, clip)?;
     }
-    let mut result = PlotRenderResult::new(layout, std::mem::take(&mut payload.legends));
+    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?);
     result.marks = Some(crate::data::source::source_arc(
         crate::layout::interior::SelectedMarkPlan {
             payload: crate::layout::interior::MarkPayload::Scatter(payload),

@@ -1,6 +1,10 @@
 use super::*;
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one Shared authority contract checks source counts, pre-font section slots and selected order in both contributor orders"
+)]
 fn combined_layer_only_contributors_follow_the_primary_domain_in_both_source_orders() {
     let layers = Plot::line(
         crate::NumericValues::new("x", [0.0, 1.0]),
@@ -39,6 +43,56 @@ fn combined_layer_only_contributors_follow_the_primary_domain_in_both_source_ord
                 .unwrap()
         };
         let root = canvas.preflight_plan().unwrap();
+        let Some(PreparedGuideDescriptor::Discrete(descriptor)) = &root.prepared().shared_guide
+        else {
+            panic!("prepared Shared discrete descriptor");
+        };
+        assert_eq!(descriptor.counts.sections, 1);
+        assert_eq!(descriptor.counts.entries, 3);
+        assert_eq!(descriptor.counts.points, 3);
+        assert_eq!(descriptor.counts.lines, 0);
+        assert_eq!(descriptor.counts.fills, 0);
+        assert_eq!(descriptor.counts.primary_source_keys, 2);
+        assert_eq!(descriptor.counts.labeled_layer_source_keys, 1);
+        assert_eq!(descriptor.counts.source_occurrences, 3);
+        let owner = crate::layout::ComponentAddress::root()
+            .child(crate::layout::AddressRole::CanvasSharedLegend, 0)
+            .unwrap()
+            .child(crate::layout::AddressRole::LegendSection, 0)
+            .unwrap();
+        let guide_text = root
+            .prepared()
+            .text_census
+            .requirements
+            .iter()
+            .filter(|requirement| {
+                matches!(
+                    requirement.text_role,
+                    crate::layout::PreparedTextRole::LegendTitle
+                        | crate::layout::PreparedTextRole::LegendLabel
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(guide_text.len(), 4);
+        assert_eq!(
+            guide_text[0].component_address,
+            owner
+                .child(crate::layout::AddressRole::LegendTitle, 0)
+                .unwrap()
+        );
+        for (index, text) in guide_text[1..].iter().enumerate() {
+            assert_eq!(
+                text.component_address,
+                owner
+                    .child(
+                        crate::layout::AddressRole::LegendEntry,
+                        u32::try_from(index).unwrap()
+                    )
+                    .unwrap()
+                    .child(crate::layout::AddressRole::LegendLabel, 0)
+                    .unwrap()
+            );
+        }
         let texts = root.plan().retained_text();
         for source in ["Treatment", "Control", "Treated", "chosen raw"] {
             assert_eq!(

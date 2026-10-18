@@ -497,7 +497,7 @@ pub(crate) fn measure(
             )?;
         }
     }
-    let mut result = PlotRenderResult::new(layout, Vec::new());
+    let mut result = PlotRenderResult::new(layout, None);
     result.y_domain = crate::spec::AxisDomain::Categorical;
     result.y_tick_keys = Some(crate::data::source::collect_source(
         prepared

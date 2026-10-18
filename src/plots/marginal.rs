@@ -19,7 +19,7 @@
     clippy::unnecessary_cast
 )]
 
-use crate::decorations::legend::LegendEntry;
+use crate::decorations::legend::GuideSourceKey;
 use crate::layout::{self, AxisSpec, PanelBox};
 use crate::render::backend::{with_clip, Backend, FillStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
@@ -108,7 +108,7 @@ impl PreparedMarginal {
         chart: &Plot,
         theme: &crate::theme::ResolvedTheme,
         data: crate::data::PlotData<'_>,
-    ) -> Result<Vec<LegendEntry>, Error> {
+    ) -> Result<Vec<GuideSourceKey>, Error> {
         let (colors, accents) = self.resolved_colors(chart, theme, data)?;
         self.guide_entries_with_colors(chart, theme, &colors, &accents)
     }
@@ -120,7 +120,7 @@ impl PreparedMarginal {
 
         colors: &CategoryColors,
         accents: &AccentColors,
-    ) -> Result<Vec<LegendEntry>, Error> {
+    ) -> Result<Vec<GuideSourceKey>, Error> {
         let mut entries = Vec::new();
         crate::data::source::reserve_source(&mut entries, self.groups.len())?;
         for group in &self.groups {
@@ -128,7 +128,7 @@ impl PreparedMarginal {
                 continue;
             }
             let color = Self::group_color(group, colors, accents)?;
-            entries.push(LegendEntry::point_fill(
+            entries.push(GuideSourceKey::point_fill(
                 chart.collective_legend_identity(&group.identity)?,
                 chart.point_style(theme, color, theme.marks.points().radii().marginal()),
                 theme
@@ -592,7 +592,6 @@ pub(crate) fn measure(
     let mut selected = Vec::new();
     crate::data::source::reserve_source(&mut selected, groups.len())?;
     let (colors, accents) = prepared.resolved_colors(chart, theme, data)?;
-    let legend_entries = prepared.guide_entries_with_colors(chart, theme, &colors, &accents)?;
     let mut source = [(f64::INFINITY, f64::NEG_INFINITY); 2];
     let mut point_ink: Option<crate::render::geometry::GeometryBox> = None;
     for (gi, group) in groups.iter().enumerate() {
@@ -742,7 +741,7 @@ pub(crate) fn measure(
         geometry.polygon(&group.top, &group.fill, Some(top_panel))?;
         geometry.polygon(&group.right, &group.fill, Some(right_panel))?;
     }
-    let mut result = PlotRenderResult::new(layout, legend_entries);
+    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?);
     result.axes = Some(result.layout.measure_axes_with_inputs(
         theme,
         context.fit_scope(),

@@ -341,17 +341,16 @@ fn validate_frozen_axes_and_guides(
     result: &mut PlotRenderResult,
     context: PlotRenderContext<'_>,
 ) -> Result<(), crate::layout::fit::PlanError> {
-    if result.decoration_mode == crate::spec::DecorationMode::SelfManaged
-        || context.retained_axes.is_some()
+    if result.decoration_mode != crate::spec::DecorationMode::SelfManaged
+        && context.retained_axes.is_none()
+        && result.axes.is_none()
     {
-        return Ok(());
-    }
-
-    if result.axes.is_none() {
         return Err(Error::Render("native panel is missing its frozen axes".into()).into());
     }
-    if !result.legend_entries.is_empty() {
-        crate::decorations::legend::resolve_entries(plot, &mut result.legend_entries)?;
+    if result.discrete_guide != plot.prepared_discrete_guide()? {
+        return Err(
+            Error::Render("selected producer changed its prepared discrete guide".into()).into(),
+        );
     }
     Ok(())
 }
@@ -381,7 +380,7 @@ fn missing_frozen_axes_do_not_trigger_label_reconstruction() {
     .erase();
     let panel = crate::layout::PanelBox::new(0.0, 600.0, 0.0, 400.0);
     let theme = crate::Theme::publication().resolve().unwrap();
-    let mut result = PlotRenderResult::new(crate::layout::Layout::envelope(panel), Vec::new());
+    let mut result = PlotRenderResult::new(crate::layout::Layout::envelope(panel), None);
     let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
     let error = validate_frozen_axes_and_guides(
         &plot,

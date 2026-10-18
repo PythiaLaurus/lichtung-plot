@@ -1,7 +1,7 @@
 //! Root-owned categorical distribution semantics and selected display operands.
 
 use crate::data::PlotData;
-use crate::decorations::legend::LegendEntry;
+use crate::decorations::legend::GuideSourceKey;
 use crate::render::backend::{Backend, FillStyle, LineStyle, Point2D, PointStyle};
 use crate::theme::CategoryColors;
 use crate::{Error, Plot, PlotKind};
@@ -65,7 +65,7 @@ impl PreparedDistribution {
         chart: &Plot,
         theme: &crate::theme::ResolvedTheme,
         data: PlotData<'_>,
-    ) -> Result<Vec<LegendEntry>, Error> {
+    ) -> Result<Vec<GuideSourceKey>, Error> {
         let colors = self.resolved_colors(chart, theme, data)?;
         self.guide_entries_with_colors(chart, theme, &colors)
     }
@@ -76,12 +76,12 @@ impl PreparedDistribution {
         theme: &crate::theme::ResolvedTheme,
 
         colors: &CategoryColors,
-    ) -> Result<Vec<LegendEntry>, Error> {
+    ) -> Result<Vec<GuideSourceKey>, Error> {
         match self {
             Self::Boxplot(prepared) => crate::data::source::collect_source(
                 prepared.sample.hue_levels.iter().map(|label| {
                     let color = colors.color(label)?;
-                    Ok(LegendEntry::line_fill(
+                    Ok(GuideSourceKey::line_fill(
                         chart.point_legend_identity(label)?,
                         theme.marks.strokes().summaries().summary().backend_style(),
                         theme.marks.fills().bodies().box_body().backend_style(color),
@@ -99,9 +99,9 @@ impl PreparedDistribution {
                         .violin_body()
                         .backend_style(color);
                     Ok(if chart.kind() == PlotKind::Violin {
-                        LegendEntry::fill(identity, fill)
+                        GuideSourceKey::fill(identity, fill)
                     } else {
-                        LegendEntry::point_fill(
+                        GuideSourceKey::point_fill(
                             identity,
                             chart.distribution_point_style(
                                 theme.marks.points().mandatory_strip(),

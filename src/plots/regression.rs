@@ -11,7 +11,7 @@
 use crate::data::PlotData;
 use crate::Error;
 
-use crate::decorations::legend::LegendEntry;
+use crate::decorations::legend::GuideSourceKey;
 use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D, PointStyle};
 use crate::spec::{PlotRenderContext, PlotRenderResult, RegressionBand};
 use crate::stats::regression::OlsFit;
@@ -102,7 +102,7 @@ impl PreparedRegression {
         theme: &crate::theme::ResolvedTheme,
 
         color: (u8, u8, u8),
-    ) -> Result<Vec<LegendEntry>, Error> {
+    ) -> Result<Vec<GuideSourceKey>, Error> {
         if !matches!(chart.legend_policy_spec(), crate::LegendPolicy::Visible(_)) {
             return Ok(Vec::new());
         }
@@ -117,7 +117,7 @@ impl PreparedRegression {
             .regression_fit()
             .backend_style();
         let fit_entry = if band == RegressionBand::PointwiseMean95 {
-            LegendEntry::line_fill(
+            GuideSourceKey::line_fill(
                 fit_identity,
                 line,
                 theme
@@ -128,9 +128,9 @@ impl PreparedRegression {
                     .backend_style(color),
             )
         } else {
-            LegendEntry::line(fit_identity, line)
+            GuideSourceKey::line(fit_identity, line)
         };
-        entries.push(LegendEntry::point(
+        entries.push(GuideSourceKey::point(
             crate::decorations::legend::GuideEntryIdentity::RegressionObservation,
             chart.point_style(theme, color, theme.marks.points().radii().regression()),
         ));
@@ -388,7 +388,6 @@ pub(crate) fn project(
         .regression_band()
         .backend_style(color);
 
-    let legend_entries = PreparedRegression::guide_entries(chart, theme, color)?;
     let payload = RegressionPayload {
         clip: projection.panel_box(),
         points: scatter_points,
@@ -408,7 +407,7 @@ pub(crate) fn project(
     }
     geometry.scatter(&payload.points, &payload.point_style, clip)?;
     geometry.line(&payload.fit_line, &payload.line_style, Some(clip))?;
-    let mut result = PlotRenderResult::new(layout, legend_entries);
+    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?);
     result.marks = Some(crate::data::source::source_arc(
         crate::layout::interior::SelectedMarkPlan {
             payload: crate::layout::interior::MarkPayload::Regression(payload),
@@ -530,6 +529,7 @@ mod style_tests {
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::publication().resolve().unwrap();
         let panel = crate::layout::PanelBox::new(10.0, 620.0, 20.0, 420.0);
+        let chart = crate::plots::shared_x::prepare_panel_for_test(&chart, &theme).unwrap();
         let old = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
             .unwrap();
@@ -554,6 +554,7 @@ mod style_tests {
             .unwrap();
         let fills = theme.marks.fills().clone().with_bands(bands).unwrap();
         theme.marks = theme.marks.clone().with_fills(fills).unwrap();
+        let chart = crate::plots::shared_x::prepare_panel_for_test(&chart, &theme).unwrap();
         let changed = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
             .unwrap();
@@ -571,16 +572,19 @@ mod style_tests {
         assert_eq!(old_fill.color.alpha(), 64);
         assert_eq!(new_fill.color.alpha(), 128);
         assert_eq!(new_fill.stroke_width.to_bits(), 2.0_f32.to_bits());
-        assert!(crate::decorations::legend::merge_exact_entries(
-            [
-                old.legend_entries[1].clone(),
-                changed.legend_entries[1].clone()
-            ],
-            "custom regression band",
-        )
-        .unwrap_err()
-        .to_string()
-        .contains("glyphs must match exactly"));
+        assert!(
+            crate::decorations::legend::discrete::PreparedDiscreteGuide::merge(
+                [
+                    old.discrete_guide.as_ref().unwrap(),
+                    changed.discrete_guide.as_ref().unwrap()
+                ],
+                &[],
+                "custom regression band",
+            )
+            .unwrap_err()
+            .to_string()
+            .contains("glyphs must match exactly")
+        );
     }
 
     #[test]
@@ -598,6 +602,7 @@ mod style_tests {
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::publication().resolve().unwrap();
         let panel = crate::layout::PanelBox::new(10.0, 620.0, 20.0, 420.0);
+        let chart = crate::plots::shared_x::prepare_panel_for_test(&chart, &theme).unwrap();
         let old = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
             .unwrap();
@@ -620,6 +625,7 @@ mod style_tests {
             .unwrap();
         let strokes = theme.marks.strokes().clone().with_curves(curves).unwrap();
         theme.marks = theme.marks.clone().with_strokes(strokes).unwrap();
+        let chart = crate::plots::shared_x::prepare_panel_for_test(&chart, &theme).unwrap();
         let changed = chart
             .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
             .unwrap();
@@ -637,15 +643,18 @@ mod style_tests {
         assert_ne!(old_style, new_style);
         assert_eq!(new_style.color, crate::theme::Color::rgb(17, 41, 67));
         assert_eq!(new_style.width.to_bits(), 2.5_f32.to_bits());
-        assert!(crate::decorations::legend::merge_exact_entries(
-            [
-                old.legend_entries[1].clone(),
-                changed.legend_entries[1].clone()
-            ],
-            "custom regression fit",
-        )
-        .unwrap_err()
-        .to_string()
-        .contains("glyphs must match exactly"));
+        assert!(
+            crate::decorations::legend::discrete::PreparedDiscreteGuide::merge(
+                [
+                    old.discrete_guide.as_ref().unwrap(),
+                    changed.discrete_guide.as_ref().unwrap()
+                ],
+                &[],
+                "custom regression fit",
+            )
+            .unwrap_err()
+            .to_string()
+            .contains("glyphs must match exactly")
+        );
     }
 }

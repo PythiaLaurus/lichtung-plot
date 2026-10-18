@@ -1,7 +1,7 @@
 //! Root-prepared interaction cells and immutable selected trace operands.
 
 use crate::data::{ObservedCollectives, PlotData};
-use crate::decorations::legend::LegendEntry;
+use crate::decorations::legend::GuideSourceKey;
 use crate::render::backend::{Backend, LineStyle, Point2D, PointStyle};
 use crate::spec::{LinePattern, PlotRenderContext, PlotRenderResult, PointShape};
 use crate::theme::CategoryColors;
@@ -192,24 +192,12 @@ impl PreparedInteraction {
         })
     }
 
-    pub(crate) fn hue_levels(&self) -> impl Iterator<Item = &str> {
-        self.traces
-            .iter()
-            .filter_map(|trace| trace.identity.hue.as_deref())
-    }
-
-    pub(crate) fn has_guide_entries(&self, chart: &Plot) -> bool {
-        self.traces
-            .iter()
-            .any(|trace| trace.identity.hue.is_some() || chart.interaction_styles_spec().is_some())
-    }
-
     pub(crate) fn guide_entries(
         &self,
         chart: &Plot,
         theme: &crate::theme::ResolvedTheme,
         data: PlotData<'_>,
-    ) -> Result<Vec<LegendEntry>, Error> {
+    ) -> Result<Vec<GuideSourceKey>, Error> {
         let colors = self.resolved_colors(chart, theme, data)?;
         self.guide_entries_with_colors(chart, theme, &colors)
     }
@@ -220,7 +208,7 @@ impl PreparedInteraction {
         theme: &crate::theme::ResolvedTheme,
 
         colors: &CategoryColors,
-    ) -> Result<Vec<LegendEntry>, Error> {
+    ) -> Result<Vec<GuideSourceKey>, Error> {
         let mut entries = Vec::new();
         crate::data::source::reserve_source(&mut entries, self.traces.len())?;
         for trace in &self.traces {
@@ -249,9 +237,9 @@ impl PreparedInteraction {
                     chart.markers_visible(),
                     chart.interaction_connectors_visible(),
                 ) {
-                    (true, true) => LegendEntry::point_line(identity, point, line),
-                    (true, false) => LegendEntry::point(identity, point),
-                    (false, true) => LegendEntry::line(identity, line),
+                    (true, true) => GuideSourceKey::point_line(identity, point, line),
+                    (true, false) => GuideSourceKey::point(identity, point),
+                    (false, true) => GuideSourceKey::line(identity, line),
                     (false, false) => {
                         return Err(Error::Render(
                             "interaction legend has no visible glyph component".into(),
@@ -534,7 +522,6 @@ pub(crate) fn measure_marks(
         domain_expansions: [None; 2],
     };
     let colors = marks.resolved_colors(chart, context.theme, data)?;
-    let legends = marks.guide_entries_with_colors(chart, context.theme, &colors)?;
     crate::data::source::reserve_source(&mut payload.traces, marks.traces.len())?;
     let mut geometry = crate::render::geometry::GeometrySnapshot::new();
     let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
@@ -601,7 +588,7 @@ pub(crate) fn measure_marks(
         payload.traces.push(selected);
     }
     payload.measure_ink(chart, marks, &layout.projection, context)?;
-    let mut result = PlotRenderResult::new(layout, legends);
+    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?);
     result.x_domain = crate::spec::AxisDomain::Categorical;
     result.marks = Some(crate::data::source::source_arc(
         crate::layout::interior::SelectedMarkPlan {

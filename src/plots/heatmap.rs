@@ -1132,7 +1132,7 @@ pub(crate) fn measure(
     payload.validate_annotation_ink(context.fit_scope())?;
     let geometry = payload.geometry()?;
 
-    let mut result = PlotRenderResult::new(layout, Vec::new()).with_resolved_axis_keys(
+    let mut result = PlotRenderResult::new(layout, None).with_resolved_axis_keys(
         crate::data::source::collect_source(
             prepared
                 .x_levels

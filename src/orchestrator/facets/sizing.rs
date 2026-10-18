@@ -133,10 +133,10 @@ pub(in crate::orchestrator) fn natural_size(
             | crate::LegendPosition::OutsideBottom
             | crate::LegendPosition::OutsideBottomRight
     );
-    let guide_size = if guide.entries.is_empty() || !outside {
-        (0.0, 0.0)
+    let guide_size = if let Some(descriptor) = guide.descriptor.as_ref().filter(|_| outside) {
+        crate::decorations::legend::Legend::natural_preference(descriptor, theme)?
     } else {
-        crate::decorations::legend::Legend::natural_preference(&guide.title, &guide.entries, theme)?
+        (0.0, 0.0)
     };
     let guide_gap = if guide_size.0 > 0.0 {
         theme.legend_outside_gap()?

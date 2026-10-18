@@ -7,7 +7,7 @@
 
 use crate::Error;
 
-use crate::decorations::legend::LegendEntry;
+use crate::decorations::legend::GuideSourceKey;
 use crate::layout::AxisSpec;
 use crate::render::backend::{with_clip, Backend, LineStyle, Point2D};
 use crate::spec::{CategoryOrder, PlotRenderContext, PlotRenderResult};
@@ -119,7 +119,7 @@ impl DumbbellData {
     pub(crate) fn guide_entries(
         chart: &Plot,
         theme: &crate::theme::ResolvedTheme,
-    ) -> Result<Vec<LegendEntry>, Error> {
+    ) -> Result<Vec<GuideSourceKey>, Error> {
         let endpoints = chart
             .dumbbell_endpoints_spec()
             .ok_or_else(|| Error::Render("Dumbbell guide requires endpoint metadata".into()))?;
@@ -129,7 +129,7 @@ impl DumbbellData {
             (endpoints.left_label(), endpoints.left_color()),
             (endpoints.right_label(), endpoints.right_color()),
         ] {
-            entries.push(LegendEntry::point(
+            entries.push(GuideSourceKey::point(
                 crate::decorations::legend::GuideEntryIdentity::endpoint(label)?,
                 endpoint_style(chart, theme, color),
             ));
@@ -281,10 +281,9 @@ fn project(
         geometry.scatter(&pair[..1], &payload.points[0], clip)?;
         geometry.scatter(&pair[1..], &payload.points[1], clip)?;
     }
-    let legend = DumbbellData::guide_entries(chart, theme)?;
     #[cfg(test)]
     count(2);
-    let mut result = PlotRenderResult::new(layout, legend);
+    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?);
     result.y_domain = crate::spec::AxisDomain::Categorical;
     result.marks = Some(crate::data::source::source_arc(
         crate::layout::interior::SelectedMarkPlan {

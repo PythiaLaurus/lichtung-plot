@@ -21,7 +21,7 @@
     clippy::if_not_else
 )]
 
-use crate::decorations::legend::{Legend, LegendEntry};
+use crate::decorations::legend::{GuideSourceKey, Legend};
 use crate::layout::{self, Layout, PanelBox};
 use crate::render::backend::{
     points_share_canonical_position, with_clip, with_layer, Backend, FillStyle, LineStyle, Point2D,
@@ -179,25 +179,27 @@ pub(crate) fn natural_guide_preference(
     chart: &Plot,
     theme: &ResolvedTheme,
 ) -> Result<(f64, f64), Error> {
-    let prepared = chart
-        .prepared_matrix_axes
-        .as_ref()
-        .ok_or_else(|| Error::Render("Matrix natural guide requires preparation".into()))?;
-    let resources = theme.prepared_font_environment()?.operation();
-    let data = chart.data().with_operation(&resources);
-    let (colors, accents) = prepared.resolved_colors(chart, theme, data)?;
-    let mapped = crate::data::source::collect_source(
-        prepared
-            .groups
-            .iter()
-            .map(|group| PreparedMatrixAxes::group_color(group, &colors, &accents)),
-    )?;
-    let entries = matrix_guide_entries(chart, &prepared.groups, &mapped, theme)?;
-    if entries.is_empty() {
+    let Some(descriptor) = chart.prepared_discrete_guide()? else {
         return Ok((0.0, 0.0));
+    };
+    Legend::natural_preference(&descriptor, theme)
+}
+
+impl PreparedMatrixAxes {
+    pub(crate) fn guide_sources(
+        &self,
+        chart: &Plot,
+        theme: &ResolvedTheme,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<Vec<GuideSourceKey>, Error> {
+        let (colors, accents) = self.resolved_colors(chart, theme, data)?;
+        let mapped = crate::data::source::collect_source(
+            self.groups
+                .iter()
+                .map(|group| Self::group_color(group, &colors, &accents)),
+        )?;
+        matrix_guide_entries(chart, &self.groups, &mapped, theme)
     }
-    let title = crate::decorations::legend::resolved_title(&entries)?;
-    Legend::natural_preference(&title, &entries, theme)
 }
 
 #[derive(Debug)]
@@ -394,8 +396,6 @@ pub(crate) fn measure(
     )?;
     let legend = match matrix_legend(
         chart,
-        groups,
-        &group_colors,
         (
             context.panel.width(),
             (!context.content_height).then_some(context.panel.height()),
@@ -749,7 +749,8 @@ pub(crate) fn measure(
 
     let layout = Layout::envelope(outer);
 
-    let mut result = PlotRenderResult::new(layout, Vec::new()).with_self_managed_decorations();
+    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?)
+        .with_self_managed_decorations();
     result.grid_axis_gutters = Some(gutters.map(f64::ceil));
     let payload = MatrixPayload {
         cells,
@@ -834,22 +835,17 @@ fn matrix_ticks<'a>(
 
 fn matrix_legend(
     chart: &Plot,
-    groups: &[HueGroup],
-    group_colors: &[(u8, u8, u8)],
     available: (f64, Option<f64>),
     theme: &ResolvedTheme,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<crate::layout::fit::FitOutcome<Option<Legend>>, Error> {
     use crate::layout::fit::FitOutcome;
-    let entries = matrix_guide_entries(chart, groups, group_colors, theme)?;
-    if entries.is_empty() {
+    let Some(descriptor) = chart.prepared_discrete_guide()? else {
         return Ok(FitOutcome::Measured(None));
-    }
-    let title = crate::decorations::legend::resolved_title(&entries)?;
-    let entries = Legend::share_entries(entries)?;
+    };
     let scope = scope.child(crate::layout::AddressRole::InsideGuide, 0)?;
     match Legend::measure_assigned(
-        &title, entries, available, false, false, theme, &mut false, &scope,
+        descriptor, available, false, false, theme, &mut false, &scope,
     )? {
         FitOutcome::Measured(legend) => Ok(FitOutcome::Measured(Some(legend))),
         FitOutcome::Miss(reason) => Ok(FitOutcome::Miss(reason)),
@@ -861,7 +857,7 @@ fn matrix_guide_entries(
     groups: &[HueGroup],
     group_colors: &[(u8, u8, u8)],
     theme: &ResolvedTheme,
-) -> Result<Vec<crate::decorations::legend::LegendEntry>, Error> {
+) -> Result<Vec<GuideSourceKey>, Error> {
     if !groups.iter().any(|group| group.identity.hue.is_some())
         || chart.legend_policy_spec() == crate::LegendPolicy::Hidden
     {
@@ -874,7 +870,7 @@ fn matrix_guide_entries(
         .zip(group_colors)
         .filter(|(group, _)| group.identity.hue.is_some())
     {
-        entries.push(LegendEntry::point_fill(
+        entries.push(GuideSourceKey::point_fill(
             chart.collective_legend_identity(&group.identity)?,
             chart.point_style(theme, color, theme.marks.points().radii().matrix()),
             theme
@@ -885,7 +881,6 @@ fn matrix_guide_entries(
                 .backend_style(color),
         ));
     }
-    crate::decorations::legend::resolve_entries(chart, &mut entries)?;
     Ok(entries)
 }
 

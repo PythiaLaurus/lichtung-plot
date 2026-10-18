@@ -418,18 +418,34 @@ fn waterfall_rejects_nonfinite_intermediate_endpoint_with_source_row() {
 
 #[test]
 fn signed_horizontal_bar_supports_precomputed_sort_and_zero_line() {
-    let svg = render(
-        Plot::horizontal_bar(
-            CategoryValues::new("label", ["neutral", "positive", "negative"]).unwrap(),
-            BarInput::estimates(NumericValues::new("value", [0.1, 2.0, -1.0])),
-        )
-        .category_order(ValueSort::Descending)
-        .color_by_sign()
-        .zero_line(),
-        "signed-horizontal-bar",
-    );
-
+    let plot = Plot::horizontal_bar(
+        CategoryValues::new("label", ["neutral", "positive", "negative"]).unwrap(),
+        BarInput::estimates(NumericValues::new("value", [0.1, 2.0, -1.0])),
+    )
+    .category_order(ValueSort::Descending)
+    .color_by_sign()
+    .zero_line();
+    let svg = render(plot.clone(), "signed-horizontal-bar");
     assert!(svg.contains("Negative"));
+    let directory = unique_dir("shared-signed-horizontal-bar");
+    let path = directory.join("plot.svg");
+    lichtung_plot::Canvas::grid(1, 2)
+        .unwrap()
+        .size(1000, 500)
+        .panel(0, 0, plot.clone())
+        .unwrap()
+        .panel(0, 1, plot)
+        .unwrap()
+        .legend_policy(lichtung_plot::CanvasLegendPolicy::Shared)
+        .svg_preserve_text(&path)
+        .unwrap();
+    let shared = std::fs::read_to_string(&path).unwrap();
+    std::fs::remove_dir_all(directory).unwrap();
+    for output in [&svg, &shared] {
+        for source in ["Change", "Nondecreasing", "Decreasing"] {
+            assert_eq!(output.matches(&format!(">{source}</text>")).count(), 1);
+        }
+    }
 }
 
 #[test]
