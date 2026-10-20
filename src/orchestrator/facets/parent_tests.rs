@@ -3,23 +3,87 @@ use crate::render::backend::TextAnchor;
 use crate::theme::TitleAlignment::{Center, End, Start};
 
 #[test]
-fn ambiguous_faceted_legend_aliases_reject_before_font_discovery() {
-    let source = Plot::scatter(
-        crate::NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
-        crate::NumericValues::new("y", [4.0, 3.0, 2.0, 1.0]),
+fn sectioned_facets_preserve_parent_domains_and_reject_alias_collisions_before_fonts() {
+    use crate::decorations::legend::discrete::LegendComposition;
+    let mut source = Plot::interaction(
+        crate::CategoryValues::new(
+            "condition",
+            ["before", "before", "before", "after", "after", "after"],
+        )
+        .unwrap(),
+        crate::NumericValues::new("estimate", [2.0, 3.0, 4.0, 5.0, 6.0, 7.0]),
+        crate::CategoryValues::new("group", ["one", "two", "one", "one", "two", "one"]).unwrap(),
+        crate::Bounds::new(
+            crate::NumericValues::new("lower", [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]),
+            crate::NumericValues::new("upper", [3.0, 4.0, 5.0, 6.0, 7.0, 8.0]),
+        ),
     )
-    .hue(crate::CategoryValues::new("hue", ["a", "a", "b", "b"]).unwrap())
+    .hue(
+        crate::CategoryValues::new("hue", ["blue", "red", "green", "blue", "red", "green"])
+            .unwrap(),
+    )
+    .styles([
+        crate::InteractionStyle::new("one").unwrap(),
+        crate::InteractionStyle::new("two")
+            .unwrap()
+            .with_point_shape(crate::PointShape::TriangleUp)
+            .unwrap(),
+    ])
     .facet(crate::FacetSpec::column(
-        crate::CategoryValues::new("facet", ["left", "left", "right", "right"]).unwrap(),
+        crate::CategoryValues::new("facet", ["left", "right", "left", "left", "right", "left"])
+            .unwrap(),
     ))
-    .labels(
-        crate::Labels::humanized()
-            .alias("a", "Same")
-            .alias("b", "Same"),
+    .labels(crate::Labels::raw())
+    .size(1200, 700);
+    source.legend_composition = LegendComposition::Separate;
+    let source = source.erase();
+    let operation = crate::font::canonical::OperationContext::new();
+    let theme = crate::Theme::publication().resolve().unwrap();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme)).unwrap();
+    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+    let prepared =
+        prepare_discrete_guide(&source, PlotKind::Interaction, &theme, &inputs, &operation)
+            .unwrap();
+    let guide = prepared.descriptor.unwrap();
+    assert_eq!(
+        (
+            guide.composition,
+            guide.counts.sections,
+            guide.counts.entries
+        ),
+        (LegendComposition::Separate, 2, 5)
+    );
+    assert_eq!(
+        guide.sections[0]
+            .entries
+            .iter()
+            .map(|entry| entry.display_label.as_ref())
+            .collect::<Vec<_>>(),
+        ["one", "two"]
+    );
+    // First occupied facet contributes blue/green before the right facet's red.
+    // The complete parent scientific hue domain is instead blue/red/green.
+    assert_eq!(
+        guide.sections[1]
+            .entries
+            .iter()
+            .map(|entry| entry.display_label.as_ref())
+            .collect::<Vec<_>>(),
+        ["blue", "red", "green"]
+    );
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        0
+    );
+    source.preflight().unwrap();
+    let ambiguous = source.labels(
+        crate::Labels::raw()
+            .alias("blue", "Same")
+            .alias("green", "Same"),
     );
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
     assert!(matches!(
-        source.preflight(),
+        ambiguous.preflight(),
         Err(Error::Render(message)) if message.contains("distinct raw identities")
     ));
     assert_eq!(

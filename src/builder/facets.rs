@@ -152,6 +152,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             && self.y_tick_labels_visible == other.y_tick_labels_visible
             && self.render_scope == other.render_scope
             && self.legend_policy == other.legend_policy
+            && self.effective_legend_composition() == other.legend_composition
             && self.suppress_continuous_guide == other.suppress_continuous_guide
             && self.root_size == other.root_size
             && other.numeric.matches(self)
@@ -237,6 +238,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             y_tick_labels_visible: self.y_tick_labels_visible,
             render_scope: self.render_scope.as_deref().map(copy).transpose()?,
             legend_policy: self.legend_policy,
+            legend_composition: self.effective_legend_composition(),
             suppress_continuous_guide: self.suppress_continuous_guide,
             root_size: self.root_size,
             numeric: crate::numeric::inputs::NumericInputs::new(self)?,

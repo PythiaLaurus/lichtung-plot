@@ -445,7 +445,7 @@ impl PreparedInteriorInputs {
                     theme,
                     &contributor,
                     keys,
-                    crate::decorations::legend::discrete::LegendComposition::Combined,
+                    scoped.effective_legend_composition(),
                 )?
             };
             panels.push(ScopedDiscreteGuide {
@@ -455,21 +455,7 @@ impl PreparedInteriorInputs {
                 descriptor,
             });
         }
-        let mut order = Vec::new();
-        if let Some(pairs) = chart.global_collective_pairs() {
-            crate::data::source::reserve_source(&mut order, pairs.len())?;
-            for pair in pairs
-                .iter()
-                .filter(|pair| pair.group.is_some() || pair.hue.is_some())
-            {
-                order.push(chart.collective_legend_identity(pair)?);
-            }
-        } else if let Some(hues) = chart.global_hue_levels() {
-            crate::data::source::reserve_source(&mut order, hues.len())?;
-            for hue in hues {
-                order.push(chart.point_legend_identity(hue)?);
-            }
-        }
+        let order = parent_guide_order(chart, &panels, facet_cells)?;
         let root = if panels.len() == 1 && order.is_empty() {
             panels[0].descriptor.clone()
         } else {
@@ -486,6 +472,64 @@ impl PreparedInteriorInputs {
             })?)
             .map_err(|_| Error::Render("discrete guide preparation was replaced".into()))
     }
+}
+
+fn parent_guide_order(
+    chart: &Plot,
+    panels: &[ScopedDiscreteGuide],
+    facet_cells: bool,
+) -> Result<Vec<crate::decorations::legend::GuideEntryIdentity>, Error> {
+    use crate::decorations::legend::discrete::{GuideSectionIdentity, LegendComposition};
+    use crate::decorations::legend::GuideEntryIdentity;
+    let mut order = Vec::new();
+    if chart.effective_legend_composition() == LegendComposition::Separate {
+        // Facet marginals follow their own full parent domains, not the first
+        // pair or occupied facet containing them. Canvas color domains also
+        // include Hidden marks and cannot order visible guide contributions.
+        if facet_cells {
+            for (field, levels) in [
+                (chart.group_name(), chart.global_group_levels()),
+                (chart.hue_dimension_key(), chart.global_hue_levels()),
+            ] {
+                if let (Some(field), Some(levels)) = (field, levels) {
+                    let consumed = panels
+                        .iter()
+                        .filter_map(|panel| panel.descriptor.as_ref())
+                        .flat_map(|guide| guide.sections.iter())
+                        .any(|section| match &section.identity {
+                            GuideSectionIdentity::GroupStyle(raw)
+                            | GuideSectionIdentity::Joint(raw)
+                            | GuideSectionIdentity::HueColor(raw) => raw.as_str() == field,
+                            _ => false,
+                        });
+                    if !consumed {
+                        continue;
+                    }
+                    crate::data::source::reserve_source(&mut order, levels.len())?;
+                    for value in levels {
+                        let identity = GuideEntryIdentity::category(field, value)?;
+                        if !order.contains(&identity) {
+                            order.push(identity);
+                        }
+                    }
+                }
+            }
+        }
+    } else if let Some(pairs) = chart.global_collective_pairs() {
+        crate::data::source::reserve_source(&mut order, pairs.len())?;
+        for pair in pairs
+            .iter()
+            .filter(|pair| pair.group.is_some() || pair.hue.is_some())
+        {
+            order.push(chart.collective_legend_identity(pair)?);
+        }
+    } else if let Some(hues) = chart.global_hue_levels() {
+        crate::data::source::reserve_source(&mut order, hues.len())?;
+        for hue in hues {
+            order.push(chart.point_legend_identity(hue)?);
+        }
+    }
+    Ok(order)
 }
 
 fn include_keys<'a>(

@@ -18,13 +18,6 @@ use crate::{Error, Result};
 pub(crate) enum LegendComposition {
     #[default]
     Combined,
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "private Separate preparation precedes the measured/public policy cutover"
-        )
-    )]
     Separate,
 }
 

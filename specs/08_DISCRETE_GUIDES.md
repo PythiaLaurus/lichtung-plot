@@ -3,8 +3,9 @@
 **Status**: Approved architectural target. Private Combined/Separate semantic
 construction, producer bindings/projection, authoritative pre-font transport/census
 and stacked section measurement/frozen geometry with owner-local exact reuse are
-implemented. Effective parent-policy selection, complete consumed-ancestor
-dependencies and public controls remain pending.
+implemented. Effective parent-policy selection, facet marginal ordering and final
+section census are implemented privately. Complete consumed-ancestor dependencies
+and public controls remain pending.
 
 ## 1. Authority And Boundary
 
@@ -21,7 +22,8 @@ evidence is in `../docs/typed-guide-identities.md` and
 `../docs/prepared-discrete-sections.md`, `../docs/discrete-producer-bindings.md`
 and `../docs/factorized-discrete-sections.md`; measured section evidence is in
 `../docs/stacked-discrete-sections.md` and
-`../docs/scoped-discrete-measurement-reuse.md`. This target does not claim the
+`../docs/scoped-discrete-measurement-reuse.md`; effective parent preparation is in
+`../docs/effective-discrete-guide-owners.md`. This target does not claim the
 public Separate renderer or the full acceptance matrix below is implemented.
 
 The source census is taken after the private Color/OpaqueColor carrier migration.

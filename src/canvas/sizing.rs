@@ -28,6 +28,7 @@ struct HeightInputs {
     parent_insets: [i64; 4],
     y_labels: bool,
     legend: crate::LegendPolicy,
+    composition: crate::decorations::legend::discrete::LegendComposition,
     continuous_hidden: bool,
     numeric: crate::numeric::inputs::NumericInputs,
     local_guide:
@@ -50,6 +51,7 @@ impl HeightInputs {
             || self.parent_insets != other.parent_insets
             || self.y_labels != other.y_labels
             || self.legend != other.legend
+            || self.composition != other.composition
             || self.continuous_hidden != other.continuous_hidden
             || self.numeric != other.numeric
             || self.local_guide != other.local_guide
@@ -108,6 +110,7 @@ impl HeightInputs {
             parent_insets,
             y_labels: plot.y_tick_labels_visible(),
             legend: plot.legend_policy_spec(),
+            composition: plot.effective_legend_composition(),
             continuous_hidden: plot.continuous_guide_suppressed(),
             numeric: crate::numeric::inputs::NumericInputs::new(plot)?,
             local_guide: if per_plot {

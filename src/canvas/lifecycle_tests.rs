@@ -3,10 +3,11 @@ use super::*;
 #[test]
 #[expect(
     clippy::too_many_lines,
-    reason = "one Shared authority contract checks source counts, pre-font section slots and selected order in both contributor orders"
+    reason = "one Shared authority contract checks effective policy, source counts, pre-font section slots and selected order"
 )]
-fn combined_layer_only_contributors_follow_the_primary_domain_in_both_source_orders() {
-    let layers = Plot::line(
+fn shared_composition_uses_parent_policy_in_both_source_orders() {
+    use crate::decorations::legend::discrete::LegendComposition::{Combined, Separate};
+    let mut layers = Plot::line(
         crate::NumericValues::new("x", [0.0, 1.0]),
         crate::NumericValues::new("y", [0.0, 1.0]),
     )
@@ -19,17 +20,28 @@ fn combined_layer_only_contributors_follow_the_primary_domain_in_both_source_ord
         .with_color(crate::Color::rgba(80, 40, 120, 180))
         .legend_label("chosen raw"),
     );
+    // Stored child selections differ; only the Shared parent's effective value
+    // owns contribution preparation, without mutating those stored selections.
+    layers.legend_composition = Separate;
     let primary = Plot::scatter(
         crate::NumericValues::new("x", [0.0, 1.0]),
         crate::NumericValues::new("y", [1.0, 0.0]),
     )
     .hue(crate::CategoryValues::new("treatment", ["control", "treated"]).unwrap());
-    for layer_first in [true, false] {
-        let canvas = Canvas::grid(1, 2)
+    for (composition, layer_first) in [
+        (Combined, true),
+        (Combined, false),
+        (Separate, true),
+        (Separate, false),
+    ] {
+        let mut canvas = Canvas::grid(1, 2)
             .unwrap()
             .size(1000, 500)
             .legend_policy(CanvasLegendPolicy::Shared);
-        let canvas = if layer_first {
+        if composition == Separate {
+            canvas.legend_composition = Some(Separate);
+        }
+        let mut canvas = if layer_first {
             canvas
                 .panel(0, 0, layers.clone())
                 .unwrap()
@@ -47,7 +59,11 @@ fn combined_layer_only_contributors_follow_the_primary_domain_in_both_source_ord
         else {
             panic!("prepared Shared discrete descriptor");
         };
-        assert_eq!(descriptor.counts.sections, 1);
+        assert_eq!(descriptor.composition, composition);
+        assert_eq!(
+            descriptor.counts.sections,
+            if composition == Combined { 1 } else { 2 }
+        );
         assert_eq!(descriptor.counts.entries, 3);
         assert_eq!(descriptor.counts.points, 3);
         assert_eq!(descriptor.counts.lines, 0);
@@ -57,8 +73,6 @@ fn combined_layer_only_contributors_follow_the_primary_domain_in_both_source_ord
         assert_eq!(descriptor.counts.source_occurrences, 3);
         let owner = crate::layout::ComponentAddress::root()
             .child(crate::layout::AddressRole::CanvasSharedLegend, 0)
-            .unwrap()
-            .child(crate::layout::AddressRole::LegendSection, 0)
             .unwrap();
         let guide_text = root
             .prepared()
@@ -73,25 +87,34 @@ fn combined_layer_only_contributors_follow_the_primary_domain_in_both_source_ord
                 )
             })
             .collect::<Vec<_>>();
-        assert_eq!(guide_text.len(), 4);
-        assert_eq!(
-            guide_text[0].component_address,
-            owner
-                .child(crate::layout::AddressRole::LegendTitle, 0)
-                .unwrap()
-        );
-        for (index, text) in guide_text[1..].iter().enumerate() {
-            assert_eq!(
-                text.component_address,
-                owner
-                    .child(
-                        crate::layout::AddressRole::LegendEntry,
-                        u32::try_from(index).unwrap()
-                    )
+        let addresses = if composition == Combined {
+            vec![(0, None), (0, Some(0)), (0, Some(1)), (0, Some(2))]
+        } else {
+            vec![
+                (0, None),
+                (0, Some(0)),
+                (0, Some(1)),
+                (1, None),
+                (1, Some(0)),
+            ]
+        };
+        assert_eq!(guide_text.len(), addresses.len());
+        for (text, (section, entry)) in guide_text.iter().zip(addresses) {
+            let section = owner
+                .child(crate::layout::AddressRole::LegendSection, section)
+                .unwrap();
+            let expected = if let Some(entry) = entry {
+                section
+                    .child(crate::layout::AddressRole::LegendEntry, entry)
                     .unwrap()
                     .child(crate::layout::AddressRole::LegendLabel, 0)
                     .unwrap()
-            );
+            } else {
+                section
+                    .child(crate::layout::AddressRole::LegendTitle, 0)
+                    .unwrap()
+            };
+            assert_eq!(text.component_address, expected,);
         }
         let texts = root.plan().retained_text();
         for source in ["Treatment", "Control", "Treated", "chosen raw"] {
@@ -103,7 +126,13 @@ fn combined_layer_only_contributors_follow_the_primary_domain_in_both_source_ord
                 1
             );
         }
-        assert!(!texts.iter().any(|(_, text)| text.source == "series"));
+        assert_eq!(
+            texts
+                .iter()
+                .filter(|(_, text)| text.source == "series")
+                .count(),
+            usize::from(composition == Separate)
+        );
         let position = |source| {
             texts
                 .iter()
@@ -112,6 +141,37 @@ fn combined_layer_only_contributors_follow_the_primary_domain_in_both_source_ord
         };
         assert!(position("Treatment") < position("Control"));
         assert!(position("Treated") < position("chosen raw"));
+        if composition == Separate {
+            assert!(position("Treated") < position("series"));
+            assert!(position("series") < position("chosen raw"));
+        }
+        let layer_slot = usize::from(!layer_first);
+        assert_eq!(
+            canvas.panels[layer_slot]
+                .as_ref()
+                .unwrap()
+                .legend_composition,
+            Separate
+        );
+        if composition == Separate && layer_first {
+            canvas.legend_policy = CanvasLegendPolicy::PerPlot;
+            let per_plot = canvas.preflight_plan().unwrap();
+            assert!(per_plot.prepared().shared_guide.is_none());
+            let composition = |index: usize| {
+                per_plot.prepared().interiors[index]
+                    .as_ref()
+                    .unwrap()
+                    .discrete_guides
+                    .get()
+                    .unwrap()
+                    .root
+                    .as_ref()
+                    .unwrap()
+                    .composition
+            };
+            assert_eq!(composition(0), Separate);
+            assert_eq!(composition(1), Combined);
+        }
     }
 }
 

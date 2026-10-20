@@ -64,8 +64,10 @@ keys, typed union and pre-font semantic validation are complete in
 `../docs/factorized-discrete-sections.md`. Stacked section measurement and frozen
 geometry are complete in `../docs/stacked-discrete-sections.md`; owner-wide flow
 reuse under the existing placement-attempt limits is complete in
-`../docs/scoped-discrete-measurement-reuse.md`. Parent/effective-policy and
-consumed-dependency integration follows.
+`../docs/scoped-discrete-measurement-reuse.md`. Effective parent policy, final
+section census and canonical facet marginal order are complete in
+`../docs/effective-discrete-guide-owners.md`; explicit consumed-dependency
+integration follows.
 The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
@@ -888,7 +890,9 @@ ink/collision bounds. No draw-time factorization or layout reconstruction.
 | T6L3 | COMPLETE | T6L2 | One bounded section flow/frame/collision plan; independently verified leaves below |
 | T6L3a | COMPLETE | T6L2 | One stacked section measurement, exact capacity allocation and frozen geometry; evidence in `docs/stacked-discrete-sections.md` |
 | T6L3b | COMPLETE | T6L3a | Owner-wide flow identity/reuse under the existing shared placement-attempt limits; evidence in `docs/scoped-discrete-measurement-reuse.md` |
-| T6L4 | PENDING | T6L3 | Facet/Canvas authority, exact merging, fonts, cache and feedback; `feat(composition): coordinate sectioned guides` |
+| T6L4 | IN PROGRESS | T6L3 | Facet/Canvas authority, exact merging, fonts, cache and feedback; independently verified leaves below |
+| T6L4a | COMPLETE | T6L3 | Effective owner policy, canonical parent domains and final section census; evidence in `docs/effective-discrete-guide-owners.md` |
+| T6L4b | PENDING | T6L4a | Explicit consumed guide/allocation/feedback dependencies in child and height reuse; `refactor(composition): retain consumed guide dependencies` |
 | T6L5 | PENDING | T6L4 | Public selection and atomic current-contract/examples migration; `feat(api): expose legend composition policy` |
 | T6L6 | PENDING | T6L5 | Full local/shared/fit/resource/output evidence; `test(legend): close section composition contracts` |
 

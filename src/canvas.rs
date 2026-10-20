@@ -315,6 +315,7 @@ pub struct Canvas {
     text_panels: Vec<Option<TextPanel>>,
     theme: Arc<crate::theme::Theme>,
     legend_policy: CanvasLegendPolicy,
+    legend_composition: Option<crate::decorations::legend::discrete::LegendComposition>,
     root_size: crate::layout::RootSize,
     title: Option<String>,
     subtitle: Option<String>,
@@ -370,6 +371,7 @@ impl Canvas {
             text_panels: (0..panel_count).map(|_| None).collect(),
             theme: Arc::new(crate::theme::Theme::publication()),
             legend_policy: CanvasLegendPolicy::PerPlot,
+            legend_composition: None,
             root_size: crate::layout::RootSize::natural(),
             title: None,
             subtitle: None,
@@ -2096,6 +2098,9 @@ impl Canvas {
     }
 
     fn cell_visibility(&self, mut plot: Plot, index: usize) -> Plot {
+        if self.legend_policy == CanvasLegendPolicy::Shared {
+            plot = plot.with_parent_legend_composition(self.legend_composition.unwrap_or_default());
+        }
         if self.legend_policy == CanvasLegendPolicy::Hidden {
             plot = plot
                 .with_suppressed_legend()

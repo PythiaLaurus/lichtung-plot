@@ -29,6 +29,18 @@ fn guide(inputs: &crate::layout::interior::PreparedInteriorInputs) -> &Arc<Prepa
     inputs.discrete_guides.get().unwrap().root.as_ref().unwrap()
 }
 
+fn separate_inputs(
+    plot: &Plot,
+    theme: &crate::theme::ResolvedTheme,
+) -> crate::layout::interior::PreparedInteriorInputs {
+    prepare(
+        &plot
+            .clone()
+            .with_parent_legend_composition(LegendComposition::Separate),
+        theme,
+    )
+}
+
 fn bar_fill(theme: &mut crate::theme::ResolvedTheme, body: crate::DataFillTheme) {
     let bodies = theme
         .marks
@@ -64,6 +76,8 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
         PreparedDiscreteGuide::prepare_for_test(&plot, &theme, LegendComposition::Separate)
             .unwrap()
             .unwrap();
+    let projected_inputs = separate_inputs(&plot, &theme);
+    assert_eq!(self::guide(&projected_inputs), &projected_mapped);
     let bars = &inputs.bars.as_ref().unwrap().panels[0].1;
     assert_eq!(bars.series, ["absent", "seen"]);
     assert!(bars
@@ -453,14 +467,12 @@ fn prepared_interaction_bindings_retain_exact_point_outlines_and_actual_group_st
         PreparedDiscreteGuide::prepare_for_test(&plot, &theme, LegendComposition::Separate)
             .unwrap()
             .unwrap();
+    let projected_inputs = separate_inputs(&plot, &theme);
+    assert_eq!(guide(&projected_inputs), &projected);
     assert_projected_interaction(&projected, outline_paint);
-    let unconfigured = interaction_input();
-    let error = PreparedDiscreteGuide::prepare_for_test(
-        &unconfigured.clone().erase(),
-        &theme,
-        LegendComposition::Separate,
-    )
-    .unwrap_err();
+    let mut unconfigured = interaction_input();
+    unconfigured.legend_composition = LegendComposition::Separate;
+    let error = unconfigured.clone().preflight().unwrap_err();
     assert!(error
         .to_string()
         .contains("unsupported discrete guide factorization"));
