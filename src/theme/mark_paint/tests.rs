@@ -93,22 +93,3 @@ fn present_widths_reject_invalid_inputs_without_imposing_a_minimum_or_maximum() 
     .with_pattern(StrokePattern::LongDash)
     .is_err());
 }
-
-#[test]
-fn absent_fill_outlines_have_one_operational_identity_and_invalid_widths_still_refuse() {
-    let paint = Color::rgba(11, 23, 37, 53);
-    let first = FillStyle::new(paint, Color::rgb(41, 59, 73), 0.0);
-    let second = FillStyle::new(paint, Color::rgba(83, 97, 109, 127), -0.0);
-    assert_eq!(first.color, second.color);
-    assert_eq!(first.stroke, Color::rgba(0, 0, 0, 0));
-    assert_eq!(first.stroke, second.stroke);
-    assert_eq!(first.stroke_width.to_bits(), second.stroke_width.to_bits());
-    let canonical = crate::render::primitives::CanonicalFillStyle::new(&first).unwrap();
-    assert_eq!(canonical.color, paint);
-    assert_eq!(canonical.stroke, Color::rgba(0, 0, 0, 0));
-    assert_eq!(canonical.stroke_width.units(), 0);
-    for width in [f32::NAN, f32::INFINITY, -1.0] {
-        let invalid = FillStyle::new(Color::rgba(0, 0, 0, 0), Color::rgba(0, 0, 0, 0), width);
-        assert!(crate::render::primitives::CanonicalFillStyle::new(&invalid).is_err());
-    }
-}

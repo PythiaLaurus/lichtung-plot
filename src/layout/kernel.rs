@@ -665,7 +665,7 @@ pub(crate) use feedback::{ChildFeedback, ChildFeedbackInputs};
 pub(crate) use feedback::{
     FeedbackKind, FeedbackRequestId, FeedbackRound, FitKind, FrameRequirements,
 };
-pub(crate) use tracks::{allocate_grid_axis, GridRequirement, TrackSpec};
+pub(crate) use tracks::{allocate_grid_axis, allocate_tracks, GridRequirement, TrackSpec};
 
 pub(crate) fn required_length(value: f64) -> Result<f64, Error> {
     let length = LayoutScalar::from_css_pixels(value, SpatialRounding::Ceil)?;

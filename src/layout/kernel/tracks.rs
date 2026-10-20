@@ -668,6 +668,11 @@ mod tests {
         };
         assert_eq!(allocation.sizes, [3, 4]);
         assert_eq!(allocation.trailing_slack, 0);
+        let FitOutcome::Measured(allocation) = alloc(&[flex(2, 5, Some(5)); 3], 10, false) else {
+            panic!("three equal guide-section capacities must share the exact shrink");
+        };
+        assert_eq!(allocation.sizes, [3, 3, 4]);
+        assert_eq!(allocation.trailing_slack, 0);
         let FitOutcome::Measured(allocation) =
             alloc(&[flex(1, 5, None), flex(2, 4, None)], 6, true)
         else {

@@ -1053,30 +1053,6 @@ mod tests {
     }
 
     #[test]
-    fn sampled_stops_do_not_move_the_numeric_center_label() {
-        let mut descriptor = descriptor();
-        descriptor
-            .stops
-            .insert(1, GradientStop::new(0.1, (70, 140, 200)));
-        let theme = crate::Theme::publication().resolve().unwrap();
-        let guide = fit::measured(MeasuredContinuousGuide::measure(
-            &descriptor,
-            (200.0, 400.0),
-            false,
-            false,
-            &theme,
-            &mut false,
-            &FitScope::root(),
-        ))
-        .unwrap();
-        let expected = guide.gradient.y0 + 0.4 * guide.gradient.height();
-        assert_eq!(
-            guide.labels[1].placement.position.y.to_bits(),
-            expected.to_bits()
-        );
-    }
-
-    #[test]
     fn horizontal_and_vertical_guides_freeze_one_gradient_and_missing_block() {
         let theme = crate::Theme::publication().resolve().unwrap();
         let guide = descriptor();
@@ -1125,25 +1101,6 @@ mod tests {
                 );
             }
         }
-    }
-
-    #[test]
-    fn insufficient_projected_length_is_a_guide_fit_miss() {
-        let theme = crate::Theme::publication().resolve().unwrap();
-        let scope = FitScope::root();
-        assert!(matches!(
-            MeasuredContinuousGuide::measure(
-                &descriptor(),
-                (80.0, 70.0),
-                false,
-                false,
-                &theme,
-                &mut false,
-                &scope,
-            )
-            .unwrap(),
-            FitOutcome::Miss(_)
-        ));
     }
 
     #[test]

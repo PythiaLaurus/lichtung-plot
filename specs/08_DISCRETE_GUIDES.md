@@ -1,9 +1,9 @@
 # Discrete Guides
 
 **Status**: Approved architectural target. Private Combined/Separate semantic
-construction, producer bindings/projection and authoritative pre-font
-transport/census are implemented. Multiple-section flow, effective parent-policy
-selection and public controls remain pending.
+construction, producer bindings/projection, authoritative pre-font transport/census
+and stacked section measurement/frozen geometry are implemented. Owner-wide flow
+reuse, effective parent-policy selection and public controls remain pending.
 
 ## 1. Authority And Boundary
 
@@ -18,7 +18,8 @@ containing-frame recovery, Unicode text, canonical arithmetic and resources.
 public contract until the corresponding atomic cutover. Combined implementation
 evidence is in `../docs/typed-guide-identities.md` and
 `../docs/prepared-discrete-sections.md`, `../docs/discrete-producer-bindings.md`
-and `../docs/factorized-discrete-sections.md`. This target does not claim the
+and `../docs/factorized-discrete-sections.md`; measured section evidence is in
+`../docs/stacked-discrete-sections.md`. This target does not claim the
 public Separate renderer or the full acceptance matrix below is implemented.
 
 The source census is taken after the private Color/OpaqueColor carrier migration.
