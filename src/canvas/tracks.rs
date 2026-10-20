@@ -579,6 +579,7 @@ pub(super) fn allocate(
                         row_insets[index / columns.len()][1],
                     ],
                     content.measurements,
+                    &[],
                 )?
             } else if let Some(text) = &content.source.text_panels[index] {
                 super::text_panel::natural_height(text, width, theme)?

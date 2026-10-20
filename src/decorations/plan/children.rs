@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use super::{LegendRole, PanelPlan};
+use crate::decorations::legend::discrete::scoped::{GuideConsumption, GuideUse, ScopedGuideInputs};
 use crate::layout::fit::FitOutcome;
 use crate::layout::kernel::{ChildFeedback, ChildFeedbackInputs, FeedbackRound};
 use crate::layout::{AddressRole, ComponentAddress, PanelBox};
@@ -54,7 +55,12 @@ impl Inputs {
             axis_label_width: context.axis_label_width.to_bits(),
             content_height: context.content_height,
             fill_content_height: context.fill_content_height,
-            plot: plot.retain_composed_inputs()?,
+            plot: plot.retain_composed_inputs(ScopedGuideInputs::new(
+                plot,
+                context.guides.use_kind,
+                context.guides.local_guide,
+                context.guides.dependencies,
+            )?)?,
             theme,
             scales: context.facet_scales(),
             feedback: round.child_inputs(&owners)?,
@@ -74,7 +80,13 @@ impl Inputs {
             && self.axis_label_width == context.axis_label_width.to_bits()
             && self.content_height == context.content_height
             && self.fill_content_height == context.fill_content_height
-            && plot.same_composed_inputs(&self.plot)
+            && self.plot.guides.matches_consumption(
+                context.guides.use_kind,
+                context.guides.local_guide,
+                context.guides.dependencies,
+            )
+            && plot.same_composed_inputs(&self.plot, &self.plot.guides)
+            && self.plot.guides.stable(round)
             && self.theme.same_validated(context.theme)?
             && self.scales == context.facet_scales()
             && round.child_inputs_equal(&self.feedback, &self.owners)
@@ -115,7 +127,6 @@ impl MeasurementPhase {
 struct Panel {
     inputs: Inputs,
     role: LegendRole,
-    discrete_guide: Option<crate::decorations::legend::discrete::DiscreteGuideSlot>,
     result: Arc<PanelPlan>,
     feedback: ChildFeedback,
 }
@@ -191,10 +202,12 @@ impl<'a> ChildPlans<'a> {
             self.panels.clear();
             return;
         }
-        self.measurements
-            .retain(|entry| round.child_stable(&entry.inputs.owners));
-        self.panels
-            .retain(|entry| round.child_stable(&entry.inputs.owners));
+        self.measurements.retain(|entry| {
+            round.child_stable(&entry.inputs.owners) && entry.inputs.plot.guides.stable(round)
+        });
+        self.panels.retain(|entry| {
+            round.child_stable(&entry.inputs.owners) && entry.inputs.plot.guides.stable(round)
+        });
     }
 
     pub(crate) fn measure(
@@ -207,7 +220,16 @@ impl<'a> ChildPlans<'a> {
         measure: impl FnOnce() -> Result<FitOutcome<PlotRenderResult>, Error>,
     ) -> Result<FitOutcome<Arc<PlotRenderResult>>, Error> {
         self.validate_owner(owner)?;
-
+        let guides = GuideConsumption {
+            use_kind: if plot.legend_policy_spec() == crate::LegendPolicy::Hidden {
+                GuideUse::Hidden
+            } else {
+                context.guides.use_kind
+            },
+            local_guide: context.guides.local_guide,
+            dependencies: context.guides.dependencies,
+        };
+        let context = context.with_guides(&guides);
         if reuse_enabled() {
             for entry in &self.measurements {
                 if entry.phase == phase && entry.inputs.matches(plot, context, owner, round)? {
@@ -250,13 +272,22 @@ impl<'a> ChildPlans<'a> {
         owner: &ComponentAddress,
     ) -> Result<FitOutcome<Arc<PanelPlan>>, Error> {
         self.validate_owner(owner)?;
-
+        let use_kind = if plot.legend_policy_spec() == crate::LegendPolicy::Hidden {
+            GuideUse::Hidden
+        } else if role == LegendRole::Panel {
+            GuideUse::Local
+        } else {
+            GuideUse::SharedSuppressed
+        };
+        let guides = GuideConsumption {
+            use_kind,
+            local_guide: discrete_guide,
+            dependencies: context.guides.dependencies,
+        };
+        let context = context.with_guides(&guides);
         if reuse_enabled() {
             for entry in &self.panels {
-                if entry.role == role
-                    && entry.discrete_guide.as_ref() == discrete_guide
-                    && entry.inputs.matches(plot, context, owner, round)?
-                {
+                if entry.role == role && entry.inputs.matches(plot, context, owner, round)? {
                     #[cfg(test)]
                     child_cache(owner, "panel", Counter::ChildCacheHit);
                     round.replay_child(&entry.feedback)?;
@@ -294,7 +325,6 @@ impl<'a> ChildPlans<'a> {
                 self.panels.push(Panel {
                     inputs,
                     role,
-                    discrete_guide: discrete_guide.cloned(),
                     result: Arc::clone(&result),
                     feedback,
                 });
@@ -312,6 +342,8 @@ fn reuse_enabled() -> bool {
     true
 }
 
+#[cfg(test)]
+mod scoped_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -352,55 +384,6 @@ mod tests {
         )
         .unwrap();
         assert_eq!(root.dimensions(), (800, 600));
-    }
-
-    #[test]
-    fn changed_child_tick_stack_invalidates_the_retained_input() {
-        let source = Plot::scatter(
-            crate::NumericValues::new("x", [0.0, 1.0]),
-            crate::NumericValues::new("y", [0.0, 1.0]),
-        )
-        .erase();
-        let theme = crate::Theme::publication().resolve().unwrap();
-        theme.prepare_font_environment().unwrap();
-        crate::layout::plan_exact_root(
-            800,
-            600,
-            |_| Ok(()),
-            |(), assigned, round| {
-                let owner = ComponentAddress::root().child(AddressRole::CanvasCell, 0)?;
-                let context = PlotRenderContext::new(
-                    source.data(),
-                    crate::layout::PanelBox::new(20.0, 400.0, 20.0, 500.0),
-                    &theme,
-                );
-                let key = Inputs::new(&source, context, &owner, round)?;
-
-                let mut changed = theme.clone();
-                changed.typography.axes.tick_label.stack = crate::font::canonical::FontStack::new(
-                    [crate::font::canonical::FontFamily::named("Noto Sand")?]
-                        .into_iter()
-                        .chain(
-                            theme.typography.axes.tick_label.stack.families()[1..]
-                                .iter()
-                                .cloned(),
-                        ),
-                )?;
-                let changed_context =
-                    PlotRenderContext::new(source.data(), context.panel, &changed);
-
-                assert!(!key.matches(&source, changed_context, &owner, round)?);
-
-                // Four scale/accent, seven axis and two point-ratio witnesses,
-                // then four shared immutable role stacks
-                // (one each), then the changed tick role's first name through its
-                // ninth/terminating byte (12). Group nesting adds no extra visit.
-
-                Ok(crate::layout::MeasuredLayout::new(assigned, ()))
-            },
-            |(), _, (), _| Ok(()),
-        )
-        .unwrap();
     }
 
     #[test]
@@ -605,14 +588,27 @@ mod tests {
                     for format in &variants {
                         let plot = make(format.clone());
                         let changed = crate::layout::fit::measured(children.measure(
-                            &plot, context, &owner, MeasurementPhase::Probe, round, &mut produce,
-                        )).map_err(crate::layout::fit::PlanError::into_error)?;
+                            &plot,
+                            context,
+                            &owner,
+                            MeasurementPhase::Probe,
+                            round,
+                            &mut produce,
+                        ))
+                        .map_err(crate::layout::fit::PlanError::into_error)?;
                         let hit = crate::layout::fit::measured(children.measure(
-                            &plot, context, &owner, MeasurementPhase::Probe, round, &mut produce,
-                        )).map_err(crate::layout::fit::PlanError::into_error)?;
+                            &plot,
+                            context,
+                            &owner,
+                            MeasurementPhase::Probe,
+                            round,
+                            &mut produce,
+                        ))
+                        .map_err(crate::layout::fit::PlanError::into_error)?;
                         assert!(!Arc::ptr_eq(&first, &changed));
                         assert!(Arc::ptr_eq(&changed, &hit));
-                        assert!(!source.same_composed_inputs(&children.measurements[0].inputs.plot));
+                        let inputs = &children.measurements[0].inputs.plot;
+                        assert!(!source.same_composed_inputs(inputs, &inputs.guides));
                     }
                     Ok(crate::layout::MeasuredLayout::new(assigned, ()))
                 },
@@ -658,7 +654,6 @@ mod tests {
                     children.panels.push(Panel {
                         inputs: Inputs::new(&source, context, &owner, round)?,
                         role: LegendRole::Suppressed,
-                        discrete_guide: None,
                         result: Arc::new(PanelPlan {
                             frame_box: context.panel,
                             panel_box: context.panel,

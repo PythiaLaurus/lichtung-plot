@@ -1,6 +1,9 @@
 //! Content sizing uses the rendering Grid's canonical track requirements.
 
 use super::{Canvas, PreparedCanvasInputs, PreparedGuideDescriptor};
+use crate::decorations::legend::discrete::scoped::{
+    ConsumedGuideDependency, GuideUse, ScopedGuideInputs,
+};
 use crate::decorations::title_block::plan::{RootAlignments, RootTitleBlockPlan};
 use crate::layout::canvas::PanelRequirements;
 use crate::layout::fit::{self, FitScope};
@@ -28,11 +31,9 @@ struct HeightInputs {
     parent_insets: [i64; 4],
     y_labels: bool,
     legend: crate::LegendPolicy,
-    composition: crate::decorations::legend::discrete::LegendComposition,
     continuous_hidden: bool,
     numeric: crate::numeric::inputs::NumericInputs,
-    local_guide:
-        Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedDiscreteGuide>>,
+    guides: ScopedGuideInputs,
     scope: Option<String>,
 }
 
@@ -51,10 +52,9 @@ impl HeightInputs {
             || self.parent_insets != other.parent_insets
             || self.y_labels != other.y_labels
             || self.legend != other.legend
-            || self.composition != other.composition
             || self.continuous_hidden != other.continuous_hidden
             || self.numeric != other.numeric
-            || self.local_guide != other.local_guide
+            || self.guides != other.guides
         {
             return false;
         }
@@ -78,6 +78,7 @@ impl HeightInputs {
         round: &FeedbackRound,
         owner: &ComponentAddress,
         per_plot: bool,
+        dependencies: &[ConsumedGuideDependency],
     ) -> Result<Self, Error> {
         let axes = plot.prepared_axis_inputs().ok_or_else(|| {
             Error::Render("height measurement requires prepared cell axes".into())
@@ -99,6 +100,26 @@ impl HeightInputs {
             }
         }
 
+        let use_kind = if plot.legend_policy_spec() == crate::LegendPolicy::Hidden {
+            GuideUse::Hidden
+        } else if per_plot {
+            GuideUse::Local
+        } else {
+            GuideUse::SharedSuppressed
+        };
+        let local = if use_kind == GuideUse::Local {
+            plot.prepared_discrete_guide()?
+                .map(|descriptor| {
+                    crate::decorations::legend::discrete::DiscreteGuideSlot::new(
+                        descriptor,
+                        &child,
+                        plot.legend_position_spec(),
+                    )
+                })
+                .transpose()?
+        } else {
+            None
+        };
         Ok(Self {
             width: crate::layout::kernel::nearest_spatial_quanta(width)?,
             ranges,
@@ -110,14 +131,9 @@ impl HeightInputs {
             parent_insets,
             y_labels: plot.y_tick_labels_visible(),
             legend: plot.legend_policy_spec(),
-            composition: plot.effective_legend_composition(),
             continuous_hidden: plot.continuous_guide_suppressed(),
             numeric: crate::numeric::inputs::NumericInputs::new(plot)?,
-            local_guide: if per_plot {
-                plot.prepared_discrete_guide()?
-            } else {
-                None
-            },
+            guides: ScopedGuideInputs::new(plot, use_kind, local.as_ref(), dependencies)?,
             scope: plot
                 .axis_scope()
                 .map(crate::data::source::copy_source_string)
@@ -131,6 +147,7 @@ impl HeightMeasurements {
         &self,
         inputs: &HeightInputs,
         owner: &ComponentAddress,
+        round: &FeedbackRound,
     ) -> Result<Option<f64>, Error> {
         let index = usize::try_from(owner.leaf_slot_index())
             .map_err(|_| Error::Render("content height slot overflowed".into()))?;
@@ -138,13 +155,17 @@ impl HeightMeasurements {
         let Some(Some(entry)) = entries.get(index) else {
             return Ok(None);
         };
-        if entry.inputs.matches_assignment(inputs) {
+        if entry.inputs.matches_assignment(inputs) && entry.inputs.guides.stable(round) {
             Ok(Some(entry.height))
         } else {
             Ok(None)
         }
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "record one exact width-dependent consequence with its declared guide dependencies"
+    )]
     pub(super) fn record(
         &self,
         plot: &Plot,
@@ -153,8 +174,10 @@ impl HeightMeasurements {
         parent_insets: [i64; 4],
         round: &FeedbackRound,
         owner: &ComponentAddress,
+        dependencies: &[ConsumedGuideDependency],
     ) -> Result<(), Error> {
-        let inputs = HeightInputs::new(plot, width, parent_insets, round, owner, true)?;
+        let inputs =
+            HeightInputs::new(plot, width, parent_insets, round, owner, true, dependencies)?;
         let index = usize::try_from(owner.leaf_slot_index())
             .map_err(|_| Error::Render("content height slot overflowed".into()))?;
         let mut entries = self.0.borrow_mut();
@@ -223,6 +246,7 @@ pub(super) fn cell_height(
     owner: &ComponentAddress,
     parent_insets: [i64; 4],
     measurements: Option<&HeightMeasurements>,
+    dependencies: &[ConsumedGuideDependency],
 ) -> Result<f64, Error> {
     let hard = plot.intrinsic_body_minimum(theme)?;
     let preference = body_preference(plot, theme, hard)?;
@@ -246,9 +270,17 @@ pub(super) fn cell_height(
         &FitScope::root(),
     )
     .map_err(fit::PlanError::into_error)?;
-    let identity = HeightInputs::new(plot, width, parent_insets, round, owner, per_plot)?;
+    let identity = HeightInputs::new(
+        plot,
+        width,
+        parent_insets,
+        round,
+        owner,
+        per_plot,
+        dependencies,
+    )?;
     if let Some(measurements) = measurements {
-        if let Some(height) = measurements.measured(&identity, owner)? {
+        if let Some(height) = measurements.measured(&identity, owner, round)? {
             return Ok(height);
         }
     }

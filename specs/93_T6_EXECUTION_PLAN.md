@@ -892,7 +892,9 @@ ink/collision bounds. No draw-time factorization or layout reconstruction.
 | T6L3b | COMPLETE | T6L3a | Owner-wide flow identity/reuse under the existing shared placement-attempt limits; evidence in `docs/scoped-discrete-measurement-reuse.md` |
 | T6L4 | IN PROGRESS | T6L3 | Facet/Canvas authority, exact merging, fonts, cache and feedback; independently verified leaves below |
 | T6L4a | COMPLETE | T6L3 | Effective owner policy, canonical parent domains and final section census; evidence in `docs/effective-discrete-guide-owners.md` |
-| T6L4b | PENDING | T6L4a | Explicit consumed guide/allocation/feedback dependencies in child and height reuse; `refactor(composition): retain consumed guide dependencies` |
+| T6L4b | IN PROGRESS | T6L4a | Explicit consumed guide/allocation/feedback dependencies in child and height reuse; independently verified leaves below |
+| T6L4b1 | COMPLETE | T6L4a | Typed scoped consumption and exact child/height dependency keys; evidence in `docs/scoped-guide-dependencies.md` |
+| T6L4b2 | PENDING | T6L4b1 | Actual Canvas/facet containing allocations and consumed ancestor stability; `refactor(composition): route consumed guide dependencies` |
 | T6L5 | PENDING | T6L4 | Public selection and atomic current-contract/examples migration; `feat(api): expose legend composition policy` |
 | T6L6 | PENDING | T6L5 | Full local/shared/fit/resource/output evidence; `test(legend): close section composition contracts` |
 

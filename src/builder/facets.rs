@@ -101,7 +101,11 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// Compare the computed inputs that Canvas/facet coordination can replace.
     /// All other source configuration is immutable for a root-local child owner.
-    pub(crate) fn same_composed_inputs(&self, other: &ComposedInputs) -> bool {
+    pub(crate) fn same_composed_inputs(
+        &self,
+        other: &ComposedInputs,
+        guides: &crate::decorations::legend::discrete::scoped::ScopedGuideInputs,
+    ) -> bool {
         fn same_values<T: PartialEq>(a: Option<&[T]>, b: Option<&[T]>) -> bool {
             match (a, b) {
                 (None, None) => true,
@@ -152,21 +156,22 @@ impl<K: crate::kind::Marker> Plot<K> {
             && self.y_tick_labels_visible == other.y_tick_labels_visible
             && self.render_scope == other.render_scope
             && self.legend_policy == other.legend_policy
-            && self.effective_legend_composition() == other.legend_composition
             && self.suppress_continuous_guide == other.suppress_continuous_guide
             && self.root_size == other.root_size
             && other.numeric.matches(self)
-            && self.prepared_discrete_guides.is_some() == other.guides_prepared
-            && match &self.prepared_discrete_guides {
-                Some(guides) => match guides.for_scope(self.axis_scope()) {
-                    Ok(guide) => guide == other.discrete_guide.as_ref(),
-                    Err(_) => false,
-                },
-                None => other.discrete_guide.is_none(),
-            }
+            && guides.matches_source(self)
+            && *guides == other.guides
     }
 
-    pub(crate) fn retain_composed_inputs(&self) -> Result<ComposedInputs, crate::Error> {
+    pub(crate) fn retain_composed_inputs(
+        &self,
+        guides: crate::decorations::legend::discrete::scoped::ScopedGuideInputs,
+    ) -> Result<ComposedInputs, crate::Error> {
+        if !guides.matches_source(self) {
+            return Err(crate::Error::Render(
+                "retained guide inputs do not belong to their computed source".into(),
+            ));
+        }
         let copy = |source: &str| -> Result<String, crate::Error> {
             let mut value = String::new();
             value
@@ -238,18 +243,10 @@ impl<K: crate::kind::Marker> Plot<K> {
             y_tick_labels_visible: self.y_tick_labels_visible,
             render_scope: self.render_scope.as_deref().map(copy).transpose()?,
             legend_policy: self.legend_policy,
-            legend_composition: self.effective_legend_composition(),
             suppress_continuous_guide: self.suppress_continuous_guide,
             root_size: self.root_size,
             numeric: crate::numeric::inputs::NumericInputs::new(self)?,
-            discrete_guide: self
-                .prepared_discrete_guides
-                .as_ref()
-                .map(|guides| guides.for_scope(self.axis_scope()))
-                .transpose()?
-                .flatten()
-                .cloned(),
-            guides_prepared: self.prepared_discrete_guides.is_some(),
+            guides,
         })
     }
 

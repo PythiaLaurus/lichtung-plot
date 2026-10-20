@@ -2723,6 +2723,7 @@ impl Canvas {
                         content_insets[index],
                         round,
                         &target,
+                        context.guides.dependencies,
                     )?;
                 }
                 let request = round.request_insets(

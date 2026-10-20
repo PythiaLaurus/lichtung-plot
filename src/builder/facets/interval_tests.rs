@@ -1,4 +1,5 @@
 use super::*;
+use crate::decorations::legend::discrete::scoped::ScopedGuideInputs;
 use crate::TickInterval;
 
 fn plot() -> Plot<crate::kind::Scatter> {
@@ -27,17 +28,19 @@ fn interval_copy_and_composed_identity_include_both_axes() {
         )
         .erase();
 
-    let retained = plot.retain_composed_inputs().unwrap();
+    let retained = plot
+        .retain_composed_inputs(ScopedGuideInputs::for_test(&plot))
+        .unwrap();
     assert_eq!(retained.x_axis_spec.interval, plot.x_axis_spec.interval);
     assert_eq!(retained.y_axis_spec.interval, plot.y_axis_spec.interval);
     assert_eq!(retained.x_axis_spec.format, plot.x_axis_spec.format);
     assert_eq!(retained.y_axis_spec.format, plot.y_axis_spec.format);
-    assert!(plot.same_composed_inputs(&retained));
+    assert!(plot.same_composed_inputs(&retained, &retained.guides));
     plot.x_axis_spec.interval = Some(TickInterval::additive(3.0).unwrap());
-    assert!(!plot.same_composed_inputs(&retained));
+    assert!(!plot.same_composed_inputs(&retained, &retained.guides));
     plot.x_axis_spec.interval = retained.x_axis_spec.interval;
     plot.y_axis_spec.interval = None;
-    assert!(!plot.same_composed_inputs(&retained));
+    assert!(!plot.same_composed_inputs(&retained, &retained.guides));
     plot.y_axis_spec.interval = retained.y_axis_spec.interval;
     for side in 0..2 {
         let mut changed = plot.clone();
@@ -46,7 +49,7 @@ fn interval_copy_and_composed_identity_include_both_axes() {
         } else {
             changed.y_axis_spec.format = None;
         }
-        assert!(!changed.same_composed_inputs(&retained));
+        assert!(!changed.same_composed_inputs(&retained, &retained.guides));
     }
 }
 
@@ -65,14 +68,18 @@ fn equal_composed_endpoints_do_not_erase_range_provenance() {
         Some((0.0, 10.0)),
         Some((0.0, 4.0)),
     );
-    let retained = automatic.retain_composed_inputs().unwrap();
+    let retained = automatic
+        .retain_composed_inputs(ScopedGuideInputs::for_test(&automatic))
+        .unwrap();
     assert_eq!(automatic.x_axis_spec.limits, configured.x_axis_spec.limits);
     assert_eq!(automatic.x_axis_spec.limits, shared.x_axis_spec.limits);
-    assert!(automatic.same_composed_inputs(&retained));
-    assert!(!configured.same_composed_inputs(&retained));
-    assert!(!shared.same_composed_inputs(&retained));
-    let shared_retained = shared.retain_composed_inputs().unwrap();
-    assert!(shared.same_composed_inputs(&shared_retained));
+    assert!(automatic.same_composed_inputs(&retained, &retained.guides));
+    assert!(!configured.same_composed_inputs(&retained, &retained.guides));
+    assert!(!shared.same_composed_inputs(&retained, &retained.guides));
+    let shared_retained = shared
+        .retain_composed_inputs(ScopedGuideInputs::for_test(&shared))
+        .unwrap();
+    assert!(shared.same_composed_inputs(&shared_retained, &shared_retained.guides));
     assert_eq!(
         shared_retained.x_axis_spec.provenance,
         crate::layout::RangeProvenance::Shared

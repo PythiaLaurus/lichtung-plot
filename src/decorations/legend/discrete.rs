@@ -3,6 +3,7 @@
 
 mod composition;
 mod projection;
+pub(crate) mod scoped;
 #[cfg(test)]
 mod source_tests;
 

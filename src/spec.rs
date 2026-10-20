@@ -616,6 +616,7 @@ pub(crate) struct PlotRenderContext<'a> {
     pub(crate) panel_text: Option<&'a [crate::decorations::panel_text::PanelTextPlan]>,
     pub(crate) self_managed_legend:
         Option<&'a Option<std::sync::Arc<crate::decorations::legend::Legend>>>,
+    pub(crate) guides: &'a crate::decorations::legend::discrete::scoped::GuideConsumption<'a>,
     fit_scope: &'a crate::layout::fit::FitScope,
 }
 
@@ -642,6 +643,7 @@ impl<'a> PlotRenderContext<'a> {
             producer_text: None,
             panel_text: None,
             self_managed_legend: None,
+            guides: &crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES,
             fit_scope: &crate::layout::fit::ROOT_SCOPE,
         }
     }
@@ -669,6 +671,7 @@ impl<'a> PlotRenderContext<'a> {
             producer_text: None,
             panel_text: None,
             self_managed_legend: None,
+            guides: &crate::decorations::legend::discrete::scoped::SUPPRESSED_GUIDES,
             fit_scope: &crate::layout::fit::ROOT_SCOPE,
         }
     }
@@ -690,6 +693,14 @@ impl<'a> PlotRenderContext<'a> {
 
     pub(crate) const fn with_fit_scope(mut self, scope: &'a crate::layout::fit::FitScope) -> Self {
         self.fit_scope = scope;
+        self
+    }
+
+    pub(crate) const fn with_guides(
+        mut self,
+        guides: &'a crate::decorations::legend::discrete::scoped::GuideConsumption<'a>,
+    ) -> Self {
+        self.guides = guides;
         self
     }
     pub(crate) const fn fit_scope(self) -> &'a crate::layout::fit::FitScope {

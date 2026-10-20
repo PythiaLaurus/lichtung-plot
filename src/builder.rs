@@ -587,12 +587,10 @@ pub(crate) struct ComposedInputs {
     y_tick_labels_visible: bool,
     render_scope: Option<String>,
     legend_policy: LegendPolicy,
-    legend_composition: crate::decorations::legend::discrete::LegendComposition,
     suppress_continuous_guide: bool,
     root_size: crate::layout::RootSize,
     numeric: crate::numeric::inputs::NumericInputs,
-    discrete_guide: Option<Arc<crate::decorations::legend::discrete::PreparedDiscreteGuide>>,
-    guides_prepared: bool,
+    pub(crate) guides: crate::decorations::legend::discrete::scoped::ScopedGuideInputs,
 }
 
 impl Plot<crate::kind::Any> {
