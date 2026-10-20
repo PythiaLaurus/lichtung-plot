@@ -896,7 +896,9 @@ ink/collision bounds. No draw-time factorization or layout reconstruction.
 | T6L4b1 | COMPLETE | T6L4a | Typed scoped consumption and exact child/height dependency keys; evidence in `docs/scoped-guide-dependencies.md` |
 | T6L4b2 | COMPLETE | T6L4b1 | Actual Canvas/facet containing allocations and consumed ancestor stability; evidence in `docs/routed-guide-dependencies.md` |
 | T6L5 | COMPLETE | T6L4 | Public selection and atomic current-contract/examples migration; evidence in `docs/public-legend-composition.md` |
-| T6L6 | PENDING | T6L5 | Full local/shared/fit/resource/output evidence; `test(legend): close section composition contracts` |
+| T6L6 | IN PROGRESS | T6L5 | Full local/shared/fit/resource/output evidence; `test(legend): close section composition contracts` |
+| T6L6a | COMPLETE | T6L5 | Actual all-25-kind source/key component census under both policies; evidence in `docs/discrete-guide-kind-census.md` |
+| T6L6b | PENDING | T6L6a | Factorized all-owner acceptance and bounded release workloads; `test(legend): verify sectioned publication contracts` |
 
 Retain current combined pair/same-field/sparse/row-hue/layer/conflict tests. Add
 dense independent-style crossings, sparse marginal-domain semantics, complete

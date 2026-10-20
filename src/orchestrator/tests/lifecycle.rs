@@ -734,6 +734,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
     let group = CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap();
     let interval_group = CategoryValues::new("interval_group", ["a", "b", "c", "d"]).unwrap();
     let hue = CategoryValues::new("hue", ["h1", "h2", "h1", "h2"]).unwrap();
+    let series = CategoryValues::new("series", ["h1", "h1", "h2", "h2"]).unwrap();
     let x = NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]);
     let y = NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]);
     let color = NumericValues::new("color", [0.1, 0.3, 0.7, 1.0]);
@@ -744,26 +745,39 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
     let plots = vec![
         (
             PlotKind::Scatter,
-            Plot::scatter(x.clone(), y.clone()).erase(),
+            Plot::scatter(x.clone(), y.clone()).hue(hue.clone()).erase(),
         ),
         (
             PlotKind::Histogram,
             Plot::histogram(crate::HistogramInput::samples(x.clone())).erase(),
         ),
-        (PlotKind::Density, Plot::density(x.clone()).erase()),
+        (
+            PlotKind::Density,
+            Plot::density(x.clone()).hue(hue.clone()).erase(),
+        ),
         (PlotKind::Qq, Plot::qq(x.clone()).erase()),
         (
             PlotKind::PointInterval,
             Plot::point_interval(interval_group.clone(), x.clone(), bounds()).erase(),
         ),
-        (PlotKind::Line, Plot::line(x.clone(), y.clone()).erase()),
+        (
+            PlotKind::Line,
+            Plot::line(x.clone(), y.clone())
+                .hue(hue.clone())
+                .band(bounds())
+                .erase(),
+        ),
         (
             PlotKind::Trajectory,
-            Plot::trajectory(AxisValues::Numeric(x.clone()), y.clone(), group.clone()).erase(),
+            Plot::trajectory(AxisValues::Numeric(x.clone()), y.clone(), group.clone())
+                .hue(hue.clone())
+                .erase(),
         ),
         (
             PlotKind::LinePath,
-            Plot::line_path(x.clone(), y.clone(), group.clone()).erase(),
+            Plot::line_path(x.clone(), y.clone(), group.clone())
+                .hue(hue.clone())
+                .erase(),
         ),
         (
             PlotKind::Interaction,
@@ -806,11 +820,15 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
         ),
         (
             PlotKind::Bar,
-            Plot::bar(group.clone(), crate::BarInput::samples(y.clone())).erase(),
+            Plot::bar(group.clone(), crate::BarInput::samples(y.clone()))
+                .series(series.clone())
+                .erase(),
         ),
         (
             PlotKind::HorizontalBar,
-            Plot::horizontal_bar(group.clone(), crate::BarInput::samples(y.clone())).erase(),
+            Plot::horizontal_bar(group.clone(), crate::BarInput::samples(y.clone()))
+                .series(series.clone())
+                .erase(),
         ),
         (
             PlotKind::StackedBar,
@@ -822,27 +840,40 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
         ),
         (
             PlotKind::Boxplot,
-            Plot::boxplot(group.clone(), y.clone()).erase(),
+            Plot::boxplot(group.clone(), y.clone())
+                .series(series.clone())
+                .erase(),
         ),
         (
             PlotKind::Violin,
-            Plot::violin(group.clone(), y.clone()).erase(),
+            Plot::violin(group.clone(), y.clone())
+                .series(series.clone())
+                .erase(),
         ),
         (
             PlotKind::Raincloud,
-            Plot::raincloud(crate::RaincloudInput::samples(group.clone(), y.clone())).erase(),
+            Plot::raincloud(crate::RaincloudInput::samples(group.clone(), y.clone()))
+                .series(series)
+                .erase(),
         ),
         (
             PlotKind::Regression,
-            Plot::regression(x.clone(), y.clone()).erase(),
+            Plot::regression(x.clone(), y.clone())
+                .band(crate::RegressionBand::PointwiseMean95)
+                .legend(crate::LegendPolicy::Visible(
+                    crate::LegendPosition::OutsideRight,
+                ))
+                .erase(),
         ),
         (
             PlotKind::Marginal,
-            Plot::marginal(x.clone(), y.clone()).erase(),
+            Plot::marginal(x.clone(), y.clone())
+                .hue(hue.clone())
+                .erase(),
         ),
         (
             PlotKind::Matrix,
-            Plot::matrix(vec![x.clone(), y.clone()]).erase(),
+            Plot::matrix(vec![x.clone(), y.clone()]).hue(hue).erase(),
         ),
         (
             PlotKind::Beeswarm,
@@ -857,6 +888,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
     crate::canvas::lifecycle_tests::mixed_family_parent_audit(&plots);
     for (kind, plot) in plots {
         let plot = plot.size(640, 480);
+        assert_discrete_kind_components(kind, &plot);
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let domain =
             crate::plots::shared_x::domain(&plot, &crate::font::canonical::OperationContext::new());
@@ -1019,6 +1051,76 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
         assert_eq!(frozen_work(), before, "{kind:?}: post-freeze work");
     }
     assert!(preparation_work.into_iter().all(|count| count > 0));
+}
+
+/// Independently specified complete key components for the actual source fixture
+/// above, including one authoritative absence for every non-Legend family.
+fn assert_discrete_kind_components(kind: PlotKind, plot: &Plot) {
+    use crate::decorations::legend::discrete::GuideCounts;
+    use crate::LegendComposition::{Combined, Separate};
+    let components = match kind {
+        PlotKind::Scatter | PlotKind::Trajectory | PlotKind::LinePath | PlotKind::Dumbbell => {
+            Some((2, 0, 0))
+        }
+        PlotKind::Line => Some((2, 2, 2)),
+        PlotKind::Interaction => Some((2, 2, 0)),
+        PlotKind::Density | PlotKind::Boxplot => Some((0, 2, 2)),
+        PlotKind::Bar
+        | PlotKind::HorizontalBar
+        | PlotKind::StackedBar
+        | PlotKind::StackedHorizontalBar
+        | PlotKind::Violin => Some((0, 0, 2)),
+        PlotKind::Raincloud | PlotKind::Marginal | PlotKind::Matrix => Some((2, 0, 2)),
+        PlotKind::Regression => Some((1, 1, 1)),
+        PlotKind::Histogram
+        | PlotKind::Qq
+        | PlotKind::PointInterval
+        | PlotKind::Coefficient
+        | PlotKind::Forest
+        | PlotKind::Heatmap
+        | PlotKind::Beeswarm
+        | PlotKind::Waterfall => None,
+    };
+    let theme = crate::Theme::publication().resolve().unwrap();
+    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+    for composition in [Combined, Separate] {
+        let plot = plot.clone().with_parent_legend_composition(composition);
+        let operation = crate::font::canonical::OperationContext::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&plot, &operation, Some(&theme)).unwrap();
+        inputs
+            .prepare_discrete_guides(
+                &plot,
+                &theme,
+                &operation,
+                &crate::layout::ComponentAddress::root(),
+                false,
+            )
+            .unwrap_or_else(|error| panic!("{kind:?}, {composition:?}: {error}"));
+        let descriptor = inputs.discrete_guides.get().unwrap().root.as_ref();
+        match (components, descriptor) {
+            (Some((points, lines, fills)), Some(descriptor)) => {
+                assert_eq!(descriptor.composition, composition);
+                assert_eq!(
+                    descriptor.counts,
+                    GuideCounts {
+                        sections: 1,
+                        entries: 2,
+                        points,
+                        lines,
+                        fills,
+                        primary_source_keys: 2,
+                        observed_pair_source_keys: 0,
+                        labeled_layer_source_keys: 0,
+                        source_occurrences: 2,
+                    },
+                    "{kind:?}, {composition:?}"
+                );
+            }
+            (None, None) => {}
+            _ => panic!("{kind:?}, {composition:?}: incorrect discrete presence"),
+        }
+    }
+    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| assert_eq!(calls.get(), 0));
 }
 
 #[test]
