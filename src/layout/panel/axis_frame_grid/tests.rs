@@ -141,7 +141,7 @@ fn native_categorical_trajectory_installs_band_projection_before_mark_capture() 
     let separate = crate::decorations::legend::discrete::PreparedDiscreteGuide::prepare_for_test(
         &plot,
         &theme,
-        crate::decorations::legend::discrete::LegendComposition::Separate,
+        crate::LegendComposition::Separate,
     )
     .unwrap()
     .unwrap();

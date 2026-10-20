@@ -403,6 +403,25 @@ pub enum CanvasLegendPolicy {
     Hidden,
 }
 
+/// Semantic composition of one discrete legend, independently of its appearance.
+///
+/// Standalone plots and facets use their Plot's selection. Canvas PerPlot uses
+/// each Plot's selection; Shared uses the Canvas selection for every contributor
+/// without changing the stored Plot values. Hidden skips guide-only composition.
+/// Continuous color guides keep their own representation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LegendComposition {
+    /// Preserve observed identities and complete mark keys in one section.
+    #[default]
+    Combined,
+    /// Explain independent mapped channels in ordered sections within one frame.
+    ///
+    /// Independent group/hue pairs require an explicitly configured group-style
+    /// channel, currently Interaction styles. Unsupported decompositions refuse
+    /// before fonts. Same-field channels remain one complete joint section.
+    Separate,
+}
+
 /// Requested legend placement.
 ///
 /// Inside positions are limited to plot edges so layout can reserve data space

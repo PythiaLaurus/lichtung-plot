@@ -83,7 +83,7 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
     let separate = crate::decorations::legend::discrete::PreparedDiscreteGuide::prepare_for_test(
         &chart,
         &theme,
-        crate::decorations::legend::discrete::LegendComposition::Separate,
+        crate::LegendComposition::Separate,
     )
     .unwrap()
     .unwrap();

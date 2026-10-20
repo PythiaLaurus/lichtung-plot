@@ -6,8 +6,8 @@ use super::*;
     reason = "one Shared authority contract checks effective policy, source counts, pre-font section slots and selected order"
 )]
 fn shared_composition_uses_parent_policy_in_both_source_orders() {
-    use crate::decorations::legend::discrete::LegendComposition::{Combined, Separate};
-    let mut layers = Plot::line(
+    use crate::LegendComposition::{Combined, Separate};
+    let layers = Plot::line(
         crate::NumericValues::new("x", [0.0, 1.0]),
         crate::NumericValues::new("y", [0.0, 1.0]),
     )
@@ -19,10 +19,12 @@ fn shared_composition_uses_parent_policy_in_both_source_orders() {
         )
         .with_color(crate::Color::rgba(80, 40, 120, 180))
         .legend_label("chosen raw"),
-    );
+    )
+    .legend_composition(Separate)
+    .legend_composition(Combined)
+    .legend_composition(Separate);
     // Stored child selections differ; only the Shared parent's effective value
     // owns contribution preparation, without mutating those stored selections.
-    layers.legend_composition = Separate;
     let primary = Plot::scatter(
         crate::NumericValues::new("x", [0.0, 1.0]),
         crate::NumericValues::new("y", [1.0, 0.0]),
@@ -34,13 +36,21 @@ fn shared_composition_uses_parent_policy_in_both_source_orders() {
         (Separate, true),
         (Separate, false),
     ] {
-        let mut canvas = Canvas::grid(1, 2)
-            .unwrap()
-            .size(1000, 500)
-            .legend_policy(CanvasLegendPolicy::Shared);
-        if composition == Separate {
-            canvas.legend_composition = Some(Separate);
-        }
+        let canvas = Canvas::grid(1, 2).unwrap().size(1000, 500);
+        let canvas = if composition == Combined {
+            // Omission, rather than an explicit enum, exercises the public
+            // Shared default against differently selected stored children.
+            canvas.legend_policy(CanvasLegendPolicy::Shared)
+        } else if layer_first {
+            canvas
+                .legend_policy(CanvasLegendPolicy::Shared)
+                .legend_composition(Combined)
+                .legend_composition(composition)
+        } else {
+            canvas
+                .legend_composition(composition)
+                .legend_policy(CanvasLegendPolicy::Shared)
+        };
         let mut canvas = if layer_first {
             canvas
                 .panel(0, 0, layers.clone())
@@ -150,7 +160,7 @@ fn shared_composition_uses_parent_policy_in_both_source_orders() {
             canvas.panels[layer_slot]
                 .as_ref()
                 .unwrap()
-                .legend_composition,
+                .effective_legend_composition(),
             Separate
         );
         if composition == Separate && layer_first {
@@ -208,6 +218,7 @@ fn shared_numeric_guides_resolve_final_sets_and_reject_equal_text_policy_conflic
         Canvas::grid(1, 2)
             .unwrap()
             .size(1000, 500)
+            .legend_composition(crate::LegendComposition::Separate)
             .legend_policy(CanvasLegendPolicy::Shared)
             .panel(0, 0, first.clone())
             .unwrap()
@@ -229,6 +240,7 @@ fn shared_numeric_guides_resolve_final_sets_and_reject_equal_text_policy_conflic
         .unwrap()
         .size(600, 400)
         .legend_policy(CanvasLegendPolicy::Hidden)
+        .legend_composition(crate::LegendComposition::Separate)
         .panel(
             0,
             0,

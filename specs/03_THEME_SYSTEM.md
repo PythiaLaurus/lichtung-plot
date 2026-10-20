@@ -1,7 +1,7 @@
 # Theme System
 
-**Status**: Complete immutable foundations and narrow heading instructions current;
-numeric/sectioned-guide presentation remains a staged target
+**Status**: Complete immutable foundations, narrow heading instructions and
+numeric/sectioned-guide presentation current
 
 ## Purpose
 
@@ -29,9 +29,11 @@ numeric presentation core and selectable combined/separate discrete legend
 composition. Their execution and detailed contracts are in
 `93_T6_EXECUTION_PLAN.md`. Both are semantic presentation policies, not theme
 appearance. Remaining DF2/DF5/DF7 scope is reviewed at T7 CLOSURE.
-Their refined architectural contracts and consumer/proof designs are closed in
+Their current architectural contracts and consumer/proof designs are in
 `06_NUMERIC_PRESENTATION.md`, `07_LOG10_DISPLAY.md` and `08_DISCRETE_GUIDES.md`;
-implementation and executable acceptance evidence remain pending.
+public construction and implementation evidence are in
+`../docs/public-numeric-formatting.md` and `../docs/public-legend-composition.md`.
+Integrated T6 acceptance/release closure remains governed by spec93.
 
 T6A2's authoritative validated construction, fields, metrics and migration
 signatures are in `94_T6_FOUNDATION_CONSTRUCTION.md`. They specify the complete

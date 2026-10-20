@@ -1,12 +1,12 @@
 # Discrete Guides
 
-**Status**: Approved architectural target. Private Combined/Separate semantic
+**Status**: Current Combined/Separate semantic
 construction, producer bindings/projection, authoritative pre-font transport/census
 and stacked section measurement/frozen geometry with owner-local exact reuse are
 implemented. Effective parent-policy selection, facet marginal ordering and final
 section census and exact scoped child/height dependencies are implemented
-privately, including actual consumed-ancestor routing. Public controls remain
-pending.
+with actual consumed-ancestor routing. Crate-root policy and Plot/Canvas controls
+are current; full acceptance and integrated release closure remain pending.
 
 ## 1. Authority And Boundary
 
@@ -17,8 +17,8 @@ owns complete theme construction, paint precedence, typography and exact local
 spacing. [`05_LAYOUT_SYSTEM.md`](05_LAYOUT_SYSTEM.md) owns root constraints,
 containing-frame recovery, Unicode text, canonical arithmetic and resources.
 [`01_ARCHITECTURE.md`](01_ARCHITECTURE.md) and
-[`02_RENDERING_CONTRACT.md`](02_RENDERING_CONTRACT.md) remain the implemented
-public contract until the corresponding atomic cutover. Combined implementation
+[`02_RENDERING_CONTRACT.md`](02_RENDERING_CONTRACT.md) define the implemented
+public boundary. Combined implementation
 evidence is in `../docs/typed-guide-identities.md` and
 `../docs/prepared-discrete-sections.md`, `../docs/discrete-producer-bindings.md`
 and `../docs/factorized-discrete-sections.md`; measured section evidence is in
@@ -26,8 +26,8 @@ and `../docs/factorized-discrete-sections.md`; measured section evidence is in
 `../docs/scoped-discrete-measurement-reuse.md`; effective parent preparation is in
 `../docs/effective-discrete-guide-owners.md`; scoped dependency-key evidence is in
 `../docs/scoped-guide-dependencies.md` and `../docs/routed-guide-dependencies.md`.
-This target does not claim the
-public Separate renderer or the full acceptance matrix below is implemented.
+Public construction is documented in `../docs/public-legend-composition.md`.
+The full acceptance matrix below and integrated release closure remain pending.
 
 The source census is taken after the private Color/OpaqueColor carrier migration.
 `docs/t6a1-public-cutover-census.md` is useful historical consumer evidence; its
@@ -62,7 +62,7 @@ impl Canvas {
 }
 ```
 
-The enum is a crate-root public policy at cutover. Backend styles, section
+The enum is a crate-root public policy. Backend styles, section
 records, provenance, layout constraints and inspection of prepared guides stay
 private. The existing sealed Legend capability is not widened, and erased Any
 does not acquire the setter. Both Plot and Canvas store a concrete Combined
@@ -1178,14 +1178,14 @@ temporary planning identifiers. No implementation evidence is asserted here.
 
 This target leaves no undecided neutral source, family applicability, layer text
 policy, section ordering, Shared authority or finite-height allocation. The
-implementation prerequisite is concrete: current flat producers do not retain
-mapping provenance, all owners do not yet carry a pre-font descriptor, and current
-cache/census paths do not consume section metadata. Those are specified migration
-tasks, not a reason to invent a first-pair default, late reconstruction or another
-flow search. Construction/section source refresh is bounded by the named owners.
+implementation uses producer-owned mapping provenance, pre-font descriptors,
+section-aware cache/census paths and the single measured guide. Construction and
+section source review stay bounded by the named owners; there is no first-pair
+default, late reconstruction or alternate flow search.
 
 The replacement is complete only when all 25 kinds and their valid parents are
 accounted for, every retired flat field/function path is gone, fonts/caches use
 the same prepared descriptor as sizing/selected output, and the new tests have
-actual recorded results. Until then this document remains an approved non-current
-architecture and its proposed acceptance evidence remains pending.
+actual recorded results. The public policy and section renderer are current;
+remaining proposed acceptance evidence and integrated release closure must be
+recorded before declaring the encompassing phase complete.

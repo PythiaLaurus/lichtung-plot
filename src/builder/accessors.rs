@@ -1091,9 +1091,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.legend_policy
     }
 
-    pub(crate) const fn effective_legend_composition(
-        &self,
-    ) -> crate::decorations::legend::discrete::LegendComposition {
+    pub(crate) const fn effective_legend_composition(&self) -> crate::LegendComposition {
         match self.parent_legend_composition {
             Some(value) => value,
             None => self.legend_composition,
@@ -1102,7 +1100,7 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     pub(crate) const fn with_parent_legend_composition(
         mut self,
-        value: crate::decorations::legend::discrete::LegendComposition,
+        value: crate::LegendComposition,
     ) -> Self {
         self.parent_legend_composition = Some(value);
         self

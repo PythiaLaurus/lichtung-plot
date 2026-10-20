@@ -479,8 +479,9 @@ fn parent_guide_order(
     panels: &[ScopedDiscreteGuide],
     facet_cells: bool,
 ) -> Result<Vec<crate::decorations::legend::GuideEntryIdentity>, Error> {
-    use crate::decorations::legend::discrete::{GuideSectionIdentity, LegendComposition};
+    use crate::decorations::legend::discrete::GuideSectionIdentity;
     use crate::decorations::legend::GuideEntryIdentity;
+    use crate::LegendComposition;
     let mut order = Vec::new();
     if chart.effective_legend_composition() == LegendComposition::Separate {
         // Facet marginals follow their own full parent domains, not the first

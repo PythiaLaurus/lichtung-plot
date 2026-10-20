@@ -2,10 +2,10 @@
 
 use std::sync::Arc;
 
-use super::{DiscreteGuideSlot, LegendComposition, PreparedDiscreteGuide};
+use super::{DiscreteGuideSlot, PreparedDiscreteGuide};
 use crate::layout::kernel::{ChildFeedbackInputs, FeedbackRound, LayoutScalar, SpatialRounding};
 use crate::layout::{ComponentAddress, PanelBox};
-use crate::{Error, Plot};
+use crate::{Error, LegendComposition, Plot};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum GuideUse {

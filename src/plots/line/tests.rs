@@ -189,7 +189,7 @@ fn supplemental_defaults_and_explicit_alpha_keep_label_paint_independent_and_gui
     let separate = crate::decorations::legend::discrete::PreparedDiscreteGuide::prepare_for_test(
         &source,
         &theme,
-        crate::decorations::legend::discrete::LegendComposition::Separate,
+        crate::LegendComposition::Separate,
     )
     .unwrap()
     .unwrap();

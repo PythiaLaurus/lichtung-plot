@@ -290,7 +290,8 @@ representations. Facet and Canvas shared legends stable-merge exact entries by
 typed raw semantic identity and reject conflicting labels or glyphs; they never
 reconstruct generic palette points in place of renderer-owned entries.
 
-When independent group and hue fields are both present, the legend title is the
+With default `LegendComposition::Combined`, when independent group and hue fields
+are both present, the legend title is the
 independently resolved `group × hue`, and each entry label is the independently
 resolved `group, hue`. When the two channels are the same semantic field with
 identical values, title and entry labels collapse to the one resolved identity.
@@ -298,6 +299,26 @@ Distinct fields always display both values, including an entry whose resolved
 values happen to be equal. The multiplication sign and comma are display
 separators only; raw pair identity remains typed and is never encoded by joining
 strings.
+
+`LegendComposition::Separate` retains one guide/frame and explains actual mapped
+channels in ordered group-style, joint, hue-color, literal and supplemental-series
+sections. Only explicitly configured Interaction group styles supply independent
+group-style mappings; unsupported independent pairs refuse before fonts rather
+than inventing a representative key. Same-field channels remain complete joint
+keys. Group projections neutralize only mapped hue RGB to the source Plot's
+legend-label RGB, preserving original component alpha and fixed/exact paint;
+hue projections neutralize only mapped Interaction shape/pattern to Circle/Solid.
+Scientific marks, membership, domains and sparse topology are unchanged.
+
+Plot's Legend-gated `legend_composition` and Canvas's setter default to Combined
+and replace only their own selection. Standalone/facets use the owning Plot,
+PerPlot each Plot, and Shared the Canvas selection for every contribution.
+Stored child selections do not conflict under Shared and remain available when
+returning to PerPlot. Hidden skips guide-only semantics/fonts while keeping
+scientific domain validation. All-continuous Canvas guides ignore composition;
+discrete/continuous mixing remains rejected. Final descriptor preorder supplies
+fonts, natural/assigned flow, exact scoped reuse and one frozen `LegendDrawPlan`.
+See `08_DISCRETE_GUIDES.md` for the complete section contract.
 
 ## Complete Theme And Scale Ownership
 

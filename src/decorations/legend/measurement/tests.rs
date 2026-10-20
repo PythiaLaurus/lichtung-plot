@@ -1,5 +1,5 @@
 use super::*;
-use crate::decorations::legend::discrete::LegendComposition;
+use crate::LegendComposition;
 
 fn empty_block() -> TextBlock {
     let theme = crate::Theme::publication().resolve().unwrap();

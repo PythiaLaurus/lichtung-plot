@@ -2,10 +2,11 @@ use super::*;
 use crate::decorations::legend::discrete::scoped::{
     ConsumedGuideDependency, DependencyUse, GuideAllocation, GuideOrientation,
 };
-use crate::decorations::legend::discrete::{LegendComposition, PreparedDiscreteGuide};
+use crate::decorations::legend::discrete::PreparedDiscreteGuide;
 use crate::layout::fit::{self, FitScope};
 use crate::layout::kernel::{FitKind, TrialOutcome};
 use crate::theme::ResolvedTheme;
+use crate::LegendComposition;
 
 fn parent_guide(field: &str, theme: &ResolvedTheme) -> Arc<PreparedDiscreteGuide> {
     let plot = Plot::scatter(

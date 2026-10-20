@@ -2,8 +2,7 @@
 
 use super::{
     add, count, incompatible, merge_entry, shared_slice, GuideCounts, GuideKeySource,
-    GuideSectionIdentity, LegendComposition, PreparedDiscreteGuide, PreparedGuideEntry,
-    PreparedGuideSection,
+    GuideSectionIdentity, PreparedDiscreteGuide, PreparedGuideEntry, PreparedGuideSection,
 };
 use crate::decorations::legend::identity::shared_text;
 use crate::decorations::legend::identity::PrimaryTitleIdentity;
@@ -12,6 +11,7 @@ use crate::decorations::legend::source::{
 };
 use crate::decorations::legend::{GuideEntryIdentity, GuideSourceKey, ResolvedGuideKey};
 use crate::layout::ComponentAddress;
+use crate::LegendComposition;
 use crate::{Error, Plot, Result};
 use std::sync::Arc;
 

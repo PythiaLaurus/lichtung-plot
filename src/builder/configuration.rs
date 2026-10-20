@@ -589,6 +589,67 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
+    /// Replace discrete guide composition; the default is Combined.
+    ///
+    /// This changes only section semantics, independently of theme, labels,
+    /// visibility, placement and sizing. Facets use this owning Plot selection.
+    /// Canvas Shared uses its own selection; PerPlot uses each Plot's value.
+    /// See [`crate::LegendComposition::Separate`] for truthful factorization.
+    /// ```
+    /// use lichtung_plot::{CategoryValues, LegendComposition, NumericValues, Plot};
+    /// let plot = Plot::scatter(NumericValues::new("x", [0.0, 1.0]),
+    ///     NumericValues::new("y", [1.0, 0.0]))
+    ///     .hue(CategoryValues::new("cohort", ["control", "treated"])?)
+    ///     .legend_composition(LegendComposition::Separate);
+    /// # let _ = plot;
+    /// # Ok::<(), lichtung_plot::Error>(())
+    /// ```
+    /// Erased plots and families without discrete legends do not expose this setter:
+    /// ```compile_fail
+    /// use lichtung_plot::{LegendComposition, Plot};
+    /// fn erased(plot: Plot) { let _ = plot.legend_composition(LegendComposition::Separate); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, LegendComposition, Plot};
+    /// fn unsupported(plot: Plot<kind::Heatmap>) { let _ = plot.legend_composition(LegendComposition::Separate); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, LegendComposition, Plot};
+    /// fn unsupported(plot: Plot<kind::Beeswarm>) { let _ = plot.legend_composition(LegendComposition::Separate); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, LegendComposition, Plot};
+    /// fn unsupported(plot: Plot<kind::Histogram>) { let _ = plot.legend_composition(LegendComposition::Separate); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, LegendComposition, Plot};
+    /// fn unsupported(plot: Plot<kind::Qq>) { let _ = plot.legend_composition(LegendComposition::Separate); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, LegendComposition, Plot};
+    /// fn unsupported(plot: Plot<kind::PointInterval>) { let _ = plot.legend_composition(LegendComposition::Separate); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, LegendComposition, Plot};
+    /// fn unsupported(plot: Plot<kind::Coefficient>) { let _ = plot.legend_composition(LegendComposition::Separate); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, LegendComposition, Plot};
+    /// fn unsupported(plot: Plot<kind::Forest>) { let _ = plot.legend_composition(LegendComposition::Separate); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, LegendComposition, Plot};
+    /// fn unsupported(plot: Plot<kind::Waterfall>) { let _ = plot.legend_composition(LegendComposition::Separate); }
+    /// ```
+    #[must_use]
+    pub const fn legend_composition(mut self, composition: crate::LegendComposition) -> Self
+    where
+        K: crate::kind::Legend,
+    {
+        self.legend_composition = composition;
+        self
+    }
+
     /// Select a centered or deterministic source-row-displaced raw-observation
     /// overlay for a boxplot or violin plot.
     #[must_use]

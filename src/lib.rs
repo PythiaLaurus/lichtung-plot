@@ -91,10 +91,10 @@ pub use spec::{
     CategoricalColorMap, CategoryOrder, CoefficientInput, ConfidenceInterval, DumbbellEndpoints,
     ErrorBar, EstimateStatus, FacetScales, FacetSpec, HeatmapAnnotations, HeatmapLabelFit,
     HeatmapLayout, HeatmapNullRowAnnotation, HistogramBins, HistogramComposite, HistogramKde,
-    HistogramStat, InteractionStyle, LegendPolicy, LegendPosition, LinePathStyle, LinePattern,
-    PanelCorner, PanelTextAnnotation, PercentileInterval, PlotKind, PointShape, QqLine, RawOverlay,
-    RegressionBand, SignificanceMarkStyle, StandardDeviation, StandardError, TextWeight,
-    TickInterval, ValueSort, WaterfallLabels,
+    HistogramStat, InteractionStyle, LegendComposition, LegendPolicy, LegendPosition,
+    LinePathStyle, LinePattern, PanelCorner, PanelTextAnnotation, PercentileInterval, PlotKind,
+    PointShape, QqLine, RawOverlay, RegressionBand, SignificanceMarkStyle, StandardDeviation,
+    StandardError, TextWeight, TickInterval, ValueSort, WaterfallLabels,
 };
 pub use spec::{PngCompression, PngOptions, PngSizing};
 pub use theme::{

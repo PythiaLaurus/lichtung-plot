@@ -73,6 +73,34 @@ optional exact `ColorDomain`. Data-scale colors use opaque `OpaqueColor`; mark
 roles supply alpha independently. See [complete theme and scale
 construction](docs/complete-theme-foundations.md).
 
+## Discrete Legend Sections
+
+`LegendComposition::Combined` is the default: one section with complete keys for
+observed identities. Select `Separate` to explain mapped channels in ordered
+sections inside one frame:
+
+```rust
+use lichtung_plot::{CategoryValues, LegendComposition, NumericValues, Plot};
+
+let plot = Plot::scatter(
+    NumericValues::new("x", [0.0, 1.0]),
+    NumericValues::new("y", [1.0, 0.0]),
+)
+.hue(CategoryValues::new("cohort", ["control", "treated"])?)
+.legend_composition(LegendComposition::Separate);
+# let _ = plot;
+# Ok::<(), lichtung_plot::Error>(())
+```
+
+Explicitly styled Interaction group/hue mappings produce group-style and hue-color
+sections. Unsupported independent pairs refuse before fonts; same-field channels
+stay joint. Sections preserve source mark geometry and alpha and do not invent
+unobserved combinations. Standalone/facets use the Plot selection, PerPlot uses
+each child's, and Shared uses `Canvas::legend_composition` for every contributor.
+Hidden skips guide-only semantics. Theme, visibility and placement keep their own
+setters. See [composition and ownership](docs/public-legend-composition.md) and
+[`examples/06_legend_sections.rs`](examples/06_legend_sections.rs).
+
 ## Exact Element Paint
 
 Exact styles accept a complete `Color`, including its byte alpha. An independent

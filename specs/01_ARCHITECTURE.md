@@ -193,6 +193,17 @@ Theme components or Canvas overrides.
 `PointLayer` is an optional ordinary-line overlay with renderer-owned visual
 defaults and selective caller overrides.
 
+Crate-root `LegendComposition::{Combined,Separate}` selects semantic sections of
+one discrete guide, independently of appearance and visibility/placement. The
+existing seventeen `kind::Legend` families expose the Plot setter; Canvas exposes
+its Shared selection. Combined is the default. Standalone/facets use the owning
+Plot, PerPlot each Plot, and Shared the Canvas for all contributions without
+mutating stored child selections. Effective sections and producer-owned keys are
+prepared before fonts and retained through exact measurement/dependency identity
+and one frozen draw plan. `08_DISCRETE_GUIDES.md` defines truthful factorization,
+ordering and unsupported independent-pair refusal. Continuous, Any and parent
+capabilities do not expand.
+
 ## Excluded Responsibilities
 
 The crate does not provide analysis routing, dynamic plugins, report

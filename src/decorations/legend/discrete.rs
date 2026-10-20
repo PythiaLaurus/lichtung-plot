@@ -13,14 +13,7 @@ use super::identity::{PrimaryTitleIdentity, RawField};
 use super::source::{LiteralDomain, Projection, SourceMapping};
 use super::{GuideEntryIdentity, ResolvedGuideKey};
 use crate::layout::{AddressRole, ComponentAddress, PreparedTextRequirement, PreparedTextRole};
-use crate::{Error, Result};
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) enum LegendComposition {
-    #[default]
-    Combined,
-    Separate,
-}
+use crate::{Error, LegendComposition, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum GuideSectionIdentity {

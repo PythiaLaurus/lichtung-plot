@@ -4,8 +4,8 @@ use crate::theme::TitleAlignment::{Center, End, Start};
 
 #[test]
 fn sectioned_facets_preserve_parent_domains_and_reject_alias_collisions_before_fonts() {
-    use crate::decorations::legend::discrete::LegendComposition;
-    let mut source = Plot::interaction(
+    use crate::LegendComposition;
+    let source = Plot::interaction(
         crate::CategoryValues::new(
             "condition",
             ["before", "before", "before", "after", "after", "after"],
@@ -34,8 +34,8 @@ fn sectioned_facets_preserve_parent_domains_and_reject_alias_collisions_before_f
             .unwrap(),
     ))
     .labels(crate::Labels::raw())
-    .size(1200, 700);
-    source.legend_composition = LegendComposition::Separate;
+    .size(1200, 700)
+    .legend_composition(LegendComposition::Separate);
     let source = source.erase();
     let operation = crate::font::canonical::OperationContext::new();
     let theme = crate::Theme::publication().resolve().unwrap();
@@ -304,13 +304,13 @@ fn measured_facet_tracks_keep_exact_fit_and_typed_owner() {
     reason = "actual routed parent guides distinguish equal-bounds descriptor changes, selective stability and cached/uncached frozen output"
 )]
 fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
-    use crate::decorations::legend::discrete::LegendComposition;
     use crate::decorations::plan::children::{ChildPlans, DISABLE_CHILD_REUSE};
     use crate::layout::kernel::{FeedbackKind, TrialOutcome};
     use crate::layout::{AddressRole, ComponentAddress};
+    use crate::LegendComposition;
 
     let make = |field| {
-        let mut plot = Plot::scatter(
+        let plot = Plot::scatter(
             crate::NumericValues::new("x", [0.0, 1.0, 0.0, 1.0]),
             crate::NumericValues::new("y", [0.0, 1.0, 1.0, 0.0]),
         )
@@ -320,8 +320,8 @@ fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
         ))
         .labels(crate::Labels::raw().alias(field, "Cohort"))
         .legend(crate::LegendPolicy::Visible(LegendPosition::InsideTopRight))
-        .size(1200, 800);
-        plot.legend_composition = LegendComposition::Separate;
+        .size(1200, 800)
+        .legend_composition(LegendComposition::Separate);
         plot.erase()
     };
     let source = make("first raw hue");

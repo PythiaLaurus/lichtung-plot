@@ -579,7 +579,7 @@ mod style_tests {
             crate::decorations::legend::discrete::PreparedDiscreteGuide::prepare_for_test(
                 &chart,
                 &theme,
-                crate::decorations::legend::discrete::LegendComposition::Separate,
+                crate::LegendComposition::Separate,
             )
             .unwrap()
             .unwrap();

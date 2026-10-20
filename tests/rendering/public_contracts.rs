@@ -56,14 +56,18 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
         assert_eq!(plot.erase().kind(), expected);
     }
 
-    fn categorical<K: kind::ExactFamily + kind::CategoricalScale>(
+    fn categorical<K: kind::ExactFamily + kind::CategoricalScale + kind::Legend>(
         plot: Plot<K>,
         expected: PlotKind,
     ) {
         let scale = CategoricalColorScale::from_palette(
             QualitativePalette::fixed([OpaqueColor::rgb(13, 29, 47)]).unwrap(),
         );
-        exact(plot.categorical_color_scale(scale), expected);
+        exact(
+            plot.categorical_color_scale(scale)
+                .legend_composition(lichtung_plot::LegendComposition::Separate),
+            expected,
+        );
     }
 
     fn numeric(name: &'static str) -> NumericValues {
@@ -177,7 +181,8 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
                 Color::rgb(180, 60, 40),
             )
             .unwrap(),
-        ),
+        )
+        .legend_composition(lichtung_plot::LegendComposition::Separate),
         PlotKind::Dumbbell,
     );
     exact::<kind::Heatmap>(
@@ -244,7 +249,9 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
         PlotKind::Raincloud,
     );
     exact::<kind::Regression>(
-        Plot::regression(numeric("x"), numeric("y")).band(RegressionBand::Hidden),
+        Plot::regression(numeric("x"), numeric("y"))
+            .band(RegressionBand::Hidden)
+            .legend_composition(lichtung_plot::LegendComposition::Separate),
         PlotKind::Regression,
     );
     categorical::<kind::Marginal>(

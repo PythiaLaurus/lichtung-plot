@@ -470,8 +470,7 @@ fn prepared_interaction_bindings_retain_exact_point_outlines_and_actual_group_st
     let projected_inputs = separate_inputs(&plot, &theme);
     assert_eq!(guide(&projected_inputs), &projected);
     assert_projected_interaction(&projected, outline_paint);
-    let mut unconfigured = interaction_input();
-    unconfigured.legend_composition = LegendComposition::Separate;
+    let unconfigured = interaction_input().legend_composition(LegendComposition::Separate);
     let error = unconfigured.clone().preflight().unwrap_err();
     assert!(error
         .to_string()

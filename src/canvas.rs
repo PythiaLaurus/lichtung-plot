@@ -19,7 +19,7 @@ use crate::render::backend::{with_layer, Backend, SurfaceRole};
 use crate::scene::RenderedScene;
 use crate::spec::AxisDomain;
 use crate::theme::ResolvedTheme;
-use crate::{CanvasLegendPolicy, Labels, Output, Plot, PlotKind, Theme};
+use crate::{CanvasLegendPolicy, Labels, LegendComposition, Output, Plot, PlotKind, Theme};
 
 mod dependencies;
 mod plot_text;
@@ -319,7 +319,7 @@ pub struct Canvas {
     text_panels: Vec<Option<TextPanel>>,
     theme: Arc<crate::theme::Theme>,
     legend_policy: CanvasLegendPolicy,
-    legend_composition: Option<crate::decorations::legend::discrete::LegendComposition>,
+    legend_composition: LegendComposition,
     root_size: crate::layout::RootSize,
     title: Option<String>,
     subtitle: Option<String>,
@@ -375,7 +375,7 @@ impl Canvas {
             text_panels: (0..panel_count).map(|_| None).collect(),
             theme: Arc::new(crate::theme::Theme::publication()),
             legend_policy: CanvasLegendPolicy::PerPlot,
-            legend_composition: None,
+            legend_composition: LegendComposition::Combined,
             root_size: crate::layout::RootSize::natural(),
             title: None,
             subtitle: None,
@@ -452,6 +452,26 @@ impl Canvas {
     #[must_use]
     pub fn legend_policy(mut self, policy: CanvasLegendPolicy) -> Self {
         self.legend_policy = policy;
+        self
+    }
+
+    /// Replace the semantic composition of a Shared discrete guide.
+    ///
+    /// Combined is the default. Under Shared this selection owns every
+    /// contribution; stored child selections remain unchanged. PerPlot, Hidden
+    /// and all-continuous guides leave this value inactive. Theme, placement and
+    /// legend-policy call order are independent.
+    /// ```
+    /// use lichtung_plot::{Canvas, CanvasLegendPolicy, LegendComposition};
+    /// let canvas = Canvas::grid(1, 2)?
+    ///     .legend_composition(LegendComposition::Separate)
+    ///     .legend_policy(CanvasLegendPolicy::Shared);
+    /// # let _ = canvas;
+    /// # Ok::<(), lichtung_plot::Error>(())
+    /// ```
+    #[must_use]
+    pub const fn legend_composition(mut self, composition: LegendComposition) -> Self {
+        self.legend_composition = composition;
         self
     }
 
@@ -2103,7 +2123,7 @@ impl Canvas {
 
     fn cell_visibility(&self, mut plot: Plot, index: usize) -> Plot {
         if self.legend_policy == CanvasLegendPolicy::Shared {
-            plot = plot.with_parent_legend_composition(self.legend_composition.unwrap_or_default());
+            plot = plot.with_parent_legend_composition(self.legend_composition);
         }
         if self.legend_policy == CanvasLegendPolicy::Hidden {
             plot = plot
