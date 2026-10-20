@@ -1,26 +1,41 @@
 //! The single immutable discrete guide: semantic sections, resolved keys and
 //! actual source occurrences, prepared before fonts or panel assignment.
 
+mod composition;
+mod projection;
 #[cfg(test)]
 mod source_tests;
 
 use std::sync::Arc;
 
-use super::identity::PrimaryTitleIdentity;
-use super::source::{Projection, SourceMapping};
-use super::{GuideEntryIdentity, GuideSourceKey, ResolvedGuideKey};
+use super::identity::{PrimaryTitleIdentity, RawField};
+use super::source::{LiteralDomain, Projection, SourceMapping};
+use super::{GuideEntryIdentity, ResolvedGuideKey};
 use crate::layout::{AddressRole, ComponentAddress, PreparedTextRequirement, PreparedTextRole};
-use crate::{Error, Plot, Result};
+use crate::{Error, Result};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) enum LegendComposition {
     #[default]
     Combined,
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "private Separate preparation precedes the measured/public policy cutover"
+        )
+    )]
+    Separate,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum GuideSectionIdentity {
     Combined(PrimaryTitleIdentity),
+    GroupStyle(RawField),
+    Joint(RawField),
+    HueColor(RawField),
+    Literal(LiteralDomain),
+    SupplementalSeries,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,6 +45,7 @@ pub(crate) struct GuideKeySource {
     source_ordinal: u32,
     mapping: SourceMapping,
     projection: Projection,
+    group_neutral_rgb: Option<crate::theme::OpaqueColor>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -102,165 +118,29 @@ pub(super) fn shared_slice<T>(values: Vec<T>) -> Result<Arc<[T]>> {
 }
 
 impl PreparedDiscreteGuide {
-    /// Source keys are transient producer operands, never a second retained
-    /// flat guide. Only this constructor resolves their display semantics.
-    pub(crate) fn prepare(
-        plot: &Plot,
-        owner: &ComponentAddress,
-        keys: Vec<GuideSourceKey>,
+    #[cfg(test)]
+    pub(crate) fn prepare_for_test(
+        plot: &crate::Plot,
+        theme: &crate::theme::ResolvedTheme,
+        composition: LegendComposition,
     ) -> Result<Option<Arc<Self>>> {
-        if keys.is_empty() {
-            return Ok(None);
-        }
-        let mut primary = None;
-        let mut counts = GuideCounts::default();
-        let mut entries = Vec::new();
-        crate::data::source::reserve_source(&mut entries, keys.len())?;
-        for (ordinal, source) in keys.into_iter().enumerate() {
-            source.validate(plot)?;
-            if let Some(title) = source.identity.primary_title() {
-                if primary.as_ref().is_some_and(|expected| *expected != title) {
-                    return Err(incompatible("plot legend"));
-                }
-                primary = Some(title);
-                add(&mut counts.primary_source_keys, 1)?;
-            } else {
-                add(&mut counts.labeled_layer_source_keys, 1)?;
-            }
-            if matches!(source.identity, GuideEntryIdentity::Pair { .. }) {
-                add(&mut counts.observed_pair_source_keys, 1)?;
-            }
-            let label = source
-                .identity
-                .resolved_label(plot, source.mapping.layer_label_context)?;
-            entries.push(PreparedGuideEntry {
-                identity: source.identity,
-                display_label: super::identity::shared_text(&label)?,
-                key: source.key,
-                sources: shared_slice(crate::data::source::collect_source(std::iter::once(Ok(
-                    GuideKeySource {
-                        producer: plot.kind(),
-                        contributor_address: owner.clone(),
-                        source_ordinal: count(ordinal)?,
-                        mapping: source.mapping,
-                        projection: Projection::Complete,
-                    },
-                )))?)?,
-            });
-        }
-        let primary = primary.unwrap_or(PrimaryTitleIdentity::Series);
-        let title = primary.resolved_text(plot)?;
-        let guide = Self::finish(
-            primary,
-            super::identity::shared_text(&title)?,
-            merge_entries(&entries, "plot legend")?,
-            counts,
-        )?;
-        Ok(Some(guide))
-    }
-
-    /// Union already resolved sections. Layer-only contributors cannot choose
-    /// a primary domain or cause first-contributor title/label resolution.
-    pub(crate) fn merge<'a>(
-        guides: impl IntoIterator<Item = &'a Arc<Self>>,
-        order: &[GuideEntryIdentity],
-        context: &str,
-    ) -> Result<Option<Arc<Self>>> {
-        let mut primary: Option<(PrimaryTitleIdentity, Arc<str>)> = None;
-        let mut entries = Vec::new();
-        let mut counts = GuideCounts::default();
-        for guide in guides {
-            add(
-                &mut counts.primary_source_keys,
-                guide.counts.primary_source_keys,
-            )?;
-            add(
-                &mut counts.observed_pair_source_keys,
-                guide.counts.observed_pair_source_keys,
-            )?;
-            add(
-                &mut counts.labeled_layer_source_keys,
-                guide.counts.labeled_layer_source_keys,
-            )?;
-            for section in guide.sections.iter() {
-                let GuideSectionIdentity::Combined(identity) = &section.identity;
-                if section
-                    .entries
-                    .iter()
-                    .any(|entry| entry.identity.primary_title().is_some())
-                {
-                    if let Some((expected, title)) = &primary {
-                        if expected != identity || *title != section.display_title {
-                            return Err(incompatible(context));
-                        }
-                    } else {
-                        primary = Some((identity.clone(), Arc::clone(&section.display_title)));
-                    }
-                }
-                crate::data::source::reserve_source(&mut entries, section.entries.len())?;
-                entries.extend(section.entries.iter().cloned());
-            }
-        }
-        if entries.is_empty() {
-            return Ok(None);
-        }
-        let (identity, title) = primary.map_or_else(
-            || {
-                Ok::<_, Error>((
-                    PrimaryTitleIdentity::Series,
-                    super::identity::shared_text("series")?,
-                ))
-            },
-            Ok,
-        )?;
-        let mut merged = merge_entries(&entries, context)?;
-        if !order.is_empty() {
-            let mut positions = crate::data::source::collect_source(merged.iter().map(|entry| {
-                Ok(order
-                    .iter()
-                    .position(|identity| *identity == entry.identity)
-                    .unwrap_or(usize::MAX))
-            }))?;
-            for index in 1..merged.len() {
-                let mut current = index;
-                while current > 0 && positions[current - 1] > positions[current] {
-                    positions.swap(current - 1, current);
-                    merged.swap(current - 1, current);
-                    current -= 1;
-                }
-            }
-        }
-        Self::finish(identity, title, merged, counts).map(Some)
-    }
-
-    fn finish(
-        identity: PrimaryTitleIdentity,
-        title: Arc<str>,
-        entries: Vec<PreparedGuideEntry>,
-        mut counts: GuideCounts,
-    ) -> Result<Arc<Self>> {
-        if entries.is_empty() {
-            return Err(Error::Render("a discrete section must be nonempty".into()));
-        }
-        counts.sections = 1;
-        counts.entries = count(entries.len())?;
-        for entry in &entries {
-            add(&mut counts.points, u32::from(entry.key.point.is_some()))?;
-            add(&mut counts.lines, u32::from(entry.key.line.is_some()))?;
-            add(&mut counts.fills, u32::from(entry.key.fill.is_some()))?;
-            add(&mut counts.source_occurrences, count(entry.sources.len())?)?;
-        }
-        crate::data::source::source_arc(Self {
-            composition: LegendComposition::Combined,
-            counts,
-            sections: shared_slice(crate::data::source::collect_source(std::iter::once(Ok(
-                PreparedGuideSection {
-                    identity: GuideSectionIdentity::Combined(identity),
-                    display_title: title,
-                    entries: shared_slice(entries)?,
-                },
-            )))?)?,
-        })
+        let operation = crate::font::canonical::OperationContext::new();
+        let inputs = crate::plots::shared_x::prepare_plot(plot, &operation, Some(theme))?;
+        let data = plot.data().with_operation(&operation);
+        let keys = if plot.legend_policy_spec() == crate::LegendPolicy::Hidden {
+            Vec::new()
+        } else if let Some(matrix) = &inputs.matrix {
+            matrix.guide_sources(plot, theme, data)?
+        } else {
+            inputs.guide_sources(plot, theme, data, plot.axis_scope())?
+        };
+        Self::prepare(
+            plot,
+            theme,
+            &ComponentAddress::root().child(AddressRole::PlotBody, 0)?,
+            keys,
+            composition,
+        )
     }
 
     pub(crate) fn append_requirements(
@@ -318,19 +198,6 @@ fn incompatible(context: &str) -> Error {
     Error::Render(format!("{context} requires compatible semantic titles, labels, and styles; glyphs must match exactly"))
 }
 
-fn merge_entries(entries: &[PreparedGuideEntry], context: &str) -> Result<Vec<PreparedGuideEntry>> {
-    let mut merged = Vec::new();
-    for supplemental in [false, true] {
-        for entry in entries
-            .iter()
-            .filter(|entry| entry.identity.primary_title().is_none() == supplemental)
-        {
-            merge_entry(&mut merged, entry.clone(), context)?;
-        }
-    }
-    Ok(merged)
-}
-
 fn merge_entry(
     entries: &mut Vec<PreparedGuideEntry>,
     entry: PreparedGuideEntry,
@@ -338,8 +205,17 @@ fn merge_entry(
 ) -> Result<()> {
     for existing in entries.iter_mut() {
         if existing.identity == entry.identity {
-            if existing.display_label != entry.display_label || existing.key != entry.key {
-                return Err(incompatible(context));
+            if existing.display_label != entry.display_label {
+                return Err(Error::Render(format!(
+                    "{context} requires compatible semantic titles, labels, and styles: conflicting labels for raw identity {:?}",
+                    entry.identity
+                )));
+            }
+            if existing.key != entry.key {
+                return Err(Error::Render(format!(
+                    "{context} requires compatible semantic titles, labels, and styles: raw identity {:?} from {:?} has incompatible {}; glyphs must match exactly",
+                    entry.identity, entry.sources.first(), existing.key.mismatched_component(&entry.key),
+                )));
             }
             let length = existing
                 .sources

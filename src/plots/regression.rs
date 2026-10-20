@@ -575,6 +575,24 @@ mod style_tests {
         assert_eq!(old_fill.color.alpha(), 64);
         assert_eq!(new_fill.color.alpha(), 128);
         assert_eq!(new_fill.stroke_width.to_bits(), 2.0_f32.to_bits());
+        let separate =
+            crate::decorations::legend::discrete::PreparedDiscreteGuide::prepare_for_test(
+                &chart,
+                &theme,
+                crate::decorations::legend::discrete::LegendComposition::Separate,
+            )
+            .unwrap()
+            .unwrap();
+        assert!(matches!(
+            separate.sections[0].identity,
+            crate::decorations::legend::discrete::GuideSectionIdentity::Literal(
+                crate::decorations::legend::source::LiteralDomain::RegressionReference
+            )
+        ));
+        assert_eq!(
+            separate.sections[0].entries[1].key,
+            changed.discrete_guide.as_ref().unwrap().sections[0].entries[1].key
+        );
         assert!(
             crate::decorations::legend::discrete::PreparedDiscreteGuide::merge(
                 [

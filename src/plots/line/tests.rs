@@ -80,6 +80,10 @@ fn exact_supplemental_color_and_alpha_edits_freeze_identically_in_either_order()
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one layer contract compares complete paints, annotations and source label context under both compositions"
+)]
 fn supplemental_defaults_and_explicit_alpha_keep_label_paint_independent_and_guides_truthful() {
     let automatic = labeled_layer(1.0, "Auto");
     let alpha = labeled_layer(1.5, "Alpha")
@@ -90,6 +94,8 @@ fn supplemental_defaults_and_explicit_alpha_keep_label_paint_independent_and_gui
         crate::NumericValues::new("x", [0.0, 2.0]),
         crate::NumericValues::new("y", [0.0, 2.0]),
     )
+    .hue(crate::CategoryValues::new("cohort", ["seen", "seen"]).unwrap())
+    .labels(crate::Labels::raw().alias("Alpha", "Legend alpha"))
     .markers(false)
     .x_limits(-2.0, 4.0)
     .y_limits(-2.0, 4.0)
@@ -166,14 +172,37 @@ fn supplemental_defaults_and_explicit_alpha_keep_label_paint_independent_and_gui
         crate::render::backend::PlannedTextOrigin::Middle
     );
     let guide = measured.discrete_guide.as_ref().unwrap();
-    assert_eq!(guide.counts.entries, 2);
+    assert_eq!(guide.counts.entries, 3);
     assert_eq!(
-        guide.sections[0].entries[1].identity,
+        guide.sections[0].entries[2].identity,
         crate::decorations::legend::GuideEntryIdentity::supplemental("Alpha").unwrap()
     );
     assert_eq!(
-        guide.sections[0].entries[1].key,
+        guide.sections[0].entries[2].key,
         crate::decorations::legend::ResolvedGuideKey::point(alpha_style.clone())
     );
-    assert_eq!(guide.sections[0].entries[1].display_label.as_ref(), "Alpha");
+    assert_eq!(alpha_text[0].plan.source, "Alpha");
+    assert_eq!(
+        guide.sections[0].entries[2].display_label.as_ref(),
+        "Legend alpha"
+    );
+    let separate = crate::decorations::legend::discrete::PreparedDiscreteGuide::prepare_for_test(
+        &source,
+        &theme,
+        crate::decorations::legend::discrete::LegendComposition::Separate,
+    )
+    .unwrap()
+    .unwrap();
+    assert!(matches!(
+        separate.sections[1].identity,
+        crate::decorations::legend::discrete::GuideSectionIdentity::SupplementalSeries
+    ));
+    assert_eq!(
+        separate.sections[1].entries[1].display_label.as_ref(),
+        "Legend alpha"
+    );
+    assert_eq!(
+        separate.sections[1].entries[1].key,
+        guide.sections[0].entries[2].key
+    );
 }

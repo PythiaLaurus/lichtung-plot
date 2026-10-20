@@ -1,9 +1,9 @@
 # Discrete Guides
 
-**Status**: Approved architectural target. Private Combined typed identities,
-section storage, producer mapping provenance and authoritative pre-font
-transport/census are implemented;
-Separate projection, multiple-section flow and public selection remain pending.
+**Status**: Approved architectural target. Private Combined/Separate semantic
+construction, producer bindings/projection and authoritative pre-font
+transport/census are implemented. Multiple-section flow, effective parent-policy
+selection and public controls remain pending.
 
 ## 1. Authority And Boundary
 
@@ -17,9 +17,9 @@ containing-frame recovery, Unicode text, canonical arithmetic and resources.
 [`02_RENDERING_CONTRACT.md`](02_RENDERING_CONTRACT.md) remain the implemented
 public contract until the corresponding atomic cutover. Combined implementation
 evidence is in `../docs/typed-guide-identities.md` and
-`../docs/prepared-discrete-sections.md` and `../docs/discrete-producer-bindings.md`;
-this target does not claim Separate or
-the full acceptance matrix proposed below is implemented.
+`../docs/prepared-discrete-sections.md`, `../docs/discrete-producer-bindings.md`
+and `../docs/factorized-discrete-sections.md`. This target does not claim the
+public Separate renderer or the full acceptance matrix below is implemented.
 
 The source census is taken after the private Color/OpaqueColor carrier migration.
 `docs/t6a1-public-cutover-census.md` is useful historical consumer evidence; its

@@ -138,6 +138,25 @@ fn native_categorical_trajectory_installs_band_projection_before_mark_capture() 
     assert_eq!(x.to_bits(), 230.0_f64.to_bits());
     let guide = selected.discrete_guide.as_ref().unwrap();
     assert_eq!(guide.counts.entries, 1);
+    let separate = crate::decorations::legend::discrete::PreparedDiscreteGuide::prepare_for_test(
+        &plot,
+        &theme,
+        crate::decorations::legend::discrete::LegendComposition::Separate,
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(
+        (
+            separate.counts.entries,
+            separate.counts.points,
+            separate.counts.lines
+        ),
+        (1, 1, 0)
+    );
+    assert!(matches!(
+        separate.sections[0].identity,
+        crate::decorations::legend::discrete::GuideSectionIdentity::HueColor(_)
+    ));
     assert_eq!(
         guide.sections[0].entries[0].identity,
         crate::decorations::legend::GuideEntryIdentity::category("cohort", "seen").unwrap()

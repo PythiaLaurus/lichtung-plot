@@ -99,6 +99,40 @@ pub(crate) struct StyleBindings {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Projection {
     Complete,
+    GroupStyle,
+    HueColor,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RgbExplanation {
+    Constant,
+    ExplainedColor,
+    NeutralizedColor,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StyleExplanation {
+    Constant,
+    ExplainedGroup,
+    NeutralizedGroup,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct GuideExplanationMask {
+    pub(super) point_fill: Option<RgbExplanation>,
+    pub(super) point_outline: Option<RgbExplanation>,
+    pub(super) line_stroke: Option<RgbExplanation>,
+    pub(super) fill_paint: Option<RgbExplanation>,
+    pub(super) fill_outline: Option<RgbExplanation>,
+    pub(super) point_shape: Option<StyleExplanation>,
+    pub(super) line_pattern: Option<StyleExplanation>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) enum GuideExplanation {
+    #[default]
+    Complete,
+    Projected(GuideExplanationMask),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

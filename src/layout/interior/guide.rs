@@ -440,7 +440,13 @@ impl PreparedInteriorInputs {
                 } else {
                     self.guide_sources(&scoped, theme, data, scope)?
                 };
-                PreparedDiscreteGuide::prepare(&scoped, &contributor, keys)?
+                PreparedDiscreteGuide::prepare(
+                    &scoped,
+                    theme,
+                    &contributor,
+                    keys,
+                    crate::decorations::legend::discrete::LegendComposition::Combined,
+                )?
             };
             panels.push(ScopedDiscreteGuide {
                 scope: scope

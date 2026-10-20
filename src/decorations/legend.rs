@@ -160,6 +160,7 @@ pub(crate) struct ResolvedGuideKey {
     point: Option<PointStyle>,
     line: Option<LineStyle>,
     fill: Option<FillStyle>,
+    explanation: source::GuideExplanation,
 }
 
 impl PartialEq for ResolvedGuideKey {
@@ -167,11 +168,24 @@ impl PartialEq for ResolvedGuideKey {
         optional_point_style_eq(self.point.as_ref(), other.point.as_ref())
             && optional_line_style_eq(self.line.as_ref(), other.line.as_ref())
             && optional_fill_style_eq(self.fill.as_ref(), other.fill.as_ref())
+            && self.explanation == other.explanation
     }
 }
 impl Eq for ResolvedGuideKey {}
 
 impl ResolvedGuideKey {
+    fn mismatched_component(&self, other: &Self) -> &'static str {
+        if !optional_point_style_eq(self.point.as_ref(), other.point.as_ref()) {
+            "point component"
+        } else if !optional_line_style_eq(self.line.as_ref(), other.line.as_ref()) {
+            "line component"
+        } else if !optional_fill_style_eq(self.fill.as_ref(), other.fill.as_ref()) {
+            "fill component"
+        } else {
+            "explanation mask"
+        }
+    }
+
     #[cfg(test)]
     pub(crate) fn point(point: PointStyle) -> Self {
         Self {

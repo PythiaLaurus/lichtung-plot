@@ -1,8 +1,9 @@
 use super::*;
 use crate::decorations::legend::source::{
-    FillRole, GuideEncoding, MarkPaintRole, PointRole, RgbBinding, StyleBinding,
+    FillRole, GuideEncoding, GuideExplanation, MarkPaintRole, PointRole, RgbBinding,
+    RgbExplanation, StyleBinding, StyleExplanation,
 };
-use crate::{CategoryValues, Color, NumericValues};
+use crate::{CategoryValues, Color, NumericValues, Plot};
 
 fn prepare(
     plot: &Plot,
@@ -24,14 +25,8 @@ fn prepare(
     inputs
 }
 
-fn guide(inputs: &crate::layout::interior::PreparedInteriorInputs) -> &PreparedDiscreteGuide {
-    inputs
-        .discrete_guides
-        .get()
-        .unwrap()
-        .root
-        .as_deref()
-        .unwrap()
+fn guide(inputs: &crate::layout::interior::PreparedInteriorInputs) -> &Arc<PreparedDiscreteGuide> {
+    inputs.discrete_guides.get().unwrap().root.as_ref().unwrap()
 }
 
 fn bar_fill(theme: &mut crate::theme::ResolvedTheme, body: crate::DataFillTheme) {
@@ -65,6 +60,10 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
     bar_fill(&mut theme, fill);
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
     let inputs = prepare(&plot, &theme);
+    let projected_mapped =
+        PreparedDiscreteGuide::prepare_for_test(&plot, &theme, LegendComposition::Separate)
+            .unwrap()
+            .unwrap();
     let bars = &inputs.bars.as_ref().unwrap().panels[0].1;
     assert_eq!(bars.series, ["absent", "seen"]);
     assert!(bars
@@ -72,14 +71,9 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
         .iter()
         .all(|bar| bar.series_index == Some(1) && bar.hue_index == Some(1)));
     let guide = guide(&inputs);
-    assert_eq!(
-        (
-            guide.counts.entries,
-            guide.counts.primary_source_keys,
-            guide.counts.source_occurrences
-        ),
-        (1, 1, 1)
-    );
+    assert_eq!(guide.counts.entries, 1);
+    assert_eq!(guide.counts.primary_source_keys, 1);
+    assert_eq!(guide.counts.source_occurrences, 1);
     let entry = &guide.sections[0].entries[0];
     let source = &entry.sources[0];
     let GuideEntryIdentity::Category { field, value } = &entry.identity else {
@@ -113,6 +107,10 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
         .unwrap();
     bar_fill(&mut theme, body);
     let fixed_inputs = prepare(&plot, &theme);
+    let projected_fixed =
+        PreparedDiscreteGuide::prepare_for_test(&plot, &theme, LegendComposition::Separate)
+            .unwrap()
+            .unwrap();
     let fixed_guide = self::guide(&fixed_inputs);
     let fixed_entry = &fixed_guide.sections[0].entries[0];
     assert_eq!(fixed_entry.key, entry.key);
@@ -123,41 +121,90 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
             FillRole::BarBody
         )))
     );
-    let merged = PreparedDiscreteGuide::merge(
-        [
-            inputs.discrete_guides.get().unwrap().root.as_ref().unwrap(),
-            fixed_inputs
-                .discrete_guides
-                .get()
-                .unwrap()
-                .root
-                .as_ref()
-                .unwrap(),
-        ],
-        &[],
-        "equal complete Bar keys",
-    )
-    .unwrap()
-    .unwrap();
+    let merged = PreparedDiscreteGuide::merge([guide, fixed_guide], &[], "equal complete Bar keys")
+        .unwrap()
+        .unwrap();
     assert_eq!(
         (merged.counts.entries, merged.counts.source_occurrences),
         (1, 2)
     );
+    assert_outline_explanations(&projected_mapped, &projected_fixed, entry, fixed_entry);
     assert_eq!(
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
         0
     );
 }
 
-fn interaction() -> Plot {
-    crate::plots::interaction::extraction::source()
-        .hue(
-            CategoryValues::new(
-                "hue",
-                ["control", "control", "treated", "treated", "treated"],
-            )
-            .unwrap(),
+fn assert_outline_explanations(
+    mapped: &Arc<PreparedDiscreteGuide>,
+    fixed: &Arc<PreparedDiscreteGuide>,
+    complete_mapped: &PreparedGuideEntry,
+    complete_fixed: &PreparedGuideEntry,
+) {
+    let GuideExplanation::Projected(mapped_mask) = &mapped.sections[0].entries[0].key.explanation
+    else {
+        panic!("mapped color explanation")
+    };
+    let GuideExplanation::Projected(fixed_mask) = &fixed.sections[0].entries[0].key.explanation
+    else {
+        panic!("fixed color explanation")
+    };
+    assert!(matches!(
+        mapped.sections[0].identity,
+        GuideSectionIdentity::HueColor(_)
+    ));
+    assert_eq!(
+        mapped_mask.fill_outline,
+        Some(RgbExplanation::ExplainedColor)
+    );
+    assert_eq!(fixed_mask.fill_outline, Some(RgbExplanation::Constant));
+    assert!(
+        PreparedDiscreteGuide::merge([mapped, fixed], &[], "projected Bar outlines")
+            .unwrap_err()
+            .to_string()
+            .contains("explanation mask")
+    );
+    let neutral = Some(crate::OpaqueColor::rgb(40, 50, 60));
+    let mapped_group = super::projection::project(
+        &complete_mapped.key,
+        &complete_mapped.sources[0].mapping,
+        Projection::GroupStyle,
+        neutral,
+    )
+    .unwrap();
+    let fixed_group = super::projection::project(
+        &complete_fixed.key,
+        &complete_fixed.sources[0].mapping,
+        Projection::GroupStyle,
+        neutral,
+    )
+    .unwrap();
+    assert_eq!(
+        mapped_group.fill.as_ref().unwrap().color,
+        Color::rgba(40, 50, 60, 17)
+    );
+    assert_eq!(
+        mapped_group.fill.as_ref().unwrap().stroke,
+        Color::rgba(40, 50, 60, 211)
+    );
+    assert_eq!(
+        fixed_group.fill.as_ref().unwrap().stroke,
+        complete_fixed.key.fill.as_ref().unwrap().stroke
+    );
+}
+
+fn interaction_input() -> Plot<crate::kind::Interaction> {
+    crate::plots::interaction::extraction::source().hue(
+        CategoryValues::new(
+            "hue",
+            ["control", "control", "treated", "treated", "treated"],
         )
+        .unwrap(),
+    )
+}
+
+fn interaction() -> Plot {
+    interaction_input()
         .styles([
             crate::InteractionStyle::new("one")
                 .unwrap()
@@ -210,15 +257,11 @@ fn interaction_theme(
     theme
 }
 
-#[test]
-fn prepared_interaction_bindings_retain_exact_point_outlines_and_actual_group_styles() {
-    let plot = interaction();
-    let ratio = crate::RelativeSpacing::ratio(5, 14).unwrap();
-    let outline_paint = Color::rgba(0, 114, 178, 53);
-    let theme = interaction_theme(&ratio, outline_paint);
-    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-    let inputs = prepare(&plot, &theme);
-    let guide = guide(&inputs);
+fn assert_complete_interaction(
+    guide: &PreparedDiscreteGuide,
+    ratio: &crate::RelativeSpacing,
+    outline_paint: Color,
+) {
     assert_eq!(
         (
             guide.counts.entries,
@@ -278,7 +321,7 @@ fn prepared_interaction_bindings_retain_exact_point_outlines_and_actual_group_st
         assert_eq!(point.color.alpha(), 17);
         let outline = point.outline.as_ref().unwrap();
         assert_eq!(outline.color, outline_paint);
-        assert_eq!(outline.width_ratio, ratio);
+        assert_eq!(&outline.width_ratio, ratio);
         assert_eq!(outline.width_for_radius(14).unwrap().units(), 5120);
         assert_eq!(entry.key.line.as_ref().unwrap().color.alpha(), 211);
         if group_value.as_str() == "one" {
@@ -295,6 +338,181 @@ fn prepared_interaction_bindings_retain_exact_point_outlines_and_actual_group_st
             );
         }
     }
+}
+
+fn assert_projected_interaction(guide: &PreparedDiscreteGuide, outline_paint: Color) {
+    assert_eq!(guide.counts.sections, 2);
+    assert_eq!(
+        (
+            guide.counts.entries,
+            guide.counts.points,
+            guide.counts.lines,
+            guide.counts.fills
+        ),
+        (4, 4, 4, 0)
+    );
+    assert_eq!(
+        (
+            guide.counts.primary_source_keys,
+            guide.counts.observed_pair_source_keys,
+            guide.counts.source_occurrences
+        ),
+        (3, 3, 6)
+    );
+    assert!(matches!(
+        guide.sections[0].identity,
+        GuideSectionIdentity::GroupStyle(_)
+    ));
+    assert!(matches!(
+        guide.sections[1].identity,
+        GuideSectionIdentity::HueColor(_)
+    ));
+    for entry in guide.sections[0].entries.iter() {
+        let point = entry.key.point.as_ref().unwrap();
+        let line = entry.key.line.as_ref().unwrap();
+        assert_eq!(point.color, Color::rgba(40, 50, 60, 17));
+        assert_eq!(line.color, Color::rgba(40, 50, 60, 211));
+        assert_eq!(point.outline.as_ref().unwrap().color, outline_paint);
+        assert_eq!(point.radius, 14);
+        let GuideEntryIdentity::Category { value, .. } = &entry.identity else {
+            panic!("group category")
+        };
+        let (shape, pattern) = if value.as_str() == "one" {
+            (
+                crate::PointShape::TriangleUp,
+                crate::StrokePattern::LongDash,
+            )
+        } else {
+            (crate::PointShape::Circle, crate::StrokePattern::Solid)
+        };
+        assert_eq!((point.shape, line.pattern), (shape, pattern));
+        let GuideExplanation::Projected(mask) = &entry.key.explanation else {
+            panic!("group explanation")
+        };
+        assert_eq!(mask.point_fill, Some(RgbExplanation::NeutralizedColor));
+        assert_eq!(mask.point_outline, Some(RgbExplanation::Constant));
+        assert_eq!(mask.point_shape, Some(StyleExplanation::ExplainedGroup));
+        assert_eq!(mask.line_pattern, Some(StyleExplanation::ExplainedGroup));
+        assert!(entry
+            .sources
+            .iter()
+            .all(|source| source.group_neutral_rgb == Some(crate::OpaqueColor::rgb(40, 50, 60))));
+    }
+    for entry in guide.sections[1].entries.iter() {
+        let point = entry.key.point.as_ref().unwrap();
+        let line = entry.key.line.as_ref().unwrap();
+        assert_eq!(
+            (point.shape, line.pattern),
+            (crate::PointShape::Circle, crate::StrokePattern::Solid)
+        );
+        assert_eq!(point.outline.as_ref().unwrap().color, outline_paint);
+        assert_eq!((point.color.alpha(), line.color.alpha()), (17, 211));
+        let GuideEntryIdentity::Category { value, .. } = &entry.identity else {
+            panic!("hue category")
+        };
+        let color = if value.as_str() == "control" {
+            (0, 114, 178)
+        } else {
+            (213, 94, 0)
+        };
+        assert_eq!(
+            (point.color.red(), point.color.green(), point.color.blue()),
+            color
+        );
+        let GuideExplanation::Projected(mask) = &entry.key.explanation else {
+            panic!("hue explanation")
+        };
+        assert_eq!(mask.point_fill, Some(RgbExplanation::ExplainedColor));
+        assert_eq!(mask.point_outline, Some(RgbExplanation::Constant));
+        assert_eq!(mask.point_shape, Some(StyleExplanation::NeutralizedGroup));
+        assert_eq!(mask.line_pattern, Some(StyleExplanation::NeutralizedGroup));
+        assert!(entry
+            .sources
+            .iter()
+            .all(|source| source.group_neutral_rgb.is_none()));
+    }
+}
+
+#[test]
+fn prepared_interaction_bindings_retain_exact_point_outlines_and_actual_group_styles() {
+    let plot = interaction();
+    let ratio = crate::RelativeSpacing::ratio(5, 14).unwrap();
+    let outline_paint = Color::rgba(0, 114, 178, 53);
+    let mut theme = interaction_theme(&ratio, outline_paint);
+    theme.typography.guides.legend_label = theme
+        .typography
+        .guides
+        .legend_label
+        .clone()
+        .with_color(Color::rgba(40, 50, 60, 0))
+        .unwrap();
+    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+    let inputs = prepare(&plot, &theme);
+    assert_complete_interaction(guide(&inputs), &ratio, outline_paint);
+    let projected =
+        PreparedDiscreteGuide::prepare_for_test(&plot, &theme, LegendComposition::Separate)
+            .unwrap()
+            .unwrap();
+    assert_projected_interaction(&projected, outline_paint);
+    let unconfigured = interaction_input();
+    let error = PreparedDiscreteGuide::prepare_for_test(
+        &unconfigured.clone().erase(),
+        &theme,
+        LegendComposition::Separate,
+    )
+    .unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("unsupported discrete guide factorization"));
+    assert!(PreparedDiscreteGuide::prepare_for_test(
+        &unconfigured.legend(crate::LegendPolicy::Hidden).erase(),
+        &theme,
+        LegendComposition::Separate
+    )
+    .unwrap()
+    .is_none());
+    let collapsed = crate::plots::interaction::extraction::source()
+        .hue(CategoryValues::new("group", ["one", "one", "one", "two", "two"]).unwrap())
+        .erase();
+    let joint =
+        PreparedDiscreteGuide::prepare_for_test(&collapsed, &theme, LegendComposition::Separate)
+            .unwrap()
+            .unwrap();
+    assert_eq!(joint.counts.sections, 1);
+    assert!(matches!(
+        joint.sections[0].identity,
+        GuideSectionIdentity::Joint(_)
+    ));
+    assert!(joint.sections[0]
+        .entries
+        .iter()
+        .all(|entry| entry.key.explanation == GuideExplanation::Complete));
+    let ambiguous = interaction().labels(
+        crate::Labels::raw()
+            .alias("group", "Shared title")
+            .alias("hue", "Shared title"),
+    );
+    assert!(PreparedDiscreteGuide::prepare_for_test(
+        &ambiguous,
+        &theme,
+        LegendComposition::Separate
+    )
+    .unwrap_err()
+    .to_string()
+    .contains("distinct section identities"));
+    let same_label = interaction().labels(
+        crate::Labels::raw()
+            .alias("one", "Equal label")
+            .alias("control", "Equal label"),
+    );
+    let distinct_sections =
+        PreparedDiscreteGuide::prepare_for_test(&same_label, &theme, LegendComposition::Separate)
+            .unwrap()
+            .unwrap();
+    assert_eq!(
+        distinct_sections.sections[0].entries[0].display_label,
+        distinct_sections.sections[1].entries[0].display_label
+    );
     assert_eq!(
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
         0

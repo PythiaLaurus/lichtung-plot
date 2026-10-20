@@ -2,6 +2,10 @@ use super::*;
 use crate::{CategoryValues, Color, DumbbellEndpoints, NumericValues, PointShape};
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one endpoint paint contract checks marks, both literal compositions and canonical outline capture"
+)]
 fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_outline_changes() {
     let colors = [Color::rgba(13, 29, 47, 0), Color::rgba(71, 83, 97, 131)];
     let source = Plot::dumbbell(
@@ -76,6 +80,27 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
     }
     let guide = measured.discrete_guide.as_ref().unwrap();
     assert_eq!(guide.counts.entries, 2);
+    let separate = crate::decorations::legend::discrete::PreparedDiscreteGuide::prepare_for_test(
+        &chart,
+        &theme,
+        crate::decorations::legend::discrete::LegendComposition::Separate,
+    )
+    .unwrap()
+    .unwrap();
+    assert!(matches!(
+        separate.sections[0].identity,
+        crate::decorations::legend::discrete::GuideSectionIdentity::Literal(
+            crate::decorations::legend::source::LiteralDomain::DumbbellEndpoints
+        )
+    ));
+    for (complete, separate) in guide.sections[0]
+        .entries
+        .iter()
+        .zip(separate.sections[0].entries.iter())
+    {
+        assert_eq!(complete.key, separate.key);
+        assert_eq!(complete.display_label, separate.display_label);
+    }
     for (actual, (identity, key)) in guide.sections[0].entries.iter().zip(expected) {
         assert_eq!(actual.identity, identity);
         assert_eq!(actual.key, key);
