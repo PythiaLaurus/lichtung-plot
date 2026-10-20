@@ -224,28 +224,41 @@ fn vertical_sections_shrink_once_in_quanta_and_never_redistribute_unused_capacit
         .all(|section| section.columns == 1 && section.capacity.is_none()));
 }
 
-fn factorized_fixture() -> (Arc<PreparedDiscreteGuide>, ResolvedTheme) {
+fn factorized_plot(group_field: &str) -> crate::Plot {
     use crate::{CategoryValues, InteractionStyle, PointShape};
-    let plot = crate::plots::interaction::extraction::source()
-        .hue(
-            CategoryValues::new(
-                "hue",
-                ["control", "control", "treated", "treated", "treated"],
-            )
-            .unwrap(),
+    crate::Plot::interaction(
+        CategoryValues::new("condition", ["b", "a", "c", "b", "c"]).unwrap(),
+        crate::NumericValues::new("estimate", [2.0, 3.0, 4.0, 5.0, 6.0]),
+        CategoryValues::new(group_field, ["one", "one", "one", "two", "two"]).unwrap(),
+        crate::Bounds::new(
+            crate::NumericValues::new("lower", [1.0, 2.0, 3.0, 4.0, 5.0]),
+            crate::NumericValues::new("upper", [3.0, 4.0, 5.0, 6.0, 7.0]),
+        ),
+    )
+    .hue(
+        CategoryValues::new(
+            "hue",
+            ["control", "control", "treated", "treated", "treated"],
         )
-        .styles([
-            InteractionStyle::new("one")
-                .unwrap()
-                .with_point_shape(PointShape::TriangleUp)
-                .unwrap(),
-            InteractionStyle::new("two")
-                .unwrap()
-                .with_point_shape(PointShape::Circle)
-                .unwrap(),
-        ])
-        .labels(crate::Labels::raw().alias("group", "Group styles\nsecond line"))
-        .erase();
+        .unwrap(),
+    )
+    .styles([
+        InteractionStyle::new("one")
+            .unwrap()
+            .with_point_shape(PointShape::TriangleUp)
+            .unwrap(),
+        InteractionStyle::new("two")
+            .unwrap()
+            .with_point_shape(PointShape::Circle)
+            .unwrap(),
+    ])
+    .labels(crate::Labels::raw().alias(group_field, "Group styles\nsecond line"))
+    .erase()
+}
+
+fn factorized_fixture() -> (Arc<PreparedDiscreteGuide>, ResolvedTheme) {
+    use crate::PointShape;
+    let plot = factorized_plot("group");
     let mut theme = crate::Theme::publication().resolve().unwrap();
     let points = theme
         .marks
@@ -398,4 +411,185 @@ fn assert_frozen_sections(measured: &Legend, descriptor: &PreparedDiscreteGuide,
         crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
         shape_calls
     );
+}
+
+fn measure_fixture(
+    descriptor: &Arc<PreparedDiscreteGuide>,
+    available: (f64, Option<f64>),
+    variant: (bool, bool),
+    theme: &ResolvedTheme,
+    scope: &FitScope,
+) -> Legend {
+    fit::measured(Legend::measure_assigned(
+        Arc::clone(descriptor),
+        available,
+        variant.0,
+        variant.1,
+        theme,
+        &mut false,
+        scope,
+    ))
+    .unwrap()
+}
+
+fn frozen_svg(measured: &Legend, theme: &ResolvedTheme) -> Vec<u8> {
+    use crate::render::backend::Backend;
+    let mut backend = crate::render::svg_backend::SvgBackend::in_memory_with_fonts(
+        600,
+        600,
+        theme.prepared_font_environment().unwrap().clone(),
+    );
+    backend.begin(600, 600).unwrap();
+    let (x, y) = measured.box_at(20.0, 30.0).anchor();
+    measured.select(x, y).unwrap().draw(&mut backend).unwrap();
+    backend.end().unwrap();
+    backend.into_bytes().unwrap()
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one actual scoped cache key proves complete consumed-input identity and same-operation uncached replay"
+)]
+fn scoped_section_measurements_reuse_values_and_invalidate_consumed_inputs() {
+    let (descriptor, theme) = factorized_fixture();
+    let scope = FitScope::root()
+        .child(AddressRole::OutsideGuideAuto, 0)
+        .unwrap();
+    let original = measure_fixture(&descriptor, (420.0, None), (false, false), &theme, &scope);
+    let equal_value = Arc::new(PreparedDiscreteGuide {
+        composition: descriptor.composition,
+        counts: descriptor.counts,
+        sections: Arc::clone(&descriptor.sections),
+    });
+    assert!(!Arc::ptr_eq(&equal_value, &descriptor));
+    let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
+    let repeated = measure_fixture(&equal_value, (420.0, None), (false, false), &theme, &scope);
+    let duplicate_compact =
+        measure_fixture(&equal_value, (420.0, None), (false, true), &theme, &scope);
+    assert!(Arc::ptr_eq(&original.layout, &repeated.layout));
+    assert!(Arc::ptr_eq(&original.layout, &duplicate_compact.layout));
+    assert_eq!(
+        crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
+        shapes
+    );
+
+    let uncached = fit::measured(measure_uncached(
+        Arc::clone(&descriptor),
+        (420.0, None),
+        false,
+        false,
+        &theme,
+        &mut false,
+        &scope,
+    ))
+    .unwrap();
+    assert!(!Arc::ptr_eq(&original.layout, &uncached.layout));
+    assert_eq!(frozen_svg(&original, &theme), frozen_svg(&uncached, &theme));
+
+    let different_source = PreparedDiscreteGuide::prepare_for_test(
+        &factorized_plot("other group"),
+        &theme,
+        LegendComposition::Separate,
+    )
+    .unwrap()
+    .unwrap();
+    let different = measure_fixture(
+        &different_source,
+        (420.0, None),
+        (false, false),
+        &theme,
+        &scope,
+    );
+    assert!(!Arc::ptr_eq(&original.layout, &different.layout));
+    assert_eq!(
+        (original.layout.width, original.layout.height),
+        (different.layout.width, different.layout.height)
+    );
+    assert_eq!(
+        frozen_svg(&original, &theme),
+        frozen_svg(&different, &theme)
+    );
+
+    let mut painted = theme.clone();
+    painted.typography.guides.legend_label = painted
+        .typography
+        .guides
+        .legend_label
+        .clone()
+        .with_color(crate::Color::rgba(11, 23, 37, 71))
+        .unwrap();
+    let new_paint = measure_fixture(&descriptor, (420.0, None), (false, false), &painted, &scope);
+    assert!(!Arc::ptr_eq(&original.layout, &new_paint.layout));
+    assert_eq!(
+        (original.layout.width, original.layout.height),
+        (new_paint.layout.width, new_paint.layout.height)
+    );
+    assert_ne!(
+        frozen_svg(&original, &theme),
+        frozen_svg(&new_paint, &painted)
+    );
+    let mut unrelated = theme.clone();
+    unrelated.surfaces.plot_panel = crate::Color::rgb(1, 2, 3);
+    let unrelated = measure_fixture(
+        &descriptor,
+        (420.0, None),
+        (false, false),
+        &unrelated,
+        &scope,
+    );
+    assert!(Arc::ptr_eq(&original.layout, &unrelated.layout));
+
+    let other_scope = FitScope::root()
+        .child(AddressRole::OutsideGuideAuto, 1)
+        .unwrap();
+    let reowned = measure_fixture(
+        &descriptor,
+        (420.0, None),
+        (false, false),
+        &theme,
+        &other_scope,
+    );
+    assert!(!Arc::ptr_eq(&original.layout, &reowned.layout));
+    let finite = measure_fixture(
+        &descriptor,
+        (420.0, Some(500.0)),
+        (false, false),
+        &theme,
+        &scope,
+    );
+    assert!(!Arc::ptr_eq(&original.layout, &finite.layout));
+    assert!(finite
+        .layout
+        .sections
+        .iter()
+        .all(|section| section.capacity.is_some()));
+    let horizontal = measure_fixture(&descriptor, (420.0, None), (true, false), &theme, &scope);
+    assert!(!Arc::ptr_eq(&original.layout, &horizontal.layout));
+    let wider = measure_fixture(
+        &descriptor,
+        (420.0 + 1.0 / 1024.0, None),
+        (false, false),
+        &theme,
+        &scope,
+    );
+    assert!(!Arc::ptr_eq(&original.layout, &wider.layout));
+
+    let miss = || match Legend::measure_assigned(
+        Arc::clone(&descriptor),
+        (1.0, None),
+        false,
+        false,
+        &theme,
+        &mut false,
+        &scope,
+    )
+    .unwrap()
+    {
+        FitOutcome::Miss(failure) => failure,
+        FitOutcome::Measured(_) => panic!("outer insets cannot fit a one-pixel assignment"),
+    };
+    let first = miss();
+    assert_eq!(first, miss());
+    assert_eq!(first.reason.address, scope.address);
 }

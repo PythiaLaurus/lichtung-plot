@@ -86,13 +86,9 @@ struct PreparedCanvasRound<'a> {
         &'a [Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
 }
 
-#[expect(
-    clippy::large_enum_variant,
-    reason = "both guide owners retain substantial common metrics inline; section/label storage is already indirect"
-)]
 enum MeasuredCanvasGuide {
     Discrete(Legend),
-    Continuous(MeasuredContinuousGuide),
+    Continuous(Box<MeasuredContinuousGuide>),
 }
 
 impl MeasuredCanvasGuide {
@@ -104,14 +100,10 @@ impl MeasuredCanvasGuide {
     }
 }
 
-#[expect(
-    clippy::large_enum_variant,
-    reason = "one selected guide retains its inline measured owner without a second heap allocation"
-)]
 enum SharedMeasuredGuide {
     Discrete(crate::decorations::plan::ResolvedLegend),
     Continuous {
-        guide: MeasuredContinuousGuide,
+        guide: Box<MeasuredContinuousGuide>,
         bounds: PanelBox,
     },
 }
@@ -2360,7 +2352,9 @@ impl Canvas {
                         compact_changes,
                         &guide_scope,
                     )? {
-                        FitOutcome::Measured(guide) => MeasuredCanvasGuide::Continuous(guide),
+                        FitOutcome::Measured(guide) => {
+                            MeasuredCanvasGuide::Continuous(Box::new(guide))
+                        }
                         FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
                     }
                 }

@@ -36,7 +36,7 @@ macro_rules! legend_spacing {
             )+
             fn relationships(&self) -> [&RelativeSpacing; 9] { [$(&self.$field),+] }
         }
-        #[derive(Debug)]
+        #[derive(Debug, Clone)]
         pub(crate) struct LegendLengths { $(pub(crate) $field: ExactLength),+,
             pub(crate) minimum: ExactLength, pub(crate) preferred: ExactLength,
             pub(crate) radius: Option<ExactLength>,

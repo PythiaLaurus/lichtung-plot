@@ -43,6 +43,8 @@ pub(crate) struct ResolvedTheme {
     pub(crate) canvas_surface_override: Option<Color>,
     font_environment: Arc<OnceLock<Result<PreparedFontEnvironment, String>>>,
     text_queries: Arc<Mutex<TextQueryCache>>,
+    /// Complete guide measurements share this operation's prepared font scope.
+    pub(crate) guide_measurements: Arc<Mutex<crate::decorations::legend::GuideMeasurements>>,
 }
 
 impl std::ops::Deref for ResolvedTheme {
@@ -414,6 +416,7 @@ impl ResolvedTheme {
             canvas_surface_override: None,
             font_environment: Arc::new(OnceLock::new()),
             text_queries: Arc::default(),
+            guide_measurements: Arc::default(),
         })
     }
 
@@ -489,6 +492,7 @@ impl ResolvedTheme {
     pub(crate) fn share_font_environment_from(&mut self, root: &Self) {
         self.font_environment = Arc::clone(&root.font_environment);
         self.text_queries = Arc::clone(&root.text_queries);
+        self.guide_measurements = Arc::clone(&root.guide_measurements);
     }
 
     /// Plan one foundational appearance within an exact finite pixel width.

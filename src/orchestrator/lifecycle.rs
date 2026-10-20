@@ -1585,7 +1585,7 @@ mod retained_legend_tests {
                 backend.end()?;
                 assert_eq!(geometry.bounds(), backend.bounds());
                 let measured = plan.panel_plan.legend.as_mut().unwrap();
-                measured.legend.metrics.font_size = f64::NAN;
+                std::sync::Arc::make_mut(&mut measured.legend.metrics).font_size = f64::NAN;
                 measured.bounds = measured.bounds.translated(10_000.0, 10_000.0);
                 capture_text_replay_plan(
                     800,

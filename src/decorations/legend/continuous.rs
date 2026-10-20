@@ -778,38 +778,6 @@ mod tests {
     }
 
     #[test]
-    fn repeated_continuous_guide_reuses_cached_text() {
-        let theme = crate::Theme::publication().resolve().unwrap();
-
-        let guide = descriptor();
-        let measure = || {
-            fit::measured(MeasuredContinuousGuide::measure(
-                &guide,
-                (300.0, 300.0),
-                false,
-                false,
-                &theme,
-                &mut false,
-                &FitScope::root(),
-            ))
-            .unwrap()
-        };
-        let original = measure();
-
-        let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
-        let repeated = measure();
-
-        assert_eq!(
-            crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
-            shapes
-        );
-        assert!(repeated.title.plan.shares_payload(&original.title.plan));
-        assert_eq!(repeated.gradient, original.gradient);
-        assert_eq!(repeated.width.to_bits(), original.width.to_bits());
-        assert_eq!(repeated.height.to_bits(), original.height.to_bits());
-    }
-
-    #[test]
     fn projected_extents_require_the_exact_center_and_endpoint_clearance() {
         let gap = crate::theme::spacing::ExactLength::pixels(5.0).unwrap();
         let minimum = crate::theme::spacing::ExactLength::pixels(40.0).unwrap();

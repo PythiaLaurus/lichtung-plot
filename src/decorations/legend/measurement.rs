@@ -1,8 +1,10 @@
 //! One canonical measurement path for every discrete section composition.
 
+mod cache;
 mod flow;
 #[cfg(test)]
 mod tests;
+pub(crate) use cache::GuideMeasurements;
 
 use std::cmp::Ordering;
 use std::sync::Arc;
@@ -616,6 +618,26 @@ pub(super) fn measure_assigned(
     compact_changes: &mut bool,
     scope: &FitScope,
 ) -> Result<FitOutcome<Legend>, Error> {
+    cache::measure_assigned(
+        descriptor,
+        available,
+        horizontal,
+        compact,
+        theme,
+        compact_changes,
+        scope,
+    )
+}
+
+fn measure_uncached(
+    descriptor: Arc<PreparedDiscreteGuide>,
+    available: (f64, Option<f64>),
+    horizontal: bool,
+    compact: bool,
+    theme: &ResolvedTheme,
+    compact_changes: &mut bool,
+    scope: &FitScope,
+) -> Result<FitOutcome<Legend>, Error> {
     if !compact {
         *compact_changes = false;
     }
@@ -644,10 +666,10 @@ pub(super) fn measure_assigned(
     };
     let legend = Legend {
         descriptor,
-        metrics,
+        metrics: Arc::new(metrics),
         available_width: assignment.width,
         available_height: assignment.height,
-        layout,
+        layout: Arc::new(layout),
     };
     let bounds = legend.box_at(0.0, 0.0);
     let mut ink = crate::render::geometry::GeometrySnapshot::new();

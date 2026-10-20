@@ -32,6 +32,7 @@ pub(crate) use source::GuideSourceKey;
 pub(crate) mod descriptor;
 pub(crate) use continuous::MeasuredContinuousGuide;
 use discrete::PreparedDiscreteGuide;
+pub(crate) use measurement::GuideMeasurements;
 
 /// The semantic kind of a contributing guide, determined before font discovery.
 /// Entry and glyph compatibility is resolved by the prepared descriptor owner.
@@ -330,7 +331,7 @@ fn optional_fill_style_eq(left: Option<&FillStyle>, right: Option<&FillStyle>) -
 // ─── Local glyph metrics ──────────────────────────────────────────────────────
 
 /// Resolved role-local metrics for legend layout and frozen drawing.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct LegendMetrics {
     /// Effective font size (px).
     pub font_size: f64,
@@ -357,7 +358,7 @@ pub(crate) struct LegendMetrics {
     source: crate::theme::LegendTheme,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct LegendFrameMetrics {
     fill: crate::theme::Color,
     outline: Option<(crate::theme::Color, f32)>,
@@ -531,15 +532,15 @@ impl LegendMetrics {
 }
 
 /// A plot legend.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct Legend {
     /// The sole prepared semantic guide retained by the measured plan.
     descriptor: std::sync::Arc<PreparedDiscreteGuide>,
     /// Resolved theme-owned metrics retained for selection and frozen drawing.
-    pub(crate) metrics: LegendMetrics,
+    pub(crate) metrics: std::sync::Arc<LegendMetrics>,
     available_width: i64,
     available_height: Option<i64>,
-    layout: LegendLayout,
+    layout: std::sync::Arc<LegendLayout>,
 }
 
 #[derive(Debug)]
