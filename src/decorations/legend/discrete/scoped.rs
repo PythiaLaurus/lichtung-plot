@@ -1,13 +1,5 @@
 //! Exact operands actually consumed by a scoped guide/child measurement.
 
-#![cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "typed dependency construction precedes routing actual parent operands"
-    )
-)]
-
 use std::sync::Arc;
 
 use super::{DiscreteGuideSlot, LegendComposition, PreparedDiscreteGuide};
@@ -40,6 +32,16 @@ pub(crate) const SUPPRESSED_GUIDES: GuideConsumption<'static> = GuideConsumption
 pub(crate) enum GuideOrientation {
     Horizontal,
     Vertical,
+}
+
+impl GuideOrientation {
+    pub(crate) const fn from_horizontal(horizontal: bool) -> Self {
+        if horizontal {
+            Self::Horizontal
+        } else {
+            Self::Vertical
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

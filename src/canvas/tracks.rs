@@ -4,6 +4,7 @@
 use super::{
     text_panel::TextPanelIntrinsics, CanvasHeader, CanvasHeaderPlan, ResolvedCanvasThemes,
 };
+use crate::decorations::legend::discrete::scoped::GuideAllocation;
 use crate::layout::canvas::PanelRequirements;
 use crate::layout::fit::{self, FitOutcome, FitScope};
 use crate::layout::kernel::{
@@ -57,6 +58,7 @@ pub(super) struct ContentSizing<'a> {
     pub interiors: &'a [Option<crate::layout::interior::PreparedInteriorInputs>],
     pub round: &'a crate::layout::kernel::FeedbackRound,
     pub measurements: Option<&'a super::sizing::HeightMeasurements>,
+    pub shared_allocation: Option<GuideAllocation>,
     pub natural_width: bool,
     pub natural_height: bool,
 }
@@ -562,6 +564,12 @@ pub(super) fn allocate(
                 .map_err(|_| Error::Render("Canvas content slot index overflowed".into()))?;
             let width = pixels(columns[index % columns.len()]);
             let height = if let Some(plot) = &plots[index] {
+                let dependencies = content.source.consumed_guide_dependencies(
+                    index,
+                    width,
+                    content.shared_allocation,
+                    content.round,
+                )?;
                 super::sizing::cell_height(
                     plot,
                     themes.plot(index).expect("prepared Plot theme"),
@@ -579,7 +587,7 @@ pub(super) fn allocate(
                         row_insets[index / columns.len()][1],
                     ],
                     content.measurements,
-                    &[],
+                    &dependencies,
                 )?
             } else if let Some(text) = &content.source.text_panels[index] {
                 super::text_panel::natural_height(text, width, theme)?

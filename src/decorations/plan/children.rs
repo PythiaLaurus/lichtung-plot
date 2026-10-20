@@ -175,8 +175,7 @@ impl<'a> ChildPlans<'a> {
     pub(crate) fn canvas_probe(
         &mut self,
         plot: &Plot,
-        panel: PanelBox,
-        theme: &crate::theme::ResolvedTheme,
+        context: PlotRenderContext<'_>,
         index: usize,
         phase: MeasurementPhase,
         round: &FeedbackRound,
@@ -185,9 +184,13 @@ impl<'a> ChildPlans<'a> {
             AddressRole::CanvasCell,
             u32::try_from(index).map_err(|_| Error::Render("canvas address overflowed".into()))?,
         )?;
-        let context = PlotRenderContext::new(plot.data(), panel, theme);
         crate::layout::fit::measured(self.measure(plot, context, &owner, phase, round, || {
-            plot.preflight_measurement(plot.kind(), panel, theme, &crate::layout::fit::ROOT_SCOPE)
+            plot.preflight_measurement(
+                plot.kind(),
+                context.panel,
+                context.theme,
+                context.fit_scope(),
+            )
         }))
         .map_err(crate::layout::fit::PlanError::into_error)
     }

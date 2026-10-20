@@ -2,9 +2,9 @@
 
 Child and width-dependent height reuse now retain an explicit guide-consumption
 key. This extends the effective policy and complete prepared contribution with
-the local placement slot and the exact declared ancestor operands. The typed key
-is implemented here; routing actual Canvas/facet containing allocations into it
-is the following integration step.
+the local placement slot and the exact declared ancestor operands. This records
+the typed-key checkpoint; actual Canvas/facet call routing is completed in
+`routed-guide-dependencies.md`.
 
 ## Exact consumption
 
@@ -83,9 +83,7 @@ Strict all-target Clippy, `just fmt-check` and `git diff --check` pass. Commands
 use the named locked/offline Cargo filters; evidence is in
 `/tmp/opencode/scoped-guides-*.log`. No broad-suite or release gate is claimed.
 
-Actual parent routing is still pending: Canvas/facet preparation and measurement
-must enumerate the containing allocations and guide owners they consume, and the
-height allocation pass must receive the same dependencies. Constructors have a
-temporary non-test dead-code expectation until that integration makes them live.
-Public composition controls and the full end-to-end Separate matrix remain
-later work.
+The subsequent routing checkpoint enumerates actual containing allocations and
+guide owners for Canvas/facet child calls and the height allocation pass, and
+removes this checkpoint's temporary non-test dead-code expectation. Public
+composition controls and the full end-to-end Separate matrix remain later work.

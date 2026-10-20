@@ -299,49 +299,215 @@ fn measured_facet_tracks_keep_exact_fit_and_typed_owner() {
 }
 
 #[test]
-fn parent_tracks_accept_a_fitting_retry_after_a_miss() {
-    let plot = Plot::scatter(
-        crate::NumericValues::new("x", [0.0]),
-        crate::NumericValues::new("y", [0.0]),
-    )
-    .erase();
-    let scope = FitScope::root();
-    let run = |repeat: bool| {
-        let theme = crate::Theme::publication().resolve().unwrap();
-        theme.prepare_font_environment().unwrap();
-        let resources = theme.prepared_font_environment().unwrap().operation();
+#[expect(
+    clippy::too_many_lines,
+    reason = "actual routed parent guides distinguish equal-bounds descriptor changes, selective stability and cached/uncached frozen output"
+)]
+fn routed_facet_guides_invalidate_only_the_cells_consuming_their_descriptor() {
+    use crate::decorations::legend::discrete::LegendComposition;
+    use crate::decorations::plan::children::{ChildPlans, DISABLE_CHILD_REUSE};
+    use crate::layout::kernel::{FeedbackKind, TrialOutcome};
+    use crate::layout::{AddressRole, ComponentAddress};
 
-        let data = plot.data().with_operation(&resources);
-        let panels = [data::FacetPanel {
-            panel_index: 0,
-            row: 0,
-            column: 0,
-            cell: Vec::new(),
-            rows: vec![0],
-            source_rows: vec![0],
-            panel: crate::layout::PanelBox::new(0.0, 1.0, 0.0, 1.0),
-        }];
-        let attempt = |width| {
-            tracks::allocate(
-                data,
-                crate::layout::PanelBox::new(0.0, width, 0.0, 60.0),
-                (1, 1),
-                &panels,
-                &[(80.0, 60.0)],
-                &[],
-                &theme,
-                &scope,
-                None,
-            )
-        };
-        let result = attempt(79.0);
-        let second = repeat.then(|| attempt(80.0));
-        (resources, result, second)
+    let make = |field| {
+        let mut plot = Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0, 0.0, 1.0]),
+            crate::NumericValues::new("y", [0.0, 1.0, 1.0, 0.0]),
+        )
+        .hue(crate::CategoryValues::new(field, ["a", "b", "a", "b"]).unwrap())
+        .facet(crate::FacetSpec::column(
+            crate::CategoryValues::new("facet", ["first", "first", "second", "second"]).unwrap(),
+        ))
+        .labels(crate::Labels::raw().alias(field, "Cohort"))
+        .legend(crate::LegendPolicy::Visible(LegendPosition::InsideTopRight))
+        .size(1200, 800);
+        plot.legend_composition = LegendComposition::Separate;
+        plot.erase()
     };
-    let (_, result, next) = run(true);
-    assert!(matches!(result.unwrap(), FitOutcome::Miss(_)));
+    let source = make("first raw hue");
+    let changed_source = make("second raw hue");
+    let guide_owner = ComponentAddress::root()
+        .child(AddressRole::InsideGuide, 0)
+        .unwrap();
+    let mut outputs = Vec::new();
+    for disabled in [false, true] {
+        DISABLE_CHILD_REUSE.with(|flag| flag.set(disabled));
+        let theme = crate::Theme::publication().resolve().unwrap();
+        let mut children = ChildPlans::facets(&source);
+        let mut exercised = false;
+        let root = crate::layout::plan_exact_root(
+            1200,
+            800,
+            |stage| {
+                let operation = stage.operation();
+                let inputs =
+                    crate::plots::shared_x::prepare_plot(&source, &operation, Some(&theme))?;
+                let guide = prepare_discrete_guide(
+                    &source,
+                    PlotKind::Scatter,
+                    &theme,
+                    &inputs,
+                    &operation,
+                )?;
+                let changed_inputs = crate::plots::shared_x::prepare_plot(
+                    &changed_source,
+                    &operation,
+                    Some(&theme),
+                )?;
+                let changed = prepare_discrete_guide(
+                    &changed_source,
+                    PlotKind::Scatter,
+                    &theme,
+                    &changed_inputs,
+                    &operation,
+                )?;
+                assert_ne!(guide.descriptor, changed.descriptor);
+                let requirements = crate::layout::foundational_plot_requirements(
+                    Some(&inputs),
+                    &source,
+                    PlotKind::Scatter,
+                    &theme,
+                    &ComponentAddress::root(),
+                    true,
+                    true,
+                    true,
+                    Some(stage),
+                )?;
+                let mut presence = stage.reserve_scalar_presence_map()?;
+                let mut census = crate::layout::PreparedTextCensus::materialize(
+                    requirements,
+                    Some(stage),
+                    Some(&mut presence),
+                )
+                .map_err(|error| Error::Render(error.to_string()))?;
+                theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
+                Ok((inputs, guide, changed))
+            },
+            |(inputs, guide, changed_guide), assigned, round| {
+                let plot = inputs.attach(source.clone())?;
+                let original = FacetPlan::new(
+                    &plot,
+                    PlotKind::Scatter,
+                    &theme,
+                    round,
+                    &mut children,
+                    guide,
+                    false,
+                    None,
+                )
+                .map_err(fit::PlanError::into_error)?;
+                if !round.child_stable(&[ComponentAddress::root()]) {
+                    children.finish_round(round);
+                    return Ok(crate::layout::MeasuredLayout::new(assigned, original));
+                }
+                exercised = true;
+                let same = FacetPlan::new(
+                    &plot,
+                    PlotKind::Scatter,
+                    &theme,
+                    round,
+                    &mut children,
+                    guide,
+                    false,
+                    None,
+                )
+                .map_err(fit::PlanError::into_error)?;
+                for (first, repeated) in original.panel_plans.iter().zip(&same.panel_plans) {
+                    assert_eq!(std::sync::Arc::ptr_eq(first, repeated), !disabled);
+                }
+                let changed = FacetPlan::new(
+                    &plot,
+                    PlotKind::Scatter,
+                    &theme,
+                    round,
+                    &mut children,
+                    changed_guide,
+                    false,
+                    None,
+                )
+                .map_err(fit::PlanError::into_error)?;
+                for (first, replacement) in same.panel_plans.iter().zip(&changed.panel_plans) {
+                    assert_eq!(first.panel_box, replacement.panel_box);
+                }
+                assert!(!std::sync::Arc::ptr_eq(
+                    &same.panel_plans[0],
+                    &changed.panel_plans[0]
+                ));
+                assert_eq!(
+                    std::sync::Arc::ptr_eq(&same.panel_plans[1], &changed.panel_plans[1]),
+                    !disabled,
+                );
+                assert!(changed.panel_plans[0].legend.is_some());
+                assert!(changed.panel_plans[1].legend.is_none());
 
-    assert!(matches!(next.unwrap().unwrap(), FitOutcome::Measured(_)));
+                // The original root-level guide slot is outside both cells.
+                // Its instability invalidates the routed consumer at unchanged
+                // bounds, while the other inside-guide cell remains independent.
+                let checkpoint = round.begin_trial()?;
+                round.request_insets(
+                    &guide_owner,
+                    &guide_owner,
+                    FeedbackKind::OwnedInk,
+                    [1.0, 0.0, 0.0, 0.0],
+                )?;
+                let unstable = FacetPlan::new(
+                    &plot,
+                    PlotKind::Scatter,
+                    &theme,
+                    round,
+                    &mut children,
+                    changed_guide,
+                    false,
+                    None,
+                )
+                .map_err(fit::PlanError::into_error)?;
+                assert!(!std::sync::Arc::ptr_eq(
+                    &changed.panel_plans[0],
+                    &unstable.panel_plans[0]
+                ));
+                assert_eq!(
+                    std::sync::Arc::ptr_eq(&changed.panel_plans[1], &unstable.panel_plans[1]),
+                    !disabled,
+                );
+                round.record_failure(FitScope::new(&guide_owner, 0).failure(
+                    crate::layout::kernel::FitKind::TrackOrResidual,
+                    "reject guide ancestor trial",
+                ))?;
+                assert!(matches!(
+                    round.finish_trial(checkpoint),
+                    TrialOutcome::Miss(_)
+                ));
+                children.finish_round(round);
+                Ok(crate::layout::MeasuredLayout::new(assigned, changed))
+            },
+            |_, _, plan, stage| {
+                let replay = crate::orchestrator::capture_text_replay_plan(
+                    1200,
+                    800,
+                    "routed facet guide dependencies",
+                    &theme,
+                    stage,
+                    |backend| plan.render(&source, PlotKind::Scatter, &theme, backend),
+                )?;
+                crate::orchestrator::validate_text_replay_plan(
+                    1200,
+                    800,
+                    &replay,
+                    "routed facet guide final Null",
+                )?;
+                Ok(replay)
+            },
+        )
+        .unwrap();
+        DISABLE_CHILD_REUSE.with(|flag| flag.set(false));
+        assert!(exercised);
+        let mut svg = root.plan().take_svg_backend().unwrap();
+        root.plan()
+            .replay(1200, 800, &mut svg, "routed facet guide replay")
+            .unwrap();
+        outputs.push(svg.into_bytes().unwrap());
+    }
+    assert_eq!(outputs[0], outputs[1]);
 }
 
 #[test]

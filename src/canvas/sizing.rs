@@ -517,6 +517,7 @@ pub(super) fn measure(
                 interiors: &prepared.interiors,
                 round,
                 measurements: Some(measurements),
+                shared_allocation: None,
                 natural_width: width.is_none(),
                 natural_height: true,
             }),

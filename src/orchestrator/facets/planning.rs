@@ -5,6 +5,10 @@ use crate::Error;
 use super::data::FacetPanel;
 use super::rendering::facet_label;
 use crate::builder::Plot;
+use crate::decorations::legend::discrete::scoped::{
+    ConsumedGuideDependency, DependencyUse, GuideAllocation, GuideConsumption, GuideOrientation,
+    SUPPRESSED_GUIDES,
+};
 use crate::decorations::plan::{LegendRole, PanelPlan};
 use crate::layout::canvas::PanelRequirements;
 use crate::layout::kernel::{FeedbackKind, FeedbackRound, FitKind, FrameRequirements};
@@ -336,18 +340,47 @@ pub(super) fn native_parent(
             }
         }
         let cell_scope = scope.child(AddressRole::FacetCell, index)?;
+        let role = if legend_owner {
+            LegendRole::Panel
+        } else {
+            LegendRole::Suppressed
+        };
+        let dependency = guide_slot
+            .as_ref()
+            .filter(|_| containing_trial || role == LegendRole::Panel)
+            .map(|slot| {
+                let (use_kind, allocation) = if role == LegendRole::Panel {
+                    (
+                        DependencyUse::DescriptorAndAllocation {
+                            descriptor: std::sync::Arc::clone(&slot.descriptor),
+                            orientation: GuideOrientation::from_horizontal(false),
+                            compact: false,
+                        },
+                        cell,
+                    )
+                } else {
+                    (DependencyUse::AllocationOnly, outer)
+                };
+                ConsumedGuideDependency::new(
+                    slot.owner.clone(),
+                    use_kind,
+                    GuideAllocation::bounds(allocation)?,
+                    round,
+                )
+            })
+            .transpose()?;
+        let guides = GuideConsumption {
+            dependencies: dependency.as_slice(),
+            ..SUPPRESSED_GUIDES
+        };
         let context = PlotRenderContext::new(
             crate::data::PlotData::with_rows(&panel_plot, &facet.rows, &facet.source_rows),
             cell,
             theme,
         )
         .with_facet_scales(facet_scales)
-        .with_fit_scope(&cell_scope);
-        let role = if legend_owner {
-            LegendRole::Panel
-        } else {
-            LegendRole::Suppressed
-        };
+        .with_fit_scope(&cell_scope)
+        .with_guides(&guides);
         let result = match children.plan(
             &panel_plot,
             role,

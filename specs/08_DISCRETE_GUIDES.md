@@ -4,8 +4,8 @@
 construction, producer bindings/projection, authoritative pre-font transport/census
 and stacked section measurement/frozen geometry with owner-local exact reuse are
 implemented. Effective parent-policy selection, facet marginal ordering and final
-section census are implemented privately. Exact scoped child/height dependency
-keys are implemented; actual consumed-ancestor routing and public controls remain
+section census and exact scoped child/height dependencies are implemented
+privately, including actual consumed-ancestor routing. Public controls remain
 pending.
 
 ## 1. Authority And Boundary
@@ -25,7 +25,8 @@ and `../docs/factorized-discrete-sections.md`; measured section evidence is in
 `../docs/stacked-discrete-sections.md` and
 `../docs/scoped-discrete-measurement-reuse.md`; effective parent preparation is in
 `../docs/effective-discrete-guide-owners.md`; scoped dependency-key evidence is in
-`../docs/scoped-guide-dependencies.md`. This target does not claim the
+`../docs/scoped-guide-dependencies.md` and `../docs/routed-guide-dependencies.md`.
+This target does not claim the
 public Separate renderer or the full acceptance matrix below is implemented.
 
 The source census is taken after the private Color/OpaqueColor carrier migration.
@@ -958,21 +959,28 @@ Retain an explicit, ordered private dependency input for each consumed guide:
 
 ```rust,ignore
 enum GuideUse { Hidden, SharedSuppressed, Local }
-enum DependencyUse { AllocationOnly, DescriptorAndAllocation }
+enum DependencyUse {
+    AllocationOnly,
+    DescriptorAndAllocation {
+        descriptor: Arc<PreparedDiscreteGuide>,
+        orientation: GuideOrientation,
+        compact: bool,
+    },
+}
+enum GuideAllocation { Width(i64), Box([i64; 4]) }
 struct ConsumedGuideDependency {
     owner: ComponentAddress,
     use_kind: DependencyUse,
-    descriptor: Option<Arc<PreparedDiscreteGuide>>,
-    assigned_edges: [i64; 4],
-    orientation: GuideOrientation,
-    compact: bool,
-    feedback: ChildFeedbackInputs,
+    allocation: GuideAllocation,
+    feedback: Arc<ChildFeedbackInputs>,
 }
 enum GuideOrientation { Horizontal, Vertical }
 struct ScopedGuideInputs {
     composition: LegendComposition,
     use_kind: GuideUse,
-    local_descriptor: Option<Arc<PreparedDiscreteGuide>>,
+    contribution_prepared: bool,
+    contribution: Option<Arc<PreparedDiscreteGuide>>,
+    local_guide: Option<DiscreteGuideSlot>,
     dependencies: Arc<[ConsumedGuideDependency]>,
 }
 ```

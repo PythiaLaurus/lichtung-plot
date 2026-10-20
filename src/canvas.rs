@@ -6,6 +6,9 @@ use std::sync::Arc;
 
 use crate::Error;
 
+use crate::decorations::legend::discrete::scoped::{
+    GuideAllocation, GuideConsumption, SUPPRESSED_GUIDES,
+};
 use crate::decorations::legend::{Legend, MeasuredContinuousGuide};
 use crate::decorations::plan::children::MeasurementPhase;
 use crate::layout::canvas::PanelRequirements;
@@ -18,6 +21,7 @@ use crate::spec::AxisDomain;
 use crate::theme::ResolvedTheme;
 use crate::{CanvasLegendPolicy, Labels, Output, Plot, PlotKind, Theme};
 
+mod dependencies;
 mod plot_text;
 mod sizing;
 mod text_panel;
@@ -2190,23 +2194,39 @@ impl Canvas {
         Ok(())
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "gutter probes consume assigned cells and the selected Shared residual allocation"
+    )]
     fn complete_cell_gutters(
+        &self,
         plots: &[Option<Plot>],
         cells: &[PanelBox],
         themes: &ResolvedCanvasThemes,
         children: &mut crate::decorations::plan::children::ChildPlans,
         round: &crate::layout::kernel::FeedbackRound,
         requirements: &mut [(usize, usize, PanelRequirements)],
+        shared_allocation: Option<GuideAllocation>,
     ) -> Result<(), Error> {
         for (index, plot) in plots.iter().enumerate() {
             let Some(plot) = plot else {
                 continue;
             };
             let theme = themes.plot(index).expect("configured Canvas plot theme");
+            let dependencies = self.consumed_guide_dependencies(
+                index,
+                cells[index].width(),
+                shared_allocation,
+                round,
+            )?;
+            let guides = GuideConsumption {
+                dependencies: &dependencies,
+                ..SUPPRESSED_GUIDES
+            };
             let probe = children.canvas_probe(
                 plot,
-                cells[index],
-                theme,
+                crate::spec::PlotRenderContext::new(plot.data(), cells[index], theme)
+                    .with_guides(&guides),
                 index,
                 MeasurementPhase::Probe,
                 round,
@@ -2262,6 +2282,7 @@ impl Canvas {
         }
         self.coordinate_plots(&mut plots, prepared.shared_x, round)?;
         let natural_grid_height = |width: f64,
+                                   shared: bool,
                                    round: &crate::layout::kernel::FeedbackRound|
          -> Result<FitOutcome<f64>, Error> {
             // Both height composition and final allocation consume the same
@@ -2285,6 +2306,7 @@ impl Canvas {
                     interiors: prepared.interiors,
                     round,
                     measurements: prepared.measurements,
+                    shared_allocation: shared.then(|| GuideAllocation::width(width)).transpose()?,
                     natural_width: false,
                     natural_height: true,
                 }),
@@ -2388,7 +2410,7 @@ impl Canvas {
             let (w, h) = measured.dimensions();
             if prepared.content_sizing {
                 let grid_width = full_outer.width() - if horizontal { 0.0 } else { w + gap };
-                let height = match natural_grid_height(grid_width, round)? {
+                let height = match natural_grid_height(grid_width, true, round)? {
                     FitOutcome::Measured(height) => height,
                     FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
                 };
@@ -2424,7 +2446,7 @@ impl Canvas {
             })
         } else {
             if prepared.content_sizing {
-                let height = match natural_grid_height(full_outer.width(), round)? {
+                let height = match natural_grid_height(full_outer.width(), false, round)? {
                     FitOutcome::Measured(height) => height,
                     FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
                 };
@@ -2435,6 +2457,14 @@ impl Canvas {
             }
             None
         };
+        let shared_allocation = shared_legend
+            .as_ref()
+            .map(|_| GuideAllocation::bounds(outer))
+            .transpose()?;
+        let shared_width = shared_legend
+            .as_ref()
+            .map(|_| GuideAllocation::width(outer.width()))
+            .transpose()?;
         let current_height = crate::layout::interior::sizing::integral(
             canvas_layout.panel_box.y1 + canvas_layout.insets.top,
         )?;
@@ -2462,6 +2492,7 @@ impl Canvas {
                     interiors: prepared.interiors,
                     round,
                     measurements: prepared.measurements,
+                    shared_allocation: shared_width,
                     natural_width: false,
                     natural_height: false,
                 })
@@ -2481,10 +2512,24 @@ impl Canvas {
                 let expected_theme = themes
                     .plot(first_index)
                     .expect("configured canvas panel has a resolved theme");
+                let dependencies = self.consumed_guide_dependencies(
+                    first_index,
+                    provisional[first_index].width(),
+                    shared_allocation,
+                    round,
+                )?;
+                let guides = GuideConsumption {
+                    dependencies: &dependencies,
+                    ..SUPPRESSED_GUIDES
+                };
                 let expected = plot_category_domain(
                     first,
-                    provisional[first_index],
-                    expected_theme,
+                    crate::spec::PlotRenderContext::new(
+                        first.data(),
+                        provisional[first_index],
+                        expected_theme,
+                    )
+                    .with_guides(&guides),
                     children,
                     first_index,
                     round,
@@ -2499,10 +2544,20 @@ impl Canvas {
                     let theme = themes
                         .plot(index)
                         .expect("configured canvas panel has a resolved theme");
+                    let dependencies = self.consumed_guide_dependencies(
+                        index,
+                        provisional[index].width(),
+                        shared_allocation,
+                        round,
+                    )?;
+                    let guides = GuideConsumption {
+                        dependencies: &dependencies,
+                        ..SUPPRESSED_GUIDES
+                    };
                     if plot_category_domain(
                         plot,
-                        provisional[index],
-                        theme,
+                        crate::spec::PlotRenderContext::new(plot.data(), provisional[index], theme)
+                            .with_guides(&guides),
                         children,
                         index,
                         round,
@@ -2561,13 +2616,14 @@ impl Canvas {
             }
         }
         if !prepared.content_sizing {
-            Self::complete_cell_gutters(
+            self.complete_cell_gutters(
                 &plots,
                 &provisional,
                 &themes,
                 children,
                 round,
                 &mut requirements,
+                shared_allocation,
             )?;
         }
         let grid = match tracks::allocate(
@@ -2589,6 +2645,7 @@ impl Canvas {
                     interiors: prepared.interiors,
                     round,
                     measurements: prepared.measurements,
+                    shared_allocation: shared_width,
                     natural_width: false,
                     natural_height: false,
                 })
@@ -2654,6 +2711,16 @@ impl Canvas {
                     .map_err(|_| Error::Render("canvas address overflowed".into()))?,
             )?;
             let source_rows = plot.configured_source_rows()?;
+            let dependencies = self.consumed_guide_dependencies(
+                index,
+                cells[index].width(),
+                shared_allocation,
+                round,
+            )?;
+            let guides = GuideConsumption {
+                dependencies: &dependencies,
+                ..SUPPRESSED_GUIDES
+            };
             let mut context = source_rows
                 .map_or_else(
                     || crate::spec::PlotRenderContext::new(plot.data(), local.body, theme),
@@ -2666,7 +2733,8 @@ impl Canvas {
                         )
                     },
                 )
-                .with_fit_scope(&child_scope);
+                .with_fit_scope(&child_scope)
+                .with_guides(&guides);
             if prepared.content_sizing
                 && self.legend_policy == CanvasLegendPolicy::PerPlot
                 && !matches!(kind, PlotKind::Heatmap | PlotKind::Beeswarm)
@@ -3081,8 +3149,7 @@ impl Canvas {
             };
             let result = children.canvas_probe(
                 plot,
-                panel,
-                theme,
+                crate::spec::PlotRenderContext::new(plot.data(), panel, theme),
                 index,
                 MeasurementPhase::Legend,
                 round,
@@ -3095,8 +3162,7 @@ impl Canvas {
 
 fn plot_category_domain(
     plot: &Plot,
-    panel: PanelBox,
-    theme: &crate::theme::ResolvedTheme,
+    context: crate::spec::PlotRenderContext<'_>,
     children: &mut crate::decorations::plan::children::ChildPlans<'_>,
     index: usize,
     round: &crate::layout::kernel::FeedbackRound,
@@ -3110,8 +3176,7 @@ fn plot_category_domain(
             "shared category labels are supported only by horizontal bar families".into(),
         ));
     }
-    let result =
-        children.canvas_probe(plot, panel, theme, index, MeasurementPhase::Category, round)?;
+    let result = children.canvas_probe(plot, context, index, MeasurementPhase::Category, round)?;
     if result.y_domain != AxisDomain::Categorical {
         return Err(Error::Data(
             "shared category labels require a categorical y-axis".into(),
