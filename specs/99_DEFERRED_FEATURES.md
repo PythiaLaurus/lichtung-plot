@@ -8,7 +8,8 @@ This document records only genuinely excluded scope, not approved work awaiting
 implementation. It grants no implementation authorization and reserves no API,
 storage, callback, or fallback. Approved boundaries are in `03_THEME_SYSTEM.md`,
 `05_LAYOUT_SYSTEM.md`, T5a0s/D1-D6 in `91_IMPLEMENTATION_PLAN.md`, and the
-user-approved T6 entry decisions in `93_T6_EXECUTION_PLAN.md`.
+user-approved T6 decisions in `93_T6_EXECUTION_PLAN.md` and the alpha/tick
+extension admission in `97_ALPHA_AND_TICK_EXTENSION_PLAN.md`.
 
 Every item has a stable ID and an explicit review checkpoint enforced by the
 entry/closure gates or named successor milestones in `91_IMPLEMENTATION_PLAN.md`.
@@ -57,30 +58,25 @@ ambient host settings. Compare the residual capabilities' semantics and bounded
 costs, then obtain user-approved new-phase admission, reasoned rejection, or
 re-deferral with an explicit new checkpoint.
 
-## DF3: Data-Mapped Alpha
+## DF4: Further Automatic Tick Controls
 
-Data-dependent alpha scales remain excluded; approved RGBA paint ownership is in
-`03_THEME_SYSTEM.md`.
+Exact generated counts, visual-density scalars, arbitrary multiplicative ratios,
+categorical stride/drop policies, and generation callbacks remain excluded.
+The user admitted target and maximum generated numeric tick counts following the
+T6 closure review. Their implementation phases and the distinction between a
+target and a hard maximum are in `97_ALPHA_AND_TICK_EXTENSION_PLAN.md`; this
+residual item does not defer that admitted work. The implemented preferred-interval
+boundary remains in `05_LAYOUT_SYSTEM.md` until the owning public cutover.
 
-**Review checkpoint**: T6 CLOSURE, before T7 starts.
+**Review checkpoint**: T7 CLOSURE, before successor planning.
 
-**Evidence and decision**: Review scientific workflows, numeric/categorical domain
-and range, missing values, legends, accessibility, facets, Canvas coordination,
-and precedence against final RGBA exact styles. Compare explicit alternatives
-without introducing multiplied opacity; obtain the user-approved disposition.
-
-## DF4: Broader Automatic Tick Controls
-
-Target/maximum/exact generated counts, visual-density scalars, arbitrary
-multiplicative ratios, categorical stride/drop policies, and generation callbacks
-remain excluded. The admitted preferred-interval boundary is in `05_LAYOUT_SYSTEM.md`.
-
-**Review checkpoint**: T6 CLOSURE, before T7 starts.
-
-**Evidence and decision**: Use implemented interval/coarsening and exact-tick
-examples on small panels, facets, and shared Canvas dimensions to identify unmet
-needs. Review precedence, nice-step deviation, semantic completeness, and resource
-limits without a second planning route; obtain the user-approved disposition.
+**Evidence and decision**: Evaluate the admitted target/maximum controls alongside
+preferred intervals and exact caller ticks on small panels, facets, and shared
+Canvas dimensions. Identify needs beyond that combined surface. Review exact
+counts separately from nice-step selection, and categorical label policies
+separately from numeric generation. Compare precedence, semantic completeness,
+and bounded costs without a second planning route; obtain user-approved new-phase
+admission, reasoned rejection, or re-deferral with an explicit new checkpoint.
 
 ## DF5: Broader Text Layout Controls
 
@@ -195,6 +191,17 @@ The review concerns the library's positioning as well as concrete capabilities;
 its evidence should establish how scientific plotting libraries, including
 matplotlib, fit these workflows and where a different interface adds value.
 
+The user explicitly added **fully caller-decided legends** to this review. This
+includes legends independent of automatic data/scale contributions: caller-owned
+titles, labels, entry selection and order, point/line/patch symbols, exact RGBA
+and geometry, continuous or discrete explanations, and addition to or replacement
+of automatic legends on individual plots and composed Canvas figures. Review
+declarative symbol-and-label construction as well as the broader possibility of
+caller-drawn/custom graphics; neither interface is preselected. Include custom
+alpha functions whose intended explanation is supplied by the caller, rather than
+inferred from the function or observed alpha values. The user chose to consider
+this capability at the AI-workflow review, not in the admitted alpha/tick work.
+
 **Review checkpoint**: The post-first-release checkpoint in
 `91_IMPLEMENTATION_PLAN.md`, after **all** of the following are complete:
 
@@ -211,7 +218,11 @@ standalone renderer boundary.
 
 **Evidence and decision**: Collect representative AI-authored workflows for
 single scientific plots and custom Canvas-like compositions, including direct
-low-level drawing, SVG post-editing, and caller-added graphical elements. Identify
+low-level drawing, SVG post-editing, caller-added graphical elements, and fully
+caller-authored legends. For legends, compare automatic scale explanations with
+independent caller declarations, append/replacement and Plot/Canvas ownership,
+symbol/label versus custom-drawing scope, measurement/placement, fonts, complete
+ink, source identity, and immutable SVG/PNG output. Identify
 where the library contributes reliable scientific transforms/statistics, axes,
 text, layout and reproducible output, and where its fixed plot catalog or public
 controls force external reconstruction. Evaluate what changes would better fit

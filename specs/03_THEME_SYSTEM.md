@@ -657,3 +657,8 @@ properties, callbacks, dynamic theme extensions, process-global defaults,
 backend dash strings, font loading, data-mapped alpha, arbitrary blend modes,
 animation, or one theme component per plot family. Such features require a new
 canonical contract and are not reserved by placeholder API.
+
+Data alpha has subsequently been admitted to the implementation phases in
+`97_ALPHA_AND_TICK_EXTENSION_PLAN.md`. That planned extension does not make it a
+current Theme field or paint API; the owning implementation must update this
+contract atomically and preserve one final alpha per independent paint.

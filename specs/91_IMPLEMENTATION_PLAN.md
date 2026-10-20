@@ -85,6 +85,10 @@ T6's execution partition is `93_T6_EXECUTION_PLAN.md`, based on completed T5e
 tables are authoritative for the new public migration and numeric/legend work.
 T6 is IN PROGRESS; planning and entry decisions are complete, and implementation
 leaves remain PENDING until started.
+The later DF3/DF4 closure-review admission is recorded in
+`97_ALPHA_AND_TICK_EXTENSION_PLAN.md`: numeric target/maximum tick selection and
+data alpha follow section-guide acceptance as independently verified umbrellas.
+Fully caller-decided legends join DF11's existing AI-workflow review.
 
 The primary-approved T5a1r2-r4/T5a3a1-f closure is one coupled interface migration
 after the completed T5a1r1 commit, as recorded under T5a3f. Its original per-stage
@@ -6584,11 +6588,13 @@ Acceptance:
 
 **Status**: IN PROGRESS — public foundations and root sizing/ticks complete;
 scientific numeric presentation and its all-consumer/output closure complete;
-section-aware discrete guide implementation follows.
+section-aware discrete guide acceptance is in progress. The user-approved numeric
+count and data-alpha extensions in spec97 follow that acceptance.
 
 Dependencies: T5e.
 
-Execution: `93_T6_EXECUTION_PLAN.md` T6P/T6A/T6B/T6C/T6N/T6L/T6Z. Complete and
+Execution: `93_T6_EXECUTION_PLAN.md` T6P/T6A/T6B/T6C/T6N/T6L/T6T/T6D/T6Z, with
+the new tick/alpha leaves in `97_ALPHA_AND_TICK_EXTENSION_PLAN.md`. Complete and
 commit independently verified leaves; separate behavior from mechanical public
 cutovers instead of accumulating one large source/closure bundle.
 
@@ -6645,8 +6651,13 @@ Existing unconfigured power labels remain unchanged. This admission adds no
 platform `powf`, dependency, resource-cap increase or alternate rendering route.
 
 The new scope is deliberately admitted here, not inferred from a review gate.
-T6's pre-existing foundation commitments below remain in force. DF3/DF4 keep
-T6 CLOSURE; T7 additionally reviews residual DF2/DF5/DF7. DF11 retains its
+T6's pre-existing foundation commitments below remain in force. The subsequent
+DF3/DF4 closure review is CLOSED as a disposition: the user approved proceeding
+with caller-computed alpha, linear/log mappings, declared continuous/discrete
+automatic-guide semantics, and numeric target/maximum tick counts. Spec97 records
+these new implementation phases; they are not yet current APIs. Residual DF4
+exact-count/density/ratio/category/callback controls join residual DF2/DF5/DF7 at
+T7 CLOSURE. Fully caller-decided legends join DF11, retaining all of its
 post-first-release milestone prerequisites.
 
 Expose the complete foundations only after every admitted consumer uses the
@@ -6690,8 +6701,10 @@ Scope:
   `Plot<K>::x_tick_interval(TickInterval) -> Self where K: kind::NumericX` and the
   corresponding `NumericY` y setter. Repeated setters replace; a present exact
   list takes precedence regardless of order and validates `1..=10_000`; absence
-  retains automatic span/typography policy. Do not expose a target count, maximum
-  count, visual-density scalar, categorical stride, or tick-generation callback.
+  retains automatic span/typography policy. This completed foundation cutover
+  exposes no count control; the subsequent T6T admission in spec97 owns target and
+  maximum counts and any atomic replacement. Density scalars, categorical stride
+  and generation callbacks remain outside that admission.
 - Make absence of a sizing call select automatic layout for Plot and Canvas.
 - Add consuming `Plot<K>::width(u32) -> Self` and `Canvas::width(u32) -> Self`
   for exact width with automatic height; retain exact `size(width, height)`.
@@ -6740,6 +6753,13 @@ Scope:
   same-field collapse, sparse/row-hue semantics and supplemental layer identity.
   Expose Plot selection and Canvas Shared authority only after end-to-end paths
   are implemented; remove the flat descriptor rather than retain another renderer.
+- Implement spec97's numeric target/maximum generation through one retained
+  per-axis source selection, preserving exact lists, scientific domains and
+  existing bounded fit/feedback. Follow with caller-computed alpha, linear/log
+  factories and automatic explanations grounded in declared source semantics.
+  Materialize custom calculations before rendering; no Plot/Canvas or Output
+  retains an application closure. Finish exact source-backed design gates before
+  each behavioral leaf and migrate current contracts with the public cutovers.
 
 Acceptance:
 
@@ -6789,11 +6809,10 @@ Acceptance:
   Sections do not multiply placement trials, search sibling allocations, invent
   group styles or alter sparse marks. Complete section geometry and keys match
   retained SVG/PNG and cached/uncached output in all root modes.
-- CLOSURE gate, before T7: review DF3 data-mapped alpha and DF4 broader count/
-  density tick controls against implemented T6 evidence, following each item's
-  `99` evidence requirements. Record for each ID a user-approved new-phase
-  admission, reasoned rejection, or re-deferral to a new explicit milestone.
-  Review does not promise implementation or retroactively expand T6.
+- CLOSURE disposition gate, before T7: CLOSED by the user's DF3/DF4 admission in
+  spec97. Complete the admitted numeric count and data-alpha phases before
+  integrated T6 closure; retain only residual DF4 at its new T7 CLOSURE checkpoint.
+  Fully caller-decided legends stay with DF11's post-first-release review.
 - `just verify` passes.
 
 T6Z3 owns the required broad gate and ten ignored release benchmark groups,
@@ -6887,9 +6906,10 @@ Acceptance:
   PF7's KEEP disposition remains in force; this review does not alter other
   items' recorded checkpoints, including the T6 entry re-deferrals below.
 - CLOSURE gate, before successor planning: review the residual DF2 locale/extended
-  numeric controls, DF5 additional text controls, and DF7 sparse topology changes
-  re-deferred by the user at T6 ENTRY. Use actual public T6 workflows and separate
-  subset decisions as required by `99_DEFERRED_FEATURES.md`; record approved
+  numeric controls, DF4 further automatic tick controls, DF5 additional text
+  controls, and DF7 sparse topology changes retained after the T6 decisions.
+  Use actual public T6 workflows and separate subset decisions as required by
+  `99_DEFERRED_FEATURES.md`; record approved
   new-phase admission, reasoned rejection or an explicit new review milestone.
 - Audit all DF1-DF10 entry/closure dispositions and user approvals. Remove admitted
   features from `99` on approved planning, not code completion; only implementation
@@ -6906,9 +6926,14 @@ interface, and publication of the first version are **all complete**. If their
 completion order changes, the checkpoint remains after the last prerequisite.
 
 At that checkpoint, review actual single-plot and custom multi-panel workflows,
-including low-level drawing, hand-edited SVG and caller-added graphics, and
-reconsider what capabilities and interfaces make the library useful to LLM-driven
-scientific figure creation. Record a user-approved new implementation phase,
+including low-level drawing, hand-edited SVG, caller-added graphics and fully
+caller-decided legends. The user explicitly assigned manual legend contents,
+symbols/labels/order, continuous/discrete explanation, automatic append/replacement,
+Plot/Canvas ownership and the broader custom-drawing possibility to this review.
+Evaluate these alongside custom alpha-function workflows without inferring
+explanatory semantics from a function or observed values. Reconsider what
+capabilities and interfaces make the library useful to LLM-driven scientific
+figure creation. Record a user-approved new implementation phase,
 reasoned rejection, or re-deferral with an explicit new milestone. This checkpoint
 does not expand T6/T7, authorize those successor milestones, reserve a new API, or
 alter the current standalone contract. T6/T7's existing DF1-DF10 gates remain as

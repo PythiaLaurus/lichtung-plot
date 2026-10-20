@@ -3,6 +3,10 @@
 **Status**: IN PROGRESS — immutable public foundations, their complete custom-value
 closure, public preferred tick intervals and root-sizing closure are complete;
 scientific numeric presentation is complete; section-aware discrete guides follow.
+The subsequent DF3/DF4 closure review admitted data alpha and numeric target/maximum
+tick selection in `97_ALPHA_AND_TICK_EXTENSION_PLAN.md`; those extensions remain
+PENDING after section-guide acceptance. Fully caller-decided legends join DF11's
+post-first-release AI-workflow review.
 
 **Current execution checkpoint:** the user-authorized resumption completed the
 mark/annotation leaf, T6B1d4d, and the private-value umbrella T6B1. Evidence is in
@@ -110,8 +114,19 @@ not a formatted exponent or `10^0.5`.
 
 TextPanel alignment, categorical label directions and identifier breaking are
 identified candidates for that later DF5 review, not additional T6 implementation.
-DF3/DF4 keep their T6 CLOSURE gates. DF6/DF8/DF9/DF10 keep T7 CLOSURE. DF11 stays
-after workspace, both adapters, Python interface and first release are complete.
+The subsequent T6 closure review has an explicit user-approved disposition:
+
+| Reviewed item | User-approved disposition | Owning work / next checkpoint |
+| --- | --- | --- |
+| DF3 data-mapped alpha | ADMIT caller-computed values, linear/log factories and automatic explanation from declared continuous/discrete semantics; functions or output counts alone do not imply guide semantics | T6D in spec97; removed from the deferred list |
+| DF4 broader tick controls | ADMIT numeric target and maximum counts through the existing source/fit lifecycle | T6T in spec97; residual exact-count/density/ratio/category/callback controls reviewed at T7 CLOSURE |
+| Fully caller-decided legends | Add data-independent, caller-authored legend content and custom-graphics scope to the AI-workflow review | DF11's existing post-first-release checkpoint |
+
+`97_ALPHA_AND_TICK_EXTENSION_PLAN.md` records the research, accepted boundaries,
+source-backed design gates and implementation leaves. This is admission to new
+work, not a claim of implementation or integrated closure. DF6/DF8/DF9/DF10 keep
+T7 CLOSURE. DF11 stays after workspace, both adapters, Python interface and first
+release are complete; adding manual legends changes none of those prerequisites.
 
 ## Delivery Discipline
 
@@ -138,8 +153,9 @@ after workspace, both adapters, Python interface and first release are complete.
 ## Stage Map
 
 The order is foundations, public sizing/ticks, numeric core, sectioned guides,
-then integrated closure. Each umbrella below consists of separately committed
-leaves. Suggested commit subjects are partition labels, not existing commits.
+numeric count selection, data alpha, then integrated closure. Each umbrella
+consists of separately committed leaves. Suggested commit subjects are partition
+labels, not existing commits.
 
 | Stage | Status | Depends on | Deliverable / suggested scoped commit |
 | --- | --- | --- | --- |
@@ -182,10 +198,12 @@ leaves. Suggested commit subjects are partition labels, not existing commits.
 | T6C3 | COMPLETE | T6C2 | Complete initial axis/chrome preferences, provisional content-height gutters and all-mode parent/output evidence; `fix(layout): compose complete content-sized root frames` |
 | T6N | COMPLETE | T6C | Unified scientific numeric formatting; leaves below |
 | T6L | IN PROGRESS | T6N | One section-aware discrete guide; leaves below |
-| T6Z | PENDING | T6L | Integrated contract, deferred-decision and phase closure |
-| T6Z1 | PENDING | T6L | Complete public examples/current-spec and property/consumer census reconciliation; `docs(api): reconcile scientific plotting contracts` |
-| T6Z2 | PENDING | T6Z1 | User-approved DF3/DF4 closure dispositions |
-| T6Z3 | PENDING | T6Z2 | Final audit, required broad gate/release evidence and closure commit; `test(api): close public scientific foundations` |
+| T6T | PENDING | T6L | Numeric target/maximum tick selection; exact design, behavior, public migration and closure leaves in spec97 |
+| T6D | PENDING | T6T | Data alpha with declared automatic-guide semantics; design, producers, guides, public migration and closure leaves in spec97 |
+| T6Z | PENDING | T6D | Integrated contract and phase closure |
+| T6Z1 | PENDING | T6D | Complete public examples/current-spec and property/consumer census reconciliation; `docs(api): reconcile scientific plotting contracts` |
+| T6Z2 | COMPLETE | User closure review | User-approved DF3/DF4 admission in spec97, residual DF4 checkpoint and fully caller-decided legends in DF11 |
+| T6Z3 | PENDING | T6Z1, T6Z2 | Final audit, required broad gate/release evidence and closure commit; `test(api): close public scientific foundations` |
 
 T6A2 must specify all accessors, validated constructors and construction-only
 edits before T6B starts; the broad component names in spec03 are not permission
@@ -911,6 +929,21 @@ fit boundaries, inside collision, changed section identity/cache, all root modes
 and identical retained SVG/PNG with reuse disabled. One owner budget and unchanged
 resource caps are mandatory; section count does not multiply placement trials.
 
+## T6T / T6D — Reviewed Tick And Alpha Extensions
+
+`97_ALPHA_AND_TICK_EXTENSION_PLAN.md` owns the exact design-gate requirements,
+scope, dependencies and leaf status for these newly admitted umbrellas. Complete
+T6L6c first. T6T closes target versus hard-maximum generation and one retained
+per-axis selection before T6D adds alpha input/mapping and declared explanation.
+An arbitrary construction function does not imply continuity, categorical
+semantics, thresholds, an inverse or a smooth legend ramp. No retained application
+callback or independent manual-legend API is admitted.
+
+Each design leaf fixes signatures, actual consumer/capability matrices, numerical
+rules, deterministic ordering, ownership and deletion targets before its code
+leaves start. Implementation leaves update current contracts atomically; until
+then the existing public interval and exact-RGBA behavior remains current.
+
 ## Verification And Closure
 
 Documentation-only stages need `git diff --check` and source/spec consistency
@@ -925,7 +958,8 @@ and the ten ignored release benchmark groups, preserve full long-caption,
 legal-break, dense/compact/refusal and source fixtures, and report actual records,
 visits, calls, cache, topology, bytes and retained output identities. Add bounded
 numeric certification/format-set and sectioned-guide workload samples to the
-relevant Rust benchmark modules; baseline speedups are not inferred from fewer
+relevant Rust benchmark modules, and bounded target/maximum/alpha samples for the
+newly admitted consumers; baseline speedups are not inferred from fewer
 logical units. After a localized failure use its focused tests and relevant
 neighbors rather than repeating successful full suites.
 
@@ -936,7 +970,8 @@ change the historical visual-property count; record justified ledger additions
 or splits with their owners. Remove every replaced selector, tuple/opacity
 carrier, formatter and flat-guide representation. No public target-only aliases.
 
-T6 completes only after DF3/DF4 decisions, public/current specifications and
-examples, verification, inspected snapshots, evidence and commits. T7 remains
-PENDING until then. The new residual DF2/DF5/DF7 T7 closure reviews are explicit
+The DF3/DF4 disposition gate is closed by the recorded user admission. T6 completes
+only after the admitted tick/alpha work, public/current specifications and
+examples, verification, inspected semantic output, evidence and commits. T7 remains
+PENDING until then. The residual DF2/DF4/DF5/DF7 T7 closure reviews are explicit
 review obligations, not automatic successor implementation.

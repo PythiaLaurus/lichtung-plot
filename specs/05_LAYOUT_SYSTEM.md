@@ -1464,6 +1464,10 @@ No target count, density control, tick callback, public constraint/measurement
 operation, `SizeRequest`, plan, layout trait, quality scorer, or plugin is added.
 Repository callers migrate atomically rather than retaining compatibility aliases.
 
+The subsequent user-approved target/maximum numeric count extension is planned in
+`97_ALPHA_AND_TICK_EXTENSION_PLAN.md`. It becomes current only with its owning
+source/API/caller cutover; this section describes the implemented interval API.
+
 ## Validation And Repair Evidence
 
 Implementation repair phases assign datasets, fonts, roots and meaningful
