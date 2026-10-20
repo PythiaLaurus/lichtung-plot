@@ -1,6 +1,7 @@
 # Data Alpha And Numeric Tick Selection
 
-**Status**: User-approved scope and execution plan; implementation PENDING.
+**Status**: User-approved scope; numeric source/API design COMPLETE, implementation
+PENDING. Data-alpha design and implementation remain PENDING.
 
 ## Authority And Recorded Decision
 
@@ -163,7 +164,7 @@ and focused closure; split behavioral leaves further when needed.
 
 | Stage | Status | Depends on | Deliverable |
 | --- | --- | --- | --- |
-| T6T0 | PENDING | T6L | Exact numeric count/source/API/consumer/deletion design |
+| T6T0 | COMPLETE | T6L | Exact generation value/API, source order/cardinality, consumer/deletion and acceptance design in `../docs/numeric-tick-selection-design.md` |
 | T6T1 | PENDING | T6T0 | Single retained generated selection and bounded source behavior |
 | T6T2 | PENDING | T6T1 | Atomic public API/caller/current-contract migration |
 | T6T3 | PENDING | T6T2 | Parent/root/output and public contract evidence |
