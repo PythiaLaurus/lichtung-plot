@@ -8,6 +8,7 @@ mod annotations;
 mod fonts;
 mod legends;
 mod numeric;
+mod sections;
 mod text;
 
 pub(super) struct ArtifactBytes {
@@ -80,8 +81,10 @@ pub(super) fn measure_case<R>(
     assert_eq!(
         result.is_ok(),
         expected_success,
-        "unexpected outcome: {name}: {:?}",
-        result.as_ref().err()
+        "unexpected outcome: {name}: {:?}; roots={:?}; guides={:?}",
+        result.as_ref().err(),
+        observations.roots,
+        observations.guides,
     );
     // Replay, reads, and caller assertions are outside both timing and observation.
     let (output, error) = match result {
@@ -522,6 +525,7 @@ fn publication_efficiency_measurements() {
     measure("separate10", scatter, publish_plot, true);
     measure("reuse10", scatter, publish_plot, false);
     numeric::measure();
+    sections::measure();
 
     for run in 0..3 {
         let start = Instant::now();

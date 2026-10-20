@@ -118,7 +118,7 @@ fn selected(sample: &CaseMeasurement) -> LegendPosition {
         .edge
 }
 
-fn equal_output(auto: &CaseMeasurement, explicit: &CaseMeasurement) {
+pub(super) fn equal_output(auto: &CaseMeasurement, explicit: &CaseMeasurement) {
     let auto = auto.output.as_ref().unwrap();
     let explicit = explicit.output.as_ref().unwrap();
     assert_eq!(auto.svg, explicit.svg, "outlined SVG geometry differs");
@@ -503,7 +503,11 @@ fn shared_legend_child_cache_replay_contract() {
         crate::layout::plan_exact_root(
             1200,
             720,
-            |stage| crate::plots::shared_x::prepare_plot(&plot, &stage.operation(), None),
+            |stage| {
+                let inputs = crate::plots::shared_x::prepare_plot(&plot, &stage.operation(), None)?;
+                inputs.prepare_discrete_guides(&plot, &theme, &stage.operation(), &owner, false)?;
+                Ok(inputs)
+            },
             |inputs, assigned, round| {
                 let plot = inputs.attach(plot.clone())?;
                 let panel = PanelBox::new(100.0, 1100.0, 100.0, 620.0);
@@ -794,15 +798,6 @@ fn populated_legend_fixture_contract() {
     }
     for dense in [false, true] {
         inside_case(dense);
-    }
-}
-
-#[test]
-fn shared_legend_selected_edge_contract() {
-    for pressure in [false, true] {
-        let auto = shared_case(true, pressure, LegendPosition::Auto);
-        let explicit = shared_case(true, pressure, selected(&auto));
-        equal_output(&auto, &explicit);
     }
 }
 

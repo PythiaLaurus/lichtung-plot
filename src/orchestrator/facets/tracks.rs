@@ -79,6 +79,24 @@ pub(super) fn allocate(
         theme.typography.composition.facet_header.font_size(),
     ))?;
     let strip_lengths = theme.facet_strip_lengths()?;
+    if let Some(content) = content.filter(|content| content.natural_width) {
+        // Initial root width owns the same external axis columns as assigned
+        // layout. Feedback can refine those requirements, but cannot grow a
+        // root whose natural selection omitted them entirely.
+        for panel in panels {
+            let plot = content
+                .plot
+                .clone()
+                .with_render_scope(panel.render_scope()?);
+            let (left, right) =
+                crate::layout::interior::sizing::horizontal_gutter_preference(&plot, theme)?;
+            let insets = column_insets.get_mut(panel.column).ok_or_else(|| {
+                Error::Render("facet child is outside declared Grid topology".into())
+            })?;
+            insets[0] = insets[0].max(required(left)?);
+            insets[1] = insets[1].max(required(right)?);
+        }
+    }
     for &(row, column, req) in gutters {
         if row >= rows || column >= columns {
             return Err(Error::Render(
