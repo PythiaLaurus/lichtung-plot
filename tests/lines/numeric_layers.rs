@@ -215,23 +215,60 @@ fn point_labels_and_whole_layer_legend_identity_remain_distinct() {
     )
     .with_color(lichtung_plot::Color::rgb(123, 45, 200))
     .labels(lichtung_plot::CategoryValues::new("annotations", ["first", "second"]).unwrap())
-    .legend_label("Selected coordinates");
-    let output = svg(line_plot(&frame).markers(false).point_layer(layer));
-    let legend = output
-        .split_once("<g id=\"legend\">")
-        .unwrap()
-        .1
-        .split_once("</g>")
-        .unwrap()
-        .0;
-
-    assert_eq!(legend.matches(">Selected coordinates</text>").count(), 1);
-    assert_eq!(legend.matches("<circle ").count(), 1);
-    assert!(!legend.contains(">first</text>") && !legend.contains(">second</text>"));
-    for label in ["first", "second"] {
-        assert!(text_line(&output, label).contains("fill=\"#7B2DC8\""));
+    .legend_label("selected_coordinates");
+    let base = line_plot(&frame)
+        .markers(false)
+        .point_layer(layer)
+        .labels(lichtung_plot::Labels::raw().alias("selected_coordinates", "Chosen sample"));
+    for composition in [
+        lichtung_plot::LegendComposition::Combined,
+        lichtung_plot::LegendComposition::Separate,
+    ] {
+        for hued in [false, true] {
+            let plot = base.clone().legend_composition(composition);
+            let plot = if hued {
+                plot.hue(CategoryValues::new("cohort", ["main"; 3]).unwrap())
+            } else {
+                plot
+            };
+            let output = svg(plot);
+            let legend = output
+                .split_once("<g id=\"legend\">")
+                .unwrap()
+                .1
+                .split_once("</g>")
+                .unwrap()
+                .0;
+            let label = if hued {
+                "Chosen sample"
+            } else {
+                "selected_coordinates"
+            };
+            assert_eq!(legend.matches(&format!(">{label}</text>")).count(), 1);
+            assert_eq!(legend.matches("<circle ").count(), 1);
+            assert!(!legend.contains(">first</text>") && !legend.contains(">second</text>"));
+            for label in ["first", "second"] {
+                assert!(text_line(&output, label).contains("fill=\"#7B2DC8\""));
+            }
+            assert_eq!(output.matches("<circle ").count(), 3);
+        }
+        let collision = base
+            .clone()
+            .legend_composition(composition)
+            .hue(CategoryValues::new("cohort", ["selected_coordinates"; 3]).unwrap());
+        if composition == lichtung_plot::LegendComposition::Combined {
+            let error = collision.preflight().unwrap_err();
+            assert!(
+                error.to_string().contains("distinct raw identities"),
+                "{error}"
+            );
+        } else {
+            let output = svg(collision);
+            assert_eq!(output.matches(">Chosen sample</text>").count(), 2);
+            assert_eq!(output.matches(">cohort</text>").count(), 1);
+            assert_eq!(output.matches(">series</text>").count(), 1);
+        }
     }
-    assert_eq!(output.matches("<circle ").count(), 3);
 }
 
 #[test]
@@ -261,41 +298,63 @@ fn repeated_explicit_colors_and_exact_duplicate_legend_entries_are_accepted() {
             .with_color(lichtung_plot::Color::rgb(123, 45, 200))
             .legend_label("Selected")
     };
-    let output = svg(line_plot(&frame)
-        .markers(false)
-        .point_layer(layer(0.5, 1.5))
-        .point_layer(layer(1.5, 2.5)));
-    let legend = output
-        .split_once("<g id=\"legend\">")
-        .unwrap()
-        .1
-        .split_once("</g>")
-        .unwrap()
-        .0;
+    for composition in [
+        lichtung_plot::LegendComposition::Combined,
+        lichtung_plot::LegendComposition::Separate,
+    ] {
+        let output = svg(line_plot(&frame)
+            .markers(false)
+            .point_layer(layer(0.5, 1.5))
+            .point_layer(layer(1.5, 2.5))
+            .legend_composition(composition));
+        let legend = output
+            .split_once("<g id=\"legend\">")
+            .unwrap()
+            .1
+            .split_once("</g>")
+            .unwrap()
+            .0;
 
-    assert_eq!(legend.matches(">Selected</text>").count(), 1);
-    assert_eq!(output.matches("fill=\"#7B2DC8\"").count(), 3);
+        assert_eq!(legend.matches(">Selected</text>").count(), 1);
+        assert_eq!(output.matches("fill=\"#7B2DC8\"").count(), 3);
+    }
 }
 
 #[test]
 fn conflicting_duplicate_point_layer_legend_identity_is_rejected() {
     let frame = line_data();
-    let error = line_plot(&frame)
-        .point_layer(
-            supplemental_point(0.5, 1.5)
-                .with_color(lichtung_plot::Color::rgb(123, 45, 200))
-                .legend_label("Selected"),
-        )
-        .point_layer(
-            supplemental_point(1.5, 2.5)
-                .with_color(lichtung_plot::Color::rgb(0, 114, 178))
-                .legend_label("Selected"),
-        )
-        .preflight()
-        .unwrap_err()
-        .to_string();
+    let first = supplemental_point(0.5, 1.5)
+        .with_color(lichtung_plot::Color::rgba(123, 45, 200, 71))
+        .with_radius(5)
+        .unwrap()
+        .legend_label("Selected");
+    let second = supplemental_point(1.5, 2.5)
+        .with_color(lichtung_plot::Color::rgba(123, 45, 200, 71))
+        .with_radius(5)
+        .unwrap()
+        .legend_label("Selected");
+    for composition in [
+        lichtung_plot::LegendComposition::Combined,
+        lichtung_plot::LegendComposition::Separate,
+    ] {
+        for conflicting in [
+            second
+                .clone()
+                .with_color(lichtung_plot::Color::rgba(0, 114, 178, 71)),
+            second.clone().with_alpha(72),
+            second.clone().with_radius(6).unwrap(),
+        ] {
+            let error = line_plot(&frame)
+                .point_layer(first.clone())
+                .point_layer(conflicting)
+                .legend_composition(composition)
+                .preflight()
+                .unwrap_err()
+                .to_string();
 
-    assert!(error.contains("compatible semantic titles, labels, and styles"));
+            assert!(error.contains("compatible semantic titles, labels, and styles"));
+        }
+    }
 }
 
 #[test]

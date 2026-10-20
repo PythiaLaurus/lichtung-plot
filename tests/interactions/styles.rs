@@ -575,25 +575,33 @@ fn shared_canvas_legend_rejects_conflicting_caller_color_mapping() {
         CategoricalColorMap::new([("Control".to_owned(), OpaqueColor::rgb(51, 51, 51))]).unwrap();
     let blue =
         CategoricalColorMap::new([("Control".to_owned(), OpaqueColor::rgb(0, 114, 178))]).unwrap();
-    let canvas = Canvas::grid(1, 2)
-        .unwrap()
-        .panel(
-            0,
-            0,
-            chart(&data, true).categorical_color_scale(CategoricalColorScale::from_map(gray)),
-        )
-        .unwrap()
-        .panel(
-            0,
-            1,
-            chart(&data, true).categorical_color_scale(CategoricalColorScale::from_map(blue)),
-        )
-        .unwrap()
-        .legend_policy(CanvasLegendPolicy::Shared);
+    for composition in [
+        lichtung_plot::LegendComposition::Combined,
+        lichtung_plot::LegendComposition::Separate,
+    ] {
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(
+                0,
+                0,
+                chart(&data, true)
+                    .categorical_color_scale(CategoricalColorScale::from_map(gray.clone())),
+            )
+            .unwrap()
+            .panel(
+                0,
+                1,
+                chart(&data, true)
+                    .categorical_color_scale(CategoricalColorScale::from_map(blue.clone())),
+            )
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared)
+            .legend_composition(composition);
 
-    let error = canvas.preflight().unwrap_err().to_string();
+        let error = canvas.preflight().unwrap_err().to_string();
 
-    assert!(error.contains("compatible semantic titles, labels, and styles"));
+        assert!(error.contains("compatible semantic titles, labels, and styles"));
+    }
 }
 
 #[test]
@@ -628,23 +636,119 @@ fn shared_canvas_legend_rejects_conflicting_custom_outline_alpha_before_fonts() 
     let x = NumericValues::new("x", [1.0, 2.0]);
     let y = NumericValues::new("y", [2.0, 3.0]);
     let series = CategoryValues::new("series", ["Control", "Control"]).unwrap();
-    let first = Plot::scatter(x.clone(), y.clone())
-        .hue(series.clone())
-        .theme(custom(73));
-    let second = Plot::scatter(x, y).hue(series).theme(custom(109));
-    let canvas = Canvas::grid(1, 2)
-        .unwrap()
-        .panel(0, 0, first)
-        .unwrap()
-        .panel(0, 1, second)
-        .unwrap()
-        .legend_policy(CanvasLegendPolicy::Shared);
+    for composition in [
+        lichtung_plot::LegendComposition::Combined,
+        lichtung_plot::LegendComposition::Separate,
+    ] {
+        let first = Plot::scatter(x.clone(), y.clone())
+            .hue(series.clone())
+            .theme(custom(73));
+        let second = Plot::scatter(x.clone(), y.clone())
+            .hue(series.clone())
+            .theme(custom(109));
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, first)
+            .unwrap()
+            .panel(0, 1, second)
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared)
+            .legend_composition(composition);
 
-    let error = canvas.preflight().unwrap_err();
-    assert!(matches!(error, lichtung_plot::Error::Render(_)), "{error}");
-    let error = error.to_string();
+        let error = canvas.preflight().unwrap_err();
+        assert!(matches!(error, lichtung_plot::Error::Render(_)), "{error}");
+        let error = error.to_string();
 
-    assert!(error.contains("compatible semantic titles, labels, and styles"));
+        assert!(error.contains("compatible semantic titles, labels, and styles"));
+    }
+}
+
+#[test]
+fn shared_separate_sections_keep_distinct_group_fields_and_one_common_hue() {
+    use lichtung_plot::LegendComposition;
+    let mut first = interaction_data();
+    first.group = CategoryValues::new(
+        "cohort",
+        ["Control", "Control", "Semantic Agent", "Semantic Agent"],
+    )
+    .unwrap();
+    first.hue = CategoryValues::new("shade", ["red", "red", "blue", "blue"]).unwrap();
+    let mut second = interaction_data();
+    second.group = CategoryValues::new(
+        "model",
+        ["Control", "Control", "Semantic Agent", "Semantic Agent"],
+    )
+    .unwrap();
+    second.hue = first.hue.clone();
+    let canvas = |composition, labels: Labels| {
+        Canvas::grid(1, 2)
+            .unwrap()
+            .panel(
+                0,
+                0,
+                chart(&first, true).legend_composition(LegendComposition::Combined),
+            )
+            .unwrap()
+            .panel(
+                0,
+                1,
+                chart(&second, true).legend_composition(LegendComposition::Separate),
+            )
+            .unwrap()
+            .labels(labels)
+            .legend_policy(CanvasLegendPolicy::Shared)
+            .legend_composition(composition)
+            .size(1200, 600)
+    };
+    let output = render_canvas(
+        canvas(LegendComposition::Separate, Labels::raw()),
+        "shared-distinct-group-sections",
+    )
+    .unwrap();
+    let guide = output
+        .split_once("<g id=\"canvas-shared-legend\">")
+        .unwrap()
+        .1
+        .split_once("</g>")
+        .unwrap()
+        .0;
+    let mut rest = guide;
+    for label in [
+        "cohort",
+        "Control",
+        "Semantic Agent",
+        "model",
+        "Control",
+        "Semantic Agent",
+        "shade",
+        "red",
+        "blue",
+    ] {
+        rest = rest.split_once(&format!(">{label}</text>")).unwrap().1;
+    }
+    assert_eq!(guide.matches(">shade</text>").count(), 1);
+    assert_eq!(guide.matches("<circle ").count(), 4);
+    assert_eq!(guide.matches("<polygon ").count(), 2);
+    assert_eq!(guide.matches("<polyline ").count(), 6);
+    assert_eq!(
+        output.matches("<circle ").count() + output.matches("<polygon ").count(),
+        14
+    );
+    let combined = canvas(LegendComposition::Combined, Labels::raw())
+        .preflight()
+        .unwrap_err();
+    assert!(combined.to_string().contains("compatible semantic titles"));
+    let ambiguous = canvas(
+        LegendComposition::Separate,
+        Labels::raw()
+            .alias("cohort", "Group")
+            .alias("model", "Group"),
+    )
+    .preflight()
+    .unwrap_err();
+    assert!(ambiguous
+        .to_string()
+        .contains("distinct section identities"));
 }
 
 #[test]

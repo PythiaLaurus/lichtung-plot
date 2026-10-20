@@ -6,7 +6,8 @@ and stacked section measurement/frozen geometry with owner-local exact reuse are
 implemented. Effective parent-policy selection, facet marginal ordering and final
 section census and exact scoped child/height dependencies are implemented
 with actual consumed-ancestor routing. Crate-root policy and Plot/Canvas controls
-are current; full acceptance and integrated release closure remain pending.
+are current; focused full-contract acceptance is complete. Integrated release
+closure remains with the encompassing scientific-foundation phase.
 
 ## 1. Authority And Boundary
 
@@ -27,7 +28,11 @@ and `../docs/factorized-discrete-sections.md`; measured section evidence is in
 `../docs/effective-discrete-guide-owners.md`; scoped dependency-key evidence is in
 `../docs/scoped-guide-dependencies.md` and `../docs/routed-guide-dependencies.md`.
 Public construction is documented in `../docs/public-legend-composition.md`.
-The full acceptance matrix below and integrated release closure remain pending.
+Actual all-kind, all-owner/root and remaining public acceptance are recorded in
+`../docs/discrete-guide-kind-census.md`,
+`../docs/sectioned-publication-contracts.md` and
+`../docs/section-composition-acceptance.md`. Integrated release closure remains
+pending under spec93; these focused receipts do not claim that gate.
 
 The source census is taken after the private Color/OpaqueColor carrier migration.
 `docs/t6a1-public-cutover-census.md` is useful historical consumer evidence; its
@@ -354,12 +359,12 @@ cutover; their present numeric defaults are evidence, not new layout constants.
 | StackedHorizontalBar | Same producer/orientation adapter | Same bar_body complete fill key per constructor-owned series | HueColor |
 | Boxplot | `PreparedDistribution::guide_entries_with_colors`, `src/plots/categorical_distribution.rs:73-90`; sample hue/series levels | summary_stroke line + box_body fill; no primary/raw-overlay/flier point in key, regardless of RawOverlay mode or outlier count | HueColor |
 | Violin | Same function, lines 92-106, Violin branch | violin_body fill alpha 178 only; no point, density_line or inner-summary key component; optional raw observations do not manufacture a key | HueColor |
-| Raincloud | Sampled `PreparedDistribution` Violin branch; supplied `PreparedRaincloud::guide_entries`, `src/plots/violin/precomputed.rs:109-124` | Point + violin_body fill. Current source uses `distribution_sample::overlay_style` with shared raw_overlay role/radius 2 and outline `true`; spec94 splits this onto mandatory_strip and applies the actual outline policy once. Mandatory strip presence is independent of RawOverlay | HueColor for sample series or supplied hue; sampled/supplied geometry use identical selected strip role |
+| Raincloud | Sampled `PreparedDistribution::guide_entries_with_colors` Violin branch; supplied `PreparedRaincloud::guide_entries` in `src/plots/violin/precomputed.rs` | Point from the independent mandatory_strip role (built-in radius 2) + violin_body fill; both paths use `distribution_point_style` and apply the actual outline policy once. Mandatory strip presence is independent of RawOverlay | HueColor for sample series or supplied hue; sampled/supplied geometry use identical selected strip role |
 | Interaction | `PreparedInteraction::{guide_entries,guide_entries_with_colors}`, `src/plots/interaction.rs:207-267`; hue present or explicit styles configured | primary point/interaction radius 4 with resolved trace shape; interaction_connector width 1.8 with trace pattern; component presence follows markers/connectors. interaction_interval width 1.2 remains a mark, not an extra key line | Configured independent style+hue -> GroupStyle + HueColor; configured group-only -> Joint; same-field hue -> Joint even without configured style; different pair without configured styles rejects |
 | Dumbbell | `DumbbellData::guide_entries`, `src/plots/dumbbell.rs:119-138`; caller endpoint metadata | Two point keys in left/right order, primary point/dumbbell radius 4 and actual outline; endpoint exact Color from spec94 replaces complete fill RGBA. Connector not included | Literal(DumbbellEndpoints) |
 | Regression | `PreparedRegression::guide_entries`, `src/plots/regression.rs:192-220`; only explicit Visible policy, not Automatic | Observations point/primary radius 3 first; regression_fit width 1.5 second, plus regression_band alpha 64 iff PointwiseMean95. Fit stroke is a fixed role, not the observation accent; no synthetic categorical mapping | Literal(RegressionReference) |
-| Marginal | `PreparedMarginal::{guide_entries,guide_entries_with_colors}`, `src/plots/marginal.rs:130-163`; hue-bearing retained collective groups | primary point/marginal radius 3 + marginal_density fill alpha 115, currently mapped outline width 1; no density_line component | HueColor, same-field Joint, or UnsupportedPair; standalone and Canvas, not generic facets |
-| Matrix | local `matrix_guide_entries`, `src/plots/matrix.rs:1207-1238`, `matrix_legend` and `natural_guide_preference` | primary point/matrix radius 2 + matrix_density fill alpha 102, currently mapped outline width 1; diagonal density and off-diagonal points share raw hue; no density_line component | HueColor, same-field Joint, or UnsupportedPair; Plot-local specialized root only |
+| Marginal | `PreparedMarginal::{guide_entries,guide_entries_with_colors}` in `src/plots/marginal.rs`; hue-bearing retained collective groups | primary point/marginal radius 3 + marginal_density fill alpha 115, built-in mapped density outline width 1; no density_line component | HueColor, same-field Joint, or UnsupportedPair; standalone and Canvas, not generic facets |
+| Matrix | local `matrix_guide_entries`, `matrix_legend` and `natural_guide_preference` in `src/plots/matrix.rs` | primary point/matrix radius 2 + matrix_density fill alpha 102, built-in mapped density outline width 1; diagonal density and off-diagonal points share raw hue; no density_line component | HueColor, same-field Joint, or UnsupportedPair; Plot-local specialized root only |
 
 The remaining **eight** kinds complete the 25-kind census:
 
@@ -474,12 +479,11 @@ RowHue has no mapped group style and is not an UnsupportedPair: graphical group
 owns connectivity, not a key. HueColor contains actual point glyphs and no neutral
 connector. Hidden neutral LinePath points leave no primary hue section.
 
-Global categorical color order is not entry membership. In particular, current
-`PreparedLine::guide_entries_with_colors` iterates global hue levels for row-hue
-keys (`line.rs:345-356`), and some prepared categorical panel domains retain
-absent series slots. The replacement records observed membership from retained
-prepared rows/groups before projection, filters keys by that membership, then
-orders them by the coordinated domain. A value present only in a Hidden Canvas
+Global categorical color order is not entry membership. Prepared row-hue sources
+and categorical panel domains can retain global palette or absent series slots.
+Guide construction records observed membership from retained prepared rows/groups
+before projection, filters keys by that membership, then orders them by the
+coordinated domain. A value present only in a Hidden Canvas
 contributor cannot leak a key/font requirement through a visible row-hue panel's
 global color list. A facet's one root guide may contain any value actually present
 in another occupied facet; that is parent union, not local fabricated presence.
@@ -537,10 +541,9 @@ effective panel-label policy when supplied.
 
 ### Actual PointLayer Behavior
 
-`PreparedLine::guide_entries_with_colors` currently constructs a layer key through
-`point_legend_identity(label)` and `without_hue_level()` (`line.rs:358-366`). That
-is not yet a true layer identity. Replace it with SupplementalLayer keyed by
-exact supplied label bytes, never append index or primary hue field. The layer's
+`PreparedLine::guide_entries_with_colors` constructs a SupplementalLayer identity
+keyed by exact supplied label bytes, never append index or primary hue field.
+The retired category-shaped layer identity is not a compatibility path. The layer's
 complete plain point has its resolved radius, fill RGBA and absent outline;
 spec94's supplemental defaults and exact Color/alpha precedence apply once.
 
@@ -651,7 +654,7 @@ order in **both** orientations, each receiving W. Section gap is the exact sum
 of title_gap against title em and row_gap against label em; no new field exists.
 
 For each entry, measure the exact key grammar using the same geometry materializer
-as frozen drawing (current `LegendEntry::glyph_ink` / `Legend::visit_calls`).
+as frozen drawing (`ResolvedGuideKey::visit_calls` and the retained selected calls).
 Fill handles keep current local 0.32-label-em half-height and full handle width;
 line endpoints/caps, point shape/radius and all painted outlines participate.
 Transparent components still retain semantic/key structure. Nominal handles,
@@ -1007,21 +1010,21 @@ and exact. Relevant roles/typography/constraints/origin/orientation/compact widt
 and parent allocation are also in the consumed measurement identity.
 
 Feedback remains selective. `FeedbackRound::{child_inputs,child_inputs_equal,
-child_stable,replay_child}` currently scopes state to owner and owning Grid
-(`children.rs:49-66`, `kernel/feedback.rs:195-285`). Retain consumed descendant
-references explicitly when an outside/shared guide or coordinated alignment lies
-outside that simple subtree. Their current descriptor/allocation/feedback values
-must match and their owners must be stable before a hit. Do not compare every
+child_stable,replay_child}` scopes the owning subtree and explicitly declared
+consumed guide/ancestor dependencies. Outside/shared guides and coordinated
+alignment retain their original owner references even outside the child subtree.
+Their current descriptor/allocation/feedback values must match and their owners
+must be stable before a hit. Do not compare every
 unrelated root sibling or incorrectly exclude a shared consequence just because
 its address is outside CanvasCell. Zero insets remain semantically inactive under
 the current feedback rules. Changed relevant guide metadata invalidates reuse
 even if the parent's box or consumed numeric domain did not change.
 
-`canvas/sizing.rs::HeightInputs` currently compares width, ranges/provenance,
+`canvas/sizing.rs::HeightInputs` compares width, ranges/provenance,
 resolved x, local/parent insets, labels, legend policy, continuous suppression
-and scope. Retain effective composition and consumed descriptor/allocation and
-descendant dependencies there too. Width equality cannot reuse a height measured
-with different sections, full glyph geometry, title leading or coordinated domains.
+and scope, plus complete scoped guide consumption, effective composition and
+descriptor/allocation/feedback dependencies. Width equality cannot reuse a height
+measured with different sections, full glyph geometry, title leading or coordinated domains.
 Height feedback replaces the previous consequence, including contraction; it
 does not aggregate guide height as cumulative owned ink or rechoose root width.
 
@@ -1078,9 +1081,12 @@ planning, new decisions or authorization for another renderer/default route.
 | Matrix/local and natural root owners | `many_hue_matrix_legend_preserves_all_labels` in `src/plots/matrix.rs`; `matrix_content_roots_compose_the_native_hue_guide_and_variable_square`, `owning_facet_discrete_guide_preference_is_composed_once_at_its_explicit_edge` in `src/orchestrator/lifecycle.rs` |
 | Selected output/containing fit | `standalone_capture_uses_selected_legend_operands_not_measured_style_or_position` in `src/orchestrator/lifecycle.rs`; `shared_guide_recovery_measures_the_complete_canvas_body`, `content_shared_guide_recovers_after_measured_gutters_without_reselecting_width` in `src/canvas.rs`; `inside_legend_resolved_box_does_not_overlap_bracket_or_label` in `tests/annotations/significance_layout.rs` |
 
-### New Fixtures And Independent Expectations (All Pending)
+### Semantic Fixtures And Independent Expectations
 
-The following names identify required future Rust fixtures, not executed tests.
+The following descriptive names identify semantic obligations. Their actual
+implemented test owners and receipts are reconciled in
+`../docs/section-composition-acceptance.md`; the names do not require new test
+functions or assert an unexecuted test inventory.
 
 * `discrete_kind_census_preserves_actual_key_components`: all 17 Legend kinds and
   eight remaining kinds, with exact entry/P/L/F/source counts. Line cases cover
@@ -1172,11 +1178,12 @@ broad-phase verification stays at the owning approved closure gate; do not repea
 full suites for every descriptor consumer or localized correction. Inspect
 intentional SVG changes with semantic/component counts and complete geometry.
 Commit subjects/bodies describe enduring behavior with mandatory scopes, never
-temporary planning identifiers. No implementation evidence is asserted here.
+temporary planning identifiers. Actual execution evidence belongs to the linked
+implementation receipts rather than being inferred from these obligations.
 
 ## 13. Closure Conditions
 
-This target leaves no undecided neutral source, family applicability, layer text
+This contract leaves no undecided neutral source, family applicability, layer text
 policy, section ordering, Shared authority or finite-height allocation. The
 implementation uses producer-owned mapping provenance, pre-font descriptors,
 section-aware cache/census paths and the single measured guide. Construction and
@@ -1186,6 +1193,7 @@ default, late reconstruction or alternate flow search.
 The replacement is complete only when all 25 kinds and their valid parents are
 accounted for, every retired flat field/function path is gone, fonts/caches use
 the same prepared descriptor as sizing/selected output, and the new tests have
-actual recorded results. The public policy and section renderer are current;
-remaining proposed acceptance evidence and integrated release closure must be
-recorded before declaring the encompassing phase complete.
+actual recorded results. The public policy, section renderer and focused
+acceptance are complete in the receipts above. Integrated release closure must
+still be recorded before declaring the encompassing scientific-foundation phase
+complete.

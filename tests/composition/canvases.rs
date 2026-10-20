@@ -516,6 +516,101 @@ fn shared_canvas_legend_merges_typed_collective_pairs() {
 }
 
 #[test]
+fn shared_point_guides_merge_across_families_only_with_equal_complete_keys() {
+    use lichtung_plot::{FontFamily, FontStack, LegendComposition, PointShape, PointTheme};
+    let canvas = |composition, trajectory_radius, absent_font| {
+        let base = Theme::publication();
+        let radii = base
+            .marks()
+            .points()
+            .radii()
+            .clone()
+            .with_scatter(6)
+            .unwrap()
+            .with_trajectory(trajectory_radius)
+            .unwrap();
+        let points = base
+            .marks()
+            .points()
+            .clone()
+            .with_primary(PointTheme::new(91, PointShape::Circle, None).unwrap())
+            .unwrap()
+            .with_radii(radii)
+            .unwrap();
+        let marks = base.marks().clone().with_points(points).unwrap();
+        let theme = base.customize().with_marks(marks);
+        let theme = if absent_font {
+            theme
+                .with_font_stack(
+                    FontStack::new([FontFamily::named("Absent cross-family guide font").unwrap()])
+                        .unwrap(),
+                )
+                .unwrap()
+        } else {
+            theme
+        }
+        .build()
+        .unwrap();
+        let x = NumericValues::new("x", [0.0, 1.0]);
+        let y = NumericValues::new("y", [1.0, 2.0]);
+        let hue = CategoryValues::new("cohort", ["seen", "seen"]).unwrap();
+        Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, Plot::scatter(x.clone(), y.clone()).hue(hue.clone()))
+            .unwrap()
+            .panel(
+                0,
+                1,
+                Plot::trajectory(
+                    x,
+                    y,
+                    CategoryValues::new("subjects", ["\u{10FFFF}"; 2]).unwrap(),
+                )
+                .hue(hue),
+            )
+            .unwrap()
+            .theme(theme)
+            .labels(Labels::raw())
+            .legend_policy(CanvasLegendPolicy::Shared)
+            .legend_composition(composition)
+            .size(1000, 500)
+    };
+    for composition in [LegendComposition::Combined, LegendComposition::Separate] {
+        let output =
+            render_canvas(canvas(composition, 6, false), "cross-family-point-key").unwrap();
+        let legend = output
+            .split_once("<g id=\"canvas-shared-legend\">")
+            .unwrap()
+            .1
+            .split_once("</g>")
+            .unwrap()
+            .0;
+        assert_eq!(legend.matches(">cohort</text>").count(), 1);
+        assert_eq!(legend.matches(">seen</text>").count(), 1);
+        assert_eq!(legend.matches("<circle ").count(), 1);
+        assert!(!legend.contains("<polyline "));
+        assert_eq!(output.matches("<circle ").count(), 5);
+        for point in output.lines().filter(|line| line.starts_with("<circle ")) {
+            assert_eq!(
+                attribute(point, "r").parse::<f64>().unwrap().to_bits(),
+                6.0_f64.to_bits()
+            );
+            assert_eq!(
+                attribute(point, "fill-opacity")
+                    .parse::<f64>()
+                    .unwrap()
+                    .to_bits(),
+                (91.0_f64 / 255.0).to_bits()
+            );
+        }
+        let error = canvas(composition, 7, true).preflight().unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("compatible semantic titles, labels, and styles"));
+    }
+}
+
+#[test]
 fn shared_legend_gap_reduces_canvas_legend_separation() {
     let x = NumericValues::new("x", [1.0, 2.0]);
     let y = NumericValues::new("y", [1.0, 2.0]);

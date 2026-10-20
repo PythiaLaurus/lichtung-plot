@@ -2,7 +2,7 @@
 
 **Status**: IN PROGRESS — immutable public foundations, their complete custom-value
 closure, public preferred tick intervals and root-sizing closure are complete;
-scientific numeric presentation is complete; section-aware discrete guides follow.
+scientific numeric presentation and focused section-guide acceptance are complete.
 The subsequent DF3/DF4 closure review admitted data alpha and numeric target/maximum
 tick selection in `97_ALPHA_AND_TICK_EXTENSION_PLAN.md`; those extensions remain
 PENDING after section-guide acceptance. Fully caller-decided legends join DF11's
@@ -71,7 +71,12 @@ reuse under the existing placement-attempt limits is complete in
 `../docs/scoped-discrete-measurement-reuse.md`. Effective parent policy, final
 section census and canonical facet marginal order are complete in
 `../docs/effective-discrete-guide-owners.md`; explicit consumed-dependency
-integration follows.
+integration is complete in `../docs/scoped-guide-dependencies.md` and
+`../docs/routed-guide-dependencies.md`. Public API, actual all-kind key census,
+all-owner/root publication and remaining public compatibility are complete in
+`../docs/public-legend-composition.md`, `../docs/discrete-guide-kind-census.md`,
+`../docs/sectioned-publication-contracts.md` and
+`../docs/section-composition-acceptance.md`.
 The user-approved simplification in
 `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` has removed production accounting,
 not merely disabled quota refusal. Historical admission evidence below describes
@@ -197,7 +202,7 @@ labels, not existing commits.
 | T6C2 | COMPLETE | T6C1 | Automatic defaults, consuming width, exact size and Output dimensions; migrate getters/callers atomically; `feat(layout): expose content-derived root sizing` |
 | T6C3 | COMPLETE | T6C2 | Complete initial axis/chrome preferences, provisional content-height gutters and all-mode parent/output evidence; `fix(layout): compose complete content-sized root frames` |
 | T6N | COMPLETE | T6C | Unified scientific numeric formatting; leaves below |
-| T6L | IN PROGRESS | T6N | One section-aware discrete guide; leaves below |
+| T6L | COMPLETE | T6N | One section-aware discrete guide; focused closure in `docs/section-composition-acceptance.md` |
 | T6T | PENDING | T6L | Numeric target/maximum tick selection; exact design, behavior, public migration and closure leaves in spec97 |
 | T6D | PENDING | T6T | Data alpha with declared automatic-guide semantics; design, producers, guides, public migration and closure leaves in spec97 |
 | T6Z | PENDING | T6D | Integrated contract and phase closure |
@@ -770,8 +775,9 @@ fit, cached/uncached output and frozen SVG/PNG. No extra full suite per numeric 
 
 `08_DISCRETE_GUIDES.md` closes the actual producer matrix, typed section/entry
 schema, mapping masks, layer/literal routing, Shared compatibility, finite-height
-flow examples and every flat-storage/census/cache/result deletion. Its design is
-source-reviewed; the new representation and acceptance tests are not implemented.
+flow examples and every flat-storage/census/cache/result deletion. The one current
+representation and focused acceptance are complete in the evidence below;
+integrated release closure stays with T6Z3.
 
 ### Public Authority And Representation
 
@@ -889,8 +895,9 @@ the existing at-most-eight automatic edge/flow trials per root round.
 
 Census all section titles/entries in final semantic order. Section records have
 stable ordinals beneath the existing guide address and are inline measured work,
-not separate placement owners. Admit projections, lookups, keys, strings,
-buffers and flow records through the same cumulative ledger. Keys include
+not separate placement owners. Projections, lookups, keys, strings, buffers and
+flow records use checked arithmetic/lengths and fallible first-party storage,
+without the retired accounting ledger or comparison fees. Keys include
 composition, ordered typed sections, full glyphs, typography, constraints and
 consumed feedback. Freeze section boxes, texts, draw operands and complete outer
 ink/collision bounds. No draw-time factorization or layout reconstruction.
@@ -914,10 +921,10 @@ ink/collision bounds. No draw-time factorization or layout reconstruction.
 | T6L4b1 | COMPLETE | T6L4a | Typed scoped consumption and exact child/height dependency keys; evidence in `docs/scoped-guide-dependencies.md` |
 | T6L4b2 | COMPLETE | T6L4b1 | Actual Canvas/facet containing allocations and consumed ancestor stability; evidence in `docs/routed-guide-dependencies.md` |
 | T6L5 | COMPLETE | T6L4 | Public selection and atomic current-contract/examples migration; evidence in `docs/public-legend-composition.md` |
-| T6L6 | IN PROGRESS | T6L5 | Full local/shared/fit/resource/output evidence; `test(legend): close section composition contracts` |
+| T6L6 | COMPLETE | T6L5 | Full focused local/shared/fit/resource/output evidence in the three acceptance leaves below |
 | T6L6a | COMPLETE | T6L5 | Actual all-25-kind source/key component census under both policies; evidence in `docs/discrete-guide-kind-census.md` |
 | T6L6b | COMPLETE | T6L6a | Factorized all-owner/root publication, initial natural facet gutters and bounded release workloads; evidence in `docs/sectioned-publication-contracts.md` |
-| T6L6c | PENDING | T6L6b | Remaining public unsupported-factorization/compatibility matrix and guide acceptance reconciliation; `test(legend): close section composition contracts` |
+| T6L6c | COMPLETE | T6L6b | Public unsupported/same-field/alias/Hidden/layer and complete Shared compatibility matrix; evidence in `docs/section-composition-acceptance.md` |
 
 Retain current combined pair/same-field/sparse/row-hue/layer/conflict tests. Add
 dense independent-style crossings, sparse marginal-domain semantics, complete

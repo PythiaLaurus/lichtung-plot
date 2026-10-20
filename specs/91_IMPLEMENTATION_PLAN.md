@@ -6588,8 +6588,9 @@ Acceptance:
 
 **Status**: IN PROGRESS — public foundations and root sizing/ticks complete;
 scientific numeric presentation and its all-consumer/output closure complete;
-section-aware discrete guide acceptance is in progress. The user-approved numeric
-count and data-alpha extensions in spec97 follow that acceptance.
+focused section-aware discrete guide acceptance is complete in
+`../docs/section-composition-acceptance.md`. The user-approved numeric count and
+data-alpha extensions in spec97 follow that acceptance.
 
 Dependencies: T5e.
 

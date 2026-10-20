@@ -1,6 +1,8 @@
 use lichtung_plot::{
-    BarInput, Bounds, CategoryValues, DumbbellEndpoints, FacetSpec, Labels, LinePathStyle,
-    NumericValues, Plot, PlotKind, Significance, SignificanceMark, SignificanceTarget,
+    BarInput, Bounds, Canvas, CanvasLegendPolicy, CategoricalColorMap, CategoricalColorScale,
+    CategoryValues, DumbbellEndpoints, FacetSpec, FontFamily, FontStack, Labels, LegendComposition,
+    LegendPolicy, LinePathStyle, NumericValues, OpaqueColor, Plot, PlotKind, Significance,
+    SignificanceMark, SignificanceTarget, Theme,
 };
 
 use super::{parse_polygon_bounds, remove_legend_layers, unique_dir};
@@ -115,7 +117,10 @@ fn interaction_data() -> InteractionData {
     }
 }
 
-fn same_name_collective_plots(hues: [&str; 6]) -> Vec<(PlotKind, Plot)> {
+fn same_name_collective_plots(
+    hues: [&str; 6],
+    composition: LegendComposition,
+) -> Vec<(PlotKind, Plot)> {
     let groups = ["g1", "g1", "g2", "g2", "g3", "g3"];
     let group = || lichtung_plot::CategoryValues::new("identity", groups).unwrap();
     let hue = || lichtung_plot::CategoryValues::new("identity", hues).unwrap();
@@ -132,11 +137,19 @@ fn same_name_collective_plots(hues: [&str; 6]) -> Vec<(PlotKind, Plot)> {
     vec![
         (
             PlotKind::Line,
-            Plot::line(x(), y()).group(group()).hue(hue()).erase(),
+            Plot::line(x(), y())
+                .group(group())
+                .hue(hue())
+                .legend_composition(composition)
+                .erase(),
         ),
         (
             PlotKind::Density,
-            Plot::density(y()).group(group()).hue(hue()).erase(),
+            Plot::density(y())
+                .group(group())
+                .hue(hue())
+                .legend_composition(composition)
+                .erase(),
         ),
         (
             PlotKind::Interaction,
@@ -150,17 +163,25 @@ fn same_name_collective_plots(hues: [&str; 6]) -> Vec<(PlotKind, Plot)> {
                 ),
             )
             .hue(hue())
+            .legend_composition(composition)
             .erase(),
         ),
         (
             PlotKind::Marginal,
-            Plot::marginal(x(), y()).group(group()).hue(hue()).erase(),
+            Plot::marginal(x(), y())
+                .group(group())
+                .hue(hue())
+                .legend_composition(composition)
+                .erase(),
         ),
         (
             PlotKind::Matrix,
             Plot::matrix(vec![x(), y()])
                 .group(group())
                 .hue(hue())
+                // This fixture requests room for three identity keys and the native grid.
+                .size(1200, 800)
+                .legend_composition(composition)
                 .erase(),
         ),
         (
@@ -168,7 +189,144 @@ fn same_name_collective_plots(hues: [&str; 6]) -> Vec<(PlotKind, Plot)> {
             Plot::line_path(x(), y(), group())
                 .hue(hue())
                 .style(LinePathStyle::Hue)
+                .legend_composition(composition)
                 .erase(),
+        ),
+    ]
+}
+
+struct PairSubject {
+    plot: Plot,
+    shared: Canvas,
+    hidden: Canvas,
+}
+
+fn pair_policy<K>(
+    plot: Plot<K>,
+    composition: LegendComposition,
+    visibility: LegendPolicy,
+    complete_map: bool,
+) -> PairSubject
+where
+    K: lichtung_plot::kind::ExactFamily
+        + lichtung_plot::kind::Legend
+        + lichtung_plot::kind::CategoricalScale,
+{
+    let gray = OpaqueColor::rgb(42, 42, 42);
+    let entries = if complete_map {
+        vec![("h1".into(), gray), ("h2".into(), gray)]
+    } else {
+        vec![("unobserved".into(), gray)]
+    };
+    let plot = plot
+        .labels(Labels::raw())
+        .categorical_color_scale(CategoricalColorScale::from_map(
+            CategoricalColorMap::new(entries).unwrap(),
+        ))
+        .legend_composition(composition)
+        .legend(visibility);
+    let [shared, hidden] = [CanvasLegendPolicy::Shared, CanvasLegendPolicy::Hidden].map(|policy| {
+        Canvas::grid(1, 1)
+            .unwrap()
+            .panel(0, 0, plot.clone())
+            .unwrap()
+            .legend_composition(composition)
+            .legend_policy(policy)
+    });
+    PairSubject {
+        plot: plot.erase(),
+        shared,
+        hidden,
+    }
+}
+
+fn independent_pair_plots(
+    one_pair: bool,
+    composition: LegendComposition,
+    visibility: LegendPolicy,
+    complete_map: bool,
+) -> Vec<(PlotKind, PairSubject)> {
+    let group = CategoryValues::new(
+        "group",
+        if one_pair {
+            ["g1"; 6]
+        } else {
+            ["g1", "g1", "g1", "g1", "g2", "g2"]
+        },
+    )
+    .unwrap();
+    let hue = CategoryValues::new(
+        "hue",
+        if one_pair {
+            ["h1"; 6]
+        } else {
+            ["h1", "h1", "h2", "h2", "h2", "h2"]
+        },
+    )
+    .unwrap();
+    let x = NumericValues::new("x", [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]);
+    let y = NumericValues::new("y", [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    let condition = CategoryValues::new("condition", ["a", "b", "c", "d", "e", "f"]).unwrap();
+    vec![
+        (
+            PlotKind::Line,
+            pair_policy(
+                Plot::line(x.clone(), y.clone())
+                    .group(group.clone())
+                    .hue(hue.clone()),
+                composition,
+                visibility,
+                complete_map,
+            ),
+        ),
+        (
+            PlotKind::Density,
+            pair_policy(
+                Plot::density(y.clone())
+                    .group(group.clone())
+                    .hue(hue.clone()),
+                composition,
+                visibility,
+                complete_map,
+            ),
+        ),
+        (
+            PlotKind::Interaction,
+            pair_policy(
+                Plot::interaction(
+                    condition,
+                    y.clone(),
+                    group.clone(),
+                    Bounds::new(
+                        NumericValues::new("lower", [0.5, 1.5, 2.5, 3.5, 4.5, 5.5]),
+                        NumericValues::new("upper", [1.5, 2.5, 3.5, 4.5, 5.5, 6.5]),
+                    ),
+                )
+                .hue(hue.clone()),
+                composition,
+                visibility,
+                complete_map,
+            ),
+        ),
+        (
+            PlotKind::Marginal,
+            pair_policy(
+                Plot::marginal(x.clone(), y.clone())
+                    .group(group.clone())
+                    .hue(hue.clone()),
+                composition,
+                visibility,
+                complete_map,
+            ),
+        ),
+        (
+            PlotKind::Matrix,
+            pair_policy(
+                Plot::matrix(vec![x, y]).group(group).hue(hue),
+                composition,
+                visibility,
+                complete_map,
+            ),
         ),
     ]
 }
@@ -457,6 +615,14 @@ fn distinct_equal_pair_values_keep_independently_resolved_legend_text() {
             .alias("hue_field", "Shade")
             .alias("same", "Shared"),
     );
+    let error = plot
+        .clone()
+        .legend_composition(LegendComposition::Separate)
+        .preflight()
+        .unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("unsupported discrete guide factorization"));
     let svg = render(plot, "distinct-equal-pair-legend").unwrap();
 
     assert!(svg.contains(">Cohort × Shade</text>"));
@@ -467,20 +633,22 @@ fn distinct_equal_pair_values_keep_independently_resolved_legend_text() {
 fn equal_same_field_channels_collapse_legend_text() {
     let identity =
         || lichtung_plot::CategoryValues::new("identity", ["g1", "g1", "g2", "g2"]).unwrap();
-    let svg = render(
-        Plot::line(
-            lichtung_plot::NumericValues::new("x", [0.0, 1.0, 0.0, 1.0]),
-            lichtung_plot::NumericValues::new("y", [1.0, 2.0, 3.0, 4.0]),
-        )
-        .group(identity())
-        .hue(identity()),
-        "same-field-collapsed-legend",
+    let plot = Plot::line(
+        lichtung_plot::NumericValues::new("x", [0.0, 1.0, 0.0, 1.0]),
+        lichtung_plot::NumericValues::new("y", [1.0, 2.0, 3.0, 4.0]),
     )
-    .unwrap();
-
-    assert!(svg.contains(">Identity</text>"));
-    assert!(svg.contains(">G 1</text>") && svg.contains(">G 2</text>"));
-    assert!(!svg.contains("Identity × Identity") && !svg.contains("G 1, G 1"));
+    .group(identity())
+    .hue(identity());
+    for composition in [LegendComposition::Combined, LegendComposition::Separate] {
+        let svg = render(
+            plot.clone().legend_composition(composition),
+            "same-field-collapsed-legend",
+        )
+        .unwrap();
+        assert!(svg.contains(">Identity</text>"));
+        assert!(svg.contains(">G 1</text>") && svg.contains(">G 2</text>"));
+        assert!(!svg.contains("Identity × Identity") && !svg.contains("G 1, G 1"));
+    }
 }
 
 #[test]
@@ -524,21 +692,143 @@ fn density_pair_error_identifies_group_and_hue() {
 
 #[test]
 fn equal_same_name_group_and_hue_channels_collapse_for_every_pair_family() {
-    for (kind, plot) in same_name_collective_plots(["g1", "g1", "g2", "g2", "g3", "g3"]) {
-        plot.preflight().unwrap_or_else(|error| {
-            panic!("{kind:?} should accept equal same-name channels: {error}")
-        });
+    for composition in [LegendComposition::Combined, LegendComposition::Separate] {
+        for (kind, plot) in
+            same_name_collective_plots(["g1", "g1", "g2", "g2", "g3", "g3"], composition)
+        {
+            plot.preflight().unwrap_or_else(|error| {
+                panic!("{kind:?} {composition:?} should accept equal same-name channels: {error}")
+            });
+        }
     }
 }
 
 #[test]
 fn conflicting_same_name_group_and_hue_channels_reject_for_every_pair_family() {
-    for (kind, plot) in same_name_collective_plots(["g1", "different", "g2", "g2", "g3", "g3"]) {
-        let error = plot.preflight().unwrap_err().to_string();
-        assert!(
-            error.contains("share semantic name \"identity\" but differ at source row 1"),
-            "{kind:?}: {error}"
+    for composition in [LegendComposition::Combined, LegendComposition::Separate] {
+        for (kind, plot) in
+            same_name_collective_plots(["g1", "different", "g2", "g2", "g3", "g3"], composition)
+        {
+            let error = plot.preflight().unwrap_err().to_string();
+            assert!(
+                error.contains("share semantic name \"identity\" but differ at source row 1"),
+                "{kind:?} {composition:?}: {error}"
+            );
+        }
+    }
+}
+
+fn assert_unsupported_pair_subject(kind: PlotKind, subject: PairSubject, absent_font: &Theme) {
+    let error = subject
+        .plot
+        .theme(absent_font.clone())
+        .preflight()
+        .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("unsupported discrete guide factorization"),
+        "{kind:?}: {error}"
+    );
+    if kind != PlotKind::Matrix {
+        let error = subject
+            .shared
+            .theme(absent_font.clone())
+            .preflight()
+            .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("unsupported discrete guide factorization"));
+        subject
+            .hidden
+            .labels(
+                Labels::raw()
+                    .alias("group", "\u{10FFFF}")
+                    .alias("hue", "\u{10FFFF}"),
+            )
+            .preflight()
+            .unwrap_or_else(|error| {
+                panic!("{kind:?} Canvas Hidden should skip factorization: {error}")
+            });
+    }
+}
+
+#[test]
+fn separate_unsupported_pairs_refuse_before_fonts_and_hidden_keeps_scientific_validation() {
+    let absent_font = Theme::publication()
+        .customize()
+        .with_font_stack(
+            FontStack::new([FontFamily::named("Absent factorization preflight font").unwrap()])
+                .unwrap(),
+        )
+        .unwrap()
+        .build()
+        .unwrap();
+    for one_pair in [true, false] {
+        for (kind, subject) in independent_pair_plots(
+            one_pair,
+            LegendComposition::Combined,
+            LegendPolicy::Automatic,
+            true,
+        ) {
+            subject.plot.preflight().unwrap_or_else(|error| {
+                panic!("{kind:?} should retain complete Combined pair keys: {error}")
+            });
+        }
+        let visible = independent_pair_plots(
+            one_pair,
+            LegendComposition::Separate,
+            LegendPolicy::Automatic,
+            true,
         );
+        for (kind, subject) in visible {
+            assert_unsupported_pair_subject(kind, subject, &absent_font);
+        }
+        for (kind, subject) in independent_pair_plots(
+            one_pair,
+            LegendComposition::Separate,
+            LegendPolicy::Hidden,
+            true,
+        ) {
+            subject
+                .plot
+                .labels(
+                    Labels::raw()
+                        .alias("group", "\u{10FFFF}")
+                        .alias("hue", "\u{10FFFF}"),
+                )
+                .preflight()
+                .unwrap_or_else(|error| {
+                    panic!("{kind:?} should skip hidden guide semantics: {error}")
+                });
+        }
+        for (kind, subject) in independent_pair_plots(
+            one_pair,
+            LegendComposition::Separate,
+            LegendPolicy::Hidden,
+            false,
+        ) {
+            let error = subject
+                .plot
+                .theme(absent_font.clone())
+                .preflight()
+                .unwrap_err();
+            assert!(
+                error.to_string().contains("no caller-owned color"),
+                "{kind:?}: {error}"
+            );
+            if kind != PlotKind::Matrix {
+                let error = subject
+                    .hidden
+                    .theme(absent_font.clone())
+                    .preflight()
+                    .unwrap_err();
+                assert!(
+                    error.to_string().contains("no caller-owned color"),
+                    "{kind:?}: {error}"
+                );
+            }
+        }
     }
 }
 
