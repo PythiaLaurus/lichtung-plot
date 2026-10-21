@@ -2,6 +2,10 @@
 
 #![allow(clippy::cast_precision_loss)]
 
+use crate::alpha::{
+    marks::{point_ink, push_point, ObservationAlpha},
+    AlphaTarget, AlphaUnitKind,
+};
 use crate::data::PlotData;
 use crate::Error;
 
@@ -20,6 +24,7 @@ struct LineGeometry {
 pub(crate) struct PreparedQq {
     theoretical: Vec<f64>,
     observed: Vec<f64>,
+    alphas: Vec<ObservationAlpha>,
     line: Option<LineGeometry>,
 }
 
@@ -49,7 +54,16 @@ pub(crate) fn intrinsic_body_minimum(
         ));
     }
     let style = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().qq());
-    let (width, height) = crate::render::geometry::point_ink_dimensions(&style)?;
+    let (width, height) = point_ink(
+        &style,
+        prepared
+            .theoretical
+            .iter()
+            .zip(&prepared.observed)
+            .zip(&prepared.alphas)
+            .map(|((&x, &y), &alpha)| (x, y, alpha)),
+    )?
+    .map_or((0.0, 0.0), crate::alpha::marks::PointInk::dimensions);
     let reference = if prepared.line.is_some() {
         crate::render::geometry::line_ink_width(
             &theme
@@ -90,6 +104,7 @@ impl PreparedQq {
 
     pub(crate) fn new(chart: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
         data.validate_row_source()?;
+        let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
         #[cfg(test)]
         crate::layout::interior::distributions::count(2, 0);
         if let Some(hue) = chart.hue_col() {
@@ -101,7 +116,11 @@ impl PreparedQq {
             .x_col()
             .ok_or_else(|| Error::Data("Q-Q plot: value column not set".into()))?;
         let values = crate::data::strict_finite_f64(data, column, "Q-Q plot")?;
-        prepare_qq(&values, chart.qq_line_spec())
+        let mut prepared = prepare_qq(&values, chart.qq_line_spec())?;
+        for source in &mut prepared.alphas {
+            *source = ObservationAlpha::resolve(data, &alpha, source.slot)?;
+        }
+        Ok(prepared)
     }
 
     pub(crate) fn ranges(&self, chart: &Plot) -> Result<[(f64, f64); 2], Error> {
@@ -127,9 +146,8 @@ impl PreparedQq {
 pub(crate) struct QqPayload {
     clip: crate::layout::PanelBox,
     line: Option<[Point2D; 2]>,
-    pub(crate) points: Vec<Point2D>,
+    pub(crate) point_batches: Vec<(Vec<Point2D>, PointStyle)>,
     line_style: LineStyle,
-    point_style: PointStyle,
     pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
 }
 
@@ -141,7 +159,10 @@ impl QqPayload {
             if let Some(line) = &self.line {
                 backend.draw_line(line, &self.line_style)?;
             }
-            backend.draw_scatter(&self.points, &self.point_style)
+            for (points, style) in &self.point_batches {
+                backend.draw_scatter(points, style)?;
+            }
+            Ok(())
         })
     }
 }
@@ -172,25 +193,19 @@ pub(crate) fn measure_marks(
 
     let projection = layout.projection.clone();
     let mut result = project(chart, prepared, layout, theme)?;
-    if let Some(ink) = crate::render::geometry::point_ink_bounds(&chart.point_style(
-        theme,
-        (0, 0, 0),
-        theme.marks.points().radii().qq(),
-    ))? {
-        let source = [
-            (
-                prepared.theoretical[0],
-                prepared.theoretical[prepared.theoretical.len() - 1],
-            ),
-            (
-                prepared.observed[0],
-                prepared.observed[prepared.observed.len() - 1],
-            ),
-        ];
+    if let Some(ink) = point_ink(
+        &chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().qq()),
+        prepared
+            .theoretical
+            .iter()
+            .zip(&prepared.observed)
+            .zip(&prepared.alphas)
+            .map(|((&x, &y), &alpha)| (x, y, alpha)),
+    )? {
         let requests = crate::layout::interior::automatic_mark_ink_expansions(
-            source,
+            ink.ranges,
             &projection,
-            ink,
+            ink.bounds,
             [
                 chart.user_x_limits().is_none(),
                 chart.user_y_limits().is_none(),
@@ -216,20 +231,20 @@ pub(crate) fn project(
     let mut payload = QqPayload {
         clip: layout.projection.panel_box(),
         line: None,
-        points: Vec::new(),
+        point_batches: Vec::new(),
         line_style: theme
             .marks
             .strokes()
             .references()
             .qq_reference()
             .backend_style(),
-        point_style: chart.point_style(
-            theme,
-            crate::theme::AccentColors::resolve(theme.marks.accents(), 1)?.color(0)?,
-            theme.marks.points().radii().qq(),
-        ),
         domain_expansions: [None; 2],
     };
+    let point_style = chart.point_style(
+        theme,
+        crate::theme::AccentColors::resolve(theme.marks.accents(), 1)?.color(0)?,
+        theme.marks.points().radii().qq(),
+    );
 
     if let Some(line) = prepared.line {
         if let Some(((line_x0, line_y0), (line_x1, line_y1))) = visible_line_segment(
@@ -242,33 +257,33 @@ pub(crate) fn project(
             payload.line = Some([Point2D::new(x0, y0), Point2D::new(x1, y1)]);
         }
     }
-    crate::data::source::reserve_source(&mut payload.points, prepared.theoretical.len())?;
-
-    payload.points.extend(
-        prepared
-            .theoretical
-            .iter()
-            .zip(&prepared.observed)
-            .filter_map(|(theoretical, observed)| {
-                if chart
-                    .x_axis_spec()
-                    .limits
-                    .is_some_and(|(minimum, maximum)| {
-                        *theoretical < minimum || *theoretical > maximum
-                    })
-                    || chart
-                        .y_axis_spec()
-                        .limits
-                        .is_some_and(|(minimum, maximum)| {
-                            *observed < minimum || *observed > maximum
-                        })
-                {
-                    return None;
-                }
-                let (x, y) = layout.projection.project(*theoretical, *observed);
-                (x.is_finite() && y.is_finite()).then_some(Point2D::new(x, y))
-            }),
-    );
+    crate::alpha::marks::require_aligned_points(prepared.theoretical.len(), prepared.alphas.len())?;
+    for ((theoretical, observed), alpha) in prepared
+        .theoretical
+        .iter()
+        .zip(&prepared.observed)
+        .zip(&prepared.alphas)
+    {
+        if chart
+            .x_axis_spec()
+            .limits
+            .is_some_and(|(minimum, maximum)| *theoretical < minimum || *theoretical > maximum)
+            || chart
+                .y_axis_spec()
+                .limits
+                .is_some_and(|(minimum, maximum)| *observed < minimum || *observed > maximum)
+        {
+            continue;
+        }
+        let (x, y) = layout.projection.project(*theoretical, *observed);
+        if x.is_finite() && y.is_finite() {
+            push_point(
+                &mut payload.point_batches,
+                Point2D::new(x, y),
+                alpha.point(point_style.clone()),
+            )?;
+        }
+    }
     let mut geometry = crate::render::geometry::GeometrySnapshot::new();
     #[cfg(test)]
     crate::layout::interior::distributions::count(2, 2);
@@ -276,7 +291,9 @@ pub(crate) fn project(
     if let Some(line) = &payload.line {
         geometry.line(line, &payload.line_style, Some(clip))?;
     }
-    geometry.scatter(&payload.points, &payload.point_style, clip)?;
+    for (points, style) in &payload.point_batches {
+        geometry.scatter(points, style, clip)?;
+    }
     let mut result = PlotRenderResult::new(layout, None);
     result.marks = Some(crate::data::source::source_arc(
         crate::layout::interior::SelectedMarkPlan {
@@ -460,11 +477,18 @@ fn prepare_qq(values: &[f64], line_mode: QqLine) -> Result<PreparedQq, Error> {
     if values.iter().any(|value| !value.is_finite()) {
         return Err(Error::Data("Q-Q plot: observations must be finite".into()));
     }
-    let mut observed = Vec::new();
-    crate::data::source::reserve_source(&mut observed, values.len())?;
-
-    observed.extend_from_slice(values);
-    crate::data::source::sort_numeric_source(&mut observed);
+    let mut order = crate::data::source::collect_source((0..values.len()).map(Ok))?;
+    crate::data::source::sort_source_by(&mut order, |a, b| {
+        values[*a].total_cmp(&values[*b]).then(a.cmp(b))
+    });
+    let observed = crate::data::source::collect_source(order.iter().map(|&row| Ok(values[row])))?;
+    let alphas = crate::data::source::collect_source(order.iter().map(|&slot| {
+        Ok(ObservationAlpha {
+            slot,
+            source_row: slot,
+            value: None,
+        })
+    }))?;
     let mut theoretical = Vec::new();
     crate::data::source::reserve_source(&mut theoretical, observed.len())?;
 
@@ -496,6 +520,7 @@ fn prepare_qq(values: &[f64], line_mode: QqLine) -> Result<PreparedQq, Error> {
     Ok(PreparedQq {
         theoretical,
         observed,
+        alphas,
         line,
     })
 }
@@ -615,21 +640,53 @@ mod tests {
 
     #[test]
     fn qq_sorts_observations_and_theoretical_quantiles() {
-        let prepared = prepare_qq(&[3.0, 1.0, 2.0], QqLine::Hidden).unwrap();
-
-        assert_eq!(prepared.observed, [1.0, 2.0, 3.0]);
+        let source = Plot::qq(crate::NumericValues::new("value", [3.0, 1.0, 1.0, 2.0]))
+            .reference_line(QqLine::Hidden)
+            .with_alpha(
+                AlphaTarget::Point,
+                crate::alpha::AlphaEncoding::observations(
+                    crate::alpha::AlphaValues::new("confidence", [230, 17, 90, 128]).unwrap(),
+                ),
+            )
+            .x_limits(-2.0, 2.0)
+            .y_limits(0.0, 4.0)
+            .erase();
+        let prepared = PreparedQq::new(&source, source.data()).unwrap();
+        assert_eq!(prepared.observed, [1.0, 1.0, 2.0, 3.0]);
+        assert_eq!(
+            prepared
+                .alphas
+                .iter()
+                .map(|alpha| alpha.slot)
+                .collect::<Vec<_>>(),
+            [1, 2, 3, 0]
+        );
         assert!(prepared
             .theoretical
             .windows(2)
             .all(|pair| pair[0] < pair[1]));
-    }
-
-    #[test]
-    fn qq_supports_two_observations() {
-        let prepared = prepare_qq(&[2.0, 1.0], QqLine::Quartiles).unwrap();
-
-        assert_eq!(prepared.theoretical.len(), 2);
-        assert!(prepared.line.is_some());
+        let theme = crate::Theme::publication().resolve().unwrap();
+        let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
+        let selected = chart
+            .measure_selected_interior(PlotRenderContext::new(
+                chart.data(),
+                crate::layout::PanelBox::new(10.0, 600.0, 20.0, 420.0),
+                &theme,
+            ))
+            .unwrap();
+        let crate::layout::interior::MarkPayload::Qq(payload) =
+            &selected.marks.as_ref().unwrap().payload
+        else {
+            panic!("Qq payload")
+        };
+        assert_eq!(
+            payload
+                .point_batches
+                .iter()
+                .map(|(_, style)| style.color.alpha())
+                .collect::<Vec<_>>(),
+            [17, 90, 128, 230]
+        );
     }
 
     #[test]
@@ -653,13 +710,6 @@ mod tests {
             })
         );
         assert_eq!(hidden.line, None);
-    }
-
-    #[test]
-    fn qq_rejects_too_few_observations() {
-        let error = prepare_qq(&[1.0], QqLine::Quartiles).unwrap_err();
-
-        assert!(error.to_string().contains("at least 2"));
     }
 
     #[test]

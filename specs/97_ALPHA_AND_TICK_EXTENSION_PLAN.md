@@ -190,7 +190,7 @@ and focused closure; split behavioral leaves further when needed.
 | T6D1 | IN PROGRESS | T6D0 | Immutable mapping preparation and actual mark consumers |
 | T6D1a | COMPLETE | T6D0 | Owned AlphaValues, common scalar/label owners, eager custom construction and complete selected recipes; `../docs/owned-alpha-values.md` |
 | T6D1b | COMPLETE | T6D1a | Explicit encodings, exact keyed/bin/facet resolution, original slots, retained three-target input and complete child/height identity; `../docs/explicit-alpha-bindings.md` |
-| T6D1c | PENDING | T6D1b | Actual observation/estimate/strip point consumers and paint-aware intrinsic/ink requirements |
+| T6D1c | IN PROGRESS | T6D1b | Actual observation/estimate/strip point consumers and paint-aware intrinsic/ink requirements |
 | T6D1d | PENDING | T6D1c | Actual series, trace and uncertainty stroke consumers with explicit units |
 | T6D1e | PENDING | T6D1d | Actual aggregate, cell, bin, band, native and supplied-fill consumers |
 | T6D2 | PENDING | T6D1 | Declared automatic guides, parent transport, census and identities |
@@ -198,6 +198,12 @@ and focused closure; split behavioral leaves further when needed.
 | T6D2b | PENDING | T6D2a | Common section measurement/freeze, scoped parent ownership, cache/height/feedback and font census |
 | T6D3 | PENDING | T6D2 | Atomic public API/caller/current-contract migration |
 | T6D4 | PENDING | T6D3 | Full admitted-family/parent/root/frozen-output evidence |
+
+The observation-consumer leaf currently closes Scatter, Qq and Regression in
+`../docs/alpha-coordinate-points.md`: original slots through finite filtering and
+stable quantile sorting, ordered final-paint batches and actual painted intrinsic/
+automatic ink. Its remaining path, estimate, categorical and native/supplied
+consumers keep T6D1c IN PROGRESS.
 
 Do not start a code leaf while its exact owning design is still pending. Use modern
 Rust module layout, the standalone offline renderer and existing pinned dependencies.

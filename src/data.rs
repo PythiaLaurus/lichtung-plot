@@ -174,13 +174,6 @@ impl<'a> PlotData<'a> {
     }
 
     /// Alpha arrays align with complete original input slots, not public row IDs.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "original-slot alpha lookup precedes actual observation consumers"
-        )
-    )]
     pub(crate) fn observation_alpha(
         self,
         alpha: &crate::alpha::PreparedAlpha,

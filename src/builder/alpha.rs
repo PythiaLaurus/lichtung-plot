@@ -18,13 +18,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "producer-owned schema preparation precedes actual alpha mark consumers"
-        )
-    )]
     pub(crate) fn prepare_alpha(
         &self,
         target: AlphaTarget,

@@ -7,6 +7,7 @@ use crate::numeric::set::FormattedSet;
 use crate::{CategoryValues, Error, NumericValues, Result};
 
 mod encoding;
+pub(crate) mod marks;
 mod materialize;
 
 pub(crate) use encoding::{AlphaEncoding, AlphaUnitKind, PreparedAlpha, ResolvedAlpha};

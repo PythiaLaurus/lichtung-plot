@@ -10,6 +10,10 @@
     clippy::too_many_lines
 )]
 
+use crate::alpha::{
+    marks::{point_ink, push_point, ObservationAlpha},
+    AlphaTarget, AlphaUnitKind,
+};
 use crate::Error;
 
 use crate::decorations::legend::source::PointRole;
@@ -18,6 +22,9 @@ use crate::render::backend::{with_clip, Backend, Point2D, PointStyle};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::theme::{AccentColors, CategoryColors};
 use crate::Plot;
+
+#[cfg(test)]
+mod tests;
 
 #[cfg(test)]
 thread_local! {
@@ -38,7 +45,14 @@ pub(crate) struct PreparedScatter {
 #[derive(Debug)]
 struct ScatterGroup {
     label: Option<String>,
-    points: Vec<(f64, f64)>,
+    points: Vec<ScatterPoint>,
+}
+
+#[derive(Debug)]
+struct ScatterPoint {
+    x: f64,
+    y: f64,
+    alpha: ObservationAlpha,
 }
 
 #[derive(Debug)]
@@ -81,7 +95,16 @@ pub(crate) fn intrinsic_body_minimum(
     crate::render::backend::validate_point_style(&style)?;
     // Reuse the canonical painted-ink owner on one origin-relative point; no
     // source point is projected or clipped and scratch storage is reserved.
-    let (width, height) = crate::render::geometry::point_ink_dimensions(&style)?;
+    let (width, height) = point_ink(
+        &style,
+        prepared.groups.iter().flat_map(|group| {
+            group
+                .points
+                .iter()
+                .map(|point| (point.x, point.y, point.alpha))
+        }),
+    )?
+    .map_or((0.0, 0.0), crate::alpha::marks::PointInk::dimensions);
     Ok((
         if chart.user_x_limits().is_none() {
             width
@@ -113,6 +136,7 @@ impl PreparedScatter {
 
     pub(crate) fn new(chart: &Plot, data: crate::data::PlotData<'_>) -> Result<Self, Error> {
         data.validate_row_source()?;
+        let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
         #[cfg(test)]
         STAGES.with(|stages| {
             let mut counts = stages.get();
@@ -151,11 +175,13 @@ impl PreparedScatter {
                 let mut points = Vec::new();
                 crate::data::source::reserve_source(&mut points, count)?;
 
-                points.extend(
-                    rows.iter()
-                        .filter(|(row, _, _)| hues[*row] == label)
-                        .map(|(_, x, y)| (*x, *y)),
-                );
+                for &(row, x, y) in rows.iter().filter(|(row, _, _)| hues[*row] == label) {
+                    points.push(ScatterPoint {
+                        x,
+                        y,
+                        alpha: ObservationAlpha::resolve(data, &alpha, row)?,
+                    });
+                }
                 groups.push(ScatterGroup {
                     label: Some(label),
                     points,
@@ -165,9 +191,13 @@ impl PreparedScatter {
             crate::data::source::reserve_source(&mut groups, 1)?;
             groups.push(ScatterGroup {
                 label: None,
-                points: crate::data::source::collect_source(
-                    rows.iter().map(|(_, x, y)| Ok((*x, *y))),
-                )?,
+                points: crate::data::source::collect_source(rows.iter().map(|&(row, x, y)| {
+                    Ok(ScatterPoint {
+                        x,
+                        y,
+                        alpha: ObservationAlpha::resolve(data, &alpha, row)?,
+                    })
+                }))?,
             });
         }
         if let Some(exact) = chart.categorical_map_spec() {
@@ -317,11 +347,14 @@ impl PreparedScatter {
                     .color(0)?
             };
             let style = chart.point_style(theme, color, theme.marks.points().radii().scatter());
-            let points = crate::data::source::collect_source(group.points.iter().map(|(x, y)| {
-                let (x, y) = projection.project(*x, *y);
-                Ok(Point2D::new(x, y))
-            }))?;
-            groups.push((points, style));
+            for point in &group.points {
+                let (x, y) = projection.project(point.x, point.y);
+                push_point(
+                    &mut groups,
+                    Point2D::new(x, y),
+                    point.alpha.point(style.clone()),
+                )?;
+            }
         }
         Ok(ScatterPayload {
             clip: projection.panel_box(),
@@ -381,11 +414,19 @@ pub(crate) fn measure_marks(
     let data = context.data.with_operation(&resources);
     let mut payload = prepared.project(chart, &layout.projection, theme, data)?;
     let point_style = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().scatter());
-    if let Some(ink) = crate::render::geometry::point_ink_bounds(&point_style)? {
+    if let Some(ink) = point_ink(
+        &point_style,
+        prepared.groups.iter().flat_map(|group| {
+            group
+                .points
+                .iter()
+                .map(|point| (point.x, point.y, point.alpha))
+        }),
+    )? {
         payload.domain_expansions = crate::layout::interior::automatic_mark_ink_expansions(
-            prepared.ranges,
+            ink.ranges,
             &layout.projection,
-            ink,
+            ink.bounds,
             [
                 chart.user_x_limits().is_none(),
                 chart.user_y_limits().is_none(),

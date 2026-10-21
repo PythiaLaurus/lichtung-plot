@@ -8,6 +8,10 @@
     clippy::similar_names
 )]
 
+use crate::alpha::{
+    marks::{point_ink, push_point, ObservationAlpha},
+    AlphaTarget, AlphaUnitKind,
+};
 use crate::data::PlotData;
 use crate::Error;
 
@@ -28,9 +32,9 @@ pub(crate) struct PreparedRegressionInputs {
 #[derive(Debug)]
 pub(crate) struct PreparedRegression {
     pub(crate) ranges: [(f64, f64); 2],
-    observation_ranges: [(f64, f64); 2],
     mark_ranges: [(f64, f64); 2],
     points: Vec<(f64, f64)>,
+    alphas: Vec<ObservationAlpha>,
     pub(crate) fit_line: [(f64, f64); 2],
     band_values: Option<Vec<(f64, f64, f64)>>,
 }
@@ -56,7 +60,15 @@ pub(crate) fn intrinsic_body_minimum(
         ));
     }
     let style = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().regression());
-    let (width, height) = crate::render::geometry::point_ink_dimensions(&style)?;
+    let (width, height) = point_ink(
+        &style,
+        prepared
+            .points
+            .iter()
+            .zip(&prepared.alphas)
+            .map(|(&(x, y), &alpha)| (x, y, alpha)),
+    )?
+    .map_or((0.0, 0.0), crate::alpha::marks::PointInk::dimensions);
     let fit = crate::render::geometry::line_ink_width(
         &theme
             .marks
@@ -143,6 +155,7 @@ impl PreparedRegression {
 
     pub(crate) fn new(chart: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
         data.validate_row_source()?;
+        let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
         #[cfg(test)]
         crate::layout::interior::distributions::count(3, 0);
         let x_col = chart
@@ -151,7 +164,12 @@ impl PreparedRegression {
         let y_col = chart
             .y_col()
             .ok_or_else(|| Error::Data("regression: y column not set".into()))?;
-        let points = crate::data::aligned_finite_f64(data, x_col, y_col, "regression")?;
+        let rows = crate::data::aligned_finite_rows(data, x_col, y_col, "regression")?;
+        let points = crate::data::source::collect_source(rows.iter().map(|&(_, x, y)| Ok((x, y))))?;
+        let alphas = crate::data::source::collect_source(
+            rows.iter()
+                .map(|&(row, _, _)| ObservationAlpha::resolve(data, &alpha, row)),
+        )?;
         let x = crate::data::source::collect_source(points.iter().map(|p| Ok(p.0)))?;
         let y = crate::data::source::collect_source(points.iter().map(|p| Ok(p.1)))?;
         let band = chart.regression_band_spec();
@@ -189,7 +207,6 @@ impl PreparedRegression {
         };
 
         let (mut y_min, mut y_max) = crate::data::min_max(y.iter().copied(), "regression")?;
-        let observation_ranges = [(x_min, x_max), (y_min, y_max)];
         y_min = y_min.min(y_fit_lo).min(y_fit_hi);
         y_max = y_max.max(y_fit_lo).max(y_fit_hi);
         if let Some(values) = &band_values {
@@ -204,9 +221,9 @@ impl PreparedRegression {
         let y_range = crate::layout::continuous_auto_range((y_min, y_max), chart.y_axis_spec())?;
         Ok(Self {
             ranges: [x_range, y_range],
-            observation_ranges,
             mark_ranges,
             points,
+            alphas,
             fit_line: [(x_min, y_fit_lo), (x_max, y_fit_hi)],
             band_values,
         })
@@ -216,10 +233,9 @@ impl PreparedRegression {
 #[derive(Debug)]
 pub(crate) struct RegressionPayload {
     clip: crate::layout::PanelBox,
-    pub(crate) points: Vec<Point2D>,
+    pub(crate) point_batches: Vec<(Vec<Point2D>, PointStyle)>,
     pub(crate) fit_line: [Point2D; 2],
     pub(crate) band: Option<Vec<Point2D>>,
-    point_style: PointStyle,
     line_style: LineStyle,
     pub(crate) band_fill: FillStyle,
     pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
@@ -233,7 +249,9 @@ impl RegressionPayload {
             if let Some(band) = &self.band {
                 backend.draw_polygon(band, &self.band_fill)?;
             }
-            backend.draw_scatter(&self.points, &self.point_style)?;
+            for (points, style) in &self.point_batches {
+                backend.draw_scatter(points, style)?;
+            }
             backend.draw_line(&self.fit_line, &self.line_style)
         })
     }
@@ -270,15 +288,18 @@ pub(crate) fn measure_marks(
         chart.user_y_limits().is_none(),
     ];
     let mut requests = [None; 2];
-    if let Some(ink) = crate::render::geometry::point_ink_bounds(&chart.point_style(
-        theme,
-        (0, 0, 0),
-        theme.marks.points().radii().regression(),
-    ))? {
+    if let Some(ink) = point_ink(
+        &chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().regression()),
+        prepared
+            .points
+            .iter()
+            .zip(&prepared.alphas)
+            .map(|(&(x, y), &alpha)| (x, y, alpha)),
+    )? {
         requests = crate::layout::interior::automatic_mark_ink_expansions(
-            prepared.observation_ranges,
+            ink.ranges,
             &projection,
-            ink,
+            ink.bounds,
             automatic,
             context.fit_scope(),
         )?;
@@ -329,11 +350,16 @@ pub(crate) fn project(
     let projection = &layout.projection;
     let color = crate::theme::AccentColors::resolve(theme.marks.accents(), 1)?.color(0)?;
     let point_style = chart.point_style(theme, color, theme.marks.points().radii().regression());
-    let scatter_points =
-        crate::data::source::collect_source(prepared.points.iter().map(|(x_value, y_value)| {
-            let (x, y) = projection.project(*x_value, *y_value);
-            Ok(Point2D::new(x, y))
-        }))?;
+    crate::alpha::marks::require_aligned_points(prepared.points.len(), prepared.alphas.len())?;
+    let mut point_batches = Vec::new();
+    for ((x_value, y_value), alpha) in prepared.points.iter().zip(&prepared.alphas) {
+        let (x, y) = projection.project(*x_value, *y_value);
+        push_point(
+            &mut point_batches,
+            Point2D::new(x, y),
+            alpha.point(point_style.clone()),
+        )?;
+    }
     let line_style = theme
         .marks
         .strokes()
@@ -393,10 +419,9 @@ pub(crate) fn project(
 
     let payload = RegressionPayload {
         clip: projection.panel_box(),
-        points: scatter_points,
+        point_batches,
         fit_line,
         band: band_polygon,
-        point_style,
         line_style,
         band_fill,
         domain_expansions: [None; 2],
@@ -408,7 +433,9 @@ pub(crate) fn project(
     if let Some(band) = &payload.band {
         geometry.polygon(band, &payload.band_fill, Some(clip))?;
     }
-    geometry.scatter(&payload.points, &payload.point_style, clip)?;
+    for (points, style) in &payload.point_batches {
+        geometry.scatter(points, style, clip)?;
+    }
     geometry.line(&payload.fit_line, &payload.line_style, Some(clip))?;
     let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?);
     result.marks = Some(crate::data::source::source_arc(
@@ -424,6 +451,67 @@ pub(crate) fn project(
 mod style_tests {
     use super::*;
     use crate::font::canonical::OperationContext;
+
+    #[test]
+    fn observation_alpha_keeps_joint_finite_members_fit_and_theme_zero_visibility_consistent() {
+        let base = Plot::regression(
+            crate::NumericValues::new("x", [1.0, f64::NAN, 2.0, 3.0]),
+            crate::NumericValues::new("y", [1.0, 2.0, 2.5, 3.0]),
+        )
+        .band(RegressionBand::Hidden)
+        .erase();
+        let source = base.clone().with_alpha(
+            AlphaTarget::Point,
+            crate::alpha::AlphaEncoding::observations(
+                crate::alpha::AlphaValues::new("confidence", [0, 99, 128, 255]).unwrap(),
+            ),
+        );
+        let prepared = PreparedRegression::new(&source, source.data()).unwrap();
+        let baseline = PreparedRegression::new(&base, base.data()).unwrap();
+        assert_eq!(prepared.fit_line, baseline.fit_line);
+        assert_eq!(
+            prepared
+                .alphas
+                .iter()
+                .map(|alpha| alpha.slot)
+                .collect::<Vec<_>>(),
+            [0, 2, 3]
+        );
+        assert_eq!(prepared.primary_mark_count(), 3);
+        let mut theme = crate::Theme::publication().resolve().unwrap();
+        let mut primary = theme.marks.points().primary().clone();
+        primary.fill_alpha = 0;
+        primary.outline = None;
+        let points = theme.marks.points().clone().with_primary(primary).unwrap();
+        theme.marks = theme.marks.clone().with_points(points).unwrap();
+        let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
+        let baseline = crate::plots::shared_x::prepare_panel_for_test(&base, &theme).unwrap();
+        assert!(
+            intrinsic_body_minimum(&chart, &theme).unwrap().0
+                > intrinsic_body_minimum(&baseline, &theme).unwrap().0
+        );
+        let selected = chart
+            .measure_selected_interior(PlotRenderContext::new(
+                chart.data(),
+                crate::layout::PanelBox::new(10.0, 600.0, 20.0, 420.0),
+                &theme,
+            ))
+            .unwrap();
+        let crate::layout::interior::MarkPayload::Regression(payload) =
+            &selected.marks.as_ref().unwrap().payload
+        else {
+            panic!("Regression payload")
+        };
+        assert_eq!(
+            payload
+                .point_batches
+                .iter()
+                .map(|(points, style)| (points.len(), style.color.alpha()))
+                .collect::<Vec<_>>(),
+            [(1, 0), (1, 128), (1, 255)]
+        );
+        assert_eq!(selected.marks.as_ref().unwrap().geometry.bounds().len(), 3);
+    }
 
     #[test]
     fn regression_observation_and_fit_ink_remeasure_with_custom_styles() {
