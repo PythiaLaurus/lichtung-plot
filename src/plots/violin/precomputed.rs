@@ -1,3 +1,4 @@
+use crate::alpha::{marks::ObservationAlpha, AlphaTarget, AlphaUnitKind};
 use crate::Error;
 
 use crate::decorations::legend::source::{FillRole, PointRole};
@@ -51,10 +52,22 @@ pub(crate) fn intrinsic_body_minimum(
     )?;
     let median = median_ink.map_or(0.0, |ink| ink.top - ink.bottom);
     let point = chart.distribution_point_style(theme.marks.points().mandatory_strip(), (0, 0, 0));
-    let (_, point_numeric) = crate::render::geometry::point_ink_dimensions(&point)?;
-    let mut pitch = crate::plots::violin::raincloud_strip_pitch(theme, width, &point)?
-        .max((1.0 / 1024.0) / (0.4 * width))
-        .max((1.0 / 1024.0) / (0.16 * width));
+    let point = crate::alpha::marks::point_ink(
+        &point,
+        prepared.groups.iter().flat_map(|group| {
+            group
+                .geometry
+                .points
+                .iter()
+                .zip(&group.alphas)
+                .map(|(point, &alpha)| (0.0, point.y, alpha))
+        }),
+    )?;
+    let point_numeric = point.map_or(0.0, |ink| ink.dimensions().1);
+    let mut pitch =
+        crate::plots::violin::raincloud_strip_pitch(theme, width, point.map(|ink| ink.bounds))?
+            .max((1.0 / 1024.0) / (0.4 * width))
+            .max((1.0 / 1024.0) / (0.16 * width));
     if let Some(ink) = cloud {
         pitch = pitch.max((-ink.left).max(0.0) / (0.5 - 0.5 * width));
         pitch = pitch.max(ink.right.max(0.0) / (0.5 + 0.1 * width));
@@ -125,6 +138,7 @@ impl PreparedRaincloud {
 #[derive(Debug)]
 struct PreparedRaincloudGroup {
     geometry: RaincloudGroup,
+    alphas: Vec<ObservationAlpha>,
 }
 
 #[cfg(test)]
@@ -137,6 +151,7 @@ pub(crate) fn prepare(chart: &Plot) -> Result<PreparedRaincloud, Error> {
         .raincloud_geometry_input()
         .ok_or_else(|| Error::Render("raincloud requires supplied geometry".into()))?;
     let range = input.validate()?;
+    let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     let categories = crate::data::source::collect_source(
         input
             .groups
@@ -144,6 +159,7 @@ pub(crate) fn prepare(chart: &Plot) -> Result<PreparedRaincloud, Error> {
             .map(|group| crate::data::source::copy_source_string(&group.category)),
     )?;
     let mut hues = Vec::new();
+    let mut original_slot = 0_usize;
     let groups = crate::data::source::collect_source(input.groups.iter().map(|group| {
         if let Some(hue) = &group.hue {
             #[cfg(test)]
@@ -153,7 +169,19 @@ pub(crate) fn prepare(chart: &Plot) -> Result<PreparedRaincloud, Error> {
                 hues.push(crate::data::source::copy_source_string(hue)?);
             }
         }
+        let alphas = crate::data::source::collect_source(group.points.iter().map(|_| {
+            let slot = original_slot;
+            original_slot = original_slot.checked_add(1).ok_or_else(|| {
+                Error::Data("supplied raincloud alpha point count overflow".into())
+            })?;
+            Ok(ObservationAlpha {
+                slot,
+                source_row: slot,
+                value: alpha.observation(slot, slot)?,
+            })
+        }))?;
         Ok(PreparedRaincloudGroup {
+            alphas,
             geometry: RaincloudGroup {
                 category: crate::data::source::copy_source_string(&group.category)?,
                 hue: group
@@ -212,8 +240,8 @@ pub(super) fn measure_marks(
         )?;
         project_strip(
             &layout,
-            &group.geometry,
-            chart.distribution_point_style(theme.marks.points().mandatory_strip(), color),
+            group,
+            &chart.distribution_point_style(theme.marks.points().mandatory_strip(), color),
             index,
             theme,
             &mut payload,
@@ -317,20 +345,30 @@ fn project_cloud_and_summary(
 
 fn project_strip(
     layout: &Layout,
-    group: &RaincloudGroup,
-    style: crate::render::backend::PointStyle,
+    prepared: &PreparedRaincloudGroup,
+    style: &crate::render::backend::PointStyle,
     index: usize,
     theme: &ResolvedTheme,
     payload: &mut DistributionPayload,
 
     scope: &crate::layout::fit::FitScope,
 ) -> Result<(), crate::layout::fit::PlanError> {
+    let group = &prepared.geometry;
+    crate::alpha::marks::require_aligned_points(group.points.len(), prepared.alphas.len())?;
     let center = index as f64 + 0.5;
     let width = 0.8;
     let (box_right, _) = layout.projection.project(center + width * 0.10, 0.0);
     let (strip_left, _) = layout.projection.project(center + width * 0.24, 0.0);
     let (strip_right, _) = layout.projection.project(center + width * 0.46, 0.0);
-    let point_ink = crate::render::geometry::point_ink_bounds(&style)?;
+    let point_ink = crate::alpha::marks::point_ink(
+        style,
+        group
+            .points
+            .iter()
+            .zip(&prepared.alphas)
+            .map(|(point, &alpha)| (0.0, point.y, alpha)),
+    )?
+    .map(|ink| ink.bounds);
     let point_left = point_ink.map_or(0.0, |ink| (-ink.left).max(0.0));
     let point_right = point_ink.map_or(0.0, |ink| ink.right.max(0.0));
     let box_right_ink = crate::render::geometry::rectangular_fill_ink_bounds(
@@ -350,5 +388,5 @@ fn project_strip(
         let (_, y) = layout.projection.project(center, point.y);
         Ok(Point2D::new(x, y))
     }))?;
-    Ok(payload.scatter(points, style)?)
+    Ok(payload.scatter(points, style, prepared.alphas.iter().copied())?)
 }

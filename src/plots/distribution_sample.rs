@@ -1,13 +1,14 @@
 //! Shared strict observation sample for categorical distribution summaries.
 
+use crate::alpha::{marks::ObservationAlpha, AlphaTarget, AlphaUnitKind};
 use crate::Error;
 
 use crate::data::PlotData;
 use crate::{Plot, RawOverlay};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct DistributionObservation {
-    pub(crate) source_row: usize,
+    pub(crate) alpha: ObservationAlpha,
     pub(crate) value: f64,
 }
 
@@ -53,6 +54,7 @@ pub(crate) fn prepare_scoped(
     family: &str,
     facet: Option<crate::data::FacetAxisSources<'_>>,
 ) -> Result<DistributionSample, Error> {
+    let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     let x_column = chart
         .x_col()
         .ok_or_else(|| Error::Data(format!("{family}: x column not set")))?;
@@ -111,7 +113,7 @@ pub(crate) fn prepare_scoped(
         {
             crate::data::source::reserve_source(&mut group.observations, 1)?;
             group.observations.push(DistributionObservation {
-                source_row: data.source_row(row),
+                alpha: ObservationAlpha::resolve(data, &alpha, row)?,
                 value,
             });
             continue;
@@ -135,7 +137,7 @@ pub(crate) fn prepare_scoped(
         let mut observations = Vec::new();
         crate::data::source::reserve_source(&mut observations, 1)?;
         observations.push(DistributionObservation {
-            source_row: data.source_row(row),
+            alpha: ObservationAlpha::resolve(data, &alpha, row)?,
             value,
         });
         crate::data::source::reserve_source(&mut groups, 1)?;

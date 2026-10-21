@@ -5,6 +5,7 @@
     reason = "validated row counts are converted to bounded plotting coordinates"
 )]
 
+use crate::alpha::{marks::ObservationAlpha, AlphaTarget, AlphaUnitKind};
 use crate::Error;
 
 use crate::decorations::legend::source::{LiteralDomain, PointRole};
@@ -20,6 +21,7 @@ struct DumbbellRow {
     group_index: usize,
     left: f64,
     right: f64,
+    alpha: ObservationAlpha,
 }
 
 #[derive(Debug)]
@@ -73,12 +75,14 @@ pub(crate) fn intrinsic_body_minimum(
         .ok_or_else(|| Error::Render("Dumbbell endpoint paints are missing".into()))?;
     let mut outward = 0.0_f64;
     let mut numeric = 0.0_f64;
-    for color in [endpoints.left_color(), endpoints.right_color()] {
-        if let Some(ink) =
-            crate::render::geometry::point_ink_bounds(&endpoint_style(chart, theme, color))?
-        {
-            outward = outward.max(ink.top.max(-ink.bottom));
-            numeric = numeric.max(ink.right - ink.left);
+    for row in &prepared.rows {
+        for color in [endpoints.left_color(), endpoints.right_color()] {
+            if let Some(ink) = crate::render::geometry::point_ink_bounds(
+                &row.alpha.point(endpoint_style(chart, theme, color)),
+            )? {
+                outward = outward.max(ink.top.max(-ink.bottom));
+                numeric = numeric.max(ink.right - ink.left);
+            }
         }
     }
     let connector = crate::render::geometry::line_ink_width(
@@ -152,7 +156,7 @@ pub(crate) struct DumbbellPayload {
     clip: crate::layout::PanelBox,
     pub(crate) pairs: Vec<[Point2D; 2]>,
     connector: LineStyle,
-    points: [crate::render::backend::PointStyle; 2],
+    points: Vec<[crate::render::backend::PointStyle; 2]>,
     pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
 }
 
@@ -161,10 +165,10 @@ impl DumbbellPayload {
         #[cfg(test)]
         count(3);
         with_clip(backend, self.clip, |backend| {
-            for pair in &self.pairs {
+            for (pair, points) in self.pairs.iter().zip(&self.points) {
                 backend.draw_line(pair, &self.connector)?;
-                backend.draw_scatter(&pair[..1], &self.points[0])?;
-                backend.draw_scatter(&pair[1..], &self.points[1])?;
+                backend.draw_scatter(&pair[..1], &points[0])?;
+                backend.draw_scatter(&pair[1..], &points[1])?;
             }
             Ok(())
         })
@@ -200,19 +204,22 @@ pub(crate) fn measure_marks(
     else {
         unreachable!("Dumbbell selected its own mark payload")
     };
-    let mut ink = crate::render::geometry::line_ink_bounds(&payload.connector)?;
-    for point in &payload.points {
-        let next = crate::render::geometry::point_ink_bounds(point)?;
-        ink = match (ink, next) {
-            (Some(current), Some(next)) => Some(current.union(next)),
-            (current, next) => current.or(next),
-        };
+    let mut full = crate::render::geometry::GeometrySnapshot::new();
+    for (pair, points) in payload.pairs.iter().zip(&payload.points) {
+        full.line(pair, &payload.connector, None)?;
+        full.scatter_with_clip(&pair[..1], &points[0], None)?;
+        full.scatter_with_clip(&pair[1..], &points[1], None)?;
     }
-    if let Some(ink) = ink {
+    if let Some(ink) = full
+        .bounds()
+        .iter()
+        .copied()
+        .reduce(crate::render::geometry::GeometryBox::union)
+    {
         let count = u32::try_from(prepared.categories.len()).map_err(|_| {
             Error::Render("Dumbbell category count exceeds coordinate range".into())
         })?;
-        let requests = crate::layout::interior::automatic_mark_ink_expansions(
+        let requests = crate::layout::interior::automatic_absolute_ink_expansions(
             [prepared.range, (0.0, f64::from(count))],
             &projection,
             ink,
@@ -250,13 +257,11 @@ fn project(
         clip: layout.projection.panel_box(),
         pairs: Vec::new(),
         connector,
-        points: [
-            endpoint_style(chart, theme, endpoints.left_color()),
-            endpoint_style(chart, theme, endpoints.right_color()),
-        ],
+        points: Vec::new(),
         domain_expansions: [None; 2],
     };
     crate::data::source::reserve_source(&mut payload.pairs, prepared.rows.len())?;
+    crate::data::source::reserve_source(&mut payload.points, prepared.rows.len())?;
 
     for row in &prepared.rows {
         let y = replicate_y(
@@ -277,13 +282,19 @@ fn project(
         payload
             .pairs
             .push([Point2D::new(left_x, left_y), Point2D::new(right_x, right_y)]);
+        payload.points.push([
+            row.alpha
+                .point(endpoint_style(chart, theme, endpoints.left_color())),
+            row.alpha
+                .point(endpoint_style(chart, theme, endpoints.right_color())),
+        ]);
     }
     let mut geometry = crate::render::geometry::GeometrySnapshot::new();
     let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
-    for pair in &payload.pairs {
+    for (pair, points) in payload.pairs.iter().zip(&payload.points) {
         geometry.line(pair, &payload.connector, Some(clip))?;
-        geometry.scatter(&pair[..1], &payload.points[0], clip)?;
-        geometry.scatter(&pair[1..], &payload.points[1], clip)?;
+        geometry.scatter(&pair[..1], &points[0], clip)?;
+        geometry.scatter(&pair[1..], &points[1], clip)?;
     }
     #[cfg(test)]
     count(2);
@@ -329,6 +340,7 @@ pub(crate) fn prepare<'a>(
 ) -> Result<DumbbellData, Error> {
     let data = data.into();
     data.validate_row_source()?;
+    let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     #[cfg(test)]
     count(0);
     if chart.y_axis_spec() != &AxisSpec::default() {
@@ -414,6 +426,7 @@ pub(crate) fn prepare<'a>(
             group_index,
             left: left[index],
             right: right[index],
+            alpha: ObservationAlpha::resolve(data, &alpha, index)?,
         });
     }
 

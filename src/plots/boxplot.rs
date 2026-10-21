@@ -30,7 +30,6 @@ struct BoxSummary {
     median: f64,
     q3: f64,
     hi_whisker: f64,
-    fliers: Vec<f64>,
 }
 
 #[derive(Debug)]
@@ -42,7 +41,7 @@ struct BoxStats {
     median: f64,
     q3: f64,
     hi_whisker: f64,
-    fliers: Vec<f64>,
+    fliers: Vec<crate::plots::distribution_sample::DistributionObservation>,
 }
 
 #[derive(Debug)]
@@ -94,8 +93,6 @@ pub(crate) fn intrinsic_body_minimum(
             theme.marks.points().radii().box_flier(),
         )
     };
-    let point = crate::render::geometry::point_ink_bounds(&point_style)?;
-
     let mut pitch = 1.0_f64 / 1024.0;
     let mut numeric = out_y.max(summary);
     for (stat, group) in prepared.stats.iter().zip(&sample.groups) {
@@ -128,25 +125,28 @@ pub(crate) fn intrinsic_body_minimum(
             pitch = pitch.max((summary / 2.0) / (0.5 + offset - cap_room));
             pitch = pitch.max((summary / 2.0) / (0.5 - offset - cap_room));
         }
-        if let Some(ink) = point {
-            if overlay.is_visible() {
-                for observation in &group.observations {
-                    let x = crate::plots::distribution_sample::overlay_x(
-                        overlay,
-                        center,
-                        thickness,
-                        observation.source_row,
-                    );
-                    let shift = x - (group.x_index as f64 + 0.5);
-                    pitch = pitch.max((-ink.left).max(0.0) / (0.5 + shift));
-                    pitch = pitch.max(ink.right.max(0.0) / (0.5 - shift));
-                }
-                numeric = numeric.max(ink.top - ink.bottom);
-            } else if !stat.fliers.is_empty() {
-                pitch = pitch.max((-ink.left).max(0.0) / (0.5 + offset));
-                pitch = pitch.max(ink.right.max(0.0) / (0.5 - offset));
-                numeric = numeric.max(ink.top - ink.bottom);
-            }
+        let observations = if overlay.is_visible() {
+            &group.observations
+        } else {
+            &stat.fliers
+        };
+        if let Some(ink) = crate::alpha::marks::point_ink(
+            &point_style,
+            observations.iter().map(|observation| {
+                let x = crate::plots::distribution_sample::overlay_x(
+                    overlay,
+                    center,
+                    thickness,
+                    observation.alpha.source_row,
+                );
+                (x, observation.value, observation.alpha)
+            }),
+        )? {
+            let left = ink.ranges[0].0 - (group.x_index as f64 + 0.5);
+            let right = ink.ranges[0].1 - (group.x_index as f64 + 0.5);
+            pitch = pitch.max((-ink.bounds.left).max(0.0) / (0.5 + left));
+            pitch = pitch.max(ink.bounds.right.max(0.0) / (0.5 - right));
+            numeric = numeric.max(ink.dimensions().1);
         }
     }
     let count = u32::try_from(sample.x_levels.len())
@@ -181,6 +181,18 @@ pub(crate) fn prepare(
                 group.observations.iter().map(|o| Ok(o.value)),
             )?;
             let summary = box_summary_with_source(&mut ys)?;
+            let mut fliers = Vec::new();
+            crate::data::source::reserve_source(&mut fliers, group.observations.len())?;
+            fliers.extend(group.observations.iter().copied().filter(|observation| {
+                observation.value < summary.lo_whisker || observation.value > summary.hi_whisker
+            }));
+            // Preserve the former value-sorted flier paint order, retaining
+            // distinct original occurrences when values coincide.
+            crate::data::source::sort_source_by(&mut fliers, |a, b| {
+                a.value
+                    .total_cmp(&b.value)
+                    .then_with(|| a.alpha.slot.cmp(&b.alpha.slot))
+            });
             Ok(BoxStats {
                 x_index: group.x_index,
                 group_index: group.group_index,
@@ -189,7 +201,7 @@ pub(crate) fn prepare(
                 median: summary.median,
                 q3: summary.q3,
                 hi_whisker: summary.hi_whisker,
-                fliers: summary.fliers,
+                fliers,
             })
         },
     ))?;
@@ -197,13 +209,13 @@ pub(crate) fn prepare(
     let y_min = stats.iter().fold(f64::INFINITY, |min, stat| {
         stat.fliers
             .iter()
-            .copied()
+            .map(|observation| observation.value)
             .fold(min.min(stat.lo_whisker), f64::min)
     });
     let y_max = stats.iter().fold(f64::NEG_INFINITY, |max, stat| {
         stat.fliers
             .iter()
-            .copied()
+            .map(|observation| observation.value)
             .fold(max.max(stat.hi_whisker), f64::max)
     });
 
@@ -241,7 +253,11 @@ pub(crate) fn measure_marks(
         )
     }))?;
     for stat in stats {
-        let maximum = stat.fliers.iter().copied().fold(stat.hi_whisker, f64::max);
+        let maximum = stat
+            .fliers
+            .iter()
+            .map(|observation| observation.value)
+            .fold(stat.hi_whisker, f64::max);
         rendered_maxima[stat.x_index] = rendered_maxima[stat.x_index].max(maximum);
         grouped_maxima[stat.x_index][stat.group_index] = maximum;
     }
@@ -361,12 +377,17 @@ pub(crate) fn measure_marks(
                 theme.marks.neutral_paints().box_flier().as_rgb(),
                 theme.marks.points().radii().box_flier(),
             );
-            let flier_points = crate::data::source::collect_source(stat.fliers.iter().map(|y| {
-                let (x_px, y_px) = proj.project(x_center_data, *y);
-                Ok(Point2D::new(x_px, y_px))
-            }))?;
+            let flier_points =
+                crate::data::source::collect_source(stat.fliers.iter().map(|observation| {
+                    let (x_px, y_px) = proj.project(x_center_data, observation.value);
+                    Ok(Point2D::new(x_px, y_px))
+                }))?;
             if !flier_points.is_empty() {
-                payload.scatter(flier_points, flier_style)?;
+                payload.scatter(
+                    flier_points,
+                    &flier_style,
+                    stat.fliers.iter().map(|observation| observation.alpha),
+                )?;
             }
         }
     }
@@ -379,7 +400,7 @@ pub(crate) fn measure_marks(
                         overlay,
                         center,
                         box_w_data,
-                        observation.source_row,
+                        observation.alpha.source_row,
                     );
                     let (x, y) = proj.project(x, observation.value);
                     Ok(Point2D::new(x, y))
@@ -387,10 +408,14 @@ pub(crate) fn measure_marks(
             ))?;
             payload.scatter(
                 points,
-                chart.distribution_point_style(
+                &chart.distribution_point_style(
                     theme.marks.points().raw_overlay(),
                     colors.color(group.hue_label.as_deref().unwrap_or(&group.label))?,
                 ),
+                group
+                    .observations
+                    .iter()
+                    .map(|observation| observation.alpha),
             )?;
         }
     }
@@ -427,20 +452,14 @@ fn box_summary_with_source(values: &mut [f64]) -> Result<BoxSummary, Error> {
         .copied()
         .find(|value| *value <= hi_fence)
         .unwrap_or(q3);
-    let mut fliers = Vec::new();
-    crate::data::source::reserve_source(&mut fliers, values.len())?;
-    fliers.extend(
-        values
-            .iter()
-            .copied()
-            .filter(|value| *value < lo_fence || *value > hi_fence),
-    );
     Ok(BoxSummary {
         lo_whisker,
         q1,
         median,
         q3,
         hi_whisker,
-        fliers,
     })
 }
+
+#[cfg(test)]
+mod alpha_tests;

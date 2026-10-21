@@ -72,9 +72,8 @@ pub(crate) struct PreparedViolin {
 pub(crate) fn raincloud_strip_pitch(
     theme: &crate::theme::ResolvedTheme,
     width: f64,
-    style: &crate::render::backend::PointStyle,
+    point: Option<crate::render::geometry::GeometryBox>,
 ) -> Result<f64, Error> {
-    let point = crate::render::geometry::point_ink_bounds(style)?;
     let left = point.map_or(0.0, |ink| (-ink.left).max(0.0));
     let right = point.map_or(0.0, |ink| ink.right.max(0.0));
     let box_right = crate::render::geometry::rectangular_fill_ink_bounds(
@@ -138,21 +137,12 @@ pub(crate) fn intrinsic_body_minimum(
         theme.marks.points().raw_overlay()
     };
     let style = chart.distribution_point_style(role, (0, 0, 0));
-    let point = if points_visible {
-        crate::render::geometry::point_ink_bounds(&style)?
-    } else {
-        None
-    };
-
     let mut pitch = 1.0_f64 / 1024.0;
     let mut numeric = cloud_y
         .max(inner_y)
         .max(if raincloud { median } else { summary });
     let body_half = if raincloud { 0.4 * width } else { width };
     pitch = pitch.max((1.0 / 1024.0) / body_half);
-    if raincloud {
-        pitch = pitch.max(raincloud_strip_pitch(theme, width, &style)?);
-    }
     let grow = |pitch: &mut f64,
                 center: f64,
                 left: f64,
@@ -182,7 +172,28 @@ pub(crate) fn intrinsic_body_minimum(
         }
         let center = crate::plots::distribution_sample::center(group, sample.group_levels.len());
         let offset = center - (group.x_index as f64 + 0.5);
+        let point = if points_visible {
+            crate::alpha::marks::point_ink(
+                &style,
+                group.observations.iter().map(|observation| {
+                    let x = crate::plots::distribution_sample::overlay_x(
+                        overlay,
+                        center,
+                        width,
+                        observation.alpha.source_row,
+                    );
+                    (x, observation.value, observation.alpha)
+                }),
+            )?
+        } else {
+            None
+        };
         if raincloud {
+            pitch = pitch.max(raincloud_strip_pitch(
+                theme,
+                width,
+                point.map(|ink| ink.bounds),
+            )?);
             grow(&mut pitch, offset, -0.5 * width, -0.1 * width, cloud)?;
             grow(&mut pitch, offset, -0.06 * width, 0.10 * width, inner)?;
             grow(&mut pitch, offset, -0.06 * width, 0.10 * width, median_ink)?;
@@ -194,19 +205,11 @@ pub(crate) fn intrinsic_body_minimum(
             grow(&mut pitch, offset, -0.08 * width, 0.08 * width, summary_ink)?;
         }
         if let Some(ink) = point {
-            if points_visible {
-                numeric = numeric.max(ink.top - ink.bottom);
-            }
+            numeric = numeric.max(ink.dimensions().1);
             if !raincloud && overlay.is_visible() {
-                for observation in &group.observations {
-                    let x = crate::plots::distribution_sample::overlay_x(
-                        overlay,
-                        center,
-                        width,
-                        observation.source_row,
-                    );
+                for x in [ink.ranges[0].0, ink.ranges[0].1] {
                     let offset = x - (group.x_index as f64 + 0.5);
-                    grow(&mut pitch, offset, 0.0, 0.0, Some(ink))?;
+                    grow(&mut pitch, offset, 0.0, 0.0, Some(ink.bounds))?;
                 }
             }
         }
@@ -251,7 +254,7 @@ pub(crate) fn prepare(
                     .observations
                     .iter()
                     .enumerate()
-                    .map(|(index, observation)| (observation.source_row, start + index)),
+                    .map(|(index, observation)| (observation.alpha.source_row, start + index)),
             );
         }
         crate::data::source::sort_source_by(&mut source_rows, Ord::cmp);
@@ -587,7 +590,14 @@ pub(crate) fn measure_marks(
             let color = group_color(group, &colors)?;
             let style =
                 chart.distribution_point_style(theme.marks.points().mandatory_strip(), color);
-            let point_ink = crate::render::geometry::point_ink_bounds(&style)?;
+            let point_ink = crate::alpha::marks::point_ink(
+                &style,
+                group
+                    .observations
+                    .iter()
+                    .map(|observation| (0.0, observation.value, observation.alpha)),
+            )?
+            .map(|ink| ink.bounds);
             let point_left = point_ink.map_or(0.0, |ink| (-ink.left).max(0.0));
             let point_right = point_ink.map_or(0.0, |ink| ink.right.max(0.0));
             let box_right_ink = crate::render::geometry::rectangular_fill_ink_bounds(
@@ -603,14 +613,22 @@ pub(crate) fn measure_marks(
             }
             let points = crate::data::source::collect_source(group.observations.iter().map(
                 |observation| {
-                    let unit =
-                        crate::plots::distribution_sample::source_row_unit(observation.source_row);
+                    let unit = crate::plots::distribution_sample::source_row_unit(
+                        observation.alpha.source_row,
+                    );
                     let x = strip_min + unit * (strip_max - strip_min);
                     let (_, y) = proj.project(center, observation.value);
                     Ok(Point2D::new(x, y))
                 },
             ))?;
-            payload.scatter(points, style)?;
+            payload.scatter(
+                points,
+                &style,
+                group
+                    .observations
+                    .iter()
+                    .map(|observation| observation.alpha),
+            )?;
         }
     }
     if overlay.is_visible() {
@@ -628,7 +646,7 @@ pub(crate) fn measure_marks(
                         overlay,
                         center,
                         violin_w_data,
-                        observation.source_row,
+                        observation.alpha.source_row,
                     );
                     let (x, y) = proj.project(x, observation.value);
                     Ok(Point2D::new(x, y))
@@ -636,7 +654,11 @@ pub(crate) fn measure_marks(
             ))?;
             payload.scatter(
                 points,
-                chart.distribution_point_style(theme.marks.points().raw_overlay(), color),
+                &chart.distribution_point_style(theme.marks.points().raw_overlay(), color),
+                group
+                    .observations
+                    .iter()
+                    .map(|observation| observation.alpha),
             )?;
         }
     }
@@ -690,3 +712,6 @@ fn violin_summary_with_source(values: &[f64]) -> Result<ViolinSummary, Error> {
         hi_whisker,
     })
 }
+
+#[cfg(test)]
+mod alpha_tests;

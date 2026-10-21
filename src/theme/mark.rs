@@ -461,6 +461,16 @@ mod tests {
         .with_global_hue_levels(vec!["\u{10FFFF}".into(), "series".into()]);
         let supplied = crate::plots::categorical_distribution::extraction::supplied();
         for (source, count, outlined) in [(sampled, 4, false), (supplied, 2, true)] {
+            let source = source.with_alpha(
+                crate::alpha::AlphaTarget::Point,
+                crate::alpha::AlphaEncoding::observations(
+                    crate::alpha::AlphaValues::new(
+                        "confidence",
+                        (0..count).map(|index| if index % 2 == 0 { 0 } else { 230 }),
+                    )
+                    .unwrap(),
+                ),
+            );
             let operation = crate::font::canonical::OperationContext::new();
             let inputs = crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
             let chart = inputs.attach(source).unwrap();
@@ -513,15 +523,22 @@ mod tests {
                 panic!("distribution payload")
             };
             let mut observed = 0;
+            let mut alphas = Vec::new();
             for mark in &payload.marks {
                 if let Mark::Scatter(points, style) = mark {
                     observed += points.len();
                     assert_eq!(style.radius, 5);
-                    assert_eq!(style.color.alpha(), 117);
+                    alphas.extend(std::iter::repeat_n(style.color.alpha(), points.len()));
                     assert_eq!(style.outline.is_some(), outlined);
                 }
             }
             assert_eq!(observed, count);
+            assert_eq!(
+                alphas,
+                (0..count)
+                    .map(|index| if index % 2 == 0 { 0 } else { 230 })
+                    .collect::<Vec<_>>()
+            );
         }
     }
 }

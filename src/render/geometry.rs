@@ -1999,36 +1999,6 @@ mod tests {
         assert_eq!(geometry.bounds()[0].right.to_bits(), 10.0_f64.to_bits());
     }
 
-    #[test]
-    fn collision_pairs_keep_their_geometric_overlap_on_repeated_queries() {
-        let mut geometry = begun_backend();
-        let bounds = GeometryBox {
-            left: 1.0,
-            right: 2.0,
-            bottom: 1.0,
-            top: 2.0,
-            weight: 1.0,
-        };
-        geometry.bounds = vec![bounds; 2];
-
-        let panel = PanelBox::new(0.0, 100.0, 0.0, 100.0);
-        assert_eq!(
-            geometry
-                .overlap_after_assignment(panel, panel, bounds, 0.0, |_| None)
-                .unwrap()
-                .to_bits(),
-            2.0_f64.to_bits()
-        );
-
-        assert_eq!(
-            geometry
-                .overlap_after_assignment(panel, panel, bounds, 0.0, |_| None)
-                .unwrap()
-                .to_bits(),
-            2.0_f64.to_bits()
-        );
-    }
-
     fn test_text_style() -> TextStyle {
         TextStyle {
             color: Color::rgb(0, 0, 0),

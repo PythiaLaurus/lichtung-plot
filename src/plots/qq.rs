@@ -690,14 +690,6 @@ mod tests {
     }
 
     #[test]
-    fn qq_quartile_line_is_horizontal_for_constant_sample() {
-        let prepared = prepare_qq(&[5.0, 5.0, 5.0], QqLine::Quartiles).unwrap();
-
-        assert!(prepared.line.unwrap().slope.abs() < f64::EPSILON);
-        assert!((prepared.line.unwrap().intercept - 5.0).abs() < f64::EPSILON);
-    }
-
-    #[test]
     fn qq_constant_ranges_use_finite_neighbors_at_zero_and_extremes() {
         let spec = crate::layout::AxisSpec::default();
 

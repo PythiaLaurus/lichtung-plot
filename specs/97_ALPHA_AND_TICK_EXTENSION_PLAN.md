@@ -201,10 +201,12 @@ and focused closure; split behavioral leaves further when needed.
 
 The observation-consumer leaf closes Scatter, Qq and Regression in
 `../docs/alpha-coordinate-points.md`, and Line/Trajectory/LinePath, Interaction and
-PointInterval/Coefficient/Forest in `../docs/alpha-path-estimate-points.md`:
+PointInterval/Coefficient/Forest in `../docs/alpha-path-estimate-points.md`, and
+Dumbbell, Boxplot, Violin and sampled/supplied Raincloud in
+`../docs/alpha-distribution-points.md`:
 original slots through filtering/sorting/order/status, final-paint batches and
-paint-aware intrinsic/ink. Ten of seventeen admitted point families are wired.
-Remaining Dumbbell, categorical and native/supplied consumers keep T6D1c IN PROGRESS.
+paint-aware intrinsic/ink. Fourteen of seventeen admitted point families are wired.
+Remaining Beeswarm, Marginal and Matrix consumers keep T6D1c IN PROGRESS.
 
 Do not start a code leaf while its exact owning design is still pending. Use modern
 Rust module layout, the standalone offline renderer and existing pinned dependencies.

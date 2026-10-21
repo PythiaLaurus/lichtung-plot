@@ -54,7 +54,7 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
     assert_eq!(payload.pairs.len(), 2);
     let mut expected = Vec::new();
     for (index, label) in ["Left", "Right"].into_iter().enumerate() {
-        let style = &payload.points[index];
+        let style = &payload.points[0][index];
         assert_eq!(style.color, colors[index]);
         assert_eq!(style.radius, 6);
         assert_eq!(style.shape, PointShape::TriangleUp);
@@ -114,4 +114,32 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
             .dumbbell_connector()
             .backend_style()
     );
+    let mapped = source.with_alpha(
+        crate::alpha::AlphaTarget::Point,
+        crate::alpha::AlphaEncoding::observations(
+            crate::alpha::AlphaValues::new("confidence", [64, 230]).unwrap(),
+        ),
+    );
+    let chart = crate::plots::shared_x::prepare_panel_for_test(&mapped, &theme).unwrap();
+    let selected = chart
+        .measure_selected_interior(PlotRenderContext::new(
+            chart.data(),
+            crate::layout::PanelBox::new(0.0, 600.0, 0.0, 400.0),
+            &theme,
+        ))
+        .unwrap();
+    let crate::layout::interior::MarkPayload::Dumbbell(payload) =
+        &selected.marks.as_ref().unwrap().payload
+    else {
+        panic!("Dumbbell payload")
+    };
+    for (styles, alpha) in payload.points.iter().zip([64, 230]) {
+        for (style, color) in styles.iter().zip(colors) {
+            assert_eq!(style.color, color.with_alpha(alpha));
+            assert_eq!(
+                style.outline.as_ref().unwrap().color,
+                Color::rgba(101, 113, 127, 61)
+            );
+        }
+    }
 }

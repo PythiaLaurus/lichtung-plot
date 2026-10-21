@@ -259,9 +259,23 @@ impl DistributionPayload {
         Ok(())
     }
 
-    pub(crate) fn scatter(&mut self, points: Vec<Point2D>, style: PointStyle) -> Result<(), Error> {
-        crate::data::source::reserve_source(&mut self.marks, 1)?;
-        self.marks.push(Mark::Scatter(points, style));
+    pub(crate) fn scatter(
+        &mut self,
+        points: Vec<Point2D>,
+        style: &PointStyle,
+        alphas: impl ExactSizeIterator<Item = crate::alpha::marks::ObservationAlpha>,
+    ) -> Result<(), Error> {
+        crate::alpha::marks::require_aligned_points(points.len(), alphas.len())?;
+        let mut batches = Vec::new();
+        for (point, alpha) in points.into_iter().zip(alphas) {
+            crate::alpha::marks::push_point(&mut batches, point, alpha.point(style.clone()))?;
+        }
+        crate::data::source::reserve_source(&mut self.marks, batches.len())?;
+        self.marks.extend(
+            batches
+                .into_iter()
+                .map(|(points, style)| Mark::Scatter(points, style)),
+        );
         Ok(())
     }
 

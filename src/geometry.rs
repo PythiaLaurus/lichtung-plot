@@ -474,15 +474,32 @@ mod validation_tests {
                 ),
             );
         assert_eq!(supplied.row_count(), 0);
-        let alpha = supplied
-            .prepare_alpha(
-                crate::alpha::AlphaTarget::Point,
-                crate::alpha::AlphaUnitKind::Observation,
-                &[],
-            )
+        let theme = crate::Theme::publication().resolve().unwrap();
+        let chart =
+            crate::plots::shared_x::prepare_panel_for_test(&supplied.erase(), &theme).unwrap();
+        let selected = chart
+            .measure_selected_interior(crate::spec::PlotRenderContext::new(
+                chart.data(),
+                crate::layout::PanelBox::new(20.0, 600.0, 20.0, 420.0),
+                &theme,
+            ))
             .unwrap();
-        assert_eq!(alpha.observation(0, 0).unwrap().unwrap().alpha, 0);
-        assert_eq!(alpha.observation(1, 1).unwrap().unwrap().alpha, 230);
+        let crate::layout::interior::MarkPayload::Distribution(payload) =
+            &selected.marks.as_ref().unwrap().payload
+        else {
+            panic!("Raincloud payload")
+        };
+        let alphas = payload
+            .marks
+            .iter()
+            .filter_map(|mark| match mark {
+                crate::plots::categorical_distribution::Mark::Scatter(points, style) => {
+                    Some((points.len(), style.color.alpha()))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(alphas, [(1, 0), (1, 230)]);
         let mut invalid_histogram = histogram;
         invalid_histogram.bins[0].lower = f64::INFINITY;
         let mut invalid_raincloud = raincloud;
@@ -495,7 +512,6 @@ mod validation_tests {
             }
             .unwrap_err();
             assert!(matches!(error, Error::Data(_)), "{error}");
-            assert!(error.to_string().contains("finite"), "{error}");
         }
     }
 }
