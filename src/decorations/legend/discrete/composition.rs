@@ -2,7 +2,8 @@
 
 use super::{
     add, count, incompatible, merge_entry, shared_slice, GuideCounts, GuideKeySource,
-    GuideSectionIdentity, PreparedDiscreteGuide, PreparedGuideEntry, PreparedGuideSection,
+    GuideSectionBody, GuideSectionIdentity, PreparedGuide, PreparedGuideEntry,
+    PreparedGuideSection,
 };
 use crate::decorations::legend::identity::shared_text;
 use crate::decorations::legend::identity::PrimaryTitleIdentity;
@@ -30,6 +31,9 @@ impl GuideSectionIdentity {
             }
             Self::Literal(LiteralDomain::BarSign) => shared_text("Change"),
             Self::Literal(_) | Self::SupplementalSeries => shared_text("series"),
+            Self::ContinuousColor(_) => {
+                Err(Error::Render("continuous title is producer-owned".into()))
+            }
         }
     }
 
@@ -40,6 +44,7 @@ impl GuideSectionIdentity {
             Self::HueColor(_) => 2,
             Self::Literal(_) => 3,
             Self::SupplementalSeries => 4,
+            Self::ContinuousColor(_) => 5,
         }
     }
 
@@ -87,7 +92,7 @@ impl GuideSectionIdentity {
     }
 }
 
-impl PreparedDiscreteGuide {
+impl PreparedGuide {
     /// Source keys are consumed once. Only section entries and actual source
     /// occurrence records survive preparation; no complete-pair adapter remains.
     pub(crate) fn prepare(
@@ -95,9 +100,12 @@ impl PreparedDiscreteGuide {
         theme: &crate::theme::ResolvedTheme,
         owner: &ComponentAddress,
         keys: Vec<GuideSourceKey>,
+        continuous: Option<Arc<super::super::descriptor::ContinuousDescriptor>>,
         composition: LegendComposition,
     ) -> Result<Option<Arc<Self>>> {
-        if keys.is_empty() || plot.legend_policy_spec() == crate::LegendPolicy::Hidden {
+        if (keys.is_empty() && continuous.is_none())
+            || plot.legend_policy_spec() == crate::LegendPolicy::Hidden
+        {
             return Ok(None);
         }
         let primary = if composition == LegendComposition::Combined {
@@ -157,7 +165,7 @@ impl PreparedDiscreteGuide {
                 )?;
             }
         }
-        finish(composition, sections, counts, &[]).map(Some)
+        finish(composition, sections, continuous, counts, &[]).map(Some)
     }
 
     /// Merge only prepared explanatory sections. Labels and key paints are
@@ -171,6 +179,7 @@ impl PreparedDiscreteGuide {
         let mut sections: Vec<Section> = Vec::new();
         let mut primary: Option<(PrimaryTitleIdentity, Arc<str>)> = None;
         let mut counts = GuideCounts::default();
+        let mut continuous: Option<Arc<super::super::descriptor::ContinuousDescriptor>> = None;
         for guide in guides {
             if composition.is_some_and(|expected| expected != guide.composition) {
                 return Err(incompatible(context));
@@ -189,10 +198,20 @@ impl PreparedDiscreteGuide {
                 guide.counts.labeled_layer_source_keys,
             )?;
             for section in guide.sections.iter() {
+                if let GuideSectionBody::ContinuousColor(color) = &section.body {
+                    if continuous
+                        .as_ref()
+                        .is_some_and(|existing| existing != color)
+                    {
+                        return Err(incompatible(context));
+                    }
+                    continuous = Some(Arc::clone(color));
+                    continue;
+                }
                 if guide.composition == LegendComposition::Combined {
                     merge_combined(&mut sections, &mut primary, section, context)?;
                 } else {
-                    for entry in section.entries.iter() {
+                    for entry in section.entries() {
                         insert(
                             &mut sections,
                             section.identity.clone(),
@@ -207,7 +226,12 @@ impl PreparedDiscreteGuide {
         let Some(composition) = composition else {
             return Ok(None);
         };
-        if composition == LegendComposition::Combined {
+        if continuous.is_some() && !sections.is_empty() {
+            return Err(Error::Data(
+                "shared Canvas guide mixes discrete and continuous contributors".into(),
+            ));
+        }
+        if composition == LegendComposition::Combined && !sections.is_empty() {
             let (identity, title) = primary.map_or_else(
                 || Ok::<_, Error>((PrimaryTitleIdentity::Series, shared_text("series")?)),
                 Ok,
@@ -218,7 +242,7 @@ impl PreparedDiscreteGuide {
             section.identity = GuideSectionIdentity::Combined(identity);
             section.title = title;
         }
-        finish(composition, sections, counts, order).map(Some)
+        finish(composition, sections, continuous, counts, order).map(Some)
     }
 }
 
@@ -232,7 +256,7 @@ fn merge_combined(
         return Err(incompatible(context));
     };
     if section
-        .entries
+        .entries()
         .iter()
         .any(|entry| entry.identity.primary_title().is_some())
     {
@@ -252,7 +276,7 @@ fn merge_combined(
             entries: Vec::new(),
         });
     }
-    for entry in section.entries.iter() {
+    for entry in section.entries() {
         merge_entry(&mut sections[0].entries, entry.clone(), context)?;
     }
     Ok(())
@@ -371,11 +395,12 @@ fn separate_source(
 fn finish(
     composition: LegendComposition,
     mut sections: Vec<Section>,
+    continuous: Option<Arc<super::super::descriptor::ContinuousDescriptor>>,
     mut counts: GuideCounts,
     order: &[GuideEntryIdentity],
-) -> Result<Arc<PreparedDiscreteGuide>> {
-    if sections.is_empty() {
-        return Err(Error::Render("a discrete guide must be nonempty".into()));
+) -> Result<Arc<PreparedGuide>> {
+    if sections.is_empty() && continuous.is_none() {
+        return Err(Error::Render("a prepared guide must be nonempty".into()));
     }
     for index in 1..sections.len() {
         let mut current = index;
@@ -387,8 +412,13 @@ fn finish(
         }
     }
     counts.sections = count(sections.len())?;
+    add(&mut counts.sections, u32::from(continuous.is_some()))?;
     let mut retained = Vec::new();
-    crate::data::source::reserve_source(&mut retained, sections.len())?;
+    crate::data::source::reserve_source(
+        &mut retained,
+        usize::try_from(counts.sections)
+            .map_err(|_| Error::Render("guide section count overflow".into()))?,
+    )?;
     for mut section in sections {
         if section.entries.is_empty()
             || matches!(section.identity, GuideSectionIdentity::Combined(_))
@@ -410,10 +440,29 @@ fn finish(
         retained.push(PreparedGuideSection {
             identity: section.identity,
             display_title: section.title,
-            entries: shared_slice(section.entries)?,
+            body: GuideSectionBody::Symbols(shared_slice(section.entries)?),
         });
     }
-    crate::data::source::source_arc(PreparedDiscreteGuide {
+    if let Some(color) = continuous {
+        let display_title = shared_text(&color.title)?;
+        if !display_title.is_empty()
+            && retained
+                .iter()
+                .any(|section| section.display_title == display_title)
+        {
+            return Err(Error::Render(format!(
+                "prepared guide: distinct section identities resolve to title {display_title:?}"
+            )));
+        }
+        retained.push(PreparedGuideSection {
+            identity: GuideSectionIdentity::ContinuousColor(super::super::identity::RawField::new(
+                &color.field,
+            )?),
+            display_title,
+            body: GuideSectionBody::ContinuousColor(color),
+        });
+    }
+    crate::data::source::source_arc(PreparedGuide {
         composition,
         counts,
         sections: shared_slice(retained)?,

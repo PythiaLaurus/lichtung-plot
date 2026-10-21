@@ -9,7 +9,7 @@ use crate::Error;
 use crate::decorations::legend::discrete::scoped::{
     GuideAllocation, GuideConsumption, SUPPRESSED_GUIDES,
 };
-use crate::decorations::legend::{Legend, MeasuredContinuousGuide};
+use crate::decorations::legend::Legend;
 use crate::decorations::plan::children::MeasurementPhase;
 use crate::layout::canvas::PanelRequirements;
 use crate::layout::fit::{FitFailure, FitScope};
@@ -48,7 +48,7 @@ struct PlannedCanvasPanel {
 }
 
 type PreparedColorDomains = Vec<(String, Vec<String>)>;
-use crate::decorations::legend::descriptor::{PreparedDiscreteGuide, PreparedGuideDescriptor};
+use crate::decorations::legend::discrete::PreparedGuide;
 
 struct CanvasPlan {
     dimensions: (u32, u32),
@@ -68,7 +68,7 @@ struct PreparedCanvasInputs {
     root_text: crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
     shared_x: Vec<Option<(f64, f64)>>,
     color_domains: Option<Arc<PreparedColorDomains>>,
-    shared_guide: Option<PreparedGuideDescriptor>,
+    shared_guide: Option<Arc<PreparedGuide>>,
     interiors: Vec<Option<crate::layout::interior::PreparedInteriorInputs>>,
     text_panel_intrinsics: Vec<Option<text_panel::TextPanelIntrinsics>>,
     plot_intrinsics: Vec<Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>>,
@@ -81,60 +81,12 @@ struct PreparedCanvasRound<'a> {
     themes: Arc<ResolvedCanvasThemes>,
     canvas_layout: RootFramePlan,
     plots: Vec<Option<Plot>>,
-    shared_legend: Option<Arc<PreparedDiscreteGuide>>,
-    shared_guide: Option<&'a PreparedGuideDescriptor>,
+    shared_legend: Option<Arc<PreparedGuide>>,
     body_probes: Vec<Option<Arc<crate::spec::PlotRenderResult>>>,
     shared_x: &'a [Option<(f64, f64)>],
     text_panel_intrinsics: &'a [Option<text_panel::TextPanelIntrinsics>],
     plot_intrinsics:
         &'a [Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
-}
-
-enum MeasuredCanvasGuide {
-    Discrete(Legend),
-    Continuous(Box<MeasuredContinuousGuide>),
-}
-
-impl MeasuredCanvasGuide {
-    fn dimensions(&self) -> (f64, f64) {
-        match self {
-            Self::Discrete(legend) => (legend.compute_box_width(), legend.compute_box_height()),
-            Self::Continuous(guide) => (guide.width, guide.height),
-        }
-    }
-}
-
-enum SharedMeasuredGuide {
-    Discrete(crate::decorations::plan::ResolvedLegend),
-    Continuous {
-        guide: Box<MeasuredContinuousGuide>,
-        bounds: PanelBox,
-    },
-}
-
-impl SharedMeasuredGuide {
-    fn observe_feedback(
-        &self,
-        round: &mut crate::layout::kernel::FeedbackRound,
-    ) -> Result<(), Error> {
-        match self {
-            Self::Discrete(legend) => legend.observe_feedback(round),
-            Self::Continuous { guide, bounds } => {
-                round.observe_box(*bounds)?;
-                guide.observe_feedback(round)
-            }
-        }
-    }
-
-    fn select(&self) -> Result<crate::decorations::legend::LegendDrawPlan, Error> {
-        match self {
-            Self::Discrete(legend) => {
-                let (x, y) = legend.bounds.anchor();
-                legend.legend.select(x, y)
-            }
-            Self::Continuous { guide, bounds } => guide.select(bounds.x0, bounds.y0),
-        }
-    }
 }
 
 struct ResolvedCanvasThemes {
@@ -794,40 +746,6 @@ impl Canvas {
         Ok(())
     }
 
-    /// Reject incompatible semantic guide kinds before the font census or body
-    /// measurement. The exact entries and continuous descriptor are prepared by
-    /// their owners; an unconfigured or hidden discrete guide contributes no kind.
-    fn validate_shared_guide_kinds(
-        &self,
-        interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
-    ) -> Result<(), Error> {
-        if self.legend_policy != CanvasLegendPolicy::Shared {
-            return Ok(());
-        }
-        let mut selected = None;
-        for (index, plot) in self.panels.iter().enumerate() {
-            let Some(plot) = plot else { continue };
-            let inputs = interiors
-                .get(index)
-                .and_then(Option::as_ref)
-                .ok_or_else(|| {
-                    Error::Render("configured Canvas guide has no prepared interior".into())
-                })?;
-            let Some(kind) =
-                crate::decorations::legend::GuideKind::contributing_prepared(plot, inputs)?
-            else {
-                continue;
-            };
-            if selected.is_some_and(|selected| selected != kind) {
-                return Err(Error::Data(
-                    "shared Canvas guide mixes discrete and continuous contributors".into(),
-                ));
-            }
-            selected = Some(kind);
-        }
-        Ok(())
-    }
-
     fn prepare_continuous_shared_guide(
         &self,
         themes: &ResolvedCanvasThemes,
@@ -958,7 +876,7 @@ impl Canvas {
         interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
         hue_groups: Option<&[(String, Vec<String>)]>,
         resources: &crate::font::canonical::OperationContext,
-    ) -> Result<Option<Arc<PreparedDiscreteGuide>>, Error> {
+    ) -> Result<Option<Arc<PreparedGuide>>, Error> {
         let mut contributions = Vec::new();
         crate::data::source::reserve_source(&mut contributions, self.panels.len())?;
         for (index, plot) in self.panels.iter().enumerate() {
@@ -1006,7 +924,7 @@ impl Canvas {
                 }
             }
         }
-        PreparedDiscreteGuide::merge(&contributions, &[], "shared canvas legend")
+        PreparedGuide::merge(&contributions, &[], "shared canvas legend")
     }
 
     fn prepare_shared_x(
@@ -1359,30 +1277,17 @@ impl Canvas {
                         )?;
                     }
                 }
-                let discrete_shared_guide = self.prepare_discrete_guides(
+                let continuous_shared_guide =
+                    self.prepare_continuous_shared_guide(&themes, &interiors)?;
+                if let Some(descriptor) = &continuous_shared_guide {
+                    self.install_shared_continuous_domain(&mut interiors, descriptor)?;
+                }
+                let shared_guide = self.prepare_discrete_guides(
                     &themes,
                     &interiors,
                     color_domains.as_deref().map(Vec::as_slice),
                     &prepared_stage.operation(),
                 )?;
-                self.validate_shared_guide_kinds(&interiors)?;
-                let continuous_shared_guide =
-                    self.prepare_continuous_shared_guide(&themes, &interiors)?;
-                let shared_guide = match (discrete_shared_guide, continuous_shared_guide) {
-                    (Some(guide), None) => Some(PreparedGuideDescriptor::Discrete(guide)),
-                    (None, Some(guide)) => Some(PreparedGuideDescriptor::Continuous(
-                        crate::data::source::source_arc(guide)?,
-                    )),
-                    (None, None) => None,
-                    (Some(_), Some(_)) => {
-                        return Err(Error::Data(
-                            "shared Canvas guide mixes discrete and continuous contributors".into(),
-                        ));
-                    }
-                };
-                if let Some(PreparedGuideDescriptor::Continuous(descriptor)) = &shared_guide {
-                    self.install_shared_continuous_domain(&mut interiors, descriptor)?;
-                }
                 let (mut census, scalar_presence) = self.foundational_text_census(
                     &themes,
                     &interiors,
@@ -1406,23 +1311,8 @@ impl Canvas {
             },
             |prepared, assigned, round| {
                 let assigned = sizing::measure(self, prepared, assigned, round, &measurements)?;
-                if let Some(PreparedGuideDescriptor::Continuous(guide)) = &prepared.shared_guide {
-                    round.observe_string(&guide.field)?;
-                    round.observe_string(&guide.title)?;
-                    round.observe_count(usize::from(guide.exact))?;
-                    round.observe_number(guide.domain.0)?;
-                    round.observe_number(guide.domain.1)?;
-                    if let Some(center) = guide.center {
-                        round.observe_number(center)?;
-                    }
-                    round.observe_count(guide.stops.len())?;
-                    for stop in &guide.stops {
-                        round.observe_number(stop.offset)?;
-                        for channel in [stop.color.0, stop.color.1, stop.color.2] {
-                            round.observe_count(usize::from(channel))?;
-                        }
-                    }
-                    round.observe_count(usize::from(guide.missing.is_some()))?;
+                if let Some(guide) = &prepared.shared_guide {
+                    round.observe_guide(guide)?;
                 }
                 prepared
                     .root_text
@@ -1583,7 +1473,7 @@ impl Canvas {
         &self,
         themes: &ResolvedCanvasThemes,
         interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
-        shared_guide: Option<&PreparedGuideDescriptor>,
+        shared_guide: Option<&Arc<PreparedGuide>>,
         prepared_stage: &mut crate::layout::kernel::PreparedStage<'_>,
     ) -> Result<(crate::layout::PreparedTextCensus, Vec<u64>), Error> {
         let root = crate::layout::ComponentAddress::root();
@@ -1622,7 +1512,7 @@ impl Canvas {
             }
         }
 
-        if let Some(PreparedGuideDescriptor::Discrete(guide)) = shared_guide {
+        if let Some(guide) = shared_guide {
             guide.append_requirements(
                 &mut requirements,
                 themes.root(),
@@ -1630,53 +1520,6 @@ impl Canvas {
                 Some(prepared_stage),
             )?;
         }
-        if let Some(PreparedGuideDescriptor::Continuous(guide)) = shared_guide {
-            let guide_owner = root.child(crate::layout::AddressRole::CanvasSharedLegend, 0)?;
-            let title_appearance = &themes.root().typography.guides.legend_title;
-            let label_appearance = &themes.root().typography.guides.legend_label;
-            let title = guide.title.as_str();
-            if !title.is_empty() {
-                let address = guide_owner.child(crate::layout::AddressRole::GuideTitle, 0)?;
-                push_text_requirement(
-                    &mut requirements,
-                    address,
-                    crate::layout::PreparedTextRole::LegendTitle,
-                    0,
-                    title,
-                    title_appearance,
-                    prepared_stage,
-                )?;
-            }
-            let labels = guide.numeric.labels.iter().map(String::as_str);
-            for (index, label) in labels.enumerate() {
-                let ordinal = u32::try_from(index)
-                    .map_err(|_| Error::Render("shared guide label ordinal overflow".into()))?;
-                let address = guide_owner.child(crate::layout::AddressRole::GuideLabel, ordinal)?;
-                push_text_requirement(
-                    &mut requirements,
-                    address,
-                    crate::layout::PreparedTextRole::LegendLabel,
-                    ordinal,
-                    label,
-                    label_appearance,
-                    prepared_stage,
-                )?;
-            }
-            if let Some(missing) = guide.missing.as_ref() {
-                let address =
-                    guide_owner.child(crate::layout::AddressRole::GuideMissingBlock, 0)?;
-                push_text_requirement(
-                    &mut requirements,
-                    address,
-                    crate::layout::PreparedTextRole::LegendLabel,
-                    0,
-                    &missing.label,
-                    label_appearance,
-                    prepared_stage,
-                )?;
-            }
-        }
-
         let composition_title = &themes.root().typography.composition.composition_header;
         let text_panel_title = &themes.root().typography.composition.text_panel_title;
         let body = &themes.root().typography.composition.body;
@@ -1852,7 +1695,7 @@ impl Canvas {
         children: &mut crate::decorations::plan::children::ChildPlans,
         shared_x: &[Option<(f64, f64)>],
         color_domains: Option<&[(String, Vec<String>)]>,
-        prepared_guide: Option<&PreparedGuideDescriptor>,
+        prepared_guide: Option<&Arc<PreparedGuide>>,
         text_panel_intrinsics: &[Option<text_panel::TextPanelIntrinsics>],
         plot_intrinsics: &[Option<
             crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
@@ -1878,13 +1721,7 @@ impl Canvas {
             measurements,
         )?;
         let mut compact_changes = true;
-        if self.legend_policy != CanvasLegendPolicy::Shared
-            || (prepared.shared_legend.is_none()
-                && !matches!(
-                    prepared.shared_guide,
-                    Some(PreparedGuideDescriptor::Continuous(_))
-                ))
-        {
+        if self.legend_policy != CanvasLegendPolicy::Shared || prepared.shared_legend.is_none() {
             return match self.build_canvas_attempt(
                 &prepared,
                 assigned,
@@ -1922,12 +1759,9 @@ impl Canvas {
                 )?;
                 let checkpoint = round.begin_trial()?;
                 #[cfg(test)]
-                let guide_trial = (prepared.shared_legend.is_some()
-                    || matches!(
-                        prepared.shared_guide,
-                        Some(PreparedGuideDescriptor::Continuous(_))
-                    ))
-                .then(|| crate::orchestrator::measurements::GuideTrial::new(&owner, edge, compact));
+                let guide_trial = prepared.shared_legend.is_some().then(|| {
+                    crate::orchestrator::measurements::GuideTrial::new(&owner, edge, compact)
+                });
                 round.observe_count(edge as usize)?;
                 round.observe_count(usize::from(compact))?;
                 let outcome = self.build_canvas_attempt(
@@ -1995,7 +1829,7 @@ impl Canvas {
         children: &mut crate::decorations::plan::children::ChildPlans<'_>,
         shared_x: &'a [Option<(f64, f64)>],
         color_domains: Option<&[(String, Vec<String>)]>,
-        prepared_guide: Option<&'a PreparedGuideDescriptor>,
+        prepared_guide: Option<&'a Arc<PreparedGuide>>,
         text_panel_intrinsics: &'a [Option<text_panel::TextPanelIntrinsics>],
         plot_intrinsics: &'a [Option<
             crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
@@ -2096,10 +1930,7 @@ impl Canvas {
                 full_outer,
                 children,
                 round,
-                match prepared_guide {
-                    Some(PreparedGuideDescriptor::Discrete(guide)) => Some(guide),
-                    Some(PreparedGuideDescriptor::Continuous(_)) | None => None,
-                },
+                prepared_guide,
             )?
         } else {
             (None, Vec::new())
@@ -2113,7 +1944,6 @@ impl Canvas {
             canvas_layout,
             plots,
             shared_legend,
-            shared_guide: prepared_guide,
             body_probes,
             shared_x,
             text_panel_intrinsics,
@@ -2337,11 +2167,7 @@ impl Canvas {
             })
         };
         let mut outer = full_outer;
-        let shared_legend = if prepared.shared_legend.is_some()
-            || matches!(
-                prepared.shared_guide,
-                Some(PreparedGuideDescriptor::Continuous(_))
-            ) {
+        let shared_legend = if let Some(descriptor) = &prepared.shared_legend {
             let (edge, compact) = guide_trial.expect("shared guide has an owned trial");
             let horizontal = matches!(
                 edge,
@@ -2385,49 +2211,22 @@ impl Canvas {
                 gap,
             );
             let available = frame.available(full_outer, [0.0; 4]);
-            let measured = match prepared.shared_guide {
-                Some(PreparedGuideDescriptor::Continuous(descriptor)) => {
-                    match MeasuredContinuousGuide::measure(
-                        descriptor,
-                        (
-                            available.0,
-                            (!prepared.content_sizing).then_some(available.1),
-                        ),
-                        horizontal,
-                        compact,
-                        themes.root(),
-                        compact_changes,
-                        &guide_scope,
-                    )? {
-                        FitOutcome::Measured(guide) => {
-                            MeasuredCanvasGuide::Continuous(Box::new(guide))
-                        }
-                        FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
-                    }
-                }
-                Some(PreparedGuideDescriptor::Discrete(_)) | None => {
-                    let descriptor = prepared
-                        .shared_legend
-                        .as_ref()
-                        .expect("prepared discrete guide");
-                    match Legend::measure_assigned(
-                        Arc::clone(descriptor),
-                        (
-                            available.0,
-                            (!prepared.content_sizing).then_some(available.1),
-                        ),
-                        horizontal,
-                        compact,
-                        themes.root(),
-                        compact_changes,
-                        &guide_scope,
-                    )? {
-                        FitOutcome::Measured(legend) => MeasuredCanvasGuide::Discrete(legend),
-                        FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
-                    }
-                }
+            let measured = match Legend::measure_assigned(
+                Arc::clone(descriptor),
+                (
+                    available.0,
+                    (!prepared.content_sizing).then_some(available.1),
+                ),
+                horizontal,
+                compact,
+                themes.root(),
+                compact_changes,
+                &guide_scope,
+            )? {
+                FitOutcome::Measured(legend) => legend,
+                FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
             };
-            let (w, h) = measured.dimensions();
+            let (w, h) = (measured.compute_box_width(), measured.compute_box_height());
             if prepared.content_sizing {
                 let grid_width = full_outer.width() - if horizontal { 0.0 } else { w + gap };
                 let height = match natural_grid_height(grid_width, true, round)? {
@@ -2451,18 +2250,9 @@ impl Canvas {
             };
             let placed = frame.place(outer, (w, h));
             let (left, bottom) = (placed.x0, placed.y0);
-            Some(match measured {
-                MeasuredCanvasGuide::Discrete(legend) => {
-                    let bounds = legend.box_at(left, bottom);
-                    SharedMeasuredGuide::Discrete(crate::decorations::plan::ResolvedLegend {
-                        legend,
-                        bounds,
-                    })
-                }
-                MeasuredCanvasGuide::Continuous(guide) => SharedMeasuredGuide::Continuous {
-                    guide,
-                    bounds: placed,
-                },
+            Some(crate::decorations::plan::ResolvedLegend {
+                bounds: measured.box_at(left, bottom),
+                legend: measured,
             })
         } else {
             if prepared.content_sizing {
@@ -2770,7 +2560,7 @@ impl Canvas {
             let guide = if role == crate::decorations::plan::LegendRole::Panel {
                 plot.prepared_discrete_guide()?
                     .map(|descriptor| {
-                        crate::decorations::legend::discrete::DiscreteGuideSlot::new(
+                        crate::decorations::legend::discrete::GuideSlot::new(
                             descriptor,
                             &owner,
                             plot.legend_position_spec(),
@@ -2989,7 +2779,10 @@ impl Canvas {
             canvas_layout,
             shared_legend_draw: shared_legend
                 .as_ref()
-                .map(SharedMeasuredGuide::select)
+                .map(|legend| {
+                    let (x, y) = legend.bounds.anchor();
+                    legend.legend.select(x, y)
+                })
                 .transpose()?,
             plots,
             panels,
@@ -3146,10 +2939,10 @@ impl Canvas {
         panel: PanelBox,
         children: &mut crate::decorations::plan::children::ChildPlans<'_>,
         round: &crate::layout::kernel::FeedbackRound,
-        prepared_discrete_guide: Option<&Arc<PreparedDiscreteGuide>>,
+        prepared_discrete_guide: Option<&Arc<PreparedGuide>>,
     ) -> Result<
         (
-            Option<Arc<PreparedDiscreteGuide>>,
+            Option<Arc<PreparedGuide>>,
             Vec<Option<Arc<crate::spec::PlotRenderResult>>>,
         ),
         Error,

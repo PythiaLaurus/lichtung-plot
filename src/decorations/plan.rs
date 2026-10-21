@@ -281,7 +281,7 @@ pub(crate) fn plan_panel(
     let guide = if role == LegendRole::Panel && kind != PlotKind::Matrix {
         plot.prepared_discrete_guide()?
             .map(|descriptor| {
-                crate::decorations::legend::discrete::DiscreteGuideSlot::new(
+                crate::decorations::legend::discrete::GuideSlot::new(
                     descriptor,
                     address,
                     plot.legend_position_spec(),
@@ -303,7 +303,7 @@ pub(crate) fn plan_panel_with_context(
     kind: PlotKind,
     role: LegendRole,
     mut context: PlotRenderContext<'_>,
-    discrete_guide: Option<&crate::decorations::legend::discrete::DiscreteGuideSlot>,
+    discrete_guide: Option<&crate::decorations::legend::discrete::GuideSlot>,
     round: &mut FeedbackRound,
     address: &ComponentAddress,
 ) -> Result<crate::layout::fit::FitOutcome<PanelPlan>, Error> {
@@ -729,7 +729,7 @@ fn plan_panel_attempt(
     kind: PlotKind,
     role: LegendRole,
     context: PlotRenderContext<'_>,
-    discrete_guide: Option<&crate::decorations::legend::discrete::DiscreteGuideSlot>,
+    discrete_guide: Option<&crate::decorations::legend::discrete::GuideSlot>,
     round: &mut FeedbackRound,
     address: &ComponentAddress,
     assigned_guide: Option<Legend>,

@@ -1093,7 +1093,7 @@ impl UnfacetedPlotPlan {
             source
                 .prepared_discrete_guide()?
                 .map(|descriptor| {
-                    crate::decorations::legend::discrete::DiscreteGuideSlot::new(
+                    crate::decorations::legend::discrete::GuideSlot::new(
                         descriptor,
                         &crate::layout::ComponentAddress::root()
                             .child(crate::layout::AddressRole::PlotBody, 0)?,

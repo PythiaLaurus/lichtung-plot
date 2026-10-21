@@ -949,7 +949,7 @@ pub(crate) struct PlotRenderResult {
     pub(crate) y_domain: AxisDomain,
     pub(crate) significance: Option<SignificancePlan>,
     pub(crate) discrete_guide:
-        Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedDiscreteGuide>>,
+        Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>>,
     pub(crate) decoration_mode: DecorationMode,
     pub(crate) x_tick_keys: Option<Vec<String>>,
     pub(crate) y_tick_keys: Option<Vec<String>>,
@@ -980,9 +980,7 @@ pub(crate) enum DecorationMode {
 impl PlotRenderResult {
     pub(crate) fn new(
         layout: Layout,
-        discrete_guide: Option<
-            std::sync::Arc<crate::decorations::legend::discrete::PreparedDiscreteGuide>,
-        >,
+        discrete_guide: Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>>,
     ) -> Self {
         Self {
             layout,

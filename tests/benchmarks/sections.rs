@@ -1,7 +1,7 @@
 //! Actual sectioned sources, parent/root requests and retained publication work.
 
 use super::{measure_case, measure_pair, CaseMeasurement};
-use crate::decorations::legend::discrete::{GuideCounts, PreparedDiscreteGuide};
+use crate::decorations::legend::discrete::{GuideCounts, PreparedGuide};
 use crate::decorations::plan::children::DISABLE_CHILD_REUSE;
 use crate::orchestrator::measurements::Counter;
 use crate::{
@@ -91,7 +91,7 @@ fn assert_sources(dense: bool, composition: LegendComposition) {
     } else {
         4
     };
-    let descriptor = PreparedDiscreteGuide::prepare_for_test(
+    let descriptor = PreparedGuide::prepare_for_test(
         &plot,
         &crate::Theme::publication().resolve().unwrap(),
         composition,
@@ -143,7 +143,7 @@ fn assert_sources(dense: bool, composition: LegendComposition) {
         descriptor
             .sections
             .iter()
-            .flat_map(|section| section.entries.iter())
+            .flat_map(|section| section.entries().iter())
             .map(|entry| entry.display_label.as_ref())
             .collect::<Vec<_>>(),
         identities

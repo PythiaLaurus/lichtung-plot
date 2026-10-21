@@ -141,7 +141,10 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
     .erase();
     let mut prepared = prepare(&source, source.data(), selection.clone()).unwrap();
     assert_eq!(prepared.colors, colors);
-    assert_eq!(prepared.guide_values(), ["-200%", "0%", "200%"]);
+    assert_eq!(
+        prepared.values.as_ref().unwrap().labels,
+        ["-200%", "0%", "200%"]
+    );
     let contributor = ContinuousContributor {
         field: "color".into(),
         title: "color".into(),
@@ -168,7 +171,10 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
         .unwrap()
         .unwrap();
     prepared.install_shared_domain(&shared).unwrap();
-    assert_eq!(prepared.guide_values(), ["-400%", "0%", "1200%"]);
+    assert_eq!(
+        prepared.values.as_ref().unwrap().labels,
+        ["-400%", "0%", "1200%"]
+    );
     assert_eq!(prepared.colors[0], colors[1]);
     assert_eq!(prepared.colors[2], colors[2]);
     assert_eq!(prepared.rows.len(), 5);

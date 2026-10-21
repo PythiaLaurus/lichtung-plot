@@ -1,4 +1,4 @@
-//! One canonical measurement path for every discrete section composition.
+//! One canonical measurement and finite allocation for all typed guide sections.
 
 mod cache;
 mod flow;
@@ -9,7 +9,8 @@ pub(crate) use cache::GuideMeasurements;
 use std::cmp::Ordering;
 use std::sync::Arc;
 
-use super::discrete::{PreparedDiscreteGuide, PreparedGuideSection};
+use super::continuous::ColorContent;
+use super::discrete::{GuideSectionBody, PreparedGuide, PreparedGuideSection};
 use super::{Legend, LegendLayout, LegendMetrics, SectionLayout};
 use crate::layout::fit::{self, FitKind, FitOutcome, FitScope, PlanError};
 use crate::layout::kernel::{allocate_tracks, LayoutScalar, SpatialRounding, TrackSpec};
@@ -60,10 +61,11 @@ struct SectionIntrinsics {
     title_preferred: i64,
     entries: Vec<EntryIntrinsics>,
     preferred_column: i64,
+    color_width: Option<ExactLength>,
 }
 
-fn discrete_guide_intrinsics(
-    descriptor: &PreparedDiscreteGuide,
+fn guide_intrinsics(
+    descriptor: &PreparedGuide,
     theme: &ResolvedTheme,
     metrics: &LegendMetrics,
 ) -> Result<Vec<SectionIntrinsics>, Error> {
@@ -83,11 +85,11 @@ fn discrete_guide_intrinsics(
         let mut entries = Vec::new();
         fit::reserve(
             &mut entries,
-            section.entries.len(),
+            section.entries().len(),
             "guide entry intrinsics",
         )?;
         let mut preferred_column = 0;
-        for entry in section.entries.iter() {
+        for entry in section.entries() {
             let (minimum, preferred) = fit::intrinsic_widths(
                 theme,
                 &entry.display_label,
@@ -119,12 +121,19 @@ fn discrete_guide_intrinsics(
                 .quanta(),
             });
         }
+        let color_width = match &section.body {
+            GuideSectionBody::ContinuousColor(color) => {
+                Some(super::continuous::intrinsic_width(color, theme, metrics)?)
+            }
+            GuideSectionBody::Symbols(_) => None,
+        };
         sections.push(SectionIntrinsics {
             title_minimum: LayoutScalar::from_css_pixels(minimum, SpatialRounding::Ceil)?.quanta(),
             title_preferred: LayoutScalar::from_css_pixels(natural, SpatialRounding::Ceil)?
                 .quanta(),
             entries,
             preferred_column,
+            color_width,
         });
     }
     Ok(sections)
@@ -176,10 +185,54 @@ struct MeasuredSection {
     title_width: ExactLength,
     title_occupancy: ExactLength,
     entries: Vec<MeasuredEntry>,
+    color: Option<ColorSection>,
+}
+
+struct ColorSection {
+    descriptor: Arc<super::descriptor::ContinuousDescriptor>,
+    content: ColorContent,
+    compact: bool,
 }
 
 impl MeasuredSection {
+    fn assigned_color(
+        &mut self,
+        assignment: &Assignment,
+        capacity: Option<i64>,
+        metrics: &LegendMetrics,
+        compact_changes: &mut bool,
+        scope: &FitScope,
+    ) -> Result<Option<super::continuous::MeasuredColorBody>, PlanError> {
+        let Some(color) = self.color.take() else {
+            return Ok(None);
+        };
+        let body_capacity = capacity
+            .map(|capacity| {
+                Ok::<_, Error>(
+                    length(capacity)?
+                        .subtract(&self.title_occupancy)
+                        .unwrap_or(length(0)?),
+                )
+            })
+            .transpose()?;
+        color
+            .content
+            .assign(
+                &color.descriptor,
+                assignment.inner_width,
+                body_capacity.as_ref(),
+                color.compact,
+                metrics,
+                compact_changes,
+                scope,
+            )
+            .map(Some)
+    }
+
     fn track(&self, metrics: &LegendMetrics) -> Result<TrackSpec, Error> {
+        if let Some(color) = &self.color {
+            return color.content.track(&self.title_occupancy, metrics);
+        }
         let mut maximum = 0;
         let mut preferred = self
             .title_occupancy
@@ -207,6 +260,35 @@ struct Assignment {
 }
 
 impl Assignment {
+    fn frame_size(
+        &self,
+        content: [&ExactLength; 2],
+        metrics: &LegendMetrics,
+        minimum: f64,
+        scope: &FitScope,
+    ) -> Result<(i64, i64), PlanError> {
+        // Inner capacity is integral quanta. Preserve its complete requirement
+        // before adding exact outer edges, including cancelling fractions.
+        let width = metrics
+            .outer_width(&length(hard(content[0])?)?)?
+            .max(minimum);
+        let height = metrics
+            .outer_height(&length(hard(content[1])?)?, true)?
+            .max(minimum);
+        if width > pixels(self.width) || self.height.is_some_and(|limit| height > pixels(limit)) {
+            return Err(scope
+                .failure(
+                    FitKind::LegendOrGuide,
+                    "complete guide frame exceeds its assigned track",
+                )
+                .into());
+        }
+        Ok((
+            LayoutScalar::from_css_pixels(width, SpatialRounding::Ceil)?.quanta(),
+            LayoutScalar::from_css_pixels(height, SpatialRounding::Ceil)?.quanta(),
+        ))
+    }
+
     fn new(
         available: (f64, Option<f64>),
         metrics: &LegendMetrics,
@@ -301,8 +383,11 @@ fn measure_section(
     metrics: &LegendMetrics,
     scope: &FitScope,
     inner_width: i64,
+    compact: bool,
 ) -> Result<MeasuredSection, PlanError> {
-    count_gaps(section.entries.len())?;
+    if matches!(section.body, GuideSectionBody::Symbols(_)) {
+        count_gaps(section.entries().len())?;
+    }
     if intrinsic.title_minimum > inner_width {
         return Err(scope
             .child(AddressRole::LegendTitle, 0)?
@@ -343,7 +428,7 @@ fn measure_section(
     let entries = fit::collect(
         "measured guide entries",
         section
-            .entries
+            .entries()
             .iter()
             .zip(&intrinsic.entries)
             .enumerate()
@@ -384,6 +469,21 @@ fn measure_section(
         title_ascent,
         title_occupancy,
         entries,
+        color: match &section.body {
+            GuideSectionBody::Symbols(_) => None,
+            GuideSectionBody::ContinuousColor(descriptor) => Some(ColorSection {
+                descriptor: Arc::clone(descriptor),
+                content: ColorContent::prepare(
+                    descriptor,
+                    inner_width,
+                    horizontal,
+                    theme,
+                    metrics,
+                    scope,
+                )?,
+                compact,
+            }),
+        },
     })
 }
 
@@ -420,7 +520,7 @@ fn section_capacities(
         return Err(scope
             .failure(
                 FitKind::LegendOrGuide,
-                "guide cannot preserve every section's title and tallest entry",
+                format!("guide cannot preserve every section's title and body minimum: {available} available quanta, {minimum} required"),
             )
             .into());
     }
@@ -448,21 +548,41 @@ fn stack_sections(
     let gap = metrics.exact.title_gap.add_length(&metrics.exact.row_gap);
     let mut top = length(0)?;
     let mut width = length(0)?;
-    for (ordinal, section) in measured.into_iter().enumerate() {
+    let mut compact_changes = false;
+    for (ordinal, mut section) in measured.into_iter().enumerate() {
         if ordinal > 0 {
             top = top.add_length(&gap);
         }
         let section_scope = scope.child(AddressRole::LegendSection, ordinal)?;
         let capacity = capacities.as_ref().map(|values| values[ordinal]);
-        let flow = flow::assigned_entries(
-            &section,
-            assignment.inner_width,
+        let (flow, color) = if let Some(body) = section.assigned_color(
+            assignment,
             capacity,
-            &top,
             metrics,
-            horizontal,
+            &mut compact_changes,
             &section_scope,
-        )?;
+        )? {
+            let flow = flow::SectionFlow {
+                width: body.width.times(1),
+                height: body.height.times(1),
+                columns: 0,
+                slots: Vec::new(),
+            };
+            (flow, Some(body))
+        } else {
+            (
+                flow::assigned_entries(
+                    &section,
+                    assignment.inner_width,
+                    capacity,
+                    &top,
+                    metrics,
+                    horizontal,
+                    &section_scope,
+                )?,
+                None,
+            )
+        };
         let occupied = section.title_occupancy.add_length(&flow.height);
         let section_width = if section.title_width.compare(&flow.width) == Ordering::Greater {
             section.title_width
@@ -484,27 +604,20 @@ fn stack_sections(
             capacity,
             columns: flow.columns,
             entries: flow.slots,
+            body_top: top
+                .add_length(&section.title_occupancy)
+                .round(SpatialRounding::NearestEven)?
+                .quanta(),
+            color,
         });
         top = top.add_length(&occupied);
     }
-    let width = metrics.outer_width(&width)?.max(frame_minimum);
-    let height = metrics.outer_height(&top, true)?.max(frame_minimum);
-    if width > pixels(assignment.width)
-        || assignment
-            .height
-            .is_some_and(|limit| height > pixels(limit))
-    {
-        return Err(scope
-            .failure(
-                FitKind::LegendOrGuide,
-                "complete discrete guide frame exceeds its assigned track",
-            )
-            .into());
-    }
+    let (width, height) = assignment.frame_size([&width, &top], metrics, frame_minimum, scope)?;
     Ok(LegendLayout {
-        width: LayoutScalar::from_css_pixels(width, SpatialRounding::Ceil)?.quanta(),
-        height: LayoutScalar::from_css_pixels(height, SpatialRounding::Ceil)?.quanta(),
+        width,
+        height,
         sections,
+        compact_changes,
     })
 }
 
@@ -513,7 +626,7 @@ fn stack_sections(
     reason = "one owner consumes fixed metrics, intrinsics, assignment and the global flow variant"
 )]
 fn measure_layout(
-    descriptor: &PreparedDiscreteGuide,
+    descriptor: &PreparedGuide,
     intrinsic: &[SectionIntrinsics],
     assignment: &Assignment,
     horizontal: bool,
@@ -539,7 +652,7 @@ fn measure_layout(
     } else {
         assignment.inner_width
     };
-    if cap <= 0 {
+    if cap <= 0 && descriptor.has_symbols() {
         return Err(scope
             .failure(
                 FitKind::LegendOrGuide,
@@ -560,35 +673,35 @@ fn measure_layout(
                     metrics,
                     &scope.child(AddressRole::LegendSection, ordinal)?,
                     assignment.inner_width,
+                    compact,
                 )
             },
         ),
     )?;
-    stack_sections(
+    let layout = stack_sections(
         measured,
         assignment,
         horizontal,
         metrics,
         frame_minimum,
         scope,
-    )
+    )?;
+    if !compact {
+        *compact_changes |= layout.compact_changes;
+    }
+    Ok(layout)
 }
 
 pub(super) fn natural_preference(
-    descriptor: &PreparedDiscreteGuide,
+    descriptor: &PreparedGuide,
     theme: &ResolvedTheme,
 ) -> Result<(f64, f64), Error> {
-    let (metrics, frame_minimum) = Legend::allocation_metrics(theme)?;
-    let intrinsic = discrete_guide_intrinsics(descriptor, theme, &metrics)?;
-    let preferred = intrinsic
-        .iter()
-        .map(|section| section.title_preferred.max(section.preferred_column))
-        .max()
-        .unwrap_or(0);
+    let (metrics, frame_minimum) = Legend::allocation_metrics(descriptor, theme)?;
+    let intrinsic = guide_intrinsics(descriptor, theme, &metrics)?;
     // The text planner's conservative advance guard is a quantum, not a new
     // layout alternative. Include it once in the complete natural requirement.
     let width = metrics
-        .outer_width(&length(add(preferred, 1)?)?)?
+        .outer_width(&length(hard(&preferred_content_width(&intrinsic)?)?)?)?
         .max(frame_minimum);
     let scope = FitScope::root();
     let assignment =
@@ -609,8 +722,59 @@ pub(super) fn natural_preference(
     Ok((pixels(layout.width), pixels(layout.height)))
 }
 
+pub(super) fn width_requirements(
+    descriptor: &PreparedGuide,
+    theme: &ResolvedTheme,
+) -> Result<super::GuideWidths, Error> {
+    let (metrics, frame_minimum) = Legend::allocation_metrics(descriptor, theme)?;
+    let intrinsics = guide_intrinsics(descriptor, theme, &metrics)?;
+    let mut title = 0;
+    let mut minimum = length(0)?;
+    let preferred = preferred_content_width(&intrinsics)?;
+    for section in intrinsics {
+        title = title.max(section.title_minimum);
+        for candidate in std::iter::once(length(section.title_minimum)?)
+            .chain(section.color_width)
+            .chain(section.entries.into_iter().map(|entry| entry.minimum))
+        {
+            if minimum.compare(&candidate).is_lt() {
+                minimum = candidate;
+            }
+        }
+    }
+    Ok(super::GuideWidths {
+        title_minimum: metrics.outer_width(&length(title)?)?.max(frame_minimum),
+        minimum: metrics
+            .outer_width(&length(hard(&minimum)?)?)?
+            .max(frame_minimum),
+        preferred: metrics
+            .outer_width(&length(hard(&preferred)?)?)?
+            .max(frame_minimum),
+        outside_gap: metrics.outside_gap,
+    })
+}
+
+fn preferred_content_width(intrinsics: &[SectionIntrinsics]) -> Result<ExactLength, Error> {
+    let mut preferred = length(0)?;
+    for section in intrinsics {
+        let title = length(add(section.title_preferred, 1)?)?;
+        let symbols = (!section.entries.is_empty())
+            .then(|| length(add(section.preferred_column, 1)?))
+            .transpose()?;
+        for candidate in std::iter::once(&title)
+            .chain(symbols.as_ref())
+            .chain(section.color_width.as_ref())
+        {
+            if preferred.compare(candidate).is_lt() {
+                preferred = candidate.times(1);
+            }
+        }
+    }
+    Ok(preferred)
+}
+
 pub(super) fn measure_assigned(
-    descriptor: Arc<PreparedDiscreteGuide>,
+    descriptor: Arc<PreparedGuide>,
     available: (f64, Option<f64>),
     horizontal: bool,
     compact: bool,
@@ -630,7 +794,7 @@ pub(super) fn measure_assigned(
 }
 
 fn measure_uncached(
-    descriptor: Arc<PreparedDiscreteGuide>,
+    descriptor: Arc<PreparedGuide>,
     available: (f64, Option<f64>),
     horizontal: bool,
     compact: bool,
@@ -641,13 +805,13 @@ fn measure_uncached(
     if !compact {
         *compact_changes = false;
     }
-    let (metrics, frame_minimum) = Legend::allocation_metrics(theme)?;
+    let (metrics, frame_minimum) = Legend::allocation_metrics(&descriptor, theme)?;
     let assignment = match Assignment::new(available, &metrics, scope) {
         Ok(value) => value,
         Err(PlanError::Fit(failure)) => return Ok(FitOutcome::Miss(failure)),
         Err(PlanError::Fatal(error)) => return Err(error),
     };
-    let intrinsic = discrete_guide_intrinsics(&descriptor, theme, &metrics)?;
+    let intrinsic = guide_intrinsics(&descriptor, theme, &metrics)?;
     let layout = match measure_layout(
         &descriptor,
         &intrinsic,

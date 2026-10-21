@@ -80,7 +80,7 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
     }
     let guide = measured.discrete_guide.as_ref().unwrap();
     assert_eq!(guide.counts.entries, 2);
-    let separate = crate::decorations::legend::discrete::PreparedDiscreteGuide::prepare_for_test(
+    let separate = crate::decorations::legend::discrete::PreparedGuide::prepare_for_test(
         &chart,
         &theme,
         crate::LegendComposition::Separate,
@@ -94,14 +94,14 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
         )
     ));
     for (complete, separate) in guide.sections[0]
-        .entries
+        .entries()
         .iter()
-        .zip(separate.sections[0].entries.iter())
+        .zip(separate.sections[0].entries().iter())
     {
         assert_eq!(complete.key, separate.key);
         assert_eq!(complete.display_label, separate.display_label);
     }
-    for (actual, (identity, key)) in guide.sections[0].entries.iter().zip(expected) {
+    for (actual, (identity, key)) in guide.sections[0].entries().iter().zip(expected) {
         assert_eq!(actual.identity, identity);
         assert_eq!(actual.key, key);
     }

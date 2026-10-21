@@ -1,18 +1,16 @@
-//! Discrete entries from one selected prepared semantic owner, without a panel
+//! Typed guide sections from one selected prepared semantic owner, without a panel
 //! assignment, font environment, or backend measurement.
 
 use super::PreparedInteriorInputs;
 use crate::data::PlotData;
-use crate::decorations::legend::discrete::{
-    PreparedDiscreteGuide, PreparedDiscreteGuides, ScopedDiscreteGuide,
-};
+use crate::decorations::legend::discrete::{PreparedGuide, PreparedGuides, ScopedGuide};
 use crate::decorations::legend::GuideSourceKey;
 use crate::theme::ResolvedTheme;
 use crate::{Error, Plot, PlotKind};
 
 /// One measured mandatory right guide beside the flexible scientific body.
-pub(crate) fn continuous_right(
-    descriptor: &crate::decorations::legend::descriptor::ContinuousDescriptor,
+pub(crate) fn native_right(
+    descriptor: std::sync::Arc<PreparedGuide>,
     panel: crate::layout::PanelBox,
     minimum: f64,
     theme: &ResolvedTheme,
@@ -20,16 +18,12 @@ pub(crate) fn continuous_right(
 
     content_plot: Option<&Plot>,
 ) -> Result<
-    (
-        crate::layout::PanelBox,
-        crate::decorations::legend::MeasuredContinuousGuide,
-    ),
+    (crate::layout::PanelBox, crate::decorations::legend::Legend),
     crate::layout::fit::PlanError,
 > {
     use crate::layout::fit::{self, FitKind};
     use crate::layout::kernel::{allocate_grid_axis, GridRequirement, TrackSpec};
-    let widths =
-        crate::decorations::legend::MeasuredContinuousGuide::vertical_widths(descriptor, theme)?;
+    let widths = crate::decorations::legend::Legend::vertical_widths(&descriptor, theme)?;
     let available = panel.width() - minimum - widths.outside_gap;
     if widths.title_minimum > available {
         return Err(scope
@@ -49,19 +43,17 @@ pub(crate) fn continuous_right(
             )
             .into());
     }
-    let guide = fit::measured(
-        crate::decorations::legend::MeasuredContinuousGuide::measure(
-            descriptor,
-            (width, content_plot.is_none().then_some(panel.height())),
-            false,
-            false,
-            theme,
-            &mut false,
-            scope,
-        ),
-    )?;
+    let guide = fit::measured(crate::decorations::legend::Legend::measure_assigned(
+        descriptor,
+        (width, content_plot.is_none().then_some(panel.height())),
+        false,
+        false,
+        theme,
+        &mut false,
+        scope,
+    ))?;
     let hard = crate::layout::kernel::ceil_spatial_quanta(minimum)?;
-    let width = crate::layout::kernel::ceil_spatial_quanta(guide.width)?;
+    let width = crate::layout::kernel::ceil_spatial_quanta(guide.compute_box_width())?;
     let tracks = [
         TrackSpec {
             min: hard,
@@ -106,7 +98,7 @@ pub(crate) fn continuous_right(
         panel.y0
             + plot
                 .natural_body_height(theme, body_right - panel.x0, preference.1)?
-                .max(guide.height)
+                .max(guide.compute_box_height())
     } else {
         panel.y1
     };
@@ -377,10 +369,9 @@ impl PreparedInteriorInputs {
             | PlotKind::PointInterval
             | PlotKind::Coefficient
             | PlotKind::Forest
-            | PlotKind::Waterfall => Ok(Vec::new()),
-            PlotKind::Heatmap | PlotKind::Beeswarm => Err(Error::Render(
-                "continuous guides cannot be prepared as discrete entries".into(),
-            )),
+            | PlotKind::Waterfall
+            | PlotKind::Heatmap
+            | PlotKind::Beeswarm => Ok(Vec::new()),
             PlotKind::Matrix => Err(Error::Render(
                 "self-managed Matrix has no parent-owned guide entry".into(),
             )),
@@ -427,9 +418,7 @@ impl PreparedInteriorInputs {
             } else {
                 owner.clone()
             };
-            let descriptor = if chart.legend_policy_spec() == crate::LegendPolicy::Hidden
-                || matches!(chart.kind(), PlotKind::Heatmap | PlotKind::Beeswarm)
-            {
+            let descriptor = if chart.legend_policy_spec() == crate::LegendPolicy::Hidden {
                 None
             } else {
                 let keys = if chart.kind() == PlotKind::Matrix {
@@ -440,15 +429,17 @@ impl PreparedInteriorInputs {
                 } else {
                     self.guide_sources(&scoped, theme, data, scope)?
                 };
-                PreparedDiscreteGuide::prepare(
+                let continuous = self.continuous_source(&scoped, theme, scope)?;
+                PreparedGuide::prepare(
                     &scoped,
                     theme,
                     &contributor,
                     keys,
+                    continuous,
                     scoped.effective_legend_composition(),
                 )?
             };
-            panels.push(ScopedDiscreteGuide {
+            panels.push(ScopedGuide {
                 scope: scope
                     .map(crate::data::source::copy_source_string)
                     .transpose()?,
@@ -456,27 +447,62 @@ impl PreparedInteriorInputs {
             });
         }
         let order = parent_guide_order(chart, &panels, facet_cells)?;
-        let root = if panels.len() == 1 && order.is_empty() {
+        let root = if facet_cells && matches!(chart.kind(), PlotKind::Heatmap | PlotKind::Beeswarm)
+        {
+            // Native color bodies belong to each actual facet. Their domains,
+            // missing blocks and alpha members are not a parent-wide union.
+            None
+        } else if panels.len() == 1 && order.is_empty() {
             panels[0].descriptor.clone()
         } else {
-            PreparedDiscreteGuide::merge(
+            PreparedGuide::merge(
                 panels.iter().filter_map(|panel| panel.descriptor.as_ref()),
                 &order,
                 "prepared discrete guide",
             )?
         };
         self.discrete_guides
-            .set(crate::data::source::source_arc(PreparedDiscreteGuides {
+            .set(crate::data::source::source_arc(PreparedGuides {
                 root,
                 panels,
             })?)
             .map_err(|_| Error::Render("discrete guide preparation was replaced".into()))
     }
+
+    pub(crate) fn continuous_source(
+        &self,
+        chart: &Plot,
+        theme: &ResolvedTheme,
+        scope: Option<&str>,
+    ) -> Result<
+        Option<std::sync::Arc<crate::decorations::legend::descriptor::ContinuousDescriptor>>,
+        Error,
+    > {
+        let field = chart.color_dimension_key().unwrap_or("");
+        let descriptor = match chart.kind() {
+            PlotKind::Heatmap => panel(
+                self.heatmap.as_ref().map(|inputs| inputs.panels.as_slice()),
+                scope,
+                chart.kind(),
+            )?
+            .guide_descriptor(field, theme)?,
+            PlotKind::Beeswarm => panel(
+                self.beeswarm
+                    .as_ref()
+                    .map(|inputs| inputs.panels.as_slice()),
+                scope,
+                chart.kind(),
+            )?
+            .guide_descriptor(field)?,
+            _ => return Ok(None),
+        };
+        crate::data::source::source_arc(descriptor).map(Some)
+    }
 }
 
 fn parent_guide_order(
     chart: &Plot,
-    panels: &[ScopedDiscreteGuide],
+    panels: &[ScopedGuide],
     facet_cells: bool,
 ) -> Result<Vec<crate::decorations::legend::GuideEntryIdentity>, Error> {
     use crate::decorations::legend::discrete::GuideSectionIdentity;

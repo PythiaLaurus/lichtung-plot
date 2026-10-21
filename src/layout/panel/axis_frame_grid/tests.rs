@@ -142,7 +142,7 @@ fn native_categorical_trajectory_installs_band_projection_before_mark_capture() 
     assert_eq!(x.to_bits(), 230.0_f64.to_bits());
     let guide = selected.discrete_guide.as_ref().unwrap();
     assert_eq!(guide.counts.entries, 1);
-    let separate = crate::decorations::legend::discrete::PreparedDiscreteGuide::prepare_for_test(
+    let separate = crate::decorations::legend::discrete::PreparedGuide::prepare_for_test(
         &plot,
         &theme,
         crate::LegendComposition::Separate,
@@ -162,7 +162,7 @@ fn native_categorical_trajectory_installs_band_projection_before_mark_capture() 
         crate::decorations::legend::discrete::GuideSectionIdentity::HueColor(_)
     ));
     assert_eq!(
-        guide.sections[0].entries[0].identity,
+        guide.sections[0].entries()[0].identity,
         crate::decorations::legend::GuideEntryIdentity::category("cohort", "seen").unwrap()
     );
     let crate::layout::interior::MarkPayload::Line(payload) =
@@ -177,7 +177,7 @@ fn native_categorical_trajectory_installs_band_projection_before_mark_capture() 
                 (213, 94, 0)
             );
             assert_eq!(
-                guide.sections[0].entries[0].key,
+                guide.sections[0].entries()[0].key,
                 crate::decorations::legend::ResolvedGuideKey::point(style.clone())
             );
         }

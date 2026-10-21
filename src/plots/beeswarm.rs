@@ -197,11 +197,6 @@ pub(crate) fn prepare(
 }
 
 impl PreparedBeeswarm {
-    pub(crate) fn guide_values(&self) -> &[String] {
-        self.values
-            .as_ref()
-            .map_or(&[], |numeric| numeric.labels.as_slice())
-    }
     pub(crate) fn guide_samples(&self) -> Result<Vec<f64>, Error> {
         crate::data::source::collect_source(self.rows.iter().map(|row| Ok(row.2)))
     }
@@ -217,7 +212,8 @@ impl PreparedBeeswarm {
         let values = Some(descriptor.numeric.try_copy()?);
         let scale =
             crate::theme::ContinuousColors::selected(descriptor.domain, &descriptor.selection)?;
-        let colorbar_stops = scale.guide_stops(&self.guide_samples()?)?;
+        let colorbar_stops =
+            crate::data::source::collect_source(descriptor.stops.iter().copied().map(Ok))?;
         self.values = values;
         self.selection = descriptor.selection.clone();
         self.scale = scale;
@@ -237,10 +233,6 @@ impl PreparedBeeswarm {
             missing: None,
             format: self.format.clone(),
         }
-    }
-
-    pub(crate) fn guide_labels(&self) -> impl Iterator<Item = &str> {
-        self.guide_values().iter().map(String::as_str)
     }
 
     pub(crate) fn guide_descriptor(
@@ -313,15 +305,19 @@ pub(crate) fn measure(
     let theme = context.theme;
 
     let minimum = intrinsic_body_minimum(chart, theme)?;
-    let (panel, colorbar) = if chart.continuous_guide_suppressed() {
+    let (panel, colorbar) = if chart.continuous_guide_suppressed()
+        || chart.legend_policy_spec() == crate::LegendPolicy::Hidden
+    {
         (context.panel, None)
     } else {
         let guide_scope = context
             .fit_scope()
             .child(crate::layout::AddressRole::OutsideGuideRight, 0)?;
-        let descriptor = prepared.guide_descriptor(chart.color_dimension_key().unwrap_or(""))?;
-        let (body, guide) = crate::layout::interior::guide::continuous_right(
-            &descriptor,
+        let descriptor = chart
+            .prepared_discrete_guide()?
+            .ok_or_else(|| Error::Render("native Beeswarm guide was not prepared".into()))?;
+        let (body, guide) = crate::layout::interior::guide::native_right(
+            descriptor,
             context.panel,
             minimum.0,
             theme,
@@ -531,7 +527,7 @@ pub(crate) fn measure(
             )?;
         }
     }
-    let mut result = PlotRenderResult::new(layout, None);
+    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?);
     result.y_domain = crate::spec::AxisDomain::Categorical;
     result.y_tick_keys = Some(crate::data::source::collect_source(
         prepared
@@ -617,14 +613,16 @@ impl BeeswarmPayload {
 }
 
 fn select_colorbar(
-    guide: &crate::decorations::legend::MeasuredContinuousGuide,
+    guide: &crate::decorations::legend::Legend,
     panel: PanelBox,
     theme: &crate::theme::ResolvedTheme,
 ) -> Result<crate::decorations::legend::LegendDrawPlan, Error> {
-    guide.select(
+    let bounds = guide.box_at(
         panel.x1 + theme.legend_outside_gap()?,
-        panel.y0 + (panel.height() - guide.height) / 2.0,
-    )
+        panel.y0 + (panel.height() - guide.compute_box_height()) / 2.0,
+    );
+    let (x, y) = bounds.anchor();
+    guide.select(x, y)
 }
 
 mod packing;

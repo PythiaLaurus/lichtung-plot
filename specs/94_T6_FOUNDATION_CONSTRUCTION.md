@@ -1008,8 +1008,9 @@ The historical T2f table assigns the following keys to theme appearance. Their
 under spec05; it does **not** by itself delete the keys or prove that every old
 family-local cap becomes a new public component field. This table pins the
 successor responsibilities against the current
-`decorations/legend/continuous.rs::MeasuredContinuousGuide::{allocation_metrics,
-measure,select}` owner. Theme typography/spacing values remain theme-owned;
+`decorations/legend.rs::Legend` envelope and
+`decorations/legend/continuous.rs::{ColorContent,MeasuredColorBody}` content owners.
+Theme typography/spacing values remain theme-owned;
 containing allocation, complete text/glyph measurement and the resulting maximum
 extent remain private renderer responsibilities. No new guide controls are added.
 

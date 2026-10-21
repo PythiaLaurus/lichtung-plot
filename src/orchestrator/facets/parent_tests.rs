@@ -55,7 +55,7 @@ fn sectioned_facets_preserve_parent_domains_and_reject_alias_collisions_before_f
     );
     assert_eq!(
         guide.sections[0]
-            .entries
+            .entries()
             .iter()
             .map(|entry| entry.display_label.as_ref())
             .collect::<Vec<_>>(),
@@ -65,7 +65,7 @@ fn sectioned_facets_preserve_parent_domains_and_reject_alias_collisions_before_f
     // The complete parent scientific hue domain is instead blue/red/green.
     assert_eq!(
         guide.sections[1]
-            .entries
+            .entries()
             .iter()
             .map(|entry| entry.display_label.as_ref())
             .collect::<Vec<_>>(),

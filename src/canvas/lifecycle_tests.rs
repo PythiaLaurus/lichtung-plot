@@ -65,8 +65,7 @@ fn shared_composition_uses_parent_policy_in_both_source_orders() {
                 .unwrap()
         };
         let root = canvas.preflight_plan().unwrap();
-        let Some(PreparedGuideDescriptor::Discrete(descriptor)) = &root.prepared().shared_guide
-        else {
+        let Some(descriptor) = &root.prepared().shared_guide else {
             panic!("prepared Shared discrete descriptor");
         };
         assert_eq!(descriptor.composition, composition);

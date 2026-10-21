@@ -9,6 +9,12 @@ with actual consumed-ancestor routing. Crate-root policy and Plot/Canvas control
 are current; focused full-contract acceptance is complete. Integrated release
 closure remains with the encompassing scientific-foundation phase.
 
+The data-alpha extension now uses one `PreparedGuide` for typed symbol sections
+and native continuous-color content, with one common measured envelope, cache,
+font traversal and frozen draw plan (`../docs/unified-guide-envelope.md`). The
+exclusive Discrete/Continuous descriptor and GuideKind are retired. Actual alpha
+explanatory sections and their public cutover remain in spec97.
+
 ## 1. Authority And Boundary
 
 This document closes the discrete-section architecture admitted in
@@ -40,11 +46,13 @@ Rgba references and open construction questions do not supersede the current
 Color carrier or spec94's closed decisions. Source identifiers below are the
 live owners, not proposed exported renderer interfaces.
 
-There is one discrete guide representation and one measured guide lifecycle for
+There is one prepared guide representation and one measured guide lifecycle for
 Combined and Separate. Sections explain existing encodings; they do not change
 marks, source rows, statistics, domains, sparse topology or glyph visibility.
 There is no general group-style mapping, scoped-alias API, independent section
-placement, layout callback, new resource cap or continuous/discrete composition.
+placement, layout callback or new resource cap. The common carrier does not relax
+categorical-RGB/continuous-color Shared incompatibility; spec97 owns the necessary
+native color-plus-alpha extension.
 The renderer remains standalone and offline. No dependency or asset work follows
 from this contract.
 
@@ -96,7 +104,8 @@ marks. In particular, hiding an unsupported pair guide does not waive invalid
 categorical data, a missing exact color mapping or an invalid Interaction style.
 
 Current surface/owner anchors: `src/kind.rs:174-184`, `src/spec.rs:513-603`,
-`src/canvas.rs:3333-3341`, `src/decorations/legend.rs::GuideKind::contributing_prepared`.
+`src/canvas.rs::prepare_discrete_guides`,
+`src/layout/interior/guide.rs::PreparedInteriorInputs::prepare_discrete_guides`.
 
 ## 3. One Typed Semantic Model
 
@@ -124,6 +133,7 @@ enum GuideSectionIdentity {
     HueColor(RawField),
     Literal(LiteralDomain),
     SupplementalSeries,
+    ContinuousColor(RawField),
 }
 enum GuideEntryIdentity {
     Category { field: RawField, value: RawCategory },
@@ -146,7 +156,11 @@ struct PreparedGuideEntry {
 struct PreparedGuideSection {
     identity: GuideSectionIdentity,
     display_title: Arc<str>,
-    entries: Arc<[PreparedGuideEntry]>,
+    body: GuideSectionBody,
+}
+enum GuideSectionBody {
+    Symbols(Arc<[PreparedGuideEntry]>),
+    ContinuousColor(Arc<ContinuousDescriptor>),
 }
 struct GuideCounts {
     sections: u32,
@@ -159,14 +173,10 @@ struct GuideCounts {
     labeled_layer_source_keys: u32,
     source_occurrences: u32,
 }
-struct PreparedDiscreteGuide {
+struct PreparedGuide {
     composition: LegendComposition,
     counts: GuideCounts,
     sections: Arc<[PreparedGuideSection]>,
-}
-enum PreparedGuideDescriptor {
-    Discrete(Arc<PreparedDiscreteGuide>),
-    Continuous(ContinuousDescriptor),
 }
 ```
 
@@ -176,12 +186,13 @@ not revalidated as a categorical selector or normalized as a category. Endpoint
 labels retain their existing validated caller bytes. Painted-string Unicode
 validation remains the text owner's responsibility, including for layer labels.
 
-Every section is nonempty. Absence is `None`, not a descriptor with zero sections;
+Every symbol section is nonempty; a continuous-color section retains its complete
+scientific descriptor and numeric labels. Absence is `None`, not a descriptor with zero sections;
 constructors reject inconsistent lengths/counts. Counts are exact checked u32
 integers; sums/products and resource calculations use checked u128, and admitted
-allocation lengths convert to usize fallibly. Counts fit the existing million
-record/topology envelope; no floating cardinality, saturating counter or second
-limit exists. Points/lines/fills count retained key components, not source marks.
+allocation lengths convert to usize fallibly. There is no floating cardinality,
+saturating counter or separate resource quota. Points/lines/fills and entries
+count symbol-key components/entries, not source marks or color-body labels.
 Source occurrences count actual retained provenance records, not a fabricated
 group-by-hue product. Primary/pair/layer source counts are counted before
 projection: a three-pair source has three primary and three pair source keys,
@@ -904,8 +915,9 @@ only their scientific color-domain source. Neither uses None as a fallback flag.
 Delete the parallel inferred discrete title/value/layer font strings in
 `layout/text/requirements.rs::push_deferred_plot_requirements`, including its
 `legend_title_census`/discrete label paths, in favor of descriptor traversal.
-Per-point labels, facet headers, continuous labels and numeric alphabets keep
-their own census. Neither a hidden raw group identifier nor an omitted key
+Per-point labels, facet headers and numeric alphabets keep their own census.
+Continuous-color labels and missing keys now use the common section traversal;
+native facets enumerate their actual scoped owners. Neither a hidden raw group identifier nor an omitted key
 component becomes a guide font requirement. Canvas's current single title and
 flat LegendLabel ordinal traversal (`canvas.rs:4374-4448`) migrates to the exact
 same section preorder. Ordinary Plot and Matrix preparation must supply the
@@ -915,10 +927,10 @@ descriptor before `foundational_plot_requirements`, not reconstruct it afterward
 
 | Current flat owner / function | Single replacement |
 | --- | --- |
-| `decorations/legend/descriptor.rs::PreparedDiscreteGuide` tuple | Struct above; Discrete carries its admitted Arc, Continuous unchanged |
+| Historical `decorations/legend/descriptor.rs::PreparedDiscreteGuide` tuple | Sole PreparedGuide above; typed symbol/color bodies replace exclusive kind dispatch |
 | `decorations/legend.rs::{LegendIdentity,LegendEntry,resolve_entries,merge_exact_entries,resolved_title}` | Typed section/entry identity, provenance, per-section merge/label validation; no per-entry title compatibility fallback |
 | `layout/interior/guide.rs::PreparedInteriorInputs::guide_entries` and all census-table producer functions | Return the one composed descriptor from prepared semantics; no flat materialization followed by a second composition route |
-| `spec.rs::PlotRenderResult.legend_entries`, constructor and every caller | Retire field; retain `discrete_guide: Option<Arc<PreparedDiscreteGuide>>`. Noncontributing results pass None. Selected marks and guide share the source style materializer |
+| `spec.rs::PlotRenderResult.legend_entries`, constructor and every caller | Retire field; retain `discrete_guide: Option<Arc<PreparedGuide>>`. Actual native color producers also return their prepared contribution. Noncontributing results pass None. Selected marks and guide share the source style materializer |
 | `orchestrator/facets.rs::PreparedFacetGuide.{title,entries}` | One optional descriptor plus independently retained scientific coordinated domains; no duplicate flat title/keys |
 | `orchestrator/facets/legend.rs::{prepare_discrete_guide,order_entries}` and sizing/planning callers | Parent-domain section ordering and exact descriptor union; panel shared suppression receives the descriptor by immutable reference |
 | `canvas.rs::{prepared_discrete_shared_guide,preflight_shared_legend}` | Pre-font authoritative descriptor. Later body probes retain/use it; remove the `None -> collect result.legend_entries -> merge` reconstruction route |
@@ -965,7 +977,7 @@ enum GuideUse { Hidden, SharedSuppressed, Local }
 enum DependencyUse {
     AllocationOnly,
     DescriptorAndAllocation {
-        descriptor: Arc<PreparedDiscreteGuide>,
+        descriptor: Arc<PreparedGuide>,
         orientation: GuideOrientation,
         compact: bool,
     },
@@ -982,8 +994,8 @@ struct ScopedGuideInputs {
     composition: LegendComposition,
     use_kind: GuideUse,
     contribution_prepared: bool,
-    contribution: Option<Arc<PreparedDiscreteGuide>>,
-    local_guide: Option<DiscreteGuideSlot>,
+    contribution: Option<Arc<PreparedGuide>>,
+    local_guide: Option<GuideSlot>,
     dependencies: Arc<[ConsumedGuideDependency]>,
 }
 ```

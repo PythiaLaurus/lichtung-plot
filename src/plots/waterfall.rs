@@ -869,7 +869,7 @@ pub(crate) fn measure(
             );
         }
     }
-    let mut result = PlotRenderResult::new(layout, None);
+    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?);
     result.numeric_presentation = Some(selected_totals.numeric.clone());
     result.y_domain = crate::spec::AxisDomain::Categorical;
     result.y_tick_keys =

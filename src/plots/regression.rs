@@ -728,14 +728,13 @@ mod style_tests {
             mapped_fill.stroke_width.to_bits(),
             new_fill.stroke_width.to_bits()
         );
-        let separate =
-            crate::decorations::legend::discrete::PreparedDiscreteGuide::prepare_for_test(
-                &chart,
-                &theme,
-                crate::LegendComposition::Separate,
-            )
-            .unwrap()
-            .unwrap();
+        let separate = crate::decorations::legend::discrete::PreparedGuide::prepare_for_test(
+            &chart,
+            &theme,
+            crate::LegendComposition::Separate,
+        )
+        .unwrap()
+        .unwrap();
         assert!(matches!(
             separate.sections[0].identity,
             crate::decorations::legend::discrete::GuideSectionIdentity::Literal(
@@ -743,22 +742,20 @@ mod style_tests {
             )
         ));
         assert_eq!(
-            separate.sections[0].entries[1].key,
-            changed.discrete_guide.as_ref().unwrap().sections[0].entries[1].key
+            separate.sections[0].entries()[1].key,
+            changed.discrete_guide.as_ref().unwrap().sections[0].entries()[1].key
         );
-        assert!(
-            crate::decorations::legend::discrete::PreparedDiscreteGuide::merge(
-                [
-                    old.discrete_guide.as_ref().unwrap(),
-                    changed.discrete_guide.as_ref().unwrap()
-                ],
-                &[],
-                "custom regression band",
-            )
-            .unwrap_err()
-            .to_string()
-            .contains("glyphs must match exactly")
-        );
+        assert!(crate::decorations::legend::discrete::PreparedGuide::merge(
+            [
+                old.discrete_guide.as_ref().unwrap(),
+                changed.discrete_guide.as_ref().unwrap()
+            ],
+            &[],
+            "custom regression band",
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("glyphs must match exactly"));
     }
 
     #[test]
@@ -817,18 +814,16 @@ mod style_tests {
         assert_ne!(old_style, new_style);
         assert_eq!(new_style.color, crate::theme::Color::rgb(17, 41, 67));
         assert_eq!(new_style.width.to_bits(), 2.5_f32.to_bits());
-        assert!(
-            crate::decorations::legend::discrete::PreparedDiscreteGuide::merge(
-                [
-                    old.discrete_guide.as_ref().unwrap(),
-                    changed.discrete_guide.as_ref().unwrap()
-                ],
-                &[],
-                "custom regression fit",
-            )
-            .unwrap_err()
-            .to_string()
-            .contains("glyphs must match exactly")
-        );
+        assert!(crate::decorations::legend::discrete::PreparedGuide::merge(
+            [
+                old.discrete_guide.as_ref().unwrap(),
+                changed.discrete_guide.as_ref().unwrap()
+            ],
+            &[],
+            "custom regression fit",
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("glyphs must match exactly"));
     }
 }

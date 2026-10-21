@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use super::{DiscreteGuideSlot, PreparedDiscreteGuide};
+use super::{GuideSlot, PreparedGuide};
 use crate::layout::kernel::{ChildFeedbackInputs, FeedbackRound, LayoutScalar, SpatialRounding};
 use crate::layout::{ComponentAddress, PanelBox};
 use crate::{Error, LegendComposition, Plot};
@@ -18,7 +18,7 @@ pub(crate) enum GuideUse {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct GuideConsumption<'a> {
     pub(crate) use_kind: GuideUse,
-    pub(crate) local_guide: Option<&'a DiscreteGuideSlot>,
+    pub(crate) local_guide: Option<&'a GuideSlot>,
     pub(crate) dependencies: &'a [ConsumedGuideDependency],
 }
 
@@ -78,7 +78,7 @@ impl GuideAllocation {
 pub(crate) enum DependencyUse {
     AllocationOnly,
     DescriptorAndAllocation {
-        descriptor: Arc<PreparedDiscreteGuide>,
+        descriptor: Arc<PreparedGuide>,
         orientation: GuideOrientation,
         compact: bool,
     },
@@ -121,8 +121,8 @@ pub(crate) struct ScopedGuideInputs {
     composition: LegendComposition,
     use_kind: GuideUse,
     contribution_prepared: bool,
-    contribution: Option<Arc<PreparedDiscreteGuide>>,
-    local_guide: Option<DiscreteGuideSlot>,
+    contribution: Option<Arc<PreparedGuide>>,
+    local_guide: Option<GuideSlot>,
     dependencies: Arc<[ConsumedGuideDependency]>,
 }
 
@@ -130,7 +130,7 @@ impl ScopedGuideInputs {
     pub(crate) fn new(
         plot: &Plot<impl crate::kind::Marker>,
         use_kind: GuideUse,
-        local_guide: Option<&DiscreteGuideSlot>,
+        local_guide: Option<&GuideSlot>,
         dependencies: &[ConsumedGuideDependency],
     ) -> Result<Self, Error> {
         if use_kind != GuideUse::Local && local_guide.is_some() {
@@ -200,7 +200,7 @@ impl ScopedGuideInputs {
     pub(crate) fn matches_consumption(
         &self,
         use_kind: GuideUse,
-        local_guide: Option<&DiscreteGuideSlot>,
+        local_guide: Option<&GuideSlot>,
         dependencies: &[ConsumedGuideDependency],
     ) -> bool {
         self.use_kind == use_kind

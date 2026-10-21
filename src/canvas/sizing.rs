@@ -1,6 +1,6 @@
 //! Content sizing uses the rendering Grid's canonical track requirements.
 
-use super::{Canvas, PreparedCanvasInputs, PreparedGuideDescriptor};
+use super::{Canvas, PreparedCanvasInputs};
 use crate::decorations::legend::discrete::scoped::{
     ConsumedGuideDependency, GuideUse, ScopedGuideInputs,
 };
@@ -114,7 +114,7 @@ impl HeightInputs {
         let local = if use_kind == GuideUse::Local {
             plot.prepared_discrete_guide()?
                 .map(|descriptor| {
-                    crate::decorations::legend::discrete::DiscreteGuideSlot::new(
+                    crate::decorations::legend::discrete::GuideSlot::new(
                         descriptor,
                         &child,
                         plot.legend_position_spec(),
@@ -491,14 +491,8 @@ pub(super) fn measure(
         }
     }
     let mut guide = (0.0, 0.0);
-    if let Some(PreparedGuideDescriptor::Discrete(descriptor)) = &prepared.shared_guide {
+    if let Some(descriptor) = &prepared.shared_guide {
         guide = crate::decorations::legend::Legend::natural_preference(descriptor, theme)?;
-    } else if let Some(PreparedGuideDescriptor::Continuous(descriptor)) = &prepared.shared_guide {
-        guide = crate::layout::interior::sizing::continuous_preference(
-            descriptor,
-            theme,
-            &FitScope::root().child(AddressRole::CanvasSharedLegend, 0)?,
-        )?;
     }
     let guide_gap = if guide.0 > 0.0 {
         theme.legend_shared_gap()?

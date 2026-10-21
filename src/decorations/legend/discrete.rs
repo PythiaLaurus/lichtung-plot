@@ -1,4 +1,4 @@
-//! The single immutable discrete guide: semantic sections, resolved keys and
+//! The single immutable guide: typed sections, resolved keys and
 //! actual source occurrences, prepared before fonts or panel assignment.
 
 mod composition;
@@ -23,6 +23,7 @@ pub(crate) enum GuideSectionIdentity {
     HueColor(RawField),
     Literal(LiteralDomain),
     SupplementalSeries,
+    ContinuousColor(RawField),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,7 +48,22 @@ pub(crate) struct PreparedGuideEntry {
 pub(crate) struct PreparedGuideSection {
     pub(crate) identity: GuideSectionIdentity,
     pub(crate) display_title: Arc<str>,
-    pub(crate) entries: Arc<[PreparedGuideEntry]>,
+    pub(crate) body: GuideSectionBody,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum GuideSectionBody {
+    Symbols(Arc<[PreparedGuideEntry]>),
+    ContinuousColor(Arc<super::descriptor::ContinuousDescriptor>),
+}
+
+impl PreparedGuideSection {
+    pub(crate) fn entries(&self) -> &[PreparedGuideEntry] {
+        match &self.body {
+            GuideSectionBody::Symbols(entries) => entries,
+            GuideSectionBody::ContinuousColor(_) => &[],
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -64,7 +80,7 @@ pub(crate) struct GuideCounts {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) struct PreparedDiscreteGuide {
+pub(crate) struct PreparedGuide {
     pub(crate) composition: LegendComposition,
     pub(crate) counts: GuideCounts,
     pub(crate) sections: Arc<[PreparedGuideSection]>,
@@ -73,14 +89,14 @@ pub(crate) struct PreparedDiscreteGuide {
 /// A consumed guide retains its semantic owner even when routed to a facet
 /// cell. Placement never reparents its section/title/entry addresses.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct DiscreteGuideSlot {
-    pub(crate) descriptor: Arc<PreparedDiscreteGuide>,
+pub(crate) struct GuideSlot {
+    pub(crate) descriptor: Arc<PreparedGuide>,
     pub(crate) owner: ComponentAddress,
 }
 
-impl DiscreteGuideSlot {
+impl GuideSlot {
     pub(crate) fn new(
-        descriptor: Arc<PreparedDiscreteGuide>,
+        descriptor: Arc<PreparedGuide>,
         parent: &ComponentAddress,
         position: crate::LegendPosition,
     ) -> Result<Self> {
@@ -104,7 +120,7 @@ pub(super) fn shared_slice<T>(values: Vec<T>) -> Result<Arc<[T]>> {
     Ok(values.into())
 }
 
-impl PreparedDiscreteGuide {
+impl PreparedGuide {
     #[cfg(test)]
     pub(crate) fn prepare_for_test(
         plot: &crate::Plot,
@@ -121,11 +137,17 @@ impl PreparedDiscreteGuide {
         } else {
             inputs.guide_sources(plot, theme, data, plot.axis_scope())?
         };
+        let continuous = if plot.legend_policy_spec() == crate::LegendPolicy::Hidden {
+            None
+        } else {
+            inputs.continuous_source(plot, theme, plot.axis_scope())?
+        };
         Self::prepare(
             plot,
             theme,
             &ComponentAddress::root().child(AddressRole::PlotBody, 0)?,
             keys,
+            continuous,
             composition,
         )
     }
@@ -152,7 +174,7 @@ impl PreparedDiscreteGuide {
                 )
                 .map_err(|error| Error::Render(error.to_string()))?;
             }
-            for (index, entry) in section.entries.iter().enumerate() {
+            for (index, entry) in section.entries().iter().enumerate() {
                 if entry.display_label.is_empty() {
                     continue;
                 }
@@ -169,6 +191,34 @@ impl PreparedDiscreteGuide {
                     stage.as_deref_mut(),
                 )
                 .map_err(|error| Error::Render(error.to_string()))?;
+            }
+            if let GuideSectionBody::ContinuousColor(color) = &section.body {
+                for (index, label) in color.numeric.labels.iter().enumerate() {
+                    PreparedTextRequirement::push_into(
+                        requirements,
+                        section_owner.child(AddressRole::GuideLabel, count(index)?)?,
+                        PreparedTextRole::LegendLabel,
+                        count(index)?,
+                        label,
+                        &[],
+                        &theme.typography.guides.legend_label,
+                        stage.as_deref_mut(),
+                    )
+                    .map_err(|error| Error::Render(error.to_string()))?;
+                }
+                if let Some(missing) = &color.missing {
+                    PreparedTextRequirement::push_into(
+                        requirements,
+                        section_owner.child(AddressRole::GuideMissingBlock, 0)?,
+                        PreparedTextRole::LegendLabel,
+                        0,
+                        &missing.label,
+                        &[],
+                        &theme.typography.guides.legend_label,
+                        stage.as_deref_mut(),
+                    )
+                    .map_err(|error| Error::Render(error.to_string()))?;
+                }
             }
         }
         Ok(())
@@ -230,26 +280,40 @@ fn merge_entry(
 /// Explicit per-scope contribution and one owning root union. None means actual
 /// noncontribution; an absent preparation owner is a different invariant state.
 #[derive(Debug)]
-pub(crate) struct PreparedDiscreteGuides {
-    pub(crate) root: Option<Arc<PreparedDiscreteGuide>>,
-    pub(crate) panels: Vec<ScopedDiscreteGuide>,
+pub(crate) struct PreparedGuides {
+    pub(crate) root: Option<Arc<PreparedGuide>>,
+    pub(crate) panels: Vec<ScopedGuide>,
 }
 
 #[derive(Debug)]
-pub(crate) struct ScopedDiscreteGuide {
+pub(crate) struct ScopedGuide {
     pub(crate) scope: Option<String>,
-    pub(crate) descriptor: Option<Arc<PreparedDiscreteGuide>>,
+    pub(crate) descriptor: Option<Arc<PreparedGuide>>,
 }
 
-impl PreparedDiscreteGuides {
-    pub(crate) fn for_scope(
-        &self,
-        scope: Option<&str>,
-    ) -> Result<Option<&Arc<PreparedDiscreteGuide>>> {
+impl PreparedGuides {
+    pub(crate) fn for_scope(&self, scope: Option<&str>) -> Result<Option<&Arc<PreparedGuide>>> {
         self.panels
             .iter()
             .find(|panel| panel.scope.as_deref() == scope)
             .map(|panel| panel.descriptor.as_ref())
             .ok_or_else(|| Error::Render("discrete guide is missing its prepared scope".into()))
+    }
+}
+
+impl PreparedGuide {
+    pub(crate) fn continuous(&self) -> Option<&Arc<super::descriptor::ContinuousDescriptor>> {
+        self.sections
+            .iter()
+            .find_map(|section| match &section.body {
+                GuideSectionBody::ContinuousColor(color) => Some(color),
+                GuideSectionBody::Symbols(_) => None,
+            })
+    }
+
+    pub(crate) fn has_symbols(&self) -> bool {
+        self.sections
+            .iter()
+            .any(|section| !section.entries().is_empty())
     }
 }

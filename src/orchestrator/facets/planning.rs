@@ -200,9 +200,7 @@ pub(super) fn native_parent(
     probe_cells: &[PanelBox],
     minima: &[(f64, f64)],
     containing_trial: bool,
-    discrete_guide: Option<
-        &std::sync::Arc<crate::decorations::legend::discrete::PreparedDiscreteGuide>,
-    >,
+    discrete_guide: Option<&std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>>,
     scope: &crate::layout::fit::FitScope,
     children: &mut crate::decorations::plan::children::ChildPlans,
     content_sizing: bool,
@@ -271,7 +269,7 @@ pub(super) fn native_parent(
     let mut legend_owner = !containing_trial;
     let guide_slot = discrete_guide
         .map(|descriptor| {
-            crate::decorations::legend::discrete::DiscreteGuideSlot::new(
+            crate::decorations::legend::discrete::GuideSlot::new(
                 std::sync::Arc::clone(descriptor),
                 &ComponentAddress::root(),
                 plot.legend_position_spec(),

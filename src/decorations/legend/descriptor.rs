@@ -1,20 +1,11 @@
 //! Font-independent shared continuous guide semantics. The containing frame
 //! measures one assigned guide only after semantic compatibility is established.
 
-pub(crate) use super::discrete::PreparedDiscreteGuide;
 use crate::numeric::{format::NumericFormat, set::FormattedSet};
 use crate::render::backend::GradientStop;
 use crate::theme::{Color, ColorStop, ContinuousColorScale};
 use crate::{Error, Plot};
 use std::sync::Arc;
-
-/// The sole prepared Canvas guide descriptor. Placement and geometry are owned
-/// by its containing frame and never selected during semantic preparation.
-#[derive(Debug)]
-pub(crate) enum PreparedGuideDescriptor {
-    Discrete(Arc<PreparedDiscreteGuide>),
-    Continuous(Arc<ContinuousDescriptor>),
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct MissingKey {
@@ -57,6 +48,10 @@ pub(crate) struct ContinuousDescriptor {
     pub format: Option<Arc<NumericFormat>>,
     pub numeric: FormattedSet,
 }
+
+// Prepared coordinates, stops and formats are finite, validated immutable values.
+// Equality therefore has the same reflexive contract as resolved symbol glyphs.
+impl Eq for ContinuousDescriptor {}
 
 impl ContinuousContributor {
     pub(crate) fn for_plot(

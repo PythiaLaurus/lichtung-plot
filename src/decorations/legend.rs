@@ -30,41 +30,8 @@ pub(crate) mod source;
 pub(crate) use identity::GuideEntryIdentity;
 pub(crate) use source::GuideSourceKey;
 pub(crate) mod descriptor;
-pub(crate) use continuous::MeasuredContinuousGuide;
-use discrete::PreparedDiscreteGuide;
+use discrete::PreparedGuide;
 pub(crate) use measurement::GuideMeasurements;
-
-/// The semantic kind of a contributing guide, determined before font discovery.
-/// Entry and glyph compatibility is resolved by the prepared descriptor owner.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum GuideKind {
-    Discrete,
-    Continuous,
-}
-
-impl GuideKind {
-    pub(crate) fn contributing_prepared(
-        plot: &crate::Plot,
-        inputs: &crate::layout::interior::PreparedInteriorInputs,
-    ) -> Result<Option<Self>, Error> {
-        use crate::PlotKind;
-        if matches!(plot.kind(), PlotKind::Heatmap | PlotKind::Beeswarm) {
-            return Ok(Some(Self::Continuous));
-        }
-        if plot.legend_policy_spec() == crate::LegendPolicy::Hidden {
-            return Ok(None);
-        }
-        if plot.kind() == PlotKind::Matrix {
-            return Err(Error::Render(
-                "Matrix cannot contribute a Canvas guide".into(),
-            ));
-        }
-        let guides = inputs.discrete_guides.get().ok_or_else(|| {
-            Error::Render("guide kind requires prepared discrete contribution or absence".into())
-        })?;
-        Ok(guides.root.is_some().then_some(Self::Discrete))
-    }
-}
 
 #[derive(Debug)]
 pub(crate) enum LegendCall {
@@ -544,7 +511,7 @@ impl LegendMetrics {
 #[derive(Debug, Clone)]
 pub(crate) struct Legend {
     /// The sole prepared semantic guide retained by the measured plan.
-    descriptor: std::sync::Arc<PreparedDiscreteGuide>,
+    descriptor: std::sync::Arc<PreparedGuide>,
     /// Resolved theme-owned metrics retained for selection and frozen drawing.
     pub(crate) metrics: std::sync::Arc<LegendMetrics>,
     available_width: i64,
@@ -557,6 +524,7 @@ struct LegendLayout {
     width: i64,
     height: i64,
     sections: Vec<SectionLayout>,
+    compact_changes: bool,
 }
 
 #[derive(Debug)]
@@ -569,6 +537,15 @@ struct SectionLayout {
     capacity: Option<i64>,
     columns: usize,
     entries: Vec<LegendSlot>,
+    body_top: i64,
+    color: Option<continuous::MeasuredColorBody>,
+}
+
+pub(crate) struct GuideWidths {
+    pub(crate) title_minimum: f64,
+    pub(crate) minimum: f64,
+    pub(crate) preferred: f64,
+    pub(crate) outside_gap: f64,
 }
 
 #[derive(Debug)]
@@ -616,22 +593,36 @@ impl LegendBox {
 
 impl Legend {
     fn allocation_metrics(
+        descriptor: &PreparedGuide,
         theme: &crate::theme::ResolvedTheme,
     ) -> Result<(LegendMetrics, f64), Error> {
         let mut metrics = LegendMetrics::from_theme(theme)?;
-        let minimum = metrics.allocation_insets(0.0)?;
+        let inset = descriptor
+            .continuous()
+            .and_then(|color| color.missing.as_ref())
+            .and_then(|key| key.outline.as_ref())
+            .map_or(0.0, |outline| f64::from(outline.width()) / 2.0);
+        let minimum = metrics.allocation_insets(inset)?;
+        metrics.ensure_key_gap(inset)?;
         Ok((metrics, minimum))
     }
 
     pub(crate) fn natural_preference(
-        descriptor: &PreparedDiscreteGuide,
+        descriptor: &PreparedGuide,
         theme: &crate::theme::ResolvedTheme,
     ) -> Result<(f64, f64), Error> {
         measurement::natural_preference(descriptor, theme)
     }
 
+    pub(crate) fn vertical_widths(
+        descriptor: &PreparedGuide,
+        theme: &crate::theme::ResolvedTheme,
+    ) -> Result<GuideWidths, Error> {
+        measurement::width_requirements(descriptor, theme)
+    }
+
     pub(crate) fn measure_assigned(
-        descriptor: std::sync::Arc<PreparedDiscreteGuide>,
+        descriptor: std::sync::Arc<PreparedGuide>,
         available: (f64, impl Into<Option<f64>>),
         horizontal: bool,
         compact: bool,
@@ -654,7 +645,7 @@ impl Legend {
         &self,
         round: &mut crate::layout::kernel::FeedbackRound,
     ) -> Result<(), Error> {
-        round.observe_discrete_guide(&self.descriptor)?;
+        round.observe_guide(&self.descriptor)?;
         self.metrics.source.observe_feedback(round)?;
         round.observe_number(self.compute_box_width())?;
         round.observe_number(self.compute_box_height())?;
@@ -718,7 +709,7 @@ impl Legend {
                 round.observe_number(measurement::pixels(value))?;
             }
             round.observe_text_block(&layout.title)?;
-            for (entry, slot) in section.entries.iter().zip(&layout.entries) {
+            for (entry, slot) in section.entries().iter().zip(&layout.entries) {
                 round.observe_legend_glyph(
                     entry.key.point.as_ref(),
                     entry.key.line.as_ref(),
@@ -733,6 +724,10 @@ impl Legend {
                 {
                     round.observe_number(measurement::pixels(value))?;
                 }
+            }
+            if let Some(color) = &layout.color {
+                round.observe_number(measurement::pixels(layout.body_top))?;
+                color.observe_feedback(round)?;
             }
         }
         Ok(())
@@ -815,6 +810,15 @@ impl Legend {
             crate::orchestrator::measurements::Counter::LegendSelection,
         );
 
+        let color_calls = self.descriptor.continuous().map_or(Ok(0), |color| {
+            color
+                .numeric
+                .labels
+                .len()
+                .checked_add(1)
+                .and_then(|count| count.checked_add(usize::from(color.missing.is_some()) * 2))
+                .ok_or_else(|| Error::Render("legend call count overflow".into()))
+        })?;
         let count = [
             u64::from(self.metrics.frame.is_some()),
             u64::from(self.descriptor.counts.sections),
@@ -826,6 +830,7 @@ impl Legend {
         .into_iter()
         .try_fold(0_u64, u64::checked_add)
         .and_then(|count| usize::try_from(count).ok())
+        .and_then(|count| count.checked_add(color_calls))
         .ok_or_else(|| Error::Render("legend call count overflow".into()))?;
         let mut calls = Vec::new();
         crate::data::source::reserve_source(&mut calls, count)?;
@@ -869,7 +874,7 @@ impl Legend {
                 ),
                 plan: layout.title.plan().clone(),
             }))?;
-            for (entry, slot) in section.entries.iter().zip(&layout.entries) {
+            for (entry, slot) in section.entries().iter().zip(&layout.entries) {
                 entry.key.visit_calls(m, translate(slot.key), &mut emit)?;
                 emit(LegendCall::Text(crate::render::backend::PlacedText {
                     placement: PlannedTextPlacement::baseline(
@@ -879,6 +884,9 @@ impl Legend {
                     ),
                     plan: slot.block.plan().clone(),
                 }))?;
+            }
+            if let Some(color) = &layout.color {
+                color.visit_calls(x, y - measurement::pixels(layout.body_top), &mut emit)?;
             }
         }
 

@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use super::{Legend, PreparedDiscreteGuide};
+use super::{Legend, PreparedGuide};
 use crate::layout::fit::{FitFailure, FitOutcome, FitScope};
 use crate::layout::kernel::{LayoutScalar, SpatialRounding};
 use crate::layout::ComponentAddress;
@@ -16,7 +16,7 @@ pub(crate) struct GuideMeasurements {
 
 #[derive(Debug)]
 struct CachedMeasurement {
-    descriptor: Arc<PreparedDiscreteGuide>,
+    descriptor: Arc<PreparedGuide>,
     owner: ComponentAddress,
     ordinal: u32,
     width: i64,
@@ -75,7 +75,7 @@ fn constraints(available: (f64, Option<f64>)) -> Result<(i64, Option<i64>), Erro
 }
 
 pub(super) fn measure_assigned(
-    descriptor: Arc<PreparedDiscreteGuide>,
+    descriptor: Arc<PreparedGuide>,
     available: (f64, Option<f64>),
     horizontal: bool,
     compact: bool,

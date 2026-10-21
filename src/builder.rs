@@ -518,7 +518,7 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     categorical_color_scale: Option<crate::theme::CategoricalColorScale>,
     render_scope: Option<String>,
     pub(crate) prepared_discrete_guides:
-        Option<Arc<crate::decorations::legend::discrete::PreparedDiscreteGuides>>,
+        Option<Arc<crate::decorations::legend::discrete::PreparedGuides>>,
     pub(crate) prepared_axes:
         std::sync::Arc<Vec<(Option<String>, crate::plots::shared_x::PreparedAxes)>>,
     pub(crate) prepared_matrix_axes:

@@ -59,11 +59,6 @@ impl HeatmapData {
         })
     }
 
-    pub(crate) fn guide_values(&self) -> &[String] {
-        self.colorbar_values
-            .as_ref()
-            .map_or(&[], |numeric| numeric.labels.as_slice())
-    }
     pub(crate) fn guide_semantics(
         &self,
         theme: &ResolvedTheme,
@@ -112,7 +107,10 @@ impl HeatmapData {
             },
             descriptor.selection.clone(),
             &descriptor.numeric,
-        )
+        )?;
+        self.colorbar_stops =
+            crate::data::source::collect_source(descriptor.stops.iter().copied().map(Ok))?;
+        Ok(())
     }
 
     fn replace_domain(
@@ -911,14 +909,6 @@ fn analyze_intrinsics(
 }
 
 impl HeatmapData {
-    pub(crate) fn guide_labels(&self) -> impl ExactSizeIterator<Item = &str> {
-        self.guide_values().iter().map(String::as_str)
-    }
-
-    pub(crate) fn missing_guide_label(&self) -> Option<&str> {
-        self.has_missing.then_some("Missing")
-    }
-
     pub(crate) fn annotation_labels(
         &self,
         alpha: u8,
@@ -941,11 +931,13 @@ pub(crate) fn measure(
 
     let text = context.producer_text()?;
     let minimum = intrinsic_body_minimum(chart, theme)?;
-    let (body, colorbar) = if chart.continuous_guide_suppressed() {
+    let (body, colorbar) = if chart.continuous_guide_suppressed()
+        || chart.legend_policy_spec() == crate::LegendPolicy::Hidden
+    {
         (context.panel, None)
     } else {
         let (body, guide) = guide::measure(
-            prepared,
+            chart,
             context.panel,
             minimum.0,
             theme,
@@ -1151,20 +1143,21 @@ pub(crate) fn measure(
     payload.validate_annotation_ink(context.fit_scope())?;
     let geometry = payload.geometry()?;
 
-    let mut result = PlotRenderResult::new(layout, None).with_resolved_axis_keys(
-        crate::data::source::collect_source(
-            prepared
-                .x_levels
-                .iter()
-                .map(|s| crate::data::source::copy_source_string(s)),
-        )?,
-        crate::data::source::collect_source(
-            prepared
-                .y_levels
-                .iter()
-                .map(|s| crate::data::source::copy_source_string(s)),
-        )?,
-    );
+    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?)
+        .with_resolved_axis_keys(
+            crate::data::source::collect_source(
+                prepared
+                    .x_levels
+                    .iter()
+                    .map(|s| crate::data::source::copy_source_string(s)),
+            )?,
+            crate::data::source::collect_source(
+                prepared
+                    .y_levels
+                    .iter()
+                    .map(|s| crate::data::source::copy_source_string(s)),
+            )?,
+        );
     result.x_domain = crate::spec::AxisDomain::Categorical;
     result
         .numeric_presentation

@@ -303,7 +303,7 @@ pub(crate) fn project(
     for (points, style) in &payload.point_batches {
         geometry.scatter(points, style, clip)?;
     }
-    let mut result = PlotRenderResult::new(layout, None);
+    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?);
     result.marks = Some(crate::data::source::source_arc(
         crate::layout::interior::SelectedMarkPlan {
             payload: crate::layout::interior::MarkPayload::Qq(payload),

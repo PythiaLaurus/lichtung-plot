@@ -2,13 +2,13 @@ use super::*;
 use crate::decorations::legend::discrete::scoped::{
     ConsumedGuideDependency, DependencyUse, GuideAllocation, GuideOrientation,
 };
-use crate::decorations::legend::discrete::PreparedDiscreteGuide;
+use crate::decorations::legend::discrete::PreparedGuide;
 use crate::layout::fit::{self, FitScope};
 use crate::layout::kernel::{FitKind, TrialOutcome};
 use crate::theme::ResolvedTheme;
 use crate::LegendComposition;
 
-fn parent_guide(field: &str, theme: &ResolvedTheme) -> Arc<PreparedDiscreteGuide> {
+fn parent_guide(field: &str, theme: &ResolvedTheme) -> Arc<PreparedGuide> {
     let plot = Plot::scatter(
         crate::NumericValues::new("x", [0.0, 1.0]),
         crate::NumericValues::new("y", [0.0, 1.0]),
@@ -16,7 +16,7 @@ fn parent_guide(field: &str, theme: &ResolvedTheme) -> Arc<PreparedDiscreteGuide
     .hue(crate::CategoryValues::new(field, ["control", "treated"]).unwrap())
     .labels(crate::Labels::raw().alias(field, "Cohort"))
     .erase();
-    PreparedDiscreteGuide::prepare_for_test(&plot, theme, LegendComposition::Combined)
+    PreparedGuide::prepare_for_test(&plot, theme, LegendComposition::Combined)
         .unwrap()
         .unwrap()
 }
@@ -46,10 +46,7 @@ fn measure(
     .map_err(fit::PlanError::into_error)
 }
 
-fn descriptor_use(
-    descriptor: &Arc<PreparedDiscreteGuide>,
-    orientation: GuideOrientation,
-) -> DependencyUse {
+fn descriptor_use(descriptor: &Arc<PreparedGuide>, orientation: GuideOrientation) -> DependencyUse {
     DependencyUse::DescriptorAndAllocation {
         descriptor: Arc::clone(descriptor),
         orientation,

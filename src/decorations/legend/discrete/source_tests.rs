@@ -25,7 +25,7 @@ fn prepare(
     inputs
 }
 
-fn guide(inputs: &crate::layout::interior::PreparedInteriorInputs) -> &Arc<PreparedDiscreteGuide> {
+fn guide(inputs: &crate::layout::interior::PreparedInteriorInputs) -> &Arc<PreparedGuide> {
     inputs.discrete_guides.get().unwrap().root.as_ref().unwrap()
 }
 
@@ -73,7 +73,7 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
     let inputs = prepare(&plot, &theme);
     let projected_mapped =
-        PreparedDiscreteGuide::prepare_for_test(&plot, &theme, LegendComposition::Separate)
+        PreparedGuide::prepare_for_test(&plot, &theme, LegendComposition::Separate)
             .unwrap()
             .unwrap();
     let projected_inputs = separate_inputs(&plot, &theme);
@@ -88,7 +88,7 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
     assert_eq!(guide.counts.entries, 1);
     assert_eq!(guide.counts.primary_source_keys, 1);
     assert_eq!(guide.counts.source_occurrences, 1);
-    let entry = &guide.sections[0].entries[0];
+    let entry = &guide.sections[0].entries()[0];
     let source = &entry.sources[0];
     let GuideEntryIdentity::Category { field, value } = &entry.identity else {
         panic!("raw category")
@@ -122,11 +122,11 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
     bar_fill(&mut theme, body);
     let fixed_inputs = prepare(&plot, &theme);
     let projected_fixed =
-        PreparedDiscreteGuide::prepare_for_test(&plot, &theme, LegendComposition::Separate)
+        PreparedGuide::prepare_for_test(&plot, &theme, LegendComposition::Separate)
             .unwrap()
             .unwrap();
     let fixed_guide = self::guide(&fixed_inputs);
-    let fixed_entry = &fixed_guide.sections[0].entries[0];
+    let fixed_entry = &fixed_guide.sections[0].entries()[0];
     assert_eq!(fixed_entry.key, entry.key);
     assert_ne!(fixed_guide, guide);
     assert_eq!(
@@ -135,7 +135,7 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
             FillRole::BarBody
         )))
     );
-    let merged = PreparedDiscreteGuide::merge([guide, fixed_guide], &[], "equal complete Bar keys")
+    let merged = PreparedGuide::merge([guide, fixed_guide], &[], "equal complete Bar keys")
         .unwrap()
         .unwrap();
     assert_eq!(
@@ -173,16 +173,16 @@ fn assert_bar_alpha_context(plot: &Plot, theme: &mut crate::theme::ResolvedTheme
         .unwrap(),
     );
     for composition in [LegendComposition::Combined, LegendComposition::Separate] {
-        let constant = PreparedDiscreteGuide::prepare_for_test(plot, theme, composition)
+        let constant = PreparedGuide::prepare_for_test(plot, theme, composition)
             .unwrap()
             .unwrap();
-        let data = PreparedDiscreteGuide::prepare_for_test(&mapped, theme, composition)
+        let data = PreparedGuide::prepare_for_test(&mapped, theme, composition)
             .unwrap()
             .unwrap();
         assert_eq!(data.counts.sections, 1);
         assert_eq!(data.counts.entries, 1);
-        let constant_key = &constant.sections[0].entries[0].key;
-        let entry = &data.sections[0].entries[0];
+        let constant_key = &constant.sections[0].entries()[0].key;
+        let entry = &data.sections[0].entries()[0];
         let constant_fill = constant_key.fill.as_ref().unwrap();
         let data_fill = entry.key.fill.as_ref().unwrap();
         assert_eq!(constant_fill.color, data_fill.color);
@@ -209,28 +209,26 @@ fn assert_bar_alpha_context(plot: &Plot, theme: &mut crate::theme::ResolvedTheme
             panic!("explicit aggregate fill binding")
         };
         assert_eq!(input, mapped.alpha_inputs().get(AlphaTarget::Fill));
-        assert!(PreparedDiscreteGuide::merge(
-            [&constant, &data],
-            &[],
-            "alpha-context compatibility"
-        )
-        .unwrap_err()
-        .to_string()
-        .contains("explanation mask"));
+        assert!(
+            PreparedGuide::merge([&constant, &data], &[], "alpha-context compatibility")
+                .unwrap_err()
+                .to_string()
+                .contains("explanation mask")
+        );
     }
 }
 
 fn assert_outline_explanations(
-    mapped: &Arc<PreparedDiscreteGuide>,
-    fixed: &Arc<PreparedDiscreteGuide>,
+    mapped: &Arc<PreparedGuide>,
+    fixed: &Arc<PreparedGuide>,
     complete_mapped: &PreparedGuideEntry,
     complete_fixed: &PreparedGuideEntry,
 ) {
-    let GuideExplanation::Projected(mapped_mask) = &mapped.sections[0].entries[0].key.explanation
+    let GuideExplanation::Projected(mapped_mask) = &mapped.sections[0].entries()[0].key.explanation
     else {
         panic!("mapped color explanation")
     };
-    let GuideExplanation::Projected(fixed_mask) = &fixed.sections[0].entries[0].key.explanation
+    let GuideExplanation::Projected(fixed_mask) = &fixed.sections[0].entries()[0].key.explanation
     else {
         panic!("fixed color explanation")
     };
@@ -244,7 +242,7 @@ fn assert_outline_explanations(
     );
     assert_eq!(fixed_mask.fill_outline, Some(RgbExplanation::Constant));
     assert!(
-        PreparedDiscreteGuide::merge([mapped, fixed], &[], "projected Bar outlines")
+        PreparedGuide::merge([mapped, fixed], &[], "projected Bar outlines")
             .unwrap_err()
             .to_string()
             .contains("explanation mask")
@@ -343,7 +341,7 @@ fn interaction_theme(
 }
 
 fn assert_complete_interaction(
-    guide: &PreparedDiscreteGuide,
+    guide: &PreparedGuide,
     ratio: &crate::RelativeSpacing,
     outline_paint: Color,
 ) {
@@ -356,7 +354,7 @@ fn assert_complete_interaction(
         ),
         (3, 3, 3, 0)
     );
-    for (ordinal, entry) in guide.sections[0].entries.iter().enumerate() {
+    for (ordinal, entry) in guide.sections[0].entries().iter().enumerate() {
         let GuideEntryIdentity::Pair {
             group_field,
             group_value,
@@ -425,7 +423,7 @@ fn assert_complete_interaction(
     }
 }
 
-fn assert_projected_interaction(guide: &PreparedDiscreteGuide, outline_paint: Color) {
+fn assert_projected_interaction(guide: &PreparedGuide, outline_paint: Color) {
     assert_eq!(guide.counts.sections, 2);
     assert_eq!(
         (
@@ -452,7 +450,7 @@ fn assert_projected_interaction(guide: &PreparedDiscreteGuide, outline_paint: Co
         guide.sections[1].identity,
         GuideSectionIdentity::HueColor(_)
     ));
-    for entry in guide.sections[0].entries.iter() {
+    for entry in guide.sections[0].entries() {
         let point = entry.key.point.as_ref().unwrap();
         let line = entry.key.line.as_ref().unwrap();
         assert_eq!(point.color, Color::rgba(40, 50, 60, 17));
@@ -483,7 +481,7 @@ fn assert_projected_interaction(guide: &PreparedDiscreteGuide, outline_paint: Co
             .iter()
             .all(|source| source.group_neutral_rgb == Some(crate::OpaqueColor::rgb(40, 50, 60))));
     }
-    for entry in guide.sections[1].entries.iter() {
+    for entry in guide.sections[1].entries() {
         let point = entry.key.point.as_ref().unwrap();
         let line = entry.key.line.as_ref().unwrap();
         assert_eq!(
@@ -534,10 +532,9 @@ fn prepared_interaction_bindings_retain_exact_point_outlines_and_actual_group_st
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
     let inputs = prepare(&plot, &theme);
     assert_complete_interaction(guide(&inputs), &ratio, outline_paint);
-    let projected =
-        PreparedDiscreteGuide::prepare_for_test(&plot, &theme, LegendComposition::Separate)
-            .unwrap()
-            .unwrap();
+    let projected = PreparedGuide::prepare_for_test(&plot, &theme, LegendComposition::Separate)
+        .unwrap()
+        .unwrap();
     let projected_inputs = separate_inputs(&plot, &theme);
     assert_eq!(guide(&projected_inputs), &projected);
     assert_projected_interaction(&projected, outline_paint);
@@ -547,7 +544,7 @@ fn prepared_interaction_bindings_retain_exact_point_outlines_and_actual_group_st
     assert!(error
         .to_string()
         .contains("unsupported discrete guide factorization"));
-    assert!(PreparedDiscreteGuide::prepare_for_test(
+    assert!(PreparedGuide::prepare_for_test(
         &unconfigured.legend(crate::LegendPolicy::Hidden).erase(),
         &theme,
         LegendComposition::Separate
@@ -557,17 +554,16 @@ fn prepared_interaction_bindings_retain_exact_point_outlines_and_actual_group_st
     let collapsed = crate::plots::interaction::extraction::source()
         .hue(CategoryValues::new("group", ["one", "one", "one", "two", "two"]).unwrap())
         .erase();
-    let joint =
-        PreparedDiscreteGuide::prepare_for_test(&collapsed, &theme, LegendComposition::Separate)
-            .unwrap()
-            .unwrap();
+    let joint = PreparedGuide::prepare_for_test(&collapsed, &theme, LegendComposition::Separate)
+        .unwrap()
+        .unwrap();
     assert_eq!(joint.counts.sections, 1);
     assert!(matches!(
         joint.sections[0].identity,
         GuideSectionIdentity::Joint(_)
     ));
     assert!(joint.sections[0]
-        .entries
+        .entries()
         .iter()
         .all(|entry| matches!(entry.key.explanation, GuideExplanation::Complete(_))));
     let ambiguous = interaction().labels(
@@ -575,26 +571,24 @@ fn prepared_interaction_bindings_retain_exact_point_outlines_and_actual_group_st
             .alias("group", "Shared title")
             .alias("hue", "Shared title"),
     );
-    assert!(PreparedDiscreteGuide::prepare_for_test(
-        &ambiguous,
-        &theme,
-        LegendComposition::Separate
-    )
-    .unwrap_err()
-    .to_string()
-    .contains("distinct section identities"));
+    assert!(
+        PreparedGuide::prepare_for_test(&ambiguous, &theme, LegendComposition::Separate)
+            .unwrap_err()
+            .to_string()
+            .contains("distinct section identities")
+    );
     let same_label = interaction().labels(
         crate::Labels::raw()
             .alias("one", "Equal label")
             .alias("control", "Equal label"),
     );
     let distinct_sections =
-        PreparedDiscreteGuide::prepare_for_test(&same_label, &theme, LegendComposition::Separate)
+        PreparedGuide::prepare_for_test(&same_label, &theme, LegendComposition::Separate)
             .unwrap()
             .unwrap();
     assert_eq!(
-        distinct_sections.sections[0].entries[0].display_label,
-        distinct_sections.sections[1].entries[0].display_label
+        distinct_sections.sections[0].entries()[0].display_label,
+        distinct_sections.sections[1].entries()[0].display_label
     );
     assert_eq!(
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
@@ -641,7 +635,7 @@ fn assert_interaction_alpha_context(
             .unwrap(),
         );
     for composition in [LegendComposition::Combined, LegendComposition::Separate] {
-        let guide = PreparedDiscreteGuide::prepare_for_test(&mapped, theme, composition)
+        let guide = PreparedGuide::prepare_for_test(&mapped, theme, composition)
             .unwrap()
             .unwrap();
         assert_eq!(
@@ -653,7 +647,7 @@ fn assert_interaction_alpha_context(
             }
         );
         for section in guide.sections.iter() {
-            for entry in section.entries.iter() {
+            for entry in section.entries() {
                 let point = entry.key.point.as_ref().unwrap();
                 let line = entry.key.line.as_ref().unwrap();
                 assert_eq!(point.color.alpha(), 255);

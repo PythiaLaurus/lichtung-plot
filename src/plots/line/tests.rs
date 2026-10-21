@@ -356,19 +356,19 @@ fn supplemental_defaults_and_explicit_alpha_keep_label_paint_independent_and_gui
     let guide = measured.discrete_guide.as_ref().unwrap();
     assert_eq!(guide.counts.entries, 3);
     assert_eq!(
-        guide.sections[0].entries[2].identity,
+        guide.sections[0].entries()[2].identity,
         crate::decorations::legend::GuideEntryIdentity::supplemental("Alpha").unwrap()
     );
     assert_eq!(
-        guide.sections[0].entries[2].key,
+        guide.sections[0].entries()[2].key,
         crate::decorations::legend::ResolvedGuideKey::point(alpha_style.clone())
     );
     assert_eq!(alpha_text[0].plan.source, "Alpha");
     assert_eq!(
-        guide.sections[0].entries[2].display_label.as_ref(),
+        guide.sections[0].entries()[2].display_label.as_ref(),
         "Legend alpha"
     );
-    let separate = crate::decorations::legend::discrete::PreparedDiscreteGuide::prepare_for_test(
+    let separate = crate::decorations::legend::discrete::PreparedGuide::prepare_for_test(
         &source,
         &theme,
         crate::LegendComposition::Separate,
@@ -380,11 +380,11 @@ fn supplemental_defaults_and_explicit_alpha_keep_label_paint_independent_and_gui
         crate::decorations::legend::discrete::GuideSectionIdentity::SupplementalSeries
     ));
     assert_eq!(
-        separate.sections[1].entries[1].display_label.as_ref(),
+        separate.sections[1].entries()[1].display_label.as_ref(),
         "Legend alpha"
     );
     assert_eq!(
-        separate.sections[1].entries[1].key,
-        guide.sections[0].entries[2].key
+        separate.sections[1].entries()[1].key,
+        guide.sections[0].entries()[2].key
     );
 }

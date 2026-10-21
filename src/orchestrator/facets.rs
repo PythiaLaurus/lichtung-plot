@@ -115,7 +115,7 @@ pub(crate) fn text_census_panels<'a>(
 
 pub(super) struct PreparedFacetGuide {
     pub(super) descriptor:
-        Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedDiscreteGuide>>,
+        Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>>,
     pub(super) hue_levels: Option<Vec<String>>,
 }
 

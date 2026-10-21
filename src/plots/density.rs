@@ -1018,19 +1018,17 @@ mod tests {
             2.5_f32.to_bits()
         );
         assert_eq!(changed_payload.curves[0].line_style.color.alpha(), 128);
-        assert!(
-            crate::decorations::legend::discrete::PreparedDiscreteGuide::merge(
-                [
-                    selected.discrete_guide.as_ref().unwrap(),
-                    changed.discrete_guide.as_ref().unwrap()
-                ],
-                &[],
-                "custom Density line",
-            )
-            .unwrap_err()
-            .to_string()
-            .contains("glyphs must match exactly")
-        );
+        assert!(crate::decorations::legend::discrete::PreparedGuide::merge(
+            [
+                selected.discrete_guide.as_ref().unwrap(),
+                changed.discrete_guide.as_ref().unwrap()
+            ],
+            &[],
+            "custom Density line",
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("glyphs must match exactly"));
     }
 
     struct DensityValues {

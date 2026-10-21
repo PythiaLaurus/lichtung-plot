@@ -27,6 +27,7 @@ fn section(title: u32, widths: &[f64], heights: &[u32]) -> MeasuredSection {
         title_ascent: 0,
         title_width: ExactLength::pixels(10.0).unwrap(),
         title_occupancy: ExactLength::pixels(f64::from(title)).unwrap(),
+        color: None,
         entries: widths
             .iter()
             .zip(heights)
@@ -256,7 +257,7 @@ fn factorized_plot(group_field: &str) -> crate::Plot {
     .erase()
 }
 
-fn factorized_fixture() -> (Arc<PreparedDiscreteGuide>, ResolvedTheme) {
+fn factorized_fixture() -> (Arc<PreparedGuide>, ResolvedTheme) {
     use crate::PointShape;
     let plot = factorized_plot("group");
     let mut theme = crate::Theme::publication().resolve().unwrap();
@@ -290,10 +291,9 @@ fn factorized_fixture() -> (Arc<PreparedDiscreteGuide>, ResolvedTheme) {
         )
         .unwrap();
     theme.marks = theme.marks.clone().with_points(points).unwrap();
-    let descriptor =
-        PreparedDiscreteGuide::prepare_for_test(&plot, &theme, LegendComposition::Separate)
-            .unwrap()
-            .unwrap();
+    let descriptor = PreparedGuide::prepare_for_test(&plot, &theme, LegendComposition::Separate)
+        .unwrap()
+        .unwrap();
     (descriptor, theme)
 }
 
@@ -339,7 +339,7 @@ fn factorized_keys_and_multiline_titles_freeze_in_one_contained_frame() {
     }
 }
 
-fn assert_frozen_sections(measured: &Legend, descriptor: &PreparedDiscreteGuide, frames: usize) {
+fn assert_frozen_sections(measured: &Legend, descriptor: &PreparedGuide, frames: usize) {
     assert_eq!(measured.layout.sections.len(), 2);
     assert_eq!(measured.layout.sections[0].title.plan().lines.len(), 2);
     let bounds = measured.box_at(20.0, 30.0);
@@ -385,7 +385,7 @@ fn assert_frozen_sections(measured: &Legend, descriptor: &PreparedDiscreteGuide,
         descriptor
             .sections
             .iter()
-            .flat_map(|section| section.entries.iter()),
+            .flat_map(|section| section.entries().iter()),
     ) {
         assert_eq!(
             crate::decorations::legend::ResolvedGuideKey::point((*point).clone()),
@@ -414,7 +414,7 @@ fn assert_frozen_sections(measured: &Legend, descriptor: &PreparedDiscreteGuide,
 }
 
 fn measure_fixture(
-    descriptor: &Arc<PreparedDiscreteGuide>,
+    descriptor: &Arc<PreparedGuide>,
     available: (f64, Option<f64>),
     variant: (bool, bool),
     theme: &ResolvedTheme,
@@ -457,7 +457,7 @@ fn scoped_section_measurements_reuse_values_and_invalidate_consumed_inputs() {
         .child(AddressRole::OutsideGuideAuto, 0)
         .unwrap();
     let original = measure_fixture(&descriptor, (420.0, None), (false, false), &theme, &scope);
-    let equal_value = Arc::new(PreparedDiscreteGuide {
+    let equal_value = Arc::new(PreparedGuide {
         composition: descriptor.composition,
         counts: descriptor.counts,
         sections: Arc::clone(&descriptor.sections),
@@ -487,7 +487,7 @@ fn scoped_section_measurements_reuse_values_and_invalidate_consumed_inputs() {
     assert!(!Arc::ptr_eq(&original.layout, &uncached.layout));
     assert_eq!(frozen_svg(&original, &theme), frozen_svg(&uncached, &theme));
 
-    let different_source = PreparedDiscreteGuide::prepare_for_test(
+    let different_source = PreparedGuide::prepare_for_test(
         &factorized_plot("other group"),
         &theme,
         LegendComposition::Separate,
@@ -592,4 +592,56 @@ fn scoped_section_measurements_reuse_values_and_invalidate_consumed_inputs() {
     let first = miss();
     assert_eq!(first, miss());
     assert_eq!(first.reason.address, scope.address);
+    assert_color_measurement_cache(&theme);
+}
+
+fn assert_color_measurement_cache(theme: &ResolvedTheme) {
+    let plot = |field: &str| {
+        crate::Plot::beeswarm(
+            crate::CategoryValues::new("category", ["A", "A"]).unwrap(),
+            crate::NumericValues::new("position", [1.0, 2.0]),
+            crate::NumericValues::new(field, [0.0, 1.0]),
+        )
+        .labels(crate::Labels::raw().alias(field, "Signal"))
+        .erase()
+    };
+    let prepare = |field| {
+        PreparedGuide::prepare_for_test(&plot(field), theme, LegendComposition::Combined)
+            .unwrap()
+            .unwrap()
+    };
+    let descriptor = prepare("signal");
+    let equal = prepare("signal");
+    let distinct = prepare("other signal");
+    let scope = FitScope::root()
+        .child(AddressRole::OutsideGuideRight, 0)
+        .unwrap();
+    let measured = measure_fixture(&descriptor, (420.0, None), (false, false), theme, &scope);
+    let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
+    let repeated = measure_fixture(&equal, (420.0, None), (false, false), theme, &scope);
+    assert!(!Arc::ptr_eq(&descriptor, &equal));
+    assert!(Arc::ptr_eq(&measured.layout, &repeated.layout));
+    assert_eq!(
+        crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
+        shapes
+    );
+    let distinct = measure_fixture(&distinct, (420.0, None), (false, false), theme, &scope);
+    assert!(!Arc::ptr_eq(&measured.layout, &distinct.layout));
+    assert_eq!(
+        (measured.layout.width, measured.layout.height),
+        (distinct.layout.width, distinct.layout.height)
+    );
+    assert_eq!(frozen_svg(&measured, theme), frozen_svg(&distinct, theme));
+    let uncached = fit::measured(measure_uncached(
+        descriptor,
+        (420.0, None),
+        false,
+        false,
+        theme,
+        &mut false,
+        &scope,
+    ))
+    .unwrap();
+    assert!(!Arc::ptr_eq(&measured.layout, &uncached.layout));
+    assert_eq!(frozen_svg(&measured, theme), frozen_svg(&uncached, theme));
 }

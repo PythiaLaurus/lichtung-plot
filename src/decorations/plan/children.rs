@@ -270,7 +270,7 @@ impl<'a> ChildPlans<'a> {
         plot: &Plot,
         role: LegendRole,
         context: PlotRenderContext<'_>,
-        discrete_guide: Option<&crate::decorations::legend::discrete::DiscreteGuideSlot>,
+        discrete_guide: Option<&crate::decorations::legend::discrete::GuideSlot>,
         round: &mut FeedbackRound,
         owner: &ComponentAddress,
     ) -> Result<FitOutcome<Arc<PanelPlan>>, Error> {

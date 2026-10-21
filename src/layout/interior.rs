@@ -114,9 +114,8 @@ impl CompositionChildPolicy {
 /// storage; no prepared Plot clone or alternate preparation route is retained.
 /// Trajectory retains its condition order.
 pub(crate) struct PreparedInteriorInputs {
-    pub(crate) discrete_guides: std::sync::OnceLock<
-        std::sync::Arc<crate::decorations::legend::discrete::PreparedDiscreteGuides>,
-    >,
+    pub(crate) discrete_guides:
+        std::sync::OnceLock<std::sync::Arc<crate::decorations::legend::discrete::PreparedGuides>>,
     pub(crate) waterfall: Option<std::sync::Arc<crate::plots::waterfall::PreparedWaterfallInputs>>,
     pub(crate) beeswarm: Option<std::sync::Arc<crate::plots::beeswarm::PreparedBeeswarmInputs>>,
     pub(crate) marginal: Option<std::sync::Arc<crate::plots::marginal::PreparedMarginal>>,

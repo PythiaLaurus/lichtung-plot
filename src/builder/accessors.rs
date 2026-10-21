@@ -979,10 +979,8 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     pub(crate) fn prepared_discrete_guide(
         &self,
-    ) -> Result<
-        Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedDiscreteGuide>>,
-        Error,
-    > {
+    ) -> Result<Option<std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>>, Error>
+    {
         self.prepared_discrete_guides
             .as_ref()
             .ok_or_else(|| Error::Render("discrete guide semantics were not prepared".into()))?

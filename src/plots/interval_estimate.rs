@@ -1224,8 +1224,8 @@ fn project(
     }
     #[cfg(test)]
     count(chart.kind(), 2);
-    let mut result =
-        PlotRenderResult::new(layout, None).with_deferred_annotation_text(deferred_annotation_text);
+    let mut result = PlotRenderResult::new(layout, chart.prepared_discrete_guide()?)
+        .with_deferred_annotation_text(deferred_annotation_text);
     result
         .numeric_presentation
         .clone_from(&prepared.value_presentation);

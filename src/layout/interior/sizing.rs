@@ -1,6 +1,6 @@
 //! Natural root composition at one chosen width. Public constructors stay exact.
 
-use crate::decorations::legend::descriptor::{ContinuousDescriptor, PreparedGuideDescriptor};
+use crate::decorations::legend::discrete::PreparedGuide;
 use crate::layout::fit::{self, FitScope};
 use crate::layout::kernel::{FeedbackKind, FeedbackRound, RootSize};
 use crate::layout::{ComponentAddress, PhysicalTextAlignment};
@@ -8,7 +8,7 @@ use crate::theme::ResolvedTheme;
 use crate::{Error, Plot, PlotKind};
 
 pub(crate) struct GuidedPreference {
-    pub(crate) descriptor: PreparedGuideDescriptor,
+    pub(crate) descriptor: std::sync::Arc<PreparedGuide>,
     pub(crate) position: crate::LegendPosition,
 }
 
@@ -26,14 +26,7 @@ impl GuidedPreference {
     }
 
     pub(crate) fn preference(&self, theme: &ResolvedTheme) -> Result<(f64, f64), Error> {
-        match &self.descriptor {
-            PreparedGuideDescriptor::Discrete(descriptor) => {
-                crate::decorations::legend::Legend::natural_preference(descriptor, theme)
-            }
-            PreparedGuideDescriptor::Continuous(descriptor) => {
-                continuous_preference(descriptor, theme, &FitScope::root())
-            }
-        }
+        crate::decorations::legend::Legend::natural_preference(&self.descriptor, theme)
     }
 
     pub(crate) fn at_width(
@@ -42,122 +35,38 @@ impl GuidedPreference {
         theme: &ResolvedTheme,
         scope: &FitScope,
     ) -> Result<(f64, f64), Error> {
-        let outcome = match &self.descriptor {
-            PreparedGuideDescriptor::Discrete(descriptor) => {
-                let legend = fit::measured(crate::decorations::legend::Legend::measure_assigned(
-                    std::sync::Arc::clone(descriptor),
-                    (width, None),
-                    self.horizontal(),
-                    false,
-                    theme,
-                    &mut false,
-                    scope,
-                ))
-                .map_err(fit::PlanError::into_error)?;
-                (legend.compute_box_width(), legend.compute_box_height())
-            }
-            PreparedGuideDescriptor::Continuous(descriptor) => {
-                let guide = fit::measured(
-                    crate::decorations::legend::MeasuredContinuousGuide::measure(
-                        descriptor,
-                        (width, None),
-                        false,
-                        false,
-                        theme,
-                        &mut false,
-                        scope,
-                    ),
-                )
-                .map_err(fit::PlanError::into_error)?;
-                (guide.width, guide.height)
-            }
-        };
-        Ok(outcome)
-    }
-}
-
-pub(crate) fn continuous_width(
-    descriptor: &ContinuousDescriptor,
-    theme: &ResolvedTheme,
-) -> Result<f64, Error> {
-    Ok(
-        crate::decorations::legend::MeasuredContinuousGuide::vertical_widths(descriptor, theme)?
-            .preferred,
-    )
-}
-
-pub(crate) fn continuous_preference(
-    descriptor: &ContinuousDescriptor,
-    theme: &ResolvedTheme,
-    scope: &FitScope,
-) -> Result<(f64, f64), Error> {
-    let width = continuous_width(descriptor, theme)?;
-    let guide = fit::measured(
-        crate::decorations::legend::MeasuredContinuousGuide::measure(
-            descriptor,
+        let guide = fit::measured(crate::decorations::legend::Legend::measure_assigned(
+            std::sync::Arc::clone(&self.descriptor),
             (width, None),
-            false,
+            self.horizontal(),
             false,
             theme,
             &mut false,
             scope,
-        ),
-    )
-    .map_err(fit::PlanError::into_error)?;
-    Ok((guide.width, guide.height))
-}
-
-fn scoped_guide<'a, T>(panels: &'a [(Option<String>, T)], plot: &Plot) -> Result<&'a T, Error> {
-    for (scope, marks) in panels {
-        if scope.as_deref() == plot.axis_scope() {
-            return Ok(marks);
-        }
+        ))
+        .map_err(fit::PlanError::into_error)?;
+        Ok((guide.compute_box_width(), guide.compute_box_height()))
     }
-    Err(Error::Render(
-        "scoped continuous guide preference is missing".into(),
-    ))
 }
 
 /// The prepared scope owns the guide. No panel assignment or edge trial occurs
 /// while this intrinsic input is retained.
 pub(crate) fn guided_preference(
     plot: &Plot,
-    inputs: &super::PreparedInteriorInputs,
-    theme: &ResolvedTheme,
+    _inputs: &super::PreparedInteriorInputs,
+    _theme: &ResolvedTheme,
 ) -> Result<Option<GuidedPreference>, Error> {
-    if matches!(plot.kind(), PlotKind::Heatmap | PlotKind::Beeswarm) {
-        if plot.continuous_guide_suppressed() {
-            return Ok(None);
-        }
-        let descriptor = match plot.kind() {
-            PlotKind::Heatmap => {
-                let prepared = inputs.heatmap.as_ref().ok_or_else(|| {
-                    Error::Render("scoped Heatmap guide preference is missing".into())
-                })?;
-                let marks = scoped_guide(&prepared.panels, plot)?;
-                marks.guide_descriptor(plot.color_dimension_key().unwrap_or(""), theme)?
-            }
-            PlotKind::Beeswarm => {
-                let prepared = inputs.beeswarm.as_ref().ok_or_else(|| {
-                    Error::Render("scoped Beeswarm guide preference is missing".into())
-                })?;
-                let marks = scoped_guide(&prepared.panels, plot)?;
-                marks.guide_descriptor(plot.color_dimension_key().unwrap_or(""))?
-            }
-            _ => unreachable!("continuous kind selected"),
-        };
-        return Ok(Some(GuidedPreference {
-            descriptor: PreparedGuideDescriptor::Continuous(crate::data::source::source_arc(
-                descriptor,
-            )?),
-            position: crate::LegendPosition::OutsideRight,
-        }));
-    }
-    let position = plot.legend_position_spec();
+    let native = matches!(plot.kind(), PlotKind::Heatmap | PlotKind::Beeswarm);
+    let position = if native {
+        crate::LegendPosition::OutsideRight
+    } else {
+        plot.legend_position_spec()
+    };
     if plot.legend_policy_spec() == crate::LegendPolicy::Hidden
         || (position != crate::LegendPosition::Auto
             && !crate::decorations::plan::is_outside(position))
         || plot.kind() == PlotKind::Matrix
+        || (native && plot.continuous_guide_suppressed())
     {
         return Ok(None);
     }
@@ -165,7 +74,7 @@ pub(crate) fn guided_preference(
         return Ok(None);
     };
     Ok(Some(GuidedPreference {
-        descriptor: PreparedGuideDescriptor::Discrete(descriptor),
+        descriptor,
         position,
     }))
 }
@@ -191,8 +100,7 @@ pub(crate) fn guided_body_height(
     }
     let available = width - hard.0 - theme.legend_outside_gap()?;
     if available <= 0.0
-        || (available < natural.0
-            && matches!(guide.descriptor, PreparedGuideDescriptor::Discrete(_)))
+        || (available < natural.0 && !matches!(plot.kind(), PlotKind::Heatmap | PlotKind::Beeswarm))
     {
         // This proposal does not select an Auto edge. The existing containing
         // frame trials report the selected width-dependent content height.
@@ -200,18 +108,7 @@ pub(crate) fn guided_body_height(
             .natural_body_height(theme, width, preference.1)?
             .max(natural.1));
     }
-    let allocated = if matches!(guide.descriptor, PreparedGuideDescriptor::Continuous(_)) {
-        continuous_width(
-            match &guide.descriptor {
-                PreparedGuideDescriptor::Continuous(value) => value,
-                PreparedGuideDescriptor::Discrete(_) => unreachable!(),
-            },
-            theme,
-        )?
-        .min(available)
-    } else {
-        natural.0.min(available)
-    };
+    let allocated = natural.0.min(available);
     let measured = guide.at_width(allocated, theme, scope)?;
     Ok(plot
         .natural_body_height(
@@ -565,15 +462,34 @@ impl Plot {
 
 #[cfg(test)]
 mod tests {
+    fn prepared_color(
+        descriptor: crate::decorations::legend::descriptor::ContinuousDescriptor,
+        theme: &crate::theme::ResolvedTheme,
+    ) -> std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide> {
+        let plot = crate::Plot::scatter(
+            crate::NumericValues::new("x", [0.0]),
+            crate::NumericValues::new("y", [0.0]),
+        )
+        .erase();
+        crate::decorations::legend::discrete::PreparedGuide::prepare(
+            &plot,
+            theme,
+            &crate::layout::ComponentAddress::root(),
+            Vec::new(),
+            Some(std::sync::Arc::new(descriptor)),
+            crate::LegendComposition::Combined,
+        )
+        .unwrap()
+        .unwrap()
+    }
+
     #[test]
     #[expect(
         clippy::too_many_lines,
         reason = "the one-quantum width oracle includes complete configured label and native-guide operands"
     )]
     fn continuous_natural_and_native_right_width_keep_half_quantum_reserves_exact() {
-        use crate::decorations::legend::{
-            descriptor::ContinuousDescriptor, MeasuredContinuousGuide,
-        };
+        use crate::decorations::legend::{descriptor::ContinuousDescriptor, Legend};
         use crate::layout::{
             fit::{FitOutcome, FitScope},
             PanelBox,
@@ -644,11 +560,12 @@ mod tests {
         let full = f64::from(u32::try_from(base + 2).unwrap()) / 1024.0;
         let below = f64::from(u32::try_from(base + 1).unwrap()) / 1024.0;
         let scope = FitScope::root();
-        let (width, _) = super::continuous_preference(&descriptor, &theme, &scope).unwrap();
+        let descriptor = prepared_color(descriptor, &theme);
+        let (width, _) = Legend::natural_preference(&descriptor, &theme).unwrap();
         assert_eq!(width.to_bits(), full.to_bits());
         assert!(matches!(
-            MeasuredContinuousGuide::measure(
-                &descriptor,
+            Legend::measure_assigned(
+                std::sync::Arc::clone(&descriptor),
                 (below, 500.0),
                 false,
                 false,
@@ -661,8 +578,8 @@ mod tests {
         ));
 
         let gap = theme.legend_outside_gap().unwrap();
-        let (_, guide) = crate::layout::interior::guide::continuous_right(
-            &descriptor,
+        let (_, guide) = crate::layout::interior::guide::native_right(
+            std::sync::Arc::clone(&descriptor),
             PanelBox::new(0.0, 64.0 + gap + full + 128.0, 0.0, 500.0),
             64.0,
             &theme,
@@ -670,10 +587,10 @@ mod tests {
             None,
         )
         .unwrap();
-        assert_eq!(guide.width.to_bits(), full.to_bits());
+        assert_eq!(guide.compute_box_width().to_bits(), full.to_bits());
         assert!(matches!(
-            crate::layout::interior::guide::continuous_right(
-                &descriptor,
+            crate::layout::interior::guide::native_right(
+                std::sync::Arc::clone(&descriptor),
                 PanelBox::new(0.0, 64.0 + gap + below, 0.0, 500.0),
                 64.0,
                 &theme,
@@ -735,12 +652,9 @@ mod tests {
             )
             .unwrap(),
         };
-        let (width, height) = super::continuous_preference(
-            &descriptor,
-            &theme,
-            &crate::layout::fit::FitScope::root(),
-        )
-        .unwrap();
+        let descriptor = prepared_color(descriptor, &theme);
+        let (width, height) =
+            crate::decorations::legend::Legend::natural_preference(&descriptor, &theme).unwrap();
         assert!(width >= 130.0 && height >= 130.0);
         assert!(width < 300.0 && height < 500.0);
     }

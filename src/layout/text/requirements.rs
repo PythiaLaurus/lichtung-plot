@@ -896,7 +896,24 @@ impl PreparedTextRequirement {
                 let guides = interiors.discrete_guides.get().ok_or_else(|| {
                     Error::Render("discrete guide font census requires prepared semantics".into())
                 })?;
-                if let Some(guide) = &guides.root {
+                if plot.has_facets() && matches!(kind, PlotKind::Heatmap | PlotKind::Beeswarm) {
+                    for (index, panel) in guides.panels.iter().enumerate() {
+                        if let Some(guide) = &panel.descriptor {
+                            let index = u32::try_from(index).map_err(|_| {
+                                Error::Render("native guide facet index overflow".into())
+                            })?;
+                            let owner = base
+                                .child(AddressRole::FacetCell, index)?
+                                .child(AddressRole::OutsideGuideRight, 0)?;
+                            guide.append_requirements(
+                                requirements,
+                                theme,
+                                &owner,
+                                prepared_stage.as_deref_mut(),
+                            )?;
+                        }
+                    }
+                } else if let Some(guide) = &guides.root {
                     let guide_parent =
                         if plot.has_facets() || base.leaf_role() == AddressRole::CanvasCell {
                             base.clone()
@@ -905,6 +922,8 @@ impl PreparedTextRequirement {
                         };
                     let role = if kind == PlotKind::Matrix {
                         AddressRole::InsideGuide
+                    } else if matches!(kind, PlotKind::Heatmap | PlotKind::Beeswarm) {
+                        AddressRole::OutsideGuideRight
                     } else {
                         crate::decorations::legend::address_role(plot.legend_position_spec())
                     };
@@ -1079,103 +1098,13 @@ fn push_deferred_plot_requirements(
                 )?;
             }
         }
-    } else if kind == PlotKind::Beeswarm {
-        let beeswarm = interiors
-            .and_then(|inputs| inputs.beeswarm.as_deref())
-            .ok_or_else(|| {
-                Error::Render("beeswarm census requires root-prepared semantics".into())
-            })?;
-        for (panel_index, (_, marks)) in beeswarm.panels.iter().enumerate() {
-            if plot.continuous_guide_suppressed() {
-                continue;
-            }
-            let guide = prepared_address_child(
-                base,
-                AddressRole::OutsideGuideRight,
-                panel_index
-                    .try_into()
-                    .map_err(|_| Error::Render("beeswarm guide panel index overflowed".into()))?,
-                prepared_stage.as_deref_mut(),
-            )?;
-            push_owned(
-                requirements,
-                prepared_address_child(
-                    &guide,
-                    AddressRole::GuideTitle,
-                    0,
-                    prepared_stage.as_deref_mut(),
-                )?,
-                PreparedTextRole::LegendTitle,
-                0,
-                marks.color_label.as_str(),
-                &[],
-                &theme.typography.guides.legend_title,
-                prepared_stage.as_deref_mut(),
-            )?;
-            for (index, label) in marks.guide_labels().enumerate() {
-                push_owned(
-                    requirements,
-                    guide.clone(),
-                    PreparedTextRole::LegendLabel,
-                    index.try_into().map_err(|_| {
-                        Error::Render("beeswarm guide census index overflowed".into())
-                    })?,
-                    label,
-                    &[],
-                    &theme.typography.guides.legend_label,
-                    prepared_stage.as_deref_mut(),
-                )?;
-            }
-        }
     } else if kind == PlotKind::Heatmap {
         let heatmap = interiors
             .and_then(|inputs| inputs.heatmap.as_deref())
             .ok_or_else(|| {
                 Error::Render("heatmap census requires root-prepared semantics".into())
             })?;
-        for (panel_index, (_, marks)) in heatmap.panels.iter().enumerate() {
-            let guide = if plot.continuous_guide_suppressed() {
-                None
-            } else {
-                let guide = prepared_address_child(
-                    base,
-                    AddressRole::OutsideGuideRight,
-                    panel_index.try_into().map_err(|_| {
-                        Error::Render("heatmap guide panel index overflowed".into())
-                    })?,
-                    prepared_stage.as_deref_mut(),
-                )?;
-                push_owned(
-                    requirements,
-                    prepared_address_child(
-                        &guide,
-                        AddressRole::GuideTitle,
-                        0,
-                        prepared_stage.as_deref_mut(),
-                    )?,
-                    PreparedTextRole::LegendTitle,
-                    0,
-                    marks.color_label.as_str(),
-                    &[],
-                    &theme.typography.guides.legend_title,
-                    prepared_stage.as_deref_mut(),
-                )?;
-                for (index, label) in marks.guide_labels().enumerate() {
-                    push_owned(
-                        requirements,
-                        guide.clone(),
-                        PreparedTextRole::LegendLabel,
-                        index.try_into().map_err(|_| {
-                            Error::Render("heatmap guide census index overflowed".into())
-                        })?,
-                        label,
-                        &[],
-                        &theme.typography.guides.legend_label,
-                        prepared_stage.as_deref_mut(),
-                    )?;
-                }
-                Some(guide)
-            };
+        for (_, marks) in &heatmap.panels {
             for (label, fill) in marks.annotation_labels(theme.marks.cells().fill_alpha()) {
                 push_deferred_body(
                     requirements,
@@ -1184,20 +1113,6 @@ fn push_deferred_plot_requirements(
                     label,
                     &[],
                     theme.contrasting_text(fill)?,
-                    prepared_stage.as_deref_mut(),
-                )?;
-            }
-            if let (Some(guide), Some(label)) = (guide.as_ref(), marks.missing_guide_label()) {
-                push_owned(
-                    requirements,
-                    guide.clone(),
-                    PreparedTextRole::LegendLabel,
-                    marks.guide_labels().count().try_into().map_err(|_| {
-                        Error::Render("heatmap guide census index overflowed".into())
-                    })?,
-                    label,
-                    &[],
-                    &theme.typography.guides.legend_label,
                     prepared_stage.as_deref_mut(),
                 )?;
             }

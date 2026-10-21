@@ -20,7 +20,7 @@ macro_rules! raw_identity {
         pub(crate) struct $name(Arc<str>);
 
         impl $name {
-            fn new(value: &str) -> Result<Self> {
+            pub(super) fn new(value: &str) -> Result<Self> {
                 shared_text(value).map(Self)
             }
 

@@ -888,7 +888,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
     crate::canvas::lifecycle_tests::mixed_family_parent_audit(&plots);
     for (kind, plot) in plots {
         let plot = plot.size(640, 480);
-        assert_discrete_kind_components(kind, &plot);
+        assert_prepared_kind_sections(kind, &plot);
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let domain =
             crate::plots::shared_x::domain(&plot, &crate::font::canonical::OperationContext::new());
@@ -1053,9 +1053,9 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
     assert!(preparation_work.into_iter().all(|count| count > 0));
 }
 
-/// Independently specified complete key components for the actual source fixture
-/// above, including one authoritative absence for every non-Legend family.
-fn assert_discrete_kind_components(kind: PlotKind, plot: &Plot) {
+/// Independently specified symbol components and native color bodies for the
+/// actual source fixture above, including authoritative absence where appropriate.
+fn assert_prepared_kind_sections(kind: PlotKind, plot: &Plot) {
     use crate::decorations::legend::discrete::GuideCounts;
     use crate::LegendComposition::{Combined, Separate};
     let components = match kind {
@@ -1117,6 +1117,26 @@ fn assert_discrete_kind_components(kind: PlotKind, plot: &Plot) {
                 );
             }
             (None, None) => {}
+            (None, Some(descriptor)) if matches!(kind, PlotKind::Heatmap | PlotKind::Beeswarm) => {
+                assert_eq!(descriptor.composition, composition);
+                assert_eq!(
+                    descriptor.counts,
+                    GuideCounts {
+                        sections: 1,
+                        ..GuideCounts::default()
+                    }
+                );
+                assert_eq!(descriptor.sections.len(), 1);
+                let color = descriptor.continuous().expect("actual native color body");
+                let source = inputs
+                    .continuous_source(&plot, &theme, plot.axis_scope())
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(color, &source);
+                assert!(!color.numeric.labels.is_empty());
+                assert!(!color.stops.is_empty());
+                assert!(!descriptor.has_symbols());
+            }
             _ => panic!("{kind:?}, {composition:?}: incorrect discrete presence"),
         }
     }

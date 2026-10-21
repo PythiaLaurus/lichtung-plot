@@ -151,7 +151,7 @@ column and edge were rounded upward separately. The singleton dense-font fixture
 verifies minimum/equal/minus-one allocation in both orientations while retaining
 all labels and stops. Missing-key outline comfort remains independently measured.
 
-`MeasuredContinuousGuide::vertical_widths` is the common admitted measuring owner
+`Legend::vertical_widths` is the common admitted measuring owner
 for natural preference and native-right allocation. It uses the measured guide's
 effective allocation metrics, including frame and missing-outline comfort, and
 retains complete exact key+gap+label/title+padding requirements until the final

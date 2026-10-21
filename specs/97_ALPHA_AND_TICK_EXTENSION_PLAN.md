@@ -195,9 +195,10 @@ and focused closure; split behavioral leaves further when needed.
 | T6D1d | COMPLETE | T6D1c | All 17 Single/record/series/aggregate scientific stroke consumers and final-paint intrinsic/ink; receipts below and `../docs/alpha-aggregate-strokes.md` |
 | T6D1e | COMPLETE | T6D1d | All 15 aggregate, cell, exact-bin, band, native and supplied-fill consumers; fill receipts below |
 | T6D2 | IN PROGRESS | T6D1 | Declared automatic guides, parent transport, census and identities |
-| T6D2a | IN PROGRESS | T6D1 | Existing-key alpha provenance/neutralization complete below; sole typed guide envelope, actual alpha explanations and exclusive-kind retirement remain |
+| T6D2a | IN PROGRESS | T6D1 | Existing-key alpha provenance/neutralization and sole typed guide envelope complete below; actual declared-alpha member/glyph census and explanatory sections remain |
 | T6D2a1 | COMPLETE | T6D1 | Typed per-paint alpha bindings and complete/projected masks; data-bound alpha neutralization in existing Combined/Separate contexts; `../docs/alpha-guide-paint-bindings.md` |
-| T6D2b | PENDING | T6D2a | Common section measurement/freeze, scoped parent ownership, cache/height/feedback and font census |
+| T6D2a2 | COMPLETE | T6D2a1 | Sole PreparedGuide with typed symbol/color bodies; remove exclusive descriptors/kinds and duplicated continuous frames, measurement/census/Canvas routes; `../docs/unified-guide-envelope.md` |
+| T6D2b | IN PROGRESS | T6D2a | Common symbol/color measurement, freeze and native/Shared census complete; extend scoped ownership, cache/height/feedback and fonts to actual alpha sections |
 | T6D3 | PENDING | T6D2 | Atomic public API/caller/current-contract migration |
 | T6D4 | PENDING | T6D3 | Full admitted-family/parent/root/frozen-output evidence |
 
@@ -241,9 +242,12 @@ Guide source provenance and existing-key projections are connected in
 `../docs/alpha-guide-paint-bindings.md`: complete immutable data inputs and semantic
 units, independently owned role/exact paints, and typed alpha explanation masks.
 Both existing compositions neutralize data-bound context alpha without inventing
-an Undeclared explanation. Sole unified sections, actual alpha member/glyph census,
-common continuous/symbol measurement and parent/feedback/public closure keep T6D2
-IN PROGRESS.
+an Undeclared explanation. `../docs/unified-guide-envelope.md` replaces the exclusive
+kind envelope with one typed PreparedGuide and common symbol/continuous-color
+measurement, frame, cache, font census and frozen draw plan. Native facets retain
+their actual scoped color domains rather than forming an invalid parent union.
+Actual alpha member/glyph census and explanations, complete alpha parent/feedback
+transport and public closure keep T6D2 IN PROGRESS.
 
 Do not start a code leaf while its exact owning design is still pending. Use modern
 Rust module layout, the standalone offline renderer and existing pinned dependencies.
