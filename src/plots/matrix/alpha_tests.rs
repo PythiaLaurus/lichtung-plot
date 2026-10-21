@@ -7,10 +7,19 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
         crate::NumericValues::new("a", [1.0, 2.0, 3.0]),
         crate::NumericValues::new("b", [2.0, 5.0, 7.0]),
     ])
+    .hue(crate::CategoryValues::new("cohort", ["seen"; 3]).unwrap())
     .source_rows(crate::SourceRows::new([100, 200, 300]).unwrap())
     .with_alpha(
         AlphaTarget::Point,
         AlphaEncoding::observations(AlphaValues::new("confidence", [0, 128, 0]).unwrap()),
+    )
+    .with_alpha(
+        AlphaTarget::Fill,
+        AlphaEncoding::keyed(
+            [crate::CategoryValues::new("cohort", ["\u{10ffff}", "seen"]).unwrap()],
+            AlphaValues::new("density confidence", [0, 64]).unwrap(),
+        )
+        .unwrap(),
     )
     .hide_point_outline()
     .erase();
@@ -31,10 +40,16 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
         .data()
         .map_source_rows(source.source_row_map().unwrap());
     let before = prepare_axes(&source, data).unwrap();
-    let control = source.clone().with_alpha(
-        AlphaTarget::Point,
-        AlphaEncoding::single(AlphaValues::new("confidence", [0]).unwrap()).unwrap(),
-    );
+    let control = source
+        .clone()
+        .with_alpha(
+            AlphaTarget::Point,
+            AlphaEncoding::single(AlphaValues::new("confidence", [0]).unwrap()).unwrap(),
+        )
+        .with_alpha(
+            AlphaTarget::Fill,
+            AlphaEncoding::single(AlphaValues::new("density confidence", [0]).unwrap()).unwrap(),
+        );
     let control_data = control
         .data()
         .map_source_rows(control.source_row_map().unwrap());
@@ -85,7 +100,7 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
     }
     for index in [0, 3] {
         assert!(
-            matches!(&payload.cells[index].marks[0], MatrixPrimitive::Polygon(_, style) if style.color.alpha() == theme.marks.fills().densities().matrix_density().fill_alpha())
+            matches!(&payload.cells[index].marks[0], MatrixPrimitive::Polygon(_, style) if style.color.alpha() == 64 && style.stroke.alpha() == 255)
         );
     }
 }

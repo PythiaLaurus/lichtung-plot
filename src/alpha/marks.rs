@@ -47,6 +47,29 @@ pub(crate) fn fill_style(alpha: Option<ResolvedAlpha>, mut style: FillStyle) -> 
     style
 }
 
+pub(crate) fn fill_ink_outset(
+    style: &FillStyle,
+    alphas: impl IntoIterator<Item = Option<ResolvedAlpha>>,
+) -> Result<(f64, f64)> {
+    let mut outset = (0.0_f64, 0.0_f64);
+    let mut visibility = [None, None];
+    for alpha in alphas {
+        let visible = usize::from(alpha.map_or(style.color.alpha(), |value| value.alpha) != 0);
+        let ink = if let Some(ink) = visibility[visible] {
+            ink
+        } else {
+            let ink = crate::render::geometry::rectangular_fill_ink_outset(&fill_style(
+                alpha,
+                style.clone(),
+            ))?;
+            visibility[visible] = Some(ink);
+            ink
+        };
+        outset = (outset.0.max(ink.0), outset.1.max(ink.1));
+    }
+    Ok(outset)
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct PointInk {
     pub(crate) ranges: [(f64, f64); 2],

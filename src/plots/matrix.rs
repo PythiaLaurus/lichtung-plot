@@ -22,8 +22,11 @@
 )]
 
 use crate::alpha::{
-    marks::{point_ink, push_point, require_aligned_points, ObservationAlpha},
-    AlphaTarget, AlphaUnitKind,
+    marks::{
+        fill_ink_outset, fill_style, point_ink, push_point, require_aligned_points,
+        ObservationAlpha,
+    },
+    AlphaTarget, AlphaUnitKind, ResolvedAlpha,
 };
 use crate::decorations::legend::source::{FillRole, PointRole};
 use crate::decorations::legend::{GuideSourceKey, Legend};
@@ -45,6 +48,7 @@ struct HueGroup {
     /// Per-column data vectors (same order as `cols`).
     columns: Vec<Vec<f64>>,
     alphas: Vec<ObservationAlpha>,
+    fill_alpha: Option<ResolvedAlpha>,
     /// Strict Scott bandwidth per matrix column.
     bandwidths: Vec<f64>,
 }
@@ -59,6 +63,18 @@ pub(crate) struct PreparedMatrixAxes {
 }
 
 impl PreparedMatrixAxes {
+    fn density_ink(&self, theme: &ResolvedTheme) -> Result<(f64, f64), Error> {
+        fill_ink_outset(
+            &theme
+                .marks
+                .fills()
+                .densities()
+                .matrix_density()
+                .backend_style((0, 0, 0)),
+            self.groups.iter().map(|group| group.fill_alpha),
+        )
+    }
+
     fn point_dimensions(&self, chart: &Plot, theme: &ResolvedTheme) -> Result<(f64, f64), Error> {
         let style = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().matrix());
         Ok(point_ink(
@@ -118,13 +134,7 @@ pub(crate) fn intrinsic_body_minimum(
         Error::Render("matrix intrinsic requires prepared variable domains".into())
     })?;
     let n = prepared.labels.len();
-    let density = theme
-        .marks
-        .fills()
-        .densities()
-        .matrix_density()
-        .backend_style((0, 0, 0));
-    let (out_x, out_y) = crate::render::geometry::rectangular_fill_ink_outset(&density)?;
+    let (out_x, out_y) = prepared.density_ink(theme)?;
     let mut cell = (
         (2.0 * out_x).max(1.0 / 1024.0),
         (2.0 * out_y).max(1.0 / 1024.0),
@@ -161,13 +171,7 @@ pub(crate) fn natural_body_preference(
     let hard = intrinsic_body_minimum(chart, theme)?;
 
     let point = marks.point_dimensions(chart, theme)?;
-    let density = theme
-        .marks
-        .fills()
-        .densities()
-        .matrix_density()
-        .backend_style((0, 0, 0));
-    let ink = crate::render::geometry::rectangular_fill_ink_outset(&density)?;
+    let ink = marks.density_ink(theme)?;
     let mut side = theme.composition_grid_gap()? * marks.labels.len().saturating_sub(1) as f64;
     for label in &marks.labels {
         let width = layout::fit::intrinsic_widths(
@@ -354,7 +358,12 @@ pub(crate) fn prepare_axes(
     crate::data::source::reserve_source(&mut cols, chart.matrix_variable_names().len())?;
     cols.extend(chart.matrix_variable_names().iter().map(String::as_str));
     let labels = chart.resolve_axis_label_domain("matrix variables", cols.iter().copied())?;
-    let (groups, hues) = build_groups(chart, &cols, data)?;
+    let (mut groups, hues) = build_groups(chart, &cols, data)?;
+    let fill_alpha =
+        chart.prepare_collective_alpha(AlphaTarget::Fill, AlphaUnitKind::Series, true, data)?;
+    for group in &mut groups {
+        group.fill_alpha = fill_alpha.collective(chart, &group.identity)?;
+    }
     if let Some(exact) = chart.categorical_map_spec() {
         for hue in &hues {
             if exact.color_in(hue).is_none() {
@@ -443,13 +452,7 @@ pub(crate) fn measure(
         outer.y1 = outer.y0 + height;
     }
     let gap = theme.composition_grid_gap()?;
-    let density = theme
-        .marks
-        .fills()
-        .densities()
-        .matrix_density()
-        .backend_style((0, 0, 0));
-    let ink = crate::render::geometry::rectangular_fill_ink_outset(&density)?;
+    let ink = prepared.density_ink(theme)?;
     let point = prepared.point_dimensions(chart, theme)?;
     let specs = crate::data::source::collect_source(display_cols.iter().map(|label| {
         let hard = layout::fit::intrinsic_widths(
@@ -692,6 +695,7 @@ pub(crate) fn measure(
                     theme,
                     &mut cell.marks,
                     &group_colors,
+                    groups,
                     &prepared.diagonals[row],
                     &cell_layout.projection,
                 )?;
@@ -988,6 +992,7 @@ fn select_diagonal_kde(
     theme: &ResolvedTheme,
     marks: &mut Vec<MatrixPrimitive>,
     group_colors: &[(u8, u8, u8)],
+    groups: &[HueGroup],
     density: &MatrixDensity,
     projection: &layout::Projection,
 ) -> Result<(), Error> {
@@ -1005,12 +1010,12 @@ fn select_diagonal_kde(
     let (x0, y0) = projection.project(projection.x_range().0, 0.0);
     let (x1, _) = projection.project(projection.x_range().1, 0.0);
 
-    if density.densities.len() != group_colors.len() {
+    if density.densities.len() != group_colors.len() || groups.len() != group_colors.len() {
         return Err(Error::Render(
             "matrix density groups differ from mapped colors".into(),
         ));
     }
-    for (densities, &color) in density.densities.iter().zip(group_colors) {
+    for ((densities, &color), group) in density.densities.iter().zip(group_colors).zip(groups) {
         let mut poly = Vec::new();
         crate::data::source::reserve_source(&mut poly, KDE_POINTS + 2)?;
         poly.push(Point2D::new(x0, y0));
@@ -1033,12 +1038,15 @@ fn select_diagonal_kde(
             poly.push(point);
         }
         poly.push(Point2D::new(x1, y0));
-        let fill = theme
-            .marks
-            .fills()
-            .densities()
-            .matrix_density()
-            .backend_style(color);
+        let fill = fill_style(
+            group.fill_alpha,
+            theme
+                .marks
+                .fills()
+                .densities()
+                .matrix_density()
+                .backend_style(color),
+        );
         marks.push(MatrixPrimitive::Polygon(poly, fill));
     }
     Ok(())
@@ -1100,6 +1108,7 @@ fn build_groups(
         groups.push(HueGroup {
             identity: crate::data::source::copy_source_pair(identity)?,
             collapsed: channels.collapsed,
+            fill_alpha: None,
             alphas: crate::data::source::collect_source(
                 rows.iter()
                     .map(|row| ObservationAlpha::resolve(data, &alpha, *row)),

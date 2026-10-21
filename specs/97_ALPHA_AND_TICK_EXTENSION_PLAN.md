@@ -192,7 +192,7 @@ and focused closure; split behavioral leaves further when needed.
 | T6D1b | COMPLETE | T6D1a | Explicit encodings, exact keyed/bin/facet resolution, original slots, retained three-target input and complete child/height identity; `../docs/explicit-alpha-bindings.md` |
 | T6D1c | COMPLETE | T6D1b | All 17 observation/estimate/strip/native point consumers and paint-aware intrinsic/ink; receipts below and `../docs/alpha-native-points.md` |
 | T6D1d | COMPLETE | T6D1c | All 17 Single/record/series/aggregate scientific stroke consumers and final-paint intrinsic/ink; receipts below and `../docs/alpha-aggregate-strokes.md` |
-| T6D1e | IN PROGRESS | T6D1d | Ten body/segment/area/band consumers complete in `../docs/alpha-aggregate-fills.md` and `../docs/alpha-series-fills.md`; five bin/cell/native/delta consumers remain |
+| T6D1e | IN PROGRESS | T6D1d | Twelve body/segment/area/band/native consumers complete in the fill receipts below; Histogram bins, Heatmap cells and Waterfall deltas remain |
 | T6D2 | PENDING | T6D1 | Declared automatic guides, parent transport, census and identities |
 | T6D2a | PENDING | T6D1 | Sole typed guide envelope, actual alpha descriptors/projections and exclusive-kind retirement |
 | T6D2b | PENDING | T6D2a | Common section measurement/freeze, scoped parent ownership, cache/height/feedback and font census |
@@ -227,8 +227,9 @@ Boxplot/Violin/Raincloud bodies in `../docs/alpha-aggregate-fills.md`. Seven of
 fifteen fill consumers retain explicit actual-unit operands and final fill-only
 replacement, independently of outlines, summaries, strips and scientific
 aggregation. Density areas and configured Line/Regression bands bring the census
-to ten in `../docs/alpha-series-fills.md`. Histogram, Heatmap, Marginal, Matrix and
-Waterfall keep T6D1e IN PROGRESS.
+to ten in `../docs/alpha-series-fills.md`. Marginal linked and Matrix diagonal
+densities bring it to twelve in `../docs/alpha-native-fills.md`. Histogram,
+Heatmap and Waterfall keep T6D1e IN PROGRESS.
 
 Do not start a code leaf while its exact owning design is still pending. Use modern
 Rust module layout, the standalone offline renderer and existing pinned dependencies.
