@@ -45,6 +45,18 @@ fn primary_point_alpha_follows_sorted_line_rows_and_keeps_supplemental_paint_ind
         crate::NumericValues::new("y", [2.0, 0.0, 1.0]),
     )
     .hue(crate::CategoryValues::new("cohort", ["seen"; 3]).unwrap())
+    .band(crate::Bounds::new(
+        crate::NumericValues::new("lower", [1.5, -0.5, 0.5]),
+        crate::NumericValues::new("upper", [2.5, 0.5, 1.5]),
+    ))
+    .with_alpha(
+        crate::alpha::AlphaTarget::Fill,
+        crate::alpha::AlphaEncoding::keyed(
+            [crate::CategoryValues::new("cohort", ["seen"]).unwrap()],
+            crate::alpha::AlphaValues::new("band confidence", [0]).unwrap(),
+        )
+        .unwrap(),
+    )
     .with_alpha(
         crate::alpha::AlphaTarget::Point,
         crate::alpha::AlphaEncoding::observations(
@@ -91,6 +103,28 @@ fn primary_point_alpha_follows_sorted_line_rows_and_keeps_supplemental_paint_ind
     assert_eq!(alphas, [17, 90, 230]);
     assert_eq!(payload.layers[0].1.color.alpha(), 61);
     assert_eq!(payload.layers[0].2[0].plan.style.paint.alpha(), 61);
+    let ribbons = payload
+        .marks
+        .iter()
+        .filter_map(|mark| match mark {
+            LineMark::Ribbon(points, fill) => Some((points.len(), fill.color.alpha(), fill.stroke)),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        ribbons,
+        [(
+            6,
+            0,
+            theme
+                .marks
+                .fills()
+                .bands()
+                .line_band()
+                .backend_style((0, 0, 0))
+                .stroke
+        )]
+    );
     assert_eq!(
         payload
             .marks

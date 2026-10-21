@@ -2,7 +2,10 @@
 
 #![allow(clippy::cast_precision_loss)]
 
-use crate::alpha::{marks::line_style, AlphaTarget, AlphaUnitKind, ResolvedAlpha};
+use crate::alpha::{
+    marks::{fill_style, line_style},
+    AlphaTarget, AlphaUnitKind, ResolvedAlpha,
+};
 use crate::data::PlotData;
 use crate::Error;
 
@@ -26,6 +29,7 @@ struct DensityCurve {
     grid: Vec<f64>,
     densities: Vec<f64>,
     line_alpha: Option<ResolvedAlpha>,
+    fill_alpha: Option<ResolvedAlpha>,
 }
 
 #[derive(Debug)]
@@ -66,20 +70,23 @@ pub(crate) fn intrinsic_body_minimum(
         .density_line()
         .backend_style((0, 0, 0));
     let mut ink = 0.0_f64;
+    let mut area = (0.0_f64, 0.0_f64);
     for curve in &prepared.curves {
         ink = ink.max(crate::render::geometry::line_ink_width(&line_style(
             curve.line_alpha,
             line.clone(),
         ))?);
+        let next = crate::render::geometry::rectangular_fill_ink_outset(&fill_style(
+            curve.fill_alpha,
+            theme
+                .marks
+                .fills()
+                .densities()
+                .density_area()
+                .backend_style((0, 0, 0)),
+        ))?;
+        area = (area.0.max(next.0), area.1.max(next.1));
     }
-    let area = crate::render::geometry::rectangular_fill_ink_outset(
-        &theme
-            .marks
-            .fills()
-            .densities()
-            .density_area()
-            .backend_style((0, 0, 0)),
-    )?;
     Ok((
         if chart.user_x_limits().is_none() {
             ink.max(area.0)
@@ -227,8 +234,11 @@ impl PreparedDensity {
         let mut prepared = prepare_density_for_chart(chart, data, column)?;
         let alpha =
             chart.prepare_collective_alpha(AlphaTarget::Line, AlphaUnitKind::Series, true, data)?;
+        let fill_alpha =
+            chart.prepare_collective_alpha(AlphaTarget::Fill, AlphaUnitKind::Series, true, data)?;
         for curve in &mut prepared.curves {
             curve.line_alpha = alpha.collective(chart, &curve.identity)?;
+            curve.fill_alpha = fill_alpha.collective(chart, &curve.identity)?;
         }
         if let Some(exact) = chart.categorical_map_spec() {
             for hue in prepared.hue_levels() {
@@ -392,12 +402,15 @@ pub(crate) fn project(
                 Vec::new()
             },
             segments: Vec::new(),
-            fill_style: theme
-                .marks
-                .fills()
-                .densities()
-                .density_area()
-                .backend_style(color),
+            fill_style: fill_style(
+                curve.fill_alpha,
+                theme
+                    .marks
+                    .fills()
+                    .densities()
+                    .density_area()
+                    .backend_style(color),
+            ),
             line_style: line_style(
                 curve.line_alpha,
                 theme.marks.data_lines().density_line().backend_style(color),
@@ -625,6 +638,7 @@ fn prepare_density_ordered<'a>(
             grid,
             densities,
             line_alpha: None,
+            fill_alpha: None,
         });
     }
     if curves.is_empty() {
@@ -1025,6 +1039,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one actual-unit contract compares independent area/curve mappings, facet membership and pre-font completeness"
+    )]
     fn keyed_curve_alpha_resolves_actual_facets_and_series_before_fonts_without_row_reduction() {
         let source = Plot::density(NumericValues::new(
             "value",
@@ -1052,6 +1070,18 @@ mod tests {
             )
             .unwrap(),
         )
+        .with_alpha(
+            AlphaTarget::Fill,
+            crate::alpha::AlphaEncoding::keyed(
+                [
+                    CategoryValues::new("cohort", ["a", "b", "a", "b", "\u{10ffff}"]).unwrap(),
+                    CategoryValues::new("panel", ["left", "left", "right", "right", "unused"])
+                        .unwrap(),
+                ],
+                crate::alpha::AlphaValues::new("area confidence", [230, 0, 64, 128, 99]).unwrap(),
+            )
+            .unwrap(),
+        )
         .erase();
         let mut theme = crate::Theme::publication().resolve().unwrap();
         let lines = theme.marks.data_lines();
@@ -1061,7 +1091,18 @@ mod tests {
         let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
         let panels = &chart.prepared_density.as_ref().unwrap().panels;
         assert_eq!(panels.len(), 2);
-        for ((scope, prepared), expected) in panels.iter().zip([[0, 128], [230, 0]]) {
+        for ((scope, prepared), (expected, fills)) in panels
+            .iter()
+            .zip([([0, 128], [230, 0]), ([230, 0], [64, 128])])
+        {
+            assert_eq!(
+                prepared
+                    .curves
+                    .iter()
+                    .map(|curve| curve.fill_alpha.unwrap().alpha)
+                    .collect::<Vec<_>>(),
+                fills
+            );
             assert_eq!(
                 prepared
                     .curves
@@ -1088,6 +1129,14 @@ mod tests {
             else {
                 panic!("Density payload")
             };
+            assert_eq!(
+                payload
+                    .curves
+                    .iter()
+                    .map(|curve| curve.fill_style.color.alpha())
+                    .collect::<Vec<_>>(),
+                fills
+            );
             assert_eq!(
                 payload
                     .curves

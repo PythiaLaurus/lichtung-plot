@@ -1,7 +1,7 @@
 //! Root-prepared ordered series, trajectories, and source-ordered paths.
 
 use crate::alpha::{
-    marks::{line_style, point_ink, push_point, ObservationAlpha},
+    marks::{fill_style, line_style, point_ink, push_point, ObservationAlpha},
     AlphaTarget, AlphaUnitKind, ResolvedAlpha,
 };
 use crate::data::{CollectivePair, PlotData};
@@ -39,6 +39,7 @@ struct LineGroup {
     hue_index: Option<usize>,
     points: Vec<LinePoint>,
     line_alpha: Option<ResolvedAlpha>,
+    fill_alpha: Option<ResolvedAlpha>,
 }
 
 #[derive(Debug)]
@@ -126,18 +127,24 @@ pub(crate) fn intrinsic_body_minimum(
     } else {
         (0.0, 0.0)
     };
-    let ribbon = if chart.kind() == PlotKind::Line && chart.line_band_configured() {
-        crate::render::geometry::rectangular_fill_ink_outset(
-            &theme
-                .marks
-                .fills()
-                .bands()
-                .line_band()
-                .backend_style((0, 0, 0)),
-        )?
-    } else {
-        (0.0, 0.0)
-    };
+    let mut ribbon = (0.0_f64, 0.0_f64);
+    if chart.kind() == PlotKind::Line && chart.line_band_configured() {
+        for group in &prepared.groups {
+            if !group.points.iter().all(|point| point.interval.is_some()) {
+                continue;
+            }
+            let ink = crate::render::geometry::rectangular_fill_ink_outset(&fill_style(
+                group.fill_alpha,
+                theme
+                    .marks
+                    .fills()
+                    .bands()
+                    .line_band()
+                    .backend_style((0, 0, 0)),
+            ))?;
+            ribbon = (ribbon.0.max(ink.0), ribbon.1.max(ink.1));
+        }
+    }
     Ok((
         if chart.user_x_limits().is_none() {
             mark.0.max(path).max(ribbon.0)
@@ -377,11 +384,22 @@ impl PreparedLine {
             include_hue,
             data,
         )?;
+        let fill_alpha = (chart.kind() == PlotKind::Line)
+            .then(|| {
+                chart.prepare_collective_alpha(AlphaTarget::Fill, AlphaUnitKind::Series, true, data)
+            })
+            .transpose()?;
         for group in &mut prepared.groups {
             let identity = group.identity.as_ref().ok_or_else(|| {
                 Error::Render("prepared line series has no scientific identity".into())
             })?;
             group.line_alpha = alpha.collective(chart, identity)?;
+            if let Some(alpha) = fill_alpha
+                .as_ref()
+                .filter(|_| group.points.iter().all(|point| point.interval.is_some()))
+            {
+                group.fill_alpha = alpha.collective(chart, identity)?;
+            }
         }
         Ok(prepared)
     }
@@ -627,6 +645,7 @@ impl PreparedLine {
                 hue_index,
                 points,
                 line_alpha: None,
+                fill_alpha: None,
             });
         }
         let mut layers = Vec::new();
@@ -789,7 +808,10 @@ fn project(
     for &index in &order {
         let group = &prepared.groups[index];
         let color = prepared.group_color(chart, group, theme, &map, &accent)?;
-        let fill = theme.marks.fills().bands().line_band().backend_style(color);
+        let fill = fill_style(
+            group.fill_alpha,
+            theme.marks.fills().bands().line_band().backend_style(color),
+        );
 
         let has_fill = chart.kind() == PlotKind::Line
             && group.points.iter().all(|point| point.interval.is_some());

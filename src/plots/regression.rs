@@ -9,7 +9,7 @@
 )]
 
 use crate::alpha::{
-    marks::{line_style, point_ink, push_point, ObservationAlpha},
+    marks::{fill_style, line_style, point_ink, push_point, ObservationAlpha},
     AlphaTarget, AlphaUnitKind, ResolvedAlpha,
 };
 use crate::data::PlotData;
@@ -36,6 +36,7 @@ pub(crate) struct PreparedRegression {
     points: Vec<(f64, f64)>,
     alphas: Vec<ObservationAlpha>,
     line_alpha: Option<ResolvedAlpha>,
+    fill_alpha: Option<ResolvedAlpha>,
     pub(crate) fit_line: [(f64, f64); 2],
     band_values: Option<Vec<(f64, f64, f64)>>,
 }
@@ -80,14 +81,15 @@ pub(crate) fn intrinsic_body_minimum(
             .backend_style(),
     ))?;
     let band = if prepared.band_values.is_some() {
-        crate::render::geometry::rectangular_fill_ink_outset(
-            &theme
+        crate::render::geometry::rectangular_fill_ink_outset(&fill_style(
+            prepared.fill_alpha,
+            theme
                 .marks
                 .fills()
                 .bands()
                 .regression_band()
                 .backend_style((0, 0, 0)),
-        )?
+        ))?
     } else {
         (0.0, 0.0)
     };
@@ -161,6 +163,7 @@ impl PreparedRegression {
         let line_alpha = chart
             .prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Single, &[])?
             .single()?;
+        let fill_alpha = chart.prepare_alpha(AlphaTarget::Fill, AlphaUnitKind::Single, &[])?;
         #[cfg(test)]
         crate::layout::interior::distributions::count(3, 0);
         let x_col = chart
@@ -230,6 +233,11 @@ impl PreparedRegression {
             points,
             alphas,
             line_alpha,
+            fill_alpha: if band_values.is_some() {
+                fill_alpha.single()?
+            } else {
+                None
+            },
             fit_line: [(x_min, y_fit_lo), (x_max, y_fit_hi)],
             band_values,
         })
@@ -419,12 +427,15 @@ pub(crate) fn project(
             Ok(upper)
         })
         .transpose()?;
-    let band_fill = theme
-        .marks
-        .fills()
-        .bands()
-        .regression_band()
-        .backend_style(color);
+    let band_fill = fill_style(
+        prepared.fill_alpha,
+        theme
+            .marks
+            .fills()
+            .bands()
+            .regression_band()
+            .backend_style(color),
+    );
 
     let payload = RegressionPayload {
         clip: projection.panel_box(),
@@ -637,6 +648,10 @@ mod style_tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one band contract compares scientific geometry, independent outline and explicit fill replacement against the owning theme"
+    )]
     fn custom_regression_band_preserves_scientific_polygon_and_changes_guide_glyph() {
         let source = Plot::regression(
             crate::NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
@@ -661,7 +676,7 @@ mod style_tests {
             .bands()
             .regression_band()
             .clone()
-            .with_fill_alpha(128)
+            .with_fill_alpha(0)
             .unwrap()
             .with_outline(Some(
                 crate::theme::DataOutlineTheme::mapped(2.0, 255).unwrap(),
@@ -692,8 +707,27 @@ mod style_tests {
         let (new_polygon, new_fill) = payload(&changed);
         assert_eq!(old_polygon, new_polygon);
         assert_eq!(old_fill.color.alpha(), 64);
-        assert_eq!(new_fill.color.alpha(), 128);
+        assert_eq!(new_fill.color.alpha(), 0);
         assert_eq!(new_fill.stroke_width.to_bits(), 2.0_f32.to_bits());
+        let mapped = chart.clone().with_alpha(
+            AlphaTarget::Fill,
+            crate::alpha::AlphaEncoding::single(
+                crate::alpha::AlphaValues::new("band confidence", [191]).unwrap(),
+            )
+            .unwrap(),
+        );
+        let mapped = crate::plots::shared_x::prepare_panel_for_test(&mapped, &theme).unwrap();
+        let mapped = mapped
+            .measure_selected_interior(PlotRenderContext::new(mapped.data(), panel, &theme))
+            .unwrap();
+        let (mapped_polygon, mapped_fill) = payload(&mapped);
+        assert_eq!(mapped_polygon, new_polygon);
+        assert_eq!(mapped_fill.color, new_fill.color.with_alpha(191));
+        assert_eq!(mapped_fill.stroke, new_fill.stroke);
+        assert_eq!(
+            mapped_fill.stroke_width.to_bits(),
+            new_fill.stroke_width.to_bits()
+        );
         let separate =
             crate::decorations::legend::discrete::PreparedDiscreteGuide::prepare_for_test(
                 &chart,
