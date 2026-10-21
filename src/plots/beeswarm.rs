@@ -256,8 +256,11 @@ impl PreparedBeeswarm {
     pub(crate) fn guide_descriptor(
         &self,
         field: &str,
-    ) -> Result<crate::decorations::legend::descriptor::ContinuousDescriptor, Error> {
-        Ok(
+    ) -> Result<Option<crate::decorations::legend::descriptor::ContinuousDescriptor>, Error> {
+        let Some(values) = &self.values else {
+            return Ok(None);
+        };
+        Ok(Some(
             crate::decorations::legend::descriptor::ContinuousDescriptor {
                 field: crate::data::source::copy_source_string(field)?,
                 title: crate::data::source::copy_source_string(&self.color_label)?,
@@ -268,15 +271,9 @@ impl PreparedBeeswarm {
                 domain: self.scale.domain(),
                 exact: self.selection.domain().is_some(),
                 format: self.format.clone(),
-                numeric: self
-                    .values
-                    .as_ref()
-                    .ok_or_else(|| {
-                        Error::Render("Beeswarm guide presentation was suppressed".into())
-                    })?
-                    .try_copy()?,
+                numeric: values.try_copy()?,
             },
-        )
+        ))
     }
 }
 

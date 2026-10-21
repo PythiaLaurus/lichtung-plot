@@ -404,7 +404,8 @@ fn ordinary_bar_accumulates_attached_and_pairwise_placements_across_calls() {
     );
     let chart = identity_bar_chart(&data)
         .significance([Significance::at("a", SignificanceMark::OneStar)])
-        .significance([Significance::between("a", "b", SignificanceMark::TwoStars)]);
+        .significance([Significance::between("a", "b", SignificanceMark::TwoStars)])
+        .size(640, 480);
 
     let svg = render_svg(chart, "bar-mixed-significance-calls").unwrap();
 

@@ -33,13 +33,15 @@ fn point_alpha_retains_source_order_color_samples_and_coincident_packing_even_at
     theme.marks = theme.marks.clone().with_points(points).unwrap();
     let select = |source: &Plot| {
         let chart = crate::plots::shared_x::prepare_panel_for_test(source, &theme).unwrap();
-        chart
+        let selected = chart
             .measure_selected_interior(PlotRenderContext::new(
                 chart.data(),
                 PanelBox::new(20.0, 700.0, 20.0, 420.0),
                 &theme,
             ))
-            .unwrap()
+            .unwrap();
+        assert!(selected.discrete_guide.is_none());
+        selected
     };
     let varied = select(&source);
     let layout::interior::MarkPayload::Beeswarm(varied) = &varied.marks.as_ref().unwrap().payload

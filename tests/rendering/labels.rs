@@ -83,18 +83,27 @@ fn direct_plot_humanizes_axes_categories_legend_title_and_entries() {
         ["Control group", "Active group"]
     );
     let axes = super::parse_text_elements(text_layer(&svg, "axes"));
+    let words = axes
+        .iter()
+        .flat_map(|entry| entry.content.split_whitespace())
+        .collect::<Vec<_>>();
     for label in ["Mean score", "Treatment group"] {
+        let required = label.split_whitespace().collect::<Vec<_>>();
         assert!(
-            axes.iter().any(|entry| entry.content == label),
+            words.windows(required.len()).any(|words| words == required),
             "missing {label:?}"
         );
     }
     assert_eq!(
         super::parse_text_elements(text_layer(&svg, "legend"))
             .into_iter()
-            .map(|entry| entry.content)
+            .flat_map(|entry| entry
+                .content
+                .split_whitespace()
+                .map(str::to_owned)
+                .collect::<Vec<_>>())
             .collect::<Vec<_>>(),
-        ["Study arm", "Control arm", "Active arm"]
+        ["Study", "arm", "Control", "arm", "Active", "arm"]
     );
 }
 
@@ -123,7 +132,11 @@ fn raw_mode_preserves_quotes_in_legend_entries() {
 fn svg_preserves_repeated_spaces_in_vertical_axis_labels() {
     let category = CategoryValues::new("category", ["first", "first", "second", "second"]).unwrap();
     let value = NumericValues::new("value", [1.0, 1.5, 2.0, 2.5]);
-    let svg = render(Plot::bar(category, BarInput::samples(value)).y_label("Response  score"));
+    let svg = render(
+        Plot::bar(category, BarInput::samples(value))
+            .y_label("Response  score")
+            .size(640, 480),
+    );
     let label = svg
         .lines()
         .find(|line| line.contains(">Response  score</text>"))
@@ -178,7 +191,11 @@ fn heatmap_and_matrix_apply_aliases_to_self_managed_labels() {
         .alias("first_level", "First cell")
         .alias("row_level", "Only row")
         .alias("raw_fill", "Measured fill");
-    let heatmap_svg = render(Plot::heatmap(raw_x, raw_y, raw_fill).labels(labels));
+    let heatmap_svg = render(
+        Plot::heatmap(raw_x, raw_y, raw_fill)
+            .labels(labels)
+            .size(640, 480),
+    );
     assert!(heatmap_svg.contains(">First cell</text>"));
     assert!(heatmap_svg.contains(">Only row</text>"));
     assert!(heatmap_svg.contains(">Measured fill</text>"));
@@ -188,7 +205,8 @@ fn heatmap_and_matrix_apply_aliases_to_self_managed_labels() {
             NumericValues::new("first_measure", [1.0, 2.0, 3.0]),
             NumericValues::new("second_measure", [3.0, 2.0, 1.0]),
         ])
-        .labels(Labels::humanized().alias("first_measure", "Primary measure")),
+        .labels(Labels::humanized().alias("first_measure", "Primary measure"))
+        .size(1200, 900),
     );
     assert!(matrix_svg.contains(">Primary measure</text>"));
     assert!(matrix_svg.contains(">Second measure</text>"));

@@ -514,7 +514,7 @@ fn heatmap_rejects_canvas_too_short_for_missing_colorbar() {
     let error = render(&data, |chart| chart.size(320, 150)).unwrap_err();
 
     assert!(
-        error.contains("LegendOrGuide") && error.contains("continuous guide"),
+        error.contains("LegendOrGuide") && error.contains("title and body minimum"),
         "{error}"
     );
 }

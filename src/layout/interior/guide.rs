@@ -481,9 +481,6 @@ impl PreparedInteriorInputs {
         Option<std::sync::Arc<crate::decorations::legend::descriptor::ContinuousDescriptor>>,
         Error,
     > {
-        if chart.continuous_guide_suppressed() {
-            return Ok(None);
-        }
         let field = chart.color_dimension_key().unwrap_or("");
         let descriptor = match chart.kind() {
             PlotKind::Heatmap => panel(
@@ -502,7 +499,7 @@ impl PreparedInteriorInputs {
             .guide_descriptor(field)?,
             _ => return Ok(None),
         };
-        crate::data::source::source_arc(descriptor).map(Some)
+        descriptor.map(crate::data::source::source_arc).transpose()
     }
 
     pub(crate) fn alpha_sources(

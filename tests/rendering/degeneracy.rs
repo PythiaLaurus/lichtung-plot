@@ -204,10 +204,14 @@ fn histogram_spans_preserve_zero_density_and_reject_collapsed_width_or_positive_
 fn rectangle_clipping_and_failed_canvas_roots_preserve_publication_contracts() {
     for range in [(0.2, 0.6), (2.0, 3.0)] {
         for plot in bars([0.5, 0.25], Some(range)) {
-            plot.preflight().unwrap();
+            plot.size(640, 480).preflight().unwrap();
         }
     }
-    histogram(0.5, 0.5).x_limits(2.0, 3.0).preflight().unwrap();
+    histogram(0.5, 0.5)
+        .x_limits(2.0, 3.0)
+        .size(640, 480)
+        .preflight()
+        .unwrap();
     let directory = tempfile::tempdir().unwrap();
     let canvas = lichtung_plot::Canvas::grid(1, 2)
         .unwrap()
@@ -221,7 +225,8 @@ fn rectangle_clipping_and_failed_canvas_roots_preserve_publication_contracts() {
         )
         .unwrap()
         .panel(0, 1, histogram(0.5, 1e-9))
-        .unwrap();
+        .unwrap()
+        .size(960, 640);
     let error = canvas
         .svg_preserve_text(directory.path().join("canvas.svg"))
         .err()

@@ -174,9 +174,12 @@ impl HeatmapData {
         &self,
         field: &str,
         theme: &ResolvedTheme,
-    ) -> Result<crate::decorations::legend::descriptor::ContinuousDescriptor, Error> {
+    ) -> Result<Option<crate::decorations::legend::descriptor::ContinuousDescriptor>, Error> {
+        let Some(values) = &self.colorbar_values else {
+            return Ok(None);
+        };
         let semantics = self.guide_semantics(theme)?;
-        Ok(
+        Ok(Some(
             crate::decorations::legend::descriptor::ContinuousDescriptor {
                 field: crate::data::source::copy_source_string(field)?,
                 title: crate::data::source::copy_source_string(&self.color_label)?,
@@ -189,15 +192,9 @@ impl HeatmapData {
                 domain: semantics.domain,
                 exact: self.color.selection.domain().is_some(),
                 format: semantics.format,
-                numeric: self
-                    .colorbar_values
-                    .as_ref()
-                    .ok_or_else(|| {
-                        Error::Render("Heatmap guide presentation was suppressed".into())
-                    })?
-                    .try_copy()?,
+                numeric: values.try_copy()?,
             },
-        )
+        ))
     }
 }
 
