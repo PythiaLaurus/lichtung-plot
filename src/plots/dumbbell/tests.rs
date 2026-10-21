@@ -106,7 +106,7 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
         assert_eq!(actual.key, key);
     }
     assert_eq!(
-        payload.connector,
+        payload.connectors[0],
         theme
             .marks
             .strokes()
@@ -114,12 +114,19 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
             .dumbbell_connector()
             .backend_style()
     );
-    let mapped = source.with_alpha(
-        crate::alpha::AlphaTarget::Point,
-        crate::alpha::AlphaEncoding::observations(
-            crate::alpha::AlphaValues::new("confidence", [64, 230]).unwrap(),
-        ),
-    );
+    let mapped = source
+        .with_alpha(
+            crate::alpha::AlphaTarget::Point,
+            crate::alpha::AlphaEncoding::observations(
+                crate::alpha::AlphaValues::new("confidence", [64, 230]).unwrap(),
+            ),
+        )
+        .with_alpha(
+            crate::alpha::AlphaTarget::Line,
+            crate::alpha::AlphaEncoding::observations(
+                crate::alpha::AlphaValues::new("pair confidence", [0, 191]).unwrap(),
+            ),
+        );
     let chart = crate::plots::shared_x::prepare_panel_for_test(&mapped, &theme).unwrap();
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
@@ -142,4 +149,12 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
             );
         }
     }
+    assert_eq!(
+        payload
+            .connectors
+            .iter()
+            .map(|style| style.color.alpha())
+            .collect::<Vec<_>>(),
+        [0, 191]
+    );
 }

@@ -14,6 +14,7 @@ pub(crate) struct PointIntervalRow {
     pub(crate) label: String,
     pub(crate) estimate: Option<crate::plots::interval_estimate::EstimateTuple>,
     pub(crate) alpha: ObservationAlpha,
+    pub(crate) line_alpha: ObservationAlpha,
 }
 
 pub(crate) fn shared_x_domain(
@@ -41,6 +42,7 @@ pub(crate) fn prepare<'a>(
 ) -> Result<Vec<PointIntervalRow>, Error> {
     let data = data.into();
     let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
+    let line_alpha = chart.prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Observation, &[])?;
     if chart.y_axis_spec() != &AxisSpec::default() {
         return Err(Error::Data(
             "point_interval: categorical y-axis limits are not supported".into(),
@@ -108,6 +110,7 @@ pub(crate) fn prepare<'a>(
             label,
             estimate,
             alpha: ObservationAlpha::resolve(data, &alpha, index)?,
+            line_alpha: ObservationAlpha::resolve(data, &line_alpha, index)?,
         });
     }
 

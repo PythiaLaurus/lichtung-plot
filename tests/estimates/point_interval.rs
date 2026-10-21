@@ -150,14 +150,29 @@ fn point_interval_clips_extreme_finite_bounds_without_projecting_infinity() {
 }
 
 #[test]
-fn point_interval_auto_range_handles_opposite_extreme_finite_bounds() {
+fn point_interval_auto_range_rejects_uncontainable_extreme_ink_but_explicit_windows_clip() {
     let data = point_interval_data(
         CategoryValues::new("category", ["extreme"]).unwrap(),
         NumericValues::new("estimate", [0.0]),
         NumericValues::new("lower", [-f64::MAX]),
         NumericValues::new("upper", [f64::MAX]),
     );
-    let svg = render(&data, |chart| chart);
+    let error = Plot::point_interval(
+        data.category.clone(),
+        data.estimate.clone(),
+        Bounds::new(data.lower.clone(), data.upper.clone()),
+    )
+    .size(520, 280)
+    .preflight()
+    .unwrap_err();
+    assert!(matches!(&error, lichtung_plot::Error::Render(_)));
+    assert!(error
+        .to_string()
+        .contains("automatic mark ink cannot obtain a finite data domain"));
+
+    // No finite binary64 domain can extend beyond both extreme endpoints.
+    // Requesting that exact window explicitly permits its boundary stroke clip.
+    let svg = render(&data, |chart| chart.x_limits(-f64::MAX, f64::MAX));
 
     assert_eq!(circles(clipped_marks(&svg)).len(), 1);
     assert!(!svg.contains("NaN") && !svg.contains("inf"));

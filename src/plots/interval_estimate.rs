@@ -1,7 +1,7 @@
 //! Root-prepared estimate semantics and selected point/interval/label geometry.
 
 use crate::alpha::{
-    marks::{point_ink, ObservationAlpha},
+    marks::{line_style, point_ink, ObservationAlpha},
     AlphaTarget, AlphaUnitKind,
 };
 use crate::Error;
@@ -21,6 +21,7 @@ pub(crate) struct PreparedEstimate {
     pub(crate) labels: Vec<String>,
     estimates: Vec<Option<EstimateTuple>>,
     alphas: Vec<ObservationAlpha>,
+    line_alphas: Vec<ObservationAlpha>,
     adjacent: Vec<Option<(String, bool)>>,
     reference: Option<f64>,
     pub(crate) range: Option<(f64, f64)>,
@@ -35,6 +36,26 @@ pub(crate) struct PreparedEstimateInputs {
 }
 
 impl PreparedEstimate {
+    fn interval_ink(&self, theme: &ResolvedTheme) -> Result<f64, Error> {
+        crate::alpha::marks::require_aligned_points(self.estimates.len(), self.line_alphas.len())?;
+        let style = theme
+            .marks
+            .strokes()
+            .summaries()
+            .estimate_interval()
+            .backend_style();
+        let mut width = 0.0_f64;
+        for (row, alpha) in self.estimates.iter().zip(&self.line_alphas) {
+            if row.and_then(|tuple| tuple.lower.zip(tuple.upper)).is_some() {
+                width = width.max(crate::render::geometry::line_ink_width(&line_style(
+                    alpha.value,
+                    style.clone(),
+                ))?);
+            }
+        }
+        Ok(width)
+    }
+
     fn point_ink(
         &self,
         chart: &Plot,
@@ -88,11 +109,9 @@ impl PreparedEstimate {
 
         let mut available = false;
         let mut unavailable = false;
-        let mut interval = false;
         for row in &self.estimates {
-            if let Some(tuple) = row {
+            if row.is_some() {
                 available = true;
-                interval |= tuple.lower.zip(tuple.upper).is_some();
             } else {
                 unavailable = true;
             }
@@ -106,23 +125,13 @@ impl PreparedEstimate {
             numeric = numeric.max(width);
             pitch = pitch.max(height);
         }
-        if interval {
-            let stroke = crate::render::geometry::line_ink_width(
-                &theme
-                    .marks
-                    .strokes()
-                    .summaries()
-                    .estimate_interval()
-                    .backend_style(),
-            )?;
-            numeric = numeric.max(stroke);
-            pitch = pitch.max(stroke);
-            if self.point_interval && stroke > 0.0 {
-                pitch = pitch.max(
-                    2.0 * f64::from(theme.marks.extents().point_interval_cap_half_height())
-                        + stroke,
-                );
-            }
+        let stroke = self.interval_ink(theme)?;
+        numeric = numeric.max(stroke);
+        pitch = pitch.max(stroke);
+        if self.point_interval && stroke > 0.0 {
+            pitch = pitch.max(
+                2.0 * f64::from(theme.marks.extents().point_interval_cap_half_height()) + stroke,
+            );
         }
         if unavailable {
             let text = theme.measure_text(
@@ -205,19 +214,23 @@ impl PreparedEstimate {
         let mut labels = Vec::new();
         let mut estimates = Vec::new();
         let mut alphas = Vec::new();
+        let mut line_alphas = Vec::new();
         crate::data::source::reserve_source(&mut labels, rows.len())?;
         crate::data::source::reserve_source(&mut estimates, rows.len())?;
         crate::data::source::reserve_source(&mut alphas, rows.len())?;
+        crate::data::source::reserve_source(&mut line_alphas, rows.len())?;
         for row in rows {
             labels.push(row.label);
             estimates.push(row.estimate);
             alphas.push(row.alpha);
+            line_alphas.push(row.line_alpha);
         }
         Ok(Self {
             kind: chart.kind(),
             labels,
             estimates,
             alphas,
+            line_alphas,
             adjacent: Vec::new(),
             reference: chart.zero_line_visible().then_some(0.0),
             range,
@@ -252,6 +265,7 @@ struct EstimateRowPayload {
     caps: [Option<[Point2D; 2]>; 2],
     point: Option<Point2D>,
     point_style: crate::render::backend::PointStyle,
+    interval_style: LineStyle,
     text: Option<crate::render::backend::PlacedText>,
 }
 
@@ -261,13 +275,32 @@ pub(crate) struct EstimatePayload {
     pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
     reference: Option<[Point2D; 2]>,
     reference_style: LineStyle,
-    interval_style: LineStyle,
     rows: Vec<EstimateRowPayload>,
     #[cfg(test)]
     kind: crate::PlotKind,
 }
 
 impl EstimatePayload {
+    fn scientific_ink(&self) -> Result<Option<crate::render::geometry::GeometryBox>, Error> {
+        let mut full = crate::render::geometry::GeometrySnapshot::new();
+        for row in &self.rows {
+            if let Some(line) = &row.interval {
+                full.line(line, &row.interval_style, None)?;
+            }
+            for cap in row.caps.iter().flatten() {
+                full.line(cap, &row.interval_style, None)?;
+            }
+            if let Some(point) = &row.point {
+                full.scatter_with_clip(std::slice::from_ref(point), &row.point_style, None)?;
+            }
+        }
+        Ok(full
+            .bounds()
+            .iter()
+            .copied()
+            .reduce(crate::render::geometry::GeometryBox::union))
+    }
+
     pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
         #[cfg(test)]
         count(self.kind, 3);
@@ -277,10 +310,10 @@ impl EstimatePayload {
             }
             for row in &self.rows {
                 if let Some(line) = &row.interval {
-                    backend.draw_line(line, &self.interval_style)?;
+                    backend.draw_line(line, &row.interval_style)?;
                 }
                 for cap in row.caps.iter().flatten() {
-                    backend.draw_line(cap, &self.interval_style)?;
+                    backend.draw_line(cap, &row.interval_style)?;
                 }
                 if let Some(point) = &row.point {
                     backend.draw_scatter(std::slice::from_ref(point), &row.point_style)?;
@@ -618,6 +651,10 @@ fn prepare_model<'a>(
     let alphas = crate::data::source::collect_source(
         (0..data.height()).map(|row| ObservationAlpha::resolve(data, &alpha, row)),
     )?;
+    let line_alpha = chart.prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Observation, &[])?;
+    let line_alphas = crate::data::source::collect_source(
+        (0..data.height()).map(|row| ObservationAlpha::resolve(data, &line_alpha, row)),
+    )?;
     let require_intervals = chart.kind() == crate::PlotKind::Forest;
     let family = if require_intervals {
         "forest"
@@ -798,6 +835,7 @@ fn prepare_model<'a>(
         labels,
         estimates: transformed_estimates,
         alphas,
+        line_alphas,
         adjacent,
         reference: Some(transformed_reference),
         range,
@@ -992,12 +1030,6 @@ fn project(
         domain_expansions: [None; 2],
         reference,
         reference_style,
-        interval_style: theme
-            .marks
-            .strokes()
-            .summaries()
-            .estimate_interval()
-            .backend_style(),
         rows: Vec::new(),
         #[cfg(test)]
         kind: chart.kind(),
@@ -1008,6 +1040,7 @@ fn project(
         theme.marks.points().radii().interval_estimate(),
     );
     crate::alpha::marks::require_aligned_points(estimates.len(), prepared.alphas.len())?;
+    crate::alpha::marks::require_aligned_points(estimates.len(), prepared.line_alphas.len())?;
     crate::data::source::reserve_source(&mut payload.rows, estimates.len())?;
     let mut deferred_annotation_text = Vec::new();
     for (index, adjacent) in adjacent_label_plans.into_iter().enumerate() {
@@ -1017,6 +1050,15 @@ fn project(
             caps: [None, None],
             point: None,
             point_style: prepared.alphas[index].point(point_style.clone()),
+            interval_style: line_style(
+                prepared.line_alphas[index].value,
+                theme
+                    .marks
+                    .strokes()
+                    .summaries()
+                    .estimate_interval()
+                    .backend_style(),
+            ),
             text: None,
         };
         if let Some(tuple) = estimates[index] {
@@ -1146,6 +1188,21 @@ fn project(
                 context.fit_scope(),
             )?;
         }
+        if let (Some(numeric), Some(bounds)) =
+            (estimate_data_range(estimates), payload.scientific_ink()?)
+        {
+            let requests = crate::layout::interior::automatic_absolute_ink_expansions(
+                [numeric, (0.0, row_count)],
+                &layout.projection,
+                bounds,
+                [true, false],
+                context.fit_scope(),
+            )?;
+            payload.domain_expansions = crate::layout::interior::merge_mark_domain_expansions(
+                payload.domain_expansions,
+                requests,
+            );
+        }
     }
     let mut geometry = crate::render::geometry::GeometrySnapshot::new();
     if let Some(line) = &payload.reference {
@@ -1153,10 +1210,10 @@ fn project(
     }
     for row in &payload.rows {
         if let Some(line) = &row.interval {
-            geometry.line(line, &payload.interval_style, Some(clip))?;
+            geometry.line(line, &row.interval_style, Some(clip))?;
         }
         for cap in row.caps.iter().flatten() {
-            geometry.line(cap, &payload.interval_style, Some(clip))?;
+            geometry.line(cap, &row.interval_style, Some(clip))?;
         }
         if let Some(point) = &row.point {
             geometry.scatter(std::slice::from_ref(point), &row.point_style, clip)?;

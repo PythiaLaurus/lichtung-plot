@@ -191,7 +191,7 @@ and focused closure; split behavioral leaves further when needed.
 | T6D1a | COMPLETE | T6D0 | Owned AlphaValues, common scalar/label owners, eager custom construction and complete selected recipes; `../docs/owned-alpha-values.md` |
 | T6D1b | COMPLETE | T6D1a | Explicit encodings, exact keyed/bin/facet resolution, original slots, retained three-target input and complete child/height identity; `../docs/explicit-alpha-bindings.md` |
 | T6D1c | COMPLETE | T6D1b | All 17 observation/estimate/strip/native point consumers and paint-aware intrinsic/ink; receipts below and `../docs/alpha-native-points.md` |
-| T6D1d | PENDING | T6D1c | Actual series, trace and uncertainty stroke consumers with explicit units |
+| T6D1d | IN PROGRESS | T6D1c | Seven Single/record stroke families complete in `../docs/alpha-record-strokes.md`; keyed series/trace/aggregate summaries remain |
 | T6D1e | PENDING | T6D1d | Actual aggregate, cell, bin, band, native and supplied-fill consumers |
 | T6D2 | PENDING | T6D1 | Declared automatic guides, parent transport, census and identities |
 | T6D2a | PENDING | T6D1 | Sole typed guide envelope, actual alpha descriptors/projections and exclusive-kind retirement |
@@ -208,6 +208,14 @@ original slots through filtering/sorting/order/status, final-paint batches and
 paint-aware intrinsic/ink. Beeswarm, Marginal and Matrix finish the census in
 `../docs/alpha-native-points.md`. All seventeen admitted point families are wired;
 series strokes, aggregate fills, guides and public cutover remain subsequent leaves.
+
+The stroke leaf has connected Qq references, Regression fits, optional Histogram
+KDE, PointInterval/Coefficient/Forest uncertainty and Dumbbell connectors in
+`../docs/alpha-record-strokes.md`. These use explicit Single/record units, final
+per-component styles and paint-aware intrinsic/automatic ink. The existing
+PointInterval extreme-domain caller is corrected to distinguish uncontainable
+automatic ink from explicitly authorized clipping under spec05. Keyed series,
+trace and aggregate-summary producers keep T6D1d IN PROGRESS.
 
 Do not start a code leaf while its exact owning design is still pending. Use modern
 Rust module layout, the standalone offline renderer and existing pinned dependencies.

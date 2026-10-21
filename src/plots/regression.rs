@@ -9,8 +9,8 @@
 )]
 
 use crate::alpha::{
-    marks::{point_ink, push_point, ObservationAlpha},
-    AlphaTarget, AlphaUnitKind,
+    marks::{line_style, point_ink, push_point, ObservationAlpha},
+    AlphaTarget, AlphaUnitKind, ResolvedAlpha,
 };
 use crate::data::PlotData;
 use crate::Error;
@@ -35,6 +35,7 @@ pub(crate) struct PreparedRegression {
     mark_ranges: [(f64, f64); 2],
     points: Vec<(f64, f64)>,
     alphas: Vec<ObservationAlpha>,
+    line_alpha: Option<ResolvedAlpha>,
     pub(crate) fit_line: [(f64, f64); 2],
     band_values: Option<Vec<(f64, f64, f64)>>,
 }
@@ -69,14 +70,15 @@ pub(crate) fn intrinsic_body_minimum(
             .map(|(&(x, y), &alpha)| (x, y, alpha)),
     )?
     .map_or((0.0, 0.0), crate::alpha::marks::PointInk::dimensions);
-    let fit = crate::render::geometry::line_ink_width(
-        &theme
+    let fit = crate::render::geometry::line_ink_width(&line_style(
+        prepared.line_alpha,
+        theme
             .marks
             .strokes()
             .curves()
             .regression_fit()
             .backend_style(),
-    )?;
+    ))?;
     let band = if prepared.band_values.is_some() {
         crate::render::geometry::rectangular_fill_ink_outset(
             &theme
@@ -156,6 +158,9 @@ impl PreparedRegression {
     pub(crate) fn new(chart: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
         data.validate_row_source()?;
         let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
+        let line_alpha = chart
+            .prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Single, &[])?
+            .single()?;
         #[cfg(test)]
         crate::layout::interior::distributions::count(3, 0);
         let x_col = chart
@@ -224,6 +229,7 @@ impl PreparedRegression {
             mark_ranges,
             points,
             alphas,
+            line_alpha,
             fit_line: [(x_min, y_fit_lo), (x_max, y_fit_hi)],
             band_values,
         })
@@ -360,12 +366,15 @@ pub(crate) fn project(
             alpha.point(point_style.clone()),
         )?;
     }
-    let line_style = theme
-        .marks
-        .strokes()
-        .curves()
-        .regression_fit()
-        .backend_style();
+    let line_style = line_style(
+        prepared.line_alpha,
+        theme
+            .marks
+            .strokes()
+            .curves()
+            .regression_fit()
+            .backend_style(),
+    );
 
     let (fit_x0, fit_y0) = projection.project(prepared.fit_line[0].0, prepared.fit_line[0].1);
     let (fit_x1, fit_y1) = projection.project(prepared.fit_line[1].0, prepared.fit_line[1].1);
@@ -460,12 +469,21 @@ mod style_tests {
         )
         .band(RegressionBand::Hidden)
         .erase();
-        let source = base.clone().with_alpha(
-            AlphaTarget::Point,
-            crate::alpha::AlphaEncoding::observations(
-                crate::alpha::AlphaValues::new("confidence", [0, 99, 128, 255]).unwrap(),
-            ),
-        );
+        let source = base
+            .clone()
+            .with_alpha(
+                AlphaTarget::Point,
+                crate::alpha::AlphaEncoding::observations(
+                    crate::alpha::AlphaValues::new("confidence", [0, 99, 128, 255]).unwrap(),
+                ),
+            )
+            .with_alpha(
+                AlphaTarget::Line,
+                crate::alpha::AlphaEncoding::single(
+                    crate::alpha::AlphaValues::new("fit confidence", [64]).unwrap(),
+                )
+                .unwrap(),
+            );
         let prepared = PreparedRegression::new(&source, source.data()).unwrap();
         let baseline = PreparedRegression::new(&base, base.data()).unwrap();
         assert_eq!(prepared.fit_line, baseline.fit_line);
@@ -511,6 +529,7 @@ mod style_tests {
             [(1, 0), (1, 128), (1, 255)]
         );
         assert_eq!(selected.marks.as_ref().unwrap().geometry.bounds().len(), 3);
+        assert_eq!(payload.line_style.color.alpha(), 64);
     }
 
     #[test]
@@ -582,6 +601,18 @@ mod style_tests {
         let strokes = theme.marks.strokes().clone().with_curves(curves).unwrap();
         theme.marks = theme.marks.clone().with_strokes(strokes).unwrap();
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), before);
+        let mapped = chart.clone().with_alpha(
+            AlphaTarget::Line,
+            crate::alpha::AlphaEncoding::single(
+                crate::alpha::AlphaValues::new("fit confidence", [128]).unwrap(),
+            )
+            .unwrap(),
+        );
+        let mapped = crate::plots::shared_x::prepare_panel_for_test(&mapped, &theme).unwrap();
+        assert_eq!(
+            intrinsic_body_minimum(&mapped, &theme).unwrap(),
+            (140.0, 140.0)
+        );
         let band = theme
             .marks
             .fills()

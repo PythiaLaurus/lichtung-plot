@@ -3,8 +3,8 @@
 #![allow(clippy::cast_precision_loss)]
 
 use crate::alpha::{
-    marks::{point_ink, push_point, ObservationAlpha},
-    AlphaTarget, AlphaUnitKind,
+    marks::{line_style, point_ink, push_point, ObservationAlpha},
+    AlphaTarget, AlphaUnitKind, ResolvedAlpha,
 };
 use crate::data::PlotData;
 use crate::Error;
@@ -26,6 +26,7 @@ pub(crate) struct PreparedQq {
     observed: Vec<f64>,
     alphas: Vec<ObservationAlpha>,
     line: Option<LineGeometry>,
+    line_alpha: Option<ResolvedAlpha>,
 }
 
 #[derive(Debug)]
@@ -65,14 +66,15 @@ pub(crate) fn intrinsic_body_minimum(
     )?
     .map_or((0.0, 0.0), crate::alpha::marks::PointInk::dimensions);
     let reference = if prepared.line.is_some() {
-        crate::render::geometry::line_ink_width(
-            &theme
+        crate::render::geometry::line_ink_width(&line_style(
+            prepared.line_alpha,
+            theme
                 .marks
                 .strokes()
                 .references()
                 .qq_reference()
                 .backend_style(),
-        )?
+        ))?
     } else {
         0.0
     };
@@ -105,6 +107,9 @@ impl PreparedQq {
     pub(crate) fn new(chart: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
         data.validate_row_source()?;
         let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
+        let line_alpha = chart
+            .prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Single, &[])?
+            .single()?;
         #[cfg(test)]
         crate::layout::interior::distributions::count(2, 0);
         if let Some(hue) = chart.hue_col() {
@@ -117,6 +122,7 @@ impl PreparedQq {
             .ok_or_else(|| Error::Data("Q-Q plot: value column not set".into()))?;
         let values = crate::data::strict_finite_f64(data, column, "Q-Q plot")?;
         let mut prepared = prepare_qq(&values, chart.qq_line_spec())?;
+        prepared.line_alpha = line_alpha;
         for source in &mut prepared.alphas {
             *source = ObservationAlpha::resolve(data, &alpha, source.slot)?;
         }
@@ -232,12 +238,15 @@ pub(crate) fn project(
         clip: layout.projection.panel_box(),
         line: None,
         point_batches: Vec::new(),
-        line_style: theme
-            .marks
-            .strokes()
-            .references()
-            .qq_reference()
-            .backend_style(),
+        line_style: line_style(
+            prepared.line_alpha,
+            theme
+                .marks
+                .strokes()
+                .references()
+                .qq_reference()
+                .backend_style(),
+        ),
         domain_expansions: [None; 2],
     };
     let point_style = chart.point_style(
@@ -522,6 +531,7 @@ fn prepare_qq(values: &[f64], line_mode: QqLine) -> Result<PreparedQq, Error> {
         observed,
         alphas,
         line,
+        line_alpha: None,
     })
 }
 
@@ -636,6 +646,32 @@ mod tests {
             .unwrap();
         theme.marks = theme.marks.clone().with_strokes(strokes).unwrap();
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), before);
+        let mapped = chart.clone().with_alpha(
+            AlphaTarget::Line,
+            crate::alpha::AlphaEncoding::single(
+                crate::alpha::AlphaValues::new("reference confidence", [128]).unwrap(),
+            )
+            .unwrap(),
+        );
+        let mapped = crate::plots::shared_x::prepare_panel_for_test(&mapped, &theme).unwrap();
+        assert_eq!(
+            intrinsic_body_minimum(&mapped, &theme).unwrap().1.to_bits(),
+            140.0_f64.to_bits()
+        );
+        let selected = mapped
+            .measure_selected_interior(PlotRenderContext::new(
+                mapped.data(),
+                crate::layout::PanelBox::new(20.0, 600.0, 20.0, 420.0),
+                &theme,
+            ))
+            .unwrap();
+        let crate::layout::interior::MarkPayload::Qq(payload) =
+            &selected.marks.as_ref().unwrap().payload
+        else {
+            panic!("Qq payload")
+        };
+        assert_eq!(payload.line_style.color, crate::Color::rgba(1, 2, 3, 128));
+        assert!(payload.line.is_some());
     }
 
     #[test]

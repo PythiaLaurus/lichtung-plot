@@ -5,7 +5,10 @@
     reason = "validated row counts are converted to bounded plotting coordinates"
 )]
 
-use crate::alpha::{marks::ObservationAlpha, AlphaTarget, AlphaUnitKind};
+use crate::alpha::{
+    marks::{line_style, ObservationAlpha},
+    AlphaTarget, AlphaUnitKind,
+};
 use crate::Error;
 
 use crate::decorations::legend::source::{LiteralDomain, PointRole};
@@ -22,6 +25,7 @@ struct DumbbellRow {
     left: f64,
     right: f64,
     alpha: ObservationAlpha,
+    line_alpha: ObservationAlpha,
 }
 
 #[derive(Debug)]
@@ -85,16 +89,19 @@ pub(crate) fn intrinsic_body_minimum(
             }
         }
     }
-    let connector = crate::render::geometry::line_ink_width(
-        &theme
-            .marks
-            .strokes()
-            .connectors()
-            .dumbbell_connector()
-            .backend_style(),
-    )?;
-    outward = outward.max(connector / 2.0);
-    numeric = numeric.max(connector);
+    for row in &prepared.rows {
+        let connector = crate::render::geometry::line_ink_width(&line_style(
+            row.line_alpha.value,
+            theme
+                .marks
+                .strokes()
+                .connectors()
+                .dumbbell_connector()
+                .backend_style(),
+        ))?;
+        outward = outward.max(connector / 2.0);
+        numeric = numeric.max(connector);
+    }
     let pitch = (outward / (0.5 - offset)).max(1.0 / 1024.0);
     let rows =
         f64::from(u32::try_from(prepared.categories.len()).map_err(|_| {
@@ -155,7 +162,7 @@ pub(crate) struct PreparedDumbbellInputs {
 pub(crate) struct DumbbellPayload {
     clip: crate::layout::PanelBox,
     pub(crate) pairs: Vec<[Point2D; 2]>,
-    connector: LineStyle,
+    connectors: Vec<LineStyle>,
     points: Vec<[crate::render::backend::PointStyle; 2]>,
     pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
 }
@@ -165,8 +172,10 @@ impl DumbbellPayload {
         #[cfg(test)]
         count(3);
         with_clip(backend, self.clip, |backend| {
-            for (pair, points) in self.pairs.iter().zip(&self.points) {
-                backend.draw_line(pair, &self.connector)?;
+            for ((pair, points), connector) in
+                self.pairs.iter().zip(&self.points).zip(&self.connectors)
+            {
+                backend.draw_line(pair, connector)?;
                 backend.draw_scatter(&pair[..1], &points[0])?;
                 backend.draw_scatter(&pair[1..], &points[1])?;
             }
@@ -205,8 +214,13 @@ pub(crate) fn measure_marks(
         unreachable!("Dumbbell selected its own mark payload")
     };
     let mut full = crate::render::geometry::GeometrySnapshot::new();
-    for (pair, points) in payload.pairs.iter().zip(&payload.points) {
-        full.line(pair, &payload.connector, None)?;
+    for ((pair, points), connector) in payload
+        .pairs
+        .iter()
+        .zip(&payload.points)
+        .zip(&payload.connectors)
+    {
+        full.line(pair, connector, None)?;
         full.scatter_with_clip(&pair[..1], &points[0], None)?;
         full.scatter_with_clip(&pair[1..], &points[1], None)?;
     }
@@ -256,12 +270,13 @@ fn project(
     let mut payload = DumbbellPayload {
         clip: layout.projection.panel_box(),
         pairs: Vec::new(),
-        connector,
+        connectors: Vec::new(),
         points: Vec::new(),
         domain_expansions: [None; 2],
     };
     crate::data::source::reserve_source(&mut payload.pairs, prepared.rows.len())?;
     crate::data::source::reserve_source(&mut payload.points, prepared.rows.len())?;
+    crate::data::source::reserve_source(&mut payload.connectors, prepared.rows.len())?;
 
     for row in &prepared.rows {
         let y = replicate_y(
@@ -288,11 +303,19 @@ fn project(
             row.alpha
                 .point(endpoint_style(chart, theme, endpoints.right_color())),
         ]);
+        payload
+            .connectors
+            .push(line_style(row.line_alpha.value, connector.clone()));
     }
     let mut geometry = crate::render::geometry::GeometrySnapshot::new();
     let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
-    for (pair, points) in payload.pairs.iter().zip(&payload.points) {
-        geometry.line(pair, &payload.connector, Some(clip))?;
+    for ((pair, points), connector) in payload
+        .pairs
+        .iter()
+        .zip(&payload.points)
+        .zip(&payload.connectors)
+    {
+        geometry.line(pair, connector, Some(clip))?;
         geometry.scatter(&pair[..1], &points[0], clip)?;
         geometry.scatter(&pair[1..], &points[1], clip)?;
     }
@@ -341,6 +364,7 @@ pub(crate) fn prepare<'a>(
     let data = data.into();
     data.validate_row_source()?;
     let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
+    let line_alpha = chart.prepare_alpha(AlphaTarget::Line, AlphaUnitKind::Observation, &[])?;
     #[cfg(test)]
     count(0);
     if chart.y_axis_spec() != &AxisSpec::default() {
@@ -427,6 +451,7 @@ pub(crate) fn prepare<'a>(
             left: left[index],
             right: right[index],
             alpha: ObservationAlpha::resolve(data, &alpha, index)?,
+            line_alpha: ObservationAlpha::resolve(data, &line_alpha, index)?,
         });
     }
 
