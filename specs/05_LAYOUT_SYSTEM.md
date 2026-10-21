@@ -1496,6 +1496,12 @@ when different instructions produce equal positions or extent. Feedback tags are
 Automatic 0, Additive 1 plus exact f64, Log10Decades 2 plus u32, Target 3 plus count,
 Maximum 4 plus count. Selected plans freeze positions/text/operands for replay.
 
+Canvas height consequences retain both concrete generation choices beside the
+independent numeric-format inputs. Equal width, domains, provenance or measured
+height cannot authorize reuse after Target/Maximum/count/reset changes. Focused
+all-family/root and cached/uncached frozen-output evidence is recorded in
+`../docs/tick-generation-parent-closure.md`.
+
 The interval-only type and setters are removed, without aliases or competing
 optional fields. No exact generated-count control, density scalar, categorical
 stride/drop, tick callback, public constraint/measurement operation, `SizeRequest`,

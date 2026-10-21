@@ -143,6 +143,9 @@ coarsening and actual text fit still apply. Exact `x_ticks`/`y_ticks` take
 precedence in either setter order and are never truncated by a generated maximum;
 actual categorical axes reject non-Automatic generation instructions.
 
+See [`examples/07_tick_generation.rs`](examples/07_tick_generation.rs) for
+independent axis choices and [the public contract](docs/public-tick-generation.md).
+
 ## Scientific Numeric Labels
 
 `NumericFormat` controls generated numeric ticks, continuous guide numbers,

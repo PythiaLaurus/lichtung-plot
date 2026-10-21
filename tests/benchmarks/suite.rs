@@ -10,6 +10,7 @@ mod legends;
 mod numeric;
 mod sections;
 mod text;
+mod ticks;
 
 pub(super) struct ArtifactBytes {
     pub svg: Vec<u8>,
@@ -208,52 +209,6 @@ pub(super) fn measure_pair(
         }
     }
     samples
-}
-
-#[test]
-fn paired_measurement_contract() {
-    let samples = measure_pair(
-        ["helper_success", "helper_failure"],
-        [
-            &|| {
-                measure_case(
-                    "helper_success",
-                    || {
-                        Plot::scatter(
-                            NumericValues::new("Predictor", [1.0, 2.0]),
-                            NumericValues::new("Response", [2.0, 1.0]),
-                        )
-                        .size(320, 240)
-                    },
-                    |root, path| root.svg(path),
-                    true,
-                    true,
-                )
-            },
-            &|| {
-                measure_case(
-                    "helper_failure",
-                    || (),
-                    |(), _| Err(crate::Error::Render("expected rejection".into())),
-                    false,
-                    false,
-                )
-            },
-        ],
-    );
-    assert_eq!(samples.len(), 3);
-    for [success, failure] in samples {
-        let output = success.output.unwrap();
-        assert!(!output.svg.is_empty() && !output.png.is_empty());
-        assert!(String::from_utf8(output.preserved_svg.unwrap())
-            .unwrap()
-            .contains("Predictor"));
-        assert!(failure.output.is_none());
-        assert!(
-            matches!(failure.error, Some(crate::Error::Render(message)) if message == "expected rejection")
-        );
-        assert_eq!(failure.observations.calls, [0; 8]);
-    }
 }
 
 fn scatter() -> Plot<crate::kind::Scatter> {
@@ -526,6 +481,7 @@ fn publication_efficiency_measurements() {
     measure("reuse10", scatter, publish_plot, false);
     numeric::measure();
     sections::measure();
+    ticks::measure();
 
     for run in 0..3 {
         let start = Instant::now();

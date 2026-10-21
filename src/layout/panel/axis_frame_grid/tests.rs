@@ -36,6 +36,8 @@ fn selected_axis_plan_retains_semantics_beside_projection_and_sources() {
         crate::NumericValues::new("x", [0.0, 3.0]),
         crate::NumericValues::new("y", [0.0, 3.0]),
     )
+    .x_tick_generation(TickGeneration::target(5).unwrap())
+    .y_tick_generation(TickGeneration::maximum(5).unwrap())
     .erase()
     .with_resolved_facet_ranges(crate::spec::PlotKind::Scatter, Some((0.0, 3.0)), None);
     let inputs = plot.axis_semantic_inputs([crate::spec::AxisDomain::Continuous; 2]);
@@ -44,6 +46,8 @@ fn selected_axis_plan_retains_semantics_beside_projection_and_sources() {
         .unwrap();
     let retained = plan.clone();
     assert_eq!(retained.semantics, inputs);
+    assert_eq!(retained.semantics[0].generation.target_count(), Some(5));
+    assert_eq!(retained.semantics[1].generation.maximum_count(), Some(5));
     assert_eq!(retained.standard, plan.standard);
     assert_eq!(retained.x_axis.source, TickSource::EXACT);
     assert_eq!(

@@ -4,7 +4,7 @@ use lichtung_plot::{
     kind, BarInput, Bounds, Canvas, CanvasLegendPolicy, CategoryValues, CoefficientInput, Color,
     DumbbellEndpoints, Error, FacetSpec, HeatmapAnnotations, HistogramInput, NumericFormat,
     NumericNotation, NumericPrecision, NumericValues, Output, Plot, PlotKind, PngCompression,
-    PngOptions, PngSizing, RaincloudInput, TextPanel, Theme,
+    PngOptions, PngSizing, RaincloudInput, TextPanel, Theme, TickGeneration,
 };
 
 use super::support::{png_dimensions, unique_dir};
@@ -177,6 +177,9 @@ fn assert_family_content_roots<K: kind::ExactFamily>(source: Plot<K>, markers: &
                 source.kind()
             );
         }
+        if markers.contains(&"y=") {
+            assert_generated_y_maximum(&svg);
+        }
         if source.kind() != PlotKind::Matrix {
             let destination = directory.join(format!("{sizing:?}-canvas.svg"));
             let canvas = Canvas::grid(1, 1)
@@ -198,9 +201,26 @@ fn assert_family_content_roots<K: kind::ExactFamily>(source: Plot<K>, markers: &
                     source.kind()
                 );
             }
+            if markers.contains(&"y=") {
+                assert_generated_y_maximum(&svg);
+            }
         }
     }
     std::fs::remove_dir_all(directory).unwrap();
+}
+
+fn assert_generated_y_maximum(svg: &str) {
+    let document = roxmltree::Document::parse(svg).unwrap();
+    let labels = document
+        .descendants()
+        .filter(|node| node.has_tag_name("text"))
+        .filter_map(|node| node.text())
+        .filter(|text| text.starts_with("y="))
+        .count();
+    assert!(
+        (1..=3).contains(&labels),
+        "generated in-domain y positions: {labels}"
+    );
 }
 
 #[test]
@@ -214,6 +234,8 @@ fn all_public_families_render_content_requests_with_their_actual_axes_and_chrome
         ($plot:expr) => {
             assert_family_content_roots(
                 $plot
+                    .x_tick_generation(TickGeneration::target(5).unwrap())
+                    .y_tick_generation(TickGeneration::maximum(3).unwrap())
                     .x_tick_format(format("x="))
                     .y_tick_format(format("y=")),
                 &["x=", "y="],
@@ -222,12 +244,22 @@ fn all_public_families_render_content_requests_with_their_actual_axes_and_chrome
     }
     macro_rules! x {
         ($plot:expr) => {
-            assert_family_content_roots($plot.x_tick_format(format("x=")), &["x="]);
+            assert_family_content_roots(
+                $plot
+                    .x_tick_generation(TickGeneration::target(5).unwrap())
+                    .x_tick_format(format("x=")),
+                &["x="],
+            );
         };
     }
     macro_rules! y {
         ($plot:expr) => {
-            assert_family_content_roots($plot.y_tick_format(format("y=")), &["y="]);
+            assert_family_content_roots(
+                $plot
+                    .y_tick_generation(TickGeneration::maximum(3).unwrap())
+                    .y_tick_format(format("y=")),
+                &["y="],
+            );
         };
     }
     let x = NumericValues::new("x", [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
@@ -261,6 +293,7 @@ fn all_public_families_render_content_requests_with_their_actual_axes_and_chrome
     ));
     assert_family_content_roots(
         Plot::coefficient(terms.clone(), CoefficientInput::estimates(x.clone()))
+            .x_tick_generation(TickGeneration::target(5).unwrap())
             .x_tick_format(format("x="))
             .estimate_labels(format("v=")),
         &["x=", "v="],
@@ -268,6 +301,7 @@ fn all_public_families_render_content_requests_with_their_actual_axes_and_chrome
     assert_family_content_roots(
         Plot::forest(terms.clone(), x.clone(), bounds(), 1.0)
             .scale(lichtung_plot::AxisScale::Log10)
+            .x_tick_generation(TickGeneration::target(5).unwrap())
             .x_tick_format(
                 NumericFormat::new(
                     NumericNotation::Scientific,
@@ -323,6 +357,7 @@ fn all_public_families_render_content_requests_with_their_actual_axes_and_chrome
     assert_family_content_roots(Plot::matrix(vec![x.clone(), y]), &[]);
     assert_family_content_roots(
         Plot::beeswarm(group, x.clone(), x)
+            .x_tick_generation(TickGeneration::target(5).unwrap())
             .x_tick_format(format("x="))
             .color_label_format(format("c=")),
         &["x=", "c="],
@@ -334,6 +369,7 @@ fn all_public_families_render_content_requests_with_their_actual_axes_and_chrome
             10.0,
         )
         .x_tick_format(format("x="))
+        .x_tick_generation(TickGeneration::target(5).unwrap())
         .total_format(format("n=")),
         &["x=", "base n=", "total n="],
     );

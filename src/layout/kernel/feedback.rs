@@ -1574,11 +1574,11 @@ mod tests {
 
     #[test]
     fn axis_semantics_and_standard_typography_are_feedback_identity() {
-        let plot = crate::Plot::scatter(
+        let source = crate::Plot::scatter(
             crate::NumericValues::new("x", [0.0, 1.0]),
             crate::NumericValues::new("y", [0.0, 1.0]),
-        )
-        .erase();
+        );
+        let plot = source.clone().erase();
         let domains = [crate::spec::AxisDomain::Continuous; 2];
         let theme = crate::Theme::publication().resolve().unwrap();
         let standard = crate::layout::StandardPanelInputs::new(&theme).unwrap();
@@ -1597,6 +1597,28 @@ mod tests {
             None,
         );
         assert_ne!(automatic, state(&shared, &standard));
+        let mut generation_states = vec![state(&plot, &standard)];
+        for side in 0..2 {
+            for generation in [
+                crate::TickGeneration::additive(1.0).unwrap(),
+                crate::TickGeneration::additive(1.0_f64.next_up()).unwrap(),
+                crate::TickGeneration::target(5).unwrap(),
+                crate::TickGeneration::target(6).unwrap(),
+                crate::TickGeneration::maximum(5).unwrap(),
+                crate::TickGeneration::maximum(6).unwrap(),
+            ] {
+                let changed = if side == 0 {
+                    source.clone().x_tick_generation(generation)
+                } else {
+                    source.clone().y_tick_generation(generation)
+                }
+                .erase();
+                let selected = state(&changed, &standard);
+                assert!(generation_states.iter().all(|other| *other != selected));
+                assert_eq!(selected, state(&changed.clone(), &standard));
+                generation_states.push(selected);
+            }
+        }
         assert_eq!(
             automatic,
             state(&plot.with_planned_x_limits((0.0, 1.0)), &standard)

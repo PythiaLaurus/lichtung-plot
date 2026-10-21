@@ -204,7 +204,7 @@ labels, not existing commits.
 | T6C3 | COMPLETE | T6C2 | Complete initial axis/chrome preferences, provisional content-height gutters and all-mode parent/output evidence; `fix(layout): compose complete content-sized root frames` |
 | T6N | COMPLETE | T6C | Unified scientific numeric formatting; leaves below |
 | T6L | COMPLETE | T6N | One section-aware discrete guide; focused closure in `docs/section-composition-acceptance.md` |
-| T6T | IN PROGRESS | T6L | Design, bounded sources and public TickGeneration cutover complete; `docs/public-tick-generation.md` records 33 focused library/four external contracts and 119 doctests; parent/root/output closure remains in spec97 |
+| T6T | COMPLETE | T6L | TickGeneration design/source/public cutover and focused parent/root/output closure; `docs/public-tick-generation.md` / `docs/tick-generation-parent-closure.md` |
 | T6D | PENDING | T6T | Data alpha with declared automatic-guide semantics; design, producers, guides, public migration and closure leaves in spec97 |
 | T6Z | PENDING | T6D | Integrated contract and phase closure |
 | T6Z1 | PENDING | T6D | Complete public examples/current-spec and property/consumer census reconciliation; `docs(api): reconcile scientific plotting contracts` |
@@ -957,8 +957,14 @@ TickGeneration now replaces the interval-only public API, including concrete
 Automatic reset and target/maximum transport. `../docs/public-tick-generation.md`
 records immediate validation, all 32 family/axis attachments, exact-order/count
 independence, categorical refusal, composed identity and compiler/publication
-checks. Parent/root/output breadth is the remaining tick leaf. Data alpha remains
-pending; the existing exact-RGBA behavior stays current until its own cutover.
+checks. `../docs/tick-generation-parent-closure.md` closes complete height-key
+selection identity, all-family/root consumer breadth, sixty real cached/uncached
+SVG/PNG publications and the bounded release workload construction. Thirty-two
+focused library tests, one external contract covering 147 roots, the public
+1200×600 example, strict lint/fmt and 671/17 discovery pass. The new library
+publication contract replaces the paired-helper inventory one-for-one. Data alpha
+and integrated release execution remain pending; exact-RGBA behavior stays current
+until its own cutover.
 
 ## Verification And Closure
 

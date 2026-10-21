@@ -1,8 +1,8 @@
 # Data Alpha And Numeric Tick Selection
 
-**Status**: User-approved scope; numeric source/API design, private bounded count
-sources and public generation cutover COMPLETE. Numeric parent/root/output closure
-and data-alpha work remain PENDING.
+**Status**: User-approved scope; numeric tick selection COMPLETE, including design,
+bounded sources, public cutover and focused parent/root/frozen-output closure.
+Data-alpha work and integrated release verification remain PENDING.
 
 ## Authority And Recorded Decision
 
@@ -168,7 +168,7 @@ and focused closure; split behavioral leaves further when needed.
 | T6T0 | COMPLETE | T6L | Exact generation value/API, source order/cardinality, consumer/deletion and acceptance design in `../docs/numeric-tick-selection-design.md` |
 | T6T1 | COMPLETE | T6T0 | Private target/maximum sources, pre-allocation cardinality and exact identity/feedback; evidence in `../docs/bounded-tick-count-sources.md` |
 | T6T2 | COMPLETE | T6T1 | Atomic TickGeneration API/caller/current-contract migration; evidence in `../docs/public-tick-generation.md` |
-| T6T3 | PENDING | T6T2 | Parent/root/output and public contract evidence |
+| T6T3 | COMPLETE | T6T2 | Complete parent height identities, all-family/root and 60 cached/uncached multi-format publications; `../docs/tick-generation-parent-closure.md` |
 | T6D0 | PENDING | T6T | Exact alpha input/mapping/producer/guide/precedence design |
 | T6D1 | PENDING | T6D0 | Immutable mapping preparation and actual mark consumers |
 | T6D2 | PENDING | T6D1 | Declared automatic guides, parent transport, census and identities |

@@ -502,10 +502,9 @@ mod tests {
                     crate::NumericValues::new("y", [0.0, 1.0]),
                 )
                 .x_tick_format(format)
-                .erase()
             };
-            let source = make(format.clone());
-            let variants = [
+            let source = make(format.clone()).erase();
+            let formats = [
                 format
                     .clone()
                     .with_notation(NumericNotation::Scientific)
@@ -530,6 +529,14 @@ mod tests {
                     .with_trailing_zeros(TrailingZeros::Trim)
                     .unwrap(),
             ];
+            let mut variants = formats.map(|format| make(format).erase()).to_vec();
+            for generation in [
+                crate::TickGeneration::target(5).unwrap(),
+                crate::TickGeneration::maximum(5).unwrap(),
+            ] {
+                variants.push(make(format.clone()).x_tick_generation(generation).erase());
+                variants.push(make(format.clone()).y_tick_generation(generation).erase());
+            }
             let theme = crate::Theme::publication().resolve().unwrap();
             let owner = ComponentAddress::root()
                 .child(AddressRole::FacetCell, 0)
@@ -588,10 +595,9 @@ mod tests {
                     assert_eq!(children.measurements.len(), 1);
                     assert!(!Arc::ptr_eq(&first, &changed));
                     assert!(Arc::ptr_eq(&changed, &children.measurements[0].result));
-                    for format in &variants {
-                        let plot = make(format.clone());
+                    for plot in &variants {
                         let changed = crate::layout::fit::measured(children.measure(
-                            &plot,
+                            plot,
                             context,
                             &owner,
                             MeasurementPhase::Probe,
@@ -600,7 +606,7 @@ mod tests {
                         ))
                         .map_err(crate::layout::fit::PlanError::into_error)?;
                         let hit = crate::layout::fit::measured(children.measure(
-                            &plot,
+                            plot,
                             context,
                             &owner,
                             MeasurementPhase::Probe,

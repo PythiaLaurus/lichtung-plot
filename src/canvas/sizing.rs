@@ -21,11 +21,12 @@ mod tests;
 #[derive(Default)]
 pub(super) struct HeightMeasurements(std::cell::RefCell<Vec<Option<HeightMeasurement>>>);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 struct HeightInputs {
     width: i64,
     ranges: [[u64; 2]; 2],
     provenance: [crate::layout::RangeProvenance; 2],
+    generation: [crate::TickGeneration; 2],
     resolved_x: Option<[u64; 2]>,
     own_insets: [[i64; 4]; 2],
     parent_insets: [i64; 4],
@@ -47,6 +48,7 @@ impl HeightInputs {
         if self.width != other.width
             || self.ranges != other.ranges
             || self.provenance != other.provenance
+            || self.generation != other.generation
             || self.resolved_x != other.resolved_x
             || self.own_insets != other.own_insets
             || self.parent_insets != other.parent_insets
@@ -124,6 +126,7 @@ impl HeightInputs {
             width: crate::layout::kernel::nearest_spatial_quanta(width)?,
             ranges,
             provenance: [plot.x_axis_spec().provenance, plot.y_axis_spec().provenance],
+            generation: [plot.x_axis_spec().generation, plot.y_axis_spec().generation],
             resolved_x: plot
                 .resolved_facet_x_range()
                 .map(|range| [range.0.to_bits(), range.1.to_bits()]),

@@ -2,21 +2,8 @@ use super::*;
 use crate::decorations::legend::discrete::scoped::{DependencyUse, GuideAllocation};
 use crate::numeric::{decimal::NegativeZero, format::NumericFormat};
 
-#[test]
-fn recorded_heights_require_complete_numeric_and_guide_inputs_at_equal_width_and_domain() {
-    let format = NumericFormat::default();
-    let make = |guide, values| {
-        Plot::heatmap(
-            crate::CategoryValues::new("x", ["a"]).unwrap(),
-            crate::CategoryValues::new("y", ["one"]).unwrap(),
-            crate::NumericValues::new("value", [1.0]),
-        )
-        .color_label_format(guide)
-        .annotations(crate::HeatmapAnnotations::Values(values))
-        .erase()
-    };
+fn assert_changed_height_inputs(source: Plot, variants: impl IntoIterator<Item = Plot>) {
     let operation = crate::font::canonical::OperationContext::new();
-    let source = make(format.clone(), format.clone());
     let inputs = crate::plots::shared_x::prepare_plot(
         &source,
         &operation,
@@ -32,17 +19,11 @@ fn recorded_heights_require_complete_numeric_and_guide_inputs_at_equal_width_and
             false,
         )
         .unwrap();
+    let variants = variants
+        .into_iter()
+        .map(|variant| inputs.attach(variant).unwrap())
+        .collect::<Vec<_>>();
     let source = inputs.attach(source).unwrap();
-    let normalized = format
-        .clone()
-        .with_negative_zero(NegativeZero::Normalize)
-        .unwrap();
-    let variants = [
-        inputs
-            .attach(make(normalized.clone(), format.clone()))
-            .unwrap(),
-        inputs.attach(make(format, normalized)).unwrap(),
-    ];
     let measurements = HeightMeasurements::default();
     crate::layout::plan_exact_root(
         800,
@@ -91,4 +72,57 @@ fn recorded_heights_require_complete_numeric_and_guide_inputs_at_equal_width_and
         |(), _, (), _| Ok(()),
     )
     .unwrap();
+}
+
+#[test]
+fn recorded_heights_require_complete_numeric_and_guide_inputs_at_equal_width_and_domain() {
+    let format = NumericFormat::default();
+    let make = |guide, values| {
+        Plot::heatmap(
+            crate::CategoryValues::new("x", ["a"]).unwrap(),
+            crate::CategoryValues::new("y", ["one"]).unwrap(),
+            crate::NumericValues::new("value", [1.0]),
+        )
+        .color_label_format(guide)
+        .annotations(crate::HeatmapAnnotations::Values(values))
+        .erase()
+    };
+    let normalized = format
+        .clone()
+        .with_negative_zero(NegativeZero::Normalize)
+        .unwrap();
+    assert_changed_height_inputs(
+        make(format.clone(), format.clone()),
+        [
+            make(normalized.clone(), format.clone()),
+            make(format, normalized),
+        ],
+    );
+
+    let source = crate::Plot::scatter(
+        crate::NumericValues::new("x", [0.0, 1.0]),
+        crate::NumericValues::new("y", [0.0, 1.0]),
+    )
+    .x_limits(0.0, 1.0)
+    .y_limits(0.0, 1.0)
+    .x_tick_generation(crate::TickGeneration::target(5).unwrap());
+    let variants = [
+        source
+            .clone()
+            .x_tick_generation(crate::TickGeneration::maximum(5).unwrap())
+            .erase(),
+        source
+            .clone()
+            .x_tick_generation(crate::TickGeneration::target(4).unwrap())
+            .erase(),
+        source
+            .clone()
+            .x_tick_generation(crate::TickGeneration::automatic())
+            .erase(),
+        source
+            .clone()
+            .y_tick_generation(crate::TickGeneration::maximum(5).unwrap())
+            .erase(),
+    ];
+    assert_changed_height_inputs(source.erase(), variants);
 }
