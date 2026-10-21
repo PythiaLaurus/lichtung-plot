@@ -205,7 +205,7 @@ labels, not existing commits.
 | T6N | COMPLETE | T6C | Unified scientific numeric formatting; leaves below |
 | T6L | COMPLETE | T6N | One section-aware discrete guide; focused closure in `docs/section-composition-acceptance.md` |
 | T6T | COMPLETE | T6L | TickGeneration design/source/public cutover and focused parent/root/output closure; `docs/public-tick-generation.md` / `docs/tick-generation-parent-closure.md` |
-| T6D | PENDING | T6T | Data alpha with declared automatic-guide semantics; design, producers, guides, public migration and closure leaves in spec97 |
+| T6D | IN PROGRESS | T6T | Exact explicit-unit inputs/numerics, 49 component gates and guide/parent design complete in `docs/data-alpha-design.md`; private implementation leaves in spec97 |
 | T6Z | PENDING | T6D | Integrated contract and phase closure |
 | T6Z1 | PENDING | T6D | Complete public examples/current-spec and property/consumer census reconciliation; `docs(api): reconcile scientific plotting contracts` |
 | T6Z2 | COMPLETE | User closure review | User-approved DF3/DF4 admission in spec97, residual DF4 checkpoint and fully caller-decided legends in DF11 |
@@ -965,6 +965,17 @@ focused library tests, one external contract covering 147 roots, the public
 publication contract replaces the paired-helper inventory one-for-one. Data alpha
 and integrated release execution remain pending; exact-RGBA behavior stays current
 until its own cutover.
+
+The user selected explicit per-observation, per-series and per-aggregate inputs
+after reviewing point/line/bar/violin examples. `../docs/data-alpha-design.md`
+closes the exact alpha gate at `f97bd8c`: independent point/line/fill targets,
+opaque owned values and bindings, declared continuous/categorical/threshold
+explanation, eager custom-function materialization, complete 25-kind consumer and
+49-attachment matrix, unified guide-envelope migration, scoped parent/cache/font/
+feedback rules and focused verification/deletion obligations. Spec97 splits
+private values/binding/consumer and guide/measurement leaves before the public
+cutover. No alpha export, code validation or release result follows from the
+documentation-only design gate.
 
 ## Verification And Closure
 

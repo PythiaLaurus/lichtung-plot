@@ -6657,7 +6657,10 @@ DF3/DF4 closure review is CLOSED as a disposition: the user approved proceeding
 with caller-computed alpha, linear/log mappings, declared continuous/discrete
 automatic-guide semantics, and numeric target/maximum tick counts. Spec97 records
 these new implementation phases. TickGeneration is now current; data-alpha APIs
-remain pending. Residual DF4
+remain pending. The user selected explicit observation/series/aggregate alpha
+inputs, rather than requiring repeated equal values in every source row.
+`../docs/data-alpha-design.md` closes that source-backed input/numeric/consumer/
+guide/parent design before implementation. Residual DF4
 exact-count/density/ratio/category/callback controls join residual DF2/DF5/DF7 at
 T7 CLOSURE. Fully caller-decided legends join DF11, retaining all of its
 post-first-release milestone prerequisites.

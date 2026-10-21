@@ -2,7 +2,8 @@
 
 **Status**: User-approved scope; numeric tick selection COMPLETE, including design,
 bounded sources, public cutover and focused parent/root/frozen-output closure.
-Data-alpha work and integrated release verification remain PENDING.
+Data-alpha source-backed design is COMPLETE; implementation and integrated release
+verification remain PENDING.
 
 ## Authority And Recorded Decision
 
@@ -110,6 +111,13 @@ never multiplication; independent outlines and text remain independently owned.
 Alpha zero does not itself delete a scientific observation or remove it from a
 scientific domain.
 
+The user subsequently selected **explicit semantic-unit inputs** after reviewing
+Scatter, Line, Bar and Violin examples: individual observations receive individual
+alpha values; series and aggregate marks receive explicitly keyed per-series or
+per-group values. These inputs are independent when a family displays both raw
+observations and collective geometry. Do not require repeated equal row values as
+the aggregate input, and do not infer mean/first/last alpha from contributing rows.
+
 ### Mapping Semantics And Automatic Explanation
 
 Mapping rules, source semantics and guide presentation are distinct:
@@ -156,6 +164,14 @@ semantics, parent compatibility/suppression, same-extent cache invalidation and
 source-drop/frozen SVG/PNG equality. A source-backed design, not this broad scope
 record, fixes public constructors, numerical rules and guide representation.
 
+The completed exact design is `../docs/data-alpha-design.md`, inspected at
+`f97bd8c`. It fixes the two opaque input values, explicit semantic-unit binding,
+three independent paint targets and 49 family/component attachments, numerical
+rules, immutable custom construction and declared explanations. It also owns the
+unified guide-envelope replacement, native color-plus-alpha composition boundary,
+actual producer/row-slot census, parent/key/font/feedback transport and public
+migration/deletion obligations. It is a design gate, not a current alpha API.
+
 ## Execution And Verification
 
 Finish the current section-guide acceptance leaf before the extensions. Implement
@@ -169,9 +185,16 @@ and focused closure; split behavioral leaves further when needed.
 | T6T1 | COMPLETE | T6T0 | Private target/maximum sources, pre-allocation cardinality and exact identity/feedback; evidence in `../docs/bounded-tick-count-sources.md` |
 | T6T2 | COMPLETE | T6T1 | Atomic TickGeneration API/caller/current-contract migration; evidence in `../docs/public-tick-generation.md` |
 | T6T3 | COMPLETE | T6T2 | Complete parent height identities, all-family/root and 60 cached/uncached multi-format publications; `../docs/tick-generation-parent-closure.md` |
-| T6D0 | PENDING | T6T | Exact alpha input/mapping/producer/guide/precedence design |
+| T6D0 | COMPLETE | T6T | User-selected explicit units, exact inputs/numerics, 49 component gates, unified guide/parent and migration design in `../docs/data-alpha-design.md` |
 | T6D1 | PENDING | T6D0 | Immutable mapping preparation and actual mark consumers |
+| T6D1a | PENDING | T6D0 | Owned AlphaValues materialization, scalar/label semantics and eager custom construction |
+| T6D1b | PENDING | T6D1a | Explicit encodings, keyed/bin/facet completeness, row-slot alignment and retained three-target input |
+| T6D1c | PENDING | T6D1b | Actual observation/estimate/strip point consumers and paint-aware intrinsic/ink requirements |
+| T6D1d | PENDING | T6D1c | Actual series, trace and uncertainty stroke consumers with explicit units |
+| T6D1e | PENDING | T6D1d | Actual aggregate, cell, bin, band, native and supplied-fill consumers |
 | T6D2 | PENDING | T6D1 | Declared automatic guides, parent transport, census and identities |
+| T6D2a | PENDING | T6D1 | Sole typed guide envelope, actual alpha descriptors/projections and exclusive-kind retirement |
+| T6D2b | PENDING | T6D2a | Common section measurement/freeze, scoped parent ownership, cache/height/feedback and font census |
 | T6D3 | PENDING | T6D2 | Atomic public API/caller/current-contract migration |
 | T6D4 | PENDING | T6D3 | Full admitted-family/parent/root/frozen-output evidence |
 
