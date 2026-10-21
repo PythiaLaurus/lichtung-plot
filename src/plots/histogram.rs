@@ -6,7 +6,10 @@
     clippy::cast_sign_loss
 )]
 
-use crate::alpha::{marks::line_style, AlphaTarget, AlphaUnitKind, ResolvedAlpha};
+use crate::alpha::{
+    marks::{fill_ink_outset, fill_style, line_style},
+    AlphaTarget, AlphaUnitKind, ResolvedAlpha,
+};
 use crate::data::PlotData;
 use crate::{Error, HistogramKdePoint};
 
@@ -31,6 +34,7 @@ pub(crate) struct HistogramSemantics {
     pub(crate) ranges: [(f64, f64); 2],
     source_ranges: [(f64, f64); 2],
     bins: Vec<crate::HistogramBin>,
+    bin_alphas: Vec<Option<ResolvedAlpha>>,
     curve: Option<Vec<HistogramKdePoint>>,
     curve_alpha: Option<ResolvedAlpha>,
     rugs: Vec<crate::HistogramRug>,
@@ -62,7 +66,7 @@ pub(crate) fn intrinsic_body_minimum(
         .bodies()
         .histogram_bin()
         .backend_style((0, 0, 0));
-    let fill = crate::render::geometry::rectangular_fill_ink_outset(&style)?;
+    let fill = fill_ink_outset(&style, prepared.bin_alphas.iter().copied())?;
     let curve = if prepared
         .curve
         .as_ref()
@@ -191,6 +195,10 @@ impl HistogramSemantics {
             (range, bins, curve, rugs)
         };
 
+        let alpha = chart.prepare_scoped_alpha(AlphaTarget::Fill, AlphaUnitKind::Bin, &[], data)?;
+        let bin_alphas = crate::data::source::collect_source(
+            bins.iter().map(|bin| alpha.bin((bin.lower, bin.upper))),
+        )?;
         let maximum = bins
             .iter()
             .map(|b| b.density)
@@ -204,6 +212,7 @@ impl HistogramSemantics {
             ],
             source_ranges: [range, (0.0, maximum)],
             bins,
+            bin_alphas,
             curve,
             curve_alpha,
             rugs,
@@ -214,10 +223,9 @@ impl HistogramSemantics {
 #[derive(Debug)]
 pub(crate) struct HistogramPayload {
     clip: crate::layout::PanelBox,
-    pub(crate) bins: Vec<[Point2D; 4]>,
+    pub(crate) bins: Vec<([Point2D; 4], FillStyle)>,
     curve: Option<Vec<Point2D>>,
     rugs: Vec<[Point2D; 2]>,
-    pub(crate) fill: FillStyle,
     curve_style: LineStyle,
     rug_style: LineStyle,
     pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
@@ -229,8 +237,8 @@ impl HistogramPayload {
         clip: Option<crate::layout::PanelBox>,
     ) -> Result<crate::render::geometry::GeometrySnapshot, Error> {
         let mut geometry = crate::render::geometry::GeometrySnapshot::new();
-        for bin in &self.bins {
-            geometry.polygon(bin, &self.fill, clip)?;
+        for (bin, fill) in &self.bins {
+            geometry.polygon(bin, fill, clip)?;
         }
         if let Some(curve) = &self.curve {
             geometry.line(curve, &self.curve_style, clip)?;
@@ -245,8 +253,8 @@ impl HistogramPayload {
         #[cfg(test)]
         crate::layout::interior::distributions::count(0, 3);
         with_clip(backend, self.clip, |backend| {
-            for bin in &self.bins {
-                backend.draw_polygon(bin, &self.fill)?;
+            for (bin, fill) in &self.bins {
+                backend.draw_polygon(bin, fill)?;
             }
             if let Some(curve) = &self.curve {
                 backend.draw_line(curve, &self.curve_style)?;
@@ -330,32 +338,45 @@ pub(crate) fn project(
         let (x, y) = layout.projection.project(x, y);
         Point2D::new(x, y)
     };
+    let fill =
+        theme.marks.fills().bodies().histogram_bin().backend_style(
+            crate::theme::AccentColors::resolve(theme.marks.accents(), 1)?.color(0)?,
+        );
     let payload = HistogramPayload {
         clip: layout.projection.panel_box(),
-        bins: crate::data::source::collect_source(prepared.bins.iter().map(|bin| {
-            let left = project(bin.lower, 0.0);
-            let right = project(bin.upper, bin.density);
-            layout.projection.validate_span(
-                crate::layout::AxisSide::Bottom,
-                (bin.lower, bin.upper),
-                (left.x, right.x),
-                bin.lower < bin.upper,
-                "histogram polygon width",
-            )?;
-            layout.projection.validate_span(
-                crate::layout::AxisSide::Left,
-                (0.0, bin.density),
-                (left.y, right.y),
-                bin.density != 0.0,
-                "histogram polygon height",
-            )?;
-            Ok([
-                left,
-                Point2D::new(right.x, left.y),
-                right,
-                Point2D::new(left.x, right.y),
-            ])
-        }))?,
+        bins: crate::data::source::collect_source(
+            prepared
+                .bins
+                .iter()
+                .zip(&prepared.bin_alphas)
+                .map(|(bin, &alpha)| {
+                    let left = project(bin.lower, 0.0);
+                    let right = project(bin.upper, bin.density);
+                    layout.projection.validate_span(
+                        crate::layout::AxisSide::Bottom,
+                        (bin.lower, bin.upper),
+                        (left.x, right.x),
+                        bin.lower < bin.upper,
+                        "histogram polygon width",
+                    )?;
+                    layout.projection.validate_span(
+                        crate::layout::AxisSide::Left,
+                        (0.0, bin.density),
+                        (left.y, right.y),
+                        bin.density != 0.0,
+                        "histogram polygon height",
+                    )?;
+                    Ok((
+                        [
+                            left,
+                            Point2D::new(right.x, left.y),
+                            right,
+                            Point2D::new(left.x, right.y),
+                        ],
+                        fill_style(alpha, fill.clone()),
+                    ))
+                }),
+        )?,
         curve: prepared
             .curve
             .as_ref()
@@ -374,9 +395,6 @@ pub(crate) fn project(
             )?;
             Ok(points)
         }))?,
-        fill: theme.marks.fills().bodies().histogram_bin().backend_style(
-            crate::theme::AccentColors::resolve(theme.marks.accents(), 1)?.color(0)?,
-        ),
         curve_style: line_style(
             prepared.curve_alpha,
             theme
@@ -966,13 +984,27 @@ mod tests {
             (2.0 * scientific_maximum).to_bits()
         );
         assert!(after.source_ranges[1].1 > before.source_ranges[1].1);
-        let mapped = source.clone().with_alpha(
-            AlphaTarget::Line,
-            crate::alpha::AlphaEncoding::single(
-                crate::alpha::AlphaValues::new("curve confidence", [0]).unwrap(),
+        let mapped = source
+            .clone()
+            .with_alpha(
+                AlphaTarget::Line,
+                crate::alpha::AlphaEncoding::single(
+                    crate::alpha::AlphaValues::new("curve confidence", [0]).unwrap(),
+                )
+                .unwrap(),
             )
-            .unwrap(),
-        );
+            .with_alpha(
+                AlphaTarget::Fill,
+                crate::alpha::AlphaEncoding::bins(
+                    crate::Bounds::new(
+                        crate::NumericValues::new("lower", [2.0, 1.0]),
+                        crate::NumericValues::new("upper", [3.0, 2.0]),
+                    ),
+                    [],
+                    crate::alpha::AlphaValues::new("bin confidence", [230, 0]).unwrap(),
+                )
+                .unwrap(),
+            );
         let prepared = HistogramSemantics::new(&mapped, mapped.data(), Some(&original)).unwrap();
         assert_eq!(prepared.bins, before.bins);
         assert_eq!(prepared.curve, before.curve);
@@ -1002,8 +1034,12 @@ mod tests {
                 .backend_style()
         );
         assert_eq!(
-            payload.fill.color.alpha(),
-            theme.marks.fills().bodies().histogram_bin().fill_alpha()
+            payload
+                .bins
+                .iter()
+                .map(|(_, fill)| fill.color.alpha())
+                .collect::<Vec<_>>(),
+            [0, 230]
         );
         source.theme(edited).preflight().unwrap();
     }
@@ -1025,13 +1061,113 @@ mod tests {
     }
 
     #[test]
-    fn auto_uses_freedman_diaconis_for_nonzero_iqr() {
-        let values = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
-
-        let histogram =
-            prepare_histogram(&values, HistogramBins::Auto, HistogramStat::Count).unwrap();
-
-        assert_eq!(histogram.heights.len(), 2);
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one exact-bin contract retains independent prepared intervals, actual facet paint and pre-font completeness"
+    )]
+    fn actual_bin_alpha_uses_exact_edges_and_facet_keys_without_sample_aggregation() {
+        let source = Plot::histogram(crate::HistogramInput::samples(crate::NumericValues::new(
+            "sample",
+            (1..=8).chain(11..=18).map(f64::from),
+        )))
+        .facet(crate::FacetSpec::column(
+            crate::CategoryValues::new(
+                "panel",
+                std::iter::repeat_n("left", 8).chain(std::iter::repeat_n("right", 8)),
+            )
+            .unwrap(),
+        ))
+        .with_alpha(
+            AlphaTarget::Fill,
+            crate::alpha::AlphaEncoding::bins(
+                crate::Bounds::new(
+                    crate::NumericValues::new("lower", [14.5, 1.0, 11.0, 4.5, 100.0]),
+                    crate::NumericValues::new("upper", [18.0, 4.5, 14.5, 8.0, 200.0]),
+                ),
+                [crate::CategoryValues::new(
+                    "panel",
+                    ["right", "left", "right", "left", "\u{10ffff}"],
+                )
+                .unwrap()],
+                crate::alpha::AlphaValues::new("bin confidence", [0, 128, 230, 64, 99]).unwrap(),
+            )
+            .unwrap(),
+        )
+        .erase();
+        let theme = crate::Theme::publication().resolve().unwrap();
+        let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
+        let panels = &chart.prepared_histogram.as_ref().unwrap().panels;
+        assert_eq!(panels.len(), 2);
+        for ((scope, prepared), (edges, alphas)) in panels.iter().zip([
+            ([1.0_f64, 4.5, 8.0], [128, 64]),
+            ([11.0_f64, 14.5, 18.0], [230, 0]),
+        ]) {
+            assert_eq!(
+                prepared
+                    .bins
+                    .iter()
+                    .map(|bin| (
+                        bin.lower.to_bits(),
+                        bin.upper.to_bits(),
+                        bin.density.to_bits()
+                    ))
+                    .collect::<Vec<_>>(),
+                [
+                    (edges[0].to_bits(), edges[1].to_bits(), 4.0_f64.to_bits()),
+                    (edges[1].to_bits(), edges[2].to_bits(), 4.0_f64.to_bits()),
+                ]
+            );
+            assert_eq!(
+                prepared
+                    .bin_alphas
+                    .iter()
+                    .map(|alpha| alpha.unwrap().alpha)
+                    .collect::<Vec<_>>(),
+                alphas
+            );
+            let chart = chart.clone().with_render_scope(scope.as_deref().unwrap());
+            let selected = chart
+                .measure_selected_interior(PlotRenderContext::new(
+                    chart.data(),
+                    crate::layout::PanelBox::new(20.0, 600.0, 20.0, 420.0),
+                    &theme,
+                ))
+                .unwrap();
+            let crate::layout::interior::MarkPayload::Histogram(payload) =
+                &selected.marks.as_ref().unwrap().payload
+            else {
+                panic!("Histogram payload")
+            };
+            assert_eq!(
+                payload
+                    .bins
+                    .iter()
+                    .map(|(_, fill)| fill.color.alpha())
+                    .collect::<Vec<_>>(),
+                alphas
+            );
+        }
+        let calls = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
+        let incomplete = source.with_alpha(
+            AlphaTarget::Fill,
+            crate::alpha::AlphaEncoding::bins(
+                crate::Bounds::new(
+                    crate::NumericValues::new("lower", [1.0]),
+                    crate::NumericValues::new("upper", [4.5]),
+                ),
+                [crate::CategoryValues::new("panel", ["left"]).unwrap()],
+                crate::alpha::AlphaValues::new("bin confidence", [0]).unwrap(),
+            )
+            .unwrap(),
+        );
+        assert!(matches!(
+            incomplete.preflight().unwrap_err(),
+            Error::Data(_)
+        ));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            calls
+        );
     }
 
     #[test]

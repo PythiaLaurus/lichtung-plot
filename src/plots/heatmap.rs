@@ -7,6 +7,7 @@
     clippy::too_many_lines
 )]
 
+use crate::alpha::{marks::ObservationAlpha, AlphaEncoding, AlphaTarget, AlphaUnitKind};
 use crate::Error;
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -31,6 +32,8 @@ pub(crate) struct HeatmapData {
     pub(crate) y_levels: Vec<String>,
     cells: Vec<Option<f64>>,
     fills: Vec<Option<OpaqueColor>>,
+    fill_binding: AlphaEncoding,
+    fill_alphas: std::sync::Arc<Vec<Option<ObservationAlpha>>>,
     highlighted: Vec<bool>,
     null_row_annotations: Vec<Option<String>>,
     has_missing: bool,
@@ -47,6 +50,15 @@ pub(crate) struct HeatmapData {
 }
 
 impl HeatmapData {
+    fn resolved_cell_fill(&self, index: usize, role_alpha: u8) -> Option<crate::Color> {
+        self.fills[index].map(|fill| {
+            let member = self.fill_alphas[index]
+                .expect("finite Heatmap cell retains original alpha membership");
+            crate::Color::from(fill)
+                .with_alpha(member.value.map_or(role_alpha, |value| value.alpha))
+        })
+    }
+
     pub(crate) fn guide_values(&self) -> &[String] {
         self.colorbar_values
             .as_ref()
@@ -188,10 +200,12 @@ fn assigned_columns(
         .zip(&prepared.fills)
         .enumerate()
     {
-        let (Some(source), Some(fill)) = (source, fill) else {
+        let (Some(source), Some(_)) = (source, fill) else {
             continue;
         };
-        let fill = crate::theme::Color::from(*fill).with_alpha(theme.marks.cells().fill_alpha());
+        let fill = prepared
+            .resolved_cell_fill(index, theme.marks.cells().fill_alpha())
+            .expect("prepared finite cell");
         let appearance = theme.contrasting_text(fill)?;
         let widths = crate::layout::fit::intrinsic_widths(
             theme,
@@ -436,6 +450,8 @@ pub(crate) struct HeatmapIntrinsicCache {
     cell_marks: crate::theme::mark::CellMarkRoles,
     cell_annotations: crate::theme::annotation::CellAnnotationGeometry,
     value_presentation: Option<std::sync::Arc<crate::numeric::set::NumericPresentation>>,
+    fill_binding: AlphaEncoding,
+    fill_alphas: std::sync::Arc<Vec<Option<ObservationAlpha>>>,
 }
 
 impl HeatmapIntrinsicCache {
@@ -456,6 +472,8 @@ impl HeatmapIntrinsicCache {
             && self.cell_marks == *theme.marks.cells()
             && self.cell_annotations == *theme.annotations.cells()
             && self.value_presentation == prepared.value_presentation
+            && self.fill_binding == prepared.fill_binding
+            && self.fill_alphas == prepared.fill_alphas
     }
 
     fn new(
@@ -489,6 +507,8 @@ impl HeatmapIntrinsicCache {
             cell_marks: theme.marks.cells().clone(),
             cell_annotations: theme.annotations.cells().clone(),
             value_presentation: prepared.value_presentation.clone(),
+            fill_binding: prepared.fill_binding.clone(),
+            fill_alphas: prepared.fill_alphas.clone(),
         })
     }
 }
@@ -785,14 +805,16 @@ fn analyze_intrinsics(
         }
     }
 
-    for (index, (source, fill)) in prepared
+    for (index, (source, _fill)) in prepared
         .value_labels
         .iter()
         .zip(&prepared.fills)
         .enumerate()
         .filter_map(|(index, (source, fill))| Some((index, (source.as_deref()?, (*fill)?))))
     {
-        let fill = crate::theme::Color::from(fill).with_alpha(theme.marks.cells().fill_alpha());
+        let fill = prepared
+            .resolved_cell_fill(index, theme.marks.cells().fill_alpha())
+            .expect("prepared finite cell");
         let appearance = theme.contrasting_text(fill)?;
         let plan = theme.measure_legacy_appearance_text(
             source,
@@ -903,12 +925,9 @@ impl HeatmapData {
     ) -> impl Iterator<Item = (&str, crate::theme::Color)> {
         self.value_labels
             .iter()
-            .zip(&self.fills)
-            .filter_map(move |(label, fill)| {
-                Some((
-                    label.as_deref()?,
-                    crate::theme::Color::from((*fill)?).with_alpha(alpha),
-                ))
+            .enumerate()
+            .filter_map(move |(index, label)| {
+                Some((label.as_deref()?, self.resolved_cell_fill(index, alpha)?))
             })
     }
 }
@@ -1222,6 +1241,7 @@ pub(crate) fn prepare<'a>(
 ) -> Result<HeatmapData, Error> {
     let data = data.into();
     validate_options(chart)?;
+    let alpha = chart.prepare_alpha(AlphaTarget::Fill, AlphaUnitKind::Observation, &[])?;
     let x_col = chart
         .x_col()
         .ok_or_else(|| Error::Data("heatmap: x category column not set".into()))?;
@@ -1286,6 +1306,7 @@ pub(crate) fn prepare<'a>(
 
     let mut seen = crate::data::source::collect_source((0..cell_count).map(|_| Ok(false)))?;
     let mut cells = crate::data::source::collect_source((0..cell_count).map(|_| Ok(None)))?;
+    let mut fill_alphas = crate::data::source::collect_source((0..cell_count).map(|_| Ok(None)))?;
     let mut highlighted = crate::data::source::collect_source((0..cell_count).map(|_| Ok(false)))?;
 
     for (row, ((x, y), fill)) in x_values.iter().zip(&y_values).zip(&fills).enumerate() {
@@ -1314,6 +1335,9 @@ pub(crate) fn prepare<'a>(
             )));
         }
         cells[y_index * x_levels.len() + x_index] = *fill;
+        if fill.is_some() {
+            fill_alphas[index] = Some(ObservationAlpha::resolve(data, &alpha, row)?);
+        }
         highlighted[y_index * x_levels.len() + x_index] =
             highlights.as_ref().is_some_and(|values| values[row]);
     }
@@ -1419,6 +1443,8 @@ pub(crate) fn prepare<'a>(
         y_levels,
         cells,
         fills: resolved_fills,
+        fill_binding: chart.alpha_inputs().get(AlphaTarget::Fill).clone(),
+        fill_alphas: crate::data::source::source_arc(fill_alphas)?,
         highlighted,
         null_row_annotations,
         has_missing,
@@ -1809,10 +1835,12 @@ fn select_cells(
             let (left, right) = (columns[x_index], columns[x_index + 1]);
             let value = prepared.cells[y_index * x_count + x_index];
             let highlighted = prepared.highlighted[y_index * x_count + x_index];
-            let color = prepared.fills[y_index * x_count + x_index]
-                .map_or(theme.marks.cells().missing_fill(), |fill| {
-                    crate::theme::Color::from(fill).with_alpha(theme.marks.cells().fill_alpha())
-                });
+            let color = prepared
+                .resolved_cell_fill(
+                    y_index * x_count + x_index,
+                    theme.marks.cells().fill_alpha(),
+                )
+                .unwrap_or(theme.marks.cells().missing_fill());
             let mut cell = CellPayload {
                 corners: [
                     Point2D::new(left, bottom),
@@ -1925,10 +1953,11 @@ fn measure_annotations(
             let source = prepared.value_labels[index]
                 .as_deref()
                 .ok_or_else(|| Error::Render("heatmap value text identity missing".into()))?;
-            let fill = prepared.fills[index].ok_or_else(|| {
-                Error::Render("heatmap value has no prepared resolved fill".into())
-            })?;
-            let fill = crate::theme::Color::from(fill).with_alpha(theme.marks.cells().fill_alpha());
+            let fill = prepared
+                .resolved_cell_fill(index, theme.marks.cells().fill_alpha())
+                .ok_or_else(|| {
+                    Error::Render("heatmap value has no prepared resolved fill".into())
+                })?;
             let appearance = theme.contrasting_text(fill)?;
             let padding = theme
                 .annotations

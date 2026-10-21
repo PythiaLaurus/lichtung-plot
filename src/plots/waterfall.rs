@@ -7,6 +7,10 @@
     clippy::too_many_lines
 )]
 
+use crate::alpha::{
+    marks::{fill_style, ObservationAlpha},
+    AlphaTarget, AlphaUnitKind,
+};
 use crate::layout::{AxisTick, PanelBox, PhysicalTextAlignment, ResolvedTextPlan};
 use crate::render::backend::{
     with_clip, Backend, FillStyle, LineStyle, PlacedText, PlannedTextPlacement, Point2D, TextAnchor,
@@ -35,7 +39,7 @@ mod totals;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct WaterfallSpan {
-    source_row: usize,
+    alpha: ObservationAlpha,
     start: f64,
     end: f64,
     delta: f64,
@@ -67,6 +71,13 @@ mod geometry_tests {
             crate::NumericValues::new("delta", [2.0, -1.0]),
             10.0,
         )
+        .source_rows(crate::SourceRows::new([400, 100]).unwrap())
+        .with_alpha(
+            AlphaTarget::Fill,
+            crate::alpha::AlphaEncoding::observations(
+                crate::alpha::AlphaValues::new("step confidence", [0, 230]).unwrap(),
+            ),
+        )
         .x_limits(0.0, 20.0)
         .erase();
         let operation = crate::font::canonical::OperationContext::new();
@@ -91,6 +102,53 @@ mod geometry_tests {
                 .unwrap()
         };
         let original = measure(&theme);
+        let crate::layout::interior::MarkPayload::Waterfall(original_payload) =
+            &original.marks.as_ref().unwrap().payload
+        else {
+            panic!("Waterfall payload")
+        };
+        assert_eq!(original_payload.source_rows, [400, 100]);
+        assert_eq!(
+            original_payload
+                .bars
+                .iter()
+                .map(|(_, style)| style.color.alpha())
+                .collect::<Vec<_>>(),
+            [0, 230]
+        );
+        assert_eq!(
+            original_payload.connectors[0].1,
+            theme
+                .marks
+                .strokes()
+                .connectors()
+                .waterfall_connector()
+                .backend_style()
+        );
+        assert!(original_payload.references.iter().all(|(_, style)| *style
+            == theme
+                .marks
+                .strokes()
+                .references()
+                .waterfall_reference()
+                .backend_style()));
+        let prepared = retained(&chart).unwrap();
+        assert_eq!(
+            prepared
+                .spans
+                .iter()
+                .map(|span| (
+                    span.alpha.slot,
+                    span.alpha.source_row,
+                    span.start.to_bits(),
+                    span.end.to_bits()
+                ))
+                .collect::<Vec<_>>(),
+            [
+                (0, 400, 10.0_f64.to_bits(), 12.0_f64.to_bits()),
+                (1, 100, 12.0_f64.to_bits(), 11.0_f64.to_bits())
+            ]
+        );
         let extents = theme
             .marks
             .extents()
@@ -202,24 +260,20 @@ fn mark_intrinsic_body_minimum(
         ));
     }
 
-    let positive = theme
+    let body = theme
         .marks
         .fills()
         .bodies()
         .waterfall_bar()
         .backend_style((0, 0, 0));
-    let negative = positive.clone();
-    let positive_ink = crate::render::geometry::rectangular_fill_ink_bounds(&positive)?;
-    let negative_ink = crate::render::geometry::rectangular_fill_ink_bounds(&negative)?;
     let geometry = BodyGeometry::new(theme);
     let mut pitch = 1.0_f64 / 1024.0;
     let mut numeric = 0.0_f64;
     for span in &prepared.spans {
-        let ink = if span.delta >= 0.0 {
-            positive_ink
-        } else {
-            negative_ink
-        };
+        let ink = crate::render::geometry::rectangular_fill_ink_bounds(&fill_style(
+            span.alpha.value,
+            body.clone(),
+        ))?;
         pitch = pitch.max(crate::layout::interior::ink_pitch(
             1.0 / 1024.0,
             geometry.breadth,
@@ -401,7 +455,8 @@ pub(crate) fn prepare(
     // Category slots, connectors, and the two named total targets survive
     // caller-window clipping. Bar records are the original row slots above.
 
-    let (spans, range) = prepare_spans(base, &deltas, data)?;
+    let alpha = chart.prepare_alpha(AlphaTarget::Fill, AlphaUnitKind::Observation, &[])?;
+    let (spans, range) = prepare_spans(base, &deltas, data, &alpha)?;
     let running = spans.last().map_or(base, |span| span.end);
     let (base_label, terminal_label) = chart
         .waterfall_labels_spec()
@@ -429,6 +484,7 @@ fn prepare_spans(
     base: f64,
     deltas: &[f64],
     data: crate::data::PlotData<'_>,
+    alpha: &crate::alpha::PreparedAlpha,
 ) -> Result<(Vec<WaterfallSpan>, (f64, f64)), Error> {
     data.source_resources()?;
     let mut running = base;
@@ -447,7 +503,7 @@ fn prepare_spans(
         range.0 = range.0.min(next);
         range.1 = range.1.max(next);
         spans.push(WaterfallSpan {
-            source_row: data.source_row(index),
+            alpha: ObservationAlpha::resolve(data, alpha, index)?,
             start: running,
             end: next,
             delta: *delta,
@@ -624,14 +680,17 @@ pub(crate) fn measure(
                 Point2D::new(right, top),
                 Point2D::new(left, top),
             ],
-            theme
-                .marks
-                .fills()
-                .bodies()
-                .waterfall_bar()
-                .backend_style(color),
+            fill_style(
+                span.alpha.value,
+                theme
+                    .marks
+                    .fills()
+                    .bodies()
+                    .waterfall_bar()
+                    .backend_style(color),
+            ),
         ));
-        source_rows.push(span.source_row);
+        source_rows.push(span.alpha.source_row);
         if index + 1 < spans.len() {
             let x = right;
             let from_y = top;

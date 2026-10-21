@@ -9,6 +9,10 @@ pub(crate) struct ScopedAlpha<'a> {
 }
 
 impl ScopedAlpha<'_> {
+    pub(crate) fn bin(&self, bounds: (f64, f64)) -> crate::Result<Option<ResolvedAlpha>> {
+        self.prepared.bin(bounds, &self.facets)
+    }
+
     pub(crate) fn keyed(&self, unit: &[(&str, &str)]) -> crate::Result<Option<ResolvedAlpha>> {
         if self.prepared.selector_fields().is_empty() {
             return self.prepared.keyed(&[]);

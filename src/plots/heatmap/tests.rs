@@ -60,8 +60,13 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
             .font_size,
         22
     );
-    let cells = theme.marks.cells().clone().with_fill_alpha(0).unwrap();
-    theme.marks = theme.marks.clone().with_cells(cells).unwrap();
+    let mapped = chart.clone().with_alpha(
+        AlphaTarget::Fill,
+        crate::alpha::AlphaEncoding::observations(
+            crate::alpha::AlphaValues::new("cell confidence", [0]).unwrap(),
+        ),
+    );
+    let chart = crate::plots::shared_x::prepare_panel_for_test(&mapped, &theme).unwrap();
     let transparent = chart
         .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
         .unwrap();
@@ -72,12 +77,38 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
     let marks = retained_in(&chart).unwrap();
     let axes = chart.prepared_axis_inputs().unwrap();
     let original = prepare_intrinsics(marks, axes, &theme, None).unwrap();
+    let same_paint = source(policy.clone()).with_alpha(
+        AlphaTarget::Fill,
+        crate::alpha::AlphaEncoding::single(
+            crate::alpha::AlphaValues::new("cell confidence", [0]).unwrap(),
+        )
+        .unwrap(),
+    );
+    let same_paint_inputs = crate::plots::shared_x::prepare_plot(
+        &same_paint,
+        &operation,
+        Some(&crate::Theme::publication()),
+    )
+    .unwrap();
+    let same_paint_marks = &same_paint_inputs.heatmap.as_ref().unwrap().panels[0].1;
+    assert_eq!(marks.fill_alphas, same_paint_marks.fill_alphas);
+    assert!(!axes
+        .heatmap_intrinsics
+        .get()
+        .unwrap()
+        .matches_inputs(same_paint_marks, &theme));
     let changed_source = source(
         policy
             .try_copy()
             .unwrap()
             .with_negative_zero(crate::numeric::decimal::NegativeZero::Normalize)
             .unwrap(),
+    )
+    .with_alpha(
+        AlphaTarget::Fill,
+        crate::alpha::AlphaEncoding::observations(
+            crate::alpha::AlphaValues::new("cell confidence", [0]).unwrap(),
+        ),
     );
     let changed_inputs = crate::plots::shared_x::prepare_plot(
         &changed_source,
@@ -132,4 +163,76 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
         &crate::layout::fit::ROOT_SCOPE
     )
     .is_err());
+}
+
+#[test]
+fn cell_alpha_retains_original_members_through_normalized_order_and_missing_grid_cells() {
+    let source = Plot::heatmap(
+        crate::CategoryValues::new("column", [" B", "A", " B", "A"]).unwrap(),
+        crate::CategoryValues::new("row", ["two", "one", "one", "two"]).unwrap(),
+        crate::NumericValues::nullable("value", [Some(1.0), None, Some(-1.0), Some(0.0)]),
+    )
+    .source_rows(crate::SourceRows::new([100, 200, 300, 400]).unwrap())
+    .x_category_order(crate::CategoryOrder::explicit(["A", "B"]))
+    .y_category_order(crate::CategoryOrder::explicit(["one", "two"]))
+    .with_alpha(
+        AlphaTarget::Fill,
+        crate::alpha::AlphaEncoding::observations(
+            crate::alpha::AlphaValues::new("cell confidence", [0, 17, 230, 64]).unwrap(),
+        ),
+    )
+    .erase();
+    let prepared = prepare(
+        &source,
+        crate::data::PlotData::with_rows(&source, &[3, 2, 0, 1], &[400, 300, 100, 200]),
+        source
+            .continuous_selection_in(crate::Theme::publication().color_scales())
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        prepared
+            .fill_alphas
+            .iter()
+            .map(|member| member.map(|member| (
+                member.slot,
+                member.source_row,
+                member.value.unwrap().alpha
+            )))
+            .collect::<Vec<_>>(),
+        [
+            None,
+            Some((2, 300, 230)),
+            Some((3, 400, 64)),
+            Some((0, 100, 0))
+        ]
+    );
+    assert_eq!(
+        prepared
+            .guide_samples()
+            .unwrap()
+            .iter()
+            .map(|value| value.to_bits())
+            .collect::<Vec<_>>(),
+        [-1.0_f64, 0.0, 1.0].map(f64::to_bits)
+    );
+    let theme = crate::Theme::publication().resolve().unwrap();
+    let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
+    let selected = chart
+        .measure_selected_interior(PlotRenderContext::new(
+            chart.data(),
+            PanelBox::new(20.0, 800.0, 20.0, 620.0),
+            &theme,
+        ))
+        .unwrap();
+    let cells = &payload(&selected).cells;
+    assert_eq!(
+        cells
+            .iter()
+            .map(|cell| cell.fill.color.alpha())
+            .collect::<Vec<_>>(),
+        [theme.marks.cells().missing_fill().alpha(), 230, 64, 0]
+    );
+    assert!(cells[0].cross.is_some());
+    assert!(cells[1..].iter().all(|cell| cell.cross.is_none()));
 }

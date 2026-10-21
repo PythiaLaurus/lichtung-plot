@@ -3,7 +3,7 @@
 **Status**: User-approved scope; numeric tick selection COMPLETE, including design,
 bounded sources, public cutover and focused parent/root/frozen-output closure.
 Data-alpha source-backed design, private owned mapping values and explicit
-binding/source-slot preparation are COMPLETE. Mark consumers are IN PROGRESS;
+binding/source-slot preparation and all 49 actual mark consumers are COMPLETE;
 guides, public cutover and integrated release verification remain PENDING.
 
 ## Authority And Recorded Decision
@@ -187,12 +187,12 @@ and focused closure; split behavioral leaves further when needed.
 | T6T2 | COMPLETE | T6T1 | Atomic TickGeneration API/caller/current-contract migration; evidence in `../docs/public-tick-generation.md` |
 | T6T3 | COMPLETE | T6T2 | Complete parent height identities, all-family/root and 60 cached/uncached multi-format publications; `../docs/tick-generation-parent-closure.md` |
 | T6D0 | COMPLETE | T6T | User-selected explicit units, exact inputs/numerics, 49 component gates, unified guide/parent and migration design in `../docs/data-alpha-design.md` |
-| T6D1 | IN PROGRESS | T6D0 | Immutable mapping preparation and actual mark consumers |
+| T6D1 | COMPLETE | T6D0 | Immutable mapping preparation and all 49 actual mark consumers; final fill closure in `../docs/alpha-bin-cell-delta-fills.md` |
 | T6D1a | COMPLETE | T6D0 | Owned AlphaValues, common scalar/label owners, eager custom construction and complete selected recipes; `../docs/owned-alpha-values.md` |
 | T6D1b | COMPLETE | T6D1a | Explicit encodings, exact keyed/bin/facet resolution, original slots, retained three-target input and complete child/height identity; `../docs/explicit-alpha-bindings.md` |
 | T6D1c | COMPLETE | T6D1b | All 17 observation/estimate/strip/native point consumers and paint-aware intrinsic/ink; receipts below and `../docs/alpha-native-points.md` |
 | T6D1d | COMPLETE | T6D1c | All 17 Single/record/series/aggregate scientific stroke consumers and final-paint intrinsic/ink; receipts below and `../docs/alpha-aggregate-strokes.md` |
-| T6D1e | IN PROGRESS | T6D1d | Twelve body/segment/area/band/native consumers complete in the fill receipts below; Histogram bins, Heatmap cells and Waterfall deltas remain |
+| T6D1e | COMPLETE | T6D1d | All 15 aggregate, cell, exact-bin, band, native and supplied-fill consumers; fill receipts below |
 | T6D2 | PENDING | T6D1 | Declared automatic guides, parent transport, census and identities |
 | T6D2a | PENDING | T6D1 | Sole typed guide envelope, actual alpha descriptors/projections and exclusive-kind retirement |
 | T6D2b | PENDING | T6D2a | Common section measurement/freeze, scoped parent ownership, cache/height/feedback and font census |
@@ -207,7 +207,7 @@ Dumbbell, Boxplot, Violin and sampled/supplied Raincloud in
 original slots through filtering/sorting/order/status, final-paint batches and
 paint-aware intrinsic/ink. Beeswarm, Marginal and Matrix finish the census in
 `../docs/alpha-native-points.md`. All seventeen admitted point families are wired;
-all scientific stroke consumers are also wired; fills, guides and public cutover
+all scientific stroke and fill consumers are also wired; guides and public cutover
 remain subsequent leaves.
 
 The stroke leaf has connected Qq references, Regression fits, optional Histogram
@@ -228,8 +228,12 @@ fifteen fill consumers retain explicit actual-unit operands and final fill-only
 replacement, independently of outlines, summaries, strips and scientific
 aggregation. Density areas and configured Line/Regression bands bring the census
 to ten in `../docs/alpha-series-fills.md`. Marginal linked and Matrix diagonal
-densities bring it to twelve in `../docs/alpha-native-fills.md`. Histogram,
-Heatmap and Waterfall keep T6D1e IN PROGRESS.
+densities bring it to twelve in `../docs/alpha-native-fills.md`. Exact Histogram
+bins, original finite Heatmap cells and Waterfall deltas complete all fifteen in
+`../docs/alpha-bin-cell-delta-fills.md`, including final-contrast font census and
+complete Heatmap intrinsic alpha identity. This closes T6D1's private mark
+consumers; unified automatic guides/parents, public cutover and integrated
+verification remain subsequent leaves.
 
 Do not start a code leaf while its exact owning design is still pending. Use modern
 Rust module layout, the standalone offline renderer and existing pinned dependencies.

@@ -2229,9 +2229,10 @@ mod tests {
 
     #[test]
     fn heatmap_value_census_requests_only_the_contrast_role_chosen_for_each_fill() {
-        for (value, label, chosen) in [
-            (0.0, "0.00", "Dark contrast font"),
-            (1.0, "1.00", "Light contrast font"),
+        for (value, label, alpha, chosen) in [
+            (0.0, "0.00", 255, "Dark contrast font"),
+            (1.0, "1.00", 255, "Light contrast font"),
+            (1.0, "1.00", 0, "Dark contrast font"),
         ] {
             let plot = crate::Plot::heatmap(
                 crate::CategoryValues::new("column", ["a", "b"]).unwrap(),
@@ -2251,6 +2252,12 @@ mod tests {
                     .with_precision(crate::NumericPrecision::AdaptiveFractional { min: 0, max: 2 })
                     .unwrap(),
             ))
+            .with_alpha(
+                crate::alpha::AlphaTarget::Fill,
+                crate::alpha::AlphaEncoding::observations(
+                    crate::alpha::AlphaValues::new("cell confidence", [alpha; 2]).unwrap(),
+                ),
+            )
             .erase();
             let resources = crate::font::canonical::OperationContext::new();
             let inputs = crate::plots::shared_x::prepare_plot(
@@ -2260,6 +2267,8 @@ mod tests {
             )
             .unwrap();
             let mut theme = crate::Theme::publication().resolve().unwrap();
+            let cells = theme.marks.cells().clone().with_fill_alpha(0).unwrap();
+            theme.marks = theme.marks.clone().with_cells(cells).unwrap();
             theme.typography.annotations.contrast.light.stack =
                 canonical::named_stack(&["Light contrast font"]);
             theme.typography.annotations.contrast.dark.stack =

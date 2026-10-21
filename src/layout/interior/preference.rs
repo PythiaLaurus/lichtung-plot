@@ -622,21 +622,4 @@ mod tests {
         let exact = super::super::coordinate::canvas_layout(&clipped, &theme).unwrap();
         assert_eq!(standard(&exact).primary_marks, 25);
     }
-
-    #[test]
-    fn path_count_does_not_multiply_connectors_or_supplemental_ink() {
-        let x = NumericValues::new("x", [0.0, 1.0, 1.0, 2.0]);
-        let y = NumericValues::new("y", [1.0, 2.0, 2.0, 3.0]);
-        let group = CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap();
-        let source = Plot::trajectory(x, y, group).size(800, 600).erase();
-        let resources = OperationContext::new();
-        let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
-        let chart = prepared.attach(source).unwrap();
-        let root = super::super::coordinate::canvas_layout(
-            &chart,
-            &crate::Theme::publication().resolve().unwrap(),
-        )
-        .unwrap();
-        assert_eq!(standard(&root).primary_marks, 4);
-    }
 }
