@@ -88,7 +88,9 @@ fn common_step_admits_complete_counts_and_exact_integral_indices() {
 
 #[test]
 fn common_step_uses_index_products_not_accumulated_addition_or_endpoint_tolerance() {
-    let positions = linear_positions((0.0, 1.0), 0.1).unwrap().unwrap();
+    let positions = linear_positions((0.0, 1.0), 0.1, MAX_TICKS)
+        .unwrap()
+        .unwrap();
     for (index, position) in positions.iter().enumerate() {
         assert_eq!(position.to_bits(), (index as f64 * 0.1).to_bits());
     }
@@ -97,7 +99,7 @@ fn common_step_uses_index_products_not_accumulated_addition_or_endpoint_toleranc
     // domain. The whole source misses, rather than dropping that first tick.
     let step = 0.1;
     let lo = 0.3_f64.next_up();
-    if let Some(positions) = linear_positions((lo, 0.9), step).unwrap() {
+    if let Some(positions) = linear_positions((lo, 0.9), step, MAX_TICKS).unwrap() {
         assert!(positions
             .iter()
             .all(|position| *position >= lo && *position <= 0.9));
@@ -107,18 +109,22 @@ fn common_step_uses_index_products_not_accumulated_addition_or_endpoint_toleranc
 #[test]
 fn adaptive_step_uses_decimal_table_ties_and_scaled_extreme_subtraction() {
     assert_eq!(
-        adaptive_positions((0.0, 100.0), 5).unwrap().unwrap(),
+        adaptive_positions((0.0, 100.0), 5, MAX_TICKS)
+            .unwrap()
+            .unwrap(),
         [0.0, 25.0, 50.0, 75.0, 100.0]
     );
     assert_eq!(
-        adaptive_positions((-f64::MAX, f64::MAX), 5)
+        adaptive_positions((-f64::MAX, f64::MAX), 5, MAX_TICKS)
             .unwrap()
             .unwrap(),
         [-1e308, 0.0, 1e308]
     );
     let adjacent = (1.0, 1.0_f64.next_up());
     assert_eq!(
-        adaptive_positions(adjacent, 10_000).unwrap().unwrap(),
+        adaptive_positions(adjacent, 10_000, MAX_TICKS)
+            .unwrap()
+            .unwrap(),
         [adjacent.0, adjacent.1]
     );
     assert_eq!(decimal_power(-323), "1e-323".parse::<f64>().unwrap());
@@ -130,7 +136,7 @@ fn adaptive_step_uses_decimal_table_ties_and_scaled_extreme_subtraction() {
         (1.0, 1.000_000_000_000_01),
     ] {
         for seed in [1, 2, 10, 10_000] {
-            if let Some(positions) = adaptive_positions(range, seed).unwrap() {
+            if let Some(positions) = adaptive_positions(range, seed, MAX_TICKS).unwrap() {
                 assert!((2..=10_000).contains(&positions.len()));
                 assert!(positions.windows(2).all(|pair| pair[0] < pair[1]));
                 assert!(positions
@@ -142,35 +148,55 @@ fn adaptive_step_uses_decimal_table_ties_and_scaled_extreme_subtraction() {
 }
 
 #[test]
-fn adaptive_source_order_is_seed_descending_then_one_midpoint() {
-    let mut sources = Sources::new((0.0, 10.0), false, None, 4).unwrap();
-    assert_eq!(sources.cap, 5);
-    for (ordinal, kind) in [
-        SourceKind::Adaptive(4),
-        SourceKind::Adaptive(3),
-        SourceKind::Adaptive(2),
-        SourceKind::Adaptive(1),
-        SourceKind::Midpoint,
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        let (source, _) = sources.next().unwrap();
-        assert_eq!(
-            source,
-            TickSource {
-                kind,
-                ordinal,
-                cap: 5,
-                precision: None,
-            }
-        );
-    }
-    assert!(sources
-        .next()
-        .unwrap_err()
-        .to_string()
-        .contains("cap exhausted"));
+fn count_targets_allow_nice_deviation_and_maxima_filter_before_formatting() {
+    use crate::orchestrator::measurements::Counter;
+    let mut target = Sources::new(
+        (0.0, 1.0),
+        false,
+        Some(TickInterval::target(4).unwrap()),
+        1000,
+    )
+    .unwrap();
+    let (source, positions) = target.next().unwrap();
+    assert_eq!(source.kind, SourceKind::Adaptive(4));
+    assert_eq!(positions.unwrap(), [0.0, 0.5, 1.0]);
+    let mut five =
+        Sources::new((0.0, 1.0), false, Some(TickInterval::target(5).unwrap()), 2).unwrap();
+    assert_eq!(five.next().unwrap().1.unwrap(), [0.0, 0.25, 0.5, 0.75, 1.0]);
+    assert!(adaptive_positions((0.0, 1.0), 5, 4).unwrap().is_none());
+    let adjacent = (1.0, 1.0_f64.next_up());
+    assert!(adaptive_positions(adjacent, 5, 1).unwrap().is_none());
+    assert_eq!(
+        adaptive_positions(adjacent, 5, 2).unwrap().unwrap(),
+        [adjacent.0, adjacent.1]
+    );
+    let theme = crate::Theme::publication().resolve().unwrap();
+    let projection = Projection::new((0.0, 1.0), (0.0, 1.0), (0.0, 2000.0, 0.0, 1000.0));
+    crate::orchestrator::measurements::start();
+    let selected = numeric_tick_plan(
+        (0.0, 1.0),
+        Some(TickInterval::maximum(4).unwrap()),
+        false,
+        &projection,
+        AxisSide::Bottom,
+        &theme,
+        false,
+        None,
+        &crate::layout::fit::ROOT_SCOPE,
+    )
+    .unwrap();
+    let work = crate::orchestrator::measurements::finish();
+    assert_eq!(
+        selected
+            .ticks
+            .iter()
+            .map(|tick| tick.position)
+            .collect::<Vec<_>>(),
+        [0.0, 0.5, 1.0]
+    );
+    assert!(work.counters[Counter::TickSource as usize] > 1);
+    assert_eq!(work.counters[Counter::TickDistinctList as usize], 1);
+    assert_eq!(work.counters[Counter::TickMetricLookup as usize], 3);
 }
 
 #[test]
@@ -189,7 +215,10 @@ fn additive_sources_are_requested_first_then_complete_decimal_coarsenings() {
         let (source, positions) = sources.next().unwrap();
         assert_eq!(source.kind, SourceKind::Additive(step));
         assert_eq!(source.ordinal, ordinal);
-        assert_eq!(positions, linear_positions((-7.0, 9.0), step).unwrap());
+        assert_eq!(
+            positions,
+            linear_positions((-7.0, 9.0), step, MAX_TICKS).unwrap()
+        );
     }
     let (source, positions) = sources.next().unwrap();
     assert_eq!(source.kind, SourceKind::Midpoint);
@@ -307,7 +336,7 @@ fn maximum_public_decade_step_widens_and_terminates_without_wrapping() {
 }
 
 #[test]
-fn logarithmic_automatic_order_has_full_integrals_then_even_indices() {
+fn logarithmic_count_sources_preserve_automatic_order_but_target_the_initial_subset() {
     let mut sources = Sources::new((-3.0, 3.0), true, None, 3).unwrap();
     assert_eq!(
         sources.next().unwrap().1.unwrap(),
@@ -316,10 +345,50 @@ fn logarithmic_automatic_order_has_full_integrals_then_even_indices() {
     assert_eq!(sources.next().unwrap().1.unwrap(), [-3.0, 0.0, 3.0]);
     assert_eq!(sources.next().unwrap().1.unwrap(), [-3.0, 3.0]);
     assert_eq!(sources.next().unwrap().0.kind, SourceKind::Midpoint);
+    let mut target = Sources::new(
+        (-3.0, 3.0),
+        true,
+        Some(TickInterval::target(4).unwrap()),
+        1000,
+    )
+    .unwrap();
+    assert_eq!(target.cap, 4);
+    let (source, positions) = target.next().unwrap();
+    assert_eq!(source.kind, SourceKind::LogSubset(4));
+    assert_eq!(positions.unwrap(), [-3.0, -1.0, 1.0, 3.0]);
+    assert_eq!(target.next().unwrap().1.unwrap(), [-3.0, 0.0, 3.0]);
+    assert_eq!(target.next().unwrap().1.unwrap(), [-3.0, 3.0]);
+    assert_eq!(target.next().unwrap().1.unwrap(), [0.0]);
+    assert!(target.next().is_err());
+    let mut maximum = Sources::new(
+        (-3.0, 3.0),
+        true,
+        Some(TickInterval::maximum(4).unwrap()),
+        7,
+    )
+    .unwrap();
+    let (source, positions) = maximum.next().unwrap();
+    assert_eq!(source.kind, SourceKind::LogIntegral);
+    assert!(positions.is_none());
+    for desired in [7, 6, 5] {
+        let (source, positions) = maximum.next().unwrap();
+        assert_eq!(source.kind, SourceKind::LogSubset(desired));
+        assert!(positions.is_none());
+    }
+    assert_eq!(maximum.next().unwrap().1.unwrap(), [-3.0, -1.0, 1.0, 3.0]);
 }
 
 #[test]
 fn source_semantics_reject_before_fonts() {
+    let discoveries = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
+    for count in [0, 10_001, u32::MAX] {
+        assert!(matches!(TickInterval::target(count), Err(Error::Data(_))));
+        assert!(matches!(TickInterval::maximum(count), Err(Error::Data(_))));
+    }
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        discoveries
+    );
     for (range, log, interval) in [
         ((f64::NAN, 1.0), false, None),
         ((1.0, 1.0), false, None),
@@ -443,7 +512,9 @@ fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
             .iter()
             .map(|tick| tick.position)
             .collect::<Vec<_>>(),
-        linear_positions((0.0, 100.0), step).unwrap().unwrap()
+        linear_positions((0.0, 100.0), step, MAX_TICKS)
+            .unwrap()
+            .unwrap()
     );
     let projection = Projection::new((0.0, 0.04), (0.0, 1.0), (0.0, 1000.0, 0.0, 1000.0));
     for (precision, expected_ordinal, expected_digits) in [
@@ -489,32 +560,38 @@ fn midpoint_is_conditional_and_must_itself_fit() {
         .child(crate::layout::AddressRole::FacetCell, 3)
         .unwrap();
     for width in [1.0, 100.0] {
-        let projection = Projection::new((1.1, 1.2), (0.0, 1.0), (0.0, width, 0.0, 100.0));
-        let result = numeric_tick_plan(
-            (1.1, 1.2),
-            Some(TickInterval::additive(1.0).unwrap()),
-            false,
-            &projection,
-            AxisSide::Bottom,
-            &theme,
-            false,
-            None,
-            &scope,
-        );
-        if width == 1.0 {
-            let Err(crate::layout::fit::PlanError::Fit(failure)) = result else {
-                panic!("terminal geometry must remain a typed fit miss")
-            };
-            assert_eq!(
-                failure.reason,
-                scope
-                    .child(crate::layout::AddressRole::AxisBottom, 0)
-                    .unwrap()
-                    .failure(crate::layout::fit::FitKind::Tick, "")
-                    .reason
+        for selection in [
+            TickInterval::additive(1.0).unwrap(),
+            TickInterval::target(1).unwrap(),
+            TickInterval::maximum(1).unwrap(),
+        ] {
+            let projection = Projection::new((1.1, 1.2), (0.0, 1.0), (0.0, width, 0.0, 100.0));
+            let result = numeric_tick_plan(
+                (1.1, 1.2),
+                Some(selection),
+                false,
+                &projection,
+                AxisSide::Bottom,
+                &theme,
+                false,
+                None,
+                &scope,
             );
-        } else {
-            assert_eq!(result.unwrap().source.kind, SourceKind::Midpoint);
+            if width == 1.0 {
+                let Err(crate::layout::fit::PlanError::Fit(failure)) = result else {
+                    panic!("terminal geometry must remain a typed fit miss")
+                };
+                assert_eq!(
+                    failure.reason,
+                    scope
+                        .child(crate::layout::AddressRole::AxisBottom, 0)
+                        .unwrap()
+                        .failure(crate::layout::fit::FitKind::Tick, "")
+                        .reason
+                );
+            } else {
+                assert_eq!(result.unwrap().source.kind, SourceKind::Midpoint);
+            }
         }
     }
 }

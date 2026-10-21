@@ -42,6 +42,24 @@ fn interval_copy_and_composed_identity_include_both_axes() {
     plot.y_axis_spec.interval = None;
     assert!(!plot.same_composed_inputs(&retained, &retained.guides));
     plot.y_axis_spec.interval = retained.y_axis_spec.interval;
+    for selection in [
+        TickInterval::target(5).unwrap(),
+        TickInterval::maximum(5).unwrap(),
+    ] {
+        let mut changed = plot.clone();
+        changed.x_axis_spec.interval = Some(selection);
+        assert!(!changed.same_composed_inputs(&retained, &retained.guides));
+        let counted = changed
+            .retain_composed_inputs(ScopedGuideInputs::for_test(&changed))
+            .unwrap();
+        assert!(changed.same_composed_inputs(&counted, &counted.guides));
+        changed.x_axis_spec.interval = Some(if selection.target_count().is_some() {
+            TickInterval::maximum(5).unwrap()
+        } else {
+            TickInterval::target(5).unwrap()
+        });
+        assert!(!changed.same_composed_inputs(&counted, &counted.guides));
+    }
     for side in 0..2 {
         let mut changed = plot.clone();
         if side == 0 {

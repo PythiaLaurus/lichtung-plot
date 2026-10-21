@@ -60,17 +60,7 @@ impl AxisSemanticInputs {
         }
         match self.interval {
             None => round.observe_count(0),
-            Some(interval) => {
-                if let Some(step) = interval.additive_step() {
-                    round.observe_count(1)?;
-                    round.observe_number(step)
-                } else {
-                    round.observe_count(2)?;
-                    round.observe_count(
-                        interval.decade_step().expect("validated decade selection") as usize
-                    )
-                }
-            }
+            Some(selection) => selection.observe_feedback(round),
         }
     }
 }

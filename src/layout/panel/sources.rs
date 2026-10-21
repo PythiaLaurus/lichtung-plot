@@ -5,7 +5,7 @@ use crate::layout::PhysicalTextAlignment;
 use crate::theme::ResolvedTheme;
 use crate::{Error, TickInterval};
 
-pub(super) const MAX_TICKS: usize = 10_000;
+pub(super) const MAX_TICKS: usize = TickInterval::MAX_COUNT as usize;
 pub(crate) const NUMERIC_ALPHABET: &[char] = &[
     '-', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'M', 'e', 'k',
 ];
@@ -98,10 +98,17 @@ fn reserve<T>(values: &mut Vec<T>, count: usize) -> Result<(), Error> {
     crate::render::backend::reserve_text_records(values, count)
 }
 
-fn linear_positions(range: (f64, f64), step: f64) -> Result<Option<Vec<f64>>, Error> {
+fn linear_positions(
+    range: (f64, f64),
+    step: f64,
+    maximum: usize,
+) -> Result<Option<Vec<f64>>, Error> {
     let Some((first, count)) = indices(range, step) else {
         return Ok(None);
     };
+    if count > maximum {
+        return Ok(None);
+    }
     let mut positions = Vec::new();
     reserve(&mut positions, count)?;
     for offset in 0..count {
@@ -120,7 +127,10 @@ fn linear_positions(range: (f64, f64), step: f64) -> Result<Option<Vec<f64>>, Er
     Ok(Some(positions))
 }
 
-fn endpoints(range: (f64, f64)) -> Result<Option<Vec<f64>>, Error> {
+fn endpoints(range: (f64, f64), maximum: usize) -> Result<Option<Vec<f64>>, Error> {
+    if maximum < 2 {
+        return Ok(None);
+    }
     let mut positions = Vec::new();
     reserve(&mut positions, 2)?;
     positions.extend([range.0, range.1]);
@@ -130,9 +140,10 @@ fn endpoints(range: (f64, f64)) -> Result<Option<Vec<f64>>, Error> {
 pub(super) fn adaptive_positions(
     range: (f64, f64),
     seed: usize,
+    maximum: usize,
 ) -> Result<Option<Vec<f64>>, Error> {
     if range.0.next_up() >= range.1 {
-        return endpoints(range);
+        return endpoints(range, maximum);
     }
     let direct = range.1 - range.0;
     let raw = if direct.is_finite() {
@@ -168,11 +179,11 @@ pub(super) fn adaptive_positions(
     let Some((step, _)) = best else {
         return Ok(None);
     };
-    let Some(positions) = linear_positions(range, step)? else {
+    let Some(positions) = linear_positions(range, step, maximum)? else {
         return Ok(None);
     };
     if positions.len() < 2 {
-        endpoints(range)
+        endpoints(range, maximum)
     } else {
         Ok(Some(positions))
     }
@@ -203,7 +214,7 @@ pub(super) fn span_quanta(span: f64) -> Result<i64, Error> {
 struct Sources {
     range: (f64, f64),
     log: bool,
-    interval: Option<TickInterval>,
+    selection: Option<TickInterval>,
     upper: usize,
     ordinal: usize,
     cap: usize,
@@ -219,7 +230,7 @@ impl Sources {
     fn new(
         range: (f64, f64),
         log: bool,
-        interval: Option<TickInterval>,
+        selection: Option<TickInterval>,
         upper: usize,
     ) -> Result<Self, Error> {
         if !(1..=MAX_TICKS).contains(&upper) {
@@ -232,8 +243,8 @@ impl Sources {
                 "numeric tick domain must be finite and strictly ascending".into(),
             ));
         }
-        if let Some(interval) = interval {
-            if log != interval.decade_step().is_some() {
+        if let Some(interval) = selection {
+            if interval.is_interval() && log != interval.decade_step().is_some() {
                 return Err(Error::Data(
                     "tick interval does not match the axis scale".into(),
                 ));
@@ -243,23 +254,30 @@ impl Sources {
         // intervals have at most 20. Include the one terminal midpoint source.
         let integral_count =
             (range.1.min(308.0).floor() - range.0.max(-323.0).ceil() + 1.0).max(0.0) as usize;
-        let cap = match interval {
-            Some(_) if log => 4 * 20 + 1,
-            Some(_) => 4 * 633 + 1,
-            None if log && integral_count >= 2 => upper.min(integral_count) + 1,
-            None => upper + 1,
+        let target = selection.and_then(|value| value.target_count());
+        let upper = target.map_or(upper, |count| count as usize);
+        let singleton =
+            target == Some(1) || selection.is_some_and(|value| value.maximum_count() == Some(1));
+        let cap = match selection {
+            _ if singleton => 1,
+            Some(value) if value.is_interval() && log => 4 * 20 + 1,
+            Some(value) if value.is_interval() => 4 * 633 + 1,
+            _ if log && integral_count >= 2 => {
+                upper.min(integral_count) + usize::from(target.is_none())
+            }
+            _ => upper + 1,
         };
         Ok(Self {
             range,
             log,
-            interval,
+            selection,
             upper,
             ordinal: 0,
             cap,
-            base: interval
+            base: selection
                 .and_then(|interval| interval.additive_step())
                 .unwrap_or(0.0),
-            log_base: interval
+            log_base: selection
                 .and_then(|interval| interval.decade_step())
                 .map_or(0, u64::from),
             factor: 0,
@@ -270,7 +288,16 @@ impl Sources {
     }
 
     fn next_kind(&mut self) -> SourceKind {
-        if self.interval.is_some() && !self.intervals_done {
+        let interval = self.selection.is_some_and(|value| value.is_interval());
+        let target = self.selection.and_then(|value| value.target_count());
+        if target == Some(1)
+            || self
+                .selection
+                .is_some_and(|value| value.maximum_count() == Some(1))
+        {
+            return SourceKind::Midpoint;
+        }
+        if interval && !self.intervals_done {
             loop {
                 let maximum = if self.log {
                     self.range
@@ -318,10 +345,20 @@ impl Sources {
                 }
             }
         }
-        if self.interval.is_none() {
+        if !interval {
             let count = (self.range.1.min(308.0).floor() - self.range.0.max(-323.0).ceil() + 1.0)
                 .max(0.0) as usize;
             if self.log && count >= 2 {
+                if target.is_some() {
+                    let desired = self.upper.min(count).saturating_sub(self.ordinal);
+                    return if desired < 2 {
+                        SourceKind::Midpoint
+                    } else if desired == count {
+                        SourceKind::LogIntegral
+                    } else {
+                        SourceKind::LogSubset(desired)
+                    };
+                }
                 if self.ordinal == 0 {
                     return SourceKind::LogIntegral;
                 }
@@ -359,16 +396,20 @@ impl Sources {
         crate::orchestrator::measurements::count(
             crate::orchestrator::measurements::Counter::TickSource,
         );
+        let maximum = self
+            .selection
+            .and_then(|value| value.maximum_count())
+            .map_or(MAX_TICKS, |count| count as usize);
         let positions = match kind {
-            SourceKind::Adaptive(seed) => adaptive_positions(self.range, seed)?,
-            SourceKind::Additive(step) => linear_positions(self.range, step)?,
+            SourceKind::Adaptive(seed) => adaptive_positions(self.range, seed, maximum)?,
+            SourceKind::Additive(step) => linear_positions(self.range, step, maximum)?,
             SourceKind::LogInterval(step) => {
                 let clamped = (self.range.0.max(-323.0), self.range.1.min(308.0));
                 if clamped.0 > clamped.1 {
                     self.intervals_done = true;
                     None
                 } else {
-                    linear_positions(clamped, step as f64)?
+                    linear_positions(clamped, step as f64, maximum)?
                 }
             }
             SourceKind::LogIntegral | SourceKind::LogSubset(_) => {
@@ -379,6 +420,9 @@ impl Sources {
                 } else {
                     count
                 };
+                if desired > maximum {
+                    return Ok((source, None));
+                }
                 let mut positions = Vec::new();
                 reserve(&mut positions, desired)?;
                 for index in 0..desired {

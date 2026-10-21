@@ -5,8 +5,9 @@ closure, public preferred tick intervals and root-sizing closure are complete;
 scientific numeric presentation and focused section-guide acceptance are complete.
 The subsequent DF3/DF4 closure review admitted data alpha and numeric target/maximum
 tick selection in `97_ALPHA_AND_TICK_EXTENSION_PLAN.md`; numeric source/API design
-is complete and implementation remains pending. Fully caller-decided legends join
-DF11's post-first-release AI-workflow review.
+and private bounded count sources are complete; public generation cutover and
+data-alpha work remain pending. Fully caller-decided legends join DF11's
+post-first-release AI-workflow review.
 
 **Current execution checkpoint:** the user-authorized resumption completed the
 mark/annotation leaf, T6B1d4d, and the private-value umbrella T6B1. Evidence is in
@@ -203,7 +204,7 @@ labels, not existing commits.
 | T6C3 | COMPLETE | T6C2 | Complete initial axis/chrome preferences, provisional content-height gutters and all-mode parent/output evidence; `fix(layout): compose complete content-sized root frames` |
 | T6N | COMPLETE | T6C | Unified scientific numeric formatting; leaves below |
 | T6L | COMPLETE | T6N | One section-aware discrete guide; focused closure in `docs/section-composition-acceptance.md` |
-| T6T | IN PROGRESS | T6L | Numeric source/API design complete in `docs/numeric-tick-selection-design.md`; behavior, public migration and closure leaves in spec97 |
+| T6T | IN PROGRESS | T6L | Design and private bounded sources complete in `docs/numeric-tick-selection-design.md` / `docs/bounded-tick-count-sources.md`; public migration and closure leaves in spec97 |
 | T6D | PENDING | T6T | Data alpha with declared automatic-guide semantics; design, producers, guides, public migration and closure leaves in spec97 |
 | T6Z | PENDING | T6D | Integrated contract and phase closure |
 | T6Z1 | PENDING | T6D | Complete public examples/current-spec and property/consumer census reconciliation; `docs(api): reconcile scientific plotting contracts` |

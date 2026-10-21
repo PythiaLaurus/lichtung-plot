@@ -285,7 +285,7 @@ pub(crate) fn nice_ticks(lo: f64, hi: f64, seed: usize) -> Vec<f64> {
     if !(lo.is_finite() && hi.is_finite()) || lo >= hi || seed == 0 {
         return Vec::new();
     }
-    super::sources::adaptive_positions((lo, hi), seed)
+    super::sources::adaptive_positions((lo, hi), seed, super::sources::MAX_TICKS)
         .unwrap()
         .unwrap_or_default()
 }
