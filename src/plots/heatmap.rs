@@ -16,8 +16,8 @@ use crate::render::backend::{
     with_clip, Backend, FillStyle, GradientStop, LineStyle, PlacedText, Point2D, TextAnchor,
 };
 use crate::spec::{
-    CategoryOrder, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, LegendPolicy,
-    PlotRenderContext, PlotRenderResult,
+    CategoryOrder, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, PlotRenderContext,
+    PlotRenderResult,
 };
 use crate::theme::{ContinuousColorScale, OpaqueColor, ResolvedTheme};
 use crate::Plot;
@@ -1510,12 +1510,6 @@ fn validate_options(chart: &Plot) -> Result<(), Error> {
                 "heatmap: {axis} categories cannot use ValueSort::{sort:?}; each category maps to multiple cells, so supply an explicit order"
             )));
         }
-    }
-    if chart.legend_policy_spec() != LegendPolicy::Automatic {
-        return Err(Error::Data(
-            "heatmap: legend policy overrides are not supported; the right-side colorbar is mandatory"
-                .into(),
-        ));
     }
     Ok(())
 }

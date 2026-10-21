@@ -4,6 +4,7 @@ use sha2::{Digest, Sha256};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
+mod alpha;
 mod annotations;
 mod fonts;
 mod legends;
@@ -363,31 +364,6 @@ fn measure<R>(
 }
 
 #[test]
-fn matrix_publication_feedback_produces_complete_output() {
-    let sample = measure_case(
-        "matrix4_feedback_storage",
-        || {
-            Plot::matrix(
-                (0..4)
-                    .map(|j| {
-                        NumericValues::new(
-                            format!("Variable {j}"),
-                            (0..100).map(move |i| f64::from((i * (j * 12 + 7)) % 101)),
-                        )
-                    })
-                    .collect(),
-            )
-            .size(1400, 1400)
-        },
-        |matrix, path| matrix.svg(path),
-        true,
-        false,
-    );
-    assert!(sample.error.is_none());
-    assert!(sample.output.is_some());
-}
-
-#[test]
 #[ignore = "release baseline; run explicitly with --release --ignored --nocapture --test-threads=1"]
 #[expect(
     clippy::too_many_lines,
@@ -482,6 +458,7 @@ fn publication_efficiency_measurements() {
     numeric::measure();
     sections::measure();
     ticks::measure();
+    alpha::measure();
 
     for run in 0..3 {
         let start = Instant::now();

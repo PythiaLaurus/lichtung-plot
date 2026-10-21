@@ -1,10 +1,11 @@
 use std::path::Path;
 
 use lichtung_plot::{
-    kind, BarInput, Bounds, Canvas, CanvasLegendPolicy, CategoryValues, CoefficientInput, Color,
-    DumbbellEndpoints, Error, FacetSpec, HeatmapAnnotations, HistogramInput, NumericFormat,
-    NumericNotation, NumericPrecision, NumericValues, Output, Plot, PlotKind, PngCompression,
-    PngOptions, PngSizing, RaincloudInput, TextPanel, Theme, TickGeneration,
+    kind, AlphaEncoding, AlphaValues, BarInput, Bounds, Canvas, CanvasLegendPolicy, CategoryValues,
+    CoefficientInput, Color, DumbbellEndpoints, Error, FacetSpec, HeatmapAnnotations,
+    HistogramInput, NumericFormat, NumericNotation, NumericPrecision, NumericValues, Output, Plot,
+    PlotKind, PngCompression, PngOptions, PngSizing, RaincloudInput, TextPanel, Theme,
+    TickGeneration,
 };
 
 use super::support::{png_dimensions, unique_dir};
@@ -151,7 +152,67 @@ fn scatter() -> Plot<kind::Scatter> {
     )
 }
 
-fn assert_family_content_roots<K: kind::ExactFamily>(source: Plot<K>, markers: &[&str]) {
+fn alpha(name: &str) -> AlphaEncoding {
+    AlphaEncoding::single(
+        AlphaValues::linear(NumericValues::new(name, [0.5]), (0.0, 1.0), (0, 255)).unwrap(),
+    )
+    .unwrap()
+}
+
+fn assert_alpha_titles(svg: &str, kind: PlotKind) {
+    let names: &[&str] = match kind {
+        PlotKind::Scatter | PlotKind::Beeswarm => &["point"],
+        PlotKind::Histogram | PlotKind::Density | PlotKind::Bar | PlotKind::HorizontalBar => {
+            &["line", "fill"]
+        }
+        PlotKind::Qq
+        | PlotKind::PointInterval
+        | PlotKind::Coefficient
+        | PlotKind::Forest
+        | PlotKind::Trajectory
+        | PlotKind::LinePath
+        | PlotKind::Interaction
+        | PlotKind::Dumbbell => &["point", "line"],
+        PlotKind::Line
+        | PlotKind::Boxplot
+        | PlotKind::Violin
+        | PlotKind::Raincloud
+        | PlotKind::Regression => &["point", "line", "fill"],
+        PlotKind::Marginal | PlotKind::Matrix => &["point", "fill"],
+        PlotKind::Heatmap
+        | PlotKind::StackedBar
+        | PlotKind::StackedHorizontalBar
+        | PlotKind::Waterfall => &["fill"],
+    };
+    let document = roxmltree::Document::parse(svg).unwrap();
+    let words = document
+        .descendants()
+        .filter(|node| node.has_tag_name("text"))
+        .filter_map(|node| node.text())
+        .flat_map(str::split_whitespace)
+        .collect::<Vec<_>>();
+    for name in names {
+        assert_eq!(
+            words
+                .windows(2)
+                .filter(|pair| pair == &[*name, "confidence"])
+                .count(),
+            1,
+            "{kind:?}: exactly one complete {name} alpha section"
+        );
+    }
+}
+
+fn assert_family_content_roots<K: kind::ExactFamily + kind::Legend>(
+    source: Plot<K>,
+    markers: &[&str],
+) {
+    let source =
+        source
+            .labels(lichtung_plot::Labels::raw())
+            .legend(lichtung_plot::LegendPolicy::Visible(
+                lichtung_plot::LegendPosition::OutsideRight,
+            ));
     let directory = unique_dir("public-family-content-roots");
     for (sizing, source) in [
         Sizing::Automatic,
@@ -170,6 +231,7 @@ fn assert_family_content_roots<K: kind::ExactFamily>(source: Plot<K>, markers: &
         sizing.assert_dimensions(dimensions);
         let svg = std::fs::read_to_string(destination).unwrap();
         assert_svg_dimensions(&svg, dimensions);
+        assert_alpha_titles(&svg, source.kind());
         for marker in markers {
             assert!(
                 svg.contains(&format!(">{marker}")),
@@ -194,6 +256,7 @@ fn assert_family_content_roots<K: kind::ExactFamily>(source: Plot<K>, markers: &
             sizing.assert_dimensions(dimensions);
             let svg = std::fs::read_to_string(destination).unwrap();
             assert_svg_dimensions(&svg, dimensions);
+            assert_alpha_titles(&svg, source.kind());
             for marker in markers {
                 assert!(
                     svg.contains(&format!(">{marker}")),
@@ -273,14 +336,35 @@ fn all_public_families_render_content_requests_with_their_actual_axes_and_chrome
             NumericValues::new("upper", [1.5, 3.0, 4.0, 5.0, 6.0, 7.0]),
         )
     };
-    xy!(Plot::scatter(x.clone(), y.clone()));
-    xy!(Plot::histogram(HistogramInput::samples(x.clone())));
-    xy!(Plot::density(x.clone()));
-    xy!(Plot::qq(x.clone()));
-    x!(Plot::point_interval(terms.clone(), x.clone(), bounds()));
-    xy!(Plot::line(x.clone(), y.clone()));
-    xy!(Plot::trajectory(x.clone(), y.clone(), group.clone()));
-    xy!(Plot::line_path(x.clone(), y.clone(), group.clone()));
+    xy!(Plot::scatter(x.clone(), y.clone()).point_alpha(alpha("point confidence")));
+    xy!(Plot::histogram(HistogramInput::samples(x.clone()))
+        .stat(lichtung_plot::HistogramStat::Density)
+        .composite(lichtung_plot::HistogramComposite::KdeAndRug(
+            lichtung_plot::HistogramKde::Internal
+        ))
+        .line_alpha(alpha("line confidence"))
+        .fill_alpha(alpha("fill confidence")));
+    xy!(Plot::density(x.clone())
+        .line_alpha(alpha("line confidence"))
+        .fill_alpha(alpha("fill confidence")));
+    xy!(Plot::qq(x.clone())
+        .point_alpha(alpha("point confidence"))
+        .line_alpha(alpha("line confidence")));
+    x!(Plot::point_interval(terms.clone(), x.clone(), bounds())
+        .point_alpha(alpha("point confidence"))
+        .line_alpha(alpha("line confidence")));
+    xy!(Plot::line(x.clone(), y.clone())
+        .band(bounds())
+        .point_alpha(alpha("point confidence"))
+        .line_alpha(alpha("line confidence"))
+        .fill_alpha(alpha("fill confidence")));
+    xy!(Plot::trajectory(x.clone(), y.clone(), group.clone())
+        .point_alpha(alpha("point confidence"))
+        .line_alpha(alpha("line confidence")));
+    xy!(Plot::line_path(x.clone(), y.clone(), group.clone())
+        .markers(true)
+        .point_alpha(alpha("point confidence"))
+        .line_alpha(alpha("line confidence")));
     y!(Plot::interaction(
         CategoryValues::new(
             "condition",
@@ -290,16 +374,24 @@ fn all_public_families_render_content_requests_with_their_actual_axes_and_chrome
         y.clone(),
         group.clone(),
         bounds(),
-    ));
+    )
+    .point_alpha(alpha("point confidence"))
+    .line_alpha(alpha("line confidence")));
     assert_family_content_roots(
-        Plot::coefficient(terms.clone(), CoefficientInput::estimates(x.clone()))
-            .x_tick_generation(TickGeneration::target(5).unwrap())
-            .x_tick_format(format("x="))
-            .estimate_labels(format("v=")),
-        &["x=", "v="],
+        Plot::coefficient(
+            terms.clone(),
+            CoefficientInput::estimates_with_intervals(x.clone(), bounds()),
+        )
+        .point_alpha(alpha("point confidence"))
+        .line_alpha(alpha("line confidence"))
+        .x_tick_generation(TickGeneration::target(5).unwrap())
+        .x_tick_format(format("x=")),
+        &["x="],
     );
     assert_family_content_roots(
         Plot::forest(terms.clone(), x.clone(), bounds(), 1.0)
+            .point_alpha(alpha("point confidence"))
+            .line_alpha(alpha("line confidence"))
             .scale(lichtung_plot::AxisScale::Log10)
             .x_tick_generation(TickGeneration::target(5).unwrap())
             .x_tick_format(
@@ -324,7 +416,9 @@ fn all_public_families_render_content_requests_with_their_actual_axes_and_chrome
             Color::rgb(180, 60, 40),
         )
         .unwrap(),
-    ));
+    )
+    .point_alpha(alpha("point confidence"))
+    .line_alpha(alpha("line confidence")));
     assert_family_content_roots(
         Plot::heatmap(
             CategoryValues::new(
@@ -335,28 +429,60 @@ fn all_public_families_render_content_requests_with_their_actual_axes_and_chrome
             group.clone(),
             x.clone(),
         )
+        .fill_alpha(alpha("fill confidence"))
         .color_label_format(format("c="))
         .annotations(HeatmapAnnotations::Values(format("v="))),
         &["c=", "v="],
     );
-    y!(Plot::bar(group.clone(), BarInput::samples(y.clone())));
+    y!(Plot::bar(
+        group.clone(),
+        BarInput::samples(y.clone()).error_bar(lichtung_plot::ErrorBar::standard_deviation())
+    )
+    .line_alpha(alpha("line confidence"))
+    .fill_alpha(alpha("fill confidence")));
     x!(Plot::horizontal_bar(
         group.clone(),
-        BarInput::samples(y.clone()),
-    ));
-    y!(Plot::stacked_bar(group.clone(), y.clone(), hue.clone()));
-    x!(Plot::stacked_horizontal_bar(group.clone(), y.clone(), hue));
-    y!(Plot::boxplot(group.clone(), y.clone()));
-    y!(Plot::violin(group.clone(), y.clone()));
-    y!(Plot::raincloud(RaincloudInput::samples(
-        group.clone(),
-        y.clone(),
-    )));
-    xy!(Plot::regression(x.clone(), y.clone()));
-    xy!(Plot::marginal(x.clone(), y.clone()));
-    assert_family_content_roots(Plot::matrix(vec![x.clone(), y]), &[]);
+        BarInput::samples(y.clone()).error_bar(lichtung_plot::ErrorBar::standard_deviation()),
+    )
+    .line_alpha(alpha("line confidence"))
+    .fill_alpha(alpha("fill confidence")));
+    y!(Plot::stacked_bar(group.clone(), y.clone(), hue.clone())
+        .fill_alpha(alpha("fill confidence")));
+    x!(Plot::stacked_horizontal_bar(group.clone(), y.clone(), hue)
+        .fill_alpha(alpha("fill confidence")));
+    y!(Plot::boxplot(group.clone(), y.clone())
+        .raw_overlay(lichtung_plot::RawOverlay::Points)
+        .point_alpha(alpha("point confidence"))
+        .line_alpha(alpha("line confidence"))
+        .fill_alpha(alpha("fill confidence")));
+    y!(Plot::violin(group.clone(), y.clone())
+        .raw_overlay(lichtung_plot::RawOverlay::Points)
+        .point_alpha(alpha("point confidence"))
+        .line_alpha(alpha("line confidence"))
+        .fill_alpha(alpha("fill confidence")));
+    y!(
+        Plot::raincloud(RaincloudInput::samples(group.clone(), y.clone(),))
+            .point_alpha(alpha("point confidence"))
+            .line_alpha(alpha("line confidence"))
+            .fill_alpha(alpha("fill confidence"))
+    );
+    xy!(Plot::regression(x.clone(), y.clone())
+        .band(lichtung_plot::RegressionBand::PointwiseMean95)
+        .point_alpha(alpha("point confidence"))
+        .line_alpha(alpha("line confidence"))
+        .fill_alpha(alpha("fill confidence")));
+    xy!(Plot::marginal(x.clone(), y.clone())
+        .point_alpha(alpha("point confidence"))
+        .fill_alpha(alpha("fill confidence")));
+    assert_family_content_roots(
+        Plot::matrix(vec![x.clone(), y])
+            .point_alpha(alpha("point confidence"))
+            .fill_alpha(alpha("fill confidence")),
+        &[],
+    );
     assert_family_content_roots(
         Plot::beeswarm(group, x.clone(), x)
+            .point_alpha(alpha("point confidence"))
             .x_tick_generation(TickGeneration::target(5).unwrap())
             .x_tick_format(format("x="))
             .color_label_format(format("c=")),
@@ -368,6 +494,7 @@ fn all_public_families_render_content_requests_with_their_actual_axes_and_chrome
             NumericValues::new("delta", [1.0, -1.0, 2.0, -2.0, 3.0, 0.0]),
             10.0,
         )
+        .fill_alpha(alpha("fill confidence"))
         .x_tick_format(format("x="))
         .x_tick_generation(TickGeneration::target(5).unwrap())
         .total_format(format("n=")),

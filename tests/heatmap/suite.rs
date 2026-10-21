@@ -593,7 +593,7 @@ fn heatmap_handles_signed_zero_subnormal_and_opposite_extremes() {
 }
 
 #[test]
-fn heatmap_colorbar_is_mandatory_right_of_and_outside_marks_clip() {
+fn heatmap_colorbar_defaults_right_outside_marks_clip_and_hidden_retains_alpha_cells() {
     let data = standard_data();
     let svg = render(&data, |chart| chart.color_label("Measured response")).unwrap();
     let clip_start = svg.find("<g clip-path=\"url(#clip-0)\">").unwrap();
@@ -607,6 +607,28 @@ fn heatmap_colorbar_is_mandatory_right_of_and_outside_marks_clip() {
     assert_eq!(svg.matches("fill=\"url(#linear-gradient-0)\"").count(), 1);
     assert!(svg.contains("<stop offset=\"0.000000\" stop-color=\"#F7FBFF\"/>"));
     assert!(svg.contains("<stop offset=\"1.000000\" stop-color=\"#08306B\"/>"));
+    let hidden = render(&data, |chart| {
+        chart
+            .fill_alpha(
+                lichtung_plot::AlphaEncoding::single(
+                    lichtung_plot::AlphaValues::linear(
+                        NumericValues::new("confidence", [0.5]),
+                        (0.0, 1.0),
+                        (0, 255),
+                    )
+                    .unwrap(),
+                )
+                .unwrap(),
+            )
+            .legend(lichtung_plot::LegendPolicy::Hidden)
+            .labels(lichtung_plot::Labels::raw().alias("confidence", "\u{10ffff}"))
+            .color_label("Measured response")
+    })
+    .unwrap();
+    assert!(!hidden.contains("<linearGradient") && !hidden.contains("Measured response"));
+    assert!(!hidden.contains('\u{10ffff}'));
+    assert_eq!(clipped_marks(&hidden).matches("<polygon ").count(), 4);
+    assert!(clipped_marks(&hidden).contains("fill-opacity="));
 }
 
 #[test]
