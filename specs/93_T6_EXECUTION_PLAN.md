@@ -205,7 +205,7 @@ labels, not existing commits.
 | T6N | COMPLETE | T6C | Unified scientific numeric formatting; leaves below |
 | T6L | COMPLETE | T6N | One section-aware discrete guide; focused closure in `docs/section-composition-acceptance.md` |
 | T6T | COMPLETE | T6L | TickGeneration design/source/public cutover and focused parent/root/output closure; `docs/public-tick-generation.md` / `docs/tick-generation-parent-closure.md` |
-| T6D | IN PROGRESS | T6T | Exact explicit-unit/49-gate design and private owned AlphaValues complete; `docs/data-alpha-design.md`, `docs/owned-alpha-values.md`; bindings/consumers/guides/public cutover remain in spec97 |
+| T6D | IN PROGRESS | T6T | Exact explicit-unit/49-gate design, private AlphaValues and explicit bindings/source slots complete; `docs/data-alpha-design.md`, `docs/owned-alpha-values.md`, `docs/explicit-alpha-bindings.md`; actual consumers/guides/public cutover remain in spec97 |
 | T6Z | PENDING | T6D | Integrated contract and phase closure |
 | T6Z1 | PENDING | T6D | Complete public examples/current-spec and property/consumer census reconciliation; `docs(api): reconcile scientific plotting contracts` |
 | T6Z2 | COMPLETE | User closure review | User-approved DF3/DF4 admission in spec97, residual DF4 checkpoint and fully caller-decided legends in DF11 |
@@ -986,6 +986,17 @@ removed. Twenty-three focused library tests and four external color/guide contra
 strict all-target Clippy, fmt/diff and 671/17 discovery pass. Six alpha unit contracts
 replace six thinner geometry tests. Actual bindings/marks/guides and public alpha
 remain pending, as do integrated full/release gates.
+
+`../docs/explicit-alpha-bindings.md` closes private immutable encodings and prepared
+unit resolution: explicit broadcast, canonical raw tuple schemas, exact bin/facet
+keys, missing-unit refusal, full original observation slots and supplied Raincloud
+point counts. Plot Clone/erase, composed inputs and height identities retain the
+complete three-target value. Actual child-cache witnesses distinguish identical
+paints with different declarations. Nineteen focused library tests, four external
+source/parent contracts, strict all-target Clippy, fmt/diff and unchanged 671/17
+discovery pass; three new binding contracts replace three thinner tests. Producer
+leaves must now consume these prepared operands and retain slots/styles before
+fonts. This does not close actual alpha rendering, guides or public cutover.
 
 ## Verification And Closure
 

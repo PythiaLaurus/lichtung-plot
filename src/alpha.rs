@@ -6,7 +6,40 @@ use crate::data::source::{collect_source, reserve_source, source_arc};
 use crate::numeric::set::FormattedSet;
 use crate::{CategoryValues, Error, NumericValues, Result};
 
+mod encoding;
 mod materialize;
+
+pub(crate) use encoding::{AlphaEncoding, AlphaUnitKind, PreparedAlpha, ResolvedAlpha};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AlphaTarget {
+    Point,
+    Line,
+    Fill,
+}
+
+impl AlphaTarget {
+    const fn index(self) -> usize {
+        match self {
+            Self::Point => 0,
+            Self::Line => 1,
+            Self::Fill => 2,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct AlphaInputs([AlphaEncoding; 3]);
+
+impl AlphaInputs {
+    pub(crate) fn get(&self, target: AlphaTarget) -> &AlphaEncoding {
+        &self.0[target.index()]
+    }
+
+    pub(crate) fn set(&mut self, target: AlphaTarget, encoding: AlphaEncoding) {
+        self.0[target.index()] = encoding;
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AlphaSemantics {

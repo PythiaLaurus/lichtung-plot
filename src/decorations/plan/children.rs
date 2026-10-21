@@ -537,6 +537,30 @@ mod tests {
                 variants.push(make(format.clone()).x_tick_generation(generation).erase());
                 variants.push(make(format.clone()).y_tick_generation(generation).erase());
             }
+            for alpha in [
+                crate::alpha::AlphaValues::new("confidence", [127; 2]).unwrap(),
+                crate::alpha::AlphaValues::linear(
+                    crate::NumericValues::new("confidence", [0.0, 1.0]),
+                    (0.0, 1.0),
+                    (127, 127),
+                )
+                .unwrap(),
+                crate::alpha::AlphaValues::continuous(
+                    crate::NumericValues::new("confidence", [0.0, 1.0]),
+                    (0.0, 1.0),
+                    |_| 127,
+                )
+                .unwrap(),
+            ] {
+                variants.push(
+                    make(format.clone())
+                        .with_alpha(
+                            crate::alpha::AlphaTarget::Point,
+                            crate::alpha::AlphaEncoding::observations(alpha),
+                        )
+                        .erase(),
+                );
+            }
             let theme = crate::Theme::publication().resolve().unwrap();
             let owner = ComponentAddress::root()
                 .child(AddressRole::FacetCell, 0)

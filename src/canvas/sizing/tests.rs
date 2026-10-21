@@ -125,4 +125,47 @@ fn recorded_heights_require_complete_numeric_and_guide_inputs_at_equal_width_and
             .erase(),
     ];
     assert_changed_height_inputs(source.erase(), variants);
+
+    let source = crate::Plot::line(
+        crate::NumericValues::new("x", [0.0, 1.0]),
+        crate::NumericValues::new("y", [0.0, 1.0]),
+    )
+    .with_alpha(
+        crate::alpha::AlphaTarget::Point,
+        crate::alpha::AlphaEncoding::observations(
+            crate::alpha::AlphaValues::new("confidence", [0, 127]).unwrap(),
+        ),
+    );
+    let variants = [
+        source
+            .clone()
+            .with_alpha(
+                crate::alpha::AlphaTarget::Point,
+                crate::alpha::AlphaEncoding::observations(
+                    crate::alpha::AlphaValues::new("confidence", [0, 128]).unwrap(),
+                ),
+            )
+            .erase(),
+        source
+            .clone()
+            .with_alpha(
+                crate::alpha::AlphaTarget::Line,
+                crate::alpha::AlphaEncoding::single(
+                    crate::alpha::AlphaValues::new("confidence", [127]).unwrap(),
+                )
+                .unwrap(),
+            )
+            .erase(),
+        source
+            .clone()
+            .with_alpha(
+                crate::alpha::AlphaTarget::Fill,
+                crate::alpha::AlphaEncoding::single(
+                    crate::alpha::AlphaValues::new("confidence", [127]).unwrap(),
+                )
+                .unwrap(),
+            )
+            .erase(),
+    ];
+    assert_changed_height_inputs(source.erase(), variants);
 }

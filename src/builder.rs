@@ -10,6 +10,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 mod accessors;
+mod alpha;
 mod configuration;
 mod facets;
 mod layout;
@@ -451,6 +452,7 @@ use crate::{
 )]
 pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     input: Arc<PlotInput>,
+    alpha: crate::alpha::AlphaInputs,
     source_rows: Option<SourceRows>,
     series: Option<CategoryValues>,
     hue: Option<CategoryValues>,
@@ -590,6 +592,7 @@ pub(crate) struct ComposedInputs {
     suppress_continuous_guide: bool,
     root_size: crate::layout::RootSize,
     numeric: crate::numeric::inputs::NumericInputs,
+    alpha: crate::alpha::AlphaInputs,
     pub(crate) guides: crate::decorations::legend::discrete::scoped::ScopedGuideInputs,
 }
 
@@ -597,6 +600,7 @@ impl Plot<crate::kind::Any> {
     fn new<K: crate::kind::Marker>(input: PlotInput, kind: PlotKind) -> Plot<K> {
         Plot {
             input: Arc::new(input),
+            alpha: crate::alpha::AlphaInputs::default(),
             source_rows: None,
             series: None,
             hue: None,
@@ -1016,6 +1020,7 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
     pub fn erase(self) -> Plot<crate::kind::Any> {
         let Plot {
             input,
+            alpha,
             source_rows,
             series,
             hue,
@@ -1129,6 +1134,7 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             title_alignment,
             subtitle_alignment,
             input,
+            alpha,
             source_rows,
             series,
             hue,

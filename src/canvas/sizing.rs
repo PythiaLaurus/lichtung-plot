@@ -34,6 +34,7 @@ struct HeightInputs {
     legend: crate::LegendPolicy,
     continuous_hidden: bool,
     numeric: crate::numeric::inputs::NumericInputs,
+    alpha: crate::alpha::AlphaInputs,
     guides: ScopedGuideInputs,
     scope: Option<String>,
 }
@@ -56,6 +57,7 @@ impl HeightInputs {
             || self.legend != other.legend
             || self.continuous_hidden != other.continuous_hidden
             || self.numeric != other.numeric
+            || self.alpha != other.alpha
             || self.guides != other.guides
         {
             return false;
@@ -136,6 +138,7 @@ impl HeightInputs {
             legend: plot.legend_policy_spec(),
             continuous_hidden: plot.continuous_guide_suppressed(),
             numeric: crate::numeric::inputs::NumericInputs::new(plot)?,
+            alpha: plot.alpha_inputs().clone(),
             guides: ScopedGuideInputs::new(plot, use_kind, local.as_ref(), dependencies)?,
             scope: plot
                 .axis_scope()

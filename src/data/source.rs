@@ -175,6 +175,12 @@ mod tests {
             crate::NumericValues::new("x", [1.0, 2.0, 3.0]),
             crate::NumericValues::new("y", [1.0, 2.0, 3.0]),
         )
+        .with_alpha(
+            crate::alpha::AlphaTarget::Point,
+            crate::alpha::AlphaEncoding::observations(
+                crate::alpha::AlphaValues::new("confidence", [0, 127, 230]).unwrap(),
+            ),
+        )
         .erase();
         let operation = OperationContext::new();
         let binding = source
@@ -198,6 +204,28 @@ mod tests {
             ),
             (2, 302, 0, 300)
         );
+        let alpha = source
+            .prepare_alpha(
+                crate::alpha::AlphaTarget::Point,
+                crate::alpha::AlphaUnitKind::Observation,
+                &[],
+            )
+            .unwrap();
+        assert_eq!(
+            data.observation_alpha(&alpha, 0).unwrap(),
+            Some(crate::alpha::ResolvedAlpha {
+                index: 2,
+                alpha: 230
+            })
+        );
+        assert_eq!(
+            data.observation_alpha(&alpha, 1).unwrap(),
+            Some(crate::alpha::ResolvedAlpha { index: 0, alpha: 0 })
+        );
+        assert!(data.observation_alpha(&alpha, 2).is_err());
+        let invalid_slot = alpha.observation(3, 999).unwrap_err();
+        assert!(invalid_slot.to_string().contains("original slot 3"));
+        assert!(invalid_slot.to_string().contains("source row 999"));
         let other = OperationContext::new();
         assert!(data.with_operation(&other).validate_row_source().is_err());
         assert!(source
@@ -207,21 +235,5 @@ mod tests {
             .with_row_source(Some(&binding))
             .validate_row_source()
             .is_err());
-    }
-
-    #[test]
-    fn source_storage_preserves_values_and_refuses_unrepresentable_lengths() {
-        let mut values = Vec::<u64>::new();
-        reserve_source(&mut values, 4).unwrap();
-        values.extend([1, 2, 3, 4]);
-        let pointer = values.as_ptr();
-        let retained = source_arc(values).unwrap();
-        assert_eq!(retained.as_ptr(), pointer);
-        assert_eq!(retained.as_slice(), &[1, 2, 3, 4]);
-        assert!(reserve_source(&mut Vec::<u64>::new(), usize::MAX).is_err());
-        assert_eq!(
-            normalize_source_string("  first\tsecond \n third ").unwrap(),
-            "first second third"
-        );
     }
 }

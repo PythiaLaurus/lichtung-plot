@@ -159,6 +159,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             && self.suppress_continuous_guide == other.suppress_continuous_guide
             && self.root_size == other.root_size
             && other.numeric.matches(self)
+            && self.alpha == other.alpha
             && guides.matches_source(self)
             && *guides == other.guides
     }
@@ -246,6 +247,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             suppress_continuous_guide: self.suppress_continuous_guide,
             root_size: self.root_size,
             numeric: crate::numeric::inputs::NumericInputs::new(self)?,
+            alpha: self.alpha.clone(),
             guides,
         })
     }

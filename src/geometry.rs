@@ -466,6 +466,23 @@ mod validation_tests {
         };
         assert_eq!(histogram.validate().unwrap(), (-2.0, 2.0));
         assert_eq!(raincloud.validate().unwrap(), (-2.0, 2.0));
+        let supplied = crate::Plot::raincloud(crate::RaincloudInput::geometry(raincloud.clone()))
+            .with_alpha(
+                crate::alpha::AlphaTarget::Point,
+                crate::alpha::AlphaEncoding::observations(
+                    crate::alpha::AlphaValues::new("confidence", [0, 230]).unwrap(),
+                ),
+            );
+        assert_eq!(supplied.row_count(), 0);
+        let alpha = supplied
+            .prepare_alpha(
+                crate::alpha::AlphaTarget::Point,
+                crate::alpha::AlphaUnitKind::Observation,
+                &[],
+            )
+            .unwrap();
+        assert_eq!(alpha.observation(0, 0).unwrap().unwrap().alpha, 0);
+        assert_eq!(alpha.observation(1, 1).unwrap().unwrap().alpha, 230);
         let mut invalid_histogram = histogram;
         invalid_histogram.bins[0].lower = f64::INFINITY;
         let mut invalid_raincloud = raincloud;

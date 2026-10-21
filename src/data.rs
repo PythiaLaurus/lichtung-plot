@@ -172,6 +172,27 @@ impl<'a> PlotData<'a> {
             .copied()
             .unwrap_or(local_row)
     }
+
+    /// Alpha arrays align with complete original input slots, not public row IDs.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "original-slot alpha lookup precedes actual observation consumers"
+        )
+    )]
+    pub(crate) fn observation_alpha(
+        self,
+        alpha: &crate::alpha::PreparedAlpha,
+        local_row: usize,
+    ) -> Result<Option<crate::alpha::ResolvedAlpha>, Error> {
+        if local_row >= self.height() {
+            return Err(Error::Data(format!(
+                "alpha local row {local_row} is outside the selected input"
+            )));
+        }
+        alpha.observation(self.row_index(local_row), self.source_row(local_row))
+    }
 }
 
 impl<'a> From<&'a crate::builder::Plot> for PlotData<'a> {

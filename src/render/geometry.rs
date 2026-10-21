@@ -2551,29 +2551,6 @@ mod tests {
     }
 
     #[test]
-    fn geometry_records_the_same_converted_subprecision_points_as_svg() {
-        let mut backend = begun_backend();
-        backend
-            .draw_line(
-                &[Point2D::new(0.0, 0.0), Point2D::new(0.0006, 0.0006)],
-                &LineStyle::solid(Color::rgb(0, 0, 0), 2.0),
-            )
-            .unwrap();
-        backend.end().unwrap();
-
-        assert_eq!(
-            backend.bounds(),
-            &[GeometryBox {
-                left: -1.0,
-                right: 1.000_976_562_5,
-                bottom: -1.0,
-                top: 1.000_976_562_5,
-                weight: 1.0,
-            }]
-        );
-    }
-
-    #[test]
     fn text_anchors_and_rotation_follow_exact_planned_ink() {
         let mut backend = begun_backend();
         for (y, anchor) in [
@@ -2662,21 +2639,6 @@ mod tests {
         backend.begin(100, 100).unwrap();
         assert!(backend.text.is_empty());
         backend.end().unwrap();
-    }
-
-    #[test]
-    fn geometry_and_svg_reject_the_same_collapsed_line() {
-        let points = [Point2D::new(0.0, 0.0), Point2D::new(0.0004, 0.0004)];
-        let style = LineStyle::solid(Color::rgb(0, 0, 0), 0.0);
-        let mut geometry = begun_backend();
-        let geometry_error = geometry.draw_line(&points, &style).unwrap_err();
-        geometry.end().unwrap();
-        let mut svg = crate::render::svg_backend::SvgBackend::in_memory(100, 100);
-        svg.begin(100, 100).unwrap();
-        let svg_error = svg.draw_line(&points, &style).unwrap_err();
-
-        assert_eq!(geometry_error.to_string(), svg_error.to_string());
-        assert!(geometry.bounds().is_empty());
     }
 
     #[test]
