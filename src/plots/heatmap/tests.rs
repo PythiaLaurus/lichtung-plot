@@ -250,6 +250,19 @@ fn cell_alpha_retains_original_members_through_normalized_order_and_missing_grid
     assert!(cells[0].cross.is_some());
     assert!(cells[1..].iter().all(|cell| cell.cross.is_none()));
     let descriptor = selected.discrete_guide.as_ref().unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let destination = directory.path().join("native.svg");
+    source
+        .clone()
+        .size(1200, 900)
+        .svg_preserve_text(&destination)
+        .unwrap();
+    let svg = std::fs::read_to_string(destination).unwrap();
+    assert_eq!(
+        svg.matches("<linearGradient").count(),
+        1,
+        "the native color-plus-alpha guide has exactly one placement owner"
+    );
     assert_eq!(descriptor.sections.len(), 2);
     assert!(matches!(
         descriptor.sections[0].body,

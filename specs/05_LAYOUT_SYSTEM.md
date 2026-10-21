@@ -1,7 +1,7 @@
 # Layout System
 
-**Status**: Implemented coordinated layout and root sizing; staged numeric/guide
-presentation extensions remain targets
+**Status**: Implemented coordinated layout, root sizing and scientific numeric/guide
+presentation; integrated release evidence remains with spec93
 
 ## Purpose And Boundary
 
@@ -40,13 +40,21 @@ historical root defaults or public pre-render dimension getters.
 
 T6 ENTRY decisions are complete in `93_T6_EXECUTION_PLAN.md`: the user admitted
 one scientific numeric presentation core and combined/separate discrete guide
-sections. These are additional approved targets, not current public behavior.
+sections, subsequently implemented as the current public behavior.
 Remaining broader formatting/text controls and sparse compaction retain explicit
 T7 review checkpoints.
 The numeric consumer design, Forest mathematical proof/resource model and
 discrete producer/section design are fully specified in
 `06_NUMERIC_PRESENTATION.md`, `07_LOG10_DISPLAY.md` and `08_DISCRETE_GUIDES.md`.
-These targets are design-closed; the corresponding code/test cutovers are pending.
+These presentation contracts are now implemented and public. Numeric tick
+generation retains complete Automatic/interval/Target/Maximum choices; data-alpha
+retains complete three-target values/bindings and actual unit members. The sole
+PreparedGuide measures category/literal/layer symbols, optional continuous color
+and declared alpha sections in one finite frame. Hidden/Undeclared still retain
+complete alpha identity through scoped child/height reuse and common native/standard
+feedback. Root bounds, 8/2 guide trials, eight feedback rounds and frozen replay are
+unchanged. Specs06/07/08 and `../docs/public-data-alpha.md` own current details;
+spec93 owns integrated release closure.
 
 Post-T5a3 accepted policies are recorded in `91_IMPLEMENTATION_PLAN.md`, T5a3p0
 (PF1-PF7). The amendments below approve external conformance data, effective-

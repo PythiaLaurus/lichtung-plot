@@ -38,16 +38,14 @@
 //! ```compile_fail
 //! use lichtung_plot::layout::Layout;
 //! ```
+//!
+//! Alpha inputs are exported from the root; internal targets and preparation stay private:
+//! ```compile_fail
+//! use lichtung_plot::alpha::AlphaTarget;
+//! ```
 
 #![deny(missing_docs)]
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "private owned alpha inputs precede explicit bindings and actual mark consumers"
-    )
-)]
 mod alpha;
 mod builder;
 mod canvas;
@@ -75,6 +73,7 @@ pub mod stats;
 mod theme;
 mod values;
 
+pub use alpha::{AlphaEncoding, AlphaSemantics, AlphaValues};
 pub use builder::Plot;
 pub use canvas::{Canvas, CanvasCategoryLabels, TextPanel};
 pub use error::{Error, Result};

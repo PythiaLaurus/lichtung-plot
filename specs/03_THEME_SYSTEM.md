@@ -320,15 +320,27 @@ Alpha values are never multiplied. Fill and stroke are independent paints. SVG
 emits the one alpha through the property appropriate to the paint and does not
 combine RGBA alpha with element-wide opacity.
 
-During the private T5c migration, a retained exact `f64` point/fill opacity
+Historically, during the private T5c migration, a retained exact `f64` point/fill opacity
 input passes its existing finite/range validation, then resolves once to a
 `u8` alpha by nearest-even rounding of `opacity * 255`. That alpha replaces
 the complete fill-paint alpha, including for an exact RGB color; it never
 multiplies the theme alpha or affects an independent outline/stroke. This
 quantization intentionally changes intermediate SVG/PNG bytes for values that
-cannot be expressed as 8-bit alpha. T6 replaces the public legacy input
-with the complete `Color`/alpha controls; it does not re-quantize retained
+cannot be expressed as 8-bit alpha. T6 has replaced that public legacy input
+with complete `Color`/alpha controls; current code does not re-quantize retained
 marks or introduce a second paint route.
+
+Explicit data-alpha inputs are now separate Plot-local encodings, never Theme
+fields or opaque color-scale stops. `point_alpha`, `line_alpha` and `fill_alpha`
+replace the selected scientific component's final byte after normal role/exact
+resolution. Outlines/text/layers retain independent ownership. Each target stores
+one concrete `AlphaEncoding`, default Theme; reset and replacement do not depend
+on call order with themes or color scales. `AlphaValues` eagerly materializes
+caller-computed or explicitly declared Linear/Log/custom/category/threshold rules.
+Observation, exact series/aggregate and exact-bin units never imply a row reduction.
+Declared explanation samples use source legend-label RGB independently of its text
+alpha; existing context keys neutralize data-bound alpha to 255. Complete recipes
+and actual members remain in prepared/cache/feedback identity even when Hidden.
 
 Canvas and panel surfaces accept RGBA `Color`. The SVG backend does not insert a
 hardcoded white root. Transparent SVG and PNG output preserves the resolved
@@ -443,9 +455,9 @@ Canvas legend policy owns composition behavior:
   an explicit per-plot legend position rejects under `Shared` because that
   position cannot be honored.
 
-One shared Canvas guide is either discrete or continuous; mixing the two kinds
-rejects during Canvas preflight. The T6 discrete target supports typed sections
-under one measured guide; continuous guides are not sectioned. A continuous
+One shared Canvas guide contains typed symbol/continuous-color/alpha sections
+under one measured frame. Categorical-RGB and continuous-color contributors remain
+incompatible, while continuous color plus alpha is admitted. A continuous
 contributor carries its typed field identity, scale kind, resolved
 title, gradient stops, diverging center when present, automatic-domain data
 envelope or exact caller domain, and missing-value block. Contributors merge
@@ -660,11 +672,10 @@ fallback outside the supplied stack, or alternate renderer after an error.
 The first public customization milestone includes the component and scale roles
 named in this specification. It does not include CSS selectors, string-keyed
 properties, callbacks, dynamic theme extensions, process-global defaults,
-backend dash strings, font loading, data-mapped alpha, arbitrary blend modes,
+backend dash strings, font loading, arbitrary blend modes,
 animation, or one theme component per plot family. Such features require a new
 canonical contract and are not reserved by placeholder API.
 
-Data alpha has subsequently been admitted to the implementation phases in
-`97_ALPHA_AND_TICK_EXTENSION_PLAN.md`. That planned extension does not make it a
-current Theme field or paint API; the owning implementation must update this
-contract atomically and preserve one final alpha per independent paint.
+Data alpha is a current Plot-local API documented in `../docs/public-data-alpha.md`;
+its independent encodings preserve one final alpha per paint without widening
+Theme construction or admitting render-time application callbacks.

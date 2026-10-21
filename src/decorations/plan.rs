@@ -310,6 +310,13 @@ pub(crate) fn plan_panel_with_context(
     use crate::layout::fit::FitOutcome;
     use crate::layout::kernel::TrialOutcome;
 
+    // Native color families place the common descriptor in their own measured
+    // right track. Transporting that descriptor does not create an outer guide.
+    let discrete_guide = if matches!(kind, PlotKind::Heatmap | PlotKind::Beeswarm) {
+        None
+    } else {
+        discrete_guide
+    };
     let minimum = plot.intrinsic_body_minimum(context.theme)?;
     let position = plot.legend_position_spec();
     let bypass_outside_guide = role == LegendRole::Suppressed
@@ -823,7 +830,8 @@ fn plan_panel_attempt(
             FitOutcome::Miss(failure) => return Ok(FitOutcome::Miss(failure)),
         }
     };
-    let visible = role == LegendRole::Panel
+    let visible = discovered.decoration_mode == crate::spec::DecorationMode::Standard
+        && role == LegendRole::Panel
         && planning_plot.legend_policy_spec() != LegendPolicy::Hidden
         && discrete_guide.is_some();
     let legend = if let Some(guide) = assigned_guide {

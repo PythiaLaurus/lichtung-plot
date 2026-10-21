@@ -16,7 +16,8 @@ exclusive Discrete/Continuous descriptor and GuideKind are retired. Declared alp
 sections now consume actual members/glyphs from all 49 components
 (`../docs/declared-alpha-sections.md`). Visibility-independent actual alpha sources,
 scoped child/height identity and native/standard feedback are complete in
-`../docs/alpha-parent-identity.md`; public cutover remains in spec97.
+`../docs/alpha-parent-identity.md`. Public alpha values and the 49 attachments are
+documented in `../docs/public-data-alpha.md`.
 
 ## 1. Authority And Boundary
 
@@ -80,9 +81,11 @@ impl Canvas {
 
 The enum is a crate-root public policy. Backend styles, section
 records, provenance, layout constraints and inspection of prepared guides stay
-private. The existing sealed Legend capability is not widened, and erased Any
-does not acquire the setter. Both Plot and Canvas store a concrete Combined
+private. The sealed Legend capability covers all 25 exact families, including
+native color/alpha guides; erased Any does not acquire the setter. Both Plot and Canvas store a concrete Combined
 default; no optional inheritance or automatic composition mode exists.
+Native Heatmap/Beeswarm retain their right track and Matrix its trailing grid track.
+The common outer panel path does not place a second native descriptor.
 
 | Rendering owner | Effective composition and guide appearance |
 | --- | --- |
@@ -382,8 +385,9 @@ marks, but it must not invoke a panel measurement or font lookup to prepare keys
 
 ## 4. Exhaustive Producer Census And Truthful Composition
 
-The live sealed Legend set has exactly **17** concrete kinds. The table below
-lists each once. Component counts describe one source key; entry counts follow
+The existing category/literal RGB-key set has exactly **17** concrete kinds. The
+sealed Legend capability now covers all 25 exact kinds for declared alpha as well.
+The table below lists the existing RGB-key producers once. Component counts describe one source key; entry counts follow
 retained semantic identities and deduplication, not the number of source rows.
 Current private role names map to spec94's complete role paths at foundation
 cutover; their present numeric defaults are evidence, not new layout constants.

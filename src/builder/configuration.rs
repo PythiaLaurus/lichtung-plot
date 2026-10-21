@@ -613,6 +613,10 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     /// Set the legend visibility and placement policy.
+    ///
+    /// Native Heatmap/Beeswarm keep their right guide track and Matrix its trailing
+    /// grid track; Hidden suppresses their guide. Standard panels use the selected
+    /// inside/outside edge. All exact families can explain declared data alpha.
     #[must_use]
     pub fn legend(mut self, policy: LegendPolicy) -> Self
     where
@@ -637,42 +641,10 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// # let _ = plot;
     /// # Ok::<(), lichtung_plot::Error>(())
     /// ```
-    /// Erased plots and families without discrete legends do not expose this setter:
+    /// All exact families can explain declared alpha. Erased plots do not expose this setter:
     /// ```compile_fail
     /// use lichtung_plot::{LegendComposition, Plot};
     /// fn erased(plot: Plot) { let _ = plot.legend_composition(LegendComposition::Separate); }
-    /// ```
-    /// ```compile_fail
-    /// use lichtung_plot::{kind, LegendComposition, Plot};
-    /// fn unsupported(plot: Plot<kind::Heatmap>) { let _ = plot.legend_composition(LegendComposition::Separate); }
-    /// ```
-    /// ```compile_fail
-    /// use lichtung_plot::{kind, LegendComposition, Plot};
-    /// fn unsupported(plot: Plot<kind::Beeswarm>) { let _ = plot.legend_composition(LegendComposition::Separate); }
-    /// ```
-    /// ```compile_fail
-    /// use lichtung_plot::{kind, LegendComposition, Plot};
-    /// fn unsupported(plot: Plot<kind::Histogram>) { let _ = plot.legend_composition(LegendComposition::Separate); }
-    /// ```
-    /// ```compile_fail
-    /// use lichtung_plot::{kind, LegendComposition, Plot};
-    /// fn unsupported(plot: Plot<kind::Qq>) { let _ = plot.legend_composition(LegendComposition::Separate); }
-    /// ```
-    /// ```compile_fail
-    /// use lichtung_plot::{kind, LegendComposition, Plot};
-    /// fn unsupported(plot: Plot<kind::PointInterval>) { let _ = plot.legend_composition(LegendComposition::Separate); }
-    /// ```
-    /// ```compile_fail
-    /// use lichtung_plot::{kind, LegendComposition, Plot};
-    /// fn unsupported(plot: Plot<kind::Coefficient>) { let _ = plot.legend_composition(LegendComposition::Separate); }
-    /// ```
-    /// ```compile_fail
-    /// use lichtung_plot::{kind, LegendComposition, Plot};
-    /// fn unsupported(plot: Plot<kind::Forest>) { let _ = plot.legend_composition(LegendComposition::Separate); }
-    /// ```
-    /// ```compile_fail
-    /// use lichtung_plot::{kind, LegendComposition, Plot};
-    /// fn unsupported(plot: Plot<kind::Waterfall>) { let _ = plot.legend_composition(LegendComposition::Separate); }
     /// ```
     #[must_use]
     pub const fn legend_composition(mut self, composition: crate::LegendComposition) -> Self

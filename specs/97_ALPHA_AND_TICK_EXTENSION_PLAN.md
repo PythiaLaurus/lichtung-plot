@@ -5,8 +5,8 @@ bounded sources, public cutover and focused parent/root/frozen-output closure.
 Data-alpha source-backed design, private owned mapping values and explicit
 binding/source-slot preparation and all 49 actual mark consumers are COMPLETE;
 guide provenance/projection and actual declared explanations are COMPLETE;
-parent/feedback closure is COMPLETE. Public cutover and integrated release
-verification remain PENDING.
+parent/feedback closure and public cutover are COMPLETE. Integrated output/release
+verification remains PENDING.
 
 ## Authority And Recorded Decision
 
@@ -173,7 +173,8 @@ three independent paint targets and 49 family/component attachments, numerical
 rules, immutable custom construction and declared explanations. It also owns the
 unified guide-envelope replacement, native color-plus-alpha composition boundary,
 actual producer/row-slot census, parent/key/font/feedback transport and public
-migration/deletion obligations. It is a design gate, not a current alpha API.
+migration/deletion obligations. Current exported constructors, sealed attachments
+and owner semantics are documented in `../docs/public-data-alpha.md`.
 
 ## Execution And Verification
 
@@ -201,7 +202,7 @@ and focused closure; split behavioral leaves further when needed.
 | T6D2a2 | COMPLETE | T6D2a1 | Sole PreparedGuide with typed symbol/color bodies; remove exclusive descriptors/kinds and duplicated continuous frames, measurement/census/Canvas routes; `../docs/unified-guide-envelope.md` |
 | T6D2a3 | COMPLETE | T6D2a2 | Actual members/glyphs from all 49 components, declared Continuous/Categorical/Threshold symbol sections, masks and Shared recipe/member compatibility; `../docs/declared-alpha-sections.md` |
 | T6D2b | COMPLETE | T6D2a | Visibility-independent actual alpha sources in scoped child/height identities and common native/standard feedback; `../docs/alpha-parent-identity.md` |
-| T6D3 | PENDING | T6D2 | Atomic public API/caller/current-contract migration |
+| T6D3 | COMPLETE | T6D2 | Root AlphaValues/AlphaEncoding/AlphaSemantics, 49 sealed attachments, 25 Legend gates, caller/example/spec migration; `../docs/public-data-alpha.md` |
 | T6D4 | PENDING | T6D3 | Full admitted-family/parent/root/frozen-output evidence |
 
 The observation-consumer leaf closes Scatter, Qq and Regression in
@@ -253,8 +254,9 @@ declared explanations for all 49 components, including native color-plus-alpha,
 supplied zero-row geometry, scoped series, complete Shared recipes and cache
 identity. `../docs/alpha-parent-identity.md` completes visibility-independent actual
 source identity, scoped child/height reuse and common selected-panel feedback for
-native and standard owners. Public cutover and integrated output/release closure
-remain subsequent obligations.
+native and standard owners. `../docs/public-data-alpha.md` records the public
+constructors, exact 17/17/15 target sets, 25 Legend gates and actual example/output
+verification. Integrated all-owner/root and release closure remain subsequent.
 
 Do not start a code leaf while its exact owning design is still pending. Use modern
 Rust module layout, the standalone offline renderer and existing pinned dependencies.

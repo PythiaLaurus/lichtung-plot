@@ -7,7 +7,8 @@ The subsequent DF3/DF4 closure review admitted data alpha and numeric target/max
 tick selection in `97_ALPHA_AND_TICK_EXTENSION_PLAN.md`; numeric selection source,
 public cutover and focused parent/output closure are complete. Data-alpha owned
 values, explicit bindings and all 49 point/stroke/fill consumers are complete;
-unified guides and alpha public cutover remain in progress. Fully
+unified guides, complete parent identities and alpha public cutover are complete;
+integrated all-owner/root and release closure remains. Fully
 caller-decided legends join DF11's post-first-release AI-workflow review.
 
 **Current execution checkpoint:** the user-authorized resumption completed the
@@ -206,7 +207,7 @@ labels, not existing commits.
 | T6N | COMPLETE | T6C | Unified scientific numeric formatting; leaves below |
 | T6L | COMPLETE | T6N | One section-aware discrete guide; focused closure in `docs/section-composition-acceptance.md` |
 | T6T | COMPLETE | T6L | TickGeneration design/source/public cutover and focused parent/root/output closure; `docs/public-tick-generation.md` / `docs/tick-generation-parent-closure.md` |
-| T6D | IN PROGRESS | T6T | Private values/bindings, all 49 consumers, unified declared explanations and complete parent/cache/feedback identity complete; `docs/declared-alpha-sections.md` / `docs/alpha-parent-identity.md`; public cutover and integrated output/release remain in spec97 |
+| T6D | IN PROGRESS | T6T | Values/bindings, all 49 consumers, unified guides, complete parent identity and public API complete; `docs/public-data-alpha.md`; integrated all-owner/root and release evidence remains in spec97 |
 | T6Z | PENDING | T6D | Integrated contract and phase closure |
 | T6Z1 | PENDING | T6D | Complete public examples/current-spec and property/consumer census reconciliation; `docs(api): reconcile scientific plotting contracts` |
 | T6Z2 | COMPLETE | User closure review | User-approved DF3/DF4 admission in spec97, residual DF4 checkpoint and fully caller-decided legends in DF11 |

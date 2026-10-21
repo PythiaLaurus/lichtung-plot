@@ -1070,6 +1070,16 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
         assert!(std::str::from_utf8(&preserve)
             .unwrap()
             .contains("viewBox=\"0 0 1200 900\""));
+        if matches!(kind, PlotKind::Heatmap | PlotKind::Beeswarm) {
+            assert_eq!(
+                std::str::from_utf8(&preserve)
+                    .unwrap()
+                    .matches("<linearGradient")
+                    .count(),
+                1,
+                "{kind:?}: one native guide placement owner"
+            );
+        }
         let outlined = scene.svg_with_text_as_paths().unwrap();
         assert!(!std::str::from_utf8(&outlined).unwrap().contains("<text"));
         let png = scene

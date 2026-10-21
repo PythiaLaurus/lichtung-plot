@@ -1,10 +1,11 @@
 # Discrete legend composition
 
 `LegendComposition` is a crate-root closed policy with `Combined` (default) and
-`Separate`. Attach it through consuming `Plot::legend_composition` on the existing
-seventeen discrete-Legend families, or `Canvas::legend_composition` for Shared.
+`Separate`. Attach it through consuming `Plot::legend_composition` on all 25 exact
+families, or `Canvas::legend_composition` for Shared.
 Each setter replaces only that selection, independently of theme, labels,
-visibility, placement and sizing call order.
+visibility, placement and sizing call order. All families can now explain declared
+data alpha; see `public-data-alpha.md` for the 49 actual component attachments.
 
 ## Meaning and ownership
 
@@ -31,11 +32,15 @@ Literal Dumbbell/Regression/sign keys remain literal; labeled Line PointLayers
 occupy the final `series` section. Raw identities remain distinct from aliases.
 
 Group-style projection neutralizes only hue-mapped RGB to the originating Plot's
-legend-label text RGB, preserving component alpha, presence, fixed/exact paints,
+legend-label text RGB, preserving independent role/exact alpha, presence, fixed/exact paints,
 outlines and geometry. The text role's alpha is not applied to the key. Hue
 projection neutralizes only mapped Interaction group shape/pattern to Circle/Solid.
 Shared Canvas text/chrome uses the Canvas theme; complete keys retain their source
 Plot paints and neutral RGB.
+
+Both compositions neutralize data-bound target alpha to 255 in existing context
+keys. Declared alpha explanations follow symbols and optional continuous-color
+content inside the same frame; Undeclared bytes do not invent an explanation.
 
 | Owner | Effective selection |
 | --- | --- |
@@ -64,11 +69,9 @@ let canvas = Canvas::grid(1, 2)?
 # Ok::<(), lichtung_plot::Error>(())
 ```
 
-The concrete Plot families with the setter are Scatter, Density, Line, Trajectory,
-LinePath, Interaction, Dumbbell, Bar, HorizontalBar, StackedBar,
-StackedHorizontalBar, Boxplot, Violin, Raincloud, Regression, Marginal and Matrix.
-Histogram, Qq, PointInterval, Coefficient, Forest, Heatmap, Beeswarm, Waterfall and
-erased Any have no such setter. Continuous guides retain their own representation.
+All 25 exact families expose the setter, including Histogram, Qq, PointInterval,
+Coefficient, Forest, Heatmap, Beeswarm and Waterfall after declared-alpha admission.
+Erased Any has no setter. Continuous content and symbols share one PreparedGuide.
 The enum moved from private semantic preparation into the existing public policy
 owner; the former private enum implementation/path is removed.
 
@@ -94,7 +97,7 @@ text/glyph ink participates in fit. Frozen SVG/PNG reuse the selected
 `../specs/08_DISCRETE_GUIDES.md` and the preceding semantic, stacked measurement,
 exact-reuse, effective-owner and routed-dependency evidence documents.
 
-## Verification
+## Historical Composition Cutover Verification
 
 The existing all-family constructor/capability inventory now attaches Separate to
 all seventeen admitted markers while preserving exact kind/erasure checks. Nine
@@ -121,3 +124,7 @@ owning titles in semantic order. Logs are `/tmp/opencode/public-guides-*.log`.
 
 The full all-owner Separate acceptance/release matrix and integrated phase closure
 remain pending. This public cutover does not claim a full-suite or release gate.
+
+The eight former concrete-family negatives above are historical evidence. The
+alpha public cutover migrates them to the all-25-family positive inventory and
+retains Any as negative; `public-data-alpha.md` owns the current boundary.

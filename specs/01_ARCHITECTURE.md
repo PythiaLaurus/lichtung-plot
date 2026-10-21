@@ -199,15 +199,29 @@ Theme components or Canvas overrides.
 defaults and selective caller overrides.
 
 Crate-root `LegendComposition::{Combined,Separate}` selects semantic sections of
-one discrete guide, independently of appearance and visibility/placement. The
-existing seventeen `kind::Legend` families expose the Plot setter; Canvas exposes
+one guide, independently of appearance and visibility/placement. All twenty-five
+exact `kind::Legend` families expose the Plot setter; Canvas exposes
 its Shared selection. Combined is the default. Standalone/facets use the owning
 Plot, PerPlot each Plot, and Shared the Canvas for all contributions without
 mutating stored child selections. Effective sections and producer-owned keys are
 prepared before fonts and retained through exact measurement/dependency identity
 and one frozen draw plan. `08_DISCRETE_GUIDES.md` defines truthful factorization,
-ordering and unsupported independent-pair refusal. Continuous, Any and parent
-capabilities do not expand.
+ordering and unsupported independent-pair refusal. Any and parent capabilities
+do not expand. Native continuous-color content and alpha symbols use the same
+descriptor, finite measurement, font census and frozen draw plan.
+
+Opaque crate-root `AlphaValues` and `AlphaEncoding`, with closed `AlphaSemantics`,
+own eager immutable mappings and explicit semantic-unit bindings. Three independent
+consuming Plot setters replace point-fill, admitted scientific-stroke and admitted
+area/body/cell alpha through sealed PointAlpha/LineAlpha/FillAlpha sets of
+17/17/15 families. Theme resets one target; Single explicitly broadcasts; observation
+slots, keyed actual series/aggregates and exact bins do not reduce into each other.
+Normal RGB/role/exact paint resolves before byte replacement. No callback survives
+construction, and zero preserves scientific membership. Declared mappings alone
+add alpha explanations; Hidden and Undeclared retain complete prepared identity
+without guide text. Scoped child/height and feedback equality retain complete
+inputs, declarations and actual members independently of extents/output bytes.
+The public contract and full component census are in `../docs/public-data-alpha.md`.
 
 ## Excluded Responsibilities
 

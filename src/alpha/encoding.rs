@@ -6,8 +6,30 @@ use super::{collect_input, numeric_key, validated_name, AlphaValues};
 use crate::data::source::{collect_source, copy_source_string, sort_source_by, source_arc};
 use crate::{Bounds, CategoryValues, Error, Result};
 
+/// One complete explicit alpha-unit binding for a Plot paint target.
+///
+/// Default is [`Self::theme`]. Observation values align with all original input
+/// slots, independently of diagnostic [`crate::SourceRows`] IDs. Series/aggregate
+/// values are explicitly keyed; they are never reduced from observation alpha.
+/// Each actual unit must resolve before fonts, even when its alpha is zero.
+///
+/// ```
+/// use lichtung_plot::{AlphaEncoding, AlphaValues, CategoryValues};
+/// let strokes = AlphaEncoding::keyed(
+///     [CategoryValues::new("series", ["control", "treated"])?],
+///     AlphaValues::new("reliability", [128, 230])?,
+/// )?;
+/// assert!(!strokes.is_theme());
+/// assert_eq!(strokes.values().unwrap().get(1), Some(230));
+/// # Ok::<(), lichtung_plot::Error>(())
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::AlphaEncoding;
+/// fn private(value: AlphaEncoding) { let _ = value.binding; }
+/// ```
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct AlphaEncoding {
+pub struct AlphaEncoding {
     binding: Binding,
 }
 
@@ -60,19 +82,24 @@ pub(crate) struct ResolvedAlpha {
 }
 
 impl AlphaEncoding {
-    pub(crate) const fn theme() -> Self {
+    /// Reset a target to its independently owned normal role/exact paint alpha.
+    #[must_use]
+    pub const fn theme() -> Self {
         Self {
             binding: Binding::Theme,
         }
     }
 
-    pub(crate) fn observations(values: AlphaValues) -> Self {
+    /// Bind bytes to every original observation/record slot, including filtered rows.
+    #[must_use]
+    pub fn observations(values: AlphaValues) -> Self {
         Self {
             binding: Binding::Observations(values),
         }
     }
 
-    pub(crate) fn single(values: AlphaValues) -> Result<Self> {
+    /// Explicitly broadcast exactly one value to every actual target unit.
+    pub fn single(values: AlphaValues) -> Result<Self> {
         if values.len() != 1 {
             return Err(Error::Data(
                 "single alpha requires exactly one value".into(),
@@ -83,7 +110,14 @@ impl AlphaEncoding {
         })
     }
 
-    pub(crate) fn keyed(
+    /// Bind explicit actual series/aggregate tuples to aligned values.
+    ///
+    /// Require at least one unique named, nonnull selector column and unique
+    /// complete tuples. Column order is canonicalized by raw field name. During
+    /// attachment, fields must include all actual unit keys and may additionally
+    /// select owning facets. Lookup is exact, without partial-key fallback; unused
+    /// pooled tuples create no marks, guide text or font requirements.
+    pub fn keyed(
         keys: impl IntoIterator<Item = CategoryValues>,
         values: AlphaValues,
     ) -> Result<Self> {
@@ -107,11 +141,17 @@ impl AlphaEncoding {
         })
     }
 
+    /// Bind exact Histogram intervals and optional owning facet keys to values.
+    ///
+    /// Each pair must be finite lower < upper; bounds, facets and alpha lengths
+    /// must agree. Complete interval/facet keys must be unique. Signed zero has one
+    /// identity. Actual prepared edges must match exactly; no sample reduction,
+    /// edge adjustment or approximate lookup is performed.
     #[expect(
         clippy::needless_pass_by_value,
-        reason = "the consuming final constructor is staged privately before public cutover"
+        reason = "the public constructor consumes exact bounds while retaining normalized interval keys"
     )]
-    pub(crate) fn bins(
+    pub fn bins(
         bounds: Bounds,
         facets: impl IntoIterator<Item = CategoryValues>,
         values: AlphaValues,
@@ -159,11 +199,15 @@ impl AlphaEncoding {
         })
     }
 
-    pub(crate) const fn is_theme(&self) -> bool {
+    /// Whether this binding uses the normal role/exact alpha without mapped values.
+    #[must_use]
+    pub const fn is_theme(&self) -> bool {
         matches!(self.binding, Binding::Theme)
     }
 
-    pub(crate) const fn values(&self) -> Option<&AlphaValues> {
+    /// Complete owned values, or None for Theme.
+    #[must_use]
+    pub const fn values(&self) -> Option<&AlphaValues> {
         match &self.binding {
             Binding::Theme => None,
             Binding::Observations(values)

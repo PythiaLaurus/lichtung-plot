@@ -61,13 +61,180 @@ impl<K: crate::kind::Marker> Plot<K> {
         &self.alpha
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "private attachment precedes sealed public alpha cutover"
-        )
-    )]
+    /// Replace point-fill alpha using original observations or explicit Single.
+    ///
+    /// Outlines and supplemental layers remain independently owned. Repeated
+    /// calls replace the complete target; [`AlphaEncoding::theme`] resets it.
+    /// Resolve normal RGB/role/exact paint first, then replace alpha, never multiply.
+    /// Declared mappings add a common-guide section; arbitrary bytes do not.
+    ///
+    /// ```
+    /// use lichtung_plot::{AlphaEncoding, AlphaValues, NumericValues, Plot};
+    /// let plot = Plot::scatter(NumericValues::new("x", [0.0, 1.0]),
+    ///     NumericValues::new("y", [1.0, 0.0]))
+    ///     .point_alpha(AlphaEncoding::observations(AlphaValues::linear(
+    ///         NumericValues::new("confidence", [0.2, 0.8]), (0.0, 1.0), (0, 255),
+    ///     )?));
+    /// # let _ = plot;
+    /// # Ok::<(), lichtung_plot::Error>(())
+    /// ```
+    ///
+    /// ```compile_fail
+    /// use lichtung_plot::{AlphaEncoding, Plot};
+    /// fn erased(plot: Plot) { let _ = plot.point_alpha(AlphaEncoding::theme()); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::Density>) { let _ = plot.point_alpha(AlphaEncoding::theme()); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::Histogram>, alpha: AlphaEncoding) { let _ = plot.point_alpha(alpha); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::Heatmap>, alpha: AlphaEncoding) { let _ = plot.point_alpha(alpha); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::Bar>, alpha: AlphaEncoding) { let _ = plot.point_alpha(alpha); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::HorizontalBar>, alpha: AlphaEncoding) { let _ = plot.point_alpha(alpha); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::StackedBar>, alpha: AlphaEncoding) { let _ = plot.point_alpha(alpha); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::StackedHorizontalBar>, alpha: AlphaEncoding) { let _ = plot.point_alpha(alpha); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::Waterfall>, alpha: AlphaEncoding) { let _ = plot.point_alpha(alpha); }
+    /// ```
+    #[must_use]
+    pub fn point_alpha(self, alpha: AlphaEncoding) -> Self
+    where
+        K: crate::kind::PointAlpha,
+    {
+        self.with_alpha(AlphaTarget::Point, alpha)
+    }
+
+    /// Replace admitted scientific-stroke alpha using explicit actual-unit values.
+    ///
+    /// Qq/Regression/optional Histogram curves use Single; estimates and Dumbbell
+    /// use original records; paths/Density/Interaction use actual series; categorical
+    /// summaries use category/positioned-series aggregates. Unlisted references,
+    /// points, fills, outlines and supplemental layers retain their own paints.
+    /// Absent optional components still validate binding kind/schema before fonts.
+    ///
+    /// ```compile_fail
+    /// use lichtung_plot::{AlphaEncoding, Plot};
+    /// fn erased(plot: Plot) { let _ = plot.line_alpha(AlphaEncoding::theme()); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::Scatter>) { let _ = plot.line_alpha(AlphaEncoding::theme()); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::Heatmap>, alpha: AlphaEncoding) { let _ = plot.line_alpha(alpha); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::StackedBar>, alpha: AlphaEncoding) { let _ = plot.line_alpha(alpha); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::StackedHorizontalBar>, alpha: AlphaEncoding) { let _ = plot.line_alpha(alpha); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::Marginal>, alpha: AlphaEncoding) { let _ = plot.line_alpha(alpha); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::Matrix>, alpha: AlphaEncoding) { let _ = plot.line_alpha(alpha); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::Beeswarm>, alpha: AlphaEncoding) { let _ = plot.line_alpha(alpha); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::Waterfall>, alpha: AlphaEncoding) { let _ = plot.line_alpha(alpha); }
+    /// ```
+    #[must_use]
+    pub fn line_alpha(self, alpha: AlphaEncoding) -> Self
+    where
+        K: crate::kind::LineAlpha,
+    {
+        self.with_alpha(AlphaTarget::Line, alpha)
+    }
+
+    /// Replace admitted scientific area/body/cell fill alpha, independently of outlines.
+    ///
+    /// Histogram uses exact bins; Heatmap/Waterfall use original records; Line and
+    /// Density/native densities use actual series; categorical bodies use actual
+    /// aggregates; Regression bands use Single. Zero preserves scientific members.
+    /// Normal RGB/role/exact paint resolves before alpha replacement. Repeated calls
+    /// replace only this complete target; [`AlphaEncoding::theme`] resets it.
+    ///
+    /// ```compile_fail
+    /// use lichtung_plot::{AlphaEncoding, Plot};
+    /// fn erased(plot: Plot) { let _ = plot.fill_alpha(AlphaEncoding::theme()); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::Trajectory>) { let _ = plot.fill_alpha(AlphaEncoding::theme()); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::Scatter>, alpha: AlphaEncoding) { let _ = plot.fill_alpha(alpha); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::Qq>, alpha: AlphaEncoding) { let _ = plot.fill_alpha(alpha); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::PointInterval>, alpha: AlphaEncoding) { let _ = plot.fill_alpha(alpha); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::LinePath>, alpha: AlphaEncoding) { let _ = plot.fill_alpha(alpha); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::Interaction>, alpha: AlphaEncoding) { let _ = plot.fill_alpha(alpha); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::Coefficient>, alpha: AlphaEncoding) { let _ = plot.fill_alpha(alpha); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::Forest>, alpha: AlphaEncoding) { let _ = plot.fill_alpha(alpha); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::Dumbbell>, alpha: AlphaEncoding) { let _ = plot.fill_alpha(alpha); }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
+    /// fn unsupported(plot: Plot<kind::Beeswarm>, alpha: AlphaEncoding) { let _ = plot.fill_alpha(alpha); }
+    /// ```
+    #[must_use]
+    pub fn fill_alpha(self, alpha: AlphaEncoding) -> Self
+    where
+        K: crate::kind::FillAlpha,
+    {
+        self.with_alpha(AlphaTarget::Fill, alpha)
+    }
+
     pub(crate) fn with_alpha(mut self, target: AlphaTarget, encoding: AlphaEncoding) -> Self {
         self.alpha.set(target, encoding);
         self

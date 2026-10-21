@@ -172,8 +172,22 @@ impl Significance<crate::Pairwise> for Boxplot {}
 impl Significance<crate::Pairwise> for Violin {}
 impl Significance<crate::Pairwise> for Raincloud {}
 capability!(Legend, "Plot families that can produce a configurable legend." => [
-    Scatter, Density, Line, Trajectory, LinePath, Interaction, Dumbbell, Bar, HorizontalBar,
-    StackedBar, StackedHorizontalBar, Boxplot, Violin, Raincloud, Regression, Marginal, Matrix,
+    Scatter, Histogram, Density, Qq, PointInterval, Line, Trajectory, LinePath, Interaction,
+    Coefficient, Forest, Dumbbell, Heatmap, Bar, HorizontalBar, StackedBar,
+    StackedHorizontalBar, Boxplot, Violin, Raincloud, Regression, Marginal, Matrix,
+    Beeswarm, Waterfall,
+]);
+capability!(PointAlpha, "Plots that accept explicit observation alpha for actual point fills, independently of outlines and supplemental layers." => [
+    Scatter, Qq, PointInterval, Line, Trajectory, LinePath, Interaction, Coefficient, Forest,
+    Dumbbell, Boxplot, Violin, Raincloud, Regression, Marginal, Matrix, Beeswarm,
+]);
+capability!(LineAlpha, "Plots that accept explicit alpha for their admitted scientific strokes, using actual record, Single, series or aggregate units." => [
+    Histogram, Density, Qq, PointInterval, Line, Trajectory, LinePath, Interaction,
+    Coefficient, Forest, Dumbbell, Bar, HorizontalBar, Boxplot, Violin, Raincloud, Regression,
+]);
+capability!(FillAlpha, "Plots that accept explicit alpha for admitted area/body/cell fills, independently of outlines and supplemental layers." => [
+    Histogram, Density, Line, Heatmap, Bar, HorizontalBar, StackedBar, StackedHorizontalBar,
+    Boxplot, Violin, Raincloud, Regression, Marginal, Matrix, Waterfall,
 ]);
 capability!(RawOverlay, "Distribution plots that accept raw-observation overlays." => [
     Boxplot, Violin,

@@ -19,7 +19,13 @@ fn erased_plot_preserves_selected_theme_text_dimensions_and_output() {
     use lichtung_plot::{PlotKind, Theme};
 
     let (x, y) = fixture_values();
+    let alpha = lichtung_plot::AlphaValues::new(
+        "confidence",
+        (0..x.len()).map(|index| [0, 128, 230][index % 3]),
+    )
+    .unwrap();
     let exact = Plot::scatter(x, y)
+        .point_alpha(lichtung_plot::AlphaEncoding::observations(alpha))
         .theme(Theme::nature())
         .size(321, 234)
         .title("Erasure parity");
@@ -43,18 +49,24 @@ fn erased_plot_preserves_selected_theme_text_dimensions_and_output() {
 )]
 fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
     use lichtung_plot::{
-        kind, AxisScale, BarPointLayer, BarSpacing, Bounds, CategoricalColorScale, CategoryValues,
-        CoefficientInput, Color, ColorDomain, ContinuousColorScale, DumbbellEndpoints,
-        HeatmapAnnotations, HeatmapLayout, HistogramBins, HistogramComposite, HistogramDimensions,
-        HistogramGeometry, HistogramInput, HistogramStat, InteractionStyle, LinePathStyle,
-        NumericValues, OpaqueColor, PlotKind, PointLayer, QqLine, QualitativePalette,
-        RaincloudDimensions, RaincloudGeometry, RaincloudInput, RegressionBand, TickGeneration,
-        WaterfallLabels,
+        kind, AlphaEncoding, AxisScale, BarPointLayer, BarSpacing, Bounds, CategoricalColorScale,
+        CategoryValues, CoefficientInput, Color, ColorDomain, ContinuousColorScale,
+        DumbbellEndpoints, HeatmapAnnotations, HeatmapLayout, HistogramBins, HistogramComposite,
+        HistogramDimensions, HistogramGeometry, HistogramInput, HistogramStat, InteractionStyle,
+        LinePathStyle, NumericValues, OpaqueColor, PlotKind, PointLayer, QqLine,
+        QualitativePalette, RaincloudDimensions, RaincloudGeometry, RaincloudInput, RegressionBand,
+        TickGeneration, WaterfallLabels,
     };
 
-    fn exact<K: kind::ExactFamily>(plot: Plot<K>, expected: PlotKind) {
+    fn exact<K: kind::ExactFamily + kind::Legend>(plot: Plot<K>, expected: PlotKind) {
         assert_eq!(plot.kind(), expected);
-        assert_eq!(plot.erase().kind(), expected);
+        assert_eq!(
+            plot.legend(lichtung_plot::LegendPolicy::Hidden)
+                .legend_composition(lichtung_plot::LegendComposition::Separate)
+                .erase()
+                .kind(),
+            expected
+        );
     }
 
     fn categorical<K: kind::ExactFamily + kind::CategoricalScale + kind::Legend>(
@@ -96,12 +108,15 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
 
     categorical::<kind::Scatter>(
         Plot::scatter(numeric("x"), numeric("y"))
+            .point_alpha(AlphaEncoding::theme())
             .x_tick_generation(TickGeneration::target(5).unwrap())
             .y_tick_generation(TickGeneration::maximum(4).unwrap()),
         PlotKind::Scatter,
     );
     exact::<kind::Histogram>(
         Plot::histogram(HistogramInput::samples(numeric("value")))
+            .line_alpha(AlphaEncoding::theme())
+            .fill_alpha(AlphaEncoding::theme())
             .bins(HistogramBins::Count(4))
             .stat(HistogramStat::Density)
             .composite(HistogramComposite::HistogramOnly)
@@ -123,12 +138,16 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
     );
     categorical::<kind::Density>(
         Plot::density(numeric("value"))
+            .line_alpha(AlphaEncoding::theme())
+            .fill_alpha(AlphaEncoding::theme())
             .x_tick_generation(TickGeneration::target(5).unwrap())
             .y_tick_generation(TickGeneration::maximum(4).unwrap()),
         PlotKind::Density,
     );
     exact::<kind::Qq>(
         Plot::qq(numeric("value"))
+            .point_alpha(AlphaEncoding::theme())
+            .line_alpha(AlphaEncoding::theme())
             .reference_line(QqLine::Identity)
             .x_tick_generation(TickGeneration::target(5).unwrap())
             .y_tick_generation(TickGeneration::maximum(4).unwrap()),
@@ -136,11 +155,16 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
     );
     exact::<kind::PointInterval>(
         Plot::point_interval(category("category"), numeric("estimate"), bounds())
+            .point_alpha(AlphaEncoding::theme())
+            .line_alpha(AlphaEncoding::theme())
             .x_tick_generation(TickGeneration::target(5).unwrap()),
         PlotKind::PointInterval,
     );
     categorical::<kind::Line>(
         Plot::line(numeric("x"), numeric("y"))
+            .point_alpha(AlphaEncoding::theme())
+            .line_alpha(AlphaEncoding::theme())
+            .fill_alpha(AlphaEncoding::theme())
             .point_layer(
                 PointLayer::new(numeric("point x"), numeric("point y"))
                     .with_color(Color::rgb(1, 2, 3))
@@ -155,12 +179,16 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
     );
     categorical::<kind::Trajectory>(
         Plot::trajectory(numeric("x"), numeric("y"), category("group"))
+            .point_alpha(AlphaEncoding::theme())
+            .line_alpha(AlphaEncoding::theme())
             .x_tick_generation(TickGeneration::target(5).unwrap())
             .y_tick_generation(TickGeneration::maximum(4).unwrap()),
         PlotKind::Trajectory,
     );
     categorical::<kind::LinePath>(
         Plot::line_path(numeric("x"), numeric("y"), category("group"))
+            .point_alpha(AlphaEncoding::theme())
+            .line_alpha(AlphaEncoding::theme())
             .style(LinePathStyle::Hue)
             .x_tick_generation(TickGeneration::target(5).unwrap())
             .y_tick_generation(TickGeneration::maximum(4).unwrap()),
@@ -174,6 +202,8 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
             bounds(),
         )
         .connectors(false)
+        .point_alpha(AlphaEncoding::theme())
+        .line_alpha(AlphaEncoding::theme())
         .y_tick_generation(TickGeneration::maximum(4).unwrap())
         .styles([
             InteractionStyle::new("a").unwrap(),
@@ -187,12 +217,16 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
             CoefficientInput::estimates(numeric("estimate")),
         )
         .reference_line(0.0)
+        .point_alpha(AlphaEncoding::theme())
+        .line_alpha(AlphaEncoding::theme())
         .x_tick_generation(TickGeneration::target(5).unwrap())
         .significance([attached()]),
         PlotKind::Coefficient,
     );
     exact::<kind::Forest>(
         Plot::forest(category("term"), numeric("estimate"), bounds(), 1.0)
+            .point_alpha(AlphaEncoding::theme())
+            .line_alpha(AlphaEncoding::theme())
             .scale(AxisScale::Log10)
             .x_tick_generation(TickGeneration::target(5).unwrap()),
         PlotKind::Forest,
@@ -211,11 +245,14 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
             .unwrap(),
         )
         .legend_composition(lichtung_plot::LegendComposition::Separate)
+        .point_alpha(AlphaEncoding::theme())
+        .line_alpha(AlphaEncoding::theme())
         .x_tick_generation(TickGeneration::target(5).unwrap()),
         PlotKind::Dumbbell,
     );
     exact::<kind::Heatmap>(
         Plot::heatmap(category("x"), category("y"), numeric("fill"))
+            .fill_alpha(AlphaEncoding::theme())
             .layout(HeatmapLayout::Cartesian)
             .annotations(HeatmapAnnotations::Hidden)
             .continuous_color_scale(
@@ -226,6 +263,8 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
     );
     categorical::<kind::Bar>(
         Plot::bar(category("category"), BarInput::estimates(numeric("value")))
+            .line_alpha(AlphaEncoding::theme())
+            .fill_alpha(AlphaEncoding::theme())
             .y_tick_generation(TickGeneration::maximum(4).unwrap())
             .spacing(BarSpacing::Compact)
             .point_layer(bar_points.clone())
@@ -235,6 +274,8 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
     );
     categorical::<kind::HorizontalBar>(
         Plot::horizontal_bar(category("category"), BarInput::estimates(numeric("value")))
+            .line_alpha(AlphaEncoding::theme())
+            .fill_alpha(AlphaEncoding::theme())
             .x_tick_generation(TickGeneration::target(5).unwrap())
             .spacing(BarSpacing::Comfort)
             .point_layer(bar_points)
@@ -244,24 +285,32 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
     );
     categorical::<kind::StackedBar>(
         Plot::stacked_bar(category("category"), numeric("value"), category("group"))
+            .fill_alpha(AlphaEncoding::theme())
             .y_tick_generation(TickGeneration::maximum(4).unwrap())
             .significance([pairwise()]),
         PlotKind::StackedBar,
     );
     categorical::<kind::StackedHorizontalBar>(
         Plot::stacked_horizontal_bar(category("category"), numeric("value"), category("group"))
+            .fill_alpha(AlphaEncoding::theme())
             .x_tick_generation(TickGeneration::target(5).unwrap())
             .significance([pairwise()]),
         PlotKind::StackedHorizontalBar,
     );
     categorical::<kind::Boxplot>(
         Plot::boxplot(category("category"), numeric("value"))
+            .point_alpha(AlphaEncoding::theme())
+            .line_alpha(AlphaEncoding::theme())
+            .fill_alpha(AlphaEncoding::theme())
             .y_tick_generation(TickGeneration::maximum(4).unwrap())
             .significance([pairwise()]),
         PlotKind::Boxplot,
     );
     categorical::<kind::Violin>(
         Plot::violin(category("category"), numeric("value"))
+            .point_alpha(AlphaEncoding::theme())
+            .line_alpha(AlphaEncoding::theme())
+            .fill_alpha(AlphaEncoding::theme())
             .y_tick_generation(TickGeneration::maximum(4).unwrap())
             .significance([pairwise()]),
         PlotKind::Violin,
@@ -272,6 +321,9 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
             numeric("value"),
         ))
         .y_tick_generation(TickGeneration::maximum(4).unwrap())
+        .point_alpha(AlphaEncoding::theme())
+        .line_alpha(AlphaEncoding::theme())
+        .fill_alpha(AlphaEncoding::theme())
         .significance([pairwise()]),
         PlotKind::Raincloud,
     );
@@ -288,6 +340,9 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
     );
     exact::<kind::Regression>(
         Plot::regression(numeric("x"), numeric("y"))
+            .point_alpha(AlphaEncoding::theme())
+            .line_alpha(AlphaEncoding::theme())
+            .fill_alpha(AlphaEncoding::theme())
             .x_tick_generation(TickGeneration::target(5).unwrap())
             .y_tick_generation(TickGeneration::maximum(4).unwrap())
             .band(RegressionBand::Hidden)
@@ -296,16 +351,21 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
     );
     categorical::<kind::Marginal>(
         Plot::marginal(numeric("x"), numeric("y"))
+            .point_alpha(AlphaEncoding::theme())
+            .fill_alpha(AlphaEncoding::theme())
             .x_tick_generation(TickGeneration::target(5).unwrap())
             .y_tick_generation(TickGeneration::maximum(4).unwrap()),
         PlotKind::Marginal,
     );
     categorical::<kind::Matrix>(
-        Plot::matrix(vec![numeric("x"), numeric("y")]),
+        Plot::matrix(vec![numeric("x"), numeric("y")])
+            .point_alpha(AlphaEncoding::theme())
+            .fill_alpha(AlphaEncoding::theme()),
         PlotKind::Matrix,
     );
     exact::<kind::Beeswarm>(
         Plot::beeswarm(category("category"), numeric("value"), numeric("color"))
+            .point_alpha(AlphaEncoding::theme())
             .x_tick_generation(TickGeneration::target(5).unwrap())
             .continuous_color_scale(
                 ContinuousColorScale::sequential(None, Some(ColorDomain::exact(0.0, 3.0).unwrap()))
@@ -315,6 +375,7 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
     );
     exact::<kind::Waterfall>(
         Plot::waterfall(category("label"), numeric("delta"), 0.0)
+            .fill_alpha(AlphaEncoding::theme())
             .x_tick_generation(TickGeneration::target(5).unwrap())
             .total_labels(WaterfallLabels::new("Base", "Total").unwrap()),
         PlotKind::Waterfall,

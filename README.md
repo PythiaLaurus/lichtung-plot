@@ -70,7 +70,7 @@ Categorical mappings use `CategoricalColorScale` with an ordered
 `QualitativePalette` or exact raw-key `CategoricalColorMap`. Heatmap and Beeswarm
 both accept one `ContinuousColorScale`, containing kind, optional gradient and
 optional exact `ColorDomain`. Data-scale colors use opaque `OpaqueColor`; mark
-roles supply alpha independently. See [complete theme and scale
+roles and explicit data-alpha inputs supply alpha independently. See [complete theme and scale
 construction](docs/complete-theme-foundations.md).
 
 ## Discrete Legend Sections
@@ -94,12 +94,48 @@ let plot = Plot::scatter(
 
 Explicitly styled Interaction group/hue mappings produce group-style and hue-color
 sections. Unsupported independent pairs refuse before fonts; same-field channels
-stay joint. Sections preserve source mark geometry and alpha and do not invent
+stay joint. Sections preserve source mark geometry and independent role/exact alpha and do not invent
 unobserved combinations. Standalone/facets use the Plot selection, PerPlot uses
 each child's, and Shared uses `Canvas::legend_composition` for every contributor.
 Hidden skips guide-only semantics. Theme, visibility and placement keep their own
 setters. See [composition and ownership](docs/public-legend-composition.md) and
 [`examples/06_legend_sections.rs`](examples/06_legend_sections.rs).
+
+## Data Alpha
+
+`point_alpha`, `line_alpha` and `fill_alpha` replace only the admitted scientific
+component's alpha byte, after normal color/role/exact paint resolution. Outlines,
+text and supplemental layers retain their own paints. Zero preserves scientific
+membership; it does not filter observations or change statistics.
+
+```rust
+use lichtung_plot::{AlphaEncoding, AlphaValues, NumericValues, Plot};
+
+let plot = Plot::scatter(
+    NumericValues::new("x", [0.0, 1.0, 2.0]),
+    NumericValues::new("y", [1.0, 0.5, 1.5]),
+).point_alpha(AlphaEncoding::observations(AlphaValues::linear(
+    NumericValues::new("confidence", [0.0, 0.5, 1.0]),
+    (0.0, 1.0), (0, 255),
+)?));
+# let _ = plot;
+# Ok::<(), lichtung_plot::Error>(())
+```
+
+Observations align with complete original slots. Series/aggregate geometry instead
+uses explicit `AlphaEncoding::keyed` values; Histogram fills use exact `bins`, and
+`single` explicitly broadcasts one value. There is no implicit row reduction.
+`AlphaValues::new` accepts arbitrary bytes without explanation. `linear`, `log10`,
+`continuous`, `categorical` and `threshold` explicitly declare mapping semantics.
+Custom functions execute during construction and are never retained. `select`
+keeps a complete pooled declaration for compatible Shared guides. Repeated setters
+replace the complete target; `AlphaEncoding::theme()` resets it.
+
+Declared mappings add numeric/category/interval symbol sections after existing
+symbols and continuous-color content, inside the same guide frame. Existing
+group/hue keys neutralize data-bound alpha to 255. See [units, mappings and family
+capabilities](docs/public-data-alpha.md) and
+[`examples/08_data_alpha.rs`](examples/08_data_alpha.rs).
 
 ## Exact Element Paint
 

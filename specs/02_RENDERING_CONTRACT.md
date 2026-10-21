@@ -290,6 +290,9 @@ Plot legend state is one `LegendPolicy`: automatic plot-family behavior,
 hidden, or explicitly visible at one `LegendPosition`. Visibility and placement
 are not independently configurable. Same-corner inside positions with different
 edge names intentionally select different data-clearance edges.
+Native Heatmap/Beeswarm retain their measured right guide track, and Matrix its
+trailing grid track; Hidden suppresses the native guide. Transporting a native
+descriptor for identity/census never creates another outer panel placement.
 
 Legend entries preserve the visible family mark. Point presence and outline,
 line presence and pattern, and fill presence and opacity match the geometry that
@@ -314,19 +317,54 @@ sections. Only explicitly configured Interaction group styles supply independent
 group-style mappings; unsupported independent pairs refuse before fonts rather
 than inventing a representative key. Same-field channels remain complete joint
 keys. Group projections neutralize only mapped hue RGB to the source Plot's
-legend-label RGB, preserving original component alpha and fixed/exact paint;
+legend-label RGB, preserving independent role/exact alpha and fixed/exact paint;
 hue projections neutralize only mapped Interaction shape/pattern to Circle/Solid.
-Scientific marks, membership, domains and sparse topology are unchanged.
+Scientific marks, membership, domains and sparse topology are unchanged. Both
+compositions independently neutralize a data-bound target's context-key alpha to
+255, including Undeclared inputs, instead of selecting one observation's alpha.
 
 Plot's Legend-gated `legend_composition` and Canvas's setter default to Combined
 and replace only their own selection. Standalone/facets use the owning Plot,
 PerPlot each Plot, and Shared the Canvas selection for every contribution.
 Stored child selections do not conflict under Shared and remain available when
 returning to PerPlot. Hidden skips guide-only semantics/fonts while keeping
-scientific domain validation. All-continuous Canvas guides ignore composition;
-discrete/continuous mixing remains rejected. Final descriptor preorder supplies
+scientific domain/binding validation. All-continuous Canvas guides ignore composition;
+categorical-RGB/continuous-color Shared mixing remains rejected. Continuous color
+and declared alpha symbols can coexist in the common envelope. Final descriptor preorder supplies
 fonts, natural/assigned flow, exact scoped reuse and one frozen `LegendDrawPlan`.
 See `08_DISCRETE_GUIDES.md` for the complete section contract.
+
+## Explicit Data Alpha
+
+`AlphaValues` eagerly owns bytes and complete declared mappings; `AlphaEncoding`
+binds Theme, complete original Observations, explicit Single, exact keyed actual
+Series/Aggregate tuples or exact Histogram Bins. Point/Line/Fill targets are
+independent, with 17/17/15 sealed capabilities. Every actual unit must resolve
+before fonts; optional absent components still validate binding kind/schema.
+Original slots are distinct from arbitrary SourceRows IDs. No mean/first/last,
+repeated-row equality requirement, regrouping or sample-to-bin reduction exists.
+
+Linear/Log domains are explicit, finite and increasing; Log sources/domains are
+positive and transformed endpoints distinguishable. Clamp finite out-of-domain
+values and quantize once nearest/ties-to-even to u8. Threshold bounds are increasing
+with equality on the right. Caller functions execute only at input construction.
+Repeated target setters replace their complete instruction; Theme resets it.
+Normal color/role/exact paint precedes alpha replacement, never multiplication.
+Independent outlines, unlisted references, chrome, text and layers keep their own
+paints. Zero retains rows, domains, scientific statistics and structural guide
+occupancy; paint-aware intrinsic/ink/capture use the same final styles.
+
+Undeclared bytes produce no alpha guide. Declared continuous maps retain all stored
+numeric examples; categorical/threshold maps explain actual consumed members in
+declaration order, including zero. All active actual role glyphs and members remain
+retained; deterministic role order selects the one-key example geometry. Alpha
+target RGB is source-Plot legend-label RGB without text alpha; only mapped group
+shape/pattern is neutralized. Shared requires complete recipes and compatible
+titles/projected glyphs, while unioning actual members. Equal visible bytes or
+representatives do not establish recipe compatibility. Hidden suppresses only
+explanatory text/fonts, not complete inputs/actual-membership identity or scientific
+validation. All owners freeze the same prepared mappings and guide operands for
+source-independent preserved/outlined SVG and PNG.
 
 ## Complete Theme And Scale Ownership
 
