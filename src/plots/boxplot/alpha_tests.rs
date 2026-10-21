@@ -23,6 +23,14 @@ fn duplicate_outliers_keep_sorted_original_occurrences_and_replacement_paint() {
             .unwrap(),
         ),
     )
+    .with_alpha(
+        AlphaTarget::Line,
+        AlphaEncoding::keyed(
+            [crate::CategoryValues::new("category", ["a"]).unwrap()],
+            AlphaValues::new("summary confidence", [128]).unwrap(),
+        )
+        .unwrap(),
+    )
     .erase();
     let prepared = prepare(
         &source,
@@ -68,10 +76,34 @@ fn duplicate_outliers_keep_sorted_original_occurrences_and_replacement_paint() {
         .with_radii(radii)
         .unwrap();
     theme.marks = theme.marks.clone().with_points(points).unwrap();
+    let summary = theme
+        .marks
+        .strokes()
+        .summaries()
+        .summary()
+        .clone()
+        .with_color(crate::Color::rgba(17, 41, 67, 0))
+        .unwrap()
+        .with_width(100.0)
+        .unwrap();
+    let summaries = theme
+        .marks
+        .strokes()
+        .summaries()
+        .clone()
+        .with_summary(summary)
+        .unwrap();
+    let strokes = theme
+        .marks
+        .strokes()
+        .clone()
+        .with_summaries(summaries)
+        .unwrap();
+    theme.marks = theme.marks.clone().with_strokes(strokes).unwrap();
     let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
     assert_eq!(
         intrinsic_body_minimum(&chart, &theme).unwrap().1.to_bits(),
-        80.0_f64.to_bits()
+        100.0_f64.to_bits()
     );
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
@@ -105,4 +137,20 @@ fn duplicate_outliers_keep_sorted_original_occurrences_and_replacement_paint() {
     );
     assert_eq!(points[1].0, points[2].0);
     assert!(points.iter().all(|(_, style)| style.outline.is_none()));
+    let summaries = payload
+        .marks
+        .iter()
+        .filter_map(|mark| match mark {
+            categorical_distribution::Mark::Line(_, style) => Some(style.color),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(summaries, [crate::Color::rgba(17, 41, 67, 128); 5]);
+    let categorical_distribution::Mark::Polygon(_, fill) = &payload.marks[0] else {
+        panic!("Boxplot body")
+    };
+    assert_eq!(
+        fill.color.alpha(),
+        theme.marks.fills().bodies().box_body().fill_alpha()
+    );
 }

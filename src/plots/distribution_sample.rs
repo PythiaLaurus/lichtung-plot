@@ -1,6 +1,6 @@
 //! Shared strict observation sample for categorical distribution summaries.
 
-use crate::alpha::{marks::ObservationAlpha, AlphaTarget, AlphaUnitKind};
+use crate::alpha::{marks::ObservationAlpha, AlphaTarget, AlphaUnitKind, ResolvedAlpha};
 use crate::Error;
 
 use crate::data::PlotData;
@@ -20,6 +20,7 @@ pub(crate) struct DistributionGroup {
     pub(crate) x_index: usize,
     pub(crate) group_index: usize,
     pub(crate) observations: Vec<DistributionObservation>,
+    pub(crate) line_alpha: Option<ResolvedAlpha>,
 }
 
 #[derive(Debug)]
@@ -148,10 +149,26 @@ pub(crate) fn prepare_scoped(
             x_index,
             group_index,
             observations,
+            line_alpha: None,
         });
     }
     if groups.is_empty() {
         return Err(Error::Data(format!("{family}: no groups")));
+    }
+    let category = data.column(x_column)?.name();
+    let mut fields = Vec::new();
+    crate::data::source::reserve_source(&mut fields, 2)?;
+    fields.push(category);
+    fields.extend(chart.group_name());
+    let line_alpha =
+        chart.prepare_scoped_alpha(AlphaTarget::Line, AlphaUnitKind::Aggregate, &fields, data)?;
+    for group in &mut groups {
+        group.line_alpha =
+            if let Some(series) = chart.group_name().zip(group.group_label.as_deref()) {
+                line_alpha.keyed(&[(category, &group.label), series])?
+            } else {
+                line_alpha.keyed(&[(category, &group.label)])?
+            };
     }
     Ok(DistributionSample {
         x_levels,

@@ -412,6 +412,10 @@ mod validation_tests {
     use super::*;
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one supplied-input contract retains support and independently keyed summary/observation paints while refusing invalid geometry"
+    )]
     fn supplied_geometry_preserves_support_and_rejects_nonfinite_values() {
         let histogram = HistogramGeometry {
             dimensions: HistogramDimensions {
@@ -437,13 +441,13 @@ mod validation_tests {
             dimensions: RaincloudDimensions {
                 category: "x".into(),
                 value: "y".into(),
-                hue: None,
+                hue: Some("cohort".into()),
             },
             groups: ["a", "b"]
                 .into_iter()
                 .map(|category| RaincloudGroup {
                     category: category.into(),
-                    hue: None,
+                    hue: Some("same".into()),
                     density: vec![
                         RaincloudDensityPoint {
                             y: -2.0,
@@ -472,6 +476,17 @@ mod validation_tests {
                 crate::alpha::AlphaEncoding::observations(
                     crate::alpha::AlphaValues::new("confidence", [0, 230]).unwrap(),
                 ),
+            )
+            .with_alpha(
+                crate::alpha::AlphaTarget::Line,
+                crate::alpha::AlphaEncoding::keyed(
+                    [
+                        crate::CategoryValues::new("x", ["b", "a"]).unwrap(),
+                        crate::CategoryValues::new("cohort", ["same", "same"]).unwrap(),
+                    ],
+                    crate::alpha::AlphaValues::new("summary confidence", [64, 128]).unwrap(),
+                )
+                .unwrap(),
             );
         assert_eq!(supplied.row_count(), 0);
         let theme = crate::Theme::publication().resolve().unwrap();
@@ -500,6 +515,18 @@ mod validation_tests {
             })
             .collect::<Vec<_>>();
         assert_eq!(alphas, [(1, 0), (1, 230)]);
+        assert_eq!(
+            payload
+                .marks
+                .iter()
+                .filter_map(|mark| match mark {
+                    crate::plots::categorical_distribution::Mark::Line(_, style) =>
+                        Some(style.color.alpha()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>(),
+            [128, 64]
+        );
         let mut invalid_histogram = histogram;
         invalid_histogram.bins[0].lower = f64::INFINITY;
         let mut invalid_raincloud = raincloud;

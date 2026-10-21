@@ -121,14 +121,6 @@ pub(crate) fn intrinsic_body_minimum(
     let inner_style = theme.marks.fills().bodies().inner_summary().backend_style();
     let inner = crate::render::geometry::rectangular_fill_ink_bounds(&inner_style)?;
     let (_, inner_y) = crate::render::geometry::rectangular_fill_ink_outset(&inner_style)?;
-    let summary_ink = crate::render::geometry::line_ink_bounds(
-        &theme.marks.strokes().summaries().summary().backend_style(),
-    )?;
-    let summary = summary_ink.map_or(0.0, |ink| ink.top - ink.bottom);
-    let median_ink = crate::render::geometry::line_ink_bounds(
-        &theme.marks.strokes().summaries().median().backend_style(),
-    )?;
-    let median = median_ink.map_or(0.0, |ink| ink.top - ink.bottom);
     let overlay = chart.raw_overlay_spec();
     let points_visible = raincloud || overlay.is_visible();
     let role = if raincloud {
@@ -138,9 +130,7 @@ pub(crate) fn intrinsic_body_minimum(
     };
     let style = chart.distribution_point_style(role, (0, 0, 0));
     let mut pitch = 1.0_f64 / 1024.0;
-    let mut numeric = cloud_y
-        .max(inner_y)
-        .max(if raincloud { median } else { summary });
+    let mut numeric = cloud_y.max(inner_y);
     let body_half = if raincloud { 0.4 * width } else { width };
     pitch = pitch.max((1.0 / 1024.0) / body_half);
     let grow = |pitch: &mut f64,
@@ -163,6 +153,20 @@ pub(crate) fn intrinsic_body_minimum(
         Ok(())
     };
     for group in &sample.groups {
+        let summary_ink =
+            crate::render::geometry::line_ink_bounds(&crate::alpha::marks::line_style(
+                group.line_alpha,
+                theme.marks.strokes().summaries().summary().backend_style(),
+            ))?;
+        let median_ink =
+            crate::render::geometry::line_ink_bounds(&crate::alpha::marks::line_style(
+                group.line_alpha,
+                theme.marks.strokes().summaries().median().backend_style(),
+            ))?;
+        numeric = numeric.max(median_ink.map_or(0.0, |ink| ink.top - ink.bottom));
+        if !raincloud {
+            numeric = numeric.max(summary_ink.map_or(0.0, |ink| ink.top - ink.bottom));
+        }
         if group.x_index >= sample.x_levels.len()
             || (grouped && group.group_index >= sample.group_levels.len())
         {
@@ -203,6 +207,7 @@ pub(crate) fn intrinsic_body_minimum(
         }
         if !raincloud {
             grow(&mut pitch, offset, -0.08 * width, 0.08 * width, summary_ink)?;
+            grow(&mut pitch, offset, -0.08 * width, 0.08 * width, median_ink)?;
         }
         if let Some(ink) = point {
             numeric = numeric.max(ink.dimensions().1);
@@ -473,7 +478,10 @@ pub(crate) fn measure_marks(
                         context,
                     )?;
                 }
-                let whisker_line = theme.marks.strokes().summaries().summary().backend_style();
+                let whisker_line = crate::alpha::marks::line_style(
+                    group.line_alpha,
+                    theme.marks.strokes().summaries().summary().backend_style(),
+                );
                 payload.line(
                     &[
                         Point2D::new(cx_px, lo_whisker_px),
@@ -508,7 +516,10 @@ pub(crate) fn measure_marks(
                 let box_fill = theme.marks.fills().bodies().inner_summary().backend_style();
                 payload.polygon(box_pts, box_fill)?;
 
-                let median_line = theme.marks.strokes().summaries().median().backend_style();
+                let median_line = crate::alpha::marks::line_style(
+                    group.line_alpha,
+                    theme.marks.strokes().summaries().median().backend_style(),
+                );
                 payload.line(
                     &[
                         Point2D::new(cx_px - box_w_px, median_px),
@@ -571,7 +582,10 @@ pub(crate) fn measure_marks(
                         Point2D::new(box_left, median),
                         Point2D::new(box_right, median),
                     ],
-                    &theme.marks.strokes().summaries().median().backend_style(),
+                    &crate::alpha::marks::line_style(
+                        group.line_alpha,
+                        theme.marks.strokes().summaries().median().backend_style(),
+                    ),
                 )?;
             }
         }

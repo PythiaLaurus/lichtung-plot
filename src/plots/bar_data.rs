@@ -2,6 +2,7 @@
 
 #![allow(clippy::cast_precision_loss)]
 
+use crate::alpha::{marks::line_style, AlphaTarget, AlphaUnitKind, ResolvedAlpha};
 use crate::data::{
     source::{sort_numeric_source, sort_source_by},
     PlotData,
@@ -145,18 +146,19 @@ pub(crate) fn intrinsic_body_minimum(
         .backend_style((0, 0, 0));
     let body_ink = crate::render::geometry::rectangular_fill_ink_bounds(&body)?;
     let outline = crate::render::geometry::rectangular_fill_ink_outset(&body)?;
-    let interval = crate::render::geometry::line_ink_width(
-        &theme
-            .marks
-            .strokes()
-            .summaries()
-            .uncertainty()
-            .backend_style(),
-    )?;
     let mut pitch = 1.0_f64 / 1024.0;
     let mut numeric = if horizontal { outline.0 } else { outline.1 };
 
     for bar in &prepared.bars {
+        let interval = crate::render::geometry::line_ink_width(&line_style(
+            bar.line_alpha,
+            theme
+                .marks
+                .strokes()
+                .summaries()
+                .uncertainty()
+                .backend_style(),
+        ))?;
         if bar.category_index >= prepared.categories.len()
             || bar
                 .series_index
@@ -294,6 +296,7 @@ pub(crate) struct PreparedBar {
     pub(crate) nonzero: bool,
     /// Optional explicit lower and upper interval endpoints around `end`.
     pub(crate) interval: Option<(f64, f64)>,
+    pub(crate) line_alpha: Option<ResolvedAlpha>,
 }
 
 /// One attached significance label resolved to a rendered bar or category cluster.
@@ -412,6 +415,7 @@ pub(crate) struct BarShape {
     pub(crate) polygon: [crate::render::backend::Point2D; 4],
     pub(crate) fill: FillStyle,
     pub(crate) interval: Option<[[crate::render::backend::Point2D; 2]; 3]>,
+    pub(crate) interval_style: crate::render::backend::LineStyle,
 }
 
 #[derive(Debug)]
@@ -420,7 +424,6 @@ pub(crate) struct BarPayload {
     pub(crate) domain_expansion: Option<crate::layout::interior::DomainExpansion>,
     pub(crate) zero: Option<[crate::render::backend::Point2D; 2]>,
     pub(crate) zero_style: crate::render::backend::LineStyle,
-    pub(crate) interval_style: crate::render::backend::LineStyle,
     pub(crate) bars: Vec<BarShape>,
     pub(crate) text: Vec<crate::render::backend::PlacedText>,
     pub(crate) points: Vec<(crate::render::backend::Point2D, PointStyle)>,
@@ -456,7 +459,7 @@ pub(crate) fn automatic_numeric_ink_expansion(
         ink.polygon(&bar.polygon, &bar.fill, None)?;
         if let Some(interval) = &bar.interval {
             for segment in interval {
-                ink.line(segment, &payload.interval_style, None)?;
+                ink.line(segment, &bar.interval_style, None)?;
             }
         }
     }
@@ -517,7 +520,7 @@ impl BarPayload {
             for bar in &self.bars {
                 backend.draw_polygon(&bar.polygon, &bar.fill)?;
                 for line in bar.interval.iter().flatten() {
-                    backend.draw_line(line, &self.interval_style)?;
+                    backend.draw_line(line, &bar.interval_style)?;
                 }
             }
             for text in &self.text {
@@ -650,7 +653,7 @@ impl BarPayload {
         for bar in &self.bars {
             geometry.polygon(&bar.polygon, &bar.fill, Some(clip))?;
             for line in bar.interval.iter().flatten() {
-                geometry.line(line, &self.interval_style, Some(clip))?;
+                geometry.line(line, &bar.interval_style, Some(clip))?;
             }
         }
         for text in &self.text {
@@ -815,6 +818,38 @@ pub(crate) fn prepare_scoped<'a>(
     #[cfg(test)]
     count(chart.kind(), 0);
     let mut prepared = prepare_core(chart, data, mode, facet)?;
+    if mode != BarMode::Stacked {
+        let category = data
+            .column(
+                chart
+                    .x_col()
+                    .ok_or_else(|| Error::Data("bar category column is missing".into()))?,
+            )?
+            .name();
+        let mut fields = Vec::new();
+        crate::data::source::reserve_source(&mut fields, 2)?;
+        fields.push(category);
+        fields.extend(chart.group_name());
+        let alpha = chart.prepare_scoped_alpha(
+            AlphaTarget::Line,
+            AlphaUnitKind::Aggregate,
+            &fields,
+            data,
+        )?;
+        for bar in &mut prepared.bars {
+            if bar.interval.is_some() {
+                let key = (category, prepared.categories[bar.category_index].as_str());
+                bar.line_alpha = if let Some(series) = chart.group_name().zip(
+                    bar.series_index
+                        .map(|index| prepared.series[index].as_str()),
+                ) {
+                    alpha.keyed(&[key, series])?
+                } else {
+                    alpha.keyed(&[key])?
+                };
+            }
+        }
+    }
     apply_attached_significance(annotations, &mut prepared, mode)?;
     prepared.points = prepare_point_layers(chart, &prepared, mode)?;
     for point in &prepared.points {
@@ -1513,6 +1548,7 @@ fn prepare_single(
             end: value,
             nonzero: value != 0.0,
             interval,
+            line_alpha: None,
         });
     }
 
@@ -1620,6 +1656,7 @@ fn prepare_grouped(
             end: value,
             nonzero: value != 0.0,
             interval,
+            line_alpha: None,
         });
     }
 
@@ -1751,6 +1788,7 @@ fn prepare_stacked(
                 end,
                 nonzero: *value != 0.0,
                 interval: None,
+                line_alpha: None,
             });
         }
     }
@@ -2194,3 +2232,6 @@ fn compensated_sum(mut values: impl ExactSizeIterator<Item = f64>) -> Option<f64
     let result = sum + correction;
     result.is_finite().then_some(result)
 }
+
+#[cfg(test)]
+mod alpha_tests;

@@ -6,8 +6,8 @@ scientific numeric presentation and focused section-guide acceptance are complet
 The subsequent DF3/DF4 closure review admitted data alpha and numeric target/maximum
 tick selection in `97_ALPHA_AND_TICK_EXTENSION_PLAN.md`; numeric selection source,
 public cutover and focused parent/output closure are complete. Data-alpha owned
-values, explicit bindings and all point-family consumers are complete; scientific
-strokes/fills, unified guides and alpha public cutover remain in progress. Fully
+values, explicit bindings and all point/scientific-stroke consumers are complete;
+fills, unified guides and alpha public cutover remain in progress. Fully
 caller-decided legends join DF11's post-first-release AI-workflow review.
 
 **Current execution checkpoint:** the user-authorized resumption completed the

@@ -447,6 +447,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "sampled and supplied strip ownership must remain independent of raw point roles and summary alpha under the same selection"
+    )]
     fn sampled_and_supplied_strips_keep_their_own_style_and_guide_when_raw_roles_change() {
         use crate::plots::categorical_distribution::Mark;
         use crate::{CategoryValues, NumericValues, Plot, RaincloudInput};
@@ -461,16 +465,24 @@ mod tests {
         .with_global_hue_levels(vec!["\u{10FFFF}".into(), "series".into()]);
         let supplied = crate::plots::categorical_distribution::extraction::supplied();
         for (source, count, outlined) in [(sampled, 4, false), (supplied, 2, true)] {
-            let source = source.with_alpha(
-                crate::alpha::AlphaTarget::Point,
-                crate::alpha::AlphaEncoding::observations(
-                    crate::alpha::AlphaValues::new(
-                        "confidence",
-                        (0..count).map(|index| if index % 2 == 0 { 0 } else { 230 }),
+            let source = source
+                .with_alpha(
+                    crate::alpha::AlphaTarget::Point,
+                    crate::alpha::AlphaEncoding::observations(
+                        crate::alpha::AlphaValues::new(
+                            "confidence",
+                            (0..count).map(|index| if index % 2 == 0 { 0 } else { 230 }),
+                        )
+                        .unwrap(),
+                    ),
+                )
+                .with_alpha(
+                    crate::alpha::AlphaTarget::Line,
+                    crate::alpha::AlphaEncoding::single(
+                        crate::alpha::AlphaValues::new("summary confidence", [64]).unwrap(),
                     )
                     .unwrap(),
-                ),
-            );
+                );
             let operation = crate::font::canonical::OperationContext::new();
             let inputs = crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
             let chart = inputs.attach(source).unwrap();
@@ -533,6 +545,17 @@ mod tests {
                 }
             }
             assert_eq!(observed, count);
+            assert_eq!(
+                payload
+                    .marks
+                    .iter()
+                    .filter_map(|mark| match mark {
+                        Mark::Line(_, style) => Some(style.color.alpha()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>(),
+                [64]
+            );
             assert_eq!(
                 alphas,
                 (0..count)

@@ -7,6 +7,18 @@ fn overlay_alpha_follows_original_slots_and_source_jitter_through_positioned_gro
         crate::CategoryValues::new("category", ["B", "A", "B", "A"]).unwrap(),
         crate::NumericValues::new("value", [3.0, 1.0, 4.0, 2.0]),
     )
+    .series(crate::CategoryValues::new("cohort", ["u", "v", "u", "v"]).unwrap())
+    .with_alpha(
+        AlphaTarget::Line,
+        AlphaEncoding::keyed(
+            [
+                crate::CategoryValues::new("category", ["A", "B"]).unwrap(),
+                crate::CategoryValues::new("cohort", ["v", "u"]).unwrap(),
+            ],
+            AlphaValues::new("summary confidence", [230, 0]).unwrap(),
+        )
+        .unwrap(),
+    )
     .raw_overlay(crate::RawOverlay::Jittered)
     .source_rows(crate::SourceRows::new([900, 100, 800, 200]).unwrap())
     .with_alpha(
@@ -67,8 +79,19 @@ fn overlay_alpha_follows_original_slots_and_source_jitter_through_positioned_gro
         [(1, 0), (1, 230), (2, 64)]
     );
     let expected =
-        crate::plots::distribution_sample::overlay_x(crate::RawOverlay::Jittered, 0.5, 0.8, 800);
+        crate::plots::distribution_sample::overlay_x(crate::RawOverlay::Jittered, 0.32, 0.34, 800);
     let expected = selected.layout.projection.project(expected, 4.0);
     assert_eq!(points[1].0[0], Point2D::new(expected.0, expected.1));
     assert!(points.iter().all(|(_, style)| style.outline.is_some()));
+    assert_eq!(
+        payload
+            .marks
+            .iter()
+            .filter_map(|mark| match mark {
+                categorical_distribution::Mark::Line(_, style) => Some(style.color.alpha()),
+                _ => None,
+            })
+            .collect::<Vec<_>>(),
+        [0, 0, 0, 0, 230, 230, 230, 230]
+    );
 }

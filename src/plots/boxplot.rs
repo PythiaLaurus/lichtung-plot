@@ -80,9 +80,6 @@ pub(crate) fn intrinsic_body_minimum(
         .backend_style((0, 0, 0));
     let body = crate::render::geometry::rectangular_fill_ink_bounds(&fill)?;
     let (_, out_y) = crate::render::geometry::rectangular_fill_ink_outset(&fill)?;
-    let summary = crate::render::geometry::line_ink_width(
-        &theme.marks.strokes().summaries().summary().backend_style(),
-    )?;
     let overlay = chart.raw_overlay_spec();
     let point_style = if overlay.is_visible() {
         chart.distribution_point_style(theme.marks.points().raw_overlay(), (0, 0, 0))
@@ -94,8 +91,13 @@ pub(crate) fn intrinsic_body_minimum(
         )
     };
     let mut pitch = 1.0_f64 / 1024.0;
-    let mut numeric = out_y.max(summary);
+    let mut numeric = out_y;
     for (stat, group) in prepared.stats.iter().zip(&sample.groups) {
+        let summary = crate::render::geometry::line_ink_width(&crate::alpha::marks::line_style(
+            group.line_alpha,
+            theme.marks.strokes().summaries().summary().backend_style(),
+        ))?;
+        numeric = numeric.max(summary);
         if stat.x_index != group.x_index
             || stat.group_index != group.group_index
             || group.x_index >= sample.x_levels.len()
@@ -120,10 +122,10 @@ pub(crate) fn intrinsic_body_minimum(
             pitch = pitch.max(ink.right.max(0.0) / right_room);
         }
         if summary > 0.0 {
-            // The 0.3-box-width whisker cap is narrower than the filled box.
-            let cap_room = 0.3 * thickness;
-            pitch = pitch.max((summary / 2.0) / (0.5 + offset - cap_room));
-            pitch = pitch.max((summary / 2.0) / (0.5 - offset - cap_room));
+            // The median spans the complete box; its independently resolved
+            // stroke may remain visible when the body has no painted ink.
+            pitch = pitch.max((summary / 2.0) / left_room);
+            pitch = pitch.max((summary / 2.0) / right_room);
         }
         let observations = if overlay.is_visible() {
             &group.observations
@@ -303,7 +305,10 @@ pub(crate) fn measure_marks(
         let group = &sample.groups[i];
         let color = colors.color(group.hue_label.as_deref().unwrap_or(&group.label))?;
         let fill = theme.marks.fills().bodies().box_body().backend_style(color);
-        let style = theme.marks.strokes().summaries().summary().backend_style();
+        let style = crate::alpha::marks::line_style(
+            group.line_alpha,
+            theme.marks.strokes().summaries().summary().backend_style(),
+        );
 
         let x_center_data =
             crate::plots::distribution_sample::center(&sample.groups[i], group_levels.len());

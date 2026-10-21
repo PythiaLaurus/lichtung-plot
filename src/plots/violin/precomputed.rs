@@ -1,4 +1,7 @@
-use crate::alpha::{marks::ObservationAlpha, AlphaTarget, AlphaUnitKind};
+use crate::alpha::{
+    marks::{line_style, ObservationAlpha},
+    AlphaTarget, AlphaUnitKind, ResolvedAlpha,
+};
 use crate::Error;
 
 use crate::decorations::legend::source::{FillRole, PointRole};
@@ -47,9 +50,17 @@ pub(crate) fn intrinsic_body_minimum(
     let box_style = theme.marks.fills().bodies().inner_summary().backend_style();
     let box_ink = crate::render::geometry::rectangular_fill_ink_bounds(&box_style)?;
     let (_, box_numeric) = crate::render::geometry::rectangular_fill_ink_outset(&box_style)?;
-    let median_ink = crate::render::geometry::line_ink_bounds(
-        &theme.marks.strokes().summaries().median().backend_style(),
-    )?;
+    let mut median_ink: Option<crate::render::geometry::GeometryBox> = None;
+    for group in &prepared.groups {
+        let next = crate::render::geometry::line_ink_bounds(&line_style(
+            group.line_alpha,
+            theme.marks.strokes().summaries().median().backend_style(),
+        ))?;
+        median_ink = match (median_ink, next) {
+            (Some(current), Some(next)) => Some(current.union(next)),
+            (current, next) => current.or(next),
+        };
+    }
     let median = median_ink.map_or(0.0, |ink| ink.top - ink.bottom);
     let point = chart.distribution_point_style(theme.marks.points().mandatory_strip(), (0, 0, 0));
     let point = crate::alpha::marks::point_ink(
@@ -139,6 +150,7 @@ impl PreparedRaincloud {
 struct PreparedRaincloudGroup {
     geometry: RaincloudGroup,
     alphas: Vec<ObservationAlpha>,
+    line_alpha: Option<ResolvedAlpha>,
 }
 
 #[cfg(test)]
@@ -152,6 +164,16 @@ pub(crate) fn prepare(chart: &Plot) -> Result<PreparedRaincloud, Error> {
         .ok_or_else(|| Error::Render("raincloud requires supplied geometry".into()))?;
     let range = input.validate()?;
     let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
+    let mut fields = Vec::new();
+    crate::data::source::reserve_source(&mut fields, 2)?;
+    fields.push(input.dimensions.category.as_str());
+    fields.extend(input.dimensions.hue.as_deref());
+    let line_alpha = chart.prepare_scoped_alpha(
+        AlphaTarget::Line,
+        AlphaUnitKind::Aggregate,
+        &fields,
+        chart.data(),
+    )?;
     let categories = crate::data::source::collect_source(
         input
             .groups
@@ -182,6 +204,12 @@ pub(crate) fn prepare(chart: &Plot) -> Result<PreparedRaincloud, Error> {
         }))?;
         Ok(PreparedRaincloudGroup {
             alphas,
+            line_alpha: if let Some(hue) = input.dimensions.hue.as_deref().zip(group.hue.as_deref())
+            {
+                line_alpha.keyed(&[(&input.dimensions.category, &group.category), hue])?
+            } else {
+                line_alpha.keyed(&[(&input.dimensions.category, &group.category)])?
+            },
             geometry: RaincloudGroup {
                 category: crate::data::source::copy_source_string(&group.category)?,
                 hue: group
@@ -228,7 +256,7 @@ pub(super) fn measure_marks(
                 .as_deref()
                 .unwrap_or(&group.geometry.category),
         )?;
-        project_cloud_and_summary(&layout, &group.geometry, color, index, theme, &mut payload)?;
+        project_cloud_and_summary(&layout, group, color, index, theme, &mut payload)?;
     }
     for (index, group) in input.groups.iter().enumerate() {
         let color = colors.color(
@@ -257,12 +285,13 @@ pub(super) fn measure_marks(
 
 fn project_cloud_and_summary(
     layout: &Layout,
-    group: &RaincloudGroup,
+    prepared: &PreparedRaincloudGroup,
     color: (u8, u8, u8),
     index: usize,
     theme: &ResolvedTheme,
     payload: &mut DistributionPayload,
 ) -> Result<(), Error> {
+    let group = &prepared.geometry;
     let center = index as f64 + 0.5;
     let width = 0.8;
     let baseline = center - width * 0.10;
@@ -339,7 +368,10 @@ fn project_cloud_and_summary(
             Point2D::new(box_left, median),
             Point2D::new(box_right, median),
         ],
-        &theme.marks.strokes().summaries().median().backend_style(),
+        &line_style(
+            prepared.line_alpha,
+            theme.marks.strokes().summaries().median().backend_style(),
+        ),
     )
 }
 

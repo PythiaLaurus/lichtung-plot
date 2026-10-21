@@ -455,57 +455,6 @@ mod tests {
     }
 
     #[test]
-    fn private_bar_outline_changes_preference_but_not_exact_root_box() {
-        let source = Plot::bar(
-            CategoryValues::new("category", ["a", "b"]).unwrap(),
-            crate::BarInput::estimates(NumericValues::new("value", [1.0, 2.0])),
-        )
-        .series(CategoryValues::new("series", ["one", "two"]).unwrap())
-        .size(1200, 900)
-        .erase();
-        let resources = OperationContext::new();
-        let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
-        let chart = prepared.attach(source).unwrap();
-        let mut theme = crate::Theme::publication().resolve().unwrap();
-        let original = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
-        let outline = crate::theme::DataOutlineTheme::fixed(
-            theme
-                .marks
-                .fills()
-                .bodies()
-                .bar_body()
-                .outline()
-                .unwrap()
-                .fixed_stroke()
-                .unwrap()
-                .clone()
-                .with_width(100.0)
-                .unwrap(),
-        );
-        let body = theme
-            .marks
-            .fills()
-            .bodies()
-            .bar_body()
-            .clone()
-            .with_outline(Some(outline))
-            .unwrap();
-        let bodies = theme
-            .marks
-            .fills()
-            .bodies()
-            .clone()
-            .with_bar_body(body)
-            .unwrap();
-        let fills = theme.marks.fills().clone().with_bodies(bodies).unwrap();
-        theme.marks = theme.marks.clone().with_fills(fills).unwrap();
-        let styled = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
-        assert_eq!(styled.panel_box, original.panel_box);
-        assert!(categorical(&styled).hard_pitch_quanta > categorical(&original).hard_pitch_quanta);
-        assert!(categorical(&styled).body_quanta.0 > categorical(&original).body_quanta.0);
-    }
-
-    #[test]
     fn sparse_collective_families_share_one_categorical_preference_carrier() {
         let category = CategoryValues::new("category", ["a", "a", "a", "b", "b", "b"]).unwrap();
         let values = NumericValues::new("value", [1.0, 2.0, 3.0, 3.0, 4.0, 5.0]);

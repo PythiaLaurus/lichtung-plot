@@ -141,12 +141,6 @@ pub(crate) fn measure_marks(
             .references()
             .bar_zero()
             .backend_style(),
-        interval_style: theme
-            .marks
-            .strokes()
-            .summaries()
-            .uncertainty()
-            .backend_style(),
         bars: Vec::new(),
         text: Vec::new(),
         points: Vec::new(),
@@ -174,6 +168,15 @@ pub(crate) fn measure_marks(
         let polygon = project_bar(&layout.projection, bar, y_center, height)?;
         payload.bars.push(bar_data::BarShape {
             polygon,
+            interval_style: crate::alpha::marks::line_style(
+                bar.line_alpha,
+                theme
+                    .marks
+                    .strokes()
+                    .summaries()
+                    .uncertainty()
+                    .backend_style(),
+            ),
             fill: theme.marks.fills().bodies().bar_body().backend_style(color),
             interval: bar
                 .interval
