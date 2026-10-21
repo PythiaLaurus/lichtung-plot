@@ -6,8 +6,9 @@ and stacked section measurement/frozen geometry with owner-local exact reuse are
 implemented. Effective parent-policy selection, facet marginal ordering and final
 section census and exact scoped child/height dependencies are implemented
 with actual consumed-ancestor routing. Crate-root policy and Plot/Canvas controls
-are current; focused full-contract acceptance is complete. Integrated release
-closure remains with the encompassing scientific-foundation phase.
+are current; focused full-contract acceptance is complete. Integrated verification
+and actual release/time/peak-RSS closure are complete in
+`../docs/scientific-foundation-closure.md`.
 
 The data-alpha extension now uses one `PreparedGuide` for typed symbol sections
 and native continuous-color content, with one common measured envelope, cache,
@@ -41,8 +42,8 @@ Public construction is documented in `../docs/public-legend-composition.md`.
 Actual all-kind, all-owner/root and remaining public acceptance are recorded in
 `../docs/discrete-guide-kind-census.md`,
 `../docs/sectioned-publication-contracts.md` and
-`../docs/section-composition-acceptance.md`. Integrated release closure remains
-pending under spec93; these focused receipts do not claim that gate.
+`../docs/section-composition-acceptance.md`. Integrated verification and release
+evidence are recorded separately in `../docs/scientific-foundation-closure.md`.
 
 The source census is taken after the private Color/OpaqueColor carrier migration.
 `docs/t6a1-public-cutover-census.md` is useful historical consumer evidence; its

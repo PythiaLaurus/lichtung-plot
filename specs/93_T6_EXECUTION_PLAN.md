@@ -1,6 +1,6 @@
 # T6 — Public Foundations And Scientific Presentation
 
-**Status**: IN PROGRESS — immutable public foundations, their complete custom-value
+**Status**: COMPLETE — immutable public foundations, their complete custom-value
 closure, public preferred tick intervals and root-sizing closure are complete;
 scientific numeric presentation and focused section-guide acceptance are complete.
 The subsequent DF3/DF4 closure review admitted data alpha and numeric target/maximum
@@ -8,10 +8,12 @@ tick selection in `97_ALPHA_AND_TICK_EXTENSION_PLAN.md`; numeric selection sourc
 public cutover and focused parent/output closure are complete. Data-alpha owned
 values, explicit bindings and all 49 point/stroke/fill consumers are complete;
 unified guides, complete parent identities, alpha public cutover and focused
-all-owner/root/output acceptance are complete; integrated full/release closure remains. Fully
+all-owner/root/output acceptance are complete. The integrated full verification,
+ten release groups, actual time/peak-RSS measurements and final current-contract
+audit pass in `../docs/scientific-foundation-closure.md`. Fully
 caller-decided legends join DF11's post-first-release AI-workflow review.
 
-**Current execution checkpoint:** the user-authorized resumption completed the
+**Completed execution history:** the user-authorized resumption completed the
 mark/annotation leaf, T6B1d4d, and the private-value umbrella T6B1. Evidence is in
 `../docs/mark-annotation-values.md`. T6B2 owns complete Theme construction and the
 remaining literal-to-component consumer resolution. Complete construction, mark
@@ -207,11 +209,11 @@ labels, not existing commits.
 | T6N | COMPLETE | T6C | Unified scientific numeric formatting; leaves below |
 | T6L | COMPLETE | T6N | One section-aware discrete guide; focused closure in `docs/section-composition-acceptance.md` |
 | T6T | COMPLETE | T6L | TickGeneration design/source/public cutover and focused parent/root/output closure; `docs/public-tick-generation.md` / `docs/tick-generation-parent-closure.md` |
-| T6D | COMPLETE | T6T | Values/bindings, 49 consumers, unified guides/parents/public API and 147 family roots plus 60 cached/uncached publications; `docs/public-data-alpha.md` / `docs/alpha-output-closure.md`; actual full/release gate remains T6Z3 |
-| T6Z | IN PROGRESS | T6D | Current contracts reconciled; final complete verification and actual release/time/RSS remain |
+| T6D | COMPLETE | T6T | Values/bindings, 49 consumers, unified guides/parents/public API and 147 family roots plus 60 cached/uncached publications; `docs/public-data-alpha.md` / `docs/alpha-output-closure.md`; integrated gate recorded under T6Z3 |
+| T6Z | COMPLETE | T6D | Current contracts reconciled; complete verification and ten release groups with actual time/peak RSS; `docs/scientific-foundation-closure.md` |
 | T6Z1 | COMPLETE | T6D | Current public examples/specs and exact property/consumer attribution; `docs/scientific-contract-reconciliation.md` and spec04 current-owner overlay |
 | T6Z2 | COMPLETE | User closure review | User-approved DF3/DF4 admission in spec97, residual DF4 checkpoint and fully caller-decided legends in DF11 |
-| T6Z3 | IN PROGRESS | T6Z1, T6Z2 | Final audit, required broad gate/release evidence and closure commit; `test(api): close public scientific foundations` |
+| T6Z3 | COMPLETE | T6Z1, T6Z2 | Final audit, successful `just verify`, all ten release groups and measured 10.86 s / 69,200 KiB peak RSS at `ddf0fbd`; `docs/scientific-foundation-closure.md` |
 
 T6A2 must specify all accessors, validated constructors and construction-only
 edits before T6B starts; the broad component names in spec03 are not permission
@@ -945,9 +947,9 @@ resource caps are mandatory; section count does not multiply placement trials.
 ## T6T / T6D — Reviewed Tick And Alpha Extensions
 
 `97_ALPHA_AND_TICK_EXTENSION_PLAN.md` owns the exact design-gate requirements,
-scope, dependencies and leaf status for these newly admitted umbrellas. Complete
-T6L6c first. T6T closes target versus hard-maximum generation and one retained
-per-axis selection before T6D adds alpha input/mapping and declared explanation.
+scope, dependencies and leaf status for these completed umbrellas. Execution
+finished T6L6c first, then T6T's target versus hard-maximum generation and one
+retained per-axis selection before T6D's alpha inputs and declared explanation.
 An arbitrary construction function does not imply continuity, categorical
 semantics, thresholds, an inverse or a smooth legend ramp. No retained application
 callback or independent manual-legend API is admitted.
@@ -964,9 +966,9 @@ selection identity, all-family/root consumer breadth, sixty real cached/uncached
 SVG/PNG publications and the bounded release workload construction. Thirty-two
 focused library tests, one external contract covering 147 roots, the public
 1200×600 example, strict lint/fmt and 671/17 discovery pass. The new library
-publication contract replaces the paired-helper inventory one-for-one. Data alpha
-and integrated release execution remain pending; exact-RGBA behavior stays current
-until its own cutover.
+publication contract replaces the paired-helper inventory one-for-one. At that
+tick-only checkpoint data alpha and integrated release execution were pending;
+the subsequent completed leaves and integrated evidence are recorded above.
 
 The user selected explicit per-observation, per-series and per-aggregate inputs
 after reviewing point/line/bar/violin examples. `../docs/data-alpha-design.md`
@@ -986,8 +988,9 @@ without re-evaluation. Continuous colors and alpha now share one finite coordina
 normalizer and one whole-set guide-label policy; the replaced method/helper are
 removed. Twenty-three focused library tests and four external color/guide contracts,
 strict all-target Clippy, fmt/diff and 671/17 discovery pass. Six alpha unit contracts
-replace six thinner geometry tests. Actual bindings/marks/guides and public alpha
-remain pending, as do integrated full/release gates.
+replace six thinner geometry tests. At that value-only checkpoint actual
+bindings/marks/guides, public alpha and integrated full/release gates were pending;
+their later completion is recorded in the current stage table and linked receipts.
 
 `../docs/explicit-alpha-bindings.md` closes private immutable encodings and prepared
 unit resolution: explicit broadcast, canonical raw tuple schemas, exact bin/facet
@@ -996,9 +999,10 @@ point counts. Plot Clone/erase, composed inputs and height identities retain the
 complete three-target value. Actual child-cache witnesses distinguish identical
 paints with different declarations. Nineteen focused library tests, four external
 source/parent contracts, strict all-target Clippy, fmt/diff and unchanged 671/17
-discovery pass; three new binding contracts replace three thinner tests. Producer
-leaves must now consume these prepared operands and retain slots/styles before
-fonts. This does not close actual alpha rendering, guides or public cutover.
+discovery pass; three new binding contracts replace three thinner tests. The later
+producer leaves consume those prepared operands and retain slots/styles before
+fonts. Their actual rendering, guide and public cutovers are complete above;
+the binding-only receipt does not substitute for that later evidence.
 
 ## Verification And Closure
 
@@ -1031,3 +1035,13 @@ only after the admitted tick/alpha work, public/current specifications and
 examples, verification, inspected semantic output, evidence and commits. T7 remains
 PENDING until then. The residual DF2/DF4/DF5/DF7 T7 closure reviews are explicit
 review obligations, not automatic successor implementation.
+
+The completed integrated gate is recorded in
+`../docs/scientific-foundation-closure.md`: 654 library passes / 17 ignored,
+481 integration passes, 146 doctests, all eight example targets, warning-denied
+docs and unpacked offline package verification. All ten ignored release groups
+pass with their complete fixtures and admitted numeric/section/tick/alpha samples;
+actual aggregate wall time is 10.86 s and peak RSS is 69,200 KiB, excluding release
+compilation. Examples05/06/07/08 also execute their public terminals. Initial
+failures and focused corrections remain recorded in
+`../docs/prepared-guide-regression-closure.md`. T6 is COMPLETE; T7 is PENDING.

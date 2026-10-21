@@ -3,7 +3,8 @@
 **Status**: Current public numeric presentation contract. Exact ordinary and
 certified power conversion, configured consumers and the atomic public replacement
 are implemented. All-family/all-root and scoped/output closure is recorded in
-`docs/scientific-numeric-closure.md`; integrated T6 closure remains with spec93.
+`../docs/scientific-numeric-closure.md`; integrated T6 verification and actual
+release/time/peak-RSS closure pass in `../docs/scientific-foundation-closure.md`.
 
 ## Authority And Source Basis
 

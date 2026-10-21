@@ -64,6 +64,6 @@ release. This standalone renderer gains no successor integration responsibility.
 Examples05/06/07/08 and the existing public constructor inventory exercise current
 numeric, composition, generation and alpha construction. Strict public compile
 boundaries and package/docs checks are recorded in their public receipts; 147
-all-family roots and 60 alpha owner/root/cache publications are live. Actual full
-verification and all ten ignored release benchmark groups remain the final gate,
-recorded separately in `scientific-foundation-closure.md` when run.
+all-family roots and 60 alpha owner/root/cache publications are live. Successful
+full verification and all ten ignored release benchmark groups, including actual
+time/peak RSS, are recorded separately in `scientific-foundation-closure.md`.

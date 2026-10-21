@@ -4,7 +4,14 @@
 
 ## Purpose
 
-**Current execution checkpoint:** the user-approved resource-accounting cleanup
+**Current execution checkpoint:** T6 is COMPLETE, including its admitted numeric
+tick-count/data-alpha extensions, current-contract/property-owner reconciliation,
+successful complete verification and all ten release groups with actual time and
+peak RSS. `../docs/scientific-foundation-closure.md` records the verified code
+baseline, initial failures/corrections, 671/17 library census, 481 integration
+passes, 146 doctests, examples and measured workloads. T7 remains PENDING.
+
+**Completed execution history:** the user-approved resource-accounting cleanup
 is complete. `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` records the retained
 correctness boundaries; `../docs/resource-accounting-cleanup.md` records
 verification and same-source release output/time/RSS comparisons. The subsequent
@@ -55,17 +62,15 @@ available in Git history through commit `0dcff20`; it is not a second current
 plan.
 
 `01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` remain authoritative for the
-implemented renderer. `03_THEME_SYSTEM.md` is the approved replacement theme
+implemented renderer. `03_THEME_SYSTEM.md` is the current complete theme
 architecture. Phase T4 established its built-in Canvas/Plot ownership and
 inheritance subset using the former closed `Theme` selector and updated the
 current contracts atomically when that public behavior landed. Its replacement
-theme values, components, colors and scales become current in their owning T6
+theme values, components, colors and scales are current through the completed T6
 cutovers recorded by spec93.
-`05_LAYOUT_SYSTEM.md` is the approved replacement layout architecture; its
-automatic layout, exact-width/automatic-height sizing, and rendered-dimension behavior remain
-non-current until Phase T6. Neither target specification is a second current
-API, and later implementation phases do not begin merely because they are
-listed here.
+`05_LAYOUT_SYSTEM.md` is the current layout architecture, including automatic
+layout, exact-width/automatic-height sizing and rendered dimensions. There is one
+implemented public API; later phases do not begin merely because they are listed.
 
 Status values are `COMPLETE`, `IN PROGRESS`, `PENDING`, and `BLOCKED`. Update a
 phase when it starts, completes, changes scope, or discovers a blocker. Complete
@@ -83,11 +88,10 @@ T5a at `1e8e3ee`, not the earlier combined-renderer implementation.
 T6's execution partition is `93_T6_EXECUTION_PLAN.md`, based on completed T5e
 (`0cbd1d6`). Its user-approved entry decisions and substage/deletion/evidence
 tables are authoritative for the new public migration and numeric/legend work.
-T6 is IN PROGRESS; planning and entry decisions are complete, and implementation
-leaves remain PENDING until started.
+T6 and its required full/release closure are COMPLETE; T7 remains PENDING.
 The later DF3/DF4 closure-review admission is recorded in
 `97_ALPHA_AND_TICK_EXTENSION_PLAN.md`: numeric target/maximum tick selection and
-data alpha follow section-guide acceptance as independently verified umbrellas.
+data alpha followed section-guide acceptance as independently verified umbrellas.
 Fully caller-decided legends join DF11's existing AI-workflow review.
 
 The primary-approved T5a1r2-r4/T5a3a1-f closure is one coupled interface migration
@@ -329,7 +333,7 @@ The approved theme and layout targets follow these rules:
 | T5c | Mark defaults, annotations, and local styles | COMPLETE |
 | T5d | Categorical and continuous data scales | COMPLETE |
 | T5e | Scientific layout closure | COMPLETE |
-| T6 | Public foundations, sizing, scientific numeric presentation and sectioned guides | IN PROGRESS |
+| T6 | Public foundations, sizing, scientific numeric presentation, sectioned guides and admitted tick/alpha extensions | COMPLETE |
 | T7 | Contract evidence, documentation, and final audit | PENDING |
 
 ## Phase T1: Approved Theme Architecture
@@ -6586,11 +6590,11 @@ Acceptance:
 
 ## Phase T6: Public Foundations And Scientific Presentation
 
-**Status**: IN PROGRESS — public foundations and root sizing/ticks complete;
-scientific numeric presentation and its all-consumer/output closure complete;
-focused section-aware discrete guide acceptance is complete in
-`../docs/section-composition-acceptance.md`. The user-approved numeric count and
-data-alpha extensions in spec97 follow that acceptance.
+**Status**: COMPLETE — public foundations, root sizing, scientific numeric
+presentation, sectioned guides and the admitted numeric count/data-alpha
+extensions are implemented. Current contracts and actual owners are reconciled;
+the successful complete gate, ten release groups, actual time/peak RSS and final
+audit are recorded in `../docs/scientific-foundation-closure.md`.
 
 Dependencies: T5e.
 
@@ -6646,7 +6650,8 @@ The numerical/guide refinement is design-closed in
 The Forest mathematical design/proof/resource/oracle gate is complete, and its
 private implementation/executable numerical certification is recorded in
 `../docs/certified-log10-conversion.md`. Consumer/public and integrated output
-gates remain pending.
+gates are complete in `../docs/scientific-numeric-closure.md` and
+`../docs/scientific-foundation-closure.md`.
 Exponent precision is not substituted for value precision.
 Existing unconfigured power labels remain unchanged. This admission adds no
 platform `powf`, dependency, resource-cap increase or alternate rendering route.
@@ -6656,8 +6661,8 @@ T6's pre-existing foundation commitments below remain in force. The subsequent
 DF3/DF4 closure review is CLOSED as a disposition: the user approved proceeding
 with caller-computed alpha, linear/log mappings, declared continuous/discrete
 automatic-guide semantics, and numeric target/maximum tick counts. Spec97 records
-these new implementation phases. TickGeneration is now current; data-alpha APIs
-remain pending. The user selected explicit observation/series/aggregate alpha
+these implementation phases. TickGeneration and data-alpha APIs are current.
+The user selected explicit observation/series/aggregate alpha
 inputs, rather than requiring repeated equal values in every source row.
 `../docs/data-alpha-design.md` closes that source-backed input/numeric/consumer/
 guide/parent design before implementation. Residual DF4
@@ -6824,6 +6829,16 @@ T6Z3 owns the required broad gate and ten ignored release benchmark groups,
 including retained complete caption/legal-break/refusal fixtures and bounded
 numeric/section workloads. Run focused checks plus strict Clippy during each
 implementation leaf; use the full suite at closure, not repeatedly for discovery.
+
+The completed broad gate at `ddf0fbd` passes 654 library tests with 17 ignored,
+all 481 integration tests, 146 doctests, all eight example targets, strict Clippy,
+formatting, warning-denied docs and offline package verification. All ten release
+groups pass, including complete numeric/section/tick/alpha samples; the prebuilt
+run measures 10.86 s wall and 69,200 KiB peak RSS. Examples05/06/07/08 execute their
+actual public terminals. `../docs/scientific-foundation-closure.md` records full
+conditions and output/work identities; initial regression failures remain in the
+linked focused receipt. The library discovery count remains 671 including 17
+ignored. This completes T6 without starting T7.
 
 ## Phase T7: Contract Evidence And Final Audit
 

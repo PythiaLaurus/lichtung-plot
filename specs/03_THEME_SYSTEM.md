@@ -33,7 +33,8 @@ Their current architectural contracts and consumer/proof designs are in
 `06_NUMERIC_PRESENTATION.md`, `07_LOG10_DISPLAY.md` and `08_DISCRETE_GUIDES.md`;
 public construction and implementation evidence are in
 `../docs/public-numeric-formatting.md` and `../docs/public-legend-composition.md`.
-Integrated T6 acceptance/release closure remains governed by spec93.
+Integrated T6 acceptance and actual release/time/peak-RSS closure are complete in
+`../docs/scientific-foundation-closure.md`, with execution status in spec93.
 
 T6A2's authoritative validated construction, fields, metrics and migration
 signatures are in `94_T6_FOUNDATION_CONSTRUCTION.md`. They specify the complete

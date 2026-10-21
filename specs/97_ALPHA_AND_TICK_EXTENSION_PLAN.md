@@ -6,7 +6,8 @@ Data-alpha source-backed design, private owned mapping values and explicit
 binding/source-slot preparation and all 49 actual mark consumers are COMPLETE;
 guide provenance/projection and actual declared explanations are COMPLETE;
 parent/feedback closure, public cutover and focused family/owner/root/output
-acceptance are COMPLETE. Integrated full/release verification remains PENDING.
+acceptance are COMPLETE. Integrated full/release verification is COMPLETE in
+`../docs/scientific-foundation-closure.md`, including actual time/peak-RSS evidence.
 
 ## Authority And Recorded Decision
 
@@ -27,11 +28,11 @@ The approved dispositions are:
 | Residual DF4 | Keep exact generated counts, density scalars, arbitrary ratios, categorical stride/drop and generation callbacks outside the admission | Review at T7 CLOSURE, before successor planning |
 | Fully caller-decided legends | DEFER to the existing AI-workflow review, including data-independent entries and the broader custom-drawing question | DF11; not a new T6/T7 closure requirement |
 
-This closes the DF3/DF4 disposition requirement, not feature implementation or
-integrated T6 verification. `93_T6_EXECUTION_PLAN.md` owns execution status. The
-current APIs and rendering contracts remain in specs01/02/03/05/08 until the
-corresponding implementation cutover; this plan exports no placeholder type,
-callback, legend-entry carrier, or alternate renderer.
+The admission itself closed the DF3/DF4 disposition requirement; the completed
+implementation and integrated verification are recorded below and in spec93.
+Current APIs and rendering contracts in specs01/02/03/05/08 describe the
+implemented cutovers; this plan exports no placeholder type, callback,
+legend-entry carrier or alternate renderer.
 
 ## Research Basis
 
@@ -213,8 +214,8 @@ Dumbbell, Boxplot, Violin and sampled/supplied Raincloud in
 original slots through filtering/sorting/order/status, final-paint batches and
 paint-aware intrinsic/ink. Beeswarm, Marginal and Matrix finish the census in
 `../docs/alpha-native-points.md`. All seventeen admitted point families are wired;
-all scientific stroke and fill consumers are also wired; guides and public cutover
-remain subsequent leaves.
+all scientific stroke and fill consumers are also wired. Those private leaves
+preceded the now-completed guide and public cutovers recorded below.
 
 The stroke leaf has connected Qq references, Regression fits, optional Histogram
 KDE, PointInterval/Coefficient/Forest uncertainty and Dumbbell connectors in
@@ -238,8 +239,8 @@ densities bring it to twelve in `../docs/alpha-native-fills.md`. Exact Histogram
 bins, original finite Heatmap cells and Waterfall deltas complete all fifteen in
 `../docs/alpha-bin-cell-delta-fills.md`, including final-contrast font census and
 complete Heatmap intrinsic alpha identity. This closes T6D1's private mark
-consumers; unified automatic guides/parents, public cutover and integrated
-verification remain subsequent leaves.
+consumers; the subsequent unified guides/parents, public cutover and integrated
+verification are also complete in the receipts below.
 
 Guide source provenance and existing-key projections are connected in
 `../docs/alpha-guide-paint-bindings.md`: complete immutable data inputs and semantic
@@ -258,7 +259,8 @@ native and standard owners. `../docs/public-data-alpha.md` records the public
 constructors, exact 17/17/15 target sets, 25 Legend gates and actual example/output
 verification. `../docs/alpha-output-closure.md` closes actual targets across 147
 public family roots and 60 cached/uncached owner/root publications, including
-native Hidden admission. Full-suite and actual release/time/RSS remain T6Z3.
+native Hidden admission. T6Z3's full verification, all ten release groups and
+actual time/peak RSS are complete in `../docs/scientific-foundation-closure.md`.
 
 Do not start a code leaf while its exact owning design is still pending. Use modern
 Rust module layout, the standalone offline renderer and existing pinned dependencies.
