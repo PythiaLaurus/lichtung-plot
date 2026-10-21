@@ -10,7 +10,6 @@ fn selected_role_padding_is_retained_for_fit_and_reassignment() {
     .erase();
     let operation = crate::font::canonical::OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
-    let chart = inputs.attach(source).unwrap();
     let mut theme = crate::Theme::publication().resolve().unwrap();
     theme.typography.annotations.panel_text.font_size = 28;
     theme.annotations = theme
@@ -18,6 +17,7 @@ fn selected_role_padding_is_retained_for_fit_and_reassignment() {
         .clone()
         .with_panel_text_padding(crate::theme::RelativeSpacing::ratio(1, 1).unwrap())
         .unwrap();
+    let chart = inputs.attach_with_guides_for_test(source, &theme).unwrap();
     let panel = PanelBox::new(10.0, 410.0, 20.0, 320.0);
     let result = chart
         .measure_selected_interior(crate::spec::PlotRenderContext::new(

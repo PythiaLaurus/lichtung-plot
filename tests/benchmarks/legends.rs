@@ -996,7 +996,11 @@ fn native_measured_gutters_are_consumed_before_the_final_frame() {
     crate::layout::plan_exact_root(
         640,
         400,
-        |stage| crate::plots::shared_x::prepare_plot(&plot, &stage.operation(), None),
+        |stage| {
+            let inputs = crate::plots::shared_x::prepare_plot(&plot, &stage.operation(), None)?;
+            inputs.prepare_discrete_guides(&plot, &theme, &stage.operation(), &address, false)?;
+            Ok(inputs)
+        },
         |inputs, assigned, round| {
             let plot = inputs.attach(plot.clone())?;
             let canvas = plot.measured_canvas_layout(&theme)?;

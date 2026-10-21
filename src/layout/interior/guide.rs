@@ -481,6 +481,9 @@ impl PreparedInteriorInputs {
         Option<std::sync::Arc<crate::decorations::legend::descriptor::ContinuousDescriptor>>,
         Error,
     > {
+        if chart.continuous_guide_suppressed() {
+            return Ok(None);
+        }
         let field = chart.color_dimension_key().unwrap_or("");
         let descriptor = match chart.kind() {
             PlotKind::Heatmap => panel(
