@@ -1,5 +1,5 @@
 use crate::alpha::{
-    marks::{line_style, ObservationAlpha},
+    marks::{fill_style, line_style, ObservationAlpha},
     AlphaTarget, AlphaUnitKind, ResolvedAlpha,
 };
 use crate::Error;
@@ -45,13 +45,21 @@ pub(crate) fn intrinsic_body_minimum(
         .bodies()
         .violin_body()
         .backend_style((0, 0, 0));
-    let cloud = crate::render::geometry::rectangular_fill_ink_bounds(&cloud_style)?;
-    let (_, cloud_numeric) = crate::render::geometry::rectangular_fill_ink_outset(&cloud_style)?;
+    let mut cloud: Option<crate::render::geometry::GeometryBox> = None;
+    let mut cloud_numeric = 0.0_f64;
     let box_style = theme.marks.fills().bodies().inner_summary().backend_style();
     let box_ink = crate::render::geometry::rectangular_fill_ink_bounds(&box_style)?;
     let (_, box_numeric) = crate::render::geometry::rectangular_fill_ink_outset(&box_style)?;
     let mut median_ink: Option<crate::render::geometry::GeometryBox> = None;
     for group in &prepared.groups {
+        let cloud_style = fill_style(group.fill_alpha, cloud_style.clone());
+        let next = crate::render::geometry::rectangular_fill_ink_bounds(&cloud_style)?;
+        cloud = match (cloud, next) {
+            (Some(current), Some(next)) => Some(current.union(next)),
+            (current, next) => current.or(next),
+        };
+        cloud_numeric = cloud_numeric
+            .max(crate::render::geometry::rectangular_fill_ink_outset(&cloud_style)?.1);
         let next = crate::render::geometry::line_ink_bounds(&line_style(
             group.line_alpha,
             theme.marks.strokes().summaries().median().backend_style(),
@@ -151,6 +159,7 @@ struct PreparedRaincloudGroup {
     geometry: RaincloudGroup,
     alphas: Vec<ObservationAlpha>,
     line_alpha: Option<ResolvedAlpha>,
+    fill_alpha: Option<ResolvedAlpha>,
 }
 
 #[cfg(test)]
@@ -170,6 +179,12 @@ pub(crate) fn prepare(chart: &Plot) -> Result<PreparedRaincloud, Error> {
     fields.extend(input.dimensions.hue.as_deref());
     let line_alpha = chart.prepare_scoped_alpha(
         AlphaTarget::Line,
+        AlphaUnitKind::Aggregate,
+        &fields,
+        chart.data(),
+    )?;
+    let fill_alpha = chart.prepare_scoped_alpha(
+        AlphaTarget::Fill,
         AlphaUnitKind::Aggregate,
         &fields,
         chart.data(),
@@ -204,12 +219,14 @@ pub(crate) fn prepare(chart: &Plot) -> Result<PreparedRaincloud, Error> {
         }))?;
         Ok(PreparedRaincloudGroup {
             alphas,
-            line_alpha: if let Some(hue) = input.dimensions.hue.as_deref().zip(group.hue.as_deref())
-            {
-                line_alpha.keyed(&[(&input.dimensions.category, &group.category), hue])?
-            } else {
-                line_alpha.keyed(&[(&input.dimensions.category, &group.category)])?
-            },
+            line_alpha: line_alpha.aggregate(
+                (&input.dimensions.category, &group.category),
+                input.dimensions.hue.as_deref().zip(group.hue.as_deref()),
+            )?,
+            fill_alpha: fill_alpha.aggregate(
+                (&input.dimensions.category, &group.category),
+                input.dimensions.hue.as_deref().zip(group.hue.as_deref()),
+            )?,
             geometry: RaincloudGroup {
                 category: crate::data::source::copy_source_string(&group.category)?,
                 hue: group
@@ -328,12 +345,15 @@ fn project_cloud_and_summary(
     cloud.push(Point2D::new(baseline_low_x, baseline_low_y));
     payload.polygon(
         cloud,
-        theme
-            .marks
-            .fills()
-            .bodies()
-            .violin_body()
-            .backend_style(color),
+        fill_style(
+            prepared.fill_alpha,
+            theme
+                .marks
+                .fills()
+                .bodies()
+                .violin_body()
+                .backend_style(color),
+        ),
     )?;
 
     let box_center = center + width * 0.02;

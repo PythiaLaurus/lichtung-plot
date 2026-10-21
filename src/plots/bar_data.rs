@@ -2,7 +2,10 @@
 
 #![allow(clippy::cast_precision_loss)]
 
-use crate::alpha::{marks::line_style, AlphaTarget, AlphaUnitKind, ResolvedAlpha};
+use crate::alpha::{
+    marks::{fill_style, line_style},
+    AlphaTarget, AlphaUnitKind, ResolvedAlpha,
+};
 use crate::data::{
     source::{sort_numeric_source, sort_source_by},
     PlotData,
@@ -144,12 +147,14 @@ pub(crate) fn intrinsic_body_minimum(
         .bodies()
         .bar_body()
         .backend_style((0, 0, 0));
-    let body_ink = crate::render::geometry::rectangular_fill_ink_bounds(&body)?;
-    let outline = crate::render::geometry::rectangular_fill_ink_outset(&body)?;
     let mut pitch = 1.0_f64 / 1024.0;
-    let mut numeric = if horizontal { outline.0 } else { outline.1 };
+    let mut numeric = 0.0_f64;
 
     for bar in &prepared.bars {
+        let body = fill_style(bar.fill_alpha, body.clone());
+        let body_ink = crate::render::geometry::rectangular_fill_ink_bounds(&body)?;
+        let outline = crate::render::geometry::rectangular_fill_ink_outset(&body)?;
+        numeric = numeric.max(if horizontal { outline.0 } else { outline.1 });
         let interval = crate::render::geometry::line_ink_width(&line_style(
             bar.line_alpha,
             theme
@@ -297,6 +302,7 @@ pub(crate) struct PreparedBar {
     /// Optional explicit lower and upper interval endpoints around `end`.
     pub(crate) interval: Option<(f64, f64)>,
     pub(crate) line_alpha: Option<ResolvedAlpha>,
+    pub(crate) fill_alpha: Option<ResolvedAlpha>,
 }
 
 /// One attached significance label resolved to a rendered bar or category cluster.
@@ -818,36 +824,38 @@ pub(crate) fn prepare_scoped<'a>(
     #[cfg(test)]
     count(chart.kind(), 0);
     let mut prepared = prepare_core(chart, data, mode, facet)?;
-    if mode != BarMode::Stacked {
-        let category = data
-            .column(
-                chart
-                    .x_col()
-                    .ok_or_else(|| Error::Data("bar category column is missing".into()))?,
-            )?
-            .name();
-        let mut fields = Vec::new();
-        crate::data::source::reserve_source(&mut fields, 2)?;
-        fields.push(category);
-        fields.extend(chart.group_name());
-        let alpha = chart.prepare_scoped_alpha(
+    let category = data
+        .column(
+            chart
+                .x_col()
+                .ok_or_else(|| Error::Data("bar category column is missing".into()))?,
+        )?
+        .name();
+    let mut fields = Vec::new();
+    crate::data::source::reserve_source(&mut fields, 2)?;
+    fields.push(category);
+    fields.extend(chart.group_name());
+    let fill_alpha =
+        chart.prepare_scoped_alpha(AlphaTarget::Fill, AlphaUnitKind::Aggregate, &fields, data)?;
+    let line_alpha = if mode == BarMode::Stacked {
+        None
+    } else {
+        Some(chart.prepare_scoped_alpha(
             AlphaTarget::Line,
             AlphaUnitKind::Aggregate,
             &fields,
             data,
-        )?;
-        for bar in &mut prepared.bars {
-            if bar.interval.is_some() {
-                let key = (category, prepared.categories[bar.category_index].as_str());
-                bar.line_alpha = if let Some(series) = chart.group_name().zip(
-                    bar.series_index
-                        .map(|index| prepared.series[index].as_str()),
-                ) {
-                    alpha.keyed(&[key, series])?
-                } else {
-                    alpha.keyed(&[key])?
-                };
-            }
+        )?)
+    };
+    for bar in &mut prepared.bars {
+        let key = (category, prepared.categories[bar.category_index].as_str());
+        let series = chart.group_name().zip(
+            bar.series_index
+                .map(|index| prepared.series[index].as_str()),
+        );
+        bar.fill_alpha = fill_alpha.aggregate(key, series)?;
+        if let Some(alpha) = line_alpha.as_ref().filter(|_| bar.interval.is_some()) {
+            bar.line_alpha = alpha.aggregate(key, series)?;
         }
     }
     apply_attached_significance(annotations, &mut prepared, mode)?;
@@ -1549,6 +1557,7 @@ fn prepare_single(
             nonzero: value != 0.0,
             interval,
             line_alpha: None,
+            fill_alpha: None,
         });
     }
 
@@ -1657,6 +1666,7 @@ fn prepare_grouped(
             nonzero: value != 0.0,
             interval,
             line_alpha: None,
+            fill_alpha: None,
         });
     }
 
@@ -1789,6 +1799,7 @@ fn prepare_stacked(
                 nonzero: *value != 0.0,
                 interval: None,
                 line_alpha: None,
+                fill_alpha: None,
             });
         }
     }

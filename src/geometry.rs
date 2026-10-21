@@ -487,6 +487,17 @@ mod validation_tests {
                     crate::alpha::AlphaValues::new("summary confidence", [64, 128]).unwrap(),
                 )
                 .unwrap(),
+            )
+            .with_alpha(
+                crate::alpha::AlphaTarget::Fill,
+                crate::alpha::AlphaEncoding::keyed(
+                    [
+                        crate::CategoryValues::new("x", ["b", "a"]).unwrap(),
+                        crate::CategoryValues::new("cohort", ["same", "same"]).unwrap(),
+                    ],
+                    crate::alpha::AlphaValues::new("body confidence", [0, 191]).unwrap(),
+                )
+                .unwrap(),
             );
         assert_eq!(supplied.row_count(), 0);
         let theme = crate::Theme::publication().resolve().unwrap();
@@ -515,6 +526,26 @@ mod validation_tests {
             })
             .collect::<Vec<_>>();
         assert_eq!(alphas, [(1, 0), (1, 230)]);
+        let inner_alpha = theme
+            .marks
+            .fills()
+            .bodies()
+            .inner_summary()
+            .backend_style()
+            .color
+            .alpha();
+        assert_eq!(
+            payload
+                .marks
+                .iter()
+                .filter_map(|mark| match mark {
+                    crate::plots::categorical_distribution::Mark::Polygon(_, style) =>
+                        Some(style.color.alpha()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>(),
+            [191, inner_alpha, 0, inner_alpha]
+        );
         assert_eq!(
             payload
                 .marks

@@ -78,8 +78,6 @@ pub(crate) fn intrinsic_body_minimum(
         .bodies()
         .box_body()
         .backend_style((0, 0, 0));
-    let body = crate::render::geometry::rectangular_fill_ink_bounds(&fill)?;
-    let (_, out_y) = crate::render::geometry::rectangular_fill_ink_outset(&fill)?;
     let overlay = chart.raw_overlay_spec();
     let point_style = if overlay.is_visible() {
         chart.distribution_point_style(theme.marks.points().raw_overlay(), (0, 0, 0))
@@ -91,13 +89,16 @@ pub(crate) fn intrinsic_body_minimum(
         )
     };
     let mut pitch = 1.0_f64 / 1024.0;
-    let mut numeric = out_y;
+    let mut numeric = 0.0_f64;
     for (stat, group) in prepared.stats.iter().zip(&sample.groups) {
+        let fill = crate::alpha::marks::fill_style(group.fill_alpha, fill.clone());
+        let body = crate::render::geometry::rectangular_fill_ink_bounds(&fill)?;
+        let (_, out_y) = crate::render::geometry::rectangular_fill_ink_outset(&fill)?;
         let summary = crate::render::geometry::line_ink_width(&crate::alpha::marks::line_style(
             group.line_alpha,
             theme.marks.strokes().summaries().summary().backend_style(),
         ))?;
-        numeric = numeric.max(summary);
+        numeric = numeric.max(summary).max(out_y);
         if stat.x_index != group.x_index
             || stat.group_index != group.group_index
             || group.x_index >= sample.x_levels.len()
@@ -304,7 +305,10 @@ pub(crate) fn measure_marks(
     for (i, stat) in stats.iter().enumerate() {
         let group = &sample.groups[i];
         let color = colors.color(group.hue_label.as_deref().unwrap_or(&group.label))?;
-        let fill = theme.marks.fills().bodies().box_body().backend_style(color);
+        let fill = crate::alpha::marks::fill_style(
+            group.fill_alpha,
+            theme.marks.fills().bodies().box_body().backend_style(color),
+        );
         let style = crate::alpha::marks::line_style(
             group.line_alpha,
             theme.marks.strokes().summaries().summary().backend_style(),

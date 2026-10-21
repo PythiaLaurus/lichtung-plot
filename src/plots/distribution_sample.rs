@@ -21,6 +21,7 @@ pub(crate) struct DistributionGroup {
     pub(crate) group_index: usize,
     pub(crate) observations: Vec<DistributionObservation>,
     pub(crate) line_alpha: Option<ResolvedAlpha>,
+    pub(crate) fill_alpha: Option<ResolvedAlpha>,
 }
 
 #[derive(Debug)]
@@ -150,6 +151,7 @@ pub(crate) fn prepare_scoped(
             group_index,
             observations,
             line_alpha: None,
+            fill_alpha: None,
         });
     }
     if groups.is_empty() {
@@ -162,13 +164,13 @@ pub(crate) fn prepare_scoped(
     fields.extend(chart.group_name());
     let line_alpha =
         chart.prepare_scoped_alpha(AlphaTarget::Line, AlphaUnitKind::Aggregate, &fields, data)?;
+    let fill_alpha =
+        chart.prepare_scoped_alpha(AlphaTarget::Fill, AlphaUnitKind::Aggregate, &fields, data)?;
     for group in &mut groups {
-        group.line_alpha =
-            if let Some(series) = chart.group_name().zip(group.group_label.as_deref()) {
-                line_alpha.keyed(&[(category, &group.label), series])?
-            } else {
-                line_alpha.keyed(&[(category, &group.label)])?
-            };
+        let key = (category, group.label.as_str());
+        let series = chart.group_name().zip(group.group_label.as_deref());
+        group.line_alpha = line_alpha.aggregate(key, series)?;
+        group.fill_alpha = fill_alpha.aggregate(key, series)?;
     }
     Ok(DistributionSample {
         x_levels,

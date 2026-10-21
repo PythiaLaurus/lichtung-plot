@@ -31,6 +31,14 @@ fn duplicate_outliers_keep_sorted_original_occurrences_and_replacement_paint() {
         )
         .unwrap(),
     )
+    .with_alpha(
+        AlphaTarget::Fill,
+        AlphaEncoding::keyed(
+            [crate::CategoryValues::new("category", ["a"]).unwrap()],
+            AlphaValues::new("body confidence", [0]).unwrap(),
+        )
+        .unwrap(),
+    )
     .erase();
     let prepared = prepare(
         &source,
@@ -149,8 +157,15 @@ fn duplicate_outliers_keep_sorted_original_occurrences_and_replacement_paint() {
     let categorical_distribution::Mark::Polygon(_, fill) = &payload.marks[0] else {
         panic!("Boxplot body")
     };
+    assert_eq!(fill.color.alpha(), 0);
     assert_eq!(
-        fill.color.alpha(),
-        theme.marks.fills().bodies().box_body().fill_alpha()
+        fill.stroke,
+        theme
+            .marks
+            .fills()
+            .bodies()
+            .box_body()
+            .backend_style((fill.color.red(), fill.color.green(), fill.color.blue()))
+            .stroke
     );
 }

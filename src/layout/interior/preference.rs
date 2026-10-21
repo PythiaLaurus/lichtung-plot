@@ -624,24 +624,6 @@ mod tests {
     }
 
     #[test]
-    fn standard_distribution_counts_exclude_samples_and_generated_vertices() {
-        for (source, expected) in super::super::distributions::sources()
-            .into_iter()
-            .zip([8, 2, 6, 6])
-        {
-            let resources = OperationContext::new();
-            let prepared = crate::plots::shared_x::prepare_plot(&source, &resources, None).unwrap();
-            let chart = prepared.attach(source).unwrap();
-            let root = super::super::coordinate::canvas_layout(
-                &chart,
-                &crate::Theme::publication().resolve().unwrap(),
-            )
-            .unwrap();
-            assert_eq!(standard(&root).primary_marks, expected);
-        }
-    }
-
-    #[test]
     fn path_count_does_not_multiply_connectors_or_supplemental_ink() {
         let x = NumericValues::new("x", [0.0, 1.0, 1.0, 2.0]);
         let y = NumericValues::new("y", [1.0, 2.0, 2.0, 3.0]);

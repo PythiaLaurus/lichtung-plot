@@ -19,6 +19,17 @@ fn overlay_alpha_follows_original_slots_and_source_jitter_through_positioned_gro
         )
         .unwrap(),
     )
+    .with_alpha(
+        AlphaTarget::Fill,
+        AlphaEncoding::keyed(
+            [
+                crate::CategoryValues::new("category", ["A", "B"]).unwrap(),
+                crate::CategoryValues::new("cohort", ["v", "u"]).unwrap(),
+            ],
+            AlphaValues::new("body confidence", [64, 128]).unwrap(),
+        )
+        .unwrap(),
+    )
     .raw_overlay(crate::RawOverlay::Jittered)
     .source_rows(crate::SourceRows::new([900, 100, 800, 200]).unwrap())
     .with_alpha(
@@ -83,6 +94,36 @@ fn overlay_alpha_follows_original_slots_and_source_jitter_through_positioned_gro
     let expected = selected.layout.projection.project(expected, 4.0);
     assert_eq!(points[1].0[0], Point2D::new(expected.0, expected.1));
     assert!(points.iter().all(|(_, style)| style.outline.is_some()));
+    assert_eq!(
+        payload
+            .marks
+            .iter()
+            .filter_map(|mark| match mark {
+                categorical_distribution::Mark::Polygon(_, style) => Some(style.color.alpha()),
+                _ => None,
+            })
+            .collect::<Vec<_>>(),
+        [
+            128,
+            theme
+                .marks
+                .fills()
+                .bodies()
+                .inner_summary()
+                .backend_style()
+                .color
+                .alpha(),
+            64,
+            theme
+                .marks
+                .fills()
+                .bodies()
+                .inner_summary()
+                .backend_style()
+                .color
+                .alpha()
+        ]
+    );
     assert_eq!(
         payload
             .marks

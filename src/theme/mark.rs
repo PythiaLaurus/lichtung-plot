@@ -482,6 +482,13 @@ mod tests {
                         crate::alpha::AlphaValues::new("summary confidence", [64]).unwrap(),
                     )
                     .unwrap(),
+                )
+                .with_alpha(
+                    crate::alpha::AlphaTarget::Fill,
+                    crate::alpha::AlphaEncoding::single(
+                        crate::alpha::AlphaValues::new("body confidence", [128]).unwrap(),
+                    )
+                    .unwrap(),
                 );
             let operation = crate::font::canonical::OperationContext::new();
             let inputs = crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
@@ -545,6 +552,27 @@ mod tests {
                 }
             }
             assert_eq!(observed, count);
+            assert_eq!(
+                payload
+                    .marks
+                    .iter()
+                    .filter_map(|mark| match mark {
+                        Mark::Polygon(_, style) => Some(style.color.alpha()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>(),
+                [
+                    128,
+                    theme
+                        .marks
+                        .fills()
+                        .bodies()
+                        .inner_summary()
+                        .backend_style()
+                        .color
+                        .alpha()
+                ]
+            );
             assert_eq!(
                 payload
                     .marks

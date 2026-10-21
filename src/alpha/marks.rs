@@ -3,7 +3,7 @@
 
 use crate::data::source::reserve_source;
 use crate::data::PlotData;
-use crate::render::backend::{LineStyle, Point2D, PointStyle};
+use crate::render::backend::{FillStyle, LineStyle, Point2D, PointStyle};
 use crate::render::geometry::GeometryBox;
 use crate::{Error, Result};
 
@@ -34,6 +34,13 @@ impl ObservationAlpha {
 }
 
 pub(crate) fn line_style(alpha: Option<ResolvedAlpha>, mut style: LineStyle) -> LineStyle {
+    if let Some(value) = alpha {
+        style.color = style.color.with_alpha(value.alpha);
+    }
+    style
+}
+
+pub(crate) fn fill_style(alpha: Option<ResolvedAlpha>, mut style: FillStyle) -> FillStyle {
     if let Some(value) = alpha {
         style.color = style.color.with_alpha(value.alpha);
     }

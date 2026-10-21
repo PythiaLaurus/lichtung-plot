@@ -38,6 +38,18 @@ impl ScopedAlpha<'_> {
             (None, None) => self.keyed(&[]),
         }
     }
+
+    pub(crate) fn aggregate(
+        &self,
+        category: (&str, &str),
+        series: Option<(&str, &str)>,
+    ) -> crate::Result<Option<ResolvedAlpha>> {
+        if let Some(series) = series {
+            self.keyed(&[category, series])
+        } else {
+            self.keyed(&[category])
+        }
+    }
 }
 
 impl<K: crate::kind::Marker> Plot<K> {

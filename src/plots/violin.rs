@@ -116,8 +116,6 @@ pub(crate) fn intrinsic_body_minimum(
         .bodies()
         .violin_body()
         .backend_style((0, 0, 0));
-    let cloud = crate::render::geometry::rectangular_fill_ink_bounds(&cloud_style)?;
-    let (_, cloud_y) = crate::render::geometry::rectangular_fill_ink_outset(&cloud_style)?;
     let inner_style = theme.marks.fills().bodies().inner_summary().backend_style();
     let inner = crate::render::geometry::rectangular_fill_ink_bounds(&inner_style)?;
     let (_, inner_y) = crate::render::geometry::rectangular_fill_ink_outset(&inner_style)?;
@@ -130,7 +128,7 @@ pub(crate) fn intrinsic_body_minimum(
     };
     let style = chart.distribution_point_style(role, (0, 0, 0));
     let mut pitch = 1.0_f64 / 1024.0;
-    let mut numeric = cloud_y.max(inner_y);
+    let mut numeric = inner_y;
     let body_half = if raincloud { 0.4 * width } else { width };
     pitch = pitch.max((1.0 / 1024.0) / body_half);
     let grow = |pitch: &mut f64,
@@ -153,6 +151,10 @@ pub(crate) fn intrinsic_body_minimum(
         Ok(())
     };
     for group in &sample.groups {
+        let cloud_style = crate::alpha::marks::fill_style(group.fill_alpha, cloud_style.clone());
+        let cloud = crate::render::geometry::rectangular_fill_ink_bounds(&cloud_style)?;
+        let (_, cloud_y) = crate::render::geometry::rectangular_fill_ink_outset(&cloud_style)?;
+        numeric = numeric.max(cloud_y);
         let summary_ink =
             crate::render::geometry::line_ink_bounds(&crate::alpha::marks::line_style(
                 group.line_alpha,
@@ -418,12 +420,15 @@ pub(crate) fn measure_marks(
             0.8
         };
 
-        let fill = theme
-            .marks
-            .fills()
-            .bodies()
-            .violin_body()
-            .backend_style(group_color(group, &colors)?);
+        let fill = crate::alpha::marks::fill_style(
+            group.fill_alpha,
+            theme
+                .marks
+                .fills()
+                .bodies()
+                .violin_body()
+                .backend_style(group_color(group, &colors)?),
+        );
         match distribution_layout {
             DistributionLayout::Mirrored => {
                 // Violin shape

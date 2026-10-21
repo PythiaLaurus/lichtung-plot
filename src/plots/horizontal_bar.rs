@@ -177,7 +177,10 @@ pub(crate) fn measure_marks(
                     .uncertainty()
                     .backend_style(),
             ),
-            fill: theme.marks.fills().bodies().bar_body().backend_style(color),
+            fill: crate::alpha::marks::fill_style(
+                bar.fill_alpha,
+                theme.marks.fills().bodies().bar_body().backend_style(color),
+            ),
             interval: bar
                 .interval
                 .map(|(lower, upper)| {
