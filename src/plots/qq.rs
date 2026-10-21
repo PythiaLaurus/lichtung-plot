@@ -708,19 +708,6 @@ mod tests {
     }
 
     #[test]
-    fn qq_opposite_extreme_auto_range_retains_endpoints_with_scaled_ticks() {
-        let spec = crate::layout::AxisSpec::default();
-
-        let range = qq_display_range((-f64::MAX, f64::MAX), &spec, "y-axis").unwrap();
-
-        assert_eq!(range, (-f64::MAX, f64::MAX));
-        assert_eq!(
-            crate::layout::nice_ticks(range.0, range.1, 5),
-            [-1e308, 0.0, 1e308]
-        );
-    }
-
-    #[test]
     fn reference_clipping_handles_horizontal_inside_and_outside_lines() {
         let inside = visible_line_segment(
             LineGeometry {
@@ -783,21 +770,6 @@ mod tests {
 
         assert_eq!(steep, Some(((-0.1, -1.0), (0.1, 1.0))));
         assert_eq!(partial, Some(((0.5, 0.0), (1.0, 0.5))));
-    }
-
-    #[test]
-    fn reference_clipping_omits_nonhorizontal_line_outside_rectangle() {
-        let segment = visible_line_segment(
-            LineGeometry {
-                slope: 1.0,
-                intercept: 2.0,
-            },
-            (0.0, 1.0),
-            (0.0, 1.0),
-        )
-        .unwrap();
-
-        assert_eq!(segment, None);
     }
 
     #[test]

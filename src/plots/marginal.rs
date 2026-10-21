@@ -19,6 +19,10 @@
     clippy::unnecessary_cast
 )]
 
+use crate::alpha::{
+    marks::{point_ink, push_point, require_aligned_points, ObservationAlpha},
+    AlphaTarget, AlphaUnitKind,
+};
 use crate::decorations::legend::source::{FillRole, PointRole};
 use crate::decorations::legend::GuideSourceKey;
 use crate::layout::{self, AxisSpec, PanelBox};
@@ -41,7 +45,7 @@ struct HueGroup {
     collapsed: bool,
     x: Vec<f64>,
     y: Vec<f64>,
-    source_rows: Vec<usize>,
+    alphas: Vec<ObservationAlpha>,
     x_bandwidth: f64,
     y_bandwidth: f64,
 }
@@ -163,11 +167,22 @@ pub(crate) fn intrinsic_body_minimum(
     let mut central =
         crate::layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
 
-    for _ in &prepared.groups {
+    for group in &prepared.groups {
         let style = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().marginal());
-        let (x, y) = crate::render::geometry::point_ink_dimensions(&style)?;
-        central.0 = central.0.max(x);
-        central.1 = central.1.max(y);
+        require_aligned_points(group.x.len(), group.alphas.len())?;
+        if let Some(ink) = point_ink(
+            &style,
+            group
+                .x
+                .iter()
+                .zip(&group.y)
+                .zip(&group.alphas)
+                .map(|((&x, &y), &alpha)| (x, y, alpha)),
+        )? {
+            let (x, y) = ink.dimensions();
+            central.0 = central.0.max(x);
+            central.1 = central.1.max(y);
+        }
     }
     let density = theme
         .marks
@@ -195,9 +210,8 @@ struct MarginalCurves {
 
 #[derive(Debug)]
 struct MarginalGroupPayload {
-    points: Vec<Point2D>,
+    point_batches: Vec<(Vec<Point2D>, crate::render::backend::PointStyle)>,
     source_rows: Vec<usize>,
-    point_style: crate::render::backend::PointStyle,
     top: Vec<Point2D>,
     right: Vec<Point2D>,
     fill: FillStyle,
@@ -289,7 +303,10 @@ impl MarginalPayload {
         }
         for group in &self.groups {
             with_clip(backend, self.clips()[0], |backend| {
-                backend.draw_scatter(&group.points, &group.point_style)
+                for (points, style) in &group.point_batches {
+                    backend.draw_scatter(points, style)?;
+                }
+                Ok(())
             })?;
             with_clip(backend, self.clips()[1], |backend| {
                 backend.draw_polygon(&group.top, &group.fill)
@@ -600,22 +617,36 @@ pub(crate) fn measure(
     crate::data::source::reserve_source(&mut selected, groups.len())?;
     let (colors, accents) = prepared.resolved_colors(chart, theme, data)?;
     let mut source = [(f64::INFINITY, f64::NEG_INFINITY); 2];
-    let mut point_ink: Option<crate::render::geometry::GeometryBox> = None;
+    let mut point_bounds: Option<crate::render::geometry::GeometryBox> = None;
     for (gi, group) in groups.iter().enumerate() {
         let color = PreparedMarginal::group_color(group, &colors, &accents)?;
         let point_style = chart.point_style(theme, color, theme.marks.points().radii().marginal());
-        if let Some(ink) = crate::render::geometry::point_ink_bounds(&point_style)? {
-            point_ink = Some(point_ink.map_or(ink, |previous| previous.union(ink)));
+        require_aligned_points(group.x.len(), group.alphas.len())?;
+        if let Some(ink) = point_ink(
+            &point_style,
+            group
+                .x
+                .iter()
+                .zip(&group.y)
+                .zip(&group.alphas)
+                .map(|((&x, &y), &alpha)| (x, y, alpha)),
+        )? {
+            point_bounds =
+                Some(point_bounds.map_or(ink.bounds, |previous| previous.union(ink.bounds)));
+            for (source, range) in source.iter_mut().zip(ink.ranges) {
+                source.0 = source.0.min(range.0);
+                source.1 = source.1.max(range.1);
+            }
         }
-        let pts =
-            crate::data::source::collect_source(group.x.iter().zip(&group.y).map(|(&x, &y)| {
-                source[0].0 = source[0].0.min(x);
-                source[0].1 = source[0].1.max(x);
-                source[1].0 = source[1].0.min(y);
-                source[1].1 = source[1].1.max(y);
-                let (x, y) = panels[0].projection.project(x, y);
-                Ok(Point2D::new(x, y))
-            }))?;
+        let mut point_batches = Vec::new();
+        for ((&x, &y), &alpha) in group.x.iter().zip(&group.y).zip(&group.alphas) {
+            let (x, y) = panels[0].projection.project(x, y);
+            push_point(
+                &mut point_batches,
+                Point2D::new(x, y),
+                alpha.point(point_style.clone()),
+            )?;
+        }
         let mut top_poly = Vec::new();
         let mut right_poly = Vec::new();
         crate::data::source::reserve_source(&mut top_poly, n_grid + 2)?;
@@ -662,17 +693,16 @@ pub(crate) fn measure(
             .marginal_density()
             .backend_style(color);
         selected.push(MarginalGroupPayload {
-            points: pts,
+            point_batches,
             source_rows: crate::data::source::collect_source(
-                group.source_rows.iter().copied().map(Ok),
+                group.alphas.iter().map(|alpha| Ok(alpha.source_row)),
             )?,
-            point_style,
             top: top_poly,
             right: right_poly,
             fill,
         });
     }
-    let mut domain_expansions = if let Some(ink) = point_ink {
+    let mut domain_expansions = if let Some(ink) = point_bounds {
         crate::layout::interior::automatic_mark_ink_expansions(
             source,
             proj,
@@ -744,7 +774,9 @@ pub(crate) fn measure(
         }
     }
     for group in &payload.groups {
-        geometry.scatter(&group.points, &group.point_style, central_panel)?;
+        for (points, style) in &group.point_batches {
+            geometry.scatter(points, style, central_panel)?;
+        }
         geometry.polygon(&group.top, &group.fill, Some(top_panel))?;
         geometry.polygon(&group.right, &group.fill, Some(right_panel))?;
     }
@@ -933,6 +965,7 @@ fn build_groups<'a>(
     data: impl Into<crate::data::PlotData<'a>>,
 ) -> Result<(Vec<HueGroup>, Vec<String>), Error> {
     let data = data.into();
+    let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
 
     let x_col = chart
         .x_col()
@@ -971,15 +1004,15 @@ fn build_groups<'a>(
             .filter(|(_, row_identity)| *row_identity == identity);
         let mut x = Vec::new();
         let mut y = Vec::new();
-        let mut source_rows = Vec::new();
+        let mut alphas = Vec::new();
         crate::data::source::reserve_source(&mut x, count)?;
         crate::data::source::reserve_source(&mut y, count)?;
-        crate::data::source::reserve_source(&mut source_rows, count)?;
+        crate::data::source::reserve_source(&mut alphas, count)?;
 
         for ((row, x_value, y_value), _) in selected {
             x.push(*x_value);
             y.push(*y_value);
-            source_rows.push(data.source_row(*row));
+            alphas.push(ObservationAlpha::resolve(data, &alpha, *row)?);
         }
         if x.is_empty() {
             continue;
@@ -1009,7 +1042,7 @@ fn build_groups<'a>(
             collapsed: channels.collapsed,
             x,
             y,
-            source_rows,
+            alphas,
             x_bandwidth,
             y_bandwidth,
         });
@@ -1098,3 +1131,6 @@ fn kde_visible_support_range<'a>(
 
     Ok((low.is_finite() && high.is_finite() && low < high).then_some((low, high)))
 }
+
+#[cfg(test)]
+mod alpha_tests;

@@ -7,6 +7,7 @@
     clippy::too_many_lines
 )]
 
+use crate::alpha::{marks::ObservationAlpha, AlphaTarget, AlphaUnitKind};
 use crate::layout::{Layout, PanelBox, PhysicalTextAlignment};
 use crate::render::backend::{with_clip, Backend, GradientStop, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
@@ -22,7 +23,7 @@ pub(crate) struct PreparedBeeswarmInputs {
 pub(crate) struct PreparedBeeswarm {
     pub(crate) levels: Vec<String>,
     pub(crate) x_data: (f64, f64),
-    rows: Vec<(usize, f64, f64, usize)>,
+    rows: Vec<(usize, f64, f64, ObservationAlpha)>,
     colors: Vec<crate::theme::OpaqueColor>,
     selection: crate::theme::ContinuousColorScale,
     scale: crate::theme::ContinuousColors,
@@ -54,9 +55,15 @@ pub(crate) fn intrinsic_body_minimum(
         ));
     }
     let point = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().beeswarm());
-    let ink = crate::render::geometry::point_ink_bounds(&point)?;
+    let ink = crate::alpha::marks::point_ink(
+        &point,
+        prepared
+            .rows
+            .iter()
+            .map(|&(_, x, _, alpha)| (x, 0.0, alpha)),
+    )?;
 
-    let pitch = 2.0 * quanta_pixels(packing::radius(&point)?);
+    let pitch = 2.0 * quanta_pixels(packing_radius(chart, theme)?);
     for &(category, _, _, _) in &prepared.rows {
         if category >= prepared.levels.len() {
             return Err(Error::Render(
@@ -72,7 +79,7 @@ pub(crate) fn intrinsic_body_minimum(
             "Beeswarm category hard span overflowed".into(),
         ));
     }
-    let mut numeric = ink.map_or(0.0, |ink| ink.right - ink.left);
+    let mut numeric = ink.map_or(0.0, |ink| ink.dimensions().0);
     if chart.zero_line_visible() && prepared.x_data.0 <= 0.0 && prepared.x_data.1 >= 0.0 {
         numeric = numeric.max(crate::render::geometry::line_ink_width(
             &theme
@@ -99,11 +106,22 @@ fn quanta_pixels(value: i64) -> f64 {
     value as f64 / 1024.0
 }
 
+fn packing_radius(chart: &Plot, theme: &crate::theme::ResolvedTheme) -> Result<i64, Error> {
+    let mut style = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().beeswarm());
+    // A data-alpha binding retains every observation's full glyph in the
+    // scientific packing input, independent of which bytes are transparent.
+    if !chart.alpha_inputs().get(AlphaTarget::Point).is_theme() {
+        style.color = style.color.with_alpha(255);
+    }
+    packing::radius(&style)
+}
+
 pub(crate) fn prepare(
     chart: &Plot,
     data: crate::data::PlotData<'_>,
     selection: crate::theme::ContinuousColorScale,
 ) -> Result<PreparedBeeswarm, Error> {
+    let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     let category_col = chart
         .y_col()
         .ok_or_else(|| Error::Data("beeswarm: categorical row column not set".into()))?;
@@ -137,12 +155,18 @@ pub(crate) fn prepare(
                     let index = indices
                         .binary_search_by_key(&category.as_str(), |entry| entry.0)
                         .map_err(|_| Error::Data("beeswarm: category identity missing".into()))?;
-                    Ok((indices[index].1, *x, *color, data.source_row(row)))
+                    Ok((
+                        indices[index].1,
+                        *x,
+                        *color,
+                        ObservationAlpha::resolve(data, &alpha, row)?,
+                    ))
                 },
             ),
         )?;
     crate::data::source::sort_source_by(&mut rows, |a, b| {
-        a.0.cmp(&b.0).then_with(|| a.3.cmp(&b.3))
+        a.0.cmp(&b.0)
+            .then_with(|| a.3.source_row.cmp(&b.3.source_row))
     });
     let format = chart.color_label_format_spec().cloned();
     let values = if chart.continuous_guide_suppressed() {
@@ -265,12 +289,15 @@ pub(crate) fn natural_body_height(
         .ok_or_else(|| Error::Render("natural Beeswarm axes missing".into()))?;
     let range = chart.x_axis_spec().limits.unwrap_or(axes.ranges[0]);
     let projection = crate::layout::Projection::new(range, (0.0, 1.0), (0.0, width, 0.0, 1.0));
-    let radius = packing::radius(&chart.point_style(
-        theme,
-        (0, 0, 0),
-        theme.marks.points().radii().beeswarm(),
-    ))?;
-    let packed = packing::pack(&marks.rows, &projection, radius)?;
+    let radius = packing_radius(chart, theme)?;
+    let packed = packing::pack(
+        marks
+            .rows
+            .iter()
+            .map(|&(category, value, color, alpha)| (category, value, color, alpha.source_row)),
+        &projection,
+        radius,
+    )?;
     let hard = intrinsic_body_minimum(chart, theme)?;
     let height = quanta_pixels(packed.hard_pitch)
         .max(2.0 * f64::from(theme.typography.axes.tick_label.font_size))
@@ -319,12 +346,15 @@ pub(crate) fn measure(
         theme,
         context.fit_scope(),
     )?;
-    let radius = packing::radius(&chart.point_style(
-        theme,
-        (0, 0, 0),
-        theme.marks.points().radii().beeswarm(),
-    ))?;
-    let packed = packing::pack(&prepared.rows, &projection, radius)?;
+    let radius = packing_radius(chart, theme)?;
+    let packed = packing::pack(
+        prepared
+            .rows
+            .iter()
+            .map(|&(category, value, color, alpha)| (category, value, color, alpha.source_row)),
+        &projection,
+        radius,
+    )?;
     let labels = axes.display_categories[1]
         .as_ref()
         .ok_or_else(|| Error::Render("Beeswarm category labels missing".into()))?;
@@ -415,9 +445,13 @@ pub(crate) fn measure(
     } else {
         None
     };
-    let points =
-        crate::data::source::collect_source(packed.points.iter().zip(&prepared.colors).map(
-            |(point, &color)| {
+    let points = crate::data::source::collect_source(
+        packed
+            .points
+            .iter()
+            .zip(&prepared.colors)
+            .zip(&prepared.rows)
+            .map(|((point, &color), row)| {
                 let band = bands[point.category];
                 let middle =
                     crate::layout::kernel::nearest_spatial_quanta(f64::midpoint(band.0, band.1))?;
@@ -426,14 +460,14 @@ pub(crate) fn measure(
                     .ok_or_else(|| Error::Render("Beeswarm arranged point overflow".into()))?;
                 Ok((
                     Point2D::new(quanta_pixels(point.x), quanta_pixels(y)),
-                    chart.point_style(
+                    row.3.point(chart.point_style(
                         theme,
                         color.as_rgb(),
                         theme.marks.points().radii().beeswarm(),
-                    ),
+                    )),
                 ))
-            },
-        ))?;
+            }),
+    )?;
     let mut payload = BeeswarmPayload {
         clip: layout.projection.panel_box(),
         zero,

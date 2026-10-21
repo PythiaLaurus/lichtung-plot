@@ -4,10 +4,11 @@
 closure, public preferred tick intervals and root-sizing closure are complete;
 scientific numeric presentation and focused section-guide acceptance are complete.
 The subsequent DF3/DF4 closure review admitted data alpha and numeric target/maximum
-tick selection in `97_ALPHA_AND_TICK_EXTENSION_PLAN.md`; numeric source/API design
-and private bounded count sources are complete; public generation cutover and
-data-alpha work remain pending. Fully caller-decided legends join DF11's
-post-first-release AI-workflow review.
+tick selection in `97_ALPHA_AND_TICK_EXTENSION_PLAN.md`; numeric selection source,
+public cutover and focused parent/output closure are complete. Data-alpha owned
+values, explicit bindings and all point-family consumers are complete; scientific
+strokes/fills, unified guides and alpha public cutover remain in progress. Fully
+caller-decided legends join DF11's post-first-release AI-workflow review.
 
 **Current execution checkpoint:** the user-authorized resumption completed the
 mark/annotation leaf, T6B1d4d, and the private-value umbrella T6B1. Evidence is in
@@ -205,7 +206,7 @@ labels, not existing commits.
 | T6N | COMPLETE | T6C | Unified scientific numeric formatting; leaves below |
 | T6L | COMPLETE | T6N | One section-aware discrete guide; focused closure in `docs/section-composition-acceptance.md` |
 | T6T | COMPLETE | T6L | TickGeneration design/source/public cutover and focused parent/root/output closure; `docs/public-tick-generation.md` / `docs/tick-generation-parent-closure.md` |
-| T6D | IN PROGRESS | T6T | Exact explicit-unit/49-gate design, private AlphaValues and explicit bindings/source slots complete; `docs/data-alpha-design.md`, `docs/owned-alpha-values.md`, `docs/explicit-alpha-bindings.md`; actual consumers/guides/public cutover remain in spec97 |
+| T6D | IN PROGRESS | T6T | Exact explicit-unit/49-gate design, private AlphaValues, explicit bindings/source slots and all 17 point consumers complete; `docs/data-alpha-design.md`, `docs/owned-alpha-values.md`, `docs/explicit-alpha-bindings.md`, `docs/alpha-native-points.md`; strokes/fills/guides/public cutover remain in spec97 |
 | T6Z | PENDING | T6D | Integrated contract and phase closure |
 | T6Z1 | PENDING | T6D | Complete public examples/current-spec and property/consumer census reconciliation; `docs(api): reconcile scientific plotting contracts` |
 | T6Z2 | COMPLETE | User closure review | User-approved DF3/DF4 admission in spec97, residual DF4 checkpoint and fully caller-decided legends in DF11 |

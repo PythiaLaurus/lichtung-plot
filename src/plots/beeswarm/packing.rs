@@ -53,7 +53,7 @@ pub(super) fn radius(style: &crate::render::backend::PointStyle) -> Result<i64, 
 }
 
 pub(super) fn pack(
-    rows: &[(usize, f64, f64, usize)],
+    rows: impl ExactSizeIterator<Item = (usize, f64, f64, usize)>,
     projection: &Projection,
     radius: i64,
 ) -> Result<Swarm, Error> {
@@ -67,7 +67,7 @@ pub(super) fn pack(
     let mut first = 0;
     let mut previous_category = None;
     let mut hard_pitch = 1_i64;
-    for &(category, value, _, source_row) in rows {
+    for (category, value, _, source_row) in rows {
         if previous_category != Some(category) {
             if previous_category.is_some_and(|previous| previous > category) {
                 return Err(Error::Render(
@@ -184,7 +184,7 @@ mod tests {
             (0, 0.0, -1.0, 2),
             (0, 0.0, 2.0, 3),
         ];
-        let result = pack(&rows, &projection, 2).unwrap();
+        let result = pack(rows.into_iter(), &projection, 2).unwrap();
         assert_eq!(
             result
                 .points
@@ -203,7 +203,7 @@ mod tests {
         );
         assert_eq!(result.hard_pitch, 20);
         let separated = [(0, 0.0, 0.0, 0), (0, 4.0 / 1024.0, 0.0, 1)];
-        let result = pack(&separated, &projection, 2).unwrap();
+        let result = pack(separated.into_iter(), &projection, 2).unwrap();
         assert_eq!(
             result
                 .points
@@ -218,7 +218,7 @@ mod tests {
     fn nonintegral_tangent_distances_round_outward_once() {
         let projection = Projection::new((-1.0, 1.0), (0.0, 1.0), (0.0, 2.0, 0.0, 1.0));
         let rows = [(0, 0.0, 0.0, 0), (0, 1.0 / 1024.0, 0.0, 1)];
-        let result = pack(&rows, &projection, 2).unwrap();
+        let result = pack(rows.into_iter(), &projection, 2).unwrap();
         assert_eq!(result.points[1].x - result.points[0].x, 1);
         assert_eq!(result.points[1].offset, -4);
         assert_eq!(ceil_sqrt(0).unwrap(), 0);
@@ -252,7 +252,7 @@ mod tests {
             }
 
             let projection = Projection::new((-1.0, 1.0), (0.0, 1.0), (0.0, 200.0, 0.0, 100.0));
-            let result = pack(&rows, &projection, radius).unwrap();
+            let result = pack(rows.iter().copied(), &projection, radius).unwrap();
             for (index, point) in result.points.iter().enumerate() {
                 for previous in &result.points[..index] {
                     let dx = i128::from(point.x) - i128::from(previous.x);
@@ -263,17 +263,6 @@ mod tests {
                     );
                 }
             }
-        }
-    }
-
-    #[test]
-    fn coincident_packing_retains_every_input_point() {
-        let projection = Projection::new((-1.0, 1.0), (0.0, 1.0), (0.0, 200.0, 0.0, 100.0));
-        for count in [8, 16, 32, 64] {
-            let rows = (0..count).map(|row| (0, 0.0, 0.0, row)).collect::<Vec<_>>();
-
-            let packed = pack(&rows, &projection, 10).unwrap();
-            assert_eq!(packed.points.len(), count);
         }
     }
 }

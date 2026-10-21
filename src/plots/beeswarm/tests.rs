@@ -1,6 +1,101 @@
 use super::*;
 use crate::decorations::legend::descriptor::ContinuousContributor;
+use crate::layout;
 use crate::theme::{ColorDomain, ColorStop, ContinuousColorScale, DivergingGradient, OpaqueColor};
+
+#[test]
+fn point_alpha_retains_source_order_color_samples_and_coincident_packing_even_at_zero() {
+    let source = Plot::beeswarm(
+        crate::CategoryValues::new("category", ["a"; 5]).unwrap(),
+        crate::NumericValues::new("value", [0.0; 5]),
+        crate::NumericValues::new("color", [-2.0, -1.0, 0.0, 1.0, 2.0]),
+    )
+    .source_rows(crate::SourceRows::new([90, 10, 80, 20, 70]).unwrap())
+    .with_alpha(
+        AlphaTarget::Point,
+        crate::alpha::AlphaEncoding::observations(
+            crate::alpha::AlphaValues::new("confidence", [0, 64, 128, 230, 0]).unwrap(),
+        ),
+    )
+    .x_limits(-1.0, 1.0)
+    .hide_point_outline()
+    .erase()
+    .with_suppressed_continuous_guide();
+    let mut theme = crate::Theme::publication().resolve().unwrap();
+    let primary = theme
+        .marks
+        .points()
+        .primary()
+        .clone()
+        .with_fill_alpha(0)
+        .unwrap();
+    let points = theme.marks.points().clone().with_primary(primary).unwrap();
+    theme.marks = theme.marks.clone().with_points(points).unwrap();
+    let select = |source: &Plot| {
+        let chart = crate::plots::shared_x::prepare_panel_for_test(source, &theme).unwrap();
+        chart
+            .measure_selected_interior(PlotRenderContext::new(
+                chart.data(),
+                PanelBox::new(20.0, 700.0, 20.0, 420.0),
+                &theme,
+            ))
+            .unwrap()
+    };
+    let varied = select(&source);
+    let layout::interior::MarkPayload::Beeswarm(varied) = &varied.marks.as_ref().unwrap().payload
+    else {
+        panic!("Beeswarm payload")
+    };
+    assert_eq!(
+        varied.source_rows,
+        [(0, 10), (0, 20), (0, 70), (0, 80), (0, 90)]
+    );
+    assert_eq!(
+        varied
+            .points
+            .iter()
+            .map(|(_, style)| style.color.alpha())
+            .collect::<Vec<_>>(),
+        [64, 230, 0, 128, 0]
+    );
+    let transparent = source.clone().with_alpha(
+        AlphaTarget::Point,
+        crate::alpha::AlphaEncoding::observations(
+            crate::alpha::AlphaValues::new("confidence", [0; 5]).unwrap(),
+        ),
+    );
+    let opaque = source.with_alpha(
+        AlphaTarget::Point,
+        crate::alpha::AlphaEncoding::observations(
+            crate::alpha::AlphaValues::new("confidence", [255; 5]).unwrap(),
+        ),
+    );
+    let transparent = select(&transparent);
+    let layout::interior::MarkPayload::Beeswarm(transparent) =
+        &transparent.marks.as_ref().unwrap().payload
+    else {
+        panic!("Beeswarm payload")
+    };
+    let opaque = select(&opaque);
+    let layout::interior::MarkPayload::Beeswarm(opaque) = &opaque.marks.as_ref().unwrap().payload
+    else {
+        panic!("Beeswarm payload")
+    };
+    assert_eq!(transparent.points.len(), 5);
+    assert!(transparent.geometry().unwrap().bounds().is_empty());
+    assert_eq!(varied.source_rows, opaque.source_rows);
+    for (((point, style), (opaque, opaque_style)), (transparent, _)) in varied
+        .points
+        .iter()
+        .zip(&opaque.points)
+        .zip(&transparent.points)
+    {
+        assert_eq!(point, opaque);
+        assert_eq!(point, transparent);
+        assert_eq!(style.color.with_alpha(255), opaque_style.color);
+        assert!(style.outline.is_none());
+    }
+}
 
 #[test]
 fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() {

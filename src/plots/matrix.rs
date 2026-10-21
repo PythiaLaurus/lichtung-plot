@@ -21,6 +21,10 @@
     clippy::if_not_else
 )]
 
+use crate::alpha::{
+    marks::{point_ink, push_point, require_aligned_points, ObservationAlpha},
+    AlphaTarget, AlphaUnitKind,
+};
 use crate::decorations::legend::source::{FillRole, PointRole};
 use crate::decorations::legend::{GuideSourceKey, Legend};
 use crate::layout::{self, Layout, PanelBox};
@@ -40,7 +44,7 @@ struct HueGroup {
     collapsed: bool,
     /// Per-column data vectors (same order as `cols`).
     columns: Vec<Vec<f64>>,
-    source_rows: Vec<usize>,
+    alphas: Vec<ObservationAlpha>,
     /// Strict Scott bandwidth per matrix column.
     bandwidths: Vec<f64>,
 }
@@ -55,6 +59,17 @@ pub(crate) struct PreparedMatrixAxes {
 }
 
 impl PreparedMatrixAxes {
+    fn point_dimensions(&self, chart: &Plot, theme: &ResolvedTheme) -> Result<(f64, f64), Error> {
+        let style = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().matrix());
+        Ok(point_ink(
+            &style,
+            self.groups
+                .iter()
+                .flat_map(|group| group.alphas.iter().map(|&alpha| (0.0, 0.0, alpha))),
+        )?
+        .map_or((0.0, 0.0), |ink| ink.dimensions()))
+    }
+
     pub(crate) fn hue_levels(&self) -> &[String] {
         &self.hues
     }
@@ -115,12 +130,9 @@ pub(crate) fn intrinsic_body_minimum(
         (2.0 * out_y).max(1.0 / 1024.0),
     );
 
-    for _ in &prepared.groups {
-        let style = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().matrix());
-        let (x, y) = crate::render::geometry::point_ink_dimensions(&style)?;
-        cell.0 = cell.0.max(x);
-        cell.1 = cell.1.max(y);
-    }
+    let point = prepared.point_dimensions(chart, theme)?;
+    cell.0 = cell.0.max(point.0);
+    cell.1 = cell.1.max(point.1);
     let mut width = 0.0;
     let mut height = 0.0;
     for label in &prepared.labels {
@@ -148,8 +160,7 @@ pub(crate) fn natural_body_preference(
         .ok_or_else(|| Error::Render("natural Matrix variables missing".into()))?;
     let hard = intrinsic_body_minimum(chart, theme)?;
 
-    let point = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().matrix());
-    let point = crate::render::geometry::point_ink_dimensions(&point)?;
+    let point = marks.point_dimensions(chart, theme)?;
     let density = theme
         .marks
         .fills()
@@ -214,7 +225,11 @@ const KDE_POINTS: usize = 60;
 
 #[derive(Debug)]
 enum MatrixPrimitive {
-    Scatter(Vec<Point2D>, Vec<usize>, crate::render::backend::PointStyle),
+    Scatter(
+        Vec<Point2D>,
+        Vec<ObservationAlpha>,
+        crate::render::backend::PointStyle,
+    ),
     Polygon(Vec<Point2D>, FillStyle),
 }
 
@@ -265,7 +280,7 @@ impl MatrixPayload {
             for mark in &cell.marks {
                 if let MatrixPrimitive::Scatter(_, rows, _) = mark {
                     for row in rows {
-                        round.observe_count(*row)?;
+                        round.observe_count(row.source_row)?;
                     }
                 }
             }
@@ -435,8 +450,7 @@ pub(crate) fn measure(
         .matrix_density()
         .backend_style((0, 0, 0));
     let ink = crate::render::geometry::rectangular_fill_ink_outset(&density)?;
-    let point = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().matrix());
-    let point = crate::render::geometry::point_ink_dimensions(&point)?;
+    let point = prepared.point_dimensions(chart, theme)?;
     let specs = crate::data::source::collect_source(display_cols.iter().map(|label| {
         let hard = layout::fit::intrinsic_widths(
             theme,
@@ -685,17 +699,28 @@ pub(crate) fn measure(
                 for (group, &color) in groups.iter().zip(&group_colors) {
                     let xs = &group.columns[col];
                     let ys = &group.columns[row];
+                    require_aligned_points(xs.len(), group.alphas.len())?;
                     let ps = chart.point_style(theme, color, theme.marks.points().radii().matrix());
-                    let pts = crate::data::source::collect_source(xs.iter().zip(ys.iter()).map(
-                        |(&xi, &yi)| {
-                            let (px, py) = cell_layout.projection.project(xi, yi);
-                            Ok(Point2D::new(px, py))
-                        },
-                    ))?;
-                    let rows = crate::data::source::collect_source(
-                        group.source_rows.iter().copied().map(Ok),
-                    )?;
-                    cell.marks.push(MatrixPrimitive::Scatter(pts, rows, ps));
+                    let mut batches = Vec::new();
+                    for ((&xi, &yi), &alpha) in xs.iter().zip(ys).zip(&group.alphas) {
+                        let (x, y) = cell_layout.projection.project(xi, yi);
+                        push_point(&mut batches, Point2D::new(x, y), alpha.point(ps.clone()))?;
+                    }
+                    let mut offset = 0_usize;
+                    crate::data::source::reserve_source(&mut cell.marks, batches.len())?;
+                    for (points, style) in batches {
+                        let end = offset.checked_add(points.len()).ok_or_else(|| {
+                            Error::Render("Matrix point membership offset overflow".into())
+                        })?;
+                        let members = group.alphas.get(offset..end).ok_or_else(|| {
+                            Error::Render("Matrix point membership is not aligned".into())
+                        })?;
+                        let members =
+                            crate::data::source::collect_source(members.iter().copied().map(Ok))?;
+                        cell.marks
+                            .push(MatrixPrimitive::Scatter(points, members, style));
+                        offset = end;
+                    }
                 }
             }
 
@@ -1025,6 +1050,7 @@ fn build_groups(
     cols: &[&str],
     data: crate::data::PlotData<'_>,
 ) -> Result<(Vec<HueGroup>, Vec<String>), Error> {
+    let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     let columns = extract_columns_f64(data, cols)?;
     let channels = crate::data::observed_collectives(
         data,
@@ -1074,8 +1100,9 @@ fn build_groups(
         groups.push(HueGroup {
             identity: crate::data::source::copy_source_pair(identity)?,
             collapsed: channels.collapsed,
-            source_rows: crate::data::source::collect_source(
-                rows.iter().map(|row| Ok(data.source_row(*row))),
+            alphas: crate::data::source::collect_source(
+                rows.iter()
+                    .map(|row| ObservationAlpha::resolve(data, &alpha, *row)),
             )?,
             columns: crate::data::source::collect_source(columns.iter().map(|column| {
                 crate::data::source::collect_source(rows.iter().map(|row| Ok(column[*row])))
@@ -1206,3 +1233,6 @@ fn extract_columns_f64(
     }
     Ok(columns)
 }
+
+#[cfg(test)]
+mod alpha_tests;
