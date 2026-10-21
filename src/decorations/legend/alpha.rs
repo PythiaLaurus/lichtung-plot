@@ -3,8 +3,8 @@
 use std::sync::Arc;
 
 use crate::alpha::{
-    marks::ObservationAlpha, AlphaEncoding, AlphaSemantics, AlphaTarget, AlphaUnitKind,
-    AlphaValues, ResolvedAlpha,
+    marks::ObservationAlpha, AlphaEncoding, AlphaInputs, AlphaSemantics, AlphaTarget,
+    AlphaUnitKind, AlphaValues, ResolvedAlpha,
 };
 use crate::data::source::{
     collect_source, copy_source_string, reserve_source, reserve_source_string, source_arc,
@@ -127,12 +127,37 @@ pub(crate) struct AlphaGlyphSource {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AlphaGuideSource {
+    pub(crate) target: AlphaTarget,
+    pub(crate) unit: AlphaUnitKind,
     pub(crate) producer: PlotKind,
     pub(crate) owner: ComponentAddress,
     pub(crate) scope: Option<Arc<str>>,
     pub(crate) input: AlphaEncoding,
     pub(crate) neutral: OpaqueColor,
     pub(crate) glyphs: Arc<[AlphaGlyphSource]>,
+}
+
+/// Complete scientific alpha identity survives Hidden and Undeclared policies.
+/// Explanatory sections borrow these same sources; they are not another census.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PreparedAlphaInputs {
+    pub(crate) inputs: AlphaInputs,
+    pub(crate) sources: Arc<[AlphaGuideSource]>,
+}
+
+impl PreparedAlphaInputs {
+    pub(crate) fn sections(&self, plot: &Plot) -> Result<Vec<PreparedGuideSection>> {
+        let mut sections = Vec::new();
+        reserve_source(&mut sections, self.sources.len())?;
+        for source in self.sources.iter() {
+            let values = source.input.values().expect("actual source retains values");
+            if values.semantics() == AlphaSemantics::Undeclared {
+                continue;
+            }
+            sections.push(alpha_section(plot, source, values)?);
+        }
+        Ok(sections)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -244,11 +269,7 @@ impl<'a> AlphaGuideBuilder<'a> {
     }
 
     pub(crate) fn enabled(&self, target: AlphaTarget) -> bool {
-        self.plot
-            .alpha_inputs()
-            .get(target)
-            .values()
-            .is_some_and(|values| values.semantics() != AlphaSemantics::Undeclared)
+        self.plot.alpha_inputs().get(target).values().is_some()
     }
 
     pub(crate) fn any_enabled(&self) -> bool {
@@ -436,57 +457,25 @@ impl<'a> AlphaGuideBuilder<'a> {
         Ok(())
     }
 
-    pub(crate) fn finish(self) -> Result<Vec<PreparedGuideSection>> {
-        let mut sections = Vec::new();
-        reserve_source(&mut sections, self.targets.iter().flatten().count())?;
+    pub(crate) fn finish(self) -> Result<Arc<PreparedAlphaInputs>> {
+        let mut sources = Vec::new();
+        reserve_source(&mut sources, self.targets.iter().flatten().count())?;
         for (target, pending) in [AlphaTarget::Point, AlphaTarget::Line, AlphaTarget::Fill]
             .into_iter()
             .zip(self.targets)
         {
             let Some(mut pending) = pending else { continue };
-            crate::data::source::sort_source_by(&mut pending.glyphs, |left, right| {
-                left.role.cmp(&right.role)
-            });
-            let input = self.plot.alpha_inputs().get(target);
-            let values = input.values().expect("enabled alpha retains owned values");
-            let examples = values.guide_examples(
-                pending
-                    .glyphs
-                    .iter()
-                    .flat_map(|glyph| glyph.members.iter().map(|member| member.value)),
-            )?;
-            let prototype = &pending
-                .glyphs
-                .first()
-                .ok_or_else(|| Error::Render("alpha section has no actual component glyph".into()))?
-                .key;
-            let entries = collect_source(examples.into_iter().map(|example| {
-                let label = if values.semantics() == AlphaSemantics::Categorical {
-                    self.plot.resolve_label(example.label)?
-                } else {
-                    copy_source_string(example.label)?
-                };
-                Ok(PreparedGuideEntry {
-                    identity: GuideEntryIdentity::AlphaMember {
-                        ordinal: u32::try_from(example.ordinal)
-                            .map_err(|_| Error::Render("alpha guide ordinal overflow".into()))?,
-                    },
-                    display_label: shared_text(&label)?,
-                    key: sample_key(prototype, target, example.alpha),
-                    sources: shared_slice(Vec::new())?,
-                })
-            }))?;
-            for (index, entry) in entries.iter().enumerate() {
-                if entries[..index]
-                    .iter()
-                    .any(|other| other.display_label == entry.display_label)
+            // Preserve first actual component order between distinct keys of
+            // one role; an unstable sort could change the selected geometry.
+            for index in 1..pending.glyphs.len() {
+                let mut current = index;
+                while current > 0 && pending.glyphs[current - 1].role > pending.glyphs[current].role
                 {
-                    return Err(Error::Render(format!(
-                        "alpha guide has distinct declared members resolving to display label {:?}",
-                        entry.display_label
-                    )));
+                    pending.glyphs.swap(current - 1, current);
+                    current -= 1;
                 }
             }
+            let input = self.plot.alpha_inputs().get(target);
             let glyphs = collect_source(pending.glyphs.into_iter().map(|glyph| {
                 Ok(AlphaGlyphSource {
                     role: glyph.role,
@@ -494,33 +483,83 @@ impl<'a> AlphaGuideBuilder<'a> {
                     members: shared_slice(glyph.members)?,
                 })
             }))?;
-            let source = AlphaGuideSource {
+            sources.push(AlphaGuideSource {
+                target,
+                unit: pending.unit,
                 producer: self.plot.kind(),
                 owner: self.owner.clone(),
                 scope: self.plot.axis_scope().map(shared_text).transpose()?,
                 input: input.clone(),
                 neutral: self.neutral,
                 glyphs: shared_slice(glyphs)?,
-            };
-            let identity = AlphaSectionIdentity {
-                field: RawField::new(values.name())?,
-                semantics: values.semantics(),
-                target,
-                unit: pending.unit,
-            };
-            let title = title(self.plot, values.name(), target, pending.unit)?;
-            sections.push(PreparedGuideSection {
-                identity: GuideSectionIdentity::Alpha(identity),
-                display_title: shared_text(&title)?,
-                body: GuideSectionBody::Alpha(source_arc(PreparedAlphaSection {
-                    declaration: values.clone(),
-                    entries: shared_slice(entries)?,
-                    sources: shared_slice(collect_source(std::iter::once(Ok(source)))?)?,
-                })?),
             });
         }
-        Ok(sections)
+        source_arc(PreparedAlphaInputs {
+            inputs: self.plot.alpha_inputs().clone(),
+            sources: shared_slice(sources)?,
+        })
     }
+}
+
+fn alpha_section(
+    plot: &Plot,
+    source: &AlphaGuideSource,
+    values: &AlphaValues,
+) -> Result<PreparedGuideSection> {
+    let examples = values.guide_examples(
+        source
+            .glyphs
+            .iter()
+            .flat_map(|glyph| glyph.members.iter().map(|member| member.value)),
+    )?;
+    let prototype = &source
+        .glyphs
+        .first()
+        .ok_or_else(|| Error::Render("alpha section has no actual component glyph".into()))?
+        .key;
+    let entries = collect_source(examples.into_iter().map(|example| {
+        let label = if values.semantics() == AlphaSemantics::Categorical {
+            plot.resolve_label(example.label)?
+        } else {
+            copy_source_string(example.label)?
+        };
+        Ok(PreparedGuideEntry {
+            identity: GuideEntryIdentity::AlphaMember {
+                ordinal: u32::try_from(example.ordinal)
+                    .map_err(|_| Error::Render("alpha guide ordinal overflow".into()))?,
+            },
+            display_label: shared_text(&label)?,
+            key: sample_key(prototype, source.target, example.alpha),
+            sources: shared_slice(Vec::new())?,
+        })
+    }))?;
+    for (index, entry) in entries.iter().enumerate() {
+        if entries[..index]
+            .iter()
+            .any(|other| other.display_label == entry.display_label)
+        {
+            return Err(Error::Render(format!(
+                "alpha guide has distinct declared members resolving to display label {:?}",
+                entry.display_label
+            )));
+        }
+    }
+    let identity = AlphaSectionIdentity {
+        field: RawField::new(values.name())?,
+        semantics: values.semantics(),
+        target: source.target,
+        unit: source.unit,
+    };
+    let title = title(plot, values.name(), source.target, source.unit)?;
+    Ok(PreparedGuideSection {
+        identity: GuideSectionIdentity::Alpha(identity),
+        display_title: shared_text(&title)?,
+        body: GuideSectionBody::Alpha(source_arc(PreparedAlphaSection {
+            declaration: values.clone(),
+            entries: shared_slice(entries)?,
+            sources: shared_slice(collect_source(std::iter::once(Ok(source.clone())))?)?,
+        })?),
+    })
 }
 
 fn sample_key(prototype: &ResolvedGuideKey, target: AlphaTarget, alpha: u8) -> ResolvedGuideKey {

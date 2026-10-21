@@ -1135,6 +1135,15 @@ fn plan_panel_attempt(
     let mut ink_request = None;
     round.observe_box(panel_box)?;
     round.observe_layout(&result.layout)?;
+    // Actual scientific alpha identity remains observable even when no guide is
+    // explained or placed locally. Native color/Matrix guides also retain their
+    // complete descriptor rather than only captured geometry and text.
+    if let Some(guides) = &plot.prepared_discrete_guides {
+        round.observe_alpha(guides.alpha_for_scope(plot.axis_scope())?)?;
+    }
+    if let Some(guide) = &result.discrete_guide {
+        round.observe_guide(guide)?;
+    }
     round.observe_count(usize::from(result.numeric_presentation.is_some()))?;
     if let Some(presentation) = &result.numeric_presentation {
         presentation.observe_feedback(round)?;

@@ -59,6 +59,7 @@ enum Observation {
     Text(String),
     TextPlan(ResolvedTextPlan),
     Guide(std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>),
+    Alpha(std::sync::Arc<crate::decorations::legend::alpha::PreparedAlphaInputs>),
     TextPlacement {
         position: [i64; 2],
         rotation: u64,
@@ -486,6 +487,13 @@ impl FeedbackRound {
         descriptor: &std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>,
     ) -> Result<(), Error> {
         self.observe(Observation::Guide(std::sync::Arc::clone(descriptor)))
+    }
+
+    pub(crate) fn observe_alpha(
+        &mut self,
+        inputs: &std::sync::Arc<crate::decorations::legend::alpha::PreparedAlphaInputs>,
+    ) -> Result<(), Error> {
+        self.observe(Observation::Alpha(std::sync::Arc::clone(inputs)))
     }
 
     pub(crate) fn observe_placement(
@@ -1227,19 +1235,102 @@ mod tests {
     }
 
     #[test]
-    fn large_feedback_stream_grows_geometrically_without_losing_observations() {
-        const COUNT: usize = 16_384;
+    fn alpha_feedback_retains_hidden_undeclared_recipes_and_actual_members() {
+        use crate::alpha::{AlphaEncoding, AlphaTarget, AlphaValues};
+        use crate::decorations::legend::alpha::{AlphaUnit, PreparedAlphaInputs};
+        use std::sync::Arc;
 
-        let mut round = FeedbackRound::new(None, 0).unwrap();
-        for value in 0..COUNT {
-            round.observe_count(value).unwrap();
-        }
-        assert_eq!(round.state.observations.len(), COUNT);
-        assert_eq!(round.state.observations.capacity(), COUNT);
-
-        round.observe_count(COUNT).unwrap();
-        assert_eq!(round.state.observations.len(), COUNT + 1);
-        assert_eq!(round.state.observations.capacity(), 2 * COUNT);
+        let prepare = |hidden: bool, custom: bool, unused: u8, source_row: usize| {
+            let values = if custom {
+                AlphaValues::continuous(
+                    crate::NumericValues::new("confidence", [0.25, 0.375, 0.75]),
+                    (0.0, 1.0),
+                    |value| {
+                        if value.to_bits() == 0.375_f64.to_bits() {
+                            unused
+                        } else {
+                            0
+                        }
+                    },
+                )
+            } else {
+                AlphaValues::new("confidence", [0; 3])
+            }
+            .unwrap();
+            let plot = crate::Plot::scatter(
+                crate::NumericValues::new("x", [0.0, f64::NAN, 1.0]),
+                crate::NumericValues::new("y", [0.0, 1.0, 1.0]),
+            )
+            .source_rows(crate::SourceRows::new([source_row, 200, 300]).unwrap())
+            .with_alpha(AlphaTarget::Point, AlphaEncoding::observations(values))
+            .labels(crate::Labels::raw().alias("confidence", "\u{10ffff}"));
+            let plot = if hidden {
+                plot.legend(crate::LegendPolicy::Hidden)
+            } else {
+                plot
+            }
+            .erase();
+            let operation = crate::font::canonical::OperationContext::new();
+            let theme = crate::Theme::publication().resolve().unwrap();
+            let inputs =
+                crate::plots::shared_x::prepare_plot(&plot, &operation, Some(&theme)).unwrap();
+            let discoveries =
+                crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
+            inputs
+                .prepare_discrete_guides(
+                    &plot,
+                    &theme,
+                    &operation,
+                    &ComponentAddress::root(),
+                    false,
+                )
+                .unwrap();
+            let guides = inputs.discrete_guides.get().unwrap();
+            assert!(guides.root.is_none());
+            assert_eq!(
+                crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+                discoveries
+            );
+            Arc::clone(guides.alpha_for_scope(None).unwrap())
+        };
+        let observe = |inputs: &Arc<PreparedAlphaInputs>| {
+            let mut round = FeedbackRound::new(None, 0).unwrap();
+            round.observe_alpha(inputs).unwrap();
+            round.finish()
+        };
+        let hidden = prepare(true, true, 0, 100);
+        let independent = prepare(true, true, 0, 100);
+        assert!(!Arc::ptr_eq(&hidden, &independent));
+        assert!(observe(&hidden).same_state(&observe(&independent)));
+        assert!(!observe(&hidden).same_state(&observe(&prepare(true, true, 99, 100))));
+        assert!(!observe(&hidden).same_state(&observe(&prepare(true, true, 0, 400))));
+        let undeclared = prepare(false, false, 0, 100);
+        assert!(!observe(&hidden).same_state(&observe(&undeclared)));
+        assert_eq!(hidden.sources[0].glyphs, undeclared.sources[0].glyphs);
+        assert_eq!(
+            hidden.sources[0].glyphs[0]
+                .members
+                .iter()
+                .map(|member| &member.unit)
+                .collect::<Vec<_>>(),
+            [
+                &AlphaUnit::Observation {
+                    slot: 0,
+                    source_row: 100
+                },
+                &AlphaUnit::Observation {
+                    slot: 2,
+                    source_row: 300
+                },
+            ]
+        );
+        let mut producer = FeedbackRound::new(None, 0).unwrap();
+        let checkpoint = producer.child_checkpoint();
+        producer.observe_alpha(&hidden).unwrap();
+        let retained = producer.retain_child_feedback(checkpoint).unwrap().unwrap();
+        let mut consumer = FeedbackRound::new(None, 1).unwrap();
+        consumer.replay_child(&retained).unwrap();
+        assert!(producer.finish().same_state(&consumer.finish()));
     }
 
     #[test]

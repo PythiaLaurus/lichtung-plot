@@ -3,6 +3,10 @@ use crate::render::backend::TextAnchor;
 use crate::theme::TitleAlignment::{Center, End, Start};
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one owning facet guide preserves independent parent domains and actual alpha members before fonts"
+)]
 fn sectioned_facets_preserve_parent_domains_and_reject_alias_collisions_before_fonts() {
     use crate::LegendComposition;
     let source = Plot::interaction(
@@ -36,6 +40,20 @@ fn sectioned_facets_preserve_parent_domains_and_reject_alias_collisions_before_f
     .labels(crate::Labels::raw())
     .size(1200, 700)
     .legend_composition(LegendComposition::Separate);
+    let source = source.with_alpha(
+        crate::alpha::AlphaTarget::Point,
+        crate::alpha::AlphaEncoding::observations(
+            crate::alpha::AlphaValues::categorical(
+                crate::CategoryValues::new(
+                    "confidence",
+                    ["low", "high", "low", "low", "high", "low"],
+                )
+                .unwrap(),
+                |value| if value == "low" { 0 } else { 230 },
+            )
+            .unwrap(),
+        ),
+    );
     let source = source.erase();
     let operation = crate::font::canonical::OperationContext::new();
     let theme = crate::Theme::publication().resolve().unwrap();
@@ -51,7 +69,7 @@ fn sectioned_facets_preserve_parent_domains_and_reject_alias_collisions_before_f
             guide.counts.sections,
             guide.counts.entries
         ),
-        (LegendComposition::Separate, 2, 5)
+        (LegendComposition::Separate, 3, 7)
     );
     assert_eq!(
         guide.sections[0]
@@ -74,6 +92,30 @@ fn sectioned_facets_preserve_parent_domains_and_reject_alias_collisions_before_f
     assert_eq!(
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
         0
+    );
+    let crate::decorations::legend::discrete::GuideSectionBody::Alpha(alpha) =
+        &guide.sections[2].body
+    else {
+        panic!("parent alpha union")
+    };
+    assert_eq!(
+        alpha
+            .entries
+            .iter()
+            .map(|entry| entry.display_label.as_ref())
+            .collect::<Vec<_>>(),
+        ["low", "high"]
+    );
+    assert_eq!(alpha.sources.len(), 2);
+    assert!(alpha.sources.iter().all(|source| source.scope.is_some()));
+    let guides = inputs.discrete_guides.get().unwrap();
+    assert_eq!(
+        guides
+            .panels
+            .iter()
+            .map(|panel| panel.alpha.sources[0].glyphs[0].members.len())
+            .collect::<Vec<_>>(),
+        [4, 2]
     );
     source.preflight().unwrap();
     let ambiguous = source.labels(

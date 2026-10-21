@@ -43,6 +43,15 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
     assert_eq!(prepared.ranges, [(1.0, 1.0); 2]);
     let theme = crate::Theme::publication().resolve().unwrap();
     let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
+    let hidden_alpha = chart
+        .prepared_discrete_guides
+        .as_ref()
+        .unwrap()
+        .alpha_for_scope(None)
+        .unwrap();
+    assert!(chart.prepared_discrete_guide().unwrap().is_none());
+    assert_eq!(hidden_alpha.inputs, *source.alpha_inputs());
+    assert_eq!(hidden_alpha.sources[0].glyphs[0].members.len(), 3);
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(
             chart.data(),
@@ -104,6 +113,8 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
         [0, 128, 0]
     );
     assert_eq!(alpha.sources[0].input.values().unwrap().len(), 4);
+    assert_eq!(hidden_alpha.sources[0].glyphs, alpha.sources[0].glyphs);
+    assert_eq!(hidden_alpha.sources[0].input, alpha.sources[0].input);
     let calls = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
     let error = source
         .with_alpha(

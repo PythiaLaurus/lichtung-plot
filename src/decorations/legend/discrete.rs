@@ -148,12 +148,14 @@ impl PreparedGuide {
         let alpha = if plot.legend_policy_spec() == crate::LegendPolicy::Hidden {
             Vec::new()
         } else {
-            inputs.alpha_sections(
-                plot,
-                theme,
-                plot.axis_scope(),
-                &ComponentAddress::root().child(AddressRole::PlotBody, 0)?,
-            )?
+            inputs
+                .alpha_sources(
+                    plot,
+                    theme,
+                    plot.axis_scope(),
+                    &ComponentAddress::root().child(AddressRole::PlotBody, 0)?,
+                )?
+                .sections(plot)?
         };
         Self::prepare(
             plot,
@@ -303,9 +305,21 @@ pub(crate) struct PreparedGuides {
 pub(crate) struct ScopedGuide {
     pub(crate) scope: Option<String>,
     pub(crate) descriptor: Option<Arc<PreparedGuide>>,
+    pub(crate) alpha: Arc<super::alpha::PreparedAlphaInputs>,
 }
 
 impl PreparedGuides {
+    pub(crate) fn alpha_for_scope(
+        &self,
+        scope: Option<&str>,
+    ) -> Result<&Arc<super::alpha::PreparedAlphaInputs>> {
+        self.panels
+            .iter()
+            .find(|panel| panel.scope.as_deref() == scope)
+            .map(|panel| &panel.alpha)
+            .ok_or_else(|| Error::Render("alpha inputs are missing their prepared scope".into()))
+    }
+
     pub(crate) fn for_scope(&self, scope: Option<&str>) -> Result<Option<&Arc<PreparedGuide>>> {
         self.panels
             .iter()

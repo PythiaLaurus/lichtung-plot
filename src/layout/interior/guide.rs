@@ -418,6 +418,7 @@ impl PreparedInteriorInputs {
             } else {
                 owner.clone()
             };
+            let alpha = self.alpha_sources(&scoped, theme, scope, &contributor)?;
             let descriptor = if chart.legend_policy_spec() == crate::LegendPolicy::Hidden {
                 None
             } else {
@@ -430,14 +431,13 @@ impl PreparedInteriorInputs {
                     self.guide_sources(&scoped, theme, data, scope)?
                 };
                 let continuous = self.continuous_source(&scoped, theme, scope)?;
-                let alpha = self.alpha_sections(&scoped, theme, scope, &contributor)?;
                 PreparedGuide::prepare(
                     &scoped,
                     theme,
                     &contributor,
                     keys,
                     continuous,
-                    alpha,
+                    alpha.sections(&scoped)?,
                     scoped.effective_legend_composition(),
                 )?
             };
@@ -446,6 +446,7 @@ impl PreparedInteriorInputs {
                     .map(crate::data::source::copy_source_string)
                     .transpose()?,
                 descriptor,
+                alpha,
             });
         }
         let order = parent_guide_order(chart, &panels, facet_cells)?;
@@ -501,18 +502,18 @@ impl PreparedInteriorInputs {
         crate::data::source::source_arc(descriptor).map(Some)
     }
 
-    pub(crate) fn alpha_sections(
+    pub(crate) fn alpha_sources(
         &self,
         chart: &Plot,
         theme: &ResolvedTheme,
         scope: Option<&str>,
         owner: &crate::layout::ComponentAddress,
-    ) -> Result<Vec<crate::decorations::legend::discrete::PreparedGuideSection>, Error> {
+    ) -> Result<std::sync::Arc<crate::decorations::legend::alpha::PreparedAlphaInputs>, Error> {
         self.route.validate(chart)?;
         let mut guide =
             crate::decorations::legend::alpha::AlphaGuideBuilder::new(chart, theme, owner);
         if !guide.any_enabled() {
-            return Ok(Vec::new());
+            return guide.finish();
         }
         macro_rules! scoped {
             ($field:ident) => {

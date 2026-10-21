@@ -14,8 +14,9 @@ and native continuous-color content, with one common measured envelope, cache,
 font traversal and frozen draw plan (`../docs/unified-guide-envelope.md`). The
 exclusive Discrete/Continuous descriptor and GuideKind are retired. Declared alpha
 sections now consume actual members/glyphs from all 49 components
-(`../docs/declared-alpha-sections.md`); complete alpha parent/feedback and public
-cutover remain in spec97.
+(`../docs/declared-alpha-sections.md`). Visibility-independent actual alpha sources,
+scoped child/height identity and native/standard feedback are complete in
+`../docs/alpha-parent-identity.md`; public cutover remains in spec97.
 
 ## 1. Authority And Boundary
 
@@ -519,6 +520,12 @@ Hidden skips guide-only aliases and fonts. Neither suppresses scientific binding
 validation. Existing symbols precede continuous-color content and then Point,
 Line and Fill alpha sections; fields within one class keep first contribution
 order. `src/decorations/legend/alpha.rs` owns these private operands.
+
+Prepared per-scope alpha inputs exist independently of explanation visibility and
+retain every configured encoding plus actual target/glyph/unit members. Hidden
+and Undeclared omit explanatory text, not this scientific identity. Scoped
+child/height equality compares it by value; the common selected-panel feedback
+path observes it and the selected descriptor for native and standard owners.
 
 ### Validation And Identity
 

@@ -122,6 +122,7 @@ pub(crate) struct ScopedGuideInputs {
     use_kind: GuideUse,
     contribution_prepared: bool,
     contribution: Option<Arc<PreparedGuide>>,
+    alpha: Option<Arc<super::super::alpha::PreparedAlphaInputs>>,
     local_guide: Option<GuideSlot>,
     dependencies: Arc<[ConsumedGuideDependency]>,
 }
@@ -175,6 +176,11 @@ impl ScopedGuideInputs {
             use_kind,
             contribution_prepared: plot.prepared_discrete_guides.is_some(),
             contribution,
+            alpha: plot
+                .prepared_discrete_guides
+                .as_ref()
+                .map(|guides| guides.alpha_for_scope(plot.axis_scope()).cloned())
+                .transpose()?,
             local_guide: local_guide.cloned(),
             dependencies: super::shared_slice(retained)?,
         })
@@ -184,10 +190,15 @@ impl ScopedGuideInputs {
         self.composition == plot.effective_legend_composition()
             && self.contribution_prepared == plot.prepared_discrete_guides.is_some()
             && match &plot.prepared_discrete_guides {
-                Some(guides) => guides
-                    .for_scope(plot.axis_scope())
-                    .is_ok_and(|guide| guide == self.contribution.as_ref()),
-                None => self.contribution.is_none(),
+                Some(guides) => {
+                    guides
+                        .for_scope(plot.axis_scope())
+                        .is_ok_and(|guide| guide == self.contribution.as_ref())
+                        && guides
+                            .alpha_for_scope(plot.axis_scope())
+                            .is_ok_and(|alpha| Some(alpha) == self.alpha.as_ref())
+                }
+                None => self.contribution.is_none() && self.alpha.is_none(),
             }
     }
 
