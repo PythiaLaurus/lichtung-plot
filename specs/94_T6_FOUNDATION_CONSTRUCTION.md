@@ -1891,8 +1891,9 @@ are **B3**, not a late unassigned B4/L task. No Color input is invented.
 
 ## 12. Adjacent Approved Policy Signature Handoff
 
-These policies are not theme fields. TickGeneration and NumericFormat are public;
-remaining section/integrated closure gates stay with spec93. This
+These policies are not theme fields. TickGeneration, NumericFormat,
+LegendComposition and explicit AlphaValues/AlphaEncoding are public; integrated
+closure gates stay with spec93. This
 section closes getter naming and validated
 construction inputs without claiming numerical certification or section evidence.
 Detailed design is closed in `06_NUMERIC_PRESENTATION.md`,
@@ -1988,12 +1989,20 @@ numeric work/byte fees; exact arithmetic and real storage/length checks remain.
 
 LegendComposition defaults Combined and is exposed at L5 with
 `Plot<K: kind::Legend>::legend_composition(self, LegendComposition) -> Self` and
-`Canvas::legend_composition(self, LegendComposition) -> Self`. Current seventeen
-Legend-capable families remain exactly A1's gate; Heatmap/Beeswarm continuous
-guides do not acquire it. PerPlot/Shared/Hidden authority, typed sections,
+`Canvas::legend_composition(self, LegendComposition) -> Self`. The admitted alpha
+extension now makes all 25 exact families Legend-capable; erased Any remains
+excluded. PerPlot/Shared/Hidden authority, typed sections,
 producer-owned neutral projections, section ordering and unsupported-factorization
 errors remain spec93 T6L. Chrome has no composition field. No typed raw f64 policy
 enum is exported in place of validated font/gradient/domain/scale values.
+
+AlphaValues/AlphaEncoding/AlphaSemantics and the independent point/line/fill
+attachments are current Plot-local inputs, outside Theme construction. Exact
+signatures, numerical semantics and all 17/17/15 admitted components are in
+`../docs/public-data-alpha.md`. Actual observation/keyed/bin/Single units materialize
+before fonts; normal role/exact paint precedes byte replacement. One PreparedGuide
+holds existing symbols, optional continuous color and declared alpha examples;
+visibility-independent source inputs/members remain in scoped/feedback identity.
 
 C2 root width/size request and Output's frozen CSS dimension getters remain
 spec05/spec93. They do not turn component metrics into root-size policies or

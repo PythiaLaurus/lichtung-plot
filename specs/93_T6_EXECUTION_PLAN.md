@@ -208,10 +208,10 @@ labels, not existing commits.
 | T6L | COMPLETE | T6N | One section-aware discrete guide; focused closure in `docs/section-composition-acceptance.md` |
 | T6T | COMPLETE | T6L | TickGeneration design/source/public cutover and focused parent/root/output closure; `docs/public-tick-generation.md` / `docs/tick-generation-parent-closure.md` |
 | T6D | COMPLETE | T6T | Values/bindings, 49 consumers, unified guides/parents/public API and 147 family roots plus 60 cached/uncached publications; `docs/public-data-alpha.md` / `docs/alpha-output-closure.md`; actual full/release gate remains T6Z3 |
-| T6Z | PENDING | T6D | Integrated contract and phase closure |
-| T6Z1 | PENDING | T6D | Complete public examples/current-spec and property/consumer census reconciliation; `docs(api): reconcile scientific plotting contracts` |
+| T6Z | IN PROGRESS | T6D | Current contracts reconciled; final complete verification and actual release/time/RSS remain |
+| T6Z1 | COMPLETE | T6D | Current public examples/specs and exact property/consumer attribution; `docs/scientific-contract-reconciliation.md` and spec04 current-owner overlay |
 | T6Z2 | COMPLETE | User closure review | User-approved DF3/DF4 admission in spec97, residual DF4 checkpoint and fully caller-decided legends in DF11 |
-| T6Z3 | PENDING | T6Z1, T6Z2 | Final audit, required broad gate/release evidence and closure commit; `test(api): close public scientific foundations` |
+| T6Z3 | IN PROGRESS | T6Z1, T6Z2 | Final audit, required broad gate/release evidence and closure commit; `test(api): close public scientific foundations` |
 
 T6A2 must specify all accessors, validated constructors and construction-only
 edits before T6B starts; the broad component names in spec03 are not permission

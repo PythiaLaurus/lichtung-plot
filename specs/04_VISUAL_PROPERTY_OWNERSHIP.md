@@ -8805,3 +8805,32 @@ the existing ledger identities and adds no unrelated plot-family component.
 This is an approved construction/ownership handoff, not implementation evidence.
 Owning B-stage cutovers migrate callers/current contracts and inspect affected
 outputs; later evidence and justified ledger reconciliation remain required.
+
+### Current Scientific Presentation Owner Reconciliation
+
+The completed public construction/consumer reconciliation is
+`../docs/scientific-contract-reconciliation.md`, baseline `07873f1`. Historical T2
+and T3j counts and source tables above retain their recorded scope. Subsequent
+user-admitted numeric, guide and alpha controls below are explicit current policy
+owners; they are not inferred extra Theme fields or changes to those old counts.
+T7 reconciles the approved extension scope alongside the historical materialized
+identities, rather than treating an old total as evidence that these inputs were
+already inventoried.
+
+| Current owner / affected historical responsibility | Classification and current source | Actual consumption / relationship |
+| --- | --- | --- |
+| Complete appearance and all role/local-metric successors in spec94 | Theme component; eight immutable components in `theme/value.rs`, `theme/mark*.rs`, `theme/typography.rs`, axis/legend/composition/annotation values | `theme-consumer-closure.md` and public foundation receipts close real pre-font/intrinsic/assigned/frozen consumers; selected owner/role replaces hidden literals, not a second style map |
+| `axes.ticks.preferred-data-interval` | Explicit policy; current per-axis TickGeneration in `spec/ticks.rs` / builder configuration | Complete choice replaces interval-only API; target/maximum preserve bounded exact-source ordering, categorical refusal, independent formats/ranges and full parent/feedback identity |
+| `axes.ticks.numeric-formatting`, `guides.{heatmap,beeswarm}.numeric-label-format`, `annotations.numeric-label.{precision,suffix,fixed-decimal-string-production}` | Explicit policy for caller selection, Renderer invariant for exact conversion; opaque NumericFormat and `numeric/{decimal,format,set,power}.rs` | Actual X/Y ticks, color labels, Heatmap values, point-only Coefficient details and Waterfall totals; independent whole-set precision and certified mathematical Forest labels; exact caller strings remain verbatim |
+| Plot/Canvas semantic section-composition inputs and existing legend source/merge/projection responsibilities | Explicit policy; concrete LegendComposition in `spec.rs`, Plot and Canvas selections | One PreparedGuide/Legend, complete typed raw identities and producer RGB/style/alpha masks; Combined/Separate/Shared authority and unsupported-factorization refusal in spec08 |
+| `capabilities.legend.family-matrix` | Renderer invariant; 25 exact `kind::Legend` implementations | All exact families can explain admitted alpha; erased Any remains excluded. Matrix Canvas/facet and supplemental-layer boundaries retain their existing owners |
+| Plot point alpha input | Plot-local data scale; `AlphaInputs[Point]`, AlphaEncoding/AlphaValues, sealed PointAlpha set | 17 actual original observation/estimate/flier/raw/strip/native point consumers; point fill replaces alpha after normal paint, independently of outline and source diagnostic IDs |
+| Plot scientific stroke alpha input | Plot-local data scale; `AlphaInputs[Line]`, AlphaEncoding/AlphaValues, sealed LineAlpha set | 17 actual Single/record/series/aggregate curve/interval/connector/summary consumers; absent optional strokes validate schema without fabricating members |
+| Plot scientific fill alpha input | Plot-local data scale; `AlphaInputs[Fill]`, AlphaEncoding/AlphaValues, sealed FillAlpha set | 15 actual body/segment/area/band/bin/cell/native/delta consumers; exact units, independent outlines, no sample reduction and no statistical/domain change |
+| Guide explanation/source/census and `layout.feedback.measured-state-identity` | Renderer invariant; complete eager declarations, actual glyphs/unit members, PreparedAlphaInputs and typed PreparedGuide | Hidden/Undeclared retain scientific identity; declared examples use source-neutral RGB; complete Shared recipes and child/height/dependency/feedback equality survive equal output bytes/extents and frozen replay |
+
+`../docs/public-data-alpha.md` owns exact public signatures and the 49-component
+census; `../docs/alpha-output-closure.md` records actual family/owner/root and three
+output-form evidence. Existing resource-accounting identities keep spec95's retired
+dispositions. Checked actual storage, canonical structural addresses and complete
+equality remain correctness owners, without cumulative quotas or new accounting.
