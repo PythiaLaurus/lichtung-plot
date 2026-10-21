@@ -24,7 +24,7 @@ pub use estimate::{
 pub use facet::{FacetScales, FacetSpec};
 pub(crate) use output::SVG_CSS_DPI;
 pub use output::{PngCompression, PngOptions, PngSizing};
-pub use ticks::TickInterval;
+pub use ticks::TickGeneration;
 
 /// Spacing preset for multiple series within one bar category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -853,7 +853,7 @@ impl<'a> PlotRenderContext<'a> {
             *target = crate::layout::AxisSpec {
                 provenance: source.provenance,
                 limits: source.limits,
-                interval: source.interval,
+                generation: source.generation,
                 format: source.format.clone(),
                 exact_ticks: source
                     .exact_ticks

@@ -229,7 +229,7 @@ fn forest_log_scale_projects_exact_ticks_from_raw_data_space() {
             AxisTick::new(1.0, "center exact"),
             AxisTick::new(10.0, "high exact"),
         ])
-        .x_tick_interval(lichtung_plot::TickInterval::log10_decades(2).unwrap()),
+        .x_tick_generation(lichtung_plot::TickGeneration::log10_decades(2).unwrap()),
         "forest-log-exact-ticks",
     )
     .unwrap();

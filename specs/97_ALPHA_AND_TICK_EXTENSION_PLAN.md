@@ -1,8 +1,8 @@
 # Data Alpha And Numeric Tick Selection
 
-**Status**: User-approved scope; numeric source/API design and private bounded
-count sources COMPLETE. Public generation cutover and data-alpha work remain
-PENDING.
+**Status**: User-approved scope; numeric source/API design, private bounded count
+sources and public generation cutover COMPLETE. Numeric parent/root/output closure
+and data-alpha work remain PENDING.
 
 ## Authority And Recorded Decision
 
@@ -167,7 +167,7 @@ and focused closure; split behavioral leaves further when needed.
 | --- | --- | --- | --- |
 | T6T0 | COMPLETE | T6L | Exact generation value/API, source order/cardinality, consumer/deletion and acceptance design in `../docs/numeric-tick-selection-design.md` |
 | T6T1 | COMPLETE | T6T0 | Private target/maximum sources, pre-allocation cardinality and exact identity/feedback; evidence in `../docs/bounded-tick-count-sources.md` |
-| T6T2 | PENDING | T6T1 | Atomic public API/caller/current-contract migration |
+| T6T2 | COMPLETE | T6T1 | Atomic TickGeneration API/caller/current-contract migration; evidence in `../docs/public-tick-generation.md` |
 | T6T3 | PENDING | T6T2 | Parent/root/output and public contract evidence |
 | T6D0 | PENDING | T6T | Exact alpha input/mapping/producer/guide/precedence design |
 | T6D1 | PENDING | T6D0 | Immutable mapping preparation and actual mark consumers |

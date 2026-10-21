@@ -358,8 +358,8 @@ fn conflicting_duplicate_point_layer_legend_identity_is_rejected() {
 }
 
 #[test]
-fn public_tick_interval_preferences_yield_to_exact_labels_in_both_setter_orders() {
-    use lichtung_plot::TickInterval;
+fn public_tick_generation_yields_to_exact_labels_in_both_setter_orders() {
+    use lichtung_plot::TickGeneration;
     let base = Plot::scatter(
         NumericValues::new("x", [0.0, 10.0]),
         NumericValues::new("y", [100.0, 105.0]),
@@ -368,9 +368,9 @@ fn public_tick_interval_preferences_yield_to_exact_labels_in_both_setter_orders(
     .y_limits(100.0, 105.0)
     .size(700, 500);
     let intervals = |plot: Plot<lichtung_plot::kind::Scatter>| {
-        plot.x_tick_interval(TickInterval::additive(5.0).unwrap())
-            .x_tick_interval(TickInterval::additive(2.0).unwrap())
-            .y_tick_interval(TickInterval::additive(1.0).unwrap())
+        plot.x_tick_generation(TickGeneration::additive(5.0).unwrap())
+            .x_tick_generation(TickGeneration::additive(2.0).unwrap())
+            .y_tick_generation(TickGeneration::additive(1.0).unwrap())
     };
     let preferred = svg(intervals(base.clone()));
     let labels = |svg: &str| {
@@ -398,13 +398,89 @@ fn public_tick_interval_preferences_yield_to_exact_labels_in_both_setter_orders(
     expected.sort_unstable();
     assert_eq!(labels(&preferred), expected);
     let exact = |plot: Plot<lichtung_plot::kind::Scatter>| {
-        plot.x_ticks(vec![AxisTick::new(1.0, "exact x")])
-            .y_ticks(vec![AxisTick::new(103.0, "exact y")])
+        plot.x_ticks(vec![AxisTick::new(1.0, "exact x"), AxisTick::new(9.0, "")])
+            .y_ticks(vec![
+                AxisTick::new(101.0, "exact y"),
+                AxisTick::new(104.0, ""),
+            ])
     };
     let before = svg(exact(intervals(base.clone())));
-    let after = svg(intervals(exact(base)));
+    let after = svg(intervals(exact(base.clone())));
     assert_eq!(before, after);
     assert_eq!(labels(&before), ["exact x", "exact y"]);
+    for generation in [
+        TickGeneration::target(1).unwrap(),
+        TickGeneration::maximum(1).unwrap(),
+        TickGeneration::automatic(),
+    ] {
+        let generated = |plot: Plot<lichtung_plot::kind::Scatter>| {
+            plot.x_tick_generation(generation)
+                .y_tick_generation(generation)
+        };
+        let before = svg(exact(generated(base.clone())));
+        let after = svg(generated(exact(base.clone())));
+        assert_eq!(before, after);
+        assert_eq!(labels(&before), ["exact x", "exact y"]);
+        // Each two-position exact list exceeds count one. The unlabeled ticks
+        // must survive just as they do without a generated count instruction.
+        assert_eq!(before, svg(exact(base.clone())));
+    }
+}
+
+#[test]
+fn public_tick_generation_counts_replace_complete_choices_and_automatic_resets() {
+    use lichtung_plot::{NumericFormat, TickGeneration};
+    fn labels<'a>(svg: &'a str, prefix: &str) -> Vec<&'a str> {
+        svg.lines()
+            .filter(|line| line.starts_with("<text "))
+            .filter_map(|line| {
+                line.split_once('>')?
+                    .1
+                    .split_once('<')?
+                    .0
+                    .strip_prefix(prefix)
+            })
+            .collect()
+    }
+    let base = Plot::scatter(
+        NumericValues::new("x", [0.0, 1.0]),
+        NumericValues::new("y", [10.0, 14.0]),
+    )
+    .x_limits(0.0, 1.0)
+    .y_limits(10.0, 14.0)
+    .x_tick_format(NumericFormat::default().with_prefix("X:").unwrap())
+    .y_tick_format(NumericFormat::default().with_prefix("Y:").unwrap())
+    .size(1000, 700);
+    let selected = base
+        .clone()
+        .x_tick_generation(TickGeneration::additive(0.2).unwrap())
+        .x_tick_generation(TickGeneration::target(4).unwrap())
+        .y_tick_generation(TickGeneration::target(5).unwrap());
+    let output = svg(selected.clone());
+    assert_eq!(labels(&output, "X:"), ["0.00", "0.50", "1.00"]);
+    assert_eq!(
+        labels(&output, "Y:"),
+        ["10.00", "11.00", "12.00", "13.00", "14.00"]
+    );
+
+    let output = svg(selected
+        .clone()
+        .x_tick_generation(TickGeneration::target(5).unwrap()));
+    assert_eq!(
+        labels(&output, "X:"),
+        ["0.00", "0.25", "0.50", "0.75", "1.00"]
+    );
+    let capped = svg(selected.x_tick_generation(TickGeneration::maximum(3).unwrap()));
+    assert_eq!(labels(&capped, "X:"), ["0.00", "0.50", "1.00"]);
+    assert_eq!(labels(&capped, "Y:"), labels(&output, "Y:"));
+
+    let reset = base
+        .clone()
+        .x_tick_generation(TickGeneration::log10_decades(2).unwrap())
+        .y_tick_generation(TickGeneration::maximum(1).unwrap())
+        .x_tick_generation(TickGeneration::automatic())
+        .y_tick_generation(TickGeneration::default());
+    assert_eq!(svg(reset), svg(base));
 }
 
 #[test]

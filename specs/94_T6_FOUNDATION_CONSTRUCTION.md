@@ -1890,7 +1890,7 @@ are **B3**, not a late unassigned B4/L task. No Color input is invented.
 
 ## 12. Adjacent Approved Policy Signature Handoff
 
-These policies are not theme fields. TickInterval and NumericFormat are public;
+These policies are not theme fields. TickGeneration and NumericFormat are public;
 remaining section/integrated closure gates stay with spec93. This
 section closes getter naming and validated
 construction inputs without claiming numerical certification or section evidence.
@@ -1898,30 +1898,40 @@ Detailed design is closed in `06_NUMERIC_PRESENTATION.md`,
 `07_LOG10_DISPLAY.md` and `08_DISCRETE_GUIDES.md`. Later source refreshes verify
 their transport/mapping to migrated foundations. Exact numeric implementation and
 independent certification are complete; current public evidence is in
-`../docs/public-numeric-formatting.md`. Legend composition remains separately staged.
+`../docs/public-numeric-formatting.md`. Spec97's numeric selection extension replaces
+the interval-only carrier and attachments with the complete current value below.
 
 ```rust,ignore
-impl TickInterval {
+impl TickGeneration {
+    fn automatic() -> Self; // also Default
     fn additive(step: f64) -> Result<Self>;
     fn log10_decades(decades: u32) -> Result<Self>;
+    fn target(count: u32) -> Result<Self>;
+    fn maximum(count: u32) -> Result<Self>;
+    fn is_automatic(&self) -> bool;
     fn additive_step(&self) -> Option<f64>;
     fn decade_step(&self) -> Option<u32>;
+    fn target_count(&self) -> Option<u32>;
+    fn maximum_count(&self) -> Option<u32>;
 }
 impl<K: kind::NumericX> Plot<K> {
-    fn x_tick_interval(self, interval: TickInterval) -> Self;
+    fn x_tick_generation(self, generation: TickGeneration) -> Self;
 }
 impl<K: kind::NumericY> Plot<K> {
-    fn y_tick_interval(self, interval: TickInterval) -> Self;
+    fn y_tick_generation(self, generation: TickGeneration) -> Self;
 }
 ```
 
-TickInterval's representation is private. Additive requires positive finite
+TickGeneration's representation is private. Additive requires positive finite
 binary64; decades positive u32, preserving the approved public signature. The
 current private source's u64 arithmetic widens that input internally; it does not
-authorize a larger public argument type. Setters
-store one optional per-axis instruction, not a count. Actual categorical axes
-reject before fonts; scientific scale/kind mismatch rejects. Exact lists suppress
-generated interval/format text irrespective of setter order. C1 owns this cutover.
+authorize a larger public argument type. Counts validate `1..=10_000`; Target is
+approximate, Maximum bounds every generated in-domain position including endpoints.
+Setters store one complete concrete per-axis instruction, replacing the previous
+choice; Automatic resets it. Actual categorical non-Automatic choices reject before
+fonts; scientific interval scale/kind mismatch rejects. Exact lists suppress
+generated selection/format text irrespective of setter order and are not capped.
+Spec05 owns source semantics; spec97 owns the extension evidence.
 
 ```rust,ignore
 enum NumericNotation { Decimal, Scientific, Engineering }

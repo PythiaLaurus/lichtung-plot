@@ -368,7 +368,7 @@ impl InteriorRoute {
                 {
                     crate::plots::interval_estimate::log_tick_plan(
                         projection.x_range(),
-                        inputs.specs[side].interval,
+                        inputs.specs[side].generation,
                         inputs.specs[side].format.as_deref(),
                         panel,
                         context.theme,
@@ -554,7 +554,7 @@ mod intrinsic_tests {
             for side in [AxisSide::Bottom, AxisSide::Left] {
                 let selected = crate::layout::numeric_tick_plan(
                     (-1.0, 1.0),
-                    None,
+                    crate::TickGeneration::automatic(),
                     false,
                     &projection,
                     side,

@@ -13,7 +13,7 @@ fn repeated_numeric_axis_selection_preserves_ticks_without_reshaping() {
     let scope = crate::layout::fit::FitScope::root();
     let first = numeric_tick_plan(
         (0.0, 1.0),
-        None,
+        TickGeneration::automatic(),
         false,
         &projection,
         AxisSide::Bottom,
@@ -26,7 +26,7 @@ fn repeated_numeric_axis_selection_preserves_ticks_without_reshaping() {
 
     let second = NumericTickPlan::measure_selected_source(
         (0.0, 1.0),
-        None,
+        TickGeneration::automatic(),
         false,
         &projection,
         AxisSide::Bottom,
@@ -41,7 +41,7 @@ fn repeated_numeric_axis_selection_preserves_ticks_without_reshaping() {
     crate::font::canonical::FONT_SHAPE_CALLS.with(|count| count.set(0));
     let result = numeric_tick_plan(
         (0.0, 1.0),
-        None,
+        TickGeneration::automatic(),
         false,
         &projection,
         AxisSide::Bottom,
@@ -150,18 +150,12 @@ fn adaptive_step_uses_decimal_table_ties_and_scaled_extreme_subtraction() {
 #[test]
 fn count_targets_allow_nice_deviation_and_maxima_filter_before_formatting() {
     use crate::orchestrator::measurements::Counter;
-    let mut target = Sources::new(
-        (0.0, 1.0),
-        false,
-        Some(TickInterval::target(4).unwrap()),
-        1000,
-    )
-    .unwrap();
+    let mut target =
+        Sources::new((0.0, 1.0), false, TickGeneration::target(4).unwrap(), 1000).unwrap();
     let (source, positions) = target.next().unwrap();
     assert_eq!(source.kind, SourceKind::Adaptive(4));
     assert_eq!(positions.unwrap(), [0.0, 0.5, 1.0]);
-    let mut five =
-        Sources::new((0.0, 1.0), false, Some(TickInterval::target(5).unwrap()), 2).unwrap();
+    let mut five = Sources::new((0.0, 1.0), false, TickGeneration::target(5).unwrap(), 2).unwrap();
     assert_eq!(five.next().unwrap().1.unwrap(), [0.0, 0.25, 0.5, 0.75, 1.0]);
     assert!(adaptive_positions((0.0, 1.0), 5, 4).unwrap().is_none());
     let adjacent = (1.0, 1.0_f64.next_up());
@@ -175,7 +169,7 @@ fn count_targets_allow_nice_deviation_and_maxima_filter_before_formatting() {
     crate::orchestrator::measurements::start();
     let selected = numeric_tick_plan(
         (0.0, 1.0),
-        Some(TickInterval::maximum(4).unwrap()),
+        TickGeneration::maximum(4).unwrap(),
         false,
         &projection,
         AxisSide::Bottom,
@@ -204,7 +198,7 @@ fn additive_sources_are_requested_first_then_complete_decimal_coarsenings() {
     let mut sources = Sources::new(
         (-7.0, 9.0),
         false,
-        Some(TickInterval::additive(1.0).unwrap()),
+        TickGeneration::additive(1.0).unwrap(),
         100,
     )
     .unwrap();
@@ -230,7 +224,7 @@ fn dense_and_empty_interval_misses_do_not_poison_coarser_sources() {
     let mut dense = Sources::new(
         (0.0, 10_000.0),
         false,
-        Some(TickInterval::additive(1.0).unwrap()),
+        TickGeneration::additive(1.0).unwrap(),
         2,
     )
     .unwrap();
@@ -238,13 +232,8 @@ fn dense_and_empty_interval_misses_do_not_poison_coarser_sources() {
     let (source, positions) = dense.next().unwrap();
     assert_eq!(source.kind, SourceKind::Additive(2.0));
     assert_eq!(positions.unwrap().len(), 5001);
-    let mut empty = Sources::new(
-        (1.1, 1.2),
-        false,
-        Some(TickInterval::additive(1.0).unwrap()),
-        2,
-    )
-    .unwrap();
+    let mut empty =
+        Sources::new((1.1, 1.2), false, TickGeneration::additive(1.0).unwrap(), 2).unwrap();
     loop {
         let (source, positions) = empty.next().unwrap();
         if source.kind == SourceKind::Midpoint {
@@ -260,7 +249,7 @@ fn additive_full_binary64_span_stays_within_declared_cap() {
     let mut sources = Sources::new(
         (1.0, f64::MAX),
         false,
-        Some(TickInterval::additive(f64::from_bits(1)).unwrap()),
+        TickGeneration::additive(f64::from_bits(1)).unwrap(),
         2,
     )
     .unwrap();
@@ -284,7 +273,7 @@ fn logarithmic_interval_vectors_are_divisible_integral_exponents_not_subsequence
     let mut sources = Sources::new(
         (-400.0, 400.0),
         true,
-        Some(TickInterval::log10_decades(2).unwrap()),
+        TickGeneration::log10_decades(2).unwrap(),
         2,
     )
     .unwrap();
@@ -304,7 +293,7 @@ fn logarithmic_empty_intersection_falls_back_to_the_original_midpoint() {
     let mut sources = Sources::new(
         (400.0, 500.0),
         true,
-        Some(TickInterval::log10_decades(1).unwrap()),
+        TickGeneration::log10_decades(1).unwrap(),
         100,
     )
     .unwrap();
@@ -320,7 +309,7 @@ fn maximum_public_decade_step_widens_and_terminates_without_wrapping() {
     let mut sources = Sources::new(
         (-3.0, 3.0),
         true,
-        Some(TickInterval::log10_decades(u32::MAX).unwrap()),
+        TickGeneration::log10_decades(u32::MAX).unwrap(),
         100,
     )
     .unwrap();
@@ -337,7 +326,7 @@ fn maximum_public_decade_step_widens_and_terminates_without_wrapping() {
 
 #[test]
 fn logarithmic_count_sources_preserve_automatic_order_but_target_the_initial_subset() {
-    let mut sources = Sources::new((-3.0, 3.0), true, None, 3).unwrap();
+    let mut sources = Sources::new((-3.0, 3.0), true, TickGeneration::automatic(), 3).unwrap();
     assert_eq!(
         sources.next().unwrap().1.unwrap(),
         [-3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0]
@@ -345,13 +334,8 @@ fn logarithmic_count_sources_preserve_automatic_order_but_target_the_initial_sub
     assert_eq!(sources.next().unwrap().1.unwrap(), [-3.0, 0.0, 3.0]);
     assert_eq!(sources.next().unwrap().1.unwrap(), [-3.0, 3.0]);
     assert_eq!(sources.next().unwrap().0.kind, SourceKind::Midpoint);
-    let mut target = Sources::new(
-        (-3.0, 3.0),
-        true,
-        Some(TickInterval::target(4).unwrap()),
-        1000,
-    )
-    .unwrap();
+    let mut target =
+        Sources::new((-3.0, 3.0), true, TickGeneration::target(4).unwrap(), 1000).unwrap();
     assert_eq!(target.cap, 4);
     let (source, positions) = target.next().unwrap();
     assert_eq!(source.kind, SourceKind::LogSubset(4));
@@ -360,13 +344,8 @@ fn logarithmic_count_sources_preserve_automatic_order_but_target_the_initial_sub
     assert_eq!(target.next().unwrap().1.unwrap(), [-3.0, 3.0]);
     assert_eq!(target.next().unwrap().1.unwrap(), [0.0]);
     assert!(target.next().is_err());
-    let mut maximum = Sources::new(
-        (-3.0, 3.0),
-        true,
-        Some(TickInterval::maximum(4).unwrap()),
-        7,
-    )
-    .unwrap();
+    let mut maximum =
+        Sources::new((-3.0, 3.0), true, TickGeneration::maximum(4).unwrap(), 7).unwrap();
     let (source, positions) = maximum.next().unwrap();
     assert_eq!(source.kind, SourceKind::LogIntegral);
     assert!(positions.is_none());
@@ -382,29 +361,28 @@ fn logarithmic_count_sources_preserve_automatic_order_but_target_the_initial_sub
 fn source_semantics_reject_before_fonts() {
     let discoveries = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
     for count in [0, 10_001, u32::MAX] {
-        assert!(matches!(TickInterval::target(count), Err(Error::Data(_))));
-        assert!(matches!(TickInterval::maximum(count), Err(Error::Data(_))));
+        assert!(matches!(TickGeneration::target(count), Err(Error::Data(_))));
+        assert!(matches!(
+            TickGeneration::maximum(count),
+            Err(Error::Data(_))
+        ));
     }
     assert_eq!(
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
         discoveries
     );
-    for (range, log, interval) in [
-        ((f64::NAN, 1.0), false, None),
-        ((1.0, 1.0), false, None),
-        ((0.0, 1.0), true, Some(TickInterval::additive(1.0).unwrap())),
-        (
-            (0.0, 1.0),
-            false,
-            Some(TickInterval::log10_decades(1).unwrap()),
-        ),
+    for (range, log, generation) in [
+        ((f64::NAN, 1.0), false, TickGeneration::automatic()),
+        ((1.0, 1.0), false, TickGeneration::automatic()),
+        ((0.0, 1.0), true, TickGeneration::additive(1.0).unwrap()),
+        ((0.0, 1.0), false, TickGeneration::log10_decades(1).unwrap()),
     ] {
         let theme = crate::Theme::publication().resolve().unwrap();
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let projection = Projection::new(range, range, (0.0, 1000.0, 0.0, 1000.0));
         assert!(numeric_tick_plan(
             range,
-            interval,
+            generation,
             log,
             &projection,
             AxisSide::Bottom,
@@ -477,7 +455,7 @@ fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
     let projection = Projection::new((0.0, 100.0), (0.0, 100.0), (0.0, 1000.0, 0.0, 1000.0));
     let plan = numeric_tick_plan(
         (0.0, 100.0),
-        Some(TickInterval::additive(10.0).unwrap()),
+        TickGeneration::additive(10.0).unwrap(),
         false,
         &projection,
         AxisSide::Bottom,
@@ -492,7 +470,7 @@ fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
     assert_eq!(plan.ticks.len(), 11);
     let dense = numeric_tick_plan(
         (0.0, 100.0),
-        Some(TickInterval::additive(0.001).unwrap()),
+        TickGeneration::additive(0.001).unwrap(),
         false,
         &projection,
         AxisSide::Bottom,
@@ -528,7 +506,7 @@ fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
         let format = NumericFormat::new(NumericNotation::Decimal, precision).unwrap();
         let selected = numeric_tick_plan(
             (0.0, 0.04),
-            Some(TickInterval::additive(0.01).unwrap()),
+            TickGeneration::additive(0.01).unwrap(),
             false,
             &projection,
             AxisSide::Bottom,
@@ -561,14 +539,14 @@ fn midpoint_is_conditional_and_must_itself_fit() {
         .unwrap();
     for width in [1.0, 100.0] {
         for selection in [
-            TickInterval::additive(1.0).unwrap(),
-            TickInterval::target(1).unwrap(),
-            TickInterval::maximum(1).unwrap(),
+            TickGeneration::additive(1.0).unwrap(),
+            TickGeneration::target(1).unwrap(),
+            TickGeneration::maximum(1).unwrap(),
         ] {
             let projection = Projection::new((1.1, 1.2), (0.0, 1.0), (0.0, width, 0.0, 100.0));
             let result = numeric_tick_plan(
                 (1.1, 1.2),
-                Some(selection),
+                selection,
                 false,
                 &projection,
                 AxisSide::Bottom,
@@ -605,7 +583,7 @@ fn numeric_source_invalid_range_and_font_failures_remain_fatal() {
     assert!(matches!(
         numeric_tick_plan(
             (1.1, 1.2),
-            None,
+            TickGeneration::automatic(),
             false,
             &projection,
             AxisSide::Bottom,
@@ -619,7 +597,7 @@ fn numeric_source_invalid_range_and_font_failures_remain_fatal() {
     assert!(matches!(
         numeric_tick_plan(
             (1.1, 1.1),
-            None,
+            TickGeneration::automatic(),
             false,
             &projection,
             AxisSide::Bottom,
@@ -644,7 +622,7 @@ fn generated_labels_are_unique_and_covered_by_the_closed_census() {
         let projection = Projection::new(range, range, (0.0, 2000.0, 0.0, 1000.0));
         let plan = numeric_tick_plan(
             range,
-            None,
+            TickGeneration::automatic(),
             log,
             &projection,
             AxisSide::Bottom,
@@ -700,7 +678,7 @@ fn generated_labels_are_unique_and_covered_by_the_closed_census() {
     let configured = crate::numeric::format::NumericFormat::default();
     let selected = numeric_tick_plan(
         range,
-        None,
+        TickGeneration::automatic(),
         true,
         &projection,
         AxisSide::Bottom,
@@ -778,19 +756,19 @@ fn numeric_formatting_uses_nearest_even_and_declared_thresholds() {
 }
 
 #[test]
-fn exact_source_overrides_intervals_and_provenance_survives_layout_cloning() {
+fn exact_source_overrides_generation_and_provenance_survives_layout_cloning() {
     let theme = crate::Theme::publication().resolve().unwrap();
     let x = super::super::AxisSpec {
         provenance: super::super::RangeProvenance::Configured,
         limits: Some((0.0, 10.0)),
-        interval: Some(TickInterval::additive(1.0).unwrap()),
+        generation: TickGeneration::maximum(1).unwrap(),
         format: None,
         exact_ticks: Some(vec![AxisTick::new(1.0, ""), AxisTick::new(9.0, "same")]),
     };
     let y = super::super::AxisSpec {
         provenance: super::super::RangeProvenance::Configured,
         limits: Some((0.0, 10.0)),
-        interval: Some(TickInterval::additive(2.0).unwrap()),
+        generation: TickGeneration::additive(2.0).unwrap(),
         format: None,
         exact_ticks: None,
     };

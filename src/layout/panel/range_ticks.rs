@@ -161,7 +161,7 @@ pub(crate) fn automatic_numeric_ticks(
 ) -> Result<Vec<AxisTick>, Error> {
     Ok(super::sources::numeric_tick_plan(
         range,
-        None,
+        crate::TickGeneration::automatic(),
         false,
         projection,
         side,

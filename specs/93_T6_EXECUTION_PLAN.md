@@ -204,7 +204,7 @@ labels, not existing commits.
 | T6C3 | COMPLETE | T6C2 | Complete initial axis/chrome preferences, provisional content-height gutters and all-mode parent/output evidence; `fix(layout): compose complete content-sized root frames` |
 | T6N | COMPLETE | T6C | Unified scientific numeric formatting; leaves below |
 | T6L | COMPLETE | T6N | One section-aware discrete guide; focused closure in `docs/section-composition-acceptance.md` |
-| T6T | IN PROGRESS | T6L | Design and private bounded sources complete in `docs/numeric-tick-selection-design.md` / `docs/bounded-tick-count-sources.md`; public migration and closure leaves in spec97 |
+| T6T | IN PROGRESS | T6L | Design, bounded sources and public TickGeneration cutover complete; `docs/public-tick-generation.md` records 33 focused library/four external contracts and 119 doctests; parent/root/output closure remains in spec97 |
 | T6D | PENDING | T6T | Data alpha with declared automatic-guide semantics; design, producers, guides, public migration and closure leaves in spec97 |
 | T6Z | PENDING | T6D | Integrated contract and phase closure |
 | T6Z1 | PENDING | T6D | Complete public examples/current-spec and property/consumer census reconciliation; `docs(api): reconcile scientific plotting contracts` |
@@ -530,8 +530,11 @@ theme root title/caption plus optional subtitle defaults. No TextPanel alignment
 arbitrary rotation or generic anchors are added. Complete per-role font sizes
 are explicit typography, not automatic shrink-to-fit.
 
-Expose `TickInterval::{additive,log10_decades}` with existing validation,
-candidate ordering and exact-tick precedence. No count/density/callback controls.
+The original interval-only foundation attachment is replaced by the complete
+`TickGeneration` and `x_tick_generation`/`y_tick_generation` API under spec97.
+Automatic reset, preferred intervals, approximate Target and hard Maximum use one
+source/value route and preserve exact-tick precedence. Density/callback controls
+remain outside the admission; spec97 owns remaining public/parent/output evidence.
 
 Omitted sizing becomes automatic. `Plot::width(u32)` and `Canvas::width(u32)`
 select exact width/content height; `size(u32,u32)` selects an exact pair. Every
@@ -949,8 +952,13 @@ callback or independent manual-legend API is admitted.
 
 Each design leaf fixes signatures, actual consumer/capability matrices, numerical
 rules, deterministic ordering, ownership and deletion targets before its code
-leaves start. Implementation leaves update current contracts atomically; until
-then the existing public interval and exact-RGBA behavior remains current.
+leaves start. Implementation leaves update current contracts atomically.
+TickGeneration now replaces the interval-only public API, including concrete
+Automatic reset and target/maximum transport. `../docs/public-tick-generation.md`
+records immediate validation, all 32 family/axis attachments, exact-order/count
+independence, categorical refusal, composed identity and compiler/publication
+checks. Parent/root/output breadth is the remaining tick leaf. Data alpha remains
+pending; the existing exact-RGBA behavior stays current until its own cutover.
 
 ## Verification And Closure
 

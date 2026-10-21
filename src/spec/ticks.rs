@@ -1,37 +1,57 @@
 use crate::{Error, Result};
 
-/// Validated first-tried spacing for generated numeric ticks, not a tick count.
+/// One validated selection for generated numeric tick positions.
 ///
-/// If the requested complete source cannot fit, the renderer tries the bounded
-/// coarser sources and final midpoint. Exact caller ticks take precedence.
+/// Targets allow nice-step deviation; maxima bound the complete in-domain list,
+/// including endpoint positions. Preferred intervals are tried before bounded
+/// coarser sources. Exact caller ticks take precedence over every selection.
 /// ```
-/// use lichtung_plot::TickInterval;
-/// let linear = TickInterval::additive(0.25)?;
-/// let logarithmic = TickInterval::log10_decades(2)?;
+/// use lichtung_plot::TickGeneration;
+/// let linear = TickGeneration::additive(0.25)?;
+/// let logarithmic = TickGeneration::log10_decades(2)?;
 /// assert_eq!(linear.additive_step(), Some(0.25));
 /// assert_eq!(logarithmic.decade_step(), Some(2));
+/// assert_eq!(TickGeneration::target(5)?.target_count(), Some(5));
+/// assert_eq!(TickGeneration::maximum(6)?.maximum_count(), Some(6));
+/// assert!(TickGeneration::default().is_automatic());
+/// assert!(TickGeneration::target(0).is_err());
+/// assert!(TickGeneration::maximum(10_001).is_err());
 /// # Ok::<(), lichtung_plot::Error>(())
 /// ```
 ///
 /// The choice and payload are private:
 /// ```compile_fail
-/// let _ = lichtung_plot::TickInterval::Additive(0.0);
+/// let _ = lichtung_plot::TickGeneration::Target(0);
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct TickInterval {
-    spacing: Spacing,
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct TickGeneration {
+    selection: Selection,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum Spacing {
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+enum Selection {
+    #[default]
+    Automatic,
     Additive(f64),
     Log10Decades(u32),
     Target(u32),
     Maximum(u32),
 }
 
-impl TickInterval {
+impl TickGeneration {
     pub(crate) const MAX_COUNT: u32 = 10_000;
+
+    /// Use renderer-owned automatic density and nice-step selection.
+    pub const fn automatic() -> Self {
+        Self {
+            selection: Selection::Automatic,
+        }
+    }
+
+    /// Inspect whether the selection is Automatic.
+    pub const fn is_automatic(&self) -> bool {
+        matches!(self.selection, Selection::Automatic)
+    }
 
     /// Prefer a finite strictly positive additive step on a linear numeric axis.
     pub fn additive(step: f64) -> Result<Self> {
@@ -41,7 +61,7 @@ impl TickInterval {
             ));
         }
         Ok(Self {
-            spacing: Spacing::Additive(step),
+            selection: Selection::Additive(step),
         })
     }
 
@@ -53,35 +73,29 @@ impl TickInterval {
             ));
         }
         Ok(Self {
-            spacing: Spacing::Log10Decades(decades),
+            selection: Selection::Log10Decades(decades),
         })
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "private target sources precede the generation API cutover"
-        )
-    )]
-    pub(crate) fn target(count: u32) -> Result<Self> {
+    /// Request approximately `count` numeric positions, allowing nice-step deviation.
+    ///
+    /// Counts must be in `1..=10_000`; one requests the original-domain midpoint.
+    /// Actual label fit can select a coarser complete source.
+    pub fn target(count: u32) -> Result<Self> {
         Self::validate_count(count)?;
         Ok(Self {
-            spacing: Spacing::Target(count),
+            selection: Selection::Target(count),
         })
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "private maximum sources precede the generation API cutover"
-        )
-    )]
-    pub(crate) fn maximum(count: u32) -> Result<Self> {
+    /// Bound generated in-domain positions, including endpoints, by `count`.
+    ///
+    /// Counts must be in `1..=10_000`. The bound applies to complete generated
+    /// sources, not exact caller ticks; it never drops individual labels.
+    pub fn maximum(count: u32) -> Result<Self> {
         Self::validate_count(count)?;
         Ok(Self {
-            spacing: Spacing::Maximum(count),
+            selection: Selection::Maximum(count),
         })
     }
 
@@ -94,24 +108,26 @@ impl TickInterval {
         Ok(())
     }
 
-    pub(crate) const fn target_count(&self) -> Option<u32> {
-        match self.spacing {
-            Spacing::Target(count) => Some(count),
+    /// Inspect the target count, or None for another selection.
+    pub const fn target_count(&self) -> Option<u32> {
+        match self.selection {
+            Selection::Target(count) => Some(count),
             _ => None,
         }
     }
 
-    pub(crate) const fn maximum_count(&self) -> Option<u32> {
-        match self.spacing {
-            Spacing::Maximum(count) => Some(count),
+    /// Inspect the hard maximum count, or None for another selection.
+    pub const fn maximum_count(&self) -> Option<u32> {
+        match self.selection {
+            Selection::Maximum(count) => Some(count),
             _ => None,
         }
     }
 
     pub(crate) const fn is_interval(&self) -> bool {
         matches!(
-            self.spacing,
-            Spacing::Additive(_) | Spacing::Log10Decades(_)
+            self.selection,
+            Selection::Additive(_) | Selection::Log10Decades(_)
         )
     }
 
@@ -119,38 +135,39 @@ impl TickInterval {
         &self,
         round: &mut crate::layout::kernel::FeedbackRound,
     ) -> Result<()> {
-        match self.spacing {
-            Spacing::Additive(step) => {
+        match self.selection {
+            Selection::Automatic => round.observe_count(0),
+            Selection::Additive(step) => {
                 round.observe_count(1)?;
                 round.observe_number(step)
             }
-            Spacing::Log10Decades(step) => {
+            Selection::Log10Decades(step) => {
                 round.observe_count(2)?;
                 round.observe_count(step as usize)
             }
-            Spacing::Target(count) => {
+            Selection::Target(count) => {
                 round.observe_count(3)?;
                 round.observe_count(count as usize)
             }
-            Spacing::Maximum(count) => {
+            Selection::Maximum(count) => {
                 round.observe_count(4)?;
                 round.observe_count(count as usize)
             }
         }
     }
 
-    /// Inspect the positive additive step, or None for logarithmic decades.
+    /// Inspect the positive additive step, or None for another selection.
     pub const fn additive_step(&self) -> Option<f64> {
-        match self.spacing {
-            Spacing::Additive(step) => Some(step),
+        match self.selection {
+            Selection::Additive(step) => Some(step),
             _ => None,
         }
     }
 
-    /// Inspect the positive integral decade step, or None for additive spacing.
+    /// Inspect the positive integral decade step, or None for another selection.
     pub const fn decade_step(&self) -> Option<u32> {
-        match self.spacing {
-            Spacing::Log10Decades(step) => Some(step),
+        match self.selection {
+            Selection::Log10Decades(step) => Some(step),
             _ => None,
         }
     }

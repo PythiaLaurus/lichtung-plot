@@ -117,7 +117,7 @@ fn exact_tick_configuration_validates_count_before_fonts() {
         let spec = AxisSpec {
             provenance: RangeProvenance::Automatic,
             limits: None,
-            interval: None,
+            generation: crate::TickGeneration::automatic(),
             format: None,
             exact_ticks: Some(
                 (0..count)
@@ -146,7 +146,7 @@ fn exact_tick_configuration_validates_positions_without_a_display_domain() {
         let spec = AxisSpec {
             provenance: RangeProvenance::Automatic,
             limits: None,
-            interval: None,
+            generation: crate::TickGeneration::automatic(),
             format: None,
             exact_ticks: Some(
                 positions
@@ -167,7 +167,7 @@ fn exact_tick_configuration_preserves_empty_and_duplicate_labels_and_checks_know
     let mut spec = AxisSpec {
         provenance: RangeProvenance::Automatic,
         limits: None,
-        interval: None,
+        generation: crate::TickGeneration::automatic(),
         format: None,
         exact_ticks: Some(vec![
             AxisTick::new(-f64::MAX, "same"),
@@ -523,7 +523,7 @@ fn frozen_axes_and_grid_replay_without_layout_theme_or_shaping() {
             AxisTick::new(5.0, "middle"),
             AxisTick::new(10.0, ""),
         ]),
-        interval: None,
+        generation: crate::TickGeneration::automatic(),
         format: None,
     };
     let layout = Layout::new_with_axis_specs_in_panel_box(

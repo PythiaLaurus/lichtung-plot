@@ -174,11 +174,16 @@ contracts; `AxisTick` is exported only from the crate root. Public geometry uses
 Canvas terminology and concise geometry nouns rather than renderer-internal
 `Figure*` or redundant `*Input` names.
 
-Opaque crate-root `TickInterval` constructs finite positive additive steps or
-positive `u32` logarithmic decade steps. `x_tick_interval` and `y_tick_interval`
-use the existing sealed NumericX/Y gates. They select a first-tried generated
-source, not a tick count; exact AxisTick lists remain authoritative. Actual
-categorical axes and scale-kind mismatches reject before fonts.
+Opaque crate-root `TickGeneration` holds one concrete Automatic, preferred
+Additive/Log10Decades, Target or Maximum choice. Default and `automatic()` select
+Automatic. Validated counts accept `1..=10_000`; target permits nice-step deviation,
+whereas maximum bounds complete in-domain generated sources, including endpoints.
+`x_tick_generation` and `y_tick_generation` use the existing sealed NumericX/Y
+gates and replace the selected axis's whole choice, including explicit Automatic
+reset. Exact AxisTick lists remain authoritative and are not capped. Actual
+categorical non-Automatic choices and interval scale-kind mismatches reject before
+fonts. Prepared axes, composed equality and feedback retain this complete value;
+there is no interval-only public type or competing optional count chain.
 
 Opaque crate-root `NumericFormat` and its closed notation/precision/zero policies
 configure generated numeric axes, continuous guide numbers, existing Heatmap and

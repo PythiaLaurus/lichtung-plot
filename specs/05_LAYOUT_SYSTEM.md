@@ -689,7 +689,7 @@ parallel/perpendicular extents by orientation), using greedy text layout. Actual
 outward intervals must remain in their bands with traced clearance.
 
 A present exact list has `1..=10_000` entries, finite strictly ascending positions
-within the final display domain. It is indivisible and overrides an interval
+within the final display domain. It is indivisible and overrides generated selection
 regardless of setter order; labels stay verbatim and need not be unique. Empty
 exact labels intentionally paint no text, create no baseline/ink/gutter/collision,
 and retain tick/grid positions. For nonempty numeric labels the parent assigns
@@ -702,10 +702,10 @@ Automatic range broadening is separate: the private nice-range seed count 5,
 five-percent margin, and owned nice-step grammar affect domain snapping only.
 They are neither generated-tick targets nor public count controls.
 
-For no-interval linear generation, `pitch=max(1 quantum,6ch)` and
+For Automatic linear generation, `pitch=max(1 quantum,6ch)` and
 `upper_seed_count=1+min(9_999,max(1,S/pitch))`. Try desired seed counts from that
 value down to 1, selecting the FIRST complete fitting source, then a terminal
-`f64::midpoint(lo,hi)` singleton. There is no universal user tick-count target.
+`f64::midpoint(lo,hi)` singleton. There is no universal five-tick default.
 For each seed `k`, `raw_step=(hi-lo)/k`; if the subtraction is nonfinite use
 `((hi/scale)-(lo/scale))*(scale/k)`, `scale=max(abs(lo),abs(hi))`.
 Reject nonfinite/nonpositive raw steps locally.
@@ -723,7 +723,7 @@ Positions are prescribed `(index as f64)*step`, finite, in the closed domain,
 and strictly ascending. A too-dense/unrepresentable source rejects locally,
 before vector materialization, without poisoning later coarser sources.
 
-With `TickInterval::additive(step)`, try complete zero-aligned vectors for
+With `TickGeneration::additive(step)`, try complete zero-aligned vectors for
 `step*(1,2,3,5)`, then ten times those values, continuing by decades. Omit exact
 duplicate steps. Stop after the first finite decade base greater than
 `max(abs(lo),abs(hi))` or before the next nonfinite base. Requested interval is
@@ -731,20 +731,45 @@ first; first fitting complete source wins; only then coarsen; midpoint is last.
 There are no interval subsequences or global joint-axis interval ranks.
 
 Forest owns logarithmic source positions. Intersect its finite increasing
-`[log_lo,log_hi]` with `[-323,308]`. Without interval, first try all integral
+`[log_lo,log_hi]` with `[-323,308]`. Under Automatic, first try all integral
 exponents when at least two exist, then evenly indexed subsequences in descending
 size `2..=min(upper_seed_count,n)`, with index
-`((i*(n-1))+((d-1)/2))/(d-1)`. If no integral source exists, use adaptive linear
+`((i*(n-1))+((d-1)/2))/(d-1)`. With fewer than two integrals, use adaptive linear
 sources over the logarithmic position domain. Try expression-labeled midpoint
 last. Integral labels format exact decimal powers; adaptive/midpoint labels are
 ASCII `10^` plus the formatted exponent, never `powf` or debug formatting.
 
-With `TickInterval::log10_decades(d)`, try positive checked exponent steps
+With `TickGeneration::log10_decades(d)`, try positive checked exponent steps
 `d*(1,2,3,5)` by decades, each containing divisible integral exponents in the
 intersection (at most 632). Stop after the first decade base beyond maximum
-absolute clamped exponent or representability; no intersection charges one
+absolute clamped exponent or representability; no intersection records one
 requested miss then midpoint. Empty sources miss. No subsequences/adaptive
 sources occur in interval mode. Always use the original domain for midpoint.
+
+`TickGeneration::target(n)` starts the existing adaptive linear program at seed n,
+then n-1 down to 1, then midpoint; the measured `6ch` upper does not replace the
+requested initial seed. Nice-step ties remain unchanged, so `[0,1]` with target
+four yields `[0,0.5,1]` while target five yields `[0,0.25,0.5,0.75,1]` when those
+labels fit. With at least two admitted Forest integral exponents, start at
+`d=min(n,integral_count)`, use the full source only when d is that full count,
+otherwise the existing evenly indexed subset, then smaller d down to 2 and
+midpoint. With fewer than two integrals, use the adaptive exponent-space program.
+
+`TickGeneration::maximum(n)` preserves Automatic's complete candidate order, but
+skips every source whose actual in-domain position count exceeds n before vector
+allocation, formatting and label measurement. Endpoint positions count, as do
+positions with empty labels. A seed's original nice step either admits its whole
+source or misses; do not select a different factor within the seed to meet the
+maximum. Forest skips an oversized full integral source and continues the same
+Automatic subsets. There is no post-selection dropping or painted-label-only cap.
+
+Both counts validate `1..=10_000`. One selects the original-domain midpoint
+directly, still subject to real fit, and never admits adjacent-domain two endpoints.
+Target permits deviation from n but retains the common 10,000-position source
+bound. Its linear program has at most n+1 candidates, integral Forest at most d;
+Maximum retains Automatic's existing bound. The midpoint is emitted at most once.
+Scientific ranges, nice-range seeds, format, root sizing and guide choices do not
+change to achieve a count. Allocation/arithmetic/font errors remain fatal.
 
 Unconfigured generated labels use locale-free nearest-even decimal conversion: scientific
 with two fractional digits for absolute value `>=1e12` or nonzero `<0.01`;
@@ -766,7 +791,7 @@ nearest/ties-to-even rounding. Scientific/engineering/fixed/significant policies
 do not mutate numeric positions, data windows, statistics or colors.
 
 Exact caller tick lists take precedence and retain their strings, regardless of
-interval/format setter order. Generated exact-precision candidates cannot change
+generation/format setter order. Generated exact-precision candidates cannot change
 notation or precision to rescue label collisions; a nonunique complete axis
 candidate is a source miss. Adaptive candidates increase uniform set precision
 minimum-first through the caller's bounded maximum. The original source ordering
@@ -1451,22 +1476,31 @@ and retain them in plans for unchanged consumption by arrangement and drawing.
 Canvas's own title/subtitle use its theme's root fields, with absent subtitle
 falling back to its own title alignment, separately from Canvas panel settings.
 
-`TickInterval` is an opaque immutable crate-root `Clone + Copy + Debug + PartialEq`
-value. `additive(step:f64)->Result<Self>` requires finite positive step;
-`log10_decades(n:u32)->Result<Self>` requires nonzero n. Plot
-`x_tick_interval(self,interval)->Self` and `y_tick_interval` require NumericX/Y
-respectively. Repeated setters replace prior interval; scale-kind mismatch is
-semantic error; categorical axes do not admit intervals. Exact ticks override
-regardless of setter order. An interval is a local first-tried preference, not
-exact positions; exact `AxisTick` remains the strict control.
+`TickGeneration` is an opaque immutable crate-root
+`Clone + Copy + Debug + Default + PartialEq` value with private choices Automatic,
+Additive, Log10Decades, Target and Maximum. `automatic()` and Default are Automatic.
+`additive(step:f64)->Result<Self>` requires finite positive step;
+`log10_decades(n:u32)->Result<Self>` requires nonzero n. `target(n:u32)` and
+`maximum(n:u32)` validate `1..=10_000`. Inspection uses `is_automatic`,
+`additive_step`, `decade_step`, `target_count` and `maximum_count`.
 
-No target count, density control, tick callback, public constraint/measurement
-operation, `SizeRequest`, plan, layout trait, quality scorer, or plugin is added.
-Repository callers migrate atomically rather than retaining compatibility aliases.
+Plot `x_tick_generation(self,generation)->Self` and `y_tick_generation` require
+NumericX/Y respectively. Each replaces that axis's whole choice, including an
+Automatic reset. Actual categorical axes reject every non-Automatic choice;
+interval scale-kind mismatch is a semantic error before fonts. Exact ticks
+override regardless of setter order and are not constrained by generated counts.
+`AxisSpec.generation` and `AxisSemanticInputs.generation` retain one concrete value,
+independently of exact ticks, range provenance and NumericFormat. Explicit copies,
+composed/child/height equality and feedback preserve its discriminant/payload even
+when different instructions produce equal positions or extent. Feedback tags are
+Automatic 0, Additive 1 plus exact f64, Log10Decades 2 plus u32, Target 3 plus count,
+Maximum 4 plus count. Selected plans freeze positions/text/operands for replay.
 
-The subsequent user-approved target/maximum numeric count extension is planned in
-`97_ALPHA_AND_TICK_EXTENSION_PLAN.md`. It becomes current only with its owning
-source/API/caller cutover; this section describes the implemented interval API.
+The interval-only type and setters are removed, without aliases or competing
+optional fields. No exact generated-count control, density scalar, categorical
+stride/drop, tick callback, public constraint/measurement operation, `SizeRequest`,
+plan, layout trait, quality scorer or plugin is added. Spec97 owns remaining
+extension acceptance and the separately admitted data-alpha work.
 
 ## Validation And Repair Evidence
 

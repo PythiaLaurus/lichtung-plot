@@ -3,7 +3,7 @@ use crate::data::{FACET_COLUMN, FACET_ROW, FACET_WRAP};
 use crate::spec::{AxisScale, FacetScales, FacetSpec, PlotKind};
 
 #[cfg(test)]
-mod interval_tests;
+mod generation_tests;
 
 impl<K: crate::kind::Marker> Plot<K> {
     /// Apply one complete generic-facet layout.
@@ -126,7 +126,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         ] {
             if axis.limits != other.limits
                 || axis.provenance != other.provenance
-                || axis.interval != other.interval
+                || axis.generation != other.generation
                 || !same_values(axis.exact_ticks.as_deref(), other.exact_ticks.as_deref())
             {
                 return false;
@@ -187,7 +187,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         for (target, source) in axes.iter_mut().zip([&self.x_axis_spec, &self.y_axis_spec]) {
             target.limits = source.limits;
             target.provenance = source.provenance;
-            target.interval = source.interval;
+            target.generation = source.generation;
             target.format.clone_from(&source.format);
             if let Some(ticks) = &source.exact_ticks {
                 let mut retained = Vec::new();

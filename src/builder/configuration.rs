@@ -256,58 +256,91 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    /// Prefer a complete generated x-tick spacing before bounded local coarsening.
+    /// Replace the complete generated x-tick selection.
     ///
-    /// Exact [`Self::x_ticks`] override generated intervals in either setter order.
-    /// The actual axis must be numeric and match the interval's linear/logarithmic
-    /// kind; semantic mismatch rejects before fonts. Repeated calls replace only
-    /// this axis's interval.
+    /// Exact [`Self::x_ticks`] take precedence in either setter order, independently
+    /// of generated count limits. Targets allow nice-step deviation; maxima bound
+    /// complete in-domain sources, including endpoints. Automatic resets a previous
+    /// interval or count. The actual axis must be numeric; an interval must also
+    /// match its linear/logarithmic scale. Mismatches reject before fonts.
     /// ```
-    /// use lichtung_plot::{NumericValues, Plot, TickInterval};
+    /// use lichtung_plot::{NumericValues, Plot, TickGeneration};
     /// let plot = Plot::scatter(NumericValues::new("x", [0.0, 10.0]),
     ///     NumericValues::new("y", [0.0, 4.0]))
-    ///     .x_tick_interval(TickInterval::additive(2.0)?)
-    ///     .y_tick_interval(TickInterval::additive(1.0)?);
+    ///     .x_tick_generation(TickGeneration::target(5)?)
+    ///     .y_tick_generation(TickGeneration::maximum(4)?)
+    ///     .x_tick_generation(TickGeneration::automatic());
     /// # let _ = plot;
     /// # Ok::<(), lichtung_plot::Error>(())
     /// ```
     /// ```compile_fail
-    /// use lichtung_plot::{kind, Plot, TickInterval};
-    /// fn categorical(plot: Plot<kind::Bar>, interval: TickInterval) {
-    ///     let _ = plot.x_tick_interval(interval);
+    /// use lichtung_plot::{kind, Plot, TickGeneration};
+    /// fn categorical(plot: Plot<kind::Bar>, generation: TickGeneration) {
+    ///     let _ = plot.x_tick_generation(generation);
     /// }
     /// ```
     /// ```compile_fail
-    /// use lichtung_plot::{Plot, TickInterval};
-    /// fn erased(plot: Plot, interval: TickInterval) {
-    ///     let _ = plot.x_tick_interval(interval);
+    /// use lichtung_plot::{Plot, TickGeneration};
+    /// fn erased(plot: Plot, generation: TickGeneration) {
+    ///     let _ = plot.x_tick_generation(generation);
+    /// }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, Plot, TickGeneration};
+    /// fn matrix(plot: Plot<kind::Matrix>, generation: TickGeneration) {
+    ///     let _ = plot.x_tick_generation(generation);
+    /// }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, Plot, TickGeneration};
+    /// fn heatmap(plot: Plot<kind::Heatmap>, generation: TickGeneration) {
+    ///     let _ = plot.x_tick_generation(generation);
     /// }
     /// ```
     #[must_use]
-    pub fn x_tick_interval(mut self, interval: crate::TickInterval) -> Self
+    pub fn x_tick_generation(mut self, generation: crate::TickGeneration) -> Self
     where
         K: crate::kind::NumericX,
     {
-        self.x_axis_spec.interval = Some(interval);
+        self.x_axis_spec.generation = generation;
         self
     }
 
-    /// Prefer a complete generated y-tick spacing before bounded local coarsening.
+    /// Replace the complete generated y-tick selection, independently of x.
     ///
     /// Exact [`Self::y_ticks`] take precedence in either setter order. Only the
-    /// existing sealed numeric-y families admit this instruction.
+    /// existing sealed numeric-y families admit this instruction. Automatic resets
+    /// any previous interval or count; actual categorical axes reject other choices.
     /// ```compile_fail
-    /// use lichtung_plot::{kind, Plot, TickInterval};
-    /// fn categorical(plot: Plot<kind::Beeswarm>, interval: TickInterval) {
-    ///     let _ = plot.y_tick_interval(interval);
+    /// use lichtung_plot::{kind, Plot, TickGeneration};
+    /// fn categorical(plot: Plot<kind::Beeswarm>, generation: TickGeneration) {
+    ///     let _ = plot.y_tick_generation(generation);
+    /// }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{Plot, TickGeneration};
+    /// fn erased(plot: Plot, generation: TickGeneration) {
+    ///     let _ = plot.y_tick_generation(generation);
+    /// }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, Plot, TickGeneration};
+    /// fn matrix(plot: Plot<kind::Matrix>, generation: TickGeneration) {
+    ///     let _ = plot.y_tick_generation(generation);
+    /// }
+    /// ```
+    /// ```compile_fail
+    /// use lichtung_plot::{kind, Plot, TickGeneration};
+    /// fn heatmap(plot: Plot<kind::Heatmap>, generation: TickGeneration) {
+    ///     let _ = plot.y_tick_generation(generation);
     /// }
     /// ```
     #[must_use]
-    pub fn y_tick_interval(mut self, interval: crate::TickInterval) -> Self
+    pub fn y_tick_generation(mut self, generation: crate::TickGeneration) -> Self
     where
         K: crate::kind::NumericY,
     {
-        self.y_axis_spec.interval = Some(interval);
+        self.y_axis_spec.generation = generation;
         self
     }
 

@@ -57,7 +57,7 @@ pub struct AxisSpec {
     pub limits: Option<(f64, f64)>,
     /// Exact numeric tick source, selected before any automatic text is measured.
     pub(crate) exact_ticks: Option<Vec<AxisTick>>,
-    pub(crate) interval: Option<crate::TickInterval>,
+    pub(crate) generation: crate::TickGeneration,
     pub(crate) format: Option<std::sync::Arc<crate::numeric::format::NumericFormat>>,
 }
 

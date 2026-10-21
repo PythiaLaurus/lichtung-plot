@@ -1,6 +1,6 @@
 use super::*;
 use crate::decorations::legend::discrete::scoped::ScopedGuideInputs;
-use crate::TickInterval;
+use crate::TickGeneration;
 
 fn plot() -> Plot<crate::kind::Scatter> {
     Plot::scatter(
@@ -12,10 +12,10 @@ fn plot() -> Plot<crate::kind::Scatter> {
 }
 
 #[test]
-fn interval_copy_and_composed_identity_include_both_axes() {
+fn generation_copy_and_composed_identity_include_both_axes() {
     let mut plot = plot()
-        .x_tick_interval(TickInterval::additive(2.0).unwrap())
-        .y_tick_interval(TickInterval::additive(1.0).unwrap())
+        .x_tick_generation(TickGeneration::additive(2.0).unwrap())
+        .y_tick_generation(TickGeneration::additive(1.0).unwrap())
         .x_tick_format(
             crate::numeric::format::NumericFormat::default()
                 .with_prefix("x ")
@@ -31,33 +31,33 @@ fn interval_copy_and_composed_identity_include_both_axes() {
     let retained = plot
         .retain_composed_inputs(ScopedGuideInputs::for_test(&plot))
         .unwrap();
-    assert_eq!(retained.x_axis_spec.interval, plot.x_axis_spec.interval);
-    assert_eq!(retained.y_axis_spec.interval, plot.y_axis_spec.interval);
+    assert_eq!(retained.x_axis_spec.generation, plot.x_axis_spec.generation);
+    assert_eq!(retained.y_axis_spec.generation, plot.y_axis_spec.generation);
     assert_eq!(retained.x_axis_spec.format, plot.x_axis_spec.format);
     assert_eq!(retained.y_axis_spec.format, plot.y_axis_spec.format);
     assert!(plot.same_composed_inputs(&retained, &retained.guides));
-    plot.x_axis_spec.interval = Some(TickInterval::additive(3.0).unwrap());
+    plot.x_axis_spec.generation = TickGeneration::additive(3.0).unwrap();
     assert!(!plot.same_composed_inputs(&retained, &retained.guides));
-    plot.x_axis_spec.interval = retained.x_axis_spec.interval;
-    plot.y_axis_spec.interval = None;
+    plot.x_axis_spec.generation = retained.x_axis_spec.generation;
+    plot.y_axis_spec.generation = TickGeneration::automatic();
     assert!(!plot.same_composed_inputs(&retained, &retained.guides));
-    plot.y_axis_spec.interval = retained.y_axis_spec.interval;
+    plot.y_axis_spec.generation = retained.y_axis_spec.generation;
     for selection in [
-        TickInterval::target(5).unwrap(),
-        TickInterval::maximum(5).unwrap(),
+        TickGeneration::target(5).unwrap(),
+        TickGeneration::maximum(5).unwrap(),
     ] {
         let mut changed = plot.clone();
-        changed.x_axis_spec.interval = Some(selection);
+        changed.x_axis_spec.generation = selection;
         assert!(!changed.same_composed_inputs(&retained, &retained.guides));
         let counted = changed
             .retain_composed_inputs(ScopedGuideInputs::for_test(&changed))
             .unwrap();
         assert!(changed.same_composed_inputs(&counted, &counted.guides));
-        changed.x_axis_spec.interval = Some(if selection.target_count().is_some() {
-            TickInterval::maximum(5).unwrap()
+        changed.x_axis_spec.generation = if selection.target_count().is_some() {
+            TickGeneration::maximum(5).unwrap()
         } else {
-            TickInterval::target(5).unwrap()
-        });
+            TickGeneration::target(5).unwrap()
+        };
         assert!(!changed.same_composed_inputs(&counted, &counted.guides));
     }
     for side in 0..2 {
@@ -105,16 +105,16 @@ fn equal_composed_endpoints_do_not_erase_range_provenance() {
 }
 
 #[test]
-fn invalid_intervals_reject_before_font_discovery() {
+fn invalid_generation_rejects_before_font_discovery() {
     let discoveries = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
     for step in [0.0, -0.0, -1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
         assert!(matches!(
-            TickInterval::additive(step),
+            TickGeneration::additive(step),
             Err(crate::Error::Data(_))
         ));
     }
-    assert!(TickInterval::log10_decades(0).is_err());
-    let plot = plot().x_tick_interval(TickInterval::log10_decades(2).unwrap());
+    assert!(TickGeneration::log10_decades(0).is_err());
+    let plot = plot().x_tick_generation(TickGeneration::log10_decades(2).unwrap());
     assert!(matches!(plot.preflight(), Err(crate::Error::Data(_))));
     assert_eq!(
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
@@ -123,7 +123,7 @@ fn invalid_intervals_reject_before_font_discovery() {
 }
 
 #[test]
-fn categorical_trajectory_intervals_refuse_before_fonts_in_standalone_and_canvas() {
+fn categorical_trajectory_generation_refuses_before_fonts_in_standalone_and_canvas() {
     let theme = crate::Theme::publication()
         .customize()
         .with_font_stack(
@@ -140,24 +140,30 @@ fn categorical_trajectory_intervals_refuse_before_fonts_in_standalone_and_canvas
         crate::NumericValues::new("value", [1.0, 2.0]),
         crate::CategoryValues::new("group", ["a", "a"]).unwrap(),
     )
-    .x_tick_interval(TickInterval::additive(1.0).unwrap())
     .theme(theme);
     let discoveries = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
-    let error = trajectory.preflight().unwrap_err();
-    assert!(matches!(error, crate::Error::Data(_)), "{error}");
-    assert!(error
-        .to_string()
-        .contains("x-axis categories do not support a numeric tick interval"));
-    let error = crate::Canvas::grid(1, 1)
-        .unwrap()
-        .panel(0, 0, trajectory)
-        .unwrap()
-        .preflight()
-        .unwrap_err();
-    assert!(matches!(error, crate::Error::Data(_)), "{error}");
-    assert!(error
-        .to_string()
-        .contains("x-axis categories do not support a numeric tick interval"));
+    for generation in [
+        TickGeneration::additive(1.0).unwrap(),
+        TickGeneration::target(4).unwrap(),
+        TickGeneration::maximum(4).unwrap(),
+    ] {
+        let trajectory = trajectory.clone().x_tick_generation(generation);
+        let error = trajectory.preflight().unwrap_err();
+        assert!(matches!(error, crate::Error::Data(_)), "{error}");
+        assert!(error
+            .to_string()
+            .contains("x-axis categories do not support numeric tick generation"));
+        let error = crate::Canvas::grid(1, 1)
+            .unwrap()
+            .panel(0, 0, trajectory)
+            .unwrap()
+            .preflight()
+            .unwrap_err();
+        assert!(matches!(error, crate::Error::Data(_)), "{error}");
+        assert!(error
+            .to_string()
+            .contains("x-axis categories do not support numeric tick generation"));
+    }
     assert_eq!(
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
         discoveries
@@ -165,11 +171,11 @@ fn categorical_trajectory_intervals_refuse_before_fonts_in_standalone_and_canvas
 }
 
 #[test]
-fn interval_rendering_and_exact_precedence_are_cache_independent() {
+fn generation_rendering_and_exact_precedence_are_cache_independent() {
     for exact in [false, true] {
         let mut plot = plot()
-            .x_tick_interval(TickInterval::additive(2.0).unwrap())
-            .y_tick_interval(TickInterval::additive(1.0).unwrap())
+            .x_tick_generation(TickGeneration::additive(2.0).unwrap())
+            .y_tick_generation(TickGeneration::additive(1.0).unwrap())
             .x_tick_format(
                 crate::numeric::format::NumericFormat::default()
                     .with_suffix(" u")
@@ -216,7 +222,7 @@ fn forest_log_interval_is_applied_in_exponent_space_and_exact_ticks_override_it(
     )
     .scale(AxisScale::Log10)
     .x_limits(0.01, 100.0)
-    .x_tick_interval(TickInterval::log10_decades(2).unwrap());
+    .x_tick_generation(TickGeneration::log10_decades(2).unwrap());
     for exact in [false, true] {
         if exact {
             forest = forest.x_ticks(vec![crate::AxisTick::new(1.0, "raw exact")]);

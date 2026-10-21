@@ -48,7 +48,8 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
         HeatmapAnnotations, HeatmapLayout, HistogramBins, HistogramComposite, HistogramDimensions,
         HistogramGeometry, HistogramInput, HistogramStat, InteractionStyle, LinePathStyle,
         NumericValues, OpaqueColor, PlotKind, PointLayer, QqLine, QualitativePalette,
-        RaincloudDimensions, RaincloudGeometry, RaincloudInput, RegressionBand, WaterfallLabels,
+        RaincloudDimensions, RaincloudGeometry, RaincloudInput, RegressionBand, TickGeneration,
+        WaterfallLabels,
     };
 
     fn exact<K: kind::ExactFamily>(plot: Plot<K>, expected: PlotKind) {
@@ -93,12 +94,19 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
     )
     .unwrap();
 
-    categorical::<kind::Scatter>(Plot::scatter(numeric("x"), numeric("y")), PlotKind::Scatter);
+    categorical::<kind::Scatter>(
+        Plot::scatter(numeric("x"), numeric("y"))
+            .x_tick_generation(TickGeneration::target(5).unwrap())
+            .y_tick_generation(TickGeneration::maximum(4).unwrap()),
+        PlotKind::Scatter,
+    );
     exact::<kind::Histogram>(
         Plot::histogram(HistogramInput::samples(numeric("value")))
             .bins(HistogramBins::Count(4))
             .stat(HistogramStat::Density)
-            .composite(HistogramComposite::HistogramOnly),
+            .composite(HistogramComposite::HistogramOnly)
+            .x_tick_generation(TickGeneration::target(5).unwrap())
+            .y_tick_generation(TickGeneration::maximum(4).unwrap()),
         PlotKind::Histogram,
     );
     exact::<kind::Histogram>(
@@ -113,13 +121,22 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
         })),
         PlotKind::Histogram,
     );
-    categorical::<kind::Density>(Plot::density(numeric("value")), PlotKind::Density);
+    categorical::<kind::Density>(
+        Plot::density(numeric("value"))
+            .x_tick_generation(TickGeneration::target(5).unwrap())
+            .y_tick_generation(TickGeneration::maximum(4).unwrap()),
+        PlotKind::Density,
+    );
     exact::<kind::Qq>(
-        Plot::qq(numeric("value")).reference_line(QqLine::Identity),
+        Plot::qq(numeric("value"))
+            .reference_line(QqLine::Identity)
+            .x_tick_generation(TickGeneration::target(5).unwrap())
+            .y_tick_generation(TickGeneration::maximum(4).unwrap()),
         PlotKind::Qq,
     );
     exact::<kind::PointInterval>(
-        Plot::point_interval(category("category"), numeric("estimate"), bounds()),
+        Plot::point_interval(category("category"), numeric("estimate"), bounds())
+            .x_tick_generation(TickGeneration::target(5).unwrap()),
         PlotKind::PointInterval,
     );
     categorical::<kind::Line>(
@@ -131,15 +148,22 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
                     .unwrap()
                     .with_alpha(128),
             )
-            .band(bounds()),
+            .band(bounds())
+            .x_tick_generation(TickGeneration::target(5).unwrap())
+            .y_tick_generation(TickGeneration::maximum(4).unwrap()),
         PlotKind::Line,
     );
     categorical::<kind::Trajectory>(
-        Plot::trajectory(numeric("x"), numeric("y"), category("group")),
+        Plot::trajectory(numeric("x"), numeric("y"), category("group"))
+            .x_tick_generation(TickGeneration::target(5).unwrap())
+            .y_tick_generation(TickGeneration::maximum(4).unwrap()),
         PlotKind::Trajectory,
     );
     categorical::<kind::LinePath>(
-        Plot::line_path(numeric("x"), numeric("y"), category("group")).style(LinePathStyle::Hue),
+        Plot::line_path(numeric("x"), numeric("y"), category("group"))
+            .style(LinePathStyle::Hue)
+            .x_tick_generation(TickGeneration::target(5).unwrap())
+            .y_tick_generation(TickGeneration::maximum(4).unwrap()),
         PlotKind::LinePath,
     );
     categorical::<kind::Interaction>(
@@ -150,6 +174,7 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
             bounds(),
         )
         .connectors(false)
+        .y_tick_generation(TickGeneration::maximum(4).unwrap())
         .styles([
             InteractionStyle::new("a").unwrap(),
             InteractionStyle::new("b").unwrap(),
@@ -162,11 +187,14 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
             CoefficientInput::estimates(numeric("estimate")),
         )
         .reference_line(0.0)
+        .x_tick_generation(TickGeneration::target(5).unwrap())
         .significance([attached()]),
         PlotKind::Coefficient,
     );
     exact::<kind::Forest>(
-        Plot::forest(category("term"), numeric("estimate"), bounds(), 1.0).scale(AxisScale::Log10),
+        Plot::forest(category("term"), numeric("estimate"), bounds(), 1.0)
+            .scale(AxisScale::Log10)
+            .x_tick_generation(TickGeneration::target(5).unwrap()),
         PlotKind::Forest,
     );
     exact::<kind::Dumbbell>(
@@ -182,7 +210,8 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
             )
             .unwrap(),
         )
-        .legend_composition(lichtung_plot::LegendComposition::Separate),
+        .legend_composition(lichtung_plot::LegendComposition::Separate)
+        .x_tick_generation(TickGeneration::target(5).unwrap()),
         PlotKind::Dumbbell,
     );
     exact::<kind::Heatmap>(
@@ -197,6 +226,7 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
     );
     categorical::<kind::Bar>(
         Plot::bar(category("category"), BarInput::estimates(numeric("value")))
+            .y_tick_generation(TickGeneration::maximum(4).unwrap())
             .spacing(BarSpacing::Compact)
             .point_layer(bar_points.clone())
             .significance([attached()])
@@ -205,6 +235,7 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
     );
     categorical::<kind::HorizontalBar>(
         Plot::horizontal_bar(category("category"), BarInput::estimates(numeric("value")))
+            .x_tick_generation(TickGeneration::target(5).unwrap())
             .spacing(BarSpacing::Comfort)
             .point_layer(bar_points)
             .significance([attached()])
@@ -213,20 +244,26 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
     );
     categorical::<kind::StackedBar>(
         Plot::stacked_bar(category("category"), numeric("value"), category("group"))
+            .y_tick_generation(TickGeneration::maximum(4).unwrap())
             .significance([pairwise()]),
         PlotKind::StackedBar,
     );
     categorical::<kind::StackedHorizontalBar>(
         Plot::stacked_horizontal_bar(category("category"), numeric("value"), category("group"))
+            .x_tick_generation(TickGeneration::target(5).unwrap())
             .significance([pairwise()]),
         PlotKind::StackedHorizontalBar,
     );
     categorical::<kind::Boxplot>(
-        Plot::boxplot(category("category"), numeric("value")).significance([pairwise()]),
+        Plot::boxplot(category("category"), numeric("value"))
+            .y_tick_generation(TickGeneration::maximum(4).unwrap())
+            .significance([pairwise()]),
         PlotKind::Boxplot,
     );
     categorical::<kind::Violin>(
-        Plot::violin(category("category"), numeric("value")).significance([pairwise()]),
+        Plot::violin(category("category"), numeric("value"))
+            .y_tick_generation(TickGeneration::maximum(4).unwrap())
+            .significance([pairwise()]),
         PlotKind::Violin,
     );
     categorical::<kind::Raincloud>(
@@ -234,6 +271,7 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
             category("category"),
             numeric("value"),
         ))
+        .y_tick_generation(TickGeneration::maximum(4).unwrap())
         .significance([pairwise()]),
         PlotKind::Raincloud,
     );
@@ -250,12 +288,16 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
     );
     exact::<kind::Regression>(
         Plot::regression(numeric("x"), numeric("y"))
+            .x_tick_generation(TickGeneration::target(5).unwrap())
+            .y_tick_generation(TickGeneration::maximum(4).unwrap())
             .band(RegressionBand::Hidden)
             .legend_composition(lichtung_plot::LegendComposition::Separate),
         PlotKind::Regression,
     );
     categorical::<kind::Marginal>(
-        Plot::marginal(numeric("x"), numeric("y")),
+        Plot::marginal(numeric("x"), numeric("y"))
+            .x_tick_generation(TickGeneration::target(5).unwrap())
+            .y_tick_generation(TickGeneration::maximum(4).unwrap()),
         PlotKind::Marginal,
     );
     categorical::<kind::Matrix>(
@@ -264,6 +306,7 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
     );
     exact::<kind::Beeswarm>(
         Plot::beeswarm(category("category"), numeric("value"), numeric("color"))
+            .x_tick_generation(TickGeneration::target(5).unwrap())
             .continuous_color_scale(
                 ContinuousColorScale::sequential(None, Some(ColorDomain::exact(0.0, 3.0).unwrap()))
                     .unwrap(),
@@ -272,6 +315,7 @@ fn constructors_and_contextual_builders_preserve_exact_plot_markers() {
     );
     exact::<kind::Waterfall>(
         Plot::waterfall(category("label"), numeric("delta"), 0.0)
+            .x_tick_generation(TickGeneration::target(5).unwrap())
             .total_labels(WaterfallLabels::new("Base", "Total").unwrap()),
         PlotKind::Waterfall,
     );

@@ -201,24 +201,31 @@ frozen replay does not resolve the optional chains again.
 
 ## Numeric Ticks
 
-Automatic numeric tick positions and density are deterministic renderer-owned
-layout decisions based on resolved range, available panel space, and measured
-labels. The current API exposes no caller-selected automatic tick count.
+Opaque immutable `TickGeneration` holds one private choice and payload. Default
+and `automatic()` select the renderer's deterministic range/span/measured-label
+policy. `additive(step)` accepts finite positive binary64 spacing;
+`log10_decades(decades)` accepts positive `u32` exponent spacing. `target(count)`
+and `maximum(count)` accept `1..=10_000`. Readonly `is_automatic`, `additive_step`,
+`decade_step`, `target_count` and `maximum_count` inspect the complete input.
+`Plot::x_tick_generation` and `Plot::y_tick_generation` retain the existing sealed
+NumericX/Y capabilities; Any has neither. Each call replaces that axis's complete
+choice, with Automatic explicitly resetting an interval or count.
 
-`TickInterval::additive(step)` accepts finite positive binary64 spacing and
-`TickInterval::log10_decades(decades)` accepts positive `u32` exponent spacing.
-The immutable choice/payload is private; readonly `additive_step` and
-`decade_step` inspect the selected input. `Plot::x_tick_interval` and
-`Plot::y_tick_interval` use the existing sealed NumericX/Y capabilities; Any has
-neither. Repeated calls replace only the selected axis interval.
+Target tries the requested initial seed before bounded smaller complete sources,
+allowing nice-step deviation and actual label fitting. Maximum filters Automatic's
+existing ordered complete sources by actual in-domain position cardinality before
+allocation/formatting/label measurement. Endpoints and intentionally unlabeled
+positions count; no individual label is dropped. One selects the original-domain
+midpoint for either count policy, and that label must still fit.
 
-The requested complete source is tried first. If it cannot fit, the existing
-bounded `(1,2,3,5)` decimal coarsenings and final midpoint remain available; no
-subsequence or target-count interpretation is introduced. Logarithmic intervals
-select divisible integral exponents, not spacing between transformed raw values.
-Actual categorical axes and linear/logarithmic kind mismatches reject before
-fonts. Prepared sources, parent copies, identity and feedback retain the complete
-interval input.
+Preferred intervals try the requested complete source first, then bounded
+`(1,2,3,5)` decimal coarsenings and final midpoint, without interval subsequences.
+Logarithmic intervals select divisible integral exponents, not spacing between
+transformed raw values. Targets use the existing Forest integral subset program
+or adaptive exponent-space program; no inverse binary64 powers are introduced.
+Actual categorical axes reject non-Automatic choices, and interval scale-kind
+mismatches reject before fonts. Prepared sources, parent copies, identity and
+feedback retain the complete generation input independently of range/format.
 
 `Plot::x_ticks` and `Plot::y_ticks` accept complete exact `AxisTick` lists. An
 exact list replaces all generated ticks on that axis; generated and exact ticks
@@ -227,9 +234,10 @@ inside the resolved range. Preflight projects the requested positions, measures
 their labels, and rejects collisions rather than omitting, moving, or rotating
 caller-owned ticks.
 
-Exact lists suppress generated interval/format text and selection regardless of setter
-order. They do not suppress semantic axis-kind validation or permit categorical
-axes to accept numeric instructions.
+Exact lists suppress generated selection/format text regardless of setter order;
+a generated maximum does not constrain or truncate an exact list. They do not
+suppress semantic axis-kind validation or permit categorical axes to accept
+numeric instructions.
 
 ## Scientific Numeric Presentation
 

@@ -1151,7 +1151,7 @@ fn project(
 
 pub(crate) fn log_tick_plan(
     range: (f64, f64),
-    interval: Option<crate::TickInterval>,
+    generation: crate::TickGeneration,
     format: Option<&crate::numeric::format::NumericFormat>,
     panel: crate::layout::PanelBox,
     theme: &ResolvedTheme,
@@ -1160,7 +1160,7 @@ pub(crate) fn log_tick_plan(
     let projection = crate::layout::Projection::new(range, (0.0, 1.0), panel.as_tuple());
     crate::layout::numeric_tick_plan(
         range,
-        interval,
+        generation,
         true,
         &projection,
         crate::layout::AxisSide::Bottom,

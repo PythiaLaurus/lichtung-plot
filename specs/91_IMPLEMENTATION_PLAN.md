@@ -6656,7 +6656,8 @@ T6's pre-existing foundation commitments below remain in force. The subsequent
 DF3/DF4 closure review is CLOSED as a disposition: the user approved proceeding
 with caller-computed alpha, linear/log mappings, declared continuous/discrete
 automatic-guide semantics, and numeric target/maximum tick counts. Spec97 records
-these new implementation phases; they are not yet current APIs. Residual DF4
+these new implementation phases. TickGeneration is now current; data-alpha APIs
+remain pending. Residual DF4
 exact-count/density/ratio/category/callback controls join residual DF2/DF5/DF7 at
 T7 CLOSURE. Fully caller-decided legends join DF11, retaining all of its
 post-first-release milestone prerequisites.
@@ -6696,16 +6697,16 @@ Scope:
 - Migrate current local style and categorical color callers to the one approved
   precedence model; delete replaced public and private representations.
 - Keep backend styles private and avoid exposing renderer implementation details.
-- Expose opaque crate-root `TickInterval: Clone + Copy + Debug + PartialEq` with
-  validated `additive(f64) -> Result<Self>` and
-  `log10_decades(u32) -> Result<Self>`, plus consuming
-  `Plot<K>::x_tick_interval(TickInterval) -> Self where K: kind::NumericX` and the
-  corresponding `NumericY` y setter. Repeated setters replace; a present exact
-  list takes precedence regardless of order and validates `1..=10_000`; absence
-  retains automatic span/typography policy. This completed foundation cutover
-  exposes no count control; the subsequent T6T admission in spec97 owns target and
-  maximum counts and any atomic replacement. Density scalars, categorical stride
-  and generation callbacks remain outside that admission.
+- Expose opaque crate-root `TickGeneration: Clone + Copy + Debug + Default + PartialEq`
+  with validated `additive(f64)`, `log10_decades(u32)`, `target(u32)` and `maximum(u32)`
+  constructors and Automatic construction/reset. The complete generation value
+  replaces the original interval-only foundation carrier under spec97's subsequent
+  admission. Consuming `Plot<K>::x_tick_generation(TickGeneration) -> Self` requires
+  `kind::NumericX`; the corresponding y setter requires NumericY. Each replaces
+  the whole axis choice; exact lists take precedence in either order and are not
+  constrained by generated counts. Target permits nice deviation, Maximum bounds
+  complete in-domain sources before allocation/formatting. Density scalars,
+  categorical stride and generation callbacks remain outside that admission.
 - Make absence of a sizing call select automatic layout for Plot and Canvas.
 - Add consuming `Plot<K>::width(u32) -> Self` and `Canvas::width(u32) -> Self`
   for exact width with automatic height; retain exact `size(width, height)`.

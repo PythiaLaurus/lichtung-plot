@@ -1,5 +1,5 @@
 use super::*;
-use crate::TickInterval;
+use crate::TickGeneration;
 
 #[test]
 fn empty_axis_measurement_does_not_shape_text() {
@@ -655,7 +655,7 @@ fn automatic_selection_and_frozen_axis_agree_at_quantum_fit_boundary() {
             let projection = projection(span);
             let selected = numeric_tick_plan(
                 (0.0, 2.0),
-                Some(TickInterval::additive(1.0).unwrap()),
+                TickGeneration::additive(1.0).unwrap(),
                 false,
                 &projection,
                 side,

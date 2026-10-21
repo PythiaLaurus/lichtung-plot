@@ -21,9 +21,8 @@ impl Plot {
             ),
             (self.y_axis_spec(), false),
         ] {
-            if spec
-                .interval
-                .is_some_and(|interval| logarithmic != interval.decade_step().is_some())
+            if spec.generation.is_interval()
+                && logarithmic != spec.generation.decade_step().is_some()
             {
                 return Err(Error::Data(
                     "tick interval does not match the axis scale".into(),

@@ -3,9 +3,9 @@
 use super::{AxisSide, AxisTick, Projection};
 use crate::layout::PhysicalTextAlignment;
 use crate::theme::ResolvedTheme;
-use crate::{Error, TickInterval};
+use crate::{Error, TickGeneration};
 
-pub(super) const MAX_TICKS: usize = TickInterval::MAX_COUNT as usize;
+pub(super) const MAX_TICKS: usize = TickGeneration::MAX_COUNT as usize;
 pub(crate) const NUMERIC_ALPHABET: &[char] = &[
     '-', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'M', 'e', 'k',
 ];
@@ -214,7 +214,7 @@ pub(super) fn span_quanta(span: f64) -> Result<i64, Error> {
 struct Sources {
     range: (f64, f64),
     log: bool,
-    selection: Option<TickInterval>,
+    generation: TickGeneration,
     upper: usize,
     ordinal: usize,
     cap: usize,
@@ -230,7 +230,7 @@ impl Sources {
     fn new(
         range: (f64, f64),
         log: bool,
-        selection: Option<TickInterval>,
+        generation: TickGeneration,
         upper: usize,
     ) -> Result<Self, Error> {
         if !(1..=MAX_TICKS).contains(&upper) {
@@ -243,25 +243,22 @@ impl Sources {
                 "numeric tick domain must be finite and strictly ascending".into(),
             ));
         }
-        if let Some(interval) = selection {
-            if interval.is_interval() && log != interval.decade_step().is_some() {
-                return Err(Error::Data(
-                    "tick interval does not match the axis scale".into(),
-                ));
-            }
+        if generation.is_interval() && log != generation.decade_step().is_some() {
+            return Err(Error::Data(
+                "tick interval does not match the axis scale".into(),
+            ));
         }
         // Binary64's full decimal span has at most 633 decade bases. Integer
         // intervals have at most 20. Include the one terminal midpoint source.
         let integral_count =
             (range.1.min(308.0).floor() - range.0.max(-323.0).ceil() + 1.0).max(0.0) as usize;
-        let target = selection.and_then(|value| value.target_count());
+        let target = generation.target_count();
         let upper = target.map_or(upper, |count| count as usize);
-        let singleton =
-            target == Some(1) || selection.is_some_and(|value| value.maximum_count() == Some(1));
-        let cap = match selection {
+        let singleton = target == Some(1) || generation.maximum_count() == Some(1);
+        let cap = match generation {
             _ if singleton => 1,
-            Some(value) if value.is_interval() && log => 4 * 20 + 1,
-            Some(value) if value.is_interval() => 4 * 633 + 1,
+            value if value.is_interval() && log => 4 * 20 + 1,
+            value if value.is_interval() => 4 * 633 + 1,
             _ if log && integral_count >= 2 => {
                 upper.min(integral_count) + usize::from(target.is_none())
             }
@@ -270,16 +267,12 @@ impl Sources {
         Ok(Self {
             range,
             log,
-            selection,
+            generation,
             upper,
             ordinal: 0,
             cap,
-            base: selection
-                .and_then(|interval| interval.additive_step())
-                .unwrap_or(0.0),
-            log_base: selection
-                .and_then(|interval| interval.decade_step())
-                .map_or(0, u64::from),
+            base: generation.additive_step().unwrap_or(0.0),
+            log_base: generation.decade_step().map_or(0, u64::from),
             factor: 0,
             previous_step: None,
             intervals_done: false,
@@ -288,13 +281,9 @@ impl Sources {
     }
 
     fn next_kind(&mut self) -> SourceKind {
-        let interval = self.selection.is_some_and(|value| value.is_interval());
-        let target = self.selection.and_then(|value| value.target_count());
-        if target == Some(1)
-            || self
-                .selection
-                .is_some_and(|value| value.maximum_count() == Some(1))
-        {
+        let interval = self.generation.is_interval();
+        let target = self.generation.target_count();
+        if target == Some(1) || self.generation.maximum_count() == Some(1) {
             return SourceKind::Midpoint;
         }
         if interval && !self.intervals_done {
@@ -397,8 +386,8 @@ impl Sources {
             crate::orchestrator::measurements::Counter::TickSource,
         );
         let maximum = self
-            .selection
-            .and_then(|value| value.maximum_count())
+            .generation
+            .maximum_count()
             .map_or(MAX_TICKS, |count| count as usize);
         let positions = match kind {
             SourceKind::Adaptive(seed) => adaptive_positions(self.range, seed, maximum)?,
@@ -448,7 +437,7 @@ impl Sources {
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn numeric_tick_plan(
     range: (f64, f64),
-    interval: Option<TickInterval>,
+    generation: TickGeneration,
     log: bool,
     projection: &Projection,
     side: AxisSide,
@@ -457,10 +446,10 @@ pub(crate) fn numeric_tick_plan(
     format: Option<&crate::numeric::format::NumericFormat>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<NumericTickPlan, crate::layout::fit::PlanError> {
-    Sources::new(range, log, interval, 1)?;
+    Sources::new(range, log, generation, 1)?;
 
     NumericTickPlan::measure_selected_source(
-        range, interval, log, projection, side, theme, legacy, format, scope,
+        range, generation, log, projection, side, theme, legacy, format, scope,
     )
 }
 
@@ -468,7 +457,7 @@ impl NumericTickPlan {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn measure_selected_source(
         range: (f64, f64),
-        interval: Option<TickInterval>,
+        generation: TickGeneration,
         log: bool,
         projection: &Projection,
         side: AxisSide,
@@ -478,7 +467,7 @@ impl NumericTickPlan {
         scope: &crate::layout::fit::FitScope,
     ) -> Result<Self, crate::layout::fit::PlanError> {
         // Validate semantic inputs before asking for the metric probe or environment.
-        Sources::new(range, log, interval, 1)?;
+        Sources::new(range, log, generation, 1)?;
         let probe = if legacy {
             theme.measure_legacy_appearance_text(
                 "0",
@@ -503,7 +492,7 @@ impl NumericTickPlan {
         };
         let upper = upper_seed_count(span as f64 / 1024.0, probe.lines[0].logical_advance_quanta)?;
 
-        let mut sources = Sources::new(range, log, interval, upper)?;
+        let mut sources = Sources::new(range, log, generation, upper)?;
         loop {
             let (mut source, positions) = sources.next()?;
             if let Some(positions) = positions {

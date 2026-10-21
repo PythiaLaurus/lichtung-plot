@@ -499,6 +499,12 @@ exponent through certified decimal rounding, not exponent-operand precision.
 Shared continuous guides require identical normalized effective policies and
 format one final-domain label set. Themes do not infer or override units.
 
+`TickGeneration` is a separate complete per-axis Plot policy, not an AxisTheme
+field. Target and Maximum affect the existing generated-source program, not the
+numeric display policy, scientific range or categorical content. Theme typography
+still supplies actual text fit; complete instructions, including Automatic reset,
+remain independent of theme attachment order and parent range coordination.
+
 ## Visibility And Content
 
 A theme may omit nonsemantic visual chrome such as grid lines, frame sides,

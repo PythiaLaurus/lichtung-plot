@@ -1494,7 +1494,7 @@ fn prepare(
             } else {
                 source.limits
             },
-            interval: source.interval,
+            generation: source.generation,
             format: source.format.clone(),
             exact_ticks: if logarithmic && side == 0 {
                 chart.projected_explicit_x_ticks()?
@@ -1529,9 +1529,9 @@ fn prepare(
                     if side == 0 { "x" } else { "y" },
                 )));
             }
-            if specs[side].interval.is_some() {
+            if !specs[side].generation.is_automatic() {
                 return Err(Error::Data(format!(
-                    "{}-axis categories do not support a numeric tick interval",
+                    "{}-axis categories do not support numeric tick generation",
                     if side == 0 { "x" } else { "y" },
                 )));
             }

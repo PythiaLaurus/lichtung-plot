@@ -208,7 +208,7 @@ impl AxisSpec {
         if supplied.is_empty() {
             super::numeric_tick_plan(
                 range,
-                self.interval,
+                self.generation,
                 false,
                 projection,
                 side,

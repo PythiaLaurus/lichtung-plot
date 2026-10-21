@@ -128,14 +128,20 @@ let plot = Plot::line(
 # Ok::<(), lichtung_plot::Error>(())
 ```
 
-## Preferred Tick Intervals
+## Numeric Tick Generation
 
-Numeric axes can request a first-tried complete spacing with
-`x_tick_interval(TickInterval::additive(2.0)?)` or `y_tick_interval(...)`.
-Forest Log10 uses `TickInterval::log10_decades(2)?` for divisible integral exponent
-steps. If the source cannot fit, bounded local coarsening still applies. Exact
-`x_ticks`/`y_ticks` take precedence in either setter order; categorical axes reject
-numeric interval instructions.
+`x_tick_generation(TickGeneration::target(5)?)` requests approximately five numeric
+positions, allowing nice-step deviation and measured coarsening.
+`TickGeneration::maximum(4)?` instead bounds the complete generated in-domain list,
+including endpoint positions. Both counts accept `1..=10_000`.
+
+Use `TickGeneration::additive(2.0)?` for first-tried linear spacing, or
+`TickGeneration::log10_decades(2)?` for divisible integral Forest Log10 exponents.
+The matching `y_tick_generation` independently controls y. Each setter replaces
+the complete choice; `TickGeneration::automatic()` resets it. Bounded local
+coarsening and actual text fit still apply. Exact `x_ticks`/`y_ticks` take
+precedence in either setter order and are never truncated by a generated maximum;
+actual categorical axes reject non-Automatic generation instructions.
 
 ## Scientific Numeric Labels
 

@@ -33,9 +33,10 @@ exist. Source symbols take precedence over historical line numbers.
 
 The post-foundation source refresh at **`387b07a`** is complete in
 [`docs/numeric-source-handoff.md`](../docs/numeric-source-handoff.md). It maps the
-historical tables to current complete Theme/role/font/scale values, opaque
-TickInterval, root requests, actual conversion/copy/cache/font paths and guide
-index drift. It is the current implementation handoff, not a numeric public
+historical tables to complete Theme/role/font/scale values, the then-current opaque
+interval carrier, root requests, actual conversion/copy/cache/font
+paths and guide index drift. The current generation carrier is TickGeneration,
+as specified in spec05. This recorded handoff is not a numeric public
 cutover or executable certification. In particular, `builder/admission.rs` and
 `Plot::admitted_clone` no longer exist; derived Clone and exhaustive `erase` are
 the actual Plot transport sites.
