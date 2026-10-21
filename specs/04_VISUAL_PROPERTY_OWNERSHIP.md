@@ -1,6 +1,7 @@
 # Visual Property Ownership Ledger
 
-**Status**: Canonical T2 migration ledger; T2 COMPLETE
+**Status**: Historical T2 migration ledger with current owner reconciliation;
+T2 COMPLETE, independent T7 audit CANCELLED by the user
 
 This ledger records current production sources and the T2-approved target
 ownership. It does not make the target APIs in `03_THEME_SYSTEM.md` current,
@@ -15,11 +16,13 @@ layout adjudication overlay at the end of this document preserves those
 historical tables, re-adjudicates 1552 existing keys, and adds 23 target-only
 keys. Fixed dimensions, universal panel minima, and private title-block
 spacing rows do not override that approved overlay. The historical T2 count
-remains valid evidence for the completed inventory, but it is not the T7
-acceptance count after adjudication.
+remains valid evidence for the completed inventory, not a current implementation
+acceptance count. Spec91 records the user's cancellation of the independent T7
+audit and its final per-key backfill requirement.
 
-The active overlay contains 1575 identities (1552 existing plus 23 target-only),
-and the materialized target contains 1883 unique keys.
+The historical reconciled overlay contains 1575 identities (1552 existing plus
+23 target-only), and its materialized target contains 1883 unique keys. These
+counts do not impose a new audit gate on subsequent approved extensions.
 
 The ledger is append-only during T2 except for corrections and T2h
 reconciliation. Tests, examples, and snapshots are evidence consumers, never
@@ -8727,9 +8730,10 @@ Existing groups remain unchanged; the override partition is now:
 `691 + 861 = 1552`, `1487 + 65 = 1552`, `1552 + 23 = 1575`, and
 `1860 + 23 = 1883`.
 
-T7 reconciles only that 1883-key materialized target. The historical 1836-record
-pre-T2h count and completed 1860-record T2 count remain provenance, not
-post-adjudication acceptance thresholds.
+The former T7 requirement to re-audit that 1883-key materialization is cancelled
+by the user in spec91. The historical 1836-record pre-T2h count, completed
+1860-record T2 count and reconciled materialization remain provenance. Their
+counts are not thresholds for the evolved implementation.
 
 ### T5a6d Closure Evidence
 
@@ -8813,9 +8817,10 @@ The completed public construction/consumer reconciliation is
 and T3j counts and source tables above retain their recorded scope. Subsequent
 user-admitted numeric, guide and alpha controls below are explicit current policy
 owners; they are not inferred extra Theme fields or changes to those old counts.
-T7 reconciles the approved extension scope alongside the historical materialized
-identities, rather than treating an old total as evidence that these inputs were
-already inventoried.
+The current consumer/owner receipts cover the approved extensions independently
+of the historical materialized identities. The user cancelled the additional
+per-key historical backfill audit; no old total is evidence that the new inputs
+were already inventoried, or a target count for current APIs.
 
 | Current owner / affected historical responsibility | Classification and current source | Actual consumption / relationship |
 | --- | --- | --- |

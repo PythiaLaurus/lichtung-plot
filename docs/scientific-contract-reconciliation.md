@@ -50,15 +50,17 @@ Constant/Neutralized/Explained responsibilities are retained.
 Spec04's historical T2/T3j counts describe their materialized scope, not a count
 of current API names or a reason to omit subsequently admitted controls. Its
 append-only current-owner reconciliation below attributes the numeric, section
-and alpha extensions to exact current values and call paths. T7 reconciles that
-approved extension scope alongside historical identities; no historical source
-table is repinned to the current renderer revision.
+and alpha extensions to exact current values and call paths. The user subsequently
+cancelled the independent T7 audit and its per-key historical backfill requirement.
+These current consumer receipts remain the technical evidence; historical source
+tables retain their provenance rather than becoming new count targets.
 
 DF1/DF3 and the admitted numeric portion of DF4 are implemented. Residual numeric
-counts/density/ratios/category/callback controls stay at the T7 closure review.
+counts/density/ratios/category/callback controls now enter the active
+post-foundation deferred review in spec91/99.
 Broader formatting/text/layout/sparse policies retain their existing deferred
 reviews. Fully caller-decided legends remain in DF11's post-first-release review,
-after workspace conversion, both polars adapters, Python interface and first
+after workspace conversion, polars and ndarray adapters, Python interface and first
 release. This standalone renderer gains no successor integration responsibility.
 
 Examples05/06/07/08 and the existing public constructor inventory exercise current

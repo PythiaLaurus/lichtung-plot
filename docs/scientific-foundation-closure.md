@@ -206,8 +206,11 @@ checked storage, root feedback and guide-trial limits remain the governing bound
 
 ## Next Boundary
 
-T7 remains PENDING. It owns the final contract/property-ledger/deferred-feature
-review, including residual DF2/DF4/DF5/DF7 decisions before successor planning.
-Fully caller-decided legends remain in DF11 after the workspace refactor, both
-polars adapters, Python interface and first release. T6 closure admits no further
-renderer API or successor integration responsibility.
+After this closure the user cancelled T7 as a separate technical audit, including
+the requirement to backfill a per-key historical property review. Existing T5/T6
+evidence remains authoritative; cancellation does not claim that the unperformed
+audit or a new full external Unicode run occurred. DF2/DF4/DF5/DF6/DF7/DF8/DF9/DF10
+are now discussed directly in the active post-foundation deferred review in
+spec91/99, before successor planning. Fully caller-decided legends remain in DF11
+after the workspace refactor, polars and ndarray adapters, Python interface and
+first release. No additional renderer API is admitted by cancelling the audit.

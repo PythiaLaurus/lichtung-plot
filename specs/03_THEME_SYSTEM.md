@@ -28,7 +28,8 @@ The completed T6 ENTRY review additionally admits one locale-free scientific
 numeric presentation core and selectable combined/separate discrete legend
 composition. Their execution and detailed contracts are in
 `93_T6_EXECUTION_PLAN.md`. Both are semantic presentation policies, not theme
-appearance. Remaining DF2/DF5/DF7 scope is reviewed at T7 CLOSURE.
+appearance. Remaining DF2/DF5/DF7 scope is discussed in the active post-foundation
+deferred review in spec91/spec99, following the user's cancellation of T7.
 Their current architectural contracts and consumer/proof designs are in
 `06_NUMERIC_PRESENTATION.md`, `07_LOG10_DISPLAY.md` and `08_DISCRETE_GUIDES.md`;
 public construction and implementation evidence are in

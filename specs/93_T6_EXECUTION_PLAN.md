@@ -118,9 +118,9 @@ not a formatted exponent or `10^0.5`.
 | Entry item | User-approved disposition | T6 work / remaining checkpoint |
 | --- | --- | --- |
 | DF1 separate legend sections | ADMIT the complete bounded discrete-section capability | T6L; remove DF1 from the active deferred list now |
-| DF2 caller numeric formatting | ADMIT one cross-surface, locale-free scientific core | T6N; residual locale/general formatting remains DF2, reviewed at T7 CLOSURE |
-| DF5 broader text controls | Existing approved typography/root alignment proceeds; RE-DEFER remaining controls | T6B exposes existing scope; remaining DF5 reviewed at T7 CLOSURE |
-| DF7 sparse compaction | RE-DEFER topology transformation | Preserve coordinates; review empty-track removal and occupied-cell repacking separately at T7 CLOSURE |
+| DF2 caller numeric formatting | ADMIT one cross-surface, locale-free scientific core | T6N; residual locale/general formatting remains DF2, now in the post-foundation deferred review |
+| DF5 broader text controls | Existing approved typography/root alignment proceeds; RE-DEFER remaining controls | T6B exposes existing scope; remaining DF5 now enters the post-foundation deferred review |
+| DF7 sparse compaction | RE-DEFER topology transformation | Preserve coordinates; discuss empty-track removal and occupied-cell repacking separately in the post-foundation deferred review |
 
 TextPanel alignment, categorical label directions and identifier breaking are
 identified candidates for that later DF5 review, not additional T6 implementation.
@@ -129,13 +129,14 @@ The subsequent T6 closure review has an explicit user-approved disposition:
 | Reviewed item | User-approved disposition | Owning work / next checkpoint |
 | --- | --- | --- |
 | DF3 data-mapped alpha | ADMIT caller-computed values, linear/log factories and automatic explanation from declared continuous/discrete semantics; functions or output counts alone do not imply guide semantics | T6D in spec97; removed from the deferred list |
-| DF4 broader tick controls | ADMIT numeric target and maximum counts through the existing source/fit lifecycle | T6T in spec97; residual exact-count/density/ratio/category/callback controls reviewed at T7 CLOSURE |
+| DF4 broader tick controls | ADMIT numeric target and maximum counts through the existing source/fit lifecycle | T6T in spec97; residual exact-count/density/ratio/category/callback controls now enter the post-foundation deferred review |
 | Fully caller-decided legends | Add data-independent, caller-authored legend content and custom-graphics scope to the AI-workflow review | DF11's existing post-first-release checkpoint |
 
 `97_ALPHA_AND_TICK_EXTENSION_PLAN.md` records the research, accepted boundaries,
 source-backed design gates and implementation leaves. This is admission to new
-work, not a claim of implementation or integrated closure. DF6/DF8/DF9/DF10 keep
-T7 CLOSURE. DF11 stays after workspace, both adapters, Python interface and first
+work, not a claim of implementation or integrated closure. DF6/DF8/DF9/DF10 now
+enter the post-foundation deferred review after the user's cancellation of T7.
+DF11 stays after workspace, both adapters, Python interface and first
 release are complete; adding manual legends changes none of those prerequisites.
 
 ## Delivery Discipline
@@ -1032,9 +1033,10 @@ carrier, formatter and flat-guide representation. No public target-only aliases.
 
 The DF3/DF4 disposition gate is closed by the recorded user admission. T6 completes
 only after the admitted tick/alpha work, public/current specifications and
-examples, verification, inspected semantic output, evidence and commits. T7 remains
-PENDING until then. The residual DF2/DF4/DF5/DF7 T7 closure reviews are explicit
-review obligations, not automatic successor implementation.
+examples, verification, inspected semantic output, evidence and commits. The user
+subsequently cancelled the separate T7 audit. Residual DF2/DF4/DF5/DF7 and
+DF6/DF8/DF9/DF10 now enter the active post-foundation deferred review in spec91/99;
+discussion does not authorize successor implementation.
 
 The completed integrated gate is recorded in
 `../docs/scientific-foundation-closure.md`: 654 library passes / 17 ignored,
@@ -1044,4 +1046,5 @@ pass with their complete fixtures and admitted numeric/section/tick/alpha sample
 actual aggregate wall time is 10.86 s and peak RSS is 69,200 KiB, excluding release
 compilation. Examples05/06/07/08 also execute their public terminals. Initial
 failures and focused corrections remain recorded in
-`../docs/prepared-guide-regression-closure.md`. T6 is COMPLETE; T7 is PENDING.
+`../docs/prepared-guide-regression-closure.md`. T6 is COMPLETE; the independent
+T7 audit is CANCELLED by the user, with deferred-feature discussion now active.

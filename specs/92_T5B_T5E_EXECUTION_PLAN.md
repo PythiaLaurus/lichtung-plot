@@ -2936,7 +2936,10 @@ it is not the first phase to discover that a custom contrast role changes metric
 T5e completion does not start T6. At T6 ENTRY present DF1/DF2/remaining DF5/DF7
 evidence and record user-approved admission with a new phase, rejection, or a
 new explicit re-deferral checkpoint. DF3/DF4 remain T6 CLOSURE; DF6/DF8/DF9/DF10
-remain T7 CLOSURE. No review gate silently admits those features.
+were assigned T7 CLOSURE at this historical checkpoint. The subsequent T6
+admissions are complete, and the user cancelled T7; remaining items now enter the
+active post-foundation deferred review in spec91/spec99. No review gate silently
+admits those features.
 
 ## Completion And Decision Discipline
 

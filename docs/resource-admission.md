@@ -354,7 +354,8 @@ reuse. Do not add a cross-operation/global font cache or change the agreed font
 freshness/lifetime policy. These three-sample timings do not justify such a change.
 PF5 is complete as evaluation/reporting, not a cache implementation. Source
 parameters, content, shaping, and PF7's current line extension remain unchanged;
-any removal of extension stays deferred to DF10 at T7 closure.
+any removal of extension requires DF10's user decision. Its former T7 checkpoint
+is superseded by the active post-foundation deferred review in spec91/spec99.
 
 ### Admission Controls
 

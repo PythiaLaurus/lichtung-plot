@@ -32,6 +32,15 @@ records the reason and any lasting exclusion in the plan or canonical contract.
 Stable IDs are not reused. Related unadmitted scope may retain its ID only with
 an explicit next checkpoint.
 
+## Active Post-Foundation Review
+
+After completing T6, the user cancelled the independent T7 audit and requested
+direct discussion of DF2/DF4/DF5/DF6/DF7/DF8/DF9/DF10. Their current checkpoint is
+the **post-foundation deferred review, IN PROGRESS, before successor planning**
+in spec91. This replaces their former T7 CLOSURE assignments. All eight decisions
+are pending; cancellation or discussion does not itself admit or reject a feature.
+DF11 retains its separate post-first-release checkpoint and all five prerequisites.
+
 ## DF2: Locale And Extended Numeric Formatting
 
 Locale-aware digits/separators/grouping, caller-selected compact/SI-prefix rules,
@@ -48,7 +57,7 @@ explicitly selected by the user. This admitted scope is implemented by public
 `../docs/public-numeric-formatting.md`. It is separate from the residual deferred
 capabilities above.
 
-**Review checkpoint**: T7 CLOSURE, before successor planning.
+**Review checkpoint**: Active post-foundation review above, before successor planning.
 
 **Evidence and decision**: Use implemented T6 numeric policies on real scientific
 figures, including scaling, units, close values, Forest logarithmic axes, shared
@@ -65,10 +74,10 @@ categorical stride/drop policies, and generation callbacks remain excluded.
 The user admitted target and maximum generated numeric tick counts following the
 T6 closure review. Their implementation phases and the distinction between a
 target and a hard maximum are in `97_ALPHA_AND_TICK_EXTENSION_PLAN.md`; this
-residual item does not defer that admitted work. The implemented preferred-interval
-boundary remains in `05_LAYOUT_SYSTEM.md` until the owning public cutover.
+residual item does not defer that admitted work. Complete TickGeneration choices,
+preferred intervals and exact ticks are current in `05_LAYOUT_SYSTEM.md`.
 
-**Review checkpoint**: T7 CLOSURE, before successor planning.
+**Review checkpoint**: Active post-foundation review above, before successor planning.
 
 **Evidence and decision**: Evaluate the admitted target/maximum controls alongside
 preferred intervals and exact caller ticks on small panels, facets, and shared
@@ -91,7 +100,7 @@ title/subtitle overrides, Canvas panel defaults and independent theme captions,
 and re-deferred the additional controls. See `93_T6_EXECUTION_PLAN.md`; those
 existing approved capabilities are not missing DF5 implementation.
 
-**Review checkpoint**: T7 CLOSURE, before successor planning.
+**Review checkpoint**: Active post-foundation review above, before successor planning.
 
 **Evidence and decision**: Evaluate the implemented public typography and sizing
 controls first. Review TextPanel alignment, bounded categorical orientations and
@@ -108,7 +117,7 @@ Maximum-width sizing, minimum width/height, maximum height, exact-height/automat
 width sizing, and public Flutter-like constraint objects remain excluded. The
 three admitted sizing modes are defined in `05_LAYOUT_SYSTEM.md`.
 
-**Review checkpoint**: T7 CLOSURE, before successor planning.
+**Review checkpoint**: Active post-foundation review above, before successor planning.
 
 **Evidence and decision**: Collect publication-column and embedding workflows using
 automatic, exact-width/automatic-height, and exact-pair output. Demonstrate unmet
@@ -124,7 +133,7 @@ At T6 ENTRY the user approved re-deferral: natural content sizing is implemented
 but does not transform topology, hand-authored Canvas can declare compact grids,
 and Cartesian holes can encode absent scientific combinations.
 
-**Review checkpoint**: T7 CLOSURE, before successor planning.
+**Review checkpoint**: Active post-foundation review above, before successor planning.
 
 **Evidence and decision**: Compare real public automatic/exact-width sparse
 figures after T6. Assess removal of wholly empty tracks separately from row-major
@@ -141,7 +150,7 @@ Caller objectives for aspect, density, whitespace, legend flow, text measure, or
 grid balance remain excluded. No scoring callback, strategy switch, string mode,
 or public layout plugin is reserved.
 
-**Review checkpoint**: T7 CLOSURE, before successor planning.
+**Review checkpoint**: Active post-foundation review above, before successor planning.
 
 **Evidence and decision**: Review unmet scientific workflows against the completed
 private local policies, including exact-constraint failures and reproducibility.
@@ -155,7 +164,8 @@ Exhaustive whole-tree search, sibling Cartesian products, exhaustive text break
 partitions, and root-wide dense-rank objectives remain excluded. Approved bounded
 containing-frame placement recovery is not this feature; see `05_LAYOUT_SYSTEM.md`.
 
-**Review checkpoint**: T7 CLOSURE, before successor planning, alongside DF8.
+**Review checkpoint**: Active post-foundation review above, before successor planning,
+alongside DF8.
 
 **Evidence and decision**: Require demonstrated scientific workloads, measured
 performance/resource comparisons with bounded local recovery, semantic
@@ -170,7 +180,7 @@ of the current extension policy; T5a3p7 is complete as a disposition only, not a
 wrapping implementation change. No strategy switch or alternate wrapping mode
 is reserved.
 
-**Review checkpoint**: T7 CLOSURE, before successor planning.
+**Review checkpoint**: Active post-foundation review above, before successor planning.
 
 **Evidence and decision**: Use post-p2/p3/p4/p6 release measurements to establish
 whether avoiding extension has meaningful benefit. Compare exact line endpoints,
@@ -212,9 +222,9 @@ this capability at the AI-workflow review, not in the admitted alpha/tick work.
 5. Publishing the first version.
 
 The review begins only after the last prerequisite is satisfied. It is not a
-T6/T7 entry or closure gate. These prerequisites identify the future review timing;
-this item does not itself authorize their implementation or change today's
-standalone renderer boundary.
+gate for T6 or the active post-foundation review. These prerequisites identify
+the future review timing; this item does not itself authorize their implementation
+or change today's standalone renderer boundary.
 
 **Evidence and decision**: Collect representative AI-authored workflows for
 single scientific plots and custom Canvas-like compositions, including direct

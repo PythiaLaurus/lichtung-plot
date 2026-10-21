@@ -25,8 +25,8 @@ The approved dispositions are:
 | --- | --- | --- |
 | DF3 data-mapped alpha | ADMIT caller-computed alpha, built-in linear/log mappings, and automatic explanation only from declared mapping semantics | T6D below; remove DF3 from the deferred list now |
 | DF4 numeric tick counts | ADMIT target and maximum generated major-tick counts, alongside existing preferred intervals and exact caller ticks | T6T below; retain only the residual excluded controls under DF4 |
-| Residual DF4 | Keep exact generated counts, density scalars, arbitrary ratios, categorical stride/drop and generation callbacks outside the admission | Review at T7 CLOSURE, before successor planning |
-| Fully caller-decided legends | DEFER to the existing AI-workflow review, including data-independent entries and the broader custom-drawing question | DF11; not a new T6/T7 closure requirement |
+| Residual DF4 | Keep exact generated counts, density scalars, arbitrary ratios, categorical stride/drop and generation callbacks outside the admission | Active post-foundation deferred review, before successor planning |
+| Fully caller-decided legends | DEFER to the existing AI-workflow review, including data-independent entries and the broader custom-drawing question | DF11's separate post-first-release checkpoint |
 
 The admission itself closed the DF3/DF4 disposition requirement; the completed
 implementation and integrated verification are recorded below and in spec93.
@@ -275,4 +275,6 @@ checks. Documentation-only leaves need source/spec review and `git diff --check`
 Reconcile specs01/02/03/05/08, examples, public exports and property/consumer
 attribution when each implementation lands. T6Z1/T6Z3 include both extensions in
 the existing final integrated gate and bounded release/output/time/RSS evidence;
-successful scope admission does not mark either feature, T6, or T7 complete.
+scope admission alone did not close implementation or verification. Those completed
+gates are recorded above. The user subsequently cancelled T7 and requested direct
+discussion of remaining deferred features under spec91/99.

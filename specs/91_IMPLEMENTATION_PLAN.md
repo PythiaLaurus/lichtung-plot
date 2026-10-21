@@ -9,7 +9,10 @@ tick-count/data-alpha extensions, current-contract/property-owner reconciliation
 successful complete verification and all ten release groups with actual time and
 peak RSS. `../docs/scientific-foundation-closure.md` records the verified code
 baseline, initial failures/corrections, 671/17 library census, 481 integration
-passes, 146 doctests, examples and measured workloads. T7 remains PENDING.
+passes, 146 doctests, examples and measured workloads. The user cancelled the
+independent T7 audit and requested immediate discussion of the remaining deferred
+features. The post-foundation deferred review below is IN PROGRESS; it supersedes
+all earlier T7 audit requirements and T7 CLOSURE checkpoints in historical entries.
 
 **Completed execution history:** the user-approved resource-accounting cleanup
 is complete. `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md` records the retained
@@ -72,9 +75,11 @@ cutovers recorded by spec93.
 layout, exact-width/automatic-height sizing and rendered dimensions. There is one
 implemented public API; later phases do not begin merely because they are listed.
 
-Status values are `COMPLETE`, `IN PROGRESS`, `PENDING`, and `BLOCKED`. Update a
-phase when it starts, completes, changes scope, or discovers a blocker. Complete
-and commit each admitted phase as one logical change before starting the next
+Status values are `COMPLETE`, `IN PROGRESS`, `PENDING`, `BLOCKED`, and `CANCELLED`.
+Cancellation records an explicit user decision, not successful execution of the
+cancelled requirements. Update a phase when it starts, completes, is cancelled,
+changes scope, or discovers a blocker. Complete and commit each admitted phase
+as one logical change before starting the next
 phase. Split a broad phase into smaller approved phases before implementation
 rather than combining unrelated migrations in one commit.
 
@@ -88,7 +93,7 @@ T5a at `1e8e3ee`, not the earlier combined-renderer implementation.
 T6's execution partition is `93_T6_EXECUTION_PLAN.md`, based on completed T5e
 (`0cbd1d6`). Its user-approved entry decisions and substage/deletion/evidence
 tables are authoritative for the new public migration and numeric/legend work.
-T6 and its required full/release closure are COMPLETE; T7 remains PENDING.
+T6 and its required full/release closure are COMPLETE; T7 is CANCELLED by the user.
 The later DF3/DF4 closure-review admission is recorded in
 `97_ALPHA_AND_TICK_EXTENSION_PLAN.md`: numeric target/maximum tick selection and
 data alpha followed section-guide acceptance as independently verified umbrellas.
@@ -334,7 +339,7 @@ The approved theme and layout targets follow these rules:
 | T5d | Categorical and continuous data scales | COMPLETE |
 | T5e | Scientific layout closure | COMPLETE |
 | T6 | Public foundations, sizing, scientific numeric presentation, sectioned guides and admitted tick/alpha extensions | COMPLETE |
-| T7 | Contract evidence, documentation, and final audit | PENDING |
+| T7 | Independent final audit cancelled; technical evidence retained with T5/T6, deferred-feature discussion moved to the post-foundation review | CANCELLED |
 
 ## Phase T1: Approved Theme Architecture
 
@@ -6639,9 +6644,9 @@ assessment and request to plan T6:
 | Reviewed item | Approved disposition |
 | --- | --- |
 | DF1 separate legend sections | Admit complete Combined/Separate composition through one section-aware discrete guide; move scope from deferred list to T6L |
-| DF2 caller numeric formatting | Admit one locale-free scientific core across actual numeric consumers in T6N; re-defer locale/general/compact rules, arbitrary multipliers, rounding controls and shared unit annotations to T7 CLOSURE |
-| DF5 broader text controls | Proceed with existing approved typography/heading alignment; re-defer TextPanel alignment, categorical directions, identifiers and broader controls to T7 CLOSURE |
-| DF7 sparse compaction | Re-defer empty-track removal and occupied-cell repacking as distinct proposals to T7 CLOSURE |
+| DF2 caller numeric formatting | Admit one locale-free scientific core across actual numeric consumers in T6N; residual locale/general/compact rules, arbitrary multipliers, rounding controls and shared unit annotations now enter the post-foundation deferred review |
+| DF5 broader text controls | Complete approved typography/heading alignment; remaining TextPanel alignment, categorical directions, identifiers and broader controls now enter the post-foundation deferred review |
+| DF7 sparse compaction | Review empty-track removal and occupied-cell repacking separately in the post-foundation deferred review |
 
 The user separately selected mathematical raw-value formatting for configured
 Forest Log10 ticks: exponent `0.5` with fractional precision 2 displays `3.16`.
@@ -6667,8 +6672,8 @@ inputs, rather than requiring repeated equal values in every source row.
 `../docs/data-alpha-design.md` closes that source-backed input/numeric/consumer/
 guide/parent design before implementation. Residual DF4
 exact-count/density/ratio/category/callback controls join residual DF2/DF5/DF7 at
-T7 CLOSURE. Fully caller-decided legends join DF11, retaining all of its
-post-first-release milestone prerequisites.
+the post-foundation deferred review. Fully caller-decided legends join DF11,
+retaining all of its post-first-release milestone prerequisites.
 
 Expose the complete foundations only after every admitted consumer uses the
 private resolved model.
@@ -6819,9 +6824,9 @@ Acceptance:
   Sections do not multiply placement trials, search sibling allocations, invent
   group styles or alter sparse marks. Complete section geometry and keys match
   retained SVG/PNG and cached/uncached output in all root modes.
-- CLOSURE disposition gate, before T7: CLOSED by the user's DF3/DF4 admission in
+- CLOSURE disposition gate: CLOSED by the user's DF3/DF4 admission in
   spec97. Complete the admitted numeric count and data-alpha phases before
-  integrated T6 closure; retain only residual DF4 at its new T7 CLOSURE checkpoint.
+  integrated T6 closure; residual DF4 now enters the post-foundation deferred review.
   Fully caller-decided legends stay with DF11's post-first-release review.
 - `just verify` passes.
 
@@ -6838,104 +6843,46 @@ run measures 10.86 s wall and 69,200 KiB peak RSS. Examples05/06/07/08 execute t
 actual public terminals. `../docs/scientific-foundation-closure.md` records full
 conditions and output/work identities; initial regression failures remain in the
 linked focused receipt. The library discovery count remains 671 including 17
-ignored. This completes T6 without starting T7.
+ignored. This completes T6. The independent T7 audit was subsequently cancelled
+by the user as recorded below.
 
 ## Phase T7: Contract Evidence And Final Audit
 
-**Status**: PENDING
+**Status**: CANCELLED — explicit user decision after completion of T6.
 
-Dependencies: T6, including its DF3/DF4 closure gate.
+The user identified the proposed general audit as duplicating the technical
+reviews, consumer/ownership reconciliation, semantic tests, examples and complete
+verification already performed in T5/T6. That evidence remains in the owning
+receipts, especially `../docs/scientific-foundation-closure.md` and
+`../docs/scientific-contract-reconciliation.md`; it does not need another phase.
 
-Close the phase with exact behavioral evidence and no residual old model.
+The separate requirement to backfill a final per-key historical ledger audit is
+withdrawn. The 1883-key materialization, 1575-row overlay and 23 target-only keys
+remain historical provenance, not a count to force onto the evolved renderer.
+Cancellation does not claim that the unperformed per-key audit or a fresh full
+external Unicode conformance run took place. Concrete future defects or relevant
+changes use the normal focused validation policy in spec90 and AGENTS.md.
 
-Scope:
+The deferred-feature decisions are discussed directly in the checkpoint below.
+This cancellation supersedes earlier T7 audit assignments and T7 CLOSURE references
+throughout historical planning records; it admits no additional rendering feature.
 
-- Add precedence tests for library default, Canvas inheritance, explicit Plot
-  replacement, plot scale configuration, and exact element styles.
-- Prove one resolved theme is used by preflight and final rendering.
-- Cover shared legends, facets, text panels, mixed explicit Plot themes, palette
-  capacity, missing mappings, canonical font candidate ordering/deduplication/
-  provenance, shared continuous-guide compatibility/domain merging, contrast
-  behavior, SVG, and PNG.
-- Cover automatic, exact-width/automatic-height, and exact-pair dimensions across
-  ordinary, specialized, facet, sparse Canvas, shared-guide, SVG, and PNG routes.
-- Cover independent caption/title/subtitle defaults, final-title subtitle fallback,
-  Plot/Canvas panel instruction precedence across mixed presets, and independent
-  Canvas headings, plus automatic/additive/Log10-decade/exact tick-policy precedence
-  across standalone, facet, Canvas-child, SVG, and PNG routes.
-- Retain reviewed deterministic snapshots for every built-in preset and selected
-  custom themes.
-- Search for retired theme APIs, repeated hidden Publication defaults, dormant
-  theme fields, unclassified hardcoded style values, and duplicate scale logic.
-- Search for fixed root defaults, universal panel minima, root-scaled spacing,
-  draw-time layout decisions, silent overflow, and alternate layout routes.
-- Prove retirement of universal candidate APIs, root Cartesian search, mandatory
-  dense ranks, residual exhaustive wrapping, and runtime strategy selectors.
-  Audit titles, axis local sources, legends, tracks, and specialized layouts for
-  separate intrinsics, one measured result, declared local owner/order/cap, and
-  at most eight root feedback rounds without unbounded local retries.
-- Recheck every T5a3 repair disposition, Unicode 16 dependency/data provenance and
-  full conformance fixtures, base-plus-mark unit preference and allowed per-scalar
-  first-coverage fallback, strict visible-miss failure, preserve-text viewer limits,
-  exact retained outline/PNG geometry, actual parser bytes/PNG options, and
-  first-party admission before census copies or final Null validation.
-- Retain benchmark evidence for `"A ".repeat(144)`, an approximately
-  200-word scientific caption in one paragraph, the three-paragraph caption, and
-  increasing long legal-break inputs. Report measured
-  performance and resource scaling, not universal unmeasured guarantees.
-- Reconcile every key in the T5a0s-reconciled final ledger against implemented
-  owners, current public names, focused evidence, and deletion of every
-  superseded source. The historical 1836-record pre-T2h count and completed
-  1860-record T2 count and historical T3j/T5a0 1884-key total are provenance,
-  not unreviewed revised-target acceptance thresholds.
-- Check expected active `04` totals explicitly: 23 target-only keys, 1575 overlay
-  rows (1552 existing plus 23 target-only), and 1883 materialized keys, including
-  the independent caption property. Coordinate any reviewed `04` difference;
-  historical 22/1574/1882 and 24/1576/1884 totals remain labeled provenance.
-- Audit all specifications, README, guides, examples, and rustdoc for residual
-  drift from the already-current implemented contract.
-- Cross-route examples prove right-guide starvation recovery versus fixed explicit
-  placement, intact overwide-identifier failure, width-after-size height clearing,
-  SVG success followed by PNG refusal, coherent base/mark coverage with permitted
-  scalar fallback, and independent Start captions with Center titles/subtitles.
+## Post-Foundation Deferred Review
 
-Acceptance:
+**Status**: IN PROGRESS — the user requested immediate discussion after cancelling
+T7. This is the current checkpoint for DF2/DF4/DF5/DF6/DF7/DF8/DF9/DF10, before
+successor implementation planning. Their scope and evidence are in spec99.
 
-- Phases T1 through T7 and all admitted T5 subphases are complete with commit and
-  verification evidence.
-- Every visual property has one implemented owner matching the approved
-  T5a0s-reconciled 1883-key inventory, including its 23 target-only keys and
-  1575-row overlay, with every source addition, split, retirement, consumer
-  relationship, and explained exclusion re-audited.
-- No mutable global theme, repeated hidden Publication default outside its
-  owning boundary, late theme lookup, compatibility alias, or unclassified
-  renderer style constant remains.
-- Snapshot changes are intentional, reviewed, and committed with their owning
-  behavior change.
-- CLOSURE gate, before successor planning: review DF6 broader root bounds/
-  maximum width, DF8 caller-selected objectives, and DF9 global optimization with
-  each item's `99` workflow/performance evidence. Let the user choose a small
-  justified bounds extension, not an assumed general constraint API. Each ID
-  requires user-approved admission with a new approved phase, rejection with
-  reason, or re-deferral to a new explicit milestone checkpoint. This is review,
-  not an implementation promise or automatic expansion of T6/T7.
-- CLOSURE gate, before successor planning: review DF10's deferred removal of line
-  extension against post-p2/p3/p4/p6 release evidence. Revisit only if meaningful
-  benefit justifies the wrapping/fit tradeoff; record user-approved admission with
-  a new phase, rejection with reason, or re-deferral to an explicit new checkpoint.
-  PF7's KEEP disposition remains in force; this review does not alter other
-  items' recorded checkpoints, including the T6 entry re-deferrals below.
-- CLOSURE gate, before successor planning: review the residual DF2 locale/extended
-  numeric controls, DF4 further automatic tick controls, DF5 additional text
-  controls, and DF7 sparse topology changes retained after the T6 decisions.
-  Use actual public T6 workflows and separate subset decisions as required by
-  `99_DEFERRED_FEATURES.md`; record approved
-  new-phase admission, reasoned rejection or an explicit new review milestone.
-- Audit all DF1-DF10 entry/closure dispositions and user approvals. Remove admitted
-  features from `99` on approved planning, not code completion; only implementation
-  makes the corresponding current contracts change. Every still-deferred item
-  retains an explicit checkpoint, including any user-approved replacement gate.
-- `just verify` passes from the completed worktree.
+Discuss actual unmet workflows against the completed public foundations and
+record the user's decision for each item: admission into a new approved phase,
+rejection with a reason, or re-deferral to a new explicit milestone. Distinct
+subsets can receive distinct dispositions. Pending discussion does not authorize
+an API, runtime change or a new blanket audit/testing phase.
+
+All eight item dispositions are pending. Keep them in spec99 until individually
+decided; remove admitted scope on approved planning and update current contracts
+only with its implementation. DF11 retains the separate post-first-release
+checkpoint and all five prerequisites below.
 
 ## Post-First-Release Deferred Review Checkpoint
 
@@ -6955,14 +6902,16 @@ explanatory semantics from a function or observed values. Reconsider what
 capabilities and interfaces make the library useful to LLM-driven scientific
 figure creation. Record a user-approved new implementation phase,
 reasoned rejection, or re-deferral with an explicit new milestone. This checkpoint
-does not expand T6/T7, authorize those successor milestones, reserve a new API, or
-alter the current standalone contract. T6/T7's existing DF1-DF10 gates remain as
-specified above.
+does not authorize those successor milestones, reserve a new API, or alter the
+current standalone contract. The active post-foundation deferred review above
+retains its independent scope and user-decision requirements.
 
-## T1 Decisions
+## T1 Decisions (Historical Summary)
 
-Current approved target summary, incorporating T5a0s amendments; completed T1 and
-T3j/T5a0/T5a0r decision records above remain historical evidence.
+Historical approved target summary, incorporating T5a0s amendments. Later public
+cutovers, canonical current specifications and the cancellation above supersede
+its implementation timing and subsequent-phase assignments. Completed T1 and
+T3j/T5a0/T5a0r decision records remain historical evidence.
 
 - `Theme` is one complete immutable value. Built-ins are constructors, and a
   construction-only builder produces custom complete themes.

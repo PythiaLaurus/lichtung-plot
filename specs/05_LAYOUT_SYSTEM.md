@@ -18,9 +18,9 @@ base-plus-mark font preference, and separate root title and caption alignment.
 Approval is not implementation evidence. T5a0s in `91_IMPLEMENTATION_PLAN.md`
 records the decisions and documentation review. Independent title/subtitle
 alignment and narrow Plot/Canvas overrides are also user-approved T6 targets.
-Broad public constraints remain deferred to DF6 review at T7 closure; remaining
-broader text controls were re-deferred at T6 entry to DF5 review at T7 closure. Neither checkpoint
-is a promise to implement those extensions.
+Broad public constraints and remaining text controls enter the active
+post-foundation deferred review as DF6 and DF5 respectively, following the user's
+cancellation of T7. Discussion does not itself admit those extensions.
 
 Current exact-root T5a6d implementation evidence is in `docs/t5a-closure.md` and
 spec 91. T5a6d, T5a6, and parent T5a are COMPLETE after final review corrections
@@ -41,8 +41,8 @@ historical root defaults or public pre-render dimension getters.
 T6 ENTRY decisions are complete in `93_T6_EXECUTION_PLAN.md`: the user admitted
 one scientific numeric presentation core and combined/separate discrete guide
 sections, subsequently implemented as the current public behavior.
-Remaining broader formatting/text controls and sparse compaction retain explicit
-T7 review checkpoints.
+Remaining broader formatting/text controls and sparse compaction are discussed
+in the active post-foundation deferred review in spec91/spec99.
 The numeric consumer design, Forest mathematical proof/resource model and
 discrete producer/section design are fully specified in
 `06_NUMERIC_PRESENTATION.md`, `07_LOG10_DISPLAY.md` and `08_DISCRETE_GUIDES.md`.
@@ -65,7 +65,8 @@ independent recheck passed; PF5's evaluation/report is complete with unchanged
 operation-local font freshness and same-Output reuse.
 PF6 permits deduplication only with the exact selected tick list preserved; PF5
 admits evaluation/reporting, not a global font cache. PF7 keeps current line
-extension; alternative behavior is deferred to DF10 review at T7 closure.
+extension; alternative behavior is discussed under DF10 in the active
+post-foundation deferred review.
 
 Parents allocate space. A child returns ONE measured immutable local plan or a
 typed fit miss under that allocation. Intrinsic summaries inform allocation but
@@ -514,7 +515,8 @@ Otherwise apply this deterministic locally greedy policy from paragraph start:
    then resume forward proposal scanning at its ending source boundary.
 
 PF7 accepts keeping this extension policy unchanged. Removing extension is not
-admitted; DF10 reviews it at T7 closure only if measured benefit justifies review.
+admitted; DF10's post-foundation review evaluates whether measured benefit
+justifies changing that policy.
 
 Within one line-start trial sequence, reuse an already tested endpoint result;
 in particular, a failed endpoint encountered during retreat stops later extension
@@ -1461,7 +1463,7 @@ compatibility alias. Each sizing call completely replaces the one stored request
 `width` after `size` clears height, and zero dimensions fail preflight without a
 setter panic.
 There is no public maximum-width builder. Broad public constraints are deferred
-for T7 closure; internal intervals remain private.
+to DF6's active post-foundation review; internal intervals remain private.
 
 At T6 only, `TitleAlignment::{Start,Center,End}` and `CompositionTheme` expose
 concrete `root_title_alignment`, optional `root_subtitle_alignment`, and concrete
