@@ -477,6 +477,7 @@ mod tests {
             &crate::layout::ComponentAddress::root(),
             Vec::new(),
             Some(std::sync::Arc::new(descriptor)),
+            Vec::new(),
             crate::LegendComposition::Combined,
         )
         .unwrap()

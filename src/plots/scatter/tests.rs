@@ -10,7 +10,18 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
     .source_rows(crate::SourceRows::new([100, 200, 300, 400]).unwrap())
     .with_alpha(
         AlphaTarget::Point,
-        AlphaEncoding::observations(AlphaValues::new("confidence", [0, 42, 128, 0]).unwrap()),
+        AlphaEncoding::observations(
+            AlphaValues::categorical(
+                crate::CategoryValues::new("confidence", ["low", "\u{10ffff}", "mid", "low"])
+                    .unwrap(),
+                |level| match level {
+                    "low" => 0,
+                    "mid" => 128,
+                    _ => 42,
+                },
+            )
+            .unwrap(),
+        ),
     )
     .x_limits(0.0, 2.0)
     .y_limits(0.0, 2.0)
@@ -61,6 +72,38 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
         .all(|(_, style)| style.outline == outline));
     let first = payload.groups[0].0[0];
     assert!(payload.groups.iter().all(|(points, _)| points[0] == first));
+    let visible = source
+        .clone()
+        .with_legend_position(crate::LegendPosition::OutsideRight)
+        .labels(crate::Labels::raw());
+    let descriptor = crate::decorations::legend::discrete::PreparedGuide::prepare_for_test(
+        &visible,
+        &theme,
+        crate::LegendComposition::Combined,
+    )
+    .unwrap()
+    .unwrap();
+    let section = &descriptor.sections[0];
+    assert_eq!(
+        section
+            .entries()
+            .iter()
+            .map(|entry| entry.display_label.as_ref())
+            .collect::<Vec<_>>(),
+        ["low", "mid"]
+    );
+    let crate::decorations::legend::discrete::GuideSectionBody::Alpha(alpha) = &section.body else {
+        panic!("declared point alpha body")
+    };
+    assert_eq!(
+        alpha.sources[0].glyphs[0]
+            .members
+            .iter()
+            .map(|member| member.value.alpha)
+            .collect::<Vec<_>>(),
+        [0, 128, 0]
+    );
+    assert_eq!(alpha.sources[0].input.values().unwrap().len(), 4);
     let calls = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
     let error = source
         .with_alpha(

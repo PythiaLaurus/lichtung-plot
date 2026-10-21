@@ -83,6 +83,9 @@ pub(crate) enum GuideEntryIdentity {
     SupplementalLayer {
         label: RawLayerLabel,
     },
+    AlphaMember {
+        ordinal: u32,
+    },
 }
 
 impl GuideEntryIdentity {
@@ -138,7 +141,7 @@ impl GuideEntryIdentity {
             Self::DumbbellEndpoint { .. }
             | Self::RegressionObservation
             | Self::RegressionFit { .. } => PrimaryTitleIdentity::Series,
-            Self::SupplementalLayer { .. } => return None,
+            Self::SupplementalLayer { .. } | Self::AlphaMember { .. } => return None,
         })
     }
 
@@ -176,6 +179,9 @@ impl GuideEntryIdentity {
                     "supplemental guide requires its source label context".into(),
                 )),
             },
+            Self::AlphaMember { .. } => Err(Error::Render(
+                "alpha labels belong to their declared section".into(),
+            )),
         }
     }
 }

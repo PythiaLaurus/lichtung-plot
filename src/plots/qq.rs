@@ -93,6 +93,35 @@ pub(crate) fn intrinsic_body_minimum(
 }
 
 impl PreparedQq {
+    pub(crate) fn alpha_guide(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
+    ) -> crate::Result<()> {
+        use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
+        let point = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().qq());
+        for &alpha in &self.alphas {
+            guide.point(AlphaGlyphRole::Primary, alpha, point.clone(), false)?;
+        }
+        if self.line.is_some() {
+            guide.line(
+                AlphaGlyphRole::Line,
+                AlphaUnitKind::Single,
+                AlphaUnit::Single,
+                self.line_alpha,
+                theme
+                    .marks
+                    .strokes()
+                    .references()
+                    .qq_reference()
+                    .backend_style(),
+                false,
+            )?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn primary_mark_count(&self) -> u128 {
         self.theoretical.len() as u128
     }

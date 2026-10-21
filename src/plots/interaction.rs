@@ -154,6 +154,60 @@ pub(crate) fn intrinsic_body_minimum(
 }
 
 impl PreparedInteraction {
+    pub(crate) fn alpha_guide(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
+    ) -> crate::Result<()> {
+        use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
+        for trace in &self.traces {
+            let unit = AlphaUnit::series(chart, Some(&trace.identity))?;
+            let point = chart
+                .point_style(theme, (0, 0, 0), theme.marks.points().radii().interaction())
+                .with_shape(trace.style.point_shape);
+            if chart.markers_visible() {
+                for cell in &trace.cells {
+                    guide.point(
+                        AlphaGlyphRole::Primary,
+                        cell.alpha,
+                        point.clone(),
+                        chart.interaction_styles_spec().is_some(),
+                    )?;
+                }
+            }
+            guide.line(
+                AlphaGlyphRole::Summary,
+                AlphaUnitKind::Series,
+                unit.clone(),
+                trace.line_alpha,
+                theme
+                    .marks
+                    .data_lines()
+                    .interaction_interval()
+                    .backend_style((0, 0, 0)),
+                false,
+            )?;
+            if chart.interaction_connectors_visible() && trace.cells.len() > 1 {
+                let mut line = theme
+                    .marks
+                    .data_lines()
+                    .interaction_connector()
+                    .backend_style((0, 0, 0));
+                line.pattern = trace.style.line_pattern.stroke_pattern();
+                guide.line(
+                    AlphaGlyphRole::Line,
+                    AlphaUnitKind::Series,
+                    unit,
+                    trace.line_alpha,
+                    line,
+                    chart.interaction_styles_spec().is_some(),
+                )?;
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn color_keys(&self) -> impl Iterator<Item = &str> {
         let has_hue = self.traces.iter().any(|trace| trace.identity.hue.is_some());
         self.traces.iter().filter_map(move |trace| {

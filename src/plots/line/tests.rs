@@ -39,7 +39,13 @@ fn measure_layer(
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one source proves independent three-target marks and their common declared explanation plan"
+)]
 fn primary_point_alpha_follows_sorted_line_rows_and_keeps_supplemental_paint_independent() {
+    use crate::decorations::legend::LegendCall;
+
     let source = Plot::line(
         crate::NumericValues::new("x", [2.0, 0.0, 1.0]),
         crate::NumericValues::new("y", [2.0, 0.0, 1.0]),
@@ -53,14 +59,24 @@ fn primary_point_alpha_follows_sorted_line_rows_and_keeps_supplemental_paint_ind
         crate::alpha::AlphaTarget::Fill,
         crate::alpha::AlphaEncoding::keyed(
             [crate::CategoryValues::new("cohort", ["seen"]).unwrap()],
-            crate::alpha::AlphaValues::new("band confidence", [0]).unwrap(),
+            crate::alpha::AlphaValues::threshold(
+                crate::NumericValues::new("band confidence", [0.0]),
+                [],
+                [0],
+            )
+            .unwrap(),
         )
         .unwrap(),
     )
     .with_alpha(
         crate::alpha::AlphaTarget::Point,
         crate::alpha::AlphaEncoding::observations(
-            crate::alpha::AlphaValues::new("confidence", [230, 17, 90]).unwrap(),
+            crate::alpha::AlphaValues::linear(
+                crate::NumericValues::new("confidence", [230.0, 17.0, 90.0]),
+                (0.0, 255.0),
+                (0, 255),
+            )
+            .unwrap(),
         ),
     )
     .point_layer(labeled_layer(0.5, "Layer").with_alpha(61))
@@ -68,7 +84,12 @@ fn primary_point_alpha_follows_sorted_line_rows_and_keeps_supplemental_paint_ind
         crate::alpha::AlphaTarget::Line,
         crate::alpha::AlphaEncoding::keyed(
             [crate::CategoryValues::new("cohort", ["unused", "seen"]).unwrap()],
-            crate::alpha::AlphaValues::new("series confidence", [0, 128]).unwrap(),
+            crate::alpha::AlphaValues::threshold(
+                crate::NumericValues::new("series confidence", [0.0, 1.0]),
+                [0.5],
+                [0, 128],
+            )
+            .unwrap(),
         )
         .unwrap(),
     )
@@ -136,6 +157,65 @@ fn primary_point_alpha_follows_sorted_line_rows_and_keeps_supplemental_paint_ind
             })
             .collect::<Vec<_>>(),
         [128]
+    );
+    let descriptor = selected.discrete_guide.as_ref().unwrap();
+    assert_eq!(
+        descriptor
+            .sections
+            .iter()
+            .map(|section| section.entries().len())
+            .collect::<Vec<_>>(),
+        [2, 5, 1, 1]
+    );
+    let measured =
+        crate::layout::fit::measured(crate::decorations::legend::Legend::measure_assigned(
+            std::sync::Arc::clone(descriptor),
+            (900.0, 900.0),
+            false,
+            false,
+            &theme,
+            &mut false,
+            &crate::layout::fit::FitScope::root(),
+        ))
+        .unwrap();
+    let (x, y) = measured.box_at(0.0, 0.0).anchor();
+    let draw = measured.select(x, y).unwrap();
+    assert_eq!(
+        draw.calls
+            .iter()
+            .filter(|call| matches!(call, LegendCall::Background(..)))
+            .count(),
+        1
+    );
+    assert_eq!(
+        draw.calls
+            .iter()
+            .filter_map(|call| match call {
+                LegendCall::Point(_, style) => Some(style.color.alpha()),
+                _ => None,
+            })
+            .collect::<Vec<_>>(),
+        [255, 61, 0, 64, 128, 191, 255]
+    );
+    assert_eq!(
+        draw.calls
+            .iter()
+            .filter_map(|call| match call {
+                LegendCall::Line(_, style) => Some(style.color.alpha()),
+                _ => None,
+            })
+            .collect::<Vec<_>>(),
+        [255, 128]
+    );
+    assert_eq!(
+        draw.calls
+            .iter()
+            .filter_map(|call| match call {
+                LegendCall::Fill(_, style) => Some(style.color.alpha()),
+                _ => None,
+            })
+            .collect::<Vec<_>>(),
+        [255, 0]
     );
 }
 

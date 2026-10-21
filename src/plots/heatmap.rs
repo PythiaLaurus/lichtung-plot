@@ -50,6 +50,42 @@ pub(crate) struct HeatmapData {
 }
 
 impl HeatmapData {
+    pub(crate) fn alpha_guide(
+        &self,
+        _chart: &Plot,
+        theme: &ResolvedTheme,
+        guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
+    ) -> crate::Result<()> {
+        use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
+        for (index, alpha) in self.fill_alphas.iter().enumerate() {
+            let Some(alpha) = alpha else { continue };
+            let highlighted = self.highlighted[index];
+            let outline = if highlighted {
+                Some(theme.annotations.cells().highlight_outline().clone())
+            } else {
+                theme.marks.cells().cell_outline().cloned()
+            };
+            let fill = crate::theme::FixedFillTheme::new(
+                crate::Color::rgba(0, 0, 0, theme.marks.cells().fill_alpha()),
+                outline,
+            )?
+            .backend_style();
+            guide.fill(
+                if highlighted {
+                    AlphaGlyphRole::Highlight
+                } else {
+                    AlphaGlyphRole::Fill
+                },
+                AlphaUnitKind::Observation,
+                AlphaUnit::observation(*alpha),
+                alpha.value,
+                fill,
+                false,
+            )?;
+        }
+        Ok(())
+    }
+
     fn resolved_cell_fill(&self, index: usize, role_alpha: u8) -> Option<crate::Color> {
         self.fills[index].map(|fill| {
             let member = self.fill_alphas[index]

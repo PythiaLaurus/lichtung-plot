@@ -67,6 +67,69 @@ pub(crate) struct PreparedViolin {
     densities: Vec<ViolinDensity>,
 }
 
+impl PreparedViolin {
+    pub(crate) fn alpha_guide(
+        &self,
+        chart: &Plot,
+        theme: &ResolvedTheme,
+        guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
+    ) -> crate::Result<()> {
+        use crate::alpha::AlphaUnitKind;
+        use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
+        let raincloud = chart.kind() == crate::PlotKind::Raincloud;
+        let fill = theme.marks.fills().bodies().violin_body();
+        let point = chart.distribution_point_style(
+            if raincloud {
+                theme.marks.points().mandatory_strip()
+            } else {
+                theme.marks.points().raw_overlay()
+            },
+            (0, 0, 0),
+        );
+        for group in &self.sample.groups {
+            let unit = AlphaUnit::aggregate(chart, &group.label, group.group_label.as_deref())?;
+            guide.fill(
+                AlphaGlyphRole::Fill,
+                AlphaUnitKind::Aggregate,
+                unit.clone(),
+                group.fill_alpha,
+                fill.backend_style((0, 0, 0)),
+                fill.outline()
+                    .is_some_and(|outline| outline.mapped_width().is_some()),
+            )?;
+            if !raincloud {
+                guide.line(
+                    AlphaGlyphRole::Summary,
+                    AlphaUnitKind::Aggregate,
+                    unit.clone(),
+                    group.line_alpha,
+                    theme.marks.strokes().summaries().summary().backend_style(),
+                    false,
+                )?;
+            }
+            guide.line(
+                AlphaGlyphRole::Median,
+                AlphaUnitKind::Aggregate,
+                unit,
+                group.line_alpha,
+                theme.marks.strokes().summaries().median().backend_style(),
+                false,
+            )?;
+            if raincloud || chart.raw_overlay_spec().is_visible() {
+                let role = if raincloud {
+                    AlphaGlyphRole::MandatoryStrip
+                } else {
+                    AlphaGlyphRole::RawOverlay
+                };
+                for observation in &group.observations {
+                    guide.point(role, observation.alpha, point.clone(), false)?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 /// The strip's occupied physical width and the final IQR-box separation use
 /// the complete resolved point/box stroke, not the historical 2px point hint.
 pub(crate) fn raincloud_strip_pitch(

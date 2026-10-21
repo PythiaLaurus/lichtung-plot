@@ -206,7 +206,7 @@ labels, not existing commits.
 | T6N | COMPLETE | T6C | Unified scientific numeric formatting; leaves below |
 | T6L | COMPLETE | T6N | One section-aware discrete guide; focused closure in `docs/section-composition-acceptance.md` |
 | T6T | COMPLETE | T6L | TickGeneration design/source/public cutover and focused parent/root/output closure; `docs/public-tick-generation.md` / `docs/tick-generation-parent-closure.md` |
-| T6D | IN PROGRESS | T6T | Explicit-unit design, private values/bindings and all 49 actual consumers complete; existing-key alpha provenance and sole typed symbol/color guide envelope complete in `docs/alpha-guide-paint-bindings.md` / `docs/unified-guide-envelope.md`; actual alpha explanations, parent closure and public cutover remain in spec97 |
+| T6D | IN PROGRESS | T6T | Private values/bindings, all 49 consumers and declared actual-member/glyph explanations complete; `docs/declared-alpha-sections.md` follows `docs/alpha-guide-paint-bindings.md` / `docs/unified-guide-envelope.md`; complete parent/feedback transport and public cutover remain in spec97 |
 | T6Z | PENDING | T6D | Integrated contract and phase closure |
 | T6Z1 | PENDING | T6D | Complete public examples/current-spec and property/consumer census reconciliation; `docs(api): reconcile scientific plotting contracts` |
 | T6Z2 | COMPLETE | User closure review | User-approved DF3/DF4 admission in spec97, residual DF4 checkpoint and fully caller-decided legends in DF11 |

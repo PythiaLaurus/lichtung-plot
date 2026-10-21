@@ -22,6 +22,7 @@ use crate::render::backend::{
 };
 use crate::Error;
 
+pub(crate) mod alpha;
 mod continuous;
 pub(crate) mod discrete;
 mod identity;

@@ -18,6 +18,19 @@ pub(crate) enum PreparedDistribution {
 }
 
 impl PreparedDistribution {
+    pub(crate) fn alpha_guide(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
+    ) -> crate::Result<()> {
+        match self {
+            Self::Boxplot(marks) => marks.alpha_guide(chart, theme, guide),
+            Self::Violin(marks) => marks.alpha_guide(chart, theme, guide),
+            Self::Supplied(marks) => marks.alpha_guide(chart, theme, guide),
+        }
+    }
+
     pub(crate) fn resolved_colors(
         &self,
         chart: &Plot,

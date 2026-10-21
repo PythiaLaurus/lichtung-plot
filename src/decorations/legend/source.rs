@@ -100,6 +100,7 @@ pub(crate) struct AlphaBindings {
 pub(crate) enum AlphaExplanation {
     Constant,
     Neutralized,
+    Explained,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

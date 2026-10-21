@@ -112,6 +112,43 @@ pub(crate) fn intrinsic_body_minimum(
 }
 
 impl HistogramSemantics {
+    pub(crate) fn alpha_guide(
+        &self,
+        _chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
+    ) -> crate::Result<()> {
+        use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
+        let fill = theme.marks.fills().bodies().histogram_bin();
+        for (bin, &alpha) in self.bins.iter().zip(&self.bin_alphas) {
+            guide.fill(
+                AlphaGlyphRole::Fill,
+                AlphaUnitKind::Bin,
+                AlphaUnit::bin((bin.lower, bin.upper)),
+                alpha,
+                fill.backend_style((0, 0, 0)),
+                fill.outline()
+                    .is_some_and(|outline| outline.mapped_width().is_some()),
+            )?;
+        }
+        if self.curve.as_ref().is_some_and(|curve| curve.len() >= 2) {
+            guide.line(
+                AlphaGlyphRole::Line,
+                AlphaUnitKind::Single,
+                AlphaUnit::Single,
+                self.curve_alpha,
+                theme
+                    .marks
+                    .strokes()
+                    .curves()
+                    .histogram_curve()
+                    .backend_style(),
+                false,
+            )?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn primary_mark_count(&self) -> u128 {
         self.bins.len() as u128
     }

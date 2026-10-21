@@ -430,12 +430,14 @@ impl PreparedInteriorInputs {
                     self.guide_sources(&scoped, theme, data, scope)?
                 };
                 let continuous = self.continuous_source(&scoped, theme, scope)?;
+                let alpha = self.alpha_sections(&scoped, theme, scope, &contributor)?;
                 PreparedGuide::prepare(
                     &scoped,
                     theme,
                     &contributor,
                     keys,
                     continuous,
+                    alpha,
                     scoped.effective_legend_composition(),
                 )?
             };
@@ -497,6 +499,63 @@ impl PreparedInteriorInputs {
             _ => return Ok(None),
         };
         crate::data::source::source_arc(descriptor).map(Some)
+    }
+
+    pub(crate) fn alpha_sections(
+        &self,
+        chart: &Plot,
+        theme: &ResolvedTheme,
+        scope: Option<&str>,
+        owner: &crate::layout::ComponentAddress,
+    ) -> Result<Vec<crate::decorations::legend::discrete::PreparedGuideSection>, Error> {
+        self.route.validate(chart)?;
+        let mut guide =
+            crate::decorations::legend::alpha::AlphaGuideBuilder::new(chart, theme, owner);
+        if !guide.any_enabled() {
+            return Ok(Vec::new());
+        }
+        macro_rules! scoped {
+            ($field:ident) => {
+                panel(
+                    self.$field.as_ref().map(|inputs| inputs.panels.as_slice()),
+                    scope,
+                    chart.kind(),
+                )?
+                .alpha_guide(chart, theme, &mut guide)?
+            };
+        }
+        match chart.kind() {
+            PlotKind::Scatter => scoped!(scatter),
+            PlotKind::Qq => scoped!(qq),
+            PlotKind::Regression => scoped!(regression),
+            PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => scoped!(line),
+            PlotKind::Density => scoped!(density),
+            PlotKind::Interaction => scoped!(interaction),
+            PlotKind::Dumbbell => scoped!(dumbbell),
+            PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => scoped!(estimate),
+            PlotKind::Histogram => scoped!(histogram),
+            PlotKind::Bar
+            | PlotKind::HorizontalBar
+            | PlotKind::StackedBar
+            | PlotKind::StackedHorizontalBar => scoped!(bars),
+            PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => scoped!(distributions),
+            PlotKind::Beeswarm => scoped!(beeswarm),
+            PlotKind::Heatmap => scoped!(heatmap),
+            PlotKind::Waterfall => scoped!(waterfall),
+            PlotKind::Marginal => self
+                .marginal
+                .as_ref()
+                .ok_or_else(|| {
+                    Error::Render("Marginal alpha guide is missing actual groups".into())
+                })?
+                .alpha_guide(chart, theme, &mut guide)?,
+            PlotKind::Matrix => self
+                .matrix
+                .as_ref()
+                .ok_or_else(|| Error::Render("Matrix alpha guide is missing actual groups".into()))?
+                .alpha_guide(chart, theme, &mut guide)?,
+        }
+        guide.finish()
     }
 }
 

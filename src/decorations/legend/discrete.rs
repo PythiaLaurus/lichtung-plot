@@ -24,6 +24,7 @@ pub(crate) enum GuideSectionIdentity {
     Literal(LiteralDomain),
     SupplementalSeries,
     ContinuousColor(RawField),
+    Alpha(super::alpha::AlphaSectionIdentity),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,7 +42,7 @@ pub(crate) struct PreparedGuideEntry {
     pub(crate) identity: GuideEntryIdentity,
     pub(crate) display_label: Arc<str>,
     pub(crate) key: ResolvedGuideKey,
-    sources: Arc<[GuideKeySource]>,
+    pub(super) sources: Arc<[GuideKeySource]>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -55,12 +56,14 @@ pub(crate) struct PreparedGuideSection {
 pub(crate) enum GuideSectionBody {
     Symbols(Arc<[PreparedGuideEntry]>),
     ContinuousColor(Arc<super::descriptor::ContinuousDescriptor>),
+    Alpha(Arc<super::alpha::PreparedAlphaSection>),
 }
 
 impl PreparedGuideSection {
     pub(crate) fn entries(&self) -> &[PreparedGuideEntry] {
         match &self.body {
             GuideSectionBody::Symbols(entries) => entries,
+            GuideSectionBody::Alpha(alpha) => &alpha.entries,
             GuideSectionBody::ContinuousColor(_) => &[],
         }
     }
@@ -142,12 +145,23 @@ impl PreparedGuide {
         } else {
             inputs.continuous_source(plot, theme, plot.axis_scope())?
         };
+        let alpha = if plot.legend_policy_spec() == crate::LegendPolicy::Hidden {
+            Vec::new()
+        } else {
+            inputs.alpha_sections(
+                plot,
+                theme,
+                plot.axis_scope(),
+                &ComponentAddress::root().child(AddressRole::PlotBody, 0)?,
+            )?
+        };
         Self::prepare(
             plot,
             theme,
             &ComponentAddress::root().child(AddressRole::PlotBody, 0)?,
             keys,
             continuous,
+            alpha,
             composition,
         )
     }
@@ -307,7 +321,7 @@ impl PreparedGuide {
             .iter()
             .find_map(|section| match &section.body {
                 GuideSectionBody::ContinuousColor(color) => Some(color),
-                GuideSectionBody::Symbols(_) => None,
+                GuideSectionBody::Symbols(_) | GuideSectionBody::Alpha(_) => None,
             })
     }
 

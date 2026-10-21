@@ -4,8 +4,9 @@
 bounded sources, public cutover and focused parent/root/frozen-output closure.
 Data-alpha source-backed design, private owned mapping values and explicit
 binding/source-slot preparation and all 49 actual mark consumers are COMPLETE;
-guide provenance/projection is IN PROGRESS; unified explanations, public cutover
-and integrated release verification remain PENDING.
+guide provenance/projection and actual declared explanations are COMPLETE;
+parent/feedback closure is IN PROGRESS, and public cutover and integrated release
+verification remain PENDING.
 
 ## Authority And Recorded Decision
 
@@ -195,10 +196,11 @@ and focused closure; split behavioral leaves further when needed.
 | T6D1d | COMPLETE | T6D1c | All 17 Single/record/series/aggregate scientific stroke consumers and final-paint intrinsic/ink; receipts below and `../docs/alpha-aggregate-strokes.md` |
 | T6D1e | COMPLETE | T6D1d | All 15 aggregate, cell, exact-bin, band, native and supplied-fill consumers; fill receipts below |
 | T6D2 | IN PROGRESS | T6D1 | Declared automatic guides, parent transport, census and identities |
-| T6D2a | IN PROGRESS | T6D1 | Existing-key alpha provenance/neutralization and sole typed guide envelope complete below; actual declared-alpha member/glyph census and explanatory sections remain |
+| T6D2a | COMPLETE | T6D1 | Existing-key alpha provenance, sole typed guide envelope and actual declaration/member/glyph explanations; receipts below |
 | T6D2a1 | COMPLETE | T6D1 | Typed per-paint alpha bindings and complete/projected masks; data-bound alpha neutralization in existing Combined/Separate contexts; `../docs/alpha-guide-paint-bindings.md` |
 | T6D2a2 | COMPLETE | T6D2a1 | Sole PreparedGuide with typed symbol/color bodies; remove exclusive descriptors/kinds and duplicated continuous frames, measurement/census/Canvas routes; `../docs/unified-guide-envelope.md` |
-| T6D2b | IN PROGRESS | T6D2a | Common symbol/color measurement, freeze and native/Shared census complete; extend scoped ownership, cache/height/feedback and fonts to actual alpha sections |
+| T6D2a3 | COMPLETE | T6D2a2 | Actual members/glyphs from all 49 components, declared Continuous/Categorical/Threshold symbol sections, masks and Shared recipe/member compatibility; `../docs/declared-alpha-sections.md` |
+| T6D2b | IN PROGRESS | T6D2a | Common symbol/color/alpha measurement, fonts, cache and Shared freeze connected; complete alpha feedback/native ownership and prepared-guide transport cleanup |
 | T6D3 | PENDING | T6D2 | Atomic public API/caller/current-contract migration |
 | T6D4 | PENDING | T6D3 | Full admitted-family/parent/root/frozen-output evidence |
 
@@ -246,8 +248,11 @@ an Undeclared explanation. `../docs/unified-guide-envelope.md` replaces the excl
 kind envelope with one typed PreparedGuide and common symbol/continuous-color
 measurement, frame, cache, font census and frozen draw plan. Native facets retain
 their actual scoped color domains rather than forming an invalid parent union.
-Actual alpha member/glyph census and explanations, complete alpha parent/feedback
-transport and public closure keep T6D2 IN PROGRESS.
+`../docs/declared-alpha-sections.md` closes actual alpha member/glyph census and
+declared explanations for all 49 components, including native color-plus-alpha,
+supplied zero-row geometry, scoped series, complete Shared recipes and cache
+identity. Complete alpha parent/feedback transport and public closure keep T6D2
+IN PROGRESS.
 
 Do not start a code leaf while its exact owning design is still pending. Use modern
 Rust module layout, the standalone offline renderer and existing pinned dependencies.

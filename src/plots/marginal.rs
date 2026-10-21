@@ -63,6 +63,32 @@ pub(crate) struct PreparedMarginal {
 }
 
 impl PreparedMarginal {
+    pub(crate) fn alpha_guide(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
+    ) -> crate::Result<()> {
+        use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
+        let point = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().marginal());
+        let fill = theme.marks.fills().densities().marginal_density();
+        for group in &self.groups {
+            for &alpha in &group.alphas {
+                guide.point(AlphaGlyphRole::Primary, alpha, point.clone(), false)?;
+            }
+            guide.fill(
+                AlphaGlyphRole::Fill,
+                AlphaUnitKind::Series,
+                AlphaUnit::series(chart, Some(&group.identity))?,
+                group.fill_alpha,
+                fill.backend_style((0, 0, 0)),
+                fill.outline()
+                    .is_some_and(|outline| outline.mapped_width().is_some()),
+            )?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn checked_primary_mark_count(&self) -> Result<u128, Error> {
         let mut count = 0_u128;
         for group in &self.groups {

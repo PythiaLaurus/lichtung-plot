@@ -35,6 +35,30 @@ pub(crate) struct PreparedWaterfall {
     total_variants: [Option<totals::TotalVariant>; 4],
 }
 
+impl PreparedWaterfall {
+    pub(crate) fn alpha_guide(
+        &self,
+        _chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
+    ) -> crate::Result<()> {
+        use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
+        let fill = theme.marks.fills().bodies().waterfall_bar();
+        for span in &self.spans {
+            guide.fill(
+                AlphaGlyphRole::Fill,
+                AlphaUnitKind::Observation,
+                AlphaUnit::observation(span.alpha),
+                span.alpha.value,
+                fill.backend_style((0, 0, 0)),
+                fill.outline()
+                    .is_some_and(|outline| outline.mapped_width().is_some()),
+            )?;
+        }
+        Ok(())
+    }
+}
+
 mod totals;
 
 #[derive(Debug, Clone, Copy, PartialEq)]

@@ -749,7 +749,12 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
         ),
         (
             PlotKind::Histogram,
-            Plot::histogram(crate::HistogramInput::samples(x.clone())).erase(),
+            Plot::histogram(crate::HistogramInput::samples(x.clone()))
+                .stat(crate::HistogramStat::Density)
+                .composite(crate::HistogramComposite::KdeAndRug(
+                    crate::HistogramKde::Internal,
+                ))
+                .erase(),
         ),
         (
             PlotKind::Density,
@@ -820,15 +825,23 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
         ),
         (
             PlotKind::Bar,
-            Plot::bar(group.clone(), crate::BarInput::samples(y.clone()))
-                .series(series.clone())
-                .erase(),
+            Plot::bar(
+                group.clone(),
+                crate::BarInput::samples(y.clone())
+                    .error_bar(crate::ErrorBar::standard_deviation()),
+            )
+            .series(series.clone())
+            .erase(),
         ),
         (
             PlotKind::HorizontalBar,
-            Plot::horizontal_bar(group.clone(), crate::BarInput::samples(y.clone()))
-                .series(series.clone())
-                .erase(),
+            Plot::horizontal_bar(
+                group.clone(),
+                crate::BarInput::samples(y.clone())
+                    .error_bar(crate::ErrorBar::standard_deviation()),
+            )
+            .series(series.clone())
+            .erase(),
         ),
         (
             PlotKind::StackedBar,
@@ -841,12 +854,14 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
         (
             PlotKind::Boxplot,
             Plot::boxplot(group.clone(), y.clone())
+                .raw_overlay(crate::RawOverlay::Points)
                 .series(series.clone())
                 .erase(),
         ),
         (
             PlotKind::Violin,
             Plot::violin(group.clone(), y.clone())
+                .raw_overlay(crate::RawOverlay::Points)
                 .series(series.clone())
                 .erase(),
         ),
@@ -885,10 +900,26 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
         ),
     ];
     let mut preparation_work = [0_u64; 3];
+    let mut alpha_components = [0_usize; 3];
     crate::canvas::lifecycle_tests::mixed_family_parent_audit(&plots);
     for (kind, plot) in plots {
-        let plot = plot.size(640, 480);
+        let mut plot = plot.size(1200, 900);
         assert_prepared_kind_sections(kind, &plot);
+        for &target in alpha_targets(kind) {
+            let name = match target {
+                crate::alpha::AlphaTarget::Point => "point confidence",
+                crate::alpha::AlphaTarget::Line => "stroke confidence",
+                crate::alpha::AlphaTarget::Fill => "fill confidence",
+            };
+            let values = crate::alpha::AlphaValues::linear(
+                NumericValues::new(name, [0.5]),
+                (0.0, 1.0),
+                (0, 255),
+            )
+            .unwrap();
+            plot = plot.with_alpha(target, crate::alpha::AlphaEncoding::single(values).unwrap());
+            alpha_components[target.index()] += 1;
+        }
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let domain =
             crate::plots::shared_x::domain(&plot, &crate::font::canonical::OperationContext::new());
@@ -908,6 +939,16 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
                 false,
             )
             .unwrap();
+        assert_actual_alpha_sections(
+            kind,
+            prepared
+                .discrete_guides
+                .get()
+                .unwrap()
+                .root
+                .as_ref()
+                .unwrap(),
+        );
         let prepared = prepared.attach(plot.clone()).unwrap();
         if matches!(
             kind,
@@ -1007,7 +1048,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
             *total += work.counters[counter as usize];
         }
         assert_eq!((backend.begins, backend.ends), (1, 1), "{kind:?}");
-        assert_eq!(plan.dimensions(), (640, 480));
+        assert_eq!(plan.dimensions(), (1200, 900));
         // Dropping the source before every concrete output makes a source-size
         // or source-data reread impossible after exact-root promotion.
         drop(plot);
@@ -1024,11 +1065,11 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
         crate::orchestrator::measurements::start();
         let mut svg = plan.take_svg_backend().unwrap();
         plan.render(&mut svg).unwrap();
-        let scene = crate::scene::RenderedScene::new(640, 480, svg.into_output()).unwrap();
+        let scene = crate::scene::RenderedScene::new(1200, 900, svg.into_output()).unwrap();
         let preserve = scene.svg_bytes().to_vec();
         assert!(std::str::from_utf8(&preserve)
             .unwrap()
-            .contains("viewBox=\"0 0 640 480\""));
+            .contains("viewBox=\"0 0 1200 900\""));
         let outlined = scene.svg_with_text_as_paths().unwrap();
         assert!(!std::str::from_utf8(&outlined).unwrap().contains("<text"));
         let png = scene
@@ -1038,8 +1079,8 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
             })
             .unwrap();
         assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
-        assert_eq!(u32::from_be_bytes(png[16..20].try_into().unwrap()), 640);
-        assert_eq!(u32::from_be_bytes(png[20..24].try_into().unwrap()), 480);
+        assert_eq!(u32::from_be_bytes(png[16..20].try_into().unwrap()), 1200);
+        assert_eq!(u32::from_be_bytes(png[20..24].try_into().unwrap()), 900);
         assert_eq!(scene.svg_bytes(), preserve);
         assert_eq!(scene.svg_with_text_as_paths().unwrap(), outlined);
         let work = crate::orchestrator::measurements::finish();
@@ -1051,6 +1092,102 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
         assert_eq!(frozen_work(), before, "{kind:?}: post-freeze work");
     }
     assert!(preparation_work.into_iter().all(|count| count > 0));
+    assert_eq!(alpha_components, [17, 17, 15]);
+}
+
+fn alpha_targets(kind: PlotKind) -> &'static [crate::alpha::AlphaTarget] {
+    use crate::alpha::AlphaTarget::{Fill, Line, Point};
+    match kind {
+        PlotKind::Scatter | PlotKind::Beeswarm => &[Point],
+        PlotKind::Histogram | PlotKind::Density | PlotKind::Bar | PlotKind::HorizontalBar => {
+            &[Line, Fill]
+        }
+        PlotKind::Qq
+        | PlotKind::PointInterval
+        | PlotKind::Coefficient
+        | PlotKind::Forest
+        | PlotKind::Trajectory
+        | PlotKind::LinePath
+        | PlotKind::Interaction
+        | PlotKind::Dumbbell => &[Point, Line],
+        PlotKind::Line
+        | PlotKind::Boxplot
+        | PlotKind::Violin
+        | PlotKind::Raincloud
+        | PlotKind::Regression => &[Point, Line, Fill],
+        PlotKind::Heatmap
+        | PlotKind::StackedBar
+        | PlotKind::StackedHorizontalBar
+        | PlotKind::Waterfall => &[Fill],
+        PlotKind::Marginal | PlotKind::Matrix => &[Point, Fill],
+    }
+}
+
+fn assert_actual_alpha_sections(
+    kind: PlotKind,
+    descriptor: &crate::decorations::legend::discrete::PreparedGuide,
+) {
+    use crate::alpha::{AlphaTarget, AlphaUnitKind};
+    use crate::decorations::legend::discrete::{GuideSectionBody, GuideSectionIdentity};
+    let sections = descriptor
+        .sections
+        .iter()
+        .filter(|section| matches!(section.body, GuideSectionBody::Alpha(_)))
+        .collect::<Vec<_>>();
+    assert_eq!(sections.len(), alpha_targets(kind).len(), "{kind:?}");
+    for (section, &target) in sections.into_iter().zip(alpha_targets(kind)) {
+        let GuideSectionIdentity::Alpha(identity) = &section.identity else {
+            panic!("typed alpha identity")
+        };
+        let unit = match (target, kind) {
+            (AlphaTarget::Point, _)
+            | (AlphaTarget::Fill, PlotKind::Heatmap | PlotKind::Waterfall)
+            | (
+                AlphaTarget::Line,
+                PlotKind::PointInterval
+                | PlotKind::Coefficient
+                | PlotKind::Forest
+                | PlotKind::Dumbbell,
+            ) => AlphaUnitKind::Observation,
+            (AlphaTarget::Fill, PlotKind::Histogram) => AlphaUnitKind::Bin,
+            (AlphaTarget::Line, PlotKind::Histogram | PlotKind::Qq | PlotKind::Regression)
+            | (AlphaTarget::Fill, PlotKind::Regression) => AlphaUnitKind::Single,
+            (
+                _,
+                PlotKind::Bar
+                | PlotKind::HorizontalBar
+                | PlotKind::StackedBar
+                | PlotKind::StackedHorizontalBar
+                | PlotKind::Boxplot
+                | PlotKind::Violin
+                | PlotKind::Raincloud,
+            ) => AlphaUnitKind::Aggregate,
+            _ => AlphaUnitKind::Series,
+        };
+        assert_eq!(
+            (identity.target, identity.unit, identity.semantics),
+            (target, unit, crate::alpha::AlphaSemantics::Continuous),
+            "{kind:?}"
+        );
+        assert_eq!(
+            section.entries().len(),
+            5,
+            "{kind:?}: numeric examples are not reduced to the actual broadcast byte"
+        );
+        let GuideSectionBody::Alpha(alpha) = &section.body else {
+            unreachable!()
+        };
+        assert_eq!(alpha.sources.len(), 1);
+        assert_eq!(alpha.sources[0].producer, kind);
+        assert!(alpha.sources[0]
+            .glyphs
+            .iter()
+            .all(|glyph| !glyph.members.is_empty()
+                && glyph
+                    .members
+                    .iter()
+                    .all(|member| member.value.alpha == 128 && member.value.index == 0)));
+    }
 }
 
 /// Independently specified symbol components and native color bodies for the

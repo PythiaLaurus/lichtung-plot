@@ -474,7 +474,12 @@ mod validation_tests {
             .with_alpha(
                 crate::alpha::AlphaTarget::Point,
                 crate::alpha::AlphaEncoding::observations(
-                    crate::alpha::AlphaValues::new("confidence", [0, 230]).unwrap(),
+                    crate::alpha::AlphaValues::linear(
+                        crate::NumericValues::new("confidence", [0.0, 230.0]),
+                        (0.0, 255.0),
+                        (0, 255),
+                    )
+                    .unwrap(),
                 ),
             )
             .with_alpha(
@@ -484,7 +489,12 @@ mod validation_tests {
                         crate::CategoryValues::new("x", ["b", "a"]).unwrap(),
                         crate::CategoryValues::new("cohort", ["same", "same"]).unwrap(),
                     ],
-                    crate::alpha::AlphaValues::new("summary confidence", [64, 128]).unwrap(),
+                    crate::alpha::AlphaValues::linear(
+                        crate::NumericValues::new("summary confidence", [64.0, 128.0]),
+                        (0.0, 255.0),
+                        (0, 255),
+                    )
+                    .unwrap(),
                 )
                 .unwrap(),
             )
@@ -495,7 +505,12 @@ mod validation_tests {
                         crate::CategoryValues::new("x", ["b", "a"]).unwrap(),
                         crate::CategoryValues::new("cohort", ["same", "same"]).unwrap(),
                     ],
-                    crate::alpha::AlphaValues::new("body confidence", [0, 191]).unwrap(),
+                    crate::alpha::AlphaValues::linear(
+                        crate::NumericValues::new("body confidence", [0.0, 191.0]),
+                        (0.0, 255.0),
+                        (0, 255),
+                    )
+                    .unwrap(),
                 )
                 .unwrap(),
             );
@@ -558,6 +573,20 @@ mod validation_tests {
                 .collect::<Vec<_>>(),
             [128, 64]
         );
+        let descriptor = selected.discrete_guide.as_ref().unwrap();
+        let sections = descriptor
+            .sections
+            .iter()
+            .filter_map(|section| match &section.body {
+                crate::decorations::legend::discrete::GuideSectionBody::Alpha(alpha) => Some(alpha),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(sections.len(), 3);
+        assert!(sections
+            .iter()
+            .all(|section| section.entries.len() == 5
+                && section.sources[0].glyphs[0].members.len() == 2));
         let mut invalid_histogram = histogram;
         invalid_histogram.bins[0].lower = f64::INFINITY;
         let mut invalid_raincloud = raincloud;

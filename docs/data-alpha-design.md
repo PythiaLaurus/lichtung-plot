@@ -251,6 +251,14 @@ outlines retain their paint/alpha unless their RGB explains another mapped chann
 Mapped group shape/pattern is neutralized for the alpha-only explanation using
 the existing Circle/Solid projection convention; fixed geometry is retained.
 
+Retain every active role glyph and its actual members. The existing one-key
+symbol grammar uses deterministic producer-role order to select an actual
+component geometry for the numeric/category examples; the complete projected
+glyph set still participates in Shared compatibility and descriptor identity.
+This is geometry selection, never a representative observation's alpha or a
+collective reduction. It preserves paired endpoints, summary/median and highlighted
+cell responsibilities without adding a mini-plot or arbitrary guide graphics.
+
 Existing group/hue keys neutralize data-bound alpha to 255, including when the
 alpha values have no declared explanation. A hue key cannot choose one row's
 alpha as representative of a varying channel. Role/exact alpha without a

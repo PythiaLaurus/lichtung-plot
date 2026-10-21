@@ -108,6 +108,45 @@ pub(crate) fn intrinsic_body_minimum(
 }
 
 impl PreparedRegression {
+    pub(crate) fn alpha_guide(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
+    ) -> crate::Result<()> {
+        use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
+        let point = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().regression());
+        for &alpha in &self.alphas {
+            guide.point(AlphaGlyphRole::Primary, alpha, point.clone(), false)?;
+        }
+        guide.line(
+            AlphaGlyphRole::Line,
+            AlphaUnitKind::Single,
+            AlphaUnit::Single,
+            self.line_alpha,
+            theme
+                .marks
+                .strokes()
+                .curves()
+                .regression_fit()
+                .backend_style(),
+            false,
+        )?;
+        if self.band_values.is_some() {
+            let fill = theme.marks.fills().bands().regression_band();
+            guide.fill(
+                AlphaGlyphRole::Fill,
+                AlphaUnitKind::Single,
+                AlphaUnit::Single,
+                self.fill_alpha,
+                fill.backend_style((0, 0, 0)),
+                fill.outline()
+                    .is_some_and(|outline| outline.mapped_width().is_some()),
+            )?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn primary_mark_count(&self) -> u128 {
         self.points.len() as u128
     }

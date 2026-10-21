@@ -7,6 +7,7 @@ use crate::numeric::set::FormattedSet;
 use crate::{CategoryValues, Error, NumericValues, Result};
 
 mod encoding;
+mod guide;
 pub(crate) mod marks;
 mod materialize;
 
@@ -20,7 +21,7 @@ pub(crate) enum AlphaTarget {
 }
 
 impl AlphaTarget {
-    const fn index(self) -> usize {
+    pub(crate) const fn index(self) -> usize {
         match self {
             Self::Point => 0,
             Self::Line => 1,

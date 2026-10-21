@@ -344,6 +344,53 @@ pub(crate) struct PreparedBars {
 }
 
 impl PreparedBars {
+    pub(crate) fn alpha_guide(
+        &self,
+        chart: &Plot,
+        theme: &ResolvedTheme,
+        guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
+    ) -> crate::Result<()> {
+        use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
+        let fill = theme.marks.fills().bodies().bar_body();
+        for bar in &self.bars {
+            let unit = AlphaUnit::aggregate(
+                chart,
+                &self.categories[bar.category_index],
+                bar.series_index.map(|index| self.series[index].as_str()),
+            )?;
+            guide.fill(
+                AlphaGlyphRole::Fill,
+                AlphaUnitKind::Aggregate,
+                unit.clone(),
+                bar.fill_alpha,
+                fill.backend_style((0, 0, 0)),
+                fill.outline()
+                    .is_some_and(|outline| outline.mapped_width().is_some()),
+            )?;
+            if bar.interval.is_some()
+                && !matches!(
+                    chart.kind(),
+                    crate::PlotKind::StackedBar | crate::PlotKind::StackedHorizontalBar
+                )
+            {
+                guide.line(
+                    AlphaGlyphRole::Line,
+                    AlphaUnitKind::Aggregate,
+                    unit,
+                    bar.line_alpha,
+                    theme
+                        .marks
+                        .strokes()
+                        .summaries()
+                        .uncertainty()
+                        .backend_style(),
+                    false,
+                )?;
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn observed_hue_levels(&self) -> impl Iterator<Item = &str> {
         self.hues.iter().enumerate().filter_map(|(index, hue)| {
             self.bars

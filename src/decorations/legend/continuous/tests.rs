@@ -52,6 +52,7 @@ fn prepared(descriptor: &ContinuousDescriptor, theme: &ResolvedTheme) -> Arc<Pre
         &crate::layout::ComponentAddress::root(),
         Vec::new(),
         Some(Arc::new(descriptor.clone())),
+        Vec::new(),
         crate::LegendComposition::Combined,
     )
     .unwrap()

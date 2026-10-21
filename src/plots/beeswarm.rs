@@ -197,6 +197,24 @@ pub(crate) fn prepare(
 }
 
 impl PreparedBeeswarm {
+    pub(crate) fn alpha_guide(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
+    ) -> crate::Result<()> {
+        let point = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().beeswarm());
+        for &(_, _, _, alpha) in &self.rows {
+            guide.point(
+                crate::decorations::legend::alpha::AlphaGlyphRole::Primary,
+                alpha,
+                point.clone(),
+                false,
+            )?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn guide_samples(&self) -> Result<Vec<f64>, Error> {
         crate::data::source::collect_source(self.rows.iter().map(|row| Ok(row.2)))
     }

@@ -34,6 +34,7 @@ impl GuideSectionIdentity {
             Self::ContinuousColor(_) => {
                 Err(Error::Render("continuous title is producer-owned".into()))
             }
+            Self::Alpha(_) => Err(Error::Render("alpha title is declaration-owned".into())),
         }
     }
 
@@ -45,6 +46,11 @@ impl GuideSectionIdentity {
             Self::Literal(_) => 3,
             Self::SupplementalSeries => 4,
             Self::ContinuousColor(_) => 5,
+            Self::Alpha(identity) => match identity.target {
+                crate::alpha::AlphaTarget::Point => 6,
+                crate::alpha::AlphaTarget::Line => 7,
+                crate::alpha::AlphaTarget::Fill => 8,
+            },
         }
     }
 
@@ -101,9 +107,10 @@ impl PreparedGuide {
         owner: &ComponentAddress,
         keys: Vec<GuideSourceKey>,
         continuous: Option<Arc<super::super::descriptor::ContinuousDescriptor>>,
+        alpha: Vec<PreparedGuideSection>,
         composition: LegendComposition,
     ) -> Result<Option<Arc<Self>>> {
-        if (keys.is_empty() && continuous.is_none())
+        if (keys.is_empty() && continuous.is_none() && alpha.is_empty())
             || plot.legend_policy_spec() == crate::LegendPolicy::Hidden
         {
             return Ok(None);
@@ -165,7 +172,7 @@ impl PreparedGuide {
                 )?;
             }
         }
-        finish(composition, sections, continuous, counts, &[]).map(Some)
+        finish(composition, sections, continuous, alpha, counts, &[]).map(Some)
     }
 
     /// Merge only prepared explanatory sections. Labels and key paints are
@@ -180,6 +187,7 @@ impl PreparedGuide {
         let mut primary: Option<(PrimaryTitleIdentity, Arc<str>)> = None;
         let mut counts = GuideCounts::default();
         let mut continuous: Option<Arc<super::super::descriptor::ContinuousDescriptor>> = None;
+        let mut alpha = Vec::new();
         for guide in guides {
             if composition.is_some_and(|expected| expected != guide.composition) {
                 return Err(incompatible(context));
@@ -198,6 +206,10 @@ impl PreparedGuide {
                 guide.counts.labeled_layer_source_keys,
             )?;
             for section in guide.sections.iter() {
+                if let GuideSectionBody::Alpha(_) = &section.body {
+                    merge_alpha(&mut alpha, section, context)?;
+                    continue;
+                }
                 if let GuideSectionBody::ContinuousColor(color) = &section.body {
                     if continuous
                         .as_ref()
@@ -242,7 +254,7 @@ impl PreparedGuide {
             section.identity = GuideSectionIdentity::Combined(identity);
             section.title = title;
         }
-        finish(composition, sections, continuous, counts, order).map(Some)
+        finish(composition, sections, continuous, alpha, counts, order).map(Some)
     }
 }
 
@@ -394,25 +406,18 @@ fn separate_source(
 
 fn finish(
     composition: LegendComposition,
-    mut sections: Vec<Section>,
+    sections: Vec<Section>,
     continuous: Option<Arc<super::super::descriptor::ContinuousDescriptor>>,
+    alpha: Vec<PreparedGuideSection>,
     mut counts: GuideCounts,
     order: &[GuideEntryIdentity],
 ) -> Result<Arc<PreparedGuide>> {
-    if sections.is_empty() && continuous.is_none() {
+    if sections.is_empty() && continuous.is_none() && alpha.is_empty() {
         return Err(Error::Render("a prepared guide must be nonempty".into()));
-    }
-    for index in 1..sections.len() {
-        let mut current = index;
-        while current > 0
-            && sections[current - 1].identity.class() > sections[current].identity.class()
-        {
-            sections.swap(current - 1, current);
-            current -= 1;
-        }
     }
     counts.sections = count(sections.len())?;
     add(&mut counts.sections, u32::from(continuous.is_some()))?;
+    add(&mut counts.sections, count(alpha.len())?)?;
     let mut retained = Vec::new();
     crate::data::source::reserve_source(
         &mut retained,
@@ -462,11 +467,92 @@ fn finish(
             body: GuideSectionBody::ContinuousColor(color),
         });
     }
+    retain_alpha_sections(&mut retained, alpha, &mut counts)?;
+    order_sections(&mut retained);
     crate::data::source::source_arc(PreparedGuide {
         composition,
         counts,
         sections: shared_slice(retained)?,
     })
+}
+
+fn order_sections(sections: &mut [PreparedGuideSection]) {
+    for index in 1..sections.len() {
+        let mut current = index;
+        while current > 0
+            && sections[current - 1].identity.class() > sections[current].identity.class()
+        {
+            sections.swap(current - 1, current);
+            current -= 1;
+        }
+    }
+}
+
+fn retain_alpha_sections(
+    retained: &mut Vec<PreparedGuideSection>,
+    alpha: Vec<PreparedGuideSection>,
+    counts: &mut GuideCounts,
+) -> Result<()> {
+    for section in alpha {
+        if !matches!(section.identity, GuideSectionIdentity::Alpha(_))
+            || section.entries().is_empty()
+        {
+            return Err(Error::Render(
+                "alpha section has no declared members".into(),
+            ));
+        }
+        if retained
+            .iter()
+            .any(|existing| existing.display_title == section.display_title)
+        {
+            return Err(Error::Render(format!(
+                "prepared guide: distinct section identities resolve to title {:?}",
+                section.display_title
+            )));
+        }
+        add(&mut counts.entries, count(section.entries().len())?)?;
+        for entry in section.entries() {
+            add(&mut counts.points, u32::from(entry.key.point.is_some()))?;
+            add(&mut counts.lines, u32::from(entry.key.line.is_some()))?;
+            add(&mut counts.fills, u32::from(entry.key.fill.is_some()))?;
+        }
+        let GuideSectionBody::Alpha(body) = &section.body else {
+            return Err(Error::Render("alpha section lost its typed body".into()));
+        };
+        add(
+            &mut counts.source_occurrences,
+            count(body.source_occurrences()?)?,
+        )?;
+        retained.push(section);
+    }
+    Ok(())
+}
+
+fn merge_alpha(
+    sections: &mut Vec<PreparedGuideSection>,
+    incoming: &PreparedGuideSection,
+    context: &str,
+) -> Result<()> {
+    if let Some(existing) = sections
+        .iter_mut()
+        .find(|section| section.identity == incoming.identity)
+    {
+        if existing.display_title != incoming.display_title {
+            return Err(incompatible(context));
+        }
+        let (GuideSectionBody::Alpha(left), GuideSectionBody::Alpha(right)) =
+            (&existing.body, &incoming.body)
+        else {
+            return Err(Error::Render(
+                "alpha section has inconsistent typed bodies".into(),
+            ));
+        };
+        existing.body = GuideSectionBody::Alpha(left.merge(right, context)?);
+    } else {
+        crate::data::source::reserve_source(sections, 1)?;
+        sections.push(incoming.clone());
+    }
+    Ok(())
 }
 
 fn order_entries(entries: &mut [PreparedGuideEntry], order: &[GuideEntryIdentity]) -> Result<()> {

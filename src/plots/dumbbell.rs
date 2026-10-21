@@ -124,6 +124,46 @@ pub(crate) fn intrinsic_body_minimum(
 }
 
 impl DumbbellData {
+    pub(crate) fn alpha_guide(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
+    ) -> crate::Result<()> {
+        use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
+        let endpoints = chart
+            .dumbbell_endpoints_spec()
+            .ok_or_else(|| Error::Render("Dumbbell guide endpoint paints are missing".into()))?;
+        for row in &self.rows {
+            guide.point(
+                AlphaGlyphRole::LeftEndpoint,
+                row.alpha,
+                endpoint_style(chart, theme, endpoints.left_color()),
+                false,
+            )?;
+            guide.point(
+                AlphaGlyphRole::RightEndpoint,
+                row.alpha,
+                endpoint_style(chart, theme, endpoints.right_color()),
+                false,
+            )?;
+            guide.line(
+                AlphaGlyphRole::Line,
+                AlphaUnitKind::Observation,
+                AlphaUnit::observation(row.line_alpha),
+                row.line_alpha.value,
+                theme
+                    .marks
+                    .strokes()
+                    .connectors()
+                    .dumbbell_connector()
+                    .backend_style(),
+                false,
+            )?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn primary_mark_count(&self) -> u128 {
         self.rows.len() as u128
     }

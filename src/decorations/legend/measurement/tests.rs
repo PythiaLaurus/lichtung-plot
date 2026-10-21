@@ -593,6 +593,87 @@ fn scoped_section_measurements_reuse_values_and_invalidate_consumed_inputs() {
     assert_eq!(first, miss());
     assert_eq!(first.reason.address, scope.address);
     assert_color_measurement_cache(&theme);
+    assert_alpha_measurement_cache(&theme);
+}
+
+fn assert_alpha_measurement_cache(theme: &ResolvedTheme) {
+    let prepare = |different: bool, source_row| {
+        let values = crate::alpha::AlphaValues::continuous(
+            crate::NumericValues::new("quality", [0.25, 0.375, 0.75]),
+            (0.0, 1.0),
+            |value| {
+                if different && value.to_bits() == 0.375_f64.to_bits() {
+                    99
+                } else {
+                    0
+                }
+            },
+        )
+        .unwrap()
+        .select([0])
+        .unwrap();
+        let plot = crate::Plot::scatter(
+            crate::NumericValues::new("x", [1.0]),
+            crate::NumericValues::new("y", [1.0]),
+        )
+        .source_rows(crate::SourceRows::new([source_row]).unwrap())
+        .with_alpha(
+            crate::alpha::AlphaTarget::Point,
+            crate::alpha::AlphaEncoding::observations(values),
+        )
+        .erase();
+        PreparedGuide::prepare_for_test(&plot, theme, LegendComposition::Combined)
+            .unwrap()
+            .unwrap()
+    };
+    let descriptor = prepare(false, 100);
+    assert_eq!(descriptor.sections[0].entries().len(), 5);
+    let scope = FitScope::root()
+        .child(AddressRole::OutsideGuideAuto, 0)
+        .unwrap();
+    let original = measure_fixture(&descriptor, (420.0, None), (false, false), theme, &scope);
+    let equal = measure_fixture(
+        &prepare(false, 100),
+        (420.0, None),
+        (false, false),
+        theme,
+        &scope,
+    );
+    assert!(Arc::ptr_eq(&original.layout, &equal.layout));
+    for changed in [prepare(true, 100), prepare(false, 200)] {
+        let changed = measure_fixture(&changed, (420.0, None), (false, false), theme, &scope);
+        assert!(!Arc::ptr_eq(&original.layout, &changed.layout));
+        assert_eq!(
+            (original.layout.width, original.layout.height),
+            (changed.layout.width, changed.layout.height)
+        );
+        assert_eq!(frozen_svg(&original, theme), frozen_svg(&changed, theme));
+    }
+    let uncached = fit::measured(measure_uncached(
+        descriptor,
+        (420.0, None),
+        false,
+        false,
+        theme,
+        &mut false,
+        &scope,
+    ))
+    .unwrap();
+    assert_eq!(frozen_svg(&original, theme), frozen_svg(&uncached, theme));
+    let calls = original.select(20.0, 500.0).unwrap().calls;
+    assert_eq!(
+        calls
+            .iter()
+            .filter_map(
+                |call| if let super::super::LegendCall::Point(_, point) = call {
+                    Some(point.color.alpha())
+                } else {
+                    None
+                }
+            )
+            .collect::<Vec<_>>(),
+        [0; 5]
+    );
 }
 
 fn assert_color_measurement_cache(theme: &ResolvedTheme) {

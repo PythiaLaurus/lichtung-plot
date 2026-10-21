@@ -125,7 +125,7 @@ fn guide_intrinsics(
             GuideSectionBody::ContinuousColor(color) => {
                 Some(super::continuous::intrinsic_width(color, theme, metrics)?)
             }
-            GuideSectionBody::Symbols(_) => None,
+            GuideSectionBody::Symbols(_) | GuideSectionBody::Alpha(_) => None,
         };
         sections.push(SectionIntrinsics {
             title_minimum: LayoutScalar::from_css_pixels(minimum, SpatialRounding::Ceil)?.quanta(),
@@ -385,7 +385,7 @@ fn measure_section(
     inner_width: i64,
     compact: bool,
 ) -> Result<MeasuredSection, PlanError> {
-    if matches!(section.body, GuideSectionBody::Symbols(_)) {
+    if !matches!(section.body, GuideSectionBody::ContinuousColor(_)) {
         count_gaps(section.entries().len())?;
     }
     if intrinsic.title_minimum > inner_width {
@@ -470,7 +470,7 @@ fn measure_section(
         title_occupancy,
         entries,
         color: match &section.body {
-            GuideSectionBody::Symbols(_) => None,
+            GuideSectionBody::Symbols(_) | GuideSectionBody::Alpha(_) => None,
             GuideSectionBody::ContinuousColor(descriptor) => Some(ColorSection {
                 descriptor: Arc::clone(descriptor),
                 content: ColorContent::prepare(

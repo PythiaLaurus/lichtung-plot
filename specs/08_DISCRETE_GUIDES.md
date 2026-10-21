@@ -12,8 +12,10 @@ closure remains with the encompassing scientific-foundation phase.
 The data-alpha extension now uses one `PreparedGuide` for typed symbol sections
 and native continuous-color content, with one common measured envelope, cache,
 font traversal and frozen draw plan (`../docs/unified-guide-envelope.md`). The
-exclusive Discrete/Continuous descriptor and GuideKind are retired. Actual alpha
-explanatory sections and their public cutover remain in spec97.
+exclusive Discrete/Continuous descriptor and GuideKind are retired. Declared alpha
+sections now consume actual members/glyphs from all 49 components
+(`../docs/declared-alpha-sections.md`); complete alpha parent/feedback and public
+cutover remain in spec97.
 
 ## 1. Authority And Boundary
 
@@ -111,8 +113,8 @@ Current surface/owner anchors: `src/kind.rs:174-184`, `src/spec.rs:513-603`,
 
 ### Descriptor, Identities And Counts
 
-The following is the closed private data schema. Names are target internal names;
-they are not compatibility aliases or additional public construction values.
+The following is the closed private data schema. These internal names are not
+compatibility aliases or additional public construction values.
 
 ```rust,ignore
 struct RawField(Arc<str>);
@@ -134,6 +136,7 @@ enum GuideSectionIdentity {
     Literal(LiteralDomain),
     SupplementalSeries,
     ContinuousColor(RawField),
+    Alpha(AlphaSectionIdentity), // raw source field, semantics, target, unit
 }
 enum GuideEntryIdentity {
     Category { field: RawField, value: RawCategory },
@@ -146,6 +149,7 @@ enum GuideEntryIdentity {
     RegressionObservation,
     RegressionFit { band: RegressionBand },
     SupplementalLayer { label: RawLayerLabel },
+    AlphaMember { ordinal: u32 },
 }
 struct PreparedGuideEntry {
     identity: GuideEntryIdentity,
@@ -161,6 +165,7 @@ struct PreparedGuideSection {
 enum GuideSectionBody {
     Symbols(Arc<[PreparedGuideEntry]>),
     ContinuousColor(Arc<ContinuousDescriptor>),
+    Alpha(Arc<PreparedAlphaSection>),
 }
 struct GuideCounts {
     sections: u32,
@@ -194,7 +199,10 @@ allocation lengths convert to usize fallibly. There is no floating cardinality,
 saturating counter or separate resource quota. Points/lines/fills and entries
 count symbol-key components/entries, not source marks or color-body labels.
 Source occurrences count actual retained provenance records, not a fabricated
-group-by-hue product. Primary/pair/layer source counts are counted before
+group-by-hue product. Alpha bodies retain their full declarations, source inputs,
+active role glyphs and actual unit members; their source occurrences count those
+actual component/member records, not repeated example labels. Primary/pair/layer
+source counts are counted before
 projection: a three-pair source has three primary and three pair source keys,
 whether it yields three Combined entries or four Separate entries. The latter
 retains six projection occurrences, two per source pair. Repeated facet/Canvas
@@ -231,9 +239,7 @@ enum GuideEncoding {
     Literal(LiteralDomain),
     SupplementalLayer,
 }
-enum PaintSlot { PointFill, PointOutline, LineStroke, FillPaint, FillOutline }
-enum StyleSlot { PointShape, LinePattern }
-enum PointRole { Primary, RawOverlay, MandatoryStrip, Supplemental }
+enum PointRole { Primary, MandatoryStrip, Supplemental }
 enum FillRole {
     BarBody, BoxBody, ViolinBody, LineBand, RegressionBand,
     DensityArea, MarginalDensity, MatrixDensity,
@@ -242,17 +248,27 @@ enum LineRole {
     SeriesLine, PathLine, DensityLine, InteractionConnector,
     SummaryStroke, RegressionFit,
 }
-enum SourceNeutralPaintRole { Path, BoxFlier }
 enum MarkPaintRole {
     PointFill(PointRole), PointOutline(PointRole),
     FillPaint(FillRole), FillOutline(FillRole), LineStroke(LineRole),
-    Neutral(SourceNeutralPaintRole),
 }
 enum MarkStyleRole { PointShape(PointRole), LinePattern(LineRole) }
 enum RgbBinding {
     Mapped { field: RawField, value: RawCategory },
     Role(MarkPaintRole),
     ExactElement,
+}
+enum AlphaBinding {
+    Role(MarkPaintRole),
+    ExactElement(MarkPaintRole),
+    Data { target: AlphaTarget, unit: AlphaUnitKind, input: AlphaEncoding },
+}
+struct AlphaBindings {
+    point_fill: Option<AlphaBinding>,
+    point_outline: Option<AlphaBinding>,
+    line_stroke: Option<AlphaBinding>,
+    fill_paint: Option<AlphaBinding>,
+    fill_outline: Option<AlphaBinding>,
 }
 enum StyleBinding {
     Role(MarkStyleRole),
@@ -275,11 +291,15 @@ struct GuideKeySource {
     producer: PlotKind,
     contributor_address: ComponentAddress,
     source_ordinal: u32,
-    encoding: GuideEncoding,
-    paint_bindings: PaintBindings,
-    style_bindings: StyleBindings,
+    mapping: SourceMapping,
     projection: Projection,
     group_neutral_rgb: Option<OpaqueColor>,
+}
+struct SourceMapping {
+    encoding: GuideEncoding,
+    paint_bindings: PaintBindings,
+    alpha_bindings: AlphaBindings,
+    style_bindings: StyleBindings,
     layer_label_context: Option<LayerLabelContext>,
 }
 ```
@@ -299,7 +319,16 @@ The final key/mask schema is also closed:
 ```rust,ignore
 enum RgbExplanation { Constant, ExplainedColor, NeutralizedColor }
 enum StyleExplanation { Constant, ExplainedGroup, NeutralizedGroup }
+enum AlphaExplanation { Constant, Neutralized, Explained }
+struct AlphaExplanationMask {
+    point_fill: Option<AlphaExplanation>,
+    point_outline: Option<AlphaExplanation>,
+    line_stroke: Option<AlphaExplanation>,
+    fill_paint: Option<AlphaExplanation>,
+    fill_outline: Option<AlphaExplanation>,
+}
 struct GuideExplanationMask {
+    alpha: AlphaExplanationMask,
     point_fill: Option<RgbExplanation>,
     point_outline: Option<RgbExplanation>,
     line_stroke: Option<RgbExplanation>,
@@ -309,7 +338,7 @@ struct GuideExplanationMask {
     line_pattern: Option<StyleExplanation>,
 }
 enum GuideExplanation {
-    Complete,
+    Complete(AlphaExplanationMask),
     Projected(GuideExplanationMask),
 }
 struct ResolvedGuideKey {
@@ -341,7 +370,8 @@ equality includes this mask and all visible geometry/paints. Source producer/
 address/role names are audit/cache provenance, not a family discriminator for
 merging otherwise equal explanatory keys.
 Merged entries retain admitted immutable source records; no source wins by being
-first. Occurrence records are reused by Arc where identical; copying is charged.
+first. Occurrence records are reused by Arc where identical, with checked storage
+for additional retained records.
 
 Do not store a second flat list of complete pair entries alongside sections.
 Prepared scientific inputs may retain their real observed pair domain for marks;
@@ -377,7 +407,9 @@ cutover; their present numeric defaults are evidence, not new layout constants.
 | Marginal | `PreparedMarginal::{guide_entries,guide_entries_with_colors}` in `src/plots/marginal.rs`; hue-bearing retained collective groups | primary point/marginal radius 3 + marginal_density fill alpha 115, built-in mapped density outline width 1; no density_line component | HueColor, same-field Joint, or UnsupportedPair; standalone and Canvas, not generic facets |
 | Matrix | local `matrix_guide_entries`, `matrix_legend` and `natural_guide_preference` in `src/plots/matrix.rs` | primary point/matrix radius 2 + matrix_density fill alpha 102, built-in mapped density outline width 1; diagonal density and off-diagonal points share raw hue; no density_line component | HueColor, same-field Joint, or UnsupportedPair; Plot-local specialized root only |
 
-The remaining **eight** kinds complete the 25-kind census:
+The remaining **eight** kinds complete the existing category/literal-key census
+below. Declared alpha contributions are independent of these RGB/reference
+contribution conditions and cover all 25 families through their admitted targets.
 
 | Kind | Discrete behavior |
 | --- | --- |
@@ -387,14 +419,15 @@ The remaining **eight** kinds complete the 25-kind census:
 | Coefficient | No discrete contribution, including numeric details/unavailable markers |
 | Forest | No discrete contribution, including Log10 ticks and estimate reference |
 | Waterfall | No discrete contribution; positive/negative accents and totals do not acquire a sign guide |
-| Heatmap | Continuous only; retain ContinuousDescriptor and missing block, never section it |
-| Beeswarm | Continuous only; same continuous boundary |
+| Heatmap | Native continuous-color content and missing block; no categorical RGB keys |
+| Beeswarm | Native continuous-color content; no categorical RGB keys |
 
-`src/layout/interior/guide.rs::PreparedInteriorInputs::guide_entries` exhaustively
-dispatches the 16 parent-capable Legend kinds, six empty cases and two continuous
-errors. Its Matrix error is intentional parent ownership, not absence of a Matrix
-guide. Matrix's local producer must migrate to the same descriptor/materializer;
-it remains excluded from Canvas and generic facets. Marginal remains excluded
+`src/layout/interior/guide.rs::PreparedInteriorInputs::guide_sources` exhaustively
+dispatches the 16 existing parent-capable symbol producers and eight empty RGB-key
+cases. Its Matrix error is intentional parent ownership, not absence of a Matrix
+guide. Matrix's local producer uses the same descriptor/materializer; it remains
+excluded from Canvas and generic facets. The independent `alpha_sections` census
+visits actual prepared components for all 25 families. Marginal remains excluded
 from generic facets. No parent-capability expansion is authorized.
 
 ### Presence And Defaults Are Producer Decisions
@@ -431,9 +464,9 @@ from RGB or from whether projected geometry happens to have positive area.
 
 For GroupStyle projection, replace only RGB of slots bound to the independent
 hue field with RGB of the **owning Plot's resolved**
-`TypographyTheme.guides.legend_label.color`. Keep each original mapped paint's
-alpha. The current private source is `theme.typography.legend_label.paint`;
-spec94's target path is `typography().guides().legend_label().color()`.
+`TypographyTheme.guides.legend_label.color`. Keep role/exact paint alpha; before
+this projection, a data-bound target alpha is independently neutralized to 255
+in every existing context key, including Combined and Undeclared inputs.
 
 For a source fill `(7,114,178,127)` and label paint `(40,50,60,0)`, the group key
 fill is exactly `(40,50,60,127)`. Text alpha 0 is not installed or multiplied.
@@ -450,19 +483,42 @@ alpha. They are never guide-projection neutral roles and do not read text paint.
 
 ### Hue Neutral Style
 
-HueColor projection retains all original final paints and constant geometry.
+HueColor projection retains RGB and constant geometry after the same independent
+data-bound context-alpha neutralization.
 Only slots with an InteractionGroup binding change: mapped PointShape becomes
 Circle; mapped connector LinePattern becomes Solid. The closed substitutions
 are fixed producer explanatory defaults, not whatever a theme's primary shape
 or pattern happens to be. A theme-owned shape/pattern in a hue-only producer is
-not changed. Radius, width, alpha, actual outline absence and fixed outline RGBA
-are never neutralized. Absent components stay absent.
+not changed. Radius, width, independently owned role/exact alpha, actual outline
+absence and fixed outline RGBA are never neutralized. Absent components stay absent.
 
 The projected style can have a different occupied extent from the originating
 style; measure that exact projected glyph. Group triangle and hue circle keys
 need not have equal width/height, but neither may use the other's approximate
 extent. Canvas draws the retained producer key; it cannot recolor a generic key
 with its palette or rebuild these masks after fonts.
+
+### Declared Alpha Symbols
+
+Alpha sections use the common symbol grammar, frame, finite allocation, cache and
+frozen draw plan. Source identity includes raw field, declared semantics, target
+and actual unit. Entries retain declaration ordinals; each source retains its
+complete encoding, structural owner/scope, actual unit members and all active
+role-produced projected glyphs. Source-label RGB neutralizes the explained target
+without borrowing text alpha; mapped group shape/pattern becomes Circle/Solid,
+while fixed geometry and independent outlines remain actual.
+
+Deterministic producer-role order selects an actual component geometry for the
+one-key examples; all active glyphs still participate in Shared compatibility and
+descriptor equality. Continuous declarations retain every stored numeric example,
+including equal/zero output bytes. Categorical/threshold sections retain actual
+consumed members in declaration order, including zero. Shared unions actual
+members only after complete declaration/title/projected-glyph compatibility and
+rejects conflicting aliases before fonts. Undeclared has no explanatory section;
+Hidden skips guide-only aliases and fonts. Neither suppresses scientific binding
+validation. Existing symbols precede continuous-color content and then Point,
+Line and Fill alpha sections; fields within one class keep first contribution
+order. `src/decorations/legend/alpha.rs` owns these private operands.
 
 ### Validation And Identity
 

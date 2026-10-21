@@ -229,6 +229,64 @@ pub(crate) fn prepare(
     })
 }
 
+impl PreparedBoxplot {
+    pub(crate) fn alpha_guide(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
+    ) -> crate::Result<()> {
+        use crate::alpha::AlphaUnitKind;
+        use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
+        let fill = theme.marks.fills().bodies().box_body();
+        let overlay = chart.raw_overlay_spec();
+        for (group, stat) in self.sample.groups.iter().zip(&self.stats) {
+            let unit = AlphaUnit::aggregate(chart, &group.label, group.group_label.as_deref())?;
+            guide.fill(
+                AlphaGlyphRole::Fill,
+                AlphaUnitKind::Aggregate,
+                unit.clone(),
+                group.fill_alpha,
+                fill.backend_style((0, 0, 0)),
+                fill.outline()
+                    .is_some_and(|outline| outline.mapped_width().is_some()),
+            )?;
+            guide.line(
+                AlphaGlyphRole::Summary,
+                AlphaUnitKind::Aggregate,
+                unit,
+                group.line_alpha,
+                theme.marks.strokes().summaries().summary().backend_style(),
+                false,
+            )?;
+            if overlay == RawOverlay::Hidden {
+                let point =
+                    chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().box_flier());
+                for observation in &stat.fliers {
+                    guide.point(
+                        AlphaGlyphRole::Outlier,
+                        observation.alpha,
+                        point.clone(),
+                        false,
+                    )?;
+                }
+            } else {
+                let point =
+                    chart.distribution_point_style(theme.marks.points().raw_overlay(), (0, 0, 0));
+                for observation in &group.observations {
+                    guide.point(
+                        AlphaGlyphRole::RawOverlay,
+                        observation.alpha,
+                        point.clone(),
+                        false,
+                    )?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 pub(crate) fn measure_marks(
     chart: &Plot,
     context: PlotRenderContext<'_>,

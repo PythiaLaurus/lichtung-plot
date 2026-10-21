@@ -178,9 +178,23 @@ fn cell_alpha_retains_original_members_through_normalized_order_and_missing_grid
     .with_alpha(
         AlphaTarget::Fill,
         crate::alpha::AlphaEncoding::observations(
-            crate::alpha::AlphaValues::new("cell confidence", [0, 17, 230, 64]).unwrap(),
+            crate::alpha::AlphaValues::categorical(
+                crate::CategoryValues::new(
+                    "cell confidence",
+                    ["zero", "\u{10ffff}", "high", "mid"],
+                )
+                .unwrap(),
+                |value| match value {
+                    "zero" => 0,
+                    "high" => 230,
+                    "mid" => 64,
+                    _ => 17,
+                },
+            )
+            .unwrap(),
         ),
     )
+    .labels(crate::Labels::raw())
     .erase();
     let prepared = prepare(
         &source,
@@ -235,4 +249,25 @@ fn cell_alpha_retains_original_members_through_normalized_order_and_missing_grid
     );
     assert!(cells[0].cross.is_some());
     assert!(cells[1..].iter().all(|cell| cell.cross.is_none()));
+    let descriptor = selected.discrete_guide.as_ref().unwrap();
+    assert_eq!(descriptor.sections.len(), 2);
+    assert!(matches!(
+        descriptor.sections[0].body,
+        crate::decorations::legend::discrete::GuideSectionBody::ContinuousColor(_)
+    ));
+    assert_eq!(
+        descriptor.sections[1]
+            .entries()
+            .iter()
+            .map(|entry| entry.display_label.as_ref())
+            .collect::<Vec<_>>(),
+        ["zero", "high", "mid"]
+    );
+    let crate::decorations::legend::discrete::GuideSectionBody::Alpha(alpha) =
+        &descriptor.sections[1].body
+    else {
+        panic!("finite-cell alpha section")
+    };
+    assert_eq!(alpha.sources[0].glyphs[0].members.len(), 3);
+    assert_eq!(alpha.sources[0].input.values().unwrap().len(), 4);
 }

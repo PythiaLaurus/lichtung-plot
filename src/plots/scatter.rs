@@ -120,6 +120,24 @@ pub(crate) fn intrinsic_body_minimum(
 }
 
 impl PreparedScatter {
+    pub(crate) fn alpha_guide(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
+    ) -> crate::Result<()> {
+        let style = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().scatter());
+        for point in self.groups.iter().flat_map(|group| &group.points) {
+            guide.point(
+                crate::decorations::legend::alpha::AlphaGlyphRole::Primary,
+                point.alpha,
+                style.clone(),
+                false,
+            )?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn checked_primary_mark_count(&self) -> Result<u128, Error> {
         self.groups.iter().try_fold(0_u128, |count, group| {
             count

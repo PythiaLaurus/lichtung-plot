@@ -63,6 +63,34 @@ pub(crate) struct PreparedMatrixAxes {
 }
 
 impl PreparedMatrixAxes {
+    pub(crate) fn alpha_guide(
+        &self,
+        chart: &Plot,
+        theme: &ResolvedTheme,
+        guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
+    ) -> crate::Result<()> {
+        use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
+        let point = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().matrix());
+        let fill = theme.marks.fills().densities().matrix_density();
+        for group in &self.groups {
+            if self.labels.len() > 1 {
+                for &alpha in &group.alphas {
+                    guide.point(AlphaGlyphRole::Primary, alpha, point.clone(), false)?;
+                }
+            }
+            guide.fill(
+                AlphaGlyphRole::Fill,
+                AlphaUnitKind::Series,
+                AlphaUnit::series(chart, Some(&group.identity))?,
+                group.fill_alpha,
+                fill.backend_style((0, 0, 0)),
+                fill.outline()
+                    .is_some_and(|outline| outline.mapped_width().is_some()),
+            )?;
+        }
+        Ok(())
+    }
+
     fn density_ink(&self, theme: &ResolvedTheme) -> Result<(f64, f64), Error> {
         fill_ink_outset(
             &theme

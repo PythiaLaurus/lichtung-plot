@@ -102,6 +102,41 @@ pub(crate) fn intrinsic_body_minimum(
 }
 
 impl PreparedDensity {
+    pub(crate) fn alpha_guide(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
+    ) -> crate::Result<()> {
+        use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
+        let fill = theme.marks.fills().densities().density_area();
+        for curve in &self.curves {
+            let unit = AlphaUnit::series(chart, Some(&curve.identity))?;
+            guide.line(
+                AlphaGlyphRole::Line,
+                AlphaUnitKind::Series,
+                unit.clone(),
+                curve.line_alpha,
+                theme
+                    .marks
+                    .data_lines()
+                    .density_line()
+                    .backend_style((0, 0, 0)),
+                false,
+            )?;
+            guide.fill(
+                AlphaGlyphRole::Fill,
+                AlphaUnitKind::Series,
+                unit,
+                curve.fill_alpha,
+                fill.backend_style((0, 0, 0)),
+                fill.outline()
+                    .is_some_and(|outline| outline.mapped_width().is_some()),
+            )?;
+        }
+        Ok(())
+    }
+
     fn resolved_colors(
         &self,
         chart: &Plot,
@@ -1064,7 +1099,12 @@ mod tests {
                         .unwrap(),
                     CategoryValues::new("cohort", ["a", "b", "a", "b", "\u{10ffff}"]).unwrap(),
                 ],
-                crate::alpha::AlphaValues::new("confidence", [0, 128, 230, 0, 99]).unwrap(),
+                crate::alpha::AlphaValues::linear(
+                    NumericValues::new("confidence", [0.0, 128.0, 230.0, 0.0, 99.0]),
+                    (0.0, 255.0),
+                    (0, 255),
+                )
+                .unwrap(),
             )
             .unwrap(),
         )
@@ -1076,7 +1116,12 @@ mod tests {
                     CategoryValues::new("panel", ["left", "left", "right", "right", "unused"])
                         .unwrap(),
                 ],
-                crate::alpha::AlphaValues::new("area confidence", [230, 0, 64, 128, 99]).unwrap(),
+                crate::alpha::AlphaValues::linear(
+                    NumericValues::new("area confidence", [230.0, 0.0, 64.0, 128.0, 99.0]),
+                    (0.0, 255.0),
+                    (0, 255),
+                )
+                .unwrap(),
             )
             .unwrap(),
         )
@@ -1143,6 +1188,21 @@ mod tests {
                     .collect::<Vec<_>>(),
                 expected
             );
+            let descriptor = selected.discrete_guide.as_ref().unwrap();
+            let sections = descriptor
+                .sections
+                .iter()
+                .filter_map(|section| match &section.body {
+                    crate::decorations::legend::discrete::GuideSectionBody::Alpha(alpha) => {
+                        Some(alpha)
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(sections.len(), 2);
+            assert!(sections.iter().all(|section| section.entries.len() == 5
+                && section.sources[0].scope.as_deref() == scope.as_deref()
+                && section.sources[0].glyphs[0].members.len() == 2));
         }
         let calls = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
         let incomplete = source.with_alpha(

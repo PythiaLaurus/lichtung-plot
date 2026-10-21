@@ -123,6 +123,57 @@ pub(crate) fn intrinsic_body_minimum(
 }
 
 impl PreparedRaincloud {
+    pub(crate) fn alpha_guide(
+        &self,
+        chart: &Plot,
+        theme: &ResolvedTheme,
+        guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
+    ) -> crate::Result<()> {
+        use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
+        let dimensions = &chart
+            .raincloud_geometry_input()
+            .ok_or_else(|| {
+                Error::Render("supplied Raincloud alpha guide has no dimensions".into())
+            })?
+            .dimensions;
+        let fill = theme.marks.fills().bodies().violin_body();
+        let point =
+            chart.distribution_point_style(theme.marks.points().mandatory_strip(), (0, 0, 0));
+        for group in &self.groups {
+            let category = (
+                dimensions.category.as_str(),
+                group.geometry.category.as_str(),
+            );
+            let unit =
+                if let Some(hue) = dimensions.hue.as_deref().zip(group.geometry.hue.as_deref()) {
+                    AlphaUnit::keyed(&[category, hue])?
+                } else {
+                    AlphaUnit::keyed(&[category])?
+                };
+            guide.fill(
+                AlphaGlyphRole::Fill,
+                AlphaUnitKind::Aggregate,
+                unit.clone(),
+                group.fill_alpha,
+                fill.backend_style((0, 0, 0)),
+                fill.outline()
+                    .is_some_and(|outline| outline.mapped_width().is_some()),
+            )?;
+            guide.line(
+                AlphaGlyphRole::Median,
+                AlphaUnitKind::Aggregate,
+                unit,
+                group.line_alpha,
+                theme.marks.strokes().summaries().median().backend_style(),
+                false,
+            )?;
+            for &alpha in &group.alphas {
+                guide.point(AlphaGlyphRole::MandatoryStrip, alpha, point.clone(), false)?;
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn primary_mark_count(&self) -> u128 {
         self.groups.len() as u128
     }

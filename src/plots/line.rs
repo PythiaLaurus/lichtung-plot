@@ -167,6 +167,58 @@ pub(crate) enum LineMark {
 }
 
 impl PreparedLine {
+    pub(crate) fn alpha_guide(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
+    ) -> crate::Result<()> {
+        use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
+        let line = if chart.kind() == PlotKind::Line {
+            theme.marks.data_lines().series_line()
+        } else {
+            theme.marks.data_lines().path_line()
+        };
+        let radius = if chart.kind() == PlotKind::Line {
+            theme.marks.points().radii().path()
+        } else {
+            theme.marks.points().radii().trajectory()
+        };
+        let point = chart.point_style(theme, (0, 0, 0), radius);
+        let band = theme.marks.fills().bands().line_band();
+        for group in &self.groups {
+            let unit = AlphaUnit::series(chart, group.identity.as_ref())?;
+            guide.line(
+                AlphaGlyphRole::Line,
+                AlphaUnitKind::Series,
+                unit.clone(),
+                group.line_alpha,
+                line.backend_style((0, 0, 0)),
+                false,
+            )?;
+            if chart.kind() == PlotKind::Trajectory || chart.markers_visible() {
+                for vertex in &group.points {
+                    guide.point(AlphaGlyphRole::Primary, vertex.alpha, point.clone(), false)?;
+                }
+            }
+            if chart.kind() == PlotKind::Line
+                && chart.line_band_configured()
+                && group.points.iter().all(|point| point.interval.is_some())
+            {
+                guide.fill(
+                    AlphaGlyphRole::Fill,
+                    AlphaUnitKind::Series,
+                    unit,
+                    group.fill_alpha,
+                    band.backend_style((0, 0, 0)),
+                    band.outline()
+                        .is_some_and(|outline| outline.mapped_width().is_some()),
+                )?;
+            }
+        }
+        Ok(())
+    }
+
     fn resolved_colors(
         &self,
         chart: &Plot,

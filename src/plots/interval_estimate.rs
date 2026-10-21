@@ -36,6 +36,46 @@ pub(crate) struct PreparedEstimateInputs {
 }
 
 impl PreparedEstimate {
+    pub(crate) fn alpha_guide(
+        &self,
+        chart: &Plot,
+        theme: &ResolvedTheme,
+        guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
+    ) -> crate::Result<()> {
+        use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
+        let point = chart.point_style(
+            theme,
+            (0, 0, 0),
+            theme.marks.points().radii().interval_estimate(),
+        );
+        let line = theme
+            .marks
+            .strokes()
+            .summaries()
+            .estimate_interval()
+            .backend_style();
+        for ((row, &alpha), &interval) in self
+            .estimates
+            .iter()
+            .zip(&self.alphas)
+            .zip(&self.line_alphas)
+        {
+            let Some(row) = row else { continue };
+            guide.point(AlphaGlyphRole::Primary, alpha, point.clone(), false)?;
+            if row.lower.zip(row.upper).is_some() {
+                guide.line(
+                    AlphaGlyphRole::Line,
+                    crate::alpha::AlphaUnitKind::Observation,
+                    AlphaUnit::observation(interval),
+                    interval.value,
+                    line.clone(),
+                    false,
+                )?;
+            }
+        }
+        Ok(())
+    }
+
     fn interval_ink(&self, theme: &ResolvedTheme) -> Result<f64, Error> {
         crate::alpha::marks::require_aligned_points(self.estimates.len(), self.line_alphas.len())?;
         let style = theme

@@ -280,6 +280,229 @@ fn shared_numeric_guides_resolve_final_sets_and_reject_equal_text_policy_conflic
             0
         );
     }
+    assert_shared_alpha_declarations();
+    assert_shared_color_and_alpha_sections();
+}
+
+#[expect(
+    clippy::too_many_lines,
+    reason = "one Shared declaration contract checks actual union members, Hidden, aliases and complete custom recipes before fonts"
+)]
+fn assert_shared_alpha_declarations() {
+    use crate::alpha::{AlphaEncoding, AlphaTarget, AlphaValues};
+    use crate::decorations::legend::discrete::GuideSectionBody;
+    let values = AlphaValues::categorical(
+        crate::CategoryValues::new("quality", ["low", "high", "\u{10ffff}"]).unwrap(),
+        |value| match value {
+            "low" => 0,
+            "high" => 230,
+            _ => 17,
+        },
+    )
+    .unwrap();
+    let scatter = |values| {
+        Plot::scatter(
+            crate::NumericValues::new("x", [0.5]),
+            crate::NumericValues::new("y", [0.5]),
+        )
+        .labels(crate::Labels::raw())
+        .x_limits(0.0, 1.0)
+        .y_limits(0.0, 1.0)
+        .with_alpha(AlphaTarget::Point, AlphaEncoding::observations(values))
+    };
+    let shared = |first, second| {
+        Canvas::grid(1, 2)
+            .unwrap()
+            .size(1200, 700)
+            .legend_policy(CanvasLegendPolicy::Shared)
+            .panel(0, 0, first)
+            .unwrap()
+            .panel(0, 1, second)
+            .unwrap()
+    };
+    let root = shared(
+        scatter(values.select([0]).unwrap()),
+        scatter(values.select([1]).unwrap()),
+    )
+    .preflight_plan()
+    .unwrap();
+    let descriptor = root.prepared().shared_guide.as_ref().unwrap();
+    assert_eq!(descriptor.sections.len(), 1);
+    assert_eq!(
+        descriptor.sections[0]
+            .entries()
+            .iter()
+            .map(|entry| entry.display_label.as_ref())
+            .collect::<Vec<_>>(),
+        ["low", "high"]
+    );
+    let GuideSectionBody::Alpha(body) = &descriptor.sections[0].body else {
+        panic!("Shared alpha body")
+    };
+    assert_eq!(body.sources.len(), 2);
+    assert_eq!(
+        body.sources
+            .iter()
+            .map(|source| source.glyphs[0].members[0].value.alpha)
+            .collect::<Vec<_>>(),
+        [0, 230]
+    );
+    assert!(root
+        .plan()
+        .retained_text()
+        .iter()
+        .all(|(_, text)| !text.source.contains('\u{10ffff}')));
+    Canvas::grid(1, 1)
+        .unwrap()
+        .size(600, 400)
+        .legend_policy(CanvasLegendPolicy::Hidden)
+        .panel(0, 0, scatter(values.select([2]).unwrap()))
+        .unwrap()
+        .preflight_plan()
+        .unwrap();
+    let labels = crate::Labels::raw()
+        .alias("low", "same")
+        .alias("high", "same");
+    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+    let error = shared(
+        scatter(values.select([0]).unwrap()).labels(labels.clone()),
+        scatter(values.select([1]).unwrap()).labels(labels),
+    )
+    .preflight_plan()
+    .err()
+    .expect("distinct alpha categories cannot collapse in Shared text");
+    assert!(error
+        .to_string()
+        .contains("distinct declared alpha members"));
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        0
+    );
+    let custom = |different| {
+        AlphaValues::continuous(
+            crate::NumericValues::new("quality", [0.25, 0.375, 0.75]),
+            (0.0, 1.0),
+            |value| {
+                if different && value.to_bits() == 0.375_f64.to_bits() {
+                    99
+                } else {
+                    0
+                }
+            },
+        )
+        .unwrap()
+        .select([0])
+        .unwrap()
+    };
+    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+    let error = shared(scatter(custom(false)), scatter(custom(true)))
+        .preflight_plan()
+        .err()
+        .expect("unequal complete custom recipes");
+    assert!(error.to_string().contains("alpha declarations"));
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        0
+    );
+}
+
+fn assert_shared_color_and_alpha_sections() {
+    use crate::alpha::{AlphaEncoding, AlphaTarget, AlphaValues};
+    use crate::decorations::legend::discrete::{GuideSectionBody, GuideSectionIdentity};
+    let values = |source| {
+        AlphaValues::linear(
+            crate::NumericValues::new("quality", source),
+            (0.0, 1.0),
+            (0, 255),
+        )
+        .unwrap()
+    };
+    let base = Theme::publication();
+    let label = base
+        .typography()
+        .guides()
+        .legend_label()
+        .clone()
+        .with_color(crate::Color::rgba(11, 22, 33, 0))
+        .unwrap();
+    let guides = base
+        .typography()
+        .guides()
+        .clone()
+        .with_legend_label(label)
+        .unwrap();
+    let typography = base.typography().clone().with_guides(guides).unwrap();
+    let source_theme = base
+        .customize()
+        .with_typography(typography)
+        .build()
+        .unwrap();
+    let points = Plot::scatter(
+        crate::NumericValues::new("x", [0.5, 0.75]),
+        crate::NumericValues::new("y", [0.5, 0.75]),
+    )
+    .theme(source_theme.clone())
+    .x_limits(0.0, 1.0)
+    .y_limits(0.0, 1.0)
+    .with_alpha(
+        AlphaTarget::Point,
+        AlphaEncoding::observations(values([0.25, 0.75])),
+    );
+    let cells = Plot::heatmap(
+        crate::CategoryValues::new("x", ["A", "B"]).unwrap(),
+        crate::CategoryValues::new("y", ["row", "row"]).unwrap(),
+        crate::NumericValues::new("signal", [0.0, 1.0]),
+    )
+    .theme(source_theme)
+    .with_alpha(
+        AlphaTarget::Fill,
+        AlphaEncoding::observations(values([0.0, 1.0])),
+    );
+    let root = Canvas::grid(1, 2)
+        .unwrap()
+        .size(1400, 800)
+        .legend_policy(CanvasLegendPolicy::Shared)
+        .panel(0, 0, points)
+        .unwrap()
+        .panel(0, 1, cells)
+        .unwrap()
+        .preflight_plan()
+        .unwrap();
+    let descriptor = root.prepared().shared_guide.as_ref().unwrap();
+    assert_eq!(descriptor.sections.len(), 3);
+    assert!(matches!(
+        descriptor.sections[0].body,
+        GuideSectionBody::ContinuousColor(_)
+    ));
+    let targets = descriptor.sections[1..]
+        .iter()
+        .map(|section| {
+            let GuideSectionIdentity::Alpha(identity) = &section.identity else {
+                panic!("alpha follows color content")
+            };
+            identity.target
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(targets, [AlphaTarget::Point, AlphaTarget::Fill]);
+    for section in &descriptor.sections[1..] {
+        let GuideSectionBody::Alpha(alpha) = &section.body else {
+            unreachable!()
+        };
+        assert!(alpha
+            .sources
+            .iter()
+            .all(|source| source.neutral == crate::OpaqueColor::rgb(11, 22, 33)));
+    }
+    let before = capture_counters();
+    let mut svg = root.plan().take_svg_backend().unwrap();
+    root.plan()
+        .replay(1400, 800, &mut svg, "typed Shared color and alpha")
+        .unwrap();
+    let svg = String::from_utf8(svg.into_bytes().unwrap()).unwrap();
+    assert_eq!(svg.matches("<linearGradient").count(), 1);
+    assert_eq!(svg.matches("id=\"canvas-shared-legend\"").count(), 1);
+    assert_eq!(svg.matches("fill=\"#0B1621\"").count(), 10);
+    assert_eq!(capture_counters(), before);
 }
 
 #[test]
