@@ -1,7 +1,7 @@
 use super::*;
 use crate::decorations::legend::source::{
-    FillRole, GuideEncoding, GuideExplanation, MarkPaintRole, PointRole, RgbBinding,
-    RgbExplanation, StyleBinding, StyleExplanation,
+    AlphaBinding, AlphaExplanation, FillRole, GuideEncoding, GuideExplanation, MarkPaintRole,
+    PointRole, RgbBinding, RgbExplanation, StyleBinding, StyleExplanation,
 };
 use crate::{CategoryValues, Color, NumericValues, Plot};
 
@@ -143,10 +143,81 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
         (1, 2)
     );
     assert_outline_explanations(&projected_mapped, &projected_fixed, entry, fixed_entry);
+    assert_bar_alpha_context(&plot, &mut theme);
     assert_eq!(
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
         0
     );
+}
+
+fn assert_bar_alpha_context(plot: &Plot, theme: &mut crate::theme::ResolvedTheme) {
+    use crate::alpha::{AlphaEncoding, AlphaTarget, AlphaUnitKind, AlphaValues};
+    let body = theme
+        .marks
+        .fills()
+        .bodies()
+        .bar_body()
+        .clone()
+        .with_fill_alpha(255)
+        .unwrap();
+    bar_fill(theme, body);
+    let mapped = plot.clone().with_alpha(
+        AlphaTarget::Fill,
+        AlphaEncoding::keyed(
+            [
+                CategoryValues::new("category", ["one", "two"]).unwrap(),
+                CategoryValues::new("cohort", ["seen", "seen"]).unwrap(),
+            ],
+            AlphaValues::new("confidence", [0, 128]).unwrap(),
+        )
+        .unwrap(),
+    );
+    for composition in [LegendComposition::Combined, LegendComposition::Separate] {
+        let constant = PreparedDiscreteGuide::prepare_for_test(plot, theme, composition)
+            .unwrap()
+            .unwrap();
+        let data = PreparedDiscreteGuide::prepare_for_test(&mapped, theme, composition)
+            .unwrap()
+            .unwrap();
+        assert_eq!(data.counts.sections, 1);
+        assert_eq!(data.counts.entries, 1);
+        let constant_key = &constant.sections[0].entries[0].key;
+        let entry = &data.sections[0].entries[0];
+        let constant_fill = constant_key.fill.as_ref().unwrap();
+        let data_fill = entry.key.fill.as_ref().unwrap();
+        assert_eq!(constant_fill.color, data_fill.color);
+        assert_eq!(constant_fill.stroke, data_fill.stroke);
+        assert_eq!(
+            constant_fill.stroke_width.to_bits(),
+            data_fill.stroke_width.to_bits()
+        );
+        assert_ne!(constant_key, &entry.key);
+        assert_eq!(entry.key.fill.as_ref().unwrap().color.alpha(), 255);
+        assert_eq!(entry.key.fill.as_ref().unwrap().stroke.alpha(), 211);
+        let alpha = match &entry.key.explanation {
+            GuideExplanation::Complete(alpha) => alpha,
+            GuideExplanation::Projected(mask) => &mask.alpha,
+        };
+        assert_eq!(alpha.fill_paint, Some(AlphaExplanation::Neutralized));
+        assert_eq!(alpha.fill_outline, Some(AlphaExplanation::Constant));
+        let Some(AlphaBinding::Data {
+            target: AlphaTarget::Fill,
+            unit: AlphaUnitKind::Aggregate,
+            input,
+        }) = &entry.sources[0].mapping.alpha_bindings.fill_paint
+        else {
+            panic!("explicit aggregate fill binding")
+        };
+        assert_eq!(input, mapped.alpha_inputs().get(AlphaTarget::Fill));
+        assert!(PreparedDiscreteGuide::merge(
+            [&constant, &data],
+            &[],
+            "alpha-context compatibility"
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("explanation mask"));
+    }
 }
 
 fn assert_outline_explanations(
@@ -470,6 +541,7 @@ fn prepared_interaction_bindings_retain_exact_point_outlines_and_actual_group_st
     let projected_inputs = separate_inputs(&plot, &theme);
     assert_eq!(guide(&projected_inputs), &projected);
     assert_projected_interaction(&projected, outline_paint);
+    assert_interaction_alpha_context(&plot, &theme, outline_paint);
     let unconfigured = interaction_input().legend_composition(LegendComposition::Separate);
     let error = unconfigured.clone().preflight().unwrap_err();
     assert!(error
@@ -497,7 +569,7 @@ fn prepared_interaction_bindings_retain_exact_point_outlines_and_actual_group_st
     assert!(joint.sections[0]
         .entries
         .iter()
-        .all(|entry| entry.key.explanation == GuideExplanation::Complete));
+        .all(|entry| matches!(entry.key.explanation, GuideExplanation::Complete(_))));
     let ambiguous = interaction().labels(
         crate::Labels::raw()
             .alias("group", "Shared title")
@@ -540,5 +612,65 @@ fn prepared_interaction_bindings_retain_exact_point_outlines_and_actual_group_st
         )
         .unwrap();
         assert!(outline.backend_style().width_for_radius(1).is_err());
+    }
+}
+
+fn assert_interaction_alpha_context(
+    plot: &Plot,
+    theme: &crate::theme::ResolvedTheme,
+    outline: Color,
+) {
+    use crate::alpha::{AlphaEncoding, AlphaTarget, AlphaValues};
+    let mapped = plot
+        .clone()
+        .with_alpha(
+            AlphaTarget::Point,
+            AlphaEncoding::observations(
+                AlphaValues::new("confidence", [0, 17, 64, 128, 230]).unwrap(),
+            ),
+        )
+        .with_alpha(
+            AlphaTarget::Line,
+            AlphaEncoding::keyed(
+                [
+                    CategoryValues::new("group", ["one", "one", "two"]).unwrap(),
+                    CategoryValues::new("hue", ["control", "treated", "treated"]).unwrap(),
+                ],
+                AlphaValues::new("trace confidence", [0, 64, 128]).unwrap(),
+            )
+            .unwrap(),
+        );
+    for composition in [LegendComposition::Combined, LegendComposition::Separate] {
+        let guide = PreparedDiscreteGuide::prepare_for_test(&mapped, theme, composition)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            guide.counts.sections,
+            if composition == LegendComposition::Combined {
+                1
+            } else {
+                2
+            }
+        );
+        for section in guide.sections.iter() {
+            for entry in section.entries.iter() {
+                let point = entry.key.point.as_ref().unwrap();
+                let line = entry.key.line.as_ref().unwrap();
+                assert_eq!(point.color.alpha(), 255);
+                assert_eq!(line.color.alpha(), 255);
+                assert_eq!(point.outline.as_ref().unwrap().color, outline);
+                let alpha = match &entry.key.explanation {
+                    GuideExplanation::Complete(alpha) => alpha,
+                    GuideExplanation::Projected(mask) => &mask.alpha,
+                };
+                assert_eq!(alpha.point_fill, Some(AlphaExplanation::Neutralized));
+                assert_eq!(alpha.line_stroke, Some(AlphaExplanation::Neutralized));
+                assert_eq!(alpha.point_outline, Some(AlphaExplanation::Constant));
+                if matches!(section.identity, GuideSectionIdentity::GroupStyle(_)) {
+                    assert_eq!(point.color, Color::rgb(40, 50, 60));
+                    assert_eq!(line.color, Color::rgb(40, 50, 60));
+                }
+            }
+        }
     }
 }

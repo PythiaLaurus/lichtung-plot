@@ -190,8 +190,17 @@ impl ResolvedGuideKey {
 
     #[cfg(test)]
     pub(crate) fn point(point: PointStyle) -> Self {
+        let alpha = source::AlphaExplanationMask {
+            point_fill: Some(source::AlphaExplanation::Constant),
+            point_outline: point
+                .outline
+                .as_ref()
+                .map(|_| source::AlphaExplanation::Constant),
+            ..source::AlphaExplanationMask::default()
+        };
         Self {
             point: Some(point),
+            explanation: source::GuideExplanation::Complete(alpha),
             ..Self::default()
         }
     }

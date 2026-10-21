@@ -3,6 +3,7 @@
 
 use super::identity::{GuideEntryIdentity, RawCategory, RawField};
 use super::ResolvedGuideKey;
+use crate::alpha::{AlphaEncoding, AlphaTarget, AlphaUnitKind};
 use crate::render::backend::{LineStyle, PointStyle};
 use crate::{Error, Plot, Result};
 
@@ -76,6 +77,62 @@ pub(crate) enum RgbBinding {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum AlphaBinding {
+    Role(MarkPaintRole),
+    ExactElement(MarkPaintRole),
+    Data {
+        target: AlphaTarget,
+        unit: AlphaUnitKind,
+        input: AlphaEncoding,
+    },
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct AlphaBindings {
+    pub(super) point_fill: Option<AlphaBinding>,
+    pub(super) point_outline: Option<AlphaBinding>,
+    pub(super) line_stroke: Option<AlphaBinding>,
+    pub(super) fill_paint: Option<AlphaBinding>,
+    pub(super) fill_outline: Option<AlphaBinding>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AlphaExplanation {
+    Constant,
+    Neutralized,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct AlphaExplanationMask {
+    pub(super) point_fill: Option<AlphaExplanation>,
+    pub(super) point_outline: Option<AlphaExplanation>,
+    pub(super) line_stroke: Option<AlphaExplanation>,
+    pub(super) fill_paint: Option<AlphaExplanation>,
+    pub(super) fill_outline: Option<AlphaExplanation>,
+}
+
+impl AlphaBindings {
+    pub(super) fn explanation(&self) -> AlphaExplanationMask {
+        let selected = |binding: &Option<AlphaBinding>| {
+            binding.as_ref().map(|binding| {
+                if matches!(binding, AlphaBinding::Data { .. }) {
+                    AlphaExplanation::Neutralized
+                } else {
+                    AlphaExplanation::Constant
+                }
+            })
+        };
+        AlphaExplanationMask {
+            point_fill: selected(&self.point_fill),
+            point_outline: selected(&self.point_outline),
+            line_stroke: selected(&self.line_stroke),
+            fill_paint: selected(&self.fill_paint),
+            fill_outline: selected(&self.fill_outline),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum StyleBinding {
     Role(MarkStyleRole),
     InteractionGroup { field: RawField, value: RawCategory },
@@ -119,6 +176,7 @@ pub(crate) enum StyleExplanation {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GuideExplanationMask {
+    pub(super) alpha: AlphaExplanationMask,
     pub(super) point_fill: Option<RgbExplanation>,
     pub(super) point_outline: Option<RgbExplanation>,
     pub(super) line_stroke: Option<RgbExplanation>,
@@ -128,11 +186,16 @@ pub(crate) struct GuideExplanationMask {
     pub(super) line_pattern: Option<StyleExplanation>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum GuideExplanation {
-    #[default]
-    Complete,
+    Complete(AlphaExplanationMask),
     Projected(GuideExplanationMask),
+}
+
+impl Default for GuideExplanation {
+    fn default() -> Self {
+        Self::Complete(AlphaExplanationMask::default())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -155,6 +218,7 @@ impl LayerLabelContext {
 pub(crate) struct SourceMapping {
     pub(super) encoding: GuideEncoding,
     pub(super) paint_bindings: PaintBindings,
+    pub(super) alpha_bindings: AlphaBindings,
     pub(super) style_bindings: StyleBindings,
     pub(super) layer_label_context: Option<LayerLabelContext>,
 }
@@ -176,6 +240,7 @@ impl GuideSourceKey {
             mapping: SourceMapping {
                 encoding,
                 paint_bindings: PaintBindings::default(),
+                alpha_bindings: AlphaBindings::default(),
                 style_bindings: StyleBindings::default(),
                 layer_label_context: None,
             },
@@ -274,6 +339,12 @@ impl GuideSourceKey {
     }
 
     pub(crate) fn with_point(mut self, point: PointStyle, role: PointRole) -> Self {
+        self.mapping.alpha_bindings.point_fill =
+            Some(AlphaBinding::Role(MarkPaintRole::PointFill(role)));
+        self.mapping.alpha_bindings.point_outline = point
+            .outline
+            .as_ref()
+            .map(|_| AlphaBinding::Role(MarkPaintRole::PointOutline(role)));
         self.mapping.paint_bindings.point_fill = Some(self.rgb(MarkPaintRole::PointFill(role)));
         self.mapping.paint_bindings.point_outline = point
             .outline
@@ -282,20 +353,28 @@ impl GuideSourceKey {
         self.mapping.style_bindings.point_shape =
             Some(StyleBinding::Role(MarkStyleRole::PointShape(role)));
         self.key.point = Some(point);
+        self.key.explanation =
+            GuideExplanation::Complete(self.mapping.alpha_bindings.explanation());
         self
     }
 
     pub(crate) fn with_exact_point(self, point: PointStyle, role: PointRole) -> Self {
         let mut key = self.with_point(point, role);
         key.mapping.paint_bindings.point_fill = Some(RgbBinding::ExactElement);
+        key.mapping.alpha_bindings.point_fill =
+            Some(AlphaBinding::ExactElement(MarkPaintRole::PointFill(role)));
         key
     }
 
     pub(crate) fn with_line(mut self, line: LineStyle, role: LineRole) -> Self {
+        self.mapping.alpha_bindings.line_stroke =
+            Some(AlphaBinding::Role(MarkPaintRole::LineStroke(role)));
         self.mapping.paint_bindings.line_stroke = Some(self.rgb(MarkPaintRole::LineStroke(role)));
         self.mapping.style_bindings.line_pattern =
             Some(StyleBinding::Role(MarkStyleRole::LinePattern(role)));
         self.key.line = Some(line);
+        self.key.explanation =
+            GuideExplanation::Complete(self.mapping.alpha_bindings.explanation());
         self
     }
 
@@ -321,6 +400,13 @@ impl GuideSourceKey {
             }
         });
         self.key.fill = Some(fill.backend_style(color));
+        self.mapping.alpha_bindings.fill_paint =
+            Some(AlphaBinding::Role(MarkPaintRole::FillPaint(role)));
+        self.mapping.alpha_bindings.fill_outline = fill
+            .outline()
+            .map(|_| AlphaBinding::Role(MarkPaintRole::FillOutline(role)));
+        self.key.explanation =
+            GuideExplanation::Complete(self.mapping.alpha_bindings.explanation());
         self
     }
 
@@ -376,6 +462,18 @@ impl GuideSourceKey {
             ));
         }
         self.validate_encoding()?;
+        let alpha = &self.mapping.alpha_bindings;
+        if paints.point_fill.is_some() != alpha.point_fill.is_some()
+            || paints.point_outline.is_some() != alpha.point_outline.is_some()
+            || paints.line_stroke.is_some() != alpha.line_stroke.is_some()
+            || paints.fill_paint.is_some() != alpha.fill_paint.is_some()
+            || paints.fill_outline.is_some() != alpha.fill_outline.is_some()
+            || self.key.explanation != GuideExplanation::Complete(alpha.explanation())
+        {
+            return Err(invalid(
+                "alpha bindings do not match actual complete key components",
+            ));
+        }
         if self
             .mapping
             .style_bindings
@@ -391,6 +489,27 @@ impl GuideSourceKey {
             ));
         }
         self.validate_bindings()
+    }
+
+    pub(super) fn bind_alpha(&mut self, plot: &Plot) -> Result<()> {
+        let bindings = &mut self.mapping.alpha_bindings;
+        bind_alpha(
+            &mut bindings.point_fill,
+            self.key.point.as_mut().map(|point| &mut point.color),
+            plot,
+        )?;
+        bind_alpha(
+            &mut bindings.line_stroke,
+            self.key.line.as_mut().map(|line| &mut line.color),
+            plot,
+        )?;
+        bind_alpha(
+            &mut bindings.fill_paint,
+            self.key.fill.as_mut().map(|fill| &mut fill.color),
+            plot,
+        )?;
+        self.key.explanation = GuideExplanation::Complete(bindings.explanation());
+        Ok(())
     }
 
     fn validate_encoding(&self) -> Result<()> {
@@ -501,6 +620,64 @@ impl GuideSourceKey {
         }
         Ok(())
     }
+}
+
+fn bind_alpha(
+    binding: &mut Option<AlphaBinding>,
+    paint: Option<&mut crate::Color>,
+    plot: &Plot,
+) -> Result<()> {
+    let Some(binding) = binding else {
+        return Ok(());
+    };
+    let (AlphaBinding::Role(role) | AlphaBinding::ExactElement(role)) = binding else {
+        return Err(invalid("data-alpha binding was installed more than once"));
+    };
+    let selected = match role {
+        MarkPaintRole::PointFill(PointRole::Primary | PointRole::MandatoryStrip) => {
+            Some((AlphaTarget::Point, AlphaUnitKind::Observation))
+        }
+        MarkPaintRole::LineStroke(role) => Some((
+            AlphaTarget::Line,
+            match role {
+                LineRole::SeriesLine
+                | LineRole::PathLine
+                | LineRole::DensityLine
+                | LineRole::InteractionConnector => AlphaUnitKind::Series,
+                LineRole::SummaryStroke => AlphaUnitKind::Aggregate,
+                LineRole::RegressionFit => AlphaUnitKind::Single,
+            },
+        )),
+        MarkPaintRole::FillPaint(role) => Some((
+            AlphaTarget::Fill,
+            match role {
+                FillRole::BarBody | FillRole::BoxBody | FillRole::ViolinBody => {
+                    AlphaUnitKind::Aggregate
+                }
+                FillRole::LineBand
+                | FillRole::DensityArea
+                | FillRole::MarginalDensity
+                | FillRole::MatrixDensity => AlphaUnitKind::Series,
+                FillRole::RegressionBand => AlphaUnitKind::Single,
+            },
+        )),
+        MarkPaintRole::PointFill(PointRole::Supplemental)
+        | MarkPaintRole::PointOutline(_)
+        | MarkPaintRole::FillOutline(_) => None,
+    };
+    if let Some((target, unit)) = selected {
+        let input = plot.alpha_inputs().get(target);
+        if !input.is_theme() {
+            let paint = paint.ok_or_else(|| invalid("data-alpha binding has no actual paint"))?;
+            *paint = paint.with_alpha(255);
+            *binding = AlphaBinding::Data {
+                target,
+                unit,
+                input: input.clone(),
+            };
+        }
+    }
+    Ok(())
 }
 
 fn invalid(detail: &str) -> Error {

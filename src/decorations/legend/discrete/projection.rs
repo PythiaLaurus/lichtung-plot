@@ -14,7 +14,7 @@ pub(super) fn project(
     projection: Projection,
     neutral: Option<OpaqueColor>,
 ) -> Result<ResolvedGuideKey> {
-    if complete.explanation != GuideExplanation::Complete {
+    if !matches!(complete.explanation, GuideExplanation::Complete(_)) {
         return Err(Error::Render(
             "guide projection requires a complete source key".into(),
         ));
@@ -81,6 +81,7 @@ pub(super) fn project(
             .pattern = crate::StrokePattern::Solid;
     }
     key.explanation = GuideExplanation::Projected(GuideExplanationMask {
+        alpha: source.alpha_bindings.explanation(),
         point_fill,
         point_outline,
         line_stroke,

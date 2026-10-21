@@ -76,7 +76,7 @@ impl GuideSectionIdentity {
                 source.projection != projection
                     || source.group_neutral_rgb.is_some() != (projection == Projection::GroupStyle)
             })
-            || matches!(entry.key.explanation, GuideExplanation::Complete)
+            || matches!(entry.key.explanation, GuideExplanation::Complete(_))
                 != (projection == Projection::Complete)
         {
             return Err(Error::Render(
@@ -118,7 +118,8 @@ impl PreparedDiscreteGuide {
         };
         let mut counts = GuideCounts::default();
         let mut sections = Vec::new();
-        for (ordinal, source) in keys.into_iter().enumerate() {
+        for (ordinal, mut source) in keys.into_iter().enumerate() {
+            source.bind_alpha(plot)?;
             source.validate(plot)?;
             if source.identity.primary_title().is_some() {
                 add(&mut counts.primary_source_keys, 1)?;

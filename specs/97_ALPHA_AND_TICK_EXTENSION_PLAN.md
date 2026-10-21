@@ -4,7 +4,8 @@
 bounded sources, public cutover and focused parent/root/frozen-output closure.
 Data-alpha source-backed design, private owned mapping values and explicit
 binding/source-slot preparation and all 49 actual mark consumers are COMPLETE;
-guides, public cutover and integrated release verification remain PENDING.
+guide provenance/projection is IN PROGRESS; unified explanations, public cutover
+and integrated release verification remain PENDING.
 
 ## Authority And Recorded Decision
 
@@ -193,8 +194,9 @@ and focused closure; split behavioral leaves further when needed.
 | T6D1c | COMPLETE | T6D1b | All 17 observation/estimate/strip/native point consumers and paint-aware intrinsic/ink; receipts below and `../docs/alpha-native-points.md` |
 | T6D1d | COMPLETE | T6D1c | All 17 Single/record/series/aggregate scientific stroke consumers and final-paint intrinsic/ink; receipts below and `../docs/alpha-aggregate-strokes.md` |
 | T6D1e | COMPLETE | T6D1d | All 15 aggregate, cell, exact-bin, band, native and supplied-fill consumers; fill receipts below |
-| T6D2 | PENDING | T6D1 | Declared automatic guides, parent transport, census and identities |
-| T6D2a | PENDING | T6D1 | Sole typed guide envelope, actual alpha descriptors/projections and exclusive-kind retirement |
+| T6D2 | IN PROGRESS | T6D1 | Declared automatic guides, parent transport, census and identities |
+| T6D2a | IN PROGRESS | T6D1 | Existing-key alpha provenance/neutralization complete below; sole typed guide envelope, actual alpha explanations and exclusive-kind retirement remain |
+| T6D2a1 | COMPLETE | T6D1 | Typed per-paint alpha bindings and complete/projected masks; data-bound alpha neutralization in existing Combined/Separate contexts; `../docs/alpha-guide-paint-bindings.md` |
 | T6D2b | PENDING | T6D2a | Common section measurement/freeze, scoped parent ownership, cache/height/feedback and font census |
 | T6D3 | PENDING | T6D2 | Atomic public API/caller/current-contract migration |
 | T6D4 | PENDING | T6D3 | Full admitted-family/parent/root/frozen-output evidence |
@@ -234,6 +236,14 @@ bins, original finite Heatmap cells and Waterfall deltas complete all fifteen in
 complete Heatmap intrinsic alpha identity. This closes T6D1's private mark
 consumers; unified automatic guides/parents, public cutover and integrated
 verification remain subsequent leaves.
+
+Guide source provenance and existing-key projections are connected in
+`../docs/alpha-guide-paint-bindings.md`: complete immutable data inputs and semantic
+units, independently owned role/exact paints, and typed alpha explanation masks.
+Both existing compositions neutralize data-bound context alpha without inventing
+an Undeclared explanation. Sole unified sections, actual alpha member/glyph census,
+common continuous/symbol measurement and parent/feedback/public closure keep T6D2
+IN PROGRESS.
 
 Do not start a code leaf while its exact owning design is still pending. Use modern
 Rust module layout, the standalone offline renderer and existing pinned dependencies.
