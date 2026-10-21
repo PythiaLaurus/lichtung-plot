@@ -57,6 +57,45 @@ impl FormattedSet {
     }
 }
 
+/// One whole-set pre-font label policy for color and alpha explanations.
+/// Repeated scientific values may share text; distinct finite values may not.
+pub(crate) fn guide_presentation(
+    values: &[f64],
+    format: Option<&NumericFormat>,
+) -> Result<FormattedSet> {
+    if values.iter().any(|value| !value.is_finite()) {
+        return Err(Error::Data("numeric guide values must be finite".into()));
+    }
+    if let Some(format) = format {
+        return format.format_set(values, false, true)?.ok_or_else(|| {
+            Error::Data("numeric guide labels are not unique at configured precision".into())
+        });
+    }
+    let mut order = crate::data::source::collect_source((0..values.len()).map(Ok))?;
+    for precision in std::iter::once(0).chain(2..=17) {
+        let profile =
+            super::profiles::BuiltinProfile::Automatic((precision != 0).then_some(precision));
+        let labels =
+            crate::data::source::collect_source(values.iter().map(|value| profile.format(*value)))?;
+        crate::data::source::sort_source_by(&mut order, |a, b| labels[*a].cmp(&labels[*b]));
+        if order.windows(2).all(|pair| {
+            labels[pair[0]] != labels[pair[1]]
+                || scientifically_equal(values[pair[0]], values[pair[1]])
+        }) {
+            return Ok(FormattedSet {
+                members: crate::data::source::collect_source(
+                    values.iter().map(|value| Ok(value.to_bits())),
+                )?,
+                labels,
+                precision,
+            });
+        }
+    }
+    Err(Error::Data(
+        "numeric guide labels are not unique at supported numeric precisions".into(),
+    ))
+}
+
 impl NumericFormat {
     pub(crate) fn format_singleton(&self, value: f64, power: bool) -> Result<String> {
         self.format_selected(

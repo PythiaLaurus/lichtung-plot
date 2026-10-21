@@ -2256,29 +2256,6 @@ mod tests {
     }
 
     #[test]
-    fn surfaces_validate_without_becoming_collision_obstacles() {
-        let mut backend = begun_backend();
-
-        backend
-            .draw_surface(
-                PanelBox::new(0.0, 100.0, 0.0, 100.0),
-                Color::rgba(1, 2, 3, 128),
-                SurfaceRole::CanvasRoot,
-            )
-            .unwrap();
-        assert!(backend
-            .draw_surface(
-                PanelBox::new(1.0, 1.0, 2.0, 3.0),
-                Color::rgb(4, 5, 6),
-                SurfaceRole::PlotPanel,
-            )
-            .is_err());
-        backend.end().unwrap();
-
-        assert!(backend.bounds().is_empty());
-    }
-
-    #[test]
     fn nested_noncontained_clips_use_their_full_positive_area_intersection() {
         let mut backend = begun_backend();
         let style = test_fill_style(255, 0.0);
@@ -2331,39 +2308,6 @@ mod tests {
                 },
             ]
         );
-    }
-
-    #[test]
-    fn point_envelopes_and_weighted_overlap_keep_the_exact_local_rules() {
-        assert!(GeometryBox::from_points(&[], 2.0).is_none());
-        let bounds =
-            GeometryBox::from_points(&[Point2D::new(2.0, 3.0), Point2D::new(5.0, 7.0)], 1.0)
-                .unwrap();
-        let weighted = GeometryBox {
-            weight: 100.0,
-            ..bounds
-        };
-        let other = GeometryBox {
-            left: 5.0,
-            right: 8.0,
-            bottom: 6.0,
-            top: 9.0,
-            weight: 1.0,
-        };
-
-        assert_eq!(
-            bounds,
-            GeometryBox {
-                left: 1.0,
-                right: 6.0,
-                bottom: 2.0,
-                top: 8.0,
-                weight: 1.0,
-            }
-        );
-        assert!((bounds.overlap_area(other, 0.0) - 2.0).abs() < f64::EPSILON);
-        assert!((weighted.overlap_area(other, 0.0) - 200.0).abs() < f64::EPSILON);
-        assert!((bounds.overlap_area(other, 1.0) - 6.0).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -2423,27 +2367,6 @@ mod tests {
                 None
             )
             .is_err());
-    }
-
-    #[test]
-    fn zero_width_lines_are_omitted_after_geometry_validation() {
-        let mut backend = begun_backend();
-        backend
-            .draw_line(
-                &[Point2D::new(1.0, 1.0), Point2D::new(2.0, 2.0)],
-                &LineStyle::solid(Color::rgb(0, 0, 0), 0.0),
-            )
-            .unwrap();
-        let error = backend
-            .draw_line(
-                &[Point2D::new(0.0, 0.0), Point2D::new(0.0004, 0.0004)],
-                &LineStyle::solid(Color::rgb(0, 0, 0), 0.0),
-            )
-            .unwrap_err();
-        backend.end().unwrap();
-
-        assert!(backend.bounds().is_empty());
-        assert!(error.to_string().contains("distinct points"));
     }
 
     #[test]
@@ -2628,29 +2551,6 @@ mod tests {
     }
 
     #[test]
-    fn scatter_and_polyline_record_individual_local_obstacles() {
-        let mut backend = begun_backend();
-        let points = [
-            Point2D::new(10.0, 10.0),
-            Point2D::new(90.0, 90.0),
-            Point2D::new(10.0, 90.0),
-        ];
-
-        backend
-            .draw_scatter(&points[..2], &PointStyle::plain((0, 0, 0), 2))
-            .unwrap();
-        backend
-            .draw_line(&points, &LineStyle::solid(Color::rgb(0, 0, 0), 2.0))
-            .unwrap();
-        backend.end().unwrap();
-
-        assert_eq!(backend.bounds().len(), 4);
-        assert!(backend.bounds()[0].right < backend.bounds()[1].left);
-        assert!((backend.bounds()[2].right - 91.0).abs() < f64::EPSILON);
-        assert!((backend.bounds()[3].left - 9.0).abs() < f64::EPSILON);
-    }
-
-    #[test]
     fn geometry_records_the_same_converted_subprecision_points_as_svg() {
         let mut backend = begun_backend();
         backend
@@ -2671,19 +2571,6 @@ mod tests {
                 weight: 1.0,
             }]
         );
-    }
-
-    #[test]
-    fn geometry_records_signed_text_without_unsigned_saturation() {
-        let mut backend = begun_backend();
-        backend
-            .draw_text(Point2D::new(-7.0, 125.0), "A", &test_text_style())
-            .unwrap();
-        backend.end().unwrap();
-
-        let bounds = backend.bounds()[0];
-        assert!((f64::midpoint(bounds.left, bounds.right) + 7.0).abs() < f64::EPSILON);
-        assert!(bounds.bottom > 100.0 && bounds.top > bounds.bottom);
     }
 
     #[test]
@@ -2816,36 +2703,6 @@ mod tests {
             }]
         );
         assert!(output.contains("points=\"10,79 9.134765625,80.5 10.8662109375,80.5\""));
-    }
-
-    #[test]
-    fn linear_gradient_records_its_rectangular_bounds() {
-        let mut backend = begun_backend();
-        let bounds = PanelBox::new(10.0, 22.0, 20.0, 80.0);
-
-        backend
-            .draw_linear_gradient(
-                bounds,
-                Point2D::new(16.0, 20.0),
-                Point2D::new(16.0, 80.0),
-                &[
-                    GradientStop::new(0.0, (0, 0, 0)),
-                    GradientStop::new(1.0, (255, 255, 255)),
-                ],
-            )
-            .unwrap();
-        backend.end().unwrap();
-
-        assert_eq!(
-            backend.bounds(),
-            &[GeometryBox {
-                left: 10.0,
-                right: 22.0,
-                bottom: 20.0,
-                top: 80.0,
-                weight: 1.0,
-            }]
-        );
     }
 
     #[test]

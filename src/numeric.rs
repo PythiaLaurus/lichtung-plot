@@ -18,6 +18,7 @@ use num_bigint::BigUint;
 pub(crate) mod decimal;
 pub(crate) mod format;
 pub(crate) mod inputs;
+pub(crate) mod mapping;
 pub(crate) mod profiles;
 pub(crate) mod set;
 

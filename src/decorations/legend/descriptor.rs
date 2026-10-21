@@ -270,51 +270,5 @@ pub(crate) fn domain_presentation(
         values[count] = domain.1;
         count + 1
     };
-    numeric_presentation(&values[..count], format)
-}
-
-/// One pre-font numeric grammar and precision search for every continuous guide.
-/// Equal scientific values (including signed zero) may repeat in a family's
-/// retained census; distinct scientific values must have distinct labels.
-fn numeric_presentation(
-    values: &[f64],
-    format: Option<&NumericFormat>,
-) -> Result<FormattedSet, Error> {
-    if !matches!(values.len(), 1..=3) || values.iter().any(|value| !value.is_finite()) {
-        return Err(Error::Data(
-            "continuous guide needs one to three finite numeric values".into(),
-        ));
-    }
-    if let Some(format) = format {
-        return format.format_set(values, false, true)?.ok_or_else(|| {
-            Error::Data("continuous guide labels are not unique at configured precision".into())
-        });
-    }
-    for precision in std::iter::once(0).chain(2..=17) {
-        let mut labels: Vec<String> = Vec::new();
-        crate::data::source::reserve_source(&mut labels, values.len())?;
-        let mut unique = true;
-        for (index, value) in values.iter().copied().enumerate() {
-            let label = crate::layout::format_guide_label(value, precision)?;
-            for (previous, existing) in labels.iter().enumerate() {
-                if !same_value(values[previous], values[index]) && same_text(existing, &label) {
-                    unique = false;
-                    break;
-                }
-            }
-            labels.push(label);
-        }
-        if unique {
-            return Ok(FormattedSet {
-                labels,
-                members: crate::data::source::collect_source(
-                    values.iter().map(|value| Ok(value.to_bits())),
-                )?,
-                precision: u8::try_from(precision).expect("bounded guide precision"),
-            });
-        }
-    }
-    Err(Error::Data(
-        "continuous guide labels are not unique at supported numeric precisions".into(),
-    ))
+    crate::numeric::set::guide_presentation(&values[..count], format)
 }

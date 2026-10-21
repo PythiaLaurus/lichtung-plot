@@ -41,6 +41,14 @@
 
 #![deny(missing_docs)]
 
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "private owned alpha inputs precede explicit bindings and actual mark consumers"
+    )
+)]
+mod alpha;
 mod builder;
 mod canvas;
 mod data;

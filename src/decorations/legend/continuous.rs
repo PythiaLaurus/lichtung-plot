@@ -287,7 +287,7 @@ impl MeasuredContinuousGuide {
             2 => [0.0, 1.0, 0.0],
             _ => [
                 0.0,
-                crate::theme::ContinuousColors::normalized_fraction(
+                crate::numeric::mapping::normalized_fraction(
                     descriptor.domain,
                     descriptor.center.ok_or_else(|| {
                         Error::Render("three-label continuous guide has no center".into())
@@ -958,8 +958,7 @@ mod tests {
             GradientStop::new(0.0, (49, 130, 189)),
             GradientStop::new(0.000_025, (80, 150, 200)),
             GradientStop::new(
-                crate::theme::ContinuousColors::normalized_fraction(descriptor.domain, 0.0)
-                    .unwrap(),
+                crate::numeric::mapping::normalized_fraction(descriptor.domain, 0.0).unwrap(),
                 (247, 247, 247),
             ),
             GradientStop::new(0.5, (239, 125, 112)),

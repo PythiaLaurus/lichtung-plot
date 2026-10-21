@@ -84,8 +84,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
         |stop| stop.offset.to_bits() == 0.625_f64.to_bits() && stop.color == colors[3].as_rgb()
     ));
     for (&(_, _, value, _), color) in prepared.rows.iter().zip(&prepared.colors) {
-        let offset =
-            crate::theme::ContinuousColors::normalized_fraction(shared.domain, value).unwrap();
+        let offset = crate::numeric::mapping::normalized_fraction(shared.domain, value).unwrap();
         assert!(shared
             .stops
             .iter()

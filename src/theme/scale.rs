@@ -6,6 +6,7 @@ use super::{
     ContinuousColorScale, OpaqueColor, PaletteCapacity, QualitativePalette, SequentialGradient,
 };
 use crate::font::canonical::OperationContext;
+use crate::numeric::mapping::normalized_fraction;
 use crate::render::backend::GradientStop;
 use crate::Error;
 
@@ -297,7 +298,7 @@ impl ContinuousColors {
         } else {
             let at_low = center.to_bits() == pair.0.to_bits();
             let at_high = center.to_bits() == pair.1.to_bits();
-            let c = Self::normalized_fraction(pair, center)?;
+            let c = normalized_fraction(pair, center)?;
             if !(at_low || at_high || c > 0.0 && c < 1.0) {
                 return Err(Error::Data(
                     "diverging center has no representable gradient stop".into(),
@@ -339,51 +340,13 @@ impl ContinuousColors {
         self.domain.as_pair()
     }
 
-    /// One arithmetic owner for mark values and diverging center-stop offsets.
-    pub(crate) fn normalized_fraction(domain: (f64, f64), value: f64) -> Result<f64, Error> {
-        if !value.is_finite() || !domain.0.is_finite() || !domain.1.is_finite() {
-            return Err(Error::Data(
-                "continuous color coordinates must be finite".into(),
-            ));
-        }
-        if domain.0 > domain.1 {
-            return Err(Error::Data(
-                "continuous color domain must be ordered".into(),
-            ));
-        }
-        let (low, high) = domain;
-        let fraction = if low.total_cmp(&high).is_eq()
-            || (low.abs().to_bits() == 0 && high.abs().to_bits() == 0)
-        {
-            0.5
-        } else if value <= low {
-            0.0
-        } else if value >= high {
-            1.0
-        } else {
-            let span = high - low;
-            if span.is_finite() {
-                (value - low) / span
-            } else {
-                let scale = low.abs().max(high.abs());
-                (value / scale - low / scale) / (high / scale - low / scale)
-            }
-        };
-        if !fraction.is_finite() {
-            return Err(Error::Data(
-                "continuous color fraction is not finite".into(),
-            ));
-        }
-        Ok(fraction.clamp(0.0, 1.0))
-    }
-
     pub(crate) fn color(&self, value: f64) -> Result<OpaqueColor, Error> {
         if let Some((center, neutral)) = self.neutral {
             if value.to_bits() == center.to_bits() || (value == 0.0 && center == 0.0) {
                 return Ok(neutral);
             }
         }
-        let fraction = Self::normalized_fraction(self.domain(), value)?;
+        let fraction = normalized_fraction(self.domain(), value)?;
         for pair in self.stops().windows(2) {
             if fraction <= pair[1].offset() {
                 let local = (fraction - pair[0].offset()) / (pair[1].offset() - pair[0].offset());
@@ -439,7 +402,7 @@ impl ContinuousColors {
                 push(stop.backend_stop())?;
             }
             for &value in observed {
-                let offset = Self::normalized_fraction(domain, value)?;
+                let offset = normalized_fraction(domain, value)?;
                 push(GradientStop::new(offset, self.color(value)?.as_rgb()))?;
             }
         }

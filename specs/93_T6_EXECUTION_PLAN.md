@@ -205,7 +205,7 @@ labels, not existing commits.
 | T6N | COMPLETE | T6C | Unified scientific numeric formatting; leaves below |
 | T6L | COMPLETE | T6N | One section-aware discrete guide; focused closure in `docs/section-composition-acceptance.md` |
 | T6T | COMPLETE | T6L | TickGeneration design/source/public cutover and focused parent/root/output closure; `docs/public-tick-generation.md` / `docs/tick-generation-parent-closure.md` |
-| T6D | IN PROGRESS | T6T | Exact explicit-unit inputs/numerics, 49 component gates and guide/parent design complete in `docs/data-alpha-design.md`; private implementation leaves in spec97 |
+| T6D | IN PROGRESS | T6T | Exact explicit-unit/49-gate design and private owned AlphaValues complete; `docs/data-alpha-design.md`, `docs/owned-alpha-values.md`; bindings/consumers/guides/public cutover remain in spec97 |
 | T6Z | PENDING | T6D | Integrated contract and phase closure |
 | T6Z1 | PENDING | T6D | Complete public examples/current-spec and property/consumer census reconciliation; `docs(api): reconcile scientific plotting contracts` |
 | T6Z2 | COMPLETE | User closure review | User-approved DF3/DF4 admission in spec97, residual DF4 checkpoint and fully caller-decided legends in DF11 |
@@ -976,6 +976,16 @@ feedback rules and focused verification/deletion obligations. Spec97 splits
 private values/binding/consumer and guide/measurement leaves before the public
 cutover. No alpha export, code validation or release result follows from the
 documentation-only design gate.
+
+`../docs/owned-alpha-values.md` records the first private code leaf: immutable final
+bytes and original semantic members, complete mapping recipes, eager continuous/
+categorical function evaluation, threshold interval membership, and selection
+without re-evaluation. Continuous colors and alpha now share one finite coordinate
+normalizer and one whole-set guide-label policy; the replaced method/helper are
+removed. Twenty-three focused library tests and four external color/guide contracts,
+strict all-target Clippy, fmt/diff and 671/17 discovery pass. Six alpha unit contracts
+replace six thinner geometry tests. Actual bindings/marks/guides and public alpha
+remain pending, as do integrated full/release gates.
 
 ## Verification And Closure
 

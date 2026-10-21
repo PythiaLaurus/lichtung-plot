@@ -2,7 +2,8 @@
 
 **Status**: User-approved scope; numeric tick selection COMPLETE, including design,
 bounded sources, public cutover and focused parent/root/frozen-output closure.
-Data-alpha source-backed design is COMPLETE; implementation and integrated release
+Data-alpha source-backed design and private owned mapping values are COMPLETE.
+Explicit bindings, mark consumers, public cutover and integrated release
 verification remain PENDING.
 
 ## Authority And Recorded Decision
@@ -186,8 +187,8 @@ and focused closure; split behavioral leaves further when needed.
 | T6T2 | COMPLETE | T6T1 | Atomic TickGeneration API/caller/current-contract migration; evidence in `../docs/public-tick-generation.md` |
 | T6T3 | COMPLETE | T6T2 | Complete parent height identities, all-family/root and 60 cached/uncached multi-format publications; `../docs/tick-generation-parent-closure.md` |
 | T6D0 | COMPLETE | T6T | User-selected explicit units, exact inputs/numerics, 49 component gates, unified guide/parent and migration design in `../docs/data-alpha-design.md` |
-| T6D1 | PENDING | T6D0 | Immutable mapping preparation and actual mark consumers |
-| T6D1a | PENDING | T6D0 | Owned AlphaValues materialization, scalar/label semantics and eager custom construction |
+| T6D1 | IN PROGRESS | T6D0 | Immutable mapping preparation and actual mark consumers |
+| T6D1a | COMPLETE | T6D0 | Owned AlphaValues, common scalar/label owners, eager custom construction and complete selected recipes; `../docs/owned-alpha-values.md` |
 | T6D1b | PENDING | T6D1a | Explicit encodings, keyed/bin/facet completeness, row-slot alignment and retained three-target input |
 | T6D1c | PENDING | T6D1b | Actual observation/estimate/strip point consumers and paint-aware intrinsic/ink requirements |
 | T6D1d | PENDING | T6D1c | Actual series, trace and uncertainty stroke consumers with explicit units |
