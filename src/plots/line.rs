@@ -1,8 +1,8 @@
 //! Root-prepared ordered series, trajectories, and source-ordered paths.
 
 use crate::alpha::{
-    marks::{point_ink, push_point, ObservationAlpha},
-    AlphaTarget, AlphaUnitKind,
+    marks::{line_style, point_ink, push_point, ObservationAlpha},
+    AlphaTarget, AlphaUnitKind, ResolvedAlpha,
 };
 use crate::data::{CollectivePair, PlotData};
 use crate::decorations::legend::source::{FillRole, LayerLabelContext, LineRole, PointRole};
@@ -38,6 +38,7 @@ struct LineGroup {
     identity: Option<CollectivePair>,
     hue_index: Option<usize>,
     points: Vec<LinePoint>,
+    line_alpha: Option<ResolvedAlpha>,
 }
 
 #[derive(Debug)]
@@ -97,7 +98,13 @@ pub(crate) fn intrinsic_body_minimum(
         theme.marks.data_lines().path_line()
     }
     .backend_style((0, 0, 0));
-    let path = crate::render::geometry::line_ink_width(&path_style)?;
+    let mut path = 0.0_f64;
+    for group in &prepared.groups {
+        path = path.max(crate::render::geometry::line_ink_width(&line_style(
+            group.line_alpha,
+            path_style.clone(),
+        ))?);
+    }
     let points_visible = chart.kind() == PlotKind::Trajectory || chart.markers_visible();
     let mark = if points_visible {
         let radius = if chart.kind() == PlotKind::Line {
@@ -355,12 +362,36 @@ impl PreparedLine {
         Ok(entries)
     }
 
+    pub(crate) fn new(
+        chart: &Plot,
+        data: PlotData<'_>,
+        conditions: Option<&[String]>,
+    ) -> Result<Self, Error> {
+        let mut prepared = Self::prepare_scientific(chart, data, conditions)?;
+        let include_hue = chart.kind() == PlotKind::Line
+            || (chart.kind() == PlotKind::LinePath
+                && chart.line_path_style_spec() == LinePathStyle::Hue);
+        let alpha = chart.prepare_collective_alpha(
+            AlphaTarget::Line,
+            AlphaUnitKind::Series,
+            include_hue,
+            data,
+        )?;
+        for group in &mut prepared.groups {
+            let identity = group.identity.as_ref().ok_or_else(|| {
+                Error::Render("prepared line series has no scientific identity".into())
+            })?;
+            group.line_alpha = alpha.collective(chart, identity)?;
+        }
+        Ok(prepared)
+    }
+
     #[expect(
         clippy::too_many_lines,
         clippy::float_cmp,
         reason = "one normalization preserves family order; duplicate scientific coordinates compare exactly including signed zero"
     )]
-    pub(crate) fn new(
+    fn prepare_scientific(
         chart: &Plot,
         data: PlotData<'_>,
         conditions: Option<&[String]>,
@@ -595,6 +626,7 @@ impl PreparedLine {
                 identity,
                 hue_index,
                 points,
+                line_alpha: None,
             });
         }
         let mut layers = Vec::new();
@@ -684,7 +716,7 @@ impl PreparedLine {
 }
 
 pub(crate) fn shared_x_domain(chart: &Plot, data: PlotData<'_>) -> Result<(f64, f64), Error> {
-    let prepared = PreparedLine::new(chart, data, None)?;
+    let prepared = PreparedLine::prepare_scientific(chart, data, None)?;
     if prepared.conditions.is_some() {
         return Err(Error::Data(
             "canvas x-range group has a categorical x axis".into(),
@@ -852,6 +884,7 @@ fn project(
             theme.marks.data_lines().path_line()
         }
         .backend_style(color);
+        let line = line_style(group.line_alpha, line);
         let point_style = chart.point_style(
             theme,
             color,
@@ -1031,14 +1064,19 @@ fn project(
             additional,
         );
     }
-    let mut band_ink = crate::render::geometry::GeometrySnapshot::new();
+    let mut mark_ink = crate::render::geometry::GeometrySnapshot::new();
 
     for mark in &payload.marks {
-        if let LineMark::Ribbon(points, style) = mark {
-            band_ink.polygon(points, style, None)?;
+        match mark {
+            LineMark::Ribbon(points, style) => mark_ink.polygon(points, style, None)?,
+            LineMark::Line(points, style) => mark_ink.line(points, style, None)?,
+            LineMark::Points(points, style) => mark_ink.scatter_with_clip(points, style, None)?,
         }
     }
-    if let Some(bounds) = band_ink
+    for (points, style, _) in &payload.layers {
+        mark_ink.scatter_with_clip(points, style, None)?;
+    }
+    if let Some(bounds) = mark_ink
         .bounds()
         .iter()
         .copied()
@@ -1048,53 +1086,6 @@ fn project(
             prepared.mark_ranges,
             &layout.projection,
             bounds,
-            [
-                chart.user_x_limits().is_none() && prepared.conditions.is_none(),
-                chart.user_y_limits().is_none(),
-            ],
-            scope,
-        )?;
-        payload.domain_expansions = crate::layout::interior::merge_mark_domain_expansions(
-            payload.domain_expansions,
-            additional,
-        );
-    }
-    let line_style = if chart.kind() == PlotKind::Line {
-        theme.marks.data_lines().series_line()
-    } else {
-        theme.marks.data_lines().path_line()
-    }
-    .backend_style((0, 0, 0));
-    let line_ink = crate::render::geometry::line_ink_bounds(&line_style)?;
-    let point_ink = if chart.kind() == PlotKind::Trajectory || chart.markers_visible() {
-        let radius = if chart.kind() == PlotKind::Line {
-            theme.marks.points().radii().path()
-        } else {
-            theme.marks.points().radii().trajectory()
-        };
-        let point_style = chart.point_style(theme, (0, 0, 0), radius);
-        crate::alpha::marks::point_ink(
-            &point_style,
-            prepared.groups.iter().flat_map(|group| {
-                group
-                    .points
-                    .iter()
-                    .map(|point| (point.x, point.y, point.alpha))
-            }),
-        )?
-        .map(|ink| ink.bounds)
-    } else {
-        None
-    };
-    let ink = match (line_ink, point_ink) {
-        (Some(line), Some(point)) => Some(line.union(point)),
-        (line, point) => line.or(point),
-    };
-    if let Some(ink) = ink {
-        let additional = crate::layout::interior::automatic_mark_ink_expansions(
-            prepared.mark_ranges,
-            &layout.projection,
-            ink,
             [
                 chart.user_x_limits().is_none() && prepared.conditions.is_none(),
                 chart.user_y_limits().is_none(),

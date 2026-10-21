@@ -2,6 +2,7 @@
 
 #![allow(clippy::cast_precision_loss)]
 
+use crate::alpha::{marks::line_style, AlphaTarget, AlphaUnitKind, ResolvedAlpha};
 use crate::data::PlotData;
 use crate::Error;
 
@@ -24,6 +25,7 @@ struct DensityCurve {
     identity: crate::data::CollectivePair,
     grid: Vec<f64>,
     densities: Vec<f64>,
+    line_alpha: Option<ResolvedAlpha>,
 }
 
 #[derive(Debug)]
@@ -63,7 +65,13 @@ pub(crate) fn intrinsic_body_minimum(
         .data_lines()
         .density_line()
         .backend_style((0, 0, 0));
-    let ink = crate::render::geometry::line_ink_width(&line)?;
+    let mut ink = 0.0_f64;
+    for curve in &prepared.curves {
+        ink = ink.max(crate::render::geometry::line_ink_width(&line_style(
+            curve.line_alpha,
+            line.clone(),
+        ))?);
+    }
     let area = crate::render::geometry::rectangular_fill_ink_outset(
         &theme
             .marks
@@ -216,7 +224,12 @@ impl PreparedDensity {
         let column = chart
             .x_col()
             .ok_or_else(|| Error::Data("density: value column not set".into()))?;
-        let prepared = prepare_density_for_chart(chart, data, column)?;
+        let mut prepared = prepare_density_for_chart(chart, data, column)?;
+        let alpha =
+            chart.prepare_collective_alpha(AlphaTarget::Line, AlphaUnitKind::Series, true, data)?;
+        for curve in &mut prepared.curves {
+            curve.line_alpha = alpha.collective(chart, &curve.identity)?;
+        }
         if let Some(exact) = chart.categorical_map_spec() {
             for hue in prepared.hue_levels() {
                 if exact.color_in(hue).is_none() {
@@ -302,21 +315,6 @@ pub(crate) fn measure_marks(
         chart.user_y_limits().is_none(),
     ];
     let mut requests = [None; 2];
-    if let Some(ink) = crate::render::geometry::line_ink_bounds(
-        &theme
-            .marks
-            .data_lines()
-            .density_line()
-            .backend_style((0, 0, 0)),
-    )? {
-        requests = crate::layout::interior::automatic_mark_ink_expansions(
-            [prepared.x_range, (0.0, prepared.maximum)],
-            &projection,
-            ink,
-            automatic,
-            context.fit_scope(),
-        )?;
-    }
     let crate::layout::interior::MarkPayload::Density(payload) = &result
         .marks
         .as_ref()
@@ -329,6 +327,9 @@ pub(crate) fn measure_marks(
     for curve in &payload.curves {
         if curve.fill.len() >= 3 {
             area.polygon(&curve.fill, &curve.fill_style, None)?;
+        }
+        for segment in &curve.segments {
+            area.line(segment, &curve.line_style, None)?;
         }
     }
     if let Some(bounds) = area
@@ -397,7 +398,10 @@ pub(crate) fn project(
                 .densities()
                 .density_area()
                 .backend_style(color),
-            line_style: theme.marks.data_lines().density_line().backend_style(color),
+            line_style: line_style(
+                curve.line_alpha,
+                theme.marks.data_lines().density_line().backend_style(color),
+            ),
         };
         crate::data::source::reserve_source(&mut projected.segments, visible.len() - 1)?;
         for pair in visible.windows(2) {
@@ -620,6 +624,7 @@ fn prepare_density_ordered<'a>(
             identity: crate::data::source::copy_source_pair(identity)?,
             grid,
             densities,
+            line_alpha: None,
         });
     }
     if curves.is_empty() {
@@ -1020,24 +1025,98 @@ mod tests {
     }
 
     #[test]
-    fn admitted_grouped_source_support_matches_the_authoritative_preparer() {
-        let values = NumericValues::new("value", [0.0, 1.0, 2.0, 100.0, 110.0, 120.0]);
-        let groups = CategoryValues::new("group", ["a", "a", "a", "b", "b", "b"]).unwrap();
-        for collapsed in [false, true] {
-            let mut plot = Plot::density(values.clone()).group(groups.clone());
-            if collapsed {
-                plot = plot.hue(groups.clone());
-            } else {
-                plot =
-                    plot.hue(CategoryValues::new("color", ["u", "u", "u", "v", "v", "v"]).unwrap());
-            }
-            let plot = plot.erase();
-            let resources = crate::font::canonical::OperationContext::new();
-            let data = plot.data().with_operation(&resources);
-            let range = shared_x_domain(&plot, data).unwrap();
-            let prepared = prepare_density_for_chart(&plot, plot.data(), crate::data::X).unwrap();
-            assert_eq!(range, prepared.x_range);
+    fn keyed_curve_alpha_resolves_actual_facets_and_series_before_fonts_without_row_reduction() {
+        let source = Plot::density(NumericValues::new(
+            "value",
+            [1.0, 11.0, 2.0, 12.0, 3.0, 13.0, 4.0, 14.0],
+        ))
+        .hue(CategoryValues::new("cohort", ["a", "a", "a", "a", "b", "b", "b", "b"]).unwrap())
+        .facet(crate::FacetSpec::column(
+            CategoryValues::new(
+                "panel",
+                [
+                    "left", "right", "left", "right", "left", "right", "left", "right",
+                ],
+            )
+            .unwrap(),
+        ))
+        .with_alpha(
+            AlphaTarget::Line,
+            crate::alpha::AlphaEncoding::keyed(
+                [
+                    CategoryValues::new("panel", ["left", "left", "right", "right", "unused"])
+                        .unwrap(),
+                    CategoryValues::new("cohort", ["a", "b", "a", "b", "\u{10ffff}"]).unwrap(),
+                ],
+                crate::alpha::AlphaValues::new("confidence", [0, 128, 230, 0, 99]).unwrap(),
+            )
+            .unwrap(),
+        )
+        .erase();
+        let mut theme = crate::Theme::publication().resolve().unwrap();
+        let lines = theme.marks.data_lines();
+        let line = lines.density_line().clone().with_alpha(0).unwrap();
+        let lines = lines.clone().with_density_line(line).unwrap();
+        theme.marks = theme.marks.clone().with_data_lines(lines).unwrap();
+        let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
+        let panels = &chart.prepared_density.as_ref().unwrap().panels;
+        assert_eq!(panels.len(), 2);
+        for ((scope, prepared), expected) in panels.iter().zip([[0, 128], [230, 0]]) {
+            assert_eq!(
+                prepared
+                    .curves
+                    .iter()
+                    .map(|curve| curve.line_alpha.unwrap().alpha)
+                    .collect::<Vec<_>>(),
+                expected
+            );
+            let chart = chart.clone().with_render_scope(scope.as_deref().unwrap());
+            let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
+            let selected = chart
+                .measure_selected_interior(PlotRenderContext::new(
+                    chart.data(),
+                    crate::layout::PanelBox::new(20.0, 600.0, 20.0, 420.0),
+                    &theme,
+                ))
+                .unwrap();
+            assert_eq!(
+                crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
+                reads
+            );
+            let crate::layout::interior::MarkPayload::Density(payload) =
+                &selected.marks.as_ref().unwrap().payload
+            else {
+                panic!("Density payload")
+            };
+            assert_eq!(
+                payload
+                    .curves
+                    .iter()
+                    .map(|curve| curve.line_style.color.alpha())
+                    .collect::<Vec<_>>(),
+                expected
+            );
         }
+        let calls = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
+        let incomplete = source.with_alpha(
+            AlphaTarget::Line,
+            crate::alpha::AlphaEncoding::keyed(
+                [
+                    CategoryValues::new("cohort", ["a"]).unwrap(),
+                    CategoryValues::new("panel", ["left"]).unwrap(),
+                ],
+                crate::alpha::AlphaValues::new("confidence", [0]).unwrap(),
+            )
+            .unwrap(),
+        );
+        assert!(matches!(
+            incomplete.preflight().unwrap_err(),
+            Error::Data(_)
+        ));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            calls
+        );
     }
 
     fn density_values(values: &[f64], labels: Option<&[&str]>) -> DensityValues {

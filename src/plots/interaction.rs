@@ -1,8 +1,8 @@
 //! Root-prepared interaction cells and immutable selected trace operands.
 
 use crate::alpha::{
-    marks::{point_ink, push_point, ObservationAlpha},
-    AlphaTarget, AlphaUnitKind,
+    marks::{line_style, point_ink, push_point, ObservationAlpha},
+    AlphaTarget, AlphaUnitKind, ResolvedAlpha,
 };
 use crate::data::{ObservedCollectives, PlotData};
 use crate::decorations::legend::source::{LineRole, PointRole};
@@ -49,6 +49,7 @@ struct Trace {
     identity: crate::data::CollectivePair,
     style: TraceStyle,
     cells: Vec<Cell>,
+    line_alpha: Option<ResolvedAlpha>,
 }
 
 #[derive(Debug)]
@@ -83,14 +84,15 @@ pub(crate) fn intrinsic_body_minimum(
 
     let mut pitch = 1.0_f64 / 1024.0;
     let mut numeric = 0.0_f64;
-    let interval = crate::render::geometry::line_ink_width(
-        &theme
-            .marks
-            .data_lines()
-            .interaction_interval()
-            .backend_style((0, 0, 0)),
-    )?;
     for trace in &prepared.traces {
+        let interval = crate::render::geometry::line_ink_width(&line_style(
+            trace.line_alpha,
+            theme
+                .marks
+                .data_lines()
+                .interaction_interval()
+                .backend_style((0, 0, 0)),
+        ))?;
         let marker = if chart.markers_visible() {
             let point = chart
                 .point_style(theme, (0, 0, 0), theme.marks.points().radii().interaction())
@@ -107,13 +109,14 @@ pub(crate) fn intrinsic_body_minimum(
             None
         };
         let connector = if chart.interaction_connectors_visible() && trace.cells.len() > 1 {
-            crate::render::geometry::line_ink_width(
-                &theme
+            crate::render::geometry::line_ink_width(&line_style(
+                trace.line_alpha,
+                theme
                     .marks
                     .data_lines()
                     .interaction_connector()
                     .backend_style((0, 0, 0)),
-            )?
+            ))?
         } else {
             0.0
         };
@@ -327,6 +330,8 @@ pub(crate) fn prepare(
         .global_collective_pairs()
         .unwrap_or(&domain.identities);
     let styles = resolve_trace_styles(chart, groups)?;
+    let line_alpha =
+        chart.prepare_collective_alpha(AlphaTarget::Line, AlphaUnitKind::Series, true, data)?;
 
     for row in 0..x.len() {
         if lower[row] > estimate[row] || estimate[row] > upper[row] {
@@ -388,6 +393,7 @@ pub(crate) fn prepare(
                 .as_ref()
                 .map_or_else(TraceStyle::default, |styles| styles[index]),
             cells,
+            line_alpha: line_alpha.collective(chart, identity)?,
         });
     }
     if let Some(exact) = chart.categorical_map_spec() {
@@ -560,15 +566,19 @@ pub(crate) fn measure_marks(
             .interaction_connector()
             .backend_style(color);
         line.pattern = trace.style.line_pattern.stroke_pattern();
+        let line = line_style(trace.line_alpha, line);
         let mut selected = TracePayload {
             intervals: Vec::new(),
             points: Vec::new(),
-            interval: context
-                .theme
-                .marks
-                .data_lines()
-                .interaction_interval()
-                .backend_style(color),
+            interval: line_style(
+                trace.line_alpha,
+                context
+                    .theme
+                    .marks
+                    .data_lines()
+                    .interaction_interval()
+                    .backend_style(color),
+            ),
             connector: (chart.interaction_connectors_visible() && trace.cells.len() > 1)
                 .then(|| line.clone()),
             markers: Vec::new(),

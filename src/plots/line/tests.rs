@@ -44,6 +44,7 @@ fn primary_point_alpha_follows_sorted_line_rows_and_keeps_supplemental_paint_ind
         crate::NumericValues::new("x", [2.0, 0.0, 1.0]),
         crate::NumericValues::new("y", [2.0, 0.0, 1.0]),
     )
+    .hue(crate::CategoryValues::new("cohort", ["seen"; 3]).unwrap())
     .with_alpha(
         crate::alpha::AlphaTarget::Point,
         crate::alpha::AlphaEncoding::observations(
@@ -51,6 +52,14 @@ fn primary_point_alpha_follows_sorted_line_rows_and_keeps_supplemental_paint_ind
         ),
     )
     .point_layer(labeled_layer(0.5, "Layer").with_alpha(61))
+    .with_alpha(
+        crate::alpha::AlphaTarget::Line,
+        crate::alpha::AlphaEncoding::keyed(
+            [crate::CategoryValues::new("cohort", ["unused", "seen"]).unwrap()],
+            crate::alpha::AlphaValues::new("series confidence", [0, 128]).unwrap(),
+        )
+        .unwrap(),
+    )
     .x_limits(-1.0, 3.0)
     .y_limits(-1.0, 3.0)
     .erase();
@@ -82,6 +91,18 @@ fn primary_point_alpha_follows_sorted_line_rows_and_keeps_supplemental_paint_ind
     assert_eq!(alphas, [17, 90, 230]);
     assert_eq!(payload.layers[0].1.color.alpha(), 61);
     assert_eq!(payload.layers[0].2[0].plan.style.paint.alpha(), 61);
+    assert_eq!(
+        payload
+            .marks
+            .iter()
+            .filter_map(|mark| if let LineMark::Line(_, style) = mark {
+                Some(style.color.alpha())
+            } else {
+                None
+            })
+            .collect::<Vec<_>>(),
+        [128]
+    );
 }
 
 #[test]
@@ -93,6 +114,14 @@ fn path_point_alpha_retains_source_vertex_order_without_regrouping_by_byte() {
     )
     .markers(true)
     .with_alpha(
+        crate::alpha::AlphaTarget::Line,
+        crate::alpha::AlphaEncoding::keyed(
+            [crate::CategoryValues::new("path", ["A"]).unwrap()],
+            crate::alpha::AlphaValues::new("path confidence", [64]).unwrap(),
+        )
+        .unwrap(),
+    )
+    .with_alpha(
         crate::alpha::AlphaTarget::Point,
         crate::alpha::AlphaEncoding::observations(
             crate::alpha::AlphaValues::new("confidence", [230, 17, 90]).unwrap(),
@@ -102,6 +131,7 @@ fn path_point_alpha_retains_source_vertex_order_without_regrouping_by_byte() {
     .y_limits(-1.0, 3.0)
     .erase();
     let prepared = PreparedLine::new(&source, source.data(), None).unwrap();
+    assert_eq!(prepared.groups[0].line_alpha.unwrap().alpha, 64);
     assert_eq!(
         prepared.groups[0]
             .points
@@ -135,6 +165,18 @@ fn path_point_alpha_retains_source_vertex_order_without_regrouping_by_byte() {
             })
             .collect::<Vec<_>>(),
         [230, 17, 90]
+    );
+    assert_eq!(
+        payload
+            .marks
+            .iter()
+            .filter_map(|mark| if let LineMark::Line(_, style) = mark {
+                Some(style.color.alpha())
+            } else {
+                None
+            })
+            .collect::<Vec<_>>(),
+        [64]
     );
 }
 

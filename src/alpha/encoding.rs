@@ -303,6 +303,14 @@ impl SelectorTable {
 }
 
 impl PreparedAlpha {
+    pub(crate) fn selector_fields(&self) -> &[String] {
+        match &self.encoding.binding {
+            Binding::Keyed(table, _) => &table.fields,
+            Binding::Bins(table, _) => &table.facets.fields,
+            Binding::Theme | Binding::Observations(_) | Binding::Single(_) => &[],
+        }
+    }
+
     fn resolved(&self, index: usize) -> Result<Option<ResolvedAlpha>> {
         self.encoding
             .values()

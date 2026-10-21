@@ -834,6 +834,14 @@ fn categorical_trajectory_retains_bottom_slots_raw_and_display_identity() {
         CategoryValues::new("group", ["a", "a", "a"]).unwrap(),
     )
     .with_alpha(
+        crate::alpha::AlphaTarget::Line,
+        crate::alpha::AlphaEncoding::keyed(
+            [CategoryValues::new("group", ["a"]).unwrap()],
+            crate::alpha::AlphaValues::new("trajectory confidence", [128]).unwrap(),
+        )
+        .unwrap(),
+    )
+    .with_alpha(
         crate::alpha::AlphaTarget::Point,
         crate::alpha::AlphaEncoding::observations(
             crate::alpha::AlphaValues::new("confidence", [0, 128, 255]).unwrap(),
@@ -903,6 +911,20 @@ fn categorical_trajectory_retains_bottom_slots_raw_and_display_identity() {
             )
             .collect::<Vec<_>>(),
         [0, 128, 255]
+    );
+    assert_eq!(
+        payload
+            .marks
+            .iter()
+            .filter_map(
+                |mark| if let crate::plots::line::LineMark::Line(_, style) = mark {
+                    Some(style.color.alpha())
+                } else {
+                    None
+                }
+            )
+            .collect::<Vec<_>>(),
+        [128]
     );
 }
 
