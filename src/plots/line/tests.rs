@@ -18,6 +18,12 @@ fn measure_layer(
         crate::NumericValues::new("y", [0.0, 2.0]),
     )
     .markers(false)
+    .with_alpha(
+        crate::alpha::AlphaTarget::Point,
+        crate::alpha::AlphaEncoding::observations(
+            crate::alpha::AlphaValues::new("confidence", [0, 0]).unwrap(),
+        ),
+    )
     .x_limits(-2.0, 4.0)
     .y_limits(-2.0, 4.0)
     .point_layer(layer)
@@ -30,6 +36,106 @@ fn measure_layer(
             theme,
         ))
         .unwrap()
+}
+
+#[test]
+fn primary_point_alpha_follows_sorted_line_rows_and_keeps_supplemental_paint_independent() {
+    let source = Plot::line(
+        crate::NumericValues::new("x", [2.0, 0.0, 1.0]),
+        crate::NumericValues::new("y", [2.0, 0.0, 1.0]),
+    )
+    .with_alpha(
+        crate::alpha::AlphaTarget::Point,
+        crate::alpha::AlphaEncoding::observations(
+            crate::alpha::AlphaValues::new("confidence", [230, 17, 90]).unwrap(),
+        ),
+    )
+    .point_layer(labeled_layer(0.5, "Layer").with_alpha(61))
+    .x_limits(-1.0, 3.0)
+    .y_limits(-1.0, 3.0)
+    .erase();
+    let theme = crate::Theme::publication().resolve().unwrap();
+    let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
+    let selected = chart
+        .measure_selected_interior(PlotRenderContext::new(
+            chart.data(),
+            crate::layout::PanelBox::new(20.0, 600.0, 20.0, 420.0),
+            &theme,
+        ))
+        .unwrap();
+    let crate::layout::interior::MarkPayload::Line(payload) =
+        &selected.marks.as_ref().unwrap().payload
+    else {
+        panic!("Line payload")
+    };
+    let alphas = payload
+        .marks
+        .iter()
+        .filter_map(|mark| {
+            if let LineMark::Points(_, style) = mark {
+                Some(style.color.alpha())
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(alphas, [17, 90, 230]);
+    assert_eq!(payload.layers[0].1.color.alpha(), 61);
+    assert_eq!(payload.layers[0].2[0].plan.style.paint.alpha(), 61);
+}
+
+#[test]
+fn path_point_alpha_retains_source_vertex_order_without_regrouping_by_byte() {
+    let source = Plot::line_path(
+        crate::NumericValues::new("x", [2.0, 0.0, 1.0]),
+        crate::NumericValues::new("y", [2.0, 0.0, 1.0]),
+        crate::CategoryValues::new("path", ["A"; 3]).unwrap(),
+    )
+    .markers(true)
+    .with_alpha(
+        crate::alpha::AlphaTarget::Point,
+        crate::alpha::AlphaEncoding::observations(
+            crate::alpha::AlphaValues::new("confidence", [230, 17, 90]).unwrap(),
+        ),
+    )
+    .x_limits(-1.0, 3.0)
+    .y_limits(-1.0, 3.0)
+    .erase();
+    let prepared = PreparedLine::new(&source, source.data(), None).unwrap();
+    assert_eq!(
+        prepared.groups[0]
+            .points
+            .iter()
+            .map(|point| point.alpha.slot)
+            .collect::<Vec<_>>(),
+        [0, 1, 2]
+    );
+    let theme = crate::Theme::publication().resolve().unwrap();
+    let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
+    let selected = chart
+        .measure_selected_interior(PlotRenderContext::new(
+            chart.data(),
+            crate::layout::PanelBox::new(20.0, 600.0, 20.0, 420.0),
+            &theme,
+        ))
+        .unwrap();
+    let crate::layout::interior::MarkPayload::Line(payload) =
+        &selected.marks.as_ref().unwrap().payload
+    else {
+        panic!("LinePath payload")
+    };
+    assert_eq!(
+        payload
+            .marks
+            .iter()
+            .filter_map(|mark| if let LineMark::Points(_, style) = mark {
+                Some(style.color.alpha())
+            } else {
+                None
+            })
+            .collect::<Vec<_>>(),
+        [230, 17, 90]
+    );
 }
 
 #[test]

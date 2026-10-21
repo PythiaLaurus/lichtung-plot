@@ -1,5 +1,9 @@
 //! Root-prepared estimate semantics and selected point/interval/label geometry.
 
+use crate::alpha::{
+    marks::{point_ink, ObservationAlpha},
+    AlphaTarget, AlphaUnitKind,
+};
 use crate::Error;
 
 use crate::layout::{AxisSpec, Layout, PhysicalTextAlignment, ResolvedTextPlan};
@@ -8,11 +12,15 @@ use crate::spec::{AxisScale, EstimateStatus, PlotRenderContext, PlotRenderResult
 use crate::theme::ResolvedTheme;
 use crate::Plot;
 
+#[cfg(test)]
+mod alpha_tests;
+
 #[derive(Debug)]
 pub(crate) struct PreparedEstimate {
     pub(crate) kind: crate::PlotKind,
     pub(crate) labels: Vec<String>,
     estimates: Vec<Option<EstimateTuple>>,
+    alphas: Vec<ObservationAlpha>,
     adjacent: Vec<Option<(String, bool)>>,
     reference: Option<f64>,
     pub(crate) range: Option<(f64, f64)>,
@@ -27,6 +35,23 @@ pub(crate) struct PreparedEstimateInputs {
 }
 
 impl PreparedEstimate {
+    fn point_ink(
+        &self,
+        chart: &Plot,
+        theme: &ResolvedTheme,
+    ) -> Result<Option<crate::alpha::marks::PointInk>, Error> {
+        point_ink(
+            &chart.point_style(
+                theme,
+                (0, 0, 0),
+                theme.marks.points().radii().interval_estimate(),
+            ),
+            self.estimates
+                .iter()
+                .zip(&self.alphas)
+                .filter_map(|(row, &alpha)| row.map(|tuple| (tuple.estimate, 0.0, alpha))),
+        )
+    }
     pub(crate) fn detail_sources(&self) -> impl Iterator<Item = &str> {
         self.estimates
             .iter()
@@ -75,12 +100,9 @@ impl PreparedEstimate {
         let mut numeric = 0.0_f64;
         let mut pitch = 1.0_f64 / 1024.0;
         if available {
-            let point = chart.point_style(
-                theme,
-                (0, 0, 0),
-                theme.marks.points().radii().interval_estimate(),
-            );
-            let (width, height) = crate::render::geometry::point_ink_dimensions(&point)?;
+            let (width, height) = self
+                .point_ink(chart, theme)?
+                .map_or((0.0, 0.0), crate::alpha::marks::PointInk::dimensions);
             numeric = numeric.max(width);
             pitch = pitch.max(height);
         }
@@ -182,16 +204,20 @@ impl PreparedEstimate {
         };
         let mut labels = Vec::new();
         let mut estimates = Vec::new();
+        let mut alphas = Vec::new();
         crate::data::source::reserve_source(&mut labels, rows.len())?;
         crate::data::source::reserve_source(&mut estimates, rows.len())?;
+        crate::data::source::reserve_source(&mut alphas, rows.len())?;
         for row in rows {
             labels.push(row.label);
             estimates.push(row.estimate);
+            alphas.push(row.alpha);
         }
         Ok(Self {
             kind: chart.kind(),
             labels,
             estimates,
+            alphas,
             adjacent: Vec::new(),
             reference: chart.zero_line_visible().then_some(0.0),
             range,
@@ -225,6 +251,7 @@ struct EstimateRowPayload {
     interval: Option<[Point2D; 2]>,
     caps: [Option<[Point2D; 2]>; 2],
     point: Option<Point2D>,
+    point_style: crate::render::backend::PointStyle,
     text: Option<crate::render::backend::PlacedText>,
 }
 
@@ -235,7 +262,6 @@ pub(crate) struct EstimatePayload {
     reference: Option<[Point2D; 2]>,
     reference_style: LineStyle,
     interval_style: LineStyle,
-    point_style: crate::render::backend::PointStyle,
     rows: Vec<EstimateRowPayload>,
     #[cfg(test)]
     kind: crate::PlotKind,
@@ -257,7 +283,7 @@ impl EstimatePayload {
                     backend.draw_line(cap, &self.interval_style)?;
                 }
                 if let Some(point) = &row.point {
-                    backend.draw_scatter(std::slice::from_ref(point), &self.point_style)?;
+                    backend.draw_scatter(std::slice::from_ref(point), &row.point_style)?;
                 }
                 if let Some(text) = &row.text {
                     text.draw(backend)?;
@@ -588,6 +614,10 @@ fn prepare_model<'a>(
     data: crate::data::PlotData<'_>,
     annotations: impl IntoIterator<Item = &'a crate::significance::SignificanceAnnotation>,
 ) -> Result<PreparedEstimate, crate::layout::fit::PlanError> {
+    let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
+    let alphas = crate::data::source::collect_source(
+        (0..data.height()).map(|row| ObservationAlpha::resolve(data, &alpha, row)),
+    )?;
     let require_intervals = chart.kind() == crate::PlotKind::Forest;
     let family = if require_intervals {
         "forest"
@@ -767,6 +797,7 @@ fn prepare_model<'a>(
         kind: chart.kind(),
         labels,
         estimates: transformed_estimates,
+        alphas,
         adjacent,
         reference: Some(transformed_reference),
         range,
@@ -967,15 +998,16 @@ fn project(
             .summaries()
             .estimate_interval()
             .backend_style(),
-        point_style: chart.point_style(
-            theme,
-            crate::theme::AccentColors::resolve(theme.marks.accents(), 1)?.color(0)?,
-            theme.marks.points().radii().interval_estimate(),
-        ),
         rows: Vec::new(),
         #[cfg(test)]
         kind: chart.kind(),
     };
+    let point_style = chart.point_style(
+        theme,
+        crate::theme::AccentColors::resolve(theme.marks.accents(), 1)?.color(0)?,
+        theme.marks.points().radii().interval_estimate(),
+    );
+    crate::alpha::marks::require_aligned_points(estimates.len(), prepared.alphas.len())?;
     crate::data::source::reserve_source(&mut payload.rows, estimates.len())?;
     let mut deferred_annotation_text = Vec::new();
     for (index, adjacent) in adjacent_label_plans.into_iter().enumerate() {
@@ -984,6 +1016,7 @@ fn project(
             interval: None,
             caps: [None, None],
             point: None,
+            point_style: prepared.alphas[index].point(point_style.clone()),
             text: None,
         };
         if let Some(tuple) = estimates[index] {
@@ -1126,7 +1159,7 @@ fn project(
             geometry.line(cap, &payload.interval_style, Some(clip))?;
         }
         if let Some(point) = &row.point {
-            geometry.scatter(std::slice::from_ref(point), &payload.point_style, clip)?;
+            geometry.scatter(std::slice::from_ref(point), &row.point_style, clip)?;
         }
         if let Some(text) = &row.text {
             geometry.text(text.placement, &text.plan, Some(clip))?;

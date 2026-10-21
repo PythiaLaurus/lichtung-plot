@@ -2,6 +2,7 @@
 
 #![allow(clippy::cast_precision_loss)]
 
+use crate::alpha::{marks::ObservationAlpha, AlphaTarget, AlphaUnitKind};
 use crate::Error;
 
 use crate::layout::AxisSpec;
@@ -12,6 +13,7 @@ use crate::Plot;
 pub(crate) struct PointIntervalRow {
     pub(crate) label: String,
     pub(crate) estimate: Option<crate::plots::interval_estimate::EstimateTuple>,
+    pub(crate) alpha: ObservationAlpha,
 }
 
 pub(crate) fn shared_x_domain(
@@ -38,6 +40,7 @@ pub(crate) fn prepare<'a>(
     data: impl Into<crate::data::PlotData<'a>>,
 ) -> Result<Vec<PointIntervalRow>, Error> {
     let data = data.into();
+    let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     if chart.y_axis_spec() != &AxisSpec::default() {
         return Err(Error::Data(
             "point_interval: categorical y-axis limits are not supported".into(),
@@ -101,7 +104,11 @@ pub(crate) fn prepare<'a>(
                 )));
             }
         }
-        rows.push(PointIntervalRow { label, estimate });
+        rows.push(PointIntervalRow {
+            label,
+            estimate,
+            alpha: ObservationAlpha::resolve(data, &alpha, index)?,
+        });
     }
 
     apply_category_order(&mut rows, chart.category_order_spec(), data)?;

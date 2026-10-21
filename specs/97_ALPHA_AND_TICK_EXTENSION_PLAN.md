@@ -3,8 +3,8 @@
 **Status**: User-approved scope; numeric tick selection COMPLETE, including design,
 bounded sources, public cutover and focused parent/root/frozen-output closure.
 Data-alpha source-backed design, private owned mapping values and explicit
-binding/source-slot preparation are COMPLETE. Mark consumers, guides, public
-cutover and integrated release verification remain PENDING.
+binding/source-slot preparation are COMPLETE. Mark consumers are IN PROGRESS;
+guides, public cutover and integrated release verification remain PENDING.
 
 ## Authority And Recorded Decision
 
@@ -199,11 +199,12 @@ and focused closure; split behavioral leaves further when needed.
 | T6D3 | PENDING | T6D2 | Atomic public API/caller/current-contract migration |
 | T6D4 | PENDING | T6D3 | Full admitted-family/parent/root/frozen-output evidence |
 
-The observation-consumer leaf currently closes Scatter, Qq and Regression in
-`../docs/alpha-coordinate-points.md`: original slots through finite filtering and
-stable quantile sorting, ordered final-paint batches and actual painted intrinsic/
-automatic ink. Its remaining path, estimate, categorical and native/supplied
-consumers keep T6D1c IN PROGRESS.
+The observation-consumer leaf closes Scatter, Qq and Regression in
+`../docs/alpha-coordinate-points.md`, and Line/Trajectory/LinePath, Interaction and
+PointInterval/Coefficient/Forest in `../docs/alpha-path-estimate-points.md`:
+original slots through filtering/sorting/order/status, final-paint batches and
+paint-aware intrinsic/ink. Ten of seventeen admitted point families are wired.
+Remaining Dumbbell, categorical and native/supplied consumers keep T6D1c IN PROGRESS.
 
 Do not start a code leaf while its exact owning design is still pending. Use modern
 Rust module layout, the standalone offline renderer and existing pinned dependencies.

@@ -833,6 +833,12 @@ fn categorical_trajectory_retains_bottom_slots_raw_and_display_identity() {
         NumericValues::new("y", [2.0, 1.0, 3.0]),
         CategoryValues::new("group", ["a", "a", "a"]).unwrap(),
     )
+    .with_alpha(
+        crate::alpha::AlphaTarget::Point,
+        crate::alpha::AlphaEncoding::observations(
+            crate::alpha::AlphaValues::new("confidence", [0, 128, 255]).unwrap(),
+        ),
+    )
     .erase();
     let inputs =
         crate::plots::shared_x::prepare_plot(&source, &OperationContext::new(), None).unwrap();
@@ -879,6 +885,25 @@ fn categorical_trajectory_retains_bottom_slots_raw_and_display_identity() {
         crate::layout::TickSource::SUPPLIED
     );
     assert!(selected.y_tick_keys.is_none());
+    let crate::layout::interior::MarkPayload::Line(payload) =
+        &selected.marks.as_ref().unwrap().payload
+    else {
+        panic!("Trajectory payload")
+    };
+    assert_eq!(
+        payload
+            .marks
+            .iter()
+            .filter_map(
+                |mark| if let crate::plots::line::LineMark::Points(_, style) = mark {
+                    Some(style.color.alpha())
+                } else {
+                    None
+                }
+            )
+            .collect::<Vec<_>>(),
+        [0, 128, 255]
+    );
 }
 
 #[test]

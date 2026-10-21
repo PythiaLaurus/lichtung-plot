@@ -1,5 +1,9 @@
 //! Root-prepared ordered series, trajectories, and source-ordered paths.
 
+use crate::alpha::{
+    marks::{point_ink, push_point, ObservationAlpha},
+    AlphaTarget, AlphaUnitKind,
+};
 use crate::data::{CollectivePair, PlotData};
 use crate::decorations::legend::source::{FillRole, LayerLabelContext, LineRole, PointRole};
 use crate::decorations::legend::GuideSourceKey;
@@ -42,6 +46,7 @@ struct LinePoint {
     y: f64,
     interval: Option<(f64, f64)>,
     hue_index: Option<usize>,
+    alpha: ObservationAlpha,
 }
 
 #[derive(Debug)]
@@ -101,7 +106,16 @@ pub(crate) fn intrinsic_body_minimum(
             theme.marks.points().radii().trajectory()
         };
         let point_style = chart.point_style(theme, (0, 0, 0), radius);
-        crate::render::geometry::point_ink_dimensions(&point_style)?
+        point_ink(
+            &point_style,
+            prepared.groups.iter().flat_map(|group| {
+                group
+                    .points
+                    .iter()
+                    .map(|point| (point.x, point.y, point.alpha))
+            }),
+        )?
+        .map_or((0.0, 0.0), crate::alpha::marks::PointInk::dimensions)
     } else {
         (0.0, 0.0)
     };
@@ -352,6 +366,7 @@ impl PreparedLine {
         conditions: Option<&[String]>,
     ) -> Result<Self, Error> {
         data.validate_row_source()?;
+        let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
         let kind = chart.kind();
         let family = match kind {
             PlotKind::Line => "line",
@@ -559,6 +574,7 @@ impl PreparedLine {
                 Ok(LinePoint {
                     x: x[row],
                     y: y[row],
+                    alpha: ObservationAlpha::resolve(data, &alpha, row)?,
                     interval,
                     hue_index: channels.rows[row].hue.as_ref().and_then(|hue| {
                         crate::data::source::source_position(&hues, |level| level == hue)
@@ -846,12 +862,22 @@ fn project(
             },
         );
         if chart.kind() == PlotKind::Line && chart.markers_visible() {
-            crate::data::source::reserve_source(&mut payload.marks, 2)?;
-            let markers = crate::data::source::collect_source(points.iter().copied().map(Ok))?;
+            crate::data::source::reserve_source(&mut payload.marks, 1)?;
+            let mut markers = Vec::new();
+            for (point, source) in points.iter().zip(&group.points) {
+                push_point(
+                    &mut markers,
+                    *point,
+                    source.alpha.point(point_style.clone()),
+                )?;
+            }
             payload.marks.push(LineMark::Line(points, line.clone()));
-            payload
-                .marks
-                .push(LineMark::Points(markers, point_style.clone()));
+            crate::data::source::reserve_source(&mut payload.marks, markers.len())?;
+            payload.marks.extend(
+                markers
+                    .into_iter()
+                    .map(|(points, style)| LineMark::Points(points, style)),
+            );
         } else {
             crate::data::source::reserve_source(&mut payload.marks, 1)?;
             payload.marks.push(LineMark::Line(points, line.clone()));
@@ -879,7 +905,11 @@ fn project(
                     crate::data::source::collect_source(std::iter::once(Ok(project(
                         point.x, point.y,
                     ))))?,
-                    chart.point_style(theme, color, theme.marks.points().radii().trajectory()),
+                    point.alpha.point(chart.point_style(
+                        theme,
+                        color,
+                        theme.marks.points().radii().trajectory(),
+                    )),
                 ));
             }
         }
@@ -1043,7 +1073,16 @@ fn project(
             theme.marks.points().radii().trajectory()
         };
         let point_style = chart.point_style(theme, (0, 0, 0), radius);
-        crate::render::geometry::point_ink_bounds(&point_style)?
+        crate::alpha::marks::point_ink(
+            &point_style,
+            prepared.groups.iter().flat_map(|group| {
+                group
+                    .points
+                    .iter()
+                    .map(|point| (point.x, point.y, point.alpha))
+            }),
+        )?
+        .map(|ink| ink.bounds)
     } else {
         None
     };

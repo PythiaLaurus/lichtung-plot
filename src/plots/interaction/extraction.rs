@@ -37,6 +37,13 @@ fn lexical_style_selectors_preserve_raw_identity_through_prepared_group_matching
         ),
     )
     .styles([spaced, single])
+    .labels(crate::Labels::raw())
+    .with_alpha(
+        crate::alpha::AlphaTarget::Point,
+        crate::alpha::AlphaEncoding::observations(
+            crate::alpha::AlphaValues::new("confidence", [0, 230]).unwrap(),
+        ),
+    )
     .erase();
     let prepared = prepare(&chart, chart.data(), None).unwrap();
     assert_eq!(prepared.traces.len(), 2);
@@ -47,4 +54,22 @@ fn lexical_style_selectors_preserve_raw_identity_through_prepared_group_matching
     assert_eq!(prepared.traces[1].style.point_shape, PointShape::TriangleUp);
     assert_eq!(prepared.traces[1].style.line_pattern, LinePattern::Dashed);
     assert_eq!(prepared.checked_primary_mark_count().unwrap(), 2);
+    assert_eq!(prepared.traces[0].cells[0].alpha.value.unwrap().alpha, 0);
+    assert_eq!(prepared.traces[1].cells[0].alpha.value.unwrap().alpha, 230);
+    let theme = crate::Theme::publication().resolve().unwrap();
+    let chart = crate::plots::shared_x::prepare_panel_for_test(&chart, &theme).unwrap();
+    let selected = chart
+        .measure_selected_interior(PlotRenderContext::new(
+            chart.data(),
+            crate::layout::PanelBox::new(40.0, 600.0, 40.0, 420.0),
+            &theme,
+        ))
+        .unwrap();
+    let crate::layout::interior::MarkPayload::Interaction(payload) =
+        &selected.marks.as_ref().unwrap().payload
+    else {
+        panic!("Interaction payload")
+    };
+    assert_eq!(payload.traces[0].markers[0].1.color.alpha(), 0);
+    assert_eq!(payload.traces[1].markers[0].1.color.alpha(), 230);
 }

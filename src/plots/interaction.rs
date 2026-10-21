@@ -1,5 +1,9 @@
 //! Root-prepared interaction cells and immutable selected trace operands.
 
+use crate::alpha::{
+    marks::{point_ink, push_point, ObservationAlpha},
+    AlphaTarget, AlphaUnitKind,
+};
 use crate::data::{ObservedCollectives, PlotData};
 use crate::decorations::legend::source::{LineRole, PointRole};
 use crate::decorations::legend::GuideSourceKey;
@@ -37,6 +41,7 @@ struct Cell {
     estimate: f64,
     lower: f64,
     upper: f64,
+    alpha: ObservationAlpha,
 }
 
 #[derive(Debug)]
@@ -90,7 +95,14 @@ pub(crate) fn intrinsic_body_minimum(
             let point = chart
                 .point_style(theme, (0, 0, 0), theme.marks.points().radii().interaction())
                 .with_shape(trace.style.point_shape);
-            crate::render::geometry::point_ink_bounds(&point)?
+            point_ink(
+                &point,
+                trace
+                    .cells
+                    .iter()
+                    .map(|cell| (0.0, cell.estimate, cell.alpha)),
+            )?
+            .map(|ink| ink.bounds)
         } else {
             None
         };
@@ -265,6 +277,7 @@ pub(crate) fn prepare(
     parent: Option<&ObservedCollectives>,
 ) -> Result<PreparedInteraction, Error> {
     data.validate_row_source()?;
+    let alpha = chart.prepare_alpha(AlphaTarget::Point, AlphaUnitKind::Observation, &[])?;
     #[cfg(test)]
     count(0);
     let x_col = chart
@@ -365,6 +378,7 @@ pub(crate) fn prepare(
                     estimate: estimate[row],
                     lower: lower[row],
                     upper: upper[row],
+                    alpha: ObservationAlpha::resolve(data, &alpha, row)?,
                 });
             }
         }
@@ -412,7 +426,7 @@ struct TracePayload {
     points: Vec<Point2D>,
     interval: LineStyle,
     connector: Option<LineStyle>,
-    marker: Option<PointStyle>,
+    markers: Vec<(Vec<Point2D>, PointStyle)>,
 }
 
 impl InteractionPayload {
@@ -432,8 +446,8 @@ impl InteractionPayload {
             if let Some(style) = &trace.connector {
                 full.line(&trace.points, style, None)?;
             }
-            if let Some(style) = &trace.marker {
-                full.scatter_with_clip(&trace.points, style, None)?;
+            for (points, style) in &trace.markers {
+                full.scatter_with_clip(points, style, None)?;
             }
         }
         if let Some(bounds) = full
@@ -479,8 +493,8 @@ impl InteractionPayload {
                 if let Some(style) = &trace.connector {
                     backend.draw_line(&trace.points, style)?;
                 }
-                if let Some(style) = &trace.marker {
-                    backend.draw_scatter(&trace.points, style)?;
+                for (points, style) in &trace.markers {
+                    backend.draw_scatter(points, style)?;
                 }
             }
             Ok(())
@@ -490,7 +504,8 @@ impl InteractionPayload {
 
 #[expect(
     clippy::cast_precision_loss,
-    reason = "selected bounded category projection and frozen trace styles"
+    clippy::too_many_lines,
+    reason = "selected bounded categories and ordered interval, connector and point paints share one frozen trace"
 )]
 pub(crate) fn measure_marks(
     chart: &Plot,
@@ -556,7 +571,7 @@ pub(crate) fn measure_marks(
                 .backend_style(color),
             connector: (chart.interaction_connectors_visible() && trace.cells.len() > 1)
                 .then(|| line.clone()),
-            marker: chart.markers_visible().then(|| point.clone()),
+            markers: Vec::new(),
         };
         crate::data::source::reserve_source(&mut selected.intervals, trace.cells.len())?;
         crate::data::source::reserve_source(&mut selected.points, trace.cells.len())?;
@@ -576,12 +591,19 @@ pub(crate) fn measure_marks(
             geometry.line(&interval, &selected.interval, Some(clip))?;
             selected.intervals.push(interval);
             selected.points.push(Point2D::new(px, py));
+            if chart.markers_visible() {
+                push_point(
+                    &mut selected.markers,
+                    Point2D::new(px, py),
+                    cell.alpha.point(point.clone()),
+                )?;
+            }
         }
         if let Some(style) = &selected.connector {
             geometry.line(&selected.points, style, Some(clip))?;
         }
-        if let Some(style) = &selected.marker {
-            geometry.scatter(&selected.points, style, clip)?;
+        for (points, style) in &selected.markers {
+            geometry.scatter(points, style, clip)?;
         }
         payload.traces.push(selected);
     }

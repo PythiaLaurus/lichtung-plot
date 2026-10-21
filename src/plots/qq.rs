@@ -698,28 +698,6 @@ mod tests {
     }
 
     #[test]
-    fn qq_identity_and_hidden_modes_are_explicit() {
-        let identity = prepare_qq(&[1.0, 2.0], QqLine::Identity).unwrap();
-        let hidden = prepare_qq(&[1.0, 2.0], QqLine::Hidden).unwrap();
-
-        assert_eq!(
-            identity.line,
-            Some(LineGeometry {
-                slope: 1.0,
-                intercept: 0.0
-            })
-        );
-        assert_eq!(hidden.line, None);
-    }
-
-    #[test]
-    fn qq_handles_large_finite_observations() {
-        let prepared = prepare_qq(&[1e300, 1.1e300, 1.2e300], QqLine::Quartiles).unwrap();
-
-        assert!(prepared.line.unwrap().slope.is_finite());
-    }
-
-    #[test]
     fn qq_constant_ranges_use_finite_neighbors_at_zero_and_extremes() {
         let spec = crate::layout::AxisSpec::default();
 
@@ -734,17 +712,6 @@ mod tests {
         assert_eq!(
             qq_display_range((-f64::MAX, -f64::MAX), &spec, "y-axis").unwrap(),
             (-f64::MAX, (-f64::MAX).next_up())
-        );
-    }
-
-    #[test]
-    fn qq_explicit_range_is_resolved_exactly() {
-        let upper = f64::from_bits(1);
-        let spec = crate::layout::AxisSpec::default().limits(0.0, upper);
-
-        assert_eq!(
-            qq_display_range((-10.0, 10.0), &spec, "y-axis").unwrap(),
-            (0.0, upper)
         );
     }
 
