@@ -1,4 +1,4 @@
-# Public API Naming, Numeric Presentation And Composed Layout
+# Public API Naming, Axis Controls And Composed Layout
 
 ## Scope And Target Contracts
 
@@ -12,6 +12,10 @@ lifecycle:
   display multipliers and rounding, configurable SI/compact presentation, shared
   multiplier/unit explanations, D3-style numeric format strings and single-value/
   complete-set formatting functions that retain automatic tick generation.
+- Extend TickGeneration with exact counts, relative automatic density, anchored
+  multiplicative intervals and position-generation functions. Add explicit
+  categorical-label stride/offset/endpoint selection without removing categories,
+  marks, tick positions or grid geometry.
 - Consistent plain-text inputs, complete instance typography and horizontal
   alignment, including independently configured TextPanel title/body text.
 - Caller-selected categorical tick-label rotation, with presets and custom angles
@@ -340,8 +344,10 @@ scientific identities and domain-level display-collision checks.
 Rotation is always a caller instruction. Omission retains the existing direction.
 Do not search for an angle or select between rotation and additional word breaks.
 The caller can combine explicit rotation, manually inserted newlines and ordinary
-legal wrapping. Required labels still fit completely or produce a typed fit miss;
-existing explicit Heatmap Wrap/Elide semantics retain their own owner.
+legal wrapping. Under All or the caller's explicit categorical-label selection,
+each required label still fits completely or produces a typed fit miss; fit cannot
+silently change that selection. Existing explicit Heatmap Wrap/Elide semantics
+retain their own owner.
 
 ### One Plain-Text Content Contract
 
@@ -464,7 +470,8 @@ outlined rendering cannot disagree at the same frozen angle.
 Add `x_category_label_rotation`/`y_category_label_rotation` Plot instructions with
 sealed axis-specific capabilities based on actual categorical axes. Do not use
 `kind::CategoricalScale`, which describes color scales. X-side families are
-Interaction, Heatmap, Bar, StackedBar, Boxplot, Violin and Raincloud. Y-side families
+Trajectory, Interaction, Heatmap, Bar, StackedBar, Boxplot, Violin and Raincloud;
+Trajectory validates that its actual x axis is categorical. Y-side families
 are PointInterval, Coefficient, Forest, Dumbbell, Heatmap, HorizontalBar,
 StackedHorizontalBar, Beeswarm and Waterfall. Matrix variable titles are not
 categorical ticks and do not acquire these setters. Preserve capability state
@@ -522,9 +529,10 @@ users must not supply every AxisTick merely to customize automatic tick text.
 Numeric presentation remains distinct from TickGeneration, statistics, scientific
 values/projection, color mapping, raw identities and exact caller strings. Retain
 the existing NumericX/NumericY/ContinuousColor and value-annotation attachment
-boundaries, including actual categorical-axis validation. This does not admit
-generation callbacks, exact generated counts, categorical dropping, a Matrix-wide
-format attachment or Canvas overrides of child formats. Existing exact ticks
+boundaries, including actual categorical-axis validation. Position generation and
+explicit categorical-label selection have their separate contracts below;
+formatting does not own them. Matrix-wide format attachment and Canvas overrides
+of child formats remain outside this scope. Existing exact ticks
 suppress automatic numeric formatting, explanation preparation and callbacks in
 either setter order; preserve the independent actual-axis semantic checks.
 
@@ -828,12 +836,322 @@ carry the same policy and selected metadata through the existing route.
 | `src/plots/heatmap.rs`, `src/plots/interval_estimate.rs`, `src/plots/waterfall.rs`, `src/plots/waterfall/totals.rs` | Complete active value sets, independent explanation slots, required-set/mask semantics and retained source eligibility |
 | `src/builder/`, `src/orchestrator/facets/`, `src/canvas.rs`, `src/canvas/dependencies.rs`, `src/canvas/sizing.rs` | Policy/handle preservation, final Shared domains, owner-local numeric/font preparation and full geometry/height reuse dependencies |
 
+## Numeric Tick Generation And Categorical Label Selection
+
+### Scope, Precedence And One Policy
+
+Implement all five requested controls: exact generated counts, relative automatic
+density, anchored multiplicative intervals, explicit categorical-label thinning
+and numeric position-generation functions. Numeric controls attach through the
+existing x/y TickGeneration setters; categorical label selection has a separate
+axis-specific value. NumericFormat continues to own number spelling, locale,
+shared factors/units and formatting functions, not position generation.
+
+Preserve Automatic, preferred Additive/Log10Decades, approximate Target, hard
+Maximum and literal exact-tick behavior. Every x/y generation setter replaces
+that axis's complete policy, independently of formatting, limits and the other
+axis. Automatic resets all locator refinements. Exact x_ticks/y_ticks take
+precedence in either order: do not execute a replaced generation function, impose
+its count/density/maximum on the exact list, or format its literal labels. Actual
+axis-kind/scale validation remains independent of that suppression.
+
+Replace the single payload choice with one normalized immutable TickGeneration:
+one closed primary locator and validated orthogonal density/count-cap refinements.
+Primary locators are Automatic, preferred Additive, preferred Log10Decades,
+approximate Target, ExactCount, Multiplicative and Function. Keep the existing
+maximum constructor's meaning by normalizing it to Automatic plus its hard cap.
+This is one representation, not competing optional locator fields or a legacy
+Maximum execution path. Add bare consuming refinement methods under the naming
+rule; a new same-name writer also migrates an existing reader to `get_`.
+
+| Primary locator | Relative density | Optional generated maximum |
+| --- | --- | --- |
+| Automatic, including the existing Maximum constructor | Scales geometry-derived seed | Filters complete candidates in their existing order |
+| Preferred Additive/Log10Decades or approximate Target | Nonneutral density rejects | Filters complete candidates, never individual positions |
+| ExactCount | Nonneutral density rejects | Must be at least the exact count; otherwise construction rejects |
+| Multiplicative | Nonneutral density rejects | Entire lattice source must satisfy the cap; no truncation |
+| Function | Scales the preferred-count hint supplied to the function | Validates its returned complete list; no truncation or reinvocation at a smaller count |
+
+Neutral density 1 is normalized away. Constructors supply neutral refinements;
+consuming edits preserve and validate the complete policy, including contradictory
+count constraints. Clearing a cap restores the primary locator's unconstrained
+generated program. `is_automatic` means the complete default/reset policy, not just
+an Automatic primary with a nondefault density or cap. Keep the existing 10000
+generated-position ceiling and public count range 1..=10000.
+
+TickGeneration must support an owned cloneable function handle. Replace Copy-based
+storage/access assumptions with explicit borrowing/cloning throughout AxisSpec,
+AxisSemanticInputs, source cursors, erasure, facets and composed-input snapshots.
+Keep complete normalized policy equality and operation-bound function identity;
+do not reconstruct an automatic choice while copying or compare only selected
+positions. Add variants/refinements with their live consumers, without dormant
+future selectors or compatibility wrappers.
+
+### Exact Count: Four Positions Across A Known Range
+
+Workflow: a publication's small multiples each require exactly four positions.
+For a linear resolved range [0,10], generate [0,10/3,20/3,10]; formatting can display
+`0,3.33,6.67,10`. Target(4) may instead choose [0,5,10], and Maximum(4) only imposes
+an upper bound. The new requirement is exact cardinality, not a nice-step target.
+
+Define the endpoint contract now: n>=2 includes both resolved display endpoints,
+with equal intervals in the active scale's coordinate space; n=1 uses that space's
+midpoint. Thus a Log10 range from 0.1 to 10 with n=3 has logarithmic coordinates
+[-1,0,1] and mathematical value labels [0.1,1,10]. Do not substitute linear raw-value
+spacing on a logarithmic axis. Counts refer to positions, not printed decimal
+digits or nonempty labels. They do not modify scientific limits or nice-range policy.
+
+For linear endpoints lo/hi, independently round each exact affine combination
+`((n-1-i)*lo+i*hi)/(n-1)` once to binary64, retaining exact endpoint bits. Use
+checked rational/scaled arithmetic rather than overflowing hi-lo or accumulated
+step addition. Logarithmic interpolation operates on the canonical exponent-space
+domain and retains mathematical power operands for presentation. It does not inherit
+the old integral-source exponent clipping as a physical-value restriction.
+
+Generate one complete strict source. If adjacent endpoints cannot represent n
+distinct positions, report a contextual generation failure; do not deduplicate,
+perturb endpoints or lower n. Distinct positions that collapse under the assigned
+projection or cannot fit their formatted labels yield a typed tick fit miss.
+Built-in adaptive formatting can choose its permitted common precision, but the
+locator cannot replace the list with fewer ticks or a terminal midpoint. For n=1
+the midpoint label must still fit. Maximum constraints are checked before text work.
+
+### Relative Density: Responsive Automatic Spacing
+
+Workflow: the same 0..100 plot needs a quieter report version and a denser large
+figure. An illustrative default list [0,25,50,75,100] might become [0,50,100] with
+lower density or [0,10,20,...,100] with higher density. These demonstrate relative
+intent, not a promise that doubling density doubles the final count.
+
+Accept a finite strictly positive multiplier d, default 1. Scale the existing
+assigned-span/6ch seed, not scientific coordinates, glyph size, label width or
+the root's width request. Let S be the existing checked `span_quanta(actual_span)`
+and C the selected tick role's measured/quantized advance of `"0"`, both in integer
+quanta. With the existing checked pitch `P=max(1,6*C)`, use
+`U=1+clamp(floor(S*d/P),1,9999)`. Evaluate the dyadic product/ratio with checked
+arithmetic and apply the finite bound before integer conversion, so an enormous
+valid d saturates the existing source limit rather than overflowing. Preserve
+span/advance quantization before applying density; density 1 must reproduce the
+present seed and ordered Automatic program.
+
+Apply the adjusted seed to the geometry-limited source counts for both linear and
+logarithmic Automatic. Preserve the existing nice-step/source order, cardinality
+filters and first complete fitting candidate; existing full-integral logarithmic
+preference remains explicit. Density is a preference and cannot waive font/ink
+fit, force partial sources or promise a particular final count. It responds to
+assigned facet/Canvas span, selected tick typography and genuine gutter feedback.
+This differs from Target's absolute approximate count and from a fixed interval.
+
+An optional maximum still filters actual complete source cardinality before
+formatting/allocation; it is not silently converted into a target seed. Preserve
+the current Automatic/Maximum singleton behavior. A Function locator receives the
+scaled preferred count as context, while retaining authority over its returned
+list. Reject density on incompatible locators rather than retain a meaningless
+setting. Keep one operation and the existing root feedback bound.
+
+### Multiplicative Intervals: An Anchored Geometric Lattice
+
+Workflow: a positive logarithmic value axis spans 1..64. With anchor 1 and ratio 2,
+its positions are [1,2,4,8,16,32,64]. Ratio 1.5 yields [1,1.5,2.25,3.375,...].
+Unlike Additive(2), which produces an additive lattice, or Log10Decades, which uses
+integral powers of ten, this locator specifies an arbitrary multiplicative ratio.
+
+Retain a finite positive anchor a and finite ratio r>1, defining the lattice
+`a*r^k` for signed integral k. Reverse powers need no ratio-below-one representation.
+Require a positive bounded resolved numeric domain, including when the active
+projection is linear. Reject zero/nonpositive domains before attempting an infinite
+near-zero lattice. Do not change the Plot's scientific transform or invent a new
+logarithm-base selector. An anchor is mandatory in normalized policy; a documented
+factory default of 1 is an ordinary supplied value, not a range-dependent origin.
+
+Determine the complete in-domain integer-index interval using checked, certified
+boundary comparisons. Check its count/cap before allocating positions or forming
+large powers. Compute each member from its original anchor/index, not repeated
+rounded multiplication of the previous value; retain deterministic boundary and
+rounding rules without epsilon inclusion or unchecked float-to-index casts.
+
+Use finite binary64 positions for a linear projection. On Log10 axes retain the
+mathematical lattice operand and its checked scale coordinate; extend the shared
+numeric operand/certified conversion machinery as needed rather than overflow or
+underflow an intermediate physical pow, or label an approximate inverse transform.
+Normalize exactly equivalent decimal-power cases through the same operand engine.
+Real arithmetic, index, coordinate or output representation failures remain fatal.
+
+This is a strict complete lattice source: fit cannot secretly increase the ratio,
+skip powers, keep an arbitrary subsequence or switch to a midpoint. If the selected
+complete source cannot fit, return a typed miss. When no lattice member lies in
+the view, the empty generated list is valid; retain axes/marks and produce no
+numeric-label explanation.
+Distinguish that case from an oversized or unrepresentable nonempty source, which
+must not be disguised as empty. Preserve raw/exact mathematical identity and
+strict projected ordering before formatting and label-cell measurement.
+
+### Category Label Selection: Twelve Bars With Six Month Names
+
+Workflow: twelve month categories still produce twelve bars at the same positions.
+An explicit stride of 2, offset 0 and no forced endpoints displays January, March,
+May, July, September and November. It does not delete February's bar, merge groups
+or renumber category positions. Default All continues to require every label.
+
+Expose one immutable CategoryLabelSelection with All and an every-k selection:
+positive stride, zero-based offset smaller than stride and explicit endpoint
+retention (none, first, last or both). Select indices i satisfying
+`i % stride == offset`, then union any requested endpoint indices once. Normalize
+stride 1/offset 0 to All; empty/one-category domains and strides larger than the
+domain have defined results without checked-index overflow. The default every-k
+factory uses offset 0 and no forced endpoints, matching the month example.
+
+Add independent x/y category-label selection instructions and sealed capabilities
+derived from actual categorical axes. Share those capabilities with the planned
+category rotation API: x families are Trajectory, Interaction, Heatmap, Bar,
+StackedBar, Boxplot, Violin and Raincloud; y families are PointInterval, Coefficient,
+Forest, Dumbbell, Heatmap, HorizontalBar, StackedHorizontalBar, Beeswarm and
+Waterfall. Trajectory checks its actual numeric-versus-categorical x axis; a
+non-All category policy on numeric x rejects before fonts. Conversely, a
+nondefault numeric generator on categorical x still rejects. Matrix variable
+titles and erased Any gain no category setter, and color-scale capabilities do
+not stand in for category-axis capabilities.
+
+Resolve the full scientific category domain, explicit/value order, humanization/
+aliases and display-collision checks first. Select labels against that final
+ordered axis domain, not input-row order or a pre-facet global ordinal. Store one
+selection policy and selected original indices with the complete axis; preserve
+all raw identities, tick positions/segments, grid lines, projection category
+counts, assigned track edges, marks and independent annotations/guide sources.
+Do not implement thinning by deleting AxisTick entries or overwriting their labels
+with empty strings, which loses provenance and native geometry.
+
+Only selected axis-label text contributes to its font census, intrinsic/required
+text width, shaping, gutters, ink and capture. Other consumers of the same category
+text retain their own requirements. Keep original category indices in requirement
+addresses; selecting labels does not compact owner/source IDs. A suppressed name
+does not waive raw-key, alias or domain-collision validation.
+
+Give selected labels capacity between neighboring selected centers and the outer
+axis boundaries, including required clearance and actual ink. A sparse label can
+use intervening unlabeled category space without changing the underlying full
+category cells. All retains the present per-category cell policy. Handle assigned
+native Heatmap cells and Beeswarm/Waterfall width producers explicitly; avoid
+indexing full assigned_cells with a shortened tick vector. Wrap/elide/rotation
+consume the same selected set, original centers and canonical transform. They
+cannot change its stride/offset/endpoints or remove another selected label to fit.
+
+Canvas FirstColumnPerRow still compares complete resolved category domains/orders,
+plus compatible label-selection policy, before suppressing duplicate whole axes.
+It does not compare only the currently visible names. Apply selection once at the
+actual axis owner; preserve the span-aware row-band/anchor rules. Facet local
+subsets and genuinely shared category domains each use their final prepared order.
+
+### Generation Functions: Business Positions From The Actual View
+
+Workflow: always include the current endpoints and an in-range warning value 50.
+The same rule returns [0,50,120] for view [0,120], [20,50,80] for [20,80] and
+[60,120] for [60,120]. It adapts after facet/Canvas range resolution instead of
+requiring the application to reconstruct all those final ranges beforehand.
+
+Provide an owned fallible locator function through TickGeneration. Its immutable
+context includes axis identity/scale, resolved domain/provenance, actual assigned
+axis span and the preferred-count hint, with no backend, mutable Plot, drawing
+hook or scientific-data mutation. Expose raw data bounds where exactly retained
+and explicit mathematical bound/scale-coordinate views for logarithmic domains;
+never reconstruct them using an unchecked physical pow or imply exact inversion
+of the rounded log10 transform. Call only after the actual domain and assignment
+exist. Natural-width low/mid/high estimates remain preferences and do not invoke
+the locator for hypothetical view boxes.
+
+The ordinary result is a complete ordered list of raw data-space positions, with
+no labels. Provide a deliberately typed exponent-space result for Log10 when a
+caller wants mathematical power positions outside physical binary64. Keep the
+coordinate form explicit; do not guess from magnitudes or treat ordinary returned
+values as exponents. Raw logarithmic inputs must be finite/positive, use the
+existing scientific transform and retain their original numeric display operand.
+Exponent results retain PowerOfTen operands. Multiplicative sources likewise
+retain their own mathematical operand instead of reducing everything to a bool
+that means every logarithmic label is `10^projected_position`.
+
+Validate the returned full source before numeric formatting: actual count at most
+10000 and any configured maximum, finite/valid coordinate values, closed-domain
+membership, strict numeric and projected ordering, and no duplicate signed-zero
+positions. Reject an invalid list; do not sort, clip, deduplicate or truncate it.
+An explicitly returned empty list is valid and removes only generated ticks/grid
+lines/number explanations, not scientific marks or axis titles/frame. A valid
+nonempty list is strict: formatting collision or geometric nonfit cannot reinvoke
+the function with a lower count or switch to Automatic. Explicit ticks suppress
+the function altogether in either setter order.
+
+Pass validated positions and their retained operand kinds to NumericFormat,
+including its own single/set formatting function. Thus the warning position 50
+can be displayed as `50`, `50.0` or caller-authored text through the format policy;
+the locator never returns an AxisTick or controls wording. Preserve one source
+list and one corresponding complete formatted result for the same context.
+
+Use the same honest shared-handle identity and operation-local materialization
+principles as formatting callbacks, with separate locator/formatter roles.
+Clones share identity; distinct functions remain different policies even when
+their present positions coincide. Remove TickGeneration's Copy requirement rather
+than leak functions into a global registry. Borrow or clone complete policy inputs
+through standalone, facets and Canvas.
+
+Materialize once per reached owner/axis/handle/policy/domain/provenance/assignment/
+preferred-count context, independently of optional child/text cache enablement.
+Assignment identity includes the geometry consumed by the public context, not an
+unrelated orthogonal size, backend or incidental probe. Changed shared ranges or
+consumed geometry may create a new context within the existing bounded measurement
+program; repeated queries reuse the stored result.
+Callbacks must return stable results for stable input; the source program bounds
+library invocations, not arbitrary application execution. Failures retain owner
+context and produce no partial output. Freeze positions, operands and formatted
+text before capture; no locator or formatter runs during capture or Output replay.
+
+### Composition, Source Programs And Implementation Owners
+
+Make the source program distinguish soft ordered candidates from strict complete
+sources. ExactCount, Multiplicative and Function do not inherit the unconditional
+coarsening/terminal-midpoint path. Preserve the old Automatic/Target/Maximum and
+preferred-interval source order. Handle successful empty strict sources explicitly
+rather than confuse them with a skipped/failed candidate. Numeric maximum applies
+to positions including any intentionally empty display labels, not the count of
+visible strings. Category selection is independent and never filters numeric ticks.
+
+Retain the complete generator, density/cap, mathematical operand and source kind,
+domain provenance, actual callback context/result and category policy/full order/
+selected indices in the consumers that depend on them. Update source/axis feedback,
+composed equality, height caches and child reuse; equal output positions or current
+visible names do not establish upstream equivalence. Track explicit/supplied versus
+generated precedence through erasure and parent reassignment.
+
+Resolve parent domains before invoking locators; shared ranges do not automatically
+force identical per-panel policies or counts. An actually shared displayed axis
+has one owner and requires compatible policy/context. Marginal strips copy the
+central axis positions without independently invoking a function or formatting
+labels. Native coordinate-axis users share the source program; Matrix retains its
+private default route without gaining public attachments. New source/function
+strings use the actual-text font admission and final sealing plan above.
+
+Numeric/categorical controls can change measured gutters and content height, but
+not scientific range provenance, statistical preparation, category topology or the
+selected root-width rule. Preserve the existing eight-round root coordinator and
+bounded guide/local alternatives. A spanning Canvas child uses its full assigned
+axis span; a max-width root keeps its selected width and must fit or fail after
+the resulting text/explanations are measured.
+
+| Owner | Required change |
+| --- | --- |
+| `src/spec/ticks.rs`, `src/spec.rs`, `src/lib.rs`, `src/kind.rs`, `src/builder/configuration.rs` | One validated extended generator, category-selection value, deliberate context/result exports and actual-axis sealed gates |
+| `src/layout/panel/sources.rs`, `src/layout/panel/sources/tests.rs`, `src/numeric/`, `src/layout/panel/projection.rs` | Exact/density/lattice source arithmetic, strict-versus-soft termination, explicit mathematical operands and complete callback results |
+| `src/layout/panel.rs`, `src/layout/panel/semantics.rs`, `src/layout/panel/cells.rs`, `src/layout/panel/axis_frame_grid.rs` | Owned policies, full category positions plus selected-label metadata, capacity/ink, empty sources and frozen axis/source identity |
+| `src/builder/facets.rs`, `src/builder/accessors.rs`, `src/plots/shared_x/prepared.rs`, `src/orchestrator/validation.rs` | Remove Copy assumptions, preserve parent provenance/choice, applicability checks and complete composed dependencies |
+| `src/layout/text/requirements.rs`, `src/layout/interior/sizing.rs`, `src/plots/heatmap.rs`, `src/plots/beeswarm.rs`, `src/plots/waterfall.rs`, `src/plots/interval_estimate.rs` | Selected-label census/preferences, native full-cell geometry, numeric/explanation measurement and actual-source admission |
+| `src/canvas.rs`, `src/canvas/dependencies.rs`, `src/orchestrator/facets/`, `src/plots/marginal.rs`, `src/plots/matrix.rs` | Final shared domains, whole-axis suppression, owner/span context, scoped reuse and existing native/private admission boundaries |
+
 ## Delivery Order
 
 Apply the naming rule first, then consolidate text inputs/styles. Complete actual
 numeric text admission before exposing emitters whose output is not covered by
 today's grammar; complete grouped numeric results before shared explanations and
-functions. Canvas owner records can then retain the final text/numeric context.
+formatting functions. Extend the generator and add explicit category selection
+through those common preparation/formatting paths before Canvas owner migration.
+Canvas owner records can then retain the final axis/text/numeric context.
 Complete spans and fixed-angle label measurement before refactoring natural width
 for the cap. Each code-changing step runs affected focused checks and strict
 Clippy; commit completed logical changes before proceeding. Update current
@@ -939,7 +1257,94 @@ font counts stop at the freeze boundary across SVG/outline/PNG/Output replay;
 do not replace behavioral checks with closure identity alone. Update numeric/font/
 layout/guide contracts and callback documentation with those implemented semantics.
 
-### 8. Make Canvas Ownership And Track Geometry Explicit
+### 8. Normalize TickGeneration And Remove Copy Assumptions
+
+Migrate the five current choices to the single primary-locator/refinement policy,
+including Maximum as Automatic plus cap, without changing their source order,
+singleton semantics, exact precedence or actual-axis refusal. Move production
+consumers to explicit borrows/clones and preserve normalized choice/provenance in
+AxisSemanticInputs, composed snapshots and feedback. Do not add unused future
+locator variants or a parallel old Maximum implementation.
+
+Adapt existing generation/composition identity tests and verify old-to-new behavior
+for Automatic/Maximum, existing interval/Target behavior, immutable resets and source
+bounds.
+Update the current representation contract with the working migration, including
+Clone rather than Copy and the precise complete-policy `is_automatic` meaning.
+
+### 9. Add Strict Exact Generated Counts
+
+Expose exact counts with endpoint-including scale-space interpolation and the
+single-midpoint n=1 rule. Integrate a strict source through shared coordinate and
+native numeric-axis callers, preserving mathematical Forest operands. Add/refine
+the optional maximum edit with complete-policy contradiction checks and the
+confirmed reader naming rule; preserve existing maximum-constructor semantics.
+
+Verify independent interpolation/endpoints/rounding, log scale spacing, collapsed
+representable positions, a genuine exact-count text nonfit and final Shared-domain
+selection. A strict source cannot fall into Automatic coarsening or midpoint retry.
+Update numeric/tick documentation and public examples with the implemented source.
+
+### 10. Add Relative Automatic Density
+
+Expose validated density on the live Automatic path, with neutral 1 normalization
+and explicit rejection on incompatible locators. Establish the preferred-count
+formula used by the later Function context without adding an unused Function
+choice. Use checked quantized arithmetic and the existing bounded source order/
+maximum filtering. Preserve true selected-role metrics and parent-assigned span
+dependencies.
+
+Replace the existing fixed-pitch boundary witness with meaningful density/default
+equivalence and saturation coverage rather than add a setter/getter echo. Exercise
+different real assignments/typography and one facet/Canvas range/height interaction;
+do not assert exact final counts from a relative preference. Update public tick
+guidance with concrete sparse/dense examples and the hard-cap distinction.
+
+### 11. Add Anchored Multiplicative Sources
+
+Implement checked geometric index bounds and strict complete lattice generation
+for positive domains. Extend the single numeric operand/certification path for
+mathematical logarithmic lattice values before exposing the source. Preserve
+anchor/index identity, cap-before-allocation, complete set formatting and final
+font admission. Do not compute a new tick from the previously rounded value.
+
+Verify the ratio-2 and ratio-1.5 examples, reciprocal indices, endpoint boundaries,
+equivalent anchor shifts, ratios near one, empty views, real index/representation
+failures, oversized lists and a strict nonfit. Include a Forest projection and
+independent rational/power certificates; no platform powf or copied locator loop
+serves as the oracle. Update numeric/certification contracts and examples together.
+
+### 12. Add Explicit Categorical Label Selection
+
+Expose the complete All/stride/offset/endpoint value and sealed x/y instructions,
+including conditional categorical Trajectory x. Resolve selection from the final
+full category order and preserve every mark, tick position and assigned cell.
+Integrate selected text requirements/preferences, neighbor capacity, native axis
+widths, full-domain collision checks and Canvas/facet sharing dependencies.
+
+Verify twelve bars with six selected names, independent y selection, endpoint/
+offset/empty cases, full native Heatmap grid and an unselected unavailable glyph
+without suppressing an independently used annotation. Replace obsolete always-all
+assumptions with All-default and explicitly selected completeness witnesses.
+Update categorical/text/layout/property contracts and examples. Share the actual
+axis capability definitions with the later fixed-angle rotation implementation.
+
+### 13. Add Owned Tick Position Functions
+
+Expose immutable actual-view context and typed raw/exponent position results through
+TickGeneration. Implement exact-tick suppression, complete result validation,
+shared-handle policy identity and operation-local materialization independent of
+optional layout caches. Format accepted operands through NumericFormat, including
+its already implemented functions and measured factor/unit explanations.
+
+Verify the view-dependent warning-50 example, final parent domains, assigned-span/
+density hints, empty output, raw versus exponent logarithmic operands, invalid
+ordering/bounds/counts, strict fit refusal and zero function calls for exact ticks.
+Prove repeated context queries/cache toggles and frozen publications reuse results
+without locator/formatter/font work. Update tick/numeric/layout/guide lifecycle
+contracts and user examples with this working interface before committing.
+
+### 14. Make Canvas Ownership And Track Geometry Explicit
 
 Migrate current 1x1 Plot/TextPanel placements to canonical payload/footprint owner
 records and derived occupancy. Preserve anchor IDs through preparation, theme/
@@ -952,7 +1357,7 @@ Validate occupancy, sparse tracks, header/row-title geometry, shared source
 provenance and assigned projections using existing focused witnesses. This step
 is a completed internal migration before exposing multi-cell placement.
 
-### 9. Implement Rectangular Plot Spans End To End
+### 15. Implement Rectangular Plot Spans End To End
 
 Expose `panel_span` together with checked whole-footprint validation, span-aware
 hard/preferred requirements, full-box child measurement, guide minima and feedback/
@@ -966,7 +1371,7 @@ and `docs/getting-started.md` with implemented placement/ownership behavior.
 Existing root modes must all support spanning owners at this step; maximum-width
 support is added through their shared allocation path later.
 
-### 10. Add Explicit Category-Label Rotation
+### 16. Add Explicit Category-Label Rotation
 
 Implement the one validated preset/custom-angle value, sealed x/y instructions
 and canonicalization before measurement. Extend label-cell fit, transformed
@@ -976,7 +1381,7 @@ change or automatic split/drop, preset/custom equivalence, nonquadrantal actual
 ink containment, explicit multiline labels and relevant Canvas/facet/native routes.
 Document the API, sign convention and canonical precision with implemented behavior.
 
-### 11. Make Existing Root Modes Explicit
+### 17. Make Existing Root Modes Explicit
 
 Replace the optional-pair request representation and coordinator signature for the
 three existing modes first. Migrate all production and test callers, embedded
@@ -988,7 +1393,7 @@ replacement, zero preflight, width locking and one prepare/capture lifecycle wit
 the focused checks below. Commit the completed representation change after those
 checks and strict Clippy pass.
 
-### 12. Separate Natural Width Composition From Height Work
+### 18. Separate Natural Width Composition From Height Work
 
 Factor the necessary width-first paths in Plot, facets and the now span-aware
 Canvas while retaining their current three-mode behavior. Use the same column
@@ -1000,7 +1405,7 @@ Validate current-mode semantic equivalence, sparse facet/Canvas topology,
 unbreakable text requirements, native Matrix sizing and mixed/all-text Canvas
 height measurement. Commit this refactoring after focused tests and strict Clippy.
 
-### 13. Add And Document Maximum Width End To End
+### 19. Add And Document Maximum Width End To End
 
 Add MaxWidth to the single request representation and expose both consuming
 `#[must_use]` setters, following the existing `pub const fn` builder style. Apply
@@ -1074,6 +1479,60 @@ stale documentation claims have no remaining caller or compatibility definition.
    selected strings/geometry across text SVG, outlines and PNG. Use a bounded
    selection of distinct contracts, not every formatter x family x output product.
 
+### Tick Generation And Category-Selection Relationships
+
+1. **Current-mode preservation and composition:** existing Automatic, Additive,
+   Log10Decades, Target and Maximum retain source order, exact precedence and
+   documented singleton behavior through the normalized representation. Compare
+   complete policies/provenance under clone/erasure/parent replacement. Exercise
+   meaningful density/cap combinations and reject contradictions without fonts;
+   do not test normalization solely by setting a property and reading it back.
+2. **Exact cardinality and interpolation:** the four-position [0,10] example,
+   singleton midpoint, both endpoints, negative/opposite-extreme linear ranges,
+   logarithmic equal spacing, subnormals and adjacent binary64 endpoints. Use
+   independent affine-rational rounding expectations and scale-space relationships.
+   Prove count never decreases on formatting/geometry failure and no unrelated
+   midpoint appears. Explicit exact lists still override the generated requirement.
+3. **Relative density:** independently check quantized seed boundaries, neutral
+   normalization, monotonic preferred seeds, tiny/huge finite multipliers and
+   clamp-before-conversion. Larger density need not produce an exact count multiple.
+   Check actual span/role metric feedback, cap filtering before text work and
+   same-context/cache equivalence without pinning automatic panel dimensions.
+4. **Multiplicative lattice:** ratio 2 and 1.5, shifted anchors/negative indices,
+   exact boundary inclusion, close-to-one ratios, full-domain cardinality limits,
+   positive-domain validation and valid empty views. Use independent rational or
+   certified interval/power witnesses for lattice membership, final coordinates and
+   numeric labels. Verify no accumulated drift, hidden coarsening, skipped powers,
+   arbitrary exponent clamp or midpoint substitution under tight geometry.
+5. **Category completeness and actual text:** twelve bars with the six selected
+   month labels, plus offset/forced endpoints and zero/one/large-stride domains.
+   Preserve full category counts, mark/source order, original tick/grid positions,
+   complete native track geometry and independent annotations/guides. Check selected
+   neighbor capacities and complete required strings, including a true selected-label
+   nonfit. A glyph used only by an unselected label is unnecessary; the same glyph
+   used by another actual annotation remains required and can still fail.
+6. **Actual-axis and shared-category semantics:** conditional categorical Trajectory
+   x, representative x/y families, native Heatmap/Beeswarm and a facet's final local
+   order. Keep numeric generation and category selection separately gated. Shared
+   Canvas row bands compare full domains/orders and compatible selection policies;
+   sparse visible-name equality alone cannot make them compatible. Verify original
+   requirement indices, whole-axis suppression and span-aware owner geometry.
+7. **Function source and formatting separation:** the warning-50 rule for all three
+   views, boundary duplicate handling by the application, raw-data versus explicit
+   exponent results, empty output and strict ordered/domain/count validation.
+   Generator functions return positions only; feed their retained operands through
+   typed or functional NumericFormat, including units/explanations. Invalid sources
+   fail before formatter invocation; font/format failures never trigger another
+   locator or a hidden lower-count application call.
+8. **Bounded parent-aware replay:** final Shared domains, assigned-span/density hints,
+   identical context queries, meaningful context changes, cloned/distinct handles
+   and optional layout-cache settings. Exact ticks invoke neither replaced locator
+   nor formatter. Marginal strip copies do not invoke a second central locator.
+   Freeze one selected source/text set before capture, then verify no new function,
+   source or font work during SVG/outline/PNG/Output replay. Include a representative
+   faceted root and a spanning-Canvas/max-width interaction, preserving existing
+   family admission boundaries rather than building a mechanical root/family matrix.
+
 ### Text And Rotation Relationships
 
 1. **Common source syntax:** the same explicit text with newlines, CRLF, blank lines
@@ -1100,10 +1559,12 @@ stale documentation claims have no remaining caller or compatibility definition.
    and nonfinite rejection. Use independent transformed-corner/containment oracles,
    not the production measurement function as its own expected result.
 6. **Useful tilts and strict fit:** a long categorical label that cannot fit
-   horizontally can fit at its explicitly selected angle; all labels/positions
-   remain. Check transformed outward ink and logical clearance, including explicit
-   multiline labels and a genuine nonfit. Omission still fails intact rather than
-   choosing an angle, changing font size or splitting `LightGBM`.
+   horizontally can fit at its explicitly selected angle. Under All, every label
+   remains; an explicit category selection preserves all positions and every
+   selected label through the same rotation path. Check transformed outward ink
+   and logical clearance, including explicit multiline labels and a genuine
+   nonfit. Omission still fails intact rather than choosing an angle, changing
+   font size or splitting `LightGBM`.
 7. **Affected owners and output:** representative x-category, y-category and native
    Heatmap/Beeswarm routes, a facet, a Canvas spanning child and one capped root.
    Retain shared-axis alignment, exact geometry dependency identity, one capture
@@ -1190,6 +1651,10 @@ Keep tests in their existing logical owners:
 - `src/font/canonical.rs`, `src/layout/text/requirements.rs`,
   `src/layout/panel/sources.rs`: actual-source admission, stable unit/face choices,
   candidate order, semantic materialization and final sealing.
+- `src/layout/panel/sources/tests.rs`, `src/layout/panel/cells.rs`,
+  `src/layout/panel/semantics.rs`, `src/builder/facets/generation_tests.rs`:
+  exact/density/lattice programs, full category geometry, complete policy/context
+  identity, parent domains and locator/formatter invocation boundaries.
 - `tests/heatmap/suite.rs`, `tests/estimates/model_displays.rs`,
   `tests/lines/numeric_layers.rs`, `tests/distributions/composites.rs`: existing
   automatic/exact ticks, continuous guides and fixed-value consumer boundaries.
@@ -1234,6 +1699,17 @@ cargo test --locked --offline --lib decimal_emission_obeys_notation_precision_an
 cargo test --locked --offline --lib finite_extremes_keep_exact_scaled_values_and_refuse_unrepresentable_output
 cargo test --locked --offline --lib fractional_powers_certify_literal_cells_carries_refinement_and_cache_independence
 cargo test --locked --offline --lib semantic_sets_resolve_uniform_precision_preserve_occurrences_and_exhaust_powers
+cargo test --locked --offline --lib six_ch_seed_has_quantized_boundaries_and_a_ten_thousand_bound
+cargo test --locked --offline --lib count_targets_allow_nice_deviation_and_maxima_filter_before_formatting
+cargo test --locked --offline --lib common_step_uses_index_products_not_accumulated_addition_or_endpoint_tolerance
+cargo test --locked --offline --lib logarithmic_interval_vectors_are_divisible_integral_exponents_not_subsequences
+cargo test --locked --offline --lib midpoint_is_conditional_and_must_itself_fit
+cargo test --locked --offline --lib source_semantics_reject_before_fonts
+cargo test --locked --offline --lib generation_copy_and_composed_identity_include_both_axes
+cargo test --locked --offline --lib generation_rendering_and_exact_precedence_are_cache_independent
+cargo test --locked --offline --lib categorical_trajectory_generation_refuses_before_fonts_in_standalone_and_canvas
+cargo test --locked --offline --lib forest_log_interval_is_applied_in_exponent_space_and_exact_ticks_override_it
+cargo test --locked --offline --lib assigned_cells_keep_positions_including_empty_labels
 cargo test --locked --offline --lib prepared_fonts_keep_their_operation_across_clones
 cargo test --locked --offline --lib sealed_census_reuses_one_normalization_per_stack_and_one_selection_per_pair
 cargo test --locked --offline --test lines numeric_layers::point_layer_edits_validate_radius_and_preserve_exact_alpha_endpoints
@@ -1241,6 +1717,7 @@ cargo test --locked --offline --test lines numeric_layers::public_tick_generatio
 cargo test --locked --offline --test lines numeric_layers::public_tick_generation_counts_replace_complete_choices_and_automatic_resets
 cargo test --locked --offline --test heatmap local_and_shared_guides_publish_the_same_distinct_close_numeric_labels
 cargo test --locked --offline --test heatmap heatmap_annotations_use_default_and_chained_formats_with_contrasting_text
+cargo test --locked --offline --test heatmap heatmap_wrap_policy_preserves_complete_crowded_axis_labels
 cargo test --locked --offline --test estimates model_displays::coefficient_fixed_value_labels_are_point_only_and_default_is_inert
 cargo test --locked --offline --test estimates model_displays::forest_log_scale_renders_raw_power_ticks_and_rejects_nonpositive_values
 cargo test --locked --offline --lib mandatory_breaks_preserve_crlf_and_all_blank_paragraphs
@@ -1265,6 +1742,8 @@ cargo test --locked --offline --test composition canvases::continuous_shared_hea
 cargo test --locked --offline --test composition canvases::composed_row_title_spans_all_columns_and_rejects_panel_titles
 cargo test --locked --offline --test composition canvases::composed_horizontal_bars_support_shared_headers_labels_and_range_groups
 cargo test --locked --offline --test composition canvases::shared_category_labels_compare_rendered_explicit_orders
+cargo test --locked --offline --test composition canvases::shared_category_labels_reject_different_row_domains_preflight
+cargo test --locked --offline --test composition facets::faceted_explicit_category_order_validates_globally_and_filters_panel_subsets
 cargo test --locked --offline --test output multiformat::plot_and_canvas_svg_operations_keep_complete_text_and_call_local_replay
 cargo test --locked --offline --lib layout::kernel::tests::
 cargo test --locked --offline --lib layout::interior::sizing::tests::
@@ -1284,9 +1763,9 @@ just fmt-check
 just lint
 ```
 
-Run the newly written/replacement numeric, callback/font, text, rotation, span and
-maximum-width witnesses as well as affected existing callers; the commands above
-are not substitutes for new-contract coverage.
+Run the newly written/replacement numeric, locator/category, callback/font, text,
+rotation, span and maximum-width witnesses as well as affected existing callers;
+the commands above are not substitutes for new-contract coverage.
 Select existing guide/cache neighbors only when their dependency paths change or
 a failure exposes an interaction. Execute affected public doctests and `just docs`
 when adding API documentation/examples. Do not run the heavyweight large-SVG/PNG

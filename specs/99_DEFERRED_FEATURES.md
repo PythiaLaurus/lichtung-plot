@@ -10,13 +10,14 @@ specifications, particularly [Theme](03_THEME_SYSTEM.md),
 [property ownership](04_VISUAL_PROPERTY_OWNERSHIP.md) and
 [guides](08_GUIDE_SYSTEM.md).
 
-DF4, DF7, DF8, DF9, DF10 and the residual scopes in DF5/DF6 are pending user
+DF7, DF8, DF9, DF10 and the residual scopes in DF5/DF6 are pending user
 disposition. Their checkpoint is the next feature-scope discussion **after
 specification/documentation cleanup and before their successor implementation
-planning**. Extended numeric presentation, unified text controls, explicit
-categorical-label angles and maximum-width/automatic-height sizing have been
-requested for implementation planning as described below. Public configuration
-naming follows the confirmed rule in [the implementation plan](91_IMPLEMENTATION_PLAN.md).
+planning**. Extended numeric presentation/tick generation, explicit category-label
+selection, unified text controls, categorical-label angles and maximum-width/
+automatic-height sizing have been requested for implementation planning as
+described below. Public configuration naming follows the confirmed rule in
+[the implementation plan](91_IMPLEMENTATION_PLAN.md).
 No additional general audit is a prerequisite. Discussion itself does not admit
 or reject a capability.
 
@@ -56,16 +57,38 @@ from this list when its plan is approved and update current contracts as impleme
 
 ## DF4: Further Automatic Tick Controls
 
-Excluded: exact generated counts, density scalars, arbitrary multiplicative ratios,
-categorical stride/drop and generation callbacks. TickGeneration Automatic,
-preferred Additive/Log10Decades, approximate Target and hard Maximum, plus verbatim
-exact ticks, are current.
+Current: TickGeneration Automatic, preferred Additive/Log10Decades, approximate
+Target and hard Maximum, plus verbatim exact ticks. Generated position selection
+is separate from NumericFormat's spelling and formatting functions.
 
-**Checkpoint:** next feature-scope discussion. Evaluate those combined controls on
-small panels/facets/shared domains first. Treat exact counts separately from
-nice-step targets, and category omission separately from numeric generation.
-Any proposal must preserve explicit precedence, semantic completeness and one
-bounded source/planning route.
+**Requested planning:** implement all five discussed controls through the existing
+axis/formatting/root lifecycle, with concrete workflows in
+[the implementation plan](91_IMPLEMENTATION_PLAN.md):
+
+- Exact generated counts: four endpoint-including positions across [0,10], rather
+  than an approximate Target or an upper bound.
+- Relative automatic density: sparse/report versus dense/large-figure views while
+  retaining span/typography-responsive automatic spacing.
+- Anchored multiplicative intervals: [1,2,4,8,16,32,64] for ratio 2, including other
+  caller-selected ratios and explicit anchor identity.
+- Category-label stride/offset/endpoints: twelve month bars with six selected names,
+  preserving all categories, marks, tick positions and grid geometry.
+- Owned numeric position functions: include view endpoints and an in-range warning
+  value 50 after final domain resolution; pass resulting positions to NumericFormat.
+
+The plan covers one normalized generator/refinement policy, strict versus soft
+source behavior, actual-axis capabilities, full category-domain/selected-text
+ownership, callback identity/materialization, facets/Shared ranges, spanning Canvas
+and frozen publication. Exact ticks retain precedence in either setter order.
+The capabilities are not implemented; explicit category-label selection does not
+authorize automatic fit-driven omission or removal of scientific categories.
+
+**Plan-review checkpoint:** review the integrated tick proposal before implementing
+it, including exact-count endpoints/scale space, density/cap combinations,
+geometric boundary arithmetic, selected-label font/native-cell requirements and
+raw-versus-exponent callback coordinates. This reviews the requested scope rather
+than reopening its feature disposition. Remove admitted scope from this list when
+its plan is approved and update current contracts as implemented.
 
 ## DF5: Broader Text Layout Controls
 
