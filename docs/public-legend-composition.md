@@ -1,63 +1,31 @@
-# Discrete legend composition
+# Legend Composition
 
-`LegendComposition` is a crate-root closed policy with `Combined` (default) and
-`Separate`. Attach it through consuming `Plot::legend_composition` on all 25 exact
-families, or `Canvas::legend_composition` for Shared.
-Each setter replaces only that selection, independently of theme, labels,
-visibility, placement and sizing call order. All families can now explain declared
-data alpha; see `public-data-alpha.md` for the 49 actual component attachments.
+LegendComposition is a closed policy: Combined(default) or Separate. Attach it
+through Plot::legend_composition on all 25 exact families or Canvas for Shared.
+Any has no setter. It is independent of Theme, placement, visibility and sizing.
 
-## Meaning and ownership
+Combined keeps complete observed symbol keys. Separate explains actual mapped
+channels in ordered group-style, joint, hue-color, literal and supplemental-series
+sections. Continuous color and declared alpha content follow inside the same
+frame. There is one placement/collision owner, with no per-section positions.
 
-Combined retains one section, observed pair identities and complete mark keys.
-Separate explains actual mapped channels in semantic section order: group style,
-joint, hue color, literal/reference domains, then supplemental point series.
-Sections share one outer frame, placement, collision obstacle and frozen draw
-plan. There is no per-section position or new placement budget.
+An Interaction with explicitly configured group styles and independent hue can
+produce two sections. A dense five-group/four-hue crossing has 20 Combined keys
+versus 5+4 Separate keys; sparse three-pair data can have 3 versus 4. Marginal
+explanations do not assert unobserved combinations or change marks/statistics.
+Repeated configured shapes/colors are valid.
 
-An Interaction with explicitly configured group styles and an independent hue
-field can produce group-style and hue-color sections. A five-group/four-hue full
-crossing has twenty Combined keys versus five plus four Separate keys. Sparse
-three-pair support can have three Combined versus four marginal keys. Marks,
-source rows and intervals are unchanged; marginal sections do not claim a
-Cartesian set of observed combinations. Repeated configured styles/colors are
-permitted without promising perceptual uniqueness.
+Same raw-field group/hue stays joint. Unsupported independent pairs without a
+mapped group-style channel reject before fonts, even for one pair/equal RGB.
+Hue-only/positioned-series keys preserve complete actual geometry. Row-hue paths
+explain point colors, not neutral connectors. Dumbbell/Regression/sign domains
+remain literal. Labeled Line PointLayers form the final series section.
 
-Same raw-field group/hue channels retain one complete joint section. Families
-without an independent mapped group-style channel refuse unsupported independent
-pair factorization before fonts, including a single observed pair or equal RGB.
-Hue-only and positioned categorical guides retain complete truthful color keys.
-Row-hue paths explain point colors without inventing hue-colored connectors.
-Literal Dumbbell/Regression/sign keys remain literal; labeled Line PointLayers
-occupy the final `series` section. Raw identities remain distinct from aliases.
-
-Group-style projection neutralizes only hue-mapped RGB to the originating Plot's
-legend-label text RGB, preserving independent role/exact alpha, presence, fixed/exact paints,
-outlines and geometry. The text role's alpha is not applied to the key. Hue
-projection neutralizes only mapped Interaction group shape/pattern to Circle/Solid.
-Shared Canvas text/chrome uses the Canvas theme; complete keys retain their source
-Plot paints and neutral RGB.
-
-Both compositions neutralize data-bound target alpha to 255 in existing context
-keys. Declared alpha explanations follow symbols and optional continuous-color
-content inside the same frame; Undeclared bytes do not invent an explanation.
-
-| Owner | Effective selection |
-| --- | --- |
-| Standalone Plot or generic facets | Owning Plot |
-| Canvas PerPlot | Each Plot independently |
-| Canvas Shared | Canvas selection for every contribution |
-| Canvas Hidden or Plot Hidden contributor | No discrete guide semantics/fonts |
-
-Shared ignores stored child selections without mutating them or treating them as
-conflicts. Returning to PerPlot uses those selections again. Hidden marks still
-participate in scientific color-domain coordination. Canvas composition is
-inactive under PerPlot/Hidden and for all-continuous guides. Explicit child guide
-edges remain incompatible with Shared. Matrix remains native Plot-local and
-excluded from Canvas/generic facets; Marginal remains excluded from generic
-facets. PointLayer attachment remains Line-only.
-
-## Public construction
+Group projection neutralizes hue-mapped RGB to the source Plot's legend-label RGB,
+without borrowing text alpha. Hue projection neutralizes only mapped Interaction
+shape/pattern to Circle/Solid. Independent paints/outlines/geometry remain actual.
+Both policies neutralize data-bound context alpha to 255; declared alpha has its
+own explanation and Undeclared does not invent one.
 
 ```rust
 use lichtung_plot::{Canvas, CanvasLegendPolicy, LegendComposition};
@@ -69,62 +37,18 @@ let canvas = Canvas::grid(1, 2)?
 # Ok::<(), lichtung_plot::Error>(())
 ```
 
-All 25 exact families expose the setter, including Histogram, Qq, PointInterval,
-Coefficient, Forest, Heatmap, Beeswarm and Waterfall after declared-alpha admission.
-Erased Any has no setter. Continuous content and symbols share one PreparedGuide.
-The enum moved from private semantic preparation into the existing public policy
-owner; the former private enum implementation/path is removed.
+Standalone/facets use owning Plot selection, PerPlot each child, Shared Canvas.
+Shared ignores stored child selections without mutating them; returning to PerPlot
+uses those selections again. Shared chrome/text comes from Canvas while keys
+retain source Plot paint/neutral RGB. Repeated raw identities require equal
+labels/full keys; conflicting aliases/styles or ambiguous nonempty section titles
+reject before fonts. Explicit child guide positions remain incompatible with Shared.
 
-`examples/06_legend_sections.rs` publishes side-by-side Combined/Separate PerPlot
-guides and a Separate Shared guide, with the same twenty observed pairs and forty
-source observations per panel. Repeated shapes/patterns are deliberately explicit
-existing styles.
+Hidden suppresses explanatory semantics/fonts but still validates scientific
+bindings/scales, and visible marks still coordinate raw color domains. Matrix
+remains native standalone, Marginal nongeneric-facetable. Native Heatmap/Beeswarm
+right tracks and Matrix trailing track place their guides only once.
 
-## Lifecycle
-
-Effective policy, scientific domains, actual producer bindings, typed sections,
-labels and complete source occurrences are prepared before the final font
-census. Titles and entry text use stable section descendants of the original
-guide slot. Natural size, assigned section flow, exact owner-local reuse,
-consumed-ancestor dependency keys and selected output use the same descriptor.
-No first-section-only rendering, flat compatibility carrier, late body-probe
-fallback, generic palette reconstruction or draw-time source access remains.
-
-Measurement stacks ordered sections with one chrome reserve, bounded global
-normal/compact variants and deterministic finite-height capacities. Complete
-text/glyph ink participates in fit. Frozen SVG/PNG reuse the selected
-`LegendDrawPlan` with no new fonts, shaping or layout. See
-`../specs/08_DISCRETE_GUIDES.md` and the preceding semantic, stacked measurement,
-exact-reuse, effective-owner and routed-dependency evidence documents.
-
-## Historical Composition Cutover Verification
-
-The existing all-family constructor/capability inventory now attaches Separate to
-all seventeen admitted markers while preserving exact kind/erasure checks. Nine
-new compile-fail documentation examples reject all eight other concrete families
-and erased Any through the actual public setter, not an obsolete import. Public
-Plot and Canvas construction examples compile; **all 114 doctests pass**.
-
-The existing Shared authority test now uses public setters, checks replacement and
-both Canvas policy/selection orders, retains actual omitted Combined behavior,
-and returns to mixed PerPlot selections without mutating child values. The
-continuous numeric-guide test stores Separate under Shared and Hidden and retains
-the same final numeric sources and pre-font policy refusals. Five facet-parent
-tests, two actual producer-binding tests, five measured section/cache tests and
-six child-cache tests also pass: **20 focused library tests** in total.
-
-**18 existing external tests** pass: the all-family capability inventory, sixteen
-Shared composition callers and actual styled Interaction key/mark parity. No unit
-or integration tests are added or moved; library discovery remains **671,
-including 17 ignored**. Strict all-target Clippy, formatting/whitespace checking,
-warning-free API docs and unpacked package verification pass. The example runs
-successfully and publishes both explicit **1600×1000** scenes; selected SVG text
-has all twenty pair labels, the five group/four hue marginal labels, and their
-owning titles in semantic order. Logs are `/tmp/opencode/public-guides-*.log`.
-
-The full all-owner Separate acceptance/release matrix and integrated phase closure
-remain pending. This public cutover does not claim a full-suite or release gate.
-
-The eight former concrete-family negatives above are historical evidence. The
-alpha public cutover migrates them to the all-25-family positive inventory and
-retains Any as negative; `public-data-alpha.md` owns the current boundary.
+See [data alpha](public-data-alpha.md), the
+[guide specification](../specs/08_GUIDE_SYSTEM.md) and
+`examples/06_legend_sections.rs` for the corresponding API use.

@@ -1,675 +1,314 @@
 # Rendering Contract
 
-**Status**: Canonical
-
-## Inputs
-
-`Plot` consumes owned immutable semantic values. Constructors return
-`Plot<kind::Family>` values, and sealed capabilities reject configuration that is
-categorically unsupported by that family at compile time. Validation before
-opening a backend canvas remains responsible for data-dependent constraints such
-as aligned lengths, finite numeric values, categorical identities, source-row
-provenance, bounds, and representable geometry. Conversion from external data
-containers belongs to callers.
-
-Exact family markers are erased explicitly with `Plot::erase` when a caller needs
-heterogeneous storage. `Plot<kind::Any>` does not regain family-specific
-configuration methods. `Canvas::panel` performs this erasure after accepting a
-typed plot.
-
-Required constructor channels have one owner. Trajectory, line-path,
-interaction, and stacked-series groups and heatmap and beeswarm continuous color
-values are stored in their closed inputs and have no replacement setter.
-
-Categorical ordering is plot-owned rather than encoded by physical input row
-order. First-observed order is the deterministic default. An explicit order
-must name every rendered category exactly once. Value-derived ordering is
-applied only after a supported family prepares one scalar rendered value per
-category; ambiguous multi-value categorical dimensions reject it.
-
-Ordinary bars consume one closed `BarInput`: raw samples, one precomputed
-estimate per cell, or one precomputed estimate with explicit drawable `Bounds`.
-Raw samples render per-cell arithmetic means and default to a deterministic
-two-sided 95% percentile-bootstrap confidence interval with 1,000 resamples and
-seed zero. Optional sampling units select multilevel resampling within each
-category, group, and facet cell. A singleton observation or sampling unit
-renders its mean without an error bar. Stacked bars remain separate sum inputs.
-
-`Bounds` is the sole caller-provided lower/upper representation and carries no
-inferential classification, level, scale, or provenance. Point-interval and
-interaction constructors require bounds atomically; interaction also requires
-its graphical group. Forest construction requires bounds and its scientific
-reference. Coefficients consume `CoefficientInput::estimates` or
-`CoefficientInput::estimates_with_intervals`, and ordinary line series add an
-optional drawable band with `Plot::band`. Rendering validates aligned lengths,
-finite endpoints, and `lower <= estimate <= upper`.
-
-Histograms consume exactly one `HistogramInput`: `samples` computes bins and
-optional composite layers, while `geometry` renders one complete
-caller-computed density-axis geometry input. Rainclouds likewise consume exactly
-one `RaincloudInput`: aligned categorical samples or complete caller-computed
-geometry. Precomputed geometry is self-contained and rejects sample-only
-channels such as facets and source-row identities during preflight.
-
-`Plot::line` is an ordinary sorted numeric line series and is the only line
-family that accepts bands or supplemental point layers. Each `PointLayer` owns
-an independent nonempty aligned numeric x/y dataset; it may represent raw
-observations or any other caller-selected supplemental coordinates and need not
-align with the primary line input. Multiple layers append in call order and
-render over primary ribbons, lines, and markers. Generic faceting rejects them.
-The renderer assigns a deterministic theme-coordinated color and selects the
-theme's supplemental radius and byte alpha (built-ins use 4 and 204). An explicit
-`Color` replaces the complete mark RGBA; a separate byte-alpha
-instruction replaces its alpha without multiplication or floating conversion. Radius replaces only
-geometry. Point-label text retains its complete theme text role: automatic mark
-color/alpha do not recolor it, explicit color replaces its paint, and explicit
-alpha replaces only its alpha. The
-primary line occupies one palette slot without hue, or one slot per level in its
-resolved hue domain with hue. A Canvas shared legend therefore reserves every
-Canvas-coordinated hue level, including a level absent from that local plot. An
-automatic point-layer color uses the palette slot after those primary slots plus
-that layer's zero-based append index. Every layer consumes its append position
-even when it has an explicit color. Palette cycling and repeated explicit colors
-are allowed. Optional point labels annotate individual points, while one optional
-legend label identifies the complete layer.
-
-Heatmap and Beeswarm use the owning theme's common sequential gradient. All four
-built-ins select `#F7FBFF -> #08306B`; the former Beeswarm-only default is removed.
-Local and Shared continuous guides consume the final prepared domain and the
-same chromatic mapping as marks, with independent mark alpha. Constant domains
-have one required numeric label; an interior diverging center contributes its
-required label without making every gradient stop a numeric label.
-
-`Plot::trajectory` requires an explicit graphical group, sorts points within
-each group, and always draws an observation marker. `Plot::line_path` requires
-numeric x values and an explicit group, preserves source-row order and repeated
-x values, and alone accepts `LinePathStyle`. Marker visibility is configurable
-for ordinary lines and line paths, but not trajectories.
-
-Dumbbell construction atomically consumes both numeric endpoints and their
-explicit labels and complete `Color` paints. Each endpoint's exact RGBA also
-supplies its literal guide key; theme radius/shape and independent outline apply
-without multiplying the exact fill alpha by a theme alpha. The neutral connector
-is independent. Waterfall construction consumes a finite base;
-rendering derives every span and the terminal through one ordered cumulative
-pass. Every intermediate endpoint must be finite. The final cumulative endpoint
-is the sole terminal used by ranges, guides, and labels; a separately associated
-sum of deltas is never substituted for rendered geometry.
-
-`Plot::source_rows` is the sole source-row identity authority for all
-plot-aligned values, faceting, composition, and raw-observation overlays.
-Individual value objects and overlay options do not own provenance.
-
-Generic faceting consumes one complete `FacetSpec`: row, column, grid, or a wrap
-with a positive column count, together with its numeric-axis sharing policy. A
-grid requires distinct row and column variable names. Marginal and matrix plots
-do not implement the generic facet capability. Faceted significance annotations
-identify one `FacetCell::single(level)` or `FacetCell::grid(row, column)`; facet
-variable names come from the `FacetSpec` and are not repeated by annotations.
-Precomputed histogram and raincloud geometry reject generic faceting before a
-backend canvas is opened.
-
-Fixed numeric facet axes share one resolved domain. `FreeX`, `FreeY`, and `Free`
-axes resolve the selected dimensions independently in every panel. A free
-interval-estimate axis containing only `NotEstimable` rows has no implicit
-numeric domain and requires explicit limits; it never borrows an estimated
-sibling's range.
-
-For ordinary bars, horizontal bars, boxplots, sample-derived violins, and
-sample-derived rainclouds, one optional `Plot::series` channel owns positioning,
-color, legend identity, and significance targeting where supported. Stacked
-bars require that series in their constructor and expose no replacement setter.
-Precomputed raincloud geometry shares the family marker, so `.series` type-checks
-without source typestate but rejects during preflight as sample-only configuration.
-
-For density, ordinary line, interaction, marginal, matrix, and
-`LinePathStyle::Hue`, graphical group and hue remain independent semantic
-dimensions. Every observed `(group, hue)` pair owns one collective mark. Hue
-without group partitions marks by hue; no unobserved Cartesian combinations are
-created. Different groups may reuse one hue, and one group may own multiple
-hue-specific marks. Pair order is stable first-observed group order followed by
-first-observed hue order within that group. Density, marginal, and matrix reject
-an observed pair that cannot independently produce its required geometry.
-
-Interaction cells are unique by `(condition, group, hue)`. `InteractionStyle`
-is keyed only by group and supplies every hue-specific mark for that group with
-the same point shape and connector pattern. A `CategoricalColorMap` is keyed by
-hue when present and otherwise by the actual color-owning raw group. A group-only
-styled interaction still emits the complete configured group
-glyph. Plain grouping without hue or group-specific visible style partitions
-geometry but creates no legend identity.
-The style constructor is fallible and requires a nonempty, already trimmed,
-control-free raw group selector, retaining interior whitespace and Unicode bytes
-for exact group lookup. Prepared resolution rejects unknown, duplicate or
-incomplete supplied mappings before fonts. `with_point_shape` and
-`with_line_pattern` replace only their own glyph fields.
-
-Trajectory and neutral line-path grouping remain different: group owns the
-connector while hue may vary point by point inside that group. Their legends
-identify visible point hues only. If neutral line-path markers are hidden, the
-inert hue legend is suppressed.
-
-If group and hue have the same semantic name, their aligned categorical values
-must be identical and they collapse to one semantic dimension. Same-named but
-different values reject. Distinct semantic fields remain distinct even when one
-observed pair contains equal display values.
-
-## Exact Element Styles
-
-`Color` is an immutable crate-root RGBA byte value with `rgb`, `rgba` and strict
-`hex` constructors, readonly channel getters and replacement `with_alpha`.
-Hex accepts exactly ASCII `#RRGGBB` or `#RRGGBBAA`, with no trimming, shorthand or
-CSS expression syntax. All alpha values, including 0 and 255, are valid.
-
-`GuideStyle` consumes a complete Color, positive finite width and closed
-`LinePattern`; readonly properties and fallible `with_color`, `with_width` and
-`with_pattern` edits retain one complete style. Guide geometry is unchanged.
-`PointLayer` exposes optional color/alpha/radius instructions through getters and
-`with_color`, `with_alpha`, and positive-radius `with_radius` edits. Independent
-alpha wins in either edit order. `BarPointLayer` instead requires complete Color
-and positive radius in its constructor, retains plain Circle/no-outline geometry
-and prepared bar centers, and creates no layer legend.
-
-`SignificanceMarkStyle` consumes positive CSS font size, closed weight and finite
-nonnegative CSS gap, normalizing signed zero. Getters inspect the exact value;
-fallible `with_font_size`, `with_weight` and `with_gap` replace their own fields.
-An explicit default is 16px/Normal/8px; absence reads the complete theme role and
-theme-owned gap. Exact style never replaces role stack/color/leading or bracket
-geometry. Old tuple-paint, floating-opacity and consuming bare-field style routes
-are removed rather than retained as aliases.
-
-## Independent Heading Alignment
-
-Common `Plot::title_alignment` and `Plot::subtitle_alignment` store independent
-optional instructions, including on erased Plots. `Canvas::panel_title_alignment`
-and `Canvas::panel_subtitle_alignment` supply independent defaults for embedded
-Plot prose. Repeated calls replace only their input; theme attachment order does
-not change them. No supplied instruction means no override at that scope.
-
-Title resolves explicit Plot instruction, Canvas panel default when composed,
-then the complete Plot theme's root-title default. Subtitle resolves its explicit
-Plot instruction, Canvas panel subtitle default, the optional Plot-theme subtitle
-default, then the final effective title alignment. An explicit Plot Theme does
-not erase a Canvas panel instruction. Caption independently uses its owning
-theme's root-caption alignment. Canvas's own title/subtitle/caption use only
-Canvas theme fields; panel defaults do not affect headers or TextPanel text.
-
-Start and End are physical left and right edges of the owning post-inset content
-span, independent of bidi direction. Both block placement and individual lines
-use the selected alignment. Concrete choices are retained before measurement and
-frozen replay does not resolve the optional chains again.
-
-## Numeric Ticks
-
-Opaque immutable `TickGeneration` holds one private choice and payload. Default
-and `automatic()` select the renderer's deterministic range/span/measured-label
-policy. `additive(step)` accepts finite positive binary64 spacing;
-`log10_decades(decades)` accepts positive `u32` exponent spacing. `target(count)`
-and `maximum(count)` accept `1..=10_000`. Readonly `is_automatic`, `additive_step`,
-`decade_step`, `target_count` and `maximum_count` inspect the complete input.
-`Plot::x_tick_generation` and `Plot::y_tick_generation` retain the existing sealed
-NumericX/Y capabilities; Any has neither. Each call replaces that axis's complete
-choice, with Automatic explicitly resetting an interval or count.
-
-Target tries the requested initial seed before bounded smaller complete sources,
-allowing nice-step deviation and actual label fitting. Maximum filters Automatic's
-existing ordered complete sources by actual in-domain position cardinality before
-allocation/formatting/label measurement. Endpoints and intentionally unlabeled
-positions count; no individual label is dropped. One selects the original-domain
-midpoint for either count policy, and that label must still fit.
-
-Preferred intervals try the requested complete source first, then bounded
-`(1,2,3,5)` decimal coarsenings and final midpoint, without interval subsequences.
-Logarithmic intervals select divisible integral exponents, not spacing between
-transformed raw values. Targets use the existing Forest integral subset program
-or adaptive exponent-space program; no inverse binary64 powers are introduced.
-Actual categorical axes reject non-Automatic choices, and interval scale-kind
-mismatches reject before fonts. Prepared sources, parent copies, identity and
-feedback retain the complete generation input independently of range/format.
-
-`Plot::x_ticks` and `Plot::y_ticks` accept complete exact `AxisTick` lists. An
-exact list replaces all generated ticks on that axis; generated and exact ticks
-are never merged. Positions are finite, strictly ascending data-space values
-inside the resolved range. Preflight projects the requested positions, measures
-their labels, and rejects collisions rather than omitting, moving, or rotating
-caller-owned ticks.
-
-Exact lists suppress generated selection/format text regardless of setter order;
-a generated maximum does not constrain or truncate an exact list. They do not
-suppress semantic axis-kind validation or permit categorical axes to accept
-numeric instructions.
-
-## Scientific Numeric Presentation
-
-`NumericFormat` is one immutable validated seven-field policy: notation,
-precision, decimal scale, literal prefix/suffix, negative zero and trailing zeros.
-Crate-root `NumericNotation` selects Decimal/Scientific/Engineering;
-`NumericPrecision` selects fractional 0..=17, significant 1..=17, or adaptive
-min/max within those bounds. Scale is an exact decimal-power shift -324..=324.
-Affixes are nonempty/control-free literal text; `%` alone never scales a value.
-`new` supplies zero scale, absent affixes, Preserve/Keep. `Default` adds
-Decimal/Fractional(2). Readonly field getters and consuming validated `with_field`
-edits preserve one normalized value.
-
-NumericX/Y-gated `x_tick_format`/`y_tick_format` replace generated axis presentation.
-ContinuousColor-gated `color_label_format` controls guide numbers.
-`HeatmapAnnotations::Values(NumericFormat)`, Coefficient-only `estimate_labels`,
-and Waterfall-only `total_format` consume the same policy. Any and Matrix gain no
-format extension. Actual categorical axes reject before fonts; exact tick text
-suppresses the generated format in either setter order.
-
-Exact ordinary binary64 values are scaled and rounded once, nearest with ties to
-even. Configured Forest ticks format mathematical `10^(exact(exponent)+scale)`
-through certified outward integer intervals, retaining exponent-space positions.
-Omitted policies retain consumer-specific default Automatic, Forest and fixed
-Waterfall grammars of this same engine.
-
-Adaptive precision distinguishes complete semantic sets before geometric fitting:
-one axis candidate, final continuous guide, active finite Heatmap panel cells,
-all available raw point-only Coefficient panel estimates (including outside an
-exact window), or closed-window-eligible Waterfall totals. Equal scientific
-values may repeat. Exhaustion misses a generated axis source or refuses a
-required guide/value set. Fixed value annotations may intentionally repeat rounded
-text. Real arithmetic/storage failures remain fatal.
-
-Shared continuous guides require identical complete effective policies before
-fonts and resolve one final merged-domain set. Canvas range groups permit
-different panel formats. Prepared Waterfall masks retain reachable successful
-sets/refusals before fonts. Full policies, member/occurrence bits and selected
-precision participate in their upstream cache/feedback identities; frozen output
-reuses completed sources. Scientific values, domains, colors and transforms,
-exact ticks, categories and caller annotation/name strings keep their own owners.
-
-See `06_NUMERIC_PRESENTATION.md` and `07_LOG10_DISPLAY.md`. Locale, caller compact
-rules, arbitrary multipliers, rounding controls and general format strings or
-callbacks remain excluded under `99_DEFERRED_FEATURES.md`.
-
-## Legends
-
-Plot legend state is one `LegendPolicy`: automatic plot-family behavior,
-hidden, or explicitly visible at one `LegendPosition`. Visibility and placement
-are not independently configurable. Same-corner inside positions with different
-edge names intentionally select different data-clearance edges.
-Native Heatmap/Beeswarm retain their measured right guide track, and Matrix its
-trailing grid track; Hidden suppresses the native guide. Transporting a native
-descriptor for identity/census never creates another outer panel placement.
-
-Legend entries preserve the visible family mark. Point presence and outline,
-line presence and pattern, and fill presence and opacity match the geometry that
-the entry explains. Density entries contain both curve line and translucent fill
-representations. Facet and Canvas shared legends stable-merge exact entries by
-typed raw semantic identity and reject conflicting labels or glyphs; they never
-reconstruct generic palette points in place of renderer-owned entries.
-
-With default `LegendComposition::Combined`, when independent group and hue fields
-are both present, the legend title is the
-independently resolved `group × hue`, and each entry label is the independently
-resolved `group, hue`. When the two channels are the same semantic field with
-identical values, title and entry labels collapse to the one resolved identity.
-Distinct fields always display both values, including an entry whose resolved
-values happen to be equal. The multiplication sign and comma are display
-separators only; raw pair identity remains typed and is never encoded by joining
-strings.
-
-`LegendComposition::Separate` retains one guide/frame and explains actual mapped
-channels in ordered group-style, joint, hue-color, literal and supplemental-series
-sections. Only explicitly configured Interaction group styles supply independent
-group-style mappings; unsupported independent pairs refuse before fonts rather
-than inventing a representative key. Same-field channels remain complete joint
-keys. Group projections neutralize only mapped hue RGB to the source Plot's
-legend-label RGB, preserving independent role/exact alpha and fixed/exact paint;
-hue projections neutralize only mapped Interaction shape/pattern to Circle/Solid.
-Scientific marks, membership, domains and sparse topology are unchanged. Both
-compositions independently neutralize a data-bound target's context-key alpha to
-255, including Undeclared inputs, instead of selecting one observation's alpha.
-
-Plot's Legend-gated `legend_composition` and Canvas's setter default to Combined
-and replace only their own selection. Standalone/facets use the owning Plot,
-PerPlot each Plot, and Shared the Canvas selection for every contribution.
-Stored child selections do not conflict under Shared and remain available when
-returning to PerPlot. Hidden skips guide-only semantics/fonts while keeping
-scientific domain/binding validation. All-continuous Canvas guides ignore composition;
-categorical-RGB/continuous-color Shared mixing remains rejected. Continuous color
-and declared alpha symbols can coexist in the common envelope. Final descriptor preorder supplies
-fonts, natural/assigned flow, exact scoped reuse and one frozen `LegendDrawPlan`.
-See `08_DISCRETE_GUIDES.md` for the complete section contract.
-
-## Explicit Data Alpha
-
-`AlphaValues` eagerly owns bytes and complete declared mappings; `AlphaEncoding`
-binds Theme, complete original Observations, explicit Single, exact keyed actual
-Series/Aggregate tuples or exact Histogram Bins. Point/Line/Fill targets are
-independent, with 17/17/15 sealed capabilities. Every actual unit must resolve
-before fonts; optional absent components still validate binding kind/schema.
-Original slots are distinct from arbitrary SourceRows IDs. No mean/first/last,
-repeated-row equality requirement, regrouping or sample-to-bin reduction exists.
-
-Linear/Log domains are explicit, finite and increasing; Log sources/domains are
-positive and transformed endpoints distinguishable. Clamp finite out-of-domain
-values and quantize once nearest/ties-to-even to u8. Threshold bounds are increasing
-with equality on the right. Caller functions execute only at input construction.
-Repeated target setters replace their complete instruction; Theme resets it.
-Normal color/role/exact paint precedes alpha replacement, never multiplication.
-Independent outlines, unlisted references, chrome, text and layers keep their own
-paints. Zero retains rows, domains, scientific statistics and structural guide
-occupancy; paint-aware intrinsic/ink/capture use the same final styles.
-
-Undeclared bytes produce no alpha guide. Declared continuous maps retain all stored
-numeric examples; categorical/threshold maps explain actual consumed members in
-declaration order, including zero. All active actual role glyphs and members remain
-retained; deterministic role order selects the one-key example geometry. Alpha
-target RGB is source-Plot legend-label RGB without text alpha; only mapped group
-shape/pattern is neutralized. Shared requires complete recipes and compatible
-titles/projected glyphs, while unioning actual members. Equal visible bytes or
-representatives do not establish recipe compatibility. Hidden suppresses only
-explanatory text/fonts, not complete inputs/actual-membership identity or scientific
-validation. All owners freeze the same prepared mappings and guide operands for
-source-independent preserved/outlined SVG and PNG.
-
-## Complete Theme And Scale Ownership
-
-`Theme` is a complete immutable value with eight independently constructed
-components. Publication, Nature, Science and CHI are ordinary validated
-constructors, not selector identities. `ThemeBuilder` starts complete and returns
-a complete value; it is never a runtime sparse override. All component fields are
-private and exposed through readonly getters and validated `with_*` edits.
-`Canvas::theme(Theme)` and `Plot::theme(Theme)` are the only theme-owner
-attachments. A Canvas always owns one complete root theme initialized with
-`Theme::publication()`, so callers are not required to call `Canvas::theme`.
-
-A Plot records whether the caller made an explicit selection. An unthemed
-standalone Plot selects Publication at its lifecycle boundary. An unthemed Plot
-inside a Canvas inherits that Canvas's root value. An explicit Plot theme
-completely replaces the inherited root for that Plot; values are not merged.
-Facets use their owning Plot's one selected theme and introduce no additional
-scope.
-
-Theme state is immutable and owner-local. There is no global, thread-local,
-environment-selected, backend-selected, or sticky theme state. The render owner
-resolves the selected complete value before canonical validation and measurement. The
-same private resolved value is reused through preflight, planning, null-backend
-validation, and final rendering; renderers do not reconstruct a preset late.
-
-Canvas surfaces, title blocks, shared headers, row titles, text panels and
-shared-guide chrome use the Canvas root value. Plot and facet marks, axes,
-annotations, panel surfaces and prose use their selected Plot value. All eighteen
-text roles retain their own stack, color, CSS size, weight and leading.
-Construction does not discover fonts. A bulk `ThemeBuilder::with_font_stack`
-replaces the stacks once; later role replacement takes precedence normally.
-`FontFamily::named` preserves one trimmed, control-free literal identity, including
-punctuation, while closed generics have explicit typed semantics. `FontStack`
-preserves order and duplicates. Default-font constants and a raw CSS parser are
-not public.
-
-`Plot::categorical_color_scale` replaces one complete palette-or-map selection on
-the fifteen `kind::CategoricalScale` families. Fixed palettes must cover the active
-prepared raw domain before fonts, even with hidden legends; extendable palettes
-use deterministic first-party extension without cycling. Exact maps require every
-used raw key before fonts, permit unused entries and never fall back to a palette.
-Display aliases are not keys. Qualitative mappings and MarkTheme accents are
-independent.
-
-Heatmap and Beeswarm share `Plot::continuous_color_scale`, one typed kind, optional
-gradient and automatic/exact `ColorDomain`. Exact domains may be constant; a
-diverging center is finite and inclusively contained in an exact domain. Wrong-kind
-gradient/center edits reject immediately. Ordered opaque gradients have exact zero
-and one endpoints; diverging gradients also have one explicit neutral at 0.5.
-Both marks and guides consume the same final-domain mapping, including Shared
-installation. All built-ins use `#F7FBFF -> #08306B` sequentially. Color scales use
-`OpaqueColor`; final marks install their own role alpha. The old categorical map
-setter, Heatmap selector and separate color-limit routes are removed.
-
-Shared Canvas legend gap is exclusively `LegendTheme::shared_gap`, resolved
-against its selected legend-label em. There is no Canvas override or policy
-compatibility exception for a theme with custom spacing.
-
-The crate computes display statistics needed to draw a requested plot, such as
-histogram bins, KDE curves, quantiles, confidence geometry for explicitly
-requested descriptive summaries, and ordinary least-squares display fits. It
-does not select scientific tests or infer caller intent.
-
-## Size And Layout Boundary
-
-Plot and Canvas each retain one complete private sizing request. Absence of a
-sizing call selects automatic layout,
-consuming `width(u32)` requests exact width with automatic height, and
-`size(width, height)` remains exact. Sizing calls replace the complete request:
-`width` after `size` discards the prior exact height; `size` after `width` replaces
-both dimensions. Zero dimensions fail at preflight. No public maximum-width or
-general bounds object is admitted. Canvas owns composed dimensions; an embedded
-Plot's standalone sizing request is not a cell preference. Canvas has no universal
-minimum-size gate: positive roots must preserve the actual complete content or
-refuse for its concrete fit requirements.
-
-Final canonical dimensions belong to the immutable root plan and rendered
-`Output::width()`/`height()`, never pre-render Plot getters or PNG raster targets.
-`05_LAYOUT_SYSTEM.md` defines the shared private sizing and allocation contract.
-
-The protocol keeps scientific layout private. Parents use intrinsic
-requirements to allocate child constraints; each child returns one immutable
-measured local plan or a typed fit miss. Parents assign final positions. Named
-bounded local choices and root-coordinated feedback replace exhaustive
-cross-component search. This deterministic policy does not promise to find every
-feasible arrangement. Semantic content does not silently clip, elide, or disappear
-to satisfy a bound. Exact constraints either
-fit the complete requested content or fail before backend creation.
-Every root mode passes shared planning-work, representability, and fallible
-allocation checks. PNG-specific dimensions, pixels, and parser-input byte limits
-apply only at PNG publication; neither hypothetical default-PNG viability nor an
-automatic-only 64 MiB SVG byte gate can reject SVG. A valid SVG in any sizing mode
-may therefore be followed by a PNG refusal without relayout or scene mutation.
-
-T5a0s records user approval of these target behaviors. Automatic placement must
-validate the affected plot-plus-guide layout, not accept guide-only fit. Bounded
-supported edge/reflow attempts may remeasure affected children, but explicit
-placements, typography, and content remain fixed. The public sizing cutover uses
-that same prepared root lifecycle for all three requests.
-
-## Scene Lifecycle
-
-`Plot::svg`, `Plot::svg_preserve_text`, `Plot::png`, `Plot::png_preview`, and
-`Plot::png_with_options`, together with their Canvas equivalents, perform one
-complete preflight and render one private immutable scene. The terminal call
-consumes the plot or canvas, publishes its requested file immediately, and
-returns an opaque `Output`. The equivalent consuming `Output` publication calls
-reuse that exact scene.
-
-On `Plot`, `Canvas`, and `Output`, both `svg` and `svg_preserve_text` are
-consuming, call-local, non-sticky terminal methods. Plain `svg` is the normal
-publication operation and converts all text to vector paths.
-`svg_preserve_text` publishes the canonical SVG with `<text>` elements intact. A
-chained call such as `plot.svg(a)?.svg_preserve_text(b)?` therefore publishes
-both forms from one scene.
-
-PNG options are call-local and non-sticky. Plain `png` publishes at 300 DPI with
-balanced compression. `png_preview` publishes at the canonical SVG source pixel
-dimensions with balanced compression and no physical-resolution metadata.
-`png_with_options` uses the exact caller-provided sizing and compression. A
-chained call such as `plot.png_preview(a)?.png(b)?` therefore publishes two
-independent rasterizations from one scene. There is no combined multi-format
-terminal operation; callers chain the required SVG and PNG operations.
-
-Every Canvas plot runs the same canonical plot-level validation as its
-standalone form before Canvas-only composition validation. Moving a plot into a
-Canvas cannot make aligned values, family-owned options, facets, intervals,
-ticks, guides, or supplemental layers more permissive.
-
-Planning retains complete text/glyph plans and producer placements before final
-capture. Capture and serializer counting do not open Null lifecycles. Canonical
-SVG storage and validation scratch are reserved before the final Null validation;
-concrete replay uses the same frozen calls without remeasurement or reshaping.
-Automatic guide placement validates the affected body, axes, labels, and guide
-together and uses bounded supported recovery. Explicit placements remain fixed.
-
-`Canvas` renders all panels through one backend begin/end lifecycle. Marks are
-clipped to their panel; titles, axes, legends, captions, and other decorations
-remain outside mark clipping where required.
-
-## Output Formats
-
-Publication SVG, preserve-text SVG, and PNG are unconditional capabilities.
-Plain `svg` derives vector glyph paths from the scene's retained font faces and
-planned glyph IDs and verifies that no `<text>` elements remain. The derived
-SVG requires no recipient-side fonts, but its text is no longer selectable,
-searchable, editable, or available to assistive text extraction.
-`svg_preserve_text` publishes the canonical SVG with accessible, selectable,
-searchable, and editable `<text>` elements intact. PNG rasterizes the derived
-outlined SVG through `resvg` and `tiny-skia`. PNG sizing validates positive,
-finite DPI or scale, positive dimensions, and bounded pixel work before allocation.
-
-The PNG conversion limits are source and target axes through `32_768` inclusive,
-source and target products through `100_000_000` pixels inclusive, and actual
-SVG parser input through `67_108_864` bytes inclusive. Validate call-local options
-before expensive conversion, then source geometry, rounded-positive target,
-target axes/work and DPI metadata, actual outlined input bytes, parse/dimension
-agreement, pixmap allocation, render, and encode. Existing canonical source-byte
-admission is not a substitute for checking the expanded parser input.
-Preserve-text and outlined SVG routes do not apply those PNG-only limits, either
-before or after the Phase T6 sizing switch. Shared representability, resource
-admission, and fallible allocation still apply.
-
-The completed T5a3 repair validates requested PNG options before outline work,
-counts actual outlined parser input before allocating that derived payload, and
-checks the parser bytes again before parsing. These PNG-only refusals do not
-poison the retained SVG source or outline cache. Public automatic sizing remains
-scheduled for T6; its target preserves the same format-local separation.
-
-Lichtung's canonical SVG backend emits no raster image elements, so the `resvg`
-JPEG, GIF, and WebP decoders are excluded. The dedicated PNG encoder remains
-responsible for compression and physical-resolution metadata.
-
-There is no plot-level PDF output. Applications that need PDF must own that
-conversion or report workflow outside this crate.
-
-## Font Policy
-
-The canonical SVG emits this ordered CSS system-font stack and embeds no font
-bytes:
-
-```text
-Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif
-```
-
-Scene preparation discovers installed fonts and resolves faces before text
-measurement. `fontdb` supplies face metadata and host generic-family names;
-project-owned ordering and glyph coverage choose the preferred available face
-for each required visible unit or scalar. Font candidates are not layout alternatives:
-layout does not switch to a less-preferred font to make content fit.
-The scene retains font identities, bytes, and planned glyphs for later outlined
-SVG and PNG conversion without rediscovery. Rendering performs no download,
-provisioning, or project-cache lookup. T5a3 implements the canonical selection,
-Unicode, geometry, and admission contract detailed in
-`03_THEME_SYSTEM.md` and `05_LAYOUT_SYSTEM.md`; public custom font types remain
-target-only until T6.
-
-Font selection prefers one compatible face for
-a base letter and its combining marks when a face in the ordered stack covers
-the unit; otherwise it retains first coverage per visible scalar. Missing visible
-coverage is an error, not replacement squares. The precise unit and retained
-selection rules are in `03`/`05`. The original source remains unchanged, including
-nonpainting Unicode controls and discretionary soft hyphens. Selected soft-hyphen
-breaks paint the prepared literal hyphen with retained original source mapping.
-
-Publication SVG fails if any text remains after conversion. Its outlined text
-requires no recipient-side font, but exact paths and text-derived layout depend
-on the generation font environment. Preserve-text SVG remains accessible and
-editable, while its displayed glyphs depend on viewer fonts and shaping. For
-identical inputs/options and the same generation font environment, scene geometry
-and retained output decisions are deterministic; no cross-viewer pixel parity
-is promised for editable text.
-
-## Significance Annotations
-
-`Significance<Attached>` and `Significance<Pairwise>` are plot-owned display
-data. `Significance::at` constructs the attached placement for one category or
-positioned series, while `Significance::between` constructs a pairwise bracket
-between exactly two such targets. `Plot::significance` is available only when
-the exact plot-family marker supports the annotation's placement.
-Raw strings identify complete categories; `SignificanceTarget::category_series`
-identifies one exact positioned series.
-
-Attached marks are supported by ordinary bars, ordinary horizontal bars, and
-coefficient plots. Pairwise brackets are supported by bar variants, boxplots,
-violins, and sample-derived rainclouds. Precomputed raincloud geometry rejects
-significance at runtime because its source mode is not encoded in the plot
-family marker. Stacked bars accept category-level bracket targets; their
-partitioned series do not provide distinct bracket anchors. Coefficients accept
-attached term targets only. Their significance marks are independent of whether
-the coefficient input includes drawable bounds.
-
-`SignificanceMark` accepts an explicit `ns` or one-through-four-star mark, or
-one caller-selected display p-value. A p-value at or above `0.05` renders `ns`;
-smaller values map through the conventional one-, two-, three-, and four-star
-thresholds. Every supplied annotation renders. Statistical adjustment and
-familywise provenance remain caller responsibilities.
-
-Facet-owned annotations name every configured facet dimension exactly once
-through `Significance::facet`; annotations are never silently replicated across
-panels. The renderer validates all annotations against rendered categories,
-series, and facet panels. It never computes, adjusts, or substitutes p-values.
-
-## Errors
-
-Public operations return `lichtung_plot::Result<T>` with these domains:
-
-- `Error::Io` for filesystem failures.
-- `Error::Data` for invalid input or data-bound options.
-- `Error::Render` for layout, backend, font, rasterization, or publication
-  failures.
-
-No fallback renderer or alternate output path is attempted after an error.
-Project-owned layout or serialization arithmetic overflow and first-party
-capacity reservation refusal are render errors with no reduced-quality fallback.
-The contract does not promise recovery from process-global allocation failure
-inside an external dependency.
+## Scientific Inputs And Validation
+
+Plot consumes owned immutable native values. Semantic constructors return exact
+`Plot<kind::Family>` values; sealed capabilities reject categorically unsupported
+configuration at compile time. Data-dependent checks validate aligned lengths,
+finite values, categorical identities, source provenance, bounds, facets, actual
+axis kinds and representable geometry before backend begin. Standalone and Canvas
+children use the same canonical validator in `src/orchestrator/validation.rs`;
+composition adds restrictions and never weakens Plot invariants.
+
+Required constructor channels have one owner. Trajectory, LinePath, Interaction
+and stacked-series groups, and Heatmap/Beeswarm continuous color values, cannot
+be replaced by a later setter. Explicit `Plot::erase` retains common/output
+operations without regaining exact-family configuration. Canvas accepts exact
+children and erases only at storage.
+
+### Categories, Groups And Provenance
+
+First-observed categorical order is deterministic by default. Explicit order
+names every rendered category exactly once. Value-derived order is valid only
+when the family prepares one unambiguous scalar rendered value per category.
+Physical input row order does not substitute for category order.
+
+`Plot::source_rows` owns one aligned diagnostic provenance map for all plot-aligned
+values, facets, composed views and raw-observation overlays. Individual values
+and layers do not own competing provenance. Original slot indices remain distinct
+from arbitrary SourceRows IDs through filtering, sorting, status handling and
+scientific preparation.
+
+Bars, HorizontalBars, Boxplots, sampled Violins and sampled Rainclouds optionally
+use `Plot::series` for positioning, color, guide identity and supported significance
+targets. Stacked bars require series atomically. Supplied Raincloud geometry
+shares its marker but rejects sample-only series during preflight.
+
+Density, ordinary Line, Interaction, Marginal, Matrix and Hue LinePath keep group
+and hue independent. Each observed `(group,hue)` pair owns one collective mark;
+hue without group partitions by hue. Do not create unobserved Cartesian pairs.
+Ordering is first-observed group, then first-observed hue within group. Density,
+Marginal and Matrix reject a pair unable to produce its required geometry.
+
+Equal group/hue field names require identical aligned raw values and collapse
+to one semantic dimension. Same name with different values rejects. Distinct
+fields stay distinct even if display values/aliases or paints are equal.
+
+Interaction cells are unique by `(condition,group,hue)`. Explicit InteractionStyle
+maps raw group to point shape/connector pattern, applying to every hue-specific
+trace of that group. Selectors are nonempty already-trimmed control-free raw
+identities; preserve interior spaces/Unicode bytes. Reject unknown, duplicate or
+incomplete configured group mappings before fonts. Color maps key hue when
+present, otherwise the actual color-owning group. Plain unstyled grouping
+partitions geometry without creating a guide identity.
+
+### Summaries And Closed Sources
+
+Ordinary bars consume one BarInput: samples, one estimate per cell, or estimates
+with drawable Bounds. Samples render arithmetic cell means; the default error
+bar is deterministic two-sided 95% percentile bootstrap with 1,000 resamples and
+seed zero. Sampling units select multilevel resampling within category/group/facet
+cells. A singleton observation/unit renders its mean without error bar. Stacked
+bars retain separate sum semantics.
+
+Bounds is the sole caller lower/upper representation; it carries no inferred
+classification, level, scale or statistical provenance. PointInterval and
+Interaction require bounds atomically, Interaction also its graphical group.
+Forest requires bounds and scientific reference. CoefficientInput selects
+estimates or estimates_with_intervals. Validate aligned finite drawable endpoints
+and `lower<=estimate<=upper`; unavailable rows retain explicit status semantics.
+Ordinary Line alone accepts optional band geometry via `Plot::band`.
+
+HistogramInput and RaincloudInput select samples or complete supplied geometry
+at construction. Supplied geometry is self-contained and rejects sample-only
+facets/source-row channels at preflight. Supplied KDE over sample-owned Histogram
+bins/rugs remains an explicitly selected composite, not a second whole input.
+Scientific zero, missing, finite-filtering and availability policies belong to
+each closed family input; appearance cannot substitute another source policy.
+
+### Paths, Layers And Specialized Inputs
+
+Ordinary Line requires numeric x and sorts numeric series. Trajectory requires
+graphical group, sorts within it and always draws observation markers; its x
+conditions may be numeric or categorical. LinePath requires numeric x/group,
+preserves original row order/repeated x and alone accepts LinePathStyle. Ordinary
+Line and LinePath marker visibility remains configurable, not Trajectory's.
+Trajectory/Neutral LinePath groups own connectivity while hue may vary by row;
+their hue keys explain points, not neutral connectors. Hiding Neutral LinePath
+markers suppresses that inert hue contribution.
+
+Only ordinary Line admits PointLayer. Each appended layer owns a nonempty
+independent aligned numeric x/y dataset, not necessarily aligned with primary
+data. Layers retain append order over primary bands/lines/markers and reject
+generic faceting. Optional per-point label strings and one layer guide label are
+different content. BarPointLayer uses exact prepared category/series centers.
+Exact paint, alpha, radius, accent and label-position ownership are specified in
+[visual properties](04_VISUAL_PROPERTY_OWNERSHIP.md).
+
+Dumbbell atomically consumes both endpoints and explicit distinct validated labels/
+complete Colors. Exact endpoint paint also supplies its literal key, independently
+of neutral connector and point outline.
+
+Waterfall consumes finite base/deltas and derives every span and terminal by one
+ordered cumulative pass. Every intermediate endpoint must be finite. The final
+cumulative endpoint is the only terminal used by ranges/guides/labels; never
+substitute a differently associated detached delta sum. Preserve scientific zero
+spans, source order and adjacent connector cardinality.
+
+Heatmap and Beeswarm share complete continuous-color scale selection and one
+final-domain mapping for marks/guides. Their point/cell alpha is independent of
+the opaque color gradient. Required labels are endpoints and an interior diverging
+center, or one constant, not every gradient stop. Heatmap missing blocks and
+fully-null-row annotations retain their distinct semantic owners.
+
+### Facets And Composition
+
+FacetSpec owns one complete row, column, grid or wrap layout plus axis sharing.
+Wrap columns are positive; grid variable names differ. Facet Fixed numeric axes
+share one domain. FreeX/FreeY/Free resolve selected dimensions per panel. A free
+estimate axis with only NotEstimable rows requires explicit limits; it cannot
+borrow a sibling range. Categorical shared axes require matching raw identity/order.
+
+Matrix/Marginal do not support generic facets. Supplied Histogram/Raincloud
+geometry rejects them at runtime. Already faceted plots cannot be Canvas children;
+Matrix remains standalone native. Canvas retains explicit row-major topology,
+empty/trailing cells and spans, and does not compact scientific absence.
+
+Canvas shared-x groups require configured members with continuous automatic x
+domains. Categorical axes, explicit x limits and unconfigured members reject.
+Install the finite strictly ascending domain union before child measurement.
+Shared range alone does not make formats/tick instructions identical.
+
+### Scientific Windows And Required Content
+
+`x_limits`/`y_limits` are explicit data windows. Retain finite off-window marks and
+crossing endpoints, project crossings and apply panel clipping; do not mutate
+values, broaden exact domains or reject merely because scientific paint is clipped.
+A marker stroke centered at an explicit boundary may clip there.
+
+Automatic axes instead contain actual painted mark requirements through the
+named intrinsic/reserve/domain rules. Mixed exact/automatic axes apply this
+distinction per dimension. Nonfinite/unrepresentable geometry and nonzero source
+geometry collapsed by transformation/quantization still reject, even when hidden
+by clipping. True scientific zeros retain their defined family behavior.
+
+Data windows do not permit clipping required titles, axes/ticks, guides or
+annotations outside assigned boxes. An annotation's explicit visibility/window
+policy may suppress it; otherwise it fits complete uncut ink or fails. Exact image
+size cannot succeed by clipping layout content. Theme chrome absence does not
+remove semantic content. Heatmap's explicit Wrap/Elide category-label policy is
+not a general text-omission control.
+
+## Presentation Owners
+
+Complete immutable appearance, inheritance, eighteen text roles, local spacing,
+scales and contrast are defined in [Theme system](03_THEME_SYSTEM.md). Exact
+styles/data-alpha use the [property contract](04_VISUAL_PROPERTY_OWNERSHIP.md).
+Generated tick choice and numeric spelling are separate policies in
+[numeric presentation](06_NUMERIC_PRESENTATION.md). Exact AxisTick lists stay
+indivisible and verbatim. Neither numeric formatting nor alpha changes scientific
+statistics, domains, source membership or categorical identity.
+
+LegendPolicy is one automatic/hidden/explicit-position choice; placement and
+visibility are not independent switches. LegendComposition selects truthful
+Combined/Separate explanations under the [guide contract](08_GUIDE_SYSTEM.md).
+All 25 exact families are Legend-capable; Any is not. Source-owned key geometry,
+complete final paints and mapping provenance feed one PreparedGuide. Native
+Heatmap/Beeswarm right tracks and Matrix trailing track place their guides once;
+transport for census/Shared identity must not create an outer duplicate.
+
+## Significance
+
+Significance<Attached> and Significance<Pairwise> are caller-owned display data,
+constructed with `at` and `between`. Raw strings identify full categories;
+SignificanceTarget::category_series selects a positioned series. Sealed placement
+capabilities gate attachment. Bars/HorizontalBars/Coefficient admit attached
+marks; bar variants/Boxplot/Violin/sampled Raincloud admit pairwise brackets.
+Stacked series do not supply separate bracket anchors. Coefficient targets terms
+and does not require drawable bounds merely for significance. Supplied Raincloud
+geometry rejects significance during preflight.
+
+SignificanceMark accepts ns, one-through-four stars or one caller-selected display
+p-value. Values >=0.05 display ns; smaller values use conventional one/two/three/
+four-star thresholds. Every supplied annotation renders. Tests, adjustment,
+familywise provenance and inferential interpretation remain caller-owned.
+
+Facet annotations identify every configured dimension exactly once via
+FacetCell::single/grid, without repeating variable names or silently replicating
+annotations. Resolve original category/series/facet identities before fonts.
+Complete selected style, label, bracket and shelf fit remain mandatory.
+
+## Root Sizing And Scene Lifecycle
+
+Plot/Canvas each retain one complete sizing request: omitted is natural width
+chosen once followed by measured height; `width(u32)` is exact width/automatic
+height; `size(u32,u32)` is an exact pair. Each call replaces the complete request,
+so width clears earlier height. Zero rejects at preflight without setter panic.
+Canvas controls embedded dimensions and ignores child standalone requests.
+Output alone exposes frozen canonical dimensions; no pre-render Plot dimensions,
+public maximum width or generic constraints are provided.
+
+[Layout](05_LAYOUT_SYSTEM.md) defines constraints-down, one immutable result-up,
+parent positioning, bounded local choices and at most eight root feedback rounds.
+Automatic placement must fit the entire affected body, axes, labels, annotations
+and guide, not just guide chrome. Explicit choices stay fixed. A policy fit error
+can occur despite an unimplemented feasible alternative; no shrink/elision or
+exhaustive layout solver is implied.
+
+An operation resolves/validates immutable inputs, prepares scientific sources and
+parent domains/guide compatibility, establishes complete text requirements,
+discovers/resolves installed fonts, obtains intrinsics, and measures the selected
+root. Capture each selected producer once into immutable commands. Count canonical
+serialization and reserve canonical scene/SVG/scratch storage before one balanced
+final Null validation. Count/capture are not extra Null lifecycles. Preflight uses
+the same preparation/planning/validation path without publishing an artifact.
+
+Terminal Plot/Canvas calls consume the owner, render one canonical scene through
+one balanced concrete lifecycle, publish one file and return Output. Canvas uses
+one begin/end for all panels. Scientific marks use their panel clip; required
+layout ink remains separately contained. Frozen replay does not measure, shape,
+format, prepare statistics, reread sources, change domains or choose layout again.
+
+Output publications consume/reuse the exact retained scene. No SVG text mode or
+PNG option is stored. Chained calls are independent same-scene publications, not
+one multi-file transaction. A failed later publication leaves earlier successes.
+
+## Fonts And Determinism
+
+Only installed system fonts are used, through typed role stacks. There is no
+download, bundled-font recovery, project asset cache or embedded font data.
+Operation-local canonical discovery/matching, same immutable bytes, used-role
+census, Unicode16 text behavior and base-plus-mark fallback are specified by
+layout. Missing visible coverage, invalid selected metrics or selected-face
+shaping failure is fatal; layout cannot select a different font to fit.
+
+Identical validated inputs/options/dependency versions and generation-font
+environment give deterministic scene decisions. Do not promise bytes across
+renderer revisions, hosts or font environments. Outlined SVG/PNG consume retained
+generation glyphs; preserve-text SVG remains viewer-font/shaping-dependent.
+
+## Output Conversion
+
+Outlined SVG, preserve-text SVG and PNG are unconditional first-party capabilities.
+`svg` converts every text element to vector paths using retained glyph identities
+and same-byte face sources, then verifies no text remains. It needs no viewer
+fonts but loses selectable/searchable/editable text. `svg_preserve_text` keeps
+canonical accessible text, selected line structure and validated CSS stack,
+without embedding fonts. Conversion never relayouts or changes the scene.
+
+PNG rasterizes the outlined scene through resvg/tiny-skia. `png` uses 300 DPI and
+Balanced compression; `png_preview` uses canonical CSS dimensions, Balanced and
+no physical-density metadata; `png_with_options` uses its call's exact sizing/
+compression. Output width/height remain canonical, not the raster target.
+Canonical SVG contains no raster image elements; unrelated JPEG/GIF/WebP decoders
+are not part of the output contract. PDF conversion belongs outside the crate.
+
+### PNG-Local Limits And Ordering
+
+Source and target axes are at most 32,768, source and target area at most
+100,000,000 pixels, actual outlined parser input at most 67,108,864 bytes, all inclusive.
+Validate positive finite DPI/scale or positive requested dimensions before
+expensive conversion; then source geometry, rounded-positive target, target
+axes/area and DPI metadata, actual outlined payload bytes, parser/dimension
+agreement, pixmap allocation, rendering and encoding. Check known limits before
+their corresponding allocations/work. Canonical text-byte count is not the
+expanded outlined parser count; check the actual payload before parsing too.
+
+These are PNG-only limits in every root sizing mode. SVG has no hypothetical
+default-PNG viability test, automatic-only 64 MiB gate or replacement scene-byte
+quota. Checked representation/lengths and fallible first-party buffers still
+apply. Valid SVG can fail a later PNG conversion without invalidating SVG or
+mutating retained scene/font/path sources. No retry at another layout/width.
+
+## Errors And Storage
+
+Public operations return the crate Result: Error::Io for filesystem failure,
+Error::Data for invalid data/data-bound options, Error::Render for layout/font/
+backend/rasterization/publication failures. No alternate renderer or output path
+is attempted after failure. Fit misses are typed layout outcomes; real arithmetic,
+allocation, I/O, font and invariant errors are immediately fatal.
+
+Project-owned lengths/products/indices/capacities/spatial conversions are checked;
+known first-party extents reserve fallibly, unknown input grows fallibly from
+actual demand. Real serializer counts and parser lengths are retained. There is
+no cumulative visits/records/cache/topology/discovery/byte-price ledger or
+production budget switch. This does not promise recoverable process-global OOM
+inside external dependencies. Existing mathematical/source/input limits and
+bounded layout algorithms are independent of resource pricing.
 
 ## Artifact Publication
 
-Terminal path arguments are base file destinations. After deriving the complete
-output bytes successfully, `svg` and `svg_preserve_text` complete the final
-filename with `.svg`; `png`, `png_preview`, and `png_with_options` complete it
-with `.png`. Plot and Canvas terminals delegate this operation to the same
-`Output` boundary and do not apply a separate suffix rule.
+After complete byte derivation succeeds, SVG methods complete the native filename
+with `.svg`, PNG methods with `.png`. If it already ends in the entire expected
+ASCII suffix under ASCII case-insensitive comparison, preserve the path exactly;
+otherwise append lowercase suffix to the leaf. Do not infer format, replace
+extension text, normalize or reject contradictory names. Thus chart.v1 becomes
+chart.v1.svg, chart.png passed to svg becomes chart.png.svg, chart.SVG stays,
+.chart becomes .chart.svg and .svg stays.
 
-If the final native filename already ends in the complete expected ASCII suffix
-under ASCII case-insensitive comparison, the complete caller path is preserved
-exactly. Otherwise the lowercase suffix is appended to that filename only.
-This rule is literal: it does not interpret an extension or infer a format,
-and it never removes, replaces, normalizes, or rejects contradictory filename
-text. Thus `chart.v1` becomes `chart.v1.svg`, `chart.png` passed to `svg`
-becomes `chart.png.svg`, `chart.SVG` remains `chart.SVG`, `.chart` becomes
-`.chart.svg`, and `.svg` remains `.svg`.
+Native suffix completion does not require UTF-8. Caller-path access follows byte
+derivation. Reject a directory destination (following Path::is_dir symlinks) or
+missing filename as Io/InvalidInput. Parent directories must already exist. Then
+use parent canonicalization, Windows leaf validation, unique sibling staging,
+replacement and cleanup. An unsuffixed nondirectory base is not read/replaced
+when its suffixed sibling is the destination.
 
-Suffix completion uses native filename units without requiring UTF-8. It first
-rejects a caller path that currently identifies a directory, following symlinks
-according to `Path::is_dir`, and then requires a file-name component. These path
-errors are `Error::Io` values with `InvalidInput`. Format conversion and byte
-derivation precede all caller-path access. The completed path then undergoes the
-ordinary parent canonicalization, Windows leaf validation, sibling staging,
-replacement, and cleanup sequence. Parent directories are not created. An
-existing unsuffixed non-directory base is neither read nor replaced when its
-suffixed sibling is the completed destination.
-
-Each file output is staged at a unique sibling path and renamed only after
-rendering or conversion succeeds. Consuming output calls publish independently;
-if a later chained publication fails, an earlier successful publication remains
-in place. Supported POSIX and Windows hosts publish with one atomic
-same-directory replacement: success installs the complete staged bytes and every
-failure preserves the prior destination without a backup or rollback window.
-The transaction retains the staging handle for every write. On POSIX, the final
-rename and pre-commit unlink remain pathname syscalls; their exact-source claim
-assumes no external namespace mutation between the final identity check and that
-single syscall because portable POSIX exposes no rename or unlink operation by
-open file handle. Windows publication and cleanup operate through the exclusive
-staging handle. Callers remain responsible for excluding independent concurrent
-mutation of the output namespace during a publication call.
-
-## Regression Evidence
-
-Renderer behavior is covered by focused semantic unit/integration tests: source
-completeness, scientific transformations, styles, containment, lifecycle, requested
-output dimensions and format validation. Whole-scene SVG sizes/hashes, stored
-scene snapshots and incidental automatic geometry are not acceptance gates.
-Equivalent current routes and frozen replay may compare their actual outputs for
-determinism; numerical rounding and serialization syntax use independent oracles.
-`90_DEVELOPMENT.md` defines the current test-expectation policy.
+Retain the staging handle for every write. Publish by one same-directory atomic
+replacement on supported POSIX/Windows hosts only after bytes succeed. Success
+installs complete staged bytes; failure preserves the previous destination with
+no backup/rollback window and removes owned staging residue. Windows publication/
+cleanup uses the exclusive staging handle. POSIX rename/unlink remain pathname
+syscalls: their exact-source claim assumes no external namespace mutation between
+final identity check and syscall. Callers exclude independent concurrent output
+namespace mutation. `src/orchestrator/artifacts.rs` and `src/output.rs` own these
+publication/conversion boundaries.

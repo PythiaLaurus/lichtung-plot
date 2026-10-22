@@ -4,7 +4,7 @@
 display values. It publishes outlined SVG and PNG artifacts and can also publish
 canonical SVG with preserved text from the same opaque rendered scene.
 
-This first standalone-boundary release intentionally has no dependency on the
+The renderer has no dependency on the
 Lichtung analysis, pipeline, asset, or reporting crates. Callers supply
 precomputed inferential annotations as ordinary plotting data.
 
@@ -259,12 +259,6 @@ filename text is never replaced, so `report.v1` becomes `report.v1.svg` and
 outside this crate.
 
 ## Development
-
-Rendering retains operation/source ownership, operation-local reuse, checked
-dimensions and allocation, and bounded layout coordination. Current correctness
-boundaries and the historical output/time/RSS comparisons are recorded in
-[the resource-accounting cleanup evidence](docs/resource-accounting-cleanup.md)
-and [the complete caption measurements](docs/caption-cleanup-performance.md).
 
 The repository pins its Rust toolchain and tracks `Cargo.lock`. Use focused
 tests and `just lint` for scoped changes. The complete read-only closure gate is:

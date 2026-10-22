@@ -159,15 +159,17 @@ The caller supplies the exact display p-value after any desired adjustment. The
 renderer validates and displays it but does not perform or choose a statistical
 test.
 
-## Preferred Numeric Tick Spacing
+## Numeric Tick Generation
 
-`TickInterval::additive(2.0)?` requests a positive linear spacing and
-`TickInterval::log10_decades(2)?` requests a positive integral exponent spacing on
-Forest Log10. Attach through `x_tick_interval` or `y_tick_interval` on the admitted
-numeric-axis families. This is the first complete source to try; dense labels can
-coarsen locally. Exact `AxisTick` lists win in either setter order. A dynamically
-categorical Trajectory x axis rejects an interval before fonts. See
-[preferred tick intervals](preferred-tick-intervals.md) for validation and evidence.
+`TickGeneration::additive(2.0)?` requests first-tried linear spacing;
+`TickGeneration::log10_decades(2)?` requests integral Forest Log10 exponent spacing.
+Attach through `x_tick_generation` or `y_tick_generation` on numeric-axis families.
+Dense labels can coarsen locally. `target(5)?` requests approximately five positions;
+`maximum(4)?` bounds the complete generated list, including endpoints.
+`automatic()` resets the complete choice. Exact `AxisTick` lists win in either
+setter order and are not truncated by generated counts. An actually categorical
+Trajectory x axis rejects non-Automatic instructions before fonts. See
+[numeric tick generation](public-tick-generation.md).
 
 ## Bars
 

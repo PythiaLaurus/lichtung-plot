@@ -1,1607 +1,592 @@
 # Layout System
 
-**Status**: Implemented coordinated layout, root sizing and scientific numeric/guide
-presentation; integrated release evidence remains with spec93
+## Protocol And Guarantees
 
-## Purpose And Boundary
+Parents allocate space and positions. A child receives constraints and returns
+**one immutable measured plan or a typed fit miss**. Intrinsic summaries inform
+allocation separately from constrained measurement; they are not collections of
+plans at all widths. Named bounded local choices and root-coordinated feedback
+do not authorize sibling Cartesian products, exhaustive wrap partitions, global
+quality ranking or root-width search.
 
-This is the single coordinated layout architecture for `lichtung-plot`.
-`01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` describe the current public
-three-mode root sizing API installed during Phase T6. Staged presentation targets
-are not aliases, dormant public types or a second rendering route. This
-specification also defines the corrected T5a3
-resource and workload target; historical global-search acceptance is superseded.
+Execution is deterministic, not a guarantee to discover every feasible layout.
+Exact roots preserve complete requested content and typography or fail. Automatic
+roots choose a natural preferred width once, then measure content height; they do
+not grow a hidden fixed canvas until something fits. Public inputs/lifecycle are
+defined by [rendering](02_RENDERING_CONTRACT.md), local appearance metrics by
+[Theme](03_THEME_SYSTEM.md), numerical sources by
+[numbers](06_NUMERIC_PRESENTATION.md) and explanatory flow by
+[guides](08_GUIDE_SYSTEM.md).
 
-The D1-D6 user-visible behavior decisions are approved: bounded containing-frame
-recovery, strict Unicode wrapping, three sizing modes, PNG-local output gates,
-base-plus-mark font preference, and separate root title and caption alignment.
-Approval is not implementation evidence. T5a0s in `91_IMPLEMENTATION_PLAN.md`
-records the decisions and documentation review. Independent title/subtitle
-alignment and narrow Plot/Canvas overrides are also user-approved T6 targets.
-Broad public constraints and remaining text controls enter the active
-post-foundation deferred review as DF6 and DF5 respectively, following the user's
-cancellation of T7. Discussion does not itself admit those extensions.
+Private owners are `src/layout/kernel.rs`, `src/layout/kernel/tracks.rs`,
+`src/layout/kernel/feedback.rs`, `src/layout/interior.rs`,
+`src/decorations/plan.rs`, `src/canvas.rs` and `src/orchestrator/facets.rs`.
 
-Current exact-root T5a6d implementation evidence is in `docs/t5a-closure.md` and
-spec 91. T5a6d, T5a6, and parent T5a are COMPLETE after final review corrections
-and the full gate in `/tmp/opencode/t5a6d-verify.log`: 1,024 library and 467
-integration tests passed, 17 ignored, with strict Clippy, API docs, and package
-verification passing. All ten release benchmark groups separately passed. At
-that T5a checkpoint, the 20 native ordinary kinds, five specialized kinds, and
-two retained parent adapters did not make this document's target current. T5b
-has since completed native guides and composition tracks; T5c–T5e have completed
-mark/annotation consequences, resolved scales, native specialized packing and
-the private three-mode root engine. Current ownership and closure evidence are
-in `docs/t5e7-producer-census.md` and `docs/t5e-closure.md`.
-The complete theme and public three-mode sizing cutovers are now current. Omitted
-Plot/Canvas sizing derives content dimensions; consuming width replaces the
-complete request; Output reports frozen canonical dimensions. There are no hidden
-historical root defaults or public pre-render dimension getters.
+### Constraints And Results
 
-T6 ENTRY decisions are complete in `93_T6_EXECUTION_PLAN.md`: the user admitted
-one scientific numeric presentation core and combined/separate discrete guide
-sections, subsequently implemented as the current public behavior.
-Remaining broader formatting/text controls and sparse compaction are discussed
-in the active post-foundation deferred review in spec91/spec99.
-The numeric consumer design, Forest mathematical proof/resource model and
-discrete producer/section design are fully specified in
-`06_NUMERIC_PRESENTATION.md`, `07_LOG10_DISPLAY.md` and `08_DISCRETE_GUIDES.md`.
-These presentation contracts are now implemented and public. Numeric tick
-generation retains complete Automatic/interval/Target/Maximum choices; data-alpha
-retains complete three-target values/bindings and actual unit members. The sole
-PreparedGuide measures category/literal/layer symbols, optional continuous color
-and declared alpha sections in one finite frame. Hidden/Undeclared still retain
-complete alpha identity through scoped child/height reuse and common native/standard
-feedback. Root bounds, 8/2 guide trials, eight feedback rounds and frozen replay are
-unchanged. Specs06/07/08 and `../docs/public-data-alpha.md` own current details;
-spec93 owns integrated release closure.
+A length constraint has nonnegative minimum and optional maximum>=minimum. None
+means no maximum, not infinity. Width/height constraints are independent.
+Invalid intervals reject before measurement; returned sizes satisfy them without
+clamping. Fill receives an exact assigned dimension; nonfill receives zero through
+the assigned extent and is aligned by the parent. An arranged PanelBox is not an
+incoming constraint or intrinsic summary.
 
-Post-T5a3 accepted policies are recorded in `91_IMPLEMENTATION_PLAN.md`, T5a3p0
-(PF1-PF7). The amendments below approve external conformance data, effective-
-feedback fixed-point completion with dirty reuse, single producer capture, and
-coarse resource accounting. P1 is complete; PF2/PF3 are implemented in `5c0acdf`
-and PF6 in `23db99f`. PF4 is implemented and final primary verification and
-independent recheck passed; PF5's evaluation/report is complete with unchanged
-operation-local font freshness and same-Output reuse.
-PF6 permits deduplication only with the exact selected tick list preserved; PF5
-admits evaluation/reporting, not a global font cache. PF7 keeps current line
-extension; alternative behavior is discussed under DF10 in the active
-post-foundation deferred review.
+Summaries retain traced hard requirements, unwrapped natural text width, preferred
+lengths and width-dependence. A minimum pair is not a promise of joint sufficiency
+for every wrapping/packing outcome. In canonical address order, parents obtain
+summaries, allocate columns/widths, measure width-dependent content, allocate rows/
+heights and arrange. Assigned-geometry calls include exact containing box,
+projection identity and attachment targets. Immutable plans retain selected boxes,
+baselines, ink, text/glyphs, ticks, guide flow, projections and geometry. Translation
+cannot change decisions; changed inputs require another keyed measurement.
 
-Parents allocate space. A child returns ONE measured immutable local plan or a
-typed fit miss under that allocation. Intrinsic summaries inform allocation but
-are not collections of constrained layouts. Explicit, bounded local attempts
-are allowed only where named below. There are no Cartesian child products,
-global quality keys, complete wrap-transition sets, or exhaustive width search.
-An automatic placement succeeds only when its affected containing layout fits,
-not merely when the guide itself fits. Bounded parent recovery is distinct from
-an exhaustive product of independently chosen child alternatives.
+FitReason is `(kind,component_address,local_attempt_ordinal)`. Kind order is
+constraint, text, tick, legend_or_guide, track_or_residual, overlay_collision,
+specialized_geometry, assigned_child. Ordinals are zero-based local attempt order.
+Propagate original child kind/address; assigned_child is only a last-resort reason.
+Exhausted reasons sort/deduplicate by that tuple and return the least.
 
-The guarantee is deterministic policy execution, not discovery of every feasible
-layout or a globally best layout. A policy fit error can occur even if a different
-unimplemented arrangement would fit. Exact roots neither shrink typography nor
-omit content; automatic roots derive a natural preferred width once, then measure
-content height. They do not start with a hidden fixed canvas and grow until fit.
+A miss is terminal or provisional with concrete named feedback, a resolvable
+predicate and enough geometry to derive the consequence. Only axis gutter,
+shared alignment, owned ink, automatic domain and content height can make a miss
+provisional. Unbreakable oversized text, insufficient exact hard total or collision
+without a named remedy is terminal. Arithmetic, allocation, I/O, font and invariant
+failures are fatal, never fit alternatives.
 
-The renderer remains standalone. It owns errors, annotation types, plans, font
-policy, scene construction, and publication. No other `lichtung-*` crate,
-network access, font provisioning, public layout plugin, or alternate renderer
-is introduced.
+Where boxes can be constructed, siblings run canonically even after a miss: later
+fatal error wins, otherwise least terminal reason, otherwise aggregate provisional
+requests. Local alternatives continue only when the next declared choice can
+address a terminal miss. The first provisional attempt stops local alternatives
+and returns to the root. Stale gutters/domains must not select a less-preferred
+tick source or guide edge.
 
-## Private Protocol
+## Canonical Geometry
 
-```rust,ignore
-type LayoutScalar = i64; // units of exactly 1/1024 CSS pixel
+LayoutScalar is signed i64 in exactly **1/1024 CSS pixel** quanta. Lengths are
+0..=i64::MAX; positions/edges use the signed range. Ordered box differences must
+be nonnegative representable lengths. Decode floating inputs as exact represented
+binary rationals before multiplying by1024. Normalize negative zero.
 
-struct LengthConstraint {
-    minimum: LayoutScalar,
-    maximum: Option<LayoutScalar>,
-}
-struct LayoutConstraints {
-    width: LengthConstraint,
-    height: LengthConstraint,
-}
-struct LayoutSize { width: LayoutScalar, height: LayoutScalar }
-struct MeasuredLayout<P> { size: LayoutSize, plan: P }
-enum MeasurementOutcome<P> {
-    Measured(MeasuredLayout<P>),
-    FitMiss(FitMiss),
-}
-```
+| Operand | Rounding |
+| --- | --- |
+| Lower length constraint | Toward positive infinity |
+| Upper length constraint | Toward negative infinity |
+| Complete hard requirement, reserve, line occupancy | Upward once after exact aggregation |
+| Lower/upper ink or collision edge | Outward, down/up respectively |
+| Font size, advance, offset, baseline, preference, alignment, spacing, stroke center/width, position | Nearest-even |
+| Integral public CSS dimensions | Checked multiplication by1024 |
 
-Intervals have nonnegative minima and optional maxima not below their minima.
-`None` means no maximum, never infinity. Invalid constraints reject before
-measurement; returned sizes must satisfy constraints without clamping. A fill
-child receives an exact dimension; a nonfill child receives zero through its
-assigned cell extent and is aligned by its parent. A `PanelBox` is an arranged
-rectangle, not an incoming constraint or an intrinsic summary.
+Stroke edges remain outward even when width/center operands use nearest-even.
+Spatial sums/differences use checked i128; counts/products/areas/squared distances/
+ratio products use checked u128 and checked conversion. Signed magnitude is taken
+after wide subtraction. Failure aborts, not saturates, wraps, skips a candidate or
+retries a smaller value. There is no epsilon equality or float geometry fallback.
 
-An intrinsic summary contains traced hard requirements, natural unwrapped text
-width, preferred lengths, and width-dependence flags. It does not promise that
-its minimum pair is jointly sufficient for every wrapping or packing outcome.
-It is separate from constrained measurement and contains no plans at all widths.
-Parents obtain summaries in canonical address order, allocate columns/widths,
-measure width-dependent content, allocate rows/heights, and finalize geometry.
-Named assigned-geometry calls receive exact containing size, projection identity,
-and attachment targets. Each successful call returns just one plan.
+One em is the resolved role font size. One ch is its shaped U+0030 advance with
+actual stack/face/weight/size/profile; missing required0 is a font error. Design
+metrics use exact `design_value*font_size_quanta/units_per_em`, rounded by spatial
+role. Round complete hard run advance upward once, not per glyph.
 
-Plans contain complete local child boxes, baselines, ink, text lines and glyphs,
-ticks, guide flow, projections, and geometry. A parent may translate an immutable
-child plan into its assigned box; it cannot mutate its decisions. Changed inputs
-require another keyed call. Inline records belong to their measured owner and do
-not manufacture anonymous child calls or duplicate topology addresses.
+Nonspatial binary64 identity inputs are finite and normalize zero. For bits b,
+total-order key is `!b` for negative, otherwise `b^0x8000000000000000`; equality
+is normalized bits. Computation uses nearest-even without FMA substitution.
+Strings compare UTF-8 bytes, integers numerically, None before Some, sequences
+elementwise then length. Pointers/hash iteration never select layouts.
 
-`FitReason` is `(kind, component_address, local_attempt_ordinal)`. Kinds sort as
-`constraint, text, tick, legend_or_guide, track_or_residual, overlay_collision,
-specialized_geometry, assigned_child`. Ordinals are zero-based in the owner's
-declared local attempt order; a call with no alternatives uses zero. The original
-child kind/address survives propagation; `assigned_child` is only a last-resort
-mapping when no more specific reason exists. Reasons within an exhausted local
-policy sort by that tuple and deduplicate; the least is returned.
+Renderer log10 in `src/numeric.rs` is correctly rounded binary64 nearest-even:
+exact-integer outward atanh intervals start at 128 fractional bits and double until
+both endpoints round identically. Exact powers10^0..10^22/exceptional inputs are
+handled explicitly; rationality proves remaining termination. decimal_power uses
+exact integer/rational conversion for exponents-323..308, not platform powf.
+Checked precision/storage/refusal remains fatal. Mathematical Forest display
+powers have the distinct [certified decimal contract](07_LOG10_DISPLAY.md).
 
-A fit miss is either terminal or provisional with concrete named feedback
-requests and enough provisional geometry to derive those requests. It is not an
-empty successful plan. Only axis-gutter, shared-alignment, owned-ink reserve,
-automatic-domain, and content-derived dimension feedback can make a miss
-provisional. A request must actually change its consumed input and identify the
-predicate it can resolve.
-An oversized unbreakable string, insufficient exact total after known minima,
-or sibling collision without a named remedy is terminal. Resource, arithmetic,
-font, and invariant errors are fatal immediately, never fit misses.
-
-Content-derived dimension feedback is an internal measured consequence of the
-column-before-row primitive contract, not another public sizing mode or search.
-`ContentHeight` transfers one guided Plot cell's preferred local frame/prose
-height from its measured owner to that cell under the owning Canvas Grid. It
-replaces the prior measurement, including contraction; neither its assigned
-width nor its height is aggregated as cumulative owned ink. Its dependency
-identity comprises the immutable prepared operation/owner (source data, labels,
-role typography and guide semantics), current coordinated numeric domains,
-assigned column width/guide capacity, applied parent and local gutter/owned-ink
-inputs, scope, tick-label visibility and discrete/continuous guide policy.
-Changing any dependency requires another admitted measurement. The parent may
-consume a retained height only when that complete identity matches; equal width
-alone is insufficient. Measurement keys, lookups, retained consequences and
-replacement requests use the same operation records/visits/calls/cache/bytes
-ledger as other child plans. A changed content consequence can provisionally
-resolve only its named row/residual fit predicate under the existing bounded
-root driver; it never restarts automatic width choice or adds an edge-search loop.
-Width-dependent content height and final cell allocation consume the same scoped
-numeric domains/shared unions, visibility and root-coordinated gutters. Gutters
-measured from the actual selected child return through that driver; a probe at a
-different provisional height must not silently replace the sizing inputs. An
-unchanged height request cannot authorize a frame extending outside its row.
-
-When child boxes can be constructed, siblings run in canonical order even after
-a fit miss, so a later fatal error wins; otherwise the least terminal reason
-wins, then provisional requests aggregate. Local attempts continue only after a
-terminal fit miss that the explicitly named alternative can address. A placement
-owner may change an automatic guide edge or its declared flow mode and remeasure
-all children whose allocated constraints change. A child failure attributable to
-that allocation rejects the containing placement attempt, even if the guide fits.
-This does not authorize independent sibling-choice products, changing explicit
-caller policies, or treating font/resource errors as reasons to retry.
-The first provisional local attempt also stops that owner's alternatives and
-returns its named requests to the root; stale parent inputs cannot justify
-silently choosing a less-preferred tick source or guide edge.
-
-## Canonical Numeric Domain
-
-`LayoutScalar` is signed two's-complement `i64`. Lengths are `0..=i64::MAX`;
-positions and ink edges are `i64::MIN..=i64::MAX`. Box edges are ordered and each
-difference must be nonnegative and representable as a length. Negative zero
-normalizes to zero. Convert binary64 input from its exact binary rational value
-multiplied mathematically by 1024, not a rounded intermediate binary64 product.
-
-The exhaustive spatial rounding rules are:
-
-1. Lower length constraints round toward positive infinity.
-2. Upper length constraints round toward negative infinity.
-3. Hard required lengths, reserves, and line occupancy round upward.
-4. Lower ink/collision/containing edges round toward negative infinity.
-5. Upper ink/collision/containing edges round toward positive infinity.
-6. Font sizes, advances, offsets, baselines, preferences, alignment guides,
-   spacing, stroke centers/widths, and derived positions round nearest-even.
-7. Exact public integral CSS dimensions use checked multiplication by 1024.
-
-Painted stroke edges use rules 4 and 5; hard extents including spacing use rule 3.
-Spatial sums/differences use checked `i128` intermediates and checked conversion
-back to `LayoutScalar`. Counts, products, areas, squared distances, byte counts,
-and ratio products use checked `u128`; signed differences are taken in checked
-wide signed arithmetic before taking their unsigned magnitude. Failure aborts
-the root, never saturates, wraps, drops one attempt, or retries a smaller value.
-
-One `em` is the normalized resolved role font size. One `ch` is the normalized
-shaped advance of U+0030 using that role's stack, selected face, weight, size,
-and shaping profile. Required U+0030 failure is a font error. Multiples such as
-`6ch`, `66ch`, and `72ch` use checked arithmetic. Font metrics use exact rational
-`design_value * font_size_quanta / units_per_em`, rounded by their spatial role.
-Advances/offsets are retained precisely enough to round the complete run's hard
-advance upward once, rather than summing rounded glyph estimates.
-
-Nonspatial binary64 inputs to geometry, state, or identity must be finite and
-normalize negative zero. For bits `b`, the unsigned total-order key is `!b` when
-the sign bit is set, otherwise `b ^ 0x8000000000000000`. Equality is normalized
-bit equality. Computation uses nearest-even binary64 without FMA substitution.
-Strings compare by UTF-8 bytes; integers numerically; `None` precedes `Some`;
-sequences compare elementwise then by length. No pointer or hash iteration order
-participates in a layout decision.
-
-Layout `log10` uses the correctly rounded ties-to-even exact-integer interval
-algorithm in `src/numeric.rs`, with pinned `num-bigint 0.4.8`. It bounds the
-atanh series with outward fixed-point arithmetic, starting at 128 fractional
-bits and doubling precision until both rational bounds round identically.
-There is no accounting parameter or per-expression price. Checked precision
-growth, actual integer representation, certified bounds and exact rounding remain.
-Real arithmetic/allocation failure is fatal and propagates through
-Forest values, references, ticks, limits, and nice-range consumers.
-Exactly representable powers `10^0..10^22` and exceptional inputs are handled
-explicitly; rationality proves termination for all remaining binary64 inputs.
-This replaces the previously prescribed CORE-MATH port, not its correctly
-rounded result contract. Evidence includes MPFR 4.2.1 rounding vectors, platform
-libm misses, every binary exponent, and near-one cancellation. Platform libm and
-approximate fallbacks are not admitted. `decimal_power(e)` is
-the correctly rounded binary64 mathematical `10^e`, using exact integer/rational
-arithmetic for the pinned exponent table `-323..=308`, not `powf`.
-
-`ceil_div(n,d) = n/d + u128::from(n%d != 0)` for positive `d`.
-Exact-rational nearest-even compares twice the remainder with the denominator
-and resolves equality to an even integer. `ceil_sqrt` and `floor_sqrt` are exact
-integer operations, not floating approximations.
+Integer ceil division is `n/d + (n%d != 0)` for positive d; nearest-even compares
+twice remainder with denominator and ties to even. Integer floor/ceil square roots
+are exact. Numeric projection preserves endpoints0/1 and uses `(v-lo)/(hi-lo)`
+when direct subtractions are finite; otherwise scaled opposite-extreme arithmetic
+with `scale=max(abs(v),abs(lo),abs(hi))`. In-domain fractions are finite[0,1].
+For D=2^64-1, key is exact nearest-even p*D; center is exact nearest-even
+`origin+span*key/D`, including origin parity. Marks/ticks/grid share it.
+Categorical edges/centers use exact integer ratios i/n and(2i+1)/(2n), including
+origin; off-center/jittered observations retain continuous positions.
 
 ## Root Sizing And Preferences
 
-| Target request | Policy |
+| Request | Policy |
 | --- | --- |
-| No sizing call | Derive natural preferred outer width once; measure at that width and derive content height. |
-| `width(w)` | Allocate exactly width `w`, reflow at that width, then derive content height. |
-| `size(w,h)` | Allocate exactly the normalized pair; return fit/error without changing either dimension. |
+| Omitted | Choose natural preferred outer width once, measure at it, derive height |
+| width(w) | Exact positive integral CSS width, measured automatic height |
+| size(w,h) | Exact positive pair, fit or fail without changing either |
 
-Plot and Canvas expose consuming `width(self, width: u32) -> Self` and retain
-`size(self, width: u32, height: u32) -> Self`. One stored sizing request is
-completely replaced by each sizing call: latest call wins, and `width` after
-`size` clears the explicit height. No call means automatic width and height.
-Dimensions must be positive integral CSS pixels; zero rejects at preflight under
-the existing builder validation pattern, not by panicking in a setter.
-All final boxes and backend dimensions are finite. Canvas owns composed
-dimensions; an embedded Plot's standalone sizing request does not become a cell
-preference. Facets belong to their one owning Plot. Constraint intervals remain
-private implementation machinery, not additional public sizing modes.
+Latest sizing call replaces the entire request; width clears earlier exact height.
+Zero rejects at preflight. Canvas ignores embedded standalone requests, including
+zero; they are not cell preferences. No public generic bounds, exact-height/auto-
+width or maximum-width mode exists.
 
-The public root cutover and focused all-mode closure are recorded in
-`docs/content-derived-root-sizing.md` and `docs/public-sizing-closure.md`.
-Standalone and Canvas natural columns share initial horizontal axis/chrome
-preferences; Matrix retains its native trailing-edge owner. A content-height
-residual miss caused by changed measured gutters consumes that named parent
-feedback before becoming terminal. Width remains the one initially chosen value;
-exact-height roots continue to require their actual assigned fit.
+Natural preference composes traced summaries, insets, gaps, guide and scientific
+requirements bottom-up. Prose prefers
+`max(hard_unbroken_width,min(natural_unwrapped_width,66ch))`; 72ch is a readability
+diagnostic, not a cap. Automatic outside guides initially contribute their Right
+one-column width+gap and cross-axis height. Explicit horizontal guides contribute
+a width maximum, vertical guides add width. Multiple guides compose canonically.
+This initial preference is not a placement commitment or permission to rechoose
+root width during feedback.
 
-Natural preference is bottom-up composition of summaries with traced insets,
-gaps, guide requirements, and scientific panel preferences. For prose, preferred
-width is `max(hard_unbroken_width,min(natural_unwrapped_width,66ch))` in its text
-role. `72ch` is a readability diagnostic, not a cap or alternative width. Root
-width is fixed from that initial composition; feedback reallocates within it and
-can change content-derived height, but does not restart width selection.
-
-For initial intrinsic composition, an automatic outside Plot guide or Canvas
-shared guide contributes its preferred RIGHT-side configuration: preferred
-one-column guide width plus the adjacent gap adds to the panel/body width, and
-its natural height participates in the cross-axis maximum. Explicit top/bottom
-guides instead contribute a width maximum; explicit left/right guides add width.
-Process multiple guides in canonical order. This is one sizing preference, not
-a placement commitment: later bounded edge attempts remain within the chosen
-root width and do not restart intrinsic width selection.
-
-For standard panels, with `m` prepared primary marks including coincident and
-transparent marks, use tick-label typography:
+For a standard panel with m prepared primary marks, including transparent and
+coincident marks, use tick-label typography:
 
 ```text
-mark_pitch = max(1em, maximum outward width or height of any primary mark)
-density_side = ceil_sqrt(max(1,m)) * mark_pitch
+mark_pitch = max(1em, maximum outward primary-mark width or height)
+density_side = ceil_sqrt(max(1,m))*mark_pitch
 preferred_width = max(hard_width,66ch,density_side)
 preferred_height = max(hard_height,ceil_div(3*preferred_width,4),density_side)
 ```
 
-The empty mark maximum is zero. Hard panel dimensions are the maximum of one
-quantum and traced representability, mark, interval, cell, annotation, and text
-requirements, not an `80x60` floor. At assigned width, natural standard height
-uses `max(hard_height,ceil_div(3*assigned_width,4),density_side)`. The `4:3`
-preference and density are soft inputs: exact allocation may depart from them.
-There is no hidden `640x480`, `960x640`, or fixed per-cell root default.
+Empty mark maximum is0. Assigned-width automatic height instead uses that assigned
+width in the same4:3 preference. Hard body dimensions are maxima of one quantum
+and actual representability/mark/interval/cell/annotation/text requirements, not
+a universal panel floor. Categorical hard pitch is max(one quantum,occupied slot
+span), preferred pitch max(hard,2em); multiply by semantic slots without compaction.
+Occupancy excludes outside axes/guides. Heatmap/Matrix prefer square cells;
+standard/categorical/Beeswarm/Waterfall/Marginal central prefer4:3. These are soft,
+not exact-aspect requirements. No hidden640x480/960x640 default exists.
 
-For a categorical dimension, `hard_pitch=max(1 quantum,maximum occupied slot
-span)`, `preferred_pitch=max(hard_pitch,2em)`, and spans are semantic slot count
-times pitch. Occupancy includes marks, intervals, value labels, and inside-band
-annotations, not outside axes/guides. Heatmap/Matrix prefer `1:1` cells; standard,
-categorical, Beeswarm, Waterfall, and Marginal central panels prefer `4:3`.
-Current production families impose no exact aspect requirement. No additional
-hard floor, aspect, preference, or root-size percentage may be invented locally.
+## Primitive Allocation And Arrangement
 
-## Tracks And Composition
+Closed primitives are Leaf, VerticalSequence, HorizontalSequence, Grid and Overlay.
+Coordinates start upper-left, x right/y down. Gaps/insets resolve from owned local
+roles, not root scale. Columns precede width-dependent text and rows.
 
-The closed primitives are `Leaf`, `VerticalSequence`, `HorizontalSequence`,
-`Grid`, and `Overlay`. Coordinates start upper-left, x rightward, y downward.
-All gaps/insets resolve from adjacent role typography, stroke, glyph geometry,
-and owned `CompositionTheme` relationships, never a root scale factor.
+A track is flexible when an occupying child fills its dimension, except declared
+Canvas/facet tracks are always noncollapsing flexible. Start hard minima from
+topology, then single-track requirements in canonical child order. Process spans
+by increasing span length then address, raising covered flexible tracks by equal
+capped surplus until their requirement including internal gaps is met. No headroom
+misses. Inflexible tracks keep required size. Build preferences using the same
+procedure from the hard vector; explicit maxima cap only soft preferences.
 
-Track allocation has one deterministic policy per dimension. Columns precede
-rows. A track is flexible exactly when at least one occupying child fills that
-dimension; otherwise it is inflexible. Declared Canvas/facet coordinate tracks
-have the noncollapsing flexible exception below. Initialize hard minima from
-topology, then single-track requirements in
-canonical child order. Process spanning requirements by increasing span length,
-then canonical address. Raise covered flexible tracks by equal capped surplus
-distribution until the span requirement, including its internal gaps, is met.
-No headroom means a track fit miss. Inflexible tracks retain their required size.
-Prepare preferred tracks with the same procedure starting at the hard vector and
-using preferred requirements; cap only soft preferences at explicit maxima.
-
-For available total `T`, subtract checked insets, gaps, and inflexible extents
-before allocation. If subtraction would be negative or the flexible hard sum
-exceeds the remainder, fail. Let flexible minima be `m[i]` and preferred sizes
-`p[i]>=m[i]`, with `p[i]` no greater than any explicit maximum. If available
-flexible total `A` is below `sum(p)`, perform ONE proportional shrink:
+Subtract insets/gaps/inflexible extents from available total with checked arithmetic.
+If remaining A is below flexible hard sum, miss. For minima m and preferences p,
+if A<sum(p), apply one proportional shrink:
 
 ```text
 C = sum(p[i]-m[i]); deficit = sum(p)-A
 shrink[i] = floor(deficit*(p[i]-m[i])/C)
 ```
 
-Give remaining shrink quanta to descending fractional-remainder numerators,
-ties by ascending track index, skipping exhausted shrink capacity. This exactly
-uses `A` without crossing minima. If `A>=sum(p)`, start at `p` and distribute
-surplus equally among flexible tracks with headroom: quotient to each, one extra
-to the first remainder tracks in index order, cap at maxima, remove capped
-tracks, and redistribute only the undistributed remainder. Each redistribution
-either finishes or removes a capped track; it is not a layout feedback loop.
+Remaining shrink quanta go by descending fractional remainder, ties ascending
+track index, skipping exhausted capacity. This exactly uses A without crossing
+minima. If A>=sum(p), distribute surplus equally among flexible tracks with
+headroom, quotient then index-ordered remainder; cap/remove exhausted tracks and
+redistribute only remaining surplus. Each step finishes or removes a capped track.
+All-max remainder is trailing parent slack unless full coverage is required, which
+misses. Recheck spans after shrink; failure does not invoke another allocator.
+Natural dimension uses preferred/content vector, not surplus up to a bound.
 
-When all maxima are reached, remaining space is explicit trailing parent slack,
-not silently added to an inflexible child. A parent requiring full flexible
-coverage rather than slack returns a typed miss. Spanning hard requirements are
-rechecked against the allocated vector; proportional shrink does not authorize
-violating one. A failure does not invoke another allocation search. A natural
-dimension uses its preferred/content vector, not surplus up to a caller bound.
+Grid edges cumulatively add insets/tracks/gaps. Spans include internal gaps.
+Declared Canvas/facet empty/trailing tracks have hard1 quantum and preferred one
+owner-local font-size em: Canvas composition_header, Plot facet_header. Occupied/
+spanning requirements can raise them. Other unoccupied tracks have no implicit
+floor; empty-slot children stay zero-size. No repacking. Natural n-track extent
+is `sum(final_preferences)+(n-1)*gap`, with actual bands/gutters added once.
 
-Grid lines are cumulative insets, tracks, and gaps. Spanned cells include all
-covered tracks and internal gaps. Canvas/facet declared rows and columns,
-including wholly empty and trailing tracks, are noncollapsing flexible tracks:
-hard minimum one quantum, preferred minimum `1em` of the owning composition
-role. Empty-slot children remain zero-size. Other unoccupied Grid tracks have
-no implicit minimum. Sparse coordinates are never repacked.
+Vertical sequence natural size is `(l+max(w)+r,t+sum(h)+sum(gaps)+b)`.
+Horizontal size is `(l+sum(w)+sum(gaps)+r,t+max(N,BA+BD)+b)`, where BA/BD are
+maximum exposed baseline/height below, N maximum nonbaseline height. Empty maxima
+are0. Absent optional children keep addresses without sequence-gap adjacency;
+present empty text stays present. Grid gaps belong to topology even beside holes.
 
-Sequence natural sizes for children `(w[i],h[i])` and insets `(l,t,r,b)` are
-`(l+max(w)+r,t+sum(h)+sum(gaps)+b)` vertically and
-`(l+sum(w)+sum(gaps)+r,t+max(N,BA+BD)+b)` horizontally. `BA` is maximum exposed
-baseline, `BD` maximum height below it, and `N` maximum non-baseline child height.
-Empty maxima are zero. Absent optional children retain addresses but create no
-sequence-gap adjacency; present empty text remains present. Grid gaps instead
-belong to declared topology even beside empty tracks.
+Cross-axis Start/End uses corresponding edge, Center nearest-even half residual,
+baseline `top+BA-child_baseline`. Key center aligns to label first baseline.
+Root title/subtitle/caption use resolved physical alignment across post-inset
+content. Headers/row titles/strips center in their spanned cells. Other nonfill
+children start unless a named role specifies otherwise.
 
-Cross-axis start/end use the corresponding edge; center uses nearest-even half
-residual; baseline uses `t+BA-child_baseline`. A legend key exposes nearest-even
-half its height and aligns to the label's first baseline. Other horizontal
-sequences baseline-align children exposing a baseline and start-align the rest.
-Root title and subtitle use independently resolved concrete `TitleAlignment`
-values under the precedence in `03_THEME_SYSTEM.md`; root caption independently
-uses the owning theme's `CompositionTheme::root_caption_alignment`, also
-`TitleAlignment`. All four built-in presets use concrete `root_title_alignment`
-`Center`, optional `root_subtitle_alignment` `None`, and caption `Start`.
-Each effective value controls both line translation within its text block and
-nonfill block placement across the owner's post-inset local root content span,
-not the data-panel span. Embedded Plot titles/subtitles retain these same Plot
-semantics within their allocated cell. Start/End are physical left/right,
-independent of bidi direction. Headers, row titles, and strips center in their spanned cells.
-Other nonfill Grid/sequence children start-align unless explicitly specified.
-
-Fill policy is closed: frames, bodies, panels, interiors, mark layers, Canvas Plot
-and TextPanel cells, and surfaces fill both axes. Horizontal axes and top/bottom
-guide tracks fill width; vertical axes and left/right tracks fill height. Text,
-glyphs, entries, individual guides, and overlays are nonfill. Empty slots are
-nonfill. A primitive fills exactly the dimensions assigned as fill by its owner.
-Root frame/body is the sole flexible main-axis child; root text stays inflexible.
+Frames/bodies/panels/interiors/marks/Canvas cells/surfaces fill both axes. Horizontal
+axes and top/bottom guide tracks fill width; vertical axes and left/right tracks
+fill height. Text/glyphs/entries/individual guides/overlays/empty slots are nonfill.
+The root body is the sole flexible main-axis child; root prose stays inflexible.
 
 ## Text And Unicode
 
-Text preserves original source bytes and is not normalized. Segmentation follows
-Unicode 16.0.0 UAX #29 extended grapheme clusters and UAX #14 default line breaking
-without locale tailoring, including BK/CR/LF/NL and GL/WJ rules. Paragraph bidi
-uses Unicode 16 UAX #9, with an all-neutral paragraph defaulting left-to-right.
-Mandatory breaks partition present text into `b+1` paragraphs, including empty
-leading, interior, and trailing paragraphs; each produces at least one line.
-CRLF is one mandatory break as required by the profile.
+Text retains original bytes without normalization. Use coherent Unicode 16.0.0:
+UAX#29 extended graphemes, default UAX#14 legal breaks without locale tailoring,
+UAX#9 paragraph bidi, script/Script_Extensions, mark General_Category and font-name
+NFKC-casefold. All-neutral paragraphs default LTR. Mandatory BK/CR/LF/NL breaks
+produce b+1 paragraphs including leading/interior/trailing empties, each with at
+least one line; CRLF is one break. GL/WJ behavior remains intact.
 
-Wrapping uses only these legal Unicode opportunities. Failure does not authorize
-emergency breaks, fit-driven rotation, typography shrinking, or content omission.
-The fixed axis-title quarter-turns below are role geometry, not fit recovery.
-New public controls for alternative text-fit behavior are deferred.
+Unicode tables/algorithms must have reproducible version/hash/provenance and
+compatible shaping classification; a dependency version alone is insufficient.
+Focused independent defaults/runtime tables remain local. Full conformance is
+opt-in against explicitly supplied hash-verified official16 data; missing/mismatch
+fails, with no downloads or hidden cache lookup. Development policy defines
+regeneration and corpus-history publication boundaries.
 
-Pin one coherent Unicode-bearing dependency graph: segmentation, line breaking,
-bidi, script/Script_Extensions, General_Category for mark classification,
-normalization/casefolding for family names, and
-shaping classification must agree with this release. A Cargo version alone is
-not evidence of data compatibility. Record versions, data releases, checksums,
-generation commands where applicable, and conformance fixtures. Pinned dependency
-tables/algorithms are permitted; bespoke first-party Unicode algorithms are not
-required. Any shaper whose internal tables differ must be patched or supplied a
-tested compatible classification path before it satisfies this target.
+Use locked rustybuzz0.20.1, language und, default variations, no caller features,
+required/default OpenType features and compatible Unicode classification.
+Resolve Common/Inherited scripts with Script_Extensions, surrounding strong
+script, paired punctuation and inherited base context; prefer compatible preceding
+strong script, otherwise following, leaving unresolved neutrals Common. Do not
+artificially split punctuation/marks or change font selection for script/fit.
+Runs follow resolved script, bidi direction and selected face; shape complete lines
+with paragraph context. Retain face/index/glyph IDs/source clusters/offsets/advances/
+directions/scripts. Selected-face/shaper/metric failure is fatal.
 
-PF1 supersedes full-corpus repository/package storage requirements: keep focused,
-independently expected default tests, runtime tables, hashes, provenance, and
-licenses. Full conformance uses explicitly invoked ignored tests against externally
-supplied official Unicode 16 data, hash-verified before parsing; missing or mismatched
-data fails. No automatic download, provisioning, or hidden cache lookup is added.
-Historical full packaged runs remain true evidence, not fresh-checkout coverage.
+### Controls And Legal Endpoints
 
-Use the locked `rustybuzz 0.20.1` shaping profile, language `und`, default
-variation coordinates, empty caller feature list, and required/default OpenType
-features, subject to that coherent-data requirement. Resolve Common/Inherited
-script using Script_Extensions, surrounding strong script within the paragraph,
-paired punctuation context, and inherited combining-mark base context. Prefer a
-compatible preceding strong script, otherwise following; unresolved neutrals
-remain Common. Do not split punctuation and marks into artificial script runs
-merely because their raw Script property differs. This script resolution never
-changes the canonical face-selection policy defined below.
+Mandatory separators/bidi controls affect algorithms without standalone painted
+glyphs. ZWJ/ZWNJ, variation selectors/default-ignorables remain in shaping/source
+mapping; absent standalone cmap is not missing visible text. Associate controls
+with relevant surrounding run or primary face in an otherwise empty run. The
+shaper suppresses nonpainting control glyphs. Selected U+00AD break paints declared
+U+002D with original source mapping; otherwise it paints nothing. Tabs and
+unsupported C0/C1 other than named mandatory separators reject; no implicit tab
+policy. Ordinary visible scalars/marks require coverage and valid shaped glyphs.
 
-Run boundaries follow resolved script, bidi direction, and selected face. A
-grapheme can cross face runs when the narrow base-plus-mark preference below
-cannot cover its unit or does not apply. This is not general whole-grapheme
-fallback. Shape with
-paragraph context and exact selected line boundaries, preserving joining and
-OpenType context rather than summing independently shaped words. Retain face
-identity/index, glyph IDs, source clusters, offsets, advances, directions, and
-resolved scripts. Font/shaper failure or invalid metrics is fatal, not a fit miss.
+Legal endpoints are UAX#14 opportunities between UAX#29 graphemes plus paragraph
+end. No proposal crosses mandatory breaks. No emergency identifier/grapheme split,
+fit-driven rotation, font shrink, omission or general ellipsis is allowed.
 
-Controls have explicit semantics, not a blanket cmap requirement. Mandatory
-separators and bidi controls affect their Unicode algorithms but require no
-painted glyph. ZWJ/ZWNJ, variation selectors, and other default-ignorables remain
-in shaping input and source/cluster mapping with their prescribed control
-behavior; absence of a standalone cmap glyph for them is not missing visible
-text. Associate nonpainting controls with the relevant surrounding face run (or
-primary face for an otherwise empty run) without changing visible-unit or scalar
-selection. The shaper suppresses nonpainting control glyphs; a discretionary
-break at U+00AD paints U+002D only when selected, and that literal participates in
-font census; the original U+00AD remains in source mapping. Other unselected
-default-ignorables paint nothing. Tab and unsupported C0/C1 controls other than
-the named mandatory separators reject during text preflight rather than silently
-disappearing; no implicit tab-stop policy exists.
-Ordinary visible scalars, including combining marks, require coverage under the
-canonical base-plus-mark/scalar policy and valid shaped glyphs; missing visible
-glyphs remain errors, with no missing-glyph boxes or font downloads.
-These are explicit nonpainting-control exceptions to the glyph requirement in
-`03_THEME_SYSTEM.md`. Primary selection and canonical candidate order remain
-unchanged; the approved narrow whole-unit preference below is the only change
-to visible face selection. Neither script resolution nor control association
-adds a general cluster-wide policy.
+### Intrinsics And Constrained Wrapping
 
-Intrinsic text analysis shapes each full paragraph ONCE and each maximal sequence
-without a legal internal break, retaining summary requirements and bounded reusable
-data. Natural width is maximum full-paragraph outward ink span; the unbroken
-requirement includes outward ink and hard advance. Retain the paragraph shaping
-and one source-ordered shaping-cluster advance map for constrained proposals,
-not an all-suffix substring map. Reuse requires identical text, font/profile,
-and paragraph context. Summaries are not proof of contextual constrained fit.
+Shape each full paragraph once plus maximal sequences with no legal internal
+break for intrinsic analysis. Natural width is maximum full-paragraph outward
+ink span; hard unbroken requirement includes ink and advance. Retain paragraph
+shaping and one source-ordered cluster advance map, not every suffix/boundary
+pair. Reuse requires identical text, font/profile and paragraph context.
 
-Legal endpoints are UAX #14 opportunities between UAX #29 grapheme clusters plus
-paragraph end. Mandatory paragraphs are processed separately, with no proposal
-crossing a mandatory break. A shaping cluster may cover several graphemes or
-share source coverage with fallback runs. Keep its source interval and exact
-rational total advance along its run's inline axis. For proposals only, use the
-nonnegative magnitude of that total; accumulate clusters in logical source order,
-charging a cluster at the first legal endpoint at or after its source end. Equal
-source endpoints use run then glyph order. A legal grapheme endpoint inside a
-shaping cluster remains legal: it receives no partial cluster estimate and is
-reshaped exactly if tried. These proposal prefixes are monotone bookkeeping,
-not independently shaped word widths or final line geometry.
+For proposals only, accumulate nonnegative magnitudes of exact shaping-cluster
+inline advances in logical source order, assigning a cluster at the first legal
+endpoint at/after its source end. Equal endpoints use run then glyph order.
+An internal legal grapheme endpoint receives no partial cluster estimate and
+remains legal for exact reshaping. Prefix monotonicity is bookkeeping, not fit proof.
 
-At assigned finite width, first check the already shaped complete paragraph's
-upward-rounded advance and outward ink span. If both fit, directly retain that
-exact unwrapped line, with its line-specific bidi treatment, without reshaping
-or endpoint search. Empty paragraphs retain one line with primary metrics.
-Otherwise apply this deterministic locally greedy policy from paragraph start:
+At finite width, if the already shaped full paragraph's complete upward advance
+and outward ink fit, retain it directly with line-specific bidi, no new endpoint
+search. Empty paragraphs retain one line with primary metrics. Otherwise, from
+each current line start:
 
-1. Scan legal endpoints forward from the current line start, using differences
-   of paragraph proposal prefixes. Stop at the first proposal exceeding width;
-   propose the preceding endpoint, or the first endpoint when none preceded it.
-   If no proposal exceeds width, propose paragraph end. Do not scan backward
-   from paragraph end or precompute substrings from every possible line start.
-2. Shape the complete proposed line exactly with paragraph context and the
-   selected break's control behavior. Check upward-rounded complete-line advance
-   AND outward ink span. If it fails, retreat one legal endpoint at a time and
-   shape/check each complete line until one fits. Failure at the first legal
-   endpoint returns a text miss, not an emergency grapheme split.
-3. From that fitting endpoint, try only the immediately next legal endpoint,
-   shaping/checking its complete line exactly. Extend while each next line fits;
-   STOP at the first exact nonfit or paragraph end. Keep the last fitting line,
-   then resume forward proposal scanning at its ending source boundary.
+1. Scan legal endpoints forward using paragraph prefix differences until first
+   proposal exceeding width. Propose previous endpoint, or first if none precedes;
+   if none exceeds, propose paragraph end. No scan backward from paragraph end.
+2. Shape/check that complete line with paragraph context and selected controls.
+   Both upward complete advance and outward ink must fit. On failure retreat one
+   legal endpoint at a time, checking each; failure at first returns text miss.
+3. From a fit, test only its immediately next legal endpoint and extend while it
+   fits. Stop at first exact nonfit or paragraph end, retain last fitting line and
+   resume from its source boundary. Never skip a nonfit to seek a distant fit.
 
-PF7 accepts keeping this extension policy unchanged. Removing extension is not
-admitted; DF10's post-foundation review evaluates whether measured benefit
-justifies changing that policy.
+Reuse endpoint results only for the same line-start trial. A retreat failure
+also stops later extension without reshaping. Release failed glyph payloads and
+obsolete start-trial entries as scanning advances; retain selected lines and one
+paragraph map. Optional trial storage grows fallibly. Contextual nonadditivity
+means this is not a globally longest-line guarantee.
 
-Within one line-start trial sequence, reuse an already tested endpoint result;
-in particular, a failed endpoint encountered during retreat stops later extension
-without reshaping. A paragraph-fit failure can likewise be reused at that same
-start. Release failed trial glyph payloads and obsolete line-start cache entries
-as scanning advances; retain selected exact lines and the one paragraph map.
-Any optional retained trial cache grows fallibly as needed, never as a complete
-boundary-pair or all-suffix collection.
+Compute paragraph bidi once, retain across soft wraps, then apply UAX#9
+line-specific reset/reorder per selected line. Do not re-resolve each as a new
+paragraph. Retain final contextual shaping for publication.
 
-Paragraph advances only propose a break; they are never exact line-fit proof.
-Final geometry uses retained contextual whole-line shaping, not sums of standalone
-words, glyph estimates, or paragraph-map advances. This policy deliberately does
-NOT promise a globally longest fit under pathological nonmonotonic contextual
-widths: it never skips a failing next endpoint seeking a distant fit. Actual
-allocation, arithmetic and fit failures propagate; scans and trials have no fees.
-
-Compute paragraph bidi levels once with full paragraph context, preserve them
-across soft wraps, then apply UAX #9 line-specific reset/reordering to each
-selected line. Do not re-resolve each soft line as an independent paragraph.
-The final exact line shaping is retained, not repeated by a publication backend.
+### Glyph Geometry And Text Boxes
 
 Accumulate design advances in exact rational layout units in visual run order.
-Each absolute glyph origin is nearest-even rounding of the exact accumulated
-pen plus that glyph's offset, once; do not accumulate individually rounded
-advances or add separately rounded pen/offset values. Freeze those absolute
-origins. Compute outward painted bounds from the same origins and scaled glyph
-outlines consumed by collision checks and outlined/PNG publication. The exact
-full-line advance used for wrapping is a separate hard measurement, not a reason
-to use different glyph placements during output.
+Each absolute glyph origin rounds the exact accumulated pen+offset once nearest-
+even, not individually rounded advance sums. Outward painted bounds use those
+same origins/scaled outlines as collisions and outlined/PNG output. Complete-line
+hard advance is separate from glyph placement.
 
-Ascender/descender use OS/2 `sTypoAscender/sTypoDescender` when present, otherwise
-hhea; invalid metrics, including nonnegative descender, reject. Let `A` and `D`
-contain the maximum scaled positive ascender/absolute descender and selected
-glyph ink above/below baselines across fallback faces. For no glyphs use primary
-metrics. Hard containment rounds outward. With resolved upward-rounded role
-line height, `pitch=max(A+D,line_height)` and
-`height=A+D+(line_count-1)*pitch`. Baseline `i` is `A+i*pitch`; first baseline
-is the sole sequence baseline and the last remains available for ink contracts.
+Use OS/2 sTypoAscender/sTypoDescender when present, otherwise hhea; invalid metrics,
+including nonnegative descender, reject. A/D contain maximum positive ascent/
+absolute descent and selected ink above/below baseline across fallback faces;
+without glyphs use primary metrics. With upward role leading,
+`pitch=max(A+D,line_height)`, `height=A+D+(line_count-1)*pitch`, baseline i=A+i*pitch.
+First baseline is sequence baseline; retain last for ink checks.
 
-Returned nonfill width is maximum selected line ink span, not unused assigned
-width. For edges `left,right`, `span=right-left`, block width `W`, line x is
-`-left` for start, `round_even((W-span)/2)-left` for center, and `W-span-left`
-for end. TextPanel, legend title/label, guide title, and standalone text start;
-composition headers, axes, ticks, and guide numbers center. Panel/annotation
-edge anchors start at left, end at right, otherwise center. These are fixed role
-decisions except for the root title, subtitle, and caption alignment rules above.
+Nonfill width is maximum selected line ink span. Given line edges left/right,
+span=right-left and block W, line origin is -left for Start,
+`round_even((W-span)/2)-left` for Center, W-span-left for End. TextPanel and guide
+titles/labels start; headers/axes/ticks/guide numbers center; annotations follow
+their typed edge anchor. Root prose has its resolved independent alignment.
 
-Editable preserve-text SVG emits original content with explicit selected line
-boundaries/anchors and validated ordered font stack/weight, preserving paragraph
-bidi context in its text structure/direction metadata. Viewer shaping and installed
-fonts remain viewer-dependent; exact retained glyph geometry is NOT promised for
-editable text. Outlined SVG and PNG consume frozen generation-host glyph identities
-and positioning exactly, using retained paths or same-byte format-local path
-extraction as defined below, with no second wrapping, fallback, or text shaping.
-Source text remains available for accessibility/metadata without painting it twice.
+Preserve-text SVG retains original content, chosen line boundaries/anchors,
+validated stack/weight and paragraph bidi metadata. Viewer shaping/fonts may
+differ. Outlined SVG/PNG use frozen generation glyphs/origins without second
+wrapping/fallback/shaping. Source accessibility metadata must not paint text twice.
 
-## Fonts And Admission
+## Installed Fonts And Pre-Font Census
 
-Resolve themes, scales, semantic domains, exact limits, categories, shared-guide
-merges, and any domain-dependent generated text sources BEFORE their font census.
-Later geometry-dependent formatters contribute a closed alphabet, not guessed
-sample labels. The unconfigured automatic numeric/Forest profile alphabet is
-ASCII `0123456789-.ekM^`. Configured numeric policies derive their complete alphabet
-from notation and operand kind; actual affixes retain source spans, including
-combining marks, rather than contributing only a scalar union. Known formatted
-labels contribute the full concatenated span. Geometry-dependent numeric labels
-add finite grammar-derived numeric/affix boundary units, including each possible
-terminal numeric scalar plus leading suffix marks, and retain whole-unit fallback
-requirements before font census. Select and retain whole-unit or permitted
-per-scalar fallback face identities during canonical font resolution, before
-measurement. Separate alphabet and affix scans cannot substitute for those
-units. Other generated
-literals, including discretionary break glyphs, are declared by their owner.
-All possible painted alphabet scalars require fallback coverage.
+Resolve scientific domains, exact limits, final color maps/contrast roles and
+Shared guide compatibility before census. Visit actual source strings in canonical
+component preorder, role order and local record order. Empty exact labels retain
+identity with zero scalar needs. CSS family names/SVG syntax/suppressed content
+are not painted text. Include actual typography probes and discretionary hyphen.
+Numeric late-generated sources contribute finite grammar/affix boundary units as
+specified in numeric presentation, not guessed labels or isolated scalar unions.
 
-Prepared text requirements visit canonical component preorder, role order, and
-local record order. Every present caller/display string, exact label, annotation,
-status, legend/guide, header, and generated text source participates. Empty exact
-tick labels retain identity but zero scalar requirements. CSS family names, SVG
-syntax, and explicitly suppressed content are not painted text. First occurrence
-assigns each structurally equal `(FontStack,weight)` pair its ordinal, retaining
-stack-entry order. Census visits pair ordinal, record order, source scalars and
-required unit spans, then generated alphabet in scalar order. Retain required
-base-plus-mark source spans and their face selections as well as scalar coverage
-requirements; a character union alone is insufficient. Identical requirements
-may share immutable data, but actual consumed occurrences charge shared processing visits.
-Include typography metric probes. Standalone generated ASCII and metric glyphs
-retain first-covering-scalar selection.
+Assign first-use ordinal to each structurally equal `(FontStack,weight)` pair,
+preserving stack entries. Census pair ordinal, source record/scalars/unit spans,
+then generated alphabet in scalar order. Retain complete base-plus-mark spans
+and face selections; shared character sets do not prove equal unit requirements.
 
-Canonical matching follows `03_THEME_SYSTEM.md`: `fontdb 0.23.0` is explicitly
-loaded from admitted files, with decoded ID-16 and ID-1 family occurrences from
-`ttf-parser 0.25.1`; named matching uses Unicode-16 NFKC-casefold. Generic entries
-use the resulting database's host generic family names, without project remap.
-Occurrences sort by `(stack_entry_index,family_match_rank,style_distance,
-stretch_distance,weight_distance,sha256_bytes,face_index)`.
+### Canonical Candidate Selection
 
-Family ranks are named ID-16 zero, named ID-1 one, generic two. Style distances
-are Normal/Oblique/Italic `0/1/2`; stretch distance is from width class 5;
-weight distance is from requested Normal/Semibold/Bold `400/600/700`.
-For duplicate `(SHA-256 complete file bytes,u32 face index)` identities keep the
-least occurrence tuple, then sort. First is primary. For a narrow unit consisting
-of one visible non-M base and its Unicode General_Category M marks (Mn, Mc, Me) within
-one extended grapheme cluster, choose the first candidate in that SAME ordered
-list covering the entire unit. Nonpainting controls are not coverage
-requirements. If no candidate covers the entire unit, retain per-visible-scalar
-first-covering fallback in the same list; absence of a whole-unit face alone is
-not an error. Leading marks without a visible base use scalar fallback. This is
-not general emoji, ZWJ-sequence, whole-grapheme, or whole-word fallback and does
-not join multiple visible bases into a unit. Visible scalars outside such a unit
-choose the first covering face in the same list.
+Explicitly load discovered files into locked fontdb0.23.0; do not delegate an
+unbounded load_system_fonts. Family occurrences are every ID16 typographic and
+ID1 legacy record decoded by ttf-parser 0.25.1. Match named families with Unicode 16
+NFKC-casefold. Generics use the resulting database's host family_name without
+project global remap; unmatched generic contributes none.
 
-Retain complete ordered-list provenance for every first-use pair, required unit
-source spans, whole-unit selections or scalar-fallback decisions, and selected
-face identities. Paths, timestamps, database IDs, and discovery order are not
-face identities. An empty list or uncovered visible scalar fails. A selected
-face's shaping/metric failure is fatal, not a reason to try another face.
+Identity is `(SHA256(complete_file_bytes),face_index_u32)`, excluding path, mtime,
+database ID and discovery order. Generate occurrence tuples and sort by
+`(stack_entry_index,family_match_rank,style_distance,stretch_distance,
+weight_distance,sha256_bytes,face_index)`. Ranks are named ID16=0, ID1=1,
+generic=2. Style Normal/Oblique/Italic distances0/1/2; stretch distance abs(width
+class-5) for classes1..9; weight distance abs(face weight-request400/600/700).
+For duplicate identities retain least complete tuple then sort. First is primary;
+fallback scans the same canonical list.
 
-Use a bounded project-owned system-source walker, not unbounded
-`Database::load_system_fonts`. Platform locations, regular-file/extension rules,
-fontconfig roots, and generic extraction are specified against the locked
-fontdb source with behavior fixtures; do not assert untested exact upstream parity.
-Directory symlinks are not followed. Entries claim admission before processing,
-canonical paths deduplicate, and admitted files order by source-location ordinal
-then lossless native path units. Do not open all files simultaneously: open one
-admitted regular file, obtain handle length, admit/reserve its bytes, read/hash/
-decode that same bounded content, then close before the next file.
+Within one EGC, a narrow selection unit is one visible non-Mark base plus its
+General_Category Mn/Mc/Me marks. Prefer first candidate covering the complete unit;
+otherwise select first coverage per visible scalar. Leading marks/outside scalars
+use scalar fallback. Nonpainting controls are not coverage requirements. No emoji/
+ZWJ/whole-word/general whole-grapheme fallback or multiple-base unit is implied.
+Empty candidate list/uncovered visible scalar fails. Selected-face metrics/shaping
+failure is not permission to try another candidate. Layout cannot change fonts
+because another face fits better.
 
-Retain admitted immutable font bytes through scene construction and any derived
-glyph publication that needs them, or retain already-derived glyph geometry
-that removes that need. Database loading, SHA identity, coverage, shaping, and
-outlines must consume those same bytes; no selected-font reread or path fallback.
-Short reads, changed lengths/content observed during admission, admitted-file I/O
-failure, arithmetic/limit/reservation failure, and invalid selected faces are
-fatal. Metadata admission follows the locked fontdb decoder: a file exposing no
-decoded face contributes no candidate. That is not permission to discard a
-selected face after shaping or metrics fail. No built-in-font, next-path,
-network, or project-cache recovery is admitted.
+Retain canonical ordered lists, pair ordinals, unit spans, selected identities and
+same immutable font bytes through geometry/path conversion. Discovery/hash/metadata/
+coverage/shaping/outlining consume those bytes. No reread selected path, next-path
+recovery, bundled font, network or project cache is allowed. Fresh operations
+discover fresh installed state; Output reuse retains its original environment.
 
-Fontconfig includes are iterative and canonical-file deduplicated, with sorted
-directory entries and fallibly retained traversal records. Read the verified
-configuration length before parsing; reject internal XML entity declarations as
-syntax failure. Set the actual-input-derived node limit `2*count('<')+1` before
-parsing. Relevant `dir`, `include`, `reset-dirs` and generic-alias directives keep
-their established semantics. Discard configuration bytes after extraction.
+### Discovery And Fontconfig
 
-For admitted inputs within the resource envelope, fontconfig directive and
-fallback semantics follow locked `fontconfig-parser 0.5.8` as used by fontdb.
-Missing optional paths are ignorable. A relevant-directive parse failure retains
-previously accepted directives but also retains the failure status so fontdb's
-global/default configuration fallback still occurs; partial results are not a
-successful parse. Empty preference-family elements are skipped as upstream does.
-Malformed XML contributes no directives. Resource or admitted-file I/O failures
-remain fatal, not triggers for a smaller fallback environment. The bounded
-adapter must prove these distinctions with differential fixtures for includes,
-partial directives, reset-dirs, aliases, absent configuration, and default roots.
-The explicit resource/entity restrictions above take precedence over unbounded
-upstream parsing; matching the unrestricted parser is not claimed outside them.
+Project-owned source walking retains platform roots, extension/regular-file rules
+and canonical deduplication with lossless native path order, source-location first.
+Directory symlinks are not followed. Grow traversal storage fallibly from actual
+prefixes. Open one admitted regular file at a time, verify actual handle length,
+reserve/read/hash/decode that content and close before next file. Short/changed
+read, discovered-file I/O, capacity/length failure and invalid selected face are
+fatal. No decoded face means no candidate, not a post-selection silent discard.
 
-## Axes And Ticks
+Fontconfig includes use iterative canonical-file deduplication and sorted directory
+entries. Verify config length before parsing; reject internal XML entity declarations,
+set input-derived node limit `2*count('<')+1`, extract directives then discard bytes.
+Relevant dir/include/reset-dirs/generic aliases retain locked fontconfig-parser0.5.8
+semantics. Missing optional paths are ignorable; discovered-file failure is not.
+Partial relevant-directive parse failure retains earlier directives **and failure
+status**, so global/default config fallback still runs. Empty family elements are
+skipped; malformed XML contributes no directives. Real storage/I/O failure remains
+fatal, not a smaller fallback environment. Do not claim unrestricted upstream parity
+outside explicit XML/entity/length restrictions.
 
-PF6 implemented output-preserving deduplication of identical complete candidate
-lists and repeated label measurements in `23db99f`; that optimization did not
-authorize changing its greatest-count selection. The T5a5 numeric-source unit
-intentionally supersedes that selector with the ordered first-fitting source
-policy below. T5a5 also closes native axis geometry/text plans; its verification
-and reviewed output changes are recorded in `91_IMPLEMENTATION_PLAN.md`.
+## Axes And Required Tick Geometry
 
-Each axis measures at its one assigned panel-parallel span and returns one tick
-plan plus required perpendicular gutter. The parent owns panel size. Initial
-gutter estimates come from intrinsic title/label requirements; changed measured
-gutters use only root-coordinated feedback. A source that fits the assigned
-parallel span but needs a larger gutter is provisional, not a reason to coarsen
-ticks merely because the previous round's gutter is stale.
+Each axis measures at one assigned panel-parallel span and returns a frozen tick
+plan plus complete perpendicular gutter. Initial gutters are intrinsic; changed
+actual gutters return to root feedback. Parallel-fitting source with larger gutter
+is provisional, not permission to coarsen on stale input. Source/format policies
+and exact precedence are owned by numeric presentation.
 
-Categorical axes retain one tick and present label per semantic category; no
-stride, dropping, rotation, or empty-tick substitute. At span `S` and count `n`,
-band edges are nearest-even exact `S*i/n` and `S*(i+1)/n`, centers
-`S*(2*i+1)/(2*n)`. Measure each label once within its assigned band (swapping
-parallel/perpendicular extents by orientation), using greedy text layout. Actual
-outward intervals must remain in their bands with traced clearance.
+Categorical axes retain every semantic tick/label. At span S/count n, equal band
+edges are exact nearest-even S*i/n, centers S*(2i+1)/(2n), including origin. Native
+Heatmap axes instead consume actual allocated producer cell edges, never rebuild
+equal bands. Measure each label at its cell width with correct orientation and
+complete outward interval/clearance. Only an explicit existing Heatmap label-fit
+policy can transform that family's category text.
 
-A present exact list has `1..=10_000` entries, finite strictly ascending positions
-within the final display domain. It is indivisible and overrides generated selection
-regardless of setter order; labels stay verbatim and need not be unique. Empty
-exact labels intentionally paint no text, create no baseline/ink/gutter/collision,
-and retain tick/grid positions. For nonempty numeric labels the parent assigns
-nonoverlapping cells bounded by adjacent projected-center midpoints and panel
-endpoints, with clearance removed. Endpoint labels use inward placement; interior
-labels center. Measure once per cell and check actual intervals; exact failure
-does not fall back to generated ticks.
+Numeric labels receive nonoverlapping cells bounded by adjacent projected-center
+midpoints and panel endpoints minus clearance. Endpoints place inward, interior
+center. Exact labels need not be unique; nonempty strings must fit whole. Empty
+exact labels retain tick/grid positions without text baseline/ink/gutter/collision.
+Candidate/final placement share canonical anchor and actual-ink predicate.
 
-Automatic range broadening is separate: the private nice-range seed count 5,
-five-percent margin, and owned nice-step grammar affect domain snapping only.
-They are neither generated-tick targets nor public count controls.
+From outside, top/left order is title, labels, ticks, stroke; bottom/right from
+panel is stroke, ticks, labels, title. Labels are projected overlays, not a parallel
+sequence. Gutter contains full perpendicular ink and owned gaps/stroke/ticks/title.
+Horizontal titles use0 rotation; left/right exact-90/+90 quarter-turns with stored
+canonical transform/ink, no trigonometric recomputation.
 
-For Automatic linear generation, `pitch=max(1 quantum,6ch)` and
-`upper_seed_count=1+min(9_999,max(1,S/pitch))`. Try desired seed counts from that
-value down to 1, selecting the FIRST complete fitting source, then a terminal
-`f64::midpoint(lo,hi)` singleton. There is no universal five-tick default.
-For each seed `k`, `raw_step=(hi-lo)/k`; if the subtraction is nonfinite use
-`((hi/scale)-(lo/scale))*(scale/k)`, `scale=max(abs(lo),abs(hi))`.
-Reject nonfinite/nonpositive raw steps locally.
+## Guides, Specialized Geometry And Overlays
 
-Choose greatest decimal table exponent with `decimal_power(e)<=raw_step` and
-test finite positive steps `10,5,2.5,2,1` times that magnitude. With no exponent,
-test only raw_step. Select the admitted step minimizing `abs(count-k)`, ties
-keeping the earlier larger step. If `lo.next_up()>=hi`, use `[lo,hi]`; a selected
-vector with fewer than two positions likewise uses the validated endpoints.
+One guide owner handles Symbols/ContinuousColor/Alpha under one frame. Auto outside
+tries Right,Top,Bottom,Left, each normal then effective compact, at most8 evaluations
+per owner/root round; explicit outside at most2 at its fixed edge. Ancestor calls
+cannot reset that budget. Identical cached trials do not consume a new evaluation;
+changed constraints do. Exhausting evaluated fit choices gives fit failure;
+stopping before choices finish due to the shared trial limit is an explicit
+planning-limit error. Sections add no budget or independent placements. Each
+success includes body/axes/labels/annotations, not guide-only fit.
 
-Common linear-step generation computes binary64 `ceil(lo/step)` and
-`floor(hi/step)`, requires exact integral indices in `[-2^53,2^53]`, calculates
-count with checked wide arithmetic, and admits `1..=10_000` before allocation.
-Positions are prescribed `(index as f64)*step`, finite, in the closed domain,
-and strictly ascending. A too-dense/unrepresentable source rejects locally,
-before vector materialization, without poisoning later coarser sources.
+Explicit inside anchors remain fixed collision overlays. One selected complete
+guide is one obstacle. Outside suffix aligns Start/Center/End along the parallel
+track; Auto centers. Multiple guide tracks put first canonical nearest panel;
+top/left reverse geometric assignment, not semantic order. Auto retains its direct
+owner/address with a routed side reference, never reparents or duplicates a child.
+Detailed section/gradient allocation belongs to the guide system.
 
-With `TickGeneration::additive(step)`, try complete zero-aligned vectors for
-`step*(1,2,3,5)`, then ten times those values, continuing by decades. Omit exact
-duplicate steps. Stop after the first finite decade base greater than
-`max(abs(lo),abs(hi))` or before the next nonfinite base. Requested interval is
-first; first fitting complete source wins; only then coarsen; midpoint is last.
-There are no interval subsequences or global joint-axis interval ranks.
-
-Forest owns logarithmic source positions. Intersect its finite increasing
-`[log_lo,log_hi]` with `[-323,308]`. Under Automatic, first try all integral
-exponents when at least two exist, then evenly indexed subsequences in descending
-size `2..=min(upper_seed_count,n)`, with index
-`((i*(n-1))+((d-1)/2))/(d-1)`. With fewer than two integrals, use adaptive linear
-sources over the logarithmic position domain. Try expression-labeled midpoint
-last. Integral labels format exact decimal powers; adaptive/midpoint labels are
-ASCII `10^` plus the formatted exponent, never `powf` or debug formatting.
-
-With `TickGeneration::log10_decades(d)`, try positive checked exponent steps
-`d*(1,2,3,5)` by decades, each containing divisible integral exponents in the
-intersection (at most 632). Stop after the first decade base beyond maximum
-absolute clamped exponent or representability; no intersection records one
-requested miss then midpoint. Empty sources miss. No subsequences/adaptive
-sources occur in interval mode. Always use the original domain for midpoint.
-
-`TickGeneration::target(n)` starts the existing adaptive linear program at seed n,
-then n-1 down to 1, then midpoint; the measured `6ch` upper does not replace the
-requested initial seed. Nice-step ties remain unchanged, so `[0,1]` with target
-four yields `[0,0.5,1]` while target five yields `[0,0.25,0.5,0.75,1]` when those
-labels fit. With at least two admitted Forest integral exponents, start at
-`d=min(n,integral_count)`, use the full source only when d is that full count,
-otherwise the existing evenly indexed subset, then smaller d down to 2 and
-midpoint. With fewer than two integrals, use the adaptive exponent-space program.
-
-`TickGeneration::maximum(n)` preserves Automatic's complete candidate order, but
-skips every source whose actual in-domain position count exceeds n before vector
-allocation, formatting and label measurement. Endpoint positions count, as do
-positions with empty labels. A seed's original nice step either admits its whole
-source or misses; do not select a different factor within the seed to meet the
-maximum. Forest skips an oversized full integral source and continues the same
-Automatic subsets. There is no post-selection dropping or painted-label-only cap.
-
-Both counts validate `1..=10_000`. One selects the original-domain midpoint
-directly, still subject to real fit, and never admits adjacent-domain two endpoints.
-Target permits deviation from n but retains the common 10,000-position source
-bound. Its linear program has at most n+1 candidates, integral Forest at most d;
-Maximum retains Automatic's existing bound. The midpoint is emitted at most once.
-Scientific ranges, nice-range seeds, format, root sizing and guide choices do not
-change to achieve a count. Allocation/arithmetic/font errors remain fatal.
-
-Unconfigured generated labels use locale-free nearest-even decimal conversion: scientific
-with two fractional digits for absolute value `>=1e12` or nonzero `<0.01`;
-`>=1_000_000` uses millions with one fractional digit and `M`; `>=10_000` uses
-thousands similarly and `k`; otherwise fixed precision 0 for `>=100`, 1 for
-`>=1`, 2 below. Trim trailing fixed fractional zeros/point. Scientific notation
-uses lowercase `e`, no positive sign, shortest exponent without leading zeros.
-Normalize negative zero. If a complete list is not unique, retry the whole list
-at scientific precisions `2..=17`, retaining first unique; otherwise source miss.
-
-### Configured Scientific Numeric Presentation
-
-The public API exposes one normalized `NumericFormat` separately from typography and data
-scales. Its exact construction/application contract is in
-`06_NUMERIC_PRESENTATION.md`, with logarithmic conversion proved in
-`07_LOG10_DISPLAY.md`. Ordinary finite values are converted from the exact
-binary64 rational times an exact decimal-power display scale, with one
-nearest/ties-to-even rounding. Scientific/engineering/fixed/significant policies
-do not mutate numeric positions, data windows, statistics or colors.
-
-Exact caller tick lists take precedence and retain their strings, regardless of
-generation/format setter order. Generated exact-precision candidates cannot change
-notation or precision to rescue label collisions; a nonunique complete axis
-candidate is a source miss. Adaptive candidates increase uniform set precision
-minimum-first through the caller's bounded maximum. The original source ordering
-and terminal midpoint remain; certification/resource errors are fatal, not
-coarsening opportunities.
-
-For configured Forest ticks, convert `10^(exact(selected_exponent)+display_scale)`
-directly to the requested decimal result. An exponent `0.5` with two fractional
-digits displays `3.16`. Retain original exponent-space projection/identity and
-the unconfigured power-label grammar. Certified outward integer intervals must
-prove identical endpoint rounding before accepting a fractional-power label;
-no platform `powf`, approximate midpoint or intermediate binary64 output value.
-Selected original-domain midpoints are not newly clamped. Exact symbolic powers,
-output representability and real scratch/precision bounds precede materialization.
-
-Continuous guides format required values once after final-domain merging and
-require numeric distinguishability; incompatible effective policies reject
-before fonts. Exact value/totals formatting may repeat rounded strings; adaptive
-value/totals sets follow admitted semantic membership and either produce a
-uniform distinct set or reject before fonts. Caller-owned names/strings are not
-parsed as numbers. Set ordering retains full deterministic comparisons and
-fallibly allocated buffers, without accounting quotas or comparison fees.
-
-The same policy and numeric operand drive terminal-label hard intrinsics, natural
-gutter preferences, constrained labels/guides, cell/attached/shelf requirements,
-cache/feedback identities and frozen publication. Domain changes may remeasure
-labels but cannot invent glyphs, reselect root width or add a formatting-specific
-layout driver. Frames continue rejecting required visible text that cannot fit.
-
-Numeric projection uses endpoints 0/1 and `(v-lo)/(hi-lo)` when both direct
-subtractions are finite; otherwise it uses
-`((v/scale)-(lo/scale))/((hi/scale)-(lo/scale))`, with
-`scale=max(abs(v),abs(lo),abs(hi))`. In-domain fractions must be finite `[0,1]`.
-With `D=2^64-1`, key is nearest-even exact `p*D`, and center nearest-even exact
-`origin+S*key/D`, using normalized panel edges and exact integer ratio arithmetic
-including origin parity. Marks, ticks, and grid lines share that projection;
-out-of-domain clipped marks retain explicit extrapolation.
-Categorical projections retain their semantic band count;
-exact band edges/midpoints use integer ratios `i/n` and `(2*i+1)/(2*n)` including
-the origin, rather than numeric keys. Off-center/jittered positions retain their
-continuous projection and are never snapped to a category center. Cell midpoints
-round nearest-even too. Keys must strictly ascend. Candidate and final axis label
-placement share one `CssQuantum` anchor and actual-ink containment predicate.
-Actual outward label intervals, clearance, tick geometry, and endpoint containment
-determine fit, not width transitions.
-Record source kind/ordinal, positions, label bytes, and retained glyph geometry.
-
-Top/left axis order from outside is title, labels, ticks, stroke; bottom/right
-from panel is stroke, ticks, labels, title. Labels are projected overlays, not
-a parallel sequence. Gutter is complete perpendicular ink plus owned gaps,
-ticks, stroke, and title. Horizontal titles have zero rotation; left/right titles
-use exact -90/+90 quarter-turns around centered anchors, with transformed ink
-and canonical rotation tokens stored, never trigonometric recomputation.
-
-## Legends And Continuous Guides
-
-Explicit placement fixes its edge/typed inside anchor. The approved bounded
-automatic policy tries `right,top,bottom,left` in that order. For each edge, the
-owning Plot frame or Canvas frame allocates space and measures the entire affected
-body, axes, labels, and guide. The first complete fitting attempt wins; guide-only
-fit is insufficient. Success requires that containing layout to fit.
-If the right legend fits but leaves insufficient plot-label space, the right
-attempt fails and another supported arrangement is tried before final fit failure.
-
-Each edge first uses the preferred flow below, then may use its one compact flow
-variant. Explicit edges can reflow within their assigned edge but never move to
-another edge; explicit inside anchors remain fixed. No variant shrinks fonts,
-hides entries, shortens labels, or changes caller data/scale policies. Changed
-child constraints cause fresh keyed local measurement; unchanged plans may be
-reused. Provisional gutter/domain feedback follows the root protocol rather than
-being treated as terminal failure or committed success on stale inputs.
-
-The policy has at most eight edge/flow trials per automatic guide owner per
-root round (two for an explicit outside edge), charged cumulatively across all
-calls in that round, including calls caused by ancestor attempts. Nested frames
-do not reset those budgets or enumerate combinations of guide choices. Multiple
-guides follow canonical owner order; each trial holds other guide decisions fixed
-at their current choices, initially their preferred placements. Exhaustion of
-admitted work remains a resource error, not a hidden best-effort rendering route.
-If every supported trial under the current constraints was evaluated and failed,
-return fit failure. If ancestor-driven calls consume the shared budget before
-those trials can finish, return an explicit planning-limit error instead. Reusing
-an identical cached trial charges a call but not another edge/flow evaluation;
-changed constraints are a new charged trial. Do not report a budget stop as proof
-that the content cannot fit.
-This limited recovery still does not promise every theoretically feasible figure.
-These approved D1 behaviors are implemented by their assigned repair and
-component phases. T6 adds the new public sizing/theme surface; it does not
-postpone correctness fixes in already-active automatic placement paths.
-
-Outside guides are normal flow; inside guides are typed collision overlays.
-No root percentage chooses typography, edge, or flow.
-
-Determine entry widths BEFORE greedy flow, using available inner WIDTH `W`,
-never height as a text wrapping width. `W` is the assigned legend width after
-horizontal chrome insets; measure the title at `W`. Available entry-body height
-`H`, when finite, subtracts vertical chrome, measured title, and its active gap.
-Negative available space misses. Entry preferred width `P[i]` is its intrinsic
-label preferred width plus exact key width and key-to-label gap; its minimum
-`M[i]` similarly includes the label's hard unbroken width. All arithmetic is
-checked. Entry allocated width below `M[i]` misses before text measurement.
-
-For top/bottom horizontal flow, fix each entry width to `E[i]=min(P[i],W)`.
-Measure its label once at `E[i]-key_width[i]-key_gap[i]`, derive its baseline-
-aligned entry height, and keep that allocated width even if actual label ink is
-narrower. In semantic order, append entries left-to-right while the next entry
-and inter-entry gap fit `W`; otherwise start the next row. Each row height is
-the maximum entry height, with traced gaps between rows. Finite `H` must contain
-the resulting total height. This is the preferred flow; only the compact variant
-below may use a narrower entry width.
-
-For left/right vertical flow, choose ONE uniform column width
-`C=min(max(P[i]),W)`. Check every `M[i]<=C`, then measure each label once at
-`C-key_width[i]-key_gap[i]`. Greedily append entries top-to-bottom in semantic
-order while their heights and inter-entry gaps fit finite `H`; otherwise start
-the next equal-width column with its traced column gap. An entry taller than
-`H`, or columns whose total widths/gaps exceed `W`, misses. With automatic
-height, use one column and derive its height. Do not mutate a completed flow;
-the compact variant below is a separate bounded trial with newly measured labels.
-
-For the compact trial, let `g` be the horizontal entry/column gap and
-`C2=floor((W-g)/2)` in layout quanta. A nonpositive `C2` or an entry minimum above
-its compact allocation rejects this variant. Horizontal entries use
-`min(P[i],C2)` then the same ordered row flow. Vertical flow uses uniform width
-`min(max(P[i]),C2)` then the same ordered column flow. If allocations duplicate
-the preferred trial, reuse its outcome. There is no scan over all column counts
-or widths, and exact label shaping still determines height and containment.
-
-Worked horizontal example, in CSS pixels after chrome/title: `W=100`, `H=50`,
-key-plus-gap 20 for each entry, and label preferred widths `[40,30,70]` give
-fixed entry widths `[60,50,90]` and label widths `[40,30,70]`. With inter-entry
-gap 5, each entry starts its own row. If measured entry heights are `[10,10,20]`
-and row gap 4, total height is `10+4+10+4+20=48`, so it fits. Entries are not
-shrunk in this preferred trial. If the containing frame fails, the compact trial
-may assign narrower widths and remeasure; the title/plot must also fit before
-either trial is accepted.
-
-Worked vertical example, after chrome/title: `W=150`, `H=45`, preferred entry
-widths `[60,70,50]`, minima at most 70, and key-plus-gap 20 give `C=70` and label
-width 50 for every entry. With measured heights `[20,20,20]`, vertical gap 5,
-and column gap 10, the first two entries fill column one exactly to 45; the
-third occupies column two. Total width is `70+10+70=150`. At `W=140` the preferred
-trial misses, but the compact trial uses width-65 columns. It fits only if minima
-permit and the newly measured entries still fit the available height; it cannot
-assume their old heights. With automatic height the preferred trial uses one
-width-70 column of height `20+5+20+5+20=70`.
-
-No entry permutations or additional row/column-major alternatives exist. Title, keys,
-labels, baseline heights, gaps, padding, and border ink all participate in final
-fit. Zero entries mean an absent legend, not a detached title. Flow slots and
-allocated entry widths are plan payload, not semantic topology.
-
-### Discrete Semantic Sections
-
-The admitted T6 Combined/Separate policy uses one ordered typed discrete-section
-descriptor, one outer frame and one placement/collision owner. Combined retains
-observed-pair and same-field behavior and current shared-primary-title rules.
-Separate exposes only actual encoded group-style, joint, hue-color, literal and
-supplemental domains, in the order defined by `93_T6_EXECUTION_PLAN.md` T6L.
-`08_DISCRETE_GUIDES.md` supplies the complete producer schema, source mapping,
-compatibility and worked allocation contract; spec93 supplies execution timing.
-It explains marginal mappings, not observed pair support, and never changes marks
-or facet topology. Unsupported factorization rejects before fonts.
-
-Producers retain mapping provenance and construct complete explanatory keys:
-group keys neutralize only hue-mapped RGB to the owning Plot's resolved
-TypographyTheme legend-label text RGB while retaining the mapped paint's original
-alpha/geometry. They do not use the legacy generic foreground carrier or Canvas
-label paint. Hue keys neutralize only mapped group shape/pattern to producer
-defaults. Canvas compares these immutable keys and does not reconstruct palette
-swatches. Exact section identities own title compatibility and entry identities
-own duplicates. Distinct sections with equal nonempty display titles reject.
-Labeled PointLayers remain separate semantic identities, never category values.
-
-Sections stack vertically, each receiving full inner width and existing normal
-or compact flow. The flow variant belongs to the whole guide. Section gap is the
-owning `title_gap+row_gap`; one outer chrome envelope is measured. Horizontal
-section height derives from width; vertical automatic height uses one column per
-section. For finite vertical height, measure entries first, derive each section's
-hard height (title plus tallest entry) and preferred height (title plus complete
-one-column entries/gaps), subtract section gaps, and allocate available height
-once with the existing hard-to-preferred proportional allocator. Each section
-then greedily fills its assigned capacity and validates its columns against
-width. Stack actual occupied heights; unused capacity is not redistributed and
-failed section allocations do not trigger sibling retries. This remains a
-bounded local policy with possible fit misses, not a search over allocations.
-
-Titles, keys, labels, section boxes and complete outer ink all participate in
-measurement and retained feedback. Stable section ordinals are inline records
-under the existing guide owner, not new placement owners or extra root trials.
-The existing automatic/explicit edge-flow budget is shared by the whole guide.
-
-Outside suffix alignment is start/center/end along the panel-parallel track:
-right/left Top/none/Bottom and top/bottom Left/none/Right respectively. Automatic
-uses center. Track sets stack first canonical guide nearest panel, subsequent
-guides outward; top/left reverse geometric assignment, not semantic traversal.
-
-An automatic Plot guide stays a directly owned `outside_guide_auto` child after
-the four explicit guide track sets. The selected side holds one non-owning routed
-reference, never another child/address/call. Canvas shared guide uses the same
-rule at its one `canvas_shared_legend` address. Edge is immutable plan data, not
-reparenting. Explicit guides belong to their side's track set.
-
-Canvas prepares one kind-tagged shared descriptor under
-`canvas.legend.shared-entry-exact-merge`; compatibility, exact entry identity,
-and continuous-domain merging occur before layout/font census. Shared labels are
-formatted once under Canvas typography from the final merged domain, never copied
-from arbitrary contributing Plot labels.
-Continuous contributors require one equal normalized effective numeric policy;
-discrete contributors merge by the selected composition's typed section/entry
-rules. Canvas Shared selects composition, PerPlot retains Plot selections, and
-Hidden suppresses both guide kinds without removing scientific scale participation.
-
-Continuous orientation is horizontal top/bottom, vertical left/right. Labels
-are lo, an interior diverging center if present, hi; constant domains have one
-midpoint label. Apply generated numeric uniqueness grammar. For outward extents
-`(Ls,Rs),(Lc,Rc),(Le,Re)` and gap `g`, gradient length is at least
-`max(Rs+g+Le,2*(Rs+g+Lc),2*(Rc+g+Le))`, omitting center terms without a center,
-and at least traced minimum length. A traced maximum below requirement misses.
-Constant-domain requirement is `2*max(Lc,Rc)+2*g`. Endpoint overhang is explicit
-flow from `-Ls` through gradient end plus `Re`, not clipped.
-
-Gradient thickness is traced key width. The inline plan is title, gradient with
-projected labels (label column beside vertical gradient, row under horizontal),
-then optional missing key/label block in reading order, with traced gaps/insets.
-The gradient and guide text are inline owned records, not measured children or
-independent orientation/length searches.
-
-## Specialized Geometry And Overlays
-
-Family ownership is exhaustive:
-
-| Interior | PlotKinds / policy |
+| Interior family | Native geometry policy |
 | --- | --- |
-| Standard | Scatter, Histogram, Density, Qq, Line, Trajectory, LinePath, Regression; standard both axes. |
-| Categorical | PointInterval, Coefficient, Forest, Dumbbell, HorizontalBar, StackedHorizontalBar; categorical height. |
-| Categorical | Bar, StackedBar, Boxplot, Violin, Raincloud, Interaction; categorical width. |
-| Beeswarm / Waterfall | Named specialized owner, categorical height and assigned standard width. |
-| Heatmap / Matrix / Marginal | Named parent-owned track producers below. |
+| Standard | Scatter, Histogram, Density, Qq, Line, Trajectory, LinePath, Regression; standard axes |
+| Categorical height | PointInterval, Coefficient, Forest, Dumbbell, HorizontalBar, StackedHorizontalBar |
+| Categorical width | Bar, StackedBar, Boxplot, Violin, Raincloud, Interaction |
+| Heatmap | Column-local minima, width-constrained cell/merged-row text then row allocation; retain every cell/missing/highlight/trailing slot and actual unequal axis bands |
+| Matrix | Declared variable square including diagonal/off-diagonal cells; preferred side max(hard width,hard height,12em), row/column maxima; reuse retained statistics and span-specific axes |
+| Marginal | 2x2 Grid: top(0,0), empty(0,1), central(1,0), right(1,1); exact linked widths/heights |
+| Beeswarm | Source-ordered greedy tangent packing at assigned numeric width, then occupied categorical tracks |
+| Waterfall | Native category bodies/adjacent connectors and source-anchored greedy base/terminal shelves |
 
-Heatmap retains every semantic row/column/cell, missing cell, highlight, merged
-row, value label, and trailing slot. Column/row minima are maxima of complete
-cell requirements; preferred pitch is at least `2em` with soft square preference.
-Allocate columns, measure cell text at those widths, derive row requirements,
-then allocate rows with the common track allocator. Matrix retains the declared
-variable square including diagonal cells; preferred cell side is
-`max(hard_width,hard_height,12em)`, aggregated by column/row maxima. Both store
-final cell rectangles and mark geometry; neither enumerates track combinations.
+Heatmap/Beeswarm use measured native right guide track; Matrix its trailing track.
+Heatmap column/row minima include actual final contrast text/stroke/cross/outline
+and label requirements, not global max-label-width times all columns. Marginal top
+height preference is max(hard,ceil(central natural height/4)); right width similarly
+central natural width/4. Derive once, no alternating subpanel search. Domain changes
+may rebuild render grids from retained samples, not recompute statistics.
 
-Marginal is a two-by-two Grid: top `(0,0)`, empty `(0,1)`, central `(1,0)`, right
-`(1,1)`, with owned gaps. Central/top share width, central/right share height.
-Top preferred height is `max(top_hard_height,ceil_div(central_height,4))`;
-right preferred width is `max(right_hard_width,ceil_div(central_width,4))`.
-Derive these from the central natural preference once, then parent allocation
-and exact shared child spans determine one layout, not coupled local iteration.
+Beeswarm visits categories semantically and points by original source order. Use
+radius containing full stroked glyph. Try zero, then same-category prior-point
+tangent offsets `yj +/- ceil_sqrt((ri+rj)^2-(xi-xj)^2)` where x distance<radius sum.
+Order by absolute displacement, negative before positive, source-row tie; deduplicate
+offsets. Take first passing all prior collision tests; strict squared-distance
+inequality overlaps, equality is tangent. No backtracking or height-driven repack;
+insufficient assigned height misses without hiding observations.
 
-Beeswarm processes categories semantically and points by source-row order at
-assigned numeric width. Radius `r[i]` contains complete stroked glyph half-extents.
-Try zero offset then tangent offsets from previously placed same-category points:
-`y[j] +/- ceil_sqrt((r[i]+r[j])^2-(x[i]-x[j])^2)` when x separation is less than
-radius sum. Order offsets by absolute displacement, then negative before positive,
-then source-row index; deduplicate equal offsets. Take first offset passing ALL
-prior-point collision checks. Squared distance below squared radius sum overlaps;
-equality is tangent. Charge each generated offset and tested pair before work.
-No branching over prior placements or category products occurs. Derive occupied
-category height from this one packing, then common categorical tracks. If assigned
-height cannot contain it, miss rather than repack or hide points.
+Waterfall visits eligible base then terminal total at exact scientific source
+anchors. Choose lowest shelf row whose complete horizontal ink intervals satisfy
+gap, otherwise append one. Row0 nearest body, increasing upward, with separate
+maximum ascent/descent, common baselines, per-edge padding and row gaps. Store all
+rows/connectors/labels/reserves before capture; do not clamp total labels horizontally.
 
-Waterfall stores one bar per category and connector per adjacent pair. Present
-in-domain base then terminal labels use greedy shelves: visit in that order and
-choose the lowest row whose final horizontal ink intervals satisfy traced gap;
-otherwise append one row. No row-index vectors are enumerated. Row zero is
-nearest body, increasing upward. `BA/BD` maxima give row height; from
-`body_top-bottom_padding`, place each row upward, common baseline at row top+BA,
-with inter-row gaps and final top padding. Labels center on exact shelf targets.
-Category value labels remain inside their slots and contribute hard pitch. Store
-rows, baselines, connectors, labels, and band reserve before drawing.
+Overlay anchor order is projected, panel_center, panel_top, panel_right,
+panel_bottom, panel_left, panel_top_right, panel_bottom_right, panel_bottom_left,
+panel_top_left, attached_start, attached_end, bracket_shelf, waterfall_shelf.
+Projected labels only use projected; configured panel text/inside guides keep
+their anchor; attached uses start then end; significance/Waterfall use their shelf.
+Visit records canonically against static parent obstacles and accepted earlier
+records. Touching at required clearance is valid. No sibling backtracking or
+obstacle feedback loop; exhausted anchors terminally miss.
 
-Overlay anchors have closed order `projected,panel_center,panel_top,panel_right,
-panel_bottom,panel_left,panel_top_right,panel_bottom_right,panel_bottom_left,
-panel_top_left,attached_start,attached_end,bracket_shelf,waterfall_shelf`.
-Projected cell/point labels have only projected; configured panel text/inside
-legends keep their configured anchor; attached labels try start then end;
-significance and Waterfall use their one shelf producer. Edges/corners align
-outward ink after inset; single edges center the other axis. Attached start/end
-place before/after the target on the declared x/y axis with traced gap, centered
-orthogonally. Projected anchors use final projection plus traced offsets.
+Significance brackets sort `(start,end,lower_target,upper_target,annotation)` and
+choose first collision-free level for span union centered complete label/stroke
+ink. Step=max(selected step,label height+label gap+tick height), with complete exact
+requirements rounded once. Shelf clears target ink/data gap/half-stroke; horizontal
+orientation uses exact axis swap/quarter-turn. Required annotations, panel text,
+cell text and supplemental labels fit their actual containing boxes, not merely
+somewhere inside root. Scientific windows are the explicit clipping exception in
+rendering, not layout-overflow permission.
 
-The overlay owner visits records canonically and selects first legal anchor
-against static obstacles and already accepted earlier records. Parent supplies
-the deterministic current obstacle context before the keyed call; no later
-sibling backtracking or obstacle feedback loop occurs. Touching at required
-clearance is allowed. A collision after listed attempts is a terminal miss.
+## Topology, Feedback And Reuse
 
-After applying the closed source-owned reserve/domain rules and the explicit
-data-window policy below, all remaining required painted ink outside its exact
-assigned containing box is a terminal fit miss,
-even when it remains inside the root. Overlay ownership or collision-free
-placement alone does not authorize overflow into neighboring axes or cells.
+Structural addresses are closed `(role_discriminant,slot_index)` sequences in
+`src/layout/kernel.rs`. Preserve canonical preorder and stable optional slots.
+Inline tick vectors, flow rows/columns, glyph/mark records, packing offsets and
+track values do not create anonymous measured calls or duplicate children.
 
-Significance brackets sort `(start,end,lower_target,upper_target,annotation)`;
-occupied interval is span union centered label ink plus clearance. Assign the
-smallest level with no intersecting prior occupied interval, charging each level
-test. `level_step=max(traced_step,max_label_height+label_gap+bracket_tick_height)`.
-Shelf is above minimum target ink top by data gap plus level*step; label baseline
-is shelf minus label gap minus descent, centered over span. Horizontal-value
-orientation uses exact axis swap/quarter-turn. Stroke/label union is owned ink.
-There is no draw-time reserve, packing, shelf choice, or generic grow-until-fit.
+Plot/Canvas roots flow title,subtitle,body,caption. A Plot frame uses outside/axis/
+panel/axis/outside rows/columns, visiting panel subtree, axes Top/Right/Bottom/Left,
+explicit guide track sets then direct Auto. Data panel owns interior/marks/inside
+guides/annotations/overlays once. Facets use Plot frames beneath one owner, not
+new roots; fixed dimensions use outer shared axes with corresponding empty cell
+axes, free dimensions local axes with empty outer slots.
 
-### Explicit Data Windows Versus Layout Overflow
+Canvas cells are Plot/TextPanel/empty, row-major with all declared holes/trailing
+slots. Spanning records occur once at minimum covered coordinate, ordered header,
+row title, range group,cell, then declaration. Range groups are nonvisual.
+Embedded Plot title/subtitle/caption remain local exactly once; Canvas prose is
+independent. TextPanel fills its surface and places nonfill required title/body
+top-left after inset; extra space expands chrome, not text. No topology repacking.
+Specialized records retain semantic category/source/declaration order; guide
+sections are stable descendants of their original guide slot.
 
-The existing `x_limits` and `y_limits` setters specify data windows, not root
-dimensions. The user approved preserving their clipping semantics during the
-T5b-T5e planning revision. This clarification does not introduce a clipping API
-or claim the remaining native geometry policies are already implemented.
+### Root Coordination
 
-On an explicitly limited data axis, finite data marks may be partially or wholly
-outside the window. Preserve their prepared scientific identities and project
-crossing lines/paths/intervals before applying the data-panel clip; do not filter
-away endpoints needed by visible crossings, mutate data to the boundary, expand
-the exact domain, or fail solely because data paint lies outside that window.
-The explicit window can clip the stroke of a marker centered at its boundary.
+At most **eight rounds cover the entire root**, with no nested convergence loop.
+Round1 uses prepared base domains, intrinsic gutters and empty reserve/alignment.
+Only these named consequences transfer:
 
-On an automatic axis, use complete painted mark requirements and the approved
-intrinsic/reserve/automatic-domain rules. Required unresolved ink is a fit miss;
-the data-panel clip is not implicit permission to discard it. For mixed exact
-and automatic axes, preserve this distinction per dimension. Primary-mark counts
-and semantic topology are not compacted merely because the window hides paint.
-
-Titles, subtitles, captions, axes and tick labels, legends, and required
-annotations must still fit their assigned layout boxes. The data-window policy
-alone does not authorize omitting a required annotation or its text/bracket.
-Existing explicit visibility/domain policies keep their own ledger-defined
-semantics; absent such authorization, an incompatible required annotation fails.
-An exact image size cannot be made successful by clipping layout content.
-
-Nonfinite, unrepresentable, or nonzero source geometry collapsed by scale
-transformation or quantization still rejects under the canonical primitive
-contract, even if a clip would conceal it. Genuine scientific zero geometry
-retains its current specified behavior. T5c owns per-family implementation and
-the case-table evidence in `92_T5B_T5E_EXECUTION_PLAN.md`; T5e repeats it across
-all three root requests. This is an explicit exception for data-window clipping,
-not a relaxation of strict Unicode wrapping or semantic text preservation.
-
-## Topology And Ownership
-
-Semantic content must occur exactly once unless an explicit owned caller policy
-authorizes its omission/transformation. No implicit clipping, elision,
-abbreviation, substitution, category dropping, scrolling, or scale-to-fit text.
-Automatic numeric ticks are renderer representation; exact ticks are caller
-content. Existing visibility/elision paths must be re-adjudicated before T6.
-Unsupported Canvas/facet family nesting rejects in semantic preparation.
-
-Structural address is a sequence of `(role_discriminant,slot_index)` pairs.
-Preserve this closed role order:
-
-```text
-root, root_title, root_subtitle, root_body, root_caption,
-plot_body, canvas_body, canvas_grid, facet_grid, canvas_shared_legend,
-canvas_header, canvas_row_title, canvas_range_group, canvas_cell,
-facet_header, facet_row_title, facet_range_group, facet_cell,
-data_panel, panel_interior, specialized_interior, mark_layer, mark_item,
-heatmap_cell, heatmap_merged_row, heatmap_value_label, heatmap_highlight,
-beeswarm_category, beeswarm_point, marginal_central, marginal_top, marginal_right,
-matrix_cell, matrix_mark, categorical_category, categorical_series_slot,
-categorical_body_mark, categorical_interval, categorical_value_label,
-waterfall_bar, waterfall_connector, waterfall_base_label, waterfall_terminal_label,
-legend_title, legend_entry, legend_key, legend_label,
-guide_title, guide_gradient, guide_label, guide_missing_block,
-surface, text_panel_content, text_panel_title, text_panel_body,
-inside_guide, annotation, annotation_target, other_overlay,
-axis_top, axis_right, axis_bottom, axis_left, axis_title,
-outside_guide_top, outside_guide_right, outside_guide_bottom,
-outside_guide_left, outside_guide_auto, text, glyph
-```
-
-Closed measured types retain order `empty_slot,canvas,plot,plot_body,plot_frame,
-canvas_body,canvas_grid,facet_grid,track_set,data_panel,standard_interior,axis,
-discrete_legend,continuous_guide,composition_text,text_panel,text_panel_content,
-legend_entry,annotation_layer,overlay_layer,heatmap_interior,beeswarm_interior,
-marginal_interior,marginal_subpanel,matrix_interior,categorical_interior,
-waterfall_interior,mark_layer,text,glyph`. PlotKind uses public declaration order.
-Root is a role, not a third root type.
-
-Traversal is preorder. Plot/Canvas roots are vertical title, subtitle, frame/body,
-caption. Absent named roles are addressed empty slots. Plot frame is a five-by-five
-Grid with rows outside-top, axis-top, panel, axis-bottom, outside-bottom and
-columns outside-left, axis-left, panel, axis-right, outside-right. Visit Plot body
-and its complete panel subtree, axes top/right/bottom/left, guide track sets in
-that order, then direct automatic guides. Plot body transparently fills one data
-panel or facet Grid. Data panel owns interior, ordered mark layers, inside guides,
-annotations, other overlays. It is not repeated as a Plot sibling.
-
-Canvas body uses that outer frame with Canvas Grid central and one optional shared
-guide; hidden/per-Plot policies leave its shared slot empty. Canvas cells contain
-Plot, TextPanel, or empty slot. TextPanel is a fill surface plus nonfill content
-anchored top-left after chrome inset; content is required title then body text.
-Extra exact space expands chrome, not text. Headers/row titles/strips are
-`composition_text`; range groups are nonvisual records without measured boxes.
-
-An embedded Plot retains its own title, subtitle, and caption exactly once in its
-local root flow. Its allocated cell includes measured space for every present
-text role; Canvas does not replace its titles with differently anchored headers
-or omit its caption. The Plot caption remains local, with its resolved Plot theme's
-independent caption alignment. A Canvas caption is separate Canvas-owned content,
-not a replacement or a duplicate of panel captions. Insufficient allocated space
-returns the applicable fit failure rather than omitting any of this content.
-
-Canvas/facet coordinates are row-major, including declared empty/trailing slots.
-Canvas shared-x groups contain configured Plot members with continuous automatic
-x domains only; categorical axes, explicit x limits, and unconfigured members
-reject during semantic preparation. Their union must have finite strictly
-ascending endpoints and is installed before child measurement. Fixed facet
-categorical axes require matching coordinated category identities; continuous
-fixed axes use their coordinated domain union. Shared alignment never weakens
-these data/scale compatibility checks.
-
-Canvas/facet traversal retains every declared slot.
-Spanning items occur once at minimum covered row/column; at one origin order is
-header, row title, range group, cell, then declaration order. Spans remain in
-topology. Facet cells are Plot frames under the owning Plot, not nested roots.
-Root faceted frame axes are empty. Fixed facet dimensions use shared outer
-axes/guides around the cell Grid and empty corresponding cell axes; free
-dimensions use panel-local domains/axes and empty shared roles. Horizontal guides
-and axes span central column only, vertical ones central row only.
-
-Repeated slots use semantic category/entry order, source-row mark order,
-declaration-order layers/annotations, target-address then declaration overlays,
-and grapheme-order text; singletons use zero. No post-filter compaction or map
-iteration assigns addresses. Heatmap traverses cells row-major, merged rows,
-value labels, highlights; Beeswarm category then points; Marginal central/top/right;
-Matrix row-major cells then source marks; categorical category/series then body,
-interval,value label; Waterfall categories,bars,connectors,base,terminal,values.
-
-These specialized items and generic mark items are addressed prepared records,
-not measured children. Marginal subpanels ARE measured children. Discrete legend
-title and entries are measured, each entry key then label. Continuous guide
-title/gradient/labels/missing block are inline addressed records. Axis tick/label
-vectors, text breaks, flow slots, packing offsets, and allocated track values are
-owner payload without structural addresses. Each record occurs exactly once.
-
-Every input has an owner-ledger or target-only key, canonical address, source
-category, normalized value, consuming stages, and immutable plan field. Sources
-are caller policies/content, resolved appearance/typography, font provenance and
-glyph metrics, scales/ticks/guides, declared topology, scientific/collision geometry,
-constraints/preferences/tracks, named feedback, resource/reservation counts, and
-canonical serialization inputs. The trace is a design/test census, not a public
-dynamic property map. Unowned layout inputs block implementation.
-
-## Root Feedback And Cache
-
-At most EIGHT root-coordinated rounds cover the entire Plot/Canvas tree, not eight
-per child. No nested convergence loop is admitted. Round one consumes prepared
-base domains, intrinsic gutter estimates, and empty reserve/alignment feedback.
-Each round allocates and measures by the fixed policy and returns one provisional
-tree or typed misses plus named consequences. Only these consequences transfer:
-
-- Axis gutter: measured complete required thickness replaces the corresponding
-  estimate; stale-gutter misses may proceed provisionally with that requirement.
-- Shared alignment: declared Canvas range groups/fixed facet axes use exactly
-  occupied members, leading `panel_start-cell_start` and trailing
-  `cell_end-panel_end`, requiring nonnegative extents. Group coordinatewise maxima
-  raise corresponding member leading/trailing track requirements.
-- Owned ink: normal-flow overhang targets nearest containing sequence/Grid with
-  outward edge differences as reserves, combined coordinatewise by maximum with
-  already consumed cumulative reserves. Apply once as additional owned inset,
-  not repeated padding for the same ink. All other unowned overflow is terminal.
-- Automatic domain: projected semantic marks/data-anchored annotations requiring
-  out-of-domain values target owning scale; union prepared base, prior cumulative
-  envelope, and new requests. Exact caller-domain changes are terminal.
-
-Requests identify source, target, and closed consequence kind; conflicting
-nonaggregating identities are internal errors. Domain preparation must establish
-all relevant text alphabets before font census; later envelope changes may
-reformat only through those prepared alphabets and resolved face lists. Shared
-guide semantic merging is preparation, never feedback. Collision, text breaks,
-selected tick sources, legend edges, packing, and tracks do not transfer as
-independent requests. Their consequences must use one named owner above.
-
-State includes consumed/next feedback, root dimensions, constraints, assigned
-contexts (including obstacles), topology, domains, preferences, resolved font
-identities, every plan/miss and local decision, boxes, ink, baselines, text/glyphs,
-ticks, guide slots, tracks, and reservations needed to interpret retained data.
-It excludes cumulative operational counters and cache-hit statistics. Compare
-exact normalized structural content, not hashes alone or epsilon distances.
-
-PF2, implemented in `5c0acdf`, converges when effective outgoing feedback
-equals consumed feedback, no misses remain, and the complete immutable plan has
-passed semantic, geometry, containment, and root-ink validation. An empty request
-list alone is insufficient. An unchanged provisional miss becomes its terminal
-fit error. Retain exact state comparison for cycle detection: a nonadjacent
-repeated state fails immediately; a nonconverged eighth round fails for exhaustion.
-Successful convergence takes one through eight rounds, with no mandatory duplicate
-measurement. Never publish a previous best plan.
-
-Optional root-local caching stores one outcome per full normalized constraint,
-assigned geometry/obstacle context, prepared input, and consumed feedback subtree,
-including descendants. Changed font/domain/topology/text/alignment/ink inputs
-invalidate reuse. Cache hits charge call attempts but not repeated producer work;
-cached diagnostic identity is unchanged. Admit and fallibly grow entries as used,
-not one million slots up front. No cache survives root completion/failure.
-
-PF2 requires dirty dependency propagation and reuse of unchanged child outcomes;
-remeasure affected owners when effective inputs change. Audit every invalidation
-edge and mutable cache's output independence. Reuse is not a cache-purity assumption
-derived from Rust traits or an unchanged request list.
-
-## Resources And Lifecycle
-
-Production rendering has no unified resource-accounting ledger. Processing
-visits, retained records, topology slots, measurement calls, cache insertions,
-font-discovery events and cumulative font/source/scratch bytes have no cumulative
-quota or per-operation debit. The counters, quota configuration, enforcement
-switch, accounting-only errors, measurement tickets and pricing expressions are
-removed under `95_RESOURCE_ACCOUNTING_SIMPLIFICATION_PLAN.md`.
-
-`OperationContext` retains an independent shared identity and the operation-local
-palette cache. Clones share identity; fresh operations differ. `RowSourceContext`
-checks original source identity and operation ownership through row views.
-Prepared fonts retain their operation, sealed census, exact source bytes and
-coverage; `FontPreparation` owns normalization preparation rather than a budget.
-Actual cache synchronization, complete cache-key equality and immutable sharing
-remain. Pointer equality alone is not a substitute for complete content equality.
-
-| Mechanism | Current contract |
+| Consequence | Update |
 | --- | --- |
-| Root feedback | At most eight rounds; adjacent equality succeeds, cycles and changed final round fail. |
-| Guide trials | Existing deterministic edge/flow order, automatic/explicit attempt rules and nonresetting owner identity. |
-| Optional exact text memo | Stop optional insertion at 256 entries; continue rendering and using retained hits. |
-| PNG axis / pixels / parser input | 32,768 / 100,000,000 / 67,108,864 bytes, only at PNG terminals. |
-| Storage and arithmetic | Checked real lengths, products, indices, layouts and spatial conversions; fallible first-party reservations and real I/O errors. |
-| Scientific and font validity | Finite/range/source validation, actual coverage, file consistency and prepared-stage ownership remain mandatory. |
+| Axis gutter | Actual complete thickness replaces estimate |
+| Shared alignment | Coordinatewise maxima of nonnegative member leading/trailing panel-to-cell extents raise corresponding tracks |
+| Owned ink | Nearest containing sequence/Grid gains outward reserves by coordinatewise max with already consumed cumulative reserves, applied once |
+| Automatic domain | Union prepared base, prior cumulative envelope and new source-backed request; exact-domain changes are terminal |
+| ContentHeight | Replace the scoped guided-cell measured height, including contraction; never cumulative ink or width reselection |
 
-First-party storage reserves known extents or grows fallibly from actual demand.
-Vector reservation also checks representable capacity; removing a byte-price
-formula does not bypass real allocation failure. Retained scene output counters
-still calculate actual serialized sizes and PNG parser input. There is no
-replacement SVG byte cap, precision budget or whole-operation score. Existing
-family/input limits, mathematical convergence rules and local fit rules remain.
-Infallible third-party allocations do not become recoverable merely because the
-renderer uses fallible reservations for its own buffers.
+Requests name source,target,kind and resolvable predicate; conflicting nonaggregating
+identities are internal errors. Shared guide merging is preparation, not feedback.
+Breaks/tick sources/edges/packing/track choices are payload, not new consequence
+kinds. Later domains use already sealed text grammar/face lists.
 
-Font discovery uses checked amortized growth rather than a million-record
-preallocation. Native ordering/deduplication, retained-byte hashing, one open
-font file at a time and file-change detection remain. Fontconfig includes retain
-iterative traversal, canonical-file deduplication, input-derived XML capacity,
-entity handling and actual read extents. Optional missing includes remain
-distinct from a discovered file disappearing, which is an I/O error.
+Converge when effective outgoing feedback equals consumed feedback, no miss remains
+and complete immutable plan passes semantic/geometry/containment/root-ink validation.
+Empty request list alone is insufficient. Unchanged provisional miss becomes its
+terminal fit error. A nonadjacent repeated complete normalized state immediately
+fails; changed/nonconverged eighth round fails exhaustion. One through eight rounds
+may succeed without mandatory duplicate measurement. Never publish previous best.
 
-Unicode normalization, segmentation, line breaking, bidi, shaping, fitting,
-sorting, projection and exact arithmetic run their existing algorithms without
-accounting callbacks or fees. Required text and scientific inputs remain
-complete. Arithmetic, allocation, font and lifecycle errors remain terminal;
-they cannot cause omission, a smaller representation or a fit retry. Functions
-without any remaining failure source return directly.
+Exact state includes consumed/next feedback, root request/dimensions, constraints,
+assigned obstacles, topology/domains/preferences, full used role/font provenance,
+plans/misses, local decisions, boxes/ink/baselines/text/glyphs/ticks/guides/tracks.
+It excludes diagnostic counters/cache-hit statistics. No epsilon/hash-only equality.
 
-Existing test/benchmark observations retain named shaping, cache, candidate,
-intrinsic, projection and lifecycle metrics. They do not sum unlike units into
-a resource score. Performance evidence compares successful same-source output
-against the disabled-refusal baseline, with elapsed time and RSS measured
-separately. Historical quota evidence in `docs/resource-admission.md` and the
-resource-accounting study describes its recorded revisions, not this contract.
+### Scoped Caches And Height Consequences
 
-Root lifecycle order is:
+Root-local reuse keys complete prepared immutable inputs, owner/scope, normalized
+constraints, actual assigned geometry/obstacles and relevant consumed feedback
+subtree/explicit ancestor dependencies. Propagate dirty inputs and reuse unchanged
+outcomes; unchanged request list alone is not purity proof. No cache survives an
+operation or failure. Optional exact text memo stops insertion at 256, continues
+rendering and retained hits; it is not a rendering quota.
 
-1. Validate call-local PNG options first when invoked through a PNG terminal;
-   normalize numeric/root constraints and resolve theme/scale ownership.
-2. Validate semantic/exact policies, domains and shared descriptors; prepare
-   topology and text requirements with checked, fallible storage.
-3. Perform font census/discovery/resolution and intrinsic summaries.
-4. Choose root width once; execute root-coordinated constrained rounds, with
-   checked, fallible local plan, state, cache and feedback growth.
-5. Converge or fail; validate semantic completeness, hard fit, finite positive
-   dimensions, and checked canonical dimension conversion. Do not apply
-   hypothetical PNG viability or PNG-derived byte gates to the shared plan.
-6. Freeze root plan, glyph IDs, origins/positions, advances, bounds, face identities,
-   and immutable same-byte face sources needed for later outline extraction.
-   PF3, implemented in `5c0acdf`, captures each producer once with
-   checked incremental reservation and fallible growth during planning,
-   before final canonical storage reservation. Never rerun a producer to size it.
-   Count from the captured immutable commands; capture is not final backend draw.
-   Count canonical serialization tokens; reserve final plan/scene storage,
-   canonical SVG buffer, and serializer scratch before any final validation
-   backend begins. Eager extraction of every glyph path is not required.
-7. Validate that frozen plan through one balanced Null lifecycle; for a terminal
-   operation draw the SAME plan through one balanced concrete lifecycle.
-8. Publish requested format with its call-local limits/reservations, without
-   changing the scene, rerunning layout, or switching rendering routes.
+Content-height dependencies include prepared scientific sources, Labels, raw/color
+domains/provenance, source-row identities, complete Theme/used fonts, both complete
+TickGeneration choices, numeric policies/value sets, three alpha inputs/actual
+members, guide semantics/visibility/composition, current width/capacity, local/
+parent insets/gutters, scope and label visibility. Measurement/reuse/replacement
+requests use the same identity. Equal width/height/output bytes do not authorize
+reuse. Provisional height resolves only its named row/residual predicate under
+the existing root driver; unchanged height cannot authorize overflow outside row.
 
-Count-only operations create no Null/concrete backend and emit no artifact.
-All first-party canonical drawing storage is reserved before Null begins. Final draw
-does not measure, wrap, shape, choose ticks/edges, pack, resize, change domains,
-or construct new planning work. Arithmetic/allocation/font errors abort at their
-encountered stage. No partial scene or file is published on failure.
+Guide dependencies distinguish actual descriptor+allocation consumption from
+allocation-only residual consumption by a Shared-suppressed child. Enumerate
+dependencies at the actual call, not by scanning unrelated siblings. Owners
+outside a child subtree still must be stable when their descriptor/allocation/
+feedback is consumed. Complete scientific alpha identity persists even Hidden
+or Undeclared. Detailed guide masks/dependencies belong to the guide specification.
 
-Derived outlined-SVG/PNG publication may extract paths later ONLY as deterministic
-format conversion from the frozen glyph IDs and immutable retained face bytes,
-using frozen origins and transforms. It may not reread font files, select faces,
-reshape, wrap, change bounds, or perform new layout. Already extracted paths may
-be reused. Derived conversion buffers and path-command payloads may be admitted
-incrementally with checked byte/element counts and fallible growth under the
-applicable format gates; they are not mandatory pre-Null canonical buffers or
-new layout-planning trials. If extracted during planning, path storage uses the
-same real length checks and fallible reservation. Conversion failure remains
-format-local and cannot mutate the canonical scene.
+## Storage, Freeze And Publication
 
-## Canonical Output And Viability
+Production has no cumulative accounting of visits, planning records, topology,
+measurement calls, cache insertions, discovery events or estimated bytes. No
+claim ticket, quota switch, fee-only error or replacement whole-operation score
+is permitted. Retain independent operation/source identity, cache synchronization,
+full equality, font census sealing, real length/capacity checks and fallible
+first-party allocation. External allocator OOM is not promised recoverable.
 
-Canonical dimension is `ceil_div(logical_quanta,1024)`, positive and `u32`.
-Exact-size roots reproduce both caller dimensions; exact-width roots reproduce
-the caller width and derive height. Conversion never clamps or reruns policy. Root SVG
-width/height/viewBox use these integral dimensions; internal geometry remains
-quantized, not rounded to whole pixels.
+Lifecycle order is semantic/option validation, scientific/domain/guide preparation,
+complete text census and fonts, intrinsics, one width choice, bounded constrained
+rounds, complete fit validation, immutable capture/count/reservation, one final
+Null lifecycle, concrete same-plan replay and format-local publication. Capture
+each selected producer once; never rerun it to determine size. Count serialization
+from immutable commands, reserve canonical output and scratch before Null.
+Count-only work opens no backend and publishes nothing. Final draw does not
+measure/shape/format/read sources/choose policy or allocate new planning work.
 
-For signed quantum `q`, format magnitude whole part `/1024` and remainder
-`%1024`. A nonzero remainder becomes `remainder*9_765_625`, zero-padded to ten
-decimal digits then trailing zeros trimmed. Use optional minus only for nonzero,
-no exponent or locale separators. Stroke/path operands use the same spelling.
-A bottom-up adapter, if needed, uses checked `root_height_quanta-y` exactly once;
-Null and canonical SVG consume identical transformed geometry.
+Canonical dimension is positive u32 `ceil_div(logical_quanta,1024)`. Exact pair and
+exact width reproduce requested dimensions; no clamping/retry. SVG root dimensions/
+viewBox are integral, internal geometry remains quantized. For signed quantum q,
+serialize magnitude whole `/1024` and remainder `%1024`; nonzero remainder times
+9765625 gives ten zero-padded fractional digits, trim trailing zeros. Minus only
+for nonzero, no exponent/locale. Bottom-up adapters transform checked root_height-y
+exactly once. Null/concrete share coordinates. Counter and serializer share exact
+token/escaping rules; emitted canonical bytes equal actual count.
 
-The nonrendering byte counter and serializer share token-length/emission rules,
-including escaped original text and exact coordinates. Count is not a Null
-lifecycle. Concrete canonical bytes must equal the count. Outlined SVG is a
-derived publication of retained glyph geometry, not the canonical text byte count.
-
-Preserve-text and outlined SVG in all three sizing modes have no inherited PNG
-dimension, pixel, or 64 MiB byte gate. Shared processing-visits and record caps,
-representability, checked byte counts, and fallible format allocation still
-apply. No automatic-only canonical preserve-text byte limit remains.
-
-Only a PNG terminal validates source geometry/axes/area, actual parser input
-bytes, and rounded-positive target geometry/axes/area against the PNG limits
-above, in every sizing mode. For default 300 DPI and source dimension `d`,
-target is checked `((25*d)+4)/8`. Custom `png_with_options` validates options
-before conversion/allocation and checks its actual requested target; preview
-checks its own raster target. Because PNG consumes retained glyph outlines,
-count/check the ACTUAL outlined SVG or equivalent parser payload against
-`67_108_864` bytes, not merely the smaller preserve-text SVG. Reject known
-dimension/product or payload limits before the corresponding allocation/parser
-work; do not rasterize to discover a known limit violation.
-
-A valid SVG can fail PNG dimension, pixel, parser-input, or reservation checks
-in any sizing mode. That failure is format-local: it neither invalidates SVG nor
-mutates the figure, canonical dimensions, or retained immutable font/path source.
-It never chooses another width, coarsens labels, shrinks fonts, or retries another
-layout. Chained publication preserves the canonical scene and same-byte path
-extraction source. `Output::width/height` always report the frozen canonical
-scene, never raster target dimensions.
-
-## Public Surface
-
-The public sizing cutover atomically installs automatic no-sizing behavior, Plot/Canvas
-consuming `width(self, width: u32) -> Self` for exact width with automatic height,
-retained exact `size(self, width: u32, height: u32) -> Self`, and final
-`Output::width()` / `height()`, removing pre-render Plot dimension getters.
-The `width` builder replaces the former getter, not an overload or
-compatibility alias. Each sizing call completely replaces the one stored request;
-`width` after `size` clears height, and zero dimensions fail preflight without a
-setter panic.
-There is no public maximum-width builder. Broad public constraints are deferred
-to DF6's active post-foundation review; internal intervals remain private.
-
-At T6 only, `TitleAlignment::{Start,Center,End}` and `CompositionTheme` expose
-concrete `root_title_alignment`, optional `root_subtitle_alignment`, and concrete
-independent `root_caption_alignment`, with built-in defaults `Center`, `None`,
-and `Start`. Caption uses the same `TitleAlignment`, not a new caption type.
-The narrow public setters are `Plot::title_alignment`, `Plot::subtitle_alignment`,
-`Canvas::panel_title_alignment`, and `Canvas::panel_subtitle_alignment`; each
-owns an optional override input. Public `panel` naming denotes composed Plot
-semantics; internal layout trees may still call their nodes children.
-
-Title precedence is explicit Plot override > Canvas panel default > resolved Plot
-theme title. Subtitle precedence is explicit Plot subtitle override > Canvas
-panel subtitle default > resolved Plot theme optional subtitle > final effective
-Plot title. Standalone Plots skip Canvas panel defaults. `None` means no
-instruction, not forced title-following that bypasses another subtitle setting.
-Theme/alignment call order is independent, and repeated setters replace only
-their own input. Complete theme replacement is otherwise unchanged; there is no
-general merging. Resolve optional inputs to concrete alignments before measuring
-and retain them in plans for unchanged consumption by arrangement and drawing.
-Canvas's own title/subtitle use its theme's root fields, with absent subtitle
-falling back to its own title alignment, separately from Canvas panel settings.
-
-`TickGeneration` is an opaque immutable crate-root
-`Clone + Copy + Debug + Default + PartialEq` value with private choices Automatic,
-Additive, Log10Decades, Target and Maximum. `automatic()` and Default are Automatic.
-`additive(step:f64)->Result<Self>` requires finite positive step;
-`log10_decades(n:u32)->Result<Self>` requires nonzero n. `target(n:u32)` and
-`maximum(n:u32)` validate `1..=10_000`. Inspection uses `is_automatic`,
-`additive_step`, `decade_step`, `target_count` and `maximum_count`.
-
-Plot `x_tick_generation(self,generation)->Self` and `y_tick_generation` require
-NumericX/Y respectively. Each replaces that axis's whole choice, including an
-Automatic reset. Actual categorical axes reject every non-Automatic choice;
-interval scale-kind mismatch is a semantic error before fonts. Exact ticks
-override regardless of setter order and are not constrained by generated counts.
-`AxisSpec.generation` and `AxisSemanticInputs.generation` retain one concrete value,
-independently of exact ticks, range provenance and NumericFormat. Explicit copies,
-composed/child/height equality and feedback preserve its discriminant/payload even
-when different instructions produce equal positions or extent. Feedback tags are
-Automatic 0, Additive 1 plus exact f64, Log10Decades 2 plus u32, Target 3 plus count,
-Maximum 4 plus count. Selected plans freeze positions/text/operands for replay.
-
-Canvas height consequences retain both concrete generation choices beside the
-independent numeric-format inputs. Equal width, domains, provenance or measured
-height cannot authorize reuse after Target/Maximum/count/reset changes. Focused
-all-family/root and cached/uncached frozen-output evidence is recorded in
-`../docs/tick-generation-parent-closure.md`.
-
-The interval-only type and setters are removed, without aliases or competing
-optional fields. No exact generated-count control, density scalar, categorical
-stride/drop, tick callback, public constraint/measurement operation, `SizeRequest`,
-plan, layout trait, quality scorer or plugin is added. Spec97 owns remaining
-extension acceptance and the separately admitted data-alpha work.
-
-## Validation And Repair Evidence
-
-Implementation repair phases assign datasets, fonts, roots and meaningful
-semantic/relational checks before claiming acceptance. Whole-scene fingerprints,
-snapshot goldens and incidental automatic coordinates are excluded by the current
-test policy in `90_DEVELOPMENT.md`. This specification
-does not assert that those implementations or fixtures already exist. Measurable
-workload acceptance includes the string `"A ".repeat(144)`, an approximately
-200-word scientific caption in a SINGLE paragraph, the three-paragraph caption
-baseline on ordinary automatic and exact-width/automatic-height Plot/Canvas output, and
-multilingual paragraphs with Arabic joining/bidi, combining marks, CJK breaks,
-and emoji controls under compatible pinned fonts. They must complete within the
-actual fit constraints at adequate assigned widths/heights, with exact-size cases
-given sufficient height for the selected wrapped lines. Record proposal visits,
-exact trials, shaped input/output counts, and retained metadata for each fixture;
-the repeated-word narrow-line regression must not reshape all remaining suffixes
-per line. Also cover direct retention of a fitting unwrapped paragraph. There is
-no all-width/all-boundary-pair enumeration. This is
-not a promise that arbitrary text fits a small exact root or every font stack.
-
-Evidence must cover numeric rounding/rational metrics, signed and `usize` limits,
-canonical coordinate bytes, one-plan child ownership, proportional shrink and
-capped surplus/remainder ties, span ordering/rechecks, sparse/trailing tracks,
-all family mappings, shared axes/domains/guides, and original semantic identity.
-Text evidence includes contextual nonadditivity, proposal/retreat/next-endpoint
-extension, stopping at first nonfit despite a distant nonmonotonic fit, mandatory
-empty paragraphs, retained paragraph bidi across soft wraps, Common/Inherited
-resolution, default-ignorables/controls, missing visible glyphs, and viewer-text
-versus exact outlined/PNG geometry. Run Unicode conformance against pinned data.
-Unbreakable-label fixtures must return a typed fit miss without emergency
-splitting, fit-driven rotation, shrinking, or omission; no new text-fit controls
-are implied by the evidence requirements.
-
-Tick evidence includes more than five automatic ticks at wide spans, exact list
-0/1/10_000/10_001 boundaries, unlabeled exact ticks, interval first/coarsen/midpoint
-ordering, `2^53` indices, Forest expressions, and stale-gutter provisional misses.
-Guide/overlay evidence includes fixed edges, bounded edge/compact-flow trials,
-entry-order flow, and rejection of guide-only fit when the affected plot fails.
-Prove another supported arrangement succeeds before reporting final fit failure,
-explicit placements remain fixed, nested owners share attempt/work budgets,
-and deterministic packing/shelves preserve content. There is no exhaustive
-sibling-product search or font/content change to force exact fit.
-
-Font evidence covers canonical name occurrences, first-use stacks/weights,
-SHA/face ordering and unchanged primary selection, first candidate covering a
-base-plus-mark unit, scalar fallback when no candidate covers the unit, leading
-marks, and nonpainting controls excluded from coverage. Include a stack where
-the first scalar face lacks a mark but a later face covers the whole unit;
-prove the later face wins for that unit while standalone generated ASCII and
-metric probes retain scalar-first selection. Preserve unit spans/selections in
-census and profile provenance tests: equal character unions with different unit
-groupings must not erase distinct requirements. Prove no general emoji/ZWJ or
-whole-word fallback is introduced. Also cover same-byte use, discovery permutation
-invariance, bounded fontconfig malformed/partial directive and fallback behavior,
-short/changing files, no simultaneous all-file handles, and coherent Unicode
-dependency provenance. Reservation refusal is injected before preparation growth,
-local/state growth, final freeze/Null, and format conversion.
-
-Resource evidence exercises limit-minus-one/equal/plus-one for every independent
-limit, cache hits/calls, unknown-payload growth, and actual processing visits rather
-than claiming an RSS/CPU guarantee. Convergence covers rounds two/eight, changed
-eight, nonadjacent repetition, terminal misses, and feedback-resolvable misses.
-Sizing evidence covers all three modes on Plot and Canvas, exact width with
-derived height, both sizing-call orders and repeated calls, and zero dimensions
-rejecting at preflight without setter panic. Alignment evidence covers all four
-presets and independent title/subtitle overrides, each precedence level, absent
-subtitle instructions falling through to the final effective title, theme/alignment
-call-order independence, and repeated-setter replacement. Also cover caption
-independence, separate Canvas root versus panel settings, wrapped line and block
-placement across each physical post-inset local root content span (not data-panel
-span), and bidi without swapping Start/End. Embedded Plot evidence must preserve
-titles, subtitles, and local captions exactly once with allocated space, keep the
-Canvas caption separate, and fail rather than omit content when space is insufficient.
-
-Output evidence covers `10_485` versus `10_486` source-axis default-target boundary,
-`3_200x3_200` versus `3_200x3_201` target-area boundary, and actual outlined PNG
-parser bytes. In all three sizing modes, cover valid SVG beyond PNG dimension,
-pixel, and 64 MiB parser-input limits, including canonical preserve-text SVG over
-64 MiB where shared admission permits it. PNG must reject safely without figure
-mutation or loss of the retained path source; later SVG publication stays valid.
-No hypothetical default-PNG gate may reject automatic or exact-width SVG.
-
-Snapshots distinguish current explicit-size preservation from intentional target
-automatic changes. Record chosen natural width, assigned tracks, local source
-ordinals, feedback state, font provenance, and workload counters, not competing
-global frontiers. Increased output size alone is not acceptance. No tests or
-verification are implied by this documentation-only revision.
+Later outlined/PNG conversion may extract paths deterministically from frozen glyph
+IDs/positions/transforms and immutable retained face bytes, with checked fallible
+format buffers. It may not rediscover fonts, reshape, wrap, change bounds or
+relayout. SVG has no PNG-derived dimension/pixel/parser-byte gate; PNG checks actual
+outlined payload and its own target as specified in rendering. At300DPI, dimension
+d becomes checked `((25*d)+4)/8`. A format failure does not mutate the scene or
+choose another representation/layout. Output dimensions stay canonical CSS pixels.

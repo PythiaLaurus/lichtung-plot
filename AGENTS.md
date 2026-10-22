@@ -47,8 +47,8 @@ be committed after those checks.
 
 Treat `cargo test --lib`, `cargo test --tests`, `just test`, and `just verify` as
 full-suite commands, not routine regression discovery. Run one only for an
-explicit user request, a required broad-phase closure gate (such as completing
-T5b, T5c, T5d, or T5e), or a demonstrated cross-cutting failure/invariant that
+explicit user request, a required broad implementation-closure gate, or a
+demonstrated cross-cutting failure/invariant that
 cannot be validated with a bounded set of focused tests. State the specific
 reason before running it; do not repeat a full suite after fixing one localized
 failure when its focused test and relevant neighbors suffice. Documentation-only
@@ -74,8 +74,8 @@ labels will be removed from the final specifications; commit messages must remai
 understandable without them. This applies to documentation commits as well as
 code commits.
 
-Before any Git push, satisfy the T5a3p1 corpus-history cleanup gate in
-`specs/91_IMPLEMENTATION_PLAN.md`. Do not publish a ref that retains the full
+Before any Git push, satisfy the corpus-ancestry publication requirements in
+`specs/90_DEVELOPMENT.md`. Do not publish a ref that retains the full
 Unicode conformance corpus in its ancestry; a forward deletion is insufficient.
 
 After achieving a phased objective, commit the completed work before moving on.

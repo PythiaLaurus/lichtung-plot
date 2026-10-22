@@ -1,245 +1,155 @@
 # Deferred Features
 
-**Status**: Deferred and non-current
+## Scope And Review Rules
 
-## Contract
+This specification identifies excluded capabilities and explicit review checkpoints.
+It grants no implementation authorization, reserves no API/storage/callback and
+does not establish a fallback route. Current behavior is defined by the system
+specifications, particularly [Theme](03_THEME_SYSTEM.md),
+[layout](05_LAYOUT_SYSTEM.md), [numbers](06_NUMERIC_PRESENTATION.md),
+[property ownership](04_VISUAL_PROPERTY_OWNERSHIP.md) and
+[guides](08_GUIDE_SYSTEM.md).
 
-This document records only genuinely excluded scope, not approved work awaiting
-implementation. It grants no implementation authorization and reserves no API,
-storage, callback, or fallback. Approved boundaries are in `03_THEME_SYSTEM.md`,
-`05_LAYOUT_SYSTEM.md`, T5a0s/D1-D6 in `91_IMPLEMENTATION_PLAN.md`, and the
-user-approved T6 decisions in `93_T6_EXECUTION_PLAN.md` and the alpha/tick
-extension admission in `97_ALPHA_AND_TICK_EXTENSION_PLAN.md`.
+DF2, DF4, DF5, DF6, DF7, DF8, DF9 and DF10 are pending user disposition. Their checkpoint
+is the next feature-scope discussion **after specification/documentation cleanup
+and before successor implementation planning**. No additional general audit is
+a prerequisite. Discussion itself does not admit or reject a capability.
 
-Every item has a stable ID and an explicit review checkpoint enforced by the
-entry/closure gates or named successor milestones in `91_IMPLEMENTATION_PLAN.md`.
-Review is not an implementation promise and does not automatically expand T6.
-At its checkpoint, present the item's evidence and tradeoffs to the user and
-record one user-approved outcome:
-admit with an approved new phase, reject with a reason, or re-defer with a new
-explicit milestone checkpoint. A vague future review does not close a gate.
-
-When work is admitted into an approved implementation plan, remove the admitted
-feature from this file immediately, retaining a broader heading only for related
-excluded scope. Do not wait for code to land. Separately, update the current
-architecture/rendering contracts atomically when implementation lands; planning
-or removal here never makes an API current. Future updates must preserve explicit
-checkpoints and evidence/decision records for every remaining item.
-
-After a review, no retained item may keep an expired checkpoint. Re-deferral
-updates its checkpoint; rejection removes it from this active review list and
-records the reason and any lasting exclusion in the plan or canonical contract.
-Stable IDs are not reused. Related unadmitted scope may retain its ID only with
-an explicit next checkpoint.
-
-## Active Post-Foundation Review
-
-After completing T6, the user cancelled the independent T7 audit and requested
-direct discussion of DF2/DF4/DF5/DF6/DF7/DF8/DF9/DF10. Their current checkpoint is
-the **post-foundation deferred review, IN PROGRESS, before successor planning**
-in spec91. This replaces their former T7 CLOSURE assignments. All eight decisions
-are pending; cancellation or discussion does not itself admit or reject a feature.
-DF11 retains its separate post-first-release checkpoint and all five prerequisites.
+At review, present concrete workflows, unmet requirements, alternatives and
+semantic/performance tradeoffs. Obtain user approval to admit a bounded scope,
+reject it with a lasting boundary, or re-defer with a new explicit checkpoint.
+No retained item may have an expired or vague checkpoint. IDs are not reused.
+Remove admitted scope from this list when its plan is approved; update current
+contracts when implemented. Admission is not implementation evidence. Record
+lasting requirements in the owning contract, not a permanent decision ledger.
 
 ## DF2: Locale And Extended Numeric Formatting
 
-Locale-aware digits/separators/grouping, caller-selected compact/SI-prefix rules,
-arbitrary display multipliers, configurable rounding modes, shared multiplier or
-unit annotations, general format strings and callbacks remain excluded.
+Excluded: locale digits/separators/grouping, caller compact/SI-prefix rules,
+arbitrary multipliers, selectable rounding modes, shared multiplier/unit
+annotations, general format strings and callbacks.
 
-The user admitted the locale-free scientific core at T6 ENTRY: fixed fractional
-and significant precision, scientific/engineering notation, exact decimal-power
-display scaling including percentage, literal affixes, negative-zero/trailing-zero
-policies and bounded adaptive precision across the actual numeric consumers.
-Configured Forest Log10 ticks format the underlying mathematical value, as
-explicitly selected by the user. This admitted scope is implemented by public
-`NumericFormat` and its closed discriminants/attachments; evidence is in
-`../docs/public-numeric-formatting.md`. It is separate from the residual deferred
-capabilities above.
+NumericFormat already covers locale-free fixed/adaptive fractional/significant
+precision, Scientific/Engineering notation, exact decimal-power scaling, literal
+affixes and zero handling, including mathematical Forest powers. These are current,
+not deferred scope.
 
-**Review checkpoint**: Active post-foundation review above, before successor planning.
-
-**Evidence and decision**: Use implemented T6 numeric policies on real scientific
-figures, including scaling, units, close values, Forest logarithmic axes, shared
-guides and exact-width wrapping, to identify unmet needs. For locale proposals,
-specify pinned data, Unicode/bidi/font coverage and reproducibility rather than
-ambient host settings. Compare the residual capabilities' semantics and bounded
-costs, then obtain user-approved new-phase admission, reasoned rejection, or
-re-deferral with an explicit new checkpoint.
+**Checkpoint:** next feature-scope discussion. Use scientific units, close values,
+Forest axes, Shared guides and exact-width text to identify a concrete unmet need.
+Locale proposals require pinned data, Unicode/bidi/font coverage and reproducibility,
+not ambient host settings. Compare semantic and bounded execution costs per subset.
 
 ## DF4: Further Automatic Tick Controls
 
-Exact generated counts, visual-density scalars, arbitrary multiplicative ratios,
-categorical stride/drop policies, and generation callbacks remain excluded.
-The user admitted target and maximum generated numeric tick counts following the
-T6 closure review. Their implementation phases and the distinction between a
-target and a hard maximum are in `97_ALPHA_AND_TICK_EXTENSION_PLAN.md`; this
-residual item does not defer that admitted work. Complete TickGeneration choices,
-preferred intervals and exact ticks are current in `05_LAYOUT_SYSTEM.md`.
+Excluded: exact generated counts, density scalars, arbitrary multiplicative ratios,
+categorical stride/drop and generation callbacks. TickGeneration Automatic,
+preferred Additive/Log10Decades, approximate Target and hard Maximum, plus verbatim
+exact ticks, are current.
 
-**Review checkpoint**: Active post-foundation review above, before successor planning.
-
-**Evidence and decision**: Evaluate the admitted target/maximum controls alongside
-preferred intervals and exact caller ticks on small panels, facets, and shared
-Canvas dimensions. Identify needs beyond that combined surface. Review exact
-counts separately from nice-step selection, and categorical label policies
-separately from numeric generation. Compare precedence, semantic completeness,
-and bounded costs without a second planning route; obtain user-approved new-phase
-admission, reasoned rejection, or re-deferral with an explicit new checkpoint.
+**Checkpoint:** next feature-scope discussion. Evaluate those combined controls on
+small panels/facets/shared domains first. Treat exact counts separately from
+nice-step targets, and category omission separately from numeric generation.
+Any proposal must preserve explicit precedence, semantic completeness and one
+bounded source/planning route.
 
 ## DF5: Broader Text Layout Controls
 
-TextPanel title/body horizontal alignment, explicit categorical-axis directions,
-general per-role alignment/anchoring, arbitrary rotation, emergency identifier
-breaking, general ellipsis and automatic font shrink remain excluded.
+Excluded: TextPanel title/body horizontal alignment, categorical-axis directions,
+general role anchoring/alignment, arbitrary rotation, emergency identifier breaks,
+general ellipsis and automatic font shrink. Complete role typography, Plot heading
+instructions, Canvas panel defaults, independent captions, strict legal wrapping
+and explicit Heatmap Wrap/Elide are current.
 
-T6 ENTRY review found complete private heading precedence/typography, strict legal
-wrapping, fixed role orientations, corner annotations and the current Heatmap
-Wrap/Elide policy. The user approved completing the existing T6 public typography,
-title/subtitle overrides, Canvas panel defaults and independent theme captions,
-and re-deferred the additional controls. See `93_T6_EXECUTION_PLAN.md`; those
-existing approved capabilities are not missing DF5 implementation.
+**Checkpoint:** next feature-scope discussion. Evaluate TextPanel alignment,
+bounded category orientation and opt-in identifier breaking as distinct candidates.
+Assess source preservation, physical versus bidi-logical meaning, actual ink,
+readability, exact dependency identity and frozen formats. General ellipsis/shrink
+must not be implied by a small admitted subset or relax default strict wrapping.
 
-**Review checkpoint**: Active post-foundation review above, before successor planning.
+## DF6: Broader Root Bounds
 
-**Evidence and decision**: Evaluate the implemented public typography and sizing
-controls first. Review TextPanel alignment, bounded categorical orientations and
-opt-in identifier breaking as distinct candidates, using narrow identifiers,
-crowded labels and mixed-direction multiline text. Assess general anchors,
-ellipsis and shrink separately, including source preservation, readability,
-physical versus bidi-logical direction, measured ink, cache/feedback identity,
-resource bounds and frozen SVG/PNG geometry. Obtain a user-approved disposition
-for each admitted subset; default strict wrapping is not relaxed by this review.
+Excluded: maximum width, minimum width/height, maximum height, exact-height/automatic-
+width and public general constraint objects. Automatic, exact-width/automatic-
+height and exact-pair requests are current.
 
-## DF6: Broader Root Bounds And Maximum Width
-
-Maximum-width sizing, minimum width/height, maximum height, exact-height/automatic-
-width sizing, and public Flutter-like constraint objects remain excluded. The
-three admitted sizing modes are defined in `05_LAYOUT_SYSTEM.md`.
-
-**Review checkpoint**: Active post-foundation review above, before successor planning.
-
-**Evidence and decision**: Collect publication-column and embedding workflows using
-automatic, exact-width/automatic-height, and exact-pair output. Demonstrate unmet
-needs and compare interactions with aspect, wrapping, legends, facets, Canvas,
-and strict fit. Let the user choose a small justified extension, rejection, or
-re-deferral; do not assume a general bounds surface is the destination.
+**Checkpoint:** next feature-scope discussion. Compare real publication-column/
+embedding needs against those three modes, including wrapping, aspect, guides,
+facets/Canvas and strict fit. A general bounds surface is not the presumed outcome.
 
 ## DF7: Sparse Composition Compaction
 
-Packing occupied cells or collapsing empty rows, columns, or trailing wrap slots
-remains excluded; preserved topology is specified in `05_LAYOUT_SYSTEM.md`.
-At T6 ENTRY the user approved re-deferral: natural content sizing is implemented
-but does not transform topology, hand-authored Canvas can declare compact grids,
-and Cartesian holes can encode absent scientific combinations.
+Excluded: repacking occupied cells or collapsing empty rows/columns/trailing wrap
+slots. Natural content sizing does not change declared topology. Empty Cartesian
+combinations can carry scientific meaning; hand-authored Canvas can declare a
+compact shape explicitly.
 
-**Review checkpoint**: Active post-foundation review above, before successor planning.
-
-**Evidence and decision**: Compare real public automatic/exact-width sparse
-figures after T6. Assess removal of wholly empty tracks separately from row-major
-occupied-cell repacking or an observed-combinations facet gallery. Specify
-occupancy, source/destination coordinate mapping, metadata-only tracks, header
-spans, row titles, range-group membership, shared label ownership and diagnostic
-identities. A partial wrapped final row is not solved by deleting wholly empty
-tracks. Show the semantic cost and actual benefit before obtaining user-approved
-new-phase admission, reasoned rejection or explicit re-deferral.
+**Checkpoint:** next feature-scope discussion. Assess removing wholly empty tracks
+separately from occupied-cell repacking/observed-combination galleries. Specify
+source/destination identity, occupancy, metadata-only tracks, spans, row titles,
+range groups/shared labels and partial final wrapped rows before claiming benefit.
 
 ## DF8: Caller-Selected Layout Objectives
 
-Caller objectives for aspect, density, whitespace, legend flow, text measure, or
-grid balance remain excluded. No scoring callback, strategy switch, string mode,
-or public layout plugin is reserved.
+Excluded: caller objectives for aspect, density, whitespace, guide flow, text measure
+or Grid balance; scoring callbacks, strategy switches, string modes and layout plugins.
 
-**Review checkpoint**: Active post-foundation review above, before successor planning.
-
-**Evidence and decision**: Review unmet scientific workflows against the completed
-private local policies, including exact-constraint failures and reproducibility.
-Compare a small typed objective with existing explicit controls and its bounded
-costs; obtain the user-approved disposition without creating global search by
-implication.
+**Checkpoint:** next feature-scope discussion. Require an unmet workflow under
+the deterministic private local policy, including exact-root failures. Compare
+a small typed objective's complete semantics/cost without implying global search.
 
 ## DF9: Global Layout Optimization
 
-Exhaustive whole-tree search, sibling Cartesian products, exhaustive text break
-partitions, and root-wide dense-rank objectives remain excluded. Approved bounded
-containing-frame placement recovery is not this feature; see `05_LAYOUT_SYSTEM.md`.
+Excluded: exhaustive whole-tree search, sibling Cartesian products, all text-break
+partitions and root-wide dense-rank objectives. Bounded containing-frame guide
+recovery is current and distinct.
 
-**Review checkpoint**: Active post-foundation review above, before successor planning,
-alongside DF8.
-
-**Evidence and decision**: Require demonstrated scientific workloads, measured
-performance/resource comparisons with bounded local recovery, semantic
-completeness, determinism, and a coherent replacement contract. Obtain the
-user-approved disposition; historical search achievements do not authorize a
-dormant solver or runtime strategy switch.
+**Checkpoint:** next feature-scope discussion alongside DF8. Require demonstrated
+scientific workloads, measured comparison with current bounded recovery, semantic
+completeness, determinism and a coherent replacement contract. No dormant solver
+or runtime strategy selector is reserved.
 
 ## DF10: Stop At First Fitting Line Proposal
 
-Removing exact next-endpoint line extension remains excluded. PF7 accepts KEEP
-of the current extension policy; T5a3p7 is complete as a disposition only, not a
-wrapping implementation change. No strategy switch or alternate wrapping mode
-is reserved.
+Excluded: removal of exact immediately-next-endpoint extension. Current wrapping
+proposes forward, retreats to a fit, then extends until first next-endpoint nonfit.
+No alternate strategy switch is provided.
 
-**Review checkpoint**: Active post-foundation review above, before successor planning.
-
-**Evidence and decision**: Use post-p2/p3/p4/p6 release measurements to establish
-whether avoiding extension has meaningful benefit. Compare exact line endpoints,
-caption heights, tight-height fit failures, bidi, soft hyphens, and retained glyph
-geometry. Revisit only if benefit justifies the wrapping/fit tradeoff; otherwise
-record rejection or explicit re-deferral. Any admission requires user acceptance
-of changed wrapping and a new approved phase under the process above.
+**Checkpoint:** next feature-scope discussion. Compare actual release workloads,
+line endpoints, caption heights, tight-root fit, bidi, soft hyphens and retained
+glyph geometry. Changing this behavior requires user acceptance of the wrapping/
+fit tradeoff, not simply a smaller internal trial count.
 
 ## DF11: Scientific Plotting For AI-Authored Workflows
 
-Reconsider the library's role and capabilities for LLM-authored, deeply customized
-scientific figures. The motivating user observation is that LLMs can write bespoke
-drawing scripts, use low-level libraries such as PIL directly, edit generated
-vector SVGs, and add custom shapes or annotations to both individual plots and
-manually composed multi-panel figures. A library limited to a closed catalog of
-internally predefined plot kinds may not provide enough value in those workflows.
-The review concerns the library's positioning as well as concrete capabilities;
-its evidence should establish how scientific plotting libraries, including
-matplotlib, fit these workflows and where a different interface adds value.
+Review the library's positioning and capabilities for AI-authored deeply customized
+figures: bespoke drawing scripts, low-level raster/vector libraries, generated-SVG
+editing, custom annotations/shapes and manually composed multi-panel output.
+A fixed plot catalog's value must be evaluated against those actual workflows,
+including how established scientific libraries support them.
 
-The user explicitly added **fully caller-decided legends** to this review. This
-includes legends independent of automatic data/scale contributions: caller-owned
-titles, labels, entry selection and order, point/line/patch symbols, exact RGBA
-and geometry, continuous or discrete explanations, and addition to or replacement
-of automatic legends on individual plots and composed Canvas figures. Review
-declarative symbol-and-label construction as well as the broader possibility of
-caller-drawn/custom graphics; neither interface is preselected. Include custom
-alpha functions whose intended explanation is supplied by the caller, rather than
-inferred from the function or observed alpha values. The user chose to consider
-this capability at the AI-workflow review, not in the admitted alpha/tick work.
+Include **fully caller-decided legends** independent of automatic contributions:
+titles/labels/selection/order, point/line/patch symbols, exact RGBA/geometry,
+continuous/discrete explanations and append/replacement on Plot/Canvas. Compare
+declarative symbol-and-label inputs with caller-drawn graphics; no interface is
+preselected. Custom alpha functions with caller-provided explanation belong here,
+not automatic inference from opaque functions or observed bytes.
 
-**Review checkpoint**: The post-first-release checkpoint in
-`91_IMPLEMENTATION_PLAN.md`, after **all** of the following are complete:
+**Checkpoint:** after **all five** prerequisites are complete:
 
-1. Refactoring the project into a Rust workspace.
-2. Completing the polars data adapter.
-3. Completing the ndarray data adapter.
-4. Completing the Python calling interface.
-5. Publishing the first version.
+1. Refactor into a Rust workspace.
+2. Complete the polars adapter.
+3. Complete the ndarray adapter.
+4. Complete the Python calling interface.
+5. Publish the first version.
 
-The review begins only after the last prerequisite is satisfied. It is not a
-gate for T6 or the active post-foundation review. These prerequisites identify
-the future review timing; this item does not itself authorize their implementation
-or change today's standalone renderer boundary.
+Review begins only after the last prerequisite. These name future timing and do
+not authorize those projects or alter the standalone renderer boundary.
 
-**Evidence and decision**: Collect representative AI-authored workflows for
-single scientific plots and custom Canvas-like compositions, including direct
-low-level drawing, SVG post-editing, caller-added graphical elements, and fully
-caller-authored legends. For legends, compare automatic scale explanations with
-independent caller declarations, append/replacement and Plot/Canvas ownership,
-symbol/label versus custom-drawing scope, measurement/placement, fonts, complete
-ink, source identity, and immutable SVG/PNG output. Identify
-where the library contributes reliable scientific transforms/statistics, axes,
-text, layout and reproducible output, and where its fixed plot catalog or public
-controls force external reconstruction. Evaluate what changes would better fit
-LLM-generated scripts and iterative figure editing, including discoverability,
-composability, custom graphics, coordinate/annotation access and retained semantic
-identity. Compare concrete alternatives and their ownership, determinism,
-measurement/resource and SVG/PNG consequences before recommending any API or
-architectural change. Present the evidence and tradeoffs for a user-approved new
-phase, reasoned rejection, or explicit re-deferral. No plugin, drawing callback,
-mutable scene, SVG-editing API or alternate rendering path is reserved here.
+Evaluate representative single/composed scientific workflows, low-level drawing,
+SVG postediting, added graphics and fully authored legends. Compare automatic
+explanations with independent declarations, Plot/Canvas ownership, measurement/
+placement/fonts/complete ink, coordinate access, source identity, immutable output,
+discoverability and composability. Identify reliable scientific/statistical/text/
+layout value versus work forced into external reconstruction. Present concrete
+alternatives and their determinism/resource/format consequences before any API
+proposal. No plugin, draw callback, mutable scene or SVG-editing route is reserved.

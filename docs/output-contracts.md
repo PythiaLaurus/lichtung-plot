@@ -36,8 +36,8 @@ fn publish_svg() -> Result<(), lichtung_plot::Error> {
 
 ## PNG
 
-PNG is rasterized from the canonical SVG scene. `.png(path)` publishes at 300
-DPI with balanced compression, scaling canonical CSS pixels from 96 DPI and
+PNG is rasterized from the outlined form of the canonical scene. `.png(path)`
+publishes at 300 DPI with balanced compression, scaling canonical CSS pixels from 96 DPI and
 writing matching physical-density metadata. `.png_preview(path)` preserves the
 canonical SVG pixel dimensions, uses balanced compression, and writes no
 physical-density metadata. `.png_with_options(path, options)` applies the exact
@@ -93,10 +93,12 @@ filename is rejected. The parent directory must already exist. An existing
 unsuffixed base file is left untouched when publication targets its completed
 sibling.
 
-Outlined SVG and PNG generation require at least one installed system font. The
-preferred order is Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans,
-then Arial. If none is present, any discovered system family is used; an empty
-font database is a render error.
+Every used text role selects installed fonts through its typed stack. The default
+order is Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, then the
+host's sans-serif generic. Missing visible glyph coverage or an empty matching
+candidate list is a render error; the renderer does not choose an arbitrary
+unrelated family. Outlined SVG and PNG retain the generation operation's font
+bytes and glyphs without rediscovery.
 
 ## Determinism
 

@@ -1,140 +1,167 @@
 # Development
 
-**Status**: Canonical
+## Toolchain, Dependencies And Commands
 
-## Toolchain
+Use pinned Rust 1.96 with rustfmt/Clippy and tracked Cargo.lock. Prefer root
+Justfile recipes; commands are locked/offline:
 
-The repository pins Rust 1.96 with rustfmt and Clippy in
-`rust-toolchain.toml`. `Cargo.lock` is tracked.
+| Recipe | Contract |
+| --- | --- |
+| just fmt / just fmt-check | Format sources / read-only formatting check |
+| just lint | cargo clippy --locked --offline --all-targets -- -D warnings |
+| just test | All library/integration/example targets, excluding doctests |
+| just test-doc | Execute public examples and compile-fail API boundaries |
+| just docs | Build API documentation with warnings denied |
+| just package | Verify Cargo's independently unpacked distributable package |
+| just verify | Complete read-only format/lint/tests/doctests/docs/package gate |
 
-## Commands
+Compiler validation must use strict Clippy, never cargo check or a nonlinting
+build as a substitute. Pass that requirement to delegated work. Documentation
+build alone does not execute doctests. Do not claim a discovery-only command,
+filtered zero tests or ignored case as executed behavioral verification.
 
-Use the root recipes:
+Declare dependencies directly in Cargo.toml, without workspace inheritance or
+path dependencies. Dependency changes update Cargo.lock and run the complete
+verification gate. Dependencies must not import application analysis/report/runtime
+or other lichtung-crate responsibilities, network provisioning or assets.
+Keep development/test support in existing Rust structure; no Python files or
+tools directory. Modern module layout is foo.rs plus foo/ siblings.
 
-```text
-just fmt
-just lint
-just test
-just test-doc
-just docs
-just package
-just verify
-```
+## Focused Verification
 
-`just verify` is the complete read-only gate. It checks formatting, compiles and
-lints every target with warnings denied, runs target tests and doctests, builds
-documentation, and verifies Cargo's independently unpacked package. `just test`
-uses `--all-targets`, which excludes doctests; `just test-doc` separately executes
-public examples and compile-fail API boundaries. Building docs alone does not
-validate those examples.
+For code changes, identify affected call paths and run the narrowest meaningful
+unit filters plus representative integration contracts, formatting and strict
+all-target Clippy. Several touched modules alone do not justify all tests. Expand
+only for a concrete failure or uncovered interaction.
 
-Compiler validation uses `just lint`, which runs
-`cargo clippy --locked --offline --all-targets -- -D warnings`. Do not substitute
-`cargo check`, including in delegated work. Targeted tests remain useful while
-iterating, but do not replace strict Clippy or the final verification gate.
+Treat cargo test --lib, cargo test --tests, just test and just verify as full-suite
+commands. Run one for an explicit request, a required broad implementation closure
+gate, a dependency change or a demonstrated cross-cutting invariant that cannot
+be checked with a bounded selection. State the specific reason first. After a
+localized repair, rerun its focused case/neighbors rather than repeat a successful
+whole suite without new cause. Pure documentation needs source/spec consistency,
+reference checks and git diff --check, not compiler/tests by default.
 
-Do not add Python files or a `tools/` directory. Development/test support stays
-within the existing Rust project structure. Unicode fixture provenance belongs
-beside the fixtures, not in a separate tooling tree.
+## Test Budget And Ownership
 
-## Dependency Changes
+Do not grow the unit-test suite. Each new unit test replaces an existing test in
+the same logical change; discovered library count including ignored cases cannot
+exceed its pre-change count on the same platform. Linux ceiling is 671 including 17
+ignored. Further deletion lowers the ceiling rather than banking future credits.
+Ignoring, merging functions, packaging parameterized cases or moving cases to
+integration suites does not evade this rule. Remove obsolete test-only hooks/
+helpers when their last meaningful consumer disappears.
 
-Dependencies are declared directly in `Cargo.toml`; workspace inheritance and
-path dependencies are prohibited. A dependency change updates and commits
-`Cargo.lock`, then runs `just verify`.
+Independent Cargo integration targets are declared in Cargo.toml, each with
+tests/<domain>/suite.rs and cohesive sibling modules; shared helpers are in
+tests/support. Targets are annotations, categorical, composition, distributions,
+estimates, heatmap, interactions, layout, lines, marginal-matrix, output, rendering
+and statistics.
+Run one with cargo test --locked --offline --test <target>. Add a target only
+for a distinct contract, not a chronological/catch-all/general suite.
 
-No dependency may introduce application-owned analysis, report, runtime,
-network-provisioning, or first-party Lichtung behavior into the renderer.
+Keep normal externally compiled library-to-file SVG/PNG tests and selected decoded
+pixel/format checks. They cannot all become private mocks. Retain a small internal
+lifecycle witness for invariants output equality cannot prove: source/operation
+ownership, no repeated statistics/font work, one selected capture/final Null and
+source-independent frozen replay. Every family needs a valid public dispatch
+route; extra cross-products require distinct failure surfaces, not mechanical
+family x preset x root x parent expansion.
 
-## Commit Messages
+## Semantic Expectations
 
-Use Conventional Commits with a scope and describe the actual behavior,
-architecture, contract or documentation change. Both the subject and body must
-remain understandable after temporary planning documents and stage labels are
-removed.
+Test independently justified scientific/API/output relationships:
 
-Do not include planning identifiers or numbered implementation stages in commit
-subjects or bodies. Documentation changes follow the same rule. Use descriptions
-such as `docs(api): map public cutovers and consumers` or
-`refactor(color): retain validated foundational paint values`, rather than naming
-an internal milestone. Review the complete message before committing.
+- Original rows, availability, statistical values, source order, complete marks/
+  required text and raw semantic identity.
+- Explicit requested canonical/PNG dimensions and real output-format limits.
+- Containment, nonoverlap, linked-axis agreement, selected paint/geometry ownership,
+  domain/window distinctions and truthful guide compatibility.
+- Error domain/source and no-partial/existing-artifact preservation, without
+  freezing incidental internal error location, Debug representation or wording.
+- Exact numeric transformations, ties/carries and serialization/escaping syntax
+  with independent mathematical or standard-data expectations.
+- Same-operation immutable replay and equivalent current routes/cache settings,
+  comparing both sides in the current implementation.
 
-## Visual Changes
+Do not freeze whole-scene SVG length/hash, scene/clipping snapshots, automatic
+panel dimensions or internal placement coordinates. Do not repin such goldens,
+replace them with measured coordinates/broad tolerances, or treat benchmark hashes
+as cross-revision contracts. An explicit input-derived dimension, independent
+rounding boundary or actual containment relation remains meaningful.
 
-Changes to layout, themes, text, SVG serialization, clipping, or marks require
-focused semantic checks consistent with `02_RENDERING_CONTRACT.md`. Inspect source
-completeness, scientific values, effective styles, clipping, containment and
-relative text/mark relationships when those contracts are affected.
+Avoid expected=actual calls to the same function/input, setter/getter echoes,
+discarded repeated unwraps and copied production search/layout algorithms masquerading
+as oracles. Preserve distinct missing/finite/availability/facet/style/error policies
+and genuinely different mark grammars. Pointer equality is not general immutability
+proof; full cache-key collision/operation identity tests remain valuable. No generic
+testing DSL, mutation system or new universal fault-injection framework is required.
 
-## Test Layout
+Numeric conversion uses independent rational/interval/root certificates, not its
+own formatter as oracle. Unicode uses pinned standard data/provenance. Statistical
+oracles for KDE/OLS/bootstrap and real arithmetic/length/representation failures
+are independent correctness evidence, not volatile scene baselines.
 
-The unit-test suite must not grow. Introducing a unit test requires deleting an
-existing unit test in the same logical change; the discovered library-test count
-(including ignored tests) must not exceed its pre-change count on the same
-platform. The Linux baseline after the approved deletion is 671 tests, including
-17 ignored. A later reduction lowers the ceiling rather than accumulating test
-credits. Replace lower-value coverage with relevant semantic contracts and retire
-unused test support. Ignoring tests, merging functions, packaging parameterized
-cases, or moving tests into integration suites does not satisfy this rule.
+## Resources And Performance
 
-Integration tests are independent Cargo test targets declared in `Cargo.toml`.
-Each target lives in `tests/<domain>/suite.rs`, with sibling modules for one
-cohesive plot family or rendering contract. This keeps targets independently
-runnable without scattering loose Rust files across `tests/` or routing every
-test through one monolithic integration crate. Shared test-only helpers live in
-`tests/support/`.
+Production retains real checked lengths/products/indices/spatial arithmetic,
+fallible first-party buffers, source/operation identity, sealed fonts, complete
+cache equality, finite layout policies and PNG-local bounds. Do not reintroduce
+unified visits/records/cache/topology/discovery/estimated-byte accounting, a global
+score, budget API, quota switch or permanent no-op claim interface. Third-party
+allocator behavior is not promised recoverable.
 
-The current focused targets are:
+Use existing test/benchmark diagnostics only for clearly named observations:
+shaping input/output, candidate/refinement counts, cache hits/misses, measurement/
+capture/replay and elapsed time. Unlike units must not be added to a resource
+score or interpreted as CPU instructions/memory. Counters do not impose exact
+cross-revision tuples unless they directly express a real lifecycle boundary.
 
-```text
-annotations       categorical       composition
-distributions     estimates         heatmap
-interactions      layout            lines
-marginal-matrix   output            rendering
-statistics
-```
+Performance comparisons use successful same-source workloads, same fonts/options/
+format and complete output, without deleting text/points or changing algorithms
+to improve timing. Distinguish cold discovery, retained Output reuse, compilation
+and nested timer scopes. Measure command/process RSS independently from retained
+payload or cumulative allocation traffic; neither visits nor requested bytes is
+peak memory. Report actual scope and uncertainty, not unsupported speedup claims.
 
-Run one target with `cargo test --test <target>`. New tests belong in the target
-whose public behavior they exercise. Add a target only for a genuinely distinct
-contract; do not create chronological, catch-all, or `general` suites.
+## Unicode Sources And Publishable History
 
-The public in-process end-to-end owners are `tests/output/` for reusable
-SVG/PNG/file publication, `tests/heatmap/` for decoded pixel/color agreement, and
-the scientific/composition targets for source/mark and parent/owner contracts.
-These compile the normal library without its `cfg(test)` implementation. Public
-constructor, contextual-builder and significance typing belongs to
-`tests/rendering/public_contracts.rs`; negative visibility and exact/Any/capability
-boundaries belong to doctests. Internal frozen-replay tests retain the few
-lifecycle witnesses that external output equality alone cannot establish.
+Retain runtime tables, focused independently expected default cases, pinned hashes,
+generation provenance and licenses. Full official Unicode conformance corpora
+must not be stored in the repository/package, compressed into another blob or
+recreated by regeneration. Explicitly invoked ignored conformance/regeneration
+checks read LICHTUNG_UNICODE16_SOURCE_DIR and verify official 16.0.0 hashes before
+parsing; missing/mismatched input fails. No automatic download, provisioning or
+dependency-cache lookup. Regeneration checks source/table agreement without
+writing the full corpus back into the tree.
 
-## Stable Test Expectations
+Before any requested push, inspect current refs/server and prove that **every ref
+intended for publication lacks the full corpus in its ancestry**. Forward deletion
+is insufficient. The corpus includes BidiCharacterTest.txt, BidiTest.txt,
+DerivedNormalizationProps.txt, GraphemeBreakTest.txt, LineBreakTest.txt and
+NormalizationTest.txt. Preserve the published base and unrelated work; any needed
+unpublished-suffix rewrite requires guarded ref updates and tree comparisons,
+without a backup ref retaining the unwanted ancestry. A normal push does not
+send unreachable reflog-only objects; this is not a physical-erasure claim.
+Do not clear unrelated recovery history or assume force-push authorization.
 
-The user rejected whole-scene byte/geometry baselines as volatile implementation
-details. Do not assert a stored SVG byte length/hash, a full SVG or clipping-summary
-snapshot, or incidental automatic panel dimensions and placement coordinates.
-Those tests and the snapshot target/tooling have been removed. Historical output
-hashes and reviewed snapshots in evidence documents describe their recorded
-revisions; they do not impose current test expectations.
+Historical execution is not fresh-checkout conformance. State which focused,
+external/ignored, release or package checks actually ran. Do not mark missing
+external data as successful full conformance.
 
-Keep checks with an independent contract:
+## Documentation And Commits
 
-- Explicit caller-requested root/PNG dimensions and output-format limits.
-- Scientific values, source rows, visible mark counts and complete required text.
-- Containment, non-overlap, linked-axis agreement and selected-style ownership.
-- Validation failure categories and absence of published output on failure,
-  without fixing an incidental internal failure location or diagnostic string.
-- Exact numerical transformations/rounding with independent mathematical
-  expectations, and narrowly specified serialization syntax/escaping.
-- Equality of outputs produced by equivalent current routes, cache settings or
-  immutable replay. This compares both sides in the same implementation rather
-  than freezing an old revision's output.
+Formal specifications define current rules by subsystem and refer to actual source
+owners. Low-numbered specifications reference files only beneath specs/ and src/.
+Keep plans/status, execution logs, commit receipts, historical censuses and
+performance samples out of formal contracts and user guides. User documentation
+explains use; it is not an agent work journal. Source comments/API examples should
+describe current behavior rather than migration stages. No compatibility route is
+authorized by old documentation.
 
-If a fixture only checked a volatile baseline, remove it. Mixed fixtures keep
-their meaningful assertions. Do not replace deleted goldens with measured
-coordinates, broad tolerances around those coordinates or redundant smoke tests.
-Benchmark hashes/byte sizes may remain observations for a specific comparison;
-they are not permanent cross-revision acceptance gates.
-
-The source-backed baseline test-size/layer audit is `../docs/test-code-audit.md`.
-The user-approved cleanup is `96_TEST_CODE_SIMPLIFICATION_PLAN.md`; implementation
-evidence and retained contract owners are in `../docs/test-code-cleanup.md`.
+Use Conventional Commits with mandatory scope and one logical change. Subjects
+and bodies describe enduring behavior/architecture, including documentation
+changes; never temporary planning identifiers or numbered stages. Inspect status,
+diff and recent style, stage only intended files, and commit completed objectives
+before starting unrelated work. Push only when explicitly requested and after
+the corpus-ancestry checks above.

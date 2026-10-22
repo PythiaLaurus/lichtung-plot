@@ -116,7 +116,8 @@ Existing Rust version tests assert every exported Unicode version in this table,
 including the tables shared with rustybuzz's transitive dependencies. The exact
 package constraints and Cargo.lock retain the audited dependency profile;
 no separate graph-audit script ships. rustybuzz's private normalization
-version was inspected at `src/hb/unicode_norm.rs`; it is not exported, so its
+version is defined by the pinned dependency's
+`rustybuzz-0.20.1/src/hb/unicode_norm.rs`; it is not exported, so its
 exact 0.20.1 package pin and Cargo.lock checksum protect that audited source.
 rustybuzz also has upstream assertions for all its Unicode tables. In particular,
 unicode-properties 0.1.4 contains Unicode 17 despite the compatible package
@@ -188,134 +189,17 @@ implementation or misrepresented as original official fixture cases.
 Both regression tests were run and failed against the previous implementation.
 Neither correction changes official fixture inputs or expected outputs.
 
-## Runtime Admission
+## Runtime Boundary
 
-PF4's accepted coarse contract below replaces the prior synthetic prices. Code
-is IN PROGRESS, not yet primary-verified; final comparison review and integrated
-verification remain pending. Prior test observations are retained as historical
-evidence, not proof that the current PF4 work has closed its gates.
+Normalization and line breaking retain one fallible implementation each, with
+checked actual input lengths, capacity arithmetic and first-party buffer growth.
+There are no accounting callbacks, cumulative visit/byte quotas or raw CSS
+font-stack parser. Typed font preferences and operation-local normalization reuse
+follow the [font/layout contract](../../../specs/05_LAYOUT_SYSTEM.md).
 
-Normalization and line breaking expose one fallible implementation each, using
-borrowed root-budget callbacks and existing project-owned errors:
-
-```rust
-fn nfkc_casefold(
-    value: &str,
-    claim: &mut impl FnMut(u64, u64) -> Result<(), FontError>,
-) -> Result<String, FontError>;
-
-fn linebreaks(
-    value: &str,
-    claim: &mut impl FnMut(u64, u64) -> Result<(), TextPlanError>,
-) -> Result<Vec<(usize, BreakOpportunity)>, TextPlanError>;
-```
-
-Callback arguments are newly requested storage bytes and actual processing visits.
-Canonical family-name validation, UTF-16 decoding, normalization, text line breaking,
-and grapheme filtering share ONE cumulative operation/root font+text ledger with
-an inclusive 1,000,000 processing-visit limit. Font resources, text resources, and
-clones retain the same consumption; no callback resets counters, creates a local
-quota, swallows a refusal, or retries without limits.
-
-Independent admissions remain 1,000,000 each for retained planning records,
-measurement/intrinsic calls, cache entries, prepared topology slots, and discovery
-entries, plus 536,870,912 (512 MiB) cumulative font/source/scratch bytes before
-read or retention. Unicode scratch buffers consume bytes, not candidate slots.
-Processing, records, calls, and cache remain the four planning-counter classes;
-sharing font/text processing does not add a fifth class. Counters do not bound
-CPU instructions, wall time, RSS, allocator overhead, or third-party allocations.
-
-Prior pair-resolution evidence charged 20 resolution units, 570 normalization
-units for `Test Sans`, and 40 cache-key/retention/copy units with one normalization
-shared across weights. Those figures belong to the superseded two-work-ledger
-policy, not current charges or measured CPU operations.
-
-Input lengths are checked against the u32 representation before scanning.
-Each actual decoding/segmentation pass is admitted before it starts. Text's
-outer pass counts were reduced when those charges moved into the fallible
-helpers, rather than double-counting the same pass. Borrowed source text is not
-charged as a new allocation and is never normalized for rendering.
-
-All first-party Unicode buffers use checked size/capacity arithmetic and
-`try_reserve_exact` before writes. Incremental geometric growth charges the
-complete new allocation (conservatively accounting for coexistence with the
-old buffer) before reserve. Copying and hashing have no extra processing price;
-actual storage still requires admission. Allocator failure returns `Allocation`; arithmetic overflow
-returns `Arithmetic`; callback errors retain their original typed classification.
-A refusal is terminal, so successful earlier claims are not rolled back.
-
-### Normalization Work
-
-Fixed Unicode-table binary searches carry no per-comparison processing price.
-Normalization admits actual scalar-pass inputs and decomposition nodes, including
-algorithmic Hangul expansion; output storage is admitted separately. Variable
-lookups count actual examined elements, not unused list tails. NFC ordering guards
-each actual preceding comparison in its variable/quadratic scan, not a fixed
-allowance or extra swap price. Recomposition stays in-place in admitted storage;
-the final UTF-8 string grows with checked byte admission and fallible reservation.
-Canonical UTF-16 validation and bounded dependency decoding admit their actual
-input before processing. These guards are not a third-party CPU/OOM guarantee.
-
-### Line-Break Work
-
-UAX #14 builds only the collapsed scalar buffer, not an additional raw-scalar
-vector. It caches the previous non-space index, numeric-prefix state, and RI
-parity in one linear pass. All later backward-context queries are O(1), replacing
-the earlier repeated prefix scans. Actual scalar inputs to variable passes and
-actual boundary visits consume the shared ledger; fixed table searches and rule
-cascades have no separate price. The prior `64` units per input scalar, `8` per
-collapsed scalar, and `256` per boundary were synthetic allowances, not current
-policy. Prior property-depth tests supported those old allowances only. Break
-offsets, mandatory opportunities, and LB25/LB8a semantics remain unchanged.
-Grapheme filtering uses an admitted linear intersection of sorted boundaries;
-storage remains independently admitted before retention.
-
-### Refusal Evidence
-
-Prior admission tests exercised the same fallible implementations as conformance.
-The following records remain historical evidence; PF4 must revalidate refusal
-boundaries in actual visits/bytes rather than preserve synthetic scores:
-
-- Input refusal returns on the first callback, before decoding or allocation.
-- Injected storage refusal leaves destination strings/vectors empty with zero
-  capacity, before reserve or push.
-- U+FDFA expansion and cross-scalar NFC exercise all intermediate buffers at
-  exact byte/work limits, and reject either limit minus one.
-- A 1,200-mark descending-class input exhausts root ordering work rather than
-  completing quadratic processing.
-- Long spaces, numeric separators, and RI sequences have linear admitted work.
-- Overflow rejects before reservation; callback error variants are preserved.
-- Cloned root resources share consumed work, and text helper tests exhaust the
-  actual shared work and byte ledgers to demonstrate caller error propagation.
-
-Official conformance cases run with fresh, bounded production-limit root
-resources per independent normalization or line-break operation. Infallible
-convenience functions and unlimited accounting probes exist only under
-`cfg(test)`; there is no infallible production wrapper or alternate runtime path.
-
-### Operation-Local Reuse
-
-The font operation retains normalized stack names once per parsed stack, sharing
-them across requested weights. `CanonicalFontCore` also retains candidate
-metadata by structural stack and weight for incremental requests outside the
-sealed census. Those requests probe only previously unseen scalars; successful
-selections accumulate in first-observation order. Repeated labels therefore do
-not repeat NFKC_CF, candidate discovery/sorting, or existing glyph probes.
-Returned provenance still uses the requesting ordinal. The sealed census path
-retains its existing complete pair results and rejects late resolution.
-
-`PreparedFontEnvironment::parse_family_stack` supplies a raw-source parser cache
-for text callers. It returns admitted copies of the retained parsed stack; the
-free parser remains the uncached primitive used during initial census parsing.
-Variable cache lookups charge actual examined entries in the shared processing
-ledger. Retained keys/payloads and returned copies consume record/byte admission,
-without extra hash/copy/materialization prices. Environment clones share the core
-and its caches; nothing is global, and warm hits do not reset or bypass limits.
-
-Prior regression coverage included 1,000 repeated requests after pre-consuming
-900,000 synthetic root work units, with independent parser/normalization/candidate/
-probe counters. That score is historical, not a current processing-visit claim.
-Adding a space probes just that new painting scalar; adding a mandatory newline
-does not probe a glyph. Changing weight builds its candidate metadata once but
-reuses normalized names. A separate sealed-census regression verifies two pair
-resolutions, one stack normalization, and exactly the expected scalar probes.
+Rendered text preserves its original bytes; family-name matching alone uses
+NFKC-casefold. Line breaking retains collapsed-scalar context for numeric prefixes,
+previous nonspace positions and RI parity; grapheme filtering intersects sorted
+boundaries without changing legal opportunities. Actual arithmetic, storage,
+font-coverage and sealed-census failures remain errors. Resource and external-corpus
+publication policies are defined in [development](../../../specs/90_DEVELOPMENT.md).
