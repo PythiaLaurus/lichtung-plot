@@ -10,10 +10,12 @@ specifications, particularly [Theme](03_THEME_SYSTEM.md),
 [property ownership](04_VISUAL_PROPERTY_OWNERSHIP.md) and
 [guides](08_GUIDE_SYSTEM.md).
 
-DF2, DF4, DF5, DF6, DF7, DF8, DF9 and DF10 are pending user disposition. Their checkpoint
-is the next feature-scope discussion **after specification/documentation cleanup
-and before successor implementation planning**. No additional general audit is
-a prerequisite. Discussion itself does not admit or reject a capability.
+DF2, DF4, DF5, DF7, DF8, DF9, DF10 and the residual bounds in DF6 are pending user
+disposition. Their checkpoint is the next feature-scope discussion **after
+specification/documentation cleanup and before their successor implementation
+planning**. DF6's maximum-width/automatic-height subset has been requested for
+bounded implementation planning as described below. No additional general audit
+is a prerequisite. Discussion itself does not admit or reject a capability.
 
 At review, present concrete workflows, unmet requirements, alternatives and
 semantic/performance tradeoffs. Obtain user approval to admit a bounded scope,
@@ -72,9 +74,16 @@ Excluded: maximum width, minimum width/height, maximum height, exact-height/auto
 width and public general constraint objects. Automatic, exact-width/automatic-
 height and exact-pair requests are current.
 
-**Checkpoint:** next feature-scope discussion. Compare real publication-column/
-embedding needs against those three modes, including wrapping, aspect, guides,
-facets/Canvas and strict fit. A general bounds surface is not the presumed outcome.
+**Maximum-width planning:** the user requested a bounded `max_width(u32)` plan for
+Plot and Canvas, including owning facets, with automatic height and a natural
+preferred width capped once. See [the implementation plan](91_IMPLEMENTATION_PLAN.md).
+The API is not implemented. Remove this subset from the deferred scope when its
+plan is approved; update current contracts with the implemented behavior.
+
+**Residual checkpoint:** next feature-scope discussion for the remaining bounds.
+Compare real publication-column/embedding needs against current root modes and
+the proposed width cap, including wrapping, aspect, guides, facets/Canvas and
+strict fit. A general bounds surface is not the presumed outcome.
 
 ## DF7: Sparse Composition Compaction
 
