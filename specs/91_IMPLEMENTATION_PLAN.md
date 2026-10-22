@@ -1,12 +1,71 @@
-# Maximum-Width Root Sizing
+# Canvas Panel Spans And Maximum-Width Root Sizing
 
-## Scope And Target Contract
+## Scope And Target Contracts
 
-Implement `Plot::max_width(u32)` and `Canvas::max_width(u32)` as a fourth root
-sizing mode: a maximum outer CSS-pixel width with content-derived height. The
-owning Plot request also controls its facets. This document is a plan, not evidence
-that the API exists. Current contracts remain in
-[rendering](02_RENDERING_CONTRACT.md) and [layout](05_LAYOUT_SYSTEM.md).
+Implement two requested capabilities through the existing Grid and root lifecycle:
+
+- Explicit rectangular Canvas Plot spans, including a 2x2 Grid with two independent
+  left panels and one right panel spanning both rows.
+- `Plot::max_width(u32)` and `Canvas::max_width(u32)` as a fourth root sizing mode:
+  maximum outer CSS-pixel width with content-derived height. The owning Plot request
+  also controls its facets.
+
+This document is a plan, not evidence that either API exists. Current contracts
+remain in [rendering](02_RENDERING_CONTRACT.md) and [layout](05_LAYOUT_SYSTEM.md).
+
+### Rectangular Canvas Plot Spans
+
+Add this consuming placement method beside the existing single-cell `panel`:
+
+```rust
+pub fn panel_span<K: kind::ExactFamily>(
+    self,
+    row: usize,
+    column: usize,
+    row_span: usize,
+    column_span: usize,
+    plot: Plot<K>,
+) -> Result<Self, Error>
+```
+
+The motivating planned use is:
+
+```rust
+let canvas = Canvas::grid(2, 2)?
+    .panel(0, 0, top_left)?
+    .panel(1, 0, bottom_left)?
+    .panel_span(0, 1, 2, 1, right_tall)?;
+```
+
+The final call gives one Plot the entire right column. Its assigned rectangle
+extends across both row tracks and the intervening gap; its scientific body is
+continuous, with one set of local prose, axes and guides.
+
+Required placement semantics:
+
+- Row/column coordinates remain zero-based. Spans are positive and end at checked
+  exclusive boundaries within the declared Grid. Reject zero, overflow and bounds
+  violations before mutating placement.
+- `panel(row,column,plot)` is the 1x1 placement operation through the same private
+  validation and insertion path. Support row spans, column spans and rectangles.
+- The entire footprint is occupied. Reject overlaps with Plot or TextPanel owners
+  in either insertion order, including a single-cell placement at a covered
+  nonanchor coordinate. Validate the whole footprint before installing its owner.
+- The minimum covered coordinate is the sole owner/anchor. A covered nonanchor
+  slot is occupied, not empty, and never contains a copied Plot or an independent
+  scientific/text producer. Preserve canonical anchor-row-major order.
+- Retain declared rows, columns, gaps and empty/trailing tracks. Placement is
+  explicit; it does not compact or repack the Grid or change root size policy.
+- Preserve Canvas-admissible family restrictions. Matrix and already-faceted
+  Plots remain excluded; native admissible families retain their current route.
+  TextPanels remain single-cell participants in the shared occupancy model.
+- Canvas assigns the complete spanned child geometry. Embedded standalone width,
+  size and future maximum-width requests do not override that assignment.
+
+The separate owner and composition rules below are part of the span feature, not
+optional follow-up work after exposing the setter.
+
+### Maximum-Width Roots
 
 | Request | Width selection | Height |
 | --- | --- | --- |
@@ -46,7 +105,8 @@ Required setter and composition semantics:
   options replay that frozen scene; PNG scaling does not rerun root layout.
 
 This scope does not admit height-only sizing, minimum dimensions, maximum height,
-public generic constraints, geometry-responsive padding or new Canvas topology.
+public generic constraints, nested Canvas objects or implicit topology changes.
+Component-box-responsive spacing is outside this plan.
 Residual root-bound proposals remain in [deferred features](99_DEFERRED_FEATURES.md).
 
 ## Existing Owners And Required Changes
@@ -58,8 +118,84 @@ Residual root-bound proposals remain in [deferred features](99_DEFERRED_FEATURES
 | `src/orchestrator/lifecycle.rs` | Standalone/faceted dispatch and automatic-height selection |
 | `src/layout/interior/sizing.rs` | Unfaceted natural outer-width composition and selected-width height proposal, including native scientific families |
 | `src/orchestrator/facets/sizing.rs`, `src/orchestrator/facets/tracks.rs`, `src/orchestrator/facets/planning.rs` | Owning-root preference, sparse declared facet columns, shared axis titles and width-dependent cell/strip heights |
-| `src/canvas.rs`, `src/canvas/sizing.rs`, `src/canvas/tracks.rs` | Canvas setter, mixed/all-text preferences, headers/spans, Shared/PerPlot guides and content-height measurements |
+| `src/canvas.rs`, `src/canvas/sizing.rs`, `src/canvas/tracks.rs` | Placement/occupancy, owner preparation and capture, span-aware natural/assigned geometry, headers, Shared/PerPlot guides and content-height measurements |
+| `src/canvas/plot_text.rs`, `src/canvas/text_panel.rs`, `src/layout/interior.rs` | Local prose within one owner assignment, TextPanel occupancy and existing child-family restrictions |
 | `src/layout/kernel/feedback.rs`, `src/canvas/dependencies.rs`, `src/decorations/plan/children.rs` | Audit actual request/constraint consumers and operation-local reuse identity |
+
+### Canonical Placement Ownership And Declared Geometry
+
+Replace fixed-slot placement assumptions with one canonical owner record containing
+the payload and validated footprint. Derive occupancy lookup from these records;
+it is not another store of Plot payloads. Migrate existing Plot/TextPanel consumers
+to this model without retaining a legacy placement path. Preparation/theme/domain
+arrays may remain Grid-sized with values only at owner anchors.
+
+Preserve owner addresses as anchor slot indices, not compact insertion ordinals.
+In the motivating 2x2, anchors are slots 0, 1 and 2; slot 3 is covered by owner 1.
+Keep one `CanvasCell` address per owner. Preparation, intrinsic/text census and
+source/guide contributions enumerate each owner once. Child measurement may repeat
+under existing feedback/local-trial rules, never once per covered slot. Retain one
+owner-scoped height consequence and selected plan/capture. Shared guide source
+occurrences must not be duplicated even when visible keys would otherwise merge.
+
+Separate declared-track geometry from owner assignments in `CanvasGridAssignment`.
+Headers/row-title positions currently index first-column `cells`; changing those
+entries to tall owner boxes would corrupt row boundaries. Retain actual row/column
+edges for composition chrome and obtain each owner's full rectangle from the
+covered interval. Covered slots must not become child measurement destinations.
+
+### Span-Aware Grid Measurement And Feedback
+
+Build `GridRequirement` values from each owner's complete footprint. Reuse
+`allocate_grid_axis` and its canonical spanning hard/preferred allocation rules;
+do not divide a Plot's minimum by its span or put the entire minimum into the
+anchor's first track. Columns still precede width-dependent measurement and rows.
+
+Measure local prose, native scientific bodies and PerPlot guides at the full
+assigned span width. An owner's height requirement applies to its entire row
+interval. Derive spanning boxes from actual track boundaries, including internal
+gaps/bands exactly once. Apply the owner's leading/trailing gutter and owned-ink
+requirements at its outer boundaries, without repeated interior padding or an
+internal panel separator. Preserve adjacent single-cell panels' own reservations.
+
+Use the same footprint-aware requirements for natural sizing, exact allocation,
+`complete_cell_gutters`, group alignment and content-height feedback. Replace the
+separate Shared-guide minimum-body calculation in `build_canvas_attempt`, which
+currently puts each Plot's minimum into one row/column, with requirements composed
+under the same span rules. A guide trial cannot reserve space using stale 1x1
+minima and then assign a different spanned body.
+
+Height and child-reuse dependencies include consumed footprint/topology, full
+assigned geometry, outer insets and relevant guide/group feedback. Record one
+height consequence and one selected plan per anchor; equal width alone cannot
+authorize reuse after footprint or assignment changes. Preserve one operation,
+the existing root feedback bound and frozen publication lifecycle.
+
+### Span Interactions With Composition Policies
+
+- **Shared ranges:** coordinate-based `x_range_group` members must name configured
+  Plot anchors. Reject covered nonanchor references rather than treating them as
+  aliases; keep groups declarable before placement and validate resolved ownership
+  during preflight. Shared domains and alignment visit distinct owners once and
+  apply leading/trailing requirements to the relevant footprint boundaries.
+- **Category labels:** `EveryPlot` remains the default. For `FirstColumnPerRow`,
+  all Plot owners participating in a shared row band must cover the same row
+  interval and retain the existing rendered-category compatibility checks. Resolve
+  occupancy to the first-column owner, process the band once, and compare each
+  distinct owner once, including horizontal spans. Preserve the current rejection
+  of missing/non-Plot peers. Reject mismatched vertical intervals before fonts;
+  the motivating tall-right/short-left layout uses `EveryPlot`.
+- **Row titles:** a title band before row `r` cannot cut through an owner with
+  `start_row < r < end_row`. Reject that conflict during structural preflight.
+  Preserve the existing prohibition on conflicting local Plot title/subtitle
+  content for the row's distinct owners. Titles at a span's outer boundary use the
+  declared row geometry, not an anchor's enlarged box.
+- **Headers:** existing external row/column headers retain their declared spans
+  and boundaries, including beside a first-column vertical span. Their geometry
+  does not establish additional Plot owners or split a spanning Plot.
+- **Guides and capture:** PerPlot/Shared/Hidden retain existing semantics. Shared
+  categorical/continuous/alpha sources and prepared font requirements use one
+  contribution per real owner, independent of the number of covered slots.
 
 ### One Mode-Aware Root Request
 
@@ -115,7 +251,39 @@ feedback rather than a second fit algorithm or an extra root operation.
 
 ## Delivery Order
 
-### 1. Make Existing Root Modes Explicit
+Complete the Canvas span-aware allocation path before refactoring its natural
+width selection for the maximum-width mode. Each code-changing step runs its
+affected focused checks and strict Clippy; commit completed logical changes before
+proceeding. Update current contracts with an exposed capability, not ahead of it.
+
+### 1. Make Canvas Ownership And Track Geometry Explicit
+
+Migrate current 1x1 Plot/TextPanel placements to canonical payload/footprint owner
+records and derived occupancy. Preserve anchor IDs through preparation, theme/
+domain inventories, text census, guide contribution, child plans and rendering.
+Separate declared track boundaries from assigned owner rectangles. All existing
+single-cell behavior must continue through this one representation; do not add a
+second span-only pipeline or unused future API.
+
+Validate occupancy, sparse tracks, header/row-title geometry, shared source
+provenance and assigned projections using existing focused witnesses. This step
+is a completed internal migration before exposing multi-cell placement.
+
+### 2. Implement Rectangular Plot Spans End To End
+
+Expose `panel_span` together with checked whole-footprint validation, span-aware
+hard/preferred requirements, full-box child measurement, guide minima and feedback/
+reuse identity. Implement the composition-policy rules above in the same feature.
+Keep single-cell `panel` and TextPanel insertion on the shared occupancy path.
+
+Replace lower-value/obsolete tests with the motivating three-owner layout and
+other span contracts below. Update `specs/01_ARCHITECTURE.md`,
+`specs/02_RENDERING_CONTRACT.md`, `specs/05_LAYOUT_SYSTEM.md`, public API examples
+and `docs/getting-started.md` with implemented placement/ownership behavior.
+Existing root modes must all support spanning owners at this step; maximum-width
+support is added through their shared allocation path later.
+
+### 3. Make Existing Root Modes Explicit
 
 Replace the optional-pair request representation and coordinator signature for the
 three existing modes first. Migrate all production and test callers, embedded
@@ -127,18 +295,19 @@ replacement, zero preflight, width locking and one prepare/capture lifecycle wit
 the focused checks below. Commit the completed representation change after those
 checks and strict Clippy pass.
 
-### 2. Separate Natural Width Composition From Height Work
+### 4. Separate Natural Width Composition From Height Work
 
-Factor the necessary width-first paths in Plot, facets and Canvas while retaining
-their current three-mode behavior. Use the same column summaries/allocator for
-natural and assigned dimensions, including headers, row-header bands, shared axis
-gutters, local Plot prose and guide preferences. Avoid a generic new layout DSL.
+Factor the necessary width-first paths in Plot, facets and the now span-aware
+Canvas while retaining their current three-mode behavior. Use the same column
+summaries/allocator for natural and assigned dimensions, including Plot footprints,
+headers, row-header bands, shared axis gutters, local Plot prose and guide
+preferences. Avoid a generic new layout DSL.
 
 Validate current-mode semantic equivalence, sparse facet/Canvas topology,
 unbreakable text requirements, native Matrix sizing and mixed/all-text Canvas
 height measurement. Commit this refactoring after focused tests and strict Clippy.
 
-### 3. Add And Document Maximum Width End To End
+### 5. Add And Document Maximum Width End To End
 
 Add MaxWidth to the single request representation and expose both consuming
 `#[must_use]` setters, following the existing `pub const fn` builder style. Apply
@@ -155,7 +324,42 @@ feature after focused verification and strict Clippy.
 
 ## Verification And Acceptance
 
-### Behavioral Relationships
+### Canvas Span Relationships
+
+Use independently meaningful requirements and geometric relationships, without
+pinning automatic row sizes or internal placement coordinates:
+
+1. **Motivating layout:** a 2x2 with two left owners and one right owner spanning
+   both rows. The right owner receives the full covered rectangle, with continuous
+   body/clip geometry and no gap through its interior; all three sources/prose
+   appear exactly once. Verify owner-specific preparation/capture evidence rather
+   than relying only on SVG ID uniqueness or visible-key deduplication.
+2. **Other rectangles:** the transposed three-owner layout exercises column spans;
+   a small multirow/multicolumn footprint exercises both directions together.
+   Assert containment, nonoverlap and agreement with declared track boundaries.
+3. **Whole-footprint occupancy:** reject zero spans, checked endpoint overflow,
+   out-of-bounds and overlap with Plot/TextPanel owners in both placement orders.
+   A covered nonanchor coordinate is occupied. Invalid placement must not reach
+   font/backend work or create partial output.
+4. **Natural and assigned sizing:** run representative spans through natural,
+   exact-width/automatic-height and exact-pair roots. Preserve required local prose,
+   axes/guides and native-family content; embedded standalone requests stay ignored.
+   Keep empty/trailing declared tracks and prevent hard-minimum violations.
+5. **Composition policies:** verify anchor-only range-group references, compatible
+   same-row-band category sharing, rejection of mixed vertical footprints, row-title
+   conflicts inside spans and correct headers beside first-column spans. Retain
+   unit-cell category/row-title behavior without covered-slot aliases.
+6. **Guides and lifecycle:** representative Shared categorical/alpha and continuous
+   sources retain their true occurrence counts and domains. Guide-space trials use
+   spanning minima. Full-span width/geometry or relevant parent feedback invalidates
+   the affected height/child plan; unchanged sibling owners retain valid reuse.
+7. **Publication:** same-Output replay equality, source-sized PNG dimensions and
+   explicit raster scaling follow the frozen composed scene with one root capture.
+8. **Combined cap:** after maximum width is implemented, cap the motivating layout
+   and assert the entire root bound, complete sources, retained occupancy and
+   containment. Use one representative combined witness, not a new family matrix.
+
+### Maximum-Width Relationships
 
 Use a bounded selection of meaningful contracts, not a new all-family x root x
 output matrix:
@@ -179,9 +383,9 @@ output matrix:
    setter/getter echoes.
 6. **Root coverage:** representative standalone coordinate, native Matrix and one
    width-sensitive native guide route; owning sparse/wrapped facets with multiline
-   shared axis titles; mixed Canvas with spanning headers and Shared/PerPlot guide
-   consumption; all-text Canvas. Verify root bounds and complete sources without
-   changing declared topology.
+   shared axis titles; mixed Canvas with spanning Plot owners/headers and
+   Shared/PerPlot guide consumption; all-text Canvas. Verify root bounds and
+   complete sources without changing declared topology.
 7. **Embedded requests:** Canvas allocation ignores child standalone maximum-width
    requests, including zero; compare with the equivalent child without that request.
 8. **Lifecycle and outputs:** retain one scientific/font preparation, selected
@@ -191,13 +395,19 @@ output matrix:
 
 Keep tests in their existing logical owners:
 
+- `src/layout/kernel/tracks.rs`: canonical span hard/preferred allocation and
+  declared sparse-track relationships, distinct from placement-overlap rejection.
 - `src/layout/kernel/tests.rs`: modes, invalid requests, bounds, quantization,
   selected-width locking, convergence and capture boundaries.
 - `src/layout/interior/sizing.rs` and `src/canvas/sizing/tests.rs`: width-first
   preference/height dependencies where private behavior needs direct evidence.
-- `src/orchestrator/tests/lifecycle.rs`: early zero refusal and one frozen lifecycle.
+- `src/canvas/lifecycle_tests.rs`, `src/orchestrator/tests/lifecycle.rs`: unique
+  source/prose/guide ownership, assigned projection, early refusal and one lifecycle.
 - `tests/layout/root_sizing.rs`: externally compiled sizing, complete sources,
   representative root owners and SVG/PNG publication relationships.
+- `tests/composition/canvases.rs`, `tests/rendering/contract.rs`,
+  `tests/output/multiformat.rs`: public placement/occupancy, headers/category/range
+  policies, shared continuous guides and frozen publication.
 
 Record same-platform discovered library counts before and after each test-changing
 step. Current Linux ceiling is 671 including 17 ignored; each new unit-test function
@@ -212,6 +422,16 @@ nonzero execution. If a named test is deliberately replaced, use its replacement
 filter. Do not claim discovery as behavioral execution.
 
 ```sh
+cargo test --locked --offline --lib overlapping_spans_are_canonical_and_infeasible_total_misses
+cargo test --locked --offline --lib declared_sparse_tracks_remain_noncollapsing_while_empty_slots_stay_zero
+cargo test --locked --offline --lib canvas_gutter_remeasurement_uses_the_assigned_projection
+cargo test --locked --offline --lib shared_composition_uses_parent_policy_in_both_source_orders
+cargo test --locked --offline --test rendering contract::canvas_text_cells_enforce_occupancy_and_fitting
+cargo test --locked --offline --test composition canvases::continuous_shared_heatmaps_draw_one_merged_guide_without_local_colorbars
+cargo test --locked --offline --test composition canvases::composed_row_title_spans_all_columns_and_rejects_panel_titles
+cargo test --locked --offline --test composition canvases::composed_horizontal_bars_support_shared_headers_labels_and_range_groups
+cargo test --locked --offline --test composition canvases::shared_category_labels_compare_rendered_explicit_orders
+cargo test --locked --offline --test output multiformat::plot_and_canvas_svg_operations_keep_complete_text_and_call_local_replay
 cargo test --locked --offline --lib layout::kernel::tests::
 cargo test --locked --offline --lib layout::interior::sizing::tests::
 cargo test --locked --offline --lib canvas::sizing::tests::
@@ -230,14 +450,15 @@ just fmt-check
 just lint
 ```
 
-Run the newly written/replacement maximum-width witnesses as well as affected
-existing callers; the commands above are not substitutes for new-contract coverage.
+Run the newly written/replacement span and maximum-width witnesses as well as
+affected existing callers; the commands above are not substitutes for new-contract
+coverage.
 Select existing guide/cache neighbors only when their dependency paths change or
 a failure exposes an interaction. Execute affected public doctests and `just docs`
 when adding API documentation/examples. Do not run the heavyweight large-SVG/PNG
 boundary workloads merely because they share the root-sizing test file.
 
-No automatic full-suite gate is required for this bounded feature. Expand beyond
+No automatic full-suite gate is required for these bounded features. Expand beyond
 the focused set only for a demonstrated uncovered invariant or an explicit request,
 following [development](90_DEVELOPMENT.md). Documentation-only planning requires
 source/reference consistency and `git diff --check`, not compiler/test execution.

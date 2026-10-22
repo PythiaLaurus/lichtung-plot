@@ -92,6 +92,11 @@ slots. Natural content sizing does not change declared topology. Empty Cartesian
 combinations can carry scientific meaning; hand-authored Canvas can declare a
 compact shape explicitly.
 
+Explicit rectangular Canvas Plot spans are requested for separate bounded planning
+in [the implementation plan](91_IMPLEMENTATION_PLAN.md). They retain caller-declared
+rows/columns and one owner per placed Plot. This planned capability is not automatic
+compaction or observed-cell repacking and does not admit the excluded scope here.
+
 **Checkpoint:** next feature-scope discussion. Assess removing wholly empty tracks
 separately from occupied-cell repacking/observed-combination galleries. Specify
 source/destination identity, occupancy, metadata-only tracks, spans, row titles,
