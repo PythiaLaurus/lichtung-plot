@@ -10,12 +10,13 @@ specifications, particularly [Theme](03_THEME_SYSTEM.md),
 [property ownership](04_VISUAL_PROPERTY_OWNERSHIP.md) and
 [guides](08_GUIDE_SYSTEM.md).
 
-DF2, DF4, DF5, DF7, DF8, DF9, DF10 and the residual bounds in DF6 are pending user
+DF2, DF4, DF7, DF8, DF9, DF10 and the residual scopes in DF5/DF6 are pending user
 disposition. Their checkpoint is the next feature-scope discussion **after
 specification/documentation cleanup and before their successor implementation
-planning**. DF6's maximum-width/automatic-height subset has been requested for
-bounded implementation planning as described below. No additional general audit
-is a prerequisite. Discussion itself does not admit or reject a capability.
+planning**. Unified text controls, explicit categorical-label angles and
+maximum-width/automatic-height sizing have been requested for bounded planning
+as described below. No additional general audit is a prerequisite. Discussion
+itself does not admit or reject a capability.
 
 At review, present concrete workflows, unmet requirements, alternatives and
 semantic/performance tradeoffs. Obtain user approval to admit a bounded scope,
@@ -56,17 +57,33 @@ bounded source/planning route.
 
 ## DF5: Broader Text Layout Controls
 
-Excluded: TextPanel title/body horizontal alignment, categorical-axis directions,
-general role anchoring/alignment, arbitrary rotation, emergency identifier breaks,
-general ellipsis and automatic font shrink. Complete role typography, Plot heading
-instructions, Canvas panel defaults, independent captions, strict legal wrapping
-and explicit Heatmap Wrap/Elide are current.
+Current: complete role typography, Plot heading instructions, Canvas panel defaults,
+independent captions, shared Unicode legal wrapping and explicit Heatmap Wrap/Elide.
+Public `Labels::humanized()` is the existing default policy for inferred names;
+the single-string resolver is private. Display-input validation and local styling/
+alignment are not yet consistent across authored text slots.
 
-**Checkpoint:** next feature-scope discussion. Evaluate TextPanel alignment,
-bounded category orientation and opt-in identifier breaking as distinct candidates.
-Assess source preservation, physical versus bidi-logical meaning, actual ink,
-readability, exact dependency identity and frozen formats. General ellipsis/shrink
-must not be implied by a small admitted subset or relax default strict wrapping.
+**Requested planning:** unify authored plain-text input, explicit newlines, local
+complete typography and horizontal alignment, including independent TextPanel
+title/body controls. Expose single-string label resolution while preserving the
+existing default humanization and Raw/alias precedence. Add caller-selected
+categorical-label rotation with both presets and custom angles through one
+measurement/rendering route. See [the implementation plan](91_IMPLEMENTATION_PLAN.md).
+These APIs are not implementation evidence; update the current contracts when
+implemented and remove admitted scope here when its plan is approved.
+
+Emergency word/identifier/grapheme splitting and caller-specified internal-break
+rules are rejected, rather than deferred candidates. Preserve ordinary Unicode
+wrapping and caller-authored breaks. Unbroken explicit/raw names stay intact when
+space is insufficient; default inferred-name humanization is preparation, never
+a fit alternative. The lasting boundary is in [layout](05_LAYOUT_SYSTEM.md).
+
+**Residual checkpoint:** next feature-scope discussion for general anchoring,
+rotation beyond categorical labels, general ellipsis and automatic font shrink.
+Evaluate these separately from the requested common text/alignment/rotation scope,
+with concrete workflows, source preservation, physical versus bidi-logical meaning,
+actual ink and frozen output. A local
+extension must not imply automatic fit-driven angle selection or truncation.
 
 ## DF6: Broader Root Bounds
 

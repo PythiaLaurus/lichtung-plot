@@ -249,6 +249,13 @@ Legal endpoints are UAX#14 opportunities between UAX#29 graphemes plus paragraph
 end. No proposal crosses mandatory breaks. No emergency identifier/grapheme split,
 fit-driven rotation, font shrink, omission or general ellipsis is allowed.
 
+Unbroken words/identifiers remain intact regardless of assigned width; even a
+short technical name such as `LightGBM` is not internally split to fit a compact
+cell. Callers choose explicit mandatory breaks or prepare display labels before
+layout. Label humanization is a content-preparation policy independent of width,
+not a response to fit failure. No additional internal-break rule or automatic
+rotation-versus-word-splitting policy is provided.
+
 ### Intrinsics And Constrained Wrapping
 
 Shape each full paragraph once plus maximal sequences with no legal internal

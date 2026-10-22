@@ -1,16 +1,21 @@
-# Canvas Panel Spans And Maximum-Width Root Sizing
+# Unified Text, Canvas Panel Spans And Maximum-Width Root Sizing
 
 ## Scope And Target Contracts
 
-Implement two requested capabilities through the existing Grid and root lifecycle:
+Implement the requested capabilities through the existing text, Grid and root
+lifecycle:
 
+- Consistent plain-text inputs, complete instance typography and horizontal
+  alignment, including independently configured TextPanel title/body text.
+- Caller-selected categorical tick-label rotation, with presets and custom angles
+  using one measurement/rendering path, plus public single-label presentation.
 - Explicit rectangular Canvas Plot spans, including a 2x2 Grid with two independent
   left panels and one right panel spanning both rows.
 - `Plot::max_width(u32)` and `Canvas::max_width(u32)` as a fourth root sizing mode:
   maximum outer CSS-pixel width with content-derived height. The owning Plot request
   also controls its facets.
 
-This document is a plan, not evidence that either API exists. Current contracts
+This document is a plan, not evidence that these APIs exist. Current contracts
 remain in [rendering](02_RENDERING_CONTRACT.md) and [layout](05_LAYOUT_SYSTEM.md).
 
 ### Rectangular Canvas Plot Spans
@@ -110,6 +115,9 @@ Component-box-responsive spacing is outside this plan.
 Residual root-bound proposals remain in [deferred features](99_DEFERRED_FEATURES.md).
 
 ## Existing Owners And Required Changes
+
+The tables and details here cover Canvas/root sizing. The text consolidation and
+rotation requirements and their owners are specified in the following section.
 
 | Owner | Responsibility |
 | --- | --- |
@@ -249,14 +257,226 @@ Heatmap, Beeswarm, Waterfall, Matrix and Marginal native sizing routes. After wi
 selection, use the current exact-width/automatic-height machinery and named
 feedback rather than a second fit algorithm or an extra root operation.
 
+## Unified Text And Explicit Category-Label Rotation
+
+### Confirmed Text Boundaries
+
+Keep ordinary Unicode legal wrapping and caller-authored mandatory line breaks.
+Do not introduce emergency word/identifier/grapheme splitting or a caller-supplied
+internal-break rule. A name such as `LightGBM` must remain intact when passed as
+explicit or raw display text, even when a narrow allocation cannot fit it.
+
+Keep the current default `Labels::humanized()` for automatically sourced names.
+Explicit title/axis-label/TextPanel strings remain verbatim. Humanization changes
+display text during label preparation, independently of fit; it is never invoked
+because a string failed to fit. Preserve `Labels::raw()`, alias precedence, raw
+scientific identities and domain-level display-collision checks.
+
+Rotation is always a caller instruction. Omission retains the existing direction.
+Do not search for an angle or select between rotation and additional word breaks.
+The caller can combine explicit rotation, manually inserted newlines and ordinary
+legal wrapping. Required labels still fit completely or produce a typed fit miss;
+existing explicit Heatmap Wrap/Elide semantics retain their own owner.
+
+### One Plain-Text Content Contract
+
+Put shared display-text validation in the existing Rust module structure, with
+one private owner such as `src/text.rs`. All displayed strings use the same Unicode
+control and mandatory-break rules before entering the existing shaping/wrapping
+engine. In particular:
+
+- Accept `\n`, CRLF and the engine's supported mandatory separators consistently.
+  Treat CRLF as one break. Preserve leading, interior and trailing blank lines and
+  caller whitespace; neither trim nor humanize explicitly supplied display text.
+- Preserve an explicitly present empty text value and its engine-defined empty
+  line metrics. Absence remains an owner-level `None` or explicit visibility policy,
+  not an accidental result of trimming. Preserve exact-tick empty-label semantics:
+  an empty label suppresses its text/gap while retaining the scientific position.
+- Continue to reject unsupported controls such as tabs according to the common
+  engine contract. Do not add a tab-expansion or platform-dependent policy.
+- Replace independent `char::is_control`/single-line/trim checks on free-form display
+  content with the shared validator. Fallible constructors may validate earlier,
+  but the accepted content is the same as preflight-validated builder inputs.
+- Keep raw category/series/field keys, font-family names, target identities, paths
+  and NumericFormat grammar under their semantic validators. Display aliases are
+  distinct from those keys and accept the common display-text syntax.
+
+Apply the contract to Plot/Canvas prose, x/y axis titles, TextPanel title/body,
+Canvas headers/row titles, exact tick display labels, label aliases, guide display
+text and caller-authored panel/point-label text. Remove the current multiline
+prohibition on `PanelTextAnnotation` display content and fit its complete block at
+the existing corner. Keep its corner ownership and existing family/facet policy.
+Audit other named display labels by semantic use rather than relaxing every
+string validator in the repository.
+
+### Common Authored Text And Style Resolution
+
+Expose one crate-root `Text` value through a private implementation module:
+
+- It retains one source string, an optional complete exact `TextTheme`, and an
+  optional horizontal `TextAlignment` instruction.
+- Plain `String`/`&str` convert into this same representation without local style
+  instructions. Relevant free-form setters/constructors accept `impl Into<Text>`;
+  strings are the ergonomic ordinary input to one implementation route.
+- `Text::new(...)`, `with_style(TextTheme)` and `with_alignment(TextAlignment)`
+  give x/y titles, prose and TextPanel content the same typed construction model.
+  TextPanel title/body remain separate Text values and can be styled independently.
+- Reuse the complete `TextTheme` for stack, RGBA, positive CSS font size, closed
+  weight and positive line-height multiplier. Existing `with_font_size`,
+  `with_weight`, `with_color`, `with_stack` and `with_line_height` remain the edits
+  on that one appearance type. An exact style replaces the complete role; do not
+  introduce a parallel sparse font-style cascade or a backend-style public API.
+- Replace public `TitleAlignment` with shared `TextAlignment` and migrate all
+  repository callers. Start/Center/End retain physical left/center/right meaning,
+  including for RTL text. Remove the old type/export rather than adding an alias.
+- Authored prose, x/y titles, TextPanel, headers/row titles and panel annotations
+  accept the common instance value. Exact tick labels and automatic/generated
+  text use common content validation and their existing role styles; this change
+  does not create per-generated-value styling callbacks or a rich-text parser.
+
+Each text-bearing slot retains source and local instructions once. Existing
+heading-alignment convenience setters edit that slot's one alignment instruction;
+they do not create a second precedence channel. Preserve content-only setter
+behavior: a string replacement does not erase an explicit heading alignment.
+Supplied Text attributes and convenience edits use latest explicit instruction
+for the same property; an exact appearance edit replaces the whole exact style.
+Theme attachment order remains independent of these local instructions.
+
+Style resolution is local exact style over the selected owner's complete Theme
+role. Resolve before font census and measurement; omitted appearance uses the
+existing Plot/Canvas ownership and role defaults. Existing Canvas panel heading
+defaults remain below explicit child instructions. TextPanel alignments default
+to Start independently. X and Y titles can now have distinct local styles despite
+sharing the Theme axis-title default.
+
+Both block placement and every line consume the selected alignment over the
+post-inset width. For a vertical axis title, alignment is along the title's logical
+line before its fixed axis transform. Container padding, anchoring and scientific
+projection remain parent geometry. Font-dependent spacing consumes its declared
+role's final selected metric: a local title size changes its title clearance,
+while root padding still uses the root owner's body metric. Do not resolve gaps
+against stale Theme font sizes after selecting an exact style.
+
+Prepared text requirements must enumerate actual selected stacks/weights and
+source text, including local styles. Intrinsics, constrained measurement, guide
+compatibility, height caches, child reuse and frozen drawing consume the same
+resolved inputs and alignment. Preserve actual ink/leading and complete equality;
+equal strings or dimensions alone do not authorize reuse.
+
+### Public Single-Label Presentation
+
+Promote the existing `Labels::resolve(&self, raw: &str) -> Result<String, Error>`
+to a documented public method and reuse its current implementation. This gives
+`Labels::humanized().resolve("long_sample_name")?` to explicit-text callers and
+also honors Raw/aliases through the same policy. Do not introduce a second public
+humanizer or copy the tokenizer. Document that it may change case/separators and
+acronyms, returns ordinary display text, and never inserts fit-dependent breaks.
+The single-label method has no domain collision context; `resolve_domain` remains
+responsible for detecting collisions among distinct raw identities.
+
+### Preset And Custom Rotation Through One Value
+
+Expose one validated `TextRotation` value with horizontal, upward/downward 45-degree
+tilts and upward/downward vertical presets, plus `degrees(f64) -> Result<Self>`.
+Factories can present enum-like named choices, but their retained result is one
+canonical angle. Preset 45 degrees and custom 45 degrees have identical geometry
+and cache identity. Reject nonfinite inputs, normalize full turns/signed zero and
+apply the existing canonical angle precision before fit measurement.
+
+Angles are degrees from physical horizontal in the top-down output frame, positive
+clockwise. The upward/downward tilt presets are -45/+45, vertical presets -90/+90
+and horizontal 0. Normalize equivalent turns to a single range before rounding,
+with one representative for the half-turn endpoint and zero.
+
+The current canonical text output stores tenths of a degree in
+`src/render/coordinates.rs`. Retain and document that precision for custom input,
+including its existing rounding rule, and use that canonical value throughout
+measurement, collision, capture, SVG text, outlined paths and PNG. Do not measure
+at the original angle and round only during output. Keep exact quadrantal
+transforms and a shared sine/cosine operand for other angles so geometry and
+outlined rendering cannot disagree at the same frozen angle.
+
+Add `x_category_label_rotation`/`y_category_label_rotation` Plot instructions with
+sealed axis-specific capabilities based on actual categorical axes. Do not use
+`kind::CategoricalScale`, which describes color scales. X-side families are
+Interaction, Heatmap, Bar, StackedBar, Boxplot, Violin and Raincloud. Y-side families
+are PointInterval, Coefficient, Forest, Dumbbell, Heatmap, HorizontalBar,
+StackedHorizontalBar, Beeswarm and Waterfall. Matrix variable titles are not
+categorical ticks and do not acquire these setters. Preserve capability state
+through erasure, owning facets and Canvas child preparation.
+
+Measure at the caller-selected angle from the start. The current label path checks
+an unrotated plan against one axis-parallel capacity; changing only the final SVG
+transform would reject useful tilts or accept overflowing labels. Extend the
+common label-cell measurement to account for transformed logical extents and
+outward ink in both parallel and perpendicular directions. For an unrotated
+rectangle `(w,h)`, its transformed axis-aligned extents are
+`(|cos|*w+|sin|*h, |sin|*w+|cos|*h)`; include the actual anchor, per-line ink,
+baselines and required cell clearance rather than using this rectangle alone.
+
+Try intact explicit paragraphs at the fixed angle first. Where ordinary legal
+wrapping is needed, select an owner-defined deterministic inline capacity and
+validate the resulting complete rotated plan against its assigned cell/outer
+region. Retain the existing immutable-plan/typed-miss protocol; no search over
+angles, arbitrary word splits, root widths or all wrap partitions is introduced.
+Unbreakable text can fit through rotation without first fitting the horizontal
+cell width. If the selected policy still cannot contain it, return a fit miss.
+
+Feed actual transformed perpendicular thickness and endpoint overhangs into the
+existing axis-gutter/owned-ink feedback. Preserve tick positions, semantic order,
+all category members and linked scientific projections. Update natural preferences
+and specialized assigned-width producers, including Heatmap Wrap/Elide and the
+Beeswarm/Waterfall `assigned_tick_width` routes. Explicit Heatmap elision uses the
+same selected angle; it must not be activated as an automatic escape elsewhere.
+The number of root rounds and local guide alternatives remains unchanged.
+
+### Text Implementation Owners
+
+| Owner | Change |
+| --- | --- |
+| `src/text.rs` (new private module), `src/lib.rs`, `src/labels.rs` | Shared authored text/content validation, alignment/rotation values, deliberate root exports and public single-label resolution |
+| `src/theme/resolved.rs`, `src/theme/typography.rs`, `src/theme/composition.rs`, `src/theme/axis.rs` | Reused complete appearance, selected local metrics, common alignment and resolved text inputs |
+| `src/builder.rs`, `src/builder/configuration.rs`, `src/builder/accessors.rs`, `src/builder/facets.rs`, `src/kind.rs` | One text slot/instruction representation, exact axis capabilities, erasure/attachment and dependency identity |
+| `src/canvas.rs`, `src/canvas/text_panel.rs`, `src/canvas/plot_text.rs`, `src/decorations/title_block/plan.rs` | Authored content, independent TextPanel alignment/styles, preserved explicit breaks and width-dependent reserves |
+| `src/layout/text.rs`, `src/layout/text/requirements.rs`, `src/font/canonical.rs`, `src/layout/fit.rs` | Common engine reuse, selected-font census and coherent intrinsic/constrained input identity |
+| `src/layout/panel.rs`, `src/layout/panel/cells.rs`, `src/layout/panel/axis_frame_grid.rs`, `src/layout/interior/sizing.rs` | Complete text on axes, fixed-angle capacity/anchor/gutter/ink measurement and natural preferences |
+| `src/orchestrator/facets/planning.rs`, `src/orchestrator/facets/sizing.rs`, `src/canvas/sizing.rs`, `src/canvas/tracks.rs` | Shared/local title styles, spanning assignments and width-first content dependencies |
+| `src/plots/heatmap.rs`, `src/plots/beeswarm.rs`, `src/plots/waterfall.rs`, `src/spec.rs`, `src/labels.rs` | Native categorical routes and display-versus-identity validation |
+| `src/render/coordinates.rs`, `src/render/geometry.rs`, `src/render/primitives.rs`, `src/render/svg_backend.rs`, `src/orchestrator/backend.rs` | One canonical text angle/transform and frozen text/outline/raster replay |
+
 ## Delivery Order
 
-Complete the Canvas span-aware allocation path before refactoring its natural
-width selection for the maximum-width mode. Each code-changing step runs its
-affected focused checks and strict Clippy; commit completed logical changes before
-proceeding. Update current contracts with an exposed capability, not ahead of it.
+Consolidate text inputs/styles before migrating Canvas ownership, so the new owner
+records retain the final text representation. Complete spans and fixed-angle label
+measurement before refactoring natural width for the cap. Each code-changing step
+runs affected focused checks and strict Clippy; commit completed logical changes
+before proceeding. Update current contracts with an exposed capability, not ahead
+of it. Proposed Text/rotation API spelling is reviewed with its implementation;
+the behavioral requirements above are the acceptance boundary.
 
-### 1. Make Canvas Ownership And Track Geometry Explicit
+### 1. Unify Display-Text Validation And Expose Label Resolution
+
+Apply one shared content validator to free-form display slots, retaining source
+whitespace and explicit mandatory breaks. Remove accidental multiline rejection
+from TextPanel/headers/panel notes while preserving semantic key validators and
+explicit empty-tick behavior. Expose the existing label resolver and retain default
+humanization, Raw/alias precedence and domain collision detection. Replace obsolete
+input-refusal tests with shared-input preservation/real-control rejection witnesses.
+Update current display-input contracts and user examples with this implemented
+behavior in the same change.
+
+### 2. Consolidate Authored Text, Styles And Alignment
+
+Introduce the common Text value, migrate receiving slots and replace TitleAlignment
+with TextAlignment across repository callers. Resolve exact appearance/alignment
+once before the font census, including selected local spacing metrics. Complete
+independent TextPanel title/body alignment and x/y title styling through the shared
+engine, with one representation behind strings and styled input. Update specs
+01 through 05 where their text/ownership contracts change and the existing theme/
+getting-started guides. Verify inherited/local precedence, used-font completeness,
+width-dependent height, actual ink and frozen replay before committing.
+
+### 3. Make Canvas Ownership And Track Geometry Explicit
 
 Migrate current 1x1 Plot/TextPanel placements to canonical payload/footprint owner
 records and derived occupancy. Preserve anchor IDs through preparation, theme/
@@ -269,7 +489,7 @@ Validate occupancy, sparse tracks, header/row-title geometry, shared source
 provenance and assigned projections using existing focused witnesses. This step
 is a completed internal migration before exposing multi-cell placement.
 
-### 2. Implement Rectangular Plot Spans End To End
+### 4. Implement Rectangular Plot Spans End To End
 
 Expose `panel_span` together with checked whole-footprint validation, span-aware
 hard/preferred requirements, full-box child measurement, guide minima and feedback/
@@ -283,7 +503,17 @@ and `docs/getting-started.md` with implemented placement/ownership behavior.
 Existing root modes must all support spanning owners at this step; maximum-width
 support is added through their shared allocation path later.
 
-### 3. Make Existing Root Modes Explicit
+### 5. Add Explicit Category-Label Rotation
+
+Implement the one validated preset/custom-angle value, sealed x/y instructions
+and canonicalization before measurement. Extend label-cell fit, transformed
+gutters and native width producers at the selected fixed angle; reuse the same
+transform operands through capture and all output modes. Verify no default angle
+change or automatic split/drop, preset/custom equivalence, nonquadrantal actual
+ink containment, explicit multiline labels and relevant Canvas/facet/native routes.
+Document the API, sign convention and canonical precision with implemented behavior.
+
+### 6. Make Existing Root Modes Explicit
 
 Replace the optional-pair request representation and coordinator signature for the
 three existing modes first. Migrate all production and test callers, embedded
@@ -295,7 +525,7 @@ replacement, zero preflight, width locking and one prepare/capture lifecycle wit
 the focused checks below. Commit the completed representation change after those
 checks and strict Clippy pass.
 
-### 4. Separate Natural Width Composition From Height Work
+### 7. Separate Natural Width Composition From Height Work
 
 Factor the necessary width-first paths in Plot, facets and the now span-aware
 Canvas while retaining their current three-mode behavior. Use the same column
@@ -307,7 +537,7 @@ Validate current-mode semantic equivalence, sparse facet/Canvas topology,
 unbreakable text requirements, native Matrix sizing and mixed/all-text Canvas
 height measurement. Commit this refactoring after focused tests and strict Clippy.
 
-### 5. Add And Document Maximum Width End To End
+### 8. Add And Document Maximum Width End To End
 
 Add MaxWidth to the single request representation and expose both consuming
 `#[must_use]` setters, following the existing `pub const fn` builder style. Apply
@@ -323,6 +553,42 @@ approved; preserve the remaining root-bound discussion. Commit the completed
 feature after focused verification and strict Clippy.
 
 ## Verification And Acceptance
+
+### Text And Rotation Relationships
+
+1. **Common source syntax:** the same explicit text with newlines, CRLF, blank lines
+   and whitespace is accepted by x/y titles, TextPanel, prose and headers, with
+   preserved source and real line metrics. Validate shared shaping/line content
+   rather than comparing their intentionally different default placements/styles.
+   Replace the panel-note test that rejects all multiline/untrimmed text.
+2. **Complete local styles:** choose different x/y-title and TextPanel title/body
+   stacks/sizes/weights/colors/leading, retaining unrelated Theme roles. Selected
+   custom fonts are included before preparation is sealed; unused fonts remain
+   unnecessary. Font-relative gaps and height consequences use selected metrics.
+3. **Alignment and precedence:** independent Start/Center/End for title/body,
+   multiline line placement, physical meaning with RTL text, inherited owner Theme,
+   local exact appearance and existing heading convenience edits. Verify source
+   completeness, containment and frozen replay without whole-scene snapshots.
+4. **Label presentation:** direct `Labels::resolve` and the automatic path agree
+   for existing humanization, Raw and aliases; default humanization is unchanged.
+   Explicit/raw `LightGBM` remains intact, independently of width, and a too-narrow
+   exact allocation refuses it rather than inventing internal breaks. Public
+   resolution returns ordinary text and domain collisions are still rejected.
+5. **Fixed-angle equivalence:** presets and equal custom angles normalize to the
+   same value and actual geometry. Exercise both signs, quarter turns, a custom
+   angle such as 30 degrees, fractional rounding/full-turn/signed-zero boundaries
+   and nonfinite rejection. Use independent transformed-corner/containment oracles,
+   not the production measurement function as its own expected result.
+6. **Useful tilts and strict fit:** a long categorical label that cannot fit
+   horizontally can fit at its explicitly selected angle; all labels/positions
+   remain. Check transformed outward ink and logical clearance, including explicit
+   multiline labels and a genuine nonfit. Omission still fails intact rather than
+   choosing an angle, changing font size or splitting `LightGBM`.
+7. **Affected owners and output:** representative x-category, y-category and native
+   Heatmap/Beeswarm routes, a facet, a Canvas spanning child and one capped root.
+   Retain shared-axis alignment, exact geometry dependency identity, one capture
+   and same-Output replay. Text-preserving SVG, outlines and PNG use the same
+   canonical rotation and complete content. Avoid mechanical family cross-products.
 
 ### Canvas Span Relationships
 
@@ -395,6 +661,10 @@ output matrix:
 
 Keep tests in their existing logical owners:
 
+- `src/layout/text.rs`, `src/theme/typography/tests.rs`,
+  `src/layout/panel/axis_frame_grid/tests.rs`, `src/render/geometry.rs`,
+  `src/orchestrator/backend.rs`: mandatory breaks/spacing, selected metrics,
+  fixed-angle cell/ink constraints and canonical frozen transforms.
 - `src/layout/kernel/tracks.rs`: canonical span hard/preferred allocation and
   declared sparse-track relationships, distinct from placement-overlap rejection.
 - `src/layout/kernel/tests.rs`: modes, invalid requests, bounds, quantization,
@@ -408,6 +678,9 @@ Keep tests in their existing logical owners:
 - `tests/composition/canvases.rs`, `tests/rendering/contract.rs`,
   `tests/output/multiformat.rs`: public placement/occupancy, headers/category/range
   policies, shared continuous guides and frozen publication.
+- `tests/rendering/labels.rs`, `tests/annotations/panel_text.rs`,
+  `tests/composition/foundations.rs`: existing label policy/defaults, multiline
+  authored notes and used-font/local-style contracts.
 
 Record same-platform discovered library counts before and after each test-changing
 step. Current Linux ceiling is 671 including 17 ignored; each new unit-test function
@@ -422,6 +695,19 @@ nonzero execution. If a named test is deliberately replaced, use its replacement
 filter. Do not claim discovery as behavioral execution.
 
 ```sh
+cargo test --locked --offline --lib mandatory_breaks_preserve_crlf_and_all_blank_paragraphs
+cargo test --locked --offline --lib whitespace_is_preserved_and_contributes_logical_advance_not_ink
+cargo test --locked --offline --lib heading_instructions_are_role_local_order_independent_and_frozen
+cargo test --locked --offline --lib unbreakable_category_fails_intact_and_cannot_rotate_or_drop
+cargo test --locked --offline --lib parent_width_keeps_natural_category_text_or_wraps_only_at_legal_boundaries
+cargo test --locked --offline --lib canonical_label_fit_accepts_touching_ink_and_rejects_one_quantum_beyond
+cargo test --locked --offline --lib frozen_text_and_brackets_never_relayout_or_convert_during_count_replay_and_outline
+cargo test --locked --offline --test rendering labels::direct_plot_humanizes_axes_categories_legend_title_and_entries
+cargo test --locked --offline --test rendering labels::raw_mode_preserves_automatic_identity_text
+cargo test --locked --offline --test rendering labels::ambiguous_display_labels_fail_during_preflight
+cargo test --locked --offline --test annotations panel_text::panel_text_renders_in_named_clipped_layer_with_theme_style_and_corner_anchors
+cargo test --locked --offline --test composition canvases::text_panel_content_stays_top_left_when_its_fill_cell_grows
+cargo test --locked --offline --test composition foundations::active_custom_font_roles_are_required_while_unused_preferences_are_not
 cargo test --locked --offline --lib overlapping_spans_are_canonical_and_infeasible_total_misses
 cargo test --locked --offline --lib declared_sparse_tracks_remain_noncollapsing_while_empty_slots_stay_zero
 cargo test --locked --offline --lib canvas_gutter_remeasurement_uses_the_assigned_projection
@@ -450,9 +736,9 @@ just fmt-check
 just lint
 ```
 
-Run the newly written/replacement span and maximum-width witnesses as well as
-affected existing callers; the commands above are not substitutes for new-contract
-coverage.
+Run the newly written/replacement text, rotation, span and maximum-width witnesses
+as well as affected existing callers; the commands above are not substitutes for
+new-contract coverage.
 Select existing guide/cache neighbors only when their dependency paths change or
 a failure exposes an interaction. Execute affected public doctests and `just docs`
 when adding API documentation/examples. Do not run the heavyweight large-SVG/PNG
