@@ -10,13 +10,15 @@ specifications, particularly [Theme](03_THEME_SYSTEM.md),
 [property ownership](04_VISUAL_PROPERTY_OWNERSHIP.md) and
 [guides](08_GUIDE_SYSTEM.md).
 
-DF2, DF4, DF7, DF8, DF9, DF10 and the residual scopes in DF5/DF6 are pending user
+DF4, DF7, DF8, DF9, DF10 and the residual scopes in DF5/DF6 are pending user
 disposition. Their checkpoint is the next feature-scope discussion **after
 specification/documentation cleanup and before their successor implementation
-planning**. Unified text controls, explicit categorical-label angles and
-maximum-width/automatic-height sizing have been requested for bounded planning
-as described below. No additional general audit is a prerequisite. Discussion
-itself does not admit or reject a capability.
+planning**. Extended numeric presentation, unified text controls, explicit
+categorical-label angles and maximum-width/automatic-height sizing have been
+requested for implementation planning as described below. Public configuration
+naming follows the confirmed rule in [the implementation plan](91_IMPLEMENTATION_PLAN.md).
+No additional general audit is a prerequisite. Discussion itself does not admit
+or reject a capability.
 
 At review, present concrete workflows, unmet requirements, alternatives and
 semantic/performance tradeoffs. Obtain user approval to admit a bounded scope,
@@ -28,19 +30,29 @@ lasting requirements in the owning contract, not a permanent decision ledger.
 
 ## DF2: Locale And Extended Numeric Formatting
 
-Excluded: locale digits/separators/grouping, caller compact/SI-prefix rules,
-arbitrary multipliers, selectable rounding modes, shared multiplier/unit
-annotations, general format strings and callbacks.
-
 NumericFormat already covers locale-free fixed/adaptive fractional/significant
 precision, Scientific/Engineering notation, exact decimal-power scaling, literal
 affixes and zero handling, including mathematical Forest powers. These are current,
-not deferred scope.
+not deferred scope. Existing omitted profiles already use prescribed k/M branches;
+this is distinct from publicly configurable SI/compact rules.
 
-**Checkpoint:** next feature-scope discussion. Use scientific units, close values,
-Forest axes, Shared guides and exact-width text to identify a concrete unmet need.
-Locale proposals require pinned data, Unicode/bidi/font coverage and reproducibility,
-not ambient host settings. Compare semantic and bounded execution costs per subset.
+**Requested planning:** support the complete extended formatting scope: explicit
+named/custom locale digits/separators/grouping/currency, configurable per-value/
+fixed/whole-set SI and compact rules, general display multipliers and rounding,
+shared multiplier/unit explanations, D3/Plotly-style numeric specifiers and owned
+single-value/complete-set functions while retaining automatic tick positions.
+Keep structured NumericFormat and one exact/certified conversion route. Do not
+reduce the requested capabilities to fit the current finite-font-alphabet model.
+See [the implementation plan](91_IMPLEMENTATION_PLAN.md) for actual-source font
+admission/final sealing, callback identity, measured explanations, composition and
+verification. The new APIs are not implemented.
+
+**Plan-review checkpoint:** review the integrated numeric proposal before its
+implementation begins, including explicit locale provenance, D3 syntax versus
+rounding semantics, mathematical Forest operands, final Shared domains, callback
+materialization and font/geometry lifecycle. This is review of the requested full
+scope, not a fresh undecided feature-scope discussion. Remove the admitted scope
+from this list when its plan is approved and update current contracts as implemented.
 
 ## DF4: Further Automatic Tick Controls
 
