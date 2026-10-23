@@ -1025,6 +1025,10 @@ pub struct TextTheme {
     pub(crate) line_height_multiplier: f64,
 }
 
+// Public construction/edits admit only finite positive leading, so complete
+// field equality is reflexive and has no signed-zero normalization ambiguity.
+impl Eq for TextTheme {}
+
 impl TextTheme {
     /// Construct one complete text role, using actual CSS pixels and a multiplier.
     pub fn new(

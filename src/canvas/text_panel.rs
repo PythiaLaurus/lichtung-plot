@@ -6,9 +6,10 @@ use crate::layout::kernel::{
     allocate_grid_axis, nearest_spatial_quanta, FitKind, GridRequirement, TrackSpec,
 };
 use crate::layout::{AddressRole, PanelBox, PhysicalTextAlignment, TextBlock};
-use crate::render::backend::{PlannedTextPlacement, Point2D, TextAnchor};
-use crate::theme::{ResolvedTheme, TextTheme};
-use crate::Error;
+use crate::render::backend::{PlannedTextPlacement, Point2D};
+use crate::text::TextAppearance;
+use crate::theme::ResolvedTheme;
+use crate::{Error, TextAlignment};
 
 #[expect(
     clippy::cast_precision_loss,
@@ -18,11 +19,19 @@ fn pixels(quanta: i64) -> f64 {
     quanta as f64 / 1024.0
 }
 
-fn text_appearance(theme: &ResolvedTheme) -> [&TextTheme; 2] {
-    [
-        theme.typography.get_composition().get_text_panel_title(),
-        theme.typography.get_composition().get_body(),
-    ]
+impl TextPanel {
+    pub(super) fn appearances<'a>(&'a self, theme: &'a ResolvedTheme) -> [TextAppearance<'a>; 2] {
+        [
+            self.title
+                .appearance(theme.typography.get_composition().get_text_panel_title()),
+            self.body
+                .appearance(theme.typography.get_composition().get_body()),
+        ]
+    }
+
+    fn alignments(&self) -> [TextAlignment; 2] {
+        [&self.title, &self.body].map(|text| text.resolved_alignment(TextAlignment::Start))
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -35,7 +44,7 @@ pub(super) struct TextPanelIntrinsics {
 
 impl TextPanelIntrinsics {
     pub(super) fn prepare(source: &TextPanel, theme: &ResolvedTheme) -> Result<Self, Error> {
-        let [title_style, body_style] = text_appearance(theme);
+        let [title_style, body_style] = source.appearances(theme);
         let title = fit::intrinsic_widths(
             theme,
             source.title(),
@@ -48,25 +57,28 @@ impl TextPanelIntrinsics {
             body_style,
             "text panel body intrinsics",
         )?;
-        let lengths = theme.text_panel_lengths()?;
+        let lengths = theme.text_panel_lengths(
+            title_style.theme.get_font_size(),
+            body_style.theme.get_font_size(),
+        )?;
 
         let edges = lengths.inset.times(2);
         let title_ch = theme
             .measure_text(
                 "0",
-                title_style,
+                title_style.theme,
                 PhysicalTextAlignment::Start,
                 "TextPanel title 66ch",
-                false,
+                title_style.exact_override,
             )?
             .width();
         let body_ch = theme
             .measure_text(
                 "0",
-                body_style,
+                body_style.theme,
                 PhysicalTextAlignment::Start,
                 "TextPanel body 66ch",
-                false,
+                body_style.exact_override,
             )?
             .width();
         Ok(Self {
@@ -77,8 +89,8 @@ impl TextPanelIntrinsics {
                 crate::theme::composition::hard(
                     &edges
                         .add_length(&lengths.gap)
-                        .add_length(&title_style.line_pitch_exact()?)
-                        .add_length(&body_style.line_pitch_exact()?),
+                        .add_length(&title_style.theme.line_pitch_exact()?)
+                        .add_length(&body_style.theme.line_pitch_exact()?),
                 )?,
             ),
             preferred_width: crate::theme::composition::hard(
@@ -98,8 +110,10 @@ pub(super) fn natural_height(
     width: f64,
     theme: &ResolvedTheme,
 ) -> Result<f64, Error> {
-    let [title, body] = text_appearance(theme);
-    let lengths = theme.text_panel_lengths()?;
+    let [title, body] = source.appearances(theme);
+    let [title_alignment, body_alignment] = source.alignments();
+    let lengths =
+        theme.text_panel_lengths(title.theme.get_font_size(), body.theme.get_font_size())?;
 
     let available = crate::theme::composition::capacity(width, &lengths.inset.times(2))?;
     let title = fit::measured(fit::text(
@@ -107,7 +121,7 @@ pub(super) fn natural_height(
         source.title(),
         title,
         available,
-        PhysicalTextAlignment::Start,
+        title_alignment.into(),
         "natural TextPanel title",
         &FitScope::root(),
     ))
@@ -117,7 +131,7 @@ pub(super) fn natural_height(
         source.body(),
         body,
         available,
-        PhysicalTextAlignment::Start,
+        body_alignment.into(),
         "natural TextPanel body",
         &FitScope::root(),
     ))
@@ -148,7 +162,8 @@ impl TextPanelPlan {
         let owner = scope.child(AddressRole::TextPanelContent, index)?;
         let title_scope = owner.child(AddressRole::TextPanelTitle, 0)?;
         let body_scope = owner.child(AddressRole::TextPanelBody, 0)?;
-        let [title_style, body_style] = text_appearance(theme);
+        let [title_style, body_style] = source.appearances(theme);
+        let [title_alignment, body_alignment] = source.alignments();
         let (title_hard, title_preferred) = intrinsics.title;
         let (body_hard, body_preferred) = intrinsics.body;
         let x0 = nearest_spatial_quanta(cell.x0)?;
@@ -162,7 +177,10 @@ impl TextPanelPlan {
             .checked_sub(y0)
             .ok_or_else(|| Error::Render("TextPanel height overflowed".into()))?;
 
-        let lengths = theme.text_panel_lengths()?;
+        let lengths = theme.text_panel_lengths(
+            title_style.theme.get_font_size(),
+            body_style.theme.get_font_size(),
+        )?;
         let edges = lengths.inset.times(2);
         let content_width = nearest_spatial_quanta(
             crate::theme::composition::capacity(pixels(width), &edges)?.max(0.0),
@@ -233,7 +251,7 @@ impl TextPanelPlan {
             source.title(),
             title_style,
             maximum_width,
-            PhysicalTextAlignment::Start,
+            title_alignment.into(),
             "text panel title",
             &title_scope,
         )? {
@@ -245,7 +263,7 @@ impl TextPanelPlan {
             source.body(),
             body_style,
             maximum_width,
-            PhysicalTextAlignment::Start,
+            body_alignment.into(),
             "text panel body",
             &body_scope,
         )? {
@@ -298,6 +316,9 @@ impl TextPanelPlan {
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
         };
         let x = lengths.inset.after_pixels(pixels(x0))?;
+        let right = lengths.inset.before_pixels(pixels(x1))?;
+        let (title_x, title_anchor) = title_alignment.resolve_physical(x, right);
+        let (body_x, body_anchor) = body_alignment.resolve_physical(x, right);
         if i128::from(allocation.sizes[0])
             + i128::from(allocation.sizes[1])
             + i128::from(allocation.trailing_slack)
@@ -319,23 +340,23 @@ impl TextPanelPlan {
             cell,
             title_placement: PlannedTextPlacement::baseline(
                 Point2D::new(
-                    x,
+                    title_x,
                     lengths
                         .inset
                         .add_pixels(pixels(title_baseline))?
                         .before_pixels(pixels(y1))?,
                 ),
-                TextAnchor::Start,
+                title_anchor,
                 0.0,
             ),
             body_placement: PlannedTextPlacement::baseline(
                 Point2D::new(
-                    x,
+                    body_x,
                     body_offset
                         .add_pixels(pixels(body_baseline))?
                         .before_pixels(pixels(y1))?,
                 ),
-                TextAnchor::Start,
+                body_anchor,
                 0.0,
             ),
             title,

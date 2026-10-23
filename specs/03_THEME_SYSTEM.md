@@ -156,6 +156,13 @@ exact represented multiplier of font-size quanta, with one upward hard occupancy
 rounding. It is not an absolute length or spacing setter. Every text role is
 complete and independently editable.
 
+TextTheme implements complete Eq over its validated fields: positive finite leading
+admits reflexive equality without NaN or signed-zero ambiguity. TextPanel's authored
+Text may supply one complete exact TextTheme independently for title and body.
+This local appearance replaces its selected Canvas role before the font census;
+omission uses that complete role. Measurement, 66ch preferences and frozen plans
+retain the selected stack, paint, size, weight, leading and exact provenance.
+
 TypographyTheme and each nested text-role group use consuming `property(value)`
 edits and paired borrowed `get_property()` readers. For example,
 `theme.typography().get_root().get_title()` borrows the complete root title role;

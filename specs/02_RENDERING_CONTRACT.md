@@ -186,6 +186,13 @@ One-name resolution does not replace complete-domain collision checks. Raw
 category/series/field keys, endpoint identities, font-family names, significance
 selectors, paths and NumericFormat grammar retain their own semantic validation.
 
+TextPanel title/body accept `impl Into<Text>` through one source representation;
+String, &str and &String retain ordinary owner defaults. Text optionally retains
+one complete exact TextTheme and one whole TextLayout request. Its alignment edit
+uses shared TextAlignment. TextLayout defaults leave alignment unspecified, while
+an explicitly supplied default request remains distinguishable from omission.
+TextPanel's existing title/body readers borrow the source as `&str`.
+
 ### Guides
 
 LegendPolicy is one automatic/hidden/explicit-position choice; placement and

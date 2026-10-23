@@ -2,7 +2,7 @@
 
 use crate::layout::{AddressRole, ComponentAddress};
 use crate::layout::{PhysicalTextAlignment, ResolvedTextPlan};
-use crate::theme::{ResolvedTheme, TextTheme};
+use crate::theme::ResolvedTheme;
 use crate::Error;
 
 #[allow(
@@ -141,15 +141,16 @@ pub(crate) fn measured<T>(result: Result<FitOutcome<T>, Error>) -> Result<T, Pla
     }
 }
 
-pub(crate) fn text(
+pub(crate) fn text<'a>(
     theme: &ResolvedTheme,
     source: &str,
-    appearance: &TextTheme,
+    appearance: impl Into<crate::text::TextAppearance<'a>>,
     width: f64,
     alignment: PhysicalTextAlignment,
     owner: &str,
     scope: &FitScope,
 ) -> Result<FitOutcome<ResolvedTextPlan>, Error> {
+    let appearance = appearance.into();
     theme.prepare_font_environment()?;
     if width.is_finite() && width < 0.0 {
         return Ok(FitOutcome::Miss(scope.failure(
@@ -160,7 +161,14 @@ pub(crate) fn text(
     let width = crate::layout::maximum_width_quanta(width)
         .map_err(|error| Error::Render(format!("{owner}: {error}")))?;
     outcome(theme.plan_text_quanta_with_policy(
-        source, appearance, width, alignment, owner, false, true, scope,
+        source,
+        appearance.theme,
+        width,
+        alignment,
+        owner,
+        appearance.exact_override,
+        true,
+        scope,
     ))
 }
 
@@ -200,19 +208,20 @@ pub(crate) fn collect<T>(
     clippy::cast_precision_loss,
     reason = "intrinsic quantum widths are compared with root-bounded pixel assignments"
 )]
-pub(crate) fn intrinsic_widths(
+pub(crate) fn intrinsic_widths<'a>(
     theme: &ResolvedTheme,
     source: &str,
-    appearance: &TextTheme,
+    appearance: impl Into<crate::text::TextAppearance<'a>>,
     owner: &str,
 ) -> Result<(f64, f64), Error> {
+    let appearance = appearance.into();
     let requirements = theme
         .measure_text(
             source,
-            appearance,
+            appearance.theme,
             PhysicalTextAlignment::Start,
             owner,
-            false,
+            appearance.exact_override,
         )?
         .intrinsic_from_analysis(1)
         .map_err(|error| Error::Render(format!("{owner}: {error}")))?;

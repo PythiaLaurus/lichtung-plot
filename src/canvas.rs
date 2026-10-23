@@ -180,30 +180,30 @@ struct TextPanelPlan {
 /// Validated prose content for one composed-canvas grid cell.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextPanel {
-    title: String,
-    body: String,
+    title: crate::Text,
+    body: crate::Text,
 }
 
 impl TextPanel {
     /// Construct a text panel, retaining verbatim title/body and mandatory breaks.
-    pub fn new(title: impl Into<String>, body: impl Into<String>) -> Result<Self, Error> {
+    pub fn new(title: impl Into<crate::Text>, body: impl Into<crate::Text>) -> Result<Self, Error> {
         let title = title.into();
         let body = body.into();
-        crate::text::validate_for(&title, "text panel title")?;
-        crate::text::validate_for(&body, "text panel body")?;
+        crate::text::validate_for(title.as_str(), "text panel title")?;
+        crate::text::validate_for(body.as_str(), "text panel body")?;
         Ok(Self { title, body })
     }
 
     /// Panel title rendered above the body.
     #[must_use]
     pub fn title(&self) -> &str {
-        &self.title
+        self.title.as_str()
     }
 
     /// Panel body rendered with deterministic wrapping.
     #[must_use]
     pub fn body(&self) -> &str {
-        &self.body
+        self.body.as_str()
     }
 }
 
@@ -1514,8 +1514,6 @@ impl Canvas {
             )?;
         }
         let composition_title = &themes.root().typography.composition.composition_header;
-        let text_panel_title = &themes.root().typography.composition.text_panel_title;
-        let body = &themes.root().typography.composition.body;
         for (index, header) in self.column_headers.iter().enumerate() {
             let address = root.child(
                 crate::layout::AddressRole::CanvasHeader,
@@ -1574,22 +1572,37 @@ impl Canvas {
                 u32::try_from(index)
                     .map_err(|_| Error::Render("text-panel census index overflowed".into()))?,
             )?;
-            for (role, local_index, source, appearance) in [
+            let [title_style, body_style] = panel.appearances(themes.root());
+            for (slot, role, source, appearance) in [
                 (
-                    crate::layout::PreparedTextRole::Header,
                     0,
+                    crate::layout::PreparedTextRole::Header,
                     panel.title(),
-                    text_panel_title,
+                    title_style.theme,
                 ),
-                (crate::layout::PreparedTextRole::Body, 0, panel.body(), body),
+                (
+                    1,
+                    crate::layout::PreparedTextRole::Body,
+                    panel.body(),
+                    body_style.theme,
+                ),
             ] {
                 let requirement_address = address.clone();
                 push_text_requirement(
                     &mut requirements,
                     requirement_address,
                     role,
-                    local_index,
+                    0,
                     source,
+                    appearance,
+                    prepared_stage,
+                )?;
+                push_text_requirement(
+                    &mut requirements,
+                    address.child(crate::layout::AddressRole::PreferenceMetric, slot)?,
+                    crate::layout::PreparedTextRole::PreferenceMetric,
+                    0,
+                    "0",
                     appearance,
                     prepared_stage,
                 )?;

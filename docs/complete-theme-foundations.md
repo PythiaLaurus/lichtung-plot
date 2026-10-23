@@ -44,6 +44,12 @@ Plot title/subtitle instructions override Canvas panel defaults, then
 Theme defaults. Captions use independent Theme alignment. Panel instructions do
 not affect Canvas root prose, headers or TextPanel.
 
+TextPanel title/body can each receive a `Text` with an exact complete TextTheme
+and a TextLayout alignment. Omitted styles use the Canvas's independent title/body
+roles. Local selected sizes drive TextPanel inset/gap metrics, while root padding
+continues to use the root body's size. Font preparation includes the selected local
+stacks and actual content; an unused replaced role does not require its fonts.
+
 ## Fonts And Local Spacing
 
 All eighteen text roles independently own stack, RGBA color, positive CSS-pixel

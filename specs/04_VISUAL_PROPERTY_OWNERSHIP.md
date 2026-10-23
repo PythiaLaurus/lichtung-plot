@@ -58,6 +58,13 @@ whitespace, mandatory breaks and present empty-line metrics. Automatic names use
 the selected Labels policy; public `Labels::resolve` exposes the same preparation
 without changing raw scientific identities or domain-level collision checks.
 
+TextPanel retains independent Text values for title/body. Each local complete
+TextTheme replaces that slot's Canvas role, and TextLayout alignment defaults to
+Start independently. TextPanel inset uses the selected body size; title/body gap
+uses the maximum selected size. Root padding remains owned by the root body role.
+Text/TextPanel equality includes complete exact appearance and layout presence,
+including an explicit default reset.
+
 ## Paint And Geometry
 
 Each final fill, stroke, text, bracket, outline and gradient stop has one RGBA

@@ -129,6 +129,182 @@ fn native_empty_category_alias_is_distinct_from_internal_label_suppression() {
 #[test]
 #[expect(
     clippy::too_many_lines,
+    reason = "one authored TextPanel contract follows selected fonts, actual role-relative geometry, reflow and frozen replay"
+)]
+fn authored_text_panel_resolves_independent_styles_alignment_and_local_metrics() {
+    use crate::layout::PhysicalTextAlignment;
+    use crate::{Color, FontFamily, FontStack, GenericFontFamily, Text, TextAlignment, TextWeight};
+    const TITLE: &str = "Heading\nshort";
+    const BODY: &str = "A complete paragraph with enough distinct words to need additional lines when the assigned content width becomes narrower.";
+    let base = Theme::publication();
+    let role = |family, color, size, weight, leading| {
+        crate::TextTheme::new(
+            FontStack::new(
+                [FontFamily::generic(family)].into_iter().chain(
+                    base.typography()
+                        .get_composition()
+                        .get_body()
+                        .get_stack()
+                        .families()
+                        .iter()
+                        .cloned(),
+                ),
+            )
+            .unwrap(),
+            color,
+            size,
+            weight,
+            leading,
+        )
+        .unwrap()
+    };
+    let title_style = role(
+        GenericFontFamily::Monospace,
+        Color::rgba(91, 37, 117, 180),
+        31,
+        TextWeight::Bold,
+        1.8,
+    );
+    let body_style = role(
+        GenericFontFamily::Serif,
+        Color::rgb(23, 89, 53),
+        17,
+        TextWeight::Normal,
+        1.35,
+    );
+    let panel = TextPanel::new(
+        Text::new(TITLE)
+            .style(title_style.clone())
+            .alignment(TextAlignment::End),
+        Text::new(BODY)
+            .style(body_style.clone())
+            .alignment(TextAlignment::Center),
+    )
+    .unwrap();
+    let spacing = crate::RelativeSpacing::ratio(1, 1).unwrap();
+    let composition = base
+        .composition()
+        .clone()
+        .text_panel(crate::TextPanelSpacing::new(spacing.clone(), spacing).unwrap())
+        .unwrap();
+    let missing =
+        FontStack::new([FontFamily::named("Unused inherited text panel font").unwrap()]).unwrap();
+    let theme = base
+        .customize()
+        .composition(composition)
+        .font_stack(missing)
+        .unwrap()
+        .build()
+        .unwrap();
+    let canvas = Canvas::grid(1, 1)
+        .unwrap()
+        .width(600)
+        .theme(theme)
+        .text_panel(0, 0, panel.clone())
+        .unwrap();
+    let discoveries = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
+    let root = canvas.preflight_plan().unwrap();
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        discoveries + 1
+    );
+    let prepared = root.prepared();
+    for (source, appearance) in [(TITLE, &title_style), (BODY, &body_style)] {
+        let requirement = prepared
+            .text_census
+            .requirements
+            .iter()
+            .find(|text| text.source == source)
+            .unwrap();
+        assert_eq!(&requirement.stack, appearance.get_stack());
+        assert_eq!(requirement.weight, appearance.get_weight());
+        assert!(prepared
+            .text_census
+            .requirements
+            .iter()
+            .any(|text| text.source == "0"
+                && text.stack == requirement.stack
+                && text.weight == requirement.weight));
+    }
+    let retained = root.plan().retained_text();
+    for (source, appearance, alignment) in [
+        (TITLE, &title_style, PhysicalTextAlignment::End),
+        (BODY, &body_style, PhysicalTextAlignment::Center),
+    ] {
+        let text = retained
+            .iter()
+            .find(|(_, text)| text.source == source)
+            .unwrap()
+            .1;
+        assert_eq!(text.style.stack, *appearance.get_stack());
+        assert_eq!(text.style.paint, appearance.get_color());
+        assert_eq!(text.style.font_size, appearance.get_font_size());
+        assert_eq!(text.style.weight, appearance.get_weight());
+        assert_eq!(text.style.alignment, alignment);
+        assert!(text.style.exact_override);
+        assert_eq!(text.line_texts().concat(), source.replace('\n', ""));
+    }
+    let theme = prepared.themes.root();
+    let wide = text_panel::natural_height(&panel, 600.0, theme).unwrap();
+    let narrow = text_panel::natural_height(&panel, 280.0, theme).unwrap();
+    assert!(
+        narrow > wide,
+        "selected styles participate in width-dependent height"
+    );
+    let measured = crate::layout::fit::measured(TextPanelPlan::measure(
+        &panel,
+        0,
+        PanelBox::new(0.0, 600.0, 0.0, 900.0),
+        theme,
+        prepared.text_panel_intrinsics[0].unwrap(),
+        &crate::layout::fit::FitScope::root(),
+    ))
+    .unwrap();
+    let quanta = crate::layout::kernel::nearest_spatial_quanta;
+    assert_eq!(
+        quanta(measured.title_placement.position.x).unwrap(),
+        (600 - 17) * 1024
+    );
+    assert_eq!(
+        quanta(measured.body_placement.position.x).unwrap(),
+        300 * 1024
+    );
+    let title = measured.title.plan();
+    let body = measured.body.plan();
+    let title_bottom = quanta(measured.title_placement.position.y).unwrap()
+        + title.first_baseline_quanta.unwrap()
+        - title.height_quanta;
+    let body_top =
+        quanta(measured.body_placement.position.y).unwrap() + body.first_baseline_quanta.unwrap();
+    assert_eq!(
+        title_bottom - body_top,
+        31 * 1024,
+        "gap uses the selected maximum font size"
+    );
+    assert!(title.lines[1].translation_x_quanta > title.lines[0].translation_x_quanta);
+    let counters = capture_counters();
+    let mut backend = root.plan().take_svg_backend().unwrap();
+    Canvas::render_preflighted(&root, &mut backend).unwrap();
+    let (width, height) = root.dimensions();
+    let scene = RenderedScene::new(width, height, backend.into_output()).unwrap();
+    let outlined = scene.svg_with_text_as_paths().unwrap();
+    assert_eq!(scene.svg_with_text_as_paths().unwrap(), outlined);
+    let options = crate::PngOptions {
+        sizing: crate::PngSizing::Source,
+        compression: crate::PngCompression::Fast,
+    };
+    let png = scene.png_bytes(&options).unwrap();
+    assert_eq!(scene.png_bytes(&options).unwrap(), png);
+    assert_eq!(capture_counters(), counters);
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        discoveries + 1
+    );
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
     reason = "one Shared authority contract checks effective policy, source counts, pre-font section slots and selected order"
 )]
 fn shared_composition_uses_parent_policy_in_both_source_orders() {

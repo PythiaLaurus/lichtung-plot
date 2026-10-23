@@ -120,6 +120,27 @@ Aliases change presentation only. Category, series and other scientific identiti
 retain their own validation, and rendering still checks the complete domain for
 ambiguous display labels.
 
+TextPanel title and body also accept `Text` with independent complete styles and
+physical alignment. Plain strings use the corresponding Canvas text roles:
+
+```rust
+use lichtung_plot::{Canvas, Color, Text, TextAlignment, TextPanel, Theme};
+
+let theme = Theme::publication();
+let heading = theme.typography().get_composition().get_text_panel_title()
+    .clone().font_size(24)?.color(Color::rgb(80, 40, 110))?;
+let note = TextPanel::new(
+    Text::new("Study context").style(heading).alignment(TextAlignment::End),
+    Text::new("First paragraph.\nSecond paragraph.").alignment(TextAlignment::Start),
+)?;
+let canvas = Canvas::grid(1, 1)?.theme(theme).text_panel(0, 0, note)?.width(400);
+# let _ = canvas;
+# Ok::<(), lichtung_plot::Error>(())
+```
+
+`Text::layout(TextLayout::default())` replaces the whole layout request and
+restores owner-default alignment. TextPanel title/body default to Start separately.
+
 ## Themes And Canvases
 
 Canvas owns one root theme and defaults it to Publication, so callers do not

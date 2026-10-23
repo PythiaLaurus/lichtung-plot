@@ -278,13 +278,10 @@ impl ResolvedTheme {
             LocalMetric::css_pixels(self.typography.root.caption.get_font_size())?,
         ])
     }
-    pub(crate) fn text_panel_lengths(&self) -> Result<TextPanelLengths> {
-        let body = self.typography.composition.body.get_font_size();
+    pub(crate) fn text_panel_lengths(&self, title: u32, body: u32) -> Result<TextPanelLengths> {
         self.composition.get_text_panel().lengths(&[
             LocalMetric::css_pixels(body)?,
-            LocalMetric::css_pixels(
-                body.max(self.typography.composition.text_panel_title.get_font_size()),
-            )?,
+            LocalMetric::css_pixels(body.max(title))?,
         ])
     }
     pub(crate) fn header_lengths(&self) -> Result<HeaderLengths> {

@@ -105,7 +105,7 @@ pub use spec::{
     StandardError, TextWeight, TickGeneration, ValueSort, WaterfallLabels,
 };
 pub use spec::{PngCompression, PngOptions, PngSizing};
-pub use text::TextAlignment;
+pub use text::{Text, TextAlignment, TextLayout};
 pub use theme::{
     AccentPalette, AnnotationTextRoles, AnnotationTheme, AxisSpacing, AxisTextRoles, AxisTheme,
     BandFillRoles, BodyFillRoles, CategoricalColorScale, CategoryMarkGeometry,

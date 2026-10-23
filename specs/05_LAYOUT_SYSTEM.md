@@ -514,7 +514,12 @@ slots. Spanning records occur once at minimum covered coordinate, ordered header
 row title, range group,cell, then declaration. Range groups are nonvisual.
 Embedded Plot title/subtitle/caption remain local exactly once; Canvas prose is
 independent. TextPanel fills its surface and places nonfill required title/body
-top-left after inset; extra space expands chrome, not text. No topology repacking.
+top-down after inset. Each Text's alignment independently positions its block
+and lines across the post-inset span, defaulting to physical Start. Local complete
+appearance supplies text metrics and the TextPanel's named inset/gap metrics.
+The census admits selected title/body stacks and their actual source plus the
+required 66ch zero glyph; replaced unused Theme fonts remain unnecessary.
+Extra space expands chrome, not text. No topology repacking.
 Specialized records retain semantic category/source/declaration order; guide
 sections are stable descendants of their original guide slot.
 
