@@ -161,8 +161,8 @@ pub(in crate::orchestrator) fn natural_size(
     let mut preferred = if requested_width.is_none() {
         let natural = allocate(None, &[])?;
         let axes = super::planning::shared_axis_requirements(
-            labels[0].as_deref(),
-            labels[1].as_deref(),
+            labels[0].as_ref(),
+            labels[1].as_ref(),
             theme,
             PanelBox::new(0.0, natural.size.0, 0.0, natural.size.1),
         )
@@ -202,8 +202,8 @@ pub(in crate::orchestrator) fn natural_size(
         &gutters,
     )?;
     let axes = super::planning::shared_axis_requirements(
-        labels[0].as_deref(),
-        labels[1].as_deref(),
+        labels[0].as_ref(),
+        labels[1].as_ref(),
         theme,
         PanelBox::new(0.0, grid.size.0, 0.0, grid.size.1),
     )

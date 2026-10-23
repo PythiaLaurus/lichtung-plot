@@ -477,6 +477,7 @@ pub(crate) struct HeatmapIntrinsicCache {
     contrast_dark: crate::theme::TextTheme,
     tick_label: crate::theme::TextTheme,
     axis_title: crate::theme::TextTheme,
+    titles: [Option<crate::Text>; 2],
     plot_panel: crate::theme::Color,
     canvas_root: crate::theme::Color,
     canvas_override: Option<crate::theme::Color>,
@@ -489,8 +490,14 @@ pub(crate) struct HeatmapIntrinsicCache {
 }
 
 impl HeatmapIntrinsicCache {
-    fn matches_inputs(&self, prepared: &HeatmapData, theme: &ResolvedTheme) -> bool {
+    fn matches_inputs(
+        &self,
+        prepared: &HeatmapData,
+        axes: &crate::plots::shared_x::PreparedAxes,
+        theme: &ResolvedTheme,
+    ) -> bool {
         self.color_scale.same(&prepared.color.scale)
+            && self.titles == axes.labels
             && self
                 .contrast_light
                 .same(&theme.typography.annotations.contrast.light)
@@ -514,6 +521,7 @@ impl HeatmapIntrinsicCache {
         minimum: (f64, f64),
         without_y_labels: (f64, f64),
         prepared: &HeatmapData,
+        axes: &crate::plots::shared_x::PreparedAxes,
         theme: &ResolvedTheme,
     ) -> Result<Self, Error> {
         let color_scale = prepared.color.scale.clone();
@@ -534,6 +542,7 @@ impl HeatmapIntrinsicCache {
             contrast_dark: text(&theme.typography.annotations.contrast.dark)?,
             tick_label: text(&theme.typography.axes.tick_label)?,
             axis_title: text(&theme.typography.axes.axis_title)?,
+            titles: [axes.copy_label(0)?, axes.copy_label(1)?],
             plot_panel: theme.surfaces.plot_panel,
             canvas_root: theme.surfaces.canvas_root,
             canvas_override: theme.canvas_surface_override,
@@ -797,7 +806,7 @@ fn analyze_intrinsics(
     let _ = diagnostic_scope;
 
     if let Some(cached) = axes.heatmap_intrinsics.get() {
-        if cached.matches_inputs(prepared, theme) {
+        if cached.matches_inputs(prepared, axes, theme) {
             return Ok((cached.minimum, cached.without_y_labels));
         }
     }
@@ -920,8 +929,8 @@ fn analyze_intrinsics(
         let Some(title) = title else { continue };
         let hard = crate::layout::fit::intrinsic_widths(
             theme,
-            title,
-            &theme.typography.axes.axis_title,
+            title.as_str(),
+            title.appearance(&theme.typography.axes.axis_title),
             "Heatmap axis title intrinsic",
         )?
         .0;
@@ -934,7 +943,7 @@ fn analyze_intrinsics(
         }
     }
     if axes.heatmap_intrinsics.get().is_none() {
-        let cache = HeatmapIntrinsicCache::new(minimum, without_y_labels, prepared, theme)?;
+        let cache = HeatmapIntrinsicCache::new(minimum, without_y_labels, prepared, axes, theme)?;
         let _ = axes.heatmap_intrinsics.set(cache);
     }
     Ok((minimum, without_y_labels))

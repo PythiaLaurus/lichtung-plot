@@ -95,12 +95,14 @@ data-dependent restrictions. An already faceted Plot cannot be embedded in Canva
 - Canvas owns declared row-major topology, Plot/TextPanel cells, root appearance,
   root prose, headers, shared ranges and Shared-guide policy/chrome. Embedded Plot
   standalone sizing does not control cell allocation.
-- Plot/Canvas prose and TextPanel title/body use the common owned `Text` value from
-  the private text module. Its optional complete TextTheme and TextLayout alignment
+- Plot/Canvas prose, x/y titles and TextPanel title/body use the common owned `Text`
+  value from the private text module. Its optional complete TextTheme and TextLayout alignment
   resolve locally over the owning roles before font preparation. Optional prose
   slots retain alignment instructions before content exists; plain replacement
   retains instructions and a present layout replaces the whole request. Complete
   content/instruction equality participates in root-frame, child and height reuse.
+  Prepared axes retain Text, including for shared facet titles; each title's selected
+  appearance owns its intrinsic measurement and font-relative axis clearances.
 - PanelTextAnnotation retains the same Text value over the owning Plot's complete
   panel-text role. Its corner places the block independently of line alignment;
   selected local size also owns its annotation padding metric.

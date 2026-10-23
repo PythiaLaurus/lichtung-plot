@@ -57,6 +57,7 @@ enum Observation {
     Number(u64),
     Count(usize),
     Text(String),
+    AuthoredText(crate::Text),
     TextPlan(ResolvedTextPlan),
     Guide(std::sync::Arc<crate::decorations::legend::discrete::PreparedGuide>),
     Alpha(std::sync::Arc<crate::decorations::legend::alpha::PreparedAlphaInputs>),
@@ -600,6 +601,10 @@ impl FeedbackRound {
         Ok(())
     }
 
+    pub(crate) fn observe_authored_text(&mut self, value: &crate::Text) -> Result<(), Error> {
+        self.observe(Observation::AuthoredText(value.try_copy()?))
+    }
+
     pub(crate) fn observe_string(&mut self, value: &str) -> Result<(), Error> {
         self.reserve_observation()?;
         let mut text = String::new();
@@ -643,7 +648,7 @@ impl FeedbackRound {
             }
             self.observe_count(usize::from(axis.label.is_some()))?;
             if let Some(label) = &axis.label {
-                self.observe_string(label)?;
+                self.observe_authored_text(label)?;
             }
             self.observe_count(axis.ticks.len())?;
             for tick in &axis.ticks {

@@ -3,12 +3,12 @@ use crate::font::canonical::OperationContext;
 use crate::orchestrator::measurements::{self, Counter};
 use crate::{CategoryValues, NumericValues};
 
-fn sources() -> [Plot; 8] {
+fn sources() -> Vec<Plot> {
     let x = NumericValues::new("x", [0.0, 1.0, 2.0]);
     let y = NumericValues::new("y", [2.0, 1.0, 3.0]);
     let group = CategoryValues::new("group", ["a", "a", "a"]).unwrap();
     let [histogram, density, qq, regression] = crate::layout::interior::distributions::sources();
-    [
+    vec![
         Plot::scatter(x.clone(), y.clone()).erase(),
         Plot::line(x.clone(), y.clone()).erase(),
         Plot::trajectory(x.clone(), y.clone(), group.clone()).erase(),

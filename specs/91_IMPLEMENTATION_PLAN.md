@@ -1669,12 +1669,14 @@ exact-tick empty-label suppression remain distinct. Public `Labels::resolve`
 shares automatic resolution and complete-domain collision checks remain in place.
 Step 3 is in progress: shared crate-root `TextAlignment` has replaced the title-only
 type through Plot/Canvas, Theme and frozen heading measurement. The common Text/
-TextLayout values now serve Plot/Canvas prose, TextPanel title/body and panel-corner
-annotations with complete local appearance, independent line alignment, selected font/spacing
-metrics and full equality. Prose content replacement, shared alignment edits and
-whole-layout reset precedence are implemented, including complete root-frame,
-child and height-cache identity. Axis/guide titles, headers and remaining display
-annotation receiving slots are still pending within this step.
+TextLayout values now serve Plot/Canvas prose, x/y titles, TextPanel title/body and
+panel-corner annotations with complete local appearance, independent line alignment,
+selected font/spacing metrics and full equality. Prose content replacement, shared
+alignment edits and whole-layout reset precedence are implemented, including complete root-frame,
+child and height-cache identity. Standard/native axes and shared facet titles retain
+independent exact styles through fonts, intrinsics, selected gaps and frozen drawing.
+Guide titles, headers and remaining display annotation receiving slots are still
+pending within this step.
 Steps 4–22 remain pending; undelivered target signatures are not current APIs.
 
 ### 1. Apply The Public Property Naming Rule

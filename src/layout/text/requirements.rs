@@ -787,28 +787,12 @@ impl PreparedTextRequirement {
                 0,
                 prepared_stage.as_deref_mut(),
             )?;
-            if let Some(x_title) = x_title {
-                let address = x_axis.clone();
-                push_owned(
+            for (address, title) in [(&x_axis, x_title.as_ref()), (&y_axis, y_title.as_ref())] {
+                Self::push_authored(
                     requirements,
-                    address,
+                    address.clone(),
                     PreparedTextRole::AxisTitle,
-                    0,
-                    x_title,
-                    &[],
-                    &theme.typography.axes.axis_title,
-                    prepared_stage.as_deref_mut(),
-                )?;
-            }
-            if let Some(y_title) = y_title {
-                let address = y_axis.clone();
-                push_owned(
-                    requirements,
-                    address,
-                    PreparedTextRole::AxisTitle,
-                    0,
-                    y_title,
-                    &[],
+                    title,
                     &theme.typography.axes.axis_title,
                     prepared_stage.as_deref_mut(),
                 )?;

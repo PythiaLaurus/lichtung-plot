@@ -2,6 +2,107 @@ use super::*;
 use crate::theme::{AxisSpacing, FrameSides, FrameTheme, RelativeSpacing};
 
 #[test]
+fn authored_axis_titles_keep_centered_blocks_and_use_independent_selected_metrics() {
+    let mut theme = crate::Theme::publication().resolve().unwrap();
+    let one = RelativeSpacing::ratio(1, 1).unwrap();
+    let zero = RelativeSpacing::ratio(0, 1).unwrap();
+    theme.axes = theme
+        .axes
+        .clone()
+        .frame(None)
+        .unwrap()
+        .ticks(None)
+        .unwrap()
+        .grid(None)
+        .unwrap()
+        .spacing(
+            AxisSpacing::new(
+                zero.clone(),
+                zero.clone(),
+                one.clone(),
+                one.clone(),
+                one,
+                zero,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let panel = crate::layout::PanelBox::new(150.0, 650.0, 150.0, 650.0);
+    let mut layout = Layout::envelope(panel);
+    layout.x_axis.label = Some(
+        crate::Text::new("Long horizontal title\nshort")
+            .style(
+                theme
+                    .typography
+                    .axes
+                    .axis_title
+                    .clone()
+                    .font_size(23)
+                    .unwrap(),
+            )
+            .alignment(crate::TextAlignment::Start),
+    );
+    layout.y_axis.label = Some(
+        crate::Text::new("Long vertical title\nshort")
+            .style(
+                theme
+                    .typography
+                    .axes
+                    .axis_title
+                    .clone()
+                    .font_size(19)
+                    .unwrap(),
+            )
+            .alignment(crate::TextAlignment::End),
+    );
+    let aligned = layout.plan_axes(&theme).unwrap();
+    let (x, xp) = aligned.x_axis.title.as_ref().unwrap();
+    let (y, yp) = aligned.y_axis.title.as_ref().unwrap();
+    assert_eq!(x.style.font_size, 23);
+    assert_eq!(y.style.font_size, 19);
+    assert!(x.style.exact_override && y.style.exact_override);
+    assert_eq!(
+        x.lines[0].translation_x_quanta + x.lines[0].ink_quanta.unwrap().left,
+        x.lines[1].translation_x_quanta + x.lines[1].ink_quanta.unwrap().left
+    );
+    assert_eq!(
+        y.lines[0].translation_x_quanta + y.lines[0].ink_quanta.unwrap().right,
+        y.lines[1].translation_x_quanta + y.lines[1].ink_quanta.unwrap().right
+    );
+    assert!((aligned.requirements().bottom - x.height() - 23.0).abs() <= 1.0 / 1024.0);
+    assert!((aligned.requirements().left - y.height() - 19.0).abs() <= 1.0 / 1024.0);
+    assert_eq!(yp.rotation.to_bits(), (-90.0_f64).to_bits());
+    // Resetting line alignment keeps the block's semantic center and measured gutter.
+    layout.x_axis.label = Some(
+        layout
+            .x_axis
+            .label
+            .take()
+            .unwrap()
+            .layout(crate::TextLayout::default()),
+    );
+    layout.y_axis.label = Some(
+        layout
+            .y_axis
+            .label
+            .take()
+            .unwrap()
+            .layout(crate::TextLayout::default()),
+    );
+    let centered = layout.plan_axes(&theme).unwrap();
+    let (cx, cxp) = centered.x_axis.title.as_ref().unwrap();
+    let (cy, cyp) = centered.y_axis.title.as_ref().unwrap();
+    assert!((xp.position.x + x.width() / 2.0 - cxp.position.x).abs() <= 1.0 / 1024.0);
+    assert!((yp.position.y - y.width() / 2.0 - cyp.position.y).abs() <= 1.0 / 1024.0);
+    assert_eq!(x.height_quanta, cx.height_quanta);
+    assert_eq!(y.height_quanta, cy.height_quanta);
+    let mut backend = crate::render::svg_backend::SvgBackend::in_memory(800, 800);
+    backend.begin(800, 800).unwrap();
+    aligned.draw(&mut backend).unwrap();
+    backend.end().unwrap();
+}
+
+#[test]
 fn selected_sides_are_frozen_drawn_and_published_once_with_no_inactive_edge_reserve() {
     let panel = crate::layout::PanelBox::new(80.0, 480.0, 80.0, 480.0);
     for (sides, count, right) in [

@@ -94,7 +94,7 @@ pub enum AxisSide {
 #[derive(Debug, Clone)]
 pub struct Axis {
     /// Present axis title, including an explicitly authored empty line.
-    pub label: Option<String>,
+    pub label: Option<crate::Text>,
     /// Tick positions + labels in data space.
     pub ticks: Vec<AxisTick>,
     /// Owner-level suppression, separate from an explicitly empty display label.

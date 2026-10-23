@@ -788,8 +788,8 @@ impl<K: crate::kind::Marker> Plot<K> {
             (self.title_text(), "plot title"),
             (self.subtitle_text(), "plot subtitle"),
             (self.caption_text(), "plot caption"),
-            (self.x_label.as_deref(), "x-axis title"),
-            (self.y_label.as_deref(), "y-axis title"),
+            (self.x_label.source(), "x-axis title"),
+            (self.y_label.source(), "y-axis title"),
             (self.color_label.as_deref(), "color guide title"),
         ] {
             if let Some(source) = source {
@@ -811,27 +811,47 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.labels.resolve_domain(domain, raw_labels)
     }
 
+    pub(crate) fn copy_axis_titles(&self) -> Result<[crate::text::TextSlot; 2], Error> {
+        Ok([self.x_label.try_copy()?, self.y_label.try_copy()?])
+    }
+
+    pub(crate) fn same_axis_titles(&self, titles: &[crate::text::TextSlot; 2]) -> bool {
+        self.x_label == titles[0] && self.y_label == titles[1]
+    }
+
     pub(crate) fn prepare_axis_labels(
         &self,
 
         policy: Option<&crate::Labels>,
-    ) -> Result<[Option<String>; 2], Error> {
+    ) -> Result<[Option<crate::Text>; 2], Error> {
         #[cfg(test)]
         crate::orchestrator::measurements::count(
             crate::orchestrator::measurements::Counter::AxisSourcePreparation,
         );
         let mut labels = [None, None];
-        for (target, source) in labels.iter_mut().zip(self.axis_label_sources(self.kind)) {
-            *target = source
-                .map(|(raw, inferred)| {
-                    if inferred {
-                        policy.unwrap_or(&self.labels).resolve(raw)
-                    } else {
-                        crate::text::validate_for(raw, "axis title")?;
-                        crate::data::source::copy_source_string(raw)
-                    }
-                })
-                .transpose()?;
+        for ((target, source), authored) in labels
+            .iter_mut()
+            .zip(self.axis_label_sources(self.kind))
+            .zip([self.x_label.content(), self.y_label.content()])
+        {
+            *target = if let Some(text) = authored {
+                crate::text::validate_for(text.as_str(), "axis title")?;
+                Some(text.try_copy()?)
+            } else {
+                source
+                    .map(|(raw, inferred)| {
+                        if inferred {
+                            policy
+                                .unwrap_or(&self.labels)
+                                .resolve(raw)
+                                .map(crate::Text::from)
+                        } else {
+                            crate::text::validate_for(raw, "axis title")?;
+                            crate::data::source::copy_source_string(raw).map(crate::Text::from)
+                        }
+                    })
+                    .transpose()?
+            };
         }
         Ok(labels)
     }
@@ -853,51 +873,45 @@ impl<K: crate::kind::Marker> Plot<K> {
     fn axis_label_sources(&self, kind: PlotKind) -> [Option<(&str, bool)>; 2] {
         let x_name = self.input.x_name().map(|name| (name, true));
         let y_name = self.input.y_name().map(|name| (name, true));
-        let x = self.x_label.as_deref().map_or_else(
-            || match kind {
-                PlotKind::HorizontalBar
-                | PlotKind::StackedHorizontalBar
-                | PlotKind::Waterfall
-                | PlotKind::Dumbbell => y_name,
-                PlotKind::Qq => Some(("Theoretical normal quantiles", false)),
-                PlotKind::Histogram => self.histogram_composite_geometry_input().map_or_else(
-                    || x_name,
-                    |input| Some((input.dimensions.value.as_str(), true)),
-                ),
-                PlotKind::Raincloud => self.raincloud_geometry_input().map_or_else(
-                    || x_name,
-                    |input| Some((input.dimensions.category.as_str(), true)),
-                ),
-                PlotKind::Matrix => None,
-                _ => x_name,
-            },
-            |raw| Some((raw, false)),
-        );
-        let y = self.y_label.as_deref().map_or_else(
-            || match kind {
-                PlotKind::HorizontalBar
-                | PlotKind::StackedHorizontalBar
-                | PlotKind::Waterfall
-                | PlotKind::Dumbbell
-                | PlotKind::Qq => x_name,
-                PlotKind::Histogram => self.histogram_composite_geometry_input().map_or_else(
-                    || match self.histogram_stat {
-                        HistogramStat::Count => Some(("Count", false)),
-                        HistogramStat::Probability => Some(("Probability", false)),
-                        HistogramStat::Density => Some(("Density", false)),
-                    },
-                    |input| Some((input.dimensions.density.as_str(), true)),
-                ),
-                PlotKind::Raincloud => self.raincloud_geometry_input().map_or_else(
-                    || y_name,
-                    |input| Some((input.dimensions.value.as_str(), true)),
-                ),
-                PlotKind::Density => Some(("Density", false)),
-                PlotKind::Matrix => None,
-                _ => y_name,
-            },
-            |raw| Some((raw, false)),
-        );
+        let x = match kind {
+            PlotKind::HorizontalBar
+            | PlotKind::StackedHorizontalBar
+            | PlotKind::Waterfall
+            | PlotKind::Dumbbell => y_name,
+            PlotKind::Qq => Some(("Theoretical normal quantiles", false)),
+            PlotKind::Histogram => self.histogram_composite_geometry_input().map_or_else(
+                || x_name,
+                |input| Some((input.dimensions.value.as_str(), true)),
+            ),
+            PlotKind::Raincloud => self.raincloud_geometry_input().map_or_else(
+                || x_name,
+                |input| Some((input.dimensions.category.as_str(), true)),
+            ),
+            PlotKind::Matrix => None,
+            _ => x_name,
+        };
+        let y = match kind {
+            PlotKind::HorizontalBar
+            | PlotKind::StackedHorizontalBar
+            | PlotKind::Waterfall
+            | PlotKind::Dumbbell
+            | PlotKind::Qq => x_name,
+            PlotKind::Histogram => self.histogram_composite_geometry_input().map_or_else(
+                || match self.histogram_stat {
+                    HistogramStat::Count => Some(("Count", false)),
+                    HistogramStat::Probability => Some(("Probability", false)),
+                    HistogramStat::Density => Some(("Density", false)),
+                },
+                |input| Some((input.dimensions.density.as_str(), true)),
+            ),
+            PlotKind::Raincloud => self.raincloud_geometry_input().map_or_else(
+                || y_name,
+                |input| Some((input.dimensions.value.as_str(), true)),
+            ),
+            PlotKind::Density => Some(("Density", false)),
+            PlotKind::Matrix => None,
+            _ => y_name,
+        };
         [x, y]
     }
 

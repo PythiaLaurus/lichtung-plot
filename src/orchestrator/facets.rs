@@ -134,8 +134,8 @@ pub(super) struct FacetPlan {
     panels: Vec<data::FacetPanel>,
     panel_plans: Vec<std::sync::Arc<crate::decorations::plan::PanelPlan>>,
     outside_legend: Option<ResolvedLegend>,
-    horizontal_axis_label: Option<String>,
-    vertical_axis_label: Option<String>,
+    horizontal_axis_label: Option<crate::Text>,
+    vertical_axis_label: Option<crate::Text>,
     canvas_layout: crate::layout::RootFramePlan,
     outer: crate::layout::PanelBox,
     shared_axis_origin: (f64, f64),
@@ -178,8 +178,8 @@ impl FacetPlan {
         let mut canvas_layout = planning::canvas_layout(
             source,
             theme,
-            horizontal_axis_label.as_deref(),
-            vertical_axis_label.as_deref(),
+            horizontal_axis_label.as_ref(),
+            vertical_axis_label.as_ref(),
             round,
         )?;
         let mut outer = canvas_layout.panel_box;
@@ -301,8 +301,8 @@ impl FacetPlan {
             || (discrete_guide.is_some() && crate::decorations::plan::is_outside(position))
         {
             planning::shared_axis_requirements(
-                horizontal_axis_label.as_deref(),
-                vertical_axis_label.as_deref(),
+                horizontal_axis_label.as_ref(),
+                vertical_axis_label.as_ref(),
                 theme,
                 canvas_layout.panel_box,
             )?
@@ -403,8 +403,8 @@ impl FacetPlan {
                         canvas_layout = planning::canvas_layout(
                             &owner,
                             theme,
-                            horizontal_axis_label.as_deref(),
-                            vertical_axis_label.as_deref(),
+                            horizontal_axis_label.as_ref(),
+                            vertical_axis_label.as_ref(),
                             round,
                         )?;
                     }
@@ -446,8 +446,8 @@ impl FacetPlan {
                         canvas_layout = planning::canvas_layout(
                             &owner,
                             theme,
-                            horizontal_axis_label.as_deref(),
-                            vertical_axis_label.as_deref(),
+                            horizontal_axis_label.as_ref(),
+                            vertical_axis_label.as_ref(),
                             round,
                         )?;
                     }
@@ -455,8 +455,8 @@ impl FacetPlan {
                 };
                 if outside {
                     let measured = match fit::outcome(planning::shared_axis_requirements(
-                        horizontal_axis_label.as_deref(),
-                        vertical_axis_label.as_deref(),
+                        horizontal_axis_label.as_ref(),
+                        vertical_axis_label.as_ref(),
                         theme,
                         reserved_outer,
                     ))? {
@@ -494,8 +494,8 @@ impl FacetPlan {
                 round.observe_count(edge as usize)?;
                 round.observe_count(usize::from(compact))?;
                 outer = match fit::outcome(planning::reserve_rewrapped_shared_axis_titles(
-                    horizontal_axis_label.as_deref(),
-                    vertical_axis_label.as_deref(),
+                    horizontal_axis_label.as_ref(),
+                    vertical_axis_label.as_ref(),
                     theme,
                     canvas_layout.panel_box,
                     reserved_outer,
@@ -640,8 +640,8 @@ impl FacetPlan {
                     strip_layers,
                     strip_text,
                     shared_axis_text: rendering::plan_shared_facet_axis_labels(
-                        horizontal_axis_label.as_deref(),
-                        vertical_axis_label.as_deref(),
+                        horizontal_axis_label.as_ref(),
+                        vertical_axis_label.as_ref(),
                         outer,
                         shared_axis_origin,
                         theme,
@@ -687,7 +687,7 @@ impl FacetPlan {
             .into_iter()
             .flatten()
         {
-            round.observe_string(label)?;
+            round.observe_authored_text(label)?;
         }
         round.observe_number(self.shared_axis_origin.0)?;
         round.observe_number(self.shared_axis_origin.1)?;
@@ -1198,8 +1198,8 @@ mod feedback_tests {
             .iter()
             .all(|panel| guide.bounds.bottom > panel.panel.y1));
         assert_eq!(
-            plan.horizontal_axis_label.as_deref(),
-            source.prepare_axis_labels(None).unwrap()[0].as_deref()
+            plan.horizontal_axis_label.as_ref(),
+            source.prepare_axis_labels(None).unwrap()[0].as_ref()
         );
     }
 

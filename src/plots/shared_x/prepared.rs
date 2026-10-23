@@ -27,16 +27,16 @@ pub(crate) struct PreparedAxes {
     pub(crate) ranges: [(f64, f64); 2],
     pub(crate) categories: [Option<Vec<AxisTick>>; 2],
     pub(crate) display_categories: [Option<Vec<String>>; 2],
-    pub(crate) labels: [Option<String>; 2],
+    pub(crate) labels: [Option<crate::Text>; 2],
     pub(crate) specs: [AxisSpec; 2],
     pub(crate) logarithmic: bool,
 }
 
 impl PreparedAxes {
-    pub(crate) fn copy_label(&self, side: usize) -> Result<Option<String>, Error> {
+    pub(crate) fn copy_label(&self, side: usize) -> Result<Option<crate::Text>, Error> {
         self.labels[side]
-            .as_deref()
-            .map(crate::data::source::copy_source_string)
+            .as_ref()
+            .map(crate::Text::try_copy)
             .transpose()
     }
 }

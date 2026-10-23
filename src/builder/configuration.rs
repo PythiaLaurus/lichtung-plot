@@ -200,16 +200,20 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     /// Set the x-axis label.
+    /// Local style and line alignment are independent of the y title. Replacement
+    /// follows [`Self::title`], preserving prior instructions when omitted.
     #[must_use]
-    pub fn x_label(mut self, label: impl Into<String>) -> Self {
-        self.x_label = Some(label.into());
+    pub fn x_label(mut self, label: impl Into<crate::Text>) -> Self {
+        self.x_label.replace(label.into());
         self
     }
 
     /// Set the y-axis label.
+    /// Local line alignment applies before the existing vertical title transform.
+    /// Content and instruction replacement follow [`Self::title`].
     #[must_use]
-    pub fn y_label(mut self, label: impl Into<String>) -> Self {
-        self.y_label = Some(label.into());
+    pub fn y_label(mut self, label: impl Into<crate::Text>) -> Self {
+        self.y_label.replace(label.into());
         self
     }
 

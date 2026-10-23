@@ -75,12 +75,13 @@ fn assert_changed_height_inputs(source: Plot, variants: impl IntoIterator<Item =
 }
 
 #[test]
-fn recorded_heights_require_complete_prose_requests_even_when_geometry_can_match() {
+fn recorded_heights_require_complete_text_requests_even_when_geometry_can_match() {
     let source = Plot::scatter(
         crate::NumericValues::new("x", [0.0, 1.0]),
         crate::NumericValues::new("y", [1.0, 0.0]),
     )
     .title("Heading")
+    .x_label("Horizontal")
     .erase();
     let exact = crate::Theme::publication()
         .typography()
@@ -94,6 +95,9 @@ fn recorded_heights_require_complete_prose_requests_even_when_geometry_can_match
         source
             .clone()
             .title(crate::Text::new("Heading").layout(crate::TextLayout::default())),
+        source
+            .clone()
+            .x_label(crate::Text::new("Horizontal").layout(crate::TextLayout::default())),
     ];
     assert_changed_height_inputs(source, variants);
 }

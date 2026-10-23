@@ -228,11 +228,18 @@ in `src/text.rs`, including constructor-validated TextPanel/headers/panel notes 
 preflight-validated Plot/Canvas prose. Leading/trailing whitespace, blank lines
 and explicitly empty text survive intrinsic analysis, font census, measurement
 and frozen capture. Empty axis titles are present text; prepared/layout axes use
-`Option<String>` to distinguish them from absent titles, including suppressed
+`Option<Text>` to distinguish them from absent titles, including suppressed
 facet-child titles. Category display aliases retain empty-line metrics too;
 internal axis text visibility carries parent/Matrix suppression without rewriting
 the prepared labels. Exact tick empty-label suppression remains an intentional
 owner rule, separate from content validation.
+
+Authored x/y titles retain complete appearance and layout requests through prepared
+axes and shared facet ownership. Intrinsics, natural gutter preferences, constrained
+measurement and axis-title spacing use each selected appearance. Line alignment
+precedes the axis transform without moving the centered block. Intrinsic, child and
+height reuse keys retain the complete request; frozen plans draw without resolving
+source or appearance again.
 
 Unicode tables/algorithms must have reproducible version/hash/provenance and
 compatible shaping classification; a dependency version alone is insufficient.

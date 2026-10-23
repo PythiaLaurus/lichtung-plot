@@ -149,6 +149,12 @@ followed by `.title("Updated")` keeps End, while
 `.title(Text::new("Updated").layout(TextLayout::default()))` restores the owning
 title defaults. Caption Text can choose its own alignment independently.
 
+Plot `x_label` and `y_label` also accept Text and preserve instructions on plain
+source replacement. Each can select its own complete style over the Theme's
+axis-title role. Alignment controls lines inside the centered title block before
+its axis orientation; the selected size also sets that title's relative gaps.
+These instructions remain attached when facets move titles to the shared parent.
+
 `PanelTextAnnotation::new(corner, text)` accepts the same `Text` value. Its exact
 style replaces the Plot's panel-note role; local alignment controls lines within
 the block while the chosen corner keeps ownership of block placement.

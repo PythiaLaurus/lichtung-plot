@@ -638,7 +638,8 @@ pub(crate) fn measure(
                     }))?,
                     label: label
                         .map(crate::data::source::copy_source_string)
-                        .transpose()?,
+                        .transpose()?
+                        .map(crate::Text::from),
                     tick_labels_visible: label.is_some(),
                     explicit_ticks: false,
                     assigned_tick_width: None,

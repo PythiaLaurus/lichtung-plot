@@ -398,6 +398,38 @@ impl Layout {
 }
 
 impl Axis {
+    /// Keep the title block centered on its semantic axis while aligning its lines
+    /// in text-local space, before the existing horizontal/vertical transform.
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "canonical text quanta convert at placement"
+    )]
+    pub(crate) fn title_placement(
+        plan: &ResolvedTextPlan,
+        center: Point2D,
+        side: AxisSide,
+    ) -> Result<PlannedTextPlacement, Error> {
+        let half = crate::render::backend::nearest_even_text_half(plan.width_quanta)
+            .ok_or_else(|| Error::Render("axis title half extent overflow".into()))?
+            as f64
+            / 1024.0;
+        let (anchor, offset) = match plan.style.alignment {
+            PhysicalTextAlignment::Start => (TextAnchor::Start, -half),
+            PhysicalTextAlignment::Center => (TextAnchor::Middle, 0.0),
+            PhysicalTextAlignment::End => (TextAnchor::End, plan.width() - half),
+        };
+        Ok(match side {
+            AxisSide::Bottom => {
+                PlannedTextPlacement::middle(Point2D::new(center.x + offset, center.y), anchor, 0.0)
+            }
+            AxisSide::Left => PlannedTextPlacement::middle(
+                Point2D::new(center.x, center.y + offset),
+                anchor,
+                -90.0,
+            ),
+        })
+    }
+
     pub(crate) fn validate_ticks(
         ticks: &[AxisTick],
         range: (f64, f64),
@@ -503,9 +535,13 @@ impl Axis {
             0.0
         };
 
+        let title_appearance = self.label.as_ref().map_or_else(
+            || (&standard.axis_title).into(),
+            |text| text.appearance(&standard.axis_title),
+        );
         let lengths = standard.axes.get_spacing().lengths(
             standard.tick_label.get_font_size(),
-            standard.axis_title.get_font_size(),
+            title_appearance.theme.get_font_size(),
         )?;
         let frame_half = standard
             .axes
@@ -631,10 +667,12 @@ impl Axis {
         let title = if let Some(label) = &self.label {
             let plan = fit::measured(fit::text(
                 theme,
-                label,
-                &standard.axis_title,
+                label.as_str(),
+                title_appearance,
                 title_width,
-                PhysicalTextAlignment::Center,
+                label
+                    .resolved_alignment(crate::TextAlignment::Center)
+                    .into(),
                 title_role,
                 scope,
             ))?;
@@ -648,18 +686,11 @@ impl Axis {
             };
             gutter = gutter.add_length(separation);
             let position = AxisLengths::before(&gutter.add_pixels(plan.height() / 2.0)?, anchor)?;
-            let mut placement = match side {
-                AxisSide::Bottom => PlannedTextPlacement::middle(
-                    Point2D::new(f64::midpoint(panel.x0, panel.x1), position),
-                    TextAnchor::Middle,
-                    0.0,
-                ),
-                AxisSide::Left => PlannedTextPlacement::middle(
-                    Point2D::new(position, f64::midpoint(panel.y0, panel.y1)),
-                    TextAnchor::Middle,
-                    -90.0,
-                ),
+            let center = match side {
+                AxisSide::Bottom => Point2D::new(f64::midpoint(panel.x0, panel.x1), position),
+                AxisSide::Left => Point2D::new(position, f64::midpoint(panel.y0, panel.y1)),
             };
+            let mut placement = Self::title_placement(&plan, center, side)?;
             let canonical = crate::render::coordinates::canonical_text(
                 placement.position,
                 placement.rotation,

@@ -800,6 +800,9 @@ mod tests {
                     source.clone().with_parent_axis_gutters(),
                     source.clone().with_suppressed_legend(),
                     source.clone().title_alignment(crate::TextAlignment::End),
+                    source
+                        .clone()
+                        .x_label(crate::Text::new("x").layout(crate::TextLayout::default())),
                 ] {
                     assert!(!key.matches(&plot, context, &owner, round)?);
                 }

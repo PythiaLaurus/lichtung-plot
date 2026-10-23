@@ -219,15 +219,28 @@ pub(crate) fn body_preference(
     }
 }
 
+fn axis_title_style<'a>(
+    plot: &'a Plot,
+    theme: &'a ResolvedTheme,
+    side: usize,
+) -> &'a crate::TextTheme {
+    plot.prepared_axis_inputs()
+        .and_then(|axes| axes.labels[side].as_ref())
+        .map_or(&theme.typography.axes.axis_title, |text| {
+            text.appearance(&theme.typography.axes.axis_title).theme
+        })
+}
+
 /// Intrinsic horizontal axis/chrome preference before a root chooses its width.
 /// Actual selected-source gutters subsequently replace this estimate via feedback.
 pub(crate) fn horizontal_gutter_preference(
     plot: &Plot,
     theme: &ResolvedTheme,
 ) -> Result<(f64, f64), Error> {
+    let title = axis_title_style(plot, theme, 1);
     let lengths = theme.axes.get_spacing().lengths(
         theme.typography.axes.tick_label.get_font_size(),
-        theme.typography.axes.axis_title.get_font_size(),
+        title.get_font_size(),
     )?;
     let chrome = if plot.kind() == PlotKind::Matrix {
         theme.axes.cell_axis_chrome()
@@ -288,7 +301,7 @@ pub(crate) fn horizontal_gutter_preference(
         .y_tick_label_gap
         .add_length(&lengths.y_title_tick_label_gap)
         .add_length(&lengths.y_title_edge_padding)
-        .add_pixels(theme.typography.axes.axis_title.line_pitch_pixels())?
+        .add_pixels(title.line_pitch_pixels())?
         .add_length(&chrome.outward(crate::layout::AxisSide::Left, true)?)
         .add_length(&edge)
         .add_pixels(label_width)?;
@@ -327,9 +340,10 @@ pub(crate) fn plot_size(
 
     let hard = plot.intrinsic_body_minimum(theme)?;
     let preference = body_preference(plot, theme, hard)?;
+    let title = axis_title_style(plot, theme, 0);
     let lengths = theme.axes.get_spacing().lengths(
         theme.typography.axes.tick_label.get_font_size(),
-        theme.typography.axes.axis_title.get_font_size(),
+        title.get_font_size(),
     )?;
     let common_chrome = if plot.kind() == PlotKind::Matrix {
         theme.axes.cell_axis_chrome()
@@ -411,7 +425,7 @@ pub(crate) fn plot_size(
                 .x_tick_label_gap
                 .add_length(&lengths.x_title_tick_label_gap)
                 .add_pixels(theme.typography.axes.tick_label.line_pitch_pixels())?
-                .add_pixels(theme.typography.axes.axis_title.line_pitch_pixels())?
+                .add_pixels(title.line_pitch_pixels())?
                 .add_length(&bottom_outward)
                 .add_length(&panel_edge),
         )?

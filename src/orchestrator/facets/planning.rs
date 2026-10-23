@@ -20,8 +20,8 @@ use crate::theme::ResolvedTheme;
 pub(super) fn canvas_layout(
     plot: &Plot,
     theme: &ResolvedTheme,
-    horizontal_axis_label: Option<&str>,
-    vertical_axis_label: Option<&str>,
+    horizontal_axis_label: Option<&crate::Text>,
+    vertical_axis_label: Option<&crate::Text>,
     round: &mut FeedbackRound,
 ) -> Result<RootFramePlan, crate::layout::fit::PlanError> {
     let mut canvas = RootFramePlan::measure(
@@ -54,8 +54,8 @@ pub(super) fn canvas_layout(
 }
 
 pub(super) fn reserve_rewrapped_shared_axis_titles(
-    horizontal_axis_label: Option<&str>,
-    vertical_axis_label: Option<&str>,
+    horizontal_axis_label: Option<&crate::Text>,
+    vertical_axis_label: Option<&crate::Text>,
     theme: &ResolvedTheme,
     reserved_panel: PanelBox,
     candidate_panel: PanelBox,
@@ -82,40 +82,36 @@ pub(super) fn reserve_rewrapped_shared_axis_titles(
 /// Shared titles own their measured perpendicular extents and theme clearance.
 /// Root padding and the scientific Grid remain independent reservations.
 pub(super) fn shared_axis_requirements(
-    horizontal: Option<&str>,
-    vertical: Option<&str>,
+    horizontal: Option<&crate::Text>,
+    vertical: Option<&crate::Text>,
     theme: &ResolvedTheme,
     panel: PanelBox,
 ) -> Result<[f64; 4], crate::layout::fit::PlanError> {
     let mut insets = [0.0; 4];
 
-    let lengths = theme.axes.get_spacing().lengths(
-        theme.typography.axes.tick_label.get_font_size(),
-        theme.typography.axes.axis_title.get_font_size(),
-    )?;
-    for (source, span, index, gap, role) in [
-        (
-            horizontal,
-            panel.width(),
-            2,
-            &lengths.x_title_without_tick_labels_gap,
-            AddressRole::AxisBottom,
-        ),
-        (
-            vertical,
-            panel.height(),
-            0,
-            &lengths.y_title_edge_padding,
-            AddressRole::AxisLeft,
-        ),
+    for (source, span, index, role) in [
+        (horizontal, panel.width(), 2, AddressRole::AxisBottom),
+        (vertical, panel.height(), 0, AddressRole::AxisLeft),
     ] {
         if let Some(source) = source {
+            let appearance = source.appearance(&theme.typography.axes.axis_title);
+            let lengths = theme.axes.get_spacing().lengths(
+                theme.typography.axes.tick_label.get_font_size(),
+                appearance.theme.get_font_size(),
+            )?;
+            let gap = if index == 2 {
+                &lengths.x_title_without_tick_labels_gap
+            } else {
+                &lengths.y_title_edge_padding
+            };
             let plan = crate::layout::fit::measured(crate::layout::fit::text(
                 theme,
-                source,
-                &theme.typography.axes.axis_title,
+                source.as_str(),
+                appearance,
                 span,
-                PhysicalTextAlignment::Center,
+                source
+                    .resolved_alignment(crate::TextAlignment::Center)
+                    .into(),
                 "shared facet axis title",
                 &crate::layout::fit::FitScope::root().child(role, 0)?,
             ))?;
@@ -126,8 +122,8 @@ pub(super) fn shared_axis_requirements(
 }
 
 fn adjusted_shared_axis_panel(
-    horizontal_axis_label: Option<&str>,
-    vertical_axis_label: Option<&str>,
+    horizontal_axis_label: Option<&crate::Text>,
+    vertical_axis_label: Option<&crate::Text>,
     theme: &ResolvedTheme,
     baseline: [f64; 4],
     candidate: PanelBox,

@@ -34,7 +34,7 @@ fn present_empty_axis_title_keeps_line_metrics_while_empty_exact_ticks_stay_hidd
     );
     let absent = layout.plan_axes(&theme).unwrap();
     assert!(absent.x_axis.title.is_none());
-    layout.x_axis.label = Some(String::new());
+    layout.x_axis.label = Some("".into());
     let present = layout.plan_axes(&theme).unwrap();
     let text = &present.x_axis.title.as_ref().unwrap().0;
     assert_eq!(text.line_texts(), [""]);

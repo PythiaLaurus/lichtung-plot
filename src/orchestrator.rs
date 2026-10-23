@@ -406,7 +406,7 @@ fn later_axis_font_failure_wins_over_an_earlier_text_fit() {
     theme.prepare_font_environment().unwrap();
     let mut layout =
         crate::layout::Layout::envelope(crate::layout::PanelBox::new(80.0, 610.0, 60.0, 450.0));
-    layout.x_axis.label = Some("W".repeat(200));
+    layout.x_axis.label = Some("W".repeat(200).into());
     let scope = FitScope::root();
     assert!(matches!(
         validate_axis_text(&layout, &theme, &scope),

@@ -155,29 +155,32 @@ fn draw_facet_strip(
 }
 
 pub(super) fn plan_shared_facet_axis_labels(
-    horizontal_label: Option<&str>,
-    vertical_label: Option<&str>,
+    horizontal_label: Option<&crate::Text>,
+    vertical_label: Option<&crate::Text>,
     grid: PanelBox,
     axis_origin: (f64, f64),
     theme: &ResolvedTheme,
 ) -> Result<Vec<PlacedText>, crate::layout::fit::PlanError> {
     let mut plans = Vec::new();
 
-    let lengths = theme.axes.get_spacing().lengths(
-        theme.typography.axes.tick_label.get_font_size(),
-        theme.typography.axes.axis_title.get_font_size(),
-    )?;
     crate::render::backend::reserve_text_records(
         &mut plans,
         usize::from(horizontal_label.is_some()) + usize::from(vertical_label.is_some()),
     )?;
     if let Some(label) = horizontal_label {
+        let appearance = label.appearance(&theme.typography.axes.axis_title);
+        let lengths = theme.axes.get_spacing().lengths(
+            theme.typography.axes.tick_label.get_font_size(),
+            appearance.theme.get_font_size(),
+        )?;
         let plan = crate::layout::fit::measured(crate::layout::fit::text(
             theme,
-            label,
-            &theme.typography.axes.axis_title,
+            label.as_str(),
+            appearance,
             grid.width(),
-            PhysicalTextAlignment::Center,
+            label
+                .resolved_alignment(crate::TextAlignment::Center)
+                .into(),
             "shared facet x-axis title",
             &crate::layout::fit::FitScope::root()
                 .child(crate::layout::AddressRole::AxisBottom, 0)?,
@@ -188,20 +191,27 @@ pub(super) fn plan_shared_facet_axis_labels(
                 .add_pixels(plan.height() / 2.0)?,
             axis_origin.1,
         )?;
-        plans.push(PlacedText::middle(
-            plan,
+        let placement = crate::layout::Axis::title_placement(
+            &plan,
             Point2D::new(f64::midpoint(grid.x0, grid.x1), middle_y),
-            TextAnchor::Middle,
-            0.0,
-        ));
+            crate::layout::AxisSide::Bottom,
+        )?;
+        plans.push(PlacedText { plan, placement });
     }
     if let Some(label) = vertical_label {
+        let appearance = label.appearance(&theme.typography.axes.axis_title);
+        let lengths = theme.axes.get_spacing().lengths(
+            theme.typography.axes.tick_label.get_font_size(),
+            appearance.theme.get_font_size(),
+        )?;
         let plan = crate::layout::fit::measured(crate::layout::fit::text(
             theme,
-            label,
-            &theme.typography.axes.axis_title,
+            label.as_str(),
+            appearance,
             grid.height(),
-            PhysicalTextAlignment::Center,
+            label
+                .resolved_alignment(crate::TextAlignment::Center)
+                .into(),
             "shared facet y-axis title",
             &crate::layout::fit::FitScope::root().child(crate::layout::AddressRole::AxisLeft, 0)?,
         ))?;
@@ -211,15 +221,12 @@ pub(super) fn plan_shared_facet_axis_labels(
                 .add_pixels(plan.height() / 2.0)?,
             axis_origin.0,
         )?;
-        plans.push(
-            PlacedText::middle(
-                plan,
-                Point2D::new(middle_x, f64::midpoint(grid.y0, grid.y1)),
-                TextAnchor::Middle,
-                -90.0,
-            )
-            .with_reversed_lines(),
-        );
+        let placement = crate::layout::Axis::title_placement(
+            &plan,
+            Point2D::new(middle_x, f64::midpoint(grid.y0, grid.y1)),
+            crate::layout::AxisSide::Left,
+        )?;
+        plans.push(PlacedText { plan, placement }.with_reversed_lines());
     }
     Ok(plans)
 }
@@ -331,8 +338,8 @@ mod tests {
         let strip = plan_facet_strip(&plot, &facet, &theme).unwrap();
         let origin = (57.25, 67.75);
         let axes = plan_shared_facet_axis_labels(
-            Some("Horizontal\nSecond"),
-            Some("Vertical\nSecond"),
+            Some(&"Horizontal\nSecond".into()),
+            Some(&"Vertical\nSecond".into()),
             grid,
             origin,
             &theme,

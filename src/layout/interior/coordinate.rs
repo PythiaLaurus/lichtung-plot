@@ -14,6 +14,7 @@ use crate::{Error, Plot};
 #[derive(Debug)]
 pub(crate) struct Intrinsics {
     standard: StandardPanelInputs,
+    titles: [Option<crate::Text>; 2],
     formats: [Option<std::sync::Arc<crate::numeric::format::NumericFormat>>; 2],
     base_ranges: [(u64, u64); 2],
     logarithmic: bool,
@@ -53,7 +54,7 @@ impl Intrinsics {
                 "prepared panel intrinsic numeric context changed".into(),
             ));
         }
-        if !summary.standard.matches(theme)? {
+        if summary.titles != axes.labels || !summary.standard.matches(theme)? {
             return Err(Error::Render(
                 "prepared panel intrinsic typography changed".into(),
             ));
@@ -98,8 +99,8 @@ impl Intrinsics {
             if let Some(label) = &axes.labels[side] {
                 let (hard, _) = fit::intrinsic_widths(
                     theme,
-                    label,
-                    &standard.axis_title,
+                    label.as_str(),
+                    label.appearance(&standard.axis_title),
                     "standard panel axis title intrinsic",
                 )?;
                 if side == 0 {
@@ -181,6 +182,7 @@ impl Intrinsics {
         }
         Ok(Self {
             standard,
+            titles: [axes.copy_label(0)?, axes.copy_label(1)?],
             formats: axes.specs.each_ref().map(|spec| spec.format.clone()),
             base_ranges: axes.ranges.map(|(lo, hi)| (lo.to_bits(), hi.to_bits())),
             logarithmic: axes.logarithmic,

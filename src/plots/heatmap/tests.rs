@@ -96,7 +96,7 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
         .heatmap_intrinsics
         .get()
         .unwrap()
-        .matches_inputs(same_paint_marks, &theme));
+        .matches_inputs(same_paint_marks, axes, &theme));
     let changed_source = source(
         policy
             .try_copy()
@@ -122,7 +122,7 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
         .heatmap_intrinsics
         .get()
         .unwrap()
-        .matches_inputs(changed_marks, &theme));
+        .matches_inputs(changed_marks, axes, &theme));
     let padding = theme
         .annotations
         .get_cells()
@@ -136,7 +136,7 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
         .heatmap_intrinsics
         .get()
         .unwrap()
-        .matches_inputs(marks, &theme));
+        .matches_inputs(marks, axes, &theme));
     let edited = prepare_intrinsics(marks, axes, &theme, None).unwrap();
     let required = (plan.width() + 11.0, plan.height() + 22.0);
     assert!(edited.0 >= original.0 && edited.1 >= original.1);

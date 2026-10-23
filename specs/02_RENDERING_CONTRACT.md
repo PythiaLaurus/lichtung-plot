@@ -186,20 +186,23 @@ One-name resolution does not replace complete-domain collision checks. Raw
 category/series/field keys, endpoint identities, font-family names, significance
 selectors, paths and NumericFormat grammar retain their own semantic validation.
 
-Plot/Canvas title, subtitle and caption, and TextPanel title/body accept
-`impl Into<Text>` through one source representation. String, &str and &String
+Plot/Canvas title, subtitle and caption, Plot x/y titles, and TextPanel title/body
+accept `impl Into<Text>` through one source representation. String, &str and &String
 carry no local instructions. Text optionally retains
 one complete exact TextTheme and one whole TextLayout request. Its alignment edit
 uses shared TextAlignment. TextLayout defaults leave alignment unspecified, while
 an explicitly supplied default request remains distinguishable from omission.
 TextPanel's existing title/body readers borrow the source as `&str`.
 
-Prose setters replace source in call order. Omitted incoming style/layout preserves
-the slot's earlier instructions; a present style replaces the complete appearance,
+Prose and x/y-title setters replace source in call order. Omitted incoming
+style/layout preserves the slot's earlier instructions; a present style replaces the complete appearance,
 and a present layout replaces the complete request. An explicit default layout
 resets alignment to owner defaults. Plot title/subtitle convenience alignment
 edits write that same request, including before any content is supplied. Presence
 remains separate from an empty source and from retained instructions.
+X/y title styles resolve independently over the shared Theme axis-title role.
+Their physical line alignment defaults to Center within each centered title block,
+before its horizontal/vertical transform, including parent-owned facet titles.
 
 PanelTextAnnotation likewise accepts `impl Into<Text>` and preserves complete Eq;
 its existing text reader returns `&str`. Local style replaces the Plot's panel-text

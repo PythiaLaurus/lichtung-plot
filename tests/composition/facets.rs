@@ -340,14 +340,52 @@ fn long_label_facets_measure_gutters_and_wrap_strips_inside_owned_cells() {
 
 #[test]
 fn faceted_shared_axis_titles_preserve_explicit_multiline_text() {
+    use lichtung_plot::{FontFamily, FontStack, Text, TextAlignment, TextWeight, Theme};
     let facet = CategoryValues::new("facet", ["left", "left", "right", "right"]).unwrap();
     let x = NumericValues::new("x", [1.0, 2.0, 1.0, 2.0]);
     let y = NumericValues::new("y", [1.0, 2.0, 2.0, 3.0]);
+    let base = Theme::publication();
+    let axis = base.typography().get_axes().get_axis_title().clone();
+    let x_style = axis
+        .clone()
+        .font_size(21)
+        .unwrap()
+        .weight(TextWeight::Bold)
+        .unwrap();
+    let y_style = axis.clone().font_size(15).unwrap();
+    let typography = base
+        .typography()
+        .clone()
+        .axes(
+            base.typography()
+                .get_axes()
+                .clone()
+                .axis_title(
+                    axis.stack(
+                        FontStack::new([FontFamily::named("Unused axis title font").unwrap()])
+                            .unwrap(),
+                    )
+                    .unwrap(),
+                )
+                .unwrap(),
+        )
+        .unwrap();
+    let theme = base.customize().typography(typography).build().unwrap();
     let svg = render_svg(
         Plot::line(x, y)
             .facet(FacetSpec::column(facet))
+            .x_label(
+                Text::new("discarded")
+                    .style(x_style)
+                    .alignment(TextAlignment::Start),
+            )
             .x_label("Shared horizontal axis\ncontinued horizontally")
-            .y_label("Shared vertical axis\ncontinued vertically")
+            .y_label(
+                Text::new("Shared vertical axis\ncontinued vertically")
+                    .style(y_style)
+                    .alignment(TextAlignment::End),
+            )
+            .theme(theme)
             .size(760, 420),
         "multiline-facet-axes",
     )
