@@ -510,21 +510,21 @@ fn heading_instructions_are_role_local_order_independent_and_frozen() {
     let composition = base
         .composition()
         .clone()
-        .with_root_title_alignment(Start)
+        .root_title_alignment(Start)
         .unwrap()
-        .with_root_subtitle_alignment(None)
+        .root_subtitle_alignment(None)
         .unwrap()
-        .with_root_caption_alignment(End)
+        .root_caption_alignment(End)
         .unwrap();
     let root_theme = base.customize().composition(composition).build().unwrap();
     let composition = base
         .composition()
         .clone()
-        .with_root_title_alignment(End)
+        .root_title_alignment(End)
         .unwrap()
-        .with_root_subtitle_alignment(Some(Start))
+        .root_subtitle_alignment(Some(Start))
         .unwrap()
-        .with_root_caption_alignment(Center)
+        .root_caption_alignment(Center)
         .unwrap();
     let local_theme = base.customize().composition(composition).build().unwrap();
     let scatter = |name: &str| {

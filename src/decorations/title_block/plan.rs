@@ -23,14 +23,14 @@ impl RootAlignments {
     ) -> Self {
         let title = plot[0]
             .or(panel[0])
-            .unwrap_or(theme.composition.root_title_alignment());
+            .unwrap_or(theme.composition.get_root_title_alignment());
         Self {
             title,
             subtitle: plot[1]
                 .or(panel[1])
-                .or(theme.composition.root_subtitle_alignment())
+                .or(theme.composition.get_root_subtitle_alignment())
                 .unwrap_or(title),
-            caption: theme.composition.root_caption_alignment(),
+            caption: theme.composition.get_root_caption_alignment(),
         }
     }
 }

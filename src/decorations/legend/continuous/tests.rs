@@ -150,24 +150,24 @@ fn constant_domain_large_typography_reserves_singleton_length_in_both_flows() {
     theme.typography.guides.legend_label.weight = crate::TextWeight::Bold;
     let spacing = theme
         .legend
-        .spacing()
+        .get_spacing()
         .clone()
-        .with_row_gap(crate::RelativeSpacing::from_pixels(5.0, 96).unwrap())
+        .row_gap(crate::RelativeSpacing::from_pixels(5.0, 96).unwrap())
         .unwrap();
     let lengths = theme
         .legend
-        .gradient_lengths()
+        .get_gradient_lengths()
         .clone()
-        .with_minimum(crate::RelativeSpacing::from_pixels(40.0, 96).unwrap())
+        .minimum(crate::RelativeSpacing::from_pixels(40.0, 96).unwrap())
         .unwrap()
-        .with_preferred(crate::RelativeSpacing::from_pixels(512.0, 96).unwrap())
+        .preferred(crate::RelativeSpacing::from_pixels(512.0, 96).unwrap())
         .unwrap();
     theme.legend = theme
         .legend
         .clone()
-        .with_spacing(spacing)
+        .spacing(spacing)
         .unwrap()
-        .with_gradient_lengths(lengths)
+        .gradient_lengths(lengths)
         .unwrap();
     let mut descriptor = descriptor();
     descriptor.domain = (12_345.0, 12_345.0);
@@ -344,7 +344,7 @@ fn custom_frame_and_owner_missing_strokes_are_allocated_and_retained_unclipped()
     theme.legend = theme
         .legend
         .clone()
-        .with_frame(Some(
+        .frame(Some(
             crate::theme::LegendFrameTheme::new(
                 crate::Color::rgba(1, 2, 3, 127),
                 Some(
@@ -380,7 +380,7 @@ fn custom_frame_and_owner_missing_strokes_are_allocated_and_retained_unclipped()
             panic!("one frame is retained first")
         };
         assert_eq!(rect[4].to_bits(), 18.0_f64.to_bits());
-        assert_eq!(fill.color, theme.legend.frame().unwrap().fill());
+        assert_eq!(fill.color, theme.legend.get_frame().unwrap().get_fill());
         assert_eq!(fill.stroke_width.to_bits(), 30.0_f32.to_bits());
         let missing = calls
             .iter()
@@ -450,7 +450,7 @@ fn custom_text_ink_overhang_cannot_be_hidden_by_the_guide_frame() {
 #[test]
 fn absent_continuous_frame_retains_gradient_labels_and_missing_key() {
     let mut theme = crate::Theme::publication().resolve().unwrap();
-    theme.legend = theme.legend.clone().with_frame(None).unwrap();
+    theme.legend = theme.legend.clone().frame(None).unwrap();
     let mut descriptor = descriptor();
     descriptor.missing.as_mut().unwrap().outline = None;
     let guide = fit::measured(Ok(measure(
@@ -521,11 +521,11 @@ fn compact_gradient_keeps_all_labels_and_skips_duplicate_allocations() {
     assert_eq!(body(&compact).stops, body(&preferred).stops);
     let lengths = theme
         .legend
-        .gradient_lengths()
+        .get_gradient_lengths()
         .clone()
-        .with_preferred(theme.legend.gradient_lengths().minimum().clone())
+        .preferred(theme.legend.get_gradient_lengths().get_minimum().clone())
         .unwrap();
-    theme.legend = theme.legend.clone().with_gradient_lengths(lengths).unwrap();
+    theme.legend = theme.legend.clone().gradient_lengths(lengths).unwrap();
     measure(
         &descriptor,
         (300.0, 300.0),

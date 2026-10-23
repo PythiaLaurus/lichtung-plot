@@ -9,7 +9,7 @@ fn root_padding_keeps_fractional_edges_until_the_complete_hard_boundary() {
     theme.composition = theme
         .composition
         .clone()
-        .with_root_padding(RootPadding::new(third.clone(), third, zero.clone(), zero).unwrap())
+        .root_padding(RootPadding::new(third.clone(), third, zero.clone(), zero).unwrap())
         .unwrap();
     let measure = |hard| {
         RootFramePlan::measure(

@@ -25,13 +25,13 @@ pub struct FrameSides {
 }
 
 macro_rules! side_field {
-    ($field:ident, $edit:ident, $bit:literal) => {
+    ($field:ident, $get:ident, $bit:literal) => {
         #[doc = concat!("Inspect whether the physical `", stringify!($field), "` side is present.")]
-        pub fn $field(&self) -> bool {
+        pub fn $get(&self) -> bool {
             self.bits & $bit != 0
         }
         #[doc = concat!("Replace only the `", stringify!($field), "` side; at least one side must remain.")]
-        pub fn $edit(mut self, value: bool) -> Result<Self> {
+        pub fn $field(mut self, value: bool) -> Result<Self> {
             self.bits = if value {
                 self.bits | $bit
             } else {
@@ -70,14 +70,19 @@ impl FrameSides {
         }
     }
 
-    side_field!(top, with_top, 1);
-    side_field!(right, with_right, 2);
-    side_field!(bottom, with_bottom, 4);
-    side_field!(left, with_left, 8);
+    side_field!(top, get_top, 1);
+    side_field!(right, get_right, 2);
+    side_field!(bottom, get_bottom, 4);
+    side_field!(left, get_left, 8);
 
     /// Existing standard drawing order: bottom, right, top, left.
     pub(crate) fn drawing_order(&self) -> [bool; 4] {
-        [self.bottom(), self.right(), self.top(), self.left()]
+        [
+            self.get_bottom(),
+            self.get_right(),
+            self.get_top(),
+            self.get_left(),
+        ]
     }
 }
 
@@ -100,19 +105,19 @@ impl FrameTheme {
         self.stroke.validate()
     }
     /// Borrow the physical side set.
-    pub fn sides(&self) -> &FrameSides {
+    pub fn get_sides(&self) -> &FrameSides {
         &self.sides
     }
     /// Borrow the complete frame stroke.
-    pub fn stroke(&self) -> &StrokeTheme {
+    pub fn get_stroke(&self) -> &StrokeTheme {
         &self.stroke
     }
     /// Replace only the nonempty physical side set.
-    pub fn with_sides(self, sides: FrameSides) -> Result<Self> {
+    pub fn sides(self, sides: FrameSides) -> Result<Self> {
         Self::new(sides, self.stroke)
     }
     /// Replace only the complete frame stroke.
-    pub fn with_stroke(self, stroke: StrokeTheme) -> Result<Self> {
+    pub fn stroke(self, stroke: StrokeTheme) -> Result<Self> {
         Self::new(self.sides, stroke)
     }
 }
@@ -141,25 +146,25 @@ impl TickTheme {
         Ok(())
     }
     /// Borrow the complete tick stroke.
-    pub fn stroke(&self) -> &StrokeTheme {
+    pub fn get_stroke(&self) -> &StrokeTheme {
         &self.stroke
     }
     /// Inspect the positive tick length in CSS pixels.
-    pub fn length(&self) -> u32 {
+    pub fn get_length(&self) -> u32 {
         self.length
     }
     /// Replace only the complete tick stroke.
-    pub fn with_stroke(self, stroke: StrokeTheme) -> Result<Self> {
+    pub fn stroke(self, stroke: StrokeTheme) -> Result<Self> {
         Self::new(stroke, self.length)
     }
     /// Replace only the positive CSS tick length.
-    pub fn with_length(self, length: u32) -> Result<Self> {
+    pub fn length(self, length: u32) -> Result<Self> {
         Self::new(self.stroke, length)
     }
 }
 
 macro_rules! axis_spacing {
-    ($($field:ident => $edit:ident : $metric:literal),+ $(,)?) => {
+    ($($field:ident => $get:ident : $metric:literal),+ $(,)?) => {
         #[derive(Clone, Debug, PartialEq, Eq)]
         /// Exact independent axis gaps, resolved from tick-label or axis-title em.
         pub struct AxisSpacing { $(pub(crate) $field: RelativeSpacing),+ }
@@ -169,9 +174,9 @@ macro_rules! axis_spacing {
             pub fn new($($field: RelativeSpacing),+) -> Result<Self> { Ok(Self { $($field),+ }) }
             $(
                 #[doc = concat!("Borrow the exact `", stringify!($field), "` relationship.")]
-                pub fn $field(&self) -> &RelativeSpacing { &self.$field }
+                pub fn $get(&self) -> &RelativeSpacing { &self.$field }
                 #[doc = concat!("Replace only the `", stringify!($field), "` relationship.")]
-                pub fn $edit(mut self, value: RelativeSpacing) -> Result<Self> {
+                pub fn $field(mut self, value: RelativeSpacing) -> Result<Self> {
                     self.$field = value;
                     self.revalidated()
                 }
@@ -180,7 +185,7 @@ macro_rules! axis_spacing {
             pub(crate) fn relationships(&self) -> [&RelativeSpacing; 6] { [$(&self.$field),+] }
             pub(crate) fn lengths(&self, tick: u32, title: u32) -> Result<AxisLengths> {
                 let metrics = [LocalMetric::css_pixels(tick)?, LocalMetric::css_pixels(title)?];
-                Ok(AxisLengths { $($field: self.$field().product(metrics[$metric])),+ })
+                Ok(AxisLengths { $($field: self.$get().product(metrics[$metric])),+ })
             }
         }
 
@@ -191,12 +196,12 @@ macro_rules! axis_spacing {
 }
 
 axis_spacing! {
-    x_tick_label_gap => with_x_tick_label_gap: 0,
-    y_tick_label_gap => with_y_tick_label_gap: 0,
-    x_title_tick_label_gap => with_x_title_tick_label_gap: 1,
-    x_title_without_tick_labels_gap => with_x_title_without_tick_labels_gap: 1,
-    y_title_tick_label_gap => with_y_title_tick_label_gap: 1,
-    y_title_edge_padding => with_y_title_edge_padding: 1,
+    x_tick_label_gap => get_x_tick_label_gap: 0,
+    y_tick_label_gap => get_y_tick_label_gap: 0,
+    x_title_tick_label_gap => get_x_title_tick_label_gap: 1,
+    x_title_without_tick_labels_gap => get_x_title_without_tick_labels_gap: 1,
+    y_title_tick_label_gap => get_y_title_tick_label_gap: 1,
+    y_title_edge_padding => get_y_title_edge_padding: 1,
 }
 
 /// Complete coordinate/cell frame, tick, grid and local spacing appearance.
@@ -223,16 +228,16 @@ impl AxisChrome<'_> {
         present_ticks: bool,
     ) -> Result<ExactLength> {
         let frame = self.frame.filter(|frame| match side {
-            crate::layout::AxisSide::Bottom => frame.sides().bottom(),
-            crate::layout::AxisSide::Left => frame.sides().left(),
+            crate::layout::AxisSide::Bottom => frame.get_sides().get_bottom(),
+            crate::layout::AxisSide::Left => frame.get_sides().get_left(),
         });
         let mut length = ExactLength::pixels(
-            frame.map_or(0.0, |frame| f64::from(frame.stroke().get_width()) / 2.0),
+            frame.map_or(0.0, |frame| f64::from(frame.get_stroke().get_width()) / 2.0),
         )?;
         if let Some(ticks) = self.ticks.filter(|_| present_ticks) {
             length = length
-                .add_pixels(f64::from(ticks.length()))?
-                .add_pixels(f64::from(ticks.stroke().get_width()) / 2.0)?;
+                .add_pixels(f64::from(ticks.get_length()))?
+                .add_pixels(f64::from(ticks.get_stroke().get_width()) / 2.0)?;
         }
         Ok(length)
     }
@@ -258,45 +263,45 @@ impl AxisTheme {
         Ok(value)
     }
     pub(crate) fn validate(&self) -> Result<()> {
-        if let Some(value) = self.frame() {
+        if let Some(value) = self.get_frame() {
             value.validate()?;
         }
-        if let Some(value) = self.cell_frame() {
+        if let Some(value) = self.get_cell_frame() {
             value.validate()?;
         }
-        if let Some(value) = self.ticks() {
+        if let Some(value) = self.get_ticks() {
             value.validate()?;
         }
-        if let Some(value) = self.grid() {
+        if let Some(value) = self.get_grid() {
             value.validate()?;
         }
         Ok(())
     }
     /// Borrow the optional ordinary coordinate frame.
-    pub fn frame(&self) -> Option<&FrameTheme> {
+    pub fn get_frame(&self) -> Option<&FrameTheme> {
         self.frame.as_ref()
     }
     /// Borrow the independent optional variable-grid cell frame.
-    pub fn cell_frame(&self) -> Option<&FrameTheme> {
+    pub fn get_cell_frame(&self) -> Option<&FrameTheme> {
         self.cell_frame.as_ref()
     }
     /// Borrow the optional tick appearance.
-    pub fn ticks(&self) -> Option<&TickTheme> {
+    pub fn get_ticks(&self) -> Option<&TickTheme> {
         self.ticks.as_ref()
     }
     /// Borrow the optional grid stroke.
-    pub fn grid(&self) -> Option<&StrokeTheme> {
+    pub fn get_grid(&self) -> Option<&StrokeTheme> {
         self.grid.as_ref()
     }
     /// Borrow all independent exact axis relationships.
-    pub fn spacing(&self) -> &AxisSpacing {
+    pub fn get_spacing(&self) -> &AxisSpacing {
         &self.spacing
     }
     pub(crate) fn coordinate_chrome(&self) -> AxisChrome<'_> {
         AxisChrome {
-            frame: self.frame(),
-            grid: self.grid(),
-            ticks: self.ticks(),
+            frame: self.get_frame(),
+            grid: self.get_grid(),
+            ticks: self.get_ticks(),
         }
     }
     /// Cell outlines belong to the native grid; common cell axes paint only ticks
@@ -305,27 +310,27 @@ impl AxisTheme {
         AxisChrome {
             frame: None,
             grid: None,
-            ticks: self.ticks(),
+            ticks: self.get_ticks(),
         }
     }
     /// Replace only the optional coordinate frame.
-    pub fn with_frame(self, frame: Option<FrameTheme>) -> Result<Self> {
+    pub fn frame(self, frame: Option<FrameTheme>) -> Result<Self> {
         Self::new(frame, self.cell_frame, self.ticks, self.grid, self.spacing)
     }
     /// Replace only the optional variable-grid cell frame.
-    pub fn with_cell_frame(self, cell_frame: Option<FrameTheme>) -> Result<Self> {
+    pub fn cell_frame(self, cell_frame: Option<FrameTheme>) -> Result<Self> {
         Self::new(self.frame, cell_frame, self.ticks, self.grid, self.spacing)
     }
     /// Replace only the optional tick appearance.
-    pub fn with_ticks(self, ticks: Option<TickTheme>) -> Result<Self> {
+    pub fn ticks(self, ticks: Option<TickTheme>) -> Result<Self> {
         Self::new(self.frame, self.cell_frame, ticks, self.grid, self.spacing)
     }
     /// Replace only the optional grid stroke.
-    pub fn with_grid(self, grid: Option<StrokeTheme>) -> Result<Self> {
+    pub fn grid(self, grid: Option<StrokeTheme>) -> Result<Self> {
         Self::new(self.frame, self.cell_frame, self.ticks, grid, self.spacing)
     }
     /// Replace only the complete local axis relationships.
-    pub fn with_spacing(self, spacing: AxisSpacing) -> Result<Self> {
+    pub fn spacing(self, spacing: AxisSpacing) -> Result<Self> {
         Self::new(self.frame, self.cell_frame, self.ticks, self.grid, spacing)
     }
 
@@ -341,10 +346,10 @@ impl AxisTheme {
             return Ok(false);
         }
         for (left, right) in self
-            .spacing()
+            .get_spacing()
             .relationships()
             .into_iter()
-            .zip(other.spacing().relationships())
+            .zip(other.get_spacing().relationships())
         {
             if !left.same(right) {
                 return Ok(false);
@@ -355,10 +360,10 @@ impl AxisTheme {
 
     pub(crate) fn observe_feedback(&self, round: &mut FeedbackRound) -> Result<()> {
         for stroke in [
-            self.frame().map(FrameTheme::stroke),
-            self.cell_frame().map(FrameTheme::stroke),
-            self.ticks().map(TickTheme::stroke),
-            self.grid(),
+            self.get_frame().map(FrameTheme::get_stroke),
+            self.get_cell_frame().map(FrameTheme::get_stroke),
+            self.get_ticks().map(TickTheme::get_stroke),
+            self.get_grid(),
         ] {
             round.observe_count(usize::from(stroke.is_some()))?;
             if let Some(stroke) = stroke {
@@ -374,15 +379,18 @@ impl AxisTheme {
                 }
             }
         }
-        for frame in [self.frame(), self.cell_frame()].into_iter().flatten() {
-            for side in frame.sides().drawing_order() {
+        for frame in [self.get_frame(), self.get_cell_frame()]
+            .into_iter()
+            .flatten()
+        {
+            for side in frame.get_sides().drawing_order() {
                 round.observe_count(usize::from(side))?;
             }
         }
-        if let Some(ticks) = self.ticks() {
-            round.observe_count(ticks.length() as usize)?;
+        if let Some(ticks) = self.get_ticks() {
+            round.observe_count(ticks.get_length() as usize)?;
         }
-        for spacing in self.spacing().relationships() {
+        for spacing in self.get_spacing().relationships() {
             spacing.observe_feedback(round)?;
         }
         Ok(())

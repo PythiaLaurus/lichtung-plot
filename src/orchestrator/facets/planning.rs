@@ -89,7 +89,7 @@ pub(super) fn shared_axis_requirements(
 ) -> Result<[f64; 4], crate::layout::fit::PlanError> {
     let mut insets = [0.0; 4];
 
-    let lengths = theme.axes.spacing().lengths(
+    let lengths = theme.axes.get_spacing().lengths(
         theme.typography.axes.tick_label.get_font_size(),
         theme.typography.axes.axis_title.get_font_size(),
     )?;

@@ -624,7 +624,7 @@ fn shared_legend_gap_reduces_canvas_legend_separation() {
         let canvas = match gap {
             Some(gap) => {
                 let theme = Theme::publication();
-                let legend = theme.legend().clone().with_shared_gap(gap).unwrap();
+                let legend = theme.legend().clone().shared_gap(gap).unwrap();
                 canvas.theme(theme.customize().legend(legend).build().unwrap())
             }
             None => canvas,
@@ -658,7 +658,7 @@ fn shared_legend_gap_reduces_canvas_legend_separation() {
     let legend = theme
         .legend()
         .clone()
-        .with_shared_gap(lichtung_plot::RelativeSpacing::ratio(2, 11).unwrap())
+        .shared_gap(lichtung_plot::RelativeSpacing::ratio(2, 11).unwrap())
         .unwrap();
     let theme = theme.customize().legend(legend).build().unwrap();
     for policy in [CanvasLegendPolicy::PerPlot, CanvasLegendPolicy::Hidden] {

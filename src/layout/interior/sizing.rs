@@ -224,7 +224,7 @@ pub(crate) fn horizontal_gutter_preference(
     plot: &Plot,
     theme: &ResolvedTheme,
 ) -> Result<(f64, f64), Error> {
-    let lengths = theme.axes.spacing().lengths(
+    let lengths = theme.axes.get_spacing().lengths(
         theme.typography.axes.tick_label.get_font_size(),
         theme.typography.axes.axis_title.get_font_size(),
     )?;
@@ -298,12 +298,12 @@ pub(crate) fn horizontal_gutter_preference(
     }
     let frame = chrome
         .frame
-        .filter(|frame| frame.sides().right())
-        .map_or(0.0, |frame| f64::from(frame.stroke().get_width()) / 2.0);
+        .filter(|frame| frame.get_sides().get_right())
+        .map_or(0.0, |frame| f64::from(frame.get_stroke().get_width()) / 2.0);
     let tick = theme
         .axes
-        .ticks()
-        .map_or(0.0, |ticks| f64::from(ticks.stroke().get_width()) / 2.0);
+        .get_ticks()
+        .map_or(0.0, |ticks| f64::from(ticks.get_stroke().get_width()) / 2.0);
     let right = edge.add_pixels(frame.max(tick))?;
     Ok((
         crate::theme::AxisLengths::hard(&left)?,
@@ -326,7 +326,7 @@ pub(crate) fn plot_size(
 
     let hard = plot.intrinsic_body_minimum(theme)?;
     let preference = body_preference(plot, theme, hard)?;
-    let lengths = theme.axes.spacing().lengths(
+    let lengths = theme.axes.get_spacing().lengths(
         theme.typography.axes.tick_label.get_font_size(),
         theme.typography.axes.axis_title.get_font_size(),
     )?;
@@ -499,18 +499,18 @@ mod tests {
         let half = crate::theme::RelativeSpacing::ratio(1, 22_528).unwrap();
         let spacing = theme
             .legend
-            .spacing()
+            .get_spacing()
             .clone()
-            .with_padding(half.clone())
+            .padding(half.clone())
             .unwrap()
-            .with_key_label_gap(half)
+            .key_label_gap(half)
             .unwrap();
         theme.legend = theme
             .legend
             .clone()
-            .with_spacing(spacing)
+            .spacing(spacing)
             .unwrap()
-            .with_frame(None)
+            .frame(None)
             .unwrap();
         let descriptor = ContinuousDescriptor {
             field: "Value".into(),
@@ -606,10 +606,16 @@ mod tests {
     fn continuous_intrinsic_width_admits_broad_frame_and_missing_key_chrome() {
         let mut theme = crate::Theme::publication().resolve().unwrap();
         let frame = crate::theme::LegendFrameTheme::new(
-            theme.legend.frame().unwrap().fill(),
+            theme.legend.get_frame().unwrap().get_fill(),
             Some(
                 crate::theme::OutlineTheme::new(
-                    theme.legend.frame().unwrap().outline().unwrap().get_color(),
+                    theme
+                        .legend
+                        .get_frame()
+                        .unwrap()
+                        .get_outline()
+                        .unwrap()
+                        .get_color(),
                     30.0,
                 )
                 .unwrap(),
@@ -617,7 +623,7 @@ mod tests {
             crate::theme::RelativeSpacing::from_pixels(50.0, 11).unwrap(),
         )
         .unwrap();
-        theme.legend = theme.legend.clone().with_frame(Some(frame)).unwrap();
+        theme.legend = theme.legend.clone().frame(Some(frame)).unwrap();
         let descriptor = crate::decorations::legend::descriptor::ContinuousDescriptor {
             selection: crate::theme::ContinuousColorScale::sequential(
                 Some(

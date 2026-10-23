@@ -18,15 +18,15 @@ fn selected_sides_are_frozen_drawn_and_published_once_with_no_inactive_edge_rese
         (None, 0, false),
     ] {
         let mut theme = crate::Theme::publication().resolve().unwrap();
-        let stroke = theme.axes.frame().unwrap().stroke().clone();
+        let stroke = theme.axes.get_frame().unwrap().get_stroke().clone();
         theme.axes = theme
             .axes
             .clone()
-            .with_frame(sides.map(|sides| FrameTheme::new(sides, stroke).unwrap()))
+            .frame(sides.map(|sides| FrameTheme::new(sides, stroke).unwrap()))
             .unwrap()
-            .with_ticks(None)
+            .ticks(None)
             .unwrap()
-            .with_grid(None)
+            .grid(None)
             .unwrap();
         let layout = Layout::envelope(panel);
         let plan = layout.plan_axes(&theme).unwrap();
@@ -60,21 +60,21 @@ fn ordinary_panel_does_not_paint_or_reserve_the_independent_cell_frame() {
     let mut theme = crate::Theme::publication().resolve().unwrap();
     let cell = theme
         .axes
-        .cell_frame()
+        .get_cell_frame()
         .unwrap()
         .clone()
-        .with_sides(FrameSides::new(true, true, true, true).unwrap())
+        .sides(FrameSides::new(true, true, true, true).unwrap())
         .unwrap();
     theme.axes = theme
         .axes
         .clone()
-        .with_frame(None)
+        .frame(None)
         .unwrap()
-        .with_cell_frame(Some(cell))
+        .cell_frame(Some(cell))
         .unwrap()
-        .with_ticks(None)
+        .ticks(None)
         .unwrap()
-        .with_grid(None)
+        .grid(None)
         .unwrap();
     let layout = Layout::envelope(crate::layout::PanelBox::new(80.0, 480.0, 80.0, 480.0));
     let plan = layout.plan_axes(&theme).unwrap();
@@ -115,13 +115,13 @@ fn zero_chrome_keeps_required_text_and_combines_fractional_gaps_before_hard_roun
     theme.axes = theme
         .axes
         .clone()
-        .with_frame(None)
+        .frame(None)
         .unwrap()
-        .with_ticks(None)
+        .ticks(None)
         .unwrap()
-        .with_grid(None)
+        .grid(None)
         .unwrap()
-        .with_spacing(spacing)
+        .spacing(spacing)
         .unwrap();
     let mut layout = Layout::envelope(crate::layout::PanelBox::new(80.0, 480.0, 80.0, 480.0));
     layout.x_axis.source = TickSource::EXACT;

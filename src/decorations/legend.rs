@@ -379,10 +379,10 @@ impl LegendMetrics {
         let handle_text = s(&exact.key_label_gap)?;
         let frame = theme
             .legend
-            .frame()
+            .get_frame()
             .map(|frame| {
                 let outline = frame
-                    .outline()
+                    .get_outline()
                     .map(|value| (value.get_color(), value.get_width()));
                 if let Some((_, width)) = outline {
                     let canonical = crate::layout::kernel::LayoutScalar::from_css_pixels(
@@ -396,7 +396,7 @@ impl LegendMetrics {
                     }
                 }
                 Ok::<_, Error>(LegendFrameMetrics {
-                    fill: frame.fill(),
+                    fill: frame.get_fill(),
                     outline,
                     radius: s(exact.radius.as_ref().expect("present frame radius"))?,
                     inset: crate::layout::kernel::required_length(

@@ -542,8 +542,8 @@ pub(crate) fn measure(
     // --- Styles ---
     let frame_style = theme
         .axes
-        .cell_frame()
-        .map(|frame| crate::theme::axis::stroke_style(frame.stroke()))
+        .get_cell_frame()
+        .map(|frame| crate::theme::axis::stroke_style(frame.get_stroke()))
         .transpose()?;
     // Each cell freezes the selected sides once. Common plans own ticks and
     // outer text without painting a duplicate frame or grid.
@@ -552,9 +552,9 @@ pub(crate) fn measure(
     axis_theme.axes = axis_theme
         .axes
         .clone()
-        .with_frame(common_chrome.frame.cloned())?
-        .with_cell_frame(None)?
-        .with_grid(common_chrome.grid.cloned())?;
+        .frame(common_chrome.frame.cloned())?
+        .cell_frame(None)?
+        .grid(common_chrome.grid.cloned())?;
 
     // X selection depends only on a column's range and X coordinates; Y
     // selection depends only on a row's range and Y coordinates. Retain the
@@ -674,26 +674,28 @@ pub(crate) fn measure(
                 address: scope.address,
                 clip: cell_panel,
                 frame: {
-                    let sides = theme.axes.cell_frame().map(|frame| frame.sides());
+                    let sides = theme.axes.get_cell_frame().map(|frame| frame.get_sides());
                     [
                         sides
-                            .is_some_and(crate::theme::FrameSides::bottom)
+                            .is_some_and(crate::theme::FrameSides::get_bottom)
                             .then_some([
                                 Point2D::new(mark_panel.x0, mark_panel.y0),
                                 Point2D::new(mark_panel.x1, mark_panel.y0),
                             ]),
                         sides
-                            .is_some_and(crate::theme::FrameSides::left)
+                            .is_some_and(crate::theme::FrameSides::get_left)
                             .then_some([
                                 Point2D::new(mark_panel.x0, mark_panel.y0),
                                 Point2D::new(mark_panel.x0, mark_panel.y1),
                             ]),
-                        sides.is_some_and(crate::theme::FrameSides::top).then_some([
-                            Point2D::new(mark_panel.x0, mark_panel.y1),
-                            Point2D::new(mark_panel.x1, mark_panel.y1),
-                        ]),
                         sides
-                            .is_some_and(crate::theme::FrameSides::right)
+                            .is_some_and(crate::theme::FrameSides::get_top)
+                            .then_some([
+                                Point2D::new(mark_panel.x0, mark_panel.y1),
+                                Point2D::new(mark_panel.x1, mark_panel.y1),
+                            ]),
+                        sides
+                            .is_some_and(crate::theme::FrameSides::get_right)
                             .then_some([
                                 Point2D::new(mark_panel.x1, mark_panel.y0),
                                 Point2D::new(mark_panel.x1, mark_panel.y1),

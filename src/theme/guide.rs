@@ -17,7 +17,7 @@ fn positive(value: &RelativeSpacing, field: &str) -> Result<()> {
 }
 
 macro_rules! legend_spacing {
-    ($($field:ident => $edit:ident: $metric:literal),+ $(,)?) => {
+    ($($field:ident => $get:ident: $metric:literal),+ $(,)?) => {
         #[derive(Clone, Debug, PartialEq, Eq)]
         /// Complete independent exact guide relationships, resolved against selected guide text em.
         pub struct LegendSpacing { $($field: RelativeSpacing),+ }
@@ -27,12 +27,12 @@ macro_rules! legend_spacing {
             pub fn new($($field: RelativeSpacing),+) -> Result<Self> {
                 let value = Self { $($field),+ }; value.validate()?; Ok(value)
             }
-            fn validate(&self) -> Result<()> { positive(self.key_width(), "key width") }
+            fn validate(&self) -> Result<()> { positive(self.get_key_width(), "key width") }
             $(
                 #[doc = concat!("Borrow the exact `", stringify!($field), "` relationship.")]
-                pub fn $field(&self) -> &RelativeSpacing { &self.$field }
+                pub fn $get(&self) -> &RelativeSpacing { &self.$field }
                 #[doc = concat!("Replace only `", stringify!($field), "`, validating the complete spacing value.")]
-                pub fn $edit(mut self, value: RelativeSpacing) -> Result<Self> { self.$field = value; self.validate()?; Ok(self) }
+                pub fn $field(mut self, value: RelativeSpacing) -> Result<Self> { self.$field = value; self.validate()?; Ok(self) }
             )+
             fn relationships(&self) -> [&RelativeSpacing; 9] { [$(&self.$field),+] }
         }
@@ -45,10 +45,10 @@ macro_rules! legend_spacing {
             pub(crate) fn lengths(&self, label_size: u32, title_size: u32) -> Result<LegendLengths> {
                 let metrics = [LocalMetric::css_pixels(label_size)?, LocalMetric::css_pixels(title_size)?];
                 Ok(LegendLengths {
-                    $($field: self.spacing().$field().product(metrics[$metric])),+,
-                    minimum: self.gradient_lengths().minimum().product(metrics[0]),
-                    preferred: self.gradient_lengths().preferred().product(metrics[0]),
-                    radius: self.frame().map(|frame| frame.radius().product(metrics[0])),
+                    $($field: self.get_spacing().$get().product(metrics[$metric])),+,
+                    minimum: self.get_gradient_lengths().get_minimum().product(metrics[0]),
+                    preferred: self.get_gradient_lengths().get_preferred().product(metrics[0]),
+                    radius: self.get_frame().map(|frame| frame.get_radius().product(metrics[0])),
                 })
             }
         }
@@ -56,11 +56,11 @@ macro_rules! legend_spacing {
 }
 
 legend_spacing! {
-    padding => with_padding: 0, key_width => with_key_width: 0,
-    key_label_gap => with_key_label_gap: 0, outside_gap => with_outside_gap: 0,
-    shared_gap => with_shared_gap: 0, row_gap => with_row_gap: 0,
-    column_gap => with_column_gap: 0, title_gap => with_title_gap: 1,
-    glyph_edge_padding => with_glyph_edge_padding: 0,
+    padding => get_padding: 0, key_width => get_key_width: 0,
+    key_label_gap => get_key_label_gap: 0, outside_gap => get_outside_gap: 0,
+    shared_gap => get_shared_gap: 0, row_gap => get_row_gap: 0,
+    column_gap => get_column_gap: 0, title_gap => get_title_gap: 1,
+    glyph_edge_padding => get_glyph_edge_padding: 0,
 }
 
 /// Positive minimum and at-least-minimum preferred continuous-guide lengths.
@@ -78,9 +78,9 @@ impl GradientLengths {
         Ok(value)
     }
     fn validate_in(&self) -> Result<()> {
-        positive(self.minimum(), "gradient minimum")?;
-        positive(self.preferred(), "gradient preference")?;
-        if self.minimum().compare(self.preferred()) == Ordering::Greater {
+        positive(self.get_minimum(), "gradient minimum")?;
+        positive(self.get_preferred(), "gradient preference")?;
+        if self.get_minimum().compare(self.get_preferred()) == Ordering::Greater {
             return Err(Error::Data(
                 "guide gradient preference must be at least its minimum".into(),
             ));
@@ -88,19 +88,19 @@ impl GradientLengths {
         Ok(())
     }
     /// Borrow the exact minimum relationship.
-    pub fn minimum(&self) -> &RelativeSpacing {
+    pub fn get_minimum(&self) -> &RelativeSpacing {
         &self.minimum
     }
     /// Borrow the exact preferred relationship.
-    pub fn preferred(&self) -> &RelativeSpacing {
+    pub fn get_preferred(&self) -> &RelativeSpacing {
         &self.preferred
     }
     /// Replace minimum, preserving the positive ordered length invariant.
-    pub fn with_minimum(self, minimum: RelativeSpacing) -> Result<Self> {
+    pub fn minimum(self, minimum: RelativeSpacing) -> Result<Self> {
         Self::new(minimum, self.preferred)
     }
     /// Replace preference, preserving the positive ordered length invariant.
-    pub fn with_preferred(self, preferred: RelativeSpacing) -> Result<Self> {
+    pub fn preferred(self, preferred: RelativeSpacing) -> Result<Self> {
         Self::new(self.minimum, preferred)
     }
 }
@@ -129,33 +129,33 @@ impl LegendFrameTheme {
         Ok(value)
     }
     fn validate(&self) -> Result<()> {
-        if let Some(outline) = self.outline() {
+        if let Some(outline) = self.get_outline() {
             outline.validate()?;
         }
         Ok(())
     }
     /// Inspect the complete container fill.
-    pub fn fill(&self) -> Color {
+    pub fn get_fill(&self) -> Color {
         self.fill
     }
     /// Borrow the optional independent outline.
-    pub fn outline(&self) -> Option<&OutlineTheme> {
+    pub fn get_outline(&self) -> Option<&OutlineTheme> {
         self.outline.as_ref()
     }
     /// Borrow the nonnegative legend-label-em corner-radius relationship.
-    pub fn radius(&self) -> &RelativeSpacing {
+    pub fn get_radius(&self) -> &RelativeSpacing {
         &self.radius
     }
     /// Replace only the container fill.
-    pub fn with_fill(self, fill: Color) -> Result<Self> {
+    pub fn fill(self, fill: Color) -> Result<Self> {
         Self::new(fill, self.outline, self.radius)
     }
     /// Replace only the optional independent outline.
-    pub fn with_outline(self, outline: Option<OutlineTheme>) -> Result<Self> {
+    pub fn outline(self, outline: Option<OutlineTheme>) -> Result<Self> {
         Self::new(self.fill, outline, self.radius)
     }
     /// Replace only the nonnegative local corner-radius relationship.
-    pub fn with_radius(self, radius: RelativeSpacing) -> Result<Self> {
+    pub fn radius(self, radius: RelativeSpacing) -> Result<Self> {
         Self::new(self.fill, self.outline, radius)
     }
 }
@@ -207,59 +207,60 @@ impl LegendTheme {
         Ok(value)
     }
     pub(crate) fn validate_in(&self) -> Result<()> {
-        self.spacing().validate()?;
-        self.gradient_lengths().validate_in()?;
-        if let Some(frame) = self.frame() {
+        self.get_spacing().validate()?;
+        self.get_gradient_lengths().validate_in()?;
+        if let Some(frame) = self.get_frame() {
             frame.validate()?;
         }
         Ok(())
     }
     /// Borrow all complete exact guide relationships.
-    pub fn spacing(&self) -> &LegendSpacing {
+    pub fn get_spacing(&self) -> &LegendSpacing {
         &self.spacing
     }
     /// Borrow the continuous-guide minimum and preference.
-    pub fn gradient_lengths(&self) -> &GradientLengths {
+    pub fn get_gradient_lengths(&self) -> &GradientLengths {
         &self.gradient_lengths
     }
     /// Borrow the optional guide-container appearance.
-    pub fn frame(&self) -> Option<&LegendFrameTheme> {
+    pub fn get_frame(&self) -> Option<&LegendFrameTheme> {
         self.frame.as_ref()
     }
     /// Borrow the Canvas-owned shared-guide gap relationship.
-    pub fn shared_gap(&self) -> &RelativeSpacing {
-        self.spacing().shared_gap()
+    pub fn get_shared_gap(&self) -> &RelativeSpacing {
+        self.get_spacing().get_shared_gap()
     }
     /// Replace the complete guide-spacing value.
-    pub fn with_spacing(self, spacing: LegendSpacing) -> Result<Self> {
+    pub fn spacing(self, spacing: LegendSpacing) -> Result<Self> {
         Self::new(spacing, self.gradient_lengths, self.frame)
     }
     /// Replace the complete continuous-guide length value.
-    pub fn with_gradient_lengths(self, value: GradientLengths) -> Result<Self> {
+    pub fn gradient_lengths(self, value: GradientLengths) -> Result<Self> {
         Self::new(self.spacing, value, self.frame)
     }
     /// Replace only the optional guide-container appearance.
-    pub fn with_frame(self, frame: Option<LegendFrameTheme>) -> Result<Self> {
+    pub fn frame(self, frame: Option<LegendFrameTheme>) -> Result<Self> {
         Self::new(self.spacing, self.gradient_lengths, frame)
     }
     /// Replace only the Canvas-owned shared-guide gap relationship.
-    pub fn with_shared_gap(self, value: RelativeSpacing) -> Result<Self> {
-        let spacing = self.spacing.with_shared_gap(value)?;
+    pub fn shared_gap(self, value: RelativeSpacing) -> Result<Self> {
+        let spacing = self.spacing.shared_gap(value)?;
         Self::new(spacing, self.gradient_lengths, self.frame)
     }
 
     pub(crate) fn same(&self, other: &Self) -> bool {
-        match (self.frame(), other.frame()) {
+        match (self.get_frame(), other.get_frame()) {
             (None, None) => {}
             (Some(left), Some(right))
-                if left.fill() == right.fill() && left.outline() == right.outline() => {}
+                if left.get_fill() == right.get_fill()
+                    && left.get_outline() == right.get_outline() => {}
             _ => return false,
         }
         for (left, right) in self
-            .spacing()
+            .get_spacing()
             .relationships()
             .into_iter()
-            .zip(other.spacing().relationships())
+            .zip(other.get_spacing().relationships())
         {
             if !left.same(right) {
                 return false;
@@ -267,38 +268,40 @@ impl LegendTheme {
         }
         for (left, right) in [
             (
-                self.gradient_lengths().minimum(),
-                other.gradient_lengths().minimum(),
+                self.get_gradient_lengths().get_minimum(),
+                other.get_gradient_lengths().get_minimum(),
             ),
             (
-                self.gradient_lengths().preferred(),
-                other.gradient_lengths().preferred(),
+                self.get_gradient_lengths().get_preferred(),
+                other.get_gradient_lengths().get_preferred(),
             ),
         ] {
             if !left.same(right) {
                 return false;
             }
         }
-        if let (Some(left), Some(right)) = (self.frame(), other.frame()) {
-            if !left.radius().same(right.radius()) {
+        if let (Some(left), Some(right)) = (self.get_frame(), other.get_frame()) {
+            if !left.get_radius().same(right.get_radius()) {
                 return false;
             }
         }
         true
     }
     pub(crate) fn observe_feedback(&self, round: &mut FeedbackRound) -> Result<()> {
-        round.observe_count(usize::from(self.frame().is_some()))?;
-        for value in self.spacing().relationships() {
+        round.observe_count(usize::from(self.get_frame().is_some()))?;
+        for value in self.get_spacing().relationships() {
             value.observe_feedback(round)?;
         }
-        self.gradient_lengths().minimum().observe_feedback(round)?;
-        self.gradient_lengths()
-            .preferred()
+        self.get_gradient_lengths()
+            .get_minimum()
             .observe_feedback(round)?;
-        if let Some(frame) = self.frame() {
+        self.get_gradient_lengths()
+            .get_preferred()
+            .observe_feedback(round)?;
+        if let Some(frame) = self.get_frame() {
             for color in [
-                Some(frame.fill()),
-                frame.outline().map(OutlineTheme::get_color),
+                Some(frame.get_fill()),
+                frame.get_outline().map(OutlineTheme::get_color),
             ]
             .into_iter()
             .flatten()
@@ -307,22 +310,22 @@ impl LegendTheme {
                     round.observe_count(usize::from(byte))?;
                 }
             }
-            round.observe_count(usize::from(frame.outline().is_some()))?;
-            if let Some(outline) = frame.outline() {
+            round.observe_count(usize::from(frame.get_outline().is_some()))?;
+            if let Some(outline) = frame.get_outline() {
                 round.observe_number(f64::from(outline.get_width()))?;
             }
-            frame.radius().observe_feedback(round)?;
+            frame.get_radius().observe_feedback(round)?;
         }
         Ok(())
     }
     pub(crate) fn outside_gap_pixels(&self, label_size: u32) -> Result<f64> {
-        self.spacing()
-            .outside_gap()
+        self.get_spacing()
+            .get_outside_gap()
             .product(LocalMetric::css_pixels(label_size)?)
             .pixels_rounded(SpatialRounding::NearestEven)
     }
     pub(crate) fn shared_gap_pixels(&self, label_size: u32) -> Result<f64> {
-        self.shared_gap()
+        self.get_shared_gap()
             .product(LocalMetric::css_pixels(label_size)?)
             .pixels_rounded(SpatialRounding::NearestEven)
     }

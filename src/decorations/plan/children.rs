@@ -438,22 +438,22 @@ mod tests {
                 let mut paint = theme.clone();
                 let frame = paint
                     .legend
-                    .frame()
+                    .get_frame()
                     .unwrap()
                     .clone()
-                    .with_fill(crate::theme::Color::rgba(1, 2, 3, 120))?;
-                paint.legend = paint.legend.clone().with_frame(Some(frame))?;
+                    .fill(crate::theme::Color::rgba(1, 2, 3, 120))?;
+                paint.legend = paint.legend.clone().frame(Some(frame))?;
                 let mut geometry = paint.clone();
-                let frame = geometry.legend.frame().unwrap();
+                let frame = geometry.legend.get_frame().unwrap();
                 let changed = crate::theme::LegendFrameTheme::new(
-                    frame.fill(),
+                    frame.get_fill(),
                     Some(crate::theme::OutlineTheme::new(
-                        frame.outline().unwrap().get_color(),
+                        frame.get_outline().unwrap().get_color(),
                         7.0,
                     )?),
-                    frame.radius().clone(),
+                    frame.get_radius().clone(),
                 )?;
-                geometry.legend = geometry.legend.clone().with_frame(Some(changed))?;
+                geometry.legend = geometry.legend.clone().frame(Some(changed))?;
                 for custom in [&paint, &geometry] {
                     let changed = crate::layout::fit::measured(children.measure(
                         &source,

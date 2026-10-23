@@ -50,24 +50,24 @@ fn metrics(row: f64, column: f64, title: f64) -> LegendMetrics {
     let mut theme = crate::Theme::publication().resolve().unwrap();
     let spacing = theme
         .legend
-        .spacing()
+        .get_spacing()
         .clone()
-        .with_padding(crate::RelativeSpacing::ratio(0, 1).unwrap())
+        .padding(crate::RelativeSpacing::ratio(0, 1).unwrap())
         .unwrap()
-        .with_glyph_edge_padding(crate::RelativeSpacing::ratio(0, 1).unwrap())
+        .glyph_edge_padding(crate::RelativeSpacing::ratio(0, 1).unwrap())
         .unwrap()
-        .with_row_gap(crate::RelativeSpacing::from_pixels(row, 11).unwrap())
+        .row_gap(crate::RelativeSpacing::from_pixels(row, 11).unwrap())
         .unwrap()
-        .with_column_gap(crate::RelativeSpacing::from_pixels(column, 11).unwrap())
+        .column_gap(crate::RelativeSpacing::from_pixels(column, 11).unwrap())
         .unwrap()
-        .with_title_gap(crate::RelativeSpacing::from_pixels(title, 12).unwrap())
+        .title_gap(crate::RelativeSpacing::from_pixels(title, 12).unwrap())
         .unwrap();
     theme.legend = theme
         .legend
         .clone()
-        .with_spacing(spacing)
+        .spacing(spacing)
         .unwrap()
-        .with_frame(None)
+        .frame(None)
         .unwrap();
     LegendMetrics::from_theme(&theme).unwrap()
 }
@@ -308,7 +308,7 @@ fn factorized_keys_and_multiline_titles_freeze_in_one_contained_frame() {
         .child(AddressRole::CanvasSharedLegend, 0)
         .unwrap();
     let mut frameless_theme = crate::Theme::publication().resolve().unwrap();
-    frameless_theme.legend = theme.legend.clone().with_frame(None).unwrap();
+    frameless_theme.legend = theme.legend.clone().frame(None).unwrap();
     for horizontal in [false, true] {
         let measured = fit::measured(Legend::measure_assigned(
             Arc::clone(&descriptor),

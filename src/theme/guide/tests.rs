@@ -21,11 +21,11 @@ fn pinned_binary_sources_and_complete_edge_rounding_are_exact() {
         22529
     );
     assert_ne!(
-        source.spacing().padding(),
+        source.get_spacing().get_padding(),
         &RelativeSpacing::ratio(4, 5).unwrap()
     );
     assert_ne!(
-        source.spacing().glyph_edge_padding(),
+        source.get_spacing().get_glyph_edge_padding(),
         &RelativeSpacing::ratio(1, 5).unwrap()
     );
     let exact = GradientLengths::new(
@@ -33,5 +33,5 @@ fn pinned_binary_sources_and_complete_edge_rounding_are_exact() {
         RelativeSpacing::ratio(3, 5).unwrap(),
     )
     .unwrap();
-    assert_eq!(exact.minimum(), exact.preferred());
+    assert_eq!(exact.get_minimum(), exact.get_preferred());
 }

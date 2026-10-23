@@ -282,6 +282,15 @@ their actual component census are specified in property ownership.
 
 ## Axis, Guide And Composition Components
 
+FrameSides, FrameTheme, TickTheme, AxisSpacing and AxisTheme use consuming
+`property(value)` edits paired with `get_property()` readers. LegendSpacing,
+GradientLengths, LegendFrameTheme and LegendTheme follow the same rule, including
+`LegendTheme::shared_gap(value)` and `get_shared_gap()`. CompositionTheme and its
+root/header/facet/text-panel spacing groups also use paired property names.
+Inspection retains optional borrowed chrome, borrowed exact relationships and
+copy alignment/length/side values. Renaming changes neither complete validation
+nor which selected local text metric resolves a relationship.
+
 FrameSides requires a nonempty subset of top/right/bottom/left. No frame is None.
 FrameTheme owns those sides and StrokeTheme; TickTheme owns stroke and positive
 length. AxisTheme owns independent optional frame, cell_frame, ticks, grid and

@@ -416,7 +416,7 @@ mod tests {
         theme.composition = theme
             .composition
             .clone()
-            .with_facet_gap(crate::theme::RelativeSpacing::ratio(0, 1).unwrap())
+            .facet_gap(crate::theme::RelativeSpacing::ratio(0, 1).unwrap())
             .unwrap();
         theme.typography.composition.body = theme
             .typography

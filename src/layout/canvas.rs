@@ -372,12 +372,12 @@ mod tests {
         spaced.composition = spaced
             .composition
             .clone()
-            .with_root_title_block(
+            .root_title_block(
                 spaced
                     .composition
-                    .root_title_block()
+                    .get_root_title_block()
                     .clone()
-                    .with_title_subtitle_gap(crate::theme::RelativeSpacing::ratio(9, 20).unwrap())
+                    .title_subtitle_gap(crate::theme::RelativeSpacing::ratio(9, 20).unwrap())
                     .unwrap(),
             )
             .unwrap();

@@ -18,7 +18,7 @@ let base = Theme::publication();
 let surfaces = base.surfaces().clone()
     .canvas_root(Color::hex("#FAFAFA")?)?;
 let legend = base.legend().clone()
-    .with_shared_gap(RelativeSpacing::ratio(2, 11)?)?;
+    .shared_gap(RelativeSpacing::ratio(2, 11)?)?;
 let custom = base.customize()
     .surfaces(surfaces)
     .legend(legend)

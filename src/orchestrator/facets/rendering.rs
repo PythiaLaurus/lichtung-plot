@@ -163,7 +163,7 @@ pub(super) fn plan_shared_facet_axis_labels(
 ) -> Result<Vec<PlacedText>, crate::layout::fit::PlanError> {
     let mut plans = Vec::new();
 
-    let lengths = theme.axes.spacing().lengths(
+    let lengths = theme.axes.get_spacing().lengths(
         theme.typography.axes.tick_label.get_font_size(),
         theme.typography.axes.axis_title.get_font_size(),
     )?;

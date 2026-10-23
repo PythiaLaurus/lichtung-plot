@@ -80,7 +80,7 @@ impl FramePlan {
         panel: crate::layout::PanelBox,
         frame: &crate::theme::FrameTheme,
     ) -> Result<Self, Error> {
-        let selected = frame.sides().drawing_order();
+        let selected = frame.get_sides().drawing_order();
         let segments = [
             [
                 Point2D::new(panel.x0, panel.y0),
@@ -101,7 +101,7 @@ impl FramePlan {
         ];
         Ok(Self {
             sides: std::array::from_fn(|index| selected[index].then_some(segments[index])),
-            style: crate::theme::axis::stroke_style(frame.stroke())?,
+            style: crate::theme::axis::stroke_style(frame.get_stroke())?,
         })
     }
 
@@ -339,10 +339,10 @@ impl Layout {
         let (x0, x1, y0, y1) = self.projection.pixel_box();
         let frame = standard
             .axes
-            .frame()
+            .get_frame()
             .map(|frame| FramePlan::new(self.projection.panel_box(), frame))
             .transpose()?;
-        let grid = if let Some(grid) = standard.axes.grid() {
+        let grid = if let Some(grid) = standard.axes.get_grid() {
             let mut lines = Vec::new();
             let count = x_axis
                 .ticks
@@ -501,23 +501,23 @@ impl Axis {
             0.0
         };
 
-        let lengths = standard.axes.spacing().lengths(
+        let lengths = standard.axes.get_spacing().lengths(
             standard.tick_label.get_font_size(),
             standard.axis_title.get_font_size(),
         )?;
         let frame_half = standard
             .axes
-            .frame()
+            .get_frame()
             .filter(|frame| match side {
-                AxisSide::Bottom => frame.sides().bottom(),
-                AxisSide::Left => frame.sides().left(),
+                AxisSide::Bottom => frame.get_sides().get_bottom(),
+                AxisSide::Left => frame.get_sides().get_left(),
             })
-            .map_or(0.0, |frame| f64::from(frame.stroke().get_width()) / 2.0);
-        let tick_appearance = standard.axes.ticks().filter(|_| !self.ticks.is_empty());
+            .map_or(0.0, |frame| f64::from(frame.get_stroke().get_width()) / 2.0);
+        let tick_appearance = standard.axes.get_ticks().filter(|_| !self.ticks.is_empty());
         let tick_style = tick_appearance
-            .map(|ticks| crate::theme::axis::stroke_style(ticks.stroke()))
+            .map(|ticks| crate::theme::axis::stroke_style(ticks.get_stroke()))
             .transpose()?;
-        let tick_length = tick_appearance.map_or(0.0, |ticks| f64::from(ticks.length()));
+        let tick_length = tick_appearance.map_or(0.0, |ticks| f64::from(ticks.get_length()));
         let frame_offset = ExactLength::pixels(frame_half)?;
         let tick_end = frame_offset.add_pixels(tick_length)?;
         let outward = tick_end.add_pixels(

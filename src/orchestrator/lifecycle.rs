@@ -258,12 +258,12 @@ mod natural_sizing_tests {
     }
 
     fn ordinary_width(theme: &mut ResolvedTheme, width: f32) -> Result<(), Error> {
-        let frame = theme.axes.frame().expect("preset ordinary frame");
+        let frame = theme.axes.get_frame().expect("preset ordinary frame");
         let changed = crate::theme::FrameTheme::new(
-            frame.sides().clone(),
-            frame.stroke().clone().width(width)?,
+            frame.get_sides().clone(),
+            frame.get_stroke().clone().width(width)?,
         )?;
-        theme.axes = theme.axes.clone().with_frame(Some(changed))?;
+        theme.axes = theme.axes.clone().frame(Some(changed))?;
         Ok(())
     }
 
@@ -287,7 +287,7 @@ mod natural_sizing_tests {
                 );
             }
             let absent = natural_scene_with_theme_edit(&source, width, |theme| {
-                theme.axes = theme.axes.clone().with_frame(None)?;
+                theme.axes = theme.axes.clone().frame(None)?;
                 Ok(())
             })
             .unwrap();
@@ -297,8 +297,8 @@ mod natural_sizing_tests {
                 crate::theme::FrameSides::new(true, true, false, false).unwrap(),
             ] {
                 let edited = natural_scene_with_theme_edit(&source, width, |theme| {
-                    let frame = theme.axes.frame().unwrap().clone().with_sides(sides)?;
-                    theme.axes = theme.axes.clone().with_frame(Some(frame))?;
+                    let frame = theme.axes.get_frame().unwrap().clone().sides(sides)?;
+                    theme.axes = theme.axes.clone().frame(Some(frame))?;
                     Ok(())
                 })
                 .unwrap();
@@ -344,12 +344,12 @@ mod natural_sizing_tests {
         for width in [None, Some(800)] {
             let baseline = natural_scene_with_theme_edit(&source, width, |_| Ok(())).unwrap();
             let wide = natural_scene_with_theme_edit(&source, width, |theme| {
-                let frame = theme.axes.cell_frame().unwrap();
+                let frame = theme.axes.get_cell_frame().unwrap();
                 let changed = crate::theme::FrameTheme::new(
-                    frame.sides().clone(),
-                    frame.stroke().clone().width(64.0)?,
+                    frame.get_sides().clone(),
+                    frame.get_stroke().clone().width(64.0)?,
                 )?;
-                theme.axes = theme.axes.clone().with_cell_frame(Some(changed))?;
+                theme.axes = theme.axes.clone().cell_frame(Some(changed))?;
                 Ok(())
             })
             .unwrap();
@@ -362,12 +362,12 @@ mod natural_sizing_tests {
                 "selected cell ink must reach containing root requirements"
             );
             assert!(natural_scene_with_theme_edit(&source, width, |theme| {
-                let frame = theme.axes.cell_frame().unwrap();
+                let frame = theme.axes.get_cell_frame().unwrap();
                 let changed = crate::theme::FrameTheme::new(
-                    frame.sides().clone(),
-                    frame.stroke().clone().width(f32::MAX)?,
+                    frame.get_sides().clone(),
+                    frame.get_stroke().clone().width(f32::MAX)?,
                 )?;
-                theme.axes = theme.axes.clone().with_cell_frame(Some(changed))?;
+                theme.axes = theme.axes.clone().cell_frame(Some(changed))?;
                 Ok(())
             })
             .is_err());
@@ -399,7 +399,7 @@ mod natural_sizing_tests {
             theme.composition = theme
                 .composition
                 .clone()
-                .with_facet_gap(crate::theme::RelativeSpacing::from_pixels(gap, 15).unwrap())
+                .facet_gap(crate::theme::RelativeSpacing::from_pixels(gap, 15).unwrap())
                 .unwrap();
             crate::orchestrator::measurements::start();
             let result =
@@ -1388,9 +1388,9 @@ mod root_title_tests {
                     plot = plot.title_alignment(End).subtitle_alignment(Start);
                 }
                 let theme = plot.resolve_theme().unwrap();
-                assert_eq!(theme.composition.root_title_alignment(), Center);
-                assert_eq!(theme.composition.root_subtitle_alignment(), None);
-                assert_eq!(theme.composition.root_caption_alignment(), Start);
+                assert_eq!(theme.composition.get_root_title_alignment(), Center);
+                assert_eq!(theme.composition.get_root_subtitle_alignment(), None);
+                assert_eq!(theme.composition.get_root_caption_alignment(), Start);
                 let prepared = crate::plots::shared_x::prepare_plot(
                     &plot,
                     &crate::font::canonical::OperationContext::new(),
@@ -1473,7 +1473,7 @@ mod root_title_tests {
             let composition = preset
                 .composition()
                 .clone()
-                .with_root_caption_alignment(Center)
+                .root_caption_alignment(Center)
                 .unwrap();
             let theme = preset.customize().composition(composition).build().unwrap();
             let plot = Plot::scatter(
