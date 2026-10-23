@@ -15,7 +15,7 @@ use crate::font::canonical::PreparedFontEnvironment;
 use crate::layout::{
     PhysicalTextAlignment, ResolvedTextPlan, TextLineHeight, TextPlanInput, TextPlanProvenance,
 };
-use crate::render::backend::{StrokePattern, TextAnchor};
+use crate::render::backend::StrokePattern;
 use crate::theme::{color_from_rgb, Color};
 use crate::theme::{
     AccentPalette, ColorScales, DivergingGradient, OpaqueColor, QualitativePalette,
@@ -1161,31 +1161,6 @@ impl TextTheme {
     /// Resolve this role's current line pitch in pixels.
     pub(crate) fn line_pitch_pixels(&self) -> f64 {
         f64::from(self.font_size) * self.line_height_multiplier
-    }
-}
-
-/// Physical horizontal alignment of a root text role.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TitleAlignment {
-    /// Align to the physical left edge of the local span.
-    Start,
-    /// Align to the physical midpoint of the local span.
-    Center,
-    /// Align to the physical right edge of the local span.
-    End,
-}
-
-impl TitleAlignment {
-    /// Resolve this alignment into one physical x coordinate and backend anchor.
-    pub(crate) fn resolve_physical(self, span_start: f64, span_end: f64) -> (f64, TextAnchor) {
-        match self {
-            Self::Start => (span_start, TextAnchor::Start),
-            Self::Center => (
-                span_start + (span_end - span_start) / 2.0,
-                TextAnchor::Middle,
-            ),
-            Self::End => (span_end, TextAnchor::End),
-        }
     }
 }
 

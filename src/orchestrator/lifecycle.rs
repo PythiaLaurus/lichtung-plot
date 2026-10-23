@@ -1293,7 +1293,7 @@ impl Plot {
 #[cfg(test)]
 mod root_title_tests {
     use super::*;
-    use crate::theme::TitleAlignment::{Center, End, Start};
+    use crate::TextAlignment::{Center, End, Start};
 
     #[test]
     fn specialized_axis_feedback_cannot_spend_the_root_caption_reserve() {

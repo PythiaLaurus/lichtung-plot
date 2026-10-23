@@ -159,18 +159,18 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// calls replace only this instruction; theme attachment order is independent.
     /// Start and End are physical left and right after the owning content insets.
     /// ```
-    /// use lichtung_plot::{NumericValues, Plot, Theme, TitleAlignment};
+    /// use lichtung_plot::{NumericValues, Plot, Theme, TextAlignment};
     /// let plot = Plot::scatter(
     ///     NumericValues::new("x", [1.0, 2.0]),
     ///     NumericValues::new("y", [2.0, 1.0]),
     /// ).title("Title").subtitle("Independent subtitle")
-    ///  .title_alignment(TitleAlignment::End)
-    ///  .subtitle_alignment(TitleAlignment::Start)
+    ///  .title_alignment(TextAlignment::End)
+    ///  .subtitle_alignment(TextAlignment::Start)
     ///  .theme(Theme::nature());
     /// # let _ = plot;
     /// ```
     #[must_use]
-    pub const fn title_alignment(mut self, alignment: crate::TitleAlignment) -> Self {
+    pub const fn title_alignment(mut self, alignment: crate::TextAlignment) -> Self {
         self.title_alignment = Some(alignment);
         self
     }
@@ -181,7 +181,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// subtitle alignment, then the final effective title alignment. Omitting this
     /// call contributes no instruction; it does not bypass those lower owners.
     #[must_use]
-    pub const fn subtitle_alignment(mut self, alignment: crate::TitleAlignment) -> Self {
+    pub const fn subtitle_alignment(mut self, alignment: crate::TextAlignment) -> Self {
         self.subtitle_alignment = Some(alignment);
         self
     }

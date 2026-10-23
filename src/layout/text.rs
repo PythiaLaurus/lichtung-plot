@@ -51,6 +51,16 @@ pub(crate) enum PhysicalTextAlignment {
     End,
 }
 
+impl From<crate::TextAlignment> for PhysicalTextAlignment {
+    fn from(alignment: crate::TextAlignment) -> Self {
+        match alignment {
+            crate::TextAlignment::Start => Self::Start,
+            crate::TextAlignment::Center => Self::Center,
+            crate::TextAlignment::End => Self::End,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum TextLineHeight {
     Multiplier(f64),

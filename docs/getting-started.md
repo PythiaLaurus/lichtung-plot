@@ -156,8 +156,8 @@ components retain names such as `typography()`. Each text role has its own typed
 mappings independently of the theme. See [complete theme and scale
 construction](complete-theme-foundations.md) for the current boundaries.
 
-Use `Plot::title_alignment(TitleAlignment::Start)` and
-`Plot::subtitle_alignment(TitleAlignment::End)` for independent heading
+Use `Plot::title_alignment(TextAlignment::Start)` and
+`Plot::subtitle_alignment(TextAlignment::End)` for independent heading
 instructions. Canvas's `panel_title_alignment` and `panel_subtitle_alignment`
 provide defaults for embedded Plots; explicit Plot instructions take precedence.
 Start and End are physical left/right after content insets. A subtitle with no

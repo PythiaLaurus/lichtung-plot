@@ -1079,8 +1079,8 @@ fn composed_panel_titles_and_subtitles_keep_distinct_measured_positions() {
     let svg = render_canvas(
         Canvas::grid(1, 1)
             .unwrap()
-            .panel_title_alignment(lichtung_plot::TitleAlignment::Start)
-            .panel_subtitle_alignment(lichtung_plot::TitleAlignment::End)
+            .panel_title_alignment(lichtung_plot::TextAlignment::Start)
+            .panel_subtitle_alignment(lichtung_plot::TextAlignment::End)
             .panel(
                 0,
                 0,

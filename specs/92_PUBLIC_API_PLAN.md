@@ -3,7 +3,8 @@
 ## Status And Reading Rules
 
 This is the signature appendix to [the implementation plan](91_IMPLEMENTATION_PLAN.md).
-It specifies the target API, not APIs already implemented by this checkout.
+It specifies the complete target API. The implementation plan's Implementation
+Status identifies the delivered subset; remaining signatures are not current APIs.
 The implementation plan owns behavior, sequencing, scientific relationships and
 verification; this appendix owns the concrete public names, types and defaults.
 Implement both together. An unresolved implementation algorithm is not permission

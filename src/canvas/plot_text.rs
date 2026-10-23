@@ -7,8 +7,8 @@ use crate::decorations::title_block::plan::{
 use crate::layout::fit::{self, FitOutcome, FitScope};
 use crate::layout::kernel::FitKind;
 use crate::layout::{AddressRole, PanelBox};
-use crate::theme::{ResolvedTheme, TitleAlignment};
-use crate::Error;
+use crate::theme::ResolvedTheme;
+use crate::{Error, TextAlignment};
 
 pub(super) struct PlotLocalTextPlan {
     pub(super) text: RootTitleBlockPlan,
@@ -20,7 +20,7 @@ impl PlotLocalTextPlan {
         plot: &Plot,
         cell: PanelBox,
         theme: &ResolvedTheme,
-        panel_alignments: [Option<TitleAlignment>; 2],
+        panel_alignments: [Option<TextAlignment>; 2],
         intrinsics: RootTitleBlockIntrinsics,
         scope: &FitScope,
     ) -> Result<FitOutcome<Self>, Error> {

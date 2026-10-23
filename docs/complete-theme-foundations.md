@@ -39,7 +39,8 @@ while Plot marks/axes/prose use Plot. The example Shared gap is exactly 2 CSS
 pixels with Publication's 11px legend-label role. LegendTheme alone owns it and
 the value remains valid under PerPlot/Hidden policies.
 
-Plot title/subtitle alignment instructions override Canvas panel defaults, then
+`TextAlignment::{Start, Center, End}` supplies physical left/center/right alignment.
+Plot title/subtitle instructions override Canvas panel defaults, then
 Theme defaults. Captions use independent Theme alignment. Panel instructions do
 not affect Canvas root prose, headers or TextPanel.
 

@@ -1667,7 +1667,10 @@ mandatory breaks and present empty-line metrics through preparation and capture.
 TextPanel/headers/panel notes admit multiline content; raw-key validation and
 exact-tick empty-label suppression remain distinct. Public `Labels::resolve`
 shares automatic resolution and complete-domain collision checks remain in place.
-Steps 3–22 remain pending; their target signatures are not current APIs.
+Step 3 is in progress: shared crate-root `TextAlignment` has replaced the title-only
+type through Plot/Canvas, Theme and frozen heading measurement. The common Text/
+TextLayout receiving slots and local appearance resolution remain to be delivered.
+Steps 4–22 remain pending; undelivered target signatures are not current APIs.
 
 ### 1. Apply The Public Property Naming Rule
 

@@ -258,8 +258,8 @@ pub struct Canvas {
     title: Option<String>,
     subtitle: Option<String>,
     // Parent defaults apply only to embedded Plot prose, never Canvas root headings.
-    pub(crate) panel_title_alignment: Option<crate::theme::TitleAlignment>,
-    pub(crate) panel_subtitle_alignment: Option<crate::theme::TitleAlignment>,
+    pub(crate) panel_title_alignment: Option<crate::TextAlignment>,
+    pub(crate) panel_subtitle_alignment: Option<crate::TextAlignment>,
     caption: Option<String>,
     labels: Option<Labels>,
     category_labels: CanvasCategoryLabels,
@@ -415,10 +415,10 @@ impl Canvas {
     /// Plot's theme default. Start and End mean the physical left and right edges
     /// of each Plot's inset content span. Headers and TextPanel text are unaffected.
     /// ```
-    /// use lichtung_plot::{Canvas, NumericValues, Plot, Theme, TitleAlignment};
+    /// use lichtung_plot::{Canvas, NumericValues, Plot, Theme, TextAlignment};
     /// let canvas = Canvas::grid(1, 1)?
-    ///     .panel_title_alignment(TitleAlignment::Start)
-    ///     .panel_subtitle_alignment(TitleAlignment::End)
+    ///     .panel_title_alignment(TextAlignment::Start)
+    ///     .panel_subtitle_alignment(TextAlignment::End)
     ///     .theme(Theme::nature())
     ///     .panel(0, 0, Plot::scatter(
     ///         NumericValues::new("x", [1.0, 2.0]),
@@ -428,7 +428,7 @@ impl Canvas {
     /// # Ok::<(), lichtung_plot::Error>(())
     /// ```
     #[must_use]
-    pub const fn panel_title_alignment(mut self, alignment: crate::TitleAlignment) -> Self {
+    pub const fn panel_title_alignment(mut self, alignment: crate::TextAlignment) -> Self {
         self.panel_title_alignment = Some(alignment);
         self
     }
@@ -440,7 +440,7 @@ impl Canvas {
     /// Theme and alignment attachment order is independent. Canvas-owned prose
     /// and all captions keep their complete theme alignment.
     #[must_use]
-    pub const fn panel_subtitle_alignment(mut self, alignment: crate::TitleAlignment) -> Self {
+    pub const fn panel_subtitle_alignment(mut self, alignment: crate::TextAlignment) -> Self {
         self.panel_subtitle_alignment = Some(alignment);
         self
     }

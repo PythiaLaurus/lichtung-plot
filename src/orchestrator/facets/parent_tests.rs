@@ -1,6 +1,6 @@
 use super::*;
 use crate::render::backend::TextAnchor;
-use crate::theme::TitleAlignment::{Center, End, Start};
+use crate::TextAlignment::{Center, End, Start};
 
 #[test]
 #[expect(

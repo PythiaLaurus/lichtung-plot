@@ -631,7 +631,7 @@ fn assert_shared_color_and_alpha_sections() {
 )]
 fn heading_instructions_are_role_local_order_independent_and_frozen() {
     use crate::layout::PhysicalTextAlignment;
-    use crate::TitleAlignment::{Center, End, Start};
+    use crate::TextAlignment::{Center, End, Start};
     let base = Theme::publication();
     let composition = base
         .composition()

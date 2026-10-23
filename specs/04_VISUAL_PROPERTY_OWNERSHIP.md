@@ -45,6 +45,7 @@ replaces only that scale. An exact field edit replaces only its field. Neither
 performs general component merging. Instructions remain independent of Theme
 attachment order.
 
+Heading instructions use crate-root `TextAlignment::{Start, Center, End}`.
 Title alignment resolves Plot instruction > Canvas panel instruction > Plot Theme.
 Subtitle resolves its Plot instruction > Canvas panel instruction > optional Plot
 Theme subtitle > final effective title. Caption uses its independent Theme field.

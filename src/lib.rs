@@ -105,6 +105,7 @@ pub use spec::{
     StandardError, TextWeight, TickGeneration, ValueSort, WaterfallLabels,
 };
 pub use spec::{PngCompression, PngOptions, PngSizing};
+pub use text::TextAlignment;
 pub use theme::{
     AccentPalette, AnnotationTextRoles, AnnotationTheme, AxisSpacing, AxisTextRoles, AxisTheme,
     BandFillRoles, BodyFillRoles, CategoricalColorScale, CategoryMarkGeometry,
@@ -119,6 +120,6 @@ pub use theme::{
     ReferenceStrokeRoles, RelativeSpacing, RootPadding, RootTextRoles, RootTitleSpacing,
     SequentialGradient, SignificanceGeometry, SizedPointTheme, SolidStrokeTheme, StrokeRoles,
     StrokeTheme, SummaryStrokeRoles, SupplementalPointTheme, SurfaceTheme, TextPanelSpacing,
-    TextTheme, Theme, ThemeBuilder, TickTheme, TitleAlignment, TypographyTheme, ValueShelfSpacing,
+    TextTheme, Theme, ThemeBuilder, TickTheme, TypographyTheme, ValueShelfSpacing,
 };
 pub use values::{BooleanValues, CategoryValues, NumericValues, SourceRows};

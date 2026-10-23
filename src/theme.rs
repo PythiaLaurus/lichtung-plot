@@ -52,7 +52,7 @@ pub use mark_paint::{
     PointOutlineTheme, PointTheme, SolidStrokeTheme, StrokeTheme,
 };
 pub(crate) use resolved::ResolvedTheme;
-pub use resolved::{SurfaceTheme, TextTheme, TitleAlignment};
+pub use resolved::{SurfaceTheme, TextTheme};
 
 pub use paint::Color;
 pub use paint::OpaqueColor;

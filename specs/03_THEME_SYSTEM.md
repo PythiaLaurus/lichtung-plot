@@ -110,8 +110,10 @@ Resolve once before validation/measurement and retain the same complete value
 through scientific preparation, fonts, collision checks and frozen operands.
 
 Exact styles and Plot scales apply only to their owned properties. Root heading
-instructions resolve separately as specified in property ownership. Composition
-alignment controls block placement and each line across the physical post-inset
+instructions resolve separately as specified in property ownership. Shared
+`TextAlignment::{Start, Center, End}` is owned by the private text module and used
+by Plot/Canvas heading instructions and CompositionTheme. Composition alignment
+controls block placement and each line across the physical post-inset
 content span, not the data-panel span or bidi-logical edges. All built-ins use
 Center title, None subtitle (follow the effective title) and independent Start
 caption. Root rotation remains fixed.

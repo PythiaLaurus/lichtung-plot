@@ -1,5 +1,37 @@
 //! Shared source syntax for authored and prepared display text.
 
+/// Physical horizontal alignment within a text owner's local span.
+///
+/// Start and End mean physical left and right, including for right-to-left text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextAlignment {
+    /// Align to the physical left edge of the local span.
+    Start,
+    /// Align to the physical midpoint of the local span.
+    Center,
+    /// Align to the physical right edge of the local span.
+    End,
+}
+
+impl TextAlignment {
+    /// Resolve one physical x coordinate and backend anchor.
+    pub(crate) fn resolve_physical(
+        self,
+        span_start: f64,
+        span_end: f64,
+    ) -> (f64, crate::render::backend::TextAnchor) {
+        use crate::render::backend::TextAnchor;
+        match self {
+            Self::Start => (span_start, TextAnchor::Start),
+            Self::Center => (
+                span_start + (span_end - span_start) / 2.0,
+                TextAnchor::Middle,
+            ),
+            Self::End => (span_end, TextAnchor::End),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, thiserror::Error)]
 #[error("display text contains unsupported control character U+{scalar:04X}")]
 pub(crate) struct UnsupportedControl {

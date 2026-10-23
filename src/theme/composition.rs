@@ -1,9 +1,9 @@
 //! Complete private composition chrome, with explicit owner-local metrics.
 
 use super::spacing::ExactLength;
-use super::{LocalMetric, RelativeSpacing, ResolvedTheme, TitleAlignment};
+use super::{LocalMetric, RelativeSpacing, ResolvedTheme};
 use crate::layout::kernel::SpatialRounding;
-use crate::Result;
+use crate::{Result, TextAlignment};
 
 macro_rules! spacing_group {
     ($name:ident, $lengths:ident; $($field:ident => $get:ident: $metric:literal),+ $(,)?) => {
@@ -54,9 +54,9 @@ spacing_group!(FacetStripSpacing, FacetStripLengths;
 /// Complete owner-local composition, header, facet and root-prose appearance.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CompositionTheme {
-    root_title_alignment: TitleAlignment,
-    root_subtitle_alignment: Option<TitleAlignment>,
-    root_caption_alignment: TitleAlignment,
+    root_title_alignment: TextAlignment,
+    root_subtitle_alignment: Option<TextAlignment>,
+    root_caption_alignment: TextAlignment,
     root_title_block: RootTitleSpacing,
     root_padding: RootPadding,
     panel_edge_clearance: RelativeSpacing,
@@ -93,9 +93,9 @@ impl CompositionTheme {
     )]
     /// Construct all root alignments and independently owned local relationships.
     pub fn new(
-        root_title_alignment: TitleAlignment,
-        root_subtitle_alignment: Option<TitleAlignment>,
-        root_caption_alignment: TitleAlignment,
+        root_title_alignment: TextAlignment,
+        root_subtitle_alignment: Option<TextAlignment>,
+        root_caption_alignment: TextAlignment,
         root_title_block: RootTitleSpacing,
         root_padding: RootPadding,
         panel_edge_clearance: RelativeSpacing,
@@ -119,9 +119,9 @@ impl CompositionTheme {
             facet_strip,
         })
     }
-    copy_fields!(root_title_alignment => get_root_title_alignment: TitleAlignment,
-        root_subtitle_alignment => get_root_subtitle_alignment: Option<TitleAlignment>,
-        root_caption_alignment => get_root_caption_alignment: TitleAlignment);
+    copy_fields!(root_title_alignment => get_root_title_alignment: TextAlignment,
+        root_subtitle_alignment => get_root_subtitle_alignment: Option<TextAlignment>,
+        root_caption_alignment => get_root_caption_alignment: TextAlignment);
     owned_fields!(root_title_block => get_root_title_block: RootTitleSpacing,
         root_padding => get_root_padding: RootPadding, panel_edge_clearance => get_panel_edge_clearance: RelativeSpacing,
         text_panel => get_text_panel: TextPanelSpacing, facet_gap => get_facet_gap: RelativeSpacing,
@@ -131,9 +131,9 @@ impl CompositionTheme {
     pub(crate) fn builtin(t: u32, s: u32, c: u32, a: u32) -> Result<Self> {
         let ratio = |n, d| RelativeSpacing::ratio(n, d);
         Self::new(
-            TitleAlignment::Center,
+            TextAlignment::Center,
             None,
-            TitleAlignment::Start,
+            TextAlignment::Start,
             RootTitleSpacing::new(ratio(0, 1)?, ratio(14, t.max(s))?, ratio(12, c)?)?,
             RootPadding::new(ratio(16, a)?, ratio(16, a)?, ratio(8, a)?, ratio(12, a)?)?,
             ratio(4, 16)?,

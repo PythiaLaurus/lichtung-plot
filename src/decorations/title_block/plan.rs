@@ -1,25 +1,25 @@
 //! Assigned-width root text, frozen before scene capture and Null validation.
 
 use crate::layout::fit::{self, FitScope, PlanError};
-use crate::layout::{AddressRole, PanelBox, PhysicalTextAlignment, ResolvedTextPlan};
+use crate::layout::{AddressRole, PanelBox, ResolvedTextPlan};
 use crate::render::backend::{Backend, PlannedTextPlacement, Point2D};
 use crate::theme::composition::RootPaddingLengths;
 use crate::theme::spacing::ExactLength;
-use crate::theme::{ResolvedTheme, TitleAlignment};
-use crate::Error;
+use crate::theme::ResolvedTheme;
+use crate::{Error, TextAlignment};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct RootAlignments {
-    pub(crate) title: TitleAlignment,
-    pub(crate) subtitle: TitleAlignment,
-    pub(crate) caption: TitleAlignment,
+    pub(crate) title: TextAlignment,
+    pub(crate) subtitle: TextAlignment,
+    pub(crate) caption: TextAlignment,
 }
 
 impl RootAlignments {
     pub(crate) fn resolve(
         theme: &ResolvedTheme,
-        plot: [Option<TitleAlignment>; 2],
-        panel: [Option<TitleAlignment>; 2],
+        plot: [Option<TextAlignment>; 2],
+        panel: [Option<TextAlignment>; 2],
     ) -> Self {
         let title = plot[0]
             .or(panel[0])
@@ -255,15 +255,15 @@ impl RootTitleBlockPlan {
                 let alignment = [alignments.title, alignments.subtitle, alignments.caption][index];
                 let (mut x, anchor) = alignment.resolve_physical(text_span.x0, text_span.x1);
                 let left = match alignment {
-                    TitleAlignment::Start => text_span.x0,
-                    TitleAlignment::Center => {
+                    TextAlignment::Start => text_span.x0,
+                    TextAlignment::Center => {
                         (text_span.x0 * 1024.0 + (text_span.width() - text.width()) * 512.0)
                             .round_ties_even()
                             / 1024.0
                     }
-                    TitleAlignment::End => text_span.x1 - text.width(),
+                    TextAlignment::End => text_span.x1 - text.width(),
                 };
-                if alignment == TitleAlignment::Center {
+                if alignment == TextAlignment::Center {
                     x = left
                         + crate::render::backend::nearest_even_text_half(text.width_quanta)
                             .ok_or_else(|| Error::Render("root text anchor overflowed".into()))?
@@ -366,11 +366,7 @@ impl RootTitleBlockPlan {
                             source,
                             appearances[index],
                             width,
-                            match align[index] {
-                                TitleAlignment::Start => PhysicalTextAlignment::Start,
-                                TitleAlignment::Center => PhysicalTextAlignment::Center,
-                                TitleAlignment::End => PhysicalTextAlignment::End,
-                            },
+                            align[index].into(),
                             "root title block",
                             &scope.child(addresses[index], 0)?,
                         ))
