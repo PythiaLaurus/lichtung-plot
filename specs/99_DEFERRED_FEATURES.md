@@ -11,7 +11,7 @@ specifications, particularly [Theme](03_THEME_SYSTEM.md),
 [property ownership](04_VISUAL_PROPERTY_OWNERSHIP.md) and
 [guides](08_GUIDE_SYSTEM.md).
 
-DF6, DF7, DF8, DF9 and DF10 are pending user disposition. Their checkpoint is the
+DF7, DF8, DF9 and DF10 are pending user disposition. Their checkpoint is the
 next feature-scope discussion before their successor implementation planning.
 DF11 has its separate prerequisite-based checkpoint below.
 No additional general audit is a prerequisite. Discussion itself does not admit
@@ -25,17 +25,6 @@ When scope enters the implementation plan, remove it from this inventory in the
 same change, including any admitted subset of a broader item. Update current
 contracts when implemented. A plan is not implementation evidence. Record lasting
 requirements in the owning contract, not a permanent decision ledger.
-
-## DF6: Broader Root Bounds
-
-Excluded: minimum width/height, maximum height, exact-height/automatic-width and
-public general constraint objects. Automatic, exact-width/automatic-height and
-exact-pair requests are current.
-
-**Checkpoint:** next feature-scope discussion. Compare real publication-column/
-embedding needs against current and planned root sizing, including wrapping,
-aspect, guides, facets/Canvas and strict fit. A general bounds surface is not the
-presumed outcome.
 
 ## DF7: Sparse Composition Compaction
 

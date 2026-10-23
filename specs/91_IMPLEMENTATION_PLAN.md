@@ -223,7 +223,6 @@ Required setter and composition semantics:
 This scope does not admit height-only sizing, minimum dimensions, maximum height,
 public generic constraints, nested Canvas objects or implicit topology changes.
 Component-box-responsive spacing is outside this plan.
-Residual root-bound proposals remain in [deferred features](99_DEFERRED_FEATURES.md).
 
 ## Existing Owners And Required Changes
 
