@@ -799,6 +799,7 @@ mod tests {
                     source.clone().with_y_tick_labels_visible(false),
                     source.clone().with_parent_axis_gutters(),
                     source.clone().with_suppressed_legend(),
+                    source.clone().title_alignment(crate::TextAlignment::End),
                 ] {
                     assert!(!key.matches(&plot, context, &owner, round)?);
                 }

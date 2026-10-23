@@ -48,9 +48,17 @@ attachment order.
 Heading instructions use crate-root `TextAlignment::{Start, Center, End}`.
 Title alignment resolves Plot instruction > Canvas panel instruction > Plot Theme.
 Subtitle resolves its Plot instruction > Canvas panel instruction > optional Plot
-Theme subtitle > final effective title. Caption uses its independent Theme field.
+Theme subtitle > final effective title. Caption resolves its Text instruction over
+the independent Theme caption field. Canvas root prose uses its own Text requests
+over the Canvas Theme, separately from embedded-panel defaults.
 Canvas panel instructions do not affect Canvas root prose, headers or TextPanel.
 Resolve concrete physical Start/Center/End before measurement and freeze it.
+
+Prose content and instructions share one Text slot. Plain replacement retains
+earlier style/layout; present exact appearance and whole layout replace their
+respective instructions. A present default layout resets the previous request.
+Convenience alignment edits update the same request in call order, even before
+content is present. Full source/style/request-presence equality owns cache reuse.
 
 Display-text syntax belongs to one shared validator, independently of these
 appearance owners. Explicit prose, titles, headers and annotations retain source

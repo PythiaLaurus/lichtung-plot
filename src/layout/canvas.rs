@@ -177,7 +177,7 @@ impl RootFramePlan {
     pub(crate) fn measure(
         canvas_size: (u32, u32),
         theme: &ResolvedTheme,
-        text: [Option<&str>; 3],
+        text: [Option<&crate::Text>; 3],
         alignments: crate::decorations::title_block::plan::RootAlignments,
         minimum_body: (f64, f64),
     ) -> Result<Self, crate::layout::fit::PlanError> {
@@ -274,7 +274,7 @@ mod tests {
             &theme,
             [None; 3],
             crate::decorations::title_block::plan::RootAlignments::resolve(
-                &theme, [None; 2], [None; 2],
+                &theme, [None; 3], [None; 2],
             ),
             (MINIMUM_PANEL_SPAN, MINIMUM_PANEL_SPAN),
         )
@@ -314,7 +314,7 @@ mod tests {
                 &theme,
                 [None; 3],
                 crate::decorations::title_block::plan::RootAlignments::resolve(
-                    &theme, [None; 2], [None; 2],
+                    &theme, [None; 3], [None; 2],
                 ),
                 child_minimum,
             )
@@ -336,12 +336,12 @@ mod tests {
         let caption =
             "diagnostic provenance with a deliberately long model and adjustment description";
         let alignments = crate::decorations::title_block::plan::RootAlignments::resolve(
-            &theme, [None; 2], [None; 2],
+            &theme, [None; 3], [None; 2],
         );
         let layout = RootFramePlan::measure(
             (360, 240),
             &theme,
-            [None, None, Some(caption)],
+            [None, None, Some(&crate::Text::new(caption))],
             alignments,
             (MINIMUM_PANEL_SPAN, MINIMUM_PANEL_SPAN),
         )
@@ -358,7 +358,7 @@ mod tests {
         assert!(RootFramePlan::measure(
             (160, 120),
             &theme,
-            [None, None, Some(&caption.repeat(8))],
+            [None, None, Some(&crate::Text::new(caption.repeat(8)))],
             alignments,
             (MINIMUM_PANEL_SPAN, MINIMUM_PANEL_SPAN),
         )
@@ -381,9 +381,11 @@ mod tests {
                     .unwrap(),
             )
             .unwrap();
-        let content = [Some("title"), Some("subtitle"), None];
+        let title = crate::Text::new("title");
+        let subtitle = crate::Text::new("subtitle");
+        let content = [Some(&title), Some(&subtitle), None];
         let alignments = crate::decorations::title_block::plan::RootAlignments::resolve(
-            &base, [None; 2], [None; 2],
+            &base, [None; 3], [None; 2],
         );
         let base_layout = RootFramePlan::measure(
             (640, 480),

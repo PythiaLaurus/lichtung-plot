@@ -141,6 +141,14 @@ let canvas = Canvas::grid(1, 1)?.theme(theme).text_panel(0, 0, note)?.width(400)
 `Text::layout(TextLayout::default())` replaces the whole layout request and
 restores owner-default alignment. TextPanel title/body default to Start separately.
 
+Plot and Canvas `title`, `subtitle` and `caption` accept the same Text values.
+Replacing prose with a plain string retains an earlier local style or alignment.
+A Text with a present style replaces the whole appearance; a present layout
+replaces the whole request. For example, `.title_alignment(TextAlignment::End)`
+followed by `.title("Updated")` keeps End, while
+`.title(Text::new("Updated").layout(TextLayout::default()))` restores the owning
+title defaults. Caption Text can choose its own alignment independently.
+
 `PanelTextAnnotation::new(corner, text)` accepts the same `Text` value. Its exact
 style replaces the Plot's panel-note role; local alignment controls lines within
 the block while the chosen corner keeps ownership of block placement.
@@ -187,7 +195,7 @@ instructions. Canvas's `panel_title_alignment` and `panel_subtitle_alignment`
 provide defaults for embedded Plots; explicit Plot instructions take precedence.
 Start and End are physical left/right after content insets. A subtitle with no
 instruction uses its optional theme default, then the effective title alignment;
-captions always use their independent complete theme field.
+captions use their own Text instruction over the independent theme field.
 
 To attach caller-computed pairwise results, construct plot-owned
 `Significance<Pairwise>` display data. The placement marker is inferred from

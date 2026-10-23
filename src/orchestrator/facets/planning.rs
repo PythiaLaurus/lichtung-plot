@@ -27,10 +27,10 @@ pub(super) fn canvas_layout(
     let mut canvas = RootFramePlan::measure(
         plot.canvas_dimensions()?,
         theme,
-        [plot.title_text(), plot.subtitle_text(), plot.caption_text()],
+        plot.prose(),
         crate::decorations::title_block::plan::RootAlignments::resolve(
             theme,
-            [plot.title_alignment, plot.subtitle_alignment],
+            plot.prose_alignments(),
             [None; 2],
         ),
         (

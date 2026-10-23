@@ -140,11 +140,12 @@ fn pixels(value: i64) -> f64 {
     value as f64 / 1024.0
 }
 
-pub(crate) fn text_width(
+pub(crate) fn text_width<'a>(
     theme: &ResolvedTheme,
     source: &str,
-    role: &crate::theme::TextTheme,
+    role: impl Into<crate::text::TextAppearance<'a>>,
 ) -> Result<f64, Error> {
+    let role = role.into();
     let (hard, natural) =
         fit::intrinsic_widths(theme, source, role, "natural root text preference")?;
     if natural <= hard {
@@ -153,10 +154,10 @@ pub(crate) fn text_width(
     let ch = theme
         .measure_text(
             "0",
-            role,
+            role.theme,
             PhysicalTextAlignment::Start,
             "natural root 66ch",
-            false,
+            role.exact_override,
         )?
         .width();
     Ok(hard.max(natural.min(66.0 * ch)))
@@ -359,17 +360,15 @@ pub(crate) fn plot_size(
     if horizontal {
         outer_width = outer_width.max(theme.root_outer_width(guide_width)?);
     }
-    for (source, role) in [plot.title_text(), plot.subtitle_text(), plot.caption_text()]
-        .into_iter()
-        .zip([
-            &theme.typography.root.title,
-            &theme.typography.root.subtitle,
-            &theme.typography.root.caption,
-        ])
-    {
+    for (source, role) in plot.prose().into_iter().zip(
+        crate::decorations::title_block::plan::RootTitleBlockPlan::appearances(theme, plot.prose()),
+    ) {
         if let Some(source) = source {
-            outer_width =
-                outer_width.max(theme.root_outer_width(text_width(theme, source, role)?)?);
+            outer_width = outer_width.max(theme.root_outer_width(text_width(
+                theme,
+                source.as_str(),
+                role,
+            )?)?);
         }
     }
     let width = requested_width.map_or_else(|| integral(outer_width), Ok)?;
@@ -391,14 +390,14 @@ pub(crate) fn plot_size(
     let body_width =
         (theme.root_inner_width(f64::from(width))? - left - right - ink[0] - ink[1]).max(hard.0);
     let body_height = plot.natural_body_height(theme, body_width, preference.1)?;
-    let sources = [plot.title_text(), plot.subtitle_text(), plot.caption_text()];
+    let sources = plot.prose();
     let prose = crate::decorations::title_block::plan::RootTitleBlockPlan::content_reserves(
         theme,
         sources,
         theme.root_inner_width(f64::from(width))?,
         crate::decorations::title_block::plan::RootAlignments::resolve(
             theme,
-            [plot.title_alignment, plot.subtitle_alignment],
+            plot.prose_alignments(),
             [None; 2],
         ),
         &FitScope::root(),

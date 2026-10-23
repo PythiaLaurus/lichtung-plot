@@ -203,6 +203,12 @@ Root title/subtitle/caption use resolved physical alignment across post-inset
 content. Headers/row titles/strips center in their spanned cells. Other nonfill
 children start unless a named role specifies otherwise.
 
+Root prose selects each Text's complete local appearance before census and uses
+it consistently for natural 66ch preference, hard widths, height, adjacent spacing
+and capture. Its actual source and zero preference glyph use the selected font
+pair. Root frame and composed child/height keys retain full Text slot identity,
+including layout presence; equal strings or dimensions alone do not authorize reuse.
+
 Frames/bodies/panels/interiors/marks/Canvas cells/surfaces fill both axes. Horizontal
 axes and top/bottom guide tracks fill width; vertical axes and left/right tracks
 fill height. Text/glyphs/entries/individual guides/overlays/empty slots are nonfill.

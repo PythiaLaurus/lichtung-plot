@@ -176,20 +176,18 @@ pub(in crate::orchestrator) fn natural_size(
     } else {
         0.0
     };
-    let sources = [
-        source.title_text(),
-        source.subtitle_text(),
-        source.caption_text(),
-    ];
+    let sources = source.prose();
     if requested_width.is_none() {
-        for (text, appearance) in sources.into_iter().zip([
-            &theme.typography.root.title,
-            &theme.typography.root.subtitle,
-            &theme.typography.root.caption,
-        ]) {
+        for (text, appearance) in sources
+            .into_iter()
+            .zip(RootTitleBlockPlan::appearances(theme, sources))
+        {
             if let Some(text) = text {
-                preferred =
-                    preferred.max(theme.root_outer_width(text_width(theme, text, appearance)?)?);
+                preferred = preferred.max(theme.root_outer_width(text_width(
+                    theme,
+                    text.as_str(),
+                    appearance,
+                )?)?);
             }
         }
     }
@@ -214,11 +212,7 @@ pub(in crate::orchestrator) fn natural_size(
         theme,
         sources,
         theme.root_inner_width(f64::from(width))?,
-        RootAlignments::resolve(
-            theme,
-            [source.title_alignment, source.subtitle_alignment],
-            [None; 2],
-        ),
+        RootAlignments::resolve(theme, source.prose_alignments(), [None; 2]),
         &FitScope::root(),
     )
     .map_err(fit::PlanError::into_error)?;

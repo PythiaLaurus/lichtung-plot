@@ -49,8 +49,5 @@ pub(crate) fn apply_canvas_text(
     canvas: &RootFramePlan,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
-    canvas.root_text.draw(
-        [plot.title_text(), plot.subtitle_text(), plot.caption_text()],
-        backend,
-    )
+    canvas.root_text.draw(plot.prose(), backend)
 }

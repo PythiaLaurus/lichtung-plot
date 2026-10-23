@@ -255,12 +255,12 @@ pub struct Canvas {
     legend_policy: CanvasLegendPolicy,
     legend_composition: LegendComposition,
     root_size: crate::layout::RootSize,
-    title: Option<String>,
-    subtitle: Option<String>,
+    title: crate::text::TextSlot,
+    subtitle: crate::text::TextSlot,
     // Parent defaults apply only to embedded Plot prose, never Canvas root headings.
     pub(crate) panel_title_alignment: Option<crate::TextAlignment>,
     pub(crate) panel_subtitle_alignment: Option<crate::TextAlignment>,
-    caption: Option<String>,
+    caption: crate::text::TextSlot,
     labels: Option<Labels>,
     category_labels: CanvasCategoryLabels,
     column_headers: Vec<CanvasHeader>,
@@ -311,11 +311,11 @@ impl Canvas {
             legend_policy: CanvasLegendPolicy::PerPlot,
             legend_composition: LegendComposition::Combined,
             root_size: crate::layout::RootSize::natural(),
-            title: None,
-            subtitle: None,
+            title: crate::text::TextSlot::EMPTY,
+            subtitle: crate::text::TextSlot::EMPTY,
             panel_title_alignment: None,
             panel_subtitle_alignment: None,
-            caption: None,
+            caption: crate::text::TextSlot::EMPTY,
             labels: None,
             category_labels: CanvasCategoryLabels::EveryPlot,
             column_headers: Vec::new(),
@@ -438,7 +438,7 @@ impl Canvas {
     /// An explicit Plot subtitle instruction wins; otherwise this wins over the
     /// optional Plot-theme subtitle default and final effective title alignment.
     /// Theme and alignment attachment order is independent. Canvas-owned prose
-    /// and all captions keep their complete theme alignment.
+    /// and captions use their own Text instructions over their complete theme roles.
     #[must_use]
     pub const fn panel_subtitle_alignment(mut self, alignment: crate::TextAlignment) -> Self {
         self.panel_subtitle_alignment = Some(alignment);
@@ -547,24 +547,38 @@ impl Canvas {
     }
 
     /// Set one canvas-level title.
+    ///
+    /// A plain string replaces content while retaining earlier local style and
+    /// layout. Present Text instructions replace the complete style or layout;
+    /// an explicit default layout restores owner defaults.
     #[must_use]
-    pub fn title(mut self, title: impl Into<String>) -> Self {
-        self.title = Some(title.into());
+    pub fn title(mut self, title: impl Into<crate::Text>) -> Self {
+        self.title.replace(title.into());
         self
     }
 
     /// Set one canvas-level subtitle.
+    /// Content and instruction replacement follow [`Self::title`].
     #[must_use]
-    pub fn subtitle(mut self, subtitle: impl Into<String>) -> Self {
-        self.subtitle = Some(subtitle.into());
+    pub fn subtitle(mut self, subtitle: impl Into<crate::Text>) -> Self {
+        self.subtitle.replace(subtitle.into());
         self
     }
 
     /// Set one canvas-level caption.
+    /// Content and instruction replacement follow [`Self::title`].
     #[must_use]
-    pub fn caption(mut self, caption: impl Into<String>) -> Self {
-        self.caption = Some(caption.into());
+    pub fn caption(mut self, caption: impl Into<crate::Text>) -> Self {
+        self.caption.replace(caption.into());
         self
+    }
+
+    fn prose(&self) -> [Option<&crate::Text>; 3] {
+        [&self.title, &self.subtitle, &self.caption].map(crate::text::TextSlot::content)
+    }
+
+    fn prose_alignments(&self) -> [Option<crate::TextAlignment>; 3] {
+        [&self.title, &self.subtitle, &self.caption].map(crate::text::TextSlot::alignment_request)
     }
 
     /// Apply one reusable automatic-label policy to every configured panel.
@@ -671,9 +685,9 @@ impl Canvas {
 
     fn validate_structure(&self) -> Result<(), Error> {
         for source in [
-            self.title.as_deref(),
-            self.subtitle.as_deref(),
-            self.caption.as_deref(),
+            self.title.source(),
+            self.subtitle.source(),
+            self.caption.source(),
         ]
         .into_iter()
         .flatten()
@@ -1439,7 +1453,7 @@ impl Canvas {
                     write!(scope, "panel-{index}").expect("reserved Canvas scope");
                     crate::decorations::title_block::plan::RootTitleBlockPlan::intrinsic_widths(
                         themes.plot(index).expect("configured Canvas Plot theme"),
-                        [plot.title_text(), plot.subtitle_text(), plot.caption_text()],
+                        plot.prose(),
                         Some(&scope),
                     )
                 })
@@ -1448,11 +1462,7 @@ impl Canvas {
         }
         let root = crate::decorations::title_block::plan::RootTitleBlockPlan::intrinsic_widths(
             themes.root(),
-            [
-                self.title.as_deref(),
-                self.subtitle.as_deref(),
-                self.caption.as_deref(),
-            ],
+            self.prose(),
             None,
         )?;
         Ok((root, text_panels, plot_titles))
@@ -1473,19 +1483,19 @@ impl Canvas {
         let mut requirements = Vec::new();
         for (source, role, address_role, appearance) in [
             (
-                self.title.as_deref(),
+                self.title.content(),
                 crate::layout::PreparedTextRole::Title,
                 crate::layout::AddressRole::RootTitle,
                 &themes.root().typography.root.title,
             ),
             (
-                self.subtitle.as_deref(),
+                self.subtitle.content(),
                 crate::layout::PreparedTextRole::Subtitle,
                 crate::layout::AddressRole::RootSubtitle,
                 &themes.root().typography.root.subtitle,
             ),
             (
-                self.caption.as_deref(),
+                self.caption.content(),
                 crate::layout::PreparedTextRole::Caption,
                 crate::layout::AddressRole::RootCaption,
                 &themes.root().typography.root.caption,
@@ -1493,14 +1503,13 @@ impl Canvas {
         ] {
             if let Some(source) = source {
                 let address = root.child(address_role, 0)?;
-                push_text_requirement(
+                crate::layout::PreparedTextRequirement::push_authored(
                     &mut requirements,
                     address,
                     role,
-                    0,
-                    source,
+                    Some(source),
                     appearance,
-                    prepared_stage,
+                    Some(prepared_stage),
                 )?;
             }
         }
@@ -1849,14 +1858,10 @@ impl Canvas {
         let canvas_layout = RootFramePlan::measure(
             (width, height),
             themes.root(),
-            [
-                self.title.as_deref(),
-                self.subtitle.as_deref(),
-                self.caption.as_deref(),
-            ],
+            self.prose(),
             crate::decorations::title_block::plan::RootAlignments::resolve(
                 themes.root(),
-                [None; 2],
+                self.prose_alignments(),
                 [None; 2],
             ),
             (

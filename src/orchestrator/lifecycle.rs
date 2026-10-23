@@ -24,6 +24,7 @@ struct PreparedPlotInputs {
 }
 
 struct CachedRootFrame {
+    prose: [crate::text::TextSlot; 3],
     dimensions: (u32, u32),
     minimum: [u64; 2],
     frame: std::sync::Arc<crate::layout::RootFramePlan>,
@@ -41,7 +42,10 @@ impl PreparedPlotInputs {
         let minimum = [minimum.0.to_bits(), minimum.1.to_bits()];
 
         if let Some(cached) = self.root_frame.borrow().as_ref() {
-            if cached.dimensions == dimensions && cached.minimum == minimum {
+            if cached.dimensions == dimensions
+                && cached.minimum == minimum
+                && source.same_prose(&cached.prose)
+            {
                 return Ok(std::sync::Arc::clone(&cached.frame));
             }
         }
@@ -49,6 +53,7 @@ impl PreparedPlotInputs {
 
         let frame = frame.into_shared();
         *self.root_frame.borrow_mut() = Some(CachedRootFrame {
+            prose: source.copy_prose()?,
             dimensions,
             minimum,
             frame: std::sync::Arc::clone(&frame),
@@ -111,9 +116,41 @@ fn prepared_root_frame_reuses_complete_prose_only_with_identical_constraints_on_
     );
 
     let repeated_changed = prepared
-        .root_frame(&source.with_canvas_size(641, 480))
+        .root_frame(&source.clone().with_canvas_size(641, 480))
         .unwrap();
     assert!(std::sync::Arc::ptr_eq(&changed, &repeated_changed));
+
+    let styled = source.clone().title(
+        crate::Text::new("Root title").style(
+            prepared
+                .theme
+                .typography
+                .root
+                .title
+                .clone()
+                .font_size(27)
+                .unwrap(),
+        ),
+    );
+    let styled_frame = prepared.root_frame(&styled).unwrap();
+    assert!(!std::sync::Arc::ptr_eq(&original, &styled_frame));
+    assert!(styled_frame.insets.top > original.insets.top);
+    let repeated_style = prepared.root_frame(&styled).unwrap();
+    assert!(std::sync::Arc::ptr_eq(&styled_frame, &repeated_style));
+    let reset = styled.title(crate::Text::new("Root title").layout(crate::TextLayout::default()));
+    let reset_frame = prepared.root_frame(&reset).unwrap();
+    assert!(!std::sync::Arc::ptr_eq(&styled_frame, &reset_frame));
+    assert_eq!(styled_frame.panel_box, reset_frame.panel_box);
+    let error = styled_frame
+        .root_text
+        .draw(reset.prose(), &mut super::backend::NullBackend::default())
+        .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("does not match its configured source"),
+        "{error}"
+    );
 }
 
 #[cfg(all(test, unix, not(any(target_os = "macos", target_os = "android"))))]
@@ -912,11 +949,7 @@ impl PlotPlan {
                 let root_text =
                     crate::decorations::title_block::plan::RootTitleBlockPlan::intrinsic_widths(
                         &theme,
-                        [
-                            source.title_text(),
-                            source.subtitle_text(),
-                            source.caption_text(),
-                        ],
+                        source.prose(),
                         None,
                     )?;
                 Ok(PreparedPlotInputs {
@@ -1352,6 +1385,12 @@ mod root_title_tests {
             );
             let required = plan.panel_plan.result.axes.as_ref().unwrap().requirements();
             let axis_ink_bottom = panel.y0 - required.bottom;
+            let text_sizes =
+                crate::decorations::title_block::plan::RootTitleBlockPlan::appearances(
+                    &theme,
+                    source.prose(),
+                )
+                .map(|role| role.theme.get_font_size());
             let caption_top = if caption.is_empty() {
                 0.0
             } else {
@@ -1359,7 +1398,7 @@ mod root_title_tests {
                     .unwrap()
                     - crate::theme::composition::hard(
                         &theme
-                            .root_title_lengths()
+                            .root_title_lengths(text_sizes)
                             .unwrap()
                             .caption_to_content_clearance,
                     )

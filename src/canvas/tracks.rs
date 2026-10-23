@@ -224,9 +224,13 @@ pub(super) fn allocate(
             let title = plot_titles[index]
                 .expect("configured Plot retains prepared text intrinsics")
                 .widths();
-            let present = [plot.title_text(), plot.subtitle_text(), plot.caption_text()]
-                .map(|value| value.is_some());
-            hard.1 = child_theme.embedded_minimum_height(present, hard.1)?;
+            let sources = plot.prose();
+            let present = sources.map(|value| value.is_some());
+            hard.1 = crate::decorations::title_block::plan::RootTitleBlockPlan::minimum_height(
+                child_theme,
+                sources,
+                hard.1,
+            )?;
             hard.0 = hard.0.max(if present.into_iter().any(|value| value) {
                 child_theme.root_outer_width(title.0)?
             } else {
@@ -257,20 +261,17 @@ pub(super) fn allocate(
                         };
                     }
                 }
-                for (source, appearance) in
-                    [plot.title_text(), plot.subtitle_text(), plot.caption_text()]
-                        .into_iter()
-                        .zip([
-                            &child_theme.typography.root.title,
-                            &child_theme.typography.root.subtitle,
-                            &child_theme.typography.root.caption,
-                        ])
-                {
+                for (source, appearance) in sources.into_iter().zip(
+                    crate::decorations::title_block::plan::RootTitleBlockPlan::appearances(
+                        child_theme,
+                        sources,
+                    ),
+                ) {
                     if let Some(source) = source {
                         width = width.max(child_theme.root_outer_width(
                             crate::layout::interior::sizing::text_width(
                                 child_theme,
-                                source,
+                                source.as_str(),
                                 appearance,
                             )?,
                         )?);

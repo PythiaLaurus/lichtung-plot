@@ -18,7 +18,7 @@ pub(crate) struct RootAlignments {
 impl RootAlignments {
     pub(crate) fn resolve(
         theme: &ResolvedTheme,
-        plot: [Option<TextAlignment>; 2],
+        plot: [Option<TextAlignment>; 3],
         panel: [Option<TextAlignment>; 2],
     ) -> Self {
         let title = plot[0]
@@ -30,13 +30,14 @@ impl RootAlignments {
                 .or(panel[1])
                 .or(theme.composition.get_root_subtitle_alignment())
                 .unwrap_or(title),
-            caption: theme.composition.get_root_caption_alignment(),
+            caption: plot[2].unwrap_or(theme.composition.get_root_caption_alignment()),
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 struct RootTextRole {
+    request: crate::Text,
     text: ResolvedTextPlan,
     bounds: PanelBox,
     placement: PlannedTextPlacement,
@@ -115,6 +116,49 @@ impl RootTitleBlockIntrinsics {
 }
 
 impl RootTitleBlockPlan {
+    pub(crate) fn appearances<'a>(
+        theme: &'a ResolvedTheme,
+        sources: [Option<&'a crate::Text>; 3],
+    ) -> [crate::text::TextAppearance<'a>; 3] {
+        let roles = [
+            &theme.typography.root.title,
+            &theme.typography.root.subtitle,
+            &theme.typography.root.caption,
+        ];
+        std::array::from_fn(|index| {
+            sources[index].map_or_else(|| roles[index].into(), |text| text.appearance(roles[index]))
+        })
+    }
+
+    pub(crate) fn minimum_height(
+        theme: &ResolvedTheme,
+        sources: [Option<&crate::Text>; 3],
+        body: f64,
+    ) -> Result<f64, Error> {
+        let appearances = Self::appearances(theme, sources);
+        let spacing =
+            theme.root_title_lengths(appearances.map(|style| style.theme.get_font_size()))?;
+        let present = sources.map(|source| source.is_some());
+        let mut required = ExactLength::pixels(body)?;
+        for (active, appearance) in present.into_iter().zip(appearances) {
+            if active {
+                required = required.add_length(&appearance.theme.line_pitch_exact()?);
+            }
+        }
+        if present[0] && present[1] {
+            required = required.add_length(&spacing.title_subtitle_gap);
+        }
+        if present[0] || present[1] {
+            required = required.add_length(&spacing.title_block_to_content_clearance);
+        }
+        if present[2] {
+            required = required.add_length(&spacing.caption_to_content_clearance);
+        }
+        if present.into_iter().any(|active| active) {
+            required = required.add_length(&theme.root_padding_lengths()?.vertical());
+        }
+        crate::theme::composition::hard(&required)
+    }
     #[cfg(test)]
     pub(crate) fn placed_text(
         &self,
@@ -145,7 +189,7 @@ impl RootTitleBlockPlan {
     /// Intrinsics do not depend on alignment or on an allocated height.
     pub(crate) fn intrinsic_widths(
         theme: &ResolvedTheme,
-        sources: [Option<&str>; 3],
+        sources: [Option<&crate::Text>; 3],
         scope: Option<&str>,
     ) -> Result<RootTitleBlockIntrinsics, Error> {
         #[cfg(not(test))]
@@ -159,15 +203,12 @@ impl RootTitleBlockPlan {
         let mut roles = [(0.0_f64, 0.0_f64); 3];
         for ((source, appearance), widths) in sources
             .into_iter()
-            .zip([
-                &theme.typography.root.title,
-                &theme.typography.root.subtitle,
-                &theme.typography.root.caption,
-            ])
+            .zip(Self::appearances(theme, sources))
             .zip(&mut roles)
         {
             if let Some(source) = source {
-                *widths = fit::intrinsic_widths(theme, source, appearance, "root title block")?;
+                *widths =
+                    fit::intrinsic_widths(theme, source.as_str(), appearance, "root title block")?;
             }
         }
         Ok(RootTitleBlockIntrinsics { roles })
@@ -181,7 +222,7 @@ impl RootTitleBlockPlan {
     )]
     pub(crate) fn measure(
         theme: &ResolvedTheme,
-        sources: [Option<&str>; 3],
+        sources: [Option<&crate::Text>; 3],
         span: PanelBox,
         padding: &RootPaddingLengths,
         maximum_width: f64,
@@ -222,7 +263,9 @@ impl RootTitleBlockPlan {
             alignments,
             scope,
         )?;
-        let spacing = theme.root_title_lengths()?;
+        let spacing = theme.root_title_lengths(
+            Self::appearances(theme, sources).map(|style| style.theme.get_font_size()),
+        )?;
         let adjacent = plans[0].is_some() && plans[1].is_some();
         if crate::theme::composition::hard(
             &reserves
@@ -312,6 +355,9 @@ impl RootTitleBlockPlan {
                     }
                 }
                 roles[index] = Some(RootTextRole {
+                    request: sources[index]
+                        .expect("measured present root text")
+                        .try_copy()?,
                     text,
                     bounds,
                     placement,
@@ -329,7 +375,7 @@ impl RootTitleBlockPlan {
     /// Width-dependent text and owned gaps, before the parent assigns height.
     pub(crate) fn content_reserves(
         theme: &ResolvedTheme,
-        sources: [Option<&str>; 3],
+        sources: [Option<&crate::Text>; 3],
         width: f64,
         alignments: RootAlignments,
         scope: &FitScope,
@@ -340,16 +386,12 @@ impl RootTitleBlockPlan {
 
     fn measure_content(
         theme: &ResolvedTheme,
-        sources: [Option<&str>; 3],
+        sources: [Option<&crate::Text>; 3],
         width: f64,
         alignments: RootAlignments,
         scope: &FitScope,
     ) -> Result<(Vec<Option<ResolvedTextPlan>>, RootTextReserves), PlanError> {
-        let appearances = [
-            &theme.typography.root.title,
-            &theme.typography.root.subtitle,
-            &theme.typography.root.caption,
-        ];
+        let appearances = Self::appearances(theme, sources);
         let align = [alignments.title, alignments.subtitle, alignments.caption];
         let addresses = [
             AddressRole::RootTitle,
@@ -363,7 +405,7 @@ impl RootTitleBlockPlan {
                     .map(|source| {
                         fit::measured(fit::text(
                             theme,
-                            source,
+                            source.as_str(),
                             appearances[index],
                             width,
                             align[index].into(),
@@ -375,7 +417,8 @@ impl RootTitleBlockPlan {
             }),
         )?;
 
-        let spacing = theme.root_title_lengths()?;
+        let spacing =
+            theme.root_title_lengths(appearances.map(|style| style.theme.get_font_size()))?;
         let mut top_reserve = crate::theme::spacing::ExactLength::quanta(
             crate::layout::kernel::LayoutScalar::from_quanta(
                 plans[0].as_ref().map_or(0, |plan| plan.height_quanta),
@@ -412,13 +455,13 @@ impl RootTitleBlockPlan {
 
     pub(crate) fn draw(
         &self,
-        sources: [Option<&str>; 3],
+        sources: [Option<&crate::Text>; 3],
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
         for (role, source) in self.roles.iter().zip(sources) {
             match (role, source) {
                 (None, None) => {}
-                (Some(role), Some(source)) if role.text.source == source => {
+                (Some(role), Some(source)) if &role.request == source => {
                     // Baselines live in the retained lines, never in a parallel vector.
                     backend.draw_planned_text(role.placement, &role.text)?;
                 }

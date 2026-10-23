@@ -23,6 +23,7 @@ pub(super) struct HeightMeasurements(std::cell::RefCell<Vec<Option<HeightMeasure
 
 #[derive(Debug, Clone, PartialEq)]
 struct HeightInputs {
+    prose: [crate::text::TextSlot; 3],
     width: i64,
     ranges: [[u64; 2]; 2],
     provenance: [crate::layout::RangeProvenance; 2],
@@ -47,6 +48,7 @@ struct HeightMeasurement {
 impl HeightInputs {
     fn matches_assignment(&self, other: &Self) -> bool {
         if self.width != other.width
+            || self.prose != other.prose
             || self.ranges != other.ranges
             || self.provenance != other.provenance
             || self.generation != other.generation
@@ -125,6 +127,7 @@ impl HeightInputs {
             None
         };
         Ok(Self {
+            prose: plot.copy_prose()?,
             width: crate::layout::kernel::nearest_spatial_quanta(width)?,
             ranges,
             provenance: [plot.x_axis_spec().provenance, plot.y_axis_spec().provenance],
@@ -256,7 +259,7 @@ pub(super) fn cell_height(
 ) -> Result<f64, Error> {
     let hard = plot.intrinsic_body_minimum(theme)?;
     let preference = body_preference(plot, theme, hard)?;
-    let sources = [plot.title_text(), plot.subtitle_text(), plot.caption_text()];
+    let sources = plot.prose();
     let present = sources.iter().any(Option::is_some);
     let prose = RootTitleBlockPlan::content_reserves(
         theme,
@@ -266,11 +269,7 @@ pub(super) fn cell_height(
         } else {
             width
         },
-        RootAlignments::resolve(
-            theme,
-            [plot.title_alignment, plot.subtitle_alignment],
-            [None; 2],
-        ),
+        RootAlignments::resolve(theme, plot.prose_alignments(), [None; 2]),
         &FitScope::root(),
     )
     .map_err(fit::PlanError::into_error)?;
@@ -375,12 +374,8 @@ pub(super) fn content_frame(
     width: u32,
     height: f64,
 ) -> Result<crate::layout::RootFramePlan, Error> {
-    let sources = [
-        source.title.as_deref(),
-        source.subtitle.as_deref(),
-        source.caption.as_deref(),
-    ];
-    let alignments = RootAlignments::resolve(theme, [None; 2], [None; 2]);
+    let sources = source.prose();
+    let alignments = RootAlignments::resolve(theme, source.prose_alignments(), [None; 2]);
     let prose = RootTitleBlockPlan::content_reserves(
         theme,
         sources,
@@ -529,20 +524,18 @@ pub(super) fn measure(
     } else {
         0.0
     };
-    let sources = [
-        source.title.as_deref(),
-        source.subtitle.as_deref(),
-        source.caption.as_deref(),
-    ];
+    let sources = source.prose();
     if requested_width.is_none() {
-        for (text, appearance) in sources.into_iter().zip([
-            &theme.typography.root.title,
-            &theme.typography.root.subtitle,
-            &theme.typography.root.caption,
-        ]) {
+        for (text, appearance) in sources
+            .into_iter()
+            .zip(RootTitleBlockPlan::appearances(theme, sources))
+        {
             if let Some(text) = text {
-                preferred_width = preferred_width
-                    .max(theme.root_outer_width(text_width(theme, text, appearance)?)?);
+                preferred_width = preferred_width.max(theme.root_outer_width(text_width(
+                    theme,
+                    text.as_str(),
+                    appearance,
+                )?)?);
             }
         }
     }
@@ -552,7 +545,7 @@ pub(super) fn measure(
         theme,
         sources,
         theme.root_inner_width(f64::from(width))?,
-        RootAlignments::resolve(theme, [None; 2], [None; 2]),
+        RootAlignments::resolve(theme, source.prose_alignments(), [None; 2]),
         &FitScope::root(),
     )
     .map_err(fit::PlanError::into_error)?;

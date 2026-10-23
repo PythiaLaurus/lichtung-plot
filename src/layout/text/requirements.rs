@@ -751,11 +751,11 @@ impl PreparedTextRequirement {
             0,
             prepared_stage.as_deref_mut(),
         )?;
-        push_present(
+        Self::push_authored(
             requirements,
             title_address,
             PreparedTextRole::Title,
-            plot.title_text(),
+            plot.prose()[0],
             &theme.typography.root.title,
             prepared_stage.as_deref_mut(),
         )?;
@@ -765,11 +765,11 @@ impl PreparedTextRequirement {
             0,
             prepared_stage.as_deref_mut(),
         )?;
-        push_present(
+        Self::push_authored(
             requirements,
             subtitle_address,
             PreparedTextRole::Subtitle,
-            plot.subtitle_text(),
+            plot.prose()[1],
             &theme.typography.root.subtitle,
             prepared_stage.as_deref_mut(),
         )?;
@@ -959,11 +959,11 @@ impl PreparedTextRequirement {
                 0,
                 prepared_stage.as_deref_mut(),
             )?;
-            push_present(
+            Self::push_authored(
                 requirements,
                 caption_address,
                 PreparedTextRole::Caption,
-                plot.caption_text(),
+                plot.prose()[2],
                 &theme.typography.root.caption,
                 prepared_stage,
             )?;
@@ -1222,27 +1222,41 @@ fn point_layer_row_is_visible(
     })
 }
 
-fn push_present(
-    requirements: &mut Vec<PreparedTextRequirement>,
-    address: ComponentAddress,
-    role: PreparedTextRole,
-    source: Option<&str>,
-    appearance: &TextTheme,
-    prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
-) -> Result<(), Error> {
-    if let Some(source) = source {
-        push_owned(
-            requirements,
-            address,
-            role,
-            0,
-            source,
-            &[],
-            appearance,
-            prepared_stage,
-        )?;
+impl PreparedTextRequirement {
+    pub(crate) fn push_authored(
+        requirements: &mut Vec<PreparedTextRequirement>,
+        address: ComponentAddress,
+        role: PreparedTextRole,
+        source: Option<&crate::Text>,
+        appearance: &TextTheme,
+        mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
+    ) -> Result<(), Error> {
+        if let Some(source) = source {
+            let appearance = source.appearance(appearance).theme;
+            let metric_address = address.child(crate::layout::AddressRole::PreferenceMetric, 0)?;
+            push_owned(
+                requirements,
+                address,
+                role,
+                0,
+                source.as_str(),
+                &[],
+                appearance,
+                prepared_stage.as_deref_mut(),
+            )?;
+            push_owned(
+                requirements,
+                metric_address,
+                PreparedTextRole::PreferenceMetric,
+                0,
+                "0",
+                &[],
+                appearance,
+                prepared_stage,
+            )?;
+        }
+        Ok(())
     }
-    Ok(())
 }
 
 #[expect(

@@ -295,6 +295,11 @@ fn native_multiline_axis_gutters_cannot_consume_root_caption_or_title_reserves()
         let roots = roots.into_snapshot();
         let caption = roots.bounds().last().unwrap();
         let title = roots.bounds().first().unwrap();
+        let text_sizes = crate::decorations::title_block::plan::RootTitleBlockPlan::appearances(
+            &theme,
+            plot.prose(),
+        )
+        .map(|role| role.theme.get_font_size());
         let axes = plan
             .result
             .axes
@@ -308,7 +313,7 @@ fn native_multiline_axis_gutters_cannot_consume_root_caption_or_title_reserves()
                     >= caption.top
                         + crate::theme::composition::hard(
                             &theme
-                                .root_title_lengths()
+                                .root_title_lengths(text_sizes)
                                 .unwrap()
                                 .caption_to_content_clearance
                         )
@@ -319,7 +324,7 @@ fn native_multiline_axis_gutters_cannot_consume_root_caption_or_title_reserves()
                     <= title.bottom
                         - crate::theme::composition::hard(
                             &theme
-                                .root_title_lengths()
+                                .root_title_lengths(text_sizes)
                                 .unwrap()
                                 .title_block_to_content_clearance
                         )
@@ -609,7 +614,7 @@ fn native_real_compositions_remeasure_gutters_and_select_guides_identically_with
         let x = NumericValues::new("x", [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]);
         let y = NumericValues::new("y", [2.0, 1.0, 3.0, 2.0, 1.0, 3.0]);
         let group = CategoryValues::new("subject", ["a", "a", "a", "b", "b", "b"]).unwrap();
-        let plots = [
+        let plots = vec![
             configured(Plot::scatter(x.clone(), y.clone()), faceted),
             configured(Plot::line(x.clone(), y.clone()), faceted),
             configured(Plot::density(x.clone()), faceted),

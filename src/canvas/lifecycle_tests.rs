@@ -129,6 +129,178 @@ fn native_empty_category_alias_is_distinct_from_internal_label_suppression() {
 #[test]
 #[expect(
     clippy::too_many_lines,
+    reason = "one composed root witnesses content edits, whole resets, local style census and independent parent precedence"
+)]
+fn authored_root_prose_preserves_edits_and_resolves_whole_request_precedence() {
+    use crate::layout::PhysicalTextAlignment::{Center, End};
+    use crate::{Color, FontFamily, FontStack, Text, TextAlignment, TextLayout, TextWeight};
+    let base = Theme::publication();
+    let title_style = base
+        .typography()
+        .get_root()
+        .get_title()
+        .clone()
+        .font_size(27)
+        .unwrap()
+        .weight(TextWeight::Bold)
+        .unwrap()
+        .color(Color::rgb(77, 33, 99))
+        .unwrap();
+    let caption_style = base
+        .typography()
+        .get_root()
+        .get_caption()
+        .clone()
+        .font_size(19)
+        .unwrap()
+        .weight(TextWeight::Bold)
+        .unwrap();
+    let unused = base
+        .typography()
+        .get_root()
+        .get_title()
+        .clone()
+        .stack(
+            FontStack::new([FontFamily::named("Unused inherited prose title font").unwrap()])
+                .unwrap(),
+        )
+        .unwrap();
+    let typography = base
+        .typography()
+        .clone()
+        .root(base.typography().get_root().clone().title(unused).unwrap())
+        .unwrap();
+    let zero = crate::RelativeSpacing::ratio(0, 1).unwrap();
+    let one = crate::RelativeSpacing::ratio(1, 1).unwrap();
+    let composition = base
+        .composition()
+        .clone()
+        .root_padding(
+            crate::RootPadding::new(zero.clone(), zero.clone(), zero.clone(), zero).unwrap(),
+        )
+        .unwrap()
+        .root_title_block(crate::RootTitleSpacing::new(one.clone(), one.clone(), one).unwrap())
+        .unwrap();
+    let theme = base
+        .customize()
+        .typography(typography)
+        .composition(composition)
+        .build()
+        .unwrap();
+    let plot = Plot::scatter(
+        crate::NumericValues::new("x", [0.0, 1.0]),
+        crate::NumericValues::new("y", [1.0, 0.0]),
+    )
+    .title_alignment(TextAlignment::End)
+    .title(Text::new("\u{10ffff}").style(title_style.clone()))
+    .title(Text::new("reset").layout(TextLayout::default()))
+    .title("Child heading\nshort")
+    .subtitle_alignment(TextAlignment::Start)
+    .subtitle(Text::new("Child subtitle").alignment(TextAlignment::End))
+    .caption(
+        Text::new("old caption")
+            .style(caption_style.clone())
+            .alignment(TextAlignment::Center),
+    )
+    .caption("Child caption");
+    let canvas = Canvas::grid(1, 1)
+        .unwrap()
+        .width(650)
+        .theme(theme)
+        .panel_title_alignment(TextAlignment::Center)
+        .panel_subtitle_alignment(TextAlignment::Start)
+        .title(
+            Text::new("discarded")
+                .style(title_style.clone())
+                .alignment(TextAlignment::End),
+        )
+        .title("Canvas heading\nshort")
+        .subtitle("Canvas subtitle")
+        .caption(
+            Text::new("Canvas caption")
+                .style(caption_style.clone())
+                .alignment(TextAlignment::Center),
+        )
+        .panel(0, 0, plot)
+        .unwrap();
+    let root = canvas.preflight_plan().unwrap();
+    let prepared = root.prepared();
+    assert!(prepared
+        .text_census
+        .requirements
+        .iter()
+        .all(|text| !text.source.contains('\u{10ffff}')));
+    let retained = root.plan().retained_text();
+    for (source, alignment, exact) in [
+        ("Canvas heading\nshort", End, Some(&title_style)),
+        ("Canvas subtitle", End, None),
+        ("Canvas caption", Center, Some(&caption_style)),
+        ("Child heading\nshort", Center, Some(&title_style)),
+        ("Child subtitle", End, None),
+        ("Child caption", Center, Some(&caption_style)),
+    ] {
+        let text = retained
+            .iter()
+            .find(|(_, text)| text.source == source)
+            .unwrap()
+            .1;
+        assert_eq!(text.style.alignment, alignment, "{source}");
+        assert_eq!(text.style.exact_override, exact.is_some());
+        if let Some(style) = exact {
+            assert_eq!(text.style.font_size, style.get_font_size());
+            assert_eq!(text.style.paint, style.get_color());
+            assert_eq!(text.style.weight, style.get_weight());
+            assert_eq!(&text.style.stack, style.get_stack());
+            let requirement = prepared
+                .text_census
+                .requirements
+                .iter()
+                .find(|text| text.source == source)
+                .unwrap();
+            assert_eq!(requirement.weight, style.get_weight());
+        }
+    }
+    let frame = crate::layout::RootFramePlan::measure(
+        (650, 900),
+        prepared.themes.root(),
+        canvas.prose(),
+        crate::decorations::title_block::plan::RootAlignments::resolve(
+            prepared.themes.root(),
+            canvas.prose_alignments(),
+            [None; 2],
+        ),
+        (1.0, 1.0),
+    )
+    .unwrap();
+    let prose: Vec<_> = frame
+        .root_text
+        .placed_text()
+        .map(|(_, text)| text)
+        .collect();
+    let quanta = crate::layout::kernel::nearest_spatial_quanta;
+    assert_eq!(
+        quanta(frame.insets.top).unwrap(),
+        prose[0].height_quanta + prose[1].height_quanta + 2 * 27 * 1024
+    );
+    assert_eq!(
+        quanta(frame.insets.bottom).unwrap(),
+        prose[2].height_quanta + 19 * 1024
+    );
+    let counters = capture_counters();
+    let mut backend = root.plan().take_svg_backend().unwrap();
+    Canvas::render_preflighted(&root, &mut backend).unwrap();
+    let (width, height) = root.dimensions();
+    let scene = RenderedScene::new(width, height, backend.into_output()).unwrap();
+    assert_eq!(
+        scene.svg_with_text_as_paths().unwrap(),
+        scene.svg_with_text_as_paths().unwrap()
+    );
+    assert_eq!(capture_counters(), counters);
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
     reason = "one authored TextPanel contract follows selected fonts, actual role-relative geometry, reflow and frozen replay"
 )]
 fn authored_text_panel_resolves_independent_styles_alignment_and_local_metrics() {

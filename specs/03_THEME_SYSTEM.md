@@ -164,6 +164,10 @@ omission uses that complete role. Measurement, 66ch preferences and frozen plans
 retain the selected stack, paint, size, weight, leading and exact provenance.
 PanelTextAnnotation applies the same complete local appearance precedence over
 the Plot's panel-text role; padding resolves against its selected font size.
+Plot/Canvas title, subtitle and caption likewise resolve local exact appearance
+over their complete root-text roles. Root title/subtitle gaps use the maximum of
+the selected title/subtitle sizes, and caption clearance uses selected caption
+size. Root padding remains tied to the root composition-body role.
 
 TypographyTheme and each nested text-role group use consuming `property(value)`
 edits and paired borrowed `get_property()` readers. For example,

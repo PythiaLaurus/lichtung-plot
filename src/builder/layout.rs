@@ -63,14 +63,10 @@ impl Plot {
         RootFramePlan::measure(
             self.canvas_dimensions()?,
             theme,
-            [
-                self.title.as_deref(),
-                self.subtitle.as_deref(),
-                self.caption.as_deref(),
-            ],
+            self.prose(),
             crate::decorations::title_block::plan::RootAlignments::resolve(
                 theme,
-                [self.title_alignment, self.subtitle_alignment],
+                self.prose_alignments(),
                 [None, None],
             ),
             (

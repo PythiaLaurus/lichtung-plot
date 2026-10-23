@@ -140,16 +140,21 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     /// Set the chart title.
+    ///
+    /// Plain strings replace content while retaining existing appearance and layout
+    /// instructions. A supplied Text's present style or whole layout replaces that
+    /// instruction; an explicit default layout resets it to owner defaults.
     #[must_use]
-    pub fn title(mut self, title: impl Into<String>) -> Self {
-        self.title = Some(title.into());
+    pub fn title(mut self, title: impl Into<crate::Text>) -> Self {
+        self.title.replace(title.into());
         self
     }
 
     /// Set the chart subtitle.
+    /// Content and instruction replacement follow [`Self::title`].
     #[must_use]
-    pub fn subtitle(mut self, subtitle: impl Into<String>) -> Self {
-        self.subtitle = Some(subtitle.into());
+    pub fn subtitle(mut self, subtitle: impl Into<crate::Text>) -> Self {
+        self.subtitle.replace(subtitle.into());
         self
     }
 
@@ -171,7 +176,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// ```
     #[must_use]
     pub const fn title_alignment(mut self, alignment: crate::TextAlignment) -> Self {
-        self.title_alignment = Some(alignment);
+        self.title.edit_alignment(alignment);
         self
     }
 
@@ -182,14 +187,15 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// call contributes no instruction; it does not bypass those lower owners.
     #[must_use]
     pub const fn subtitle_alignment(mut self, alignment: crate::TextAlignment) -> Self {
-        self.subtitle_alignment = Some(alignment);
+        self.subtitle.edit_alignment(alignment);
         self
     }
 
     /// Set the chart caption.
+    /// Content and instruction replacement follow [`Self::title`].
     #[must_use]
-    pub fn caption(mut self, caption: impl Into<String>) -> Self {
-        self.caption = Some(caption.into());
+    pub fn caption(mut self, caption: impl Into<crate::Text>) -> Self {
+        self.caption.replace(caption.into());
         self
     }
 

@@ -475,12 +475,8 @@ pub(crate) fn canvas_layout(
     let mut root = crate::layout::RootFramePlan::measure(
         plot.canvas_dimensions()?,
         theme,
-        [plot.title_text(), plot.subtitle_text(), plot.caption_text()],
-        RootAlignments::resolve(
-            theme,
-            [plot.title_alignment, plot.subtitle_alignment],
-            [None; 2],
-        ),
+        plot.prose(),
+        RootAlignments::resolve(theme, plot.prose_alignments(), [None; 2]),
         minimum,
     )?;
     root.native_preference = match super::InteriorRoute::classify(plot.kind()) {

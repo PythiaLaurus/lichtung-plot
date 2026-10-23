@@ -133,7 +133,8 @@ impl<K: crate::kind::Marker> Plot<K> {
             }
         }
         let range = |value: Option<(f64, f64)>| value.map(|(a, b)| (a.to_bits(), b.to_bits()));
-        range(self.x_axis_spec.limits) == range(other.x_axis_spec.limits)
+        self.same_prose(&other.prose)
+            && range(self.x_axis_spec.limits) == range(other.x_axis_spec.limits)
             && range(self.y_axis_spec.limits) == range(other.y_axis_spec.limits)
             && range(self.resolved_facet_x_range) == range(other.resolved_facet_x_range)
             && same_values(
@@ -233,6 +234,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         let [x_axis_spec, y_axis_spec] = axes;
         let [global_hue_levels, global_group_levels, global_line_condition_levels] = levels;
         Ok(ComposedInputs {
+            prose: self.copy_prose()?,
             x_axis_spec,
             y_axis_spec,
             global_hue_levels,

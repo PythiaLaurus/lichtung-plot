@@ -2,19 +2,24 @@
 
 /// Authored display text with optional complete appearance and layout instructions.
 ///
-/// Plain strings retain the receiving owner's defaults. Content validation happens
+/// Plain strings carry no local instructions. Content validation happens
 /// at the receiving constructor or preflight, without rewriting the source.
 ///
 /// ```
-/// use lichtung_plot::{PanelCorner, PanelTextAnnotation, Text, TextAlignment, TextLayout, TextPanel, Theme};
+/// use lichtung_plot::{NumericValues, PanelCorner, PanelTextAnnotation, Plot, Text, TextAlignment, TextLayout, TextPanel, Theme};
 /// let style = Theme::publication().typography().get_composition()
 ///     .get_text_panel_title().clone().font_size(24)?;
 /// let title = Text::new("Study\ncontext").style(style).alignment(TextAlignment::End);
 /// let note = PanelTextAnnotation::new(PanelCorner::TopLeft, title.clone())?;
+/// let plot = Plot::scatter(NumericValues::new("x", [0.0, 1.0]),
+///     NumericValues::new("y", [1.0, 0.0]))
+///     .title(title.clone()).title("Updated heading")
+///     .caption(Text::new("Centered caption").alignment(TextAlignment::Center));
 /// let panel = TextPanel::new(title, Text::new("Independent body")
 ///     .layout(TextLayout::default().alignment(TextAlignment::Start)))?;
 /// assert_eq!(panel.title(), "Study\ncontext");
 /// assert_eq!(note.text(), panel.title());
+/// # let _ = plot;
 /// # Ok::<(), lichtung_plot::Error>(())
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -70,10 +75,37 @@ impl Text {
     /// Edit alignment within this text's one layout request.
     #[must_use]
     pub fn alignment(mut self, alignment: TextAlignment) -> Self {
-        self.layout
-            .get_or_insert_with(TextLayout::default)
-            .alignment = Some(alignment);
+        self.edit_alignment(alignment);
         self
+    }
+
+    const fn edit_alignment(&mut self, alignment: TextAlignment) {
+        if let Some(layout) = &mut self.layout {
+            layout.alignment = Some(alignment);
+        } else {
+            self.layout = Some(TextLayout {
+                alignment: Some(alignment),
+            });
+        }
+    }
+
+    pub(crate) const fn alignment_request(&self) -> Option<TextAlignment> {
+        match &self.layout {
+            Some(layout) => layout.alignment,
+            None => None,
+        }
+    }
+
+    pub(crate) fn try_copy(&self) -> crate::Result<Self> {
+        Ok(Self {
+            source: crate::data::source::copy_source_string(&self.source)?,
+            style: self
+                .style
+                .as_ref()
+                .map(crate::TextTheme::try_copy)
+                .transpose()?,
+            layout: self.layout.clone(),
+        })
     }
 
     pub(crate) fn appearance<'a>(&'a self, role: &'a crate::TextTheme) -> TextAppearance<'a> {
@@ -84,10 +116,64 @@ impl Text {
     }
 
     pub(crate) fn resolved_alignment(&self, default: TextAlignment) -> TextAlignment {
-        self.layout
-            .as_ref()
-            .and_then(|layout| layout.alignment)
-            .unwrap_or(default)
+        self.alignment_request().unwrap_or(default)
+    }
+}
+
+/// An optional authored owner can retain instructions before it receives content.
+/// Its one Text request remains authoritative when later content replaces source.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TextSlot {
+    text: Text,
+    present: bool,
+}
+
+impl TextSlot {
+    pub(crate) const EMPTY: Self = Self {
+        text: Text {
+            source: String::new(),
+            style: None,
+            layout: None,
+        },
+        present: false,
+    };
+
+    pub(crate) fn replace(&mut self, incoming: Text) {
+        self.text.source = incoming.source;
+        if incoming.style.is_some() {
+            self.text.style = incoming.style;
+        }
+        if incoming.layout.is_some() {
+            self.text.layout = incoming.layout;
+        }
+        self.present = true;
+    }
+
+    pub(crate) const fn edit_alignment(&mut self, alignment: TextAlignment) {
+        self.text.edit_alignment(alignment);
+    }
+
+    pub(crate) const fn alignment_request(&self) -> Option<TextAlignment> {
+        self.text.alignment_request()
+    }
+
+    pub(crate) const fn content(&self) -> Option<&Text> {
+        if self.present {
+            Some(&self.text)
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn source(&self) -> Option<&str> {
+        self.content().map(Text::as_str)
+    }
+
+    pub(crate) fn try_copy(&self) -> crate::Result<Self> {
+        Ok(Self {
+            text: self.text.try_copy()?,
+            present: self.present,
+        })
     }
 }
 
@@ -226,6 +312,51 @@ mod tests {
     use crate::{
         AxisTick, Canvas, Labels, NumericValues, PanelCorner, PanelTextAnnotation, Plot, TextPanel,
     };
+
+    #[test]
+    fn content_replacement_retains_instructions_until_a_whole_request_replaces_them() {
+        use super::{Text, TextAlignment, TextLayout, TextSlot};
+        const BEFORE_CONTENT: TextSlot = {
+            let mut slot = TextSlot::EMPTY;
+            slot.edit_alignment(TextAlignment::End);
+            slot
+        };
+        let mut slot = BEFORE_CONTENT;
+        assert!(slot.content().is_none());
+        let style = crate::Theme::publication()
+            .typography()
+            .get_root()
+            .get_title()
+            .clone();
+        slot.replace(Text::new("first").style(style.clone()));
+        slot.replace(Text::new("replacement"));
+        assert_eq!(
+            slot.content(),
+            Some(
+                &Text::new("replacement")
+                    .style(style.clone())
+                    .alignment(TextAlignment::End)
+            )
+        );
+        slot.replace(Text::new("reset").layout(TextLayout::default()));
+        assert_eq!(
+            slot.content(),
+            Some(
+                &Text::new("reset")
+                    .style(style.clone())
+                    .layout(TextLayout::default())
+            )
+        );
+        slot.edit_alignment(TextAlignment::Start);
+        assert_eq!(
+            slot.content(),
+            Some(
+                &Text::new("reset")
+                    .style(style)
+                    .alignment(TextAlignment::Start)
+            )
+        );
+    }
 
     #[test]
     fn whole_layout_reset_preserves_style_and_complete_text_panel_equality() {

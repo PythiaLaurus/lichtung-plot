@@ -41,14 +41,19 @@ the value remains valid under PerPlot/Hidden policies.
 
 `TextAlignment::{Start, Center, End}` supplies physical left/center/right alignment.
 Plot title/subtitle instructions override Canvas panel defaults, then
-Theme defaults. Captions use independent Theme alignment. Panel instructions do
-not affect Canvas root prose, headers or TextPanel.
+Theme defaults. Caption Text resolves over independent Theme alignment. Panel
+instructions do not affect Canvas root prose, headers or TextPanel.
 
 TextPanel title/body can each receive a `Text` with an exact complete TextTheme
 and a TextLayout alignment. Omitted styles use the Canvas's independent title/body
 roles. Local selected sizes drive TextPanel inset/gap metrics, while root padding
 continues to use the root body's size. Font preparation includes the selected local
 stacks and actual content; an unused replaced role does not require its fonts.
+
+Plot/Canvas prose supports the same complete local Text style. Title/subtitle
+spacing uses their selected maximum size and caption clearance uses its selected
+size. Plain prose replacement retains earlier local instructions; supplying a
+whole TextLayout replaces the request, including an explicit default reset.
 
 ## Fonts And Local Spacing
 

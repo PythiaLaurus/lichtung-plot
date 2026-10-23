@@ -219,32 +219,6 @@ impl ResolvedTheme {
                 self.typography.axes.tick_label.get_font_size(),
             )?))
     }
-    pub(crate) fn embedded_minimum_height(&self, present: [bool; 3], body: f64) -> Result<f64> {
-        let spacing = self.root_title_lengths()?;
-        let mut required = ExactLength::pixels(body)?;
-        for (active, role) in present.into_iter().zip([
-            &self.typography.root.title,
-            &self.typography.root.subtitle,
-            &self.typography.root.caption,
-        ]) {
-            if active {
-                required = required.add_length(&role.line_pitch_exact()?);
-            }
-        }
-        if present[0] && present[1] {
-            required = required.add_length(&spacing.title_subtitle_gap);
-        }
-        if present[0] || present[1] {
-            required = required.add_length(&spacing.title_block_to_content_clearance);
-        }
-        if present[2] {
-            required = required.add_length(&spacing.caption_to_content_clearance);
-        }
-        if present.into_iter().any(|active| active) {
-            required = required.add_length(&self.root_padding_lengths()?.vertical());
-        }
-        hard(&required)
-    }
     pub(crate) fn root_inner_width(&self, outer: f64) -> Result<f64> {
         capacity(outer, &self.root_padding_lengths()?.horizontal())
     }
@@ -266,16 +240,10 @@ impl ResolvedTheme {
                 self.typography.composition.body.get_font_size(),
             )?])
     }
-    pub(crate) fn root_title_lengths(&self) -> Result<RootTitleLengths> {
+    pub(crate) fn root_title_lengths(&self, sizes: [u32; 3]) -> Result<RootTitleLengths> {
         self.composition.get_root_title_block().lengths(&[
-            LocalMetric::css_pixels(
-                self.typography
-                    .root
-                    .title
-                    .get_font_size()
-                    .max(self.typography.root.subtitle.get_font_size()),
-            )?,
-            LocalMetric::css_pixels(self.typography.root.caption.get_font_size())?,
+            LocalMetric::css_pixels(sizes[0].max(sizes[1]))?,
+            LocalMetric::css_pixels(sizes[2])?,
         ])
     }
     pub(crate) fn text_panel_lengths(&self, title: u32, body: u32) -> Result<TextPanelLengths> {

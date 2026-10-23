@@ -17,7 +17,7 @@ fn root_padding_keeps_fractional_edges_until_the_complete_hard_boundary() {
             &theme,
             [None; 3],
             crate::decorations::title_block::plan::RootAlignments::resolve(
-                &theme, [None; 2], [None; 2],
+                &theme, [None; 3], [None; 2],
             ),
             (hard, 1.0 / 1024.0),
         )

@@ -745,26 +745,49 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// The chart title, if any.
     #[must_use]
     pub(crate) fn title_text(&self) -> Option<&str> {
-        self.title.as_deref()
+        self.title.source()
     }
 
     /// The chart subtitle, if any.
     #[must_use]
     pub(crate) fn subtitle_text(&self) -> Option<&str> {
-        self.subtitle.as_deref()
+        self.subtitle.source()
     }
 
     /// The chart caption, if any.
     #[must_use]
     pub(crate) fn caption_text(&self) -> Option<&str> {
-        self.caption.as_deref()
+        self.caption.source()
+    }
+
+    pub(crate) fn prose(&self) -> [Option<&crate::Text>; 3] {
+        [&self.title, &self.subtitle, &self.caption].map(crate::text::TextSlot::content)
+    }
+
+    pub(crate) fn prose_alignments(&self) -> [Option<crate::TextAlignment>; 3] {
+        [&self.title, &self.subtitle, &self.caption].map(crate::text::TextSlot::alignment_request)
+    }
+
+    pub(crate) fn copy_prose(&self) -> Result<[crate::text::TextSlot; 3], Error> {
+        Ok([
+            self.title.try_copy()?,
+            self.subtitle.try_copy()?,
+            self.caption.try_copy()?,
+        ])
+    }
+
+    pub(crate) fn same_prose(&self, prose: &[crate::text::TextSlot; 3]) -> bool {
+        [&self.title, &self.subtitle, &self.caption]
+            .into_iter()
+            .zip(prose)
+            .all(|(left, right)| left == right)
     }
 
     pub(crate) fn validate_display_text(&self) -> Result<(), Error> {
         for (source, role) in [
-            (self.title.as_deref(), "plot title"),
-            (self.subtitle.as_deref(), "plot subtitle"),
-            (self.caption.as_deref(), "plot caption"),
+            (self.title_text(), "plot title"),
+            (self.subtitle_text(), "plot subtitle"),
+            (self.caption_text(), "plot caption"),
             (self.x_label.as_deref(), "x-axis title"),
             (self.y_label.as_deref(), "y-axis title"),
             (self.color_label.as_deref(), "color guide title"),
