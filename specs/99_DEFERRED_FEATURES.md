@@ -67,8 +67,9 @@ axis/formatting/root lifecycle, with concrete workflows in
 
 - Exact generated counts: four endpoint-including positions across [0,10], rather
   than an approximate Target or an upper bound.
-- Relative automatic density: sparse/report versus dense/large-figure views while
-  retaining span/typography-responsive automatic spacing.
+- Data-interval density: one tick every 20 data units gives 6 positions on [0,100]
+  and 11 on [0,200]; final data range and interval determine the list, independently
+  of canvas width/fonts. Support it directly through the built-in interval locator.
 - Anchored multiplicative intervals: [1,2,4,8,16,32,64] for ratio 2, including other
   caller-selected ratios and explicit anchor identity.
 - Category-label stride/offset/endpoints: twelve month bars with six selected names,
@@ -76,7 +77,7 @@ axis/formatting/root lifecycle, with concrete workflows in
 - Owned numeric position functions: include view endpoints and an in-range warning
   value 50 after final domain resolution; pass resulting positions to NumericFormat.
 
-The plan covers one normalized generator/refinement policy, strict versus soft
+The plan covers one normalized generator/count-cap policy, strict versus soft
 source behavior, actual-axis capabilities, full category-domain/selected-text
 ownership, callback identity/materialization, facets/Shared ranges, spanning Canvas
 and frozen publication. Exact ticks retain precedence in either setter order.
@@ -84,9 +85,9 @@ The capabilities are not implemented; explicit category-label selection does not
 authorize automatic fit-driven omission or removal of scientific categories.
 
 **Plan-review checkpoint:** review the integrated tick proposal before implementing
-it, including exact-count endpoints/scale space, density/cap combinations,
-geometric boundary arithmetic, selected-label font/native-cell requirements and
-raw-versus-exponent callback coordinates. This reviews the requested scope rather
+it, including exact-count endpoints/scale space, data-interval membership and cap
+checks, geometric boundary arithmetic, selected-label font/native-cell requirements
+and raw-versus-exponent callback coordinates. This reviews the requested scope rather
 than reopening its feature disposition. Remove admitted scope from this list when
 its plan is approved and update current contracts as implemented.
 

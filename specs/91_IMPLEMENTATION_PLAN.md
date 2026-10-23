@@ -12,7 +12,7 @@ lifecycle:
   display multipliers and rounding, configurable SI/compact presentation, shared
   multiplier/unit explanations, D3-style numeric format strings and single-value/
   complete-set formatting functions that retain automatic tick generation.
-- Extend TickGeneration with exact counts, relative automatic density, anchored
+- Extend TickGeneration with exact counts, data-interval density, anchored
   multiplicative intervals and position-generation functions. Add explicit
   categorical-label stride/offset/endpoint selection without removing categories,
   marks, tick positions or grid geometry.
@@ -723,8 +723,9 @@ Natural preference uses complete content at preferred size. Hard requirements us
 only explicitly admitted font floors/ellipsis; preserve a nonzero marker/text
 requirement and assigned actual-ink proof. Selected local text metrics update only
 their declared gaps/clearance and height/gutters, not unrelated mark metrics or
-root padding. Generation/density seeds use resolved preferred tick typography;
-fitting a source at a smaller size does not request more ticks within that trial.
+root padding. Existing Automatic geometry seeds use resolved preferred tick
+typography; data-interval positions depend only on their step and final domain.
+Fitting a source at a smaller size does not request more ticks within that trial.
 Real assignment/domain changes still flow through the existing bounded coordinator.
 
 ### Text Dependencies, Font Admission And Frozen Publication
@@ -1099,7 +1100,7 @@ carry the same policy and selected metadata through the existing route.
 
 ### Scope, Precedence And One Policy
 
-Implement all five requested controls: exact generated counts, relative automatic
+Implement all five requested controls: exact generated counts, data-interval
 density, anchored multiplicative intervals, explicit categorical-label thinning
 and numeric position-generation functions. Numeric controls attach through the
 existing x/y TickGeneration setters; categorical label selection has a separate
@@ -1109,34 +1110,40 @@ shared factors/units and formatting functions, not position generation.
 Preserve Automatic, preferred Additive/Log10Decades, approximate Target, hard
 Maximum and literal exact-tick behavior. Every x/y generation setter replaces
 that axis's complete policy, independently of formatting, limits and the other
-axis. Automatic resets all locator refinements. Exact x_ticks/y_ticks take
+axis. Automatic resets the locator and its cap. Exact x_ticks/y_ticks take
 precedence in either order: do not execute a replaced generation function, impose
-its count/density/maximum on the exact list, or format its literal labels. Actual
+its count/interval/maximum on the exact list, or format its literal labels. Actual
 axis-kind/scale validation remains independent of that suppression.
 
 Replace the single payload choice with one normalized immutable TickGeneration:
-one closed primary locator and validated orthogonal density/count-cap refinements.
-Primary locators are Automatic, preferred Additive, preferred Log10Decades,
-approximate Target, ExactCount, Multiplicative and Function. Keep the existing
-maximum constructor's meaning by normalizing it to Automatic plus its hard cap.
-This is one representation, not competing optional locator fields or a legacy
-Maximum execution path. Add bare consuming refinement methods under the naming
+one closed primary locator and an optional validated generated-count cap. Primary
+locators are Automatic, Interval, approximate Target, ExactCount, Multiplicative
+and Function. Interval retains its step, coordinate space and strict/preferred
+requirement: the current Additive and Log10Decades constructors select preferred
+linear-data and integral-exponent intervals respectively; data-interval density
+selects a strict data-space interval. Reuse the same interval source machinery,
+without a second implementation for the newly exposed requirement.
+
+Keep the existing maximum constructor's meaning by normalizing it to Automatic
+plus its hard cap. This is one representation, not competing optional locators or
+a legacy Maximum execution path. Add bare consuming cap edits under the naming
 rule; a new same-name writer also migrates an existing reader to `get_`.
 
-| Primary locator | Relative density | Optional generated maximum |
-| --- | --- | --- |
-| Automatic, including the existing Maximum constructor | Scales geometry-derived seed | Filters complete candidates in their existing order |
-| Preferred Additive/Log10Decades or approximate Target | Nonneutral density rejects | Filters complete candidates, never individual positions |
-| ExactCount | Nonneutral density rejects | Must be at least the exact count; otherwise construction rejects |
-| Multiplicative | Nonneutral density rejects | Entire lattice source must satisfy the cap; no truncation |
-| Function | Scales the preferred-count hint supplied to the function | Validates its returned complete list; no truncation or reinvocation at a smaller count |
+| Primary locator | Optional generated maximum |
+| --- | --- |
+| Automatic, including the existing Maximum constructor | Filters complete candidates in their existing order |
+| Preferred Interval, including current Additive/Log10Decades, or approximate Target | Filters complete candidates, never individual positions |
+| Strict data-space Interval | Entire in-domain interval list must satisfy the cap; no enlarged step or truncation |
+| ExactCount | Must be at least the exact count; otherwise construction rejects |
+| Multiplicative | Entire lattice source must satisfy the cap; no truncation |
+| Function | Validates its returned complete list; no truncation or reinvocation at a smaller count |
 
-Neutral density 1 is normalized away. Constructors supply neutral refinements;
-consuming edits preserve and validate the complete policy, including contradictory
+Consuming edits preserve and validate the complete policy, including contradictory
 count constraints. Clearing a cap restores the primary locator's unconstrained
-generated program. `is_automatic` means the complete default/reset policy, not just
-an Automatic primary with a nondefault density or cap. Keep the existing 10000
-generated-position ceiling and public count range 1..=10000.
+generated program. `is_automatic` means the complete default/reset policy, not an
+Automatic primary with a nondefault cap. Keep the existing 10000 generated-position
+ceiling and public count range 1..=10000. Data-interval density directly retains
+its data-unit step in the Interval locator's complete policy.
 
 TickGeneration must support an owned cloneable function handle. Replace Copy-based
 storage/access assumptions with explicit borrowing/cloning throughout AxisSpec,
@@ -1175,39 +1182,58 @@ Built-in adaptive formatting can choose its permitted common precision, but the
 locator cannot replace the list with fewer ticks or a terminal midpoint. For n=1
 the midpoint label must still fit. Maximum constraints are checked before text work.
 
-### Relative Density: Responsive Automatic Spacing
+### Data-Interval Density: One Tick Every Twenty Data Units
 
-Workflow: the same 0..100 plot needs a quieter report version and a denser large
-figure. An illustrative default list [0,25,50,75,100] might become [0,50,100] with
-lower density or [0,10,20,...,100] with higher density. These demonstrate relative
-intent, not a promise that doubling density doubles the final count.
+Workflow: request one tick for every 20 units of the numeric data range. The final
+resolved domain determines how many positions exist:
 
-Accept a finite strictly positive multiplier d, default 1. Scale the existing
-assigned-span/6ch seed, not scientific coordinates, glyph size, label width or
-the root's width request. Let S be the existing checked `span_quanta(actual_span)`
-and C the selected tick role's measured/quantized advance of `"0"`, both in integer
-quanta. With the existing checked pitch `P=max(1,6*C)`, use
-`U=1+clamp(floor(S*d/P),1,9999)`. Evaluate the dyadic product/ratio with checked
-arithmetic and apply the finite bound before integer conversion, so an enormous
-valid d saturates the existing source limit rather than overflowing. Preserve
-span/advance quantization before applying density; density 1 must reproduce the
-present seed and ordered Automatic program.
+| Resolved data range | Positions at step 20 | Count |
+| --- | --- | --- |
+| [0,100] | [0,20,40,60,80,100] | 6 |
+| [0,200] | [0,20,40,60,80,100,120,140,160,180,200] | 11 |
+| [40,100] | [40,60,80,100] | 4 |
+| [5,95] | [20,40,60,80] | 4 |
 
-Apply the adjusted seed to the geometry-limited source counts for both linear and
-logarithmic Automatic. Preserve the existing nice-step/source order, cardinality
-filters and first complete fitting candidate; existing full-integral logarithmic
-preference remains explicit. Density is a preference and cannot waive font/ink
-fit, force partial sources or promise a particular final count. It responds to
-assigned facet/Canvas span, resolved preferred tick typography and genuine gutter
-feedback. A font-fit trial does not rescale the generator seed or change its list.
-This differs from Target's absolute approximate count and from a fixed interval.
+Accept a finite strictly positive interval s in data units. Use zero-aligned
+positions `k*s` for signed integral k within the closed final data domain; retain
+only endpoints that belong to that lattice. The same range/step gives the same
+positions and count across widths, fonts, root modes and cache settings. Parent
+range resolution can change the list because its data-domain membership changes.
+The interval is not a factor applied to a renderer-selected tick count or to a
+pixel/font pitch, and is not estimated from the number of source observations.
 
-An optional maximum still filters actual complete source cardinality before
-formatting/allocation; it is not silently converted into a target seed. Preserve
-the current Automatic/Maximum singleton behavior. A Function locator receives the
-scaled preferred count as context, while retaining authority over its returned
-list. Reject density on incompatible locators rather than retain a meaningless
-setting. Keep one operation and the existing root feedback bound.
+Expose this as a built-in strict Interval requirement. The existing
+`TickGeneration::additive(step)` is a preferred linear interval that may coarsen;
+retain that behavior while sharing its interval source/arithmetic owner with the
+strict requirement. A strict data interval cannot become a larger nice step,
+skip members or switch to a midpoint because text or space is insufficient.
+TextLayout can apply explicitly permitted font fit/ellipsis to the complete list;
+otherwise a genuine nonfit returns a typed tick miss. No application function is
+required to express the interval or derive its count.
+
+Compute first/last indices and cardinality from checked exact input ratios and
+boundary comparisons, without overflowing hi-lo or unchecked float-to-index casts.
+For the strict source, membership uses mathematical index products of the retained
+step; independently round each admitted product once to its coordinate operand.
+Do not accumulate rounded additions or use an epsilon to include an endpoint.
+Check the complete count against 10000 and any configured maximum before allocating
+or formatting. Oversized lists reject rather than saturate, truncate or enlarge s.
+An in-domain empty lattice is valid and contributes no numeric-label explanation;
+unrepresentable indices/positions or collapsed distinct coordinates are real
+generation/fit failures, not empty success or permission to lower the count.
+
+On a Log10 axis, a data interval still refers to raw data units, not exponent or
+screen distance; require positive admitted positions and retain their mathematical
+display operands through projection. Resolve genuinely retained raw/mathematical
+domain bounds without pretending that the rounded log transform has an exact
+binary64 inverse. Existing preferred Log10Decades remains integral-exponent
+spacing, and Multiplicative retains its ratio contract. Extend the common operand/
+checked-boundary path as needed rather than reinterpret s by the active scale.
+
+Resolve the final facet/Canvas data domain before generating this source, then fit
+its full list within the actual assignment. Preserve the existing bounded root
+lifecycle and exact-tick precedence. Function remains the separate application-
+defined position source described below.
 
 ### Multiplicative Intervals: An Anchored Geometric Lattice
 
@@ -1312,10 +1338,10 @@ The same rule returns [0,50,120] for view [0,120], [20,50,80] for [20,80] and
 requiring the application to reconstruct all those final ranges beforehand.
 
 Provide an owned fallible locator function through TickGeneration. Its immutable
-context includes axis identity/scale, resolved domain/provenance, actual assigned
-axis span and the preferred-count hint, with no backend, mutable Plot, drawing
-hook or scientific-data mutation. Expose raw data bounds where exactly retained
-and explicit mathematical bound/scale-coordinate views for logarithmic domains;
+context includes axis identity/scale, resolved domain/provenance and actual assigned
+axis span, with no backend, mutable Plot, drawing hook or scientific-data mutation.
+Expose exactly retained raw bounds and explicit mathematical bound/scale-coordinate
+views for logarithmic domains;
 never reconstruct them using an unchecked physical pow or imply exact inversion
 of the rounded log10 transform. Call only after the actual domain and assignment
 exist. Natural-width low/mid/high estimates remain preferences and do not invoke
@@ -1354,8 +1380,8 @@ their present positions coincide. Remove TickGeneration's Copy requirement rathe
 than leak functions into a global registry. Borrow or clone complete policy inputs
 through standalone, facets and Canvas.
 
-Materialize once per reached owner/axis/handle/policy/domain/provenance/assignment/
-preferred-count context, independently of optional child/text cache enablement.
+Materialize once per reached owner/axis/handle/policy/domain/provenance/assignment
+context, independently of optional child/text cache enablement.
 Assignment identity includes the geometry consumed by the public context, not an
 unrelated orthogonal size, backend or incidental probe. Changed shared ranges or
 consumed geometry may create a new context within the existing bounded measurement
@@ -1368,18 +1394,18 @@ text before capture; no locator or formatter runs during capture or Output repla
 ### Composition, Source Programs And Implementation Owners
 
 Make the source program distinguish soft ordered candidates from strict complete
-sources. ExactCount, Multiplicative and Function do not inherit the unconditional
-coarsening/terminal-midpoint path. Preserve the old Automatic/Target/Maximum and
-preferred-interval source order. Handle successful empty strict sources explicitly
-rather than confuse them with a skipped/failed candidate. Numeric maximum applies
-to positions including any intentionally empty display labels, not the count of
-visible strings. Category selection is independent and never filters numeric ticks.
+sources. ExactCount, strict data Interval, Multiplicative and Function do not inherit
+the unconditional coarsening/terminal-midpoint path. Preserve the existing
+Automatic/Target/Maximum and preferred-interval source order. Handle empty strict
+sources explicitly rather than confuse them with a skipped/failed candidate.
+Numeric maximum applies to positions including intentionally empty display labels,
+not the count of visible strings. Category selection never filters numeric ticks.
 
-Retain the complete generator, density/cap, mathematical operand and source kind,
-domain provenance, actual callback context/result and category policy/full order/
-selected indices in the consumers that depend on them. Update source/axis feedback,
-composed equality, height caches and child reuse; equal output positions or current
-visible names do not establish upstream equivalence. Track explicit/supplied versus
+Retain the complete generator, interval space/step/requirement, cap, mathematical
+operand and source kind, domain provenance, actual callback context/result and
+category policy/full order/selected indices in their dependent consumers. Update
+source/axis feedback, composed equality, height caches and child reuse. Equal
+positions or visible names do not establish upstream equivalence. Track explicit/supplied versus
 generated precedence through erasure and parent reassignment.
 
 Resolve parent domains before invoking locators; shared ranges do not automatically
@@ -1400,7 +1426,7 @@ the resulting text/explanations are measured.
 | Owner | Required change |
 | --- | --- |
 | `src/spec/ticks.rs`, `src/spec.rs`, `src/lib.rs`, `src/kind.rs`, `src/builder/configuration.rs` | One validated extended generator, category-selection value, deliberate context/result exports and actual-axis sealed gates |
-| `src/layout/panel/sources.rs`, `src/layout/panel/sources/tests.rs`, `src/numeric/`, `src/layout/panel/projection.rs` | Exact/density/lattice source arithmetic, strict-versus-soft termination, explicit mathematical operands and complete callback results |
+| `src/layout/panel/sources.rs`, `src/layout/panel/sources/tests.rs`, `src/numeric/`, `src/layout/panel/projection.rs` | Exact/data-interval/lattice source arithmetic, strict-versus-soft termination, explicit mathematical operands and complete callback results |
 | `src/layout/panel.rs`, `src/layout/panel/semantics.rs`, `src/layout/panel/cells.rs`, `src/layout/panel/axis_frame_grid.rs` | Owned policies, full category positions plus selected-label metadata, capacity/ink, empty sources and frozen axis/source identity |
 | `src/builder/facets.rs`, `src/builder/accessors.rs`, `src/plots/shared_x/prepared.rs`, `src/orchestrator/validation.rs` | Remove Copy assumptions, preserve parent provenance/choice, applicability checks and complete composed dependencies |
 | `src/layout/text/requirements.rs`, `src/layout/interior/sizing.rs`, `src/plots/heatmap.rs`, `src/plots/beeswarm.rs`, `src/plots/waterfall.rs`, `src/plots/interval_estimate.rs` | Selected-label census/preferences, native full-cell geometry, numeric/explanation measurement and actual-source admission |
@@ -1522,8 +1548,9 @@ layout/guide contracts and callback documentation with those implemented semanti
 
 ### 8. Normalize TickGeneration And Remove Copy Assumptions
 
-Migrate the five current choices to the single primary-locator/refinement policy,
-including Maximum as Automatic plus cap, without changing their source order,
+Migrate the five current choices to the single primary-locator/count-cap policy,
+including preferred Additive/Log10Decades through the common Interval representation
+and Maximum as Automatic plus cap, without changing their source order,
 singleton semantics, exact precedence or actual-axis refusal. Move production
 consumers to explicit borrows/clones and preserve normalized choice/provenance in
 AxisSemanticInputs, composed snapshots and feedback. Do not add unused future
@@ -1548,20 +1575,23 @@ representable positions, a genuine exact-count text nonfit and final Shared-doma
 selection. A strict source cannot fall into Automatic coarsening or midpoint retry.
 Update numeric/tick documentation and public examples with the implemented source.
 
-### 10. Add Relative Automatic Density
+### 10. Add Data-Interval Density
 
-Expose validated density on the live Automatic path, with neutral 1 normalization
-and explicit rejection on incompatible locators. Establish the preferred-count
-formula used by the later Function context without adding an unused Function
-choice. Use checked quantized arithmetic and the existing bounded source order/
-maximum filtering. Preserve true selected-role metrics and parent-assigned span
-dependencies.
+Expose a finite positive data-unit step through the shared Interval locator with
+the strict complete-source requirement. Reuse the current preferred interval's
+source/arithmetic owners; retain its documented coarsening behavior independently.
+Generate after final parent-domain resolution with checked index/count/boundary
+arithmetic, cap-before-allocation and retained raw/mathematical operands. The
+requested data interval never rescales with assigned pixels or selected fonts.
 
-Replace the existing fixed-pitch boundary witness with meaningful density/default
-equivalence and saturation coverage rather than add a setter/getter echo. Exercise
-different real assignments/typography and one facet/Canvas range/height interaction;
-do not assert exact final counts from a relative preference. Update public tick
-guidance with concrete sparse/dense examples and the hard-cap distinction.
+Verify step 20 on [0,100], [0,200], [40,100] and [5,95], negative/cross-zero domains,
+fractional steps, exact boundaries, subnormals/extremes and valid empty lists.
+Use independent rational membership/rounding expectations, including indices
+beyond exact binary64 integer conversion. Check unchanged source lists across
+width/font/cache changes, real strict nonfit and cap refusal, and a final Shared
+domain changing the count. Exercise a raw-data interval on Log10 independently of
+exponent spacing. Update public tick docs/examples and current contracts with this
+built-in requirement; no generator function is needed for data-interval density.
 
 ### 11. Add Anchored Multiplicative Sources
 
@@ -1601,8 +1631,8 @@ shared-handle policy identity and operation-local materialization independent of
 optional layout caches. Format accepted operands through NumericFormat, including
 its already implemented functions and measured factor/unit explanations.
 
-Verify the view-dependent warning-50 example, final parent domains, assigned-span/
-density hints, empty output, raw versus exponent logarithmic operands, invalid
+Verify the view-dependent warning-50 example, final parent domains, assigned-span
+context, empty output, raw versus exponent logarithmic operands, invalid
 ordering/bounds/counts, strict fit refusal and zero function calls for exact ticks.
 Prove repeated context queries/cache toggles and frozen publications reuse results
 without locator/formatter/font work. Update tick/numeric/layout/guide lifecycle
@@ -1799,7 +1829,7 @@ stale documentation claims have no remaining caller or compatibility definition.
    Log10Decades, Target and Maximum retain source order, exact precedence and
    documented singleton behavior through the normalized representation. Compare
    complete policies/provenance under clone/erasure/parent replacement. Exercise
-   meaningful density/cap combinations and reject contradictions without fonts;
+   meaningful interval/cap combinations and reject contradictions before text work;
    do not test normalization solely by setting a property and reading it back.
 2. **Exact cardinality and interpolation:** the four-position [0,10] example,
    singleton midpoint, both endpoints, negative/opposite-extreme linear ranges,
@@ -1807,11 +1837,14 @@ stale documentation claims have no remaining caller or compatibility definition.
    independent affine-rational rounding expectations and scale-space relationships.
    Prove count never decreases on formatting/geometry failure and no unrelated
    midpoint appears. Explicit exact lists still override the generated requirement.
-3. **Relative density:** independently check quantized seed boundaries, neutral
-   normalization, monotonic preferred seeds, tiny/huge finite multipliers and
-   clamp-before-conversion. Larger density need not produce an exact count multiple.
-   Check actual span/role metric feedback, cap filtering before text work and
-   same-context/cache equivalence without pinning automatic panel dimensions.
+3. **Data-interval density:** the step-20 examples have 6,11,4,4 positions respectively.
+   Final domain/step, not pixels or fonts, determine the complete lattice. Check
+   negative/cross-zero domains, fractional steps, boundary inclusion, empty lists,
+   subnormals/extreme indices/counts and independent rational membership/rounding.
+   Compare positions/counts under width/typography/cache changes and resolved parent
+   domains. Required text must fit under its explicit policy or miss; count/cap
+   failure cannot enlarge the step, clamp the count, insert endpoints or retry a
+   midpoint. Preserve old preferred Additive/Log10Decades coarsening separately.
 4. **Multiplicative lattice:** ratio 2 and 1.5, shifted anchors/negative indices,
    exact boundary inclusion, close-to-one ratios, full-domain cardinality limits,
    positive-domain validation and valid empty views. Use independent rational or
@@ -1838,7 +1871,7 @@ stale documentation claims have no remaining caller or compatibility definition.
    typed or functional NumericFormat, including units/explanations. Invalid sources
    fail before formatter invocation; font/format failures never trigger another
    locator or a hidden lower-count application call.
-8. **Bounded parent-aware replay:** final Shared domains, assigned-span/density hints,
+8. **Bounded parent-aware replay:** final Shared domains, assigned-span context,
    identical context queries, meaningful context changes, cloned/distinct handles
    and optional layout-cache settings. Exact ticks invoke neither replaced locator
    nor formatter. Marginal strip copies do not invoke a second central locator.
@@ -2009,8 +2042,8 @@ Keep tests in their existing logical owners:
   candidate order, semantic materialization and final sealing.
 - `src/layout/panel/sources/tests.rs`, `src/layout/panel/cells.rs`,
   `src/layout/panel/semantics.rs`, `src/builder/facets/generation_tests.rs`:
-  exact/density/lattice programs, full category geometry, complete policy/context
-  identity, parent domains and locator/formatter invocation boundaries.
+  exact/data-interval/lattice programs, full category geometry, complete policy/
+  context identity, parent domains and locator/formatter invocation boundaries.
 - `tests/heatmap/suite.rs`, `tests/estimates/model_displays.rs`,
   `tests/lines/numeric_layers.rs`, `tests/distributions/composites.rs`: existing
   automatic/exact ticks, continuous guides and fixed-value consumer boundaries.
@@ -2059,7 +2092,9 @@ cargo test --locked --offline --lib decimal_emission_obeys_notation_precision_an
 cargo test --locked --offline --lib finite_extremes_keep_exact_scaled_values_and_refuse_unrepresentable_output
 cargo test --locked --offline --lib fractional_powers_certify_literal_cells_carries_refinement_and_cache_independence
 cargo test --locked --offline --lib semantic_sets_resolve_uniform_precision_preserve_occurrences_and_exhaust_powers
-cargo test --locked --offline --lib six_ch_seed_has_quantized_boundaries_and_a_ten_thousand_bound
+cargo test --locked --offline --lib common_step_admits_complete_counts_and_exact_integral_indices
+cargo test --locked --offline --lib additive_sources_are_requested_first_then_complete_decimal_coarsenings
+cargo test --locked --offline --lib dense_and_empty_interval_misses_do_not_poison_coarser_sources
 cargo test --locked --offline --lib count_targets_allow_nice_deviation_and_maxima_filter_before_formatting
 cargo test --locked --offline --lib common_step_uses_index_products_not_accumulated_addition_or_endpoint_tolerance
 cargo test --locked --offline --lib logarithmic_interval_vectors_are_divisible_integral_exponents_not_subsequences
