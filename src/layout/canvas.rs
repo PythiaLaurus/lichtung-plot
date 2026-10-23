@@ -421,16 +421,18 @@ mod tests {
         let layout = Layout {
             projection: crate::layout::Projection::new((0.0, 1.0), (0.0, 1.0), panel.as_tuple()),
             x_axis: crate::layout::Axis {
-                label: String::new(),
+                label: None,
                 ticks: Vec::new(),
+                tick_labels_visible: true,
                 explicit_ticks: false,
                 assigned_tick_width: None,
                 assigned_cells: None,
                 source: crate::layout::TickSource::SUPPLIED,
             },
             y_axis: crate::layout::Axis {
-                label: String::new(),
+                label: None,
                 ticks: Vec::new(),
+                tick_labels_visible: true,
                 explicit_ticks: false,
                 assigned_tick_width: None,
                 assigned_cells: None,

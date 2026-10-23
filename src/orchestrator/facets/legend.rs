@@ -18,7 +18,7 @@ pub(super) fn prepare_discrete_guide(
     resources: &crate::font::canonical::OperationContext,
 ) -> Result<super::PreparedFacetGuide, Error> {
     let source_data = source.data().with_operation(resources);
-    let mut base = super::data::base_plot(source, kind, false, false, resources)?;
+    let mut base = super::data::base_plot(source, kind, resources)?;
     if let Some(column) = source.hue_col() {
         let observed = inputs.observed_color_levels(&base)?;
         let values = crate::data::strict_strings(source_data, column, "facet hue")?;

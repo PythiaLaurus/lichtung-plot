@@ -200,8 +200,6 @@ pub(super) fn facet_selectors(
 pub(super) fn base_plot(
     source: &Plot,
     kind: PlotKind,
-    has_horizontal_axis_label: bool,
-    has_vertical_axis_label: bool,
     resources: &crate::font::canonical::OperationContext,
 ) -> Result<Plot, Error> {
     let source_rows = source.configured_source_rows()?;
@@ -209,12 +207,6 @@ pub(super) fn base_plot(
         .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
         .with_operation(resources);
     let mut base_plot = source.clone().without_facets();
-    if has_horizontal_axis_label {
-        base_plot = base_plot.x_label("");
-    }
-    if has_vertical_axis_label {
-        base_plot = base_plot.y_label("");
-    }
     let independent_collectives = matches!(
         kind,
         PlotKind::Density | PlotKind::Line | PlotKind::Interaction

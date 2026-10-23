@@ -166,7 +166,7 @@ impl RootTitleBlockPlan {
             ])
             .zip(&mut roles)
         {
-            if let Some(source) = source.filter(|source| !source.is_empty()) {
+            if let Some(source) = source {
                 *widths = fit::intrinsic_widths(theme, source, appearance, "root title block")?;
             }
         }
@@ -360,7 +360,6 @@ impl RootTitleBlockPlan {
             "root title block",
             (0..3).map(|index| {
                 sources[index]
-                    .filter(|source| !source.is_empty())
                     .map(|source| {
                         fit::measured(fit::text(
                             theme,
@@ -421,7 +420,7 @@ impl RootTitleBlockPlan {
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
         for (role, source) in self.roles.iter().zip(sources) {
-            match (role, source.filter(|source| !source.is_empty())) {
+            match (role, source) {
                 (None, None) => {}
                 (Some(role), Some(source)) if role.text.source == source => {
                     // Baselines live in the retained lines, never in a parallel vector.

@@ -395,7 +395,7 @@ fn missing_frozen_axes_do_not_trigger_label_reconstruction() {
         shapes,
         crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get)
     );
-    assert!(result.layout.x_axis.label.is_empty() && result.layout.y_axis.label.is_empty());
+    assert!(result.layout.x_axis.label.is_none() && result.layout.y_axis.label.is_none());
 }
 
 #[cfg(test)]
@@ -406,13 +406,13 @@ fn later_axis_font_failure_wins_over_an_earlier_text_fit() {
     theme.prepare_font_environment().unwrap();
     let mut layout =
         crate::layout::Layout::envelope(crate::layout::PanelBox::new(80.0, 610.0, 60.0, 450.0));
-    layout.x_axis.label = "W".repeat(200);
+    layout.x_axis.label = Some("W".repeat(200));
     let scope = FitScope::root();
     assert!(matches!(
         validate_axis_text(&layout, &theme, &scope),
         Err(PlanError::Fit(_))
     ));
-    layout.y_axis.label = "\u{10ffff}".into();
+    layout.y_axis.label = Some("\u{10ffff}".into());
     assert!(matches!(
         validate_axis_text(&layout, &theme, &scope),
         Err(PlanError::Fatal(_))

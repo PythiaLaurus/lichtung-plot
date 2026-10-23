@@ -257,9 +257,7 @@ pub(super) fn cell_height(
     let hard = plot.intrinsic_body_minimum(theme)?;
     let preference = body_preference(plot, theme, hard)?;
     let sources = [plot.title_text(), plot.subtitle_text(), plot.caption_text()];
-    let present = sources
-        .iter()
-        .any(|source| source.is_some_and(|text| !text.is_empty()));
+    let present = sources.iter().any(Option::is_some);
     let prose = RootTitleBlockPlan::content_reserves(
         theme,
         sources,

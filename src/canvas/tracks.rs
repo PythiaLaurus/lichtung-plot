@@ -225,7 +225,7 @@ pub(super) fn allocate(
                 .expect("configured Plot retains prepared text intrinsics")
                 .widths();
             let present = [plot.title_text(), plot.subtitle_text(), plot.caption_text()]
-                .map(|value| value.is_some_and(|text| !text.is_empty()));
+                .map(|value| value.is_some());
             hard.1 = child_theme.embedded_minimum_height(present, hard.1)?;
             hard.0 = hard.0.max(if present.into_iter().any(|value| value) {
                 child_theme.root_outer_width(title.0)?

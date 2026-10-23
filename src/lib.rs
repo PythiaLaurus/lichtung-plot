@@ -70,6 +70,7 @@ mod significance;
 mod spec;
 /// Display-only statistics (KDE, CI, OLS for fit lines).
 pub mod stats;
+mod text;
 mod theme;
 mod values;
 

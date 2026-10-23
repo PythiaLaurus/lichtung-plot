@@ -1,6 +1,132 @@
 use super::*;
 
 #[test]
+fn authored_display_slots_preserve_common_source_and_real_blank_line_metrics() {
+    const SOURCE: &str = "\n  Alpha \r\n\r\nBeta  \n";
+    let plot = Plot::line(
+        crate::NumericValues::new("x", [0.0, 1.0]),
+        crate::NumericValues::new("y", [1.0, 0.0]),
+    )
+    .title(SOURCE)
+    .subtitle(SOURCE)
+    .caption(SOURCE)
+    .x_label(SOURCE)
+    .y_label(SOURCE)
+    .hue(crate::CategoryValues::new("cohort", ["single"; 2]).unwrap())
+    .labels(Labels::raw().alias("cohort", "").alias("single", SOURCE))
+    .point_layer(
+        crate::PointLayer::new(
+            crate::NumericValues::new("selected x", [0.5]),
+            crate::NumericValues::new("selected y", [0.5]),
+        )
+        .labels(crate::CategoryValues::new("note", [SOURCE]).unwrap()),
+    )
+    .legend(crate::LegendPolicy::Visible(
+        crate::LegendPosition::OutsideRight,
+    ))
+    .panel_text_annotation(
+        crate::PanelTextAnnotation::new(crate::PanelCorner::TopLeft, SOURCE).unwrap(),
+    );
+    let canvas = Canvas::grid(2, 1)
+        .unwrap()
+        .size(1200, 2000)
+        .title(SOURCE)
+        .subtitle("")
+        .caption(SOURCE)
+        .column_header(0, 1, SOURCE)
+        .unwrap()
+        .row_header(0, 2, SOURCE)
+        .unwrap()
+        .row_title(1, SOURCE)
+        .unwrap()
+        .panel(0, 0, plot)
+        .unwrap()
+        .text_panel(1, 0, TextPanel::new(SOURCE, SOURCE).unwrap())
+        .unwrap();
+    let root = canvas.preflight_plan().unwrap();
+    let retained = root.plan().retained_text();
+    let blocks: Vec<_> = retained
+        .iter()
+        .filter(|(_, text)| text.source == SOURCE)
+        .collect();
+    // Six Plot slots, a point label, two root prose slots, three headers,
+    // two TextPanel slots and a guide entry.
+    assert_eq!(blocks.len(), 15);
+    for (_, text) in blocks {
+        assert_eq!(text.line_texts(), ["", "  Alpha ", "", "Beta  ", ""]);
+        assert!(text.line_pitch_quanta > 0);
+        assert!(text.height_quanta > 4 * text.line_pitch_quanta);
+        for lines in text.lines.windows(2) {
+            assert_eq!(
+                lines[1].translation_y_quanta - lines[0].translation_y_quanta,
+                text.line_pitch_quanta
+            );
+        }
+        for index in [0, 2, 4] {
+            assert!(text.lines[index].runs.is_empty());
+        }
+    }
+    let empty: Vec<_> = retained
+        .iter()
+        .filter(|(_, text)| text.source.is_empty())
+        .collect();
+    assert_eq!(
+        empty.len(),
+        2,
+        "the explicit root subtitle and guide title must survive capture"
+    );
+    for (_, text) in empty {
+        assert_eq!(text.line_texts(), [""]);
+        assert!(text.height_quanta > 0);
+    }
+    let counters = capture_counters();
+    let mut backend = root.plan().take_svg_backend().unwrap();
+    Canvas::render_preflighted(&root, &mut backend).unwrap();
+    assert_eq!(capture_counters(), counters);
+}
+
+#[test]
+fn native_empty_category_alias_is_distinct_from_internal_label_suppression() {
+    let plot = Plot::heatmap(
+        crate::CategoryValues::new("column", ["c", "c"]).unwrap(),
+        crate::CategoryValues::new("row", ["a", "b"]).unwrap(),
+        crate::NumericValues::new("value", [1.0, 2.0]),
+    );
+    let canvas = Canvas::grid(1, 2)
+        .unwrap()
+        .size(1000, 500)
+        .labels(Labels::raw().alias("a", "").alias("b", "Visible label"))
+        .panel(0, 0, plot.clone())
+        .unwrap()
+        .panel(0, 1, plot.with_y_tick_labels_visible(false))
+        .unwrap();
+    let root = canvas.preflight_plan().unwrap();
+    let retained = root.plan().retained_text();
+    let blank: Vec<_> = retained
+        .iter()
+        .filter(|(_, text)| text.source.is_empty())
+        .collect();
+    assert_eq!(blank.len(), 1);
+    assert_eq!(blank[0].1.line_texts(), [""]);
+    assert!(blank[0].1.height_quanta > 0);
+    assert_eq!(
+        retained
+            .iter()
+            .filter(|(_, text)| text.source == "Visible label")
+            .count(),
+        1
+    );
+    let mut backend = root.plan().take_svg_backend().unwrap();
+    Canvas::render_preflighted(&root, &mut backend).unwrap();
+    let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+    assert_eq!(
+        svg.matches("<polygon ").count(),
+        4,
+        "all four scientific cells remain"
+    );
+}
+
+#[test]
 #[expect(
     clippy::too_many_lines,
     reason = "one Shared authority contract checks effective policy, source counts, pre-font section slots and selected order"

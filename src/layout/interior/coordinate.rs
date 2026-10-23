@@ -95,10 +95,10 @@ impl Intrinsics {
         );
         let mut without_y_categories = minimum_body.1;
         for side in 0..2 {
-            if !axes.labels[side].is_empty() {
+            if let Some(label) = &axes.labels[side] {
                 let (hard, _) = fit::intrinsic_widths(
                     theme,
-                    &axes.labels[side],
+                    label,
                     &standard.axis_title,
                     "standard panel axis title intrinsic",
                 )?;
@@ -112,31 +112,29 @@ impl Intrinsics {
             if let Some(labels) = &axes.display_categories[side] {
                 let mut category_pitch = 0.0_f64;
                 for label in labels {
-                    if !label.is_empty() {
-                        let parallel = if side == 0 {
-                            fit::intrinsic_widths(
-                                theme,
+                    let parallel = if side == 0 {
+                        fit::intrinsic_widths(
+                            theme,
+                            label,
+                            &standard.tick_label,
+                            "coordinate panel tick label intrinsic",
+                        )?
+                        .0
+                    } else {
+                        // Mandatory lines and actual font metrics, not a
+                        // nominal single-line height, constrain row slots.
+                        theme
+                            .measure_text(
                                 label,
                                 &standard.tick_label,
+                                crate::layout::PhysicalTextAlignment::Center,
                                 "coordinate panel tick label intrinsic",
+                                false,
                             )?
-                            .0
-                        } else {
-                            // Mandatory lines and actual font metrics, not a
-                            // nominal single-line height, constrain row slots.
-                            theme
-                                .measure_text(
-                                    label,
-                                    &standard.tick_label,
-                                    crate::layout::PhysicalTextAlignment::Center,
-                                    "coordinate panel tick label intrinsic",
-                                    false,
-                                )?
-                                .height()
-                        };
-                        category_pitch = category_pitch
-                            .max(parallel + 2.0 * crate::layout::panel::LABEL_CLEARANCE);
-                    }
+                            .height()
+                    };
+                    category_pitch =
+                        category_pitch.max(parallel + 2.0 * crate::layout::panel::LABEL_CLEARANCE);
                 }
                 let span = category_pitch
                     * f64::from(
@@ -351,11 +349,7 @@ impl InteriorRoute {
                         |(tick, label)| {
                             Ok(crate::layout::AxisTick {
                                 position: tick.position,
-                                label: if side == 1 && !plot.y_tick_labels_visible() {
-                                    String::new()
-                                } else {
-                                    crate::data::source::copy_source_string(label)?
-                                },
+                                label: crate::data::source::copy_source_string(label)?,
                             })
                         },
                     ))?
@@ -388,8 +382,9 @@ impl InteriorRoute {
                     )?
                 };
                 Ok(Axis {
-                    label: crate::data::source::copy_source_string(&inputs.labels[side])?,
+                    label: inputs.copy_label(side)?,
                     ticks: ticks.ticks,
+                    tick_labels_visible: side == 0 || plot.y_tick_labels_visible(),
                     explicit_ticks: inputs.specs[side].exact_ticks.is_some(),
                     assigned_tick_width: None,
                     assigned_cells: None,

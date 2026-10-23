@@ -12,6 +12,7 @@ use crate::spec::{
 
 impl Plot {
     pub(crate) fn validate_configuration(&self, kind: PlotKind) -> Result<(), Error> {
+        self.validate_display_text()?;
         self.x_axis_spec().validate("x-axis")?;
         self.y_axis_spec().validate("y-axis")?;
         for (spec, logarithmic) in [

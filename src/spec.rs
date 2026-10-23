@@ -113,7 +113,7 @@ pub enum PanelCorner {
     BottomRight,
 }
 
-/// Caller-owned single-line text anchored inside a chart panel.
+/// Caller-owned text block anchored inside a chart panel.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PanelTextAnnotation {
     corner: PanelCorner,
@@ -124,17 +124,7 @@ impl PanelTextAnnotation {
     /// Construct one validated panel-corner annotation.
     pub fn new(corner: PanelCorner, text: impl Into<String>) -> Result<Self, crate::Error> {
         let text = text.into();
-        if text.trim().is_empty()
-            || text.trim() != text
-            || text.chars().any(|character| {
-                character.is_control() || matches!(character, '\u{2028}' | '\u{2029}')
-            })
-        {
-            return Err(crate::Error::Data(
-                "panel text must be nonempty, single-line, trimmed, and contain no control characters"
-                    .into(),
-            ));
-        }
+        crate::text::validate_for(&text, "panel text")?;
         Ok(Self { corner, text })
     }
 
@@ -232,7 +222,7 @@ impl HeatmapNullRowAnnotation {
             text: text.into(),
         };
         validate_heatmap_annotation_label(&annotation.row_label, "row label")?;
-        validate_heatmap_annotation_label(&annotation.text, "text")?;
+        crate::text::validate_for(&annotation.text, "heatmap fully-null row annotation text")?;
         Ok(annotation)
     }
 
@@ -354,27 +344,14 @@ pub struct WaterfallLabels {
 }
 
 impl WaterfallLabels {
-    /// Construct non-empty verbatim labels for the base and terminal values.
+    /// Construct verbatim display labels for the base and terminal values.
     pub fn new(base: impl Into<String>, terminal: impl Into<String>) -> Result<Self, crate::Error> {
         let labels = Self {
             base: base.into(),
             terminal: terminal.into(),
         };
-        if labels.base.trim().is_empty() || labels.terminal.trim().is_empty() {
-            return Err(crate::Error::Data(
-                "waterfall annotation labels must not be empty".into(),
-            ));
-        }
-        if labels.base.trim() != labels.base
-            || labels.terminal.trim() != labels.terminal
-            || labels.base.chars().any(char::is_control)
-            || labels.terminal.chars().any(char::is_control)
-        {
-            return Err(crate::Error::Data(
-                "waterfall annotation labels must contain no surrounding whitespace or control characters"
-                    .into(),
-            ));
-        }
+        crate::text::validate_for(&labels.base, "waterfall base label")?;
+        crate::text::validate_for(&labels.terminal, "waterfall terminal label")?;
         Ok(labels)
     }
 
@@ -803,8 +780,8 @@ impl<'a> PlotRenderContext<'a> {
         x: (f64, f64),
         y: (f64, f64),
         panel: PanelBox,
-        x_label: String,
-        y_label: String,
+        x_label: Option<String>,
+        y_label: Option<String>,
         x_spec: &crate::layout::AxisSpec,
         y_spec: &crate::layout::AxisSpec,
         theme: &crate::theme::ResolvedTheme,
@@ -837,8 +814,8 @@ impl<'a> PlotRenderContext<'a> {
         mut x: (f64, f64),
         mut y: (f64, f64),
         panel: PanelBox,
-        x_label: String,
-        y_label: String,
+        x_label: Option<String>,
+        y_label: Option<String>,
         mut x_ticks: Vec<crate::layout::AxisTick>,
         mut y_ticks: Vec<crate::layout::AxisTick>,
         x_spec: &crate::layout::AxisSpec,

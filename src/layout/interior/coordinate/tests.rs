@@ -1037,8 +1037,8 @@ fn native_exact_sources_are_indivisible_and_missing_axes_never_fall_back() {
                 (0.0, 1.0),
                 (0.0, 1.0),
                 context.panel,
-                String::new(),
-                String::new(),
+                None,
+                None,
                 &crate::layout::AxisSpec::default(),
                 &crate::layout::AxisSpec::default(),
                 &theme

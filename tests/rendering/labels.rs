@@ -78,10 +78,10 @@ fn direct_plot_humanizes_axes_categories_legend_title_and_entries() {
     let study_arm = CategoryValues::new("study_arm", ["control_arm", "active_arm"]).unwrap();
     let svg = render(horizontal_bar(&treatment_group, &mean_score).series(study_arm));
 
-    assert_eq!(
-        horizontal_category_text(&svg, 2),
-        ["Control group", "Active group"]
-    );
+    let resolved =
+        ["control_group", "active_group"].map(|raw| Labels::default().resolve(raw).unwrap());
+    assert_eq!(resolved, ["Control group", "Active group"]);
+    assert_eq!(horizontal_category_text(&svg, 2), resolved);
     let axes = super::parse_text_elements(text_layer(&svg, "axes"));
     let words = axes
         .iter()
@@ -113,7 +113,11 @@ fn raw_mode_preserves_automatic_identity_text() {
     let y = NumericValues::new("y_value", [2.0, 3.0]);
     let svg = render(Plot::scatter(x, y).labels(Labels::raw()));
 
-    assert!(svg.contains(">x_value</text>") && svg.contains(">y_value</text>"));
+    for raw in ["x_value", "y_value"] {
+        let resolved = Labels::raw().resolve(raw).unwrap();
+        assert_eq!(resolved, raw);
+        assert!(svg.contains(&format!(">{resolved}</text>")));
+    }
 }
 
 #[test]
@@ -153,11 +157,13 @@ fn aliases_override_every_automatic_horizontal_bar_surface_and_escape_svg() {
         .alias("mean_score", "Score\n(points)")
         .alias("feature_name", "Feature")
         .alias("raw_feature", "A & B <feature>");
+    let resolved = labels.resolve("mean_score").unwrap();
+    assert_eq!(resolved, "Score\n(points)");
     let svg =
         render(Plot::horizontal_bar(feature_name, BarInput::estimates(mean_score)).labels(labels));
 
     let axes = super::parse_text_elements(text_layer(&svg, "axes"));
-    for label in ["Score", "(points)", "Feature"] {
+    for label in resolved.lines().chain(std::iter::once("Feature")) {
         assert!(
             axes.iter().any(|entry| entry.content == label),
             "missing {label:?}"
@@ -176,10 +182,17 @@ fn ambiguous_display_labels_fail_during_preflight() {
     let value = NumericValues::new("value", [1.0, 2.0]);
     let plot = Plot::bar(group, BarInput::estimates(value));
 
-    let error = plot.preflight().unwrap_err().to_string();
+    let error = plot.clone().preflight().unwrap_err().to_string();
 
     assert!(error.contains("label collision in x-axis categories"));
     assert!(error.contains("Labels::raw()"));
+    let error = plot
+        .labels(Labels::raw().aliases([("control_group", ""), ("control-group", "")]))
+        .preflight()
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("label collision in x-axis categories"));
+    assert!(error.contains("colliding aliases"));
 }
 
 #[test]

@@ -822,7 +822,7 @@ fn heatmap_merges_annotated_fully_null_row_and_preserves_finite_value_labels() {
     );
     let annotation = HeatmapNullRowAnnotation::new(
         "not fit",
-        "No finite measurements were available for this modeled outcome.",
+        " No finite measurements\r\n\r\nwere available for this modeled outcome. ",
     )
     .unwrap();
     let svg = render(&data, |chart| {
@@ -844,7 +844,7 @@ fn heatmap_merges_annotated_fully_null_row_and_preserves_finite_value_labels() {
 }
 
 #[test]
-fn heatmap_null_row_annotation_requires_nonempty_trimmed_labels() {
+fn heatmap_null_row_annotation_distinguishes_raw_keys_from_display_text() {
     let errors = [
         HeatmapNullRowAnnotation::new("", "explanation")
             .unwrap_err()
@@ -852,7 +852,7 @@ fn heatmap_null_row_annotation_requires_nonempty_trimmed_labels() {
         HeatmapNullRowAnnotation::new(" row", "explanation")
             .unwrap_err()
             .to_string(),
-        HeatmapNullRowAnnotation::new("row", " explanation ")
+        HeatmapNullRowAnnotation::new("row\nkey", "explanation")
             .unwrap_err()
             .to_string(),
     ];
@@ -860,6 +860,8 @@ fn heatmap_null_row_annotation_requires_nonempty_trimmed_labels() {
     assert!(errors
         .iter()
         .all(|error| error.contains("must be nonempty, trimmed")));
+    let error = HeatmapNullRowAnnotation::new("row", "unsupported\ttab").unwrap_err();
+    assert!(error.to_string().contains("unsupported control"));
 }
 
 #[test]

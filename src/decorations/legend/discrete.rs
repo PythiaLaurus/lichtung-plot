@@ -177,23 +177,18 @@ impl PreparedGuide {
     ) -> Result<()> {
         for (ordinal, section) in self.sections.iter().enumerate() {
             let section_owner = owner.child(AddressRole::LegendSection, count(ordinal)?)?;
-            if !section.display_title.is_empty() {
-                PreparedTextRequirement::push_into(
-                    requirements,
-                    section_owner.child(AddressRole::LegendTitle, 0)?,
-                    PreparedTextRole::LegendTitle,
-                    0,
-                    section.display_title.as_ref(),
-                    &[],
-                    &theme.typography.guides.legend_title,
-                    stage.as_deref_mut(),
-                )
-                .map_err(|error| Error::Render(error.to_string()))?;
-            }
+            PreparedTextRequirement::push_into(
+                requirements,
+                section_owner.child(AddressRole::LegendTitle, 0)?,
+                PreparedTextRole::LegendTitle,
+                0,
+                section.display_title.as_ref(),
+                &[],
+                &theme.typography.guides.legend_title,
+                stage.as_deref_mut(),
+            )
+            .map_err(|error| Error::Render(error.to_string()))?;
             for (index, entry) in section.entries().iter().enumerate() {
-                if entry.display_label.is_empty() {
-                    continue;
-                }
                 PreparedTextRequirement::push_into(
                     requirements,
                     section_owner

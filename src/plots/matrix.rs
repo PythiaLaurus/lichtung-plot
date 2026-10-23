@@ -633,14 +633,13 @@ pub(crate) fn measure(
                     ticks: crate::data::source::collect_source(ticks.ticks.iter().map(|tick| {
                         Ok(layout::AxisTick {
                             position: tick.position,
-                            label: if label.is_some() {
-                                crate::data::source::copy_source_string(&tick.label)?
-                            } else {
-                                String::new()
-                            },
+                            label: crate::data::source::copy_source_string(&tick.label)?,
                         })
                     }))?,
-                    label: crate::data::source::copy_source_string(label.unwrap_or_default())?,
+                    label: label
+                        .map(crate::data::source::copy_source_string)
+                        .transpose()?,
+                    tick_labels_visible: label.is_some(),
                     explicit_ticks: false,
                     assigned_tick_width: None,
                     assigned_cells: None,

@@ -89,13 +89,7 @@ pub(in crate::orchestrator) fn natural_size(
     let selectors = data::facet_selectors(source, data)?;
     let panels = data::extract_panels(source, &selectors, None, data)?;
     let labels = source.prepare_axis_labels(None)?;
-    let base = data::base_plot(
-        source,
-        source.kind(),
-        !labels[0].is_empty(),
-        !labels[1].is_empty(),
-        &resources,
-    )?;
+    let base = data::base_plot(source, source.kind(), &resources)?;
     let mut minima = Vec::new();
     crate::data::source::reserve_source(&mut minima, panels.len())?;
     let mut gutters = Vec::new();
@@ -167,8 +161,8 @@ pub(in crate::orchestrator) fn natural_size(
     let mut preferred = if requested_width.is_none() {
         let natural = allocate(None, &[])?;
         let axes = super::planning::shared_axis_requirements(
-            (!labels[0].is_empty()).then_some(labels[0].as_str()),
-            (!labels[1].is_empty()).then_some(labels[1].as_str()),
+            labels[0].as_deref(),
+            labels[1].as_deref(),
             theme,
             PanelBox::new(0.0, natural.size.0, 0.0, natural.size.1),
         )
@@ -210,8 +204,8 @@ pub(in crate::orchestrator) fn natural_size(
         &gutters,
     )?;
     let axes = super::planning::shared_axis_requirements(
-        (!labels[0].is_empty()).then_some(labels[0].as_str()),
-        (!labels[1].is_empty()).then_some(labels[1].as_str()),
+        labels[0].as_deref(),
+        labels[1].as_deref(),
         theme,
         PanelBox::new(0.0, grid.size.0, 0.0, grid.size.1),
     )

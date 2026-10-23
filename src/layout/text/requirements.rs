@@ -179,6 +179,11 @@ impl PreparedTextRequirement {
                 true,
             ),
         };
+        crate::text::validate(&source).map_err(|error| {
+            canonical::FontError::UnsupportedControl {
+                scalar: error.scalar,
+            }
+        })?;
         let retained_source = match source {
             Cow::Borrowed(source) => {
                 let mut retained = String::new();
@@ -769,7 +774,7 @@ impl PreparedTextRequirement {
             prepared_stage.as_deref_mut(),
         )?;
         if kind != PlotKind::Matrix {
-            let (x_title, y_title) = plot.resolved_axis_labels(kind);
+            let [x_title, y_title] = plot.prepare_axis_labels(None)?;
             let x_axis = prepared_address_child(
                 base,
                 AddressRole::AxisBottom,
@@ -782,7 +787,7 @@ impl PreparedTextRequirement {
                 0,
                 prepared_stage.as_deref_mut(),
             )?;
-            if !x_title.is_empty() {
+            if let Some(x_title) = x_title {
                 let address = x_axis.clone();
                 push_owned(
                     requirements,
@@ -795,7 +800,7 @@ impl PreparedTextRequirement {
                     prepared_stage.as_deref_mut(),
                 )?;
             }
-            if !y_title.is_empty() {
+            if let Some(y_title) = y_title {
                 let address = y_axis.clone();
                 push_owned(
                     requirements,
@@ -1222,7 +1227,7 @@ fn push_present(
     appearance: &TextTheme,
     prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), Error> {
-    if let Some(source) = source.filter(|source| !source.is_empty()) {
+    if let Some(source) = source {
         push_owned(
             requirements,
             address,

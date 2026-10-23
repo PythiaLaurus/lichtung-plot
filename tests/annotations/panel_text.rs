@@ -29,9 +29,10 @@ fn svg<K: lichtung_plot::kind::Marker>(chart: &Plot<K>) -> String {
 }
 
 #[test]
-fn panel_text_constructor_rejects_empty_multiline_and_untrimmed_text() {
-    for text in ["", "   ", " leading", "trailing ", "first\nsecond"] {
-        assert!(PanelTextAnnotation::new(PanelCorner::TopLeft, text).is_err());
+fn panel_text_constructor_rejects_unsupported_controls() {
+    for text in ["tab\there", "null\0here", "delete\u{7f}"] {
+        let error = PanelTextAnnotation::new(PanelCorner::TopLeft, text).unwrap_err();
+        assert!(error.to_string().contains("unsupported control"), "{error}");
     }
 }
 
@@ -40,7 +41,7 @@ fn panel_text_renders_in_named_clipped_layer_with_theme_style_and_corner_anchors
     let data = scatter_data();
     let chart = scatter(&data)
         .panel_text_annotation(
-            PanelTextAnnotation::new(PanelCorner::TopLeft, "Upper note").unwrap(),
+            PanelTextAnnotation::new(PanelCorner::TopLeft, "Upper note\r\n\n next ").unwrap(),
         )
         .panel_text_annotation(
             PanelTextAnnotation::new(PanelCorner::BottomRight, "Lower note").unwrap(),
@@ -64,6 +65,7 @@ fn panel_text_renders_in_named_clipped_layer_with_theme_style_and_corner_anchors
         .lines()
         .find(|line| line.contains("Lower note"))
         .unwrap();
+    assert!(layer.contains("> next </text>"));
     let coordinate = |line: &str, attribute: &str| {
         line.split_once(&format!("{attribute}=\""))
             .unwrap()

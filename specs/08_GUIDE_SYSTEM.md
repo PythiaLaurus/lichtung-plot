@@ -180,8 +180,10 @@ only when observed; endpoint labels and Regression literals retain their owners.
 Within a section, same entry identity merges only with exact label/full-key
 equality; distinct identities with equal display labels reject. Across sections
 equal labels are valid if titles differ. Distinct section identities with equal
-**nonempty** title reject; empty titles have zero heading/gap. Empty entry label
-retains its key/identity but no text baseline/ink. Strict Unicode text fit remains.
+**nonempty** title reject. Explicit empty titles and entry labels retain their
+empty-line metrics and normal spacing, with no painted glyphs; entry key/identity
+remain present. All guide display text uses the shared Unicode control and
+mandatory-break validator, preserving aliases verbatim. Strict text fit remains.
 Labels aliases are global raw-string mappings, not field-scoped entries.
 
 Supplemental identity is exact supplied layer label, never append index or hue

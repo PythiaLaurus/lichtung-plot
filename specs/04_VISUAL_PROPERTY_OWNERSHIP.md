@@ -51,6 +51,12 @@ Theme subtitle > final effective title. Caption uses its independent Theme field
 Canvas panel instructions do not affect Canvas root prose, headers or TextPanel.
 Resolve concrete physical Start/Center/End before measurement and freeze it.
 
+Display-text syntax belongs to one shared validator, independently of these
+appearance owners. Explicit prose, titles, headers and annotations retain source
+whitespace, mandatory breaks and present empty-line metrics. Automatic names use
+the selected Labels policy; public `Labels::resolve` exposes the same preparation
+without changing raw scientific identities or domain-level collision checks.
+
 ## Paint And Geometry
 
 Each final fill, stroke, text, bracket, outline and gradient stop has one RGBA

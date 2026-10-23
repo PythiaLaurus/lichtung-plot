@@ -421,10 +421,7 @@ fn measure_section(
     ))?;
     let (title_ascent, title_descent) = text_extents(&title)?;
     let title_height = add(title_ascent, title_descent)?;
-    let mut title_occupancy = length(title_height)?;
-    if !section.display_title.is_empty() {
-        title_occupancy = title_occupancy.add_length(&metrics.exact.title_gap);
-    }
+    let title_occupancy = length(title_height)?.add_length(&metrics.exact.title_gap);
     let entries = fit::collect(
         "measured guide entries",
         section

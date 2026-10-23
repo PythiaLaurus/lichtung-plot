@@ -760,6 +760,22 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.caption.as_deref()
     }
 
+    pub(crate) fn validate_display_text(&self) -> Result<(), Error> {
+        for (source, role) in [
+            (self.title.as_deref(), "plot title"),
+            (self.subtitle.as_deref(), "plot subtitle"),
+            (self.caption.as_deref(), "plot caption"),
+            (self.x_label.as_deref(), "x-axis title"),
+            (self.y_label.as_deref(), "y-axis title"),
+            (self.color_label.as_deref(), "color guide title"),
+        ] {
+            if let Some(source) = source {
+                crate::text::validate_for(source, role)?;
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn resolve_label(&self, raw: &str) -> Result<String, Error> {
         self.labels.resolve(raw)
     }
@@ -776,14 +792,23 @@ impl<K: crate::kind::Marker> Plot<K> {
         &self,
 
         policy: Option<&crate::Labels>,
-    ) -> Result<[String; 2], Error> {
-        let mut labels = [String::new(), String::new()];
-        for (target, (raw, inferred)) in labels.iter_mut().zip(self.axis_label_sources(self.kind)) {
-            *target = if inferred {
-                policy.unwrap_or(&self.labels).resolve(raw)?
-            } else {
-                crate::data::source::copy_source_string(raw)?
-            };
+    ) -> Result<[Option<String>; 2], Error> {
+        #[cfg(test)]
+        crate::orchestrator::measurements::count(
+            crate::orchestrator::measurements::Counter::AxisSourcePreparation,
+        );
+        let mut labels = [None, None];
+        for (target, source) in labels.iter_mut().zip(self.axis_label_sources(self.kind)) {
+            *target = source
+                .map(|(raw, inferred)| {
+                    if inferred {
+                        policy.unwrap_or(&self.labels).resolve(raw)
+                    } else {
+                        crate::text::validate_for(raw, "axis title")?;
+                        crate::data::source::copy_source_string(raw)
+                    }
+                })
+                .transpose()?;
         }
         Ok(labels)
     }
@@ -802,41 +827,28 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.labels.resolve_domain(domain, raw_labels)
     }
 
-    pub(crate) fn resolved_axis_labels(&self, kind: PlotKind) -> (String, String) {
-        #[cfg(test)]
-        crate::orchestrator::measurements::count(
-            crate::orchestrator::measurements::Counter::AxisSourcePreparation,
-        );
-        let [x, y] = self.axis_label_sources(kind).map(|(raw, inferred)| {
-            if inferred {
-                self.resolve_label(raw).expect("label allocation")
-            } else {
-                raw.to_owned()
-            }
-        });
-        (x, y)
-    }
-
-    fn axis_label_sources(&self, kind: PlotKind) -> [(&str, bool); 2] {
-        let x_name = self.input.x_name().map_or(("", false), |name| (name, true));
-        let y_name = self.input.y_name().map_or(("", false), |name| (name, true));
+    fn axis_label_sources(&self, kind: PlotKind) -> [Option<(&str, bool)>; 2] {
+        let x_name = self.input.x_name().map(|name| (name, true));
+        let y_name = self.input.y_name().map(|name| (name, true));
         let x = self.x_label.as_deref().map_or_else(
             || match kind {
                 PlotKind::HorizontalBar
                 | PlotKind::StackedHorizontalBar
                 | PlotKind::Waterfall
                 | PlotKind::Dumbbell => y_name,
-                PlotKind::Qq => ("Theoretical normal quantiles", false),
-                PlotKind::Histogram => self
-                    .histogram_composite_geometry_input()
-                    .map_or_else(|| x_name, |input| (&input.dimensions.value, true)),
-                PlotKind::Raincloud => self
-                    .raincloud_geometry_input()
-                    .map_or_else(|| x_name, |input| (&input.dimensions.category, true)),
-                PlotKind::Matrix => ("", false),
+                PlotKind::Qq => Some(("Theoretical normal quantiles", false)),
+                PlotKind::Histogram => self.histogram_composite_geometry_input().map_or_else(
+                    || x_name,
+                    |input| Some((input.dimensions.value.as_str(), true)),
+                ),
+                PlotKind::Raincloud => self.raincloud_geometry_input().map_or_else(
+                    || x_name,
+                    |input| Some((input.dimensions.category.as_str(), true)),
+                ),
+                PlotKind::Matrix => None,
                 _ => x_name,
             },
-            |raw| (raw, false),
+            |raw| Some((raw, false)),
         );
         let y = self.y_label.as_deref().map_or_else(
             || match kind {
@@ -847,20 +859,21 @@ impl<K: crate::kind::Marker> Plot<K> {
                 | PlotKind::Qq => x_name,
                 PlotKind::Histogram => self.histogram_composite_geometry_input().map_or_else(
                     || match self.histogram_stat {
-                        HistogramStat::Count => ("Count", false),
-                        HistogramStat::Probability => ("Probability", false),
-                        HistogramStat::Density => ("Density", false),
+                        HistogramStat::Count => Some(("Count", false)),
+                        HistogramStat::Probability => Some(("Probability", false)),
+                        HistogramStat::Density => Some(("Density", false)),
                     },
-                    |input| (&input.dimensions.density, true),
+                    |input| Some((input.dimensions.density.as_str(), true)),
                 ),
-                PlotKind::Raincloud => self
-                    .raincloud_geometry_input()
-                    .map_or_else(|| y_name, |input| (&input.dimensions.value, true)),
-                PlotKind::Density => ("Density", false),
-                PlotKind::Matrix => ("", false),
+                PlotKind::Raincloud => self.raincloud_geometry_input().map_or_else(
+                    || y_name,
+                    |input| Some((input.dimensions.value.as_str(), true)),
+                ),
+                PlotKind::Density => Some(("Density", false)),
+                PlotKind::Matrix => None,
                 _ => y_name,
             },
-            |raw| (raw, false),
+            |raw| Some((raw, false)),
         );
         [x, y]
     }
@@ -871,6 +884,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         policy: Option<&crate::Labels>,
     ) -> Result<String, Error> {
         if let Some(label) = self.color_label_text() {
+            crate::text::validate_for(label, "color guide title")?;
             crate::data::source::copy_source_string(label)
         } else if let Some(values) = self.color_values() {
             policy.unwrap_or(&self.labels).resolve(values.name())

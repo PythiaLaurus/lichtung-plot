@@ -470,7 +470,7 @@ impl ResolvedTextPlan {
                     return Ok(None);
                 }
                 for scalar in separator.chars() {
-                    if !canonical::is_nonrendering_mandatory_break(scalar) {
+                    if !crate::text::is_nonrendering_mandatory_break(scalar) {
                         return Ok(None);
                     }
                 }
@@ -1282,7 +1282,7 @@ fn mandatory_paragraph_seeds(source: &str) -> Result<Vec<ParagraphSeed>, TextPla
     let mut scalar_count = 0_u128;
     let mut scalars = source.char_indices().peekable();
     while let Some((index, scalar)) = scalars.next() {
-        if !canonical::is_nonrendering_mandatory_break(scalar) {
+        if !crate::text::is_nonrendering_mandatory_break(scalar) {
             scalar_count = scalar_count
                 .checked_add(1)
                 .ok_or(TextPlanError::Arithmetic("paragraph scalar count"))?;
@@ -1679,7 +1679,7 @@ fn selected_paragraph_items(
             .chars()
             .next()
             .ok_or(TextPlanError::Arithmetic("source scalar boundary"))?;
-        if canonical::is_nonpainting_control(scalar) {
+        if crate::text::is_nonpainting_control(scalar) {
             item.face = following_face;
         } else {
             following_face = item.face;
@@ -1691,7 +1691,7 @@ fn selected_paragraph_items(
             .chars()
             .next()
             .ok_or(TextPlanError::Arithmetic("source scalar boundary"))?;
-        if canonical::is_nonpainting_control(scalar) {
+        if crate::text::is_nonpainting_control(scalar) {
             if let Some(face) = preceding_face {
                 item.face = face;
             }
@@ -1843,7 +1843,7 @@ fn selected_face(
     unit: &str,
     scalar: char,
 ) -> Result<FaceIdentity, TextPlanError> {
-    if canonical::is_nonpainting_control(scalar) {
+    if crate::text::is_nonpainting_control(scalar) {
         return Ok(pair.primary);
     }
     let selection = pair

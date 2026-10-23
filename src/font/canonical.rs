@@ -15,6 +15,8 @@ use sha2::{Digest, Sha256};
 use unicode_properties::UnicodeGeneralCategory;
 use unicode_segmentation::UnicodeSegmentation;
 
+use crate::text::{is_nonpainting_control, is_nonrendering_mandatory_break};
+
 #[cfg(test)]
 thread_local! {
     pub(crate) static FONT_DISCOVERY_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -2441,10 +2443,7 @@ fn scalar_selection_capacities(
     presence.fill(0);
 
     for scalar in required_scalars {
-        if scalar.is_control()
-            && !is_nonrendering_mandatory_break(*scalar)
-            && !is_nonpainting_control(*scalar)
-        {
+        if crate::text::is_unsupported_control(*scalar) {
             return Err(FontError::UnsupportedControl {
                 scalar: *scalar as u32,
             });
@@ -2568,25 +2567,6 @@ where
         ));
     }
     Ok(())
-}
-
-// UAX #14 BK, CR, LF, and NL controls partition paragraphs and do not paint.
-// They remain in the census, but a glyph probe would incorrectly make
-// newline coverage a font requirement. VT/FF/LS/PS have BK and NEL has NL.
-pub(crate) const fn is_nonrendering_mandatory_break(scalar: char) -> bool {
-    matches!(
-        scalar,
-        '\u{000A}' | '\u{000B}' | '\u{000C}' | '\u{000D}' | '\u{0085}' | '\u{2028}' | '\u{2029}'
-    )
-}
-
-/// Unicode 16 Default_Ignorable_Code_Point plus bidi controls.
-pub(crate) const fn is_nonpainting_control(scalar: char) -> bool {
-    matches!(scalar as u32, 0x00AD | 0x034F | 0x061C | 0x115F..=0x1160
-        | 0x17B4..=0x17B5 | 0x180B..=0x180F | 0x200B..=0x200F
-        | 0x202A..=0x202E | 0x2060..=0x206F | 0x3164 | 0xFE00..=0xFE0F
-        | 0xFEFF | 0xFFA0 | 0xFFF0..=0xFFF8 | 0x1BCA0..=0x1BCA3
-        | 0x1D173..=0x1D17A | 0xE0000..=0xE0FFF)
 }
 
 /// Context is clipped to the selected line, not to a font/script item. Empty

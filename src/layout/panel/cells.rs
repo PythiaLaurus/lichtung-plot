@@ -96,6 +96,7 @@ impl LabelCell {
 pub(super) fn assign(
     ticks: &[AxisTick],
     categorical: bool,
+    labels_visible: bool,
     assigned: Option<&[(f64, f64)]>,
     projection: &Projection,
     side: AxisSide,
@@ -185,18 +186,20 @@ pub(super) fn assign(
             cells[last].inward = true;
         }
     }
-    apply_clearance(&mut cells, ticks, scope)?;
+    if labels_visible {
+        apply_clearance(&mut cells, ticks, categorical, scope)?;
+    }
     Ok(cells)
 }
 
 fn apply_clearance(
     cells: &mut [LabelCell],
     ticks: &[AxisTick],
-
+    categorical: bool,
     scope: &FitScope,
 ) -> Result<(), PlanError> {
     for (cell, tick) in cells.iter_mut().zip(ticks) {
-        if !tick.label.is_empty() {
+        if categorical || !tick.label.is_empty() {
             cell.start += LABEL_CLEARANCE;
             cell.end -= LABEL_CLEARANCE;
             if cell.capacity() <= 0.0 {
@@ -245,6 +248,7 @@ mod tests {
                 let result = assign(
                     &ticks,
                     categorical,
+                    true,
                     None,
                     &projection,
                     AxisSide::Bottom,
@@ -275,6 +279,7 @@ mod tests {
             let error = assign(
                 &ticks,
                 false,
+                true,
                 None,
                 &projection,
                 AxisSide::Bottom,

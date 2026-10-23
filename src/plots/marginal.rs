@@ -543,18 +543,14 @@ pub(crate) fn measure(
             (x_low, x_high),
             (y_low, y_high),
             crate::layout::PanelBox::new(central_x0, central_x1, central_y0, central_y1),
-            crate::data::source::copy_source_string(
-                &chart
-                    .prepared_axis_inputs()
-                    .ok_or_else(|| Error::Render("Marginal axes missing".into()))?
-                    .labels[0],
-            )?,
-            crate::data::source::copy_source_string(
-                &chart
-                    .prepared_axis_inputs()
-                    .ok_or_else(|| Error::Render("Marginal axes missing".into()))?
-                    .labels[1],
-            )?,
+            chart
+                .prepared_axis_inputs()
+                .ok_or_else(|| Error::Render("Marginal axes missing".into()))?
+                .copy_label(0)?,
+            chart
+                .prepared_axis_inputs()
+                .ok_or_else(|| Error::Render("Marginal axes missing".into()))?
+                .copy_label(1)?,
             &layout::display_axis_spec(chart.x_axis_spec(), (x_low, x_high)),
             &layout::display_axis_spec(chart.y_axis_spec(), (y_low, y_high)),
             theme,

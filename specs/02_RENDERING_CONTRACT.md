@@ -163,6 +163,31 @@ Generated tick choice and numeric spelling are separate policies in
 indivisible and verbatim. Neither numeric formatting nor alpha changes scientific
 statistics, domains, source membership or categorical identity.
 
+### Display Text
+
+Free-form display text shares one source-syntax validator in `src/text.rs`.
+Plot/Canvas prose, x/y titles, TextPanel title/body, Canvas headers/row titles,
+panel notes, point labels, guide display text and aliases preserve caller bytes,
+whitespace and mandatory breaks. LF, CRLF and the engine's mandatory separators
+are accepted; CRLF is one break. Tabs and unsupported controls reject at a
+fallible constructor or preflight, before shaping. There is no trimming or
+single-line restriction on these display slots.
+
+Present empty prose, titles and annotations retain one empty line's font metrics;
+structural absence is `None` or an explicit owner visibility policy. Exact tick
+empty labels deliberately suppress text/gap while keeping their positions.
+PanelTextAnnotation fits its complete block at its selected corner and retains
+the existing duplicate-corner, collision and facet rules.
+
+Automatically sourced names still default to `Labels::humanized()`. Public
+`Labels::resolve(&self, raw: &str) -> Result<String>` uses the same alias-first,
+humanized/raw resolution as rendering; aliases preserve their explicit bytes.
+One-name resolution does not replace complete-domain collision checks. Raw
+category/series/field keys, endpoint identities, font-family names, significance
+selectors, paths and NumericFormat grammar retain their own semantic validation.
+
+### Guides
+
 LegendPolicy is one automatic/hidden/explicit-position choice; placement and
 visibility are not independent switches. LegendComposition selects truthful
 Combined/Separate explanations under the [guide contract](08_GUIDE_SYSTEM.md).

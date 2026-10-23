@@ -72,14 +72,32 @@ impl Labels {
         self
     }
 
-    pub(crate) fn resolve(&self, raw: &str) -> Result<String, Error> {
-        if let Some(alias) = self.aliases.as_ref().and_then(|aliases| aliases.get(raw)) {
-            copy_label(alias)
-        } else if self.mode == LabelMode::Humanized {
-            humanize(raw)
-        } else {
-            copy_label(raw)
-        }
+    /// Resolve one raw name with alias precedence and the selected fallback.
+    ///
+    /// The result uses the shared display-text syntax, preserving explicit alias
+    /// whitespace and mandatory breaks. Collisions between different identities
+    /// are checked when the renderer resolves their complete semantic domain.
+    ///
+    /// ```
+    /// use lichtung_plot::Labels;
+    /// let labels = Labels::humanized().alias("mean_score", " Score\r\n(points) ");
+    /// assert_eq!(labels.resolve("mean_score")?, " Score\r\n(points) ");
+    /// assert_eq!(labels.resolve("control_group")?, "Control group");
+    /// assert_eq!(Labels::raw().resolve("control_group")?, "control_group");
+    /// assert!(labels.alias("bad", "a\tb").resolve("bad").is_err());
+    /// # Ok::<(), lichtung_plot::Error>(())
+    /// ```
+    pub fn resolve(&self, raw: &str) -> Result<String, Error> {
+        let display =
+            if let Some(alias) = self.aliases.as_ref().and_then(|aliases| aliases.get(raw)) {
+                copy_label(alias)
+            } else if self.mode == LabelMode::Humanized {
+                humanize(raw)
+            } else {
+                copy_label(raw)
+            }?;
+        crate::text::validate_for(&display, "label")?;
+        Ok(display)
     }
 
     pub(crate) fn resolve_domain<'a>(

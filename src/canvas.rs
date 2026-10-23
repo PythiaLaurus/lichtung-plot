@@ -185,12 +185,12 @@ pub struct TextPanel {
 }
 
 impl TextPanel {
-    /// Construct a text panel with nonempty title and body.
+    /// Construct a text panel, retaining verbatim title/body and mandatory breaks.
     pub fn new(title: impl Into<String>, body: impl Into<String>) -> Result<Self, Error> {
         let title = title.into();
         let body = body.into();
-        validate_text_panel_value(&title, "title")?;
-        validate_text_panel_value(&body, "body")?;
+        crate::text::validate_for(&title, "text panel title")?;
+        crate::text::validate_for(&body, "text panel body")?;
         Ok(Self { title, body })
     }
 
@@ -207,20 +207,6 @@ impl TextPanel {
     }
 }
 
-fn validate_text_panel_value(value: &str, role: &str) -> Result<(), Error> {
-    if value.trim().is_empty() || value.trim() != value {
-        return Err(Error::Data(format!(
-            "text panel {role} must be nonempty and have no surrounding whitespace"
-        )));
-    }
-    if value.chars().any(char::is_control) {
-        return Err(Error::Data(format!(
-            "text panel {role} must not contain control characters"
-        )));
-    }
-    Ok(())
-}
-
 fn canvas_header(
     start: usize,
     span: usize,
@@ -234,11 +220,7 @@ fn canvas_header(
             start.saturating_add(span)
         )));
     }
-    if text.trim().is_empty() || text.trim() != text || text.chars().any(char::is_control) {
-        return Err(Error::Data(format!(
-            "canvas {role} header must be nonempty, trimmed, and free of control characters"
-        )));
-    }
+    crate::text::validate_for(&text, &format!("canvas {role} header"))?;
     Ok(CanvasHeader { start, span, text })
 }
 
@@ -688,6 +670,16 @@ impl Canvas {
     }
 
     fn validate_structure(&self) -> Result<(), Error> {
+        for source in [
+            self.title.as_deref(),
+            self.subtitle.as_deref(),
+            self.caption.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            crate::text::validate_for(source, "canvas prose")?;
+        }
         if self.panels.iter().all(Option::is_none) && self.text_panels.iter().all(Option::is_none) {
             return Err(Error::Data(
                 "canvas requires at least one configured panel".into(),
@@ -733,10 +725,11 @@ impl Canvas {
         for title in &self.row_titles {
             let start = title.start * self.columns;
             let end = start + self.columns;
-            if self.panels[start..end].iter().flatten().any(|plot| {
-                plot.title_text().is_some_and(|text| !text.is_empty())
-                    || plot.subtitle_text().is_some_and(|text| !text.is_empty())
-            }) {
+            if self.panels[start..end]
+                .iter()
+                .flatten()
+                .any(|plot| plot.title_text().is_some() || plot.subtitle_text().is_some())
+            {
                 return Err(Error::Data(format!(
                     "canvas row title cannot coexist with a panel title or subtitle in row {}",
                     title.start
@@ -1498,7 +1491,7 @@ impl Canvas {
                 &themes.root().typography.root.caption,
             ),
         ] {
-            if let Some(source) = source.filter(|source| !source.is_empty()) {
+            if let Some(source) = source {
                 let address = root.child(address_role, 0)?;
                 push_text_requirement(
                     &mut requirements,

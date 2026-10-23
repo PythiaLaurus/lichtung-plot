@@ -126,7 +126,7 @@ fn zero_chrome_keeps_required_text_and_combines_fractional_gaps_before_hard_roun
     let mut layout = Layout::envelope(crate::layout::PanelBox::new(80.0, 480.0, 80.0, 480.0));
     layout.x_axis.source = TickSource::EXACT;
     layout.x_axis.ticks = vec![AxisTick::new(0.5, "I")];
-    layout.x_axis.label = "I".into();
+    layout.x_axis.label = Some("I".into());
     let plan = layout.plan_axes(&theme).unwrap();
     let label = &plan.x_axis.ticks[0].label.as_ref().unwrap().0;
     let title = &plan.x_axis.title.as_ref().unwrap().0;

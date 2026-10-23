@@ -93,10 +93,12 @@ pub enum AxisSide {
 /// labels in the same vector.
 #[derive(Debug, Clone)]
 pub struct Axis {
-    /// Axis label (e.g. "petal_length (cm)" or "species").
-    pub label: String,
+    /// Present axis title, including an explicitly authored empty line.
+    pub label: Option<String>,
     /// Tick positions + labels in data space.
     pub ticks: Vec<AxisTick>,
+    /// Owner-level suppression, separate from an explicitly empty display label.
+    pub(crate) tick_labels_visible: bool,
     pub(crate) explicit_ticks: bool,
     pub(crate) assigned_tick_width: Option<f64>,
     /// Selected category track edges in panel coordinates, when a producer owns them.

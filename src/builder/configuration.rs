@@ -531,7 +531,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    /// Add caller-owned single-line text at one corner inside the chart panel.
+    /// Add a caller-owned text block at one corner inside the chart panel.
     #[must_use]
     pub fn panel_text_annotation(mut self, annotation: PanelTextAnnotation) -> Self
     where

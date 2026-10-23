@@ -1662,7 +1662,12 @@ Step 1 is complete. Public configuration edits and same-type paired readers have
 migrated through declaration macros, repository callers, function-item references,
 ordinary/compile-fail examples and current specifications. Read-only properties,
 types, fallibility, validation timing and construction lifecycle are preserved.
-Steps 2–22 remain pending; their target signatures are not current APIs.
+Step 2 is complete. One shared display-source validator retains whitespace,
+mandatory breaks and present empty-line metrics through preparation and capture.
+TextPanel/headers/panel notes admit multiline content; raw-key validation and
+exact-tick empty-label suppression remain distinct. Public `Labels::resolve`
+shares automatic resolution and complete-domain collision checks remain in place.
+Steps 3–22 remain pending; their target signatures are not current APIs.
 
 ### 1. Apply The Public Property Naming Rule
 

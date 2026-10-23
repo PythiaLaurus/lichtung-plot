@@ -217,6 +217,17 @@ NFKC-casefold. All-neutral paragraphs default LTR. Mandatory BK/CR/LF/NL breaks
 produce b+1 paragraphs including leading/interior/trailing empties, each with at
 least one line; CRLF is one break. GL/WJ behavior remains intact.
 
+All free-form display owners enter this engine through the shared source validator
+in `src/text.rs`, including constructor-validated TextPanel/headers/panel notes and
+preflight-validated Plot/Canvas prose. Leading/trailing whitespace, blank lines
+and explicitly empty text survive intrinsic analysis, font census, measurement
+and frozen capture. Empty axis titles are present text; prepared/layout axes use
+`Option<String>` to distinguish them from absent titles, including suppressed
+facet-child titles. Category display aliases retain empty-line metrics too;
+internal axis text visibility carries parent/Matrix suppression without rewriting
+the prepared labels. Exact tick empty-label suppression remains an intentional
+owner rule, separate from content validation.
+
 Unicode tables/algorithms must have reproducible version/hash/provenance and
 compatible shaping classification; a dependency version alone is insufficient.
 Focused independent defaults/runtime tables remain local. Full conformance is

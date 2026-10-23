@@ -86,6 +86,40 @@ assert_eq!((output.width(), output.height()), (600, 400));
 # Ok::<(), lichtung_plot::Error>(())
 ```
 
+## Display Text And Labels
+
+Explicit titles, axis titles, captions, TextPanel content, Canvas headers and
+panel notes preserve whitespace and authored line breaks. `\n` and CRLF are
+supported, including leading/trailing blank lines; CRLF makes one break.
+An explicitly empty title or prose value still occupies one empty text line.
+Tabs and unsupported controls are rejected by constructors or preflight.
+Exact `AxisTick` empty labels instead suppress their text while keeping the tick.
+
+Automatic data names default to `Labels::humanized()`. Use `Labels::raw()` to
+preserve them, or aliases to select exact display text. Public `resolve` lets you
+prepare one name using the same rules as the renderer:
+
+```rust
+use lichtung_plot::{Labels, NumericValues, Plot, TextPanel};
+
+let labels = Labels::humanized().alias("mean_score", "Score\r\n(points)");
+assert_eq!(labels.resolve("mean_score")?, "Score\r\n(points)");
+assert_eq!(labels.resolve("control_group")?, "Control group");
+let plot = Plot::scatter(
+    NumericValues::new("dose", [1.0, 2.0]),
+    NumericValues::new("mean_score", [2.0, 3.0]),
+)
+.labels(labels)
+.title("Results\n\nIndependent observations");
+let note = TextPanel::new("Study context", " First paragraph.\r\n\r\nSecond paragraph. ")?;
+# let _ = (plot, note);
+# Ok::<(), lichtung_plot::Error>(())
+```
+
+Aliases change presentation only. Category, series and other scientific identities
+retain their own validation, and rendering still checks the complete domain for
+ambiguous display labels.
+
 ## Themes And Canvases
 
 Canvas owns one root theme and defaults it to Publication, so callers do not

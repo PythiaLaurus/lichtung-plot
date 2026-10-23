@@ -24,6 +24,61 @@ fn empty_axis_measurement_does_not_shape_text() {
 }
 
 #[test]
+fn present_empty_axis_title_keeps_line_metrics_while_empty_exact_ticks_stay_hidden() {
+    let theme = crate::Theme::publication().resolve().unwrap();
+    let mut layout = layout(
+        PanelBox::new(80.0, 680.0, 80.0, 480.0),
+        vec![AxisTick::new(1.0, "")],
+        Vec::new(),
+        TickSource::EXACT,
+    );
+    let absent = layout.plan_axes(&theme).unwrap();
+    assert!(absent.x_axis.title.is_none());
+    layout.x_axis.label = Some(String::new());
+    let present = layout.plan_axes(&theme).unwrap();
+    let text = &present.x_axis.title.as_ref().unwrap().0;
+    assert_eq!(text.line_texts(), [""]);
+    assert!(text.height_quanta > 0);
+    assert!(present.x_axis.gutter >= absent.x_axis.gutter + text.height());
+    assert!(present.x_axis.ticks[0].label.is_none());
+    assert_eq!(
+        present.x_axis.ticks[0].position.to_bits(),
+        absent.x_axis.ticks[0].position.to_bits()
+    );
+    assert_eq!(
+        present.x_axis.ticks[0].segment,
+        absent.x_axis.ticks[0].segment
+    );
+}
+
+#[test]
+fn empty_category_alias_keeps_its_line_until_the_owner_hides_tick_text() {
+    let theme = crate::Theme::publication().resolve().unwrap();
+    let mut layout = layout(
+        PanelBox::new(80.0, 680.0, 80.0, 480.0),
+        Vec::new(),
+        vec![AxisTick::new(1.5, "")],
+        TickSource::SUPPLIED,
+    );
+    let visible = layout.plan_axes(&theme).unwrap();
+    let text = &visible.y_axis.ticks[0].label.as_ref().unwrap().0;
+    assert_eq!(text.line_texts(), [""]);
+    assert!(text.height_quanta > 0);
+    layout.y_axis.tick_labels_visible = false;
+    let hidden = layout.plan_axes(&theme).unwrap();
+    assert!(hidden.y_axis.ticks[0].label.is_none());
+    assert!(visible.y_axis.gutter > hidden.y_axis.gutter);
+    assert_eq!(
+        visible.y_axis.ticks[0].segment,
+        hidden.y_axis.ticks[0].segment
+    );
+    assert_eq!(
+        visible.y_axis.ticks[0].position.to_bits(),
+        hidden.y_axis.ticks[0].position.to_bits()
+    );
+}
+
+#[test]
 fn selected_axis_plan_retains_semantics_beside_projection_and_sources() {
     let theme = crate::Theme::publication().resolve().unwrap();
     let layout = layout(
@@ -84,8 +139,8 @@ fn categorical_marks_ticks_and_grid_use_exact_band_ratios_at_odd_origins() {
             (0.0, 3.0),
             (0.0, 3.0),
             PanelBox::new(origin, end, origin, end),
-            String::new(),
-            String::new(),
+            None,
+            None,
             ticks(),
             ticks(),
             &AxisSpec::default(),
@@ -421,7 +476,7 @@ fn gutter_is_provisional_below_at_and_above_forty_percent() {
         vec![AxisTick::new(1.5, "W".repeat(20))],
         TickSource::SUPPLIED,
     );
-    layout.y_axis.label = "vertical title".into();
+    layout.y_axis.label = Some("vertical title".into());
     let gutter = layout.plan_axes(&theme).unwrap().requirements().left;
     for fraction in [0.39, 0.40, 0.41, 1.1] {
         layout.projection = Projection::new(
@@ -453,8 +508,8 @@ fn frozen_requirements_contain_drawn_ink_and_tick_strokes_with_or_without_frame(
             vec![AxisTick::new(0.0, "low"), AxisTick::new(3.0, "high")],
             TickSource::EXACT,
         );
-        layout.x_axis.label = "first line\nsecond line".into();
-        layout.y_axis.label = "first line\nsecond line".into();
+        layout.x_axis.label = Some("first line\nsecond line".into());
+        layout.y_axis.label = Some("first line\nsecond line".into());
         let plan = layout.plan_axes(&theme).unwrap();
         let required = plan.requirements();
         for (axis, side) in [
@@ -506,7 +561,7 @@ fn measured_gutters_are_translation_invariant_at_fractional_parent_origins() {
         vec![AxisTick::new(0.0, "-0.5"), AxisTick::new(3.0, "0.5")],
         TickSource::EXACT,
     );
-    layout.y_axis.label = "Y".into();
+    layout.y_axis.label = Some("Y".into());
     let required = layout.plan_axes(&theme).unwrap().requirements();
     for origin in [80.1, 80.2, 300.333, 500.789] {
         layout.projection = Projection::new(

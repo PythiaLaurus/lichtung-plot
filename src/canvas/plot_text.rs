@@ -25,9 +25,7 @@ impl PlotLocalTextPlan {
         scope: &FitScope,
     ) -> Result<FitOutcome<Self>, Error> {
         let sources = [plot.title_text(), plot.subtitle_text(), plot.caption_text()];
-        let present = sources
-            .iter()
-            .any(|source| source.is_some_and(|text| !text.is_empty()));
+        let present = sources.iter().any(Option::is_some);
 
         let padding = if present {
             theme.root_padding_lengths()?

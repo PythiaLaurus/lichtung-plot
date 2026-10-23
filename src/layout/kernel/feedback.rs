@@ -635,12 +635,16 @@ impl FeedbackRound {
             self.observe_number(range.1)?;
         }
         for axis in [&layout.x_axis, &layout.y_axis] {
+            self.observe_count(usize::from(axis.tick_labels_visible))?;
             self.observe_count(usize::from(axis.explicit_ticks))?;
             self.observe_count(usize::from(axis.assigned_tick_width.is_some()))?;
             if let Some(width) = axis.assigned_tick_width {
                 self.observe_number(width)?;
             }
-            self.observe_string(&axis.label)?;
+            self.observe_count(usize::from(axis.label.is_some()))?;
+            if let Some(label) = &axis.label {
+                self.observe_string(label)?;
+            }
             self.observe_count(axis.ticks.len())?;
             for tick in &axis.ticks {
                 self.observe_number(tick.position)?;

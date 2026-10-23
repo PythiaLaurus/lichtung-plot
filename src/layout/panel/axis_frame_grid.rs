@@ -424,6 +424,7 @@ impl Axis {
             )));
         }
         for (index, tick) in ticks.iter().enumerate() {
+            crate::text::validate_for(&tick.label, axis)?;
             if !tick.position.is_finite() {
                 return Err(Error::Data(format!(
                     "{axis} explicit tick {index} position must be finite; got {}",
@@ -489,13 +490,14 @@ impl Axis {
         let cells = cells::assign(
             &self.ticks,
             categorical,
+            self.tick_labels_visible,
             self.assigned_cells.as_deref(),
             projection,
             side,
             scope,
         )?;
         let panel = projection.panel_box();
-        let vertical_width = if side == AxisSide::Left {
+        let vertical_width = if side == AxisSide::Left && self.tick_labels_visible {
             self.vertical_label_width(panel, theme)?
         } else {
             0.0
@@ -534,6 +536,7 @@ impl Axis {
         let mut ticks = Vec::new();
         fit::reserve(&mut ticks, self.ticks.len(), "frozen axis ticks")?;
         let mut label_extent = 0.0_f64;
+        let mut labels_present = false;
         let (gap, title_gap, title_width, tick_role, title_role) = match side {
             AxisSide::Bottom => (
                 &lengths.x_tick_label_gap,
@@ -561,9 +564,10 @@ impl Axis {
                     Point2D::new(segment_end, cell.center),
                 ],
             };
-            let label = if tick.label.is_empty() {
+            let label = if !self.tick_labels_visible || (!categorical && tick.label.is_empty()) {
                 None
             } else {
+                labels_present = true;
                 let (width, alignment) = match side {
                     AxisSide::Bottom => (cell.capacity(), PhysicalTextAlignment::Center),
                     AxisSide::Left => (vertical_width, PhysicalTextAlignment::End),
@@ -621,22 +625,20 @@ impl Axis {
             });
         }
         let mut gutter = outward;
-        if label_extent > 0.0 {
+        if labels_present {
             gutter = gutter.add_length(gap).add_pixels(label_extent)?;
         }
-        let title = if self.label.is_empty() {
-            None
-        } else {
+        let title = if let Some(label) = &self.label {
             let plan = fit::measured(fit::text(
                 theme,
-                &self.label,
+                label,
                 &standard.axis_title,
                 title_width,
                 PhysicalTextAlignment::Center,
                 title_role,
                 scope,
             ))?;
-            let separation = if label_extent > 0.0 {
+            let separation = if labels_present {
                 title_gap
             } else {
                 match side {
@@ -680,6 +682,8 @@ impl Axis {
             }
             gutter = gutter.add_pixels(thickness)?;
             Some((plan, placement))
+        } else {
+            None
         };
         if side == AxisSide::Left && title.is_some() {
             gutter = gutter.add_length(&lengths.y_title_edge_padding);

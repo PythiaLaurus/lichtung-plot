@@ -424,26 +424,24 @@ pub(crate) fn measure(
             let middle = f64::midpoint(band.0, band.1);
             Ok(crate::layout::AxisTick::new(
                 (middle - panel.y0) / panel.height() * prepared.levels.len() as f64,
-                if chart.y_tick_labels_visible() {
-                    crate::data::source::copy_source_string(label)?
-                } else {
-                    String::new()
-                },
+                crate::data::source::copy_source_string(label)?,
             ))
         }))?;
     let layout = Layout {
         projection,
         x_axis: crate::layout::Axis {
-            label: crate::data::source::copy_source_string(&axes.labels[0])?,
+            label: axes.copy_label(0)?,
             ticks: x.ticks,
+            tick_labels_visible: true,
             source: x.source,
             explicit_ticks: axes.specs[0].exact_ticks.is_some(),
             assigned_tick_width: None,
             assigned_cells: None,
         },
         y_axis: crate::layout::Axis {
-            label: crate::data::source::copy_source_string(&axes.labels[1])?,
+            label: axes.copy_label(1)?,
             ticks,
+            tick_labels_visible: chart.y_tick_labels_visible(),
             source: crate::layout::TickSource::SUPPLIED,
             explicit_ticks: false,
             assigned_tick_width: Some(width),

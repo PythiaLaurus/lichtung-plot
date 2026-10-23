@@ -175,9 +175,6 @@ impl FacetPlan {
 
         let selectors = data::facet_selectors(source, source.data())?;
         let [horizontal_axis_label, vertical_axis_label] = source.prepare_axis_labels(None)?;
-        let horizontal_axis_label =
-            (!horizontal_axis_label.is_empty()).then_some(horizontal_axis_label);
-        let vertical_axis_label = (!vertical_axis_label.is_empty()).then_some(vertical_axis_label);
         let mut canvas_layout = planning::canvas_layout(
             source,
             theme,
@@ -189,13 +186,7 @@ impl FacetPlan {
         round.observe_canvas(&canvas_layout)?;
         let resources = theme.prepared_font_environment()?.operation();
         let data = source.data().with_operation(&resources);
-        let mut base_plot = data::base_plot(
-            source,
-            kind,
-            horizontal_axis_label.is_some(),
-            vertical_axis_label.is_some(),
-            &resources,
-        )?;
+        let mut base_plot = data::base_plot(source, kind, &resources)?;
         if let Some(levels) = &prepared_guide.hue_levels {
             base_plot = base_plot.with_global_hue_levels(crate::data::source::collect_source(
                 levels
@@ -1208,7 +1199,7 @@ mod feedback_tests {
             .all(|panel| guide.bounds.bottom > panel.panel.y1));
         assert_eq!(
             plan.horizontal_axis_label.as_deref(),
-            Some(source.resolved_axis_labels(source.kind()).0.as_str())
+            source.prepare_axis_labels(None).unwrap()[0].as_deref()
         );
     }
 
