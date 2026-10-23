@@ -39,9 +39,26 @@ fn panel_text_constructor_rejects_unsupported_controls() {
 #[test]
 fn panel_text_renders_in_named_clipped_layer_with_theme_style_and_corner_anchors() {
     let data = scatter_data();
+    let local = Theme::nature()
+        .typography()
+        .get_annotations()
+        .get_panel_text()
+        .clone()
+        .font_size(21)
+        .unwrap()
+        .weight(lichtung_plot::TextWeight::Bold)
+        .unwrap()
+        .color(lichtung_plot::Color::rgb(80, 40, 110))
+        .unwrap();
     let chart = scatter(&data)
         .panel_text_annotation(
-            PanelTextAnnotation::new(PanelCorner::TopLeft, "Upper note\r\n\n next ").unwrap(),
+            PanelTextAnnotation::new(
+                PanelCorner::TopLeft,
+                lichtung_plot::Text::new("Upper note\r\n\n next ")
+                    .style(local)
+                    .alignment(lichtung_plot::TextAlignment::Center),
+            )
+            .unwrap(),
         )
         .panel_text_annotation(
             PanelTextAnnotation::new(PanelCorner::BottomRight, "Lower note").unwrap(),
@@ -77,6 +94,11 @@ fn panel_text_renders_in_named_clipped_layer_with_theme_style_and_corner_anchors
             .unwrap()
     };
     assert!(upper.contains("text-anchor=\"start\""));
+    assert!(
+        upper.contains("fill=\"#50286E\"")
+            && upper.contains("font-size=\"21\"")
+            && upper.contains("font-weight=\"700\"")
+    );
     assert!(lower.contains("text-anchor=\"start\""));
     assert!(coordinate(lower, "x") > coordinate(upper, "x"));
     assert!(coordinate(lower, "y") > coordinate(upper, "y"));

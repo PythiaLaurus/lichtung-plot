@@ -117,14 +117,17 @@ pub enum PanelCorner {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PanelTextAnnotation {
     corner: PanelCorner,
-    text: String,
+    text: crate::Text,
 }
 
 impl PanelTextAnnotation {
-    /// Construct one validated panel-corner annotation.
-    pub fn new(corner: PanelCorner, text: impl Into<String>) -> Result<Self, crate::Error> {
+    /// Construct one validated panel-corner annotation from plain or styled text.
+    ///
+    /// Local appearance replaces the complete panel-text role. Alignment applies
+    /// within the text block; the selected corner continues to place that block.
+    pub fn new(corner: PanelCorner, text: impl Into<crate::Text>) -> Result<Self, crate::Error> {
         let text = text.into();
-        crate::text::validate_for(&text, "panel text")?;
+        crate::text::validate_for(text.as_str(), "panel text")?;
         Ok(Self { corner, text })
     }
 
@@ -137,6 +140,10 @@ impl PanelTextAnnotation {
     /// Verbatim caller-owned annotation text.
     #[must_use]
     pub fn text(&self) -> &str {
+        self.text.as_str()
+    }
+
+    pub(crate) const fn content(&self) -> &crate::Text {
         &self.text
     }
 }

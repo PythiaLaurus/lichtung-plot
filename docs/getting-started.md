@@ -141,6 +141,10 @@ let canvas = Canvas::grid(1, 1)?.theme(theme).text_panel(0, 0, note)?.width(400)
 `Text::layout(TextLayout::default())` replaces the whole layout request and
 restores owner-default alignment. TextPanel title/body default to Start separately.
 
+`PanelTextAnnotation::new(corner, text)` accepts the same `Text` value. Its exact
+style replaces the Plot's panel-note role; local alignment controls lines within
+the block while the chosen corner keeps ownership of block placement.
+
 ## Themes And Canvases
 
 Canvas owns one root theme and defaults it to Publication, so callers do not

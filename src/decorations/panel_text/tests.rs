@@ -1,17 +1,31 @@
 use super::*;
 
 #[test]
-fn selected_role_padding_is_retained_for_fit_and_reassignment() {
+fn selected_local_style_padding_is_retained_for_fit_and_reassignment() {
+    let appearance = crate::Theme::publication()
+        .typography()
+        .get_annotations()
+        .get_panel_text()
+        .clone()
+        .font_size(28)
+        .unwrap();
     let source = Plot::scatter(
         crate::NumericValues::new("x", [0.0, 1.0]),
         crate::NumericValues::new("y", [0.0, 1.0]),
     )
-    .panel_text_annotation(crate::PanelTextAnnotation::new(PanelCorner::TopLeft, "Note").unwrap())
+    .panel_text_annotation(
+        crate::PanelTextAnnotation::new(
+            PanelCorner::TopLeft,
+            crate::Text::new("Note\nx")
+                .style(appearance)
+                .alignment(TextAlignment::End),
+        )
+        .unwrap(),
+    )
     .erase();
     let operation = crate::font::canonical::OperationContext::new();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &operation, None).unwrap();
     let mut theme = crate::Theme::publication().resolve().unwrap();
-    theme.typography.annotations.panel_text.font_size = 28;
     theme.annotations = theme
         .annotations
         .clone()
@@ -27,7 +41,18 @@ fn selected_role_padding_is_retained_for_fit_and_reassignment() {
         ))
         .unwrap();
     let plan = &result.panel_text[0];
-    assert_eq!(plan.position.x.to_bits(), (panel.x0 + 28.0).to_bits());
+    assert!(plan.text_plan.style.exact_override);
+    assert_eq!(
+        plan.text_plan.style.alignment,
+        crate::layout::PhysicalTextAlignment::End
+    );
+    assert!(
+        plan.text_plan.lines[1].translation_x_quanta > plan.text_plan.lines[0].translation_x_quanta
+    );
+    assert_eq!(
+        (plan.position.x - plan.text_plan.width()).to_bits(),
+        (panel.x0 + 28.0).to_bits()
+    );
     assert_eq!(
         plan.minimum_size.0.to_bits(),
         (plan.text_plan.width() + 56.0).to_bits()

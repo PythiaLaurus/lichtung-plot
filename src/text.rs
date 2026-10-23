@@ -6,13 +6,15 @@
 /// at the receiving constructor or preflight, without rewriting the source.
 ///
 /// ```
-/// use lichtung_plot::{Text, TextAlignment, TextLayout, TextPanel, Theme};
+/// use lichtung_plot::{PanelCorner, PanelTextAnnotation, Text, TextAlignment, TextLayout, TextPanel, Theme};
 /// let style = Theme::publication().typography().get_composition()
 ///     .get_text_panel_title().clone().font_size(24)?;
 /// let title = Text::new("Study\ncontext").style(style).alignment(TextAlignment::End);
+/// let note = PanelTextAnnotation::new(PanelCorner::TopLeft, title.clone())?;
 /// let panel = TextPanel::new(title, Text::new("Independent body")
 ///     .layout(TextLayout::default().alignment(TextAlignment::Start)))?;
 /// assert_eq!(panel.title(), "Study\ncontext");
+/// assert_eq!(note.text(), panel.title());
 /// # Ok::<(), lichtung_plot::Error>(())
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]

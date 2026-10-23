@@ -1000,13 +1000,16 @@ fn push_deferred_plot_requirements(
     let mut body_index = 0_u32;
 
     for annotation in plot.panel_text_annotations() {
+        let appearance = annotation
+            .content()
+            .appearance(&theme.typography.annotations.panel_text);
         push_deferred_body(
             requirements,
             &body_address,
             &mut body_index,
             annotation.text(),
             &[],
-            &theme.typography.annotations.panel_text,
+            appearance.theme,
             prepared_stage.as_deref_mut(),
         )?;
     }

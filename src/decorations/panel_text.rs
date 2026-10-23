@@ -5,7 +5,7 @@ use crate::layout::{Layout, PanelBox, PhysicalTextAlignment, ResolvedTextPlan};
 use crate::render::backend::{PlannedTextPlacement, Point2D, TextAnchor};
 use crate::theme::spacing::ExactLength;
 use crate::theme::ResolvedTheme;
-use crate::{PanelCorner, Plot};
+use crate::{PanelCorner, Plot, TextAlignment};
 
 #[cfg(test)]
 mod tests;
@@ -111,6 +111,13 @@ fn placement(
         TextAnchor::End => (x - text.width(), x),
         TextAnchor::Middle => (x - text.width() / 2.0, x + text.width() / 2.0),
     };
+    // Corner ownership places the complete block. Its line alignment selects a
+    // matching backend anchor within that block, without moving the block itself.
+    let (x, anchor) = match text.style.alignment {
+        PhysicalTextAlignment::Start => (left, TextAnchor::Start),
+        PhysicalTextAlignment::Center => (f64::midpoint(left, right), TextAnchor::Middle),
+        PhysicalTextAlignment::End => (right, TextAnchor::End),
+    };
     (
         Point2D::new(x, y),
         anchor,
@@ -134,39 +141,34 @@ pub(crate) fn measure_plans(
         return Ok(Vec::new());
     }
     let panel = layout.projection.panel_box();
-    let padding =
-        theme
-            .annotations
-            .get_panel_text_padding()
-            .product(crate::theme::LocalMetric::css_pixels(
-                theme.typography.annotations.panel_text.get_font_size(),
-            )?);
-    let inset = padding.pixels_rounded(SpatialRounding::NearestEven)?;
-    let both_edges = padding.times(2);
-    let available_width = ExactLength::pixels(panel.width())?
-        .subtract(&both_edges)
-        .map_or(Ok(0.0), |width| {
-            width.pixels_rounded(SpatialRounding::Floor)
-        })?;
     let plans = crate::layout::fit::collect( "panel annotations", plot
         .panel_text_annotations()
         .iter()
         .enumerate()
         .map(|(index, annotation)| {
             let scope = scope.child(AddressRole::Annotation, index)?;
+            let appearance = annotation.content().appearance(&theme.typography.annotations.panel_text);
+            let padding = theme.annotations.get_panel_text_padding().product(
+                crate::theme::LocalMetric::css_pixels(appearance.theme.get_font_size())?,
+            );
+            let inset = padding.pixels_rounded(SpatialRounding::NearestEven)?;
+            let both_edges = padding.times(2);
+            let available_width = ExactLength::pixels(panel.width())?
+                .subtract(&both_edges)
+                .map_or(Ok(0.0), |width| width.pixels_rounded(SpatialRounding::Floor))?;
             if available_width <= 0.0 {
                 return Err(scope.failure(FitKind::Constraint, "panel text has no usable space inside the resolved chart panel; increase the canvas").into());
             }
             let alignment = match annotation.corner() {
-                PanelCorner::TopLeft | PanelCorner::BottomLeft => PhysicalTextAlignment::Start,
-                PanelCorner::TopRight | PanelCorner::BottomRight => PhysicalTextAlignment::End,
+                PanelCorner::TopLeft | PanelCorner::BottomLeft => TextAlignment::Start,
+                PanelCorner::TopRight | PanelCorner::BottomRight => TextAlignment::End,
             };
             let text_plan = theme.measure_legacy_appearance_text(
                 annotation.text(),
-                &theme.typography.annotations.panel_text,
-                alignment,
+                appearance.theme,
+                annotation.content().resolved_alignment(alignment).into(),
                 "panel text annotation",
-                false,
+                appearance.exact_override,
             )?;
             let width = text_plan.width();
             let text_height = text_plan.height();

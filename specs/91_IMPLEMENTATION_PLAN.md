@@ -1669,10 +1669,10 @@ exact-tick empty-label suppression remain distinct. Public `Labels::resolve`
 shares automatic resolution and complete-domain collision checks remain in place.
 Step 3 is in progress: shared crate-root `TextAlignment` has replaced the title-only
 type through Plot/Canvas, Theme and frozen heading measurement. The common Text/
-TextLayout values now serve TextPanel title/body with complete local appearance,
-independent alignment, selected font/spacing metrics and full equality. Remaining
-receiving slots, their content-edit precedence and local appearance resolution
-are still pending within this step.
+TextLayout values now serve TextPanel title/body and panel-corner annotations with
+complete local appearance, independent line alignment, selected font/spacing
+metrics and full equality. Remaining receiving slots, their content-edit precedence
+and local appearance resolution are still pending within this step.
 Steps 4–22 remain pending; undelivered target signatures are not current APIs.
 
 ### 1. Apply The Public Property Naming Rule

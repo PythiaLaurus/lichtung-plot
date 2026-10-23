@@ -193,6 +193,11 @@ uses shared TextAlignment. TextLayout defaults leave alignment unspecified, whil
 an explicitly supplied default request remains distinguishable from omission.
 TextPanel's existing title/body readers borrow the source as `&str`.
 
+PanelTextAnnotation likewise accepts `impl Into<Text>` and preserves complete Eq;
+its existing text reader returns `&str`. Local style replaces the Plot's panel-text
+role before the census. Local line alignment is independent of corner ownership,
+and the selected size determines the annotation's font-relative padding and fit.
+
 ### Guides
 
 LegendPolicy is one automatic/hidden/explicit-position choice; placement and

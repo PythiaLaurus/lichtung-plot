@@ -65,6 +65,11 @@ uses the maximum selected size. Root padding remains owned by the root body role
 Text/TextPanel equality includes complete exact appearance and layout presence,
 including an explicit default reset.
 
+PanelTextAnnotation retains Text with complete appearance/request equality.
+Its local TextTheme replaces the complete Plot panel-text role, including the
+font metric used by panel_text_padding. The corner continues to place the whole
+block; TextLayout alignment chooses physical line alignment inside that block.
+
 ## Paint And Geometry
 
 Each final fill, stroke, text, bracket, outline and gradient stop has one RGBA

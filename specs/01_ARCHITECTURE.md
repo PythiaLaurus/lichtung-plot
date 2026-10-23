@@ -99,6 +99,9 @@ data-dependent restrictions. An already faceted Plot cannot be embedded in Canva
   module. Its optional complete TextTheme and TextLayout alignment resolve locally
   over the Canvas roles before font preparation; complete content/instruction
   equality is retained through composition.
+- PanelTextAnnotation retains the same Text value over the owning Plot's complete
+  panel-text role. Its corner places the block independently of line alignment;
+  selected local size also owns its annotation padding metric.
 - Each operation owns prepared sources, immutable font bytes, exact dependencies,
   caches and bounded root coordination. Clones of operation context share identity;
   a new operation has a new identity and fresh installed-font discovery.
