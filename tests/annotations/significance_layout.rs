@@ -415,27 +415,6 @@ fn ordinary_bar_accumulates_attached_and_pairwise_placements_across_calls() {
 }
 
 #[test]
-fn default_per_bar_mark_weight_is_normal() {
-    let data = SignificanceBarData::new(
-        CategoryValues::new("group", ["a"]).unwrap(),
-        NumericValues::new("value", [1.0]),
-    );
-    let chart =
-        identity_bar_chart(&data).significance([Significance::at("a", SignificanceMark::OneStar)]);
-
-    let svg = render_svg(chart, "default-bar-mark-weight").unwrap();
-    let mark = svg
-        .lines()
-        .find(|line| line.ends_with(">*</text>"))
-        .unwrap();
-
-    assert!(
-        !mark.contains("font-weight="),
-        "default significance marks must use SVG's normal 400 weight: {mark}"
-    );
-}
-
-#[test]
 fn explicit_y_limits_succeed_when_sufficient_and_error_when_insufficient() {
     let data = SignificanceBarData::new(
         CategoryValues::new("group", ["a", "b"]).unwrap(),

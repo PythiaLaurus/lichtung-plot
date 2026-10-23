@@ -1,6 +1,6 @@
 use lichtung_plot::{
     CategoryValues, HistogramBins, HistogramInput, HistogramStat, NumericValues, Plot, PointLayer,
-    QqLine, Theme,
+    QqLine,
 };
 
 #[path = "../support/visual.rs"]

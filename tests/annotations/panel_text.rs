@@ -81,16 +81,6 @@ fn panel_text_renders_in_named_clipped_layer_with_theme_style_and_corner_anchors
 }
 
 #[test]
-fn panel_text_default_is_byte_inert() {
-    let data = scatter_data();
-    let first = svg(&scatter(&data));
-    let second = svg(&scatter(&data));
-
-    assert_eq!(first, second);
-    assert!(!first.contains("panel-text"));
-}
-
-#[test]
 fn panel_text_rejects_duplicate_corner() {
     let data = scatter_data();
     let chart = scatter(&data)

@@ -1,5 +1,5 @@
 use lichtung_plot::{
-    BarInput, BarSpacing, CategoryOrder, CategoryValues, Labels, NumericValues, Plot, ValueSort,
+    BarInput, CategoryOrder, CategoryValues, Labels, NumericValues, Plot, ValueSort,
 };
 
 #[path = "../support/visual.rs"]

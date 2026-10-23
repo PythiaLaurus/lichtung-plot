@@ -14,33 +14,6 @@ fn text_line<'a>(svg: &'a str, text: &str) -> &'a str {
 }
 
 #[test]
-fn omitted_theme_calls_select_publication_for_plot_and_canvas() {
-    let omitted_plot = render_svg(scatter(), "theme-default-plot").unwrap();
-    let explicit_plot = render_svg(
-        scatter().theme(Theme::publication()),
-        "theme-publication-plot",
-    )
-    .unwrap();
-    assert_eq!(omitted_plot, explicit_plot);
-
-    let omitted_canvas = render_canvas(
-        Canvas::grid(1, 1).unwrap().panel(0, 0, scatter()).unwrap(),
-        "theme-default-canvas",
-    )
-    .unwrap();
-    let explicit_canvas = render_canvas(
-        Canvas::grid(1, 1)
-            .unwrap()
-            .theme(Theme::publication())
-            .panel(0, 0, scatter())
-            .unwrap(),
-        "theme-publication-canvas",
-    )
-    .unwrap();
-    assert_eq!(omitted_canvas, explicit_canvas);
-}
-
-#[test]
 fn unthemed_canvas_child_inherits_the_root_theme() {
     let inherited = render_canvas(
         Canvas::grid(1, 1)

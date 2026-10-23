@@ -944,9 +944,9 @@ private module; every method must have a live owner and complete identity.
 Verification includes independent public construction for every policy family,
 parsed/typed policy equality, both callback result forms, lifetime/thread/clone
 contracts, read capability preservation and the deliberate Copy/type removals.
-Choose focused semantic witnesses and compile-fail capability checks under the
-existing unit-test budget, not an accessor echo suite. Literal examples use real
-planned names; every method, callback context and scalar type has a specified
-signature rather than a placeholder. Algorithm proofs and focused strict-Clippy
-gates remain the implementation plan's obligations, not claims that this appendix
-has implemented or compiled the future API.
+Choose focused semantic witnesses and compile-fail capability checks within the
+three-layer test limits in `90_DEVELOPMENT.md`, not an accessor echo suite. Literal
+examples use real planned names; every method, callback context and scalar type
+has a specified signature rather than a placeholder. Algorithm proofs and focused
+strict-Clippy gates remain the implementation plan's obligations, not claims that
+this appendix has implemented or compiled the future API.

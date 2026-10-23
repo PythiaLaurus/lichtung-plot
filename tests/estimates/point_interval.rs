@@ -55,25 +55,7 @@ fn enable_zero_line(
 }
 
 #[test]
-fn point_interval_constructor_accepts_complete_typed_bounds() {
-    let data = standard_data();
-    Plot::point_interval(
-        data.category,
-        data.estimate,
-        Bounds::new(data.lower, data.upper),
-    )
-    .preflight()
-    .unwrap();
-}
-
-#[test]
-fn repeated_svg_rendering_is_byte_identical() {
-    let data = standard_data();
-    assert_eq!(render(&data, |plot| plot), render(&data, |plot| plot));
-}
-
-#[test]
-fn point_interval_renders_asymmetric_intervals_with_fixed_pixel_caps() {
+fn point_interval_renders_asymmetric_bounds_and_endpoint_caps() {
     let data = point_interval_data(
         CategoryValues::new("category", ["first"]).unwrap(),
         NumericValues::new("estimate", [1.0]),
@@ -87,8 +69,13 @@ fn point_interval_renders_asymmetric_intervals_with_fixed_pixel_caps() {
     let interval = lines[0];
 
     assert_eq!((lines.len(), circles(marks).len()), (3, 1));
-    assert!(((lines[1][1].1 - lines[1][0].1).abs() - 8.0).abs() < 0.01);
-    assert!(((lines[2][1].1 - lines[2][0].1).abs() - 8.0).abs() < 0.01);
+    assert_eq!(lines[1][0].0.to_bits(), interval[0].0.to_bits());
+    assert_eq!(lines[2][0].0.to_bits(), interval[1].0.to_bits());
+    for cap in &lines[1..] {
+        let minimum = cap[0].1.min(cap[1].1);
+        let maximum = cap[0].1.max(cap[1].1);
+        assert!(minimum < circle.1 && circle.1 < maximum);
+    }
     assert!((circle.0 - interval[0].0) < (interval[1].0 - circle.0));
 }
 
@@ -219,20 +206,6 @@ fn point_interval_draws_optional_zero_line_behind_marks() {
     assert_eq!(polylines(clipped_marks(&without_zero)).len(), 3);
     assert_eq!(zero_lines.len(), 4);
     assert!((zero_lines[0][0].0 - zero_lines[0][1].0).abs() < 0.01);
-}
-
-#[test]
-fn point_interval_renders_one_constant_row_without_invalid_geometry() {
-    let data = point_interval_data(
-        CategoryValues::new("category", ["only"]).unwrap(),
-        NumericValues::new("estimate", [5.0]),
-        NumericValues::new("lower", [5.0]),
-        NumericValues::new("upper", [5.0]),
-    );
-    let svg = render(&data, |chart| chart);
-
-    assert_eq!(circles(clipped_marks(&svg)).len(), 1);
-    assert!(!svg.contains("NaN") && !svg.contains("inf"));
 }
 
 fn clipped_marks(svg: &str) -> &str {

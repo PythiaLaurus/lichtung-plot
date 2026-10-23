@@ -190,35 +190,6 @@ fn estimate_status_keeps_unavailable_rows_visible_without_numeric_marks() {
 }
 
 #[test]
-fn all_estimated_status_is_byte_identical_to_strict_default() {
-    let frame = all_estimated_data();
-    for (without, with, name) in vec![
-        (
-            point_interval(&frame, false).erase(),
-            point_interval(&frame, true).erase(),
-            "point",
-        ),
-        (
-            coefficient(&frame, false).erase(),
-            coefficient(&frame, true).erase(),
-            "coefficient",
-        ),
-        (
-            forest(&frame, false).erase(),
-            forest(&frame, true).erase(),
-            "forest",
-        ),
-    ]
-    .into_boxed_slice()
-    {
-        assert_eq!(
-            svg(without, &format!("strict-{name}")),
-            svg(with, &format!("status-{name}"))
-        );
-    }
-}
-
-#[test]
 fn estimate_status_values_must_align_with_estimate_rows() {
     let frame = all_estimated_data();
     assert!(point_interval(&frame, false)

@@ -42,15 +42,36 @@ localized repair, rerun its focused case/neighbors rather than repeat a successf
 whole suite without new cause. Pure documentation needs source/spec consistency,
 reference checks and git diff --check, not compiler/tests by default.
 
-## Test Budget And Ownership
+## Test Scale And Ownership
 
-Do not grow the unit-test suite. Each new unit test replaces an existing test in
-the same logical change; discovered library count including ignored cases cannot
-exceed its pre-change count on the same platform. Linux ceiling is 671 including 17
-ignored. Further deletion lowers the ceiling rather than banking future credits.
-Ignoring, merging functions, packaging parameterized cases or moving cases to
-integration suites does not evade this rule. Remove obsolete test-only hooks/
-helpers when their last meaningful consumer disappears.
+| Layer | Reasonable scale | Upper limit |
+| --- | --- | --- |
+| Unit tests | 300–800 tests | 800 |
+| Module integration, excluding core E2E | 100–300 tests | 300 |
+| Core E2E | 30–80 scenarios | 80 |
+
+The upper bounds limit the maintained suite; the lower ends are not quotas to
+fill. Meaningful coverage may grow within these limits without replacing a test
+in the same change or preserving a historical count. Count ignored tests too.
+Review the affected layer's count when changing tests.
+
+Classify by responsibility, not Cargo target type. A unit test exercises an
+isolated calculation or policy, including public numerical functions compiled
+as a Cargo integration target. A module integration test checks a specific
+relationship between cooperating components, such as source rows and marks,
+guide compatibility or a layout constraint. Core E2E covers representative
+public workflows through preparation, layout and real publication, including
+composition and frozen-output reuse. SVG inspection alone does not turn a
+feature-focused integration assertion into a separate core E2E workflow.
+
+Count independent E2E scenarios, not only their driver functions. Configuration
+cross-products still count as separate scenarios; do not compress them into a
+loop to satisfy a ceiling. Ignoring, merging functions, parameterized packaging,
+relabeling or moving tests between suites does not evade a limit. Delete
+redundant/low-value tests and remove test-only hooks/helpers when their last
+meaningful consumer disappears. Do not add getter/setter inventories, repeated
+per-family smoke/determinism checks, arbitrary pixel/default-style expectations
+or expensive boundary-sized workloads without a distinct useful contract.
 
 Independent Cargo integration targets are declared in Cargo.toml, each with
 tests/<domain>/suite.rs and cohesive sibling modules; shared helpers are in

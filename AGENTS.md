@@ -28,14 +28,23 @@ Use modern Rust module layout: `foo.rs` plus `foo/` siblings. Do not add
 
 ## Testing
 
-Do not grow the unit-test suite. Every new unit test must be offset by deleting
-an existing unit test in the same logical change. The discovered library-test
-count, including ignored tests, must not exceed its pre-change count on the same
-platform (the current Linux baseline is 671, including 17 ignored). Further
-deletions do not create a budget for later growth. Prefer replacing lower-value
-tests with meaningful coverage of the changed contract, and remove obsolete
-test-only support. Do not evade this rule with ignored tests, merged test
-functions, parameterized-case packaging, or migration into integration suites.
+Keep the test suite within these size limits:
+
+| Layer | Reasonable scale | Upper limit |
+| --- | --- | --- |
+| Unit tests | 300–800 tests | 800 |
+| Module integration, excluding core E2E | 100–300 tests | 300 |
+| Core E2E | 30–80 scenarios | 80 |
+
+These are ceilings, not minimum quotas. Meaningful new coverage may grow within
+them; adding a unit test does not require deleting another. Classify by the
+contract exercised, not merely Cargo's library/integration target boundary, and
+count ignored tests too. Count independently exercised E2E scenarios rather than
+only driver functions. Do not evade limits with merged functions, parameterized
+packaging, relabeling or moving tests between suites. Remove low-value/redundant
+tests and obsolete test-only support; do not fill available space with accessor
+echoes, per-family smoke/replay copies or mechanical configuration cross-products.
+See `specs/90_DEVELOPMENT.md` for ownership and semantic expectations.
 
 Run the narrowest tests that exercise the changed behavior and its affected
 callers, plus strict Clippy for code changes. A change spanning several modules

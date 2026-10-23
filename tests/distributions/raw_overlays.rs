@@ -27,15 +27,6 @@ fn plot(samples: &[f64], kind: PlotKind, overlay: RawOverlay) -> Plot {
     }
 }
 
-fn plot_with_default_overlay(samples: &[f64], kind: PlotKind) -> Plot {
-    let (category, values) = values(samples);
-    match kind {
-        PlotKind::Boxplot => Plot::boxplot(category, values).erase(),
-        PlotKind::Violin => Plot::violin(category, values).erase(),
-        _ => panic!("unsupported raw-overlay fixture kind {kind:?}"),
-    }
-}
-
 fn render<K: lichtung_plot::kind::Marker>(
     plot: Plot<K>,
     name: &str,
@@ -58,23 +49,6 @@ fn circle_tags(svg: &str) -> Vec<&str> {
         .skip(1)
         .filter_map(|tail| tail.split_once("/>").map(|(tag, _)| tag))
         .collect()
-}
-
-#[test]
-fn explicit_hidden_is_byte_identical_to_the_default_for_boxplot_and_violin() {
-    for kind in [PlotKind::Boxplot, PlotKind::Violin] {
-        let default = render(
-            plot_with_default_overlay(&[1.0, 2.0, 3.0, 4.0], kind),
-            "overlay-default",
-        )
-        .unwrap();
-        let explicit = render(
-            plot(&[1.0, 2.0, 3.0, 4.0], kind, RawOverlay::Hidden),
-            "overlay-explicit-hidden",
-        )
-        .unwrap();
-        assert_eq!(default, explicit, "{kind:?}");
-    }
 }
 
 #[test]
@@ -197,14 +171,6 @@ fn plot_source_rows_preserve_jitter_after_compaction_and_reordering() {
 }
 
 #[test]
-fn plot_source_rows_reject_duplicate_identities() {
-    assert!(SourceRows::new([4, 4])
-        .unwrap_err()
-        .to_string()
-        .contains("duplicate 4"));
-}
-
-#[test]
 fn facets_keep_original_source_rows_for_jitter() {
     let plot = Plot::boxplot(
         lichtung_plot::CategoryValues::new("category", ["a"; 8]).unwrap(),
@@ -313,15 +279,4 @@ fn narrow_composed_canvas_rejects_before_lifecycle_or_artifact_creation() {
     );
     assert!(!output.exists());
     std::fs::remove_dir_all(directory).unwrap();
-}
-
-#[test]
-fn adequate_composed_canvas_accepts_raw_overlay() {
-    Canvas::grid(1, 1)
-        .unwrap()
-        .panel(0, 0, violin(&[1.0, 2.0, 3.0, 4.0], RawOverlay::Jittered))
-        .unwrap()
-        .size(640, 480)
-        .preflight()
-        .unwrap();
 }

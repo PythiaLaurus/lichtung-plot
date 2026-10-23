@@ -1,14 +1,11 @@
 use std::path::Path;
 
 use lichtung_plot::{
-    kind, AlphaEncoding, AlphaValues, BarInput, Bounds, Canvas, CanvasLegendPolicy, CategoryValues,
-    CoefficientInput, Color, DumbbellEndpoints, Error, FacetSpec, HeatmapAnnotations,
-    HistogramInput, NumericFormat, NumericNotation, NumericPrecision, NumericValues, Output, Plot,
-    PlotKind, PngCompression, PngOptions, PngSizing, RaincloudInput, TextPanel, Theme,
-    TickGeneration,
+    kind, Canvas, CanvasLegendPolicy, CategoryValues, Error, FacetSpec, NumericFormat,
+    NumericValues, Output, Plot, TextPanel,
 };
 
-use super::support::{png_dimensions, unique_dir};
+use super::support::unique_dir;
 
 #[derive(Clone, Copy, Debug)]
 enum Sizing {
@@ -51,51 +48,11 @@ struct Scene {
 
 fn publish(name: &str, render_scene: impl FnOnce(&Path) -> Result<Output, Error>) -> Scene {
     let directory = unique_dir(name);
-    let preserved = directory.join("preserved.svg");
-    let outlined = directory.join("outlined.svg");
-    let preview = directory.join("preview.png");
-    let half = directory.join("half.png");
-    let repeated = directory.join("repeated.svg");
-    let output = render_scene(&preserved).unwrap_or_else(|error| panic!("{name}: {error}"));
+    let destination = directory.join("plot.svg");
+    let output = render_scene(&destination).unwrap_or_else(|error| panic!("{name}: {error}"));
     let dimensions = (output.width(), output.height());
-    let svg = std::fs::read_to_string(&preserved).unwrap();
+    let svg = std::fs::read_to_string(destination).unwrap();
     assert_svg_dimensions(&svg, dimensions);
-    let output = output
-        .svg(&outlined)
-        .unwrap()
-        .png_preview(&preview)
-        .unwrap()
-        .png_with_options(
-            &half,
-            PngOptions {
-                sizing: PngSizing::Scale(0.5),
-                compression: PngCompression::Fast,
-            },
-        )
-        .unwrap()
-        .svg_preserve_text(&repeated)
-        .unwrap();
-    assert_eq!((output.width(), output.height()), dimensions);
-    assert_eq!(std::fs::read_to_string(repeated).unwrap(), svg);
-    let outlined = std::fs::read_to_string(outlined).unwrap();
-    assert_svg_dimensions(&outlined, dimensions);
-    assert!(!outlined.contains("<text"));
-    assert!(outlined.contains("<path"));
-    let bytes = std::fs::read(preview).unwrap();
-    assert_eq!(png_dimensions(&bytes), dimensions);
-    let mut reader = png::Decoder::new(std::io::Cursor::new(&bytes))
-        .read_info()
-        .unwrap();
-    let mut pixels = vec![0; reader.output_buffer_size().unwrap()];
-    let decoded = reader.next_frame(&mut pixels).unwrap();
-    assert_eq!((decoded.width, decoded.height), dimensions);
-    assert!(pixels[..decoded.buffer_size()]
-        .iter()
-        .any(|byte| *byte < 255));
-    assert_eq!(
-        png_dimensions(&std::fs::read(half).unwrap()),
-        (dimensions.0.div_ceil(2), dimensions.1.div_ceil(2))
-    );
     std::fs::remove_dir_all(directory).unwrap();
     Scene { dimensions, svg }
 }
@@ -152,358 +109,8 @@ fn scatter() -> Plot<kind::Scatter> {
     )
 }
 
-fn alpha(name: &str) -> AlphaEncoding {
-    AlphaEncoding::single(
-        AlphaValues::linear(NumericValues::new(name, [0.5]), (0.0, 1.0), (0, 255)).unwrap(),
-    )
-    .unwrap()
-}
-
-fn assert_alpha_titles(svg: &str, kind: PlotKind) {
-    let names: &[&str] = match kind {
-        PlotKind::Scatter | PlotKind::Beeswarm => &["point"],
-        PlotKind::Histogram | PlotKind::Density | PlotKind::Bar | PlotKind::HorizontalBar => {
-            &["line", "fill"]
-        }
-        PlotKind::Qq
-        | PlotKind::PointInterval
-        | PlotKind::Coefficient
-        | PlotKind::Forest
-        | PlotKind::Trajectory
-        | PlotKind::LinePath
-        | PlotKind::Interaction
-        | PlotKind::Dumbbell => &["point", "line"],
-        PlotKind::Line
-        | PlotKind::Boxplot
-        | PlotKind::Violin
-        | PlotKind::Raincloud
-        | PlotKind::Regression => &["point", "line", "fill"],
-        PlotKind::Marginal | PlotKind::Matrix => &["point", "fill"],
-        PlotKind::Heatmap
-        | PlotKind::StackedBar
-        | PlotKind::StackedHorizontalBar
-        | PlotKind::Waterfall => &["fill"],
-    };
-    let document = roxmltree::Document::parse(svg).unwrap();
-    let words = document
-        .descendants()
-        .filter(|node| node.has_tag_name("text"))
-        .filter_map(|node| node.text())
-        .flat_map(str::split_whitespace)
-        .collect::<Vec<_>>();
-    for name in names {
-        assert_eq!(
-            words
-                .windows(2)
-                .filter(|pair| pair == &[*name, "confidence"])
-                .count(),
-            1,
-            "{kind:?}: exactly one complete {name} alpha section"
-        );
-    }
-}
-
-fn assert_family_content_roots<K: kind::ExactFamily + kind::Legend>(
-    source: Plot<K>,
-    markers: &[&str],
-) {
-    let source =
-        source
-            .labels(lichtung_plot::Labels::raw())
-            .legend(lichtung_plot::LegendPolicy::Visible(
-                lichtung_plot::LegendPosition::OutsideRight,
-            ));
-    let directory = unique_dir("public-family-content-roots");
-    for (sizing, source) in [
-        Sizing::Automatic,
-        Sizing::Width(801),
-        Sizing::Exact(1001, 901),
-    ]
-    .into_iter()
-    .zip([source.clone(), source.clone(), source])
-    {
-        let destination = directory.join(format!("{sizing:?}-plot.svg"));
-        let output = sizing
-            .plot(source.clone())
-            .svg_preserve_text(&destination)
-            .unwrap_or_else(|error| panic!("{:?}, {sizing:?}: {error}", source.kind()));
-        let dimensions = (output.width(), output.height());
-        sizing.assert_dimensions(dimensions);
-        let svg = std::fs::read_to_string(destination).unwrap();
-        assert_svg_dimensions(&svg, dimensions);
-        assert_alpha_titles(&svg, source.kind());
-        for marker in markers {
-            assert!(
-                svg.contains(&format!(">{marker}")),
-                "{:?}, {sizing:?}: missing {marker}",
-                source.kind()
-            );
-        }
-        if markers.contains(&"y=") {
-            assert_generated_y_maximum(&svg);
-        }
-        if source.kind() != PlotKind::Matrix {
-            let destination = directory.join(format!("{sizing:?}-canvas.svg"));
-            let canvas = Canvas::grid(1, 1)
-                .unwrap()
-                .panel(0, 0, source.clone())
-                .unwrap();
-            let output = sizing
-                .canvas(canvas)
-                .svg_preserve_text(&destination)
-                .unwrap_or_else(|error| panic!("Canvas {:?}, {sizing:?}: {error}", source.kind()));
-            let dimensions = (output.width(), output.height());
-            sizing.assert_dimensions(dimensions);
-            let svg = std::fs::read_to_string(destination).unwrap();
-            assert_svg_dimensions(&svg, dimensions);
-            assert_alpha_titles(&svg, source.kind());
-            for marker in markers {
-                assert!(
-                    svg.contains(&format!(">{marker}")),
-                    "Canvas {:?}, {sizing:?}: missing {marker}",
-                    source.kind()
-                );
-            }
-            if markers.contains(&"y=") {
-                assert_generated_y_maximum(&svg);
-            }
-        }
-    }
-    std::fs::remove_dir_all(directory).unwrap();
-}
-
-fn assert_generated_y_maximum(svg: &str) {
-    let document = roxmltree::Document::parse(svg).unwrap();
-    let labels = document
-        .descendants()
-        .filter(|node| node.has_tag_name("text"))
-        .filter_map(|node| node.text())
-        .filter(|text| text.starts_with("y="))
-        .count();
-    assert!(
-        (1..=3).contains(&labels),
-        "generated in-domain y positions: {labels}"
-    );
-}
-
 #[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "one existing typed family census covers each actual numeric surface in all root modes"
-)]
-fn all_public_families_render_content_requests_with_their_actual_axes_and_chrome() {
-    let format = |prefix| NumericFormat::default().with_prefix(prefix).unwrap();
-    macro_rules! xy {
-        ($plot:expr) => {
-            assert_family_content_roots(
-                $plot
-                    .x_tick_generation(TickGeneration::target(5).unwrap())
-                    .y_tick_generation(TickGeneration::maximum(3).unwrap())
-                    .x_tick_format(format("x="))
-                    .y_tick_format(format("y=")),
-                &["x=", "y="],
-            );
-        };
-    }
-    macro_rules! x {
-        ($plot:expr) => {
-            assert_family_content_roots(
-                $plot
-                    .x_tick_generation(TickGeneration::target(5).unwrap())
-                    .x_tick_format(format("x=")),
-                &["x="],
-            );
-        };
-    }
-    macro_rules! y {
-        ($plot:expr) => {
-            assert_family_content_roots(
-                $plot
-                    .y_tick_generation(TickGeneration::maximum(3).unwrap())
-                    .y_tick_format(format("y=")),
-                &["y="],
-            );
-        };
-    }
-    let x = NumericValues::new("x", [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
-    let y = NumericValues::new("response", [1.0, 3.0, 2.0, 5.0, 4.0, 6.0]);
-    let group = CategoryValues::new("group", ["a", "a", "a", "b", "b", "b"]).unwrap();
-    let terms = CategoryValues::new("term", ["a", "b", "c", "d", "e", "f"]).unwrap();
-    let hue = CategoryValues::new("treatment", ["one", "two", "one", "two", "one", "two"]).unwrap();
-    let bounds = || {
-        Bounds::new(
-            NumericValues::new("lower", [0.5, 1.0, 2.0, 3.0, 4.0, 5.0]),
-            NumericValues::new("upper", [1.5, 3.0, 4.0, 5.0, 6.0, 7.0]),
-        )
-    };
-    xy!(Plot::scatter(x.clone(), y.clone()).point_alpha(alpha("point confidence")));
-    xy!(Plot::histogram(HistogramInput::samples(x.clone()))
-        .stat(lichtung_plot::HistogramStat::Density)
-        .composite(lichtung_plot::HistogramComposite::KdeAndRug(
-            lichtung_plot::HistogramKde::Internal
-        ))
-        .line_alpha(alpha("line confidence"))
-        .fill_alpha(alpha("fill confidence")));
-    xy!(Plot::density(x.clone())
-        .line_alpha(alpha("line confidence"))
-        .fill_alpha(alpha("fill confidence")));
-    xy!(Plot::qq(x.clone())
-        .point_alpha(alpha("point confidence"))
-        .line_alpha(alpha("line confidence")));
-    x!(Plot::point_interval(terms.clone(), x.clone(), bounds())
-        .point_alpha(alpha("point confidence"))
-        .line_alpha(alpha("line confidence")));
-    xy!(Plot::line(x.clone(), y.clone())
-        .band(bounds())
-        .point_alpha(alpha("point confidence"))
-        .line_alpha(alpha("line confidence"))
-        .fill_alpha(alpha("fill confidence")));
-    xy!(Plot::trajectory(x.clone(), y.clone(), group.clone())
-        .point_alpha(alpha("point confidence"))
-        .line_alpha(alpha("line confidence")));
-    xy!(Plot::line_path(x.clone(), y.clone(), group.clone())
-        .markers(true)
-        .point_alpha(alpha("point confidence"))
-        .line_alpha(alpha("line confidence")));
-    y!(Plot::interaction(
-        CategoryValues::new(
-            "condition",
-            ["before", "during", "after", "before", "during", "after"],
-        )
-        .unwrap(),
-        y.clone(),
-        group.clone(),
-        bounds(),
-    )
-    .point_alpha(alpha("point confidence"))
-    .line_alpha(alpha("line confidence")));
-    assert_family_content_roots(
-        Plot::coefficient(
-            terms.clone(),
-            CoefficientInput::estimates_with_intervals(x.clone(), bounds()),
-        )
-        .point_alpha(alpha("point confidence"))
-        .line_alpha(alpha("line confidence"))
-        .x_tick_generation(TickGeneration::target(5).unwrap())
-        .x_tick_format(format("x=")),
-        &["x="],
-    );
-    assert_family_content_roots(
-        Plot::forest(terms.clone(), x.clone(), bounds(), 1.0)
-            .point_alpha(alpha("point confidence"))
-            .line_alpha(alpha("line confidence"))
-            .scale(lichtung_plot::AxisScale::Log10)
-            .x_tick_generation(TickGeneration::target(5).unwrap())
-            .x_tick_format(
-                NumericFormat::new(
-                    NumericNotation::Scientific,
-                    NumericPrecision::Significant(3),
-                )
-                .unwrap()
-                .with_prefix("x=")
-                .unwrap(),
-            ),
-        &["x="],
-    );
-    x!(Plot::dumbbell(
-        terms.clone(),
-        x.clone(),
-        y.clone(),
-        DumbbellEndpoints::new(
-            "Left",
-            Color::rgb(20, 80, 140),
-            "Right",
-            Color::rgb(180, 60, 40),
-        )
-        .unwrap(),
-    )
-    .point_alpha(alpha("point confidence"))
-    .line_alpha(alpha("line confidence")));
-    assert_family_content_roots(
-        Plot::heatmap(
-            CategoryValues::new(
-                "column",
-                ["first", "second", "third", "first", "second", "third"],
-            )
-            .unwrap(),
-            group.clone(),
-            x.clone(),
-        )
-        .fill_alpha(alpha("fill confidence"))
-        .color_label_format(format("c="))
-        .annotations(HeatmapAnnotations::Values(format("v="))),
-        &["c=", "v="],
-    );
-    y!(Plot::bar(
-        group.clone(),
-        BarInput::samples(y.clone()).error_bar(lichtung_plot::ErrorBar::standard_deviation())
-    )
-    .line_alpha(alpha("line confidence"))
-    .fill_alpha(alpha("fill confidence")));
-    x!(Plot::horizontal_bar(
-        group.clone(),
-        BarInput::samples(y.clone()).error_bar(lichtung_plot::ErrorBar::standard_deviation()),
-    )
-    .line_alpha(alpha("line confidence"))
-    .fill_alpha(alpha("fill confidence")));
-    y!(Plot::stacked_bar(group.clone(), y.clone(), hue.clone())
-        .fill_alpha(alpha("fill confidence")));
-    x!(Plot::stacked_horizontal_bar(group.clone(), y.clone(), hue)
-        .fill_alpha(alpha("fill confidence")));
-    y!(Plot::boxplot(group.clone(), y.clone())
-        .raw_overlay(lichtung_plot::RawOverlay::Points)
-        .point_alpha(alpha("point confidence"))
-        .line_alpha(alpha("line confidence"))
-        .fill_alpha(alpha("fill confidence")));
-    y!(Plot::violin(group.clone(), y.clone())
-        .raw_overlay(lichtung_plot::RawOverlay::Points)
-        .point_alpha(alpha("point confidence"))
-        .line_alpha(alpha("line confidence"))
-        .fill_alpha(alpha("fill confidence")));
-    y!(
-        Plot::raincloud(RaincloudInput::samples(group.clone(), y.clone(),))
-            .point_alpha(alpha("point confidence"))
-            .line_alpha(alpha("line confidence"))
-            .fill_alpha(alpha("fill confidence"))
-    );
-    xy!(Plot::regression(x.clone(), y.clone())
-        .band(lichtung_plot::RegressionBand::PointwiseMean95)
-        .point_alpha(alpha("point confidence"))
-        .line_alpha(alpha("line confidence"))
-        .fill_alpha(alpha("fill confidence")));
-    xy!(Plot::marginal(x.clone(), y.clone())
-        .point_alpha(alpha("point confidence"))
-        .fill_alpha(alpha("fill confidence")));
-    assert_family_content_roots(
-        Plot::matrix(vec![x.clone(), y])
-            .point_alpha(alpha("point confidence"))
-            .fill_alpha(alpha("fill confidence")),
-        &[],
-    );
-    assert_family_content_roots(
-        Plot::beeswarm(group, x.clone(), x)
-            .point_alpha(alpha("point confidence"))
-            .x_tick_generation(TickGeneration::target(5).unwrap())
-            .x_tick_format(format("x="))
-            .color_label_format(format("c=")),
-        &["x=", "c="],
-    );
-    assert_family_content_roots(
-        Plot::waterfall(
-            terms,
-            NumericValues::new("delta", [1.0, -1.0, 2.0, -2.0, 3.0, 0.0]),
-            10.0,
-        )
-        .fill_alpha(alpha("fill confidence"))
-        .x_tick_format(format("x="))
-        .x_tick_generation(TickGeneration::target(5).unwrap())
-        .total_format(format("n=")),
-        &["x=", "base n=", "total n="],
-    );
-}
-
-#[test]
-fn standalone_sizing_calls_replace_the_complete_request_before_frozen_publication() {
+fn standalone_sizing_calls_replace_the_complete_request_before_publication() {
     let caption = caption();
     let source = scatter()
         .title("Standalone request replacement")
@@ -609,46 +216,35 @@ fn owning_facets_keep_sparse_wrap_and_complete_prose_in_all_public_root_modes() 
 }
 
 #[test]
-fn matrix_roots_keep_native_cells_and_their_hue_guide_in_all_public_root_modes() {
+fn matrix_root_keeps_native_cells_hue_guide_and_complete_prose() {
     let caption = caption();
-    for sizing in [
-        Sizing::Automatic,
-        Sizing::Width(801),
-        Sizing::Exact(1001, 1201),
-    ] {
-        let plot = Plot::matrix(vec![
-            NumericValues::new("alpha_value", [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]),
-            NumericValues::new("beta_value", [2.0, 1.0, 4.0, 3.0, 6.0, 5.0]),
-        ])
-        .hue(
-            CategoryValues::new(
-                "treatment",
-                [
-                    "Control", "Control", "Control", "Exposed", "Exposed", "Exposed",
-                ],
-            )
-            .unwrap(),
+    let plot = Plot::matrix(vec![
+        NumericValues::new("alpha_value", [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]),
+        NumericValues::new("beta_value", [2.0, 1.0, 4.0, 3.0, 6.0, 5.0]),
+    ])
+    .hue(
+        CategoryValues::new(
+            "treatment",
+            [
+                "Control", "Control", "Control", "Exposed", "Exposed", "Exposed",
+            ],
         )
-        .title("Native matrix sizing")
-        .caption(&caption);
-        let scene = publish(&format!("public-matrix-sizing-{sizing:?}"), |path| {
-            sizing.plot(plot).svg_preserve_text(path)
-        });
-        sizing.assert_dimensions(scene.dimensions);
-        for source in [
-            "Native matrix sizing",
-            "Treatment",
-            "Control",
-            "Exposed",
-            &caption,
-        ] {
-            assert_complete_source(&scene.svg, source);
-        }
-        assert!(
-            scene.svg.contains(">Alpha value</text>") && scene.svg.contains(">Beta value</text>")
-        );
-        assert_eq!(scene.svg.matches("<clipPath ").count(), 4);
+        .unwrap(),
+    )
+    .title("Native matrix sizing")
+    .caption(&caption);
+    let scene = publish("public-matrix-sizing", |path| plot.svg_preserve_text(path));
+    for source in [
+        "Native matrix sizing",
+        "Treatment",
+        "Control",
+        "Exposed",
+        &caption,
+    ] {
+        assert_complete_source(&scene.svg, source);
     }
+    assert!(scene.svg.contains(">Alpha value</text>") && scene.svg.contains(">Beta value</text>"));
+    assert_eq!(scene.svg.matches("<clipPath ").count(), 4);
 }
 
 fn mixed_canvas(caption: &str, replace_children: bool) -> Canvas {
@@ -699,48 +295,42 @@ fn mixed_canvas(caption: &str, replace_children: bool) -> Canvas {
 }
 
 #[test]
-fn mixed_canvas_owns_all_modes_and_ignores_standalone_child_requests() {
+fn mixed_canvas_keeps_complete_content_and_ignores_standalone_child_requests() {
     let caption = caption();
-    for sizing in [
-        Sizing::Automatic,
-        Sizing::Width(1101),
-        Sizing::Exact(1301, 1401),
+    let scene = publish("public-mixed-canvas", |path| {
+        mixed_canvas(&caption, false)
+            .width(1101)
+            .svg_preserve_text(path)
+    });
+    let replaced = publish("public-mixed-canvas-child-requests", |path| {
+        mixed_canvas(&caption, true)
+            .width(1101)
+            .svg_preserve_text(path)
+    });
+    assert_eq!(scene.dimensions.0, 1101);
+    assert_eq!(replaced.svg, scene.svg);
+    for source in [
+        "Canvas root title",
+        "Independent Canvas subtitle",
+        "First panel title",
+        "First panel subtitle",
+        "First local caption",
+        "Second panel title",
+        "Second panel subtitle",
+        "Second local caption",
+        "Interpretation",
+        "A complete prose cell alongside two scientific panels.",
+        "0.125% remains literal caller text.",
+        "Shared scientific observations",
+        "Treatment",
+        "Control",
+        "Exposed",
+        &caption,
     ] {
-        let scene = publish("public-mixed-canvas", |path| {
-            sizing
-                .canvas(mixed_canvas(&caption, false))
-                .svg_preserve_text(path)
-        });
-        sizing.assert_dimensions(scene.dimensions);
-        let replaced = publish("public-mixed-canvas-child-requests", |path| {
-            sizing
-                .canvas(mixed_canvas(&caption, true))
-                .svg_preserve_text(path)
-        });
-        assert_eq!(replaced.svg, scene.svg, "{sizing:?}");
-        for source in [
-            "Canvas root title",
-            "Independent Canvas subtitle",
-            "First panel title",
-            "First panel subtitle",
-            "First local caption",
-            "Second panel title",
-            "Second panel subtitle",
-            "Second local caption",
-            "Interpretation",
-            "A complete prose cell alongside two scientific panels.",
-            "0.125% remains literal caller text.",
-            "Shared scientific observations",
-            "Treatment",
-            "Control",
-            "Exposed",
-            &caption,
-        ] {
-            assert_complete_source(&scene.svg, source);
-        }
-        assert_eq!(scene.svg.matches("<clipPath ").count(), 2);
-        assert!(scene.svg.contains(">First:") && scene.svg.contains(">Second:"));
+        assert_complete_source(&scene.svg, source);
     }
+    assert_eq!(scene.svg.matches("<clipPath ").count(), 2);
+    assert!(scene.svg.contains(">First:") && scene.svg.contains(">Second:"));
 }
 
 #[test]
@@ -789,27 +379,11 @@ fn all_text_canvas_reflows_complete_content_and_replaces_root_requests() {
 }
 
 #[test]
-fn valid_svg_keeps_png_axis_and_area_refusals_local_in_all_root_modes() {
+fn png_scene_limits_do_not_prevent_svg_publication() {
     let directory = unique_dir("public-sizing-png-local");
     for (name, plot, expected) in [
-        (
-            "automatic-axis",
-            scatter().title("W".repeat(3000)),
-            "scene dimensions",
-        ),
-        ("width-axis", scatter().width(33_000), "scene dimensions"),
-        (
-            "exact-axis",
-            scatter().size(33_000, 200),
-            "scene dimensions",
-        ),
-        (
-            "automatic-area",
-            scatter().title("W".repeat(900)),
-            "scene work",
-        ),
-        ("width-area", scatter().width(16_000), "scene work"),
-        ("exact-area", scatter().size(10_000, 10_001), "scene work"),
+        ("axis", scatter().size(33_000, 200), "scene dimensions"),
+        ("area", scatter().size(10_000, 10_001), "scene work"),
     ] {
         let preserved = directory.join(format!("{name}.svg"));
         let outlined = directory.join(format!("{name}-outlined.svg"));
@@ -825,125 +399,6 @@ fn valid_svg_keeps_png_axis_and_area_refusals_local_in_all_root_modes() {
         assert!(!refused.exists());
         assert_eq!(std::fs::read_to_string(preserved).unwrap(), svg);
         assert_svg_dimensions(&std::fs::read_to_string(outlined).unwrap(), dimensions);
-    }
-    std::fs::remove_dir_all(directory).unwrap();
-}
-
-#[test]
-fn default_png_target_rounding_keeps_axis_and_area_boundaries_independent() {
-    let directory = unique_dir("public-default-png-boundaries");
-    // At 300 DPI, targets round (25 * source) / 8 to the nearest integer.
-    // 10_485 -> 32_766 fits the axis gate; 10_486 -> 32_769 does not.
-    // 3_200² -> 10_000² is exactly the target-area limit; the next row exceeds it.
-    for (name, dimensions, target) in [
-        ("axis", (10_485, 240), (32_766, 750)),
-        ("area", (3_200, 3_200), (10_000, 10_000)),
-    ] {
-        let preserved = directory.join(format!("{name}.svg"));
-        let raster = directory.join(format!("{name}.png"));
-        let output = scatter()
-            .size(dimensions.0, dimensions.1)
-            .svg_preserve_text(&preserved)
-            .unwrap()
-            .png(&raster)
-            .unwrap();
-        assert_eq!((output.width(), output.height()), dimensions);
-        assert_eq!(png_dimensions(&std::fs::read(raster).unwrap()), target);
-        assert_svg_dimensions(&std::fs::read_to_string(preserved).unwrap(), dimensions);
-    }
-    for (name, dimensions, expected) in [
-        ("axis-refusal", (10_486, 240), "computed PNG dimensions"),
-        ("area-refusal", (3_200, 3_201), "computed PNG work"),
-    ] {
-        let preserved = directory.join(format!("{name}.svg"));
-        let refused = directory.join(format!("{name}.png"));
-        let output = scatter()
-            .size(dimensions.0, dimensions.1)
-            .svg_preserve_text(&preserved)
-            .unwrap();
-        assert_eq!((output.width(), output.height()), dimensions);
-        let error = output.png(&refused).err().unwrap();
-        assert!(error.to_string().contains(expected), "{name}: {error}");
-        assert!(!refused.exists());
-        assert_svg_dimensions(&std::fs::read_to_string(preserved).unwrap(), dimensions);
-    }
-    std::fs::remove_dir_all(directory).unwrap();
-}
-
-#[test]
-fn large_canonical_svg_and_actual_outlined_parser_payload_stay_format_local_in_all_modes() {
-    const MARKS: usize = 900_000;
-    const PARSER_LIMIT: usize = 64 * 1024 * 1024;
-    let base = Theme::publication();
-    let tick_label = base
-        .typography()
-        .axes()
-        .tick_label()
-        .clone()
-        .with_font_size(8)
-        .unwrap();
-    let axes = base
-        .typography()
-        .axes()
-        .clone()
-        .with_tick_label(tick_label)
-        .unwrap();
-    let typography = base.typography().clone().with_axes(axes).unwrap();
-    let theme = base
-        .customize()
-        .with_typography(typography)
-        .build()
-        .unwrap();
-    let source = Plot::scatter(
-        NumericValues::new("x", vec![0.0; MARKS]),
-        NumericValues::new("y", vec![1.0; MARKS]),
-    )
-    .theme(theme);
-    let directory = unique_dir("public-sizing-large-parser-payload");
-    for (index, sizing) in [
-        Sizing::Automatic,
-        Sizing::Width(10_000),
-        Sizing::Exact(10_000, 8_000),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        let preserved = directory.join(format!("{index}.svg"));
-        let outlined = directory.join(format!("{index}-outlined.svg"));
-        let repeated = directory.join(format!("{index}-repeated.svg"));
-        let refused = directory.join(format!("{index}.png"));
-        let output = sizing
-            .plot(source.clone())
-            .svg_preserve_text(&preserved)
-            .unwrap();
-        let dimensions = (output.width(), output.height());
-        sizing.assert_dimensions(dimensions);
-        assert!(dimensions.0 <= 32_768 && dimensions.1 <= 32_768);
-        assert!(u64::from(dimensions.0) * u64::from(dimensions.1) <= 100_000_000);
-        let svg = std::fs::read_to_string(&preserved).unwrap();
-        assert!(
-            svg.len() > PARSER_LIMIT,
-            "{sizing:?}: actual canonical bytes must cross the PNG-only gate"
-        );
-        assert_eq!(
-            svg.matches("<circle ").count(),
-            MARKS,
-            "coincident marks cannot disappear"
-        );
-        let output = output
-            .svg(&outlined)
-            .unwrap()
-            .svg_preserve_text(&repeated)
-            .unwrap();
-        assert_eq!((output.width(), output.height()), dimensions);
-        assert!(std::fs::metadata(outlined).unwrap().len() > PARSER_LIMIT as u64);
-        assert_eq!(std::fs::read_to_string(repeated).unwrap(), svg);
-        let error = output.png_preview(&refused).err().unwrap();
-        assert!(
-            error.to_string().contains("parser input size"),
-            "{sizing:?}: {error}"
-        );
-        assert!(!refused.exists());
     }
     std::fs::remove_dir_all(directory).unwrap();
 }

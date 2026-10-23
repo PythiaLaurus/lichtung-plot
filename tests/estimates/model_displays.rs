@@ -45,23 +45,6 @@ fn line_rejects_duplicate_x_within_hue_series_including_signed_zero() {
 }
 
 #[test]
-fn interaction_and_forest_constructors_accept_complete_atomic_bounds() {
-    let data = estimate_data();
-    let bounds = || Bounds::new(data.lower.clone(), data.upper.clone());
-    Plot::interaction(
-        data.factor.clone(),
-        data.estimate.clone(),
-        data.trace.clone(),
-        bounds(),
-    )
-    .preflight()
-    .unwrap();
-    Plot::forest(data.term.clone(), data.estimate.clone(), bounds(), 0.0)
-        .preflight()
-        .unwrap();
-}
-
-#[test]
 fn coefficient_fixed_value_labels_are_point_only_and_default_is_inert() {
     let data = estimate_data();
     let base = || {

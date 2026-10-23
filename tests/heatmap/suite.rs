@@ -65,57 +65,6 @@ fn render(
 }
 
 #[test]
-fn heatmap_constructor_accepts_typed_configuration() {
-    let data = HeatmapData::new(
-        CategoryValues::new("column", ["a", "b", "b"]).unwrap(),
-        CategoryValues::new("row", ["a", "a", "b"]).unwrap(),
-        NumericValues::new("value", [0.0, 1.0, 0.5]),
-    );
-    let svg = render(&data, |plot| {
-        plot.color_label("Response")
-            .layout(HeatmapLayout::UpperTriangle { diagonal: true })
-            .continuous_color_scale(
-                ContinuousColorScale::diverging(
-                    0.5,
-                    None,
-                    Some(ColorDomain::exact(-1.0, 2.0).unwrap()),
-                )
-                .unwrap(),
-            )
-            .annotations(HeatmapAnnotations::Values(NumericFormat::default()))
-    })
-    .unwrap();
-    assert!(svg.contains(">Response</text>"));
-    assert!(svg.contains(">-1</text>") && svg.contains(">2</text>"));
-}
-
-#[test]
-fn heatmap_cartesian_default_is_byte_identical_to_explicit_cartesian() {
-    let data = standard_data();
-
-    let default = render(&data, |chart| chart).unwrap();
-    let explicit = render(&data, |chart| chart.layout(HeatmapLayout::Cartesian)).unwrap();
-
-    assert_eq!(default, explicit);
-}
-
-#[test]
-fn heatmap_hidden_annotations_and_all_false_highlights_are_byte_inert() {
-    let data = standard_data()
-        .with_highlight(BooleanValues::new("selected", [false, false, false, false]));
-
-    let default = render(&data, |chart| chart).unwrap();
-    let explicit = render(&data, |chart| {
-        chart
-            .annotations(HeatmapAnnotations::Hidden)
-            .heatmap_highlight(data.highlight.clone().unwrap())
-    })
-    .unwrap();
-
-    assert_eq!(default, explicit);
-}
-
-#[test]
 fn heatmap_lower_triangle_suppresses_structural_cells_without_missing_marks() {
     let data = HeatmapData::new(
         CategoryValues::new("column", ["a", "a", "b"]).unwrap(),
@@ -1028,28 +977,6 @@ fn heatmap_highlight_requires_complete_boolean_values() {
 }
 
 #[test]
-fn numeric_format_rejects_invalid_precision_and_suffix() {
-    let errors = [
-        NumericFormat::default()
-            .with_precision(NumericPrecision::Fractional(18))
-            .unwrap_err()
-            .to_string(),
-        NumericFormat::default()
-            .with_suffix("")
-            .unwrap_err()
-            .to_string(),
-        NumericFormat::default()
-            .with_suffix("\n")
-            .unwrap_err()
-            .to_string(),
-    ];
-
-    assert!(errors
-        .iter()
-        .all(|error| error.contains("numeric presentation")));
-}
-
-#[test]
 fn heatmap_annotations_error_when_cells_cannot_fit_values() {
     let columns = (0..30).map(|index| format!("c{index}")).collect::<Vec<_>>();
     let rows = vec!["row"; columns.len()];
@@ -1098,27 +1025,6 @@ fn heatmap_rejects_value_sorted_category_order() {
     let error = render(&data, |chart| chart.x_category_order(ValueSort::Descending)).unwrap_err();
 
     assert!(error.contains("heatmap:"));
-}
-
-#[test]
-fn continuous_color_construction_rejects_invalid_domain_and_center_before_attachment() {
-    let domain = ColorDomain::exact(2.0, 1.0).unwrap_err();
-    assert!(domain.to_string().contains("finite and ascending"));
-    let outside =
-        ContinuousColorScale::diverging(0.0, None, Some(ColorDomain::exact(0.5, 1.0).unwrap()))
-            .unwrap_err();
-    assert!(outside.to_string().contains("must contain center"));
-    let nonfinite = ContinuousColorScale::diverging(f64::INFINITY, None, None).unwrap_err();
-    assert!(nonfinite.to_string().contains("center must be finite"));
-}
-
-#[test]
-fn heatmap_svg_is_byte_deterministic() {
-    let data = standard_data();
-    let first = render(&data, |chart| chart).unwrap();
-    let second = render(&data, |chart| chart).unwrap();
-
-    assert_eq!(first, second);
 }
 
 #[test]

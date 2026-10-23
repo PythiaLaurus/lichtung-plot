@@ -7,7 +7,6 @@ struct StyledInteractionData {
     estimate: NumericValues,
     lower: NumericValues,
     upper: NumericValues,
-    panel: Option<CategoryValues>,
     styles: Vec<InteractionStyle>,
 }
 
@@ -25,7 +24,6 @@ fn interaction_data() -> StyledInteractionData {
         estimate: NumericValues::new("estimate", [1.0, 1.5, 1.2, 2.0]),
         lower: NumericValues::new("lower", [0.8, 1.3, 1.0, 1.8]),
         upper: NumericValues::new("upper", [1.2, 1.7, 1.4, 2.2]),
-        panel: None,
         styles: vec![
             InteractionStyle::new("Control")
                 .unwrap()
@@ -53,7 +51,6 @@ fn single_series_data(
         estimate,
         lower,
         upper,
-        panel: None,
         styles: vec![style],
     }
 }
@@ -268,26 +265,6 @@ fn interaction_styles_reject_duplicate_groups() {
 }
 
 #[test]
-fn styled_interaction_output_is_deterministic() {
-    let data = interaction_data();
-
-    assert_eq!(svg(chart(&data, true)), svg(chart(&data, true)));
-}
-
-#[test]
-fn interaction_styles_apply_by_group_across_facets() {
-    let mut data = interaction_data();
-    data.panel = Some(CategoryValues::new("panel", ["Left", "Left", "Right", "Right"]).unwrap());
-
-    let output = svg(chart(&data, true)
-        .facet(FacetSpec::column(data.panel.clone().unwrap()))
-        .size(960, 320));
-
-    assert!(output.contains(">panel = Left</text>") && output.contains(">panel = Right</text>"));
-    assert!(output.contains("stroke-dasharray=\"5 3\"") && output.contains("<polygon points="));
-}
-
-#[test]
 fn faceted_interactions_keep_sparse_global_pair_styles_and_colors() {
     let panel = CategoryValues::new(
         "panel",
@@ -371,32 +348,6 @@ fn faceted_interactions_keep_sparse_global_pair_styles_and_colors() {
             .count(),
         2
     );
-}
-
-#[test]
-fn unconfigured_interaction_styles_preserve_circle_solid_defaults() {
-    let data = interaction_data();
-    let first = svg(chart(&data, false));
-    let second = svg(chart(&data, false));
-
-    assert_eq!(first, second);
-    assert_eq!(first.matches("<circle ").count(), 6);
-    assert!(!first.contains("<polygon points=") && !first.contains("stroke-dasharray=\"5 3\""));
-}
-
-#[test]
-fn categorical_colors_apply_exact_trace_rgb_to_marks_and_legend() {
-    let data = interaction_data();
-    let colors = CategoricalColorMap::new([
-        ("Control".to_owned(), OpaqueColor::rgb(51, 51, 51)),
-        ("Semantic Agent".to_owned(), OpaqueColor::rgb(0, 114, 178)),
-    ])
-    .unwrap();
-    let output =
-        svg(chart(&data, true).categorical_color_scale(CategoricalColorScale::from_map(colors)));
-
-    assert!(output.matches("#333333").count() >= 4);
-    assert!(output.matches("#0072B2").count() >= 4);
 }
 
 #[test]

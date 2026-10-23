@@ -115,151 +115,20 @@ fn explicit_histogram() -> HistogramGeometry {
     }
 }
 
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "small focused test samples map their counts and hash mantissas to f64"
-)]
-fn parity_raincloud_geometry() -> RaincloudGeometry {
-    let groups = [
-        ("control", "control", vec![1.0, 2.0, 3.0, 4.0, 5.0]),
-        ("active", "active", vec![2.0, 3.0, 4.0, 5.0, 6.0]),
-    ];
-    let bandwidth = |values: &[f64]| {
-        let count = values.len() as f64;
-        let mean = values.iter().sum::<f64>() / count;
-        let variance = values
-            .iter()
-            .map(|value| (value - mean).powi(2))
-            .sum::<f64>()
-            / (count - 1.0);
-        (count.powf(-0.2) * variance.sqrt()).max(1e-6)
+fn hued_raincloud_geometry() -> RaincloudGeometry {
+    let mut geometry = explicit_raincloud();
+    geometry.dimensions = RaincloudDimensions {
+        category: "condition".into(),
+        value: "score".into(),
+        hue: Some("treatment".into()),
     };
-    let support_low = groups
-        .iter()
-        .map(|(_, _, values)| {
-            values.iter().copied().fold(f64::INFINITY, f64::min) - 2.0 * bandwidth(values)
-        })
-        .fold(f64::INFINITY, f64::min);
-    let support_high = groups
-        .iter()
-        .map(|(_, _, values)| {
-            values.iter().copied().fold(f64::NEG_INFINITY, f64::max) + 2.0 * bandwidth(values)
-        })
-        .fold(f64::NEG_INFINITY, f64::max);
-    let grid = (0..64)
-        .map(|index| support_low + (support_high - support_low) * f64::from(index) / 63.0)
-        .collect::<Vec<_>>();
-    let mut source_row = 0_usize;
-    let groups = groups
-        .into_iter()
-        .map(|(category, hue, values)| {
-            let mut densities = lichtung_plot::stats::distribution::kde(&values, &grid).unwrap();
-            densities[0] = 0.0;
-            densities[63] = 0.0;
-            let maximum = densities.iter().copied().fold(0.0_f64, f64::max);
-            let density = grid
-                .iter()
-                .copied()
-                .zip(densities)
-                .map(|(y, density)| RaincloudDensityPoint {
-                    y,
-                    normalized_width: density / maximum,
-                })
-                .collect();
-            let points = values
-                .iter()
-                .copied()
-                .map(|y| {
-                    let point = RaincloudPoint {
-                        y,
-                        normalized_strip: source_row_unit(source_row),
-                    };
-                    source_row += 1;
-                    point
-                })
-                .collect();
-            RaincloudGroup {
-                category: category.into(),
-                hue: Some(hue.into()),
-                density,
-                q1: lichtung_plot::stats::distribution::quantile(&values, 0.25).unwrap(),
-                median: lichtung_plot::stats::distribution::quantile(&values, 0.5).unwrap(),
-                q3: lichtung_plot::stats::distribution::quantile(&values, 0.75).unwrap(),
-                points,
-            }
-        })
-        .collect();
-    RaincloudGeometry {
-        dimensions: RaincloudDimensions {
-            category: "condition".into(),
-            value: "score".into(),
-            hue: Some("treatment".into()),
-        },
-        groups,
-    }
-}
-
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "the upper 53 hash bits intentionally map onto an f64 mantissa"
-)]
-fn source_row_unit(source_row: usize) -> f64 {
-    let mut value = u64::try_from(source_row)
-        .unwrap()
-        .wrapping_add(0x9e37_79b9_7f4a_7c15);
-    value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
-    value = (value ^ (value >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
-    value ^= value >> 31;
-    ((value >> 11) as f64) * (1.0 / ((1_u64 << 53) as f64))
-}
-
-#[test]
-fn supplied_and_sample_rainclouds_preserve_labels_colors_legend_and_recorded_marks() {
-    let categories = lichtung_plot::CategoryValues::new(
-        "condition",
-        [
-            "control", "control", "control", "control", "control", "active", "active", "active",
-            "active", "active",
-        ],
-    )
-    .unwrap();
-    let series = lichtung_plot::CategoryValues::new(
-        "treatment",
-        [
-            "control", "control", "control", "control", "control", "active", "active", "active",
-            "active", "active",
-        ],
-    )
-    .unwrap();
-    let sample = Plot::raincloud(RaincloudInput::samples(
-        categories,
-        lichtung_plot::NumericValues::new(
-            "score",
-            [1.0, 2.0, 3.0, 4.0, 5.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-        ),
-    ))
-    .series(series);
-    let format = lichtung_plot::NumericFormat::new(
-        lichtung_plot::NumericNotation::Engineering,
-        lichtung_plot::NumericPrecision::Significant(3),
-    )
-    .unwrap()
-    .with_prefix("raw=")
-    .unwrap();
-    let supplied = Plot::raincloud(RaincloudInput::geometry(parity_raincloud_geometry()))
-        .y_tick_format(format.clone());
-    let sample = sample.y_tick_format(format);
-
-    let supplied = render(supplied, "supplied-raincloud").unwrap();
-    let sample = render(sample, "sample-raincloud").unwrap();
-
-    for svg in [&supplied, &sample] {
-        assert!(svg.contains(">Condition</text>") && svg.contains(">Score</text>"));
-        assert!(svg.contains(">Control</text>") && svg.contains(">Active</text>"));
-        assert!(svg.contains("#0072B2") && svg.contains("#D55E00"));
-        assert_eq!(svg.matches("<circle ").count(), 12);
-        assert!(svg.contains(">raw="));
-    }
+    geometry.groups[0].category = "control".into();
+    geometry.groups[0].hue = Some("control".into());
+    let mut active = geometry.groups[0].clone();
+    active.category = "active".into();
+    active.hue = Some("active".into());
+    geometry.groups.push(active);
+    geometry
 }
 
 #[test]
@@ -367,7 +236,7 @@ fn embedded_raincloud_hues_coordinate_with_sample_series_in_shared_canvas_legend
     ))
     .series(lichtung_plot::CategoryValues::new("treatment", ["control"; 5]).unwrap())
     .categorical_color_scale(CategoricalColorScale::from_map(colors.clone()));
-    let mut input = parity_raincloud_geometry();
+    let mut input = hued_raincloud_geometry();
     input.groups.remove(0);
     let supplied = Plot::raincloud(RaincloudInput::geometry(input))
         .categorical_color_scale(CategoricalColorScale::from_map(colors));
@@ -391,7 +260,7 @@ fn embedded_raincloud_hues_coordinate_with_sample_series_in_shared_canvas_legend
 
 #[test]
 fn precomputed_raincloud_accepts_repeated_categories_with_distinct_hues() {
-    let mut input = parity_raincloud_geometry();
+    let mut input = hued_raincloud_geometry();
     input.groups[1].category = input.groups[0].category.clone();
     Plot::raincloud(RaincloudInput::geometry(input))
         .preflight()
@@ -400,7 +269,7 @@ fn precomputed_raincloud_accepts_repeated_categories_with_distinct_hues() {
 
 #[test]
 fn precomputed_raincloud_rejects_duplicate_category_hue_identities_before_backend_begin() {
-    let mut input = parity_raincloud_geometry();
+    let mut input = hued_raincloud_geometry();
     input.groups[1].category = input.groups[0].category.clone();
     input.groups[1].hue = input.groups[0].hue.clone();
     assert!(Plot::raincloud(RaincloudInput::geometry(input))
@@ -718,19 +587,4 @@ fn raincloud_accepts_source_row_column_without_duplicate_overlay() {
     )
     .unwrap();
     assert_eq!(parse_circle_bounds(&svg).len(), 3);
-}
-
-#[test]
-fn explicit_inert_composite_options_match_default_svg_bytes() {
-    let histogram_default = Plot::histogram(HistogramInput::samples(
-        lichtung_plot::NumericValues::new("value", [0.0, 1.0, 2.0, 3.0]),
-    ));
-    let histogram_explicit = Plot::histogram(HistogramInput::samples(
-        lichtung_plot::NumericValues::new("value", [0.0, 1.0, 2.0, 3.0]),
-    ))
-    .composite(HistogramComposite::HistogramOnly);
-    assert_eq!(
-        render(histogram_default, "histogram-default").unwrap(),
-        render(histogram_explicit, "histogram-explicit").unwrap(),
-    );
 }

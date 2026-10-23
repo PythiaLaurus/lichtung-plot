@@ -3,7 +3,7 @@
     reason = "helpers are shared by independently compiled integration test targets"
 )]
 
-use lichtung_plot::{BarInput, BarSpacing, CategoryValues, NumericValues, Plot};
+use lichtung_plot::NumericValues;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 static TEMP_DIRECTORY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -196,30 +196,6 @@ pub(super) fn text_y(text: &[SvgTextElement], content: &str) -> f64 {
     text_element(text, content).y
 }
 
-pub(super) fn grouped_bar_internal_gap(spacing: BarSpacing) -> f64 {
-    let group = CategoryValues::new("group", ["A", "A"]).unwrap();
-    let series = CategoryValues::new("series", ["control", "treatment"]).unwrap();
-    let value = NumericValues::new("value", [1.0, 2.0]);
-    let dir = unique_dir("grouped-bar-spacing");
-    let out = dir.join("bar.svg");
-    let chart = Plot::bar(group, BarInput::estimates(value))
-        .series(series)
-        .spacing(spacing)
-        .size(360, 260);
-    chart
-        .svg_preserve_text(&out)
-        .expect("bar render must succeed");
-    let svg = std::fs::read_to_string(&out).expect("svg must exist");
-    let mut bars = parse_polygon_bounds(&svg);
-    bars.sort_by(|a, b| a.x.total_cmp(&b.x));
-    assert_eq!(
-        bars.len(),
-        2,
-        "single category × 2 series levels should draw 2 bars"
-    );
-    bars[1].x - (bars[0].x + bars[0].width)
-}
-
 pub(super) fn assert_legend_does_not_overlap_graphics(svg: &str, plot_type: &str) {
     let (legend_rect, legend_start) = parse_legend_rect_and_start(svg);
     let graphic_layer = remove_named_layer(&svg[..legend_start], "grid");
@@ -236,17 +212,6 @@ pub(super) fn assert_legend_does_not_overlap_graphics(svg: &str, plot_type: &str
         overlaps.is_empty(),
         "{plot_type} legend should not cover graphic marks; legend={legend_rect:?}, overlaps={overlaps:?}"
     );
-}
-
-pub(super) fn legend_gap_from_graphics(svg: &str) -> f64 {
-    let (legend_rect, legend_start) = parse_legend_rect_and_start(svg);
-    let graphic_layer = remove_named_layer(&svg[..legend_start], "grid");
-    let graphic_bounds = parse_graphic_bounds(&graphic_layer);
-    let graphics_right = graphic_bounds
-        .iter()
-        .map(|bounds| bounds.x + bounds.width)
-        .fold(f64::NEG_INFINITY, f64::max);
-    legend_rect.x - graphics_right
 }
 
 pub(super) fn assert_inside_legend_clear(svg: &str, panel: SvgRect, plot_type: &str) {

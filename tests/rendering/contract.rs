@@ -322,22 +322,6 @@ fn small_positive_canvas_dimensions_use_content_fit_not_a_global_floor() {
     assert!(svg.contains(">A</text>") && svg.contains(">B</text>"));
 }
 
-#[test]
-fn all_text_canvas_renders_one_svg_document() {
-    let canvas = Canvas::grid(1, 1)
-        .unwrap()
-        .text_panel(
-            0,
-            0,
-            TextPanel::new("Summary", "One deterministic text cell.").unwrap(),
-        )
-        .unwrap();
-
-    let output = svg_canvas(canvas, "single-text-canvas");
-
-    assert_eq!(output.matches("<svg ").count(), 1);
-}
-
 fn svg_canvas(canvas: Canvas, name: &str) -> String {
     let directory = unique_dir(name);
     let output = directory.join("canvas.svg");

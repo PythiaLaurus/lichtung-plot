@@ -11,41 +11,6 @@ fn histogram_does_not_preflight_nonexistent_legend_text() {
     .unwrap();
 }
 
-/// Violin plot renders to a non-empty SVG without
-/// panicking. We use a 3-species × 15-observation
-/// synthetic sample (smaller than the iris
-/// template's, but enough to exercise the KDE).
-#[test]
-fn violin_smoke() {
-    let species: Vec<&str> = (0..15)
-        .map(|i| match i % 3 {
-            0 => "a",
-            1 => "b",
-            _ => "c",
-        })
-        .collect();
-    let value: Vec<f64> = (0..15)
-        .map(|i| match i % 3 {
-            0 => 1.0 + f64::from(i) * 0.1,
-            1 => 3.0 + f64::from(i) * 0.1,
-            _ => 5.0 + f64::from(i) * 0.1,
-        })
-        .collect();
-    let species = CategoryValues::new("species", species).unwrap();
-    let value = NumericValues::new("value", value);
-
-    let dir = unique_dir("violin-smoke");
-    let out = dir.join("violin.svg");
-    let chart = Plot::violin(species, value)
-        .theme(Theme::publication())
-        .size(640, 480);
-    chart
-        .svg_preserve_text(&out)
-        .expect("violin render must succeed");
-    let svg_bytes = std::fs::read(&out).expect("svg must exist");
-    assert!(!svg_bytes.is_empty(), "violin svg must be non-empty");
-}
-
 #[test]
 fn mass_spectrum_high_intensity_renders_upward() {
     let mz = NumericValues::new("mz", [100.0, 200.0, 300.0]);
@@ -148,41 +113,6 @@ fn histogram_svg_is_deterministic_and_labels_selected_statistic() {
     assert_eq!(first_svg, std::fs::read_to_string(second).unwrap());
     assert_eq!(first_svg.matches("<polygon points=").count(), 3);
     assert!(first_svg.contains(">Probability</text>"));
-    std::fs::remove_dir_all(dir).unwrap();
-}
-
-#[test]
-fn histogram_implicit_axis_label_coordinates_stay_inside_canvas() {
-    let value = NumericValues::new("value", [1.0, 2.0, 3.0]);
-    let dir = unique_dir("histogram-implicit-label-layout");
-    let output = dir.join("histogram.svg");
-    Plot::histogram(HistogramInput::samples(value))
-        .svg_preserve_text(&output)
-        .unwrap();
-    let svg = std::fs::read_to_string(output).unwrap();
-    let text = parse_text_elements(&svg);
-    let value_label = text_element(&text, "Value");
-    assert!(value_label.x.is_finite() && (0.0..=640.0).contains(&value_label.x));
-    assert!(value_label.y.is_finite() && (0.0..=480.0).contains(&value_label.y));
-
-    let count_line = svg
-        .lines()
-        .find(|line| line.contains(">Count</text>"))
-        .unwrap();
-    let transform = count_line
-        .split_once("transform=\"")
-        .unwrap()
-        .1
-        .split_once('"')
-        .unwrap()
-        .0
-        .strip_prefix("rotate(-90.0,")
-        .unwrap()
-        .strip_suffix(')')
-        .unwrap();
-    let (pivot_x, pivot_y) = transform.split_once(',').unwrap();
-    assert!((0.0..=640.0).contains(&pivot_x.parse::<f64>().unwrap()));
-    assert!((0.0..=480.0).contains(&pivot_y.parse::<f64>().unwrap()));
     std::fs::remove_dir_all(dir).unwrap();
 }
 

@@ -2010,11 +2010,12 @@ Add MaxWidth to the single request representation and expose both consuming
 the common cap policy in all three root routes and enforce bounds throughout the
 coordinator. Update actual request/height/cache dependencies and preflight handling.
 
-Replace lower-value/obsolete tests with the contract coverage below and keep the
-library-test budget. Update current contracts in `specs/02_RENDERING_CONTRACT.md`
-and `specs/05_LAYOUT_SYSTEM.md`, API examples, `docs/getting-started.md` and any
-affected README sizing guidance together with the implemented behavior. Commit the
-completed feature after focused verification and strict Clippy.
+Remove lower-value/obsolete tests and add the contract coverage below within the
+three-layer test limits in `specs/90_DEVELOPMENT.md`. Update current contracts in
+`specs/02_RENDERING_CONTRACT.md` and `specs/05_LAYOUT_SYSTEM.md`, API examples,
+`docs/getting-started.md` and any affected README sizing guidance together with
+the implemented behavior. Commit the completed feature after focused verification
+and strict Clippy.
 
 ## Verification And Acceptance
 
@@ -2034,7 +2035,7 @@ storage without treating pointer identity as rendering evidence. Preserve comple
 appearance/request equality on text-bearing values and source signed-zero identity
 in numeric contexts. Migration must cover all callers when removing Copy, changing
 u32 sizes/counts or replacing the corner reader; do not add an accessor echo suite
-or grow the test budget to inventory method names.
+or use available test capacity to inventory method names.
 
 ### Naming Relationships
 
@@ -2357,11 +2358,12 @@ Keep tests in their existing logical owners:
   `tests/composition/foundations.rs`: existing label policy/defaults, multiline
   authored notes and used-font/local-style contracts.
 
-Record same-platform discovered library counts before and after each test-changing
-step. Current Linux ceiling is 671 including 17 ignored; each new unit-test function
-must replace an existing one in the same logical change. Name replacements in the
-change review and remove obsolete helpers. Do not evade the limit by merging
-functions, packaging cases or moving unit responsibilities into integration tests.
+Review affected layer counts, including ignored tests, before and after each
+test-changing step. Follow `specs/90_DEVELOPMENT.md`: at most 800 unit tests,
+300 module integration tests excluding core E2E, and 80 core E2E scenarios.
+Meaningful additions need not replace an existing test; remove redundant tests
+and obsolete helpers. Do not evade limits by merging functions, packaging cases,
+relabeling or moving responsibilities between suites.
 
 ### Focused Commands
 
@@ -2443,11 +2445,11 @@ cargo test --locked --offline --lib canvas::sizing::tests::
 cargo test --locked --offline --lib zero_sizing_requests_refuse_before_font_discovery_or_backend_begin
 cargo test --locked --offline --lib standalone_terminal_resolves_and_plans_once_with_one_final_lifecycle
 cargo test --locked --offline --lib chained_terminals_reuse_one_canonical_scene_and_plan_each_png
-cargo test --locked --offline --test layout root_sizing::standalone_sizing_calls_replace_the_complete_request_before_frozen_publication
+cargo test --locked --offline --test layout root_sizing::standalone_sizing_calls_replace_the_complete_request_before_publication
 cargo test --locked --offline --test layout root_sizing::automatic_roots_expand_for_complete_unbreakable_text_and_exact_width_refuses_it
 cargo test --locked --offline --test layout root_sizing::owning_facets_keep_sparse_wrap_and_complete_prose_in_all_public_root_modes
-cargo test --locked --offline --test layout root_sizing::matrix_roots_keep_native_cells_and_their_hue_guide_in_all_public_root_modes
-cargo test --locked --offline --test layout root_sizing::mixed_canvas_owns_all_modes_and_ignores_standalone_child_requests
+cargo test --locked --offline --test layout root_sizing::matrix_root_keeps_native_cells_hue_guide_and_complete_prose
+cargo test --locked --offline --test layout root_sizing::mixed_canvas_keeps_complete_content_and_ignores_standalone_child_requests
 cargo test --locked --offline --test layout root_sizing::all_text_canvas_reflows_complete_content_and_replaces_root_requests
 cargo test --locked --offline --test composition facets::faceted_shared_axis_titles_preserve_explicit_multiline_text
 cargo test --locked --offline --test composition facets::shared_facet_axis_titles_clear_outside_legends
@@ -2460,8 +2462,9 @@ text/anchor/rotation/ellipsis/font-fit, span and maximum-width witnesses and aff
 callers; the commands above are not substitutes for new-contract coverage.
 Select existing guide/cache neighbors only when their dependency paths change or
 a failure exposes an interaction. Execute affected public doctests and `just docs`
-when adding API documentation/examples. Do not run the heavyweight large-SVG/PNG
-boundary workloads merely because they share the root-sizing test file.
+when adding API documentation/examples. Keep real SVG/PNG publication witnesses
+representative; do not recreate family-by-root-mode replay cross-products or
+boundary-sized raster/parser workloads where focused arithmetic checks suffice.
 
 No automatic full-suite gate is required merely for naming or these feature
 boundaries. Expand beyond the focused set for a demonstrated uncovered invariant,

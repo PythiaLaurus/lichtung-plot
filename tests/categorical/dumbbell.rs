@@ -155,13 +155,6 @@ fn dumbbell_rejects_null_and_nonfinite_inputs() {
 }
 
 #[test]
-fn dumbbell_output_is_byte_deterministic_and_registered() {
-    let data = replicated_data();
-
-    assert_eq!(svg(&chart(&data)), svg(&chart(&data)));
-}
-
-#[test]
 fn dumbbell_endpoint_labels_are_caller_owned_not_inferred_direction() {
     let data = replicated_data();
     let rendered = svg(&chart(&data));

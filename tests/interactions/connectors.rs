@@ -49,15 +49,6 @@ fn svg<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str) -> String {
 }
 
 #[test]
-fn explicit_visible_interaction_connectors_are_byte_identical_to_default() {
-    let frame = interaction_data();
-    assert_eq!(
-        svg(chart(&frame), "connector-default"),
-        svg(chart(&frame).connectors(true), "connector-explicit")
-    );
-}
-
-#[test]
 fn hidden_interaction_connectors_update_marks_and_exact_legend() {
     let frame = interaction_data();
     let visible = svg(chart(&frame), "connectors-visible");

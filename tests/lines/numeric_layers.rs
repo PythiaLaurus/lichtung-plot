@@ -96,19 +96,6 @@ fn automatic_point_layers_use_defaults_and_stable_no_hue_palette_order() {
 }
 
 #[test]
-fn point_layer_edits_validate_radius_and_preserve_exact_alpha_endpoints() {
-    let layer = supplemental_point(1.0, 2.0);
-
-    assert!(layer.clone().with_radius(1).is_ok());
-    assert!(layer.clone().with_radius(0).is_err());
-    assert_eq!(layer.color(), None);
-    assert_eq!(layer.radius(), None);
-    assert_eq!(layer.alpha(), None);
-    assert_eq!(layer.clone().with_alpha(255).alpha(), Some(255));
-    assert_eq!(layer.with_alpha(0).alpha(), Some(0));
-}
-
-#[test]
 fn automatic_point_layers_follow_an_independent_accent_sequence() {
     use lichtung_plot::{
         AccentPalette, CategoricalColorScale, OpaqueColor, QualitativePalette, Theme,
@@ -742,29 +729,4 @@ fn supplemental_geometry_rejects_facets_and_incompatible_guides() {
     .to_string();
     assert!(faceted.contains("not supported with faceting"));
     assert!(segment.contains("requires numeric x and y axes"));
-}
-
-#[test]
-fn configured_numeric_layers_emit_deterministic_bytes() {
-    let build = || {
-        let frame = line_data();
-        let observed = observations();
-        line_plot(&frame)
-            .x_ticks(vec![AxisTick::new(0.0, "start"), AxisTick::new(2.0, "end")])
-            .guide(GuideSpec::vertical(
-                1.0,
-                style(lichtung_plot::Color::rgb(200, 17, 34), LinePattern::Dashed),
-            ))
-            .point_layer(point_layer(&observed, 3, 89))
-    };
-    assert_eq!(svg(build()), svg(build()));
-}
-
-#[test]
-fn unused_numeric_layer_defaults_leave_standard_line_scene_inert() {
-    let first = svg(line_plot(&line_data()));
-    let second = svg(line_plot(&line_data()));
-    assert_eq!(first, second);
-    assert!(!first.contains("#C81122") && !first.contains("#7B2DC8"));
-    assert!(first.contains("fill-opacity=\"0.8196078431372549\""));
 }

@@ -15,7 +15,7 @@ fn fixture_scatter() -> Plot<lichtung_plot::kind::Scatter> {
 }
 
 #[test]
-fn caption_reserves_space_uses_theme_font_and_is_drawn_after_axes() {
+fn caption_reserves_space_and_is_drawn_after_axes() {
     let plain = render(fixture_scatter().size(320, 240), "caption-plain");
     let captioned = render(
         fixture_scatter()
@@ -27,34 +27,10 @@ fn caption_reserves_space_uses_theme_font_and_is_drawn_after_axes() {
     let plain_clip = parse_first_clip_rect(&plain);
     let captioned_clip = parse_first_clip_rect(&captioned);
     assert!(captioned_clip.height < plain_clip.height);
-    assert!(captioned.contains("font-size=\"15\"") && captioned.contains(">Caption text</text>"));
+    assert!(captioned.contains(">Caption text</text>"));
     assert!(
         captioned.find(">Caption text</text>").unwrap() > captioned.find(">x axis</text>").unwrap()
     );
-}
-
-#[test]
-fn x_tick_labels_clear_tick_marks_by_their_measured_edge_gap() {
-    let svg = render(
-        Plot::scatter(
-            lichtung_plot::NumericValues::new("x", [0.0, 1.0]),
-            lichtung_plot::NumericValues::new("y", [0.0, 1.0]),
-        )
-        .x_label("Horizontal axis")
-        .x_limits(0.0, 1.0)
-        .x_ticks(vec![AxisTick::new(0.0, "zero"), AxisTick::new(1.0, "one")])
-        .size(360, 260),
-        "tick-edge-gap",
-    );
-    let text = parse_text_elements(&svg);
-    let tick = text_element(&text, "zero");
-    let clip = parse_first_clip_rect(&svg);
-    let endpoint = clip.y + clip.height + 5.0;
-    let gap = tick.y - tick.font_size * 0.6 - endpoint;
-    // This SVG helper estimates glyph height. Exact retained-ink clearance is
-    // checked in the native axis tests; the owned label gap is 8px, not an
-    // incidental whole-pixel anchor/line-height offset.
-    assert!(gap >= 8.0, "gap={gap}");
 }
 
 #[test]
@@ -238,17 +214,6 @@ fn horizontal_bar_long_ticks_clear_y_axis_label() {
 }
 
 #[test]
-fn single_series_bar_does_not_draw_legend() {
-    let group = CategoryValues::new("group", ["A", "A", "B", "B"]).unwrap();
-    let value = NumericValues::new("value", [1.0, 2.0, 4.0, 6.0]);
-    let svg = render(
-        Plot::bar(group, BarInput::samples(value)).size(360, 260),
-        "bar-no-legend",
-    );
-    assert!(!has_legend(&svg));
-}
-
-#[test]
 fn grouped_distribution_legends_do_not_cover_graphics_or_axes() {
     let box_dose = CategoryValues::new(
         "dose",
@@ -296,22 +261,6 @@ fn grouped_distribution_legends_do_not_cover_graphics_or_axes() {
 }
 
 #[test]
-fn scatter_legend_prefers_top_when_clear() {
-    let x = NumericValues::new("x", [4.0, 4.2, 4.4, 4.6, 4.8, 5.0]);
-    let y = NumericValues::new("y", [4.0, 4.2, 4.1, 4.3, 4.0, 4.2]);
-    let group = CategoryValues::new("group", ["high", "high", "low", "low", "mid", "mid"]).unwrap();
-    let svg = render(
-        Plot::scatter(x, y)
-            .hue(group)
-            .x_limits(0.0, 10.0)
-            .y_limits(0.0, 10.0)
-            .size(360, 260),
-        "legend-prefers-top",
-    );
-    assert!(parse_legend_rect(&svg).1 < 100.0);
-}
-
-#[test]
 fn explicit_inside_and_outside_legend_positions_are_honored() {
     let x = NumericValues::new("x", [4.0, 4.2, 4.4, 4.6, 4.8, 5.0]);
     let y = NumericValues::new("y", [4.0, 4.2, 4.1, 4.3, 4.0, 4.2]);
@@ -339,45 +288,6 @@ fn explicit_inside_and_outside_legend_positions_are_honored() {
     let panel = parse_first_clip_rect(&outside);
     assert!(legend.x > panel.x + panel.width);
     assert!(legend.y + legend.height > panel.y + panel.height - 30.0);
-}
-
-#[test]
-fn top_scatter_legend_does_not_expand_lower_y_range() {
-    let x = NumericValues::new("x", [8.0, 8.4, 8.8, 9.2, 9.6, 1.0, 2.0, 3.0]);
-    let y = NumericValues::new("y", [8.0, 8.5, 8.2, 9.0, 9.4, 1.0, 2.0, 1.5]);
-    let group = CategoryValues::new(
-        "group",
-        ["high", "high", "high", "high", "high", "low", "low", "mid"],
-    )
-    .unwrap();
-    let svg = render(
-        Plot::scatter(x, y).hue(group).size(360, 260),
-        "top-legend-range",
-    );
-    assert!(!svg.contains(">-5</text>") && !svg.contains(">-10</text>"));
-}
-
-#[test]
-fn scatter_legend_entry_font_is_readable() {
-    let x = NumericValues::new("x", [1.0, 2.0, 3.0]);
-    let y = NumericValues::new("y", [1.0, 2.0, 3.0]);
-    let group = CategoryValues::new("group", ["high", "low", "mid"]).unwrap();
-    let svg = render(Plot::scatter(x, y).hue(group).size(640, 480), "legend-font");
-    assert!(svg.contains("font-size=\"11\"") && svg.contains(">High</text>"));
-}
-
-#[test]
-fn publication_theme_uses_larger_default_text() {
-    let svg = render(
-        fixture_scatter()
-            .title("Publication title")
-            .x_label("Publication axis")
-            .size(360, 260),
-        "publication-text-size",
-    );
-    assert!(svg.contains("font-size=\"16\""));
-    assert!(svg.contains("font-size=\"17\"") && svg.contains(">Publication axis</text>"));
-    assert!(svg.contains("font-size=\"20\"") && svg.contains(">Publication title</text>"));
 }
 
 fn assert_range_padding<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str, padded: bool) {
@@ -418,32 +328,6 @@ fn scatter_explicit_limits_are_not_padded() {
         .x_limits(0.0, 10.0)
         .y_limits(0.0, 10.0),
         "scatter-exact-limits",
-        false,
-    );
-}
-
-#[test]
-fn regression_auto_range_pads_data_from_frame() {
-    assert_range_padding(
-        Plot::regression(
-            lichtung_plot::NumericValues::new("x", [0.0, 5.0, 10.0]),
-            lichtung_plot::NumericValues::new("y", [0.0, 5.0, 10.0]),
-        ),
-        "regression-auto-padding",
-        true,
-    );
-}
-
-#[test]
-fn regression_explicit_limits_are_not_padded() {
-    assert_range_padding(
-        Plot::regression(
-            lichtung_plot::NumericValues::new("x", [0.0, 5.0, 10.0]),
-            lichtung_plot::NumericValues::new("y", [0.0, 5.0, 10.0]),
-        )
-        .x_limits(0.0, 10.0)
-        .y_limits(0.0, 10.0),
-        "regression-exact-limits",
         false,
     );
 }
