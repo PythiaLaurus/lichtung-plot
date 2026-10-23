@@ -46,7 +46,7 @@ pub(crate) struct HeatmapData {
     value_presentation: Option<std::sync::Arc<crate::numeric::set::NumericPresentation>>,
     colorbar_values: Option<crate::numeric::set::FormattedSet>,
     color_format: Option<std::sync::Arc<crate::numeric::format::NumericFormat>>,
-    pub(crate) color_label: String,
+    pub(crate) color_label: crate::Text,
 }
 
 impl HeatmapData {
@@ -187,7 +187,7 @@ impl HeatmapData {
         Ok(Some(
             crate::decorations::legend::descriptor::ContinuousDescriptor {
                 field: crate::data::source::copy_source_string(field)?,
-                title: crate::data::source::copy_source_string(&self.color_label)?,
+                title: crate::data::source::source_arc(self.color_label.try_copy()?)?,
                 stops: crate::data::source::collect_source(
                     self.colorbar_stops.iter().copied().map(Ok),
                 )?,

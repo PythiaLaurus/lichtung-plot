@@ -1675,8 +1675,9 @@ selected font/spacing metrics and full equality. Prose content replacement, shar
 alignment edits and whole-layout reset precedence are implemented, including complete root-frame,
 child and height-cache identity. Standard/native axes and shared facet titles retain
 independent exact styles through fonts, intrinsics, selected gaps and frozen drawing.
-Guide titles, headers and remaining display annotation receiving slots are still
-pending within this step.
+Continuous color titles now retain complete Text through local/shared guide preparation,
+compatibility, selected section gaps, font census, caches and frozen drawing.
+Headers and remaining display annotation receiving slots are still pending within this step.
 Steps 4–22 remain pending; undelivered target signatures are not current APIs.
 
 ### 1. Apply The Public Property Naming Rule

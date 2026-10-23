@@ -483,7 +483,7 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     parent_legend_composition: Option<crate::LegendComposition>,
     /// Canvas Shared owns the continuous color guide for this prepared child.
     suppress_continuous_guide: bool,
-    color_label: Option<String>,
+    color_label: crate::text::TextSlot,
     color_label_format: Option<Arc<crate::numeric::format::NumericFormat>>,
     continuous_color_scale: Option<crate::theme::ContinuousColorScale>,
     heatmap_layout: HeatmapLayout,
@@ -629,7 +629,7 @@ impl Plot<crate::kind::Any> {
             legend_composition: crate::LegendComposition::Combined,
             parent_legend_composition: None,
             suppress_continuous_guide: false,
-            color_label: None,
+            color_label: crate::text::TextSlot::EMPTY,
             color_label_format: None,
             continuous_color_scale: None,
             heatmap_layout: HeatmapLayout::default(),

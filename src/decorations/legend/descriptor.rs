@@ -25,7 +25,7 @@ pub(crate) struct ContinuousSemantics {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ContinuousContributor {
     pub field: String,
-    pub title: String,
+    pub title: crate::Text,
     pub selection: ContinuousColorScale,
     pub samples: Vec<f64>,
     pub missing: Option<MissingKey>,
@@ -37,7 +37,7 @@ pub(crate) struct ContinuousContributor {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ContinuousDescriptor {
     pub field: String,
-    pub title: String,
+    pub title: Arc<crate::Text>,
     /// Complete final-domain gradient, retained before guide measurement.
     pub stops: Vec<GradientStop>,
     pub selection: ContinuousColorScale,
@@ -75,7 +75,7 @@ impl ContinuousContributor {
                     })?;
                 let semantics = marks.guide_semantics(theme)?;
                 (
-                    crate::data::source::copy_source_string(&marks.color_label)?,
+                    marks.color_label.try_copy()?,
                     semantics,
                     marks.guide_samples()?,
                 )
@@ -91,7 +91,7 @@ impl ContinuousContributor {
                     })?;
                 let semantics = marks.continuous_semantics();
                 (
-                    crate::data::source::copy_source_string(&marks.color_label)?,
+                    marks.color_label.try_copy()?,
                     semantics,
                     marks.guide_samples()?,
                 )
@@ -134,7 +134,7 @@ impl ContinuousContributor {
                     _ => false,
                 };
                 if !same_text(&existing.field, &contributor.field)
-                    || !same_text(&existing.title, &contributor.title)
+                    || existing.title.as_ref() != &contributor.title
                     || existing.selection.kind() != contributor.selection.kind()
                     || !same_stops(existing.selection.stops()?, contributor.selection.stops()?)
                     || !same_center
@@ -176,7 +176,7 @@ impl ContinuousContributor {
                 }
                 combined = Some(ContinuousDescriptor {
                     field: contributor.field,
-                    title: contributor.title,
+                    title: crate::data::source::source_arc(contributor.title)?,
                     center: contributor.selection.get_center(),
                     selection: contributor.selection,
                     stops: Vec::new(),

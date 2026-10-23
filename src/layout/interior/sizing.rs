@@ -527,7 +527,7 @@ mod tests {
             .unwrap();
         let descriptor = ContinuousDescriptor {
             field: "Value".into(),
-            title: "Value".into(),
+            title: std::sync::Arc::new("Value".into()),
             selection: crate::theme::ContinuousColorScale::sequential(None, None).unwrap(),
             domain: (0.000_000_000_012_345, 0.000_000_000_098_765),
             center: None,
@@ -648,7 +648,7 @@ mod tests {
             )
             .unwrap(),
             field: "signal".into(),
-            title: "Signal".into(),
+            title: std::sync::Arc::new("Signal".into()),
             stops: vec![
                 crate::render::backend::GradientStop::new(0.0, (0, 0, 0)),
                 crate::render::backend::GradientStop::new(1.0, (255, 255, 255)),

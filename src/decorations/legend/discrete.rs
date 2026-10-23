@@ -48,7 +48,7 @@ pub(crate) struct PreparedGuideEntry {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PreparedGuideSection {
     pub(crate) identity: GuideSectionIdentity,
-    pub(crate) display_title: Arc<str>,
+    pub(crate) display_title: Arc<crate::Text>,
     pub(crate) body: GuideSectionBody,
 }
 
@@ -177,14 +177,13 @@ impl PreparedGuide {
     ) -> Result<()> {
         for (ordinal, section) in self.sections.iter().enumerate() {
             let section_owner = owner.child(AddressRole::LegendSection, count(ordinal)?)?;
-            PreparedTextRequirement::push_into(
+            PreparedTextRequirement::push_authored(
                 requirements,
                 section_owner.child(AddressRole::LegendTitle, 0)?,
                 PreparedTextRole::LegendTitle,
-                0,
-                section.display_title.as_ref(),
-                &[],
+                Some(&section.display_title),
                 &theme.typography.guides.legend_title,
+                false,
                 stage.as_deref_mut(),
             )
             .map_err(|error| Error::Render(error.to_string()))?;

@@ -186,6 +186,12 @@ remain present. All guide display text uses the shared Unicode control and
 mandatory-break validator, preserving aliases verbatim. Strict text fit remains.
 Labels aliases are global raw-string mappings, not field-scoped entries.
 
+Section titles retain shared Text values, including complete optional style and
+layout presence. Color titles accept authored Text; automatic titles use the same
+representation without local instructions. Resolve exact appearance over the
+consuming Plot/Canvas guide-title role before the census and measurement. Physical
+line alignment defaults to Start within the existing left-positioned block.
+
 Supplemental identity is exact supplied layer label, never append index or hue
 value. Source Categorical context resolves its label through Labels; LiteralSeries
 context preserves supplied bytes. Determine context before contribution filtering,
@@ -215,7 +221,7 @@ still comes from each Plot and must agree, while chrome/text comes from Canvas.
 
 ## Continuous Color And Alpha Sections
 
-Continuous contributors retain raw field, scale kind, resolved title, full semantic
+Continuous contributors retain raw field, scale kind, complete resolved Text title, full semantic
 gradient, diverging center, missing block, exact/automatic domain provenance and
 effective numeric policy. Shared requires exact compatibility of all except
 automatic envelopes: union finite automatic lo/hi; if any exact domain exists,
@@ -223,6 +229,9 @@ all exact domains agree and contain every automatic envelope. Generate one final
 label set and install final-domain mapping before contrast/fonts. Never merge
 already formatted child labels or projected local stops, choose first contributor's
 gradient/format, or treat this preparation as feedback.
+Title compatibility includes exact appearance and layout request presence; equal
+source strings or coincident geometry do not permit merging different requests.
+The continuous descriptor and containing section share one retained title value.
 
 A local placement-suppression flag does not mean retained source/presentation is
 absent. Heatmap/Beeswarm source descriptors reflect actual retained numeric
@@ -270,8 +279,9 @@ Frame absence removes chrome, not content/padding/structural key occupancy.
 Assigned inner width W subtracts complete hard horizontal insets; optional inner
 height H subtracts one outer vertical reserve. Negative/unusable space misses.
 All sections stack vertically in both orientations and get full W. Exact section
-gap=title_gap+row_gap under their separate role metrics. Titles measure at W and
-empty title activates no gap. No per-section position/variant/search.
+gap before section s is its selected title_gap[s]+row_gap under their separate
+role metrics. Titles measure at W, retaining empty-line metrics and their gap.
+No per-section position/variant/search.
 
 Key measurement visits the same complete frozen-call grammar as drawing. Fill
 handle half-height is0.32 label-em, handle width is guide-local; actual stroke
@@ -300,10 +310,10 @@ without inventing a finite height to force more columns.
 After measuring title and entries at fixed trial widths, form exact requirements:
 
 ```text
-T[s] = occupied_title_height + active_exact_title_gap
+T[s] = occupied_title_height + selected_exact_title_gap[s]
 hard[s] = ceil(T[s]+max(entry_heights))
 preferred[s] = ceil(T[s]+sum(entry_heights)+(entry_count-1)*exact_row_gap)
-A = H-ceil((section_count-1)*exact_section_gap)
+A = H-ceil(sum(selected_exact_title_gap[s]+exact_row_gap for s=1..section_count-1))
 ```
 
 Counts subtract only for nonempty sections. Preferred here is hard one-column

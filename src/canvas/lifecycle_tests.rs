@@ -659,6 +659,55 @@ fn shared_composition_uses_parent_policy_in_both_source_orders() {
 }
 
 #[test]
+fn shared_color_titles_reject_style_and_request_presence_conflicts_before_fonts() {
+    use crate::{FontFamily, FontStack, Text, TextLayout};
+    let base = crate::Theme::publication();
+    let unavailable = base
+        .typography()
+        .get_guides()
+        .get_legend_title()
+        .clone()
+        .stack(
+            FontStack::new([FontFamily::named("Unavailable shared color title font").unwrap()])
+                .unwrap(),
+        )
+        .unwrap();
+    let title = Text::new("Signal").style(unavailable);
+    let plot = |title| {
+        Plot::heatmap(
+            crate::CategoryValues::new("x", ["a"]).unwrap(),
+            crate::CategoryValues::new("y", ["b"]).unwrap(),
+            crate::NumericValues::new("signal", [1.0]),
+        )
+        .color_label(title)
+    };
+    for incompatible in [
+        title
+            .clone()
+            .style(base.typography().get_guides().get_legend_title().clone()),
+        title.clone().layout(TextLayout::default()),
+    ] {
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared)
+            .panel(0, 0, plot(title.clone()))
+            .unwrap()
+            .panel(0, 1, plot(incompatible))
+            .unwrap();
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        let error = canvas
+            .preflight_plan()
+            .err()
+            .expect("incompatible complete title");
+        assert!(error.to_string().contains("incompatible identity, title"));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+}
+
+#[test]
 fn shared_numeric_guides_resolve_final_sets_and_reject_equal_text_policy_conflicts_before_fonts() {
     use crate::numeric::{
         decimal::{NegativeZero, NumericNotation, TrailingZeros},

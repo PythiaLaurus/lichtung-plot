@@ -30,7 +30,7 @@ pub(crate) struct PreparedBeeswarm {
     colorbar_stops: Vec<GradientStop>,
     values: Option<crate::numeric::set::FormattedSet>,
     format: Option<std::sync::Arc<crate::numeric::format::NumericFormat>>,
-    pub(crate) color_label: String,
+    pub(crate) color_label: crate::Text,
 }
 
 fn retained(chart: &Plot) -> Result<&PreparedBeeswarm, Error> {
@@ -275,7 +275,7 @@ impl PreparedBeeswarm {
         Ok(Some(
             crate::decorations::legend::descriptor::ContinuousDescriptor {
                 field: crate::data::source::copy_source_string(field)?,
-                title: crate::data::source::copy_source_string(&self.color_label)?,
+                title: crate::data::source::source_arc(self.color_label.try_copy()?)?,
                 stops: self.guide_stops()?,
                 selection: self.selection.clone(),
                 center: self.selection.get_center(),

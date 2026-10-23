@@ -1509,6 +1509,7 @@ impl Canvas {
                     role,
                     Some(source),
                     appearance,
+                    true,
                     Some(prepared_stage),
                 )?;
             }

@@ -18,24 +18,29 @@ use std::sync::Arc;
 
 struct Section {
     identity: GuideSectionIdentity,
-    title: Arc<str>,
+    title: Arc<crate::Text>,
     entries: Vec<PreparedGuideEntry>,
 }
 
 impl GuideSectionIdentity {
-    fn title(&self, plot: &Plot) -> Result<Arc<str>> {
-        match self {
-            Self::Combined(primary) => shared_text(&primary.resolved_text(plot)?),
+    fn title(&self, plot: &Plot) -> Result<Arc<crate::Text>> {
+        let source = match self {
+            Self::Combined(primary) => primary.resolved_text(plot),
             Self::GroupStyle(field) | Self::Joint(field) | Self::HueColor(field) => {
-                shared_text(&plot.resolve_label(field.as_str())?)
+                plot.resolve_label(field.as_str())
             }
-            Self::Literal(LiteralDomain::BarSign) => shared_text("Change"),
-            Self::Literal(_) | Self::SupplementalSeries => shared_text("series"),
+            Self::Literal(LiteralDomain::BarSign) => {
+                crate::data::source::copy_source_string("Change")
+            }
+            Self::Literal(_) | Self::SupplementalSeries => {
+                crate::data::source::copy_source_string("series")
+            }
             Self::ContinuousColor(_) => {
                 Err(Error::Render("continuous title is producer-owned".into()))
             }
             Self::Alpha(_) => Err(Error::Render("alpha title is declaration-owned".into())),
-        }
+        }?;
+        crate::data::source::source_arc(crate::Text::from(source))
     }
 
     fn class(&self) -> u8 {
@@ -184,7 +189,7 @@ impl PreparedGuide {
     ) -> Result<Option<Arc<Self>>> {
         let mut composition = None;
         let mut sections: Vec<Section> = Vec::new();
-        let mut primary: Option<(PrimaryTitleIdentity, Arc<str>)> = None;
+        let mut primary: Option<(PrimaryTitleIdentity, Arc<crate::Text>)> = None;
         let mut counts = GuideCounts::default();
         let mut continuous: Option<Arc<super::super::descriptor::ContinuousDescriptor>> = None;
         let mut alpha = Vec::new();
@@ -245,7 +250,14 @@ impl PreparedGuide {
         }
         if composition == LegendComposition::Combined && !sections.is_empty() {
             let (identity, title) = primary.map_or_else(
-                || Ok::<_, Error>((PrimaryTitleIdentity::Series, shared_text("series")?)),
+                || {
+                    Ok::<_, Error>((
+                        PrimaryTitleIdentity::Series,
+                        crate::data::source::source_arc(crate::Text::from(
+                            crate::data::source::copy_source_string("series")?,
+                        ))?,
+                    ))
+                },
                 Ok,
             )?;
             let section = sections
@@ -260,7 +272,7 @@ impl PreparedGuide {
 
 fn merge_combined(
     sections: &mut Vec<Section>,
-    primary: &mut Option<(PrimaryTitleIdentity, Arc<str>)>,
+    primary: &mut Option<(PrimaryTitleIdentity, Arc<crate::Text>)>,
     section: &PreparedGuideSection,
     context: &str,
 ) -> Result<()> {
@@ -332,7 +344,7 @@ fn insert_source(
 fn insert(
     sections: &mut Vec<Section>,
     identity: GuideSectionIdentity,
-    title: Arc<str>,
+    title: Arc<crate::Text>,
     entry: PreparedGuideEntry,
     context: &str,
 ) -> Result<()> {
@@ -345,9 +357,14 @@ fn insert(
         }
         return merge_entry(&mut section.entries, entry, context);
     }
-    if !title.is_empty() && sections.iter().any(|section| section.title == title) {
+    if !title.as_str().is_empty()
+        && sections
+            .iter()
+            .any(|section| section.title.as_str() == title.as_str())
+    {
         return Err(Error::Render(format!(
-            "{context}: distinct section identities resolve to title {title:?}"
+            "{context}: distinct section identities resolve to title {:?}",
+            title.as_str()
         )));
     }
     let mut entries = Vec::new();
@@ -449,14 +466,15 @@ fn finish(
         });
     }
     if let Some(color) = continuous {
-        let display_title = shared_text(&color.title)?;
-        if !display_title.is_empty()
+        let display_title = Arc::clone(&color.title);
+        if !display_title.as_str().is_empty()
             && retained
                 .iter()
-                .any(|section| section.display_title == display_title)
+                .any(|section| section.display_title.as_str() == display_title.as_str())
         {
             return Err(Error::Render(format!(
-                "prepared guide: distinct section identities resolve to title {display_title:?}"
+                "prepared guide: distinct section identities resolve to title {:?}",
+                display_title.as_str()
             )));
         }
         retained.push(PreparedGuideSection {
@@ -503,11 +521,11 @@ fn retain_alpha_sections(
         }
         if retained
             .iter()
-            .any(|existing| existing.display_title == section.display_title)
+            .any(|existing| existing.display_title.as_str() == section.display_title.as_str())
         {
             return Err(Error::Render(format!(
                 "prepared guide: distinct section identities resolve to title {:?}",
-                section.display_title
+                section.display_title.as_str()
             )));
         }
         add(&mut counts.entries, count(section.entries().len())?)?;

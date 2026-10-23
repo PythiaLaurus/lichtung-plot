@@ -233,17 +233,57 @@ fn narrow_spanning_canvas_header_wraps_completely_above_its_cells() {
 
 #[test]
 fn continuous_shared_heatmaps_draw_one_merged_guide_without_local_colorbars() {
+    use lichtung_plot::{FontFamily, FontStack, Text, TextAlignment, TextWeight, Theme};
+    let base = Theme::publication();
+    let style = base
+        .typography()
+        .get_guides()
+        .get_legend_title()
+        .clone()
+        .font_size(24)
+        .unwrap()
+        .weight(TextWeight::Bold)
+        .unwrap();
+    let title = Text::new("discarded")
+        .style(style)
+        .alignment(TextAlignment::End);
+    let guides = base
+        .typography()
+        .get_guides()
+        .clone()
+        .legend_title(
+            base.typography()
+                .get_guides()
+                .get_legend_title()
+                .clone()
+                .stack(
+                    FontStack::new([
+                        FontFamily::named("Unused inherited guide title font").unwrap()
+                    ])
+                    .unwrap(),
+                )
+                .unwrap(),
+        )
+        .unwrap();
+    let theme = base
+        .customize()
+        .typography(base.typography().clone().guides(guides).unwrap())
+        .build()
+        .unwrap();
     let plot = |values| {
         Plot::heatmap(
             CategoryValues::new("column", ["one", "two"]).unwrap(),
             CategoryValues::new("row", ["only", "only"]).unwrap(),
             NumericValues::new("fill", values),
         )
+        .color_label(title.clone())
+        .color_label("Fill\nshared")
     };
     let svg = render_canvas(
         Canvas::grid(1, 2)
             .unwrap()
             .size(1200, 640)
+            .theme(theme)
             .panel(0, 0, plot([0.0, 2.0]))
             .unwrap()
             .panel(0, 1, plot([1.0, 5.0]))
@@ -285,7 +325,13 @@ fn continuous_shared_heatmaps_draw_one_merged_guide_without_local_colorbars() {
         .filter(|node| node.has_tag_name("text"))
         .filter_map(|node| node.text())
         .collect::<Vec<_>>();
-    assert_eq!(texts, ["Fill", "0", "5"]);
+    assert_eq!(texts, ["Fill", "shared", "0", "5"]);
+    let title = guide
+        .descendants()
+        .find(|node| node.has_tag_name("text") && node.text() == Some("Fill"))
+        .unwrap();
+    assert_eq!(title.attribute("font-size"), Some("24"));
+    assert_eq!(title.attribute("font-weight"), Some("700"));
     assert_unique_svg_ids(&svg);
 }
 

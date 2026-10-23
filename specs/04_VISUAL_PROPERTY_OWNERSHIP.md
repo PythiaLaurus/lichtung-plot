@@ -66,6 +66,13 @@ title gaps and edge padding. Physical line alignment defaults to Center inside
 the centered block before the title transform; shared facet titles retain the same
 requests and selected metrics. Matrix variable names remain automatic axis titles.
 
+Continuous color titles retain authored Text through source preparation and guide
+union. A local complete style overrides the actual consuming guide-title role;
+Shared Canvas uses its role for omissions and requires exact equality of authored
+requests before fonts. Line alignment defaults to Start inside the left-positioned
+block. Title gap uses the section's selected size, independently of label/key/frame
+metrics. A gap before a later section uses that incoming title's gap plus row_gap.
+
 Display-text syntax belongs to one shared validator, independently of these
 appearance owners. Explicit prose, titles, headers and annotations retain source
 whitespace, mandatory breaks and present empty-line metrics. Automatic names use

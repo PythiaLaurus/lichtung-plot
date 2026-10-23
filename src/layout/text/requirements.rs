@@ -757,6 +757,7 @@ impl PreparedTextRequirement {
             PreparedTextRole::Title,
             plot.prose()[0],
             &theme.typography.root.title,
+            true,
             prepared_stage.as_deref_mut(),
         )?;
         let subtitle_address = prepared_address_child(
@@ -771,6 +772,7 @@ impl PreparedTextRequirement {
             PreparedTextRole::Subtitle,
             plot.prose()[1],
             &theme.typography.root.subtitle,
+            true,
             prepared_stage.as_deref_mut(),
         )?;
         if kind != PlotKind::Matrix {
@@ -794,6 +796,7 @@ impl PreparedTextRequirement {
                     PreparedTextRole::AxisTitle,
                     title,
                     &theme.typography.axes.axis_title,
+                    false,
                     prepared_stage.as_deref_mut(),
                 )?;
             }
@@ -949,6 +952,7 @@ impl PreparedTextRequirement {
                 PreparedTextRole::Caption,
                 plot.prose()[2],
                 &theme.typography.root.caption,
+                true,
                 prepared_stage,
             )?;
         }
@@ -1213,11 +1217,14 @@ impl PreparedTextRequirement {
         role: PreparedTextRole,
         source: Option<&crate::Text>,
         appearance: &TextTheme,
+        preferred_width_metric: bool,
         mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
     ) -> Result<(), Error> {
         if let Some(source) = source {
             let appearance = source.appearance(appearance).theme;
-            let metric_address = address.child(crate::layout::AddressRole::PreferenceMetric, 0)?;
+            let metric_address = preferred_width_metric
+                .then(|| address.child(crate::layout::AddressRole::PreferenceMetric, 0))
+                .transpose()?;
             push_owned(
                 requirements,
                 address,
@@ -1228,16 +1235,18 @@ impl PreparedTextRequirement {
                 appearance,
                 prepared_stage.as_deref_mut(),
             )?;
-            push_owned(
-                requirements,
-                metric_address,
-                PreparedTextRole::PreferenceMetric,
-                0,
-                "0",
-                &[],
-                appearance,
-                prepared_stage,
-            )?;
+            if let Some(address) = metric_address {
+                push_owned(
+                    requirements,
+                    address,
+                    PreparedTextRole::PreferenceMetric,
+                    0,
+                    "0",
+                    &[],
+                    appearance,
+                    prepared_stage,
+                )?;
+            }
         }
         Ok(())
     }
@@ -2388,7 +2397,7 @@ mod tests {
             )
             .unwrap(),
             field: "fill".into(),
-            title: "Fill".into(),
+            title: std::sync::Arc::new("Fill".into()),
             stops: vec![
                 crate::render::backend::GradientStop::new(0.0, (247, 251, 255)),
                 crate::render::backend::GradientStop::new(1.0, (8, 48, 107)),

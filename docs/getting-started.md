@@ -155,6 +155,11 @@ axis-title role. Alignment controls lines inside the centered title block before
 its axis orientation; the selected size also sets that title's relative gaps.
 These instructions remain attached when facets move titles to the shared parent.
 
+For Heatmap and Beeswarm, `color_label` accepts the same Text value for the color
+guide title. Shared Canvas guides require equal complete title requests, including
+local styles and explicit layout resets. An omitted style uses the consuming
+guide's Theme role; title spacing follows the selected title size.
+
 `PanelTextAnnotation::new(corner, text)` accepts the same `Text` value. Its exact
 style replaces the Plot's panel-note role; local alignment controls lines within
 the block while the chosen corner keeps ownership of block placement.

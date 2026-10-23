@@ -56,12 +56,14 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     /// Set the title shown beside a continuous color scale.
+    /// Content-only replacement preserves earlier Text instructions. Shared guides
+    /// require equal complete title requests, including exact style and layout presence.
     #[must_use]
-    pub fn color_label(mut self, label: impl Into<String>) -> Self
+    pub fn color_label(mut self, label: impl Into<crate::Text>) -> Self
     where
         K: crate::kind::ContinuousColor,
     {
-        self.color_label = Some(label.into());
+        self.color_label.replace(label.into());
         self
     }
 

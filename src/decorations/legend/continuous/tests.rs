@@ -18,7 +18,7 @@ fn descriptor() -> ContinuousDescriptor {
         )
         .unwrap(),
         field: "signal".into(),
-        title: "Signal".into(),
+        title: Arc::new("Signal".into()),
         stops: vec![
             GradientStop::new(0.0, (49, 130, 189)),
             GradientStop::new(0.4, (247, 247, 247)),
@@ -93,6 +93,75 @@ fn selected(guide: &Legend) -> LegendDrawPlan {
         && bounds.right <= 20.0 + guide.compute_box_width()
         && bounds.top <= 30.0 + guide.compute_box_height()));
     selected
+}
+
+#[test]
+fn authored_title_owns_line_alignment_gap_and_complete_measurement_identity() {
+    let mut theme = crate::Theme::publication().resolve().unwrap();
+    theme.legend = theme
+        .legend
+        .clone()
+        .spacing(
+            theme
+                .legend
+                .get_spacing()
+                .clone()
+                .title_gap(crate::RelativeSpacing::ratio(1, 1).unwrap())
+                .unwrap(),
+        )
+        .unwrap();
+    let mut descriptor = descriptor();
+    let title = crate::Text::new("Measured signal\nshort").style(
+        theme
+            .typography
+            .guides
+            .legend_title
+            .clone()
+            .font_size(25)
+            .unwrap(),
+    );
+    descriptor.title = Arc::new(title.clone().alignment(crate::TextAlignment::End));
+    let measure = |descriptor: &ContinuousDescriptor| {
+        fit::measured(Ok(measure(
+            descriptor,
+            (350.0, 400.0),
+            false,
+            false,
+            &theme,
+            &mut false,
+        )))
+        .unwrap()
+    };
+    let aligned = measure(&descriptor);
+    let same = measure(&descriptor);
+    assert!(Arc::ptr_eq(&aligned.layout, &same.layout));
+    let section = &aligned.layout.sections[0];
+    let plan = section.title.plan();
+    assert_eq!(plan.style.font_size, 25);
+    assert!(plan.style.exact_override);
+    assert_eq!(
+        plan.style.alignment,
+        crate::layout::PhysicalTextAlignment::End
+    );
+    assert_eq!(
+        plan.lines[0].translation_x_quanta + plan.lines[0].ink_quanta.unwrap().right,
+        plan.lines[1].translation_x_quanta + plan.lines[1].ink_quanta.unwrap().right,
+    );
+    assert_eq!(
+        section.body_top - section.top - plan.height_quanta,
+        25 * 1024
+    );
+    selected(&aligned);
+    descriptor.title = Arc::new(title.clone());
+    let omitted = measure(&descriptor);
+    descriptor.title = Arc::new(title.layout(crate::TextLayout::default()));
+    let reset = measure(&descriptor);
+    assert!(!Arc::ptr_eq(&omitted.layout, &reset.layout));
+    assert_eq!(omitted.layout.height, reset.layout.height);
+    assert_eq!(
+        reset.layout.sections[0].title.plan().style.alignment,
+        crate::layout::PhysicalTextAlignment::Start
+    );
 }
 
 #[test]
@@ -431,7 +500,7 @@ fn custom_text_ink_overhang_cannot_be_hidden_by_the_guide_frame() {
         .iter_mut()
         .find_map(|call| match call {
             LegendCall::Text(text)
-                if text.plan.source == descriptor.sections[0].display_title.as_ref() =>
+                if text.plan.source == descriptor.sections[0].display_title.as_str() =>
             {
                 Some(text)
             }
@@ -479,7 +548,7 @@ fn absent_continuous_frame_retains_gradient_labels_and_missing_key() {
             }
         })
         .collect::<Vec<_>>();
-    assert_eq!(labels[0], descriptor.title);
+    assert_eq!(labels[0], descriptor.title.as_str());
     assert_eq!(labels.last().copied(), Some("Missing"));
     assert_eq!(
         &labels[1..=descriptor.numeric.labels.len()],

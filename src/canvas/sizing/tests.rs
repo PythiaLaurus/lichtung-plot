@@ -112,18 +112,21 @@ fn recorded_heights_require_complete_numeric_and_guide_inputs_at_equal_width_and
             crate::NumericValues::new("value", [1.0]),
         )
         .color_label_format(guide)
+        .color_label("Value")
         .annotations(crate::HeatmapAnnotations::Values(values))
-        .erase()
     };
     let normalized = format
         .clone()
         .negative_zero(NegativeZero::Normalize)
         .unwrap();
     assert_changed_height_inputs(
-        make(format.clone(), format.clone()),
+        make(format.clone(), format.clone()).erase(),
         [
-            make(normalized.clone(), format.clone()),
-            make(format, normalized),
+            make(normalized.clone(), format.clone()).erase(),
+            make(format.clone(), normalized).erase(),
+            make(format.clone(), format)
+                .color_label(crate::Text::new("Value").layout(crate::TextLayout::default()))
+                .erase(),
         ],
     );
 

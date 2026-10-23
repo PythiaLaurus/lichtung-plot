@@ -19,11 +19,12 @@ fn empty_block() -> TextBlock {
 
 /// Font-independent, post-measurement operands from spec08's worked examples.
 /// Empty retained plans are never drawn by these allocation/packing fixtures.
-fn section(title: u32, widths: &[f64], heights: &[u32]) -> MeasuredSection {
+fn section(title: u32, gap: u32, widths: &[f64], heights: &[u32]) -> MeasuredSection {
     assert_eq!(widths.len(), heights.len());
     let block = empty_block();
     MeasuredSection {
         title: block.clone(),
+        title_gap: ExactLength::pixels(f64::from(gap)).unwrap(),
         title_ascent: 0,
         title_width: ExactLength::pixels(10.0).unwrap(),
         title_occupancy: ExactLength::pixels(f64::from(title)).unwrap(),
@@ -46,7 +47,7 @@ fn section(title: u32, widths: &[f64], heights: &[u32]) -> MeasuredSection {
     }
 }
 
-fn metrics(row: f64, column: f64, title: f64) -> LegendMetrics {
+fn metrics(row: f64, column: f64) -> LegendMetrics {
     let mut theme = crate::Theme::publication().resolve().unwrap();
     let spacing = theme
         .legend
@@ -59,8 +60,6 @@ fn metrics(row: f64, column: f64, title: f64) -> LegendMetrics {
         .row_gap(crate::RelativeSpacing::from_pixels(row, 11).unwrap())
         .unwrap()
         .column_gap(crate::RelativeSpacing::from_pixels(column, 11).unwrap())
-        .unwrap()
-        .title_gap(crate::RelativeSpacing::from_pixels(title, 12).unwrap())
         .unwrap();
     theme.legend = theme
         .legend
@@ -74,14 +73,14 @@ fn metrics(row: f64, column: f64, title: f64) -> LegendMetrics {
 
 #[test]
 fn horizontal_sections_stack_actual_rows_and_compact_remeasures_can_be_taller() {
-    let metrics = metrics(4.0, 5.0, 4.0);
+    let metrics = metrics(4.0, 5.0);
     let scope = FitScope::root()
         .child(AddressRole::OutsideGuideAuto, 0)
         .unwrap();
     let normal = || {
         vec![
-            section(12, &[60.0, 50.0], &[10, 10]),
-            section(12, &[90.0], &[20]),
+            section(12, 4, &[60.0, 50.0], &[10, 10]),
+            section(12, 4, &[90.0], &[20]),
         ]
     };
     let assignment = Assignment::new((100.0, Some(76.0)), &metrics, &scope).unwrap();
@@ -110,8 +109,8 @@ fn horizontal_sections_stack_actual_rows_and_compact_remeasures_can_be_taller() 
     // reused after the entry width changes to C2 = (100 - 5) / 2 = 47.5.
     let compact = || {
         vec![
-            section(12, &[47.5, 47.5], &[20, 20]),
-            section(12, &[47.5], &[30]),
+            section(12, 4, &[47.5, 47.5], &[20, 20]),
+            section(12, 4, &[47.5], &[30]),
         ]
     };
     assert!(matches!(
@@ -130,10 +129,10 @@ fn horizontal_sections_stack_actual_rows_and_compact_remeasures_can_be_taller() 
 
 #[test]
 fn a_shared_baseline_reserves_the_independent_maximum_ascent_and_descent() {
-    let metrics = metrics(0.0, 0.0, 0.0);
+    let metrics = metrics(0.0, 0.0);
     let scope = FitScope::root();
     let measured = || {
-        let mut section = section(0, &[40.0, 40.0], &[20, 20]);
+        let mut section = section(0, 0, &[40.0, 40.0], &[20, 20]);
         section.entries[0].ascent = 18 * 1024;
         section.entries[0].descent = 2 * 1024;
         section.entries[1].ascent = 5 * 1024;
@@ -154,14 +153,14 @@ fn a_shared_baseline_reserves_the_independent_maximum_ascent_and_descent() {
 
 #[test]
 fn vertical_sections_shrink_once_in_quanta_and_never_redistribute_unused_capacity() {
-    let metrics = metrics(5.0, 10.0, 5.0);
+    let metrics = metrics(5.0, 10.0);
     let scope = FitScope::root()
         .child(AddressRole::OutsideGuideAuto, 0)
         .unwrap();
     let normal = || {
         vec![
-            section(10, &[45.0; 3], &[20; 3]),
-            section(10, &[90.0; 2], &[20; 2]),
+            section(10, 5, &[45.0; 3], &[20; 3]),
+            section(10, 5, &[90.0; 2], &[20; 2]),
         ]
     };
     assert_eq!(
@@ -193,8 +192,8 @@ fn vertical_sections_shrink_once_in_quanta_and_never_redistribute_unused_capacit
         scope.child(AddressRole::LegendSection, 1).unwrap().address
     );
     let compact = vec![
-        section(10, &[45.0; 3], &[20; 3]),
-        section(10, &[45.0; 2], &[20; 2]),
+        section(10, 5, &[45.0; 3], &[20; 3]),
+        section(10, 5, &[45.0; 2], &[20; 2]),
     ];
     let layout = stack_sections(compact, &assignment, false, &metrics, 0.0, &scope).unwrap();
     assert_eq!((layout.width, layout.height), (100 * 1024, 95 * 1024));

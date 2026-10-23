@@ -553,7 +553,7 @@ fn alpha_section(
     let title = title(plot, values.name(), source.target, source.unit)?;
     Ok(PreparedGuideSection {
         identity: GuideSectionIdentity::Alpha(identity),
-        display_title: shared_text(&title)?,
+        display_title: crate::data::source::source_arc(crate::Text::from(title))?,
         body: GuideSectionBody::Alpha(source_arc(PreparedAlphaSection {
             declaration: values.clone(),
             entries: shared_slice(entries)?,

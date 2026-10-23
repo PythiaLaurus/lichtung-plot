@@ -468,7 +468,15 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// Heatmap colorbar title, if explicitly configured.
     #[must_use]
     pub(crate) fn color_label_text(&self) -> Option<&str> {
-        self.color_label.as_deref()
+        self.color_label.source()
+    }
+
+    pub(crate) fn copy_color_title(&self) -> Result<crate::text::TextSlot, Error> {
+        self.color_label.try_copy()
+    }
+
+    pub(crate) fn same_color_title(&self, title: &crate::text::TextSlot) -> bool {
+        self.color_label == *title
     }
 
     /// Requested heatmap coordinate layout.
@@ -790,7 +798,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             (self.caption_text(), "plot caption"),
             (self.x_label.source(), "x-axis title"),
             (self.y_label.source(), "y-axis title"),
-            (self.color_label.as_deref(), "color guide title"),
+            (self.color_label_text(), "color guide title"),
         ] {
             if let Some(source) = source {
                 crate::text::validate_for(source, role)?;
@@ -919,14 +927,17 @@ impl<K: crate::kind::Marker> Plot<K> {
         &self,
 
         policy: Option<&crate::Labels>,
-    ) -> Result<String, Error> {
-        if let Some(label) = self.color_label_text() {
-            crate::text::validate_for(label, "color guide title")?;
-            crate::data::source::copy_source_string(label)
+    ) -> Result<crate::Text, Error> {
+        if let Some(label) = self.color_label.content() {
+            crate::text::validate_for(label.as_str(), "color guide title")?;
+            label.try_copy()
         } else if let Some(values) = self.color_values() {
-            policy.unwrap_or(&self.labels).resolve(values.name())
+            policy
+                .unwrap_or(&self.labels)
+                .resolve(values.name())
+                .map(crate::Text::from)
         } else {
-            Ok(String::new())
+            Ok(crate::Text::new(String::new()))
         }
     }
 

@@ -241,6 +241,12 @@ precedes the axis transform without moving the centered block. Intrinsic, child 
 height reuse keys retain the complete request; frozen plans draw without resolving
 source or appearance again.
 
+Guide sections retain shared Text title values. Actual selected source/stack/weight
+enter the census; the extra `0` metric is admitted only for owners consuming a ch
+width preference, not merely because a value is authored Text. Guide title gaps
+are section-local selected metrics. Complete title requests participate in Shared
+compatibility, measurement/child/height identity and frozen guide feedback.
+
 Unicode tables/algorithms must have reproducible version/hash/provenance and
 compatible shaping classification; a dependency version alone is insufficient.
 Focused independent defaults/runtime tables remain local. Full conformance is

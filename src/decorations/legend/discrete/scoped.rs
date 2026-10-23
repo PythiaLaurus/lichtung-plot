@@ -118,6 +118,7 @@ impl ConsumedGuideDependency {
 /// distinct from the descriptor actually drawn by a routed/Shared owner.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ScopedGuideInputs {
+    color_title: crate::text::TextSlot,
     composition: LegendComposition,
     use_kind: GuideUse,
     contribution_prepared: bool,
@@ -172,6 +173,7 @@ impl ScopedGuideInputs {
         )?;
         retained.extend_from_slice(dependencies);
         Ok(Self {
+            color_title: plot.copy_color_title()?,
             composition,
             use_kind,
             contribution_prepared: plot.prepared_discrete_guides.is_some(),
@@ -188,6 +190,7 @@ impl ScopedGuideInputs {
 
     pub(crate) fn matches_source(&self, plot: &Plot<impl crate::kind::Marker>) -> bool {
         self.composition == plot.effective_legend_composition()
+            && plot.same_color_title(&self.color_title)
             && self.contribution_prepared == plot.prepared_discrete_guides.is_some()
             && match &plot.prepared_discrete_guides {
                 Some(guides) => {

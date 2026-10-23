@@ -168,6 +168,11 @@ Plot/Canvas title, subtitle and caption likewise resolve local exact appearance
 over their complete root-text roles. Root title/subtitle gaps use the maximum of
 the selected title/subtitle sizes, and caption clearance uses selected caption
 size. Root padding remains tied to the root composition-body role.
+X/y axis titles resolve independently over axis_title; their selected sizes own
+the corresponding title clearances. Continuous guide titles resolve local Text
+appearance over the consuming guide-title role, including Shared Canvas ownership.
+Each measured section resolves title_gap against that title's selected size;
+frame, key and label spacing retain their declared guide-label metrics.
 
 TypographyTheme and each nested text-role group use consuming `property(value)`
 edits and paired borrowed `get_property()` readers. For example,

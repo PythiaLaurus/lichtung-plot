@@ -186,7 +186,7 @@ One-name resolution does not replace complete-domain collision checks. Raw
 category/series/field keys, endpoint identities, font-family names, significance
 selectors, paths and NumericFormat grammar retain their own semantic validation.
 
-Plot/Canvas title, subtitle and caption, Plot x/y titles, and TextPanel title/body
+Plot/Canvas title, subtitle and caption, Plot x/y and color-guide titles, and TextPanel title/body
 accept `impl Into<Text>` through one source representation. String, &str and &String
 carry no local instructions. Text optionally retains
 one complete exact TextTheme and one whole TextLayout request. Its alignment edit
@@ -194,7 +194,7 @@ uses shared TextAlignment. TextLayout defaults leave alignment unspecified, whil
 an explicitly supplied default request remains distinguishable from omission.
 TextPanel's existing title/body readers borrow the source as `&str`.
 
-Prose and x/y-title setters replace source in call order. Omitted incoming
+Prose, x/y-title and color-guide-title setters replace source in call order. Omitted incoming
 style/layout preserves the slot's earlier instructions; a present style replaces the complete appearance,
 and a present layout replaces the complete request. An explicit default layout
 resets alignment to owner defaults. Plot title/subtitle convenience alignment
@@ -218,6 +218,11 @@ All 25 exact families are Legend-capable; Any is not. Source-owned key geometry,
 complete final paints and mapping provenance feed one PreparedGuide. Native
 Heatmap/Beeswarm right tracks and Matrix trailing track place their guides once;
 transport for census/Shared identity must not create an outer duplicate.
+`color_label(impl Into<Text>)` retains complete local style and line alignment over
+the consuming Plot or Shared Canvas guide-title role. Shared contributors require
+equal complete Text requests before fonts, even when different requests could
+produce identical text or geometry. Guide titles default to Start inside the
+left-positioned block; selected title size owns its title gap.
 
 ## Significance
 

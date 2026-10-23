@@ -78,8 +78,10 @@ fn guide_intrinsics(
     for section in descriptor.sections.iter() {
         let (minimum, natural) = fit::intrinsic_widths(
             theme,
-            &section.display_title,
-            &theme.typography.guides.legend_title,
+            section.display_title.as_str(),
+            section
+                .display_title
+                .appearance(&theme.typography.guides.legend_title),
             "legend title intrinsic",
         )?;
         let mut entries = Vec::new();
@@ -181,6 +183,7 @@ impl MeasuredEntry {
 
 struct MeasuredSection {
     title: TextBlock,
+    title_gap: ExactLength,
     title_ascent: i64,
     title_width: ExactLength,
     title_occupancy: ExactLength,
@@ -370,6 +373,32 @@ fn entry_allocation(
     .min(cap)
 }
 
+fn measure_title(
+    text: &crate::Text,
+    width: i64,
+    theme: &ResolvedTheme,
+    scope: &FitScope,
+) -> Result<(ResolvedTextPlan, ExactLength), PlanError> {
+    let appearance = text.appearance(&theme.typography.guides.legend_title);
+    let plan = fit::measured(fit::text(
+        theme,
+        text.as_str(),
+        appearance,
+        pixels(width),
+        text.resolved_alignment(crate::TextAlignment::Start).into(),
+        "legend section title",
+        &scope.child(AddressRole::LegendTitle, 0)?,
+    ))?;
+    let gap = theme
+        .legend
+        .lengths(
+            theme.typography.guides.legend_label.get_font_size(),
+            appearance.theme.get_font_size(),
+        )?
+        .title_gap;
+    Ok((plan, gap))
+}
+
 #[expect(
     clippy::too_many_arguments,
     reason = "section text measurement consumes the owner's fixed width variant and resolved role metrics"
@@ -410,18 +439,10 @@ fn measure_section(
                 .into());
         }
     }
-    let title = fit::measured(fit::text(
-        theme,
-        &section.display_title,
-        &theme.typography.guides.legend_title,
-        pixels(inner_width),
-        PhysicalTextAlignment::Start,
-        "legend section title",
-        &scope.child(AddressRole::LegendTitle, 0)?,
-    ))?;
+    let (title, title_gap) = measure_title(&section.display_title, inner_width, theme, scope)?;
     let (title_ascent, title_descent) = text_extents(&title)?;
     let title_height = add(title_ascent, title_descent)?;
-    let title_occupancy = length(title_height)?.add_length(&metrics.exact.title_gap);
+    let title_occupancy = length(title_height)?.add_length(&title_gap);
     let entries = fit::collect(
         "measured guide entries",
         section
@@ -461,6 +482,7 @@ fn measure_section(
             }),
     )?;
     Ok(MeasuredSection {
+        title_gap,
         title_width: ExactLength::pixels(title.width().max(title.fit_width()))?,
         title: TextBlock::from_resolved(title),
         title_ascent,
@@ -502,8 +524,13 @@ fn section_capacities(
             .ok_or_else(|| Error::Render("guide section minima overflow".into()))?;
         tracks.push(track);
     }
-    let gap = metrics.exact.title_gap.add_length(&metrics.exact.row_gap);
-    let reserve = hard(&gap.times(count_gaps(sections.len())?))?;
+    let mut gaps = length(0)?;
+    for section in sections.iter().skip(1) {
+        gaps = gaps
+            .add_length(&section.title_gap)
+            .add_length(&metrics.exact.row_gap);
+    }
+    let reserve = hard(&gaps)?;
     let available = height
         .checked_sub(reserve)
         .filter(|value| *value >= 0)
@@ -542,13 +569,14 @@ fn stack_sections(
     };
     let mut sections = Vec::new();
     fit::reserve(&mut sections, measured.len(), "measured guide sections")?;
-    let gap = metrics.exact.title_gap.add_length(&metrics.exact.row_gap);
     let mut top = length(0)?;
     let mut width = length(0)?;
     let mut compact_changes = false;
     for (ordinal, mut section) in measured.into_iter().enumerate() {
         if ordinal > 0 {
-            top = top.add_length(&gap);
+            top = top
+                .add_length(&section.title_gap)
+                .add_length(&metrics.exact.row_gap);
         }
         let section_scope = scope.child(AddressRole::LegendSection, ordinal)?;
         let capacity = capacities.as_ref().map(|values| values[ordinal]);

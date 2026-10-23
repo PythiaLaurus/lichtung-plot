@@ -316,8 +316,6 @@ pub(crate) struct LegendMetrics {
     pub pad: f64,
     /// Entry height (px) = font_size + label_spacing.
     pub entry_h: f64,
-    /// Title height (px).
-    pub title_h: f64,
     /// Handle (marker) width (px).
     pub handle_w: f64,
     /// Handle-to-text gap (px).
@@ -326,7 +324,6 @@ pub(crate) struct LegendMetrics {
     pub shared_gap: f64,
     pub column_gap: f64,
     pub row_gap: f64,
-    pub title_gap: f64,
     pub minimum: f64,
     pub preferred: f64,
     pub edge_pad: f64,
@@ -367,9 +364,6 @@ impl LegendMetrics {
         let entry_h = s(&exact
             .row_gap
             .add_pixels(theme.typography.guides.legend_label.line_pitch_pixels())?)?;
-        let title_h = s(&exact
-            .title_gap
-            .add_pixels(theme.typography.guides.legend_title.line_pitch_pixels())?)?;
         let handle_w = s(&exact.key_width)?;
         if handle_w <= 0.0 {
             return Err(Error::Render(
@@ -411,14 +405,12 @@ impl LegendMetrics {
             font_size,
             pad,
             entry_h,
-            title_h,
             handle_w,
             handle_text,
             outside_gap: s(&exact.outside_gap)?,
             shared_gap: s(&exact.shared_gap)?,
             column_gap: s(&exact.column_gap)?,
             row_gap: s(&exact.row_gap)?,
-            title_gap: s(&exact.title_gap)?,
             minimum: exact.minimum.pixels_rounded(Ceil)?,
             preferred: s(&exact.preferred)?,
             edge_pad,
@@ -662,14 +654,12 @@ impl Legend {
             self.metrics.font_size,
             self.metrics.pad,
             self.metrics.entry_h,
-            self.metrics.title_h,
             self.metrics.handle_w,
             self.metrics.handle_text,
             self.metrics.outside_gap,
             self.metrics.shared_gap,
             self.metrics.column_gap,
             self.metrics.row_gap,
-            self.metrics.title_gap,
             self.metrics.edge_pad,
         ] {
             round.observe_number(metric)?;
@@ -869,13 +859,23 @@ impl Legend {
             y: y + measurement::pixels(position[1]),
         };
         for (section, layout) in self.descriptor.sections.iter().zip(&self.layout.sections) {
+            let title = layout.title.plan();
+            let (title_anchor, title_offset) = match title.style.alignment {
+                crate::layout::PhysicalTextAlignment::Start => (TextAnchor::Start, 0),
+                crate::layout::PhysicalTextAlignment::Center => (
+                    TextAnchor::Middle,
+                    crate::render::backend::nearest_even_text_half(title.width_quanta)
+                        .ok_or_else(|| Error::Render("legend title half extent overflow".into()))?,
+                ),
+                crate::layout::PhysicalTextAlignment::End => (TextAnchor::End, title.width_quanta),
+            };
             emit(LegendCall::Text(crate::render::backend::PlacedText {
                 placement: PlannedTextPlacement::baseline(
-                    translate([0, layout.title_baseline]),
-                    TextAnchor::Start,
+                    translate([title_offset, layout.title_baseline]),
+                    title_anchor,
                     0.0,
                 ),
-                plan: layout.title.plan().clone(),
+                plan: title.clone(),
             }))?;
             for (entry, slot) in section.entries().iter().zip(&layout.entries) {
                 entry.key.visit_calls(m, translate(slot.key), &mut emit)?;
