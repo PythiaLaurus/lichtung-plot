@@ -904,7 +904,7 @@ fn categorical_trajectory_retains_bottom_slots_raw_and_display_identity() {
             .iter()
             .filter_map(
                 |mark| if let crate::plots::line::LineMark::Points(_, style) = mark {
-                    Some(style.color.alpha())
+                    Some(style.color.get_alpha())
                 } else {
                     None
                 }
@@ -918,7 +918,7 @@ fn categorical_trajectory_retains_bottom_slots_raw_and_display_identity() {
             .iter()
             .filter_map(
                 |mark| if let crate::plots::line::LineMark::Line(_, style) = mark {
-                    Some(style.color.alpha())
+                    Some(style.color.get_alpha())
                 } else {
                     None
                 }

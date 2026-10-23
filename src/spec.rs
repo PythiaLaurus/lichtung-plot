@@ -267,8 +267,8 @@ fn validate_heatmap_annotation_label(value: &str, role: &str) -> Result<(), crat
 /// let endpoints = DumbbellEndpoints::new(
 ///     "Before", Color::rgba(20, 80, 140, 128), "After", Color::rgb(180, 60, 40),
 /// )?;
-/// assert_eq!(endpoints.left_color().alpha(), 128);
-/// assert_eq!(endpoints.right_color().alpha(), 255);
+/// assert_eq!(endpoints.left_color().get_alpha(), 128);
+/// assert_eq!(endpoints.right_color().get_alpha(), 255);
 /// # Ok::<(), lichtung_plot::Error>(())
 /// ```
 ///

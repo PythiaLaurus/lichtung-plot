@@ -14,7 +14,7 @@ use crate::{CategoryValues, Color, NumericValues};
 /// use lichtung_plot::{Color, GuideStyle, LinePattern};
 /// let guide = GuideStyle::new(Color::rgba(20, 80, 140, 128), 1.5, LinePattern::Solid)?
 ///     .pattern(LinePattern::Dashed)?;
-/// assert_eq!(guide.get_color().alpha(), 128);
+/// assert_eq!(guide.get_color().get_alpha(), 128);
 /// # Ok::<(), lichtung_plot::Error>(())
 /// ```
 ///
@@ -198,7 +198,7 @@ pub struct PointLayer {
 ///     CategoryValues::new("category", ["A"])?, None,
 ///     NumericValues::new("value", [2.0]), Color::rgba(20, 80, 140, 0), 4,
 /// )?;
-/// assert_eq!(layer.color().alpha(), 0);
+/// assert_eq!(layer.color().get_alpha(), 0);
 /// # Ok::<(), lichtung_plot::Error>(())
 /// ```
 ///
@@ -387,10 +387,10 @@ impl PointLayer {
         defaults: &crate::theme::mark::SupplementalPointTheme,
     ) -> crate::render::backend::PointStyle {
         let color = self.color.unwrap_or_else(|| {
-            crate::theme::color_from_rgb(automatic_color).with_alpha(defaults.fill_alpha())
+            crate::theme::color_from_rgb(automatic_color).alpha(defaults.fill_alpha())
         });
         crate::render::backend::PointStyle {
-            color: self.alpha.map_or(color, |alpha| color.with_alpha(alpha)),
+            color: self.alpha.map_or(color, |alpha| color.alpha(alpha)),
             radius: self.radius.unwrap_or(defaults.radius()),
             outline: None,
             shape: crate::PointShape::Circle,
@@ -403,7 +403,7 @@ impl PointLayer {
     ) -> Result<crate::theme::TextTheme, Error> {
         let paint = self.color.unwrap_or(role.color());
         role.try_copy()?
-            .with_color(self.alpha.map_or(paint, |alpha| paint.with_alpha(alpha)))
+            .with_color(self.alpha.map_or(paint, |alpha| paint.alpha(alpha)))
     }
 }
 

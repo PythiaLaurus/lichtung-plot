@@ -574,12 +574,12 @@ mod style_tests {
             payload
                 .point_batches
                 .iter()
-                .map(|(points, style)| (points.len(), style.color.alpha()))
+                .map(|(points, style)| (points.len(), style.color.get_alpha()))
                 .collect::<Vec<_>>(),
             [(1, 0), (1, 128), (1, 255)]
         );
         assert_eq!(selected.marks.as_ref().unwrap().geometry.bounds().len(), 3);
-        assert_eq!(payload.line_style.color.alpha(), 64);
+        assert_eq!(payload.line_style.color.get_alpha(), 64);
     }
 
     #[test]
@@ -745,8 +745,8 @@ mod style_tests {
         let (old_polygon, old_fill) = payload(&old);
         let (new_polygon, new_fill) = payload(&changed);
         assert_eq!(old_polygon, new_polygon);
-        assert_eq!(old_fill.color.alpha(), 64);
-        assert_eq!(new_fill.color.alpha(), 0);
+        assert_eq!(old_fill.color.get_alpha(), 64);
+        assert_eq!(new_fill.color.get_alpha(), 0);
         assert_eq!(new_fill.stroke_width.to_bits(), 2.0_f32.to_bits());
         let mapped = chart.clone().with_alpha(
             AlphaTarget::Fill,
@@ -761,7 +761,7 @@ mod style_tests {
             .unwrap();
         let (mapped_polygon, mapped_fill) = payload(&mapped);
         assert_eq!(mapped_polygon, new_polygon);
-        assert_eq!(mapped_fill.color, new_fill.color.with_alpha(191));
+        assert_eq!(mapped_fill.color, new_fill.color.alpha(191));
         assert_eq!(mapped_fill.stroke, new_fill.stroke);
         assert_eq!(
             mapped_fill.stroke_width.to_bits(),

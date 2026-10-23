@@ -136,7 +136,7 @@ mod geometry_tests {
             original_payload
                 .bars
                 .iter()
-                .map(|(_, style)| style.color.alpha())
+                .map(|(_, style)| style.color.get_alpha())
                 .collect::<Vec<_>>(),
             [0, 230]
         );

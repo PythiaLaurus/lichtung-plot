@@ -184,16 +184,16 @@ impl ResolvedGuideKey {
         // and selected drawing share the same grammar and canonical materializer.
         let mut occupied = self.clone();
         if let Some(fill) = &mut occupied.fill {
-            fill.color = fill.color.with_alpha(255);
-            fill.stroke = fill.stroke.with_alpha(255);
+            fill.color = fill.color.alpha(255);
+            fill.stroke = fill.stroke.alpha(255);
         }
         if let Some(line) = &mut occupied.line {
-            line.color = line.color.with_alpha(255);
+            line.color = line.color.alpha(255);
         }
         if let Some(point) = &mut occupied.point {
-            point.color = point.color.with_alpha(255);
+            point.color = point.color.alpha(255);
             if let Some(outline) = &mut point.outline {
-                outline.color = outline.color.with_alpha(255);
+                outline.color = outline.color.alpha(255);
             }
         }
         occupied.visit_calls(metrics, Point2D::new(0.0, 0.0), |call| {
@@ -685,7 +685,7 @@ impl Legend {
                 .into_iter()
                 .flatten()
             {
-                for channel in [paint.red(), paint.green(), paint.blue(), paint.alpha()] {
+                for channel in [paint.red(), paint.green(), paint.blue(), paint.get_alpha()] {
                     round.observe_count(usize::from(channel))?;
                 }
             }

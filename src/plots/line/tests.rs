@@ -115,20 +115,22 @@ fn primary_point_alpha_follows_sorted_line_rows_and_keeps_supplemental_paint_ind
         .iter()
         .filter_map(|mark| {
             if let LineMark::Points(_, style) = mark {
-                Some(style.color.alpha())
+                Some(style.color.get_alpha())
             } else {
                 None
             }
         })
         .collect::<Vec<_>>();
     assert_eq!(alphas, [17, 90, 230]);
-    assert_eq!(payload.layers[0].1.color.alpha(), 61);
-    assert_eq!(payload.layers[0].2[0].plan.style.paint.alpha(), 61);
+    assert_eq!(payload.layers[0].1.color.get_alpha(), 61);
+    assert_eq!(payload.layers[0].2[0].plan.style.paint.get_alpha(), 61);
     let ribbons = payload
         .marks
         .iter()
         .filter_map(|mark| match mark {
-            LineMark::Ribbon(points, fill) => Some((points.len(), fill.color.alpha(), fill.stroke)),
+            LineMark::Ribbon(points, fill) => {
+                Some((points.len(), fill.color.get_alpha(), fill.stroke))
+            }
             _ => None,
         })
         .collect::<Vec<_>>();
@@ -151,7 +153,7 @@ fn primary_point_alpha_follows_sorted_line_rows_and_keeps_supplemental_paint_ind
             .marks
             .iter()
             .filter_map(|mark| if let LineMark::Line(_, style) = mark {
-                Some(style.color.alpha())
+                Some(style.color.get_alpha())
             } else {
                 None
             })
@@ -191,7 +193,7 @@ fn primary_point_alpha_follows_sorted_line_rows_and_keeps_supplemental_paint_ind
         draw.calls
             .iter()
             .filter_map(|call| match call {
-                LegendCall::Point(_, style) => Some(style.color.alpha()),
+                LegendCall::Point(_, style) => Some(style.color.get_alpha()),
                 _ => None,
             })
             .collect::<Vec<_>>(),
@@ -201,7 +203,7 @@ fn primary_point_alpha_follows_sorted_line_rows_and_keeps_supplemental_paint_ind
         draw.calls
             .iter()
             .filter_map(|call| match call {
-                LegendCall::Line(_, style) => Some(style.color.alpha()),
+                LegendCall::Line(_, style) => Some(style.color.get_alpha()),
                 _ => None,
             })
             .collect::<Vec<_>>(),
@@ -211,7 +213,7 @@ fn primary_point_alpha_follows_sorted_line_rows_and_keeps_supplemental_paint_ind
         draw.calls
             .iter()
             .filter_map(|call| match call {
-                LegendCall::Fill(_, style) => Some(style.color.alpha()),
+                LegendCall::Fill(_, style) => Some(style.color.get_alpha()),
                 _ => None,
             })
             .collect::<Vec<_>>(),
@@ -273,7 +275,7 @@ fn path_point_alpha_retains_source_vertex_order_without_regrouping_by_byte() {
             .marks
             .iter()
             .filter_map(|mark| if let LineMark::Points(_, style) = mark {
-                Some(style.color.alpha())
+                Some(style.color.get_alpha())
             } else {
                 None
             })
@@ -285,7 +287,7 @@ fn path_point_alpha_retains_source_vertex_order_without_regrouping_by_byte() {
             .marks
             .iter()
             .filter_map(|mark| if let LineMark::Line(_, style) = mark {
-                Some(style.color.alpha())
+                Some(style.color.get_alpha())
             } else {
                 None
             })
@@ -314,10 +316,10 @@ fn exact_supplemental_color_and_alpha_edits_freeze_identically_in_either_order()
     let (points, style, text) = &first.layers[0];
     let (other_points, other_style, other_text) = &second.layers[0];
     assert_eq!(style, other_style);
-    assert_eq!(style.color, paint.with_alpha(131));
+    assert_eq!(style.color, paint.alpha(131));
     assert_eq!(style.radius, 9);
     assert!(style.outline.is_none());
-    assert_eq!(text[0].plan.style.paint, paint.with_alpha(131));
+    assert_eq!(text[0].plan.style.paint, paint.alpha(131));
     assert_eq!(text[0].plan.style, other_text[0].plan.style);
     assert_eq!(text[0].plan.source, "Exact");
     assert_eq!(points.len(), 1);
@@ -325,7 +327,7 @@ fn exact_supplemental_color_and_alpha_edits_freeze_identically_in_either_order()
     assert_eq!(points[0].y.to_bits(), other_points[0].y.to_bits());
     let captured =
         crate::render::primitives::CanonicalScatter::new(points, style, 400, None).unwrap();
-    assert_eq!(captured.color, paint.with_alpha(131));
+    assert_eq!(captured.color, paint.alpha(131));
     assert_eq!(
         color_then_alpha
             .discrete_guide
@@ -406,12 +408,12 @@ fn supplemental_defaults_and_explicit_alpha_keep_label_paint_independent_and_gui
     assert_eq!(payload.layers.len(), 2);
     let (automatic_points, automatic_style, automatic_text) = &payload.layers[0];
     assert_eq!(automatic_style.radius, 7);
-    assert_eq!(automatic_style.color.alpha(), 17);
+    assert_eq!(automatic_style.color.get_alpha(), 17);
     assert_eq!(automatic_text[0].plan.style.paint, role_paint);
     let (alpha_points, alpha_style, alpha_text) = &payload.layers[1];
     assert_eq!(alpha_style.radius, 9);
-    assert_eq!(alpha_style.color.alpha(), 128);
-    assert_eq!(alpha_text[0].plan.style.paint, role_paint.with_alpha(128));
+    assert_eq!(alpha_style.color.get_alpha(), 128);
+    assert_eq!(alpha_text[0].plan.style.paint, role_paint.alpha(128));
     assert_eq!(alpha_text[0].plan.style.font_size, 16);
     assert_eq!(alpha_text[0].plan.style.weight, crate::TextWeight::Semibold);
     assert_eq!(automatic_points.len(), 1);

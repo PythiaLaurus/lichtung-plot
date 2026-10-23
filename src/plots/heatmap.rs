@@ -90,8 +90,7 @@ impl HeatmapData {
         self.fills[index].map(|fill| {
             let member = self.fill_alphas[index]
                 .expect("finite Heatmap cell retains original alpha membership");
-            crate::Color::from(fill)
-                .with_alpha(member.value.map_or(role_alpha, |value| value.alpha))
+            crate::Color::from(fill).alpha(member.value.map_or(role_alpha, |value| value.alpha))
         })
     }
 

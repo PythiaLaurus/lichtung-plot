@@ -97,8 +97,8 @@ fn point_interval_alpha_keeps_original_slots_through_category_order_and_unavaila
     };
     assert!(payload.rows[0].point.is_none());
     assert!(payload.rows[0].text.is_some());
-    assert_eq!(payload.rows[1].point_style.color.alpha(), 255);
-    assert_eq!(payload.rows[2].point_style.color.alpha(), 0);
+    assert_eq!(payload.rows[1].point_style.color.get_alpha(), 255);
+    assert_eq!(payload.rows[2].point_style.color.get_alpha(), 0);
     assert!(payload.rows[1].interval.is_some());
     assert!(payload.rows[2].interval.is_some());
     assert_eq!(

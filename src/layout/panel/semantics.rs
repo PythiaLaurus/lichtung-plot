@@ -154,7 +154,7 @@ impl StandardPanelInputs {
                 text.paint.red(),
                 text.paint.green(),
                 text.paint.blue(),
-                text.paint.alpha(),
+                text.paint.get_alpha(),
             ] {
                 round.observe_count(usize::from(channel))?;
             }

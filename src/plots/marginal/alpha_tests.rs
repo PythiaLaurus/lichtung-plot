@@ -94,7 +94,7 @@ fn central_alpha_retains_filtered_original_members_and_does_not_change_densities
         payload.groups[0]
             .point_batches
             .iter()
-            .map(|(points, style)| (points.len(), style.color.alpha()))
+            .map(|(points, style)| (points.len(), style.color.get_alpha()))
             .collect::<Vec<_>>(),
         [(1, 0), (1, 128), (1, 0)]
     );
@@ -106,7 +106,7 @@ fn central_alpha_retains_filtered_original_members_and_does_not_change_densities
         payload
             .groups
             .iter()
-            .map(|group| group.fill.color.alpha())
+            .map(|group| group.fill.color.get_alpha())
             .collect::<Vec<_>>(),
         [230, 0]
     );
@@ -115,12 +115,12 @@ fn central_alpha_retains_filtered_original_members_and_does_not_change_densities
         payload.groups[1]
             .point_batches
             .iter()
-            .map(|(points, style)| (points.len(), style.color.alpha()))
+            .map(|(points, style)| (points.len(), style.color.get_alpha()))
             .collect::<Vec<_>>(),
         [(1, 0), (1, 64), (1, 230)]
     );
     assert!(payload
         .groups
         .iter()
-        .all(|group| group.fill.stroke.alpha() == 255));
+        .all(|group| group.fill.stroke.get_alpha() == 255));
 }

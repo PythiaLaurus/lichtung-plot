@@ -748,7 +748,7 @@ mod tests {
             payload
                 .point_batches
                 .iter()
-                .map(|(_, style)| style.color.alpha())
+                .map(|(_, style)| style.color.get_alpha())
                 .collect::<Vec<_>>(),
             [17, 90, 128, 230]
         );

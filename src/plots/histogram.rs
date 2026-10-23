@@ -1061,7 +1061,7 @@ mod tests {
         else {
             panic!("Histogram payload")
         };
-        assert_eq!(payload.curve_style.color.alpha(), 0);
+        assert_eq!(payload.curve_style.color.get_alpha(), 0);
         assert_eq!(
             payload.rug_style,
             theme
@@ -1075,7 +1075,7 @@ mod tests {
             payload
                 .bins
                 .iter()
-                .map(|(_, fill)| fill.color.alpha())
+                .map(|(_, fill)| fill.color.get_alpha())
                 .collect::<Vec<_>>(),
             [0, 230]
         );
@@ -1180,7 +1180,7 @@ mod tests {
                 payload
                     .bins
                     .iter()
-                    .map(|(_, fill)| fill.color.alpha())
+                    .map(|(_, fill)| fill.color.get_alpha())
                     .collect::<Vec<_>>(),
                 alphas
             );

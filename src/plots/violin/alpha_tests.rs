@@ -85,7 +85,7 @@ fn overlay_alpha_follows_original_slots_and_source_jitter_through_positioned_gro
     assert_eq!(
         points
             .iter()
-            .map(|(points, style)| (points.len(), style.color.alpha()))
+            .map(|(points, style)| (points.len(), style.color.get_alpha()))
             .collect::<Vec<_>>(),
         [(1, 0), (1, 230), (2, 64)]
     );
@@ -99,7 +99,7 @@ fn overlay_alpha_follows_original_slots_and_source_jitter_through_positioned_gro
             .marks
             .iter()
             .filter_map(|mark| match mark {
-                categorical_distribution::Mark::Polygon(_, style) => Some(style.color.alpha()),
+                categorical_distribution::Mark::Polygon(_, style) => Some(style.color.get_alpha()),
                 _ => None,
             })
             .collect::<Vec<_>>(),
@@ -112,7 +112,7 @@ fn overlay_alpha_follows_original_slots_and_source_jitter_through_positioned_gro
                 .inner_summary()
                 .backend_style()
                 .color
-                .alpha(),
+                .get_alpha(),
             64,
             theme
                 .marks
@@ -121,7 +121,7 @@ fn overlay_alpha_follows_original_slots_and_source_jitter_through_positioned_gro
                 .inner_summary()
                 .backend_style()
                 .color
-                .alpha()
+                .get_alpha()
         ]
     );
     assert_eq!(
@@ -129,7 +129,7 @@ fn overlay_alpha_follows_original_slots_and_source_jitter_through_positioned_gro
             .marks
             .iter()
             .filter_map(|mark| match mark {
-                categorical_distribution::Mark::Line(_, style) => Some(style.color.alpha()),
+                categorical_distribution::Mark::Line(_, style) => Some(style.color.get_alpha()),
                 _ => None,
             })
             .collect::<Vec<_>>(),

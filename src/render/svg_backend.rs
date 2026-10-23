@@ -679,8 +679,8 @@ impl fmt::Display for PaintAttributes<'_> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let Self { paint, property } = self;
         write!(formatter, "{property}=\"{paint}\"")?;
-        if paint.0.alpha() != 255 {
-            let opacity = f64::from(paint.0.alpha()) / 255.0;
+        if paint.0.get_alpha() != 255 {
+            let opacity = f64::from(paint.0.get_alpha()) / 255.0;
             write!(formatter, " {property}-opacity=\"{opacity}\"")?;
         }
         Ok(())

@@ -365,7 +365,7 @@ impl CachedTextQuery {
             input.paint.red(),
             input.paint.green(),
             input.paint.blue(),
-            input.paint.alpha(),
+            input.paint.get_alpha(),
             u8::from(input.exact_override),
         ]);
         hash.update([u8::from(preferred_lines.is_some())]);

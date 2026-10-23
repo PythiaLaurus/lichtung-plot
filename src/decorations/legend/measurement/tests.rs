@@ -666,7 +666,7 @@ fn assert_alpha_measurement_cache(theme: &ResolvedTheme) {
             .iter()
             .filter_map(
                 |call| if let super::super::LegendCall::Point(_, point) = call {
-                    Some(point.color.alpha())
+                    Some(point.color.get_alpha())
                 } else {
                     None
                 }

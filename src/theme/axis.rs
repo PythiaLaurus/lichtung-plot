@@ -368,7 +368,7 @@ impl AxisTheme {
                     stroke.color().red(),
                     stroke.color().green(),
                     stroke.color().blue(),
-                    stroke.color().alpha(),
+                    stroke.color().get_alpha(),
                 ] {
                     round.observe_count(usize::from(channel))?;
                 }

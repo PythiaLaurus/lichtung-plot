@@ -27,7 +27,7 @@ impl ObservationAlpha {
 
     pub(crate) fn point(self, mut style: PointStyle) -> PointStyle {
         if let Some(value) = self.value {
-            style.color = style.color.with_alpha(value.alpha);
+            style.color = style.color.alpha(value.alpha);
         }
         style
     }
@@ -35,14 +35,14 @@ impl ObservationAlpha {
 
 pub(crate) fn line_style(alpha: Option<ResolvedAlpha>, mut style: LineStyle) -> LineStyle {
     if let Some(value) = alpha {
-        style.color = style.color.with_alpha(value.alpha);
+        style.color = style.color.alpha(value.alpha);
     }
     style
 }
 
 pub(crate) fn fill_style(alpha: Option<ResolvedAlpha>, mut style: FillStyle) -> FillStyle {
     if let Some(value) = alpha {
-        style.color = style.color.with_alpha(value.alpha);
+        style.color = style.color.alpha(value.alpha);
     }
     style
 }
@@ -54,7 +54,7 @@ pub(crate) fn fill_ink_outset(
     let mut outset = (0.0_f64, 0.0_f64);
     let mut visibility = [None, None];
     for alpha in alphas {
-        let visible = usize::from(alpha.map_or(style.color.alpha(), |value| value.alpha) != 0);
+        let visible = usize::from(alpha.map_or(style.color.get_alpha(), |value| value.alpha) != 0);
         let ink = if let Some(ink) = visibility[visible] {
             ink
         } else {
@@ -96,8 +96,12 @@ pub(crate) fn point_ink(
     // visibility changes the canonical bounds. Cache an actual style for each.
     let mut visibility = [None, None];
     for (x, y, alpha) in points {
-        let visible =
-            usize::from(alpha.value.map_or(style.color.alpha(), |value| value.alpha) != 0);
+        let visible = usize::from(
+            alpha
+                .value
+                .map_or(style.color.get_alpha(), |value| value.alpha)
+                != 0,
+        );
         let bounds = if let Some(bounds) = visibility[visible] {
             bounds
         } else {

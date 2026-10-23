@@ -248,7 +248,7 @@ impl DataOutlineTheme {
             (stroke.color(), stroke.width())
         } else {
             (
-                mapped.with_alpha(self.mapped_alpha().expect("validated mapped outline")),
+                mapped.alpha(self.mapped_alpha().expect("validated mapped outline")),
                 self.mapped_width().expect("validated mapped outline"),
             )
         }
@@ -301,7 +301,7 @@ impl DataFillTheme {
             .map_or((Color::rgba(0, 0, 0, 0), 0.0), |outline| {
                 outline.operands(color)
             });
-        FillStyle::new(color.with_alpha(self.fill_alpha()), stroke, width)
+        FillStyle::new(color.alpha(self.fill_alpha()), stroke, width)
     }
 }
 
@@ -418,7 +418,7 @@ impl PointTheme {
         outline_visible: bool,
     ) -> PointStyle {
         PointStyle {
-            color: color_from_rgb(rgb).with_alpha(self.fill_alpha()),
+            color: color_from_rgb(rgb).alpha(self.fill_alpha()),
             radius,
             shape: self.shape(),
             outline: self
@@ -439,7 +439,7 @@ pub struct DataLineTheme {
 
 impl DataLineTheme {
     pub(crate) fn validate(&self) -> Result<()> {
-        validate_width(self.width())
+        validate_width(self.get_width())
     }
     /// Construct positive finite CSS width, mapped byte alpha and a closed pattern.
     pub fn new(width: f32, alpha: u8, pattern: StrokePattern) -> Result<Self> {
@@ -452,34 +452,34 @@ impl DataLineTheme {
         Ok(value)
     }
     /// Inspect the positive CSS width.
-    pub fn width(&self) -> f32 {
+    pub fn get_width(&self) -> f32 {
         self.width
     }
     /// Inspect mapped stroke alpha.
-    pub fn alpha(&self) -> u8 {
+    pub fn get_alpha(&self) -> u8 {
         self.alpha
     }
     /// Inspect the closed stroke pattern.
-    pub fn pattern(&self) -> StrokePattern {
+    pub fn get_pattern(&self) -> StrokePattern {
         self.pattern
     }
     /// Replace only the positive CSS width.
-    pub fn with_width(self, width: f32) -> Result<Self> {
+    pub fn width(self, width: f32) -> Result<Self> {
         Self::new(width, self.alpha, self.pattern)
     }
     /// Replace only mapped stroke alpha.
-    pub fn with_alpha(self, alpha: u8) -> Result<Self> {
+    pub fn alpha(self, alpha: u8) -> Result<Self> {
         Self::new(self.width, alpha, self.pattern)
     }
     /// Replace only the closed stroke pattern.
-    pub fn with_pattern(self, pattern: StrokePattern) -> Result<Self> {
+    pub fn pattern(self, pattern: StrokePattern) -> Result<Self> {
         Self::new(self.width, self.alpha, pattern)
     }
     pub(crate) fn backend_style(&self, rgb: (u8, u8, u8)) -> LineStyle {
         LineStyle {
-            color: color_from_rgb(rgb).with_alpha(self.alpha()),
-            width: self.width(),
-            pattern: self.pattern(),
+            color: color_from_rgb(rgb).alpha(self.get_alpha()),
+            width: self.get_width(),
+            pattern: self.get_pattern(),
         }
     }
 }

@@ -381,7 +381,7 @@ impl<'a> AlphaGuideBuilder<'a> {
         }
         style.color = Color::from(self.neutral);
         if mapped_outline {
-            style.stroke = Color::from(self.neutral).with_alpha(style.stroke.alpha());
+            style.stroke = Color::from(self.neutral).alpha(style.stroke.get_alpha());
         }
         let outline = style.stroke_width > 0.0;
         let key = ResolvedGuideKey {
@@ -570,15 +570,15 @@ fn sample_key(prototype: &ResolvedGuideKey, target: AlphaTarget, alpha: u8) -> R
                 .point
                 .as_mut()
                 .expect("point alpha has its actual glyph");
-            point.color = point.color.with_alpha(alpha);
+            point.color = point.color.alpha(alpha);
         }
         AlphaTarget::Line => {
             let line = key.line.as_mut().expect("line alpha has its actual glyph");
-            line.color = line.color.with_alpha(alpha);
+            line.color = line.color.alpha(alpha);
         }
         AlphaTarget::Fill => {
             let fill = key.fill.as_mut().expect("fill alpha has its actual glyph");
-            fill.color = fill.color.with_alpha(alpha);
+            fill.color = fill.color.alpha(alpha);
         }
     }
     key

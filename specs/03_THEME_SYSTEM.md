@@ -41,11 +41,11 @@ admitted. Values implement Clone/Debug/PartialEq, and Eq where normalized storag
 permits it. Complete Theme equality excludes operation context, fonts discovered
 at render time and caches.
 
-For each component/group field `f`, `f()` returns a Copy value, a borrowed owned
-value, `Option<T>` for optional Copy values or `Option<&T>` for optional owned
-values. Collections expose borrowed slices/iterators, not mutable access.
-Consuming `with_f` edits replace only f, validate the resulting complete value
-and return Result. Cross-field failures reject immediately. ThemeBuilder's
+Inspection returns a Copy value, a borrowed owned value, `Option<T>` for optional
+Copy values or `Option<&T>` for optional owned values. Collections expose borrowed
+slices/iterators, not mutable access. Consuming field edits replace only that
+field, validate the resulting complete value and return Result. Cross-field
+failures reject immediately. ThemeBuilder's
 complete component replacements return Self; its font-stack edit and build return
 Result. Closed-choice factory values use their documented factories and replace
 whole choices, rather than exporting unchecked variants.
@@ -108,9 +108,11 @@ caption. Root rotation remains fixed.
 ## Colors, Paints And Typography
 
 `OpaqueColor` is Copy/Eq RGB bytes; `Color` is Copy/Eq RGBA bytes. `rgb` is
-infallible, with Color alpha 255; `rgba` supplies all four channels; `with_alpha`
-replaces alpha. Strict hex accepts exactly ASCII `#RRGGBB` for OpaqueColor and
-`#RRGGBB`/`#RRGGBBAA` for Color, with case-insensitive hex digits, no trimming,
+infallible, with Color alpha 255; `rgba` supplies all four channels. Color's const
+`alpha(byte)` replaces alpha and its paired const `get_alpha()` inspects it.
+Read-only RGB queries remain `red()`, `green()` and `blue()`. Strict hex accepts
+exactly ASCII `#RRGGBB` for OpaqueColor and `#RRGGBB`/`#RRGGBBAA` for Color, with
+case-insensitive hex digits, no trimming,
 shorthand, CSS expression or floating channel. OpaqueColor-to-Color sets 255;
 there is no conversion silently dropping Color alpha into a data scale.
 
@@ -198,6 +200,11 @@ is closed Solid/ShortDash/MediumDash/LongDash with dash grammar solid/`3 2`/`4 3
 | SizedPointTheme | complete PointTheme appearance, positive radius |
 | SupplementalPointTheme | positive radius, fill_alpha; plain Circle/no outline |
 | DataLineTheme | positive width, alpha, StrokePattern |
+
+DataLineTheme consuming edits are `width(value)`, `alpha(value)` and
+`pattern(value)`, with paired `get_width()`, `get_alpha()` and `get_pattern()`
+readers. Every edit reconstructs and validates the complete width/alpha/pattern
+value, including retained sibling constraints.
 
 Mapped outlines receive mapped RGB and their own alpha; fixed outlines retain
 complete Color. Point-outline ratios resolve against the final selected point

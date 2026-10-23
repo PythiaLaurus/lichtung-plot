@@ -92,7 +92,7 @@ text_group! {
         dark: TextTheme => with_dark,
     }
     validate |value| {
-        if value.light.color().alpha() != 255 || value.dark.color().alpha() != 255 {
+        if value.light.color().get_alpha() != 255 || value.dark.color().get_alpha() != 255 {
             return Err(Error::Data("contrast text candidates must be opaque".into()));
         }
     }

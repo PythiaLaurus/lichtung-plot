@@ -142,7 +142,7 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
     };
     for (styles, alpha) in payload.points.iter().zip([64, 230]) {
         for (style, color) in styles.iter().zip(colors) {
-            assert_eq!(style.color, color.with_alpha(alpha));
+            assert_eq!(style.color, color.alpha(alpha));
             assert_eq!(
                 style.outline.as_ref().unwrap().color,
                 Color::rgba(101, 113, 127, 61)
@@ -153,7 +153,7 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
         payload
             .connectors
             .iter()
-            .map(|style| style.color.alpha())
+            .map(|style| style.color.get_alpha())
             .collect::<Vec<_>>(),
         [0, 191]
     );

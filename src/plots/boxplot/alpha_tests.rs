@@ -139,7 +139,7 @@ fn duplicate_outliers_keep_sorted_original_occurrences_and_replacement_paint() {
     assert_eq!(
         points
             .iter()
-            .map(|(points, style)| (points.len(), style.color.alpha()))
+            .map(|(points, style)| (points.len(), style.color.get_alpha()))
             .collect::<Vec<_>>(),
         [(1, 128), (1, 230), (1, 0)]
     );
@@ -157,7 +157,7 @@ fn duplicate_outliers_keep_sorted_original_occurrences_and_replacement_paint() {
     let categorical_distribution::Mark::Polygon(_, fill) = &payload.marks[0] else {
         panic!("Boxplot body")
     };
-    assert_eq!(fill.color.alpha(), 0);
+    assert_eq!(fill.color.get_alpha(), 0);
     assert_eq!(
         fill.stroke,
         theme

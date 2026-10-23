@@ -91,7 +91,11 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
                 MatrixPrimitive::Scatter(points, members, style) => {
                     assert_eq!(points.len(), members.len());
                     assert!(style.outline.is_none());
-                    (members[0].slot, members[0].source_row, style.color.alpha())
+                    (
+                        members[0].slot,
+                        members[0].source_row,
+                        style.color.get_alpha(),
+                    )
                 }
                 MatrixPrimitive::Polygon(..) => panic!("off-diagonal polygon"),
             })
@@ -100,7 +104,7 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
     }
     for index in [0, 3] {
         assert!(
-            matches!(&payload.cells[index].marks[0], MatrixPrimitive::Polygon(_, style) if style.color.alpha() == 64 && style.stroke.alpha() == 255)
+            matches!(&payload.cells[index].marks[0], MatrixPrimitive::Polygon(_, style) if style.color.get_alpha() == 64 && style.stroke.get_alpha() == 255)
         );
     }
 }

@@ -68,7 +68,7 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
         payload
             .groups
             .iter()
-            .map(|(points, style)| (points.len(), style.color.alpha()))
+            .map(|(points, style)| (points.len(), style.color.get_alpha()))
             .collect::<Vec<_>>(),
         [(1, 0), (1, 128), (1, 0)]
     );

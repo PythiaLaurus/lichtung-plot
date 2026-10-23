@@ -56,7 +56,7 @@ fn point_alpha_retains_source_order_color_samples_and_coincident_packing_even_at
         varied
             .points
             .iter()
-            .map(|(_, style)| style.color.alpha())
+            .map(|(_, style)| style.color.get_alpha())
             .collect::<Vec<_>>(),
         [64, 230, 0, 128, 0]
     );
@@ -94,7 +94,7 @@ fn point_alpha_retains_source_order_color_samples_and_coincident_packing_even_at
     {
         assert_eq!(point, opaque);
         assert_eq!(point, transparent);
-        assert_eq!(style.color.with_alpha(255), opaque_style.color);
+        assert_eq!(style.color.alpha(255), opaque_style.color);
         assert!(style.outline.is_none());
     }
 }
@@ -221,7 +221,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
             color.as_rgb()
         );
         assert_eq!(
-            style.color.alpha(),
+            style.color.get_alpha(),
             theme.marks.points().primary().fill_alpha()
         );
     }

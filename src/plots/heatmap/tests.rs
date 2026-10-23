@@ -71,7 +71,7 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
         .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
         .unwrap();
     let cell = &payload(&transparent).cells[0];
-    assert_eq!(cell.fill.color.alpha(), 0);
+    assert_eq!(cell.fill.color.get_alpha(), 0);
     let plan = &cell.text.as_ref().unwrap().plan;
     assert_eq!(plan.style.font_size, 11);
     let marks = retained_in(&chart).unwrap();
@@ -243,9 +243,9 @@ fn cell_alpha_retains_original_members_through_normalized_order_and_missing_grid
     assert_eq!(
         cells
             .iter()
-            .map(|cell| cell.fill.color.alpha())
+            .map(|cell| cell.fill.color.get_alpha())
             .collect::<Vec<_>>(),
-        [theme.marks.cells().missing_fill().alpha(), 230, 64, 0]
+        [theme.marks.cells().missing_fill().get_alpha(), 230, 64, 0]
     );
     assert!(cells[0].cross.is_some());
     assert!(cells[1..].iter().all(|cell| cell.cross.is_none()));

@@ -46,13 +46,13 @@ impl OpaqueColor {
 /// Complete RGBA paint with one opaque RGB identity and one byte alpha.
 ///
 /// Channels are exact bytes, including fully transparent and opaque alpha.
-/// Use [`Color::with_alpha`] to replace alpha without multiplying it.
+/// Use [`Color::alpha`] to replace alpha without multiplying it.
 ///
 /// ```
 /// use lichtung_plot::Color;
 /// let paint = Color::hex("#12345680")?;
-/// assert_eq!(paint.alpha(), 128);
-/// assert_eq!(paint.with_alpha(255), Color::rgb(18, 52, 86));
+/// assert_eq!(paint.get_alpha(), 128);
+/// assert_eq!(paint.alpha(255), Color::rgb(18, 52, 86));
 /// # Ok::<(), lichtung_plot::Error>(())
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -100,13 +100,13 @@ impl Color {
     }
 
     /// Inspect alpha: zero is transparent and 255 is opaque.
-    pub const fn alpha(&self) -> u8 {
+    pub const fn get_alpha(&self) -> u8 {
         self.alpha
     }
 
     /// Replace alpha, retaining all RGB channels exactly.
     #[must_use]
-    pub const fn with_alpha(self, alpha: u8) -> Self {
+    pub const fn alpha(self, alpha: u8) -> Self {
         Self { alpha, ..self }
     }
 }
@@ -153,7 +153,7 @@ mod tests {
     use super::*;
 
     fn channels(color: Color) -> [u8; 4] {
-        [color.red(), color.green(), color.blue(), color.alpha()]
+        [color.red(), color.green(), color.blue(), color.get_alpha()]
     }
 
     #[test]

@@ -66,7 +66,7 @@ impl PointStyle {
     #[must_use]
     pub(crate) fn new(color: (u8, u8, u8), radius: u32) -> Self {
         Self {
-            color: color_from_rgb(color).with_alpha(209),
+            color: color_from_rgb(color).alpha(209),
             radius,
             outline: Some(PointOutline::publication().unwrap()),
             shape: PointShape::Circle,
@@ -78,7 +78,7 @@ impl PointStyle {
     #[must_use]
     pub(crate) fn plain(color: (u8, u8, u8), radius: u32) -> Self {
         Self {
-            color: color_from_rgb(color).with_alpha(209),
+            color: color_from_rgb(color).alpha(209),
             radius,
             outline: None,
             shape: PointShape::Circle,

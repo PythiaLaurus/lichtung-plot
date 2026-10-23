@@ -304,13 +304,13 @@ impl GeometrySnapshot {
         backend::validate_fill_style(style)?;
         if rounded.rect.width.value() == 0.0
             || rounded.rect.height.value() == 0.0
-            || (style.color.alpha() == 0
-                && (style.stroke.alpha() == 0 || style.stroke_width == 0.0))
+            || (style.color.get_alpha() == 0
+                && (style.stroke.get_alpha() == 0 || style.stroke_width == 0.0))
         {
             return Ok(());
         }
         let padding = super::coordinates::CanonicalCoordinate::nonnegative_length(
-            f64::from(if style.stroke.alpha() == 0 {
+            f64::from(if style.stroke.get_alpha() == 0 {
                 0.0
             } else {
                 style.stroke_width
@@ -392,11 +392,11 @@ impl GeometrySnapshot {
         let points = backend::validate_polygon_points(points)?;
         let style = super::primitives::CanonicalFillStyle::new(style)?;
         let ring = polygon_ring(&points);
-        let fill = (style.color.alpha() > 0 && polygon_has_positive_area(&ring)?)
+        let fill = (style.color.get_alpha() > 0 && polygon_has_positive_area(&ring)?)
             .then(|| GeometryBox::from_canonical_points(&ring, 0))
             .transpose()?
             .flatten();
-        let stroke = if style.stroke.alpha() > 0 {
+        let stroke = if style.stroke.get_alpha() > 0 {
             polygon_stroke_bounds(&ring, style.stroke_width.units())?
         } else {
             None
@@ -932,7 +932,7 @@ fn scatter_bounds(
     let outline_width = style
         .outline
         .as_ref()
-        .filter(|outline| outline.color.alpha() > 0)
+        .filter(|outline| outline.color.get_alpha() > 0)
         .map(|outline| {
             outline
                 .width_for_radius(style.radius)
@@ -948,7 +948,7 @@ fn scatter_bounds(
             )?
             .units();
             for point in canonical_points {
-                if style.color.alpha() == 0 && outline_width == 0 {
+                if style.color.get_alpha() == 0 && outline_width == 0 {
                     continue;
                 }
                 record(GeometryBox::from_canonical_points(
@@ -959,7 +959,7 @@ fn scatter_bounds(
         }
         PointShape::TriangleUp => {
             for triangle in backend::validate_triangle_points(points, style.radius)? {
-                let fill = (style.color.alpha() > 0)
+                let fill = (style.color.get_alpha() > 0)
                     .then(|| GeometryBox::from_canonical_points(&triangle, 0))
                     .transpose()?
                     .flatten();
@@ -984,7 +984,7 @@ fn line_bounds(
     }
     let points = backend::validate_line_points(points)?;
     let style = super::primitives::CanonicalLineStyle::new(style)?;
-    if style.color.alpha() == 0 || style.width.units() == 0 {
+    if style.color.get_alpha() == 0 || style.width.units() == 0 {
         return Ok(());
     }
     for segment in points.windows(2) {
@@ -1500,11 +1500,11 @@ impl Backend for GeometryBackend {
         let points = backend::validate_polygon_points(points)?;
         let style = super::primitives::CanonicalFillStyle::new(style)?;
         let ring = polygon_ring(&points);
-        let fill_bounds = (style.color.alpha() > 0 && polygon_has_positive_area(&ring)?)
+        let fill_bounds = (style.color.get_alpha() > 0 && polygon_has_positive_area(&ring)?)
             .then(|| GeometryBox::from_canonical_points(&ring, 0))
             .transpose()?
             .flatten();
-        let stroke_bounds = if style.stroke.alpha() > 0 {
+        let stroke_bounds = if style.stroke.get_alpha() > 0 {
             polygon_stroke_bounds(&ring, style.stroke_width.units())?
         } else {
             None
@@ -1612,13 +1612,13 @@ impl Backend for GeometryBackend {
         backend::validate_fill_style(style)?;
         if rounded.rect.width.value() == 0.0
             || rounded.rect.height.value() == 0.0
-            || (style.color.alpha() == 0
-                && (style.stroke.alpha() == 0 || style.stroke_width == 0.0))
+            || (style.color.get_alpha() == 0
+                && (style.stroke.get_alpha() == 0 || style.stroke_width == 0.0))
         {
             return Ok(());
         }
         let padding = super::coordinates::CanonicalCoordinate::nonnegative_length(
-            f64::from(if style.stroke.alpha() == 0 {
+            f64::from(if style.stroke.get_alpha() == 0 {
                 0.0
             } else {
                 style.stroke_width
@@ -1708,7 +1708,7 @@ mod tests {
             ),
             "circle" => {
                 let mut style = PointStyle::new((0, 0, 0), 1);
-                style.color = style.color.with_alpha(0);
+                style.color = style.color.alpha(0);
                 style.outline = Some(backend::PointOutline {
                     color: Color::rgb(0, 0, 0),
                     width_ratio: crate::theme::RelativeSpacing::new(f64::from(width)).unwrap(),
@@ -1924,7 +1924,7 @@ mod tests {
                 .begin_clip(PanelBox::new(8.0, 12.0, 12.0, 13.0))
                 .unwrap();
             let mut style = PointStyle::new((0, 0, 0), 2).with_shape(shape);
-            style.color = style.color.with_alpha(0);
+            style.color = style.color.alpha(0);
             geometry
                 .draw_scatter(&[Point2D::new(10.0, 10.0)], &style)
                 .unwrap();

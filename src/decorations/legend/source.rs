@@ -670,7 +670,7 @@ fn bind_alpha(
         let input = plot.alpha_inputs().get(target);
         if !input.is_theme() {
             let paint = paint.ok_or_else(|| invalid("data-alpha binding has no actual paint"))?;
-            *paint = paint.with_alpha(255);
+            *paint = paint.alpha(255);
             *binding = AlphaBinding::Data {
                 target,
                 unit,

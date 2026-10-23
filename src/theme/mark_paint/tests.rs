@@ -23,7 +23,7 @@ fn present_widths_reject_invalid_inputs_without_imposing_a_minimum_or_maximum() 
             .is_err());
         assert!(DataLineTheme::new(1.0, 255, StrokePattern::Solid)
             .unwrap()
-            .with_width(width)
+            .width(width)
             .is_err());
     }
     for width in [f32::from_bits(1), f32::MIN_POSITIVE, f32::MAX] {
@@ -48,7 +48,7 @@ fn present_widths_reject_invalid_inputs_without_imposing_a_minimum_or_maximum() 
         assert_eq!(
             DataLineTheme::new(width, 255, StrokePattern::Solid)
                 .unwrap()
-                .width()
+                .get_width()
                 .to_bits(),
             width.to_bits()
         );
@@ -83,13 +83,13 @@ fn present_widths_reject_invalid_inputs_without_imposing_a_minimum_or_maximum() 
         alpha: 211,
         pattern: StrokePattern::Solid
     }
-    .with_alpha(0)
+    .alpha(0)
     .is_err());
     assert!(DataLineTheme {
         width: f32::NAN,
         alpha: 211,
         pattern: StrokePattern::Solid
     }
-    .with_pattern(StrokePattern::LongDash)
+    .pattern(StrokePattern::LongDash)
     .is_err());
 }

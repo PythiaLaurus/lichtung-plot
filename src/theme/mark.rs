@@ -547,7 +547,7 @@ mod tests {
                 if let Mark::Scatter(points, style) = mark {
                     observed += points.len();
                     assert_eq!(style.radius, 5);
-                    alphas.extend(std::iter::repeat_n(style.color.alpha(), points.len()));
+                    alphas.extend(std::iter::repeat_n(style.color.get_alpha(), points.len()));
                     assert_eq!(style.outline.is_some(), outlined);
                 }
             }
@@ -557,7 +557,7 @@ mod tests {
                     .marks
                     .iter()
                     .filter_map(|mark| match mark {
-                        Mark::Polygon(_, style) => Some(style.color.alpha()),
+                        Mark::Polygon(_, style) => Some(style.color.get_alpha()),
                         _ => None,
                     })
                     .collect::<Vec<_>>(),
@@ -570,7 +570,7 @@ mod tests {
                         .inner_summary()
                         .backend_style()
                         .color
-                        .alpha()
+                        .get_alpha()
                 ]
             );
             assert_eq!(
@@ -578,7 +578,7 @@ mod tests {
                     .marks
                     .iter()
                     .filter_map(|mark| match mark {
-                        Mark::Line(_, style) => Some(style.color.alpha()),
+                        Mark::Line(_, style) => Some(style.color.get_alpha()),
                         _ => None,
                     })
                     .collect::<Vec<_>>(),

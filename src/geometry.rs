@@ -535,7 +535,7 @@ mod validation_tests {
             .iter()
             .filter_map(|mark| match mark {
                 crate::plots::categorical_distribution::Mark::Scatter(points, style) => {
-                    Some((points.len(), style.color.alpha()))
+                    Some((points.len(), style.color.get_alpha()))
                 }
                 _ => None,
             })
@@ -548,14 +548,14 @@ mod validation_tests {
             .inner_summary()
             .backend_style()
             .color
-            .alpha();
+            .get_alpha();
         assert_eq!(
             payload
                 .marks
                 .iter()
                 .filter_map(|mark| match mark {
                     crate::plots::categorical_distribution::Mark::Polygon(_, style) =>
-                        Some(style.color.alpha()),
+                        Some(style.color.get_alpha()),
                     _ => None,
                 })
                 .collect::<Vec<_>>(),
@@ -567,7 +567,7 @@ mod validation_tests {
                 .iter()
                 .filter_map(|mark| match mark {
                     crate::plots::categorical_distribution::Mark::Line(_, style) =>
-                        Some(style.color.alpha()),
+                        Some(style.color.get_alpha()),
                     _ => None,
                 })
                 .collect::<Vec<_>>(),

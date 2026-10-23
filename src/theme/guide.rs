@@ -300,7 +300,7 @@ impl LegendTheme {
                 .into_iter()
                 .flatten()
             {
-                for byte in [color.red(), color.green(), color.blue(), color.alpha()] {
+                for byte in [color.red(), color.green(), color.blue(), color.get_alpha()] {
                     round.observe_count(usize::from(byte))?;
                 }
             }

@@ -911,7 +911,7 @@ mod tests {
             .data_lines()
             .density_line()
             .clone()
-            .with_width(140.0)
+            .width(140.0)
             .unwrap();
         let lines = theme
             .marks
@@ -928,7 +928,7 @@ mod tests {
             .data_lines()
             .density_line()
             .clone()
-            .with_alpha(0)
+            .alpha(0)
             .unwrap();
         let lines = theme
             .marks
@@ -1008,11 +1008,11 @@ mod tests {
         };
         assert_eq!(
             payload.curves[0].fill_style.color,
-            crate::theme::Color::from(theme.color_scales.qualitative().colors()[0]).with_alpha(56)
+            crate::theme::Color::from(theme.color_scales.qualitative().colors()[0]).alpha(56)
         );
         assert_eq!(
             payload.curves[1].fill_style.color,
-            crate::theme::Color::from(theme.color_scales.qualitative().colors()[1]).with_alpha(56)
+            crate::theme::Color::from(theme.color_scales.qualitative().colors()[1]).alpha(56)
         );
         assert!(payload.curves[0].fill[0].x > payload.curves[1].fill[0].x);
         let line = theme
@@ -1020,9 +1020,9 @@ mod tests {
             .data_lines()
             .density_line()
             .clone()
-            .with_width(2.5)
+            .width(2.5)
             .unwrap()
-            .with_alpha(128)
+            .alpha(128)
             .unwrap();
         let lines = theme
             .marks
@@ -1052,7 +1052,7 @@ mod tests {
             changed_payload.curves[0].line_style.width.to_bits(),
             2.5_f32.to_bits()
         );
-        assert_eq!(changed_payload.curves[0].line_style.color.alpha(), 128);
+        assert_eq!(changed_payload.curves[0].line_style.color.get_alpha(), 128);
         assert!(crate::decorations::legend::discrete::PreparedGuide::merge(
             [
                 selected.discrete_guide.as_ref().unwrap(),
@@ -1128,7 +1128,7 @@ mod tests {
         .erase();
         let mut theme = crate::Theme::publication().resolve().unwrap();
         let lines = theme.marks.data_lines();
-        let line = lines.density_line().clone().with_alpha(0).unwrap();
+        let line = lines.density_line().clone().alpha(0).unwrap();
         let lines = lines.clone().with_density_line(line).unwrap();
         theme.marks = theme.marks.clone().with_data_lines(lines).unwrap();
         let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
@@ -1176,7 +1176,7 @@ mod tests {
                 payload
                     .curves
                     .iter()
-                    .map(|curve| curve.fill_style.color.alpha())
+                    .map(|curve| curve.fill_style.color.get_alpha())
                     .collect::<Vec<_>>(),
                 fills
             );
@@ -1184,7 +1184,7 @@ mod tests {
                 payload
                     .curves
                     .iter()
-                    .map(|curve| curve.line_style.color.alpha())
+                    .map(|curve| curve.line_style.color.get_alpha())
                     .collect::<Vec<_>>(),
                 expected
             );

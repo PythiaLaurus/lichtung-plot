@@ -165,11 +165,14 @@ fn aggregate_uncertainty_alpha_uses_actual_category_series_and_facet_keys_before
                 payload
                     .bars
                     .iter()
-                    .map(|bar| bar.fill.color.alpha())
+                    .map(|bar| bar.fill.color.get_alpha())
                     .collect::<Vec<_>>(),
                 fills
             );
-            assert!(payload.bars.iter().all(|bar| bar.fill.stroke.alpha() == 61));
+            assert!(payload
+                .bars
+                .iter()
+                .all(|bar| bar.fill.stroke.get_alpha() == 61));
         }
         let calls = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
         let incomplete = source.with_alpha(
@@ -276,12 +279,12 @@ fn stacked_body_alpha_preserves_signed_accumulation_zero_segments_and_independen
             payload
                 .bars
                 .iter()
-                .map(|bar| bar.fill.color.alpha())
+                .map(|bar| bar.fill.color.get_alpha())
                 .collect::<Vec<_>>(),
             [128, 230, 0, 64, 17]
         );
         assert!(payload.bars.iter().all(|bar| bar.interval.is_none()));
-        assert!(payload.bars.iter().all(|bar| bar.fill.stroke.alpha()
+        assert!(payload.bars.iter().all(|bar| bar.fill.stroke.get_alpha()
             == theme
                 .marks
                 .fills()
@@ -289,6 +292,6 @@ fn stacked_body_alpha_preserves_signed_accumulation_zero_segments_and_independen
                 .bar_body()
                 .backend_style((0, 0, 0))
                 .stroke
-                .alpha()));
+                .get_alpha()));
     }
 }

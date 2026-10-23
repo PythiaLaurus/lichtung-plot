@@ -192,8 +192,8 @@ fn assert_bar_alpha_context(plot: &Plot, theme: &mut crate::theme::ResolvedTheme
             data_fill.stroke_width.to_bits()
         );
         assert_ne!(constant_key, &entry.key);
-        assert_eq!(entry.key.fill.as_ref().unwrap().color.alpha(), 255);
-        assert_eq!(entry.key.fill.as_ref().unwrap().stroke.alpha(), 211);
+        assert_eq!(entry.key.fill.as_ref().unwrap().color.get_alpha(), 255);
+        assert_eq!(entry.key.fill.as_ref().unwrap().stroke.get_alpha(), 211);
         let alpha = match &entry.key.explanation {
             GuideExplanation::Complete(alpha) => alpha,
             GuideExplanation::Projected(mask) => &mask.alpha,
@@ -328,7 +328,7 @@ fn interaction_theme(
         .data_lines()
         .interaction_connector()
         .clone()
-        .with_alpha(211)
+        .alpha(211)
         .unwrap();
     let lines = theme
         .marks
@@ -401,12 +401,12 @@ fn assert_complete_interaction(
         assert_eq!(source.mapping.style_bindings.line_pattern, Some(style));
         let point = entry.key.point.as_ref().unwrap();
         assert_eq!(point.radius, 14);
-        assert_eq!(point.color.alpha(), 17);
+        assert_eq!(point.color.get_alpha(), 17);
         let outline = point.outline.as_ref().unwrap();
         assert_eq!(outline.color, outline_paint);
         assert_eq!(&outline.width_ratio, ratio);
         assert_eq!(outline.width_for_radius(14).unwrap().units(), 5120);
-        assert_eq!(entry.key.line.as_ref().unwrap().color.alpha(), 211);
+        assert_eq!(entry.key.line.as_ref().unwrap().color.get_alpha(), 211);
         if group_value.as_str() == "one" {
             assert_eq!(point.shape, crate::PointShape::TriangleUp);
             assert_eq!(
@@ -489,7 +489,7 @@ fn assert_projected_interaction(guide: &PreparedGuide, outline_paint: Color) {
             (crate::PointShape::Circle, crate::StrokePattern::Solid)
         );
         assert_eq!(point.outline.as_ref().unwrap().color, outline_paint);
-        assert_eq!((point.color.alpha(), line.color.alpha()), (17, 211));
+        assert_eq!((point.color.get_alpha(), line.color.get_alpha()), (17, 211));
         let GuideEntryIdentity::Category { value, .. } = &entry.identity else {
             panic!("hue category")
         };
@@ -650,8 +650,8 @@ fn assert_interaction_alpha_context(
             for entry in section.entries() {
                 let point = entry.key.point.as_ref().unwrap();
                 let line = entry.key.line.as_ref().unwrap();
-                assert_eq!(point.color.alpha(), 255);
-                assert_eq!(line.color.alpha(), 255);
+                assert_eq!(point.color.get_alpha(), 255);
+                assert_eq!(line.color.get_alpha(), 255);
                 assert_eq!(point.outline.as_ref().unwrap().color, outline);
                 let alpha = match &entry.key.explanation {
                     GuideExplanation::Complete(alpha) => alpha,

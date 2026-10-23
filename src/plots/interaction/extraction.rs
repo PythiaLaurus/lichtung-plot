@@ -79,16 +79,26 @@ fn lexical_style_selectors_preserve_raw_identity_through_prepared_group_matching
     else {
         panic!("Interaction payload")
     };
-    assert_eq!(payload.traces[0].markers[0].1.color.alpha(), 0);
-    assert_eq!(payload.traces[1].markers[0].1.color.alpha(), 230);
-    assert_eq!(payload.traces[0].interval.color.alpha(), 0);
+    assert_eq!(payload.traces[0].markers[0].1.color.get_alpha(), 0);
+    assert_eq!(payload.traces[1].markers[0].1.color.get_alpha(), 230);
+    assert_eq!(payload.traces[0].interval.color.get_alpha(), 0);
     assert_eq!(
-        payload.traces[0].connector.as_ref().unwrap().color.alpha(),
+        payload.traces[0]
+            .connector
+            .as_ref()
+            .unwrap()
+            .color
+            .get_alpha(),
         0
     );
-    assert_eq!(payload.traces[1].interval.color.alpha(), 64);
+    assert_eq!(payload.traces[1].interval.color.get_alpha(), 64);
     assert_eq!(
-        payload.traces[1].connector.as_ref().unwrap().color.alpha(),
+        payload.traces[1]
+            .connector
+            .as_ref()
+            .unwrap()
+            .color
+            .get_alpha(),
         64
     );
     assert_eq!(

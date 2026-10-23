@@ -106,7 +106,7 @@ fn paint(
                 let neutral = neutral.ok_or_else(|| {
                     Error::Render("group projection requires its owning label RGB".into())
                 })?;
-                *paint = crate::theme::color_from_rgb(neutral.as_rgb()).with_alpha(paint.alpha());
+                *paint = crate::theme::color_from_rgb(neutral.as_rgb()).alpha(paint.get_alpha());
                 Ok(Some(RgbExplanation::NeutralizedColor))
             } else {
                 Ok(Some(RgbExplanation::ExplainedColor))

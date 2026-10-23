@@ -111,7 +111,7 @@ fn packing_radius(chart: &Plot, theme: &crate::theme::ResolvedTheme) -> Result<i
     // A data-alpha binding retains every observation's full glyph in the
     // scientific packing input, independent of which bytes are transparent.
     if !chart.alpha_inputs().get(AlphaTarget::Point).is_theme() {
-        style.color = style.color.with_alpha(255);
+        style.color = style.color.alpha(255);
     }
     packing::radius(&style)
 }

@@ -278,7 +278,7 @@ pub(super) fn linear_channel(channel: u8) -> f64 {
 }
 
 fn source_over(destination: &mut [f64; 3], paint: Color) {
-    let a = f64::from(paint.alpha()) / 255.0;
+    let a = f64::from(paint.get_alpha()) / 255.0;
     let one_minus_a = 1.0 - a;
     for (channel, source) in [paint.red(), paint.green(), paint.blue()]
         .into_iter()
@@ -309,7 +309,10 @@ pub(super) fn select<'a>(
     light: &'a TextTheme,
     dark: &'a TextTheme,
 ) -> Result<&'a TextTheme, Error> {
-    if backdrop.alpha() != 255 || light.paint.alpha() != 255 || dark.paint.alpha() != 255 {
+    if backdrop.get_alpha() != 255
+        || light.paint.get_alpha() != 255
+        || dark.paint.get_alpha() != 255
+    {
         return Err(Error::Render(
             "contrast backdrop and candidate text must be opaque".into(),
         ));
