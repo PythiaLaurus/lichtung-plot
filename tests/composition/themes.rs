@@ -85,7 +85,7 @@ fn mixed_children_keep_distinct_complete_canvas_roles_on_the_root_theme() {
         TextTheme, TextWeight,
     };
     let base = Theme::nature();
-    let profile = base.typography().root().title().get_stack().clone();
+    let profile = base.typography().get_root().get_title().get_stack().clone();
     let role = |family, color, size, weight, leading| {
         TextTheme::new(
             FontStack::new(
@@ -108,7 +108,7 @@ fn mixed_children_keep_distinct_complete_canvas_roles_on_the_root_theme() {
         TextWeight::Semibold,
         1.4,
     );
-    let root = base.typography().root().clone().with_title(title).unwrap();
+    let root = base.typography().get_root().clone().title(title).unwrap();
     let header = role(
         GenericFontFamily::Serif,
         Color::rgb(43, 79, 127),
@@ -132,20 +132,20 @@ fn mixed_children_keep_distinct_complete_canvas_roles_on_the_root_theme() {
     );
     let composition = base
         .typography()
-        .composition()
+        .get_composition()
         .clone()
-        .with_composition_header(header)
+        .composition_header(header)
         .unwrap()
-        .with_text_panel_title(panel_title)
+        .text_panel_title(panel_title)
         .unwrap()
-        .with_body(body)
+        .body(body)
         .unwrap();
     let typography = base
         .typography()
         .clone()
-        .with_root(root)
+        .root(root)
         .unwrap()
-        .with_composition(composition)
+        .composition(composition)
         .unwrap();
     let surfaces = base
         .surfaces()
@@ -254,7 +254,7 @@ fn facets_use_their_owning_plot_theme_without_a_new_scope() {
     )
     .unwrap();
     let base = Theme::nature();
-    let profile = base.typography().root().title().get_stack().clone();
+    let profile = base.typography().get_root().get_title().get_stack().clone();
     let stack = FontStack::new(
         [FontFamily::generic(GenericFontFamily::Serif)]
             .into_iter()
@@ -263,8 +263,8 @@ fn facets_use_their_owning_plot_theme_without_a_new_scope() {
     .unwrap();
     let header = base
         .typography()
-        .composition()
-        .facet_header()
+        .get_composition()
+        .get_facet_header()
         .clone()
         .color(Color::rgb(131, 47, 103))
         .unwrap()
@@ -276,20 +276,12 @@ fn facets_use_their_owning_plot_theme_without_a_new_scope() {
         .unwrap();
     let composition = base
         .typography()
-        .composition()
+        .get_composition()
         .clone()
-        .with_facet_header(header)
+        .facet_header(header)
         .unwrap();
-    let typography = base
-        .typography()
-        .clone()
-        .with_composition(composition)
-        .unwrap();
-    let custom = base
-        .customize()
-        .with_typography(typography)
-        .build()
-        .unwrap();
+    let typography = base.typography().clone().composition(composition).unwrap();
+    let custom = base.customize().typography(typography).build().unwrap();
     let nature = render_svg(
         scatter().theme(custom).facet(facets()),
         "theme-facet-nature",

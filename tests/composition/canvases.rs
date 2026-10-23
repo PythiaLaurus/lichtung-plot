@@ -538,10 +538,10 @@ fn shared_point_guides_merge_across_families_only_with_equal_complete_keys() {
             .with_radii(radii)
             .unwrap();
         let marks = base.marks().clone().with_points(points).unwrap();
-        let theme = base.customize().with_marks(marks);
+        let theme = base.customize().marks(marks);
         let theme = if absent_font {
             theme
-                .with_font_stack(
+                .font_stack(
                     FontStack::new([FontFamily::named("Absent cross-family guide font").unwrap()])
                         .unwrap(),
                 )
@@ -625,7 +625,7 @@ fn shared_legend_gap_reduces_canvas_legend_separation() {
             Some(gap) => {
                 let theme = Theme::publication();
                 let legend = theme.legend().clone().with_shared_gap(gap).unwrap();
-                canvas.theme(theme.customize().with_legend(legend).build().unwrap())
+                canvas.theme(theme.customize().legend(legend).build().unwrap())
             }
             None => canvas,
         };
@@ -660,7 +660,7 @@ fn shared_legend_gap_reduces_canvas_legend_separation() {
         .clone()
         .with_shared_gap(lichtung_plot::RelativeSpacing::ratio(2, 11).unwrap())
         .unwrap();
-    let theme = theme.customize().with_legend(legend).build().unwrap();
+    let theme = theme.customize().legend(legend).build().unwrap();
     for policy in [CanvasLegendPolicy::PerPlot, CanvasLegendPolicy::Hidden] {
         Canvas::grid(1, 1)
             .unwrap()

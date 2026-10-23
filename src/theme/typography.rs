@@ -9,7 +9,7 @@ use super::TextTheme;
 macro_rules! text_group {
     (
         $(#[$attribute:meta])* $name:ident {
-            $($field:ident: $type:ty => $edit:ident),+ $(,)?
+            $($field:ident: $type:ty => $get:ident),+ $(,)?
         }
         $(validate |$value:ident| $validation:block)?
     ) => {
@@ -35,12 +35,12 @@ macro_rules! text_group {
 
             $(
                 #[doc = concat!("Borrow the independent `", stringify!($field), "` text role.")]
-                pub fn $field(&self) -> &$type {
+                pub fn $get(&self) -> &$type {
                     &self.$field
                 }
 
                 #[doc = concat!("Replace only `", stringify!($field), "`, validating the complete role group.")]
-                pub fn $edit(mut self, value: $type) -> Result<Self, Error> {
+                pub fn $field(mut self, value: $type) -> Result<Self, Error> {
                     self.$field = value;
                     self.validate()?;
                     Ok(self)
@@ -53,43 +53,43 @@ macro_rules! text_group {
 text_group! {
     /// Independent root and embedded Plot headings.
     RootTextRoles {
-        title: TextTheme => with_title,
-        subtitle: TextTheme => with_subtitle,
-        caption: TextTheme => with_caption,
+        title: TextTheme => get_title,
+        subtitle: TextTheme => get_subtitle,
+        caption: TextTheme => get_caption,
     }
 }
 
 text_group! {
     /// Complete coordinate-axis typography.
     AxisTextRoles {
-        axis_title: TextTheme => with_axis_title,
-        tick_label: TextTheme => with_tick_label,
+        axis_title: TextTheme => get_axis_title,
+        tick_label: TextTheme => get_tick_label,
     }
 }
 
 text_group! {
     /// Complete discrete and continuous guide typography.
     GuideTextRoles {
-        legend_title: TextTheme => with_legend_title,
-        legend_label: TextTheme => with_legend_label,
+        legend_title: TextTheme => get_legend_title,
+        legend_label: TextTheme => get_legend_label,
     }
 }
 
 text_group! {
     /// Independent facet, composition, and embedded-prose text roles.
     CompositionTextRoles {
-        facet_header: TextTheme => with_facet_header,
-        composition_header: TextTheme => with_composition_header,
-        text_panel_title: TextTheme => with_text_panel_title,
-        body: TextTheme => with_body,
+        facet_header: TextTheme => get_facet_header,
+        composition_header: TextTheme => get_composition_header,
+        text_panel_title: TextTheme => get_text_panel_title,
+        body: TextTheme => get_body,
     }
 }
 
 text_group! {
     /// Complete opaque candidates selected before font planning.
     ContrastTextRoles {
-        light: TextTheme => with_light,
-        dark: TextTheme => with_dark,
+        light: TextTheme => get_light,
+        dark: TextTheme => get_dark,
     }
     validate |value| {
         if value.light.get_color().get_alpha() != 255 || value.dark.get_color().get_alpha() != 255 {
@@ -101,23 +101,23 @@ text_group! {
 text_group! {
     /// Complete annotation text, independent of mark and axis chrome.
     AnnotationTextRoles {
-        significance_label: TextTheme => with_significance_label,
-        estimate_detail: TextTheme => with_estimate_detail,
-        waterfall_total: TextTheme => with_waterfall_total,
-        point_layer_label: TextTheme => with_point_layer_label,
-        panel_text: TextTheme => with_panel_text,
-        contrast: ContrastTextRoles => with_contrast,
+        significance_label: TextTheme => get_significance_label,
+        estimate_detail: TextTheme => get_estimate_detail,
+        waterfall_total: TextTheme => get_waterfall_total,
+        point_layer_label: TextTheme => get_point_layer_label,
+        panel_text: TextTheme => get_panel_text,
+        contrast: ContrastTextRoles => get_contrast,
     }
 }
 
 text_group! {
     /// One complete retained typography value with all eighteen semantic roles.
     TypographyTheme {
-        root: RootTextRoles => with_root,
-        axes: AxisTextRoles => with_axes,
-        guides: GuideTextRoles => with_guides,
-        composition: CompositionTextRoles => with_composition,
-        annotations: AnnotationTextRoles => with_annotations,
+        root: RootTextRoles => get_root,
+        axes: AxisTextRoles => get_axes,
+        guides: GuideTextRoles => get_guides,
+        composition: CompositionTextRoles => get_composition,
+        annotations: AnnotationTextRoles => get_annotations,
     }
 }
 
@@ -158,24 +158,24 @@ impl TypographyTheme {
     /// Stable traversal of each retained font handle, exactly once.
     pub(crate) fn roles(&self) -> [&TextTheme; 18] {
         [
-            self.root().title(),
-            self.root().subtitle(),
-            self.root().caption(),
-            self.axes().axis_title(),
-            self.axes().tick_label(),
-            self.annotations().significance_label(),
-            self.annotations().estimate_detail(),
-            self.annotations().waterfall_total(),
-            self.annotations().point_layer_label(),
-            self.annotations().panel_text(),
-            self.annotations().contrast().light(),
-            self.annotations().contrast().dark(),
-            self.guides().legend_title(),
-            self.guides().legend_label(),
-            self.composition().facet_header(),
-            self.composition().composition_header(),
-            self.composition().text_panel_title(),
-            self.composition().body(),
+            self.get_root().get_title(),
+            self.get_root().get_subtitle(),
+            self.get_root().get_caption(),
+            self.get_axes().get_axis_title(),
+            self.get_axes().get_tick_label(),
+            self.get_annotations().get_significance_label(),
+            self.get_annotations().get_estimate_detail(),
+            self.get_annotations().get_waterfall_total(),
+            self.get_annotations().get_point_layer_label(),
+            self.get_annotations().get_panel_text(),
+            self.get_annotations().get_contrast().get_light(),
+            self.get_annotations().get_contrast().get_dark(),
+            self.get_guides().get_legend_title(),
+            self.get_guides().get_legend_label(),
+            self.get_composition().get_facet_header(),
+            self.get_composition().get_composition_header(),
+            self.get_composition().get_text_panel_title(),
+            self.get_composition().get_body(),
         ]
     }
 }

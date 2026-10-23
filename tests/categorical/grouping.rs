@@ -757,7 +757,7 @@ fn assert_unsupported_pair_subject(kind: PlotKind, subject: PairSubject, absent_
 fn separate_unsupported_pairs_refuse_before_fonts_and_hidden_keeps_scientific_validation() {
     let absent_font = Theme::publication()
         .customize()
-        .with_font_stack(
+        .font_stack(
             FontStack::new([FontFamily::named("Absent factorization preflight font").unwrap()])
                 .unwrap(),
         )

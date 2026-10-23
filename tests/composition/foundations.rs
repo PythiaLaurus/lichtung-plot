@@ -8,8 +8,8 @@ use lichtung_plot::{
 fn stack(family: GenericFontFamily) -> FontStack {
     let profile = Theme::publication()
         .typography()
-        .root()
-        .title()
+        .get_root()
+        .get_title()
         .get_stack()
         .clone();
     FontStack::new(
@@ -37,8 +37,8 @@ fn public_shared_gradient_drives_both_families_without_borrowing_mark_alpha_or_c
     let base = Theme::publication();
     let label = base
         .typography()
-        .guides()
-        .legend_label()
+        .get_guides()
+        .get_legend_label()
         .clone()
         .color(Color::rgb(19, 61, 113))
         .unwrap()
@@ -46,16 +46,12 @@ fn public_shared_gradient_drives_both_families_without_borrowing_mark_alpha_or_c
         .unwrap();
     let guides = base
         .typography()
-        .guides()
+        .get_guides()
         .clone()
-        .with_legend_label(label)
+        .legend_label(label)
         .unwrap();
-    let typography = base.typography().clone().with_guides(guides).unwrap();
-    let root_theme = base
-        .customize()
-        .with_typography(typography)
-        .build()
-        .unwrap();
+    let typography = base.typography().clone().guides(guides).unwrap();
+    let root_theme = base.customize().typography(typography).build().unwrap();
     let primary = base
         .marks()
         .points()
@@ -74,8 +70,8 @@ fn public_shared_gradient_drives_both_families_without_borrowing_mark_alpha_or_c
         .unwrap();
     let label = base
         .typography()
-        .guides()
-        .legend_label()
+        .get_guides()
+        .get_legend_label()
         .clone()
         .color(Color::rgb(211, 79, 23))
         .unwrap()
@@ -83,11 +79,11 @@ fn public_shared_gradient_drives_both_families_without_borrowing_mark_alpha_or_c
         .unwrap();
     let guides = base
         .typography()
-        .guides()
+        .get_guides()
         .clone()
-        .with_legend_label(label)
+        .legend_label(label)
         .unwrap();
-    let typography = base.typography().clone().with_guides(guides).unwrap();
+    let typography = base.typography().clone().guides(guides).unwrap();
     let scales = base
         .color_scales()
         .clone()
@@ -95,9 +91,9 @@ fn public_shared_gradient_drives_both_families_without_borrowing_mark_alpha_or_c
         .unwrap();
     let child_theme = base
         .customize()
-        .with_marks(marks)
-        .with_typography(typography)
-        .with_color_scales(scales)
+        .marks(marks)
+        .typography(typography)
+        .color_scales(scales)
         .build()
         .unwrap();
     let selection =
@@ -219,14 +215,14 @@ fn transparent_cells_select_complete_custom_contrast_roles_before_frozen_svg_and
     .unwrap();
     let annotations = base
         .typography()
-        .annotations()
+        .get_annotations()
         .clone()
-        .with_contrast(ContrastTextRoles::new(light, dark).unwrap())
+        .contrast(ContrastTextRoles::new(light, dark).unwrap())
         .unwrap();
     let unused = base
         .typography()
-        .composition()
-        .body()
+        .get_composition()
+        .get_body()
         .clone()
         .stack(
             FontStack::new([FontFamily::named("Unavailable unused body role").unwrap()]).unwrap(),
@@ -234,16 +230,16 @@ fn transparent_cells_select_complete_custom_contrast_roles_before_frozen_svg_and
         .unwrap();
     let composition = base
         .typography()
-        .composition()
+        .get_composition()
         .clone()
-        .with_body(unused)
+        .body(unused)
         .unwrap();
     let typography = base
         .typography()
         .clone()
-        .with_annotations(annotations)
+        .annotations(annotations)
         .unwrap()
-        .with_composition(composition)
+        .composition(composition)
         .unwrap();
     let surfaces = base
         .surfaces()
@@ -261,10 +257,10 @@ fn transparent_cells_select_complete_custom_contrast_roles_before_frozen_svg_and
         .unwrap();
     let theme = base
         .customize()
-        .with_typography(typography)
-        .with_surfaces(surfaces)
-        .with_marks(marks)
-        .with_annotations(annotations)
+        .typography(typography)
+        .surfaces(surfaces)
+        .marks(marks)
+        .annotations(annotations)
         .build()
         .unwrap();
     let gradient = DivergingGradient::new([
@@ -357,21 +353,17 @@ fn active_custom_font_roles_are_required_while_unused_preferences_are_not() {
     let base = Theme::publication();
     let title = base
         .typography()
-        .root()
-        .title()
+        .get_root()
+        .get_title()
         .clone()
         .stack(
             FontStack::new([FontFamily::named("Unavailable public heading role").unwrap()])
                 .unwrap(),
         )
         .unwrap();
-    let root = base.typography().root().clone().with_title(title).unwrap();
-    let typography = base.typography().clone().with_root(root).unwrap();
-    let theme = base
-        .customize()
-        .with_typography(typography)
-        .build()
-        .unwrap();
+    let root = base.typography().get_root().clone().title(title).unwrap();
+    let typography = base.typography().clone().root(root).unwrap();
+    let theme = base.customize().typography(typography).build().unwrap();
     let plot = Plot::scatter(
         NumericValues::new("x", [1.0, 2.0]),
         NumericValues::new("y", [2.0, 1.0]),

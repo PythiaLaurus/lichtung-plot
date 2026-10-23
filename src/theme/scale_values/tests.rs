@@ -127,7 +127,7 @@ fn domains_and_continuous_edits_validate_kind_center_and_complete_result() {
 fn fixed_plot_palette_capacity_is_checked_before_fonts_even_with_hidden_legend() {
     let theme = crate::Theme::publication()
         .customize()
-        .with_font_stack(
+        .font_stack(
             crate::FontStack::new([crate::FontFamily::named(
                 "Absent fixed palette preflight font",
             )
@@ -170,8 +170,8 @@ fn hidden_shared_plots_validate_the_final_palette_domain_before_fonts() {
         .unwrap();
     let theme = base
         .customize()
-        .with_color_scales(scales)
-        .with_font_stack(
+        .color_scales(scales)
+        .font_stack(
             crate::FontStack::new([crate::FontFamily::named(
                 "Absent shared palette preflight font",
             )

@@ -575,8 +575,8 @@ fn shared_canvas_legend_rejects_conflicting_custom_outline_alpha_before_fonts() 
         let points = base.marks().points().clone().with_primary(primary).unwrap();
         let marks = base.marks().clone().with_points(points).unwrap();
         base.customize()
-            .with_marks(marks)
-            .with_font_stack(
+            .marks(marks)
+            .font_stack(
                 FontStack::new([FontFamily::named("Absent shared-key preflight font").unwrap()])
                     .unwrap(),
             )

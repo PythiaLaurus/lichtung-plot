@@ -998,7 +998,7 @@ mod tests {
             .with_sampled_rug_height(crate::theme::RelativeSpacing::new(2.0).unwrap())
             .unwrap();
         let marks = original.marks().clone().with_extents(extents).unwrap();
-        let edited = original.customize().with_marks(marks).build().unwrap();
+        let edited = original.customize().marks(marks).build().unwrap();
         let before = HistogramSemantics::new(&source, source.data(), Some(&original)).unwrap();
         let after = HistogramSemantics::new(&source, source.data(), Some(&edited)).unwrap();
         assert_eq!(before.bins, after.bins);

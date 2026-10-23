@@ -536,7 +536,7 @@ impl ResolvedTheme {
         self.prepare_font_environment()?;
         let environment = self.prepared_font_environment()?;
 
-        let appearance = self.typography.axes().tick_label();
+        let appearance = self.typography.get_axes().get_tick_label();
         let height = crate::layout::maximum_width_quanta(available_height)
             .map_err(|error| crate::Error::Render(format!("axis row height: {error}")))?;
         let count = i64::try_from(labels.len().max(1))
@@ -652,8 +652,8 @@ impl ResolvedTheme {
             self.canvas_surface_override
                 .unwrap_or(self.surfaces.get_canvas_root()),
             self.annotations.planning_backdrop().into(),
-            self.typography.annotations().contrast().light(),
-            self.typography.annotations().contrast().dark(),
+            self.typography.get_annotations().get_contrast().get_light(),
+            self.typography.get_annotations().get_contrast().get_dark(),
         )
     }
 

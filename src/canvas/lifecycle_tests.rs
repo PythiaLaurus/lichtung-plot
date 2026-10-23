@@ -417,23 +417,19 @@ fn assert_shared_color_and_alpha_sections() {
     let base = Theme::publication();
     let label = base
         .typography()
-        .guides()
-        .legend_label()
+        .get_guides()
+        .get_legend_label()
         .clone()
         .color(crate::Color::rgba(11, 22, 33, 0))
         .unwrap();
     let guides = base
         .typography()
-        .guides()
+        .get_guides()
         .clone()
-        .with_legend_label(label)
+        .legend_label(label)
         .unwrap();
-    let typography = base.typography().clone().with_guides(guides).unwrap();
-    let source_theme = base
-        .customize()
-        .with_typography(typography)
-        .build()
-        .unwrap();
+    let typography = base.typography().clone().guides(guides).unwrap();
+    let source_theme = base.customize().typography(typography).build().unwrap();
     let points = Plot::scatter(
         crate::NumericValues::new("x", [0.5, 0.75]),
         crate::NumericValues::new("y", [0.5, 0.75]),
@@ -520,11 +516,7 @@ fn heading_instructions_are_role_local_order_independent_and_frozen() {
         .unwrap()
         .with_root_caption_alignment(End)
         .unwrap();
-    let root_theme = base
-        .customize()
-        .with_composition(composition)
-        .build()
-        .unwrap();
+    let root_theme = base.customize().composition(composition).build().unwrap();
     let composition = base
         .composition()
         .clone()
@@ -534,11 +526,7 @@ fn heading_instructions_are_role_local_order_independent_and_frozen() {
         .unwrap()
         .with_root_caption_alignment(Center)
         .unwrap();
-    let local_theme = base
-        .customize()
-        .with_composition(composition)
-        .build()
-        .unwrap();
+    let local_theme = base.customize().composition(composition).build().unwrap();
     let scatter = |name: &str| {
         Plot::scatter(
             crate::NumericValues::new("x", [1.0, 2.0]),

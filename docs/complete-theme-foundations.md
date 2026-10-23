@@ -20,8 +20,8 @@ let surfaces = base.surfaces().clone()
 let legend = base.legend().clone()
     .with_shared_gap(RelativeSpacing::ratio(2, 11)?)?;
 let custom = base.customize()
-    .with_surfaces(surfaces)
-    .with_legend(legend)
+    .surfaces(surfaces)
+    .legend(legend)
     .build()?;
 # let _ = custom;
 # Ok::<(), lichtung_plot::Error>(())
@@ -42,7 +42,7 @@ not affect Canvas root prose, headers or TextPanel.
 
 All eighteen text roles independently own stack, RGBA color, positive CSS-pixel
 size, closed weight and positive leading. Obtain a built-in stack through, for
-example, `Theme::publication().typography().root().title().get_stack().clone()`.
+example, `Theme::publication().typography().get_root().get_title().get_stack().clone()`.
 TextTheme edits use bare property names such as `font_size(14)` and
 `line_height(1.25)`; paired inspection uses `get_font_size()` and
 `get_line_height()`. Every edit validates the complete role.
@@ -51,7 +51,7 @@ GenericFontFamily explicitly selects Serif/SansSerif/Monospace. FontStack retain
 nonempty ordered entries including duplicates. Availability is checked only when
 an operation consumes the role. No downloads or provisioning occur.
 
-ThemeBuilder::with_font_stack replaces all role stacks once during construction;
+ThemeBuilder::font_stack replaces all role stacks once during construction;
 later role/component replacements have ordinary latest-edit precedence.
 RelativeSpacing::new(f64) retains that exact binary rational; ratio(u32,u32)
 retains the reduced mathematical ratio. Local role metrics resolve spacing, never

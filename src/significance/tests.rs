@@ -28,18 +28,18 @@ fn selected_theme_gap_and_tick_height_survive_canonical_capture_with_exact_prece
     let mut theme = crate::Theme::publication().resolve().unwrap();
     let label = theme
         .typography
-        .annotations()
-        .significance_label()
+        .get_annotations()
+        .get_significance_label()
         .clone()
         .font_size(24)
         .unwrap();
     let roles = theme
         .typography
-        .annotations()
+        .get_annotations()
         .clone()
-        .with_significance_label(label)
+        .significance_label(label)
         .unwrap();
-    theme.typography = theme.typography.clone().with_annotations(roles).unwrap();
+    theme.typography = theme.typography.clone().annotations(roles).unwrap();
     let geometry = theme
         .annotations
         .significance()

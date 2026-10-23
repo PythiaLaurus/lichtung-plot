@@ -16,11 +16,11 @@ use super::{
 /// ```
 /// use lichtung_plot::{Color, Theme};
 /// let base = Theme::publication();
-/// let title = base.typography().root().title().clone()
+/// let title = base.typography().get_root().get_title().clone()
 ///     .color(Color::hex("#194A75")?)?;
-/// let root = base.typography().root().clone().with_title(title)?;
-/// let typography = base.typography().clone().with_root(root)?;
-/// let custom = base.customize().with_typography(typography).build()?;
+/// let root = base.typography().get_root().clone().title(title)?;
+/// let typography = base.typography().clone().root(root)?;
+/// let custom = base.customize().typography(typography).build()?;
 /// assert_ne!(custom.typography(), base.typography());
 /// # Ok::<(), lichtung_plot::Error>(())
 /// ```
@@ -53,7 +53,7 @@ pub struct ThemeBuilder {
 }
 
 macro_rules! components {
-    ($($field:ident: $ty:ty => $edit:ident),+ $(,)?) => {
+    ($($field:ident: $ty:ty => $get:ident),+ $(,)?) => {
         impl Theme {
             $(
                 #[doc = concat!("Borrow the complete `", stringify!($field), "` component.")]
@@ -63,10 +63,10 @@ macro_rules! components {
         impl ThemeBuilder {
             $(
                 #[doc = concat!("Borrow the current complete `", stringify!($field), "` component.")]
-                pub fn $field(&self) -> &$ty { self.value.$field() }
+                pub fn $get(&self) -> &$ty { self.value.$field() }
                 #[doc = concat!("Replace the complete `", stringify!($field), "` construction input.")]
                 #[must_use]
-                pub fn $edit(mut self, value: $ty) -> Self {
+                pub fn $field(mut self, value: $ty) -> Self {
                     self.value.$field = value;
                     self
                 }
@@ -75,11 +75,11 @@ macro_rules! components {
     };
 }
 
-components!(surfaces: SurfaceTheme => with_surfaces,
-    typography: TypographyTheme => with_typography, axes: AxisTheme => with_axes,
-    legend: LegendTheme => with_legend, composition: CompositionTheme => with_composition,
-    marks: MarkTheme => with_marks, annotations: AnnotationTheme => with_annotations,
-    color_scales: ColorScales => with_color_scales);
+components!(surfaces: SurfaceTheme => get_surfaces,
+    typography: TypographyTheme => get_typography, axes: AxisTheme => get_axes,
+    legend: LegendTheme => get_legend, composition: CompositionTheme => get_composition,
+    marks: MarkTheme => get_marks, annotations: AnnotationTheme => get_annotations,
+    color_scales: ColorScales => get_color_scales);
 
 impl Theme {
     #[expect(
@@ -156,7 +156,7 @@ impl ThemeBuilder {
     }
 
     /// Replace the stack in all eighteen roles once; later role edits take precedence normally.
-    pub fn with_font_stack(mut self, stack: FontStack) -> Result<Self> {
+    pub fn font_stack(mut self, stack: FontStack) -> Result<Self> {
         self.value.typography = self.value.typography.with_font_stack(stack)?;
         Ok(self)
     }
@@ -188,25 +188,25 @@ mod tests {
             .unwrap();
         let builder = source
             .customize()
-            .with_surfaces(surfaces)
-            .with_font_stack(stack.clone())
+            .surfaces(surfaces)
+            .font_stack(stack.clone())
             .unwrap();
         let local = crate::font::canonical::named_stack(&["Later title replacement"]);
         let title = builder
-            .typography()
-            .root()
-            .title()
+            .get_typography()
+            .get_root()
+            .get_title()
             .clone()
             .stack(local.clone())
             .unwrap();
         let root = builder
-            .typography()
-            .root()
+            .get_typography()
+            .get_root()
             .clone()
-            .with_title(title)
+            .title(title)
             .unwrap();
-        let typography = builder.typography().clone().with_root(root).unwrap();
-        let customized = builder.with_typography(typography).build().unwrap();
+        let typography = builder.get_typography().clone().root(root).unwrap();
+        let customized = builder.typography(typography).build().unwrap();
         assert_eq!(source, saved);
         assert_eq!(
             customized.surfaces().get_canvas_root(),

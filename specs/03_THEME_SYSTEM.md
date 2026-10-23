@@ -16,9 +16,10 @@ and `chi()` return ordinary complete validated values, without retained selector
 identity. No public resolved-theme snapshot or backend style record is exposed.
 
 `Theme::customize()` clones a complete working copy; `ThemeBuilder::new(Theme)`
-consumes one. Builder getters borrow working components, `with_component` replaces
-one complete component and `build()` revalidates the complete result.
-`with_font_stack` fallibly replaces stacks across all eighteen text roles once
+consumes one. Builder `get_component()` readers borrow working components,
+`component(value)` replaces one complete component and `build()` revalidates the
+complete result. Theme's read-only `component()` readers retain their names.
+`font_stack` fallibly replaces stacks across all eighteen text roles once
 during construction; later role/component edits have ordinary latest-edit meaning.
 The builder is construction-only and is never stored as a runtime override.
 
@@ -147,7 +148,13 @@ exact represented multiplier of font-size quanta, with one upward hard occupancy
 rounding. It is not an absolute length or spacing setter. Every text role is
 complete and independently editable.
 
-Its consuming edits use `stack(value)`, `color(value)`, `font_size(value)`,
+TypographyTheme and each nested text-role group use consuming `property(value)`
+edits and paired borrowed `get_property()` readers. For example,
+`theme.typography().get_root().get_title()` borrows the complete root title role;
+editing that role and replacing its containing groups retains ordinary latest-edit
+precedence without changing other text roles.
+
+`TextTheme`'s consuming edits use `stack(value)`, `color(value)`, `font_size(value)`,
 `weight(value)` and `line_height(value)`. Paired readers are `get_stack()`,
 `get_color()`, `get_font_size()`, `get_weight()` and `get_line_height()`, preserving
 the borrowed font stack and copy results. Each edit reconstructs and validates

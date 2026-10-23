@@ -1475,11 +1475,7 @@ mod root_title_tests {
                 .clone()
                 .with_root_caption_alignment(Center)
                 .unwrap();
-            let theme = preset
-                .customize()
-                .with_composition(composition)
-                .build()
-                .unwrap();
+            let theme = preset.customize().composition(composition).build().unwrap();
             let plot = Plot::scatter(
                 crate::NumericValues::new("x", [0.0, 1.0]),
                 crate::NumericValues::new("y", [0.0, 1.0]),

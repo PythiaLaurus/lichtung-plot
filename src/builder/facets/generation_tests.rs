@@ -126,7 +126,7 @@ fn invalid_generation_rejects_before_font_discovery() {
 fn categorical_trajectory_generation_refuses_before_fonts_in_standalone_and_canvas() {
     let theme = crate::Theme::publication()
         .customize()
-        .with_font_stack(
+        .font_stack(
             crate::FontStack::new([
                 crate::FontFamily::named("Absent categorical interval font").unwrap()
             ])

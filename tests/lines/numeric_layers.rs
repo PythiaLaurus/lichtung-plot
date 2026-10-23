@@ -109,7 +109,7 @@ fn automatic_point_layers_follow_an_independent_accent_sequence() {
                 .unwrap(),
         )
         .unwrap();
-    let theme = base.customize().with_marks(marks).build().unwrap();
+    let theme = base.customize().marks(marks).build().unwrap();
     let palette = CategoricalColorScale::from_palette(
         QualitativePalette::fixed([
             OpaqueColor::rgb(29, 137, 59),

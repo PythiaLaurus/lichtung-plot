@@ -24,8 +24,8 @@ impl ResolvedTheme {
     ) -> Result<EffectiveSignificance> {
         let mut label = self
             .typography
-            .annotations()
-            .significance_label()
+            .get_annotations()
+            .get_significance_label()
             .try_copy()?;
         if let Some(exact) = exact {
             label = label

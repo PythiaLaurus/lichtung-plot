@@ -107,7 +107,7 @@ pub(super) fn allocate(
             .get_font_size(),
     ))?;
     let header_lengths = theme.header_lengths()?;
-    let appearance = theme.typography.composition().composition_header();
+    let appearance = theme.typography.get_composition().get_composition_header();
     let mut row_header_plans = Vec::new();
     crate::layout::fit::reserve(
         &mut row_header_plans,
