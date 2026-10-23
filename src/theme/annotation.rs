@@ -29,15 +29,15 @@ impl ResolvedTheme {
             .try_copy()?;
         if let Some(exact) = exact {
             label = label
-                .with_font_size(exact.font_size())?
-                .with_weight(exact.weight())?;
+                .with_font_size(exact.get_font_size())?
+                .with_weight(exact.get_weight())?;
         }
         let geometry = self.annotations.significance();
         let em = LocalMetric::css_pixels(label.font_size())?;
         Ok(EffectiveSignificance {
             gap: exact.map_or_else(
                 || Ok(geometry.label_gap().product(em)),
-                |exact| ExactLength::pixels(exact.gap()),
+                |exact| ExactLength::pixels(exact.get_gap()),
             )?,
             geometry: geometry.clone(),
             label,

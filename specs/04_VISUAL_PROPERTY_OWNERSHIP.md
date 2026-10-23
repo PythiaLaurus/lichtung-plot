@@ -79,7 +79,10 @@ coincident point and original painting order.
 ## Exact Elements And Annotations
 
 `GuideStyle` owns complete Color, finite positive CSS stroke width and closed
-LinePattern. Its geometry remains owned by GuideSpec.
+LinePattern. Its consuming edits are `color(value)`, `width(value)` and
+`pattern(value)`, with paired `get_color()`, `get_width()` and `get_pattern()`
+readers retaining their const-call capability. Edits validate the complete style;
+its geometry remains owned by GuideSpec.
 
 An ordinary Line `PointLayer` has independent data and optional exact color, alpha
 and radius. Automatic marks use MarkTheme supplemental radius/alpha and stable
@@ -109,6 +112,11 @@ explicit Default is exactly 16px/Normal/8px. Stack, color, leading and bracket
 geometry remain Theme-owned. Preserve this distinction through fonts, intrinsic
 reserves, shelf packing, backend validation and capture. Frozen canonical brackets
 retain selected tick height; no backend constant can reconstruct it.
+
+Exact mark-style edits use `font_size(value)`, `weight(value)` and `gap(value)`;
+paired readers are `get_font_size()`, `get_weight()` and `get_gap()`. Construction
+and consuming edits validate the complete value; size remains positive u32 CSS
+pixels and the readers remain const.
 
 Typed significance targets use original category/series/facet identities, never
 synthetic concatenated keys. Anchors use final prepared mark centers. The occupied

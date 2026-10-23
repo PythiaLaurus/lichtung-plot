@@ -22,9 +22,9 @@ fn lexical_style_selectors_preserve_raw_identity_through_prepared_group_matching
     }
     let spaced = InteractionStyle::new("A  B")
         .unwrap()
-        .with_point_shape(PointShape::TriangleUp)
+        .point_shape(PointShape::TriangleUp)
         .unwrap()
-        .with_line_pattern(LinePattern::Dashed)
+        .line_pattern(LinePattern::Dashed)
         .unwrap();
     let single = InteractionStyle::new("A B").unwrap();
     let chart = Plot::interaction(

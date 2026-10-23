@@ -65,13 +65,13 @@ fn source(dense: bool) -> Plot<crate::kind::Interaction> {
     .styles((0..if dense { 5 } else { 2 }).map(|group| {
         InteractionStyle::new(format!("G{}", group + 1))
             .unwrap()
-            .with_point_shape(if group % 2 == 0 {
+            .point_shape(if group % 2 == 0 {
                 PointShape::Circle
             } else {
                 PointShape::TriangleUp
             })
             .unwrap()
-            .with_line_pattern(if group % 2 == 0 {
+            .line_pattern(if group % 2 == 0 {
                 LinePattern::Solid
             } else {
                 LinePattern::Dashed

@@ -52,6 +52,10 @@ incomplete configured group mappings before fonts. Color maps key hue when
 present, otherwise the actual color-owning group. Plain unstyled grouping
 partitions geometry without creating a guide identity.
 
+InteractionStyle consumes `point_shape(value)` / `line_pattern(value)` edits and
+retains `get_point_shape()` / `get_line_pattern()` readers. Its read-only raw
+selector keeps `group()`. Each edit validates the complete style.
+
 ### Summaries And Closed Sources
 
 Ordinary bars consume one BarInput: samples, one estimate per cell, or estimates

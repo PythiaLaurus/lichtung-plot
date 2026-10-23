@@ -13,8 +13,8 @@ use crate::{CategoryValues, Color, NumericValues};
 /// ```
 /// use lichtung_plot::{Color, GuideStyle, LinePattern};
 /// let guide = GuideStyle::new(Color::rgba(20, 80, 140, 128), 1.5, LinePattern::Solid)?
-///     .with_pattern(LinePattern::Dashed)?;
-/// assert_eq!(guide.color().alpha(), 128);
+///     .pattern(LinePattern::Dashed)?;
+/// assert_eq!(guide.get_color().alpha(), 128);
 /// # Ok::<(), lichtung_plot::Error>(())
 /// ```
 ///
@@ -51,32 +51,32 @@ impl GuideStyle {
     }
 
     /// Inspect the complete exact guide paint.
-    pub const fn color(&self) -> Color {
+    pub const fn get_color(&self) -> Color {
         self.color
     }
 
     /// Inspect the positive guide width in CSS pixels.
-    pub const fn width(&self) -> f32 {
+    pub const fn get_width(&self) -> f32 {
         self.width
     }
 
     /// Inspect the closed guide pattern.
-    pub const fn pattern(&self) -> LinePattern {
+    pub const fn get_pattern(&self) -> LinePattern {
         self.pattern
     }
 
     /// Replace the complete exact guide paint.
-    pub fn with_color(self, color: Color) -> Result<Self, Error> {
+    pub fn color(self, color: Color) -> Result<Self, Error> {
         Self::new(color, self.width, self.pattern)
     }
 
     /// Replace the positive guide width in CSS pixels.
-    pub fn with_width(self, width: f32) -> Result<Self, Error> {
+    pub fn width(self, width: f32) -> Result<Self, Error> {
         Self::new(self.color, width, self.pattern)
     }
 
     /// Replace the closed guide pattern.
-    pub fn with_pattern(self, pattern: LinePattern) -> Result<Self, Error> {
+    pub fn pattern(self, pattern: LinePattern) -> Result<Self, Error> {
         Self::new(self.color, self.width, pattern)
     }
 

@@ -93,17 +93,18 @@ impl TextWeight {
 /// ```
 /// use lichtung_plot::{SignificanceMarkStyle, TextWeight};
 /// let style = SignificanceMarkStyle::default()
-///     .with_font_size(18)?.with_weight(TextWeight::Semibold)?.with_gap(9.0)?;
-/// assert_eq!(style.font_size(), 18);
-/// assert_eq!(style.weight(), TextWeight::Semibold);
-/// assert_eq!(style.gap(), 9.0);
+///     .font_size(18)?.weight(TextWeight::Semibold)?.gap(9.0)?;
+/// assert_eq!(style.get_font_size(), 18);
+/// assert_eq!(style.get_weight(), TextWeight::Semibold);
+/// assert_eq!(style.get_gap(), 9.0);
 /// # Ok::<(), lichtung_plot::Error>(())
 /// ```
 ///
-/// Bare property names inspect; consuming edits use `with_`:
+/// Private fields prevent bypassing complete construction validation:
 /// ```compile_fail
 /// use lichtung_plot::SignificanceMarkStyle;
-/// let _ = SignificanceMarkStyle::default().gap(9.0);
+/// let mut style = SignificanceMarkStyle::default();
+/// style.gap = f64::NAN;
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SignificanceMarkStyle {
@@ -131,19 +132,19 @@ impl SignificanceMarkStyle {
     }
 
     /// Replace the positive mark font size in CSS pixels.
-    pub fn with_font_size(mut self, font_size: u32) -> Result<Self, Error> {
+    pub fn font_size(mut self, font_size: u32) -> Result<Self, Error> {
         self.font_size = font_size;
         self.validate()
     }
 
     /// Replace the mark font weight.
-    pub fn with_weight(mut self, weight: TextWeight) -> Result<Self, Error> {
+    pub fn weight(mut self, weight: TextWeight) -> Result<Self, Error> {
         self.weight = weight;
         self.validate()
     }
 
     /// Replace the finite nonnegative mark-to-data gap in CSS pixels.
-    pub fn with_gap(mut self, gap: f64) -> Result<Self, Error> {
+    pub fn gap(mut self, gap: f64) -> Result<Self, Error> {
         self.gap = gap;
         self.validate()
     }
@@ -162,17 +163,17 @@ impl SignificanceMarkStyle {
     }
 
     /// Inspect the exact positive font size in CSS pixels.
-    pub const fn font_size(&self) -> u32 {
+    pub const fn get_font_size(&self) -> u32 {
         self.font_size
     }
 
     /// Inspect the exact font weight.
-    pub const fn weight(&self) -> TextWeight {
+    pub const fn get_weight(&self) -> TextWeight {
         self.weight
     }
 
     /// Inspect the exact finite nonnegative gap in CSS pixels.
-    pub const fn gap(&self) -> f64 {
+    pub const fn get_gap(&self) -> f64 {
         self.gap
     }
 }
@@ -259,8 +260,8 @@ impl LinePattern {
 /// ```
 /// use lichtung_plot::{InteractionStyle, LinePattern, PointShape};
 /// let style = InteractionStyle::new("Control")?
-///     .with_point_shape(PointShape::TriangleUp)?
-///     .with_line_pattern(LinePattern::Dashed)?;
+///     .point_shape(PointShape::TriangleUp)?
+///     .line_pattern(LinePattern::Dashed)?;
 /// assert_eq!(style.group(), "Control");
 /// # Ok::<(), lichtung_plot::Error>(())
 /// ```
@@ -291,13 +292,13 @@ impl InteractionStyle {
     }
 
     /// Select the point shape for this group.
-    pub fn with_point_shape(mut self, shape: PointShape) -> Result<Self, Error> {
+    pub fn point_shape(mut self, shape: PointShape) -> Result<Self, Error> {
         self.shape = shape;
         self.validate()
     }
 
     /// Select the connector pattern for this group.
-    pub fn with_line_pattern(mut self, pattern: LinePattern) -> Result<Self, Error> {
+    pub fn line_pattern(mut self, pattern: LinePattern) -> Result<Self, Error> {
         self.pattern = pattern;
         self.validate()
     }
@@ -322,13 +323,13 @@ impl InteractionStyle {
 
     /// Configured point shape.
     #[must_use]
-    pub const fn point_shape(&self) -> PointShape {
+    pub const fn get_point_shape(&self) -> PointShape {
         self.shape
     }
 
     /// Configured connector pattern.
     #[must_use]
-    pub const fn line_pattern(&self) -> LinePattern {
+    pub const fn get_line_pattern(&self) -> LinePattern {
         self.pattern
     }
 }

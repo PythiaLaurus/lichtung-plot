@@ -27,11 +27,11 @@ fn interaction_data() -> StyledInteractionData {
         styles: vec![
             InteractionStyle::new("Control")
                 .unwrap()
-                .with_line_pattern(LinePattern::Dashed)
+                .line_pattern(LinePattern::Dashed)
                 .unwrap(),
             InteractionStyle::new("Semantic Agent")
                 .unwrap()
-                .with_point_shape(PointShape::TriangleUp)
+                .point_shape(PointShape::TriangleUp)
                 .unwrap(),
         ],
     }
@@ -105,9 +105,9 @@ fn native_interaction_keeps_panel_and_prose_inside_the_requested_root() {
     .styles([
         InteractionStyle::new("two")
             .unwrap()
-            .with_point_shape(PointShape::TriangleUp)
+            .point_shape(PointShape::TriangleUp)
             .unwrap()
-            .with_line_pattern(LinePattern::Dashed)
+            .line_pattern(LinePattern::Dashed)
             .unwrap(),
         InteractionStyle::new("one").unwrap(),
     ])
@@ -254,7 +254,7 @@ fn interaction_styles_reject_duplicate_groups() {
             InteractionStyle::new("Control").unwrap(),
             InteractionStyle::new("Control")
                 .unwrap()
-                .with_line_pattern(LinePattern::Dashed)
+                .line_pattern(LinePattern::Dashed)
                 .unwrap(),
         ])
         .preflight()
@@ -297,11 +297,11 @@ fn faceted_interactions_keep_sparse_global_pair_styles_and_colors() {
             .styles([
                 InteractionStyle::new("g1")
                     .unwrap()
-                    .with_line_pattern(LinePattern::Dashed)
+                    .line_pattern(LinePattern::Dashed)
                     .unwrap(),
                 InteractionStyle::new("g2")
                     .unwrap()
-                    .with_point_shape(PointShape::TriangleUp)
+                    .point_shape(PointShape::TriangleUp)
                     .unwrap(),
             ])
             .categorical_color_scale(CategoricalColorScale::from_map(colors))
@@ -373,11 +373,11 @@ fn crossed_group_hue_interactions_render_only_observed_pair_traces() {
             .styles([
                 InteractionStyle::new("g1")
                     .unwrap()
-                    .with_line_pattern(LinePattern::Dashed)
+                    .line_pattern(LinePattern::Dashed)
                     .unwrap(),
                 InteractionStyle::new("g2")
                     .unwrap()
-                    .with_point_shape(PointShape::TriangleUp)
+                    .point_shape(PointShape::TriangleUp)
                     .unwrap(),
             ])
             .categorical_color_scale(CategoricalColorScale::from_map(colors)),
@@ -446,7 +446,7 @@ fn shared_canvas_legend_preserves_caller_colors_and_composite_trace_glyphs() {
         NumericValues::new("upper", [1.2, 1.7]),
         InteractionStyle::new("Control")
             .unwrap()
-            .with_line_pattern(LinePattern::Dashed)
+            .line_pattern(LinePattern::Dashed)
             .unwrap(),
     );
     let semantic = single_series_data(
@@ -456,7 +456,7 @@ fn shared_canvas_legend_preserves_caller_colors_and_composite_trace_glyphs() {
         NumericValues::new("upper", [1.4, 2.2]),
         InteractionStyle::new("Semantic Agent")
             .unwrap()
-            .with_point_shape(PointShape::TriangleUp)
+            .point_shape(PointShape::TriangleUp)
             .unwrap(),
     );
     let colors = CategoricalColorMap::new([
@@ -519,7 +519,7 @@ fn shared_canvas_legend_rejects_conflicting_caller_color_mapping() {
         NumericValues::new("upper", [1.2, 1.7]),
         InteractionStyle::new("Control")
             .unwrap()
-            .with_line_pattern(LinePattern::Dashed)
+            .line_pattern(LinePattern::Dashed)
             .unwrap(),
     );
     let gray =

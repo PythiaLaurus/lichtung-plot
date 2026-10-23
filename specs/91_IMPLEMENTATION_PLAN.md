@@ -1658,10 +1658,11 @@ migrate in their capability steps with all affected callers and read contracts.
 
 ### Implementation Status
 
-Step 1 is in progress. NumericFormat's seven property edits and paired readers
-have migrated, including repository callers and the current numeric specification.
-The remaining appearance, Theme and supplemental-style naming migrations are
-pending. Steps 2–22 remain pending; their target signatures are not current APIs.
+Step 1 is in progress. NumericFormat, GuideStyle, InteractionStyle and
+SignificanceMarkStyle property edits and paired readers have migrated, including
+repository callers and their current specifications. The remaining appearance,
+Theme and supplemental-point naming migrations are pending. Steps 2–22 remain
+pending; their target signatures are not current APIs.
 
 ### 1. Apply The Public Property Naming Rule
 

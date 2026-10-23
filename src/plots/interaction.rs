@@ -704,8 +704,8 @@ fn resolve_trace_styles(chart: &Plot, levels: &[String]) -> Result<Option<Vec<Tr
             )));
         }
         styles[index] = Some(TraceStyle {
-            point_shape: configured.point_shape(),
-            line_pattern: configured.line_pattern(),
+            point_shape: configured.get_point_shape(),
+            line_pattern: configured.get_line_pattern(),
         });
     }
     crate::data::source::collect_source(styles.into_iter().zip(levels).map(|(style, trace)| {

@@ -558,18 +558,18 @@ fn horizontal_vertical_and_diagonal_guides_render_closed_styles() {
     let frame = line_data();
     let diagonal = GuideStyle::new(lichtung_plot::Color::rgb(0, 0, 0), 2.0, LinePattern::Solid)
         .unwrap()
-        .with_color(lichtung_plot::Color::rgba(34, 51, 204, 149))
+        .color(lichtung_plot::Color::rgba(34, 51, 204, 149))
         .unwrap()
-        .with_width(1.25)
+        .width(1.25)
         .unwrap()
-        .with_pattern(LinePattern::Dashed)
+        .pattern(LinePattern::Dashed)
         .unwrap();
     assert_eq!(
-        diagonal.color(),
+        diagonal.get_color(),
         lichtung_plot::Color::rgba(34, 51, 204, 149)
     );
-    assert_eq!(diagonal.width().to_bits(), 1.25_f32.to_bits());
-    assert_eq!(diagonal.pattern(), LinePattern::Dashed);
+    assert_eq!(diagonal.get_width().to_bits(), 1.25_f32.to_bits());
+    assert_eq!(diagonal.get_pattern(), LinePattern::Dashed);
     let output = svg(line_plot(&frame)
         .x_limits(0.0, 2.0)
         .y_limits(0.0, 4.0)

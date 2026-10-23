@@ -291,9 +291,9 @@ fn interaction() -> Plot {
         .styles([
             crate::InteractionStyle::new("one")
                 .unwrap()
-                .with_point_shape(crate::PointShape::TriangleUp)
+                .point_shape(crate::PointShape::TriangleUp)
                 .unwrap()
-                .with_line_pattern(crate::LinePattern::Dashed)
+                .line_pattern(crate::LinePattern::Dashed)
                 .unwrap(),
             crate::InteractionStyle::new("two").unwrap(),
         ])

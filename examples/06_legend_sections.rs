@@ -31,12 +31,12 @@ fn main() -> lichtung_plot::Result<()> {
     let styles = (0..5)
         .map(|group| {
             InteractionStyle::new(format!("G{}", group + 1))?
-                .with_point_shape(if group % 2 == 0 {
+                .point_shape(if group % 2 == 0 {
                     PointShape::Circle
                 } else {
                     PointShape::TriangleUp
                 })?
-                .with_line_pattern(if group % 2 == 0 {
+                .line_pattern(if group % 2 == 0 {
                     LinePattern::Solid
                 } else {
                     LinePattern::Dashed

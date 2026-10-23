@@ -246,11 +246,11 @@ fn factorized_plot(group_field: &str) -> crate::Plot {
     .styles([
         InteractionStyle::new("one")
             .unwrap()
-            .with_point_shape(PointShape::TriangleUp)
+            .point_shape(PointShape::TriangleUp)
             .unwrap(),
         InteractionStyle::new("two")
             .unwrap()
-            .with_point_shape(PointShape::Circle)
+            .point_shape(PointShape::Circle)
             .unwrap(),
     ])
     .labels(crate::Labels::raw().alias(group_field, "Group styles\nsecond line"))

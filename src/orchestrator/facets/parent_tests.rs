@@ -30,7 +30,7 @@ fn sectioned_facets_preserve_parent_domains_and_reject_alias_collisions_before_f
         crate::InteractionStyle::new("one").unwrap(),
         crate::InteractionStyle::new("two")
             .unwrap()
-            .with_point_shape(crate::PointShape::TriangleUp)
+            .point_shape(crate::PointShape::TriangleUp)
             .unwrap(),
     ])
     .facet(crate::FacetSpec::column(
