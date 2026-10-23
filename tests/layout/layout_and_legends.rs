@@ -113,7 +113,7 @@ fn translated_spectrum_legend_does_not_cover_graphics_or_axes() {
         lichtung_plot::NumericValues::new("selected mz", [200.0]),
         lichtung_plot::NumericValues::new("selected intensity", [10.0]),
     )
-    .with_color(lichtung_plot::Color::rgba(213, 94, 0, 230))
+    .color(lichtung_plot::Color::rgba(213, 94, 0, 230))
     .legend_label("Selected peaks");
     let svg = render(
         Plot::line(

@@ -94,6 +94,11 @@ with an exact paint. An unkeyed primary uses accent slot 0, first layer slot 1;
 a categorically mapped primary uses no accent slot, first layer slot 0. Extension
 does not cycle.
 
+PointLayer consumes `color(value)`, `alpha(value)` and `radius(value)` edits.
+Its const readers `get_color()`, `get_alpha()` and `get_radius()` preserve optional
+request presence. Radius validates immediately; color and byte-alpha edits remain
+infallible, with alpha editing retaining its const-call capability.
+
 PointLayer labels retain the position policy from `src/plots/line.rs`: add final
 radius plus resolved nominal gap to both projected coordinates, apply Rust
 `f64::round()` to whole CSS pixels (halfway away from zero), then canonicalize.
@@ -102,7 +107,8 @@ Required visible labels contribute complete unclipped ink; do not clamp to root
 origin or reinterpret the nominal gap as a painted-edge minimum.
 
 `BarPointLayer` owns complete Color and positive radius at construction, uses
-prepared bar centers, plain circles/no outline and no layer legend. Dumbbell
+prepared bar centers, plain circles/no outline and no layer legend. Its read-only
+paint and radius queries remain `color()` and `radius()`. Dumbbell
 endpoint labels/Colors are constructor-owned; each exact RGBA supplies its literal
 key, while Theme radius/shape/independent outline apply and the connector is separate.
 

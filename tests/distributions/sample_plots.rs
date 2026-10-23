@@ -25,7 +25,7 @@ fn mass_spectrum_high_intensity_renders_upward() {
                 lichtung_plot::NumericValues::new("peak m/z", [200.0]),
                 lichtung_plot::NumericValues::new("peak intensity", [10.0]),
             )
-            .with_color(lichtung_plot::Color::rgba(222, 45, 38, 230)),
+            .color(lichtung_plot::Color::rgba(222, 45, 38, 230)),
         )
         .size(320, 240)
         .title("Mass spectrum");

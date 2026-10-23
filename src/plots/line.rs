@@ -411,7 +411,7 @@ impl PreparedLine {
                     crate::decorations::legend::GuideEntryIdentity::supplemental(label)?,
                     LayerLabelContext::for_plot(chart),
                 );
-                entries.push(if chart.point_layers()[index].color().is_some() {
+                entries.push(if chart.point_layers()[index].get_color().is_some() {
                     key.with_exact_point(style, PointRole::Supplemental)
                 } else {
                     key.with_point(style, PointRole::Supplemental)

@@ -79,7 +79,7 @@ fn primary_point_alpha_follows_sorted_line_rows_and_keeps_supplemental_paint_ind
             .unwrap(),
         ),
     )
-    .point_layer(labeled_layer(0.5, "Layer").with_alpha(61))
+    .point_layer(labeled_layer(0.5, "Layer").alpha(61))
     .with_alpha(
         crate::alpha::AlphaTarget::Line,
         crate::alpha::AlphaEncoding::keyed(
@@ -298,9 +298,9 @@ fn path_point_alpha_retains_source_vertex_order_without_regrouping_by_byte() {
 fn exact_supplemental_color_and_alpha_edits_freeze_identically_in_either_order() {
     let theme = crate::Theme::publication().resolve().unwrap();
     let paint = crate::Color::rgba(13, 29, 47, 53);
-    let layer = labeled_layer(1.0, "Exact").with_radius(9).unwrap();
-    let color_then_alpha = measure_layer(layer.clone().with_color(paint).with_alpha(131), &theme);
-    let alpha_then_color = measure_layer(layer.with_alpha(131).with_color(paint), &theme);
+    let layer = labeled_layer(1.0, "Exact").radius(9).unwrap();
+    let color_then_alpha = measure_layer(layer.clone().color(paint).alpha(131), &theme);
+    let alpha_then_color = measure_layer(layer.alpha(131).color(paint), &theme);
     let crate::layout::interior::MarkPayload::Line(first) =
         &color_then_alpha.marks.as_ref().unwrap().payload
     else {
@@ -348,10 +348,7 @@ fn exact_supplemental_color_and_alpha_edits_freeze_identically_in_either_order()
 )]
 fn supplemental_defaults_and_explicit_alpha_keep_label_paint_independent_and_guides_truthful() {
     let automatic = labeled_layer(1.0, "Auto");
-    let alpha = labeled_layer(1.5, "Alpha")
-        .with_alpha(128)
-        .with_radius(9)
-        .unwrap();
+    let alpha = labeled_layer(1.5, "Alpha").alpha(128).radius(9).unwrap();
     let source = Plot::line(
         crate::NumericValues::new("x", [0.0, 2.0]),
         crate::NumericValues::new("y", [0.0, 2.0]),

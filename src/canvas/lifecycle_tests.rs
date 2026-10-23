@@ -17,7 +17,7 @@ fn shared_composition_uses_parent_policy_in_both_source_orders() {
             crate::NumericValues::new("selected x", [0.5]),
             crate::NumericValues::new("selected y", [0.5]),
         )
-        .with_color(crate::Color::rgba(80, 40, 120, 180))
+        .color(crate::Color::rgba(80, 40, 120, 180))
         .legend_label("chosen raw"),
     )
     .legend_composition(Separate)

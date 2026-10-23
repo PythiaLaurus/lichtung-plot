@@ -150,9 +150,9 @@ let points = PointLayer::new(
     NumericValues::new("selected x", [1.0]),
     NumericValues::new("selected y", [2.0]),
 )
-.with_color(Color::hex("#14508C80")?)
-.with_alpha(192)
-.with_radius(5)?;
+.color(Color::hex("#14508C80")?)
+.alpha(192)
+.radius(5)?;
 let guide = GuideStyle::new(Color::rgba(180, 60, 40, 128), 1.5, LinePattern::Dashed)?;
 let plot = Plot::line(
     NumericValues::new("x", [0.0, 1.0, 2.0]),

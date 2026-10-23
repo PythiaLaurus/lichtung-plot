@@ -162,9 +162,9 @@ impl GuideSpec {
 /// use lichtung_plot::{Color, NumericValues, PointLayer};
 /// let layer = PointLayer::new(
 ///     NumericValues::new("x", [1.0]), NumericValues::new("y", [2.0]),
-/// ).with_alpha(128).with_color(Color::rgb(20, 80, 140)).with_radius(5)?;
-/// assert_eq!(layer.alpha(), Some(128));
-/// assert_eq!(layer.color(), Some(Color::rgb(20, 80, 140)));
+/// ).alpha(128).color(Color::rgb(20, 80, 140)).radius(5)?;
+/// assert_eq!(layer.get_alpha(), Some(128));
+/// assert_eq!(layer.get_color(), Some(Color::rgb(20, 80, 140)));
 /// # Ok::<(), lichtung_plot::Error>(())
 /// ```
 ///
@@ -304,7 +304,7 @@ impl PointLayer {
     /// Replace the automatic mark paint and label paint with complete RGBA.
     /// An independent explicit alpha instruction takes precedence over this alpha.
     #[must_use]
-    pub fn with_color(mut self, color: Color) -> Self {
+    pub fn color(mut self, color: Color) -> Self {
         self.color = Some(color);
         self
     }
@@ -314,7 +314,7 @@ impl PointLayer {
     /// # Errors
     ///
     /// Returns an error when `radius` is zero.
-    pub fn with_radius(mut self, radius: u32) -> Result<Self, Error> {
+    pub fn radius(mut self, radius: u32) -> Result<Self, Error> {
         validate_point_radius("point-layer", radius)?;
         self.radius = Some(radius);
         Ok(self)
@@ -325,23 +325,23 @@ impl PointLayer {
     /// This replaces alpha after resolving color, regardless of edit order.
     /// Without an exact color, label RGB stays owned by its theme text role.
     #[must_use]
-    pub const fn with_alpha(mut self, alpha: u8) -> Self {
+    pub const fn alpha(mut self, alpha: u8) -> Self {
         self.alpha = Some(alpha);
         self
     }
 
     /// Inspect the optional caller paint instruction, before theme resolution.
-    pub const fn color(&self) -> Option<Color> {
+    pub const fn get_color(&self) -> Option<Color> {
         self.color
     }
 
     /// Inspect the optional caller alpha instruction, before theme resolution.
-    pub const fn alpha(&self) -> Option<u8> {
+    pub const fn get_alpha(&self) -> Option<u8> {
         self.alpha
     }
 
     /// Inspect the optional caller radius instruction, before theme resolution.
-    pub const fn radius(&self) -> Option<u32> {
+    pub const fn get_radius(&self) -> Option<u32> {
         self.radius
     }
 

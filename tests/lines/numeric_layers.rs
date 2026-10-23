@@ -63,10 +63,10 @@ fn style(color: lichtung_plot::Color, pattern: LinePattern) -> GuideStyle {
 
 fn point_layer(values: &PointValues, radius: u32, alpha: u8) -> PointLayer {
     PointLayer::new(values.x.clone(), values.y.clone())
-        .with_color(lichtung_plot::Color::rgb(123, 45, 200))
-        .with_radius(radius)
+        .color(lichtung_plot::Color::rgb(123, 45, 200))
+        .radius(radius)
         .unwrap()
-        .with_alpha(alpha)
+        .alpha(alpha)
 }
 
 fn supplemental_point(x: f64, y: f64) -> PointLayer {
@@ -180,9 +180,7 @@ fn explicit_point_layer_consumes_its_automatic_palette_position() {
     let frame = line_data();
     let output = svg(line_plot(&frame)
         .markers(false)
-        .point_layer(
-            supplemental_point(0.25, 1.25).with_color(lichtung_plot::Color::rgb(123, 45, 200)),
-        )
+        .point_layer(supplemental_point(0.25, 1.25).color(lichtung_plot::Color::rgb(123, 45, 200)))
         .point_layer(supplemental_point(1.75, 2.75)));
     let points = output
         .lines()
@@ -200,7 +198,7 @@ fn point_labels_and_whole_layer_legend_identity_remain_distinct() {
         lichtung_plot::NumericValues::new("selected x", [0.5, 1.5]),
         lichtung_plot::NumericValues::new("selected y", [1.5, 2.5]),
     )
-    .with_color(lichtung_plot::Color::rgb(123, 45, 200))
+    .color(lichtung_plot::Color::rgb(123, 45, 200))
     .labels(lichtung_plot::CategoryValues::new("annotations", ["first", "second"]).unwrap())
     .legend_label("selected_coordinates");
     let base = line_plot(&frame)
@@ -282,7 +280,7 @@ fn repeated_explicit_colors_and_exact_duplicate_legend_entries_are_accepted() {
     let frame = line_data();
     let layer = |x, y| {
         supplemental_point(x, y)
-            .with_color(lichtung_plot::Color::rgb(123, 45, 200))
+            .color(lichtung_plot::Color::rgb(123, 45, 200))
             .legend_label("Selected")
     };
     for composition in [
@@ -311,13 +309,13 @@ fn repeated_explicit_colors_and_exact_duplicate_legend_entries_are_accepted() {
 fn conflicting_duplicate_point_layer_legend_identity_is_rejected() {
     let frame = line_data();
     let first = supplemental_point(0.5, 1.5)
-        .with_color(lichtung_plot::Color::rgba(123, 45, 200, 71))
-        .with_radius(5)
+        .color(lichtung_plot::Color::rgba(123, 45, 200, 71))
+        .radius(5)
         .unwrap()
         .legend_label("Selected");
     let second = supplemental_point(1.5, 2.5)
-        .with_color(lichtung_plot::Color::rgba(123, 45, 200, 71))
-        .with_radius(5)
+        .color(lichtung_plot::Color::rgba(123, 45, 200, 71))
+        .radius(5)
         .unwrap()
         .legend_label("Selected");
     for composition in [
@@ -327,9 +325,9 @@ fn conflicting_duplicate_point_layer_legend_identity_is_rejected() {
         for conflicting in [
             second
                 .clone()
-                .with_color(lichtung_plot::Color::rgba(0, 114, 178, 71)),
-            second.clone().with_alpha(72),
-            second.clone().with_radius(6).unwrap(),
+                .color(lichtung_plot::Color::rgba(0, 114, 178, 71)),
+            second.clone().alpha(72),
+            second.clone().radius(6).unwrap(),
         ] {
             let error = line_plot(&frame)
                 .point_layer(first.clone())
