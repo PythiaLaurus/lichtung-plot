@@ -48,7 +48,7 @@ cross-references connect requirements rather than creating competing contracts.
 | [Certified power conversion](07_LOG10_DISPLAY.md) | Mathematical Forest operand, interval proof, representability and independent oracle |
 | [Guide system](08_GUIDE_SYSTEM.md) | Typed explanations, composition, compatibility, measurement and parent ownership |
 | [Development](90_DEVELOPMENT.md) | Verification, semantic tests, dependency and publication discipline |
-| [Deferred features](99_DEFERRED_FEATURES.md) | Excluded capabilities and explicit review checkpoints |
+| [Deferred features](99_DEFERRED_FEATURES.md) | User-requested deferred reviews and their checkpoints |
 
 Formal requirements refer to source owners by stable file/module names, not line
 numbers, implementation-stage identifiers, execution logs or historical counts.

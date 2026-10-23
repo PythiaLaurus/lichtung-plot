@@ -2,7 +2,7 @@
 
 ## Scope And Review Rules
 
-This specification lists capabilities outside
+This specification records user-requested deferred reviews outside
 [the implementation plan](91_IMPLEMENTATION_PLAN.md), with explicit review checkpoints.
 It grants no implementation authorization, reserves no API/storage/callback and
 does not establish a fallback route. Current behavior is defined by the system
@@ -11,11 +11,9 @@ specifications, particularly [Theme](03_THEME_SYSTEM.md),
 [property ownership](04_VISUAL_PROPERTY_OWNERSHIP.md) and
 [guides](08_GUIDE_SYSTEM.md).
 
-DF8, DF9 and DF10 are pending user disposition. Their checkpoint is the
-next feature-scope discussion before their successor implementation planning.
-DF11 has its separate prerequisite-based checkpoint below.
-No additional general audit is a prerequisite. Discussion itself does not admit
-or reject a capability.
+DF11 is the only deferred item, with its prerequisite-based checkpoint below.
+Renderer exclusions, possible extensions and agent suggestions do not by themselves
+create deferred work. Discussion itself does not admit or reject a capability.
 
 At review, present concrete workflows, unmet requirements, alternatives and
 semantic/performance tradeoffs. Obtain user approval to admit a bounded scope,
@@ -25,37 +23,6 @@ When scope enters the implementation plan, remove it from this inventory in the
 same change, including any admitted subset of a broader item. Update current
 contracts when implemented. A plan is not implementation evidence. Record lasting
 requirements in the owning contract, not a permanent decision ledger.
-
-## DF8: Caller-Selected Layout Objectives
-
-Excluded: caller objectives for aspect, density, whitespace, guide flow, text measure
-or Grid balance; scoring callbacks, strategy switches, string modes and layout plugins.
-
-**Checkpoint:** next feature-scope discussion. Require an unmet workflow under
-the deterministic private local policy, including exact-root failures. Compare
-a small typed objective's complete semantics/cost without implying global search.
-
-## DF9: Global Layout Optimization
-
-Excluded: exhaustive whole-tree search, sibling Cartesian products, all text-break
-partitions and root-wide dense-rank objectives. Bounded containing-frame guide
-recovery is current and distinct.
-
-**Checkpoint:** next feature-scope discussion alongside DF8. Require demonstrated
-scientific workloads, measured comparison with current bounded recovery, semantic
-completeness, determinism and a coherent replacement contract. No dormant solver
-or runtime strategy selector is reserved.
-
-## DF10: Stop At First Fitting Line Proposal
-
-Excluded: removal of exact immediately-next-endpoint extension. Current wrapping
-proposes forward, retreats to a fit, then extends until first next-endpoint nonfit.
-No alternate strategy switch is provided.
-
-**Checkpoint:** next feature-scope discussion. Compare actual release workloads,
-line endpoints, caption heights, tight-root fit, bidi, soft hyphens and retained
-glyph geometry. Changing this behavior requires user acceptance of the wrapping/
-fit tradeoff, not simply a smaller internal trial count.
 
 ## DF11: Scientific Plotting For AI-Authored Workflows
 

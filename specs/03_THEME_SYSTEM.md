@@ -463,5 +463,4 @@ Theme construction does not admit CSS selectors, raw dash strings, arbitrary
 property maps, runtime callbacks, dynamic theme extensions, process-global
 defaults, font loading, blend modes, animation, one component per plot family or
 new content-omission controls. Data alpha is a separate Plot-local value, not a
-Theme field. Broader unadmitted controls and their review checkpoints belong to
-[deferred features](99_DEFERRED_FEATURES.md).
+Theme field.

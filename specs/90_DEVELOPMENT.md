@@ -167,9 +167,11 @@ errors by themselves. Preserve drawable results through normal geometry/window
 handling; report failures from the actual consumed operation or an explicit caller
 constraint, rather than inventing additional input-acceptance rules.
 
-When a capability enters an implementation plan, remove it from the deferred-feature
-inventory in the same change. For partial admission, retain only the unadmitted
-scope and its review checkpoint. Implementation status belongs in the plan until
+Deferred entries require explicit user direction; renderer exclusions and agent
+suggestions alone do not create future work. When a capability enters an
+implementation plan, remove it from the deferred-feature inventory in the same
+change. For partial admission, retain only the unadmitted scope and its review
+checkpoint. Implementation status belongs in the plan until
 current contracts can be updated with working behavior.
 
 Formal specifications define current rules by subsystem and refer to actual source
