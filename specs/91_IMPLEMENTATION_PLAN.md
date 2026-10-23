@@ -32,6 +32,22 @@ This document is a plan, not evidence that these APIs exist. Current contracts
 remain in [rendering](02_RENDERING_CONTRACT.md), [Theme](03_THEME_SYSTEM.md),
 [layout](05_LAYOUT_SYSTEM.md) and [numeric presentation](06_NUMERIC_PRESENTATION.md).
 
+The [public API appendix](92_PUBLIC_API_PLAN.md) completes this plan's concrete
+names, signatures, value variants, defaults and migration types. This document
+owns behavior, implementation order and verification; implement both together.
+The following map connects each public change to its complete signature inventory:
+
+| Public change | Signature owner | Delivery steps |
+| --- | --- | --- |
+| Property naming and retained reads | [Migration summary](92_PUBLIC_API_PLAN.md#migration-summary) and the naming rule below | 1 |
+| Text inputs, appearance, placement and adaptation | [Text](92_PUBLIC_API_PLAN.md#text-inputs-and-appearance), [TextLayout](92_PUBLIC_API_PLAN.md#textlayout-and-layout-values), [role attachments](92_PUBLIC_API_PLAN.md#text-role-attachments-and-capabilities) | 2, 3, 16-19 |
+| Built-in NumericFormat, locale, specifiers and common units | [Numeric policy](92_PUBLIC_API_PLAN.md#numeric-formatting-types-and-methods) | 5, 6 |
+| Single/set numeric formatting functions | [Function signatures and read-only views](92_PUBLIC_API_PLAN.md#numeric-formatting-functions) | 4, 7; multiplicative operand extension in 11 |
+| Numeric tick locators, counts and position functions | [TickGeneration](92_PUBLIC_API_PLAN.md#tick-generation-and-category-selection) | 8-11, 13 |
+| Categorical-label selection | [Selection and sealed gates](92_PUBLIC_API_PLAN.md#category-selection-and-sealed-gates) | 12 |
+| Rectangular Canvas placement | [Canvas placement](92_PUBLIC_API_PLAN.md#canvas-placement-and-root-requests) | 14, 15 |
+| Maximum-width roots | [Root requests](92_PUBLIC_API_PLAN.md#canvas-placement-and-root-requests) | 20-22 |
+
 ### Reference-Backed Capabilities And Configurable Defaults
 
 For the requested numeric/text capabilities, support the configuration space
@@ -441,6 +457,9 @@ Expose one crate-root `Text` value through a private implementation module:
   `color`, `stack` and `line_height` edits operate on that one appearance type;
   paired public readers use `get_`. An exact style replaces the complete role;
   do not introduce a parallel sparse font-style cascade or a backend-style public API.
+  The appendix inventories all receiving slots and preserved `&str` readers.
+  Retain Eq on existing text-bearing annotations/TextPanel by complete normalized
+  appearance/request equality, not by discarding their newly retained style.
 - Replace public `TitleAlignment` with shared `TextAlignment` and migrate all
   repository callers. Start/Center/End retain physical left/center/right meaning,
   including for RTL text. Remove the old type/export rather than adding an alias.
@@ -517,7 +536,7 @@ replacing a project-owned surface.
 | --- | --- |
 | Plot/Canvas title, subtitle, caption; x/y titles; TextPanel title/body; headers/row titles | The existing common Text input owns its layout; title/body and x/y remain independent |
 | Numeric/category/exact axis tick labels | Axis-specific `x_tick_text_layout`/`y_tick_text_layout` on sealed actual-axis capabilities, stored once per axis; no separate numeric/category rotation engine |
-| Facet strips and Matrix variable/diagonal headings | Typed header-role instructions, with actual local/shared owner assignment; Matrix headings do not become categorical ticks or gain numeric format/generator attachments |
+| Facet strips and Matrix variable titles | Typed header-role instructions, with actual local/shared owner assignment; Matrix's actual left-edge/bottom-edge variable titles do not become categorical ticks or gain numeric format/generator attachments |
 | Discrete/continuous guide titles, entries and numbers | Typed guide-owner role instructions; Canvas Shared chrome resolves Canvas-owned policy, independently of replaced local guide layouts |
 | PanelTextAnnotation and point-layer labels | Common Text for authored annotations and a layer-label TextLayout for column-backed labels; the semantic owner retains corner/data reference, occurrence and paint rules |
 | Heatmap values/null-row text, estimate details, Waterfall totals and significance labels | Typed existing annotation-role instructions, retaining required sets, contrast-role selection, shelves/bracket paths and scientific anchors |
@@ -527,6 +546,9 @@ role registry, per-value style callback or backend handle. An instruction must b
 consumed coherently or rejected with actual-owner context; it cannot silently do
 nothing on a supported text slot. Erased plots retain supplied policy but do not
 gain broad setters through Any.
+Use the appendix's exact role methods and sealed `XAxisText`, `YAxisText` and
+`EstimateDetailText` gates. Matrix's KDE diagonal does not produce a separate
+heading, so this plan adds no unused diagonal-text method or new text producer.
 Add positive fractional CSS font sizes to the complete appearance and resolved
 text pipeline; migrate integer-only font/metric storage and callers together.
 Use the existing canonical spatial representation for actual scaled geometry,
@@ -689,6 +711,8 @@ greedy/parity overlap reduction, and optional boundary-label hiding with configu
 clearance/tolerance. Apply an explicit category selection first, then an explicitly
 requested overlap policy; retain both eligible and finally visible original-index
 sets. Endpoint inclusion/priority is explicit, not guessed from the current count.
+Greedy/parity also admit configurable minimum label separation, as in Vega
+labelSeparation; zero is their initial extra gap, not the only allowed value.
 An enabled visibility policy changes painted labels, never scientific membership,
 numeric tick cardinality, generator interval or the formatter's semantic result.
 
@@ -969,6 +993,10 @@ non-Latin digits. Validate nonempty/distinct digit tokens, positive group sizes,
 field-appropriate Unicode/control syntax and coherent absence/disabled grouping.
 Preserve exact supplied bytes; currency formatting does not perform exchange or
 scientific-unit conversion.
+The appendix pins all 59 named d3-format 3.1.0 locale IDs and their source/license,
+and specifies complete custom locale constructors, grouping repeat modes and
+read-only token access. Invariant ASCII spelling remains the explicit-policy
+default; selecting a named locale is a deliberate request, not host inference.
 
 Apply grouping to numeric digit runs, not affixes or arbitrary callback text.
 Define exponent, radix, sign, accounting parentheses, decimal, currency, percent,
@@ -993,6 +1021,11 @@ can specify k/M/B, long words or application units and choose per-value or whole
 rules. Threshold comparison uses the unrounded scaled mathematical magnitude.
 Any round-boundary promotion has one documented rule in the emitter and must not
 re-round a quantized value or silently change fixed/shared prefixes.
+The appendix gives KeepThreshold/PromoteOnRounding as explicit choices and the
+scales-backed K/M/B/T convenience over that same custom-rule representation.
+Whole-set selection resolves its declared rule once, then freezes the common
+factor; no individual label can promote it independently. Fixed selections require
+KeepThreshold instead of ignoring a contradictory promotion request.
 
 For automatic whole-set selection, use the greatest absolute nonzero displayed
 mathematical member; all-zero sets select the neutral factor. The same rule is
@@ -1000,6 +1033,8 @@ independent of member order, text width, clipping and cache state. A caller-fixe
 factor/prefix takes precedence explicitly. Record the selected factor once in the
 complete-set result. Shared continuous guides choose after final-domain merging;
 actual shared axes use the common axis owner, not separate local approximations.
+Mathematical decimal factors and their callback views retain exact arbitrary-size
+integral exponents using the appendix's decimal interchange, not a new i64 ceiling.
 
 ### Shared Multiplier And Unit Explanations Are Layout Content
 
@@ -1038,8 +1073,8 @@ reserve each actual explanation once and preserve the selected root width.
 
 ### D3-Style Specifiers Compile Into The Same Policy
 
-Add one fallible NumericFormat specifier parser. Use this grammar and publish its
-exact normalization/default table with implementation:
+Add `NumericFormat::from_specifier(&str) -> Result<Self>`. Use this grammar and the
+appendix's [exact normalization/default table](92_PUBLIC_API_PLAN.md#specifier-normalization-and-emission-order):
 
 ```text
 [[fill]align][sign][symbol][0][width][,][.precision][~][type]
@@ -1079,6 +1114,11 @@ The normal numeric attachments continue to receive one validated policy type.
 Preserve Plot cloning and its existing threading bounds with an opaque shared
 callback handle; library invocation is serial in canonical owner/source order.
 Support fallible application results through the crate's error contract.
+Use the appendix's `value_function`/`set_function` signatures, NumericLabels result
+and borrowed NumericValueContext/NumericSetContext views. Their built-in helpers
+bypass only the emission callback, not exact factors or complete-set resolution.
+Expose the retained raw FacetCell levels through the specified read-only methods
+rather than return an opaque owner key the application cannot inspect.
 
 - A context exposes the exact operand kind, raw source identity/occurrence,
   consumer role and complete semantic-set context where applicable, explicit
@@ -1242,7 +1282,7 @@ rule; a new same-name writer also migrates an existing reader to `get_`.
 | --- | --- |
 | Automatic, including the existing Maximum constructor | Filters complete candidates in their existing order |
 | Preferred Interval, including current Additive/Log10Decades, or approximate Target | Filters complete candidates, never individual positions |
-| Fixed data-space Interval | Entire in-domain interval list must satisfy an explicitly selected cap; no implicit enlarged step or truncation |
+| Fixed Interval in Data or Scale space | Entire in-domain interval list must satisfy an explicitly selected cap; no implicit enlarged step or truncation |
 | ExactCount | Must be at least the exact count; otherwise construction rejects |
 | Fixed Multiplicative | Entire lattice source must satisfy the cap; no truncation |
 | Adaptive Multiplicative | Filters complete candidates under its declared adaptive program |
@@ -1259,6 +1299,9 @@ Automatic candidate bounds remain finite; they do not silently cap an explicit
 request. Migrate public count validation and all affected source/capture consumers
 coherently when removing the old shared ceiling. Data-interval density retains
 its data-unit step and numeric origin in the complete locator policy.
+The appendix fixes counts/caps and their read results as usize in that capability
+migration; the earlier naming-only step retains u32. Use the one consuming
+`maximum_count(Option<usize>)` edit and paired `get_maximum_count` reader.
 
 TickGeneration must support an owned cloneable function handle. Replace Copy-based
 storage/access assumptions with explicit borrowing/cloning throughout AxisSpec,
@@ -1606,9 +1649,12 @@ Canvas owner records can then retain the final axis/text/numeric context.
 Complete spans and shared anchoring/rotation/overflow/font-fit measurement before
 refactoring natural width for the cap. Each code-changing step runs focused checks
 and strict Clippy; commit completed logical changes before proceeding. Update current
-contracts with an exposed capability, not ahead of it. Concrete new value/factory
-spellings are reviewed with implementation under the confirmed naming rule; the
-behavioral requirements above are the acceptance boundary.
+contracts with an exposed capability, not ahead of it. The public API appendix
+fixes concrete value/factory names, signatures and defaults; it is part of the
+acceptance boundary, not a list of placeholders for implementation to rename.
+Expose each listed value/variant only with its working consumer. The naming-only
+step retains current types; fractional sizes, usize counts and annotation positions
+migrate in their capability steps with all affected callers and read contracts.
 
 ### 1. Apply The Public Property Naming Rule
 
@@ -1648,6 +1694,9 @@ engine, with one representation behind strings and styled input. Update specs
 01 through 05 where their text/ownership contracts change and the existing theme/
 getting-started guides. Verify inherited/local precedence, used-font completeness,
 width-dependent height, actual ink and frozen replay before committing.
+Use the appendix's complete receiving-slot inventory, keep existing text readers
+as `&str`, and preserve annotation/TextPanel Eq with complete appearance equality.
+The fractional font-size signature migration belongs to step 16, not step 1 or 3.
 
 ### 4. Replace Closed Numeric Font Preparation With Actual-Text Admission
 
@@ -1679,6 +1728,9 @@ rounding, locale tokens, custom thresholds, carry/prefix boundaries, strict synt
 errors and preserved omitted profiles. Replace obsolete 17-digit upper-bound
 refusal cases with the newly implemented precision contract. Update specs 06/07,
 the numeric-formatting guide and `examples/05_numeric_formats.rs` together.
+Implement the appendix's pinned 59-name registry, NumericLocale custom values,
+NumericPrefixes selection/promotion and `from_specifier` normalization table;
+do not leave their public defaults or scalar types to a second formatter design.
 
 ### 6. Add Grouped Scale And Required Unit Explanations End To End
 
@@ -1687,6 +1739,8 @@ complete-set result. Implement its measured slots on axes, continuous guides,
 Heatmap value blocks, point-only Coefficient labels and Waterfall shelves. Resolve
 Shared numeric domains before the one final result and include explanation/role
 identity in owner, feedback, height and child-reuse dependencies.
+Expose NumericUnit/NumericExplanation through the specified typed edits and retain
+mathematical NumericFactor exponents without a machine-integer interchange bound.
 
 Verify automatic/fixed factor selection, source-order independence, one Shared
 explanation, distinct local axis/value policies, full text/ink containment and a
@@ -1701,6 +1755,10 @@ surface, with exact operand/context views, fallible final text and complete-set
 cardinality checks. Implement shared-handle identity and operation-local semantic
 materialization independently of optional layout caches. Admit actual callback
 text before measurement and retain the selected result through final sealing.
+Use the exact fallible Fn bounds and read-only context/result signatures from the
+appendix, including inspectable raw FacetCell levels and built-in helpers. At this
+step operand views expose the live Binary64/PowerOfTen cases; Multiplicative arrives
+with its source in step 11, not as a dormant public variant.
 
 Verify automatic positions with custom labels, Forest exponent context, ordered
 duplicate occurrences, final Shared-domain callbacks, callback errors/cardinality/
@@ -1736,6 +1794,9 @@ confirmed reader naming rule; preserve existing maximum-constructor semantics.
 Remove the shared 10000 ceiling from explicit count/source APIs and their consumers
 in this coherent migration, retaining private Automatic candidate bounds and real
 checked storage/output limits. An explicit maximum remains an enforced caller rule.
+Migrate target/maximum/count readers and source lengths to usize here, including
+the consuming `maximum_count` edit and paired `get_maximum_count` reader. Expose
+`exact_count`, TickSpace and TickSingleton with their documented signatures.
 
 Verify zero/empty semantics, independent interpolation/endpoints/rounding, all
 singleton choices, data/log-space spacing, collapsed positions, selected text policies and
@@ -1762,6 +1823,8 @@ width/font/cache changes, explicit overlap/hiding/strict refusal, sources above
 raw-data interval on Log10 independently of exponent spacing. Update public tick
 docs/examples and current contracts with this built-in requirement; no generator
 function is needed for data-interval density.
+Use `interval(step, origin, space, requirement)` with TickSpace/TickRequirement;
+preserve the old constructors' admitted scale binding in the one normalized source.
 
 ### 11. Add Anchored Multiplicative Sources
 
@@ -1776,6 +1839,8 @@ equivalent anchor shifts, ratios near one, empty views, real index/representatio
 failures, caller-capped lists and selected text nonfit/overlap behavior. Include a
 Forest projection and independent rational/power certificates; no platform powf or
 copied locator loop serves as the oracle. Update numeric/certification contracts and examples together.
+Use `multiplicative(anchor, ratio, requirement)` and the live Multiplicative operand
+view, preserving exact signed index interchange and either positive ratio direction.
 
 ### 12. Add Explicit Categorical Label Selection
 
@@ -1792,6 +1857,8 @@ assumptions with All-default and explicitly selected completeness witnesses.
 Update categorical/text/layout/property contracts and examples. Reuse actual-axis
 applicability with later general text layout while retaining category-only selection
 gates.
+Expose `x_category_labels`/`y_category_labels` under the appendix's exact
+CategoricalX/CategoricalY sets, with CategoryLabelSelection and LabelEndpoints.
 
 ### 13. Add Owned Tick Position Functions
 
@@ -1810,6 +1877,8 @@ refusal without introducing result validators or strictness configuration.
 Prove repeated context queries/cache toggles and frozen publications reuse results
 without locator/formatter/font work. Update tick/numeric/layout/guide lifecycle
 contracts and user examples with this working interface before committing.
+Use the appendix's TickContext and TickPositions result variants; preserve typed
+Data versus Log10Exponents without adding result-acceptance settings.
 
 ### 14. Make Canvas Ownership And Track Geometry Explicit
 
@@ -1855,6 +1924,9 @@ one fixed point, post-inset TextPanel placement, canonical fractional offsets,
 panel-corner/inside-guide conflicts and unchanged source/mark positions. Update
 current text/property/layout contracts and examples; every typed coordinate frame
 has a real owner/transform/fit consumer rather than an untyped backend escape.
+Migrate TextTheme/SignificanceMarkStyle font-size constructors, edits and readers
+to f64 with their metric consumers. Expose the specified PanelTextAnnotation::at,
+TextPosition reader replacement and real role attachments/sealed gates together.
 
 ### 17. Generalize Text Orientation And Rotation Placement
 
@@ -1945,6 +2017,24 @@ affected README sizing guidance together with the implemented behavior. Commit t
 completed feature after focused verification and strict Clippy.
 
 ## Verification And Acceptance
+
+### Public API Completeness
+
+Treat the [API appendix](92_PUBLIC_API_PLAN.md) as the signature/default inventory
+for these steps. Review crate-root exports, sealed bounds, generic Fn/lifetime/
+Send/Sync contracts, consuming receivers, Result types, scalar migrations and
+preserved reads against the working implementation. Keep each step's exposed
+subset consumer-backed; the final API has no unspecified method/context/choice
+names, dormant selectors or compatibility definitions.
+
+Use meaningful public construction/compile-fail witnesses for capability gates
+and independent semantic examples for typed/parsed policies, callback helpers and
+position result variants. Verify cloned callback identity and thread-safe Plot
+storage without treating pointer identity as rendering evidence. Preserve complete
+appearance/request equality on text-bearing values and source signed-zero identity
+in numeric contexts. Migration must cover all callers when removing Copy, changing
+u32 sizes/counts or replacing the corner reader; do not add an accessor echo suite
+or grow the test budget to inventory method names.
 
 ### Naming Relationships
 
