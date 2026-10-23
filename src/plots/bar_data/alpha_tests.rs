@@ -61,9 +61,9 @@ fn aggregate_uncertainty_alpha_uses_actual_category_series_and_facet_keys_before
             .summaries()
             .uncertainty()
             .clone()
-            .with_color(crate::Color::rgba(17, 41, 67, 0))
+            .color(crate::Color::rgba(17, 41, 67, 0))
             .unwrap()
-            .with_width(40.0)
+            .width(40.0)
             .unwrap();
         let summaries = theme
             .marks
@@ -85,9 +85,9 @@ fn aggregate_uncertainty_alpha_uses_actual_category_series_and_facet_keys_before
             .bodies()
             .bar_body()
             .clone()
-            .with_fill_alpha(0)
+            .fill_alpha(0)
             .unwrap()
-            .with_outline(Some(crate::DataOutlineTheme::mapped(2.375, 61).unwrap()))
+            .outline(Some(crate::DataOutlineTheme::mapped(2.375, 61).unwrap()))
             .unwrap();
         let bodies = theme
             .marks

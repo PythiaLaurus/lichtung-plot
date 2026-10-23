@@ -211,7 +211,7 @@ impl PreparedLine {
                     unit,
                     group.fill_alpha,
                     band.backend_style((0, 0, 0)),
-                    band.outline()
+                    band.get_outline()
                         .is_some_and(|outline| outline.mapped_width().is_some()),
                 )?;
             }

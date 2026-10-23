@@ -512,7 +512,7 @@ impl Axis {
                 AxisSide::Bottom => frame.sides().bottom(),
                 AxisSide::Left => frame.sides().left(),
             })
-            .map_or(0.0, |frame| f64::from(frame.stroke().width()) / 2.0);
+            .map_or(0.0, |frame| f64::from(frame.stroke().get_width()) / 2.0);
         let tick_appearance = standard.axes.ticks().filter(|_| !self.ticks.is_empty());
         let tick_style = tick_appearance
             .map(|ticks| crate::theme::axis::stroke_style(ticks.stroke()))

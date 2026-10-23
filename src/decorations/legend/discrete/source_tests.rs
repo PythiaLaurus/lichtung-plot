@@ -117,7 +117,7 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
         .bodies()
         .bar_body()
         .clone()
-        .with_outline(Some(fixed))
+        .outline(Some(fixed))
         .unwrap();
     bar_fill(&mut theme, body);
     let fixed_inputs = prepare(&plot, &theme);
@@ -158,7 +158,7 @@ fn assert_bar_alpha_context(plot: &Plot, theme: &mut crate::theme::ResolvedTheme
         .bodies()
         .bar_body()
         .clone()
-        .with_fill_alpha(255)
+        .fill_alpha(255)
         .unwrap();
     bar_fill(theme, body);
     let mapped = plot.clone().with_alpha(

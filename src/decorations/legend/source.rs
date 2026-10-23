@@ -393,7 +393,7 @@ impl GuideSourceKey {
         role: FillRole,
     ) -> Self {
         self.mapping.paint_bindings.fill_paint = Some(self.rgb(MarkPaintRole::FillPaint(role)));
-        self.mapping.paint_bindings.fill_outline = fill.outline().map(|outline| {
+        self.mapping.paint_bindings.fill_outline = fill.get_outline().map(|outline| {
             if outline.mapped_width().is_some() {
                 self.rgb(MarkPaintRole::FillOutline(role))
             } else {
@@ -404,7 +404,7 @@ impl GuideSourceKey {
         self.mapping.alpha_bindings.fill_paint =
             Some(AlphaBinding::Role(MarkPaintRole::FillPaint(role)));
         self.mapping.alpha_bindings.fill_outline = fill
-            .outline()
+            .get_outline()
             .map(|_| AlphaBinding::Role(MarkPaintRole::FillOutline(role)));
         self.key.explanation =
             GuideExplanation::Complete(self.mapping.alpha_bindings.explanation());

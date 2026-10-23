@@ -299,11 +299,11 @@ pub(crate) fn horizontal_gutter_preference(
     let frame = chrome
         .frame
         .filter(|frame| frame.sides().right())
-        .map_or(0.0, |frame| f64::from(frame.stroke().width()) / 2.0);
+        .map_or(0.0, |frame| f64::from(frame.stroke().get_width()) / 2.0);
     let tick = theme
         .axes
         .ticks()
-        .map_or(0.0, |ticks| f64::from(ticks.stroke().width()) / 2.0);
+        .map_or(0.0, |ticks| f64::from(ticks.stroke().get_width()) / 2.0);
     let right = edge.add_pixels(frame.max(tick))?;
     Ok((
         crate::theme::AxisLengths::hard(&left)?,
@@ -609,7 +609,7 @@ mod tests {
             theme.legend.frame().unwrap().fill(),
             Some(
                 crate::theme::OutlineTheme::new(
-                    theme.legend.frame().unwrap().outline().unwrap().color(),
+                    theme.legend.frame().unwrap().outline().unwrap().get_color(),
                     30.0,
                 )
                 .unwrap(),

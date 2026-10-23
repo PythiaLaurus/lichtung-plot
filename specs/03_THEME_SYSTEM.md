@@ -223,6 +223,13 @@ DataLineTheme consuming edits are `width(value)`, `alpha(value)` and
 readers. Every edit reconstructs and validates the complete width/alpha/pattern
 value, including retained sibling constraints.
 
+StrokeTheme, SolidStrokeTheme, OutlineTheme, PointOutlineTheme, DataFillTheme,
+FixedFillTheme and PointTheme follow the same property naming: consuming
+`property(value)` edits pair with `get_property()` readers. Borrowed optional
+outlines remain optional references. DataOutlineTheme's closed-choice factories
+and read-only `fixed_stroke()`, `mapped_width()` and `mapped_alpha()` keep their
+names and structural choice semantics.
+
 Mapped outlines receive mapped RGB and their own alpha; fixed outlines retain
 complete Color. Point-outline ratios resolve against the final selected point
 radius, with outward hard ink independent of nearest-even width/center operands.

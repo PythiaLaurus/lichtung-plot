@@ -37,25 +37,25 @@ macro_rules! solid_paint {
             }
 
             pub(crate) fn validate(&self) -> Result<()> {
-                validate_width(self.width())
+                validate_width(self.get_width())
             }
 
             /// Inspect the complete stroke paint.
-            pub fn color(&self) -> Color {
+            pub fn get_color(&self) -> Color {
                 self.paint
             }
             /// Inspect the positive width in CSS pixels.
-            pub fn width(&self) -> f32 {
+            pub fn get_width(&self) -> f32 {
                 self.width
             }
 
             /// Replace only the complete stroke paint.
-            pub fn with_color(self, color: Color) -> Result<Self> {
+            pub fn color(self, color: Color) -> Result<Self> {
                 Self::new(color, self.width)
             }
 
             /// Replace only the positive CSS width.
-            pub fn with_width(self, width: f32) -> Result<Self> {
+            pub fn width(self, width: f32) -> Result<Self> {
                 Self::new(self.paint, width)
             }
         }
@@ -81,7 +81,7 @@ pub struct StrokeTheme {
 
 impl StrokeTheme {
     pub(crate) fn validate(&self) -> Result<()> {
-        validate_width(self.width())
+        validate_width(self.get_width())
     }
     /// Construct a complete stroke with positive finite CSS width and a closed pattern.
     pub fn new(color: Color, width: f32, pattern: StrokePattern) -> Result<Self> {
@@ -94,36 +94,36 @@ impl StrokeTheme {
     }
 
     /// Inspect the complete stroke paint.
-    pub fn color(&self) -> Color {
+    pub fn get_color(&self) -> Color {
         self.paint
     }
     /// Inspect the positive CSS width.
-    pub fn width(&self) -> f32 {
+    pub fn get_width(&self) -> f32 {
         self.width
     }
     /// Inspect the closed stroke pattern.
-    pub fn pattern(&self) -> StrokePattern {
+    pub fn get_pattern(&self) -> StrokePattern {
         self.pattern
     }
 
     /// Replace only the complete stroke paint.
-    pub fn with_color(self, color: Color) -> Result<Self> {
+    pub fn color(self, color: Color) -> Result<Self> {
         Self::new(color, self.width, self.pattern)
     }
     /// Replace only the positive CSS width.
-    pub fn with_width(self, width: f32) -> Result<Self> {
+    pub fn width(self, width: f32) -> Result<Self> {
         Self::new(self.paint, width, self.pattern)
     }
     /// Replace only the closed stroke pattern.
-    pub fn with_pattern(self, pattern: StrokePattern) -> Result<Self> {
+    pub fn pattern(self, pattern: StrokePattern) -> Result<Self> {
         Self::new(self.paint, self.width, pattern)
     }
 
     pub(crate) fn backend_style(&self) -> LineStyle {
         LineStyle {
-            color: self.color(),
-            width: self.width(),
-            pattern: self.pattern(),
+            color: self.get_color(),
+            width: self.get_width(),
+            pattern: self.get_pattern(),
         }
     }
 }
@@ -157,19 +157,19 @@ impl PointOutlineTheme {
     }
 
     /// Inspect the independent outline paint.
-    pub fn color(&self) -> Color {
+    pub fn get_color(&self) -> Color {
         self.color
     }
     /// Borrow the exact positive width-to-radius ratio.
-    pub fn width_ratio(&self) -> &RelativeSpacing {
+    pub fn get_width_ratio(&self) -> &RelativeSpacing {
         &self.width_ratio
     }
     /// Replace only the independent outline paint.
-    pub fn with_color(self, color: Color) -> Result<Self> {
+    pub fn color(self, color: Color) -> Result<Self> {
         Self::new(color, self.width_ratio)
     }
     /// Replace only the positive radius-relative width.
-    pub fn with_width_ratio(self, width_ratio: RelativeSpacing) -> Result<Self> {
+    pub fn width_ratio(self, width_ratio: RelativeSpacing) -> Result<Self> {
         Self::new(self.color, width_ratio)
     }
 
@@ -180,8 +180,8 @@ impl PointOutlineTheme {
     /// Materialize the operational outline by sharing the same immutable ratio.
     pub(crate) fn backend_style(&self) -> PointOutline {
         PointOutline {
-            color: self.color(),
-            width_ratio: self.width_ratio().clone(),
+            color: self.get_color(),
+            width_ratio: self.get_width_ratio().clone(),
         }
     }
 }
@@ -245,7 +245,7 @@ impl DataOutlineTheme {
 
     fn operands(&self, mapped: Color) -> (Color, f32) {
         if let Some(stroke) = self.fixed_stroke() {
-            (stroke.color(), stroke.width())
+            (stroke.get_color(), stroke.get_width())
         } else {
             (
                 mapped.alpha(self.mapped_alpha().expect("validated mapped outline")),
@@ -264,7 +264,7 @@ pub struct DataFillTheme {
 
 impl DataFillTheme {
     pub(crate) fn validate(&self) -> Result<()> {
-        if let Some(outline) = self.outline() {
+        if let Some(outline) = self.get_outline() {
             outline.validate()?;
         }
         Ok(())
@@ -279,29 +279,29 @@ impl DataFillTheme {
         Ok(value)
     }
     /// Inspect fill alpha, including transparent and opaque endpoints.
-    pub fn fill_alpha(&self) -> u8 {
+    pub fn get_fill_alpha(&self) -> u8 {
         self.fill_alpha
     }
     /// Borrow the optional independent outline.
-    pub fn outline(&self) -> Option<&DataOutlineTheme> {
+    pub fn get_outline(&self) -> Option<&DataOutlineTheme> {
         self.outline.as_ref()
     }
     /// Replace only fill alpha.
-    pub fn with_fill_alpha(self, fill_alpha: u8) -> Result<Self> {
+    pub fn fill_alpha(self, fill_alpha: u8) -> Result<Self> {
         Self::new(fill_alpha, self.outline)
     }
     /// Replace the complete optional outline without changing fill alpha.
-    pub fn with_outline(self, outline: Option<DataOutlineTheme>) -> Result<Self> {
+    pub fn outline(self, outline: Option<DataOutlineTheme>) -> Result<Self> {
         Self::new(self.fill_alpha, outline)
     }
     pub(crate) fn backend_style(&self, rgb: (u8, u8, u8)) -> FillStyle {
         let color = color_from_rgb(rgb);
         let (stroke, width) = self
-            .outline()
+            .get_outline()
             .map_or((Color::rgba(0, 0, 0, 0), 0.0), |outline| {
                 outline.operands(color)
             });
-        FillStyle::new(color.alpha(self.fill_alpha()), stroke, width)
+        FillStyle::new(color.alpha(self.get_fill_alpha()), stroke, width)
     }
 }
 
@@ -314,7 +314,7 @@ pub struct FixedFillTheme {
 
 impl FixedFillTheme {
     pub(crate) fn validate(&self) -> Result<()> {
-        if let Some(outline) = self.outline() {
+        if let Some(outline) = self.get_outline() {
             outline.validate()?;
         }
         Ok(())
@@ -329,32 +329,32 @@ impl FixedFillTheme {
         Ok(value)
     }
     /// Inspect the complete fill paint.
-    pub fn color(&self) -> Color {
+    pub fn get_color(&self) -> Color {
         self.paint
     }
     /// Borrow the optional independent outline.
-    pub fn outline(&self) -> Option<&OutlineTheme> {
+    pub fn get_outline(&self) -> Option<&OutlineTheme> {
         self.outline.as_ref()
     }
     /// Replace only the complete fill paint.
-    pub fn with_color(self, color: Color) -> Result<Self> {
+    pub fn color(self, color: Color) -> Result<Self> {
         Self::new(color, self.outline)
     }
     /// Replace the complete optional outline without changing fill paint.
-    pub fn with_outline(self, outline: Option<OutlineTheme>) -> Result<Self> {
+    pub fn outline(self, outline: Option<OutlineTheme>) -> Result<Self> {
         Self::new(self.paint, outline)
     }
     pub(crate) fn backend_style(&self) -> FillStyle {
-        self.outline().map_or_else(
-            || FillStyle::new(self.color(), Color::rgba(0, 0, 0, 0), 0.0),
-            |outline| outline.backend_style(self.color()),
+        self.get_outline().map_or_else(
+            || FillStyle::new(self.get_color(), Color::rgba(0, 0, 0, 0), 0.0),
+            |outline| outline.backend_style(self.get_color()),
         )
     }
 }
 
 impl OutlineTheme {
     pub(crate) fn backend_style(&self, fill: Color) -> FillStyle {
-        FillStyle::new(fill, self.color(), self.width())
+        FillStyle::new(fill, self.get_color(), self.get_width())
     }
 }
 
@@ -368,7 +368,7 @@ pub struct PointTheme {
 
 impl PointTheme {
     pub(crate) fn validate(&self) -> Result<()> {
-        if let Some(outline) = self.outline() {
+        if let Some(outline) = self.get_outline() {
             outline.validate()?;
         }
         Ok(())
@@ -388,27 +388,27 @@ impl PointTheme {
         Ok(value)
     }
     /// Inspect the mapped point fill alpha.
-    pub fn fill_alpha(&self) -> u8 {
+    pub fn get_fill_alpha(&self) -> u8 {
         self.fill_alpha
     }
     /// Inspect the closed point shape.
-    pub fn shape(&self) -> PointShape {
+    pub fn get_shape(&self) -> PointShape {
         self.shape
     }
     /// Borrow the optional independent outline.
-    pub fn outline(&self) -> Option<&PointOutlineTheme> {
+    pub fn get_outline(&self) -> Option<&PointOutlineTheme> {
         self.outline.as_ref()
     }
     /// Replace only mapped fill alpha.
-    pub fn with_fill_alpha(self, fill_alpha: u8) -> Result<Self> {
+    pub fn fill_alpha(self, fill_alpha: u8) -> Result<Self> {
         Self::new(fill_alpha, self.shape, self.outline)
     }
     /// Replace only the closed point shape.
-    pub fn with_shape(self, shape: PointShape) -> Result<Self> {
+    pub fn shape(self, shape: PointShape) -> Result<Self> {
         Self::new(self.fill_alpha, shape, self.outline)
     }
     /// Replace the optional independent outline without changing fill or shape.
-    pub fn with_outline(self, outline: Option<PointOutlineTheme>) -> Result<Self> {
+    pub fn outline(self, outline: Option<PointOutlineTheme>) -> Result<Self> {
         Self::new(self.fill_alpha, self.shape, outline)
     }
     pub(crate) fn backend_style(
@@ -418,11 +418,11 @@ impl PointTheme {
         outline_visible: bool,
     ) -> PointStyle {
         PointStyle {
-            color: color_from_rgb(rgb).alpha(self.fill_alpha()),
+            color: color_from_rgb(rgb).alpha(self.get_fill_alpha()),
             radius,
-            shape: self.shape(),
+            shape: self.get_shape(),
             outline: self
-                .outline()
+                .get_outline()
                 .filter(|_| outline_visible)
                 .map(PointOutlineTheme::backend_style),
         }

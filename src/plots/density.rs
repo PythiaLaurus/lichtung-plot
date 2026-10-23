@@ -130,7 +130,7 @@ impl PreparedDensity {
                 unit,
                 curve.fill_alpha,
                 fill.backend_style((0, 0, 0)),
-                fill.outline()
+                fill.get_outline()
                     .is_some_and(|outline| outline.mapped_width().is_some()),
             )?;
         }
@@ -944,7 +944,7 @@ mod tests {
             .densities()
             .density_area()
             .clone()
-            .with_outline(Some(
+            .outline(Some(
                 crate::theme::DataOutlineTheme::mapped(140.0, 255).unwrap(),
             ))
             .unwrap();

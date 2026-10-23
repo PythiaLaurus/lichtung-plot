@@ -381,7 +381,9 @@ impl LegendMetrics {
             .legend
             .frame()
             .map(|frame| {
-                let outline = frame.outline().map(|value| (value.color(), value.width()));
+                let outline = frame
+                    .outline()
+                    .map(|value| (value.get_color(), value.get_width()));
                 if let Some((_, width)) = outline {
                     let canonical = crate::layout::kernel::LayoutScalar::from_css_pixels(
                         f64::from(width),
@@ -602,7 +604,7 @@ impl Legend {
             .continuous()
             .and_then(|color| color.missing.as_ref())
             .and_then(|key| key.outline.as_ref())
-            .map_or(0.0, |outline| f64::from(outline.width()) / 2.0);
+            .map_or(0.0, |outline| f64::from(outline.get_width()) / 2.0);
         let minimum = metrics.allocation_insets(inset)?;
         metrics.ensure_key_gap(inset)?;
         Ok((metrics, minimum))

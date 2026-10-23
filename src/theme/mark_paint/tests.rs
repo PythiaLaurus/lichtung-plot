@@ -11,16 +11,13 @@ fn present_widths_reject_invalid_inputs_without_imposing_a_minimum_or_maximum() 
         assert!(DataOutlineTheme::mapped(width, 255).is_err());
         assert!(StrokeTheme::new(paint, 1.0, StrokePattern::Solid)
             .unwrap()
-            .with_width(width)
+            .width(width)
             .is_err());
         assert!(SolidStrokeTheme::new(paint, 1.0)
             .unwrap()
-            .with_width(width)
+            .width(width)
             .is_err());
-        assert!(OutlineTheme::new(paint, 1.0)
-            .unwrap()
-            .with_width(width)
-            .is_err());
+        assert!(OutlineTheme::new(paint, 1.0).unwrap().width(width).is_err());
         assert!(DataLineTheme::new(1.0, 255, StrokePattern::Solid)
             .unwrap()
             .width(width)
@@ -30,19 +27,22 @@ fn present_widths_reject_invalid_inputs_without_imposing_a_minimum_or_maximum() 
         assert_eq!(
             StrokeTheme::new(paint, width, StrokePattern::Solid)
                 .unwrap()
-                .width()
+                .get_width()
                 .to_bits(),
             width.to_bits()
         );
         assert_eq!(
             SolidStrokeTheme::new(paint, width)
                 .unwrap()
-                .width()
+                .get_width()
                 .to_bits(),
             width.to_bits()
         );
         assert_eq!(
-            OutlineTheme::new(paint, width).unwrap().width().to_bits(),
+            OutlineTheme::new(paint, width)
+                .unwrap()
+                .get_width()
+                .to_bits(),
             width.to_bits()
         );
         assert_eq!(
@@ -65,7 +65,7 @@ fn present_widths_reject_invalid_inputs_without_imposing_a_minimum_or_maximum() 
         paint,
         width: f32::NAN,
     };
-    assert!(poisoned.clone().with_color(Color::rgb(1, 2, 3)).is_err());
+    assert!(poisoned.clone().color(Color::rgb(1, 2, 3)).is_err());
     assert!(FixedFillTheme::new(paint, Some(poisoned.clone())).is_err());
     assert!(DataFillTheme::new(17, Some(DataOutlineTheme::fixed(poisoned))).is_err());
     assert!(StrokeTheme {
@@ -73,11 +73,9 @@ fn present_widths_reject_invalid_inputs_without_imposing_a_minimum_or_maximum() 
         width: 0.0,
         pattern: StrokePattern::Solid
     }
-    .with_pattern(StrokePattern::ShortDash)
+    .pattern(StrokePattern::ShortDash)
     .is_err());
-    assert!(SolidStrokeTheme { paint, width: 0.0 }
-        .with_color(paint)
-        .is_err());
+    assert!(SolidStrokeTheme { paint, width: 0.0 }.color(paint).is_err());
     assert!(DataLineTheme {
         width: 0.0,
         alpha: 211,

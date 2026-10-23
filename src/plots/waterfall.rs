@@ -51,7 +51,7 @@ impl PreparedWaterfall {
                 AlphaUnit::observation(span.alpha),
                 span.alpha.value,
                 fill.backend_style((0, 0, 0)),
-                fill.outline()
+                fill.get_outline()
                     .is_some_and(|outline| outline.mapped_width().is_some()),
             )?;
         }
@@ -216,7 +216,7 @@ mod geometry_tests {
             .bodies()
             .waterfall_bar()
             .clone()
-            .with_outline(None)
+            .outline(None)
             .unwrap();
         let bodies = theme
             .marks
@@ -234,7 +234,7 @@ mod geometry_tests {
             .connectors()
             .waterfall_connector()
             .clone()
-            .with_color(crate::theme::Color::rgba(0, 0, 0, 0))
+            .color(crate::theme::Color::rgba(0, 0, 0, 0))
             .unwrap();
         let connectors = theme
             .marks

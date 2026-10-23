@@ -65,7 +65,7 @@ impl EffectiveSignificance {
 
     pub(crate) fn panel_padding(&self) -> Result<ExactLength> {
         let selected = self.length(self.geometry.panel_padding())?;
-        let ink = ExactLength::pixels(f64::from(self.geometry.bracket_stroke().width()) / 2.0)?
+        let ink = ExactLength::pixels(f64::from(self.geometry.bracket_stroke().get_width()) / 2.0)?
             .add_pixels(1.0 / 1024.0)?;
         Ok(if selected.compare(&ink).is_lt() {
             ink
@@ -90,8 +90,8 @@ impl EffectiveSignificance {
         label: &crate::layout::ResolvedTextPlan,
     ) -> Result<crate::render::backend::BracketStyle> {
         Ok(crate::render::backend::BracketStyle {
-            color: self.geometry.bracket_stroke().color(),
-            width: self.geometry.bracket_stroke().width(),
+            color: self.geometry.bracket_stroke().get_color(),
+            width: self.geometry.bracket_stroke().get_width(),
             label_color: label.style.paint,
             font_family: label
                 .copy_stack()

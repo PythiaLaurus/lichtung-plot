@@ -71,7 +71,7 @@ fn central_alpha_retains_filtered_original_members_and_does_not_change_densities
         .points()
         .primary()
         .clone()
-        .with_fill_alpha(0)
+        .fill_alpha(0)
         .unwrap();
     let points = theme.marks.points().clone().with_primary(primary).unwrap();
     theme.marks = theme.marks.clone().with_points(points).unwrap();

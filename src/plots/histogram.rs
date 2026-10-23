@@ -127,7 +127,7 @@ impl HistogramSemantics {
                 AlphaUnit::bin((bin.lower, bin.upper)),
                 alpha,
                 fill.backend_style((0, 0, 0)),
-                fill.outline()
+                fill.get_outline()
                     .is_some_and(|outline| outline.mapped_width().is_some()),
             )?;
         }
@@ -902,7 +902,7 @@ mod tests {
             .curves()
             .histogram_curve()
             .clone()
-            .with_width(140.0)
+            .width(140.0)
             .unwrap();
         let rug = theme
             .marks
@@ -910,7 +910,7 @@ mod tests {
             .curves()
             .histogram_rug()
             .clone()
-            .with_width(140.0)
+            .width(140.0)
             .unwrap();
         let curves = theme
             .marks
@@ -931,7 +931,7 @@ mod tests {
             .bodies()
             .histogram_bin()
             .clone()
-            .with_outline(Some(outline))
+            .outline(Some(outline))
             .unwrap();
         let bodies = theme
             .marks
@@ -951,7 +951,7 @@ mod tests {
             .bodies()
             .histogram_bin()
             .clone()
-            .with_outline(Some(crate::theme::DataOutlineTheme::fixed(
+            .outline(Some(crate::theme::DataOutlineTheme::fixed(
                 crate::theme::OutlineTheme::new(crate::theme::Color::rgba(1, 2, 3, 0), 140.0)
                     .unwrap(),
             )))

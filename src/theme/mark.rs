@@ -407,9 +407,9 @@ mod tests {
             .bodies()
             .inner_summary()
             .clone()
-            .with_color(Color::rgba(11, 23, 37, 53))
+            .color(Color::rgba(11, 23, 37, 53))
             .unwrap()
-            .with_outline(None)
+            .outline(None)
             .unwrap();
         let bodies = original
             .fills()
@@ -499,7 +499,7 @@ mod tests {
                 .points()
                 .primary()
                 .clone()
-                .with_fill_alpha(117)
+                .fill_alpha(117)
                 .unwrap();
             let strip = SizedPointTheme::new(appearance, 5).unwrap();
             let points = theme

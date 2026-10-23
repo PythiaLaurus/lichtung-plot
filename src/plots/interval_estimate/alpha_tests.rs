@@ -60,9 +60,9 @@ fn point_interval_alpha_keeps_original_slots_through_category_order_and_unavaila
         .summaries()
         .estimate_interval()
         .clone()
-        .with_color(crate::Color::rgba(17, 41, 67, 0))
+        .color(crate::Color::rgba(17, 41, 67, 0))
         .unwrap()
-        .with_width(40.0)
+        .width(40.0)
         .unwrap();
     let summaries = theme
         .marks

@@ -261,7 +261,7 @@ mod natural_sizing_tests {
         let frame = theme.axes.frame().expect("preset ordinary frame");
         let changed = crate::theme::FrameTheme::new(
             frame.sides().clone(),
-            frame.stroke().clone().with_width(width)?,
+            frame.stroke().clone().width(width)?,
         )?;
         theme.axes = theme.axes.clone().with_frame(Some(changed))?;
         Ok(())
@@ -347,7 +347,7 @@ mod natural_sizing_tests {
                 let frame = theme.axes.cell_frame().unwrap();
                 let changed = crate::theme::FrameTheme::new(
                     frame.sides().clone(),
-                    frame.stroke().clone().with_width(64.0)?,
+                    frame.stroke().clone().width(64.0)?,
                 )?;
                 theme.axes = theme.axes.clone().with_cell_frame(Some(changed))?;
                 Ok(())
@@ -365,7 +365,7 @@ mod natural_sizing_tests {
                 let frame = theme.axes.cell_frame().unwrap();
                 let changed = crate::theme::FrameTheme::new(
                     frame.sides().clone(),
-                    frame.stroke().clone().with_width(f32::MAX)?,
+                    frame.stroke().clone().width(f32::MAX)?,
                 )?;
                 theme.axes = theme.axes.clone().with_cell_frame(Some(changed))?;
                 Ok(())

@@ -27,7 +27,7 @@ fn point_alpha_retains_source_order_color_samples_and_coincident_packing_even_at
         .points()
         .primary()
         .clone()
-        .with_fill_alpha(0)
+        .fill_alpha(0)
         .unwrap();
     let points = theme.marks.points().clone().with_primary(primary).unwrap();
     theme.marks = theme.marks.clone().with_points(points).unwrap();
@@ -222,7 +222,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
         );
         assert_eq!(
             style.color.get_alpha(),
-            theme.marks.points().primary().fill_alpha()
+            theme.marks.points().primary().get_fill_alpha()
         );
     }
     assert!(payload

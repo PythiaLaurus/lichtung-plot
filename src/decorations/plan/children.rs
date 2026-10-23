@@ -448,7 +448,7 @@ mod tests {
                 let changed = crate::theme::LegendFrameTheme::new(
                     frame.fill(),
                     Some(crate::theme::OutlineTheme::new(
-                        frame.outline().unwrap().color(),
+                        frame.outline().unwrap().get_color(),
                         7.0,
                     )?),
                     frame.radius().clone(),

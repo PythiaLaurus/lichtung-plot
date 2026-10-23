@@ -140,7 +140,7 @@ impl PreparedRegression {
                 AlphaUnit::Single,
                 self.fill_alpha,
                 fill.backend_style((0, 0, 0)),
-                fill.outline()
+                fill.get_outline()
                     .is_some_and(|outline| outline.mapped_width().is_some()),
             )?;
         }
@@ -618,7 +618,7 @@ mod style_tests {
             .curves()
             .regression_fit()
             .clone()
-            .with_width(140.0)
+            .width(140.0)
             .unwrap();
         let curves = theme
             .marks
@@ -639,7 +639,7 @@ mod style_tests {
             .curves()
             .regression_fit()
             .clone()
-            .with_color(crate::theme::Color::rgba(1, 2, 3, 0))
+            .color(crate::theme::Color::rgba(1, 2, 3, 0))
             .unwrap();
         let curves = theme
             .marks
@@ -669,7 +669,7 @@ mod style_tests {
             .bands()
             .regression_band()
             .clone()
-            .with_outline(Some(
+            .outline(Some(
                 crate::theme::DataOutlineTheme::mapped(140.0, 255).unwrap(),
             ))
             .unwrap();
@@ -715,9 +715,9 @@ mod style_tests {
             .bands()
             .regression_band()
             .clone()
-            .with_fill_alpha(0)
+            .fill_alpha(0)
             .unwrap()
-            .with_outline(Some(
+            .outline(Some(
                 crate::theme::DataOutlineTheme::mapped(2.0, 255).unwrap(),
             ))
             .unwrap();
@@ -822,9 +822,9 @@ mod style_tests {
             .curves()
             .regression_fit()
             .clone()
-            .with_color(crate::theme::Color::rgb(17, 41, 67))
+            .color(crate::theme::Color::rgb(17, 41, 67))
             .unwrap()
-            .with_width(2.5)
+            .width(2.5)
             .unwrap();
         let curves = theme
             .marks

@@ -64,9 +64,9 @@ fn duplicate_outliers_keep_sorted_original_occurrences_and_replacement_paint() {
         .points()
         .primary()
         .clone()
-        .with_fill_alpha(0)
+        .fill_alpha(0)
         .unwrap()
-        .with_outline(None)
+        .outline(None)
         .unwrap();
     let radii = theme
         .marks
@@ -90,9 +90,9 @@ fn duplicate_outliers_keep_sorted_original_occurrences_and_replacement_paint() {
         .summaries()
         .summary()
         .clone()
-        .with_color(crate::Color::rgba(17, 41, 67, 0))
+        .color(crate::Color::rgba(17, 41, 67, 0))
         .unwrap()
-        .with_width(100.0)
+        .width(100.0)
         .unwrap();
     let summaries = theme
         .marks

@@ -296,9 +296,12 @@ impl LegendTheme {
             .preferred()
             .observe_feedback(round)?;
         if let Some(frame) = self.frame() {
-            for color in [Some(frame.fill()), frame.outline().map(OutlineTheme::color)]
-                .into_iter()
-                .flatten()
+            for color in [
+                Some(frame.fill()),
+                frame.outline().map(OutlineTheme::get_color),
+            ]
+            .into_iter()
+            .flatten()
             {
                 for byte in [color.red(), color.green(), color.blue(), color.get_alpha()] {
                     round.observe_count(usize::from(byte))?;
@@ -306,7 +309,7 @@ impl LegendTheme {
             }
             round.observe_count(usize::from(frame.outline().is_some()))?;
             if let Some(outline) = frame.outline() {
-                round.observe_number(f64::from(outline.width()))?;
+                round.observe_number(f64::from(outline.get_width()))?;
             }
             frame.radius().observe_feedback(round)?;
         }

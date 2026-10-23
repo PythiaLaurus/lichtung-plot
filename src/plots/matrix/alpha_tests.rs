@@ -66,7 +66,7 @@ fn every_off_diagonal_replays_original_observation_alpha_without_changing_diagon
         .points()
         .primary()
         .clone()
-        .with_fill_alpha(0)
+        .fill_alpha(0)
         .unwrap();
     let points = theme.marks.points().clone().with_primary(primary).unwrap();
     theme.marks = theme.marks.clone().with_points(points).unwrap();

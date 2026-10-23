@@ -156,7 +156,7 @@ impl ColorContent {
             .missing
             .as_ref()
             .and_then(|key| key.outline.as_ref())
-            .map_or(0.0, |outline| f64::from(outline.width()) / 2.0);
+            .map_or(0.0, |outline| f64::from(outline.get_width()) / 2.0);
         let missing_height = if let Some(plan) = &missing {
             let key = metrics.exact.key_width.add_pixels(missing_inset)?;
             let text = ExactLength::pixels(plan.height())?;

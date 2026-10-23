@@ -633,7 +633,7 @@ mod tests {
             .references()
             .qq_reference()
             .clone()
-            .with_width(140.0)
+            .width(140.0)
             .unwrap();
         let references = theme
             .marks
@@ -658,7 +658,7 @@ mod tests {
             .references()
             .qq_reference()
             .clone()
-            .with_color(crate::theme::Color::rgba(1, 2, 3, 0))
+            .color(crate::theme::Color::rgba(1, 2, 3, 0))
             .unwrap();
         let references = theme
             .marks

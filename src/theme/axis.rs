@@ -9,7 +9,7 @@ use super::{LocalMetric, RelativeSpacing, StrokeTheme};
 pub(crate) fn stroke_style(stroke: &StrokeTheme) -> Result<crate::render::backend::LineStyle> {
     stroke.validate()?;
     let width = crate::layout::kernel::LayoutScalar::from_css_pixels(
-        f64::from(stroke.width()),
+        f64::from(stroke.get_width()),
         SpatialRounding::NearestEven,
     )?;
     if width.quanta() == 0 {
@@ -227,12 +227,12 @@ impl AxisChrome<'_> {
             crate::layout::AxisSide::Left => frame.sides().left(),
         });
         let mut length = ExactLength::pixels(
-            frame.map_or(0.0, |frame| f64::from(frame.stroke().width()) / 2.0),
+            frame.map_or(0.0, |frame| f64::from(frame.stroke().get_width()) / 2.0),
         )?;
         if let Some(ticks) = self.ticks.filter(|_| present_ticks) {
             length = length
                 .add_pixels(f64::from(ticks.length()))?
-                .add_pixels(f64::from(ticks.stroke().width()) / 2.0)?;
+                .add_pixels(f64::from(ticks.stroke().get_width()) / 2.0)?;
         }
         Ok(length)
     }
@@ -362,13 +362,13 @@ impl AxisTheme {
         ] {
             round.observe_count(usize::from(stroke.is_some()))?;
             if let Some(stroke) = stroke {
-                round.observe_number(f64::from(stroke.width()))?;
-                round.observe_count(stroke.pattern() as usize)?;
+                round.observe_number(f64::from(stroke.get_width()))?;
+                round.observe_count(stroke.get_pattern() as usize)?;
                 for channel in [
-                    stroke.color().red(),
-                    stroke.color().green(),
-                    stroke.color().blue(),
-                    stroke.color().get_alpha(),
+                    stroke.get_color().red(),
+                    stroke.get_color().green(),
+                    stroke.get_color().blue(),
+                    stroke.get_color().get_alpha(),
                 ] {
                     round.observe_count(usize::from(channel))?;
                 }

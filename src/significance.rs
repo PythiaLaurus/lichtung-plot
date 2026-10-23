@@ -363,7 +363,13 @@ fn plan_comparisons_at_with_label(
         } else {
             comparison.label.plan.width()
         };
-        let clearance = f64::from(theme.annotations.significance().bracket_stroke().width()) / 2.0
+        let clearance = f64::from(
+            theme
+                .annotations
+                .significance()
+                .bracket_stroke()
+                .get_width(),
+        ) / 2.0
             + 1.0 / 1024.0;
         let interval = (
             start.min(center - label_span / 2.0) - clearance,

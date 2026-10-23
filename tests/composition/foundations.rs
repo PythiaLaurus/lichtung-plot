@@ -57,7 +57,7 @@ fn public_shared_gradient_drives_both_families_without_borrowing_mark_alpha_or_c
         .points()
         .primary()
         .clone()
-        .with_fill_alpha(71)
+        .fill_alpha(71)
         .unwrap();
     let points = base.marks().points().clone().with_primary(primary).unwrap();
     let cells = base.marks().cells().clone().with_fill_alpha(151).unwrap();
