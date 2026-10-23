@@ -125,7 +125,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
     let owner = crate::theme::Theme::publication()
         .color_scales()
         .clone()
-        .with_diverging(gradient)
+        .diverging(gradient)
         .unwrap();
     let selection = ContinuousColorScale::diverging(0.0, None, None)
         .unwrap()
@@ -159,7 +159,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
         field: "color".into(),
         title: "color".into(),
         selection: selection
-            .with_domain(Some(ColorDomain::exact(-4.0, 12.0).unwrap()))
+            .domain(Some(ColorDomain::exact(-4.0, 12.0).unwrap()))
             .unwrap(),
         samples: vec![-4.0, 6.0, 12.0],
         missing: None,

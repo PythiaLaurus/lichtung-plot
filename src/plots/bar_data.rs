@@ -422,7 +422,7 @@ impl PreparedBars {
         };
         let colors = CategoryColors::resolve(
             if chart.colors_by_sign() { &[] } else { keys },
-            theme.color_scales.qualitative(),
+            theme.color_scales.get_qualitative(),
             if chart.colors_by_sign() {
                 None
             } else {

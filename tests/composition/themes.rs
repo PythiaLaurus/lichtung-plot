@@ -162,7 +162,7 @@ fn mixed_children_keep_distinct_complete_canvas_roles_on_the_root_theme() {
     let scales = base
         .color_scales()
         .clone()
-        .with_qualitative(QualitativePalette::fixed([OpaqueColor::rgb(233, 129, 41)]).unwrap())
+        .qualitative(QualitativePalette::fixed([OpaqueColor::rgb(233, 129, 41)]).unwrap())
         .unwrap();
     let custom = Theme::new(
         surfaces,

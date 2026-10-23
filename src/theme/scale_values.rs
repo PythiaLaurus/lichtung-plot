@@ -313,27 +313,27 @@ impl ColorScales {
         })
     }
     /// Borrow the default categorical palette, independent of mark accents.
-    pub fn qualitative(&self) -> &QualitativePalette {
+    pub fn get_qualitative(&self) -> &QualitativePalette {
         &self.qualitative
     }
     /// Borrow the default sequential gradient.
-    pub fn sequential(&self) -> &SequentialGradient {
+    pub fn get_sequential(&self) -> &SequentialGradient {
         &self.sequential
     }
     /// Borrow the default diverging gradient.
-    pub fn diverging(&self) -> &DivergingGradient {
+    pub fn get_diverging(&self) -> &DivergingGradient {
         &self.diverging
     }
     /// Replace only the complete default categorical palette.
-    pub fn with_qualitative(self, value: QualitativePalette) -> Result<Self> {
+    pub fn qualitative(self, value: QualitativePalette) -> Result<Self> {
         Self::new(value, self.sequential, self.diverging)
     }
     /// Replace only the complete default sequential gradient.
-    pub fn with_sequential(self, value: SequentialGradient) -> Result<Self> {
+    pub fn sequential(self, value: SequentialGradient) -> Result<Self> {
         Self::new(self.qualitative, value, self.diverging)
     }
     /// Replace only the complete default diverging gradient.
-    pub fn with_diverging(self, value: DivergingGradient) -> Result<Self> {
+    pub fn diverging(self, value: DivergingGradient) -> Result<Self> {
         Self::new(self.qualitative, self.sequential, value)
     }
 }
@@ -412,7 +412,7 @@ pub enum ContinuousScaleKind {
 /// let scale = ContinuousColorScale::diverging(
 ///     0.0, Some(gradient), Some(ColorDomain::exact(-1.0, 3.0)?),
 /// )?;
-/// assert_eq!(scale.center(), Some(0.0));
+/// assert_eq!(scale.get_center(), Some(0.0));
 /// # Ok::<(), lichtung_plot::Error>(())
 /// ```
 ///
@@ -463,7 +463,7 @@ impl ContinuousColorScale {
         Ok(value)
     }
     fn validate(&self) -> Result<()> {
-        if let Some(center) = self.center() {
+        if let Some(center) = self.get_center() {
             if !center.is_finite()
                 || self
                     .domain
@@ -485,38 +485,38 @@ impl ContinuousColorScale {
         }
     }
     /// Inspect the exact diverging center, or None for sequential mapping.
-    pub fn center(&self) -> Option<f64> {
+    pub fn get_center(&self) -> Option<f64> {
         match self.selection {
             ContinuousSelection::Sequential(_) => None,
             ContinuousSelection::Diverging { center, .. } => Some(center),
         }
     }
     /// Borrow the optional exact domain; None means automatic from active finite values.
-    pub fn domain(&self) -> Option<&ColorDomain> {
+    pub fn get_domain(&self) -> Option<&ColorDomain> {
         self.domain.as_ref()
     }
     /// Borrow a supplied sequential gradient, if this is its selected kind.
-    pub fn sequential_gradient(&self) -> Option<&SequentialGradient> {
+    pub fn get_sequential_gradient(&self) -> Option<&SequentialGradient> {
         match &self.selection {
             ContinuousSelection::Sequential(gradient) => gradient.as_ref(),
             ContinuousSelection::Diverging { .. } => None,
         }
     }
     /// Borrow a supplied diverging gradient, if this is its selected kind.
-    pub fn diverging_gradient(&self) -> Option<&DivergingGradient> {
+    pub fn get_diverging_gradient(&self) -> Option<&DivergingGradient> {
         match &self.selection {
             ContinuousSelection::Diverging { gradient, .. } => gradient.as_ref(),
             ContinuousSelection::Sequential(_) => None,
         }
     }
     /// Replace the optional exact domain, preserving kind and any center containment.
-    pub fn with_domain(mut self, domain: Option<ColorDomain>) -> Result<Self> {
+    pub fn domain(mut self, domain: Option<ColorDomain>) -> Result<Self> {
         self.domain = domain;
         self.validate()?;
         Ok(self)
     }
     /// Replace a diverging center; reject sequential kind or an excluding exact domain.
-    pub fn with_center(mut self, value: f64) -> Result<Self> {
+    pub fn center(mut self, value: f64) -> Result<Self> {
         let ContinuousSelection::Diverging { center, .. } = &mut self.selection else {
             return Err(invalid("sequential scale has no center"));
         };
@@ -525,7 +525,7 @@ impl ContinuousColorScale {
         Ok(self)
     }
     /// Replace the optional sequential gradient; reject a diverging selection.
-    pub fn with_sequential_gradient(mut self, value: Option<SequentialGradient>) -> Result<Self> {
+    pub fn sequential_gradient(mut self, value: Option<SequentialGradient>) -> Result<Self> {
         let ContinuousSelection::Sequential(gradient) = &mut self.selection else {
             return Err(invalid("diverging scale cannot take a sequential gradient"));
         };
@@ -534,7 +534,7 @@ impl ContinuousColorScale {
         Ok(self)
     }
     /// Replace the optional diverging gradient; reject a sequential selection.
-    pub fn with_diverging_gradient(mut self, value: Option<DivergingGradient>) -> Result<Self> {
+    pub fn diverging_gradient(mut self, value: Option<DivergingGradient>) -> Result<Self> {
         let ContinuousSelection::Diverging { gradient, .. } = &mut self.selection else {
             return Err(invalid("sequential scale cannot take a diverging gradient"));
         };

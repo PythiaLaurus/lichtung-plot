@@ -229,7 +229,7 @@ impl PreparedInteriorInputs {
             };
             palette
         } else {
-            theme.color_scales().qualitative()
+            theme.color_scales().get_qualitative()
         };
         if palette.capacity() != crate::theme::PaletteCapacity::Fixed || chart.colors_by_sign() {
             return Ok(());

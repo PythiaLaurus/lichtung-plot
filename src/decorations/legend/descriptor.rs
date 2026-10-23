@@ -107,7 +107,7 @@ impl ContinuousContributor {
                 "continuous guide domain is not finite and ordered".into(),
             ));
         }
-        let exact = semantics.selection.domain().is_some();
+        let exact = semantics.selection.get_domain().is_some();
         Ok(Some(Self {
             field,
             title,
@@ -128,7 +128,7 @@ impl ContinuousContributor {
         let mut samples = Vec::new();
         for contributor in contributors {
             if let Some(existing) = &mut combined {
-                let same_center = match (existing.center, contributor.selection.center()) {
+                let same_center = match (existing.center, contributor.selection.get_center()) {
                     (None, None) => true,
                     (Some(a), Some(b)) => a.to_bits() == b.to_bits(),
                     _ => false,
@@ -177,7 +177,7 @@ impl ContinuousContributor {
                 combined = Some(ContinuousDescriptor {
                     field: contributor.field,
                     title: contributor.title,
-                    center: contributor.selection.center(),
+                    center: contributor.selection.get_center(),
                     selection: contributor.selection,
                     stops: Vec::new(),
                     missing: contributor.missing,
@@ -202,7 +202,7 @@ impl ContinuousContributor {
             }
         }
         if let Some(existing) = &mut combined {
-            existing.selection = existing.selection.clone().with_domain(
+            existing.selection = existing.selection.clone().domain(
                 existing
                     .exact
                     .then(|| crate::theme::ColorDomain::exact(existing.domain.0, existing.domain.1))

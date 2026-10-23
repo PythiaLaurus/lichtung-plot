@@ -2375,7 +2375,7 @@ mod tests {
             selection: crate::theme::ContinuousColorScale::sequential(
                 Some(
                     crate::theme::scale_values::test_defaults()
-                        .sequential()
+                        .get_sequential()
                         .clone(),
                 ),
                 None,

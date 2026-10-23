@@ -11,7 +11,7 @@ fn descriptor() -> ContinuousDescriptor {
             0.0,
             Some(
                 crate::theme::scale_values::test_defaults()
-                    .diverging()
+                    .get_diverging()
                     .clone(),
             ),
             None,

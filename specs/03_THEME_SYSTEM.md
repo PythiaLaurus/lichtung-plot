@@ -440,6 +440,9 @@ ColorScales owns qualitative, sequential and diverging values. Every built-in
 sequential sequence is `0:#F7FBFF -> 1:#08306B`; diverging is
 `0:(49,130,189), 0.5:(247,247,247), 1:(222,45,38)`. Built-in qualitative/independent
 accent seeds are constructed in `src/theme/resolved.rs`, with stable exact prefixes.
+Its consuming `qualitative(value)`, `sequential(value)` and `diverging(value)` edits
+pair with borrowed `get_qualitative()`, `get_sequential()` and `get_diverging()`
+readers. Read-only palette/stop/domain inspection retains its bare names.
 
 ContinuousColorScale sequential/diverging factories own kind, optional matching
 gradient, optional ColorDomain and finite diverging center. ColorDomain is finite
@@ -447,6 +450,12 @@ minimum<=maximum, allowing constants. An exact diverging domain contains center
 inclusively. None gradient selects matching Theme default; None domain means
 automatic from prepared finite active values. Wrong-kind gradient/center edits
 reject immediately; reconstruct the complete kind to change it.
+
+ContinuousColorScale edits use `domain(value)`, `center(value)`,
+`sequential_gradient(value)` and `diverging_gradient(value)`, paired with
+`get_domain()`, `get_center()`, `get_sequential_gradient()` and
+`get_diverging_gradient()`. Optional domain/gradient readers remain borrowed;
+the optional center is copied and the read-only `kind()` keeps its name.
 
 Heatmap and Beeswarm share this complete attachment. Automatic sequential domain
 is finite observed min/max; constant maps to midpoint. Automatic diverging domains

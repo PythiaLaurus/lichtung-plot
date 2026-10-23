@@ -14,24 +14,24 @@ type Rgb = (u8, u8, u8);
 
 impl ContinuousColorScale {
     pub(crate) fn resolved_in(&self, owner: &ColorScales) -> Result<Self, Error> {
-        if let Some(center) = self.center() {
+        if let Some(center) = self.get_center() {
             Self::diverging(
                 center,
                 Some(
-                    self.diverging_gradient()
-                        .unwrap_or(owner.diverging())
+                    self.get_diverging_gradient()
+                        .unwrap_or(owner.get_diverging())
                         .clone(),
                 ),
-                self.domain().cloned(),
+                self.get_domain().cloned(),
             )
         } else {
             Self::sequential(
                 Some(
-                    self.sequential_gradient()
-                        .unwrap_or(owner.sequential())
+                    self.get_sequential_gradient()
+                        .unwrap_or(owner.get_sequential())
                         .clone(),
                 ),
-                self.domain().cloned(),
+                self.get_domain().cloned(),
             )
         }
     }
@@ -41,11 +41,11 @@ impl ContinuousColorScale {
         values: &[f64],
         family: &str,
     ) -> Result<ColorDomain, Error> {
-        if let Some(domain) = self.domain() {
+        if let Some(domain) = self.get_domain() {
             return Ok(domain.clone());
         }
         let (minimum, maximum) = crate::data::min_max(values.iter().copied(), family)?;
-        let Some(center) = self.center() else {
+        let Some(center) = self.get_center() else {
             return ColorDomain::exact(minimum, maximum);
         };
         let mut radius = 0.0_f64;
@@ -278,7 +278,7 @@ impl ContinuousColors {
         let domain = ColorDomain::exact(domain.0, domain.1)?;
         let pair = domain.as_pair();
         let semantic = selection.stops()?;
-        let Some(center) = selection.center() else {
+        let Some(center) = selection.get_center() else {
             return Self::resolve(pair, semantic);
         };
         if center < pair.0 || center > pair.1 {
@@ -287,7 +287,7 @@ impl ContinuousColors {
             ));
         }
         let neutral = selection
-            .diverging_gradient()
+            .get_diverging_gradient()
             .expect("validated diverging selection")
             .neutral();
         let mut stops = Vec::new();

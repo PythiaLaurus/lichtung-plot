@@ -1664,8 +1664,10 @@ all nested typography groups and ThemeBuilder property edits and paired readers
 have migrated, including repository callers and their current specifications.
 Compound stroke, outline, fill and point paints have also migrated with their
 backend and guide consumers. Axis, guide and composition chrome/spacing have
-migrated, including Matrix's function-item side readers. The remaining
-mark/annotation geometry and scale-value naming migrations are pending.
+migrated, including Matrix's function-item side readers. ColorScales and
+ContinuousColorScale edits/readers have migrated through final-domain and Shared
+guide preparation. The remaining mark/annotation geometry naming migration is
+pending.
 Steps 2–22 remain pending; their target signatures are not current APIs.
 
 ### 1. Apply The Public Property Naming Rule

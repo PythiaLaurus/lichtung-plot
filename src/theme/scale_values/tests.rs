@@ -62,62 +62,68 @@ fn domains_and_continuous_edits_validate_kind_center_and_complete_result() {
     let defaults = test_defaults();
     let source = ContinuousColorScale::diverging(
         -0.0,
-        Some(defaults.diverging().clone()),
+        Some(defaults.get_diverging().clone()),
         Some(ColorDomain::exact(-2.0, 3.0).unwrap()),
     )
     .unwrap();
     assert_eq!(source.kind(), ContinuousScaleKind::Diverging);
-    assert_eq!(source.center().unwrap().to_bits(), 0);
+    assert_eq!(source.get_center().unwrap().to_bits(), 0);
     assert_eq!(
-        source.domain().unwrap().minimum().to_bits(),
+        source.get_domain().unwrap().minimum().to_bits(),
         (-2.0_f64).to_bits()
     );
     assert_eq!(
-        source.domain().unwrap().maximum().to_bits(),
+        source.get_domain().unwrap().maximum().to_bits(),
         3.0_f64.to_bits()
     );
-    assert_eq!(source.diverging_gradient(), Some(defaults.diverging()));
-    assert!(source.sequential_gradient().is_none());
-    let shifted = source.clone().with_center(1.25).unwrap();
-    assert_eq!(shifted.center().unwrap().to_bits(), 1.25_f64.to_bits());
-    assert_eq!(shifted.domain(), source.domain());
-    assert_eq!(shifted.diverging_gradient(), source.diverging_gradient());
-    assert!(source.clone().with_center(f64::NAN).is_err());
-    assert!(source.clone().with_center(4.0).is_err());
+    assert_eq!(
+        source.get_diverging_gradient(),
+        Some(defaults.get_diverging())
+    );
+    assert!(source.get_sequential_gradient().is_none());
+    let shifted = source.clone().center(1.25).unwrap();
+    assert_eq!(shifted.get_center().unwrap().to_bits(), 1.25_f64.to_bits());
+    assert_eq!(shifted.get_domain(), source.get_domain());
+    assert_eq!(
+        shifted.get_diverging_gradient(),
+        source.get_diverging_gradient()
+    );
+    assert!(source.clone().center(f64::NAN).is_err());
+    assert!(source.clone().center(4.0).is_err());
     assert!(source
         .clone()
-        .with_domain(Some(ColorDomain::exact(1.0, 2.0).unwrap()))
+        .domain(Some(ColorDomain::exact(1.0, 2.0).unwrap()))
         .is_err());
     let automatic = source
         .clone()
-        .with_domain(None)
+        .domain(None)
         .unwrap()
-        .with_diverging_gradient(None)
+        .diverging_gradient(None)
         .unwrap();
-    assert!(automatic.domain().is_none());
-    assert!(automatic.diverging_gradient().is_none());
-    assert_eq!(automatic.center(), source.center());
-    assert!(source.clone().with_sequential_gradient(None).is_err());
+    assert!(automatic.get_domain().is_none());
+    assert!(automatic.get_diverging_gradient().is_none());
+    assert_eq!(automatic.get_center(), source.get_center());
+    assert!(source.clone().sequential_gradient(None).is_err());
     let sequential = ContinuousColorScale::sequential(
-        Some(defaults.sequential().clone()),
+        Some(defaults.get_sequential().clone()),
         Some(constant.clone()),
     )
     .unwrap();
     assert_eq!(sequential.kind(), ContinuousScaleKind::Sequential);
-    assert_eq!(sequential.domain(), Some(&constant));
+    assert_eq!(sequential.get_domain(), Some(&constant));
     assert_eq!(
-        sequential.sequential_gradient(),
-        Some(defaults.sequential())
+        sequential.get_sequential_gradient(),
+        Some(defaults.get_sequential())
     );
-    assert!(sequential.center().is_none());
-    assert!(sequential.diverging_gradient().is_none());
-    assert!(sequential.clone().with_center(0.0).is_err());
-    assert!(sequential.clone().with_diverging_gradient(None).is_err());
+    assert!(sequential.get_center().is_none());
+    assert!(sequential.get_diverging_gradient().is_none());
+    assert!(sequential.clone().center(0.0).is_err());
+    assert!(sequential.clone().diverging_gradient(None).is_err());
     assert!(sequential
         .clone()
-        .with_sequential_gradient(None)
+        .sequential_gradient(None)
         .unwrap()
-        .sequential_gradient()
+        .get_sequential_gradient()
         .is_none());
     assert!(ContinuousColorScale::diverging(1.0, None, Some(constant)).is_err());
     assert!(ContinuousColorScale::diverging(f64::INFINITY, None, None).is_err());
@@ -166,7 +172,7 @@ fn hidden_shared_plots_validate_the_final_palette_domain_before_fonts() {
     let scales = base
         .color_scales()
         .clone()
-        .with_qualitative(QualitativePalette::fixed([OpaqueColor::rgb(13, 29, 47)]).unwrap())
+        .qualitative(QualitativePalette::fixed([OpaqueColor::rgb(13, 29, 47)]).unwrap())
         .unwrap();
     let theme = base
         .customize()
@@ -223,15 +229,15 @@ fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_own
     theme.color_scales = theme
         .color_scales
         .clone()
-        .with_qualitative(palette.clone())
+        .qualitative(palette.clone())
         .unwrap()
-        .with_sequential(gradient.clone())
+        .sequential(gradient.clone())
         .unwrap();
     assert_eq!(theme.marks.accents(), original.marks.accents());
     let keys = ["one".into(), "two".into()];
     let mapped = super::super::CategoryColors::resolve(
         &keys,
-        theme.color_scales.qualitative(),
+        theme.color_scales.get_qualitative(),
         None,
         &resources,
     )
@@ -239,7 +245,7 @@ fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_own
     assert_eq!(mapped.colors(), palette.colors());
     assert!(super::super::CategoryColors::resolve(
         &["one".into(), "two".into(), "three".into()],
-        theme.color_scales.qualitative(),
+        theme.color_scales.get_qualitative(),
         None,
         &resources
     )
@@ -254,7 +260,10 @@ fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_own
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources, Some(&theme)).unwrap();
     let prepared = &inputs.heatmap.as_ref().unwrap().panels[0].1;
     let semantics = prepared.guide_semantics(&theme).unwrap();
-    assert_eq!(semantics.selection.sequential_gradient(), Some(&gradient));
+    assert_eq!(
+        semantics.selection.get_sequential_gradient(),
+        Some(&gradient)
+    );
     assert_eq!(
         semantics.selection.stops().unwrap().as_ptr(),
         gradient.stops().as_ptr()
@@ -289,7 +298,7 @@ fn resolved_palette_edits_do_not_change_accents_and_heatmap_reads_its_actual_own
     assert!(svg.contains("fill=\"#53565A\""));
     assert!(svg.contains("fill=\"#6D7074\""));
     assert_eq!(
-        original.color_scales.qualitative().capacity(),
+        original.color_scales.get_qualitative().capacity(),
         PaletteCapacity::Extendable
     );
 }

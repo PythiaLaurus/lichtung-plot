@@ -87,7 +87,7 @@ fn public_shared_gradient_drives_both_families_without_borrowing_mark_alpha_or_c
     let scales = base
         .color_scales()
         .clone()
-        .with_diverging(gradient.clone())
+        .diverging(gradient.clone())
         .unwrap();
     let child_theme = base
         .customize()
@@ -112,7 +112,7 @@ fn public_shared_gradient_drives_both_families_without_borrowing_mark_alpha_or_c
         NumericValues::new("response", [0.0, 3.0, 6.0]),
     )
     .theme(child_theme)
-    .continuous_color_scale(selection.with_diverging_gradient(Some(gradient)).unwrap());
+    .continuous_color_scale(selection.diverging_gradient(Some(gradient)).unwrap());
     let svg = render_canvas(
         Canvas::grid(1, 2)
             .unwrap()

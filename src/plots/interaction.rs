@@ -248,7 +248,7 @@ impl PreparedInteraction {
         };
         CategoryColors::resolve(
             &keys,
-            theme.color_scales.qualitative(),
+            theme.color_scales.get_qualitative(),
             chart.categorical_color_scale_spec(),
             data.source_resources()?,
         )

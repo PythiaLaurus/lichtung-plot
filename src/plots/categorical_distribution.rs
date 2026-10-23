@@ -53,14 +53,14 @@ impl PreparedDistribution {
             let parent = crate::data::source::source_levels(&raw)?;
             return CategoryColors::resolve(
                 &parent,
-                theme.color_scales.qualitative(),
+                theme.color_scales.get_qualitative(),
                 chart.categorical_color_scale_spec(),
                 resources,
             );
         };
         CategoryColors::resolve(
             keys,
-            theme.color_scales.qualitative(),
+            theme.color_scales.get_qualitative(),
             chart.categorical_color_scale_spec(),
             resources,
         )

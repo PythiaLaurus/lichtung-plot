@@ -163,7 +163,7 @@ impl PreparedDensity {
         };
         let map = CategoryColors::resolve(
             &keys,
-            theme.color_scales.qualitative(),
+            theme.color_scales.get_qualitative(),
             chart.categorical_color_scale_spec(),
             resources,
         )?;
@@ -1008,11 +1008,11 @@ mod tests {
         };
         assert_eq!(
             payload.curves[0].fill_style.color,
-            crate::theme::Color::from(theme.color_scales.qualitative().colors()[0]).alpha(56)
+            crate::theme::Color::from(theme.color_scales.get_qualitative().colors()[0]).alpha(56)
         );
         assert_eq!(
             payload.curves[1].fill_style.color,
-            crate::theme::Color::from(theme.color_scales.qualitative().colors()[1]).alpha(56)
+            crate::theme::Color::from(theme.color_scales.get_qualitative().colors()[1]).alpha(56)
         );
         assert!(payload.curves[0].fill[0].x > payload.curves[1].fill[0].x);
         let line = theme

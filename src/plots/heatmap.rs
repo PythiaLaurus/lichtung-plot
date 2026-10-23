@@ -185,11 +185,11 @@ impl HeatmapData {
                 stops: crate::data::source::collect_source(
                     self.colorbar_stops.iter().copied().map(Ok),
                 )?,
-                center: semantics.selection.center(),
+                center: semantics.selection.get_center(),
                 selection: semantics.selection,
                 missing: semantics.missing,
                 domain: semantics.domain,
-                exact: self.color.selection.domain().is_some(),
+                exact: self.color.selection.get_domain().is_some(),
                 format: semantics.format,
                 numeric: values.try_copy()?,
             },
@@ -434,7 +434,7 @@ impl PreparedHeatmapColor {
         domain: ResolvedColorDomain,
         selection: ContinuousColorScale,
     ) -> Result<Self, Error> {
-        if selection.center().map(f64::to_bits) != domain.center.map(f64::to_bits) {
+        if selection.get_center().map(f64::to_bits) != domain.center.map(f64::to_bits) {
             return Err(Error::Render(
                 "resolved Heatmap domain disagrees with its retained scale selection".into(),
             ));
@@ -453,7 +453,7 @@ impl PreparedHeatmapColor {
         ResolvedColorDomain {
             minimum,
             maximum,
-            center: self.selection.center(),
+            center: self.selection.get_center(),
         }
     }
 
@@ -1379,7 +1379,7 @@ pub(crate) fn prepare<'a>(
     crate::data::source::reserve_source(&mut finite, fills.len())?;
 
     finite.extend(fills.iter().flatten().copied());
-    if finite.is_empty() && selection.domain().is_none() {
+    if finite.is_empty() && selection.get_domain().is_none() {
         return Err(Error::Data(
             "heatmap: color column must contain at least one finite value unless explicit color limits are set"
                 .into(),
@@ -1691,7 +1691,7 @@ fn color_domain(
     Ok(ResolvedColorDomain {
         minimum: domain.minimum(),
         maximum: domain.maximum(),
-        center: selection.center(),
+        center: selection.get_center(),
     })
 }
 

@@ -174,7 +174,7 @@ pub(crate) fn prepare(
     } else {
         Some(crate::decorations::legend::descriptor::domain_presentation(
             color_range,
-            selection.center(),
+            selection.get_center(),
             format.as_deref(),
         )?)
     };
@@ -266,10 +266,10 @@ impl PreparedBeeswarm {
                 title: crate::data::source::copy_source_string(&self.color_label)?,
                 stops: self.guide_stops()?,
                 selection: self.selection.clone(),
-                center: self.selection.center(),
+                center: self.selection.get_center(),
                 missing: None,
                 domain: self.scale.domain(),
-                exact: self.selection.domain().is_some(),
+                exact: self.selection.get_domain().is_some(),
                 format: self.format.clone(),
                 numeric: values.try_copy()?,
             },
