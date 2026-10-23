@@ -432,11 +432,11 @@ impl ResolvedTheme {
 impl ResolvedTheme {
     pub(crate) fn legend_outside_gap(&self) -> Result<f64, Error> {
         self.legend
-            .outside_gap_pixels(self.typography.guides.legend_label.font_size())
+            .outside_gap_pixels(self.typography.guides.legend_label.get_font_size())
     }
     pub(crate) fn legend_shared_gap(&self) -> Result<f64, Error> {
         self.legend
-            .shared_gap_pixels(self.typography.guides.legend_label.font_size())
+            .shared_gap_pixels(self.typography.guides.legend_label.get_font_size())
     }
     pub(crate) fn same_validated(&self, other: &Self) -> Result<bool, Error> {
         if !self.axes.same_validated(&other.axes)? {
@@ -648,9 +648,9 @@ impl ResolvedTheme {
     pub(crate) fn contrasting_text(&self, fill: Color) -> Result<&TextTheme, Error> {
         super::contrast::select(
             fill,
-            self.surfaces.plot_panel(),
+            self.surfaces.get_plot_panel(),
             self.canvas_surface_override
-                .unwrap_or(self.surfaces.canvas_root()),
+                .unwrap_or(self.surfaces.get_canvas_root()),
             self.annotations.planning_backdrop().into(),
             self.typography.annotations().contrast().light(),
             self.typography.annotations().contrast().dark(),
@@ -717,15 +717,15 @@ impl ResolvedTheme {
     ) -> Result<ResolvedTextPlan, crate::layout::fit::PlanError> {
         let input = TextPlanInput {
             source,
-            stack: appearance.stack(),
-            weight: appearance.weight(),
-            font_size: appearance.font_size(),
-            line_height: TextLineHeight::Multiplier(appearance.line_height()),
+            stack: appearance.get_stack(),
+            weight: appearance.get_weight(),
+            font_size: appearance.get_font_size(),
+            line_height: TextLineHeight::Multiplier(appearance.get_line_height()),
             maximum_width_quanta,
             alignment,
-            paint: appearance.color(),
+            paint: appearance.get_color(),
             provenance: TextPlanProvenance {
-                pair_ordinal: pair_ordinal(appearance.weight()),
+                pair_ordinal: pair_ordinal(appearance.get_weight()),
                 owner: owner.to_owned(),
             },
             exact_override,
@@ -904,11 +904,11 @@ impl ResolvedTheme {
             Ok(owned)
         };
         let appearance = TextTheme::new(
-            appearance.stack().clone(),
-            appearance.color(),
-            appearance.font_size(),
-            appearance.weight(),
-            appearance.line_height(),
+            appearance.get_stack().clone(),
+            appearance.get_color(),
+            appearance.get_font_size(),
+            appearance.get_weight(),
+            appearance.get_line_height(),
         )?;
         let source = if let Some(index) = query_key.shaping_entry {
             Arc::clone(&cache.entries[index].source)
@@ -990,22 +990,22 @@ impl SurfaceTheme {
     }
 
     /// Inspect the complete Canvas root paint.
-    pub fn canvas_root(&self) -> Color {
+    pub fn get_canvas_root(&self) -> Color {
         self.canvas_root
     }
 
     /// Inspect the complete Plot panel paint.
-    pub fn plot_panel(&self) -> Color {
+    pub fn get_plot_panel(&self) -> Color {
         self.plot_panel
     }
 
     /// Replace only the Canvas root paint.
-    pub fn with_canvas_root(self, canvas_root: Color) -> Result<Self, Error> {
+    pub fn canvas_root(self, canvas_root: Color) -> Result<Self, Error> {
         Self::new(canvas_root, self.plot_panel)
     }
 
     /// Replace only the Plot panel paint.
-    pub fn with_plot_panel(self, plot_panel: Color) -> Result<Self, Error> {
+    pub fn plot_panel(self, plot_panel: Color) -> Result<Self, Error> {
         Self::new(self.canvas_root, plot_panel)
     }
 }
@@ -1060,32 +1060,32 @@ impl TextTheme {
     }
 
     /// Borrow this role's complete ordered font preferences.
-    pub fn stack(&self) -> &crate::font::canonical::FontStack {
+    pub fn get_stack(&self) -> &crate::font::canonical::FontStack {
         &self.stack
     }
 
     /// Inspect the complete text paint.
-    pub fn color(&self) -> Color {
+    pub fn get_color(&self) -> Color {
         self.paint
     }
 
     /// Inspect the positive font size in actual CSS pixels.
-    pub fn font_size(&self) -> u32 {
+    pub fn get_font_size(&self) -> u32 {
         self.font_size
     }
 
     /// Inspect the closed font weight.
-    pub fn weight(&self) -> TextWeight {
+    pub fn get_weight(&self) -> TextWeight {
         self.weight
     }
 
     /// Inspect the retained multiplier, without multiplying by the font size.
-    pub fn line_height(&self) -> f64 {
+    pub fn get_line_height(&self) -> f64 {
         self.line_height_multiplier
     }
 
     /// Replace only the complete font stack.
-    pub fn with_stack(self, stack: crate::font::canonical::FontStack) -> Result<Self, Error> {
+    pub fn stack(self, stack: crate::font::canonical::FontStack) -> Result<Self, Error> {
         Self::new(
             stack,
             self.paint,
@@ -1096,7 +1096,7 @@ impl TextTheme {
     }
 
     /// Replace only the complete text paint.
-    pub fn with_color(self, color: Color) -> Result<Self, Error> {
+    pub fn color(self, color: Color) -> Result<Self, Error> {
         Self::new(
             self.stack,
             color,
@@ -1107,7 +1107,7 @@ impl TextTheme {
     }
 
     /// Replace only the positive CSS font size.
-    pub fn with_font_size(self, font_size: u32) -> Result<Self, Error> {
+    pub fn font_size(self, font_size: u32) -> Result<Self, Error> {
         Self::new(
             self.stack,
             self.paint,
@@ -1118,7 +1118,7 @@ impl TextTheme {
     }
 
     /// Replace only the font weight.
-    pub fn with_weight(self, weight: TextWeight) -> Result<Self, Error> {
+    pub fn weight(self, weight: TextWeight) -> Result<Self, Error> {
         Self::new(
             self.stack,
             self.paint,
@@ -1129,7 +1129,7 @@ impl TextTheme {
     }
 
     /// Replace only the finite positive line-height multiplier.
-    pub fn with_line_height(self, line_height: f64) -> Result<Self, Error> {
+    pub fn line_height(self, line_height: f64) -> Result<Self, Error> {
         Self::new(
             self.stack,
             self.paint,
@@ -1152,10 +1152,10 @@ impl TextTheme {
             self.stack
                 .try_copy()
                 .map_err(|error| Error::Render(error.to_string()))?,
-            self.color(),
-            self.font_size(),
-            self.weight(),
-            self.line_height(),
+            self.get_color(),
+            self.get_font_size(),
+            self.get_weight(),
+            self.get_line_height(),
         )
     }
     /// Resolve this role's current line pitch in pixels.

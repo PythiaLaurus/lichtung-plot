@@ -386,7 +386,7 @@ impl FontFamily {
 /// Obtain a built-in profile from a complete text role, or construct typed entries:
 /// ```
 /// use lichtung_plot::{FontFamily, FontStack, GenericFontFamily, Theme};
-/// let profile = Theme::publication().typography().root().title().stack().clone();
+/// let profile = Theme::publication().typography().root().title().get_stack().clone();
 /// assert_eq!(profile.families()[0].name(), Some("Noto Sans"));
 /// let stack = FontStack::new([
 ///     FontFamily::named("A, B")?, // One literal identity, not two CSS entries.

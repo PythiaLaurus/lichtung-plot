@@ -502,8 +502,8 @@ impl Axis {
         };
 
         let lengths = standard.axes.spacing().lengths(
-            standard.tick_label.font_size(),
-            standard.axis_title.font_size(),
+            standard.tick_label.get_font_size(),
+            standard.axis_title.get_font_size(),
         )?;
         let frame_half = standard
             .axes

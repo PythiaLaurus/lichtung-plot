@@ -10,7 +10,7 @@ fn stack(family: GenericFontFamily) -> FontStack {
         .typography()
         .root()
         .title()
-        .stack()
+        .get_stack()
         .clone();
     FontStack::new(
         [FontFamily::generic(family)]
@@ -40,9 +40,9 @@ fn public_shared_gradient_drives_both_families_without_borrowing_mark_alpha_or_c
         .guides()
         .legend_label()
         .clone()
-        .with_color(Color::rgb(19, 61, 113))
+        .color(Color::rgb(19, 61, 113))
         .unwrap()
-        .with_font_size(13)
+        .font_size(13)
         .unwrap();
     let guides = base
         .typography()
@@ -77,9 +77,9 @@ fn public_shared_gradient_drives_both_families_without_borrowing_mark_alpha_or_c
         .guides()
         .legend_label()
         .clone()
-        .with_color(Color::rgb(211, 79, 23))
+        .color(Color::rgb(211, 79, 23))
         .unwrap()
-        .with_font_size(7)
+        .font_size(7)
         .unwrap();
     let guides = base
         .typography()
@@ -228,7 +228,7 @@ fn transparent_cells_select_complete_custom_contrast_roles_before_frozen_svg_and
         .composition()
         .body()
         .clone()
-        .with_stack(
+        .stack(
             FontStack::new([FontFamily::named("Unavailable unused body role").unwrap()]).unwrap(),
         )
         .unwrap();
@@ -248,9 +248,9 @@ fn transparent_cells_select_complete_custom_contrast_roles_before_frozen_svg_and
     let surfaces = base
         .surfaces()
         .clone()
-        .with_canvas_root(Color::rgba(19, 37, 53, 0))
+        .canvas_root(Color::rgba(19, 37, 53, 0))
         .unwrap()
-        .with_plot_panel(Color::rgba(31, 47, 61, 0))
+        .plot_panel(Color::rgba(31, 47, 61, 0))
         .unwrap();
     let cells = base.marks().cells().clone().with_fill_alpha(128).unwrap();
     let marks = base.marks().clone().with_cells(cells).unwrap();
@@ -360,7 +360,7 @@ fn active_custom_font_roles_are_required_while_unused_preferences_are_not() {
         .root()
         .title()
         .clone()
-        .with_stack(
+        .stack(
             FontStack::new([FontFamily::named("Unavailable public heading role").unwrap()])
                 .unwrap(),
         )

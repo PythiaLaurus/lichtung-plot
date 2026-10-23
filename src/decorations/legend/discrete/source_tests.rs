@@ -527,7 +527,7 @@ fn prepared_interaction_bindings_retain_exact_point_outlines_and_actual_group_st
         .guides
         .legend_label
         .clone()
-        .with_color(Color::rgba(40, 50, 60, 0))
+        .color(Color::rgba(40, 50, 60, 0))
         .unwrap();
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
     let inputs = prepare(&plot, &theme);

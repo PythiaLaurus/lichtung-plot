@@ -216,7 +216,7 @@ impl ResolvedTheme {
             .composition
             .panel_edge_clearance()
             .product(LocalMetric::css_pixels(
-                self.typography.axes.tick_label.font_size(),
+                self.typography.axes.tick_label.get_font_size(),
             )?))
     }
     pub(crate) fn embedded_minimum_height(&self, present: [bool; 3], body: f64) -> Result<f64> {
@@ -263,7 +263,7 @@ impl ResolvedTheme {
         self.composition
             .root_padding()
             .lengths(&[LocalMetric::css_pixels(
-                self.typography.composition.body.font_size(),
+                self.typography.composition.body.get_font_size(),
             )?])
     }
     pub(crate) fn root_title_lengths(&self) -> Result<RootTitleLengths> {
@@ -272,18 +272,18 @@ impl ResolvedTheme {
                 self.typography
                     .root
                     .title
-                    .font_size()
-                    .max(self.typography.root.subtitle.font_size()),
+                    .get_font_size()
+                    .max(self.typography.root.subtitle.get_font_size()),
             )?,
-            LocalMetric::css_pixels(self.typography.root.caption.font_size())?,
+            LocalMetric::css_pixels(self.typography.root.caption.get_font_size())?,
         ])
     }
     pub(crate) fn text_panel_lengths(&self) -> Result<TextPanelLengths> {
-        let body = self.typography.composition.body.font_size();
+        let body = self.typography.composition.body.get_font_size();
         self.composition.text_panel().lengths(&[
             LocalMetric::css_pixels(body)?,
             LocalMetric::css_pixels(
-                body.max(self.typography.composition.text_panel_title.font_size()),
+                body.max(self.typography.composition.text_panel_title.get_font_size()),
             )?,
         ])
     }
@@ -291,21 +291,24 @@ impl ResolvedTheme {
         self.composition
             .headers()
             .lengths(&[LocalMetric::css_pixels(
-                self.typography.composition.composition_header.font_size(),
+                self.typography
+                    .composition
+                    .composition_header
+                    .get_font_size(),
             )?])
     }
     pub(crate) fn facet_strip_lengths(&self) -> Result<FacetStripLengths> {
         self.composition
             .facet_strip()
             .lengths(&[LocalMetric::css_pixels(
-                self.typography.composition.facet_header.font_size(),
+                self.typography.composition.facet_header.get_font_size(),
             )?])
     }
     pub(crate) fn composition_grid_gap(&self) -> Result<f64> {
         self.composition
             .canvas_grid_gap()
             .product(LocalMetric::css_pixels(
-                self.typography.composition.body.font_size(),
+                self.typography.composition.body.get_font_size(),
             )?)
             .pixels_rounded(SpatialRounding::NearestEven)
     }
@@ -313,7 +316,7 @@ impl ResolvedTheme {
         self.composition
             .facet_gap()
             .product(LocalMetric::css_pixels(
-                self.typography.composition.facet_header.font_size(),
+                self.typography.composition.facet_header.get_font_size(),
             )?)
             .pixels_rounded(SpatialRounding::NearestEven)
     }
@@ -321,8 +324,8 @@ impl ResolvedTheme {
 
 impl super::TextTheme {
     pub(crate) fn line_pitch_exact(&self) -> Result<ExactLength> {
-        Ok(RelativeSpacing::new(self.line_height())?
-            .product(LocalMetric::css_pixels(self.font_size())?))
+        Ok(RelativeSpacing::new(self.get_line_height())?
+            .product(LocalMetric::css_pixels(self.get_font_size())?))
     }
 }
 

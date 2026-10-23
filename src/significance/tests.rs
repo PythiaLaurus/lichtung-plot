@@ -31,7 +31,7 @@ fn selected_theme_gap_and_tick_height_survive_canonical_capture_with_exact_prece
         .annotations()
         .significance_label()
         .clone()
-        .with_font_size(24)
+        .font_size(24)
         .unwrap();
     let roles = theme
         .typography
@@ -98,8 +98,8 @@ fn selected_theme_gap_and_tick_height_survive_canonical_capture_with_exact_prece
     let exact = exact.gap(3.0).unwrap();
     let effective = theme.effective_significance(Some(exact)).unwrap();
     assert!(effective.exact_override);
-    assert_eq!(effective.label.font_size(), 12);
-    assert_eq!(effective.label.weight(), crate::TextWeight::Bold);
+    assert_eq!(effective.label.get_font_size(), 12);
+    assert_eq!(effective.label.get_weight(), crate::TextWeight::Bold);
     assert_eq!(effective.gap_pixels().unwrap().to_bits(), 3.0_f64.to_bits());
     assert_eq!(
         effective

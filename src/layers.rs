@@ -401,9 +401,9 @@ impl PointLayer {
         &self,
         role: &crate::theme::TextTheme,
     ) -> Result<crate::theme::TextTheme, Error> {
-        let paint = self.color.unwrap_or(role.color());
+        let paint = self.color.unwrap_or(role.get_color());
         role.try_copy()?
-            .with_color(self.alpha.map_or(paint, |alpha| paint.alpha(alpha)))
+            .color(self.alpha.map_or(paint, |alpha| paint.alpha(alpha)))
     }
 }
 

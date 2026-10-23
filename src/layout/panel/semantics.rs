@@ -117,10 +117,10 @@ impl StandardPanelInputs {
                 .map_err(|error| crate::Error::Render(error.to_string()))?;
             crate::theme::TextTheme::new(
                 stack,
-                source.color(),
-                source.font_size(),
-                source.weight(),
-                source.line_height(),
+                source.get_color(),
+                source.get_font_size(),
+                source.get_weight(),
+                source.get_line_height(),
             )
         };
         Ok(Self {

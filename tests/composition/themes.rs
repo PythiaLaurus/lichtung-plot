@@ -85,7 +85,7 @@ fn mixed_children_keep_distinct_complete_canvas_roles_on_the_root_theme() {
         TextTheme, TextWeight,
     };
     let base = Theme::nature();
-    let profile = base.typography().root().title().stack().clone();
+    let profile = base.typography().root().title().get_stack().clone();
     let role = |family, color, size, weight, leading| {
         TextTheme::new(
             FontStack::new(
@@ -150,9 +150,9 @@ fn mixed_children_keep_distinct_complete_canvas_roles_on_the_root_theme() {
     let surfaces = base
         .surfaces()
         .clone()
-        .with_canvas_root(Color::rgb(23, 43, 69))
+        .canvas_root(Color::rgb(23, 43, 69))
         .unwrap()
-        .with_plot_panel(Color::rgb(242, 225, 192))
+        .plot_panel(Color::rgb(242, 225, 192))
         .unwrap();
     let marks = base
         .marks()
@@ -254,7 +254,7 @@ fn facets_use_their_owning_plot_theme_without_a_new_scope() {
     )
     .unwrap();
     let base = Theme::nature();
-    let profile = base.typography().root().title().stack().clone();
+    let profile = base.typography().root().title().get_stack().clone();
     let stack = FontStack::new(
         [FontFamily::generic(GenericFontFamily::Serif)]
             .into_iter()
@@ -266,13 +266,13 @@ fn facets_use_their_owning_plot_theme_without_a_new_scope() {
         .composition()
         .facet_header()
         .clone()
-        .with_color(Color::rgb(131, 47, 103))
+        .color(Color::rgb(131, 47, 103))
         .unwrap()
-        .with_font_size(23)
+        .font_size(23)
         .unwrap()
-        .with_weight(TextWeight::Semibold)
+        .weight(TextWeight::Semibold)
         .unwrap()
-        .with_stack(stack)
+        .stack(stack)
         .unwrap();
     let composition = base
         .typography()

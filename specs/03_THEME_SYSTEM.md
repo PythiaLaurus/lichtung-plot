@@ -33,6 +33,10 @@ The builder is construction-only and is never stored as a runtime override.
 | AnnotationTheme | Significance, cell/value/detail, panel text and shelf geometry; contrast backdrop | `src/theme/annotation.rs` |
 | ColorScales | Default qualitative, sequential and diverging mappings | `src/theme/scale_values.rs` |
 
+SurfaceTheme consumes `canvas_root(value)` and `plot_panel(value)` edits, with
+paired `get_canvas_root()` and `get_plot_panel()` readers. Both edits retain
+complete surface construction and admit transparent paints.
+
 ### Uniform Value Contract
 
 Component and nested group fields are private. Fully typed `new` constructors
@@ -142,6 +146,12 @@ Normal/Semibold/Bold weight and finite positive f64 line_height. Leading is an
 exact represented multiplier of font-size quanta, with one upward hard occupancy
 rounding. It is not an absolute length or spacing setter. Every text role is
 complete and independently editable.
+
+Its consuming edits use `stack(value)`, `color(value)`, `font_size(value)`,
+`weight(value)` and `line_height(value)`. Paired readers are `get_stack()`,
+`get_color()`, `get_font_size()`, `get_weight()` and `get_line_height()`, preserving
+the borrowed font stack and copy results. Each edit reconstructs and validates
+the complete role, including retained size and leading constraints.
 
 | Typography group | Retained complete roles |
 | --- | --- |

@@ -517,7 +517,7 @@ fn scoped_section_measurements_reuse_values_and_invalidate_consumed_inputs() {
         .guides
         .legend_label
         .clone()
-        .with_color(crate::Color::rgba(11, 23, 37, 71))
+        .color(crate::Color::rgba(11, 23, 37, 71))
         .unwrap();
     let new_paint = measure_fixture(&descriptor, (420.0, None), (false, false), &painted, &scope);
     assert!(!Arc::ptr_eq(&original.layout, &new_paint.layout));

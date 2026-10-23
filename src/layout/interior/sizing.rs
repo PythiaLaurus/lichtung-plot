@@ -225,8 +225,8 @@ pub(crate) fn horizontal_gutter_preference(
     theme: &ResolvedTheme,
 ) -> Result<(f64, f64), Error> {
     let lengths = theme.axes.spacing().lengths(
-        theme.typography.axes.tick_label.font_size(),
-        theme.typography.axes.axis_title.font_size(),
+        theme.typography.axes.tick_label.get_font_size(),
+        theme.typography.axes.axis_title.get_font_size(),
     )?;
     let chrome = if plot.kind() == PlotKind::Matrix {
         theme.axes.cell_axis_chrome()
@@ -327,8 +327,8 @@ pub(crate) fn plot_size(
     let hard = plot.intrinsic_body_minimum(theme)?;
     let preference = body_preference(plot, theme, hard)?;
     let lengths = theme.axes.spacing().lengths(
-        theme.typography.axes.tick_label.font_size(),
-        theme.typography.axes.axis_title.font_size(),
+        theme.typography.axes.tick_label.get_font_size(),
+        theme.typography.axes.axis_title.get_font_size(),
     )?;
     let common_chrome = if plot.kind() == PlotKind::Matrix {
         theme.axes.cell_axis_chrome()

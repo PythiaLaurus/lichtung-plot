@@ -553,7 +553,7 @@ fn plan_not_estimable(
         &theme
             .annotations
             .estimates()
-            .lengths(appearance.font_size())?,
+            .lengths(appearance.get_font_size())?,
         if vertical_guide_x.is_some() {
             crate::render::geometry::line_ink_width(reference_style)?
         } else {
@@ -948,11 +948,11 @@ fn project(
     };
     let detail_role = &theme.typography.annotations.estimate_detail;
     let detail_label = crate::theme::TextTheme::new(
-        crate::data::source::copy_font_stack(detail_role.stack())?,
-        detail_role.color(),
-        detail_role.font_size(),
-        detail_role.weight(),
-        detail_role.line_height(),
+        crate::data::source::copy_font_stack(detail_role.get_stack())?,
+        detail_role.get_color(),
+        detail_role.get_font_size(),
+        detail_role.get_weight(),
+        detail_role.get_line_height(),
     )?;
 
     let not_estimable_plan = estimates
@@ -993,7 +993,7 @@ fn project(
                 )
             } else {
                 (&detail_label, theme.annotations.estimates().numeric_label_gap()
-                    .product(crate::theme::LocalMetric::css_pixels(detail_label.font_size())?)
+                    .product(crate::theme::LocalMetric::css_pixels(detail_label.get_font_size())?)
                     .pixels_rounded(crate::layout::kernel::SpatialRounding::NearestEven)?,
                     "coefficient estimate label", false)
             };

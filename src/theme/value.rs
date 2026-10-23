@@ -17,7 +17,7 @@ use super::{
 /// use lichtung_plot::{Color, Theme};
 /// let base = Theme::publication();
 /// let title = base.typography().root().title().clone()
-///     .with_color(Color::hex("#194A75")?)?;
+///     .color(Color::hex("#194A75")?)?;
 /// let root = base.typography().root().clone().with_title(title)?;
 /// let typography = base.typography().clone().with_root(root)?;
 /// let custom = base.customize().with_typography(typography).build()?;
@@ -182,9 +182,9 @@ mod tests {
         let surfaces = source
             .surfaces()
             .clone()
-            .with_canvas_root(Color::rgba(11, 23, 37, 53))
+            .canvas_root(Color::rgba(11, 23, 37, 53))
             .unwrap()
-            .with_plot_panel(Color::rgba(41, 59, 73, 97))
+            .plot_panel(Color::rgba(41, 59, 73, 97))
             .unwrap();
         let builder = source
             .customize()
@@ -197,7 +197,7 @@ mod tests {
             .root()
             .title()
             .clone()
-            .with_stack(local.clone())
+            .stack(local.clone())
             .unwrap();
         let root = builder
             .typography()
@@ -209,11 +209,11 @@ mod tests {
         let customized = builder.with_typography(typography).build().unwrap();
         assert_eq!(source, saved);
         assert_eq!(
-            customized.surfaces().canvas_root(),
+            customized.surfaces().get_canvas_root(),
             Color::rgba(11, 23, 37, 53)
         );
         assert_eq!(
-            customized.surfaces().plot_panel(),
+            customized.surfaces().get_plot_panel(),
             Color::rgba(41, 59, 73, 97)
         );
         for (index, (before, after)) in source
@@ -223,13 +223,13 @@ mod tests {
             .zip(customized.typography().roles())
             .enumerate()
         {
-            assert_eq!(after.stack(), if index == 0 { &local } else { &stack });
-            assert_eq!(after.color(), before.color());
-            assert_eq!(after.font_size(), before.font_size());
-            assert_eq!(after.weight(), before.weight());
+            assert_eq!(after.get_stack(), if index == 0 { &local } else { &stack });
+            assert_eq!(after.get_color(), before.get_color());
+            assert_eq!(after.get_font_size(), before.get_font_size());
+            assert_eq!(after.get_weight(), before.get_weight());
             assert_eq!(
-                after.line_height().to_bits(),
-                before.line_height().to_bits()
+                after.get_line_height().to_bits(),
+                before.get_line_height().to_bits()
             );
         }
         assert_eq!(customized.marks(), source.marks());
@@ -237,7 +237,7 @@ mod tests {
         operation.canvas_surface_override = Some(Color::rgb(1, 2, 3));
         operation.surfaces = source.surfaces().clone();
         assert_ne!(operation.surfaces, *customized.surfaces());
-        assert_eq!(customized.typography().root.title.stack(), &local);
+        assert_eq!(customized.typography().root.title.get_stack(), &local);
         assert_eq!(
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
             discoveries

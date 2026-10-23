@@ -164,8 +164,8 @@ pub(super) fn plan_shared_facet_axis_labels(
     let mut plans = Vec::new();
 
     let lengths = theme.axes.spacing().lengths(
-        theme.typography.axes.tick_label.font_size(),
-        theme.typography.axes.axis_title.font_size(),
+        theme.typography.axes.tick_label.get_font_size(),
+        theme.typography.axes.axis_title.get_font_size(),
     )?;
     crate::render::backend::reserve_text_records(
         &mut plans,
@@ -311,7 +311,7 @@ mod tests {
             .composition
             .facet_header
             .clone()
-            .with_font_size(17)
+            .font_size(17)
             .unwrap();
         theme.typography.axes.axis_title.line_height_multiplier = 1.25;
         let grid = PanelBox::new(71.25, 372.75, 83.25, 304.75);

@@ -53,14 +53,14 @@ let canvas = Canvas::grid(1, 2)?
 ```
 
 Built-in constructors return complete immutable values. Customize any component
-through its validated `with_*` edits, then build a new theme:
+through its validated consuming edits, then build a new theme:
 
 ```rust
 use lichtung_plot::{Color, Theme};
 
 let base = Theme::publication();
 let surfaces = base.surfaces().clone()
-    .with_canvas_root(Color::hex("#FAFAFA")?)?;
+    .canvas_root(Color::hex("#FAFAFA")?)?;
 let custom = base.customize().with_surfaces(surfaces).build()?;
 # let _ = custom;
 # Ok::<(), lichtung_plot::Error>(())
@@ -221,7 +221,7 @@ Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif
 
 Each of the eighteen complete text roles owns a typed `FontStack`. Inspect a
 built-in profile through
-`Theme::publication().typography().root().title().stack()`, or construct ordered
+`Theme::publication().typography().root().title().get_stack()`, or construct ordered
 `FontFamily::named` and `FontFamily::generic` entries. A named value is one literal
 family, including any punctuation; it is not a CSS stack expression.
 `ThemeBuilder::with_font_stack` edits all roles once during construction. A later

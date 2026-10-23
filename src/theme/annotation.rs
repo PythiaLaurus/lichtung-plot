@@ -29,11 +29,11 @@ impl ResolvedTheme {
             .try_copy()?;
         if let Some(exact) = exact {
             label = label
-                .with_font_size(exact.get_font_size())?
-                .with_weight(exact.get_weight())?;
+                .font_size(exact.get_font_size())?
+                .weight(exact.get_weight())?;
         }
         let geometry = self.annotations.significance();
-        let em = LocalMetric::css_pixels(label.font_size())?;
+        let em = LocalMetric::css_pixels(label.get_font_size())?;
         Ok(EffectiveSignificance {
             gap: exact.map_or_else(
                 || Ok(geometry.label_gap().product(em)),
@@ -48,7 +48,7 @@ impl ResolvedTheme {
 
 impl EffectiveSignificance {
     fn length(&self, spacing: &RelativeSpacing) -> Result<ExactLength> {
-        Ok(spacing.product(LocalMetric::css_pixels(self.label.font_size())?))
+        Ok(spacing.product(LocalMetric::css_pixels(self.label.get_font_size())?))
     }
 
     pub(crate) fn tick_height(&self) -> Result<ExactLength> {

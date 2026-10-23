@@ -259,7 +259,7 @@ pub(crate) struct AlphaGuideBuilder<'a> {
 
 impl<'a> AlphaGuideBuilder<'a> {
     pub(crate) fn new(plot: &'a Plot, theme: &ResolvedTheme, owner: &'a ComponentAddress) -> Self {
-        let paint = theme.typography.guides.legend_label.color();
+        let paint = theme.typography.guides.legend_label.get_color();
         Self {
             plot,
             owner,

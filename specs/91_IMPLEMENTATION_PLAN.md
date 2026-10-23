@@ -1659,10 +1659,11 @@ migrate in their capability steps with all affected callers and read contracts.
 ### Implementation Status
 
 Step 1 is in progress. NumericFormat, GuideStyle, InteractionStyle,
-SignificanceMarkStyle, PointLayer, Color and DataLineTheme property edits and
-paired readers have migrated, including repository callers and their current
-specifications. The remaining appearance and Theme naming migrations are pending.
-Steps 2–22 remain pending; their target signatures are not current APIs.
+SignificanceMarkStyle, PointLayer, Color, DataLineTheme, TextTheme and SurfaceTheme
+property edits and paired readers have migrated, including repository callers
+and their current specifications. The remaining nested appearance and Theme
+naming migrations are pending. Steps 2–22 remain pending; their target signatures
+are not current APIs.
 
 ### 1. Apply The Public Property Naming Rule
 

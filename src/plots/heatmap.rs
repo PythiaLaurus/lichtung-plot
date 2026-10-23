@@ -246,7 +246,7 @@ fn assigned_columns(
         let padding = theme
             .annotations
             .cells()
-            .value_padding(appearance.font_size())?;
+            .value_padding(appearance.get_font_size())?;
         hard[index % count] = hard[index % count].max(padding.width(widths.0)?);
     }
     let preferred = crate::layout::kernel::ceil_spatial_quanta(
@@ -515,11 +515,11 @@ impl HeatmapIntrinsicCache {
         let color_scale = prepared.color.scale.clone();
         let text = |role: &crate::theme::TextTheme| -> Result<_, Error> {
             crate::theme::TextTheme::new(
-                crate::data::source::copy_font_stack(role.stack())?,
-                role.color(),
-                role.font_size(),
-                role.weight(),
-                role.line_height(),
+                crate::data::source::copy_font_stack(role.get_stack())?,
+                role.get_color(),
+                role.get_font_size(),
+                role.get_weight(),
+                role.get_line_height(),
             )
         };
         Ok(Self {
@@ -901,7 +901,7 @@ fn analyze_intrinsics(
         let padding = theme
             .annotations
             .cells()
-            .null_row_padding(appearance.font_size())?;
+            .null_row_padding(appearance.get_font_size())?;
         minimum.0 = minimum.0.max(padding.width(hard)?);
         row_hard[row] = row_hard[row].max(padding.height(unwrapped.height())?);
     }
@@ -1981,7 +1981,7 @@ fn measure_annotations(
             let padding = theme
                 .annotations
                 .cells()
-                .value_padding(appearance.font_size())?;
+                .value_padding(appearance.get_font_size())?;
             let owner = prepared.value_owners[index]
                 .as_deref()
                 .ok_or_else(|| Error::Render("heatmap value owner missing".into()))?;
@@ -2014,7 +2014,7 @@ fn measure_annotations(
         let padding = theme
             .annotations
             .cells()
-            .null_row_padding(appearance.font_size())?;
+            .null_row_padding(appearance.get_font_size())?;
         let available_width = padding.available_width(columns[columns.len() - 1] - columns[0])?;
         let row_scope = scope.child(AddressRole::HeatmapMergedRow, y_index)?;
         let block =

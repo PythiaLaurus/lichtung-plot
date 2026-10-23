@@ -415,7 +415,7 @@ mod tests {
             .composition
             .facet_header
             .clone()
-            .with_font_size(32)
+            .font_size(32)
             .unwrap();
         let panel = PanelBox::new(20.0, 420.0, 20.0, 320.0);
         let layout = Layout {

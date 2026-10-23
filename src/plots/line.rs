@@ -1042,7 +1042,11 @@ fn project(
                 + theme
                     .annotations
                     .point_label_gap_length(
-                        theme.typography.annotations.point_layer_label.font_size(),
+                        theme
+                            .typography
+                            .annotations
+                            .point_layer_label
+                            .get_font_size(),
                     )?
                     .pixels_rounded(crate::layout::kernel::SpatialRounding::NearestEven)?;
             for ((&(x, y), point), label) in layer.points.iter().zip(&points).zip(labels) {

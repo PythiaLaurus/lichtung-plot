@@ -393,7 +393,7 @@ pub(crate) fn intrinsic_body_minimum(
         theme
             .annotations
             .waterfall_shelf()
-            .lengths(theme.typography.annotations.waterfall_total.font_size())?
+            .lengths(theme.typography.annotations.waterfall_total.get_font_size())?
             .padding
             .times(2)
             .add_pixels(height)?
@@ -996,7 +996,7 @@ fn plan_annotations(
     let metrics = theme
         .annotations
         .waterfall_shelf()
-        .lengths(theme.typography.annotations.waterfall_total.font_size())?;
+        .lengths(theme.typography.annotations.waterfall_total.get_font_size())?;
     let gap = metrics
         .gap
         .round(crate::layout::kernel::SpatialRounding::Ceil)?

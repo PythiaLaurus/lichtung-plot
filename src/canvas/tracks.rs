@@ -100,7 +100,11 @@ pub(super) fn allocate(
 
     let gap = required(theme.composition_grid_gap()?)?;
     let em = required(f64::from(
-        theme.typography.composition.composition_header.font_size(),
+        theme
+            .typography
+            .composition
+            .composition_header
+            .get_font_size(),
     ))?;
     let header_lengths = theme.header_lengths()?;
     let appearance = theme.typography.composition().composition_header();

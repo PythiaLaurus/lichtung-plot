@@ -90,8 +90,8 @@ pub(super) fn shared_axis_requirements(
     let mut insets = [0.0; 4];
 
     let lengths = theme.axes.spacing().lengths(
-        theme.typography.axes.tick_label.font_size(),
-        theme.typography.axes.axis_title.font_size(),
+        theme.typography.axes.tick_label.get_font_size(),
+        theme.typography.axes.axis_title.get_font_size(),
     )?;
     for (source, span, index, gap, role) in [
         (

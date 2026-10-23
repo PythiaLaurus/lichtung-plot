@@ -420,7 +420,7 @@ fn assert_shared_color_and_alpha_sections() {
         .guides()
         .legend_label()
         .clone()
-        .with_color(crate::Color::rgba(11, 22, 33, 0))
+        .color(crate::Color::rgba(11, 22, 33, 0))
         .unwrap();
     let guides = base
         .typography()

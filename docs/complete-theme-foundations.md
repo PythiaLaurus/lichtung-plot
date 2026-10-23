@@ -3,7 +3,7 @@
 Theme is one complete immutable appearance value with eight components:
 SurfaceTheme, TypographyTheme, AxisTheme, LegendTheme, CompositionTheme, MarkTheme,
 AnnotationTheme and ColorScales. Fields are private, with readonly getters and
-validated consuming `with_*` edits.
+validated consuming edits.
 
 `Theme::new` consumes all eight components. The built-ins are ordinary
 `publication()`, `nature()`, `science()` and `chi()` constructors. `customize()`
@@ -16,7 +16,7 @@ use lichtung_plot::{Color, RelativeSpacing, Theme};
 
 let base = Theme::publication();
 let surfaces = base.surfaces().clone()
-    .with_canvas_root(Color::hex("#FAFAFA")?)?;
+    .canvas_root(Color::hex("#FAFAFA")?)?;
 let legend = base.legend().clone()
     .with_shared_gap(RelativeSpacing::ratio(2, 11)?)?;
 let custom = base.customize()
@@ -42,7 +42,10 @@ not affect Canvas root prose, headers or TextPanel.
 
 All eighteen text roles independently own stack, RGBA color, positive CSS-pixel
 size, closed weight and positive leading. Obtain a built-in stack through, for
-example, `Theme::publication().typography().root().title().stack().clone()`.
+example, `Theme::publication().typography().root().title().get_stack().clone()`.
+TextTheme edits use bare property names such as `font_size(14)` and
+`line_height(1.25)`; paired inspection uses `get_font_size()` and
+`get_line_height()`. Every edit validates the complete role.
 FontFamily::named is one nonempty trimmed control-free literal identity, not CSS;
 GenericFontFamily explicitly selects Serif/SansSerif/Monospace. FontStack retains
 nonempty ordered entries including duplicates. Availability is checked only when

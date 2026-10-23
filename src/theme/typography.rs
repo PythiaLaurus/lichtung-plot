@@ -92,7 +92,7 @@ text_group! {
         dark: TextTheme => with_dark,
     }
     validate |value| {
-        if value.light.color().get_alpha() != 255 || value.dark.color().get_alpha() != 255 {
+        if value.light.get_color().get_alpha() != 255 || value.dark.get_color().get_alpha() != 255 {
             return Err(Error::Data("contrast text candidates must be opaque".into()));
         }
     }
@@ -149,7 +149,7 @@ impl TypographyTheme {
         let stacks =
             std::iter::repeat_n(stack.clone(), roles.len() - 1).chain(std::iter::once(stack));
         for (role, stack) in roles.into_iter().zip(stacks) {
-            *role = role.clone().with_stack(stack)?;
+            *role = role.clone().stack(stack)?;
         }
         self.validate()?;
         Ok(self)

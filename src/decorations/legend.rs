@@ -358,8 +358,8 @@ impl LegendMetrics {
         use crate::layout::kernel::SpatialRounding::{Ceil, NearestEven};
 
         let exact = theme.legend.lengths(
-            theme.typography.guides.legend_label.font_size(),
-            theme.typography.guides.legend_title.font_size(),
+            theme.typography.guides.legend_label.get_font_size(),
+            theme.typography.guides.legend_title.get_font_size(),
         )?;
         let s = |value: &crate::theme::spacing::ExactLength| value.pixels_rounded(NearestEven);
         let font_size = f64::from(theme.typography.guides.legend_label.font_size);

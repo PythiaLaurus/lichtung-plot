@@ -379,7 +379,7 @@ fn separate_source(
             let GuideEntryIdentity::Pair { group_value, hue_value, .. } = identity else {
                 return Err(Error::Render("independent guide source lost its pair identity".into()));
             };
-            let paint = theme.typography.guides.legend_label.color();
+            let paint = theme.typography.guides.legend_label.get_color();
             let neutral = crate::theme::OpaqueColor::rgb(paint.red(), paint.green(), paint.blue());
             let group_key = super::projection::project(&key, &source.mapping, Projection::GroupStyle, Some(neutral))?;
             let mut group_source = source.clone();

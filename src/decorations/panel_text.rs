@@ -139,7 +139,7 @@ pub(crate) fn measure_plans(
             .annotations
             .panel_text_padding()
             .product(crate::theme::LocalMetric::css_pixels(
-                theme.typography.annotations.panel_text.font_size(),
+                theme.typography.annotations.panel_text.get_font_size(),
             )?);
     let inset = padding.pixels_rounded(SpatialRounding::NearestEven)?;
     let both_edges = padding.times(2);

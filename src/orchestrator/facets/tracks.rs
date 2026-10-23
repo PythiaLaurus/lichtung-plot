@@ -76,7 +76,7 @@ pub(super) fn allocate(
     row_insets.resize(rows, [0_i64; 2]);
     let gap = required(theme.composition_facet_gap()?)?;
     let em = required(f64::from(
-        theme.typography.composition.facet_header.font_size(),
+        theme.typography.composition.facet_header.get_font_size(),
     ))?;
     let strip_lengths = theme.facet_strip_lengths()?;
     if let Some(content) = content.filter(|content| content.natural_width) {
@@ -423,14 +423,14 @@ mod tests {
             .composition
             .body
             .clone()
-            .with_font_size(34)
+            .font_size(34)
             .unwrap();
         theme.typography.composition.composition_header = theme
             .typography
             .composition
             .composition_header
             .clone()
-            .with_font_size(40)
+            .font_size(40)
             .unwrap();
         for em in [15, 30] {
             theme.typography.composition.facet_header = theme
@@ -438,7 +438,7 @@ mod tests {
                 .composition
                 .facet_header
                 .clone()
-                .with_font_size(em)
+                .font_size(em)
                 .unwrap();
             crate::layout::plan_exact_root(
                 1,

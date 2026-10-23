@@ -386,11 +386,11 @@ fn supplemental_defaults_and_explicit_alpha_keep_label_paint_independent_and_gui
         .annotations
         .point_layer_label
         .clone()
-        .with_color(role_paint)
+        .color(role_paint)
         .unwrap()
-        .with_font_size(16)
+        .font_size(16)
         .unwrap()
-        .with_weight(crate::TextWeight::Semibold)
+        .weight(crate::TextWeight::Semibold)
         .unwrap();
     let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
     let measured = chart
