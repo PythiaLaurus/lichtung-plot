@@ -151,6 +151,27 @@ external data as successful full conformance.
 
 ## Documentation And Commits
 
+For requested capabilities with precedents in established plotting libraries,
+preserve their meaningful configuration choices. Cite the actual API/behavior in
+implementation planning; a conventional default is not a restriction to that one
+value. Distinguish user requirements, existing repository contracts, reference-
+backed capabilities and new proposals. Ask the user about product behavior with
+no established basis rather than silently promote a local implementation choice
+to a contract. Do not reinstate a capability the user explicitly rejected through
+a different name. Implementation difficulty calls for architectural planning, not
+unannounced capability reduction.
+
+Position-generation functions do not need an independent correctness-validation
+stage or a strictness switch. Unsorted, repeated or off-window positions are not
+errors by themselves. Preserve drawable results through normal geometry/window
+handling; report failures from the actual consumed operation or an explicit caller
+constraint, rather than inventing additional input-acceptance rules.
+
+When a capability enters an implementation plan, remove it from the deferred-feature
+inventory in the same change. For partial admission, retain only the unadmitted
+scope and its review checkpoint. Implementation status belongs in the plan until
+current contracts can be updated with working behavior.
+
 Formal specifications define current rules by subsystem and refer to actual source
 owners. Low-numbered specifications reference files only beneath specs/ and src/.
 Keep plans/status, execution logs, commit receipts, historical censuses and

@@ -2,7 +2,8 @@
 
 ## Scope And Review Rules
 
-This specification identifies excluded capabilities and explicit review checkpoints.
+This specification lists capabilities outside
+[the implementation plan](91_IMPLEMENTATION_PLAN.md), with explicit review checkpoints.
 It grants no implementation authorization, reserves no API/storage/callback and
 does not establish a fallback route. Current behavior is defined by the system
 specifications, particularly [Theme](03_THEME_SYSTEM.md),
@@ -10,14 +11,9 @@ specifications, particularly [Theme](03_THEME_SYSTEM.md),
 [property ownership](04_VISUAL_PROPERTY_OWNERSHIP.md) and
 [guides](08_GUIDE_SYSTEM.md).
 
-DF7, DF8, DF9, DF10 and the residual scope in DF6 are pending user
-disposition. Their checkpoint is the next feature-scope discussion **after
-specification/documentation cleanup and before their successor implementation
-planning**. Extended numeric presentation/tick generation, explicit category-label
-selection, unified text controls with general anchoring/rotation/ellipsis/font fit,
-and maximum-width/automatic-height sizing have been requested for planning as
-described below. Public configuration naming follows the confirmed rule in
-[the implementation plan](91_IMPLEMENTATION_PLAN.md).
+DF6, DF7, DF8, DF9 and DF10 are pending user disposition. Their checkpoint is the
+next feature-scope discussion before their successor implementation planning.
+DF11 has its separate prerequisite-based checkpoint below.
 No additional general audit is a prerequisite. Discussion itself does not admit
 or reject a capability.
 
@@ -25,135 +21,21 @@ At review, present concrete workflows, unmet requirements, alternatives and
 semantic/performance tradeoffs. Obtain user approval to admit a bounded scope,
 reject it with a lasting boundary, or re-defer with a new explicit checkpoint.
 No retained item may have an expired or vague checkpoint. IDs are not reused.
-Remove admitted scope from this list when its plan is approved; update current
-contracts when implemented. Admission is not implementation evidence. Record
-lasting requirements in the owning contract, not a permanent decision ledger.
-
-## DF2: Locale And Extended Numeric Formatting
-
-NumericFormat already covers locale-free fixed/adaptive fractional/significant
-precision, Scientific/Engineering notation, exact decimal-power scaling, literal
-affixes and zero handling, including mathematical Forest powers. These are current,
-not deferred scope. Existing omitted profiles already use prescribed k/M branches;
-this is distinct from publicly configurable SI/compact rules.
-
-**Requested planning:** support the complete extended formatting scope: explicit
-named/custom locale digits/separators/grouping/currency, configurable per-value/
-fixed/whole-set SI and compact rules, general display multipliers and rounding,
-shared multiplier/unit explanations, D3/Plotly-style numeric specifiers and owned
-single-value/complete-set functions while retaining automatic tick positions.
-Keep structured NumericFormat and one exact/certified conversion route. Do not
-reduce the requested capabilities to fit the current finite-font-alphabet model.
-See [the implementation plan](91_IMPLEMENTATION_PLAN.md) for actual-source font
-admission/final sealing, callback identity, measured explanations, composition and
-verification. The new APIs are not implemented.
-
-**Plan-review checkpoint:** review the integrated numeric proposal before its
-implementation begins, including explicit locale provenance, D3 syntax versus
-rounding semantics, mathematical Forest operands, final Shared domains, callback
-materialization and font/geometry lifecycle. This is review of the requested full
-scope, not a fresh undecided feature-scope discussion. Remove the admitted scope
-from this list when its plan is approved and update current contracts as implemented.
-
-## DF4: Further Automatic Tick Controls
-
-Current: TickGeneration Automatic, preferred Additive/Log10Decades, approximate
-Target and hard Maximum, plus verbatim exact ticks. Generated position selection
-is separate from NumericFormat's spelling and formatting functions.
-
-**Requested planning:** implement all five discussed controls through the existing
-axis/formatting/root lifecycle, with concrete workflows in
-[the implementation plan](91_IMPLEMENTATION_PLAN.md):
-
-- Exact generated counts: four endpoint-including positions across [0,10], rather
-  than an approximate Target or an upper bound.
-- Data-interval density: one tick every 20 data units gives 6 positions on [0,100]
-  and 11 on [0,200]; final data range and interval determine the list, independently
-  of canvas width/fonts. Support it directly through the built-in interval locator.
-- Anchored multiplicative intervals: [1,2,4,8,16,32,64] for ratio 2, including other
-  caller-selected ratios and explicit anchor identity.
-- Category-label stride/offset/endpoints: twelve month bars with six selected names,
-  preserving all categories, marks, tick positions and grid geometry.
-- Owned numeric position functions: include view endpoints and an in-range warning
-  value 50 after final domain resolution; pass resulting positions to NumericFormat.
-
-The plan covers one normalized generator/count-cap policy, strict versus soft
-source behavior, actual-axis capabilities, full category-domain/selected-text
-ownership, callback identity/materialization, facets/Shared ranges, spanning Canvas
-and frozen publication. Exact ticks retain precedence in either setter order.
-The capabilities are not implemented; explicit category-label selection does not
-authorize automatic fit-driven omission or removal of scientific categories.
-
-**Plan-review checkpoint:** review the integrated tick proposal before implementing
-it, including exact-count endpoints/scale space, data-interval membership and cap
-checks, geometric boundary arithmetic, selected-label font/native-cell requirements
-and raw-versus-exponent callback coordinates. This reviews the requested scope rather
-than reopening its feature disposition. Remove admitted scope from this list when
-its plan is approved and update current contracts as implemented.
-
-## DF5: Broader Text Layout Controls
-
-Current: complete role typography, Plot heading instructions, Canvas panel defaults,
-independent captions, shared Unicode legal wrapping and explicit Heatmap Wrap/Elide.
-Public `Labels::humanized()` is the existing default policy for inferred names;
-the single-string resolver is private. Display-input validation and local styling/
-alignment are not yet consistent across authored text slots.
-
-**Requested planning:** unify authored plain-text input, explicit newlines, local
-complete typography and horizontal alignment, including independent TextPanel
-title/body controls. Expose single-string label resolution while preserving the
-existing default humanization and Raw/alias precedence. Include all four additional
-controls as one text-system extension:
-
-- General anchoring: keep a two-line label's bottom-left corner at its data
-  reference or center a text block in its assigned cell as content/size changes.
-- Explicit rotation beyond category labels: a 30-degree point note, horizontal
-  y title and numeric/exact/category ticks share one canonical transform.
-- General ellipsis: a fixed-width guide shows `Treatment group…`, retaining full
-  original source, identity and original-versus-displayed mappings.
-- Automatic font shrink: a 140px title prefers 14px and permits a 10px floor;
-  layout selects a fitting candidate while independent text keeps its own policy.
-
-See [the implementation plan](91_IMPLEMENTATION_PLAN.md) for one TextLayout request
-beside complete TextTheme appearance, owner-specific attachments, reference/anchor
-geometry, Heatmap migration, Unicode source views, bounded size/group fitting,
-actual font admission and frozen publication. Ellipsis/shrink require the owner's
-explicit permission except for Heatmap's existing dense-grid elision default.
-These APIs are not implemented; update current contracts when implemented and
-remove admitted scope here when its plan is approved.
-
-Emergency word/identifier/grapheme splitting and caller-specified internal-break
-rules are rejected, rather than deferred candidates. Preserve ordinary Unicode
-wrapping and caller-authored breaks. Complete explicit/raw names stay intact under
-the complete-text policy; explicit ellipsis derives a display view without adding
-internal-word line breaks or changing raw identity. Default humanization remains
-preparation, never a fit alternative. The lasting no-internal-break boundary is
-in [layout](05_LAYOUT_SYSTEM.md); the new controls remain planned, not current.
-
-**Plan-review checkpoint:** review the integrated text proposal before implementing
-it, including typed reference/anchor meaning, absolute versus inherited angles,
-ellipsis Unicode/bidi/source provenance, complete-before-abbreviated font fitting,
-local size bounds/grouping, existing exact annotation styles, font admission and
-parent/root/cache/output consequences. This reviews the requested full scope, not
-a new feature-disposition discussion. Remove admitted scope when its plan is
-approved; automatic angle selection and emergency word splitting remain outside it.
+When scope enters the implementation plan, remove it from this inventory in the
+same change, including any admitted subset of a broader item. Update current
+contracts when implemented. A plan is not implementation evidence. Record lasting
+requirements in the owning contract, not a permanent decision ledger.
 
 ## DF6: Broader Root Bounds
 
-Excluded: maximum width, minimum width/height, maximum height, exact-height/automatic-
-width and public general constraint objects. Automatic, exact-width/automatic-
-height and exact-pair requests are current.
+Excluded: minimum width/height, maximum height, exact-height/automatic-width and
+public general constraint objects. Automatic, exact-width/automatic-height and
+exact-pair requests are current.
 
-**Maximum-width planning:** the user requested a bounded `max_width(u32)` plan for
-Plot and Canvas, including owning facets, with automatic height and a natural
-preferred width capped once. See [the implementation plan](91_IMPLEMENTATION_PLAN.md).
-The API is not implemented. Remove this subset from the deferred scope when its
-plan is approved; update current contracts with the implemented behavior.
-
-**Residual checkpoint:** next feature-scope discussion for the remaining bounds.
-Compare real publication-column/embedding needs against current root modes and
-the proposed width cap, including wrapping, aspect, guides, facets/Canvas and
-strict fit. A general bounds surface is not the presumed outcome.
+**Checkpoint:** next feature-scope discussion. Compare real publication-column/
+embedding needs against current and planned root sizing, including wrapping,
+aspect, guides, facets/Canvas and strict fit. A general bounds surface is not the
+presumed outcome.
 
 ## DF7: Sparse Composition Compaction
 
@@ -161,11 +43,6 @@ Excluded: repacking occupied cells or collapsing empty rows/columns/trailing wra
 slots. Natural content sizing does not change declared topology. Empty Cartesian
 combinations can carry scientific meaning; hand-authored Canvas can declare a
 compact shape explicitly.
-
-Explicit rectangular Canvas Plot spans are requested for separate bounded planning
-in [the implementation plan](91_IMPLEMENTATION_PLAN.md). They retain caller-declared
-rows/columns and one owner per placed Plot. This planned capability is not automatic
-compaction or observed-cell repacking and does not admit the excluded scope here.
 
 **Checkpoint:** next feature-scope discussion. Assess removing wholly empty tracks
 separately from occupied-cell repacking/observed-combination galleries. Specify

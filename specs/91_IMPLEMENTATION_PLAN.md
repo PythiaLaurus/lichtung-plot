@@ -18,10 +18,10 @@ lifecycle:
   marks, tick positions or grid geometry.
 - Consistent plain-text inputs, complete instance typography and horizontal
   alignment, including independently configured TextPanel title/body text.
-- One shared text-layout policy for general anchoring, explicit rotation beyond
-  category labels, general ellipsis and bounded automatic font shrink. Reuse the
-  complete typography value and one measurement/rendering path, including public
-  single-label presentation and independently configured authored/generated roles.
+- One shared text-layout policy for general anchoring, fixed/data-relative rotation
+  and explicit automatic tick angles, general ellipsis and configurable font fit.
+  Reuse the complete typography value and one measurement/rendering path, including
+  public single-label presentation and independently configured authored/generated roles.
 - Explicit rectangular Canvas Plot spans, including a 2x2 Grid with two independent
   left panels and one right panel spanning both rows.
 - `Plot::max_width(u32)` and `Canvas::max_width(u32)` as a fourth root sizing mode:
@@ -31,6 +31,45 @@ lifecycle:
 This document is a plan, not evidence that these APIs exist. Current contracts
 remain in [rendering](02_RENDERING_CONTRACT.md), [Theme](03_THEME_SYSTEM.md),
 [layout](05_LAYOUT_SYSTEM.md) and [numeric presentation](06_NUMERIC_PRESENTATION.md).
+
+### Reference-Backed Capabilities And Configurable Defaults
+
+For the requested numeric/text capabilities, support the configuration space
+established by existing plotting libraries. A familiar default is a convenience,
+not permission to exclude their other supported choices. Cite the actual property
+or behavior, distinguish capability parity from byte-for-byte imitation, and ask
+the user about a proposed product rule with no established precedent. Do not turn
+an implementation shortcut, existing storage type or local search constant into
+a user-facing restriction. Explicit user decisions, including rejection of relative
+tick density and internal-word emergency wrapping, remain controlling.
+
+The following references establish the capabilities used in this plan:
+
+| Capability | Checked precedent | Required configurable surface |
+| --- | --- | --- |
+| Data interval and origin | [Matplotlib MultipleLocator](https://matplotlib.org/stable/api/ticker_api.html#matplotlib.ticker.MultipleLocator), [Plotly dtick/tick0](https://plotly.com/python/reference/layout/xaxis/#layout-xaxis-dtick), [scales breaks_width](https://scales.r-lib.org/reference/breaks_width.html) | Data-unit interval plus a finite numeric origin; 0 is a default, not the only origin |
+| Fixed count versus preferred count/interval | [Matplotlib LinearLocator/MaxNLocator/MultipleLocator](https://matplotlib.org/stable/api/ticker_api.html), [Qt Charts tickCount/tickAnchor/tickInterval](https://doc.qt.io/qt-6/qvalueaxis-qtcharts.html#tickCount-prop), current preferred intervals | Deliberate exact and adaptive requests, not an unconditional coarsening or failure rule for every request |
+| Custom positions and empty axes | [ggplot2 breaks](https://ggplot2.tidyverse.org/reference/scale_continuous.html#arg-breaks), [Matplotlib FixedLocator/NullLocator](https://matplotlib.org/stable/api/ticker_api.html) | View-dependent position functions, explicit positions and valid no-tick output; separate source positions from label visibility |
+| Logarithmic versus data-unit intervals | [Plotly dtick](https://plotly.com/python/reference/layout/xaxis/#layout-xaxis-dtick), [Matplotlib LogLocator](https://matplotlib.org/stable/api/ticker_api.html#matplotlib.ticker.LogLocator) | Raw additive spacing on a log projection and geometric/exponent spacing with configurable ratio/base |
+| Label stride, overlap and boundary treatment | [Plotly ticklabelstep/ticklabeloverflow](https://plotly.com/python/reference/layout/xaxis/), [Vega labelOverlap/labelBound](https://vega.github.io/vega/docs/axes/) | Explicit label selection, show-overlap and optional overlap/boundary hiding while preserving ticks/data |
+| More than a fixed global tick threshold | [Matplotlib Locator.raise_if_exceeds](https://matplotlib.org/stable/api/ticker_api.html#matplotlib.ticker.Locator.raise_if_exceeds) documents warning rather than a hard limit | Caller-selected maximum or no application-wide maximum for explicit sources; real representation/allocation checks remain |
+| Text anchors, coordinates and offsets | [Plotly annotations](https://plotly.com/python/reference/layout/annotations/), [Matplotlib Text](https://matplotlib.org/stable/api/text_api.html), [ggfittext placement/justification](https://wilkox.org/ggfittext/reference/geom_fit_text.html), [ggplot2 numeric justification implementation](https://github.com/tidyverse/ggplot2/blob/v4.0.3/R/geom-text.R) | Independent horizontal/vertical or baseline anchors, fractional justification, typed data/panel/figure references and configurable offsets |
+| Rotation placement | [Matplotlib rotation_mode](https://matplotlib.org/stable/gallery/text_labels_and_annotations/demo_text_rotation_mode.html) and [transform_rotates_text](https://matplotlib.org/stable/api/text_api.html#matplotlib.text.Text.set_transform_rotates_text), [Vega text angle/dx/dy](https://vega.github.io/vega/docs/marks/text/), [Plotly autotickangles](https://plotly.com/python/reference/layout/xaxis/#layout-xaxis-autotickangles) | Rotate-about-anchor and align-after-rotation, screen/text-local offsets, screen/data-relative directions and explicit automatic tick-angle candidates |
+| Ellipsis and text bounds | [Vega limit/ellipsis/dir](https://vega.github.io/vega/docs/marks/text/), [ECharts overflow/ellipsis](https://github.com/apache/echarts-doc/blob/master/en/option/partial/text-style.md), [Qt text elision](https://doc.qt.io/qt-6/qfontmetrics.html#elidedText) | Configurable marker, direction, length/line bounds and overflow handling; Qt is supporting text-stack evidence for left/middle/right elision, not a claim about a Qt Charts API |
+| Font fit and grouping | [ggfittext min.size/grow/reflow/outside](https://wilkox.org/ggfittext/reference/geom_fit_text.html), [Plotly uniformtext](https://plotly.com/python/text-and-annotations/#Controlling-Text-Size-with-uniformtext) | Configurable size bounds, reflow, independent/uniform fitting and explicit hide/show/outside handling at the size floor |
+| Fractional text size | [Vega fontSize](https://vega.github.io/vega/docs/marks/text/), [Matplotlib fontsize](https://matplotlib.org/stable/api/text_api.html#matplotlib.text.Text.set_fontsize) | Positive fractional CSS sizes throughout measurement and output, not an integer-only fit grid |
+
+These sources support capabilities, not every combined default. The user has
+confirmed two combinations: data intervals use configurable numeric origins, without
+a separate origin-following-the-view mode; shrink and ellipsis support both content-
+first and preferred-size-first ordering, with content-first as the default. Any
+further unsupported product choice needs a concrete workflow and user confirmation
+before it is written as a requirement. Position functions have no additional
+correctness-validation stage or strictness mode: drawable results proceed through
+normal window/geometry handling, and a failed operation or explicit caller
+constraint reports its error. Numerical proofs, finite algorithms and
+the existing standalone/frozen-output contract remain implementation obligations;
+they do not themselves establish a new truncation, visibility or failure policy.
 
 ### Public Property Names And Validation
 
@@ -174,8 +213,8 @@ Required setter and composition semantics:
   alignment, ink, domain or content-height feedback cannot reselect it or raise it
   beyond the cap. Height remains content-driven under the existing eight-round
   coordinator.
-- Required text follows its explicit complete/ellipsis/font-fit policy; scientific
-  sources, selected labels, annotations and guide sections retain their membership.
+- Text follows its explicit wrapping/overflow/visibility/font-fit policy; scientific
+  sources, eligible labels, annotation identities and guide sections remain retained.
   Preserve mark metrics and declared spacing ownership. Width capping does not
   itself enable font shrink, abbreviation, padding compression or root-width search.
 - Output reports the actual selected canonical width/height. SVG modes and PNG
@@ -346,14 +385,13 @@ display text during label preparation, independently of fit; it is never invoked
 because a string failed to fit. Preserve `Labels::raw()`, alias precedence, raw
 scientific identities and domain-level display-collision checks.
 
-Rotation is always a caller instruction. Omission retains the existing direction.
-The caller can combine a fixed angle, authored newlines, ordinary legal wrapping
-and explicit overflow/font-fit instructions. Complete text at the declared size
-remains the ordinary default. Ellipsis and font shrink require the actual owner's
-explicit policy; fit cannot enable them or change category-label selection.
-Selected labels remain present even when their explicitly permitted display view
-is abbreviated. Preserve Heatmap's existing omitted Elide and explicit Wrap
-behavior as owner defaults mapped into the same shared policy/engine.
+Omission retains the owner's existing orientation and complete-text behavior.
+The caller can select a fixed angle or an explicit automatic tick-angle policy,
+authored newlines, legal soft wrapping or no soft wrapping, and overflow/font-fit
+instructions. No adaptation activates merely because a complete default failed.
+Label hiding/reduction requires its own explicit policy and never removes data or
+tick positions. Preserve Heatmap's existing omitted Elide and explicit Wrap
+semantics as configurable owner defaults within the shared engine.
 
 ### One Plain-Text Content Contract
 
@@ -449,15 +487,16 @@ equal strings or dimensions alone do not authorize reuse.
 
 ### One TextLayout Policy And Deliberate Attachments
 
-Treat anchoring, fixed rotation, ellipsis and font shrink as one text-system
+Treat anchoring, orientation, overflow and font fit as one text-system
 extension: public configuration expresses intent; the existing layout engine
 resolves actual placement/content/size. TextTheme remains a complete deterministic
-appearance with a preferred positive integer CSS font size. Do not put parent
+appearance with a preferred positive CSS font size. Do not put parent
 coordinates, a shrink algorithm or mutable selected sizes into Theme components.
 
 Expose an immutable crate-root TextLayout value with private instructions for
-alignment, anchor, offset, rotation, overflow and font fit. Reuse TextAlignment and
-TextRotation; add validated TextAnchor, TextOverflow and TextFit values through
+alignment, anchor, offset/frame, orientation/rotation placement, finite text bounds,
+soft wrapping, overflow/overlap, font fit/grouping and adaptation priority. Reuse
+TextAlignment and the fixed TextRotation value; add validated layout values through
 the same private text module. All construction/edits follow the naming rule.
 TextLayout defaults mean the actual owner's existing defaults, including axis
 orientation and Heatmap elision, not a universal horizontal/unwrapped placement.
@@ -489,6 +528,11 @@ role registry, per-value style callback or backend handle. An instruction must b
 consumed coherently or rejected with actual-owner context; it cannot silently do
 nothing on a supported text slot. Erased plots retain supplied policy but do not
 gain broad setters through Any.
+Add positive fractional CSS font sizes to the complete appearance and resolved
+text pipeline; migrate integer-only font/metric storage and callers together.
+Use the existing canonical spatial representation for actual scaled geometry,
+without rounding a permitted 12.5px request to 12px before measurement. Font sizes
+remain appearance inputs; selected fit sizes belong only to resolved plans.
 
 Replace the earlier unpublished category-only rotation setter proposal with the
 general axis TextLayout attachment. Category-label selection keeps its categorical
@@ -506,38 +550,52 @@ data reference as its content or size changes. Separately, a TextPanel body can
 remain centered within an enlarged assigned cell. Line alignment still controls
 the individual lines inside that positioned block.
 
-Use one TextAnchor representation for the nine physical box presets and custom
-normalized `(u,v)` fractions in [0,1], with (0,0) top-left and (1,1) bottom-right.
-Preset/custom-equivalent anchors normalize identically. Point/exposed-baseline
-owners also support an explicit first-baseline reference using the measured
-baseline, not an assumed font ascent; reject an unsupported reference combination
-at policy resolution. Fractions must be finite; normalize signed zero and retain
-their exact represented values for checked quantum arithmetic.
+Use one TextAnchor representation for independent horizontal/vertical presets,
+including the nine physical box combinations and first/center baseline references
+established by Matplotlib/Vega. Also support finite fractional block justification,
+with (0,0) top-left and (1,1) bottom-right. ggplot2's numeric justification passes
+through without a 0..1 clamp; preserve that capability with checked geometry.
+Preset/custom-equivalent anchors normalize identically. Baseline references use
+actual measured metrics. Normalize signed zero and retain checked arithmetic and applicability.
 
 An anchor selects a point of the measured block rectangle, not the clipped ink or
 the first glyph. The owner supplies the reference: corresponding post-inset cell
 point for box placement, projected coordinate for a point label, or its existing
-tick/title/corner reference. A typed finite signed CSS offset is relative to that
-reference in physical screen directions. Omitted offset retains the owner's
-existing radius/gap/inset rule; an explicit offset replaces that translation.
+tick/title/corner reference. Authored annotations additionally accept typed data,
+panel-fraction and owning figure/Canvas references, with independent x/y reference
+kinds where meaningful, as in Plotly. Extend the existing annotation representation
+rather than add a parallel generic drawing callback. A PanelCorner constructor
+remains a convenience for that semantic reference; strings still use common Text.
+Use raw category/series identities for categorical references and the real numeric
+transform for data references. Explicit limits/facet/Canvas assignment resolve
+these references before text placement, with source provenance retained.
+
+A finite signed CSS offset can be selected in physical screen coordinates or
+text-local coordinates that rotate with the block, following Plotly shifts and
+Vega dx/dy. Omitted offset retains the existing owner translation. Explicit offset
+and its selected reference frame have one resolved meaning, independent of style
+attachment; parent padding is not applied twice.
 Thus an explicit zero offset can attach directly to a point without changing its
 scientific coordinates. Text never carries an untyped interchangeable data/CSS
 coordinate pair.
 
-In the public top-down frame, place a local point p using
-`reference + offset + R(angle) * (p - block_anchor)`. Round checked canonical
+In rotate-about-anchor mode, a screen offset places a local point p using
+`reference + offset + R(angle) * (p - block_anchor)`; a text-local offset is inside
+the rotation. In align-after-rotation mode, align the transformed block bounds to
+the reference instead. Both are established rotation placement behaviors, not
+independent rendering pipelines. Round checked canonical
 positions consistently with the shared geometry engine; convert the internal y-up
-frame exactly once. Rotation is about the resolved anchor. Keep default middle/
-baseline and existing axis multiline ordering when instructions are omitted;
+frame exactly once. Keep default middle/baseline and existing axis multiline
+ordering when instructions are omitted;
 replace their scattered placement arithmetic with one resolved transform rather
 than retain independent legacy and general-anchor paths.
 
-Fit uses the transformed logical block, actual glyph ink and owner clearance.
-Natural/hard requirements and assigned containment include offsets/overhangs;
-changing an anchor cannot bypass a required boundary or silently move to another
-corner. PanelCorner continues to identify the panel reference, distinct from the
-text block anchor. Update PanelTextPlan bounds/reassignment/legend-collision
-dependencies and point-label required ink together with drawing.
+Fit uses transformed logical extents, actual ink and the explicit overflow/overlap
+policy below. Natural/required geometry includes offsets/overhangs, or the actual
+clip/hidden result when requested. PanelCorner identifies a panel reference,
+distinct from the text block anchor. Update PanelTextPlan reassignment and guide/
+annotation collision dependencies together with drawing; an allow-overlap request
+must not be rejected by a stale unconditional rectangle-collision check.
 
 ### Public Single-Label Presentation
 
@@ -557,18 +615,19 @@ tilts and upward/downward vertical presets, plus `degrees(f64) -> Result<Self>`.
 Factories can present enum-like named choices, but their retained result is one
 canonical angle. Preset 45 degrees and custom 45 degrees have identical geometry
 and cache identity. Reject nonfinite inputs, normalize full turns/signed zero and
-apply the existing canonical angle precision before fit measurement.
+resolve the common retained angle before fit measurement.
 
 Angles are degrees from physical horizontal in the top-down output frame, positive
 clockwise. The upward/downward tilt presets are -45/+45, vertical presets -90/+90
-and horizontal 0. Normalize equivalent turns to a single range before rounding,
+and horizontal 0. Normalize equivalent turns to a single range,
 with one representative for the half-turn endpoint and zero.
 
-The current canonical text output stores tenths of a degree in
-`src/render/coordinates.rs`. Retain and document that precision for custom input,
-including its existing rounding rule, and use that canonical value throughout
-measurement, collision, capture, SVG text, outlined paths and PNG. Do not measure
-at the original angle and round only during output. Keep exact quadrantal
+The current canonical output stores tenths of a degree in
+`src/render/coordinates.rs`. Replace that representation when exposing general
+rotation so a finite custom angle such as 30.05 degrees is not silently restricted
+to the old tenth-degree grid. Normalize a single retained angle, serialize it
+without a second lossy output-only quantization and use it throughout measurement,
+collision, capture, SVG text, outlines and PNG. Keep exact quadrantal
 transforms and a shared sine/cosine operand for other angles so geometry and
 outlined rendering cannot disagree at the same frozen angle.
 
@@ -576,7 +635,10 @@ Workflow: rotate a point annotation by 30 degrees, give the y title an explicit
 horizontal angle, or tilt numeric/exact as well as categorical tick labels. Attach
 the same TextRotation through TextLayout for every admitted role above. Angles
 are absolute from physical horizontal: explicit 0 replaces an owner's vertical
-default, while omission inherits it. Do not add an extra relative-angle channel.
+default, while omission inherits it. Support explicitly data-relative directions
+for data-anchored notes through a typed pair/direction reference, as in Matplotlib's
+transform-relative text rotation; resolve it from the actual projection. It is
+distinct from a screen-angle instruction and does not mutate scientific data.
 Retain actual-axis capability checks, erasure and parent-owned preparation; color
 scale traits do not stand in for text/axis capabilities.
 
@@ -592,12 +654,15 @@ baselines and required cell clearance rather than using this rectangle alone.
 Try intact explicit paragraphs at the fixed angle first. Where ordinary legal
 wrapping is needed, select an owner-defined deterministic inline capacity and
 validate the resulting complete rotated plan against its assigned cell/outer
-region. Retain the existing immutable-plan/typed-miss protocol; no search over
-angles, arbitrary word splits, root widths or all wrap partitions is introduced.
+region. Retain the existing immutable-plan/typed-miss protocol; fixed-angle fitting
+does not search other angles, arbitrary word splits, root widths or all wrap partitions.
 Unbreakable text can fit through rotation without first fitting the horizontal
 cell width. Use that same fixed-angle capacity/containment predicate for all
-permitted overflow/font-size candidates. If no selected-policy candidate fits,
-return a typed miss; never search for a better angle or another block anchor.
+permitted overflow/font-size candidates. A fixed angle never becomes an automatic
+one. Separately support caller-enabled automatic tick orientation with a supplied
+ordered finite candidate list, as in Plotly autotickangles. Try the caller's order
+under the same real text-fit predicate, retaining the chosen angle and all consumed
+dependencies; do not invent emergency word breaks or a root-wide angle optimizer.
 
 Feed actual transformed thickness/overhangs into axis gutters, heading/strip/guide
 tracks, TextPanel height and annotation/shelf ink as appropriate. Preserve tick and
@@ -608,7 +673,39 @@ inherit the old vertical column reversal. Derive preserved role-specific orderin
 from the resolved orientation, not preset/custom spelling or request presence;
 an explicit angle equal to the inherited angle has the same geometry. Existing
 root rounds and guide alternatives remain the containing program, not a loop over
-angles or whole-figure layouts.
+unrequested angles or whole-figure layouts.
+
+### Explicit Overlap, Bounds And Visibility Policies
+
+Support strict containment/nonoverlap, deliberate overlap, finite owner clipping,
+and local overflow with full final-root containment. Plotly annotations/overflow,
+Vega labelOverlap/labelBound and ggfittext floor handling establish that failure is
+not the only available behavior. Defaults retain existing owners' strict behavior
+unless an already documented owner default applies; explicit policies can select
+the other behaviors. The physical output canvas remains a real final bound.
+
+Axis label visibility is independent from numeric positions/grid lines and category
+topology. Support all eligible labels, explicit stride/selection, show-overlap,
+greedy/parity overlap reduction, and optional boundary-label hiding with configurable
+clearance/tolerance. Apply an explicit category selection first, then an explicitly
+requested overlap policy; retain both eligible and finally visible original-index
+sets. Endpoint inclusion/priority is explicit, not guessed from the current count.
+An enabled visibility policy changes painted labels, never scientific membership,
+numeric tick cardinality, generator interval or the formatter's semantic result.
+
+Known finite text width/height and line limits are independent caller constraints,
+not hidden defaults tied to the root size. Soft wrapping is independently selectable
+between ordinary legal wrapping and no soft wraps; authored mandatory breaks remain.
+At a font floor or ellipsis failure, explicit choices include typed refusal, hiding
+that text, clipping, or drawing beyond its local box within its parent's allowed
+region. Retain original text/accessibility/source identity and actual selected
+clip/visibility in the frozen plan. A deliberate hidden/overlapped/clipped label
+must not be passed off as a complete nonoverlapping label in tests or diagnostics.
+
+Failures of required source interpretation, consumed-font coverage, scientific
+transforms and real arithmetic/allocation remain errors at their actual operations.
+Permission to hide, overlap or clip text does not make an unsuccessful consumed
+operation succeed or change scientific coordinates.
 
 ### General Ellipsis: A Fixed-Width Guide Entry
 
@@ -618,18 +715,19 @@ identity remain available. A caller can instead retain the suffix of a long samp
 name or its two identifying ends. This is explicit display abbreviation, not a
 numeric/category transformation or a source-deleting fit alternative.
 
-TextOverflow has complete text and explicit start/middle/end ellipsis policies.
-Ellipsis retains a nonempty single-line marker with visible content, default
-U+2026, and a positive maximum line count, default 1. A custom marker uses the display
-validator and selected appearance; reject mandatory breaks/unsupported controls
-inside it, and reject whitespace/control-only invisible markers. Directions refer
-to logical source order: End retains a prefix, Start a suffix and Middle both ends,
-independently of physical TextAlignment and bidi.
+Alongside complete/clip/visible/hide overflow, support start/middle/end ellipsis,
+configurable marker, pixel bounds and a configurable line cap. U+2026 and one line
+are defaults for an explicit ordinary ellipsis request, not restrictions. Permit
+an explicitly empty marker for markerless truncation as well as a custom literal;
+validate common display syntax and single-line marker applicability. Resolve
+automatic/LTR/RTL paragraph direction and distinguish logical start/end from
+physical left/right elision, following Vega/Qt. Do not assume that an RTL prefix
+is always at the physical left. Alignment is independent.
 
 Keep original bytes and full-source validation/domain-collision checks. Derive a
-display view from original extended-grapheme spans plus a synthetic marker. For
-k retained graphemes, End keeps the first k, Start the last k, and Middle keeps
-ceil(k/2) at the beginning and floor(k/2) at the end without overlapping them.
+display view from original extended-grapheme spans plus a synthetic marker. End
+keeps a prefix, Start a suffix and Middle retains both ends; use actual measured
+capacities rather than hard-code an equal retained-grapheme split as the only rule.
 Retain mandatory breaks within selected spans and enforce the declared line cap;
 removed paragraphs are part of the explicit abbreviation. Never split an extended
 grapheme, erase controls by byte slicing, trim whitespace or insert an illegal
@@ -640,11 +738,12 @@ Try the complete source first under the line/geometry constraints. When elision
 is needed, use retained paragraph/cluster advances to propose a retained count,
 then exact-shape/measure the marked candidate. Retreat to a fit and extend through
 immediately neighboring retained-count candidates until the first nonfit, as a
-source-bounded local program. Middle has one fixed balanced split, not a prefix x
-suffix Cartesian search. Do not repeatedly rebuild/retain every full prefix or
-claim the globally longest possible display string. A marker-only view is a real
-abbreviated label; if even the marker cannot fit, return a typed miss, not empty
-text or disappearance of the label.
+source-bounded local program. Middle uses a bounded two-ended measured proposal,
+not a prefix x suffix Cartesian search. Do not repeatedly rebuild/retain every
+full prefix or claim the globally longest possible display string. A marker-only
+view is a real abbreviation; markerless or hidden output is possible only through
+the selected explicit policy. If the marker cannot fit, consume the configured
+refusal/hide/clip/overflow action instead of impose one universal error rule.
 Empty source retains its owner's existing empty-text semantics and never invents
 a marker. In particular, exact empty tick labels keep zero text/gap/gutter while
 retaining their position; authored empty blocks retain their primary line metrics.
@@ -656,61 +755,67 @@ view's real boundaries. Keep original and derived source addresses distinct in
 ResolvedTextPlan, canonical text runs and SVG emission; do not assume every glyph
 cluster is an offset into one unmodified original string.
 
-Validate displayed-set distinctness where required after elision, including
-selected category/guide/numeric labels. An ambiguous abbreviated set yields the
-consumer's typed miss; do not change aliases, silently choose different markers
-or drop an entry. Exact caller labels retain their documented duplicate allowance.
+Keep full-source semantic/domain validation before deriving views. Permit repeated
+displayed abbreviations as in ordinary library text/label outputs, and support an
+explicit distinct-display requirement for consumers that need it. Preserve current
+Heatmap distinctness as its omitted owner default, not a universal truncation rule.
+If distinctness is requested, a collision follows the selected failure policy;
+do not invent alias rewriting or automatic distinguishing suffixes. Exact caller
+labels retain their duplicate allowance.
 NumericFormat still produces the complete final numeric spelling once per semantic
 context; explicit text overflow derives a view of that result without parsing,
 rerounding or reinvoking a formatting function. Shared unit explanations retain
 their required slot and original text even if the caller explicitly abbreviates it.
 
 Migrate Heatmap `fitted_label`/`fitted_unique_labels` to this one engine. Preserve its
-omitted dense-grid End/`...` owner default, original-cell capacities and ambiguity/
-no-marker-room refusal; its existing Wrap maps to complete ordinary wrapping.
+omitted dense-grid End/`...` owner default, original-cell capacities and current
+distinctness/refusal defaults; its existing Wrap maps to complete legal wrapping.
 Replace HeatmapLabelFit/its setter with the common x/y TextLayout attachments and
 migrate repository callers/docs in the same logical change. The owner-default
 marker is an ordinary policy value, not a legacy formatter or fallback chain.
 Selected-label metadata and full tick/grid geometry remain independent.
 
-### Bounded Font Fit: Preferred 14px With A 10px Floor
+### Configurable Font Fit: Preferred 14px With A 10px Floor
 
 Workflow: a 140px title allocation prefers 14px but explicitly allows shrinking
-to 10px. If complete text fits first at 12px, retain 12px and its measured geometry.
+to 10px. A measured choice of 12px retains that size and its real geometry; a
+permitted fitting fractional size is not excluded by an integer sampling grid.
 Another title/body can keep a fixed size or choose a different floor. Complete
 text with ordinary wrapping remains preferred when its actual width/height permit
 it; automatic-height roots do not invent a finite height to force smaller text.
 
-TextFit selects fixed preferred size or explicit `shrink_to(minimum)`. Preferred
-size comes from the resolved complete TextTheme, including a local exact style.
-The minimum is a positive integer CSS size no larger than that preferred size;
-resolve cross-property contradictions before font work for actual owners. Equal
-minimum/preferred normalizes to fixed. Shrinking never grows text above preferred
-or changes stack, weight, color or the line-height multiplier.
+TextFit selects fixed preferred size, shrink-to-floor, or explicit bounded growth
+and shrink, following ggfittext. Preferred appearance still comes from TextTheme;
+minimum/maximum are positive CSS sizes, including fractional sizes. Validate the
+resolved bounds and normalize an equal-size interval to fixed. Growth requires a
+meaningful finite box or upper bound; an auto-height/root preference cannot invent
+an infinite target. Keep stack, weight, paint and declared leading ownership.
 
-Use a fixed, documented local candidate program rather than assume measured fit
-is monotone or scan an unbounded integer range. For preferred p and minimum m,
-the descending unique sizes are `p-floor(i*(p-m)/31)` for i=0..31, computed with
-checked integer arithmetic. This includes both endpoints, visits every integer
-for ranges of at most 31px, and has at most 32 sizes. Select the first actual fit;
-the contract is a bounded candidate choice, not the globally largest fitting
-integer. At 14..10 it tries 14,13,12,11,10 in order. The count is a private local
-policy constant, not a new request-wide resource meter or user quota switch.
+Select a measured size within the requested bounds using retained design/shape
+inputs and a justified finite local algorithm. Recheck actual wrapping/ink at
+accepted sizes, include the real floor and upper boundary, and do not assume that
+arbitrary size-dependent wrapping is globally
+monotone. Source/metric-derived proposals and refinement need independent boundary
+and termination evidence before publication; an arbitrary sample count cannot
+exclude the user's permitted sizes or turn an untested fit into proven nonfit.
+No promise of a global whole-figure optimum or new application resource quota is
+introduced by this local font-fit capability.
 
-Try complete text across that size program first. Only if no complete candidate
-fits and ellipsis is explicitly enabled, repeat the same program with its marked
-display candidates. This prioritizes completeness over abbreviation at a larger
-size. There are at most two mode passes, not a root-wide product of text choices.
-Respect any explicit line cap during both passes. Fixed-size mode has one size.
-If all permitted candidates fail, return the owner's typed text/tick miss. Font,
-allocation, arithmetic and shaping errors remain fatal, not smaller-size retries.
+Support both user-confirmed combination priorities. Content-first tries complete
+text with permitted fitting before marked views; preferred-size-first tries
+permitted abbreviation at the preferred size before reducing it. Content-first
+is the default, and the request retains its explicit priority through all caches.
+Reflow versus no soft reflow is selectable, with authored breaks preserved. A
+floor nonfit consumes explicit refusal/hide/clip/local-overflow handling, as in
+ggfittext/Plotly, rather than force one behavior for every text owner. Font,
+arithmetic, allocation and shaping errors remain fatal instead of fit alternatives.
 
-For one axis or a uniform guide-label/numeric annotation role, choose one size
-that fits its complete active/selected set; do not make individual members tiny
-or change the set. Independent authored slots and semantic roles keep independent
-choices. Distinct contrast appearances remain their own declared roles/groups;
-equal initial sizes do not couple light/dark or unrelated owners. Preserve the
-owner's source order, category-selection indices and required availability masks.
+Support independent per-label sizes and uniform owner/group sizing, as established
+by Plotly and ggfittext. Uniform fitting selects one permitted size for its full
+active/eligible set; independent mode can fit members separately. Each policy
+retains group identity and all resulting sizes/visibility without changing data,
+ticks or raw category selection. Unrelated roles, including contrast appearances,
+do not become coupled merely because initial sizes are equal.
 
 At each candidate recompute exact scaled origins, outward ink, line pitch,
 wrapping, anchor and transformed containment from retained design/font inputs.
@@ -720,11 +825,11 @@ and fallible storage, not all candidate scenes or a second paragraph-analysis
 framework. Source/formatter functions do not run again for different font trials.
 
 Natural preference uses complete content at preferred size. Hard requirements use
-only explicitly admitted font floors/ellipsis; preserve a nonzero marker/text
-requirement and assigned actual-ink proof. Selected local text metrics update only
-their declared gaps/clearance and height/gutters, not unrelated mark metrics or
-root padding. Existing Automatic geometry seeds use resolved preferred tick
-typography; data-interval positions depend only on their step and final domain.
+only explicitly admitted size/overflow/visibility rules; preserve real required
+geometry and actual clip/ink proof for the chosen policy. Selected text metrics
+update only their declared gaps/clearance and height/gutters, not unrelated mark
+metrics or root padding. Existing Automatic geometry seeds use resolved preferred tick
+typography; fixed data-interval positions depend only on step, origin and final domain.
 Fitting a source at a smaller size does not request more ticks within that trial.
 Real assignment/domain changes still flow through the existing bounded coordinator.
 
@@ -732,9 +837,9 @@ Real assignment/domain changes still flow through the existing bounded coordinat
 
 All four controls execute during intrinsic/assigned measurement, before capture.
 Retain original source, normalized request/default provenance, exact appearance,
-reference frame/offset, anchor/angle, consumed width/height/line cap, grouping and
-selected size, display spans/marker, baselines and transformed required ink in
-their consuming dependencies. Separate low-level shape reuse from complete layout
+reference frame/offset, anchor/orientation/rotation mode, bounds/line cap, overlap/
+visibility/priority/grouping and selected sizes, display spans/marker, baselines and
+ink in their consuming dependencies. Separate low-level shape reuse from complete layout
 identity: equal current glyphs/strings/widths do not establish upstream equivalence.
 
 Extend the same actual-text font-admission protocol planned for numeric results.
@@ -751,11 +856,12 @@ Canvas. Parent-assigned reference/geometry changes invalidate affected layout/
 height/ink plans; independent siblings retain valid reuse. Maximum width keeps its
 selected root bound and runs permitted local text policies within that assignment.
 Instructions do not directly mutate scientific values, explicit range requests,
-statistics, category topology, root mode or selected visibility. Existing authorized
+statistics, category topology or root mode. Visible-label changes follow only their
+declared policy and remain separate from the eligible set. Existing authorized
 linked display-domain/owned-ink feedback still honors parent provenance and the
 eight-round/guide-recovery program; text adaptation does not reset that program.
 
-Freeze selected size, display view, full original source mappings and canonical
+Freeze selected sizes, visibility/clip, display view, source mappings and canonical
 transform before capture. Text SVG paints the selected display once and retains
 full original text as nonpainting accessibility metadata when abbreviated; outlines
 and PNG use the same retained glyph/placement plan. Output replay performs no
@@ -922,10 +1028,12 @@ Each consuming owner supplies a real measured explanation slot:
   labels use their numeric-label block; Waterfall totals use the total shelf.
   Keep these independent of a differently formatted color guide or numeric axis.
 
-Measure complete explanations before accepting a candidate/owner plan and include
-their minimum/preferred widths, height and ink in natural/assigned sizing. A
-required explanation cannot overlap scientific marks, disappear when space is
-tight or be appended to SVG after geometry is frozen. Keep x/y and independent
+Measure explanations under their actual text policy before accepting an owner
+plan; include their minimum/preferred widths, height and ink in natural/assigned
+sizing. Complete visible explanations are the default. Only explicit text policy
+can abbreviate, clip, hide or allow local overlap; preserve the full explanation
+and metadata in its retained slot. Tight space alone cannot silently remove it or
+append it to SVG after geometry is frozen. Keep x/y and independent
 value owners distinct. Facets, spanning Canvas owners and max-width roots must
 reserve each actual explanation once and preserve the selected root width.
 
@@ -1118,10 +1226,12 @@ axis-kind/scale validation remains independent of that suppression.
 Replace the single payload choice with one normalized immutable TickGeneration:
 one closed primary locator and an optional validated generated-count cap. Primary
 locators are Automatic, Interval, approximate Target, ExactCount, Multiplicative
-and Function. Interval retains its step, coordinate space and strict/preferred
+and Function. Interval retains its step/origin, coordinate space and fixed/preferred
 requirement: the current Additive and Log10Decades constructors select preferred
 linear-data and integral-exponent intervals respectively; data-interval density
-selects a strict data-space interval. Reuse the same interval source machinery,
+provides fixed data-space spacing and explicit adaptive behavior as separate choices.
+Multiplicative likewise retains its anchor, ratio and fixed/adaptive requirement.
+Label overlap/visibility/overflow is independently configurable. Reuse interval machinery,
 without a second implementation for the newly exposed requirement.
 
 Keep the existing maximum constructor's meaning by normalizing it to Automatic
@@ -1133,17 +1243,23 @@ rule; a new same-name writer also migrates an existing reader to `get_`.
 | --- | --- |
 | Automatic, including the existing Maximum constructor | Filters complete candidates in their existing order |
 | Preferred Interval, including current Additive/Log10Decades, or approximate Target | Filters complete candidates, never individual positions |
-| Strict data-space Interval | Entire in-domain interval list must satisfy the cap; no enlarged step or truncation |
+| Fixed data-space Interval | Entire in-domain interval list must satisfy an explicitly selected cap; no implicit enlarged step or truncation |
 | ExactCount | Must be at least the exact count; otherwise construction rejects |
-| Multiplicative | Entire lattice source must satisfy the cap; no truncation |
-| Function | Validates its returned complete list; no truncation or reinvocation at a smaller count |
+| Fixed Multiplicative | Entire lattice source must satisfy the cap; no truncation |
+| Adaptive Multiplicative | Filters complete candidates under its declared adaptive program |
+| Function | Final in-domain list must satisfy a selected cap; no truncation or reinvocation at a smaller count |
 
 Consuming edits preserve and validate the complete policy, including contradictory
 count constraints. Clearing a cap restores the primary locator's unconstrained
 generated program. `is_automatic` means the complete default/reset policy, not an
-Automatic primary with a nondefault cap. Keep the existing 10000 generated-position
-ceiling and public count range 1..=10000. Data-interval density directly retains
-its data-unit step in the Interval locator's complete policy.
+Automatic primary with a nondefault cap. The current 10000 ceiling is not a
+universal capability limit for the new explicit locators/functions. Support an
+explicit count maximum or no application-level maximum, as distinct from actual
+count/index/output representation and fallible allocation. Existing private
+Automatic candidate bounds remain finite; they do not silently cap an explicit
+request. Migrate public count validation and all affected source/capture consumers
+coherently when removing the old shared ceiling. Data-interval density retains
+its data-unit step and numeric origin in the complete locator policy.
 
 TickGeneration must support an owned cloneable function handle. Replace Copy-based
 storage/access assumptions with explicit borrowing/cloning throughout AxisSpec,
@@ -1160,67 +1276,86 @@ For a linear resolved range [0,10], generate [0,10/3,20/3,10]; formatting can di
 `0,3.33,6.67,10`. Target(4) may instead choose [0,5,10], and Maximum(4) only imposes
 an upper bound. The new requirement is exact cardinality, not a nice-step target.
 
-Define the endpoint contract now: n>=2 includes both resolved display endpoints,
-with equal intervals in the active scale's coordinate space; n=1 uses that space's
-midpoint. Thus a Log10 range from 0.1 to 10 with n=3 has logarithmic coordinates
-[-1,0,1] and mathematical value labels [0.1,1,10]. Do not substitute linear raw-value
-spacing on a logarithmic axis. Counts refer to positions, not printed decimal
+For the standard exact-count locator, n>=2 includes both resolved display endpoints
+with equal intervals in the selected data/scale coordinate space. Preserve both
+raw-data and logarithmic-space interpretations through explicit coordinate choice;
+do not use one scale's default to exclude the other. Zero requests a valid empty
+tick list, as with LinearLocator(0), without removing marks/frame/title. A singleton
+has a configurable lower/midpoint/upper or caller-specified in-domain position;
+a lower-endpoint default follows
+Matplotlib LinearLocator, while the existing Target(1) midpoint remains unchanged.
+Thus a Log10 range from 0.1 to 10 with n=3 in scale space has coordinates
+[-1,0,1] and mathematical value labels [0.1,1,10]; data-space selection instead gives
+[0.1,5.05,10] before projection. Do not silently substitute one interpretation for
+the other. Counts refer to positions, not printed decimal
 digits or nonempty labels. They do not modify scientific limits or nice-range policy.
 
-For linear endpoints lo/hi, independently round each exact affine combination
+For linear endpoints lo/hi and n>=2, independently round each exact affine combination
 `((n-1-i)*lo+i*hi)/(n-1)` once to binary64, retaining exact endpoint bits. Use
 checked rational/scaled arithmetic rather than overflowing hi-lo or accumulated
 step addition. Logarithmic interpolation operates on the canonical exponent-space
 domain and retains mathematical power operands for presentation. It does not inherit
 the old integral-source exponent clipping as a physical-value restriction.
 
-Generate one complete strict source. If adjacent endpoints cannot represent n
-distinct positions, report a contextual generation failure; do not deduplicate,
-perturb endpoints or lower n. Distinct positions that collapse under the assigned
-projection or cannot fit their formatted labels yield a typed tick fit miss.
+Generate one complete source. If adjacent endpoints cannot represent n
+distinct representable data positions, report a contextual generation failure;
+do not perturb endpoints or lower n. Coincident painted/projected label geometry
+is resolved by the explicit overlap/visibility policy, not an unconditional
+nonoverlap rule for all uses.
 Built-in adaptive formatting can choose its permitted common precision, but the
 locator cannot replace the list with fewer ticks or a terminal midpoint. For n=1
-the midpoint label must still fit. Maximum constraints are checked before text work.
+the selected singleton follows its declared label policy. Any selected maximum is
+checked before text work.
 
 ### Data-Interval Density: One Tick Every Twenty Data Units
 
 Workflow: request one tick for every 20 units of the numeric data range. The final
 resolved domain determines how many positions exist:
 
-| Resolved data range | Positions at step 20 | Count |
-| --- | --- | --- |
-| [0,100] | [0,20,40,60,80,100] | 6 |
-| [0,200] | [0,20,40,60,80,100,120,140,160,180,200] | 11 |
-| [40,100] | [40,60,80,100] | 4 |
-| [5,95] | [20,40,60,80] | 4 |
+| Resolved data range | Numeric origin | Positions at step 20 | Count |
+| --- | --- | --- | --- |
+| [0,100] | 0 | [0,20,40,60,80,100] | 6 |
+| [0,200] | 0 | [0,20,40,60,80,100,120,140,160,180,200] | 11 |
+| [40,100] | 0 | [40,60,80,100] | 4 |
+| [5,95] | 0 | [20,40,60,80] | 4 |
+| [5,95] | 5 | [5,25,45,65,85] | 5 |
 
-Accept a finite strictly positive interval s in data units. Use zero-aligned
-positions `k*s` for signed integral k within the closed final data domain; retain
-only endpoints that belong to that lattice. The same range/step gives the same
-positions and count across widths, fonts, root modes and cache settings. Parent
+Accept a finite strictly positive interval s and finite numeric origin a in data
+units. Positions belong to `a+k*s` for signed integral k. Origin 0 is the ordinary
+default, following MultipleLocator/tick0/breaks_width, and can be replaced directly.
+The user chose configurable numeric origins rather than an additional implicit
+origin-following-the-view mode. A caller may set a to a known lower bound or use
+the existing generation-function extension when that rule depends on the view.
+For fixed spacing, retain in-domain lattice positions and do not add unrelated
+endpoints implicitly; explicit positions/count/function sources cover other lists.
+The same final domain/step/origin gives the same positions and count across widths,
+fonts, root modes and cache settings. Parent
 range resolution can change the list because its data-domain membership changes.
 The interval is not a factor applied to a renderer-selected tick count or to a
 pixel/font pitch, and is not estimated from the number of source observations.
 
-Expose this as a built-in strict Interval requirement. The existing
-`TickGeneration::additive(step)` is a preferred linear interval that may coarsen;
-retain that behavior while sharing its interval source/arithmetic owner with the
-strict requirement. A strict data interval cannot become a larger nice step,
-skip members or switch to a midpoint because text or space is insufficient.
-TextLayout can apply explicitly permitted font fit/ellipsis to the complete list;
-otherwise a genuine nonfit returns a typed tick miss. No application function is
-required to express the interval or derive its count.
+Expose built-in fixed and preferred interval requirements rather than hard-wire
+one response to crowded labels. The existing additive(step) remains a preferred
+interval that may coarsen; fixed spacing preserves its full position list. Both
+share the same normalized source/arithmetic owner and numeric origin. TextLayout
+can explicitly allow overlapping labels, hide/reduce labels, clip/overflow text,
+fit sizes or elide within that list. Default strict text fit can still refuse,
+but it is one selected behavior. Label reduction never changes ticks/grid lines or
+the data interval. No function is required to configure either interval or origin.
 
 Compute first/last indices and cardinality from checked exact input ratios and
 boundary comparisons, without overflowing hi-lo or unchecked float-to-index casts.
-For the strict source, membership uses mathematical index products of the retained
-step; independently round each admitted product once to its coordinate operand.
-Do not accumulate rounded additions or use an epsilon to include an endpoint.
-Check the complete count against 10000 and any configured maximum before allocating
-or formatting. Oversized lists reject rather than saturate, truncate or enlarge s.
-An in-domain empty lattice is valid and contributes no numeric-label explanation;
-unrepresentable indices/positions or collapsed distinct coordinates are real
-generation/fit failures, not empty success or permission to lower the count.
+Compute every a+k*s independently and round once into its declared data-coordinate
+representation; membership/boundary checks must match that representation, including
+ordinary 0.1-step endpoint expectations. Do not accumulate rounded additions or
+introduce an unproved tolerance/fatal-boundary rule. Use independent rational/
+rounding-cell witnesses, preserving current preferred-source observable behavior
+where promised. Check any caller-selected maximum before library materialization/
+formatting. Large valid sources are not rejected solely because they exceed the
+old 10000 threshold; actual representation/allocation failure is still an error.
+A fixed interval can validly have no in-domain ticks, following fixed locators and
+ggplot2 empty breaks. Preserve frame/title/data without a numeric explanation.
+An explicitly adaptive interval retains its documented complete-candidate recovery.
 
 On a Log10 axis, a data interval still refers to raw data units, not exponent or
 screen distance; require positive admitted positions and retain their mathematical
@@ -1242,13 +1377,16 @@ its positions are [1,2,4,8,16,32,64]. Ratio 1.5 yields [1,1.5,2.25,3.375,...].
 Unlike Additive(2), which produces an additive lattice, or Log10Decades, which uses
 integral powers of ten, this locator specifies an arbitrary multiplicative ratio.
 
-Retain a finite positive anchor a and finite ratio r>1, defining the lattice
-`a*r^k` for signed integral k. Reverse powers need no ratio-below-one representation.
-Require a positive bounded resolved numeric domain, including when the active
-projection is linear. Reject zero/nonpositive domains before attempting an infinite
-near-zero lattice. Do not change the Plot's scientific transform or invent a new
-logarithm-base selector. An anchor is mandatory in normalized policy; a documented
-factory default of 1 is an ordinary supplied value, not a range-dependent origin.
+Retain a configurable positive anchor and positive ratio r!=1 for the geometric
+lattice `a*r^k`, with signed integral indices. A default anchor of 1 is not a fixed
+origin. Reciprocal ratio directions describe the same indexed lattice through
+exact normalization, rather than an unexplained r>1-only public restriction.
+The positive lattice follows LogLocator's logarithmic value domain. On a linear
+projection, intersect it with the actual view instead of reject a wholly negative
+view that simply has no members. A view containing an infinite near-zero tail is
+a genuinely unbounded fixed source, not a reason to invent a hidden exponent cutoff.
+Do not add signed/mirrored geometric lattices without a supporting precedent or
+user confirmation, or change the scientific transform to implement a locator.
 
 Determine the complete in-domain integer-index interval using checked, certified
 boundary comparisons. Check its count/cap before allocating positions or forming
@@ -1263,21 +1401,22 @@ underflow an intermediate physical pow, or label an approximate inverse transfor
 Normalize exactly equivalent decimal-power cases through the same operand engine.
 Real arithmetic, index, coordinate or output representation failures remain fatal.
 
-This is a strict complete lattice source: fit cannot secretly increase the ratio,
-skip powers, keep an arbitrary subsequence or switch to a midpoint. If the selected
-complete source cannot fit, return a typed miss. When no lattice member lies in
-the view, the empty generated list is valid; retain axes/marks and produce no
-numeric-label explanation.
+Fixed geometric spacing retains the complete lattice; label visibility/overlap/
+overflow is selected independently. Support explicit adaptive logarithmic source
+selection as in LogLocator without silently changing a fixed ratio request. When
+no member lies in the view, the empty generated list is valid; retain axes/marks
+and produce no numeric-label explanation.
 Distinguish that case from an oversized or unrepresentable nonempty source, which
-must not be disguised as empty. Preserve raw/exact mathematical identity and
-strict projected ordering before formatting and label-cell measurement.
+must not be disguised as empty. Preserve raw/exact mathematical and occurrence
+identity, with a stable geometric ordering for cell measurement.
 
 ### Category Label Selection: Twelve Bars With Six Month Names
 
 Workflow: twelve month categories still produce twelve bars at the same positions.
 An explicit stride of 2, offset 0 and no forced endpoints displays January, March,
 May, July, September and November. It does not delete February's bar, merge groups
-or renumber category positions. Default All continues to require every label.
+or renumber category positions. Default All makes every label eligible and retains
+the owner's ordinary visible-label policy unless the caller explicitly changes it.
 
 Expose one immutable CategoryLabelSelection with All and an every-k selection:
 positive stride, zero-based offset smaller than stride and explicit endpoint
@@ -1308,10 +1447,11 @@ counts, assigned track edges, marks and independent annotations/guide sources.
 Do not implement thinning by deleting AxisTick entries or overwriting their labels
 with empty strings, which loses provenance and native geometry.
 
-Only selected axis-label text contributes to its font census, intrinsic/required
-text width, shaping, gutters, ink and capture. Other consumers of the same category
-text retain their own requirements. Keep original category indices in requirement
-addresses; selecting labels does not compact owner/source IDs. A suppressed name
+Only eligible axis-label text participates in analysis. Actually consumed analysis
+determines font needs; final visibility/clip and selected size determine painted
+ink, gutters and capture under the declared policy. Other consumers of the same
+category text retain their own requirements. Keep original category indices in
+requirement addresses; selecting labels does not compact owner/source IDs. A suppressed name
 does not waive raw-key, alias or domain-collision validation.
 
 Give selected labels capacity between neighboring selected centers and the outer
@@ -1321,11 +1461,14 @@ category cells. All retains the present per-category cell policy. Handle assigne
 native Heatmap cells and Beeswarm/Waterfall width producers explicitly; avoid
 indexing full assigned_cells with a shortened tick vector. The selected TextLayout
 consumes the same required set, original centers and canonical transform. Its
-explicit overflow/font-fit policies may adapt display content/size, but they
-cannot change its stride/offset/endpoints or remove another selected label to fit.
+explicit overflow/font-fit policies may adapt display content/size. An explicit
+overlap/boundary hiding policy can select a visible subset of eligible labels;
+retain both sets and endpoint intent without changing categories or ticks. Under
+the ordinary all-selected-visible policy, fitting cannot silently hide a label.
 
 Canvas FirstColumnPerRow still compares complete resolved category domains/orders,
-plus compatible label-selection policy, before suppressing duplicate whole axes.
+plus compatible label-selection and text policies, before suppressing duplicate
+whole axes.
 It does not compare only the currently visible names. Apply selection once at the
 actual axis owner; preserve the span-aware row-band/anchor rules. Facet local
 subsets and genuinely shared category domains each use their final prepared order.
@@ -1347,27 +1490,46 @@ of the rounded log10 transform. Call only after the actual domain and assignment
 exist. Natural-width low/mid/high estimates remain preferences and do not invoke
 the locator for hypothetical view boxes.
 
-The ordinary result is a complete ordered list of raw data-space positions, with
+The ordinary result is a complete source-order list of raw data-space positions, with
 no labels. Provide a deliberately typed exponent-space result for Log10 when a
 caller wants mathematical power positions outside physical binary64. Keep the
 coordinate form explicit; do not guess from magnitudes or treat ordinary returned
-values as exponents. Raw logarithmic inputs must be finite/positive, use the
-existing scientific transform and retain their original numeric display operand.
+values as exponents. Raw logarithmic positions use the existing scientific
+transform when projected and retain their original numeric display operand.
 Exponent results retain PowerOfTen operands. Multiplicative sources likewise
 retain their own mathematical operand instead of reducing everything to a bool
 that means every logarithmic label is `10^projected_position`.
 
-Validate the returned full source before numeric formatting: actual count at most
-10000 and any configured maximum, finite/valid coordinate values, closed-domain
-membership, strict numeric and projected ordering, and no duplicate signed-zero
-positions. Reject an invalid list; do not sort, clip, deduplicate or truncate it.
-An explicitly returned empty list is valid and removes only generated ticks/grid
-lines/number explanations, not scientific marks or axis titles/frame. A valid
-nonempty list is strict: formatting collision or geometric nonfit cannot reinvoke
-the function with a lower count or switch to Automatic. Explicit ticks suppress
-the function altogether in either setter order.
+Process returned positions through normal window/projection/layout operations,
+without an independent correctness-validation pass or strictness option. Unsorted,
+repeated and off-window positions are not errors by themselves. Retain original
+occurrence IDs and source order; build a stable geometric-order view when cells
+need it. Normal view filtering/clipping handles off-window positions without
+changing scientific limits or consuming their unused text. Coincident occurrences
+retain their drawable geometry and declared label policy instead of failing a
+source-level uniqueness test.
 
-Pass validated positions and their retained operand kinds to NumericFormat,
+Draw when the requested operations can succeed. If an actually consumed coordinate
+cannot be projected, the requested geometry cannot be laid out or a real storage/
+arithmetic operation fails, return that operation's error with owner context. Do
+not invent a separate result-acceptance rule or run a prevalidation pass to reject
+otherwise drawable output. A function's own error likewise ends the operation;
+it does not cause a repair, fallback or lower-count application call.
+
+An explicit generated maximum applies to the final in-domain list before first-party
+copies/formatting; exceeding that requested constraint is an error. It is not a new
+universal 10000 cap on callback results. Empty output is valid and removes generated
+ticks/grid lines/number explanations, not scientific marks or axis titles/frame.
+A nonempty result uses its declared text overlap/visibility/overflow policy.
+Explicit ticks suppress the function altogether in either setter order.
+
+For example, returning [80,20,20,-10,120] for view [0,100] retains the in-view
+occurrences [80,20,20] with original indices [0,1,2]. The two occurrences at 20
+can share a painted position; internal geometric ordering does not rewrite their
+source identities. No ordering, duplicate or domain-acceptance check rejects this
+drawable source.
+
+Pass retained in-domain positions and their operand kinds to NumericFormat,
 including its own single/set formatting function. Thus the warning position 50
 can be displayed as `50`, `50.0` or caller-authored text through the format policy;
 the locator never returns an AxisTick or controls wording. Preserve one source
@@ -1393,20 +1555,22 @@ text before capture; no locator or formatter runs during capture or Output repla
 
 ### Composition, Source Programs And Implementation Owners
 
-Make the source program distinguish soft ordered candidates from strict complete
-sources. ExactCount, strict data Interval, Multiplicative and Function do not inherit
-the unconditional coarsening/terminal-midpoint path. Preserve the existing
-Automatic/Target/Maximum and preferred-interval source order. Handle empty strict
+Make the source program distinguish soft ordered candidates from complete fixed
+sources. ExactCount, fixed Interval/Multiplicative and Function do not inherit an
+unrequested coarsening/terminal-midpoint path. Adaptive interval/geometric choices
+have their declared candidate programs. Preserve the existing
+Automatic/Target/Maximum and preferred-interval source order. Handle empty complete
 sources explicitly rather than confuse them with a skipped/failed candidate.
 Numeric maximum applies to positions including intentionally empty display labels,
 not the count of visible strings. Category selection never filters numeric ticks.
 
-Retain the complete generator, interval space/step/requirement, cap, mathematical
-operand and source kind, domain provenance, actual callback context/result and
-category policy/full order/selected indices in their dependent consumers. Update
-source/axis feedback, composed equality, height caches and child reuse. Equal
-positions or visible names do not establish upstream equivalence. Track explicit/supplied versus
-generated precedence through erasure and parent reassignment.
+Retain the complete generator, interval space/step/origin/requirement, multiplicative
+anchor/ratio/requirement, cap, mathematical operand and source kind, domain provenance,
+actual callback context/result and category policy/full order/eligible/visible
+indices in their dependent consumers. Update source/axis feedback, composed
+equality, height caches and child reuse. Equal positions or visible names do not
+establish upstream equivalence. Track explicit/supplied versus generated precedence
+through erasure and parent reassignment.
 
 Resolve parent domains before invoking locators; shared ranges do not automatically
 force identical per-panel policies or counts. An actually shared displayed axis
@@ -1420,13 +1584,13 @@ Numeric/categorical controls can change measured gutters and content height, but
 not scientific range provenance, statistical preparation, category topology or the
 selected root-width rule. Preserve the existing eight-round root coordinator and
 bounded guide/local alternatives. A spanning Canvas child uses its full assigned
-axis span; a max-width root keeps its selected width and must fit or fail after
-the resulting text/explanations are measured.
+axis span; a max-width root keeps its selected width and consumes the chosen text
+policies, with final root containment established before publication.
 
 | Owner | Required change |
 | --- | --- |
 | `src/spec/ticks.rs`, `src/spec.rs`, `src/lib.rs`, `src/kind.rs`, `src/builder/configuration.rs` | One validated extended generator, category-selection value, deliberate context/result exports and actual-axis sealed gates |
-| `src/layout/panel/sources.rs`, `src/layout/panel/sources/tests.rs`, `src/numeric/`, `src/layout/panel/projection.rs` | Exact/data-interval/lattice source arithmetic, strict-versus-soft termination, explicit mathematical operands and complete callback results |
+| `src/layout/panel/sources.rs`, `src/layout/panel/sources/tests.rs`, `src/numeric/`, `src/layout/panel/projection.rs` | Exact/data-interval/lattice source arithmetic, fixed/adaptive programs, explicit mathematical operands, normal window handling and complete callback results |
 | `src/layout/panel.rs`, `src/layout/panel/semantics.rs`, `src/layout/panel/cells.rs`, `src/layout/panel/axis_frame_grid.rs` | Owned policies, full category positions plus selected-label metadata, capacity/ink, empty sources and frozen axis/source identity |
 | `src/builder/facets.rs`, `src/builder/accessors.rs`, `src/plots/shared_x/prepared.rs`, `src/orchestrator/validation.rs` | Remove Copy assumptions, preserve parent provenance/choice, applicability checks and complete composed dependencies |
 | `src/layout/text/requirements.rs`, `src/layout/interior/sizing.rs`, `src/plots/heatmap.rs`, `src/plots/beeswarm.rs`, `src/plots/waterfall.rs`, `src/plots/interval_estimate.rs` | Selected-label census/preferences, native full-cell geometry, numeric/explanation measurement and actual-source admission |
@@ -1562,50 +1726,57 @@ bounds.
 Update the current representation contract with the working migration, including
 Clone rather than Copy and the precise complete-policy `is_automatic` meaning.
 
-### 9. Add Strict Exact Generated Counts
+### 9. Add Exact Generated Counts
 
-Expose exact counts with endpoint-including scale-space interpolation and the
-single-midpoint n=1 rule. Integrate a strict source through shared coordinate and
-native numeric-axis callers, preserving mathematical Forest operands. Add/refine
-the optional maximum edit with complete-policy contradiction checks and the
+Expose exact counts with standard endpoint-including interpolation, explicit
+data/scale-space choice and configurable singleton placement. Integrate a complete
+source through shared coordinate and native numeric-axis callers, preserving
+mathematical Forest operands. Add/refine the optional maximum edit with complete-
+policy contradiction checks and the
 confirmed reader naming rule; preserve existing maximum-constructor semantics.
+Remove the shared 10000 ceiling from explicit count/source APIs and their consumers
+in this coherent migration, retaining private Automatic candidate bounds and real
+checked storage/output limits. An explicit maximum remains an enforced caller rule.
 
-Verify independent interpolation/endpoints/rounding, log scale spacing, collapsed
-representable positions, a genuine exact-count text nonfit and final Shared-domain
-selection. A strict source cannot fall into Automatic coarsening or midpoint retry.
+Verify zero/empty semantics, independent interpolation/endpoints/rounding, all
+singleton choices, data/log-space spacing, collapsed positions, selected text policies and
+final Shared-domain selection. This source cannot fall into Automatic coarsening
+or midpoint retry.
 Update numeric/tick documentation and public examples with the implemented source.
 
 ### 10. Add Data-Interval Density
 
-Expose a finite positive data-unit step through the shared Interval locator with
-the strict complete-source requirement. Reuse the current preferred interval's
-source/arithmetic owners; retain its documented coarsening behavior independently.
+Expose a finite positive data-unit step and configurable numeric origin through
+the shared Interval locator. Support fixed and preferred requirements explicitly;
+reuse the current preferred interval's source/arithmetic owners and preserve its
+documented recovery independently from label visibility/overflow.
 Generate after final parent-domain resolution with checked index/count/boundary
 arithmetic, cap-before-allocation and retained raw/mathematical operands. The
 requested data interval never rescales with assigned pixels or selected fonts.
 
-Verify step 20 on [0,100], [0,200], [40,100] and [5,95], negative/cross-zero domains,
-fractional steps, exact boundaries, subnormals/extremes and valid empty lists.
+Verify all step-20 examples, including origin 5 on [5,95], negative/cross-zero
+domains, fractional steps, ordinary decimal endpoints, extremes and valid empty lists.
 Use independent rational membership/rounding expectations, including indices
 beyond exact binary64 integer conversion. Check unchanged source lists across
-width/font/cache changes, real strict nonfit and cap refusal, and a final Shared
-domain changing the count. Exercise a raw-data interval on Log10 independently of
-exponent spacing. Update public tick docs/examples and current contracts with this
-built-in requirement; no generator function is needed for data-interval density.
+width/font/cache changes, explicit overlap/hiding/strict refusal, sources above
+10000, caller-cap refusal and a final Shared domain changing the count. Exercise a
+raw-data interval on Log10 independently of exponent spacing. Update public tick
+docs/examples and current contracts with this built-in requirement; no generator
+function is needed for data-interval density.
 
 ### 11. Add Anchored Multiplicative Sources
 
-Implement checked geometric index bounds and strict complete lattice generation
-for positive domains. Extend the single numeric operand/certification path for
-mathematical logarithmic lattice values before exposing the source. Preserve
+Implement checked geometric index bounds, configurable anchor/ratio and explicit
+fixed/adaptive source behavior. Extend the single numeric operand/certification
+path for mathematical logarithmic lattice values before exposing the source. Preserve
 anchor/index identity, cap-before-allocation, complete set formatting and final
 font admission. Do not compute a new tick from the previously rounded value.
 
 Verify the ratio-2 and ratio-1.5 examples, reciprocal indices, endpoint boundaries,
 equivalent anchor shifts, ratios near one, empty views, real index/representation
-failures, oversized lists and a strict nonfit. Include a Forest projection and
-independent rational/power certificates; no platform powf or copied locator loop
-serves as the oracle. Update numeric/certification contracts and examples together.
+failures, caller-capped lists and selected text nonfit/overlap behavior. Include a
+Forest projection and independent rational/power certificates; no platform powf or
+copied locator loop serves as the oracle. Update numeric/certification contracts and examples together.
 
 ### 12. Add Explicit Categorical Label Selection
 
@@ -1626,14 +1797,17 @@ gates.
 ### 13. Add Owned Tick Position Functions
 
 Expose immutable actual-view context and typed raw/exponent position results through
-TickGeneration. Implement exact-tick suppression, complete result validation,
+TickGeneration. Implement exact-tick suppression, normal window/projection handling,
 shared-handle policy identity and operation-local materialization independent of
-optional layout caches. Format accepted operands through NumericFormat, including
+optional layout caches. Format retained operands through NumericFormat, including
 its already implemented functions and measured factor/unit explanations.
 
-Verify the view-dependent warning-50 example, final parent domains, assigned-span
-context, empty output, raw versus exponent logarithmic operands, invalid
-ordering/bounds/counts, strict fit refusal and zero function calls for exact ticks.
+Verify the warning-50 example, final parent domains, assigned-span context, empty
+output, raw/exponent operands and ordinary view filtering with source-order and
+duplicate occurrences retained. Demonstrate drawable unsorted/repeated/off-window
+results, real projection/layout/storage failures, immediate function errors and
+zero function calls for exact ticks. Include a valid large list and a caller-cap
+refusal without introducing result validators or strictness configuration.
 Prove repeated context queries/cache toggles and frozen publications reuse results
 without locator/formatter/font work. Update tick/numeric/layout/guide lifecycle
 contracts and user examples with this working interface before committing.
@@ -1667,9 +1841,12 @@ support is added through their shared allocation path later.
 
 ### 16. Unify Text Anchors And Role Attachments
 
-Extend the live TextLayout with validated box/baseline anchors and physical offset,
-plus deliberate typed role attachments for authored and automatic text. Replace
-scattered middle/baseline placement arithmetic with one measured reference/anchor
+Extend live TextLayout with box/baseline/fractional justification, typed annotation
+references, screen/text-local offsets, finite text bounds, wrapping and explicit
+overlap/clip/visibility policies. Add fractional font size through complete
+appearance, selected metrics and rendering storage. Add deliberate typed role
+attachments for authored and automatic text. Replace scattered middle/baseline
+placement arithmetic with one measured reference/anchor
 transform, preserving omitted owner defaults, exact paint/coordinates and existing
 axis multiline ordering. Carry request/default provenance through parent assignment,
 prepared text, group identity, annotation collision and child-height dependencies.
@@ -1677,50 +1854,56 @@ prepared text, group identity, annotation collision and child-height dependencie
 Verify independent preset/custom anchor relationships, different content/size at
 one fixed point, post-inset TextPanel placement, canonical fractional offsets,
 panel-corner/inside-guide conflicts and unchanged source/mark positions. Update
-current text/property/layout contracts and examples; do not expose fields with no
-measurement/fit consumer or an arbitrary coordinate-system selector.
+current text/property/layout contracts and examples; every typed coordinate frame
+has a real owner/transform/fit consumer rather than an untyped backend escape.
 
-### 17. Generalize Explicit Text Rotation
+### 17. Generalize Text Orientation And Rotation Placement
 
 Add the one preset/custom-angle instruction through TextLayout across admitted
 slots/groups, including numeric/exact/category ticks, titles, headers and annotation
-roles. Canonicalize before measurement and use the resolved block anchor as pivot.
+roles. Replace the old tenth-degree restriction, resolve screen/data-relative
+orientation before measurement and support rotate-about-anchor/align-after-rotation.
+Implement explicit ordered automatic tick-angle candidates through this same engine.
 Extend actual logical/ink fit, local gutters/tracks/shelves and native width
 producers together; absolute 0 can replace a vertical default without inheriting
 its old reversed-column behavior.
 
 Verify the 30-degree point note, horizontal y title, categorical useful tilt and
 rotated numeric/exact labels using independent transformed-ink/containment evidence.
-Keep default angles, source membership and one frozen transform across outputs.
+Keep omitted owner directions, source membership and one frozen transform across
+outputs; verify non-tenth angles and the two rotation placements independently.
 Update public text/axis docs with the common attachment rather than publish the
 earlier category-only setter proposal alongside it.
 
 ### 18. Generalize Ellipsis And Migrate Heatmap
 
-Implement complete/start/middle/end display policies, markers and explicit line
-caps in the shared text engine with original/synthetic source provenance. Preserve
-grapheme and bidi context, source-bounded candidate trials, displayed-set validation
-and real no-marker-room misses. Extend actual-text admission for reached marker
-units. Route Heatmap's existing Elide/Wrap defaults through this engine and remove
+Implement complete/start/middle/end display policies, configurable or empty markers,
+direction and bounds/line caps with original/synthetic source provenance. Preserve
+grapheme and bidi context, source-bounded trials, declared display-collision policy
+and explicit no-marker-room handling. Extend actual-text admission for reached
+marker units. Route Heatmap's existing Elide/Wrap defaults through this engine and remove
 its replaced enum/setter/helper route with all repository callers migrated.
 
 Verify the guide-entry workflow, suffix/middle and multiline limits, combining/
-RTL/contextual cases, original-source accessibility, ambiguity and the current
+RTL/contextual cases, original-source accessibility, optional distinctness and the current
 Heatmap dense/wrapped contracts. Exact tick literal spelling and NumericFormat
 function results remain stored unchanged; only explicit text layout derives a view.
 Update text/numeric/guide/layout contracts and examples with the working behavior.
 
-### 19. Add Bounded Local Font Fit
+### 19. Add Configurable Local Font Fit
 
-Implement the live fixed/shrink-to-floor policy with preferred/minimum resolution,
-the at-most-32-size program and complete-before-ellipsis ordering. Choose one size
-per actual uniform owner/group, recomputing exact metrics/spacing/anchor/ink while
-retaining original sources and stable font selections. Feed only actual consequences
+Implement fixed/shrink/bounded-grow policies with fractional size bounds and a
+justified finite metric-based fitting algorithm. Support independent/uniform groups,
+both user-confirmed shrink/ellipsis priorities and explicit floor-failure actions,
+recomputing exact metrics/spacing/anchor/ink while retaining original sources and
+stable font selections. Feed only actual consequences
 into current requirements/height/gutters; preserve generator preferred-size seeds.
 
-Verify 14/13/12 refusal/refusal/fit, equal-floor normalization, large checked size
-ranges, a true floor nonfit, nonmonotone measured-fit handling, uniform axis/guide
-sets, independent contrast roles and no repeated numeric callbacks per size.
+Verify independently justified fit boundaries, useful fractional sizes, equal-bound
+normalization, large checked ranges, both priorities and floor hide/show/clip/error
+handling. Exercise nonmonotone wrapping, independent/uniform groups, contrast roles
+and no repeated numeric callbacks per size. No unexplained sampled-size quota
+can substitute for the requested bounds.
 Exercise one combined anchor/rotation/ellipsis/floor request under assigned Canvas
 geometry. Freeze selected view/size before capture and verify no fitting during
 replay. Update current contracts and source examples after focused checks/Clippy.
@@ -1759,10 +1942,8 @@ coordinator. Update actual request/height/cache dependencies and preflight handl
 Replace lower-value/obsolete tests with the contract coverage below and keep the
 library-test budget. Update current contracts in `specs/02_RENDERING_CONTRACT.md`
 and `specs/05_LAYOUT_SYSTEM.md`, API examples, `docs/getting-started.md` and any
-affected README sizing guidance together with the implemented behavior. Remove
-the admitted maximum-width subset from the deferred list when this plan is
-approved; preserve the remaining root-bound discussion. Commit the completed
-feature after focused verification and strict Clippy.
+affected README sizing guidance together with the implemented behavior. Commit the
+completed feature after focused verification and strict Clippy.
 
 ## Verification And Acceptance
 
@@ -1795,10 +1976,11 @@ stale documentation claims have no remaining caller or compatibility definition.
    order, geometry and cache enablement. Preserve omitted defaults through existing
    expected numeric contracts instead of a whole-scene golden.
 4. **Required explanations:** the `1,2,3` plus `×10⁶`/unit workflow preserves source
-   values/positions and has measured complete explanation text. Cover x/y axes,
+   values/positions and has a retained explanation with measured text policy. Cover x/y axes,
    one continuous Shared guide and representative fixed value-label owners.
-   Distinct local units/formats retain their own slots; a true nonfit rejects
-   without omitted metadata, overlap or partial publication.
+   Distinct local units/formats retain their slots. Complete/strict nonfit rejects;
+   explicit abbreviation/hiding/clipping/overlap preserves metadata and its actual
+   visible result. No failure produces partial publication.
 5. **Function semantics:** single/set callbacks receive the declared exact operand
    and complete occurrence order, including duplicate values, signed zero and a
    Forest power outside finite physical binary64. Validate returned arity, common
@@ -1832,45 +2014,52 @@ stale documentation claims have no remaining caller or compatibility definition.
    meaningful interval/cap combinations and reject contradictions before text work;
    do not test normalization solely by setting a property and reading it back.
 2. **Exact cardinality and interpolation:** the four-position [0,10] example,
-   singleton midpoint, both endpoints, negative/opposite-extreme linear ranges,
-   logarithmic equal spacing, subnormals and adjacent binary64 endpoints. Use
-   independent affine-rational rounding expectations and scale-space relationships.
+   zero/empty output, configurable singleton/default-lower placement, both endpoints,
+   negative/opposite-extreme ranges, explicit data/log-space spacing, subnormals and adjacent
+   binary64 endpoints. Use independent affine-rational rounding expectations and
+   scale-space relationships. Existing Target(1) keeps its midpoint.
    Prove count never decreases on formatting/geometry failure and no unrelated
    midpoint appears. Explicit exact lists still override the generated requirement.
-3. **Data-interval density:** the step-20 examples have 6,11,4,4 positions respectively.
-   Final domain/step, not pixels or fonts, determine the complete lattice. Check
-   negative/cross-zero domains, fractional steps, boundary inclusion, empty lists,
-   subnormals/extreme indices/counts and independent rational membership/rounding.
-   Compare positions/counts under width/typography/cache changes and resolved parent
-   domains. Required text must fit under its explicit policy or miss; count/cap
-   failure cannot enlarge the step, clamp the count, insert endpoints or retry a
-   midpoint. Preserve old preferred Additive/Log10Decades coarsening separately.
-4. **Multiplicative lattice:** ratio 2 and 1.5, shifted anchors/negative indices,
-   exact boundary inclusion, close-to-one ratios, full-domain cardinality limits,
-   positive-domain validation and valid empty views. Use independent rational or
-   certified interval/power witnesses for lattice membership, final coordinates and
-   numeric labels. Verify no accumulated drift, hidden coarsening, skipped powers,
-   arbitrary exponent clamp or midpoint substitution under tight geometry.
+3. **Data-interval density:** the step-20 examples have 6,11,4,4,5 positions; the last
+   uses origin 5. Final domain/step/origin, not pixels/fonts, determine the fixed
+   lattice. Check negative/cross-zero domains, fractional steps, ordinary decimal
+   endpoints, empty lists, subnormals/extreme indices and independent membership/
+   rounding witnesses. Compare fixed positions/counts across width/typography/cache
+   changes and final parent domains. Selected overlap/hide/clip/fit policies affect
+   labels, not ticks. A fixed source cannot coarsen, truncate, insert endpoints or
+   retry a midpoint. Verify preferred recovery separately, a drawable source above
+   10000 and an explicit maximum refusal before first-party source materialization.
+4. **Multiplicative lattice:** ratio 2 and 1.5, reciprocal directions, configurable
+   anchors/negative indices, boundary inclusion, close-to-one ratios, real count/
+   representation failures and valid empty views, including a negative linear view.
+   Use independent rational/certified witnesses for membership, coordinates and
+   labels. Fixed spacing has no accumulated drift, hidden coarsening, skipped powers,
+   arbitrary exponent clamp or midpoint substitution. Adaptive logarithmic selection
+   follows only its explicit program; an infinite fixed near-zero tail is a real
+   source failure, not an empty result or an implicit cutoff.
 5. **Category completeness and actual text:** twelve bars with the six selected
    month labels, plus offset/forced endpoints and zero/one/large-stride domains.
    Preserve full category counts, mark/source order, original tick/grid positions,
    complete native track geometry and independent annotations/guides. Check selected
-   neighbor capacities and complete required strings, including a true selected-label
-   nonfit. A glyph used only by an unselected label is unnecessary; the same glyph
+   neighbor capacities, eligible/visible sets and the chosen text policy, including
+   a true complete/strict nonfit and explicit overlap/boundary hiding. A glyph used
+   only by an unselected label is unnecessary; the same glyph
    used by another actual annotation remains required and can still fail.
 6. **Actual-axis and shared-category semantics:** conditional categorical Trajectory
    x, representative x/y families, native Heatmap/Beeswarm and a facet's final local
    order. Keep numeric generation and category selection separately gated. Shared
-   Canvas row bands compare full domains/orders and compatible selection policies;
+   Canvas row bands compare full domains/orders and compatible selection/text policies;
    sparse visible-name equality alone cannot make them compatible. Verify original
    requirement indices, whole-axis suppression and span-aware owner geometry.
 7. **Function source and formatting separation:** the warning-50 rule for all three
-   views, boundary duplicate handling by the application, raw-data versus explicit
-   exponent results, empty output and strict ordered/domain/count validation.
-   Generator functions return positions only; feed their retained operands through
-   typed or functional NumericFormat, including units/explanations. Invalid sources
-   fail before formatter invocation; font/format failures never trigger another
-   locator or a hidden lower-count application call.
+   views, unsorted/repeated/off-window drawable positions, source occurrence order,
+   raw/exponent results, empty output, large lists and explicit count maxima.
+   Generator functions return positions only; feed retained in-domain operands
+   through NumericFormat, including units/explanations. There is no independent
+   result-validator/strictness mode. Exercise actual projection/layout/storage
+   failures where those operations are consumed and a function error that directly
+   ends rendering. No failure triggers another locator, input repair or a hidden
+   lower-count application call.
 8. **Bounded parent-aware replay:** final Shared domains, assigned-span context,
    identical context queries, meaningful context changes, cloned/distinct handles
    and optional layout-cache settings. Exact ticks invoke neither replaced locator
@@ -1888,7 +2077,7 @@ stale documentation claims have no remaining caller or compatibility definition.
    rather than comparing their intentionally different default placements/styles.
    Replace the panel-note test that rejects all multiline/untrimmed text.
 2. **Complete local styles:** choose different x/y-title and TextPanel title/body
-   stacks/sizes/weights/colors/leading, retaining unrelated Theme roles. Selected
+   stacks/fractional sizes/weights/colors/leading, retaining unrelated Theme roles. Selected
    custom fonts are included before preparation is sealed; unused fonts remain
    unnecessary. Font-relative gaps and height consequences use selected metrics.
 3. **Alignment and precedence:** independent Start/Center/End for title/body,
@@ -1903,55 +2092,62 @@ stale documentation claims have no remaining caller or compatibility definition.
    Public resolution returns ordinary text and domain collisions are still rejected.
 5. **Fixed-angle equivalence:** presets and equal custom angles normalize to the
    same value and actual geometry. Exercise both signs, quarter turns, a custom
-   angle such as 30 degrees, fractional rounding/full-turn/signed-zero boundaries
+   angle such as 30.05 degrees without tenth-degree quantization, full turns/signed zero
    and nonfinite rejection. Use independent transformed-corner/containment oracles,
    not the production measurement function as its own expected result.
-6. **Useful tilts and strict fit:** a long categorical label that cannot fit
-   horizontally can fit at its explicitly selected angle. Under All, every label
-   remains; an explicit category selection preserves all positions and every
-   selected label through the same rotation path. Check transformed outward ink
+6. **Useful tilts and declared fit:** a long categorical label that cannot fit
+   horizontally can fit at its explicitly selected angle. Under All/all-visible,
+   every label remains; category selection and explicit overlap reduction retain
+   all positions plus eligible/visible provenance through the same rotation path.
+   Check transformed outward ink
    and logical clearance, including explicit multiline labels and a genuine
-   nonfit. Without explicit overflow/font-fit permission, failure retains the full
-   source and fixed size rather than choosing an angle or splitting `LightGBM`.
+   nonfit. Fixed-angle failure cannot choose another angle or split `LightGBM`.
+   Explicit automatic orientation follows its supplied candidate order, consumed
+   dependencies and the same fit predicate, independently of fixed-angle requests.
 7. **Affected owners and output:** representative x-category, y-category and native
    Heatmap/Beeswarm routes, a facet, a Canvas spanning child and one capped root.
    Retain shared-axis alignment, exact geometry dependency identity, one capture
    and same-Output replay. Text-preserving SVG, outlines and PNG use the same
    canonical rotation and source/view mapping. Avoid mechanical family cross-products.
 8. **Reference and block anchoring:** independent nine-preset/fraction relationships,
-   first-baseline references, physical offsets, negative bearings, blank/multiline
-   blocks and RTL alignment. Change content/font size at one fixed data reference
+   out-of-box finite justification, baseline references, screen/text-local offsets,
+   typed data/panel/figure frames, negative bearings, blank blocks and RTL alignment.
+   Change content/font size at one fixed data reference
    and assert the chosen anchor relationship, not a frozen internal placement.
-   Cover post-inset TextPanel placement and real corner/guide collision refusal.
+   Cover post-inset placement and corner/guide collision refusal or explicit overlap.
 9. **General rotation:** a 30-degree point note, explicit horizontal y title and
-   numeric/exact labels alongside the categorical witness. Verify pivot stability,
-   absolute versus inherited orientation, multiline ordering and real transformed
+   numeric/exact labels alongside the categorical witness. Verify rotate-about-anchor
+   versus align-after-rotation, screen/data-relative and inherited orientation,
+   multiline ordering and real transformed
    track/shelf/cell containment. Significance text transformation cannot rotate its
    bracket path or move its scientific target.
-10. **Ellipsis content and Unicode:** all three logical directions, balanced middle,
-    literal/custom marker, explicit line cap, zero/one/large source and insufficient
-    marker room. Preserve complete graphemes, retained mandatory breaks, bidi/
+10. **Ellipsis content and Unicode:** start/middle/end, physical/logical directions,
+    automatic/LTR/RTL, measured two-ended middle, default/custom/empty markers, finite
+    bounds, line caps, zero/one/large source and selected no-marker-room handling.
+    Preserve complete graphemes, retained mandatory breaks, bidi/
     isolates, combining units, contextual substitution and selected soft-hyphen
     provenance. Check original source/aliases separately from visible display and
-    validate post-elision sets without imposing uniqueness on exact caller labels.
+    exercise optional distinctness versus allowed repeated views, including exact labels.
 11. **Current defaults and admission:** compare complete/fixed owner behavior and
     Heatmap's dense Elide/explicit Wrap semantics through the shared engine; remove
     the replaced surface. An unused custom marker adds no font need; a reached
     marker is admitted before shaping. Missing fonts for consumed source analysis
     remain fatal, while wholly unselected/off-window owners remain unconsumed.
-12. **Bounded uniform font fit:** independently justified font metrics make 14/13px
-    fail and 12px fit in the 140px workflow. Check floor/nonfit/equal-size behavior,
-    checked large ranges, endpoint inclusion and at-most-32 distinct ordered sizes.
-    Do not assume all unvisited sizes fail or use binary search as the fit oracle.
-    Axis/guide groups retain one size and all members; independent TextPanel and
-    contrast roles retain separate choices. Verify selected line height/clearance
+12. **Configurable font fit:** use independent metrics/boundaries for a fitting
+    fractional size, real floor/upper/equal-size bounds, checked large ranges,
+    bounded growth and nonmonotone reflow. Prove finite algorithm behavior without
+    treating arbitrary integer samples or unvisited sizes as a nonfit oracle.
+    Independent fitting can select separate sizes; an explicit uniform axis/guide
+    group selects one size for its active set. Exercise floor refuse/hide/clip/show
+    and keep unrelated TextPanel/contrast roles independent. Verify line height/clearance
     without changing explicit pixel gaps, mark metrics or generator seed inputs.
-13. **Composition and policy order:** complete text at a permitted smaller size wins
-    over larger abbreviated text; ellipsis/floor/fixed angle/anchor combine under
-    actual assignment with a real terminal miss. Natural preference stays complete
+13. **Composition and policy order:** content-first defaults to complete smaller
+    text before abbreviation; preferred-size-first can select a larger abbreviated
+    view. Verify both on the same source/bounds, along with ellipsis/floor/angle/
+    anchor under actual assignment and a real terminal miss. Natural preference stays complete
     at preferred size; only explicit adaptation relaxes hard requirements. Cover
     parent range/geometry changes, exact-tick format suppression, stable NumericFormat
-    results across size trials, selected-label membership and optional-cache equality.
+    results across size trials, eligible/visible membership and optional-cache equality.
 14. **Frozen views and bounded coverage:** inspect painted text separately from
     nonpainting original-source SVG metadata; full-source string presence alone is
     not evidence that a label was drawn. Capture/outline/PNG/replay use retained
