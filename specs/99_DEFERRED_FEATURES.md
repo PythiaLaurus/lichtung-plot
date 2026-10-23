@@ -10,12 +10,12 @@ specifications, particularly [Theme](03_THEME_SYSTEM.md),
 [property ownership](04_VISUAL_PROPERTY_OWNERSHIP.md) and
 [guides](08_GUIDE_SYSTEM.md).
 
-DF7, DF8, DF9, DF10 and the residual scopes in DF5/DF6 are pending user
+DF7, DF8, DF9, DF10 and the residual scope in DF6 are pending user
 disposition. Their checkpoint is the next feature-scope discussion **after
 specification/documentation cleanup and before their successor implementation
 planning**. Extended numeric presentation/tick generation, explicit category-label
-selection, unified text controls, categorical-label angles and maximum-width/
-automatic-height sizing have been requested for implementation planning as
+selection, unified text controls with general anchoring/rotation/ellipsis/font fit,
+and maximum-width/automatic-height sizing have been requested for planning as
 described below. Public configuration naming follows the confirmed rule in
 [the implementation plan](91_IMPLEMENTATION_PLAN.md).
 No additional general audit is a prerequisite. Discussion itself does not admit
@@ -101,24 +101,41 @@ alignment are not yet consistent across authored text slots.
 **Requested planning:** unify authored plain-text input, explicit newlines, local
 complete typography and horizontal alignment, including independent TextPanel
 title/body controls. Expose single-string label resolution while preserving the
-existing default humanization and Raw/alias precedence. Add caller-selected
-categorical-label rotation with both presets and custom angles through one
-measurement/rendering route. See [the implementation plan](91_IMPLEMENTATION_PLAN.md).
-These APIs are not implementation evidence; update the current contracts when
-implemented and remove admitted scope here when its plan is approved.
+existing default humanization and Raw/alias precedence. Include all four additional
+controls as one text-system extension:
+
+- General anchoring: keep a two-line label's bottom-left corner at its data
+  reference or center a text block in its assigned cell as content/size changes.
+- Explicit rotation beyond category labels: a 30-degree point note, horizontal
+  y title and numeric/exact/category ticks share one canonical transform.
+- General ellipsis: a fixed-width guide shows `Treatment group…`, retaining full
+  original source, identity and original-versus-displayed mappings.
+- Automatic font shrink: a 140px title prefers 14px and permits a 10px floor;
+  layout selects a fitting candidate while independent text keeps its own policy.
+
+See [the implementation plan](91_IMPLEMENTATION_PLAN.md) for one TextLayout request
+beside complete TextTheme appearance, owner-specific attachments, reference/anchor
+geometry, Heatmap migration, Unicode source views, bounded size/group fitting,
+actual font admission and frozen publication. Ellipsis/shrink require the owner's
+explicit permission except for Heatmap's existing dense-grid elision default.
+These APIs are not implemented; update current contracts when implemented and
+remove admitted scope here when its plan is approved.
 
 Emergency word/identifier/grapheme splitting and caller-specified internal-break
 rules are rejected, rather than deferred candidates. Preserve ordinary Unicode
-wrapping and caller-authored breaks. Unbroken explicit/raw names stay intact when
-space is insufficient; default inferred-name humanization is preparation, never
-a fit alternative. The lasting boundary is in [layout](05_LAYOUT_SYSTEM.md).
+wrapping and caller-authored breaks. Complete explicit/raw names stay intact under
+the complete-text policy; explicit ellipsis derives a display view without adding
+internal-word line breaks or changing raw identity. Default humanization remains
+preparation, never a fit alternative. The lasting no-internal-break boundary is
+in [layout](05_LAYOUT_SYSTEM.md); the new controls remain planned, not current.
 
-**Residual checkpoint:** next feature-scope discussion for general anchoring,
-rotation beyond categorical labels, general ellipsis and automatic font shrink.
-Evaluate these separately from the requested common text/alignment/rotation scope,
-with concrete workflows, source preservation, physical versus bidi-logical meaning,
-actual ink and frozen output. A local
-extension must not imply automatic fit-driven angle selection or truncation.
+**Plan-review checkpoint:** review the integrated text proposal before implementing
+it, including typed reference/anchor meaning, absolute versus inherited angles,
+ellipsis Unicode/bidi/source provenance, complete-before-abbreviated font fitting,
+local size bounds/grouping, existing exact annotation styles, font admission and
+parent/root/cache/output consequences. This reviews the requested full scope, not
+a new feature-disposition discussion. Remove admitted scope when its plan is
+approved; automatic angle selection and emergency word splitting remain outside it.
 
 ## DF6: Broader Root Bounds
 
