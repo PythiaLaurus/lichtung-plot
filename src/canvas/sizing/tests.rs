@@ -89,7 +89,7 @@ fn recorded_heights_require_complete_numeric_and_guide_inputs_at_equal_width_and
     };
     let normalized = format
         .clone()
-        .with_negative_zero(NegativeZero::Normalize)
+        .negative_zero(NegativeZero::Normalize)
         .unwrap();
     assert_changed_height_inputs(
         make(format.clone(), format.clone()),

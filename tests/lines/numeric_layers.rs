@@ -435,8 +435,8 @@ fn public_tick_generation_counts_replace_complete_choices_and_automatic_resets()
     )
     .x_limits(0.0, 1.0)
     .y_limits(10.0, 14.0)
-    .x_tick_format(NumericFormat::default().with_prefix("X:").unwrap())
-    .y_tick_format(NumericFormat::default().with_prefix("Y:").unwrap())
+    .x_tick_format(NumericFormat::default().prefix("X:").unwrap())
+    .y_tick_format(NumericFormat::default().prefix("Y:").unwrap())
     .size(1000, 700);
     let selected = base
         .clone()

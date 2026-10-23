@@ -667,7 +667,7 @@ mod natural_sizing_tests {
                 crate::NumericPrecision::AdaptiveFractional { min: 0, max: 2 },
             )
             .unwrap()
-            .with_suffix(" u")
+            .suffix(" u")
             .unwrap(),
         )
         .facet(
@@ -748,8 +748,8 @@ mod natural_sizing_tests {
         let source = Plot::heatmap(crate::CategoryValues::new("x", ["a", "b", "a", "b", "a", "b", "a", "b"]).unwrap(),
             crate::CategoryValues::new("y", ["first", "first", "second", "second", "first", "first", "second", "second"]).unwrap(),
             crate::NumericValues::nullable("color response with independently measured legal word boundaries", [Some(1.01), None, Some(1.02), Some(1.03), Some(100.1), None, Some(250.2), Some(350.3)]))
-            .annotations(crate::HeatmapAnnotations::Values(crate::NumericFormat::new(crate::NumericNotation::Decimal, crate::NumericPrecision::AdaptiveFractional { min: 0, max: 2 }).unwrap().with_prefix("v=").unwrap()))
-            .color_label_format(crate::NumericFormat::default().with_prefix("g=").unwrap())
+            .annotations(crate::HeatmapAnnotations::Values(crate::NumericFormat::new(crate::NumericNotation::Decimal, crate::NumericPrecision::AdaptiveFractional { min: 0, max: 2 }).unwrap().prefix("v=").unwrap()))
+            .color_label_format(crate::NumericFormat::default().prefix("g=").unwrap())
             .facet(crate::FacetSpec::column(crate::CategoryValues::new("panel", ["first", "first", "first", "first", "second", "second", "second", "second"]).unwrap()).scales(crate::FacetScales::Fixed))
             .caption("First complete explanatory caption paragraph.\nSecond complete explanatory caption paragraph.").erase();
         for width in [None, Some(1200)] {

@@ -7,7 +7,7 @@ fn plot() -> Plot<lichtung_plot::kind::Scatter> {
     )
     .x_tick_format(
         lichtung_plot::NumericFormat::default()
-            .with_prefix("x=")
+            .prefix("x=")
             .unwrap(),
     )
     .y_tick_format(
@@ -16,7 +16,7 @@ fn plot() -> Plot<lichtung_plot::kind::Scatter> {
             lichtung_plot::NumericPrecision::Significant(3),
         )
         .unwrap()
-        .with_prefix("y=")
+        .prefix("y=")
         .unwrap(),
     )
     .title("Selectable scene text")

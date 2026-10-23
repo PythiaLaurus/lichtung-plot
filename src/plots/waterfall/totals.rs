@@ -231,7 +231,7 @@ mod tests {
             .unwrap();
         let limited_format = format
             .clone()
-            .with_precision(NumericPrecision::AdaptiveFractional { min: 0, max: 1 })
+            .precision(NumericPrecision::AdaptiveFractional { min: 0, max: 1 })
             .unwrap();
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let error = source()

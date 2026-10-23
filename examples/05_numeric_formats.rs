@@ -7,8 +7,8 @@ use lichtung_plot::{
 
 fn main() -> lichtung_plot::Result<()> {
     let percent = NumericFormat::new(NumericNotation::Decimal, NumericPrecision::Fractional(1))?
-        .with_decimal_scale(2)?
-        .with_suffix("%")?;
+        .decimal_scale(2)?
+        .suffix("%")?;
     let adaptive = NumericFormat::new(
         NumericNotation::Decimal,
         NumericPrecision::AdaptiveFractional { min: 0, max: 3 },
@@ -35,14 +35,14 @@ fn main() -> lichtung_plot::Result<()> {
         CategoryValues::new("term", ["a", "b"])?,
         CoefficientInput::estimates(NumericValues::new("estimate", [1.01, 1.02])),
     )
-    .estimate_labels(adaptive.with_suffix(" units")?)
+    .estimate_labels(adaptive.suffix(" units")?)
     .title("One complete estimate set");
     let totals = Plot::waterfall(
         CategoryValues::new("step", ["gain", "loss"])?,
         NumericValues::new("delta", [12.5, -2.0]),
         100.0,
     )
-    .total_format(NumericFormat::default().with_prefix("$")?)
+    .total_format(NumericFormat::default().prefix("$")?)
     .title("Verbatim names and numeric affixes");
     let forest = Plot::forest(
         CategoryValues::new("term", ["ratio"])?,

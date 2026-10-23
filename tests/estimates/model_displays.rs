@@ -55,7 +55,7 @@ fn coefficient_fixed_value_labels_are_point_only_and_default_is_inert() {
     };
     let default = render_svg(base(), "coefficient-default-labels").unwrap();
     let labeled = render_svg(
-        base().estimate_labels(NumericFormat::default().with_suffix(" units").unwrap()),
+        base().estimate_labels(NumericFormat::default().suffix(" units").unwrap()),
         "coefficient-value-labels",
     )
     .unwrap();

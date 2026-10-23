@@ -100,7 +100,7 @@ impl NumericFormat {
     pub(crate) fn format_singleton(&self, value: f64, power: bool) -> Result<String> {
         self.format_selected(
             value,
-            self.precision().bounds()?.0,
+            self.get_precision().bounds()?.0,
             power,
             &mut PowerFormatter::default(),
         )
@@ -115,7 +115,7 @@ impl NumericFormat {
     ) -> Result<String> {
         let resolved = self.resolve_at(digits)?;
         if power {
-            let operand = Log10Operand::new(value, self.decimal_scale())?;
+            let operand = Log10Operand::new(value, self.get_decimal_scale())?;
             Ok(formatter.format(&operand, &resolved)?.text)
         } else {
             super::decimal::format_finite(value, &resolved)
@@ -133,9 +133,9 @@ impl NumericFormat {
                 "numeric presentation members must be finite".into(),
             ));
         }
-        let (min, max) = self.precision().bounds()?;
+        let (min, max) = self.get_precision().bounds()?;
         let adaptive = matches!(
-            self.precision(),
+            self.get_precision(),
             NumericPrecision::AdaptiveFractional { .. }
                 | NumericPrecision::AdaptiveSignificant { .. }
         );
@@ -230,7 +230,7 @@ mod tests {
             ["1", "1", "1"]
         );
         let adaptive = exact
-            .with_precision(NumericPrecision::AdaptiveFractional { min: 0, max: 2 })
+            .precision(NumericPrecision::AdaptiveFractional { min: 0, max: 2 })
             .unwrap();
         let selected = adaptive.format_set(&values, false, true).unwrap().unwrap();
         assert_eq!(selected.precision, 2);

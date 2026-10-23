@@ -10,8 +10,8 @@ let percentage = NumericFormat::new(
     NumericNotation::Decimal,
     NumericPrecision::Fractional(1),
 )?
-.with_decimal_scale(2)?
-.with_suffix("%")?;
+.decimal_scale(2)?
+.suffix("%")?;
 # let _ = percentage;
 # Ok::<(), lichtung_plot::Error>(())
 ```
@@ -21,10 +21,12 @@ coordinates and colors are unchanged. Notation is Decimal/Scientific/Engineering
 Fractional precision accepts 0..=17, significant 1..=17; adaptive min/max must be
 ordered within matching bounds. Decimal scale accepts -324..=324.
 
-Readonly getters are notation, precision, decimal_scale, prefix, suffix,
-negative_zero and trailing_zeros; validated consuming `with_field` edits replace
-exactly one field. `new` supplies scale 0, no affixes, Preserve/Keep;
-Default adds Decimal/Fractional(2).
+Configure a property with its bare name, such as `precision(policy)` or
+`decimal_scale(2)`. Validated consuming edits replace exactly one field; paired
+readers are `get_notation()`, `get_precision()`, `get_decimal_scale()`,
+`get_prefix()`, `get_suffix()`, `get_negative_zero()` and `get_trailing_zeros()`.
+`new` supplies scale 0, no affixes, Preserve/Keep; Default adds
+Decimal/Fractional(2).
 Affixes are nonempty control-free literal text including spaces/combining marks.
 Reconstruct without an affix to omit it; no empty-string reset or format string.
 

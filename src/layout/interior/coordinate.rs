@@ -592,9 +592,9 @@ mod intrinsic_tests {
                     NumericPrecision::AdaptiveFractional { min: 2, max: 4 },
                 )
                 .unwrap()
-                .with_prefix("[")
+                .prefix("[")
                 .unwrap()
-                .with_suffix("]")
+                .suffix("]")
                 .unwrap(),
             )
             .y_tick_format(

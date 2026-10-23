@@ -266,7 +266,7 @@ pub(crate) fn horizontal_gutter_preference(
                 axes.ranges[1].1,
             ] {
                 if let Some(format) = &axes.specs[1].format {
-                    let (min, max) = format.precision().bounds()?;
+                    let (min, max) = format.get_precision().bounds()?;
                     let mut formatter = crate::numeric::power::certified::PowerFormatter::default();
                     for digits in min..=max {
                         include_label(&format.format_selected(

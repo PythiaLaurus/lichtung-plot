@@ -749,9 +749,9 @@ fn heatmap_annotations_use_default_and_chained_formats_with_contrasting_text() {
     let configured_svg = render(&data, |chart| {
         chart.annotations(HeatmapAnnotations::Values(
             NumericFormat::default()
-                .with_precision(NumericPrecision::Fractional(1))
+                .precision(NumericPrecision::Fractional(1))
                 .unwrap()
-                .with_suffix("%")
+                .suffix("%")
                 .unwrap(),
         ))
     })
@@ -946,9 +946,9 @@ fn heatmap_annotations_append_suffix_and_border_only_selected_cells() {
             .heatmap_highlight(data.highlight.clone().unwrap())
             .annotations(HeatmapAnnotations::Values(
                 NumericFormat::default()
-                    .with_precision(NumericPrecision::Fractional(1))
+                    .precision(NumericPrecision::Fractional(1))
                     .unwrap()
-                    .with_suffix("%")
+                    .suffix("%")
                     .unwrap(),
             ))
     })
@@ -990,7 +990,7 @@ fn heatmap_annotations_error_when_cells_cannot_fit_values() {
         .size(360, 220)
         .annotations(HeatmapAnnotations::Values(
             NumericFormat::default()
-                .with_precision(NumericPrecision::Fractional(4))
+                .precision(NumericPrecision::Fractional(4))
                 .unwrap(),
         ));
     let directory = tempfile::tempdir().unwrap();
@@ -1009,7 +1009,7 @@ fn heatmap_annotations_error_when_cells_cannot_fit_values() {
             .size(3000, 220)
             .annotations(HeatmapAnnotations::Values(
                 NumericFormat::default()
-                    .with_precision(NumericPrecision::Fractional(4))
+                    .precision(NumericPrecision::Fractional(4))
                     .unwrap(),
             ))
     })

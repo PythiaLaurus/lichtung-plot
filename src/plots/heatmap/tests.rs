@@ -101,7 +101,7 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
         policy
             .try_copy()
             .unwrap()
-            .with_negative_zero(crate::numeric::decimal::NegativeZero::Normalize)
+            .negative_zero(crate::numeric::decimal::NegativeZero::Normalize)
             .unwrap(),
     )
     .with_alpha(

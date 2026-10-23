@@ -194,8 +194,8 @@ explicit; a percent suffix alone only appends `%`.
 use lichtung_plot::{NumericFormat, NumericNotation, NumericPrecision, NumericValues, Plot};
 
 let percent = NumericFormat::new(NumericNotation::Decimal, NumericPrecision::Fractional(1))?
-    .with_decimal_scale(2)?
-    .with_suffix("%")?;
+    .decimal_scale(2)?
+    .suffix("%")?;
 let plot = Plot::scatter(
     NumericValues::new("time", [1.0, 2.0]),
     NumericValues::new("fraction", [0.125, 0.875]),

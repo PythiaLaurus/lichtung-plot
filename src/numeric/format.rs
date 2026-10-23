@@ -75,9 +75,9 @@ impl NumericPrecision {
 /// ```
 /// use lichtung_plot::{NumericFormat, NumericNotation, NumericPrecision, NumericValues, Plot};
 /// let percent = NumericFormat::new(NumericNotation::Decimal, NumericPrecision::Fractional(1))?
-///     .with_decimal_scale(2)?
-///     .with_suffix("%")?;
-/// assert_eq!(percent.decimal_scale(), 2);
+///     .decimal_scale(2)?
+///     .suffix("%")?;
+/// assert_eq!(percent.get_decimal_scale(), 2);
 /// let plot = Plot::scatter(NumericValues::new("x", [1.0, 2.0]),
 ///                          NumericValues::new("rate", [0.125, 0.875]))
 ///     .y_tick_format(percent);
@@ -93,7 +93,7 @@ impl NumericPrecision {
 /// ```compile_fail
 /// use lichtung_plot::numeric::format::NumericFormat;
 /// ```
-/// Construction edits use `with_field`; inspection does not mutate the value:
+/// Precision edits take an explicit precision policy:
 /// ```compile_fail
 /// use lichtung_plot::NumericFormat;
 /// let _ = NumericFormat::default().precision(2);
@@ -156,36 +156,36 @@ impl NumericFormat {
     }
 
     /// The selected decimal/exponent notation.
-    pub const fn notation(&self) -> NumericNotation {
+    pub const fn get_notation(&self) -> NumericNotation {
         self.notation
     }
     /// The exact precision or complete adaptive bounds.
-    pub const fn precision(&self) -> NumericPrecision {
+    pub const fn get_precision(&self) -> NumericPrecision {
         self.precision
     }
     /// The exact signed decimal display shift, from -324 through 324.
-    pub const fn decimal_scale(&self) -> i16 {
+    pub const fn get_decimal_scale(&self) -> i16 {
         self.decimal_scale
     }
     /// Literal text before the sign and number, or absence.
-    pub fn prefix(&self) -> Option<&str> {
+    pub fn get_prefix(&self) -> Option<&str> {
         self.prefix.as_deref()
     }
     /// Literal text immediately after the number, or absence.
-    pub fn suffix(&self) -> Option<&str> {
+    pub fn get_suffix(&self) -> Option<&str> {
         self.suffix.as_deref()
     }
     /// Actual and rounded negative-zero handling.
-    pub const fn negative_zero(&self) -> NegativeZero {
+    pub const fn get_negative_zero(&self) -> NegativeZero {
         self.negative_zero
     }
     /// Fractional trailing-zero handling.
-    pub const fn trailing_zeros(&self) -> TrailingZeros {
+    pub const fn get_trailing_zeros(&self) -> TrailingZeros {
         self.trailing_zeros
     }
 
     /// Replace notation while retaining and validating every other field.
-    pub fn with_notation(mut self, value: NumericNotation) -> Result<Self> {
+    pub fn notation(mut self, value: NumericNotation) -> Result<Self> {
         self.notation = value;
         self.validate()?;
         Ok(self)
@@ -193,7 +193,7 @@ impl NumericFormat {
 
     /// Replace precision; fractional bounds are 0..=17 and significant bounds 1..=17.
     /// Adaptive `min` must not exceed `max`.
-    pub fn with_precision(mut self, value: NumericPrecision) -> Result<Self> {
+    pub fn precision(mut self, value: NumericPrecision) -> Result<Self> {
         self.precision = value;
         self.validate()?;
         Ok(self)
@@ -201,7 +201,7 @@ impl NumericFormat {
 
     /// Replace the exact decimal display shift within -324..=324.
     /// This never changes scientific coordinates or color mapping.
-    pub fn with_decimal_scale(mut self, value: i16) -> Result<Self> {
+    pub fn decimal_scale(mut self, value: i16) -> Result<Self> {
         self.decimal_scale = value;
         self.validate()?;
         Ok(self)
@@ -209,7 +209,7 @@ impl NumericFormat {
 
     /// Replace the literal prefix with nonempty, control-free text.
     /// Spaces and combining marks are preserved exactly.
-    pub fn with_prefix(mut self, value: impl Into<String>) -> Result<Self> {
+    pub fn prefix(mut self, value: impl Into<String>) -> Result<Self> {
         self.prefix = Some(value.into());
         self.validate()?;
         Ok(self)
@@ -217,21 +217,21 @@ impl NumericFormat {
 
     /// Replace the literal suffix with nonempty, control-free text.
     /// No scaling or spacing is inferred from its contents.
-    pub fn with_suffix(mut self, value: impl Into<String>) -> Result<Self> {
+    pub fn suffix(mut self, value: impl Into<String>) -> Result<Self> {
         self.suffix = Some(value.into());
         self.validate()?;
         Ok(self)
     }
 
     /// Replace handling of actual or rounded negative zero.
-    pub fn with_negative_zero(mut self, value: NegativeZero) -> Result<Self> {
+    pub fn negative_zero(mut self, value: NegativeZero) -> Result<Self> {
         self.negative_zero = value;
         self.validate()?;
         Ok(self)
     }
 
     /// Replace fractional zero trimming; integral place-value zeros are retained.
-    pub fn with_trailing_zeros(mut self, value: TrailingZeros) -> Result<Self> {
+    pub fn trailing_zeros(mut self, value: TrailingZeros) -> Result<Self> {
         self.trailing_zeros = value;
         self.validate()?;
         Ok(self)
@@ -282,12 +282,12 @@ impl NumericFormat {
             sources.push(text);
             Ok(())
         };
-        if let Some(prefix) = self.prefix() {
+        if let Some(prefix) = self.get_prefix() {
             for first in ["-", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"] {
                 join(prefix, first)?;
             }
         }
-        if let Some(suffix) = self.suffix() {
+        if let Some(suffix) = self.get_suffix() {
             for last in ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"] {
                 join(last, suffix)?;
             }
@@ -310,7 +310,7 @@ impl NumericFormat {
         round.observe_count(usize::from(min))?;
         round.observe_count(usize::from(max))?;
         round.observe_number(f64::from(self.decimal_scale))?;
-        for affix in [self.prefix(), self.suffix()] {
+        for affix in [self.get_prefix(), self.get_suffix()] {
             round.observe_count(usize::from(affix.is_some()))?;
             if let Some(text) = affix {
                 round.observe_string(text)?;
@@ -329,11 +329,11 @@ mod tests {
     fn owned_policy_edits_preserve_literal_affixes_and_semantic_precision_bounds() {
         let format = NumericFormat::new(NumericNotation::Decimal, NumericPrecision::Fractional(2))
             .unwrap()
-            .with_decimal_scale(2)
+            .decimal_scale(2)
             .unwrap()
-            .with_prefix("[")
+            .prefix("[")
             .unwrap()
-            .with_suffix("\u{0301} units]")
+            .suffix("\u{0301} units]")
             .unwrap();
         assert_eq!(
             format.format_singleton(0.125, false).unwrap(),
@@ -341,7 +341,7 @@ mod tests {
         );
         let normalized = format
             .clone()
-            .with_negative_zero(NegativeZero::Normalize)
+            .negative_zero(NegativeZero::Normalize)
             .unwrap();
         assert_ne!(format, normalized);
         assert_eq!(
@@ -353,13 +353,13 @@ mod tests {
             "[0.00\u{0301} units]"
         );
         let engineering = normalized
-            .with_notation(NumericNotation::Engineering)
+            .notation(NumericNotation::Engineering)
             .unwrap()
-            .with_precision(NumericPrecision::Significant(3))
+            .precision(NumericPrecision::Significant(3))
             .unwrap()
-            .with_decimal_scale(0)
+            .decimal_scale(0)
             .unwrap()
-            .with_trailing_zeros(TrailingZeros::Trim)
+            .trailing_zeros(TrailingZeros::Trim)
             .unwrap();
         assert_eq!(
             engineering.format_singleton(999.5, false).unwrap(),
@@ -372,7 +372,7 @@ mod tests {
 
         let adaptive = format
             .clone()
-            .with_precision(NumericPrecision::AdaptiveFractional { min: 1, max: 3 })
+            .precision(NumericPrecision::AdaptiveFractional { min: 1, max: 3 })
             .unwrap();
         assert!(adaptive.resolve_at(0).is_err());
         assert!(adaptive.resolve_at(4).is_err());
@@ -390,25 +390,19 @@ mod tests {
             NumericPrecision::AdaptiveSignificant { min: 1, max: 18 },
         ] {
             assert!(matches!(
-                format.clone().with_precision(precision),
+                format.clone().precision(precision),
                 Err(Error::Data(_))
             ));
         }
         for scale in [-325, 325] {
             assert!(matches!(
-                format.clone().with_decimal_scale(scale),
+                format.clone().decimal_scale(scale),
                 Err(Error::Data(_))
             ));
         }
         for affix in ["", "\n"] {
-            assert!(matches!(
-                format.clone().with_prefix(affix),
-                Err(Error::Data(_))
-            ));
-            assert!(matches!(
-                format.clone().with_suffix(affix),
-                Err(Error::Data(_))
-            ));
+            assert!(matches!(format.clone().prefix(affix), Err(Error::Data(_))));
+            assert!(matches!(format.clone().suffix(affix), Err(Error::Data(_))));
         }
     }
 }

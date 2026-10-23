@@ -250,11 +250,7 @@ fn matrix_root_keeps_native_cells_hue_guide_and_complete_prose() {
 fn mixed_canvas(caption: &str, replace_children: bool) -> Canvas {
     let child = |name: &str| {
         let plot = scatter()
-            .x_tick_format(
-                NumericFormat::default()
-                    .with_prefix(format!("{name}:"))
-                    .unwrap(),
-            )
+            .x_tick_format(NumericFormat::default().prefix(format!("{name}:")).unwrap())
             .hue(
                 CategoryValues::new("treatment", ["Control", "Exposed", "Control", "Exposed"])
                     .unwrap(),

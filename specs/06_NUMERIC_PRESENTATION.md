@@ -25,8 +25,9 @@ and sealed text preparation in [layout](05_LAYOUT_SYSTEM.md).
 ## NumericFormat Value
 
 NumericFormat is opaque Clone/Debug/PartialEq/Eq with seven private normalized
-fields. Getter names are the field names; consuming `with_field` edits return
-Result and replace only their field, validating the complete result.
+fields. A consuming `field(value)` edit returns Result and replaces only its
+field, validating the complete result. Its paired `get_field()` reader retains
+the existing borrowed/copy result and const-call capability where applicable.
 
 | Field | Input contract |
 | --- | --- |
@@ -41,7 +42,7 @@ Fractional bounds are 0..=17, significant 1..=17, adaptive min<=max in matching
 bounds. `new(notation,precision)` supplies scale 0, no affixes, Preserve and Keep.
 Default is Decimal/Fractional(2) with those same fields. Prefix/suffix retain exact
 bytes including spaces/combining marks: no trim, normalization, inferred units or
-inserted spacing. `with_prefix/with_suffix` accept supplied strings, not an
+inserted spacing. `prefix(value)` / `suffix(value)` accept supplied strings, not an
 empty-string reset; reconstruct without an affix to omit it. Equality includes
 all fields and bounds, absent/present affixes and literal bytes.
 

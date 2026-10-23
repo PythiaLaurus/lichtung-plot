@@ -102,13 +102,11 @@ fn point_alpha_retains_source_order_color_samples_and_coincident_packing_even_at
 #[test]
 fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() {
     let format = crate::numeric::format::NumericFormat::default()
-        .with_precision(
-            crate::numeric::format::NumericPrecision::AdaptiveFractional { min: 0, max: 2 },
-        )
+        .precision(crate::numeric::format::NumericPrecision::AdaptiveFractional { min: 0, max: 2 })
         .unwrap()
-        .with_decimal_scale(2)
+        .decimal_scale(2)
         .unwrap()
-        .with_suffix("%")
+        .suffix("%")
         .unwrap();
     let colors = [
         OpaqueColor::rgb(10, 20, 30),

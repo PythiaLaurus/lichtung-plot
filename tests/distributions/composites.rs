@@ -178,9 +178,9 @@ fn precomputed_raincloud_series_type_checks_but_preflight_rejects_it() {
 #[test]
 fn supplied_histogram_geometry_matches_sample_labels_and_recorded_marks() {
     let format = lichtung_plot::NumericFormat::default()
-        .with_decimal_scale(2)
+        .decimal_scale(2)
         .unwrap()
-        .with_suffix("%")
+        .suffix("%")
         .unwrap();
     let values = [0.0_f64, 0.5, 1.5, 2.0];
     let sample = histogram_plot(

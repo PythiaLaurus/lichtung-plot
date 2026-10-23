@@ -1663,7 +1663,7 @@ mod tests {
                         crate::NumericPrecision::Fractional(0),
                     )
                     .unwrap()
-                    .with_suffix("\u{0301}")
+                    .suffix("\u{0301}")
                     .unwrap();
                     let mut requirements = Vec::new();
                     let source = if formatted {
@@ -2039,7 +2039,7 @@ mod tests {
     #[test]
     fn generated_numeric_affix_units_choose_whole_faces_before_sealing() {
         let format = crate::numeric::format::NumericFormat::default()
-            .with_suffix("\u{0301}")
+            .suffix("\u{0301}")
             .unwrap();
         let mut appearance = appearance("Digits", TextWeight::Normal);
         appearance.stack = canonical::named_stack(&["Digits", "Marks", "Whole"]);
@@ -2102,7 +2102,7 @@ mod tests {
         )
         .x_tick_format(
             crate::numeric::format::NumericFormat::default()
-                .with_suffix("\u{10ffff}")
+                .suffix("\u{10ffff}")
                 .unwrap(),
         )
         .x_ticks(vec![crate::layout::AxisTick::new(1.0, "exact")])
@@ -2164,7 +2164,7 @@ mod tests {
             )
             .annotations(crate::HeatmapAnnotations::Values(
                 crate::NumericFormat::default()
-                    .with_precision(crate::NumericPrecision::AdaptiveFractional { min: 0, max: 2 })
+                    .precision(crate::NumericPrecision::AdaptiveFractional { min: 0, max: 2 })
                     .unwrap(),
             ))
             .with_alpha(
@@ -2323,7 +2323,7 @@ mod tests {
         )
         .annotations(crate::HeatmapAnnotations::Values(
             crate::NumericFormat::default()
-                .with_precision(crate::NumericPrecision::Fractional(2))
+                .precision(crate::NumericPrecision::Fractional(2))
                 .unwrap(),
         ))
         .erase();
@@ -2422,9 +2422,9 @@ mod tests {
         )
         .estimate_labels(
             crate::NumericFormat::default()
-                .with_precision(crate::NumericPrecision::AdaptiveFractional { min: 0, max: 2 })
+                .precision(crate::NumericPrecision::AdaptiveFractional { min: 0, max: 2 })
                 .unwrap()
-                .with_suffix("\u{0301} units")
+                .suffix("\u{0301} units")
                 .unwrap(),
         )
         .estimate_status([

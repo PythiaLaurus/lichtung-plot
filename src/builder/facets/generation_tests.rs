@@ -18,12 +18,12 @@ fn generation_copy_and_composed_identity_include_both_axes() {
         .y_tick_generation(TickGeneration::additive(1.0).unwrap())
         .x_tick_format(
             crate::numeric::format::NumericFormat::default()
-                .with_prefix("x ")
+                .prefix("x ")
                 .unwrap(),
         )
         .y_tick_format(
             crate::numeric::format::NumericFormat::default()
-                .with_suffix(" y")
+                .suffix(" y")
                 .unwrap(),
         )
         .erase();
@@ -178,7 +178,7 @@ fn generation_rendering_and_exact_precedence_are_cache_independent() {
             .y_tick_generation(TickGeneration::additive(1.0).unwrap())
             .x_tick_format(
                 crate::numeric::format::NumericFormat::default()
-                    .with_suffix(" u")
+                    .suffix(" u")
                     .unwrap(),
             );
         if exact {

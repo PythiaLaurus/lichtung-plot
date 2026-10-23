@@ -507,27 +507,24 @@ mod tests {
             let formats = [
                 format
                     .clone()
-                    .with_notation(NumericNotation::Scientific)
+                    .notation(NumericNotation::Scientific)
                     .unwrap(),
                 format
                     .clone()
-                    .with_precision(NumericPrecision::Significant(2))
+                    .precision(NumericPrecision::Significant(2))
                     .unwrap(),
                 format
                     .clone()
-                    .with_precision(NumericPrecision::AdaptiveFractional { min: 2, max: 3 })
+                    .precision(NumericPrecision::AdaptiveFractional { min: 2, max: 3 })
                     .unwrap(),
-                format.clone().with_decimal_scale(1).unwrap(),
-                format.clone().with_prefix("raw ").unwrap(),
-                format.clone().with_suffix(" u").unwrap(),
+                format.clone().decimal_scale(1).unwrap(),
+                format.clone().prefix("raw ").unwrap(),
+                format.clone().suffix(" u").unwrap(),
                 format
                     .clone()
-                    .with_negative_zero(NegativeZero::Normalize)
+                    .negative_zero(NegativeZero::Normalize)
                     .unwrap(),
-                format
-                    .clone()
-                    .with_trailing_zeros(TrailingZeros::Trim)
-                    .unwrap(),
+                format.clone().trailing_zeros(TrailingZeros::Trim).unwrap(),
             ];
             let mut variants = formats.map(|format| make(format).erase()).to_vec();
             for generation in [

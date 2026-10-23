@@ -42,8 +42,8 @@ fn linear(generation: TickGeneration) -> Plot<crate::kind::Scatter> {
     )
     .x_tick_generation(generation)
     .y_tick_generation(TickGeneration::maximum(3).unwrap())
-    .x_tick_format(NumericFormat::default().with_prefix("X:").unwrap())
-    .y_tick_format(NumericFormat::default().with_prefix("Y:").unwrap())
+    .x_tick_format(NumericFormat::default().prefix("X:").unwrap())
+    .y_tick_format(NumericFormat::default().prefix("Y:").unwrap())
     .y_limits(0.0, 1.0)
 }
 
@@ -66,7 +66,7 @@ fn forest(generation: TickGeneration) -> Plot<crate::kind::Forest> {
             crate::NumericPrecision::Significant(3),
         )
         .unwrap()
-        .with_prefix("F:")
+        .prefix("F:")
         .unwrap(),
     )
 }
@@ -97,7 +97,7 @@ impl Root {
                         0,
                         1,
                         linear(TickGeneration::maximum(3).unwrap())
-                            .x_tick_format(NumericFormat::default().with_prefix("R:").unwrap()),
+                            .x_tick_format(NumericFormat::default().prefix("R:").unwrap()),
                     )
                     .unwrap()
                     .x_range_group([(0, 0), (0, 1)])
@@ -113,7 +113,7 @@ impl Root {
                         0,
                         1,
                         forest(TickGeneration::maximum(3).unwrap())
-                            .x_tick_format(NumericFormat::default().with_prefix("R:").unwrap()),
+                            .x_tick_format(NumericFormat::default().prefix("R:").unwrap()),
                     )
                     .unwrap(),
             )),

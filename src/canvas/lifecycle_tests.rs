@@ -192,7 +192,7 @@ fn shared_numeric_guides_resolve_final_sets_and_reject_equal_text_policy_conflic
     };
     let format = NumericFormat::new(NumericNotation::Decimal, NumericPrecision::Fractional(0))
         .unwrap()
-        .with_suffix(" u")
+        .suffix(" u")
         .unwrap();
     let plot = |values, format| {
         Plot::heatmap(
@@ -243,10 +243,7 @@ fn shared_numeric_guides_resolve_final_sets_and_reject_equal_text_policy_conflic
         .panel(
             0,
             0,
-            plot(
-                [1.01, 1.02],
-                format.clone().with_suffix("\u{10ffff}").unwrap(),
-            ),
+            plot([1.01, 1.02], format.clone().suffix("\u{10ffff}").unwrap()),
         )
         .unwrap()
         .preflight_plan()
@@ -254,20 +251,20 @@ fn shared_numeric_guides_resolve_final_sets_and_reject_equal_text_policy_conflic
     for different in [
         format
             .clone()
-            .with_notation(NumericNotation::Engineering)
+            .notation(NumericNotation::Engineering)
             .unwrap(),
         format
             .clone()
-            .with_precision(NumericPrecision::AdaptiveFractional { min: 0, max: 2 })
+            .precision(NumericPrecision::AdaptiveFractional { min: 0, max: 2 })
             .unwrap(),
-        format.clone().with_decimal_scale(2).unwrap(),
-        format.clone().with_prefix("unit ").unwrap(),
-        format.clone().with_suffix(" other").unwrap(),
+        format.clone().decimal_scale(2).unwrap(),
+        format.clone().prefix("unit ").unwrap(),
+        format.clone().suffix(" other").unwrap(),
         format
             .clone()
-            .with_negative_zero(NegativeZero::Normalize)
+            .negative_zero(NegativeZero::Normalize)
             .unwrap(),
-        format.with_trailing_zeros(TrailingZeros::Trim).unwrap(),
+        format.trailing_zeros(TrailingZeros::Trim).unwrap(),
     ] {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let error = canvas(different)
