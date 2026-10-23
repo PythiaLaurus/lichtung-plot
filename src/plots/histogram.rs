@@ -62,9 +62,9 @@ pub(crate) fn intrinsic_body_minimum(
     }
     let style = theme
         .marks
-        .fills()
-        .bodies()
-        .histogram_bin()
+        .get_fills()
+        .get_bodies()
+        .get_histogram_bin()
         .backend_style((0, 0, 0));
     let fill = fill_ink_outset(&style, prepared.bin_alphas.iter().copied())?;
     let curve = if prepared
@@ -76,9 +76,9 @@ pub(crate) fn intrinsic_body_minimum(
             prepared.curve_alpha,
             theme
                 .marks
-                .strokes()
-                .curves()
-                .histogram_curve()
+                .get_strokes()
+                .get_curves()
+                .get_histogram_curve()
                 .backend_style(),
         ))?
     } else {
@@ -90,9 +90,9 @@ pub(crate) fn intrinsic_body_minimum(
         crate::render::geometry::line_ink_width(
             &theme
                 .marks
-                .strokes()
-                .curves()
-                .histogram_rug()
+                .get_strokes()
+                .get_curves()
+                .get_histogram_rug()
                 .backend_style(),
         )?
     };
@@ -119,7 +119,7 @@ impl HistogramSemantics {
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
-        let fill = theme.marks.fills().bodies().histogram_bin();
+        let fill = theme.marks.get_fills().get_bodies().get_histogram_bin();
         for (bin, &alpha) in self.bins.iter().zip(&self.bin_alphas) {
             guide.fill(
                 AlphaGlyphRole::Fill,
@@ -139,9 +139,9 @@ impl HistogramSemantics {
                 self.curve_alpha,
                 theme
                     .marks
-                    .strokes()
-                    .curves()
-                    .histogram_curve()
+                    .get_strokes()
+                    .get_curves()
+                    .get_histogram_curve()
                     .backend_style(),
                 false,
             )?;
@@ -213,7 +213,12 @@ impl HistogramSemantics {
                     default = crate::theme::Theme::publication();
                     &default
                 };
-                let top = maximum * owner.marks().extents().sampled_rug_height().as_f64();
+                let top = maximum
+                    * owner
+                        .marks()
+                        .get_extents()
+                        .get_sampled_rug_height()
+                        .as_f64();
                 if !top.is_finite() {
                     return Err(Error::Render(
                         "sampled rug height exceeds finite geometry".into(),
@@ -376,9 +381,13 @@ pub(crate) fn project(
         let (x, y) = layout.projection.project(x, y);
         Point2D::new(x, y)
     };
-    let fill =
-        theme.marks.fills().bodies().histogram_bin().backend_style(
-            crate::theme::AccentColors::resolve(theme.marks.accents(), 1)?.color(0)?,
+    let fill = theme
+        .marks
+        .get_fills()
+        .get_bodies()
+        .get_histogram_bin()
+        .backend_style(
+            crate::theme::AccentColors::resolve(theme.marks.get_accents(), 1)?.color(0)?,
         );
     let payload = HistogramPayload {
         clip: layout.projection.panel_box(),
@@ -437,16 +446,16 @@ pub(crate) fn project(
             prepared.curve_alpha,
             theme
                 .marks
-                .strokes()
-                .curves()
-                .histogram_curve()
+                .get_strokes()
+                .get_curves()
+                .get_histogram_curve()
                 .backend_style(),
         ),
         rug_style: theme
             .marks
-            .strokes()
-            .curves()
-            .histogram_rug()
+            .get_strokes()
+            .get_curves()
+            .get_histogram_rug()
             .backend_style(),
         domain_expansions: [None; 2],
     };
@@ -898,58 +907,58 @@ mod tests {
         let baseline = chart.intrinsic_body_minimum(&theme).unwrap();
         let curve = theme
             .marks
-            .strokes()
-            .curves()
-            .histogram_curve()
+            .get_strokes()
+            .get_curves()
+            .get_histogram_curve()
             .clone()
             .width(140.0)
             .unwrap();
         let rug = theme
             .marks
-            .strokes()
-            .curves()
-            .histogram_rug()
+            .get_strokes()
+            .get_curves()
+            .get_histogram_rug()
             .clone()
             .width(140.0)
             .unwrap();
         let curves = theme
             .marks
-            .strokes()
-            .curves()
+            .get_strokes()
+            .get_curves()
             .clone()
-            .with_histogram_curve(curve)
+            .histogram_curve(curve)
             .unwrap()
-            .with_histogram_rug(rug)
+            .histogram_rug(rug)
             .unwrap();
-        let strokes = theme.marks.strokes().clone().with_curves(curves).unwrap();
-        theme.marks = theme.marks.clone().with_strokes(strokes).unwrap();
+        let strokes = theme.marks.get_strokes().clone().curves(curves).unwrap();
+        theme.marks = theme.marks.clone().strokes(strokes).unwrap();
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), baseline);
         let outline = crate::theme::DataOutlineTheme::mapped(140.0, 255).unwrap();
         let bin = theme
             .marks
-            .fills()
-            .bodies()
-            .histogram_bin()
+            .get_fills()
+            .get_bodies()
+            .get_histogram_bin()
             .clone()
             .outline(Some(outline))
             .unwrap();
         let bodies = theme
             .marks
-            .fills()
-            .bodies()
+            .get_fills()
+            .get_bodies()
             .clone()
-            .with_histogram_bin(bin)
+            .histogram_bin(bin)
             .unwrap();
-        let fills = theme.marks.fills().clone().with_bodies(bodies).unwrap();
-        theme.marks = theme.marks.clone().with_fills(fills).unwrap();
+        let fills = theme.marks.get_fills().clone().bodies(bodies).unwrap();
+        theme.marks = theme.marks.clone().fills(fills).unwrap();
         let styled = chart.intrinsic_body_minimum(&theme).unwrap();
         assert_eq!(styled.0.to_bits(), baseline.0.to_bits());
         assert!(styled.1 > 140.0);
         let bin = theme
             .marks
-            .fills()
-            .bodies()
-            .histogram_bin()
+            .get_fills()
+            .get_bodies()
+            .get_histogram_bin()
             .clone()
             .outline(Some(crate::theme::DataOutlineTheme::fixed(
                 crate::theme::OutlineTheme::new(crate::theme::Color::rgba(1, 2, 3, 0), 140.0)
@@ -958,13 +967,13 @@ mod tests {
             .unwrap();
         let bodies = theme
             .marks
-            .fills()
-            .bodies()
+            .get_fills()
+            .get_bodies()
             .clone()
-            .with_histogram_bin(bin)
+            .histogram_bin(bin)
             .unwrap();
-        let fills = theme.marks.fills().clone().with_bodies(bodies).unwrap();
-        theme.marks = theme.marks.clone().with_fills(fills).unwrap();
+        let fills = theme.marks.get_fills().clone().bodies(bodies).unwrap();
+        theme.marks = theme.marks.clone().fills(fills).unwrap();
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), baseline);
 
         let source = sample()
@@ -993,11 +1002,11 @@ mod tests {
         let original = crate::theme::Theme::publication();
         let extents = original
             .marks()
-            .extents()
+            .get_extents()
             .clone()
-            .with_sampled_rug_height(crate::theme::RelativeSpacing::new(2.0).unwrap())
+            .sampled_rug_height(crate::theme::RelativeSpacing::new(2.0).unwrap())
             .unwrap();
-        let marks = original.marks().clone().with_extents(extents).unwrap();
+        let marks = original.marks().clone().extents(extents).unwrap();
         let edited = original.customize().marks(marks).build().unwrap();
         let before = HistogramSemantics::new(&source, source.data(), Some(&original)).unwrap();
         let after = HistogramSemantics::new(&source, source.data(), Some(&edited)).unwrap();
@@ -1066,9 +1075,9 @@ mod tests {
             payload.rug_style,
             theme
                 .marks
-                .strokes()
-                .curves()
-                .histogram_rug()
+                .get_strokes()
+                .get_curves()
+                .get_histogram_rug()
                 .backend_style()
         );
         assert_eq!(

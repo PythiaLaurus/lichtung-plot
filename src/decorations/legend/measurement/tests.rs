@@ -263,19 +263,19 @@ fn factorized_fixture() -> (Arc<PreparedGuide>, ResolvedTheme) {
     let mut theme = crate::Theme::publication().resolve().unwrap();
     let points = theme
         .marks
-        .points()
+        .get_points()
         .clone()
-        .with_radii(
+        .radii(
             theme
                 .marks
-                .points()
-                .radii()
+                .get_points()
+                .get_radii()
                 .clone()
-                .with_interaction(23)
+                .interaction(23)
                 .unwrap(),
         )
         .unwrap()
-        .with_primary(
+        .primary(
             crate::PointTheme::new(
                 17,
                 PointShape::Circle,
@@ -290,7 +290,7 @@ fn factorized_fixture() -> (Arc<PreparedGuide>, ResolvedTheme) {
             .unwrap(),
         )
         .unwrap();
-    theme.marks = theme.marks.clone().with_points(points).unwrap();
+    theme.marks = theme.marks.clone().points(points).unwrap();
     let descriptor = PreparedGuide::prepare_for_test(&plot, &theme, LegendComposition::Separate)
         .unwrap()
         .unwrap();

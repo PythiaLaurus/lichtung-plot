@@ -15,7 +15,7 @@ fn selected_role_padding_is_retained_for_fit_and_reassignment() {
     theme.annotations = theme
         .annotations
         .clone()
-        .with_panel_text_padding(crate::theme::RelativeSpacing::ratio(1, 1).unwrap())
+        .panel_text_padding(crate::theme::RelativeSpacing::ratio(1, 1).unwrap())
         .unwrap();
     let chart = inputs.attach_with_guides_for_test(source, &theme).unwrap();
     let panel = PanelBox::new(10.0, 410.0, 20.0, 320.0);

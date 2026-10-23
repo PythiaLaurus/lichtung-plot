@@ -6,28 +6,28 @@ macro_rules! field_type {
 }
 
 macro_rules! field_getter {
-    (borrow $field:ident: $ty:ty) => {
+    (borrow $field:ident: $ty:ty => $get:ident) => {
         #[doc = concat!("Borrow the complete `", stringify!($field), "` value.")]
-        pub fn $field(&self) -> &$ty {
+        pub fn $get(&self) -> &$ty {
             &self.$field
         }
     };
-    (copy $field:ident: $ty:ty) => {
+    (copy $field:ident: $ty:ty => $get:ident) => {
         #[doc = concat!("Inspect `", stringify!($field), "`.")]
-        pub fn $field(&self) -> $ty {
+        pub fn $get(&self) -> $ty {
             self.$field
         }
     };
-    (optional $field:ident: $ty:ty) => {
+    (optional $field:ident: $ty:ty => $get:ident) => {
         #[doc = concat!("Borrow the optional `", stringify!($field), "` value; absence is structural.")]
-        pub fn $field(&self) -> Option<&$ty> {
+        pub fn $get(&self) -> Option<&$ty> {
             self.$field.as_ref()
         }
     };
 }
 
 macro_rules! validated_component {
-    ($name:ident { $($kind:ident $field:ident: $ty:ty => $edit:ident),+ $(,)? }
+    ($name:ident { $($kind:ident $field:ident: $ty:ty => $get:ident),+ $(,)? }
         validate |$value:ident| $validation:block) => {
         #[derive(Clone, Debug, PartialEq)]
         #[doc = concat!("Complete immutable `", stringify!($name), "` appearance component.")]
@@ -52,10 +52,10 @@ macro_rules! validated_component {
             }
 
             $(
-                super::component::field_getter!($kind $field: $ty);
+                super::component::field_getter!($kind $field: $ty => $get);
 
                 #[doc = concat!("Replace only `", stringify!($field), "`, validating the complete resulting component.")]
-                pub fn $edit(mut self, value: super::component::field_type!($kind $ty)) -> $crate::Result<Self> {
+                pub fn $field(mut self, value: super::component::field_type!($kind $ty)) -> $crate::Result<Self> {
                     self.$field = value;
                     self.validate()?;
                     Ok(self)

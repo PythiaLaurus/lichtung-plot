@@ -54,7 +54,11 @@ pub(crate) fn intrinsic_body_minimum(
             "Qq primary quantile pairs are incomplete".into(),
         ));
     }
-    let style = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().qq());
+    let style = chart.point_style(
+        theme,
+        (0, 0, 0),
+        theme.marks.get_points().get_radii().get_qq(),
+    );
     let (width, height) = point_ink(
         &style,
         prepared
@@ -70,9 +74,9 @@ pub(crate) fn intrinsic_body_minimum(
             prepared.line_alpha,
             theme
                 .marks
-                .strokes()
-                .references()
-                .qq_reference()
+                .get_strokes()
+                .get_references()
+                .get_qq_reference()
                 .backend_style(),
         ))?
     } else {
@@ -100,7 +104,11 @@ impl PreparedQq {
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
-        let point = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().qq());
+        let point = chart.point_style(
+            theme,
+            (0, 0, 0),
+            theme.marks.get_points().get_radii().get_qq(),
+        );
         for &alpha in &self.alphas {
             guide.point(AlphaGlyphRole::Primary, alpha, point.clone(), false)?;
         }
@@ -112,9 +120,9 @@ impl PreparedQq {
                 self.line_alpha,
                 theme
                     .marks
-                    .strokes()
-                    .references()
-                    .qq_reference()
+                    .get_strokes()
+                    .get_references()
+                    .get_qq_reference()
                     .backend_style(),
                 false,
             )?;
@@ -229,7 +237,11 @@ pub(crate) fn measure_marks(
     let projection = layout.projection.clone();
     let mut result = project(chart, prepared, layout, theme)?;
     if let Some(ink) = point_ink(
-        &chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().qq()),
+        &chart.point_style(
+            theme,
+            (0, 0, 0),
+            theme.marks.get_points().get_radii().get_qq(),
+        ),
         prepared
             .theoretical
             .iter()
@@ -271,17 +283,17 @@ pub(crate) fn project(
             prepared.line_alpha,
             theme
                 .marks
-                .strokes()
-                .references()
-                .qq_reference()
+                .get_strokes()
+                .get_references()
+                .get_qq_reference()
                 .backend_style(),
         ),
         domain_expansions: [None; 2],
     };
     let point_style = chart.point_style(
         theme,
-        crate::theme::AccentColors::resolve(theme.marks.accents(), 1)?.color(0)?,
-        theme.marks.points().radii().qq(),
+        crate::theme::AccentColors::resolve(theme.marks.get_accents(), 1)?.color(0)?,
+        theme.marks.get_points().get_radii().get_qq(),
     );
 
     if let Some(line) = prepared.line {
@@ -615,65 +627,65 @@ mod tests {
         let chart = inputs.attach(source).unwrap();
         let mut theme = crate::Theme::publication().resolve().unwrap();
         let before = chart.intrinsic_body_minimum(&theme).unwrap();
-        let radii = theme.marks.points().radii().clone().with_qq(54).unwrap();
-        let points = theme.marks.points().clone().with_radii(radii).unwrap();
-        theme.marks = theme.marks.clone().with_points(points).unwrap();
+        let radii = theme.marks.get_points().get_radii().clone().qq(54).unwrap();
+        let points = theme.marks.get_points().clone().radii(radii).unwrap();
+        theme.marks = theme.marks.clone().points(points).unwrap();
         let sized = chart.intrinsic_body_minimum(&theme).unwrap();
         assert_eq!(sized.0.to_bits(), before.0.to_bits());
         assert_eq!(sized.1.to_bits(), (108.0_f64 + 5530.0 / 1024.0).to_bits());
-        let mut primary = theme.marks.points().primary().clone();
+        let mut primary = theme.marks.get_points().get_primary().clone();
         primary.fill_alpha = 0;
         primary.outline.as_mut().unwrap().color = crate::theme::Color::rgba(255, 255, 255, 0);
-        let points = theme.marks.points().clone().with_primary(primary).unwrap();
-        theme.marks = theme.marks.clone().with_points(points).unwrap();
+        let points = theme.marks.get_points().clone().primary(primary).unwrap();
+        theme.marks = theme.marks.clone().points(points).unwrap();
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), before);
         let reference = theme
             .marks
-            .strokes()
-            .references()
-            .qq_reference()
+            .get_strokes()
+            .get_references()
+            .get_qq_reference()
             .clone()
             .width(140.0)
             .unwrap();
         let references = theme
             .marks
-            .strokes()
-            .references()
+            .get_strokes()
+            .get_references()
             .clone()
-            .with_qq_reference(reference)
+            .qq_reference(reference)
             .unwrap();
         let strokes = theme
             .marks
-            .strokes()
+            .get_strokes()
             .clone()
-            .with_references(references)
+            .references(references)
             .unwrap();
-        theme.marks = theme.marks.clone().with_strokes(strokes).unwrap();
+        theme.marks = theme.marks.clone().strokes(strokes).unwrap();
         let reference = chart.intrinsic_body_minimum(&theme).unwrap();
         assert_eq!(reference.0.to_bits(), before.0.to_bits());
         assert_eq!(reference.1.to_bits(), 140.0_f64.to_bits());
         let reference = theme
             .marks
-            .strokes()
-            .references()
-            .qq_reference()
+            .get_strokes()
+            .get_references()
+            .get_qq_reference()
             .clone()
             .color(crate::theme::Color::rgba(1, 2, 3, 0))
             .unwrap();
         let references = theme
             .marks
-            .strokes()
-            .references()
+            .get_strokes()
+            .get_references()
             .clone()
-            .with_qq_reference(reference)
+            .qq_reference(reference)
             .unwrap();
         let strokes = theme
             .marks
-            .strokes()
+            .get_strokes()
             .clone()
-            .with_references(references)
+            .references(references)
             .unwrap();
-        theme.marks = theme.marks.clone().with_strokes(strokes).unwrap();
+        theme.marks = theme.marks.clone().strokes(strokes).unwrap();
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), before);
         let mapped = chart.clone().with_alpha(
             AlphaTarget::Line,

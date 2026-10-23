@@ -366,8 +366,8 @@ fn plan_comparisons_at_with_label(
         let clearance = f64::from(
             theme
                 .annotations
-                .significance()
-                .bracket_stroke()
+                .get_significance()
+                .get_bracket_stroke()
                 .get_width(),
         ) / 2.0
             + 1.0 / 1024.0;

@@ -56,9 +56,9 @@ fn point_interval_alpha_keeps_original_slots_through_category_order_and_unavaila
     let mut theme = crate::Theme::publication().resolve().unwrap();
     let interval = theme
         .marks
-        .strokes()
-        .summaries()
-        .estimate_interval()
+        .get_strokes()
+        .get_summaries()
+        .get_estimate_interval()
         .clone()
         .color(crate::Color::rgba(17, 41, 67, 0))
         .unwrap()
@@ -66,18 +66,18 @@ fn point_interval_alpha_keeps_original_slots_through_category_order_and_unavaila
         .unwrap();
     let summaries = theme
         .marks
-        .strokes()
-        .summaries()
+        .get_strokes()
+        .get_summaries()
         .clone()
-        .with_estimate_interval(interval)
+        .estimate_interval(interval)
         .unwrap();
     let strokes = theme
         .marks
-        .strokes()
+        .get_strokes()
         .clone()
-        .with_summaries(summaries)
+        .summaries(summaries)
         .unwrap();
-    theme.marks = theme.marks.clone().with_strokes(strokes).unwrap();
+    theme.marks = theme.marks.clone().strokes(strokes).unwrap();
     assert_eq!(
         prepared.interval_ink(&theme).unwrap().to_bits(),
         40.0_f64.to_bits()

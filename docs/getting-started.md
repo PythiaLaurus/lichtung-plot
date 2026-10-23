@@ -114,9 +114,10 @@ The Canvas call remains optional: omitting it selects Publication for the root.
 Theme state is owner-local and never global or sticky across render calls.
 
 Presets are complete immutable `Theme` values, with eight fully typed components.
-Use `theme.customize()`, validated component `with_*` edits, and `build()` to
-construct a replacement. Each text role has its own typed `FontStack`; named
-families are literal identities, not comma-separated CSS input. Plot-local
+Use `theme.customize()`, validated component `property(value)` edits, and `build()`
+to construct a replacement. Paired readers use `get_property()`; Theme's read-only
+components retain names such as `typography()`. Each text role has its own typed
+`FontStack`; named families are literal identities, not comma-separated CSS input. Plot-local
 `categorical_color_scale` and `continuous_color_scale` attach complete typed
 mappings independently of the theme. See [complete theme and scale
 construction](complete-theme-foundations.md) for the current boundaries.

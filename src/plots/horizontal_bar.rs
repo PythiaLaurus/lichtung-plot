@@ -109,7 +109,7 @@ pub(crate) fn measure_marks(
         &prepared.categories,
         &prepared.series,
         &rendered_maxima,
-        theme.marks.extents().categories().group_span(true),
+        theme.marks.get_extents().get_categories().group_span(true),
         base_x_range,
         panel_box,
         mode == BarMode::Stacked,
@@ -137,9 +137,9 @@ pub(crate) fn measure_marks(
         zero: None,
         zero_style: theme
             .marks
-            .strokes()
-            .references()
-            .bar_zero()
+            .get_strokes()
+            .get_references()
+            .get_bar_zero()
             .backend_style(),
         bars: Vec::new(),
         text: Vec::new(),
@@ -162,7 +162,7 @@ pub(crate) fn measure_marks(
             mode,
             chart.bar_spacing_spec(),
             true,
-            theme.marks.extents().categories(),
+            theme.marks.get_extents().get_categories(),
         );
         let color = prepared.bar_color(chart, bar, &colors, &accents)?;
         let polygon = project_bar(&layout.projection, bar, y_center, height)?;
@@ -172,14 +172,19 @@ pub(crate) fn measure_marks(
                 bar.line_alpha,
                 theme
                     .marks
-                    .strokes()
-                    .summaries()
-                    .uncertainty()
+                    .get_strokes()
+                    .get_summaries()
+                    .get_uncertainty()
                     .backend_style(),
             ),
             fill: crate::alpha::marks::fill_style(
                 bar.fill_alpha,
-                theme.marks.fills().bodies().bar_body().backend_style(color),
+                theme
+                    .marks
+                    .get_fills()
+                    .get_bodies()
+                    .get_bar_body()
+                    .backend_style(color),
             ),
             interval: bar
                 .interval
@@ -192,9 +197,9 @@ pub(crate) fn measure_marks(
                         height,
                         theme
                             .marks
-                            .extents()
-                            .categories()
-                            .uncertainty_cap_ratio()
+                            .get_extents()
+                            .get_categories()
+                            .get_uncertainty_cap_ratio()
                             .as_f64(),
                     )
                 })
@@ -217,7 +222,7 @@ pub(crate) fn measure_marks(
             point.series_index,
             prepared,
             mode,
-            theme.marks.extents().categories().group_span(true),
+            theme.marks.get_extents().get_categories().group_span(true),
         );
         let projected = layout.projection.project(point.value, y_center);
         payload

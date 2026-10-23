@@ -32,11 +32,11 @@ impl ResolvedTheme {
                 .font_size(exact.get_font_size())?
                 .weight(exact.get_weight())?;
         }
-        let geometry = self.annotations.significance();
+        let geometry = self.annotations.get_significance();
         let em = LocalMetric::css_pixels(label.get_font_size())?;
         Ok(EffectiveSignificance {
             gap: exact.map_or_else(
-                || Ok(geometry.label_gap().product(em)),
+                || Ok(geometry.get_label_gap().product(em)),
                 |exact| ExactLength::pixels(exact.get_gap()),
             )?,
             geometry: geometry.clone(),
@@ -52,21 +52,22 @@ impl EffectiveSignificance {
     }
 
     pub(crate) fn tick_height(&self) -> Result<ExactLength> {
-        self.length(self.geometry.tick_height())
+        self.length(self.geometry.get_tick_height())
     }
 
     pub(crate) fn data_gap(&self) -> Result<ExactLength> {
-        self.length(self.geometry.data_gap())
+        self.length(self.geometry.get_data_gap())
     }
 
     pub(crate) fn level_step(&self) -> Result<ExactLength> {
-        self.length(self.geometry.level_step())
+        self.length(self.geometry.get_level_step())
     }
 
     pub(crate) fn panel_padding(&self) -> Result<ExactLength> {
-        let selected = self.length(self.geometry.panel_padding())?;
-        let ink = ExactLength::pixels(f64::from(self.geometry.bracket_stroke().get_width()) / 2.0)?
-            .add_pixels(1.0 / 1024.0)?;
+        let selected = self.length(self.geometry.get_panel_padding())?;
+        let ink =
+            ExactLength::pixels(f64::from(self.geometry.get_bracket_stroke().get_width()) / 2.0)?
+                .add_pixels(1.0 / 1024.0)?;
         Ok(if selected.compare(&ink).is_lt() {
             ink
         } else {
@@ -80,7 +81,7 @@ impl EffectiveSignificance {
 
     pub(crate) fn attached_reserve(&self, extent: f64) -> Result<f64> {
         self.gap
-            .add_length(&self.length(self.geometry.attached_extra_clearance())?)
+            .add_length(&self.length(self.geometry.get_attached_extra_clearance())?)
             .add_pixels(extent)?
             .pixels_rounded(SpatialRounding::Ceil)
     }
@@ -90,8 +91,8 @@ impl EffectiveSignificance {
         label: &crate::layout::ResolvedTextPlan,
     ) -> Result<crate::render::backend::BracketStyle> {
         Ok(crate::render::backend::BracketStyle {
-            color: self.geometry.bracket_stroke().get_color(),
-            width: self.geometry.bracket_stroke().get_width(),
+            color: self.geometry.get_bracket_stroke().get_color(),
+            width: self.geometry.get_bracket_stroke().get_width(),
             label_color: label.style.paint,
             font_family: label
                 .copy_stack()
@@ -108,22 +109,22 @@ impl EffectiveSignificance {
 }
 
 validated_component!(SignificanceGeometry {
-    borrow bracket_stroke: SolidStrokeTheme => with_bracket_stroke,
-    borrow label_gap: RelativeSpacing => with_label_gap,
-    borrow tick_height: RelativeSpacing => with_tick_height,
-    borrow data_gap: RelativeSpacing => with_data_gap,
-    borrow level_step: RelativeSpacing => with_level_step,
-    borrow panel_padding: RelativeSpacing => with_panel_padding,
-    borrow attached_extra_clearance: RelativeSpacing => with_attached_extra_clearance,
-} validate |value| { value.bracket_stroke().validate()?; });
+    borrow bracket_stroke: SolidStrokeTheme => get_bracket_stroke,
+    borrow label_gap: RelativeSpacing => get_label_gap,
+    borrow tick_height: RelativeSpacing => get_tick_height,
+    borrow data_gap: RelativeSpacing => get_data_gap,
+    borrow level_step: RelativeSpacing => get_level_step,
+    borrow panel_padding: RelativeSpacing => get_panel_padding,
+    borrow attached_extra_clearance: RelativeSpacing => get_attached_extra_clearance,
+} validate |value| { value.get_bracket_stroke().validate()?; });
 
 validated_component!(CellAnnotationGeometry {
-    borrow highlight_outline: OutlineTheme => with_highlight_outline,
-    borrow value_horizontal_padding: RelativeSpacing => with_value_horizontal_padding,
-    borrow value_vertical_padding: RelativeSpacing => with_value_vertical_padding,
-    borrow null_row_horizontal_padding: RelativeSpacing => with_null_row_horizontal_padding,
-    borrow null_row_vertical_padding: RelativeSpacing => with_null_row_vertical_padding,
-} validate |value| { value.highlight_outline().validate()?; });
+    borrow highlight_outline: OutlineTheme => get_highlight_outline,
+    borrow value_horizontal_padding: RelativeSpacing => get_value_horizontal_padding,
+    borrow value_vertical_padding: RelativeSpacing => get_value_vertical_padding,
+    borrow null_row_horizontal_padding: RelativeSpacing => get_null_row_horizontal_padding,
+    borrow null_row_vertical_padding: RelativeSpacing => get_null_row_vertical_padding,
+} validate |value| { value.get_highlight_outline().validate()?; });
 
 pub(crate) struct CellTextPadding {
     horizontal: ExactLength,
@@ -134,16 +135,16 @@ impl CellAnnotationGeometry {
     pub(crate) fn value_padding(&self, em: u32) -> Result<CellTextPadding> {
         let em = LocalMetric::css_pixels(em)?;
         Ok(CellTextPadding {
-            horizontal: self.value_horizontal_padding().product(em),
-            vertical: self.value_vertical_padding().product(em),
+            horizontal: self.get_value_horizontal_padding().product(em),
+            vertical: self.get_value_vertical_padding().product(em),
         })
     }
 
     pub(crate) fn null_row_padding(&self, em: u32) -> Result<CellTextPadding> {
         let em = LocalMetric::css_pixels(em)?;
         Ok(CellTextPadding {
-            horizontal: self.null_row_horizontal_padding().product(em),
-            vertical: self.null_row_vertical_padding().product(em),
+            horizontal: self.get_null_row_horizontal_padding().product(em),
+            vertical: self.get_null_row_vertical_padding().product(em),
         })
     }
 }
@@ -171,9 +172,9 @@ impl CellTextPadding {
 }
 
 validated_component!(EstimateAnnotationGeometry {
-    borrow panel_inset: RelativeSpacing => with_panel_inset,
-    borrow guide_clearance: RelativeSpacing => with_guide_clearance,
-    borrow numeric_label_gap: RelativeSpacing => with_numeric_label_gap,
+    borrow panel_inset: RelativeSpacing => get_panel_inset,
+    borrow guide_clearance: RelativeSpacing => get_guide_clearance,
+    borrow numeric_label_gap: RelativeSpacing => get_numeric_label_gap,
 } validate |_value| {});
 
 pub(crate) struct EstimateAnnotationLengths {
@@ -185,16 +186,16 @@ impl EstimateAnnotationGeometry {
     pub(crate) fn lengths(&self, em: u32) -> Result<EstimateAnnotationLengths> {
         let em = LocalMetric::css_pixels(em)?;
         Ok(EstimateAnnotationLengths {
-            panel_inset: self.panel_inset().product(em),
-            guide_clearance: self.guide_clearance().product(em),
+            panel_inset: self.get_panel_inset().product(em),
+            guide_clearance: self.get_guide_clearance().product(em),
         })
     }
 }
 
 validated_component!(ValueShelfSpacing {
-    borrow padding: RelativeSpacing => with_padding,
-    borrow gap: RelativeSpacing => with_gap,
-    borrow row_gap: RelativeSpacing => with_row_gap,
+    borrow padding: RelativeSpacing => get_padding,
+    borrow gap: RelativeSpacing => get_gap,
+    borrow row_gap: RelativeSpacing => get_row_gap,
 } validate |_value| {});
 
 pub(crate) struct ValueShelfLengths {
@@ -207,26 +208,26 @@ impl ValueShelfSpacing {
     pub(crate) fn lengths(&self, em: u32) -> Result<ValueShelfLengths> {
         let em = LocalMetric::css_pixels(em)?;
         Ok(ValueShelfLengths {
-            padding: self.padding().product(em),
-            gap: self.gap().product(em),
-            row_gap: self.row_gap().product(em),
+            padding: self.get_padding().product(em),
+            gap: self.get_gap().product(em),
+            row_gap: self.get_row_gap().product(em),
         })
     }
 }
 
 validated_component!(AnnotationTheme {
-    borrow significance: SignificanceGeometry => with_significance,
-    borrow cells: CellAnnotationGeometry => with_cells,
-    borrow estimates: EstimateAnnotationGeometry => with_estimates,
-    borrow point_label_gap: RelativeSpacing => with_point_label_gap,
-    borrow panel_text_padding: RelativeSpacing => with_panel_text_padding,
-    borrow waterfall_shelf: ValueShelfSpacing => with_waterfall_shelf,
-    copy planning_backdrop: OpaqueColor => with_planning_backdrop,
+    borrow significance: SignificanceGeometry => get_significance,
+    borrow cells: CellAnnotationGeometry => get_cells,
+    borrow estimates: EstimateAnnotationGeometry => get_estimates,
+    borrow point_label_gap: RelativeSpacing => get_point_label_gap,
+    borrow panel_text_padding: RelativeSpacing => get_panel_text_padding,
+    borrow waterfall_shelf: ValueShelfSpacing => get_waterfall_shelf,
+    copy planning_backdrop: OpaqueColor => get_planning_backdrop,
 } validate |value| {
-    value.significance().validate()?;
-    value.cells().validate()?;
-    value.estimates().validate()?;
-    value.waterfall_shelf().validate()?;
+    value.get_significance().validate()?;
+    value.get_cells().validate()?;
+    value.get_estimates().validate()?;
+    value.get_waterfall_shelf().validate()?;
 });
 
 impl AnnotationTheme {
@@ -258,7 +259,9 @@ impl AnnotationTheme {
     }
 
     pub(crate) fn point_label_gap_length(&self, em: u32) -> Result<ExactLength> {
-        Ok(self.point_label_gap().product(LocalMetric::css_pixels(em)?))
+        Ok(self
+            .get_point_label_gap()
+            .product(LocalMetric::css_pixels(em)?))
     }
 }
 
@@ -280,29 +283,21 @@ mod tests {
         let mut theme = crate::Theme::publication().resolve().unwrap();
         let shelf = theme
             .annotations
-            .waterfall_shelf()
+            .get_waterfall_shelf()
             .clone()
-            .with_padding(RelativeSpacing::ratio(0, 1).unwrap())
+            .padding(RelativeSpacing::ratio(0, 1).unwrap())
             .unwrap();
-        theme.annotations = theme
-            .annotations
-            .clone()
-            .with_waterfall_shelf(shelf)
-            .unwrap();
+        theme.annotations = theme.annotations.clone().waterfall_shelf(shelf).unwrap();
         let unpadded = chart.intrinsic_body_minimum(&theme).unwrap();
         // Each edge contributes exactly 1/4 quantum at the selected 14px role.
         // The combined 1/2 quantum reserves one quantum, rather than two.
         let shelf = theme
             .annotations
-            .waterfall_shelf()
+            .get_waterfall_shelf()
             .clone()
-            .with_padding(RelativeSpacing::ratio(1, 14 * 4096).unwrap())
+            .padding(RelativeSpacing::ratio(1, 14 * 4096).unwrap())
             .unwrap();
-        theme.annotations = theme
-            .annotations
-            .clone()
-            .with_waterfall_shelf(shelf)
-            .unwrap();
+        theme.annotations = theme.annotations.clone().waterfall_shelf(shelf).unwrap();
         let padded = chart.intrinsic_body_minimum(&theme).unwrap();
         assert_eq!(padded.0.to_bits(), unpadded.0.to_bits());
         assert_eq!(

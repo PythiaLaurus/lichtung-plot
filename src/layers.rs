@@ -387,11 +387,11 @@ impl PointLayer {
         defaults: &crate::theme::mark::SupplementalPointTheme,
     ) -> crate::render::backend::PointStyle {
         let color = self.color.unwrap_or_else(|| {
-            crate::theme::color_from_rgb(automatic_color).alpha(defaults.fill_alpha())
+            crate::theme::color_from_rgb(automatic_color).alpha(defaults.get_fill_alpha())
         });
         crate::render::backend::PointStyle {
             color: self.alpha.map_or(color, |alpha| color.alpha(alpha)),
-            radius: self.radius.unwrap_or(defaults.radius()),
+            radius: self.radius.unwrap_or(defaults.get_radius()),
             outline: None,
             shape: crate::PointShape::Circle,
         }

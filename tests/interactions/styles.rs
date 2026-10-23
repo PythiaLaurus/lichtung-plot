@@ -567,13 +567,13 @@ fn shared_canvas_legend_rejects_conflicting_custom_outline_alpha_before_fonts() 
         .unwrap();
         let primary = base
             .marks()
-            .points()
-            .primary()
+            .get_points()
+            .get_primary()
             .clone()
             .outline(Some(outline))
             .unwrap();
-        let points = base.marks().points().clone().with_primary(primary).unwrap();
-        let marks = base.marks().clone().with_points(points).unwrap();
+        let points = base.marks().get_points().clone().primary(primary).unwrap();
+        let marks = base.marks().clone().points(points).unwrap();
         base.customize()
             .marks(marks)
             .font_stack(

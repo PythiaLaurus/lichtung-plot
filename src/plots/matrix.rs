@@ -70,8 +70,12 @@ impl PreparedMatrixAxes {
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
-        let point = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().matrix());
-        let fill = theme.marks.fills().densities().matrix_density();
+        let point = chart.point_style(
+            theme,
+            (0, 0, 0),
+            theme.marks.get_points().get_radii().get_matrix(),
+        );
+        let fill = theme.marks.get_fills().get_densities().get_matrix_density();
         for group in &self.groups {
             if self.labels.len() > 1 {
                 for &alpha in &group.alphas {
@@ -95,16 +99,20 @@ impl PreparedMatrixAxes {
         fill_ink_outset(
             &theme
                 .marks
-                .fills()
-                .densities()
-                .matrix_density()
+                .get_fills()
+                .get_densities()
+                .get_matrix_density()
                 .backend_style((0, 0, 0)),
             self.groups.iter().map(|group| group.fill_alpha),
         )
     }
 
     fn point_dimensions(&self, chart: &Plot, theme: &ResolvedTheme) -> Result<(f64, f64), Error> {
-        let style = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().matrix());
+        let style = chart.point_style(
+            theme,
+            (0, 0, 0),
+            theme.marks.get_points().get_radii().get_matrix(),
+        );
         Ok(point_ink(
             &style,
             self.groups
@@ -132,7 +140,7 @@ impl PreparedMatrixAxes {
             resources,
         )?;
         let accents = AccentColors::resolve(
-            theme.marks.accents(),
+            theme.marks.get_accents(),
             usize::from(self.groups.iter().any(|group| group.identity.hue.is_none())),
         )?;
         Ok((colors, accents))
@@ -734,7 +742,11 @@ pub(crate) fn measure(
                     let xs = &group.columns[col];
                     let ys = &group.columns[row];
                     require_aligned_points(xs.len(), group.alphas.len())?;
-                    let ps = chart.point_style(theme, color, theme.marks.points().radii().matrix());
+                    let ps = chart.point_style(
+                        theme,
+                        color,
+                        theme.marks.get_points().get_radii().get_matrix(),
+                    );
                     let mut batches = Vec::new();
                     for ((&xi, &yi), &alpha) in xs.iter().zip(ys).zip(&group.alphas) {
                         let (x, y) = cell_layout.projection.project(xi, yi);
@@ -945,11 +957,15 @@ fn matrix_guide_entries(
                 false,
             )?
             .with_point(
-                chart.point_style(theme, color, theme.marks.points().radii().matrix()),
+                chart.point_style(
+                    theme,
+                    color,
+                    theme.marks.get_points().get_radii().get_matrix(),
+                ),
                 PointRole::Primary,
             )
             .with_fill(
-                theme.marks.fills().densities().matrix_density(),
+                theme.marks.get_fills().get_densities().get_matrix_density(),
                 color,
                 FillRole::MatrixDensity,
             ),
@@ -1034,7 +1050,13 @@ fn select_diagonal_kde(
             panel.x0,
             panel.x1,
             panel.y0,
-            panel.y0 + panel.height() * theme.marks.extents().matrix_density_fraction().as_f64(),
+            panel.y0
+                + panel.height()
+                    * theme
+                        .marks
+                        .get_extents()
+                        .get_matrix_density_fraction()
+                        .as_f64(),
         ),
     );
     let (x0, y0) = projection.project(projection.x_range().0, 0.0);
@@ -1072,9 +1094,9 @@ fn select_diagonal_kde(
             group.fill_alpha,
             theme
                 .marks
-                .fills()
-                .densities()
-                .matrix_density()
+                .get_fills()
+                .get_densities()
+                .get_matrix_density()
                 .backend_style(color),
         );
         marks.push(MatrixPrimitive::Polygon(poly, fill));

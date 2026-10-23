@@ -46,6 +46,12 @@ admitted. Values implement Clone/Debug/PartialEq, and Eq where normalized storag
 permits it. Complete Theme equality excludes operation context, fonts discovered
 at render time and caches.
 
+Each editable field `property` has one consuming `property(value)` edit and its
+paired `get_property()` reader, including macro-generated mark and annotation
+groups. Read-only and write-only properties keep bare names. Theme's read-only
+components are distinct from ThemeBuilder's editable construction components;
+there are no retained `with_*` configuration aliases.
+
 Inspection returns a Copy value, a borrowed owned value, `Option<T>` for optional
 Copy values or `Option<&T>` for optional owned values. Collections expose borrowed
 slices/iterators, not mutable access. Consuming field edits replace only that

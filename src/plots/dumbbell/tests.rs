@@ -24,20 +24,20 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
     let point = crate::theme::PointTheme::new(17, PointShape::TriangleUp, Some(outline)).unwrap();
     let radii = theme
         .marks
-        .points()
-        .radii()
+        .get_points()
+        .get_radii()
         .clone()
-        .with_dumbbell(6)
+        .dumbbell(6)
         .unwrap();
     let points = theme
         .marks
-        .points()
+        .get_points()
         .clone()
-        .with_primary(point)
+        .primary(point)
         .unwrap()
-        .with_radii(radii)
+        .radii(radii)
         .unwrap();
-    theme.marks = theme.marks.clone().with_points(points).unwrap();
+    theme.marks = theme.marks.clone().points(points).unwrap();
     let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
     let measured = chart
         .measure_selected_interior(PlotRenderContext::new(
@@ -109,9 +109,9 @@ fn exact_endpoint_rgba_reaches_marks_literal_keys_and_canonical_capture_without_
         payload.connectors[0],
         theme
             .marks
-            .strokes()
-            .connectors()
-            .dumbbell_connector()
+            .get_strokes()
+            .get_connectors()
+            .get_dumbbell_connector()
             .backend_style()
     );
     let mapped = source

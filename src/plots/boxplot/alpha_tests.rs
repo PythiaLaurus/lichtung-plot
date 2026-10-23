@@ -61,8 +61,8 @@ fn duplicate_outliers_keep_sorted_original_occurrences_and_replacement_paint() {
     let mut theme = crate::Theme::publication().resolve().unwrap();
     let primary = theme
         .marks
-        .points()
-        .primary()
+        .get_points()
+        .get_primary()
         .clone()
         .fill_alpha(0)
         .unwrap()
@@ -70,25 +70,25 @@ fn duplicate_outliers_keep_sorted_original_occurrences_and_replacement_paint() {
         .unwrap();
     let radii = theme
         .marks
-        .points()
-        .radii()
+        .get_points()
+        .get_radii()
         .clone()
-        .with_box_flier(40)
+        .box_flier(40)
         .unwrap();
     let points = theme
         .marks
-        .points()
+        .get_points()
         .clone()
-        .with_primary(primary)
+        .primary(primary)
         .unwrap()
-        .with_radii(radii)
+        .radii(radii)
         .unwrap();
-    theme.marks = theme.marks.clone().with_points(points).unwrap();
+    theme.marks = theme.marks.clone().points(points).unwrap();
     let summary = theme
         .marks
-        .strokes()
-        .summaries()
-        .summary()
+        .get_strokes()
+        .get_summaries()
+        .get_summary()
         .clone()
         .color(crate::Color::rgba(17, 41, 67, 0))
         .unwrap()
@@ -96,18 +96,18 @@ fn duplicate_outliers_keep_sorted_original_occurrences_and_replacement_paint() {
         .unwrap();
     let summaries = theme
         .marks
-        .strokes()
-        .summaries()
+        .get_strokes()
+        .get_summaries()
         .clone()
-        .with_summary(summary)
+        .summary(summary)
         .unwrap();
     let strokes = theme
         .marks
-        .strokes()
+        .get_strokes()
         .clone()
-        .with_summaries(summaries)
+        .summaries(summaries)
         .unwrap();
-    theme.marks = theme.marks.clone().with_strokes(strokes).unwrap();
+    theme.marks = theme.marks.clone().strokes(strokes).unwrap();
     let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
     assert_eq!(
         intrinsic_body_minimum(&chart, &theme).unwrap().1.to_bits(),
@@ -162,9 +162,9 @@ fn duplicate_outliers_keep_sorted_original_occurrences_and_replacement_paint() {
         fill.stroke,
         theme
             .marks
-            .fills()
-            .bodies()
-            .box_body()
+            .get_fills()
+            .get_bodies()
+            .get_box_body()
             .backend_style((fill.color.red(), fill.color.green(), fill.color.blue()))
             .stroke
     );

@@ -54,7 +54,11 @@ impl BarSignificance {
         Ok(Self {
             appearance: theme.effective_significance(chart.significance_mark_style_override())?,
             mode: mode(chart),
-            group_span: theme.marks.extents().categories().group_span(horizontal),
+            group_span: theme
+                .marks
+                .get_extents()
+                .get_categories()
+                .group_span(horizontal),
         })
     }
 
@@ -143,9 +147,9 @@ pub(crate) fn intrinsic_body_minimum(
 
     let body = theme
         .marks
-        .fills()
-        .bodies()
-        .bar_body()
+        .get_fills()
+        .get_bodies()
+        .get_bar_body()
         .backend_style((0, 0, 0));
     let mut pitch = 1.0_f64 / 1024.0;
     let mut numeric = 0.0_f64;
@@ -159,9 +163,9 @@ pub(crate) fn intrinsic_body_minimum(
             bar.line_alpha,
             theme
                 .marks
-                .strokes()
-                .summaries()
-                .uncertainty()
+                .get_strokes()
+                .get_summaries()
+                .get_uncertainty()
                 .backend_style(),
         ))?;
         if bar.category_index >= prepared.categories.len()
@@ -179,7 +183,7 @@ pub(crate) fn intrinsic_body_minimum(
             mode,
             chart.bar_spacing_spec(),
             horizontal,
-            theme.marks.extents().categories(),
+            theme.marks.get_extents().get_categories(),
         );
         // Distinct source slot edges must survive the canonical pixel quantum
         // even when their paint is transparent or the scientific height is zero.
@@ -207,9 +211,9 @@ pub(crate) fn intrinsic_body_minimum(
             let cap = thickness
                 * theme
                     .marks
-                    .extents()
-                    .categories()
-                    .uncertainty_cap_ratio()
+                    .get_extents()
+                    .get_categories()
+                    .get_uncertainty_cap_ratio()
                     .as_f64();
             pitch = pitch.max((1.0 / 1024.0) / (2.0 * cap));
             let left_room = 0.5 + relative - cap;
@@ -240,7 +244,11 @@ pub(crate) fn intrinsic_body_minimum(
             point.series_index,
             prepared,
             mode,
-            theme.marks.extents().categories().group_span(horizontal),
+            theme
+                .marks
+                .get_extents()
+                .get_categories()
+                .group_span(horizontal),
         );
         let relative = center - (point.category_index as f64 + 0.5);
         if let Some(ink) = crate::render::geometry::point_ink_bounds(&point.style)? {
@@ -351,7 +359,7 @@ impl PreparedBars {
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
-        let fill = theme.marks.fills().bodies().bar_body();
+        let fill = theme.marks.get_fills().get_bodies().get_bar_body();
         for bar in &self.bars {
             let unit = AlphaUnit::aggregate(
                 chart,
@@ -380,9 +388,9 @@ impl PreparedBars {
                     bar.line_alpha,
                     theme
                         .marks
-                        .strokes()
-                        .summaries()
-                        .uncertainty()
+                        .get_strokes()
+                        .get_summaries()
+                        .get_uncertainty()
                         .backend_style(),
                     false,
                 )?;
@@ -431,7 +439,7 @@ impl PreparedBars {
             resources,
         )?;
         let accents = AccentColors::resolve(
-            theme.marks.accents(),
+            theme.marks.get_accents(),
             if chart.colors_by_sign() { 2 } else { 0 },
         )?;
         Ok((colors, accents))
@@ -1507,7 +1515,7 @@ pub(crate) fn guide_sources(
                         LiteralDomain::BarSign,
                     )
                     .with_fill(
-                        theme.marks.fills().bodies().bar_body(),
+                        theme.marks.get_fills().get_bodies().get_bar_body(),
                         accents.color(usize::from(decreasing))?,
                         FillRole::BarBody,
                     ),
@@ -1522,7 +1530,7 @@ pub(crate) fn guide_sources(
     for label in prepared.observed_hue_levels() {
         entries.push(
             GuideSourceKey::hue_only(chart.point_legend_identity(label)?)?.with_fill(
-                theme.marks.fills().bodies().bar_body(),
+                theme.marks.get_fills().get_bodies().get_bar_body(),
                 colors.color(label)?,
                 FillRole::BarBody,
             ),

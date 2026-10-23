@@ -94,9 +94,9 @@ pub(crate) fn intrinsic_body_minimum(
         ));
     }
     let path_style = if chart.kind() == PlotKind::Line {
-        theme.marks.data_lines().series_line()
+        theme.marks.get_data_lines().get_series_line()
     } else {
-        theme.marks.data_lines().path_line()
+        theme.marks.get_data_lines().get_path_line()
     }
     .backend_style((0, 0, 0));
     let mut path = 0.0_f64;
@@ -109,9 +109,9 @@ pub(crate) fn intrinsic_body_minimum(
     let points_visible = chart.kind() == PlotKind::Trajectory || chart.markers_visible();
     let mark = if points_visible {
         let radius = if chart.kind() == PlotKind::Line {
-            theme.marks.points().radii().path()
+            theme.marks.get_points().get_radii().get_path()
         } else {
-            theme.marks.points().radii().trajectory()
+            theme.marks.get_points().get_radii().get_trajectory()
         };
         let point_style = chart.point_style(theme, (0, 0, 0), radius);
         point_ink(
@@ -137,9 +137,9 @@ pub(crate) fn intrinsic_body_minimum(
                 group.fill_alpha,
                 theme
                     .marks
-                    .fills()
-                    .bands()
-                    .line_band()
+                    .get_fills()
+                    .get_bands()
+                    .get_line_band()
                     .backend_style((0, 0, 0)),
             ))?;
             ribbon = (ribbon.0.max(ink.0), ribbon.1.max(ink.1));
@@ -175,17 +175,17 @@ impl PreparedLine {
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
         let line = if chart.kind() == PlotKind::Line {
-            theme.marks.data_lines().series_line()
+            theme.marks.get_data_lines().get_series_line()
         } else {
-            theme.marks.data_lines().path_line()
+            theme.marks.get_data_lines().get_path_line()
         };
         let radius = if chart.kind() == PlotKind::Line {
-            theme.marks.points().radii().path()
+            theme.marks.get_points().get_radii().get_path()
         } else {
-            theme.marks.points().radii().trajectory()
+            theme.marks.get_points().get_radii().get_trajectory()
         };
         let point = chart.point_style(theme, (0, 0, 0), radius);
-        let band = theme.marks.fills().bands().line_band();
+        let band = theme.marks.get_fills().get_bands().get_line_band();
         for group in &self.groups {
             let unit = AlphaUnit::series(chart, group.identity.as_ref())?;
             guide.line(
@@ -236,7 +236,7 @@ impl PreparedLine {
             .primary_accent_slots
             .checked_add(self.layers.len())
             .ok_or_else(|| Error::Render("Line accent slot count overflowed".into()))?;
-        let accent = AccentColors::resolve(theme.marks.accents(), slots)?;
+        let accent = AccentColors::resolve(theme.marks.get_accents(), slots)?;
         Ok((map, accent))
     }
 
@@ -266,7 +266,7 @@ impl PreparedLine {
             })?;
             map.color(&self.hues[hue])
         } else {
-            Ok(theme.marks.neutral_paints().path().as_rgb())
+            Ok(theme.marks.get_neutral_paints().get_path().as_rgb())
         }
     }
     pub(crate) fn checked_primary_mark_count(&self) -> Result<u128, Error> {
@@ -350,9 +350,15 @@ impl PreparedLine {
             let has_fill = chart.kind() == PlotKind::Line
                 && group.points.iter().all(|point| point.interval.is_some());
             let (line, line_role) = if chart.kind() == PlotKind::Line {
-                (theme.marks.data_lines().series_line(), LineRole::SeriesLine)
+                (
+                    theme.marks.get_data_lines().get_series_line(),
+                    LineRole::SeriesLine,
+                )
             } else {
-                (theme.marks.data_lines().path_line(), LineRole::PathLine)
+                (
+                    theme.marks.get_data_lines().get_path_line(),
+                    LineRole::PathLine,
+                )
             };
             crate::data::source::reserve_source(&mut entries, 1)?;
             let identity = chart.collective_legend_identity(identity)?;
@@ -364,9 +370,9 @@ impl PreparedLine {
                         theme,
                         color,
                         if chart.kind() == PlotKind::Line {
-                            theme.marks.points().radii().path()
+                            theme.marks.get_points().get_radii().get_path()
                         } else {
-                            theme.marks.points().radii().trajectory()
+                            theme.marks.get_points().get_radii().get_trajectory()
                         },
                     ),
                     PointRole::Primary,
@@ -374,7 +380,7 @@ impl PreparedLine {
             }
             if has_fill {
                 key = key.with_fill(
-                    theme.marks.fills().bands().line_band(),
+                    theme.marks.get_fills().get_bands().get_line_band(),
                     color,
                     FillRole::LineBand,
                 );
@@ -393,7 +399,7 @@ impl PreparedLine {
                         chart.point_style(
                             theme,
                             map.color(label)?,
-                            theme.marks.points().radii().trajectory(),
+                            theme.marks.get_points().get_radii().get_trajectory(),
                         ),
                         PointRole::Primary,
                     ),
@@ -405,7 +411,7 @@ impl PreparedLine {
                 crate::data::source::reserve_source(&mut entries, 1)?;
                 let style = chart.point_layers()[index].point_style(
                     accent.color(self.primary_accent_slots + index)?,
-                    theme.marks.points().supplemental(),
+                    theme.marks.get_points().get_supplemental(),
                 );
                 let key = GuideSourceKey::supplemental(
                     crate::decorations::legend::GuideEntryIdentity::supplemental(label)?,
@@ -862,7 +868,12 @@ fn project(
         let color = prepared.group_color(chart, group, theme, &map, &accent)?;
         let fill = fill_style(
             group.fill_alpha,
-            theme.marks.fills().bands().line_band().backend_style(color),
+            theme
+                .marks
+                .get_fills()
+                .get_bands()
+                .get_line_band()
+                .backend_style(color),
         );
 
         let has_fill = chart.kind() == PlotKind::Line
@@ -953,9 +964,9 @@ fn project(
             }
         }
         let line = if chart.kind() == PlotKind::Line {
-            theme.marks.data_lines().series_line()
+            theme.marks.get_data_lines().get_series_line()
         } else {
-            theme.marks.data_lines().path_line()
+            theme.marks.get_data_lines().get_path_line()
         }
         .backend_style(color);
         let line = line_style(group.line_alpha, line);
@@ -963,9 +974,9 @@ fn project(
             theme,
             color,
             if chart.kind() == PlotKind::Line {
-                theme.marks.points().radii().path()
+                theme.marks.get_points().get_radii().get_path()
             } else {
-                theme.marks.points().radii().trajectory()
+                theme.marks.get_points().get_radii().get_trajectory()
             },
         );
         if chart.kind() == PlotKind::Line && chart.markers_visible() {
@@ -1015,7 +1026,7 @@ fn project(
                     point.alpha.point(chart.point_style(
                         theme,
                         color,
-                        theme.marks.points().radii().trajectory(),
+                        theme.marks.get_points().get_radii().get_trajectory(),
                     )),
                 ));
             }
@@ -1026,7 +1037,7 @@ fn project(
     for (index, layer) in prepared.layers.iter().enumerate() {
         let style = chart.point_layers()[index].point_style(
             accent.color(prepared.primary_accent_slots + index)?,
-            theme.marks.points().supplemental(),
+            theme.marks.get_points().get_supplemental(),
         );
         let points = crate::data::source::collect_source(
             layer.points.iter().map(|&(x, y)| Ok(project(x, y))),

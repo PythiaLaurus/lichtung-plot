@@ -157,7 +157,7 @@ fn mixed_children_keep_distinct_complete_canvas_roles_on_the_root_theme() {
     let marks = base
         .marks()
         .clone()
-        .with_accents(AccentPalette::new([OpaqueColor::rgb(29, 131, 47)]).unwrap())
+        .accents(AccentPalette::new([OpaqueColor::rgb(29, 131, 47)]).unwrap())
         .unwrap();
     let scales = base
         .color_scales()

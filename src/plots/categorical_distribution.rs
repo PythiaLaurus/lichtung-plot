@@ -103,17 +103,22 @@ impl PreparedDistribution {
             let key = GuideSourceKey::hue_only(chart.point_legend_identity(label)?)?;
             let key = if boxplot {
                 key.with_role_line(
-                    theme.marks.strokes().summaries().summary().backend_style(),
+                    theme
+                        .marks
+                        .get_strokes()
+                        .get_summaries()
+                        .get_summary()
+                        .backend_style(),
                     LineRole::SummaryStroke,
                 )
                 .with_fill(
-                    theme.marks.fills().bodies().box_body(),
+                    theme.marks.get_fills().get_bodies().get_box_body(),
                     color,
                     FillRole::BoxBody,
                 )
             } else {
                 let key = key.with_fill(
-                    theme.marks.fills().bodies().violin_body(),
+                    theme.marks.get_fills().get_bodies().get_violin_body(),
                     color,
                     FillRole::ViolinBody,
                 );
@@ -122,7 +127,7 @@ impl PreparedDistribution {
                 } else {
                     key.with_point(
                         chart.distribution_point_style(
-                            theme.marks.points().mandatory_strip(),
+                            theme.marks.get_points().get_mandatory_strip(),
                             color,
                         ),
                         PointRole::MandatoryStrip,

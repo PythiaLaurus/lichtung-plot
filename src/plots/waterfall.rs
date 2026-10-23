@@ -43,7 +43,7 @@ impl PreparedWaterfall {
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
-        let fill = theme.marks.fills().bodies().waterfall_bar();
+        let fill = theme.marks.get_fills().get_bodies().get_waterfall_bar();
         for span in &self.spans {
             guide.fill(
                 AlphaGlyphRole::Fill,
@@ -144,17 +144,17 @@ mod geometry_tests {
             original_payload.connectors[0].1,
             theme
                 .marks
-                .strokes()
-                .connectors()
-                .waterfall_connector()
+                .get_strokes()
+                .get_connectors()
+                .get_waterfall_connector()
                 .backend_style()
         );
         assert!(original_payload.references.iter().all(|(_, style)| *style
             == theme
                 .marks
-                .strokes()
-                .references()
-                .waterfall_reference()
+                .get_strokes()
+                .get_references()
+                .get_waterfall_reference()
                 .backend_style()));
         let prepared = retained(&chart).unwrap();
         assert_eq!(
@@ -175,11 +175,11 @@ mod geometry_tests {
         );
         let extents = theme
             .marks
-            .extents()
+            .get_extents()
             .clone()
-            .with_waterfall_body_category_breadth(crate::theme::RelativeSpacing::new(0.3).unwrap())
+            .waterfall_body_category_breadth(crate::theme::RelativeSpacing::new(0.3).unwrap())
             .unwrap();
-        theme.marks = theme.marks.clone().with_extents(extents).unwrap();
+        theme.marks = theme.marks.clone().extents(extents).unwrap();
         let narrower = measure(&theme);
         let payload = |plan: &PlotRenderResult| {
             let crate::layout::interior::MarkPayload::Waterfall(payload) =
@@ -202,54 +202,52 @@ mod geometry_tests {
         assert_eq!(connectors[0].0[1].y.to_bits(), after[1].0[0].y.to_bits());
         let extents = theme
             .marks
-            .extents()
+            .get_extents()
             .clone()
-            .with_waterfall_body_category_breadth(
-                crate::theme::RelativeSpacing::ratio(1, 1).unwrap(),
-            )
+            .waterfall_body_category_breadth(crate::theme::RelativeSpacing::ratio(1, 1).unwrap())
             .unwrap();
-        theme.marks = theme.marks.clone().with_extents(extents).unwrap();
+        theme.marks = theme.marks.clone().extents(extents).unwrap();
         assert!(mark_intrinsic_body_minimum(&chart, &theme).is_err());
         let body = theme
             .marks
-            .fills()
-            .bodies()
-            .waterfall_bar()
+            .get_fills()
+            .get_bodies()
+            .get_waterfall_bar()
             .clone()
             .outline(None)
             .unwrap();
         let bodies = theme
             .marks
-            .fills()
-            .bodies()
+            .get_fills()
+            .get_bodies()
             .clone()
-            .with_waterfall_bar(body)
+            .waterfall_bar(body)
             .unwrap();
-        let fills = theme.marks.fills().clone().with_bodies(bodies).unwrap();
-        theme.marks = theme.marks.clone().with_fills(fills).unwrap();
+        let fills = theme.marks.get_fills().clone().bodies(bodies).unwrap();
+        theme.marks = theme.marks.clone().fills(fills).unwrap();
         assert!(mark_intrinsic_body_minimum(&chart, &theme).is_err());
         let connector = theme
             .marks
-            .strokes()
-            .connectors()
-            .waterfall_connector()
+            .get_strokes()
+            .get_connectors()
+            .get_waterfall_connector()
             .clone()
             .color(crate::theme::Color::rgba(0, 0, 0, 0))
             .unwrap();
         let connectors = theme
             .marks
-            .strokes()
-            .connectors()
+            .get_strokes()
+            .get_connectors()
             .clone()
-            .with_waterfall_connector(connector)
+            .waterfall_connector(connector)
             .unwrap();
         let strokes = theme
             .marks
-            .strokes()
+            .get_strokes()
             .clone()
-            .with_connectors(connectors)
+            .connectors(connectors)
             .unwrap();
-        theme.marks = theme.marks.clone().with_strokes(strokes).unwrap();
+        theme.marks = theme.marks.clone().strokes(strokes).unwrap();
         assert!(mark_intrinsic_body_minimum(&chart, &theme).is_ok());
     }
 }
@@ -258,8 +256,8 @@ impl BodyGeometry {
     fn new(theme: &crate::theme::ResolvedTheme) -> Self {
         let breadth = theme
             .marks
-            .extents()
-            .waterfall_body_category_breadth()
+            .get_extents()
+            .get_waterfall_body_category_breadth()
             .as_f64();
         let free = 1.0 - breadth;
         let low = free / 2.0;
@@ -286,9 +284,9 @@ fn mark_intrinsic_body_minimum(
 
     let body = theme
         .marks
-        .fills()
-        .bodies()
-        .waterfall_bar()
+        .get_fills()
+        .get_bodies()
+        .get_waterfall_bar()
         .backend_style((0, 0, 0));
     let geometry = BodyGeometry::new(theme);
     let mut pitch = 1.0_f64 / 1024.0;
@@ -318,9 +316,9 @@ fn mark_intrinsic_body_minimum(
         let connector = crate::render::geometry::line_ink_width(
             &theme
                 .marks
-                .strokes()
-                .connectors()
-                .waterfall_connector()
+                .get_strokes()
+                .get_connectors()
+                .get_waterfall_connector()
                 .backend_style(),
         )?;
         pitch = pitch.max(crate::layout::interior::ink_pitch(
@@ -332,9 +330,9 @@ fn mark_intrinsic_body_minimum(
     numeric = numeric.max(crate::render::geometry::line_ink_width(
         &theme
             .marks
-            .strokes()
-            .references()
-            .waterfall_reference()
+            .get_strokes()
+            .get_references()
+            .get_waterfall_reference()
             .backend_style(),
     )?);
     let categories = f64::from(
@@ -392,7 +390,7 @@ pub(crate) fn intrinsic_body_minimum(
     let shelf = if height > 0.0 {
         theme
             .annotations
-            .waterfall_shelf()
+            .get_waterfall_shelf()
             .lengths(theme.typography.annotations.waterfall_total.get_font_size())?
             .padding
             .times(2)
@@ -668,7 +666,7 @@ pub(crate) fn measure(
     let mut bars = Vec::new();
     let mut source_rows = Vec::new();
     let mut connectors = Vec::new();
-    let accents = crate::theme::AccentColors::resolve(theme.marks.accents(), 2)?;
+    let accents = crate::theme::AccentColors::resolve(theme.marks.get_accents(), 2)?;
     crate::data::source::reserve_source(&mut bars, spans.len())?;
     crate::data::source::reserve_source(&mut source_rows, spans.len())?;
     crate::data::source::reserve_source(&mut connectors, spans.len().saturating_sub(1))?;
@@ -708,9 +706,9 @@ pub(crate) fn measure(
                 span.alpha.value,
                 theme
                     .marks
-                    .fills()
-                    .bodies()
-                    .waterfall_bar()
+                    .get_fills()
+                    .get_bodies()
+                    .get_waterfall_bar()
                     .backend_style(color),
             ),
         ));
@@ -724,9 +722,9 @@ pub(crate) fn measure(
                 [Point2D::new(x, from_y), Point2D::new(x, to_y)],
                 theme
                     .marks
-                    .strokes()
-                    .connectors()
-                    .waterfall_connector()
+                    .get_strokes()
+                    .get_connectors()
+                    .get_waterfall_connector()
                     .backend_style(),
             ));
         }
@@ -739,9 +737,9 @@ pub(crate) fn measure(
             [Point2D::new(x, y0), Point2D::new(x, y1)],
             theme
                 .marks
-                .strokes()
-                .references()
-                .waterfall_reference()
+                .get_strokes()
+                .get_references()
+                .get_waterfall_reference()
                 .backend_style(),
         )
     });
@@ -995,7 +993,7 @@ fn plan_annotations(
     crate::data::source::reserve_source(&mut rows, 2)?;
     let metrics = theme
         .annotations
-        .waterfall_shelf()
+        .get_waterfall_shelf()
         .lengths(theme.typography.annotations.waterfall_total.get_font_size())?;
     let gap = metrics
         .gap

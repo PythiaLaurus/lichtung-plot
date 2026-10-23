@@ -74,18 +74,18 @@ pub(crate) fn intrinsic_body_minimum(
     };
     let fill = theme
         .marks
-        .fills()
-        .bodies()
-        .box_body()
+        .get_fills()
+        .get_bodies()
+        .get_box_body()
         .backend_style((0, 0, 0));
     let overlay = chart.raw_overlay_spec();
     let point_style = if overlay.is_visible() {
-        chart.distribution_point_style(theme.marks.points().raw_overlay(), (0, 0, 0))
+        chart.distribution_point_style(theme.marks.get_points().get_raw_overlay(), (0, 0, 0))
     } else {
         chart.point_style(
             theme,
-            theme.marks.neutral_paints().box_flier().as_rgb(),
-            theme.marks.points().radii().box_flier(),
+            theme.marks.get_neutral_paints().get_box_flier().as_rgb(),
+            theme.marks.get_points().get_radii().get_box_flier(),
         )
     };
     let mut pitch = 1.0_f64 / 1024.0;
@@ -96,7 +96,12 @@ pub(crate) fn intrinsic_body_minimum(
         let (_, out_y) = crate::render::geometry::rectangular_fill_ink_outset(&fill)?;
         let summary = crate::render::geometry::line_ink_width(&crate::alpha::marks::line_style(
             group.line_alpha,
-            theme.marks.strokes().summaries().summary().backend_style(),
+            theme
+                .marks
+                .get_strokes()
+                .get_summaries()
+                .get_summary()
+                .backend_style(),
         ))?;
         numeric = numeric.max(summary).max(out_y);
         if stat.x_index != group.x_index
@@ -238,7 +243,7 @@ impl PreparedBoxplot {
     ) -> crate::Result<()> {
         use crate::alpha::AlphaUnitKind;
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
-        let fill = theme.marks.fills().bodies().box_body();
+        let fill = theme.marks.get_fills().get_bodies().get_box_body();
         let overlay = chart.raw_overlay_spec();
         for (group, stat) in self.sample.groups.iter().zip(&self.stats) {
             let unit = AlphaUnit::aggregate(chart, &group.label, group.group_label.as_deref())?;
@@ -256,12 +261,20 @@ impl PreparedBoxplot {
                 AlphaUnitKind::Aggregate,
                 unit,
                 group.line_alpha,
-                theme.marks.strokes().summaries().summary().backend_style(),
+                theme
+                    .marks
+                    .get_strokes()
+                    .get_summaries()
+                    .get_summary()
+                    .backend_style(),
                 false,
             )?;
             if overlay == RawOverlay::Hidden {
-                let point =
-                    chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().box_flier());
+                let point = chart.point_style(
+                    theme,
+                    (0, 0, 0),
+                    theme.marks.get_points().get_radii().get_box_flier(),
+                );
                 for observation in &stat.fliers {
                     guide.point(
                         AlphaGlyphRole::Outlier,
@@ -271,8 +284,10 @@ impl PreparedBoxplot {
                     )?;
                 }
             } else {
-                let point =
-                    chart.distribution_point_style(theme.marks.points().raw_overlay(), (0, 0, 0));
+                let point = chart.distribution_point_style(
+                    theme.marks.get_points().get_raw_overlay(),
+                    (0, 0, 0),
+                );
                 for observation in &group.observations {
                     guide.point(
                         AlphaGlyphRole::RawOverlay,
@@ -365,11 +380,21 @@ pub(crate) fn measure_marks(
         let color = colors.color(group.hue_label.as_deref().unwrap_or(&group.label))?;
         let fill = crate::alpha::marks::fill_style(
             group.fill_alpha,
-            theme.marks.fills().bodies().box_body().backend_style(color),
+            theme
+                .marks
+                .get_fills()
+                .get_bodies()
+                .get_box_body()
+                .backend_style(color),
         );
         let style = crate::alpha::marks::line_style(
             group.line_alpha,
-            theme.marks.strokes().summaries().summary().backend_style(),
+            theme
+                .marks
+                .get_strokes()
+                .get_summaries()
+                .get_summary()
+                .backend_style(),
         );
 
         let x_center_data =
@@ -441,8 +466,8 @@ pub(crate) fn measure_marks(
         if overlay == RawOverlay::Hidden {
             let flier_style = chart.point_style(
                 theme,
-                theme.marks.neutral_paints().box_flier().as_rgb(),
-                theme.marks.points().radii().box_flier(),
+                theme.marks.get_neutral_paints().get_box_flier().as_rgb(),
+                theme.marks.get_points().get_radii().get_box_flier(),
             );
             let flier_points =
                 crate::data::source::collect_source(stat.fliers.iter().map(|observation| {
@@ -476,7 +501,7 @@ pub(crate) fn measure_marks(
             payload.scatter(
                 points,
                 &chart.distribution_point_style(
-                    theme.marks.points().raw_overlay(),
+                    theme.marks.get_points().get_raw_overlay(),
                     colors.color(group.hue_label.as_deref().unwrap_or(&group.label))?,
                 ),
                 group

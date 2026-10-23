@@ -125,13 +125,13 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
         .matches_inputs(changed_marks, &theme));
     let padding = theme
         .annotations
-        .cells()
+        .get_cells()
         .clone()
-        .with_value_horizontal_padding(crate::theme::RelativeSpacing::ratio(1, 1).unwrap())
+        .value_horizontal_padding(crate::theme::RelativeSpacing::ratio(1, 1).unwrap())
         .unwrap()
-        .with_value_vertical_padding(crate::theme::RelativeSpacing::ratio(2, 1).unwrap())
+        .value_vertical_padding(crate::theme::RelativeSpacing::ratio(2, 1).unwrap())
         .unwrap();
-    theme.annotations = theme.annotations.clone().with_cells(padding).unwrap();
+    theme.annotations = theme.annotations.clone().cells(padding).unwrap();
     assert!(!axes
         .heatmap_intrinsics
         .get()
@@ -245,7 +245,12 @@ fn cell_alpha_retains_original_members_through_normalized_order_and_missing_grid
             .iter()
             .map(|cell| cell.fill.color.get_alpha())
             .collect::<Vec<_>>(),
-        [theme.marks.cells().missing_fill().get_alpha(), 230, 64, 0]
+        [
+            theme.marks.get_cells().get_missing_fill().get_alpha(),
+            230,
+            64,
+            0
+        ]
     );
     assert!(cells[0].cross.is_some());
     assert!(cells[1..].iter().all(|cell| cell.cross.is_none()));

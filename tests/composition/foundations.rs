@@ -54,19 +54,19 @@ fn public_shared_gradient_drives_both_families_without_borrowing_mark_alpha_or_c
     let root_theme = base.customize().typography(typography).build().unwrap();
     let primary = base
         .marks()
-        .points()
-        .primary()
+        .get_points()
+        .get_primary()
         .clone()
         .fill_alpha(71)
         .unwrap();
-    let points = base.marks().points().clone().with_primary(primary).unwrap();
-    let cells = base.marks().cells().clone().with_fill_alpha(151).unwrap();
+    let points = base.marks().get_points().clone().primary(primary).unwrap();
+    let cells = base.marks().get_cells().clone().fill_alpha(151).unwrap();
     let marks = base
         .marks()
         .clone()
-        .with_points(points)
+        .points(points)
         .unwrap()
-        .with_cells(cells)
+        .cells(cells)
         .unwrap();
     let label = base
         .typography()
@@ -248,12 +248,12 @@ fn transparent_cells_select_complete_custom_contrast_roles_before_frozen_svg_and
         .unwrap()
         .plot_panel(Color::rgba(31, 47, 61, 0))
         .unwrap();
-    let cells = base.marks().cells().clone().with_fill_alpha(128).unwrap();
-    let marks = base.marks().clone().with_cells(cells).unwrap();
+    let cells = base.marks().get_cells().clone().fill_alpha(128).unwrap();
+    let marks = base.marks().clone().cells(cells).unwrap();
     let annotations = base
         .annotations()
         .clone()
-        .with_planning_backdrop(OpaqueColor::rgb(0, 0, 0))
+        .planning_backdrop(OpaqueColor::rgb(0, 0, 0))
         .unwrap();
     let theme = base
         .customize()

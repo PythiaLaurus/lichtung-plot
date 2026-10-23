@@ -42,17 +42,13 @@ fn selected_theme_gap_and_tick_height_survive_canonical_capture_with_exact_prece
     theme.typography = theme.typography.clone().annotations(roles).unwrap();
     let geometry = theme
         .annotations
-        .significance()
+        .get_significance()
         .clone()
-        .with_label_gap(crate::theme::RelativeSpacing::ratio(1, 1).unwrap())
+        .label_gap(crate::theme::RelativeSpacing::ratio(1, 1).unwrap())
         .unwrap()
-        .with_tick_height(crate::theme::RelativeSpacing::ratio(1, 2).unwrap())
+        .tick_height(crate::theme::RelativeSpacing::ratio(1, 2).unwrap())
         .unwrap();
-    theme.annotations = theme
-        .annotations
-        .clone()
-        .with_significance(geometry)
-        .unwrap();
+    theme.annotations = theme.annotations.clone().significance(geometry).unwrap();
     let selected = plan(
         &chart,
         &categories(),
@@ -127,23 +123,19 @@ fn fractional_significance_levels_reserve_the_complete_exact_requirement_once() 
     let spacing = |pixels: u32| RelativeSpacing::ratio(pixels * 4096 + 1, 16 * 4096).unwrap();
     let geometry = theme
         .annotations
-        .significance()
+        .get_significance()
         .clone()
-        .with_label_gap(spacing(8))
+        .label_gap(spacing(8))
         .unwrap()
-        .with_tick_height(spacing(7))
+        .tick_height(spacing(7))
         .unwrap()
-        .with_data_gap(spacing(6))
+        .data_gap(spacing(6))
         .unwrap()
-        .with_panel_padding(spacing(2))
+        .panel_padding(spacing(2))
         .unwrap()
-        .with_level_step(RelativeSpacing::ratio(0, 1).unwrap())
+        .level_step(RelativeSpacing::ratio(0, 1).unwrap())
         .unwrap();
-    theme.annotations = theme
-        .annotations
-        .clone()
-        .with_significance(geometry)
-        .unwrap();
+    theme.annotations = theme.annotations.clone().significance(geometry).unwrap();
     let effective = theme.effective_significance(None).unwrap();
     let annotations = [comparison("a", "b", 0.01), comparison("a", "c", 0.01)];
     let label = theme

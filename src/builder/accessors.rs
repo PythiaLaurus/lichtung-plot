@@ -1063,11 +1063,11 @@ impl<K: crate::kind::Marker> Plot<K> {
         color: (u8, u8, u8),
         radius: u32,
     ) -> PointStyle {
-        theme
-            .marks
-            .points()
-            .primary()
-            .backend_style(color, radius, self.point_outline_visible)
+        theme.marks.get_points().get_primary().backend_style(
+            color,
+            radius,
+            self.point_outline_visible,
+        )
     }
 
     /// Materialize one selected distribution role with the same outline policy as its guide.

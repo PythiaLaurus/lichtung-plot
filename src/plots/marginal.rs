@@ -70,8 +70,16 @@ impl PreparedMarginal {
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
-        let point = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().marginal());
-        let fill = theme.marks.fills().densities().marginal_density();
+        let point = chart.point_style(
+            theme,
+            (0, 0, 0),
+            theme.marks.get_points().get_radii().get_marginal(),
+        );
+        let fill = theme
+            .marks
+            .get_fills()
+            .get_densities()
+            .get_marginal_density();
         for group in &self.groups {
             for &alpha in &group.alphas {
                 guide.point(AlphaGlyphRole::Primary, alpha, point.clone(), false)?;
@@ -114,7 +122,7 @@ impl PreparedMarginal {
             resources,
         )?;
         let accents = AccentColors::resolve(
-            theme.marks.accents(),
+            theme.marks.get_accents(),
             usize::from(self.groups.iter().any(|group| group.identity.hue.is_none())),
         )?;
         Ok((colors, accents))
@@ -170,11 +178,19 @@ impl PreparedMarginal {
                     false,
                 )?
                 .with_point(
-                    chart.point_style(theme, color, theme.marks.points().radii().marginal()),
+                    chart.point_style(
+                        theme,
+                        color,
+                        theme.marks.get_points().get_radii().get_marginal(),
+                    ),
                     PointRole::Primary,
                 )
                 .with_fill(
-                    theme.marks.fills().densities().marginal_density(),
+                    theme
+                        .marks
+                        .get_fills()
+                        .get_densities()
+                        .get_marginal_density(),
                     color,
                     FillRole::MarginalDensity,
                 ),
@@ -198,7 +214,11 @@ pub(crate) fn intrinsic_body_minimum(
         crate::layout::interior::coordinate::Intrinsics::prepared(chart, theme)?.minimum(chart);
 
     for group in &prepared.groups {
-        let style = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().marginal());
+        let style = chart.point_style(
+            theme,
+            (0, 0, 0),
+            theme.marks.get_points().get_radii().get_marginal(),
+        );
         require_aligned_points(group.x.len(), group.alphas.len())?;
         if let Some(ink) = point_ink(
             &style,
@@ -232,9 +252,9 @@ fn density_ink(chart: &Plot, theme: &crate::theme::ResolvedTheme) -> Result<(f64
     fill_ink_outset(
         &theme
             .marks
-            .fills()
-            .densities()
-            .marginal_density()
+            .get_fills()
+            .get_densities()
+            .get_marginal_density()
             .backend_style((0, 0, 0)),
         prepared.groups.iter().map(|group| group.fill_alpha),
     )
@@ -642,7 +662,11 @@ pub(crate) fn measure(
     let mut point_bounds: Option<crate::render::geometry::GeometryBox> = None;
     for (gi, group) in groups.iter().enumerate() {
         let color = PreparedMarginal::group_color(group, &colors, &accents)?;
-        let point_style = chart.point_style(theme, color, theme.marks.points().radii().marginal());
+        let point_style = chart.point_style(
+            theme,
+            color,
+            theme.marks.get_points().get_radii().get_marginal(),
+        );
         require_aligned_points(group.x.len(), group.alphas.len())?;
         if let Some(ink) = point_ink(
             &point_style,
@@ -694,13 +718,21 @@ pub(crate) fn measure(
             let (x, _) = panels[1].projection.project(curves.x_grid[i], 0.0);
             let y = baseline_y
                 + x_densities[gi][i] / x_dens_max
-                    * theme.marks.extents().marginal_density_fraction().as_f64()
+                    * theme
+                        .marks
+                        .get_extents()
+                        .get_marginal_density_fraction()
+                        .as_f64()
                     * top_span;
             top_poly.push(Point2D::new(x, y));
             let (_, y) = panels[2].projection.project(0.0, y_grid[i]);
             let x = baseline_x
                 + y_densities[gi][i] / y_dens_max
-                    * theme.marks.extents().marginal_density_fraction().as_f64()
+                    * theme
+                        .marks
+                        .get_extents()
+                        .get_marginal_density_fraction()
+                        .as_f64()
                     * right_span;
             right_poly.push(Point2D::new(x, y));
         }
@@ -712,9 +744,9 @@ pub(crate) fn measure(
             group.fill_alpha,
             theme
                 .marks
-                .fills()
-                .densities()
-                .marginal_density()
+                .get_fills()
+                .get_densities()
+                .get_marginal_density()
                 .backend_style(color),
         );
         selected.push(MarginalGroupPayload {

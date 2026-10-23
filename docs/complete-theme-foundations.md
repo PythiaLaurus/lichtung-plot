@@ -5,6 +5,11 @@ SurfaceTheme, TypographyTheme, AxisTheme, LegendTheme, CompositionTheme, MarkThe
 AnnotationTheme and ColorScales. Fields are private, with readonly getters and
 validated consuming edits.
 
+Configuration properties use consuming `property(value)` edits and paired
+`get_property()` readers. Read-only properties retain their bare names:
+`theme.typography()` inspects an immutable Theme, while `builder.get_typography()`
+inspects the ThemeBuilder component replaced by `builder.typography(value)`.
+
 `Theme::new` consumes all eight components. The built-ins are ordinary
 `publication()`, `nature()`, `science()` and `chi()` constructors. `customize()`
 clones a complete working copy; ThemeBuilder::new consumes one. Builder getters

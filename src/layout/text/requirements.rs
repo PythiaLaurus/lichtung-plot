@@ -1105,7 +1105,7 @@ fn push_deferred_plot_requirements(
                 Error::Render("heatmap census requires root-prepared semantics".into())
             })?;
         for (_, marks) in &heatmap.panels {
-            for (label, fill) in marks.annotation_labels(theme.marks.cells().fill_alpha()) {
+            for (label, fill) in marks.annotation_labels(theme.marks.get_cells().get_fill_alpha()) {
                 push_deferred_body(
                     requirements,
                     &body_address,
@@ -1123,7 +1123,7 @@ fn push_deferred_plot_requirements(
                     &mut body_index,
                     annotation.text(),
                     &[],
-                    theme.contrasting_text(theme.marks.cells().missing_fill())?,
+                    theme.contrasting_text(theme.marks.get_cells().get_missing_fill())?,
                     prepared_stage.as_deref_mut(),
                 )?;
             }
@@ -2182,8 +2182,8 @@ mod tests {
             )
             .unwrap();
             let mut theme = crate::Theme::publication().resolve().unwrap();
-            let cells = theme.marks.cells().clone().with_fill_alpha(0).unwrap();
-            theme.marks = theme.marks.clone().with_cells(cells).unwrap();
+            let cells = theme.marks.get_cells().clone().fill_alpha(0).unwrap();
+            theme.marks = theme.marks.clone().cells(cells).unwrap();
             theme.typography.annotations.contrast.light.stack =
                 canonical::named_stack(&["Light contrast font"]);
             theme.typography.annotations.contrast.dark.stack =
@@ -2257,11 +2257,11 @@ mod tests {
         theme.surfaces.canvas_root = Color::rgba(0, 0, 0, 0);
         let cells = theme
             .marks
-            .cells()
+            .get_cells()
             .clone()
-            .with_missing_fill(Color::rgba(20, 40, 60, 0))
+            .missing_fill(Color::rgba(20, 40, 60, 0))
             .unwrap();
-        theme.marks = theme.marks.clone().with_cells(cells).unwrap();
+        theme.marks = theme.marks.clone().cells(cells).unwrap();
         theme.typography.annotations.contrast.light.stack =
             canonical::named_stack(&["Light missing row"]);
         theme.typography.annotations.contrast.dark.stack =
@@ -2278,7 +2278,7 @@ mod tests {
             theme.annotations = theme
                 .annotations
                 .clone()
-                .with_planning_backdrop(backdrop)
+                .planning_backdrop(backdrop)
                 .unwrap();
             let requirements = with_prepared_stage(|stage| {
                 foundational_plot_requirements(
@@ -2302,7 +2302,7 @@ mod tests {
             assert_eq!(selected[0].stack, canonical::named_stack(&[expected]));
             assert_eq!(
                 theme
-                    .contrasting_text(theme.marks.cells().missing_fill())
+                    .contrasting_text(theme.marks.get_cells().get_missing_fill())
                     .unwrap()
                     .font_size,
                 if expected == "Light missing row" {

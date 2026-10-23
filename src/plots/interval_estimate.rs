@@ -46,13 +46,13 @@ impl PreparedEstimate {
         let point = chart.point_style(
             theme,
             (0, 0, 0),
-            theme.marks.points().radii().interval_estimate(),
+            theme.marks.get_points().get_radii().get_interval_estimate(),
         );
         let line = theme
             .marks
-            .strokes()
-            .summaries()
-            .estimate_interval()
+            .get_strokes()
+            .get_summaries()
+            .get_estimate_interval()
             .backend_style();
         for ((row, &alpha), &interval) in self
             .estimates
@@ -80,9 +80,9 @@ impl PreparedEstimate {
         crate::alpha::marks::require_aligned_points(self.estimates.len(), self.line_alphas.len())?;
         let style = theme
             .marks
-            .strokes()
-            .summaries()
-            .estimate_interval()
+            .get_strokes()
+            .get_summaries()
+            .get_estimate_interval()
             .backend_style();
         let mut width = 0.0_f64;
         for (row, alpha) in self.estimates.iter().zip(&self.line_alphas) {
@@ -105,7 +105,7 @@ impl PreparedEstimate {
             &chart.point_style(
                 theme,
                 (0, 0, 0),
-                theme.marks.points().radii().interval_estimate(),
+                theme.marks.get_points().get_radii().get_interval_estimate(),
             ),
             self.estimates
                 .iter()
@@ -170,7 +170,12 @@ impl PreparedEstimate {
         pitch = pitch.max(stroke);
         if self.point_interval && stroke > 0.0 {
             pitch = pitch.max(
-                2.0 * f64::from(theme.marks.extents().point_interval_cap_half_height()) + stroke,
+                2.0 * f64::from(
+                    theme
+                        .marks
+                        .get_extents()
+                        .get_point_interval_cap_half_height(),
+                ) + stroke,
             );
         }
         if unavailable {
@@ -552,7 +557,7 @@ fn plan_not_estimable(
         vertical_guide_x,
         &theme
             .annotations
-            .estimates()
+            .get_estimates()
             .lengths(appearance.get_font_size())?,
         if vertical_guide_x.is_some() {
             crate::render::geometry::line_ink_width(reference_style)?
@@ -934,16 +939,16 @@ fn project(
     let reference_style = if prepared.point_interval {
         theme
             .marks
-            .strokes()
-            .references()
-            .point_interval_reference()
+            .get_strokes()
+            .get_references()
+            .get_point_interval_reference()
             .backend_style()
     } else {
         theme
             .marks
-            .strokes()
-            .references()
-            .estimate_reference()
+            .get_strokes()
+            .get_references()
+            .get_estimate_reference()
             .backend_style()
     };
     let detail_role = &theme.typography.annotations.estimate_detail;
@@ -992,7 +997,7 @@ fn project(
                     significance.exact_override,
                 )
             } else {
-                (&detail_label, theme.annotations.estimates().numeric_label_gap()
+                (&detail_label, theme.annotations.get_estimates().get_numeric_label_gap()
                     .product(crate::theme::LocalMetric::css_pixels(detail_label.get_font_size())?)
                     .pixels_rounded(crate::layout::kernel::SpatialRounding::NearestEven)?,
                     "coefficient estimate label", false)
@@ -1076,8 +1081,8 @@ fn project(
     };
     let point_style = chart.point_style(
         theme,
-        crate::theme::AccentColors::resolve(theme.marks.accents(), 1)?.color(0)?,
-        theme.marks.points().radii().interval_estimate(),
+        crate::theme::AccentColors::resolve(theme.marks.get_accents(), 1)?.color(0)?,
+        theme.marks.get_points().get_radii().get_interval_estimate(),
     );
     crate::alpha::marks::require_aligned_points(estimates.len(), prepared.alphas.len())?;
     crate::alpha::marks::require_aligned_points(estimates.len(), prepared.line_alphas.len())?;
@@ -1094,9 +1099,9 @@ fn project(
                 prepared.line_alphas[index].value,
                 theme
                     .marks
-                    .strokes()
-                    .summaries()
-                    .estimate_interval()
+                    .get_strokes()
+                    .get_summaries()
+                    .get_estimate_interval()
                     .backend_style(),
             ),
             text: None,
@@ -1128,8 +1133,12 @@ fn project(
                     for (index, bound) in [lower, upper].into_iter().enumerate() {
                         if bound >= x_range.0 && bound <= x_range.1 {
                             let (x, py) = layout.projection.project(bound, y);
-                            let half =
-                                f64::from(theme.marks.extents().point_interval_cap_half_height());
+                            let half = f64::from(
+                                theme
+                                    .marks
+                                    .get_extents()
+                                    .get_point_interval_cap_half_height(),
+                            );
                             row.caps[index] =
                                 Some([Point2D::new(x, py - half), Point2D::new(x, py + half)]);
                         }

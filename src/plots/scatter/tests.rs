@@ -73,7 +73,11 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
         [(1, 0), (1, 128), (1, 0)]
     );
     let outline = chart
-        .point_style(&theme, (0, 0, 0), theme.marks.points().radii().scatter())
+        .point_style(
+            &theme,
+            (0, 0, 0),
+            theme.marks.get_points().get_radii().get_scatter(),
+        )
         .outline;
     assert!(payload
         .groups

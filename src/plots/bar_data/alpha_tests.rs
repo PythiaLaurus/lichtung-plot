@@ -57,9 +57,9 @@ fn aggregate_uncertainty_alpha_uses_actual_category_series_and_facet_keys_before
         let mut theme = crate::Theme::publication().resolve().unwrap();
         let interval = theme
             .marks
-            .strokes()
-            .summaries()
-            .uncertainty()
+            .get_strokes()
+            .get_summaries()
+            .get_uncertainty()
             .clone()
             .color(crate::Color::rgba(17, 41, 67, 0))
             .unwrap()
@@ -67,23 +67,23 @@ fn aggregate_uncertainty_alpha_uses_actual_category_series_and_facet_keys_before
             .unwrap();
         let summaries = theme
             .marks
-            .strokes()
-            .summaries()
+            .get_strokes()
+            .get_summaries()
             .clone()
-            .with_uncertainty(interval)
+            .uncertainty(interval)
             .unwrap();
         let strokes = theme
             .marks
-            .strokes()
+            .get_strokes()
             .clone()
-            .with_summaries(summaries)
+            .summaries(summaries)
             .unwrap();
-        theme.marks = theme.marks.clone().with_strokes(strokes).unwrap();
+        theme.marks = theme.marks.clone().strokes(strokes).unwrap();
         let body = theme
             .marks
-            .fills()
-            .bodies()
-            .bar_body()
+            .get_fills()
+            .get_bodies()
+            .get_bar_body()
             .clone()
             .fill_alpha(0)
             .unwrap()
@@ -91,13 +91,13 @@ fn aggregate_uncertainty_alpha_uses_actual_category_series_and_facet_keys_before
             .unwrap();
         let bodies = theme
             .marks
-            .fills()
-            .bodies()
+            .get_fills()
+            .get_bodies()
             .clone()
-            .with_bar_body(body)
+            .bar_body(body)
             .unwrap();
-        let fills = theme.marks.fills().clone().with_bodies(bodies).unwrap();
-        theme.marks = theme.marks.clone().with_fills(fills).unwrap();
+        let fills = theme.marks.get_fills().clone().bodies(bodies).unwrap();
+        theme.marks = theme.marks.clone().fills(fills).unwrap();
         let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
         let panels = &chart.prepared_bars.as_ref().unwrap().panels;
         assert_eq!(panels.len(), 2);
@@ -287,9 +287,9 @@ fn stacked_body_alpha_preserves_signed_accumulation_zero_segments_and_independen
         assert!(payload.bars.iter().all(|bar| bar.fill.stroke.get_alpha()
             == theme
                 .marks
-                .fills()
-                .bodies()
-                .bar_body()
+                .get_fills()
+                .get_bodies()
+                .get_bar_body()
                 .backend_style((0, 0, 0))
                 .stroke
                 .get_alpha()));

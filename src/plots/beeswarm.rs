@@ -54,7 +54,11 @@ pub(crate) fn intrinsic_body_minimum(
             "Beeswarm source rows and prepared points differ".into(),
         ));
     }
-    let point = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().beeswarm());
+    let point = chart.point_style(
+        theme,
+        (0, 0, 0),
+        theme.marks.get_points().get_radii().get_beeswarm(),
+    );
     let ink = crate::alpha::marks::point_ink(
         &point,
         prepared
@@ -84,9 +88,9 @@ pub(crate) fn intrinsic_body_minimum(
         numeric = numeric.max(crate::render::geometry::line_ink_width(
             &theme
                 .marks
-                .strokes()
-                .references()
-                .beeswarm_reference()
+                .get_strokes()
+                .get_references()
+                .get_beeswarm_reference()
                 .backend_style(),
         )?);
     }
@@ -107,7 +111,11 @@ fn quanta_pixels(value: i64) -> f64 {
 }
 
 fn packing_radius(chart: &Plot, theme: &crate::theme::ResolvedTheme) -> Result<i64, Error> {
-    let mut style = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().beeswarm());
+    let mut style = chart.point_style(
+        theme,
+        (0, 0, 0),
+        theme.marks.get_points().get_radii().get_beeswarm(),
+    );
     // A data-alpha binding retains every observation's full glyph in the
     // scientific packing input, independent of which bytes are transparent.
     if !chart.alpha_inputs().get(AlphaTarget::Point).is_theme() {
@@ -203,7 +211,11 @@ impl PreparedBeeswarm {
         theme: &crate::theme::ResolvedTheme,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
-        let point = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().beeswarm());
+        let point = chart.point_style(
+            theme,
+            (0, 0, 0),
+            theme.marks.get_points().get_radii().get_beeswarm(),
+        );
         for &(_, _, _, alpha) in &self.rows {
             guide.point(
                 crate::decorations::legend::alpha::AlphaGlyphRole::Primary,
@@ -448,9 +460,9 @@ pub(crate) fn measure(
             [Point2D::new(x, y0), Point2D::new(x, y1)],
             theme
                 .marks
-                .strokes()
-                .references()
-                .beeswarm_reference()
+                .get_strokes()
+                .get_references()
+                .get_beeswarm_reference()
                 .backend_style(),
         ))
     } else {
@@ -474,7 +486,7 @@ pub(crate) fn measure(
                     row.3.point(chart.point_style(
                         theme,
                         color.as_rgb(),
-                        theme.marks.points().radii().beeswarm(),
+                        theme.marks.get_points().get_radii().get_beeswarm(),
                     )),
                 ))
             }),

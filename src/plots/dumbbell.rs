@@ -94,9 +94,9 @@ pub(crate) fn intrinsic_body_minimum(
             row.line_alpha.value,
             theme
                 .marks
-                .strokes()
-                .connectors()
-                .dumbbell_connector()
+                .get_strokes()
+                .get_connectors()
+                .get_dumbbell_connector()
                 .backend_style(),
         ))?;
         outward = outward.max(connector / 2.0);
@@ -154,9 +154,9 @@ impl DumbbellData {
                 row.line_alpha.value,
                 theme
                     .marks
-                    .strokes()
-                    .connectors()
-                    .dumbbell_connector()
+                    .get_strokes()
+                    .get_connectors()
+                    .get_dumbbell_connector()
                     .backend_style(),
                 false,
             )?;
@@ -303,9 +303,9 @@ fn project(
     let category_count = prepared.categories.len();
     let connector = theme
         .marks
-        .strokes()
-        .connectors()
-        .dumbbell_connector()
+        .get_strokes()
+        .get_connectors()
+        .get_dumbbell_connector()
         .backend_style();
     let mut payload = DumbbellPayload {
         clip: layout.projection.panel_box(),
@@ -512,7 +512,7 @@ fn endpoint_style(
     let mut point = chart.point_style(
         theme,
         (color.red(), color.green(), color.blue()),
-        theme.marks.points().radii().dumbbell(),
+        theme.marks.get_points().get_radii().get_dumbbell(),
     );
     // Exact endpoint paint replaces the entire fill. Theme geometry and the
     // independent outline policy still apply to both marks and literal keys.

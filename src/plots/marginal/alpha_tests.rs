@@ -68,13 +68,13 @@ fn central_alpha_retains_filtered_original_members_and_does_not_change_densities
     let mut theme = crate::Theme::publication().resolve().unwrap();
     let primary = theme
         .marks
-        .points()
-        .primary()
+        .get_points()
+        .get_primary()
         .clone()
         .fill_alpha(0)
         .unwrap();
-    let points = theme.marks.points().clone().with_primary(primary).unwrap();
-    theme.marks = theme.marks.clone().with_points(points).unwrap();
+    let points = theme.marks.get_points().clone().primary(primary).unwrap();
+    theme.marks = theme.marks.clone().points(points).unwrap();
     let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
     let selected = chart
         .measure_selected_interior(PlotRenderContext::new(

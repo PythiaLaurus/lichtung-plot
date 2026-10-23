@@ -61,12 +61,18 @@ impl HeatmapData {
             let Some(alpha) = alpha else { continue };
             let highlighted = self.highlighted[index];
             let outline = if highlighted {
-                Some(theme.annotations.cells().highlight_outline().clone())
+                Some(
+                    theme
+                        .annotations
+                        .get_cells()
+                        .get_highlight_outline()
+                        .clone(),
+                )
             } else {
-                theme.marks.cells().cell_outline().cloned()
+                theme.marks.get_cells().get_cell_outline().cloned()
             };
             let fill = crate::theme::FixedFillTheme::new(
-                crate::Color::rgba(0, 0, 0, theme.marks.cells().fill_alpha()),
+                crate::Color::rgba(0, 0, 0, theme.marks.get_cells().get_fill_alpha()),
                 outline,
             )?
             .backend_style();
@@ -103,8 +109,8 @@ impl HeatmapData {
             .has_missing
             .then(|| -> Result<_, Error> {
                 Ok(crate::decorations::legend::descriptor::MissingKey {
-                    fill: theme.marks.cells().missing_fill(),
-                    outline: theme.marks.cells().missing_key_outline().cloned(),
+                    fill: theme.marks.get_cells().get_missing_fill(),
+                    outline: theme.marks.get_cells().get_missing_key_outline().cloned(),
                     label: crate::data::source::copy_source_string("Missing")?,
                 })
             })
@@ -234,7 +240,7 @@ fn assigned_columns(
             continue;
         };
         let fill = prepared
-            .resolved_cell_fill(index, theme.marks.cells().fill_alpha())
+            .resolved_cell_fill(index, theme.marks.get_cells().get_fill_alpha())
             .expect("prepared finite cell");
         let appearance = theme.contrasting_text(fill)?;
         let widths = crate::layout::fit::intrinsic_widths(
@@ -245,7 +251,7 @@ fn assigned_columns(
         )?;
         let padding = theme
             .annotations
-            .cells()
+            .get_cells()
             .value_padding(appearance.get_font_size())?;
         hard[index % count] = hard[index % count].max(padding.width(widths.0)?);
     }
@@ -339,7 +345,7 @@ fn assigned_rows(
         if let Some(plan) = plan {
             let padding = theme
                 .annotations
-                .cells()
+                .get_cells()
                 .value_padding(plan.style.font_size)?;
             hard[index / width] = hard[index / width].max(padding.height(plan.height())?);
         }
@@ -348,7 +354,7 @@ fn assigned_rows(
         if let Some(plan) = plan {
             let padding = theme
                 .annotations
-                .cells()
+                .get_cells()
                 .null_row_padding(plan.style.font_size)?;
             hard[index] = hard[index].max(padding.height(plan.height())?);
         }
@@ -498,9 +504,9 @@ impl HeatmapIntrinsicCache {
             && self.plot_panel == theme.surfaces.plot_panel
             && self.canvas_root == theme.surfaces.canvas_root
             && self.canvas_override == theme.canvas_surface_override
-            && self.backdrop == theme.annotations.planning_backdrop()
-            && self.cell_marks == *theme.marks.cells()
-            && self.cell_annotations == *theme.annotations.cells()
+            && self.backdrop == theme.annotations.get_planning_backdrop()
+            && self.cell_marks == *theme.marks.get_cells()
+            && self.cell_annotations == *theme.annotations.get_cells()
             && self.value_presentation == prepared.value_presentation
             && self.fill_binding == prepared.fill_binding
             && self.fill_alphas == prepared.fill_alphas
@@ -533,9 +539,9 @@ impl HeatmapIntrinsicCache {
             plot_panel: theme.surfaces.plot_panel,
             canvas_root: theme.surfaces.canvas_root,
             canvas_override: theme.canvas_surface_override,
-            backdrop: theme.annotations.planning_backdrop(),
-            cell_marks: theme.marks.cells().clone(),
-            cell_annotations: theme.annotations.cells().clone(),
+            backdrop: theme.annotations.get_planning_backdrop(),
+            cell_marks: theme.marks.get_cells().clone(),
+            cell_annotations: theme.annotations.get_cells().clone(),
             value_presentation: prepared.value_presentation.clone(),
             fill_binding: prepared.fill_binding.clone(),
             fill_alphas: prepared.fill_alphas.clone(),
@@ -617,7 +623,7 @@ pub(crate) fn natural_body_height(
         if let Some(plan) = plan {
             let padding = theme
                 .annotations
-                .cells()
+                .get_cells()
                 .value_padding(plan.style.font_size)?;
             heights[index / marks.x_levels.len()] =
                 heights[index / marks.x_levels.len()].max(padding.height(plan.height())?);
@@ -627,7 +633,7 @@ pub(crate) fn natural_body_height(
         if let Some(plan) = plan {
             let padding = theme
                 .annotations
-                .cells()
+                .get_cells()
                 .null_row_padding(plan.style.font_size)?;
             heights[index] = heights[index].max(padding.height(plan.height())?);
         }
@@ -669,7 +675,7 @@ fn intrinsic_cell_ink(prepared: &HeatmapData, theme: &ResolvedTheme) -> Result<(
             let ink = if let Some(ink) = missing_row {
                 ink
             } else {
-                let ink = cell(theme.marks.cells().missing_row_outline())?;
+                let ink = cell(theme.marks.get_cells().get_missing_row_outline())?;
                 missing_row = Some(ink);
                 ink
             };
@@ -688,14 +694,14 @@ fn intrinsic_cell_ink(prepared: &HeatmapData, theme: &ResolvedTheme) -> Result<(
                 if let Some(ink) = highlight {
                     ink
                 } else {
-                    let ink = cell(Some(theme.annotations.cells().highlight_outline()))?;
+                    let ink = cell(Some(theme.annotations.get_cells().get_highlight_outline()))?;
                     highlight = Some(ink);
                     ink
                 }
             } else if let Some(ink) = normal {
                 ink
             } else {
-                let ink = cell(theme.marks.cells().cell_outline())?;
+                let ink = cell(theme.marks.get_cells().get_cell_outline())?;
                 normal = Some(ink);
                 ink
             };
@@ -706,7 +712,7 @@ fn intrinsic_cell_ink(prepared: &HeatmapData, theme: &ResolvedTheme) -> Result<(
                     stroke
                 } else {
                     let stroke = crate::render::geometry::line_ink_width(
-                        &theme.marks.cells().missing_cross().backend_style(),
+                        &theme.marks.get_cells().get_missing_cross().backend_style(),
                     )?;
                     cross = Some(stroke);
                     stroke
@@ -843,7 +849,7 @@ fn analyze_intrinsics(
         .filter_map(|(index, (source, fill))| Some((index, (source.as_deref()?, (*fill)?))))
     {
         let fill = prepared
-            .resolved_cell_fill(index, theme.marks.cells().fill_alpha())
+            .resolved_cell_fill(index, theme.marks.get_cells().get_fill_alpha())
             .expect("prepared finite cell");
         let appearance = theme.contrasting_text(fill)?;
         let plan = theme.measure_legacy_appearance_text(
@@ -855,7 +861,7 @@ fn analyze_intrinsics(
         )?;
         let padding = theme
             .annotations
-            .cells()
+            .get_cells()
             .value_padding(plan.style.font_size)?;
         let hard_width = crate::layout::fit::intrinsic_widths(
             theme,
@@ -877,7 +883,7 @@ fn analyze_intrinsics(
         Ok(next)
     })?;
     minimum.0 = minimum.0.max(total_columns);
-    let appearance = theme.contrasting_text(theme.marks.cells().missing_fill())?;
+    let appearance = theme.contrasting_text(theme.marks.get_cells().get_missing_fill())?;
     for (row, source) in prepared
         .null_row_annotations
         .iter()
@@ -900,7 +906,7 @@ fn analyze_intrinsics(
         )?;
         let padding = theme
             .annotations
-            .cells()
+            .get_cells()
             .null_row_padding(appearance.get_font_size())?;
         minimum.0 = minimum.0.max(padding.width(hard)?);
         row_hard[row] = row_hard[row].max(padding.height(unwrapped.height())?);
@@ -1165,7 +1171,7 @@ pub(crate) fn measure(
 
     let payload = HeatmapPayload {
         clip: panel,
-        cross_style: theme.marks.cells().missing_cross().backend_style(),
+        cross_style: theme.marks.get_cells().get_missing_cross().backend_style(),
         cells: select_cells(prepared, columns, rows, theme, &annotations)?,
         colorbar: colorbar
             .as_ref()
@@ -1828,8 +1834,8 @@ fn select_cells(
                     Point2D::new(left, top),
                 ],
                 fill: crate::theme::FixedFillTheme::new(
-                    theme.marks.cells().missing_fill(),
-                    theme.marks.cells().missing_row_outline().cloned(),
+                    theme.marks.get_cells().get_missing_fill(),
+                    theme.marks.get_cells().get_missing_row_outline().cloned(),
                 )?
                 .backend_style(),
                 cross: None,
@@ -1857,9 +1863,9 @@ fn select_cells(
             let color = prepared
                 .resolved_cell_fill(
                     y_index * x_count + x_index,
-                    theme.marks.cells().fill_alpha(),
+                    theme.marks.get_cells().get_fill_alpha(),
                 )
-                .unwrap_or(theme.marks.cells().missing_fill());
+                .unwrap_or(theme.marks.get_cells().get_missing_fill());
             let mut cell = CellPayload {
                 corners: [
                     Point2D::new(left, bottom),
@@ -1870,9 +1876,15 @@ fn select_cells(
                 fill: crate::theme::FixedFillTheme::new(
                     color,
                     if highlighted {
-                        Some(theme.annotations.cells().highlight_outline().clone())
+                        Some(
+                            theme
+                                .annotations
+                                .get_cells()
+                                .get_highlight_outline()
+                                .clone(),
+                        )
                     } else {
-                        theme.marks.cells().cell_outline().cloned()
+                        theme.marks.get_cells().get_cell_outline().cloned()
                     },
                 )?
                 .backend_style(),
@@ -1896,7 +1908,7 @@ fn select_cells(
                     stroke
                 } else {
                     let stroke = crate::render::geometry::line_ink_width(
-                        &theme.marks.cells().missing_cross().backend_style(),
+                        &theme.marks.get_cells().get_missing_cross().backend_style(),
                     )?;
                     cross_width = Some(stroke);
                     stroke
@@ -1910,8 +1922,8 @@ fn select_cells(
                 )?;
                 let inset = theme
                     .marks
-                    .cells()
-                    .missing_cross_inset()
+                    .get_cells()
+                    .get_missing_cross_inset()
                     .product(metric)
                     .pixels_rounded(crate::layout::kernel::SpatialRounding::NearestEven)?
                     .clamp(1.0, 4.0)
@@ -1973,14 +1985,14 @@ fn measure_annotations(
                 .as_deref()
                 .ok_or_else(|| Error::Render("heatmap value text identity missing".into()))?;
             let fill = prepared
-                .resolved_cell_fill(index, theme.marks.cells().fill_alpha())
+                .resolved_cell_fill(index, theme.marks.get_cells().get_fill_alpha())
                 .ok_or_else(|| {
                     Error::Render("heatmap value has no prepared resolved fill".into())
                 })?;
             let appearance = theme.contrasting_text(fill)?;
             let padding = theme
                 .annotations
-                .cells()
+                .get_cells()
                 .value_padding(appearance.get_font_size())?;
             let owner = prepared.value_owners[index]
                 .as_deref()
@@ -2010,10 +2022,10 @@ fn measure_annotations(
         let Some(annotation) = annotation else {
             continue;
         };
-        let appearance = theme.contrasting_text(theme.marks.cells().missing_fill())?;
+        let appearance = theme.contrasting_text(theme.marks.get_cells().get_missing_fill())?;
         let padding = theme
             .annotations
-            .cells()
+            .get_cells()
             .null_row_padding(appearance.get_font_size())?;
         let available_width = padding.available_width(columns[columns.len() - 1] - columns[0])?;
         let row_scope = scope.child(AddressRole::HeatmapMergedRow, y_index)?;
@@ -2075,7 +2087,7 @@ fn check_annotation_tracks(
         let height = rows[row] - rows[row + 1];
         let padding = theme
             .annotations
-            .cells()
+            .get_cells()
             .value_padding(plan.style.font_size)?;
         if width < padding.width(plan.width())? || height < padding.height(plan.height())? {
             let precision = prepared
@@ -2093,7 +2105,7 @@ fn check_annotation_tracks(
         let Some(plan) = plan else { continue };
         let padding = theme
             .annotations
-            .cells()
+            .get_cells()
             .null_row_padding(plan.style.font_size)?;
         if rows[row] - rows[row + 1] < padding.height(plan.height())?
             || columns[columns.len() - 1] - columns[0] < padding.width(plan.width())?

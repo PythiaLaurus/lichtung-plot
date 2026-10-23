@@ -353,7 +353,7 @@ impl PreparedInteriorInputs {
                     kind,
                 )?;
                 let color =
-                    crate::theme::AccentColors::resolve(theme.marks.accents(), 1)?.color(0)?;
+                    crate::theme::AccentColors::resolve(theme.marks.get_accents(), 1)?.color(0)?;
                 crate::plots::regression::PreparedRegression::guide_entries(chart, theme, color)
             }
             PlotKind::Dumbbell => {

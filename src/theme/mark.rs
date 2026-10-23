@@ -29,256 +29,256 @@ fn fraction(value: &RelativeSpacing, limit: &RelativeSpacing, positive: bool) ->
 }
 
 validated_component!(SizedPointTheme {
-    borrow appearance: PointTheme => with_appearance,
-    copy radius: u32 => with_radius,
+    borrow appearance: PointTheme => get_appearance,
+    copy radius: u32 => get_radius,
 } validate |value| {
-    value.appearance().validate()?;
-    positive_radius(value.radius())?;
+    value.get_appearance().validate()?;
+    positive_radius(value.get_radius())?;
 });
 
 impl SizedPointTheme {
     pub(crate) fn backend_style(&self, color: (u8, u8, u8), outline_visible: bool) -> PointStyle {
-        self.appearance()
-            .backend_style(color, self.radius(), outline_visible)
+        self.get_appearance()
+            .backend_style(color, self.get_radius(), outline_visible)
     }
 }
 
 validated_component!(SupplementalPointTheme {
-    copy radius: u32 => with_radius,
-    copy fill_alpha: u8 => with_fill_alpha,
-} validate |value| { positive_radius(value.radius())?; });
+    copy radius: u32 => get_radius,
+    copy fill_alpha: u8 => get_fill_alpha,
+} validate |value| { positive_radius(value.get_radius())?; });
 
 validated_component!(PointRadii {
-    copy scatter: u32 => with_scatter,
-    copy path: u32 => with_path,
-    copy trajectory: u32 => with_trajectory,
-    copy regression: u32 => with_regression,
-    copy qq: u32 => with_qq,
-    copy marginal: u32 => with_marginal,
-    copy matrix: u32 => with_matrix,
-    copy interval_estimate: u32 => with_interval_estimate,
-    copy dumbbell: u32 => with_dumbbell,
-    copy interaction: u32 => with_interaction,
-    copy beeswarm: u32 => with_beeswarm,
-    copy box_flier: u32 => with_box_flier,
+    copy scatter: u32 => get_scatter,
+    copy path: u32 => get_path,
+    copy trajectory: u32 => get_trajectory,
+    copy regression: u32 => get_regression,
+    copy qq: u32 => get_qq,
+    copy marginal: u32 => get_marginal,
+    copy matrix: u32 => get_matrix,
+    copy interval_estimate: u32 => get_interval_estimate,
+    copy dumbbell: u32 => get_dumbbell,
+    copy interaction: u32 => get_interaction,
+    copy beeswarm: u32 => get_beeswarm,
+    copy box_flier: u32 => get_box_flier,
 } validate |value| {
-    for radius in [value.scatter(), value.path(), value.trajectory(), value.regression(),
-        value.qq(), value.marginal(), value.matrix(), value.interval_estimate(),
-        value.dumbbell(), value.interaction(), value.beeswarm(), value.box_flier()] {
+    for radius in [value.get_scatter(), value.get_path(), value.get_trajectory(), value.get_regression(),
+        value.get_qq(), value.get_marginal(), value.get_matrix(), value.get_interval_estimate(),
+        value.get_dumbbell(), value.get_interaction(), value.get_beeswarm(), value.get_box_flier()] {
         positive_radius(radius)?;
     }
 });
 
 validated_component!(PointRoles {
-    borrow primary: PointTheme => with_primary,
-    borrow raw_overlay: SizedPointTheme => with_raw_overlay,
-    borrow mandatory_strip: SizedPointTheme => with_mandatory_strip,
-    borrow radii: PointRadii => with_radii,
-    borrow supplemental: SupplementalPointTheme => with_supplemental,
+    borrow primary: PointTheme => get_primary,
+    borrow raw_overlay: SizedPointTheme => get_raw_overlay,
+    borrow mandatory_strip: SizedPointTheme => get_mandatory_strip,
+    borrow radii: PointRadii => get_radii,
+    borrow supplemental: SupplementalPointTheme => get_supplemental,
 } validate |value| {
-    value.primary().validate()?;
-    value.raw_overlay().validate()?;
-    value.mandatory_strip().validate()?;
-    value.radii().validate()?;
-    value.supplemental().validate()?;
+    value.get_primary().validate()?;
+    value.get_raw_overlay().validate()?;
+    value.get_mandatory_strip().validate()?;
+    value.get_radii().validate()?;
+    value.get_supplemental().validate()?;
 });
 
 validated_component!(BodyFillRoles {
-    borrow bar_body: DataFillTheme => with_bar_body,
-    borrow box_body: DataFillTheme => with_box_body,
-    borrow violin_body: DataFillTheme => with_violin_body,
-    borrow inner_summary: FixedFillTheme => with_inner_summary,
-    borrow histogram_bin: DataFillTheme => with_histogram_bin,
-    borrow waterfall_bar: DataFillTheme => with_waterfall_bar,
+    borrow bar_body: DataFillTheme => get_bar_body,
+    borrow box_body: DataFillTheme => get_box_body,
+    borrow violin_body: DataFillTheme => get_violin_body,
+    borrow inner_summary: FixedFillTheme => get_inner_summary,
+    borrow histogram_bin: DataFillTheme => get_histogram_bin,
+    borrow waterfall_bar: DataFillTheme => get_waterfall_bar,
 } validate |value| {
-    for fill in [value.bar_body(), value.box_body(), value.violin_body(),
-        value.histogram_bin(), value.waterfall_bar()] { fill.validate()?; }
-    value.inner_summary().validate()?;
+    for fill in [value.get_bar_body(), value.get_box_body(), value.get_violin_body(),
+        value.get_histogram_bin(), value.get_waterfall_bar()] { fill.validate()?; }
+    value.get_inner_summary().validate()?;
 });
 
 validated_component!(BandFillRoles {
-    borrow line_band: DataFillTheme => with_line_band,
-    borrow regression_band: DataFillTheme => with_regression_band,
+    borrow line_band: DataFillTheme => get_line_band,
+    borrow regression_band: DataFillTheme => get_regression_band,
 } validate |value| {
-    value.line_band().validate()?;
-    value.regression_band().validate()?;
+    value.get_line_band().validate()?;
+    value.get_regression_band().validate()?;
 });
 
 validated_component!(DensityFillRoles {
-    borrow density_area: DataFillTheme => with_density_area,
-    borrow marginal_density: DataFillTheme => with_marginal_density,
-    borrow matrix_density: DataFillTheme => with_matrix_density,
+    borrow density_area: DataFillTheme => get_density_area,
+    borrow marginal_density: DataFillTheme => get_marginal_density,
+    borrow matrix_density: DataFillTheme => get_matrix_density,
 } validate |value| {
-    for fill in [value.density_area(), value.marginal_density(), value.matrix_density()] {
+    for fill in [value.get_density_area(), value.get_marginal_density(), value.get_matrix_density()] {
         fill.validate()?;
     }
 });
 
 validated_component!(FillRoles {
-    borrow bodies: BodyFillRoles => with_bodies,
-    borrow bands: BandFillRoles => with_bands,
-    borrow densities: DensityFillRoles => with_densities,
+    borrow bodies: BodyFillRoles => get_bodies,
+    borrow bands: BandFillRoles => get_bands,
+    borrow densities: DensityFillRoles => get_densities,
 } validate |value| {
-    value.bodies().validate()?;
-    value.bands().validate()?;
-    value.densities().validate()?;
+    value.get_bodies().validate()?;
+    value.get_bands().validate()?;
+    value.get_densities().validate()?;
 });
 
 validated_component!(DataLineRoles {
-    borrow series_line: DataLineTheme => with_series_line,
-    borrow path_line: DataLineTheme => with_path_line,
-    borrow density_line: DataLineTheme => with_density_line,
-    borrow interaction_interval: DataLineTheme => with_interaction_interval,
-    borrow interaction_connector: DataLineTheme => with_interaction_connector,
+    borrow series_line: DataLineTheme => get_series_line,
+    borrow path_line: DataLineTheme => get_path_line,
+    borrow density_line: DataLineTheme => get_density_line,
+    borrow interaction_interval: DataLineTheme => get_interaction_interval,
+    borrow interaction_connector: DataLineTheme => get_interaction_connector,
 } validate |value| {
-    for line in [value.series_line(), value.path_line(), value.density_line(),
-        value.interaction_interval(), value.interaction_connector()] { line.validate()?; }
+    for line in [value.get_series_line(), value.get_path_line(), value.get_density_line(),
+        value.get_interaction_interval(), value.get_interaction_connector()] { line.validate()?; }
 });
 
 validated_component!(NeutralPaintRoles {
-    copy path: OpaqueColor => with_path,
-    copy box_flier: OpaqueColor => with_box_flier,
+    copy path: OpaqueColor => get_path,
+    copy box_flier: OpaqueColor => get_box_flier,
 } validate |_value| {});
 
 validated_component!(ReferenceStrokeRoles {
-    borrow bar_zero: StrokeTheme => with_bar_zero,
-    borrow waterfall_reference: StrokeTheme => with_waterfall_reference,
-    borrow beeswarm_reference: StrokeTheme => with_beeswarm_reference,
-    borrow point_interval_reference: StrokeTheme => with_point_interval_reference,
-    borrow estimate_reference: StrokeTheme => with_estimate_reference,
-    borrow qq_reference: StrokeTheme => with_qq_reference,
+    borrow bar_zero: StrokeTheme => get_bar_zero,
+    borrow waterfall_reference: StrokeTheme => get_waterfall_reference,
+    borrow beeswarm_reference: StrokeTheme => get_beeswarm_reference,
+    borrow point_interval_reference: StrokeTheme => get_point_interval_reference,
+    borrow estimate_reference: StrokeTheme => get_estimate_reference,
+    borrow qq_reference: StrokeTheme => get_qq_reference,
 } validate |value| {
-    for stroke in [value.bar_zero(), value.waterfall_reference(), value.beeswarm_reference(),
-        value.point_interval_reference(), value.estimate_reference(), value.qq_reference()] {
+    for stroke in [value.get_bar_zero(), value.get_waterfall_reference(), value.get_beeswarm_reference(),
+        value.get_point_interval_reference(), value.get_estimate_reference(), value.get_qq_reference()] {
         stroke.validate()?;
     }
 });
 
 validated_component!(ConnectorStrokeRoles {
-    borrow waterfall_connector: StrokeTheme => with_waterfall_connector,
-    borrow dumbbell_connector: StrokeTheme => with_dumbbell_connector,
+    borrow waterfall_connector: StrokeTheme => get_waterfall_connector,
+    borrow dumbbell_connector: StrokeTheme => get_dumbbell_connector,
 } validate |value| {
-    value.waterfall_connector().validate()?;
-    value.dumbbell_connector().validate()?;
+    value.get_waterfall_connector().validate()?;
+    value.get_dumbbell_connector().validate()?;
 });
 
 validated_component!(SummaryStrokeRoles {
-    borrow uncertainty: StrokeTheme => with_uncertainty,
-    borrow summary: StrokeTheme => with_summary,
-    borrow estimate_interval: StrokeTheme => with_estimate_interval,
-    borrow median: StrokeTheme => with_median,
+    borrow uncertainty: StrokeTheme => get_uncertainty,
+    borrow summary: StrokeTheme => get_summary,
+    borrow estimate_interval: StrokeTheme => get_estimate_interval,
+    borrow median: StrokeTheme => get_median,
 } validate |value| {
-    for stroke in [value.uncertainty(), value.summary(), value.estimate_interval(), value.median()] {
+    for stroke in [value.get_uncertainty(), value.get_summary(), value.get_estimate_interval(), value.get_median()] {
         stroke.validate()?;
     }
 });
 
 validated_component!(CurveStrokeRoles {
-    borrow histogram_curve: StrokeTheme => with_histogram_curve,
-    borrow histogram_rug: StrokeTheme => with_histogram_rug,
-    borrow regression_fit: StrokeTheme => with_regression_fit,
+    borrow histogram_curve: StrokeTheme => get_histogram_curve,
+    borrow histogram_rug: StrokeTheme => get_histogram_rug,
+    borrow regression_fit: StrokeTheme => get_regression_fit,
 } validate |value| {
-    for stroke in [value.histogram_curve(), value.histogram_rug(), value.regression_fit()] {
+    for stroke in [value.get_histogram_curve(), value.get_histogram_rug(), value.get_regression_fit()] {
         stroke.validate()?;
     }
 });
 
 validated_component!(StrokeRoles {
-    borrow references: ReferenceStrokeRoles => with_references,
-    borrow connectors: ConnectorStrokeRoles => with_connectors,
-    borrow summaries: SummaryStrokeRoles => with_summaries,
-    borrow curves: CurveStrokeRoles => with_curves,
+    borrow references: ReferenceStrokeRoles => get_references,
+    borrow connectors: ConnectorStrokeRoles => get_connectors,
+    borrow summaries: SummaryStrokeRoles => get_summaries,
+    borrow curves: CurveStrokeRoles => get_curves,
 } validate |value| {
-    value.references().validate()?;
-    value.connectors().validate()?;
-    value.summaries().validate()?;
-    value.curves().validate()?;
+    value.get_references().validate()?;
+    value.get_connectors().validate()?;
+    value.get_summaries().validate()?;
+    value.get_curves().validate()?;
 });
 
 validated_component!(CellMarkRoles {
-    copy fill_alpha: u8 => with_fill_alpha,
-    optional cell_outline: OutlineTheme => with_cell_outline,
-    copy missing_fill: Color => with_missing_fill,
-    optional missing_row_outline: OutlineTheme => with_missing_row_outline,
-    optional missing_key_outline: OutlineTheme => with_missing_key_outline,
-    borrow missing_cross: StrokeTheme => with_missing_cross,
-    borrow missing_cross_inset: RelativeSpacing => with_missing_cross_inset,
+    copy fill_alpha: u8 => get_fill_alpha,
+    optional cell_outline: OutlineTheme => get_cell_outline,
+    copy missing_fill: Color => get_missing_fill,
+    optional missing_row_outline: OutlineTheme => get_missing_row_outline,
+    optional missing_key_outline: OutlineTheme => get_missing_key_outline,
+    borrow missing_cross: StrokeTheme => get_missing_cross,
+    borrow missing_cross_inset: RelativeSpacing => get_missing_cross_inset,
 } validate |value| {
-    for outline in [value.cell_outline(), value.missing_row_outline(), value.missing_key_outline()]
+    for outline in [value.get_cell_outline(), value.get_missing_row_outline(), value.get_missing_key_outline()]
         .into_iter().flatten() { outline.validate()?; }
-    value.missing_cross().validate()?;
-    if value.missing_cross_inset().compare(&RelativeSpacing::ratio(1, 2)?).is_ge() {
+    value.get_missing_cross().validate()?;
+    if value.get_missing_cross_inset().compare(&RelativeSpacing::ratio(1, 2)?).is_ge() {
         return Err(Error::Data("missing-cell cross inset must be smaller than one half".into()));
     }
 });
 
 validated_component!(CategoryMarkGeometry {
-    borrow vertical_body_breadth: RelativeSpacing => with_vertical_body_breadth,
-    borrow horizontal_body_breadth: RelativeSpacing => with_horizontal_body_breadth,
-    borrow vertical_group_span: RelativeSpacing => with_vertical_group_span,
-    borrow horizontal_group_span: RelativeSpacing => with_horizontal_group_span,
-    borrow uncertainty_cap_ratio: RelativeSpacing => with_uncertainty_cap_ratio,
+    borrow vertical_body_breadth: RelativeSpacing => get_vertical_body_breadth,
+    borrow horizontal_body_breadth: RelativeSpacing => get_horizontal_body_breadth,
+    borrow vertical_group_span: RelativeSpacing => get_vertical_group_span,
+    borrow horizontal_group_span: RelativeSpacing => get_horizontal_group_span,
+    borrow uncertainty_cap_ratio: RelativeSpacing => get_uncertainty_cap_ratio,
 } validate |value| {
     let one = RelativeSpacing::ratio(1, 1)?;
-    for extent in [value.vertical_body_breadth(), value.horizontal_body_breadth(),
-        value.vertical_group_span(), value.horizontal_group_span()] {
+    for extent in [value.get_vertical_body_breadth(), value.get_horizontal_body_breadth(),
+        value.get_vertical_group_span(), value.get_horizontal_group_span()] {
         fraction(extent, &one, true)?;
     }
-    fraction(value.uncertainty_cap_ratio(), &RelativeSpacing::ratio(1, 2)?, true)?;
+    fraction(value.get_uncertainty_cap_ratio(), &RelativeSpacing::ratio(1, 2)?, true)?;
 });
 
 validated_component!(MarkExtentTheme {
-    borrow categories: CategoryMarkGeometry => with_categories,
-    borrow waterfall_body_category_breadth: RelativeSpacing => with_waterfall_body_category_breadth,
-    copy point_interval_cap_half_height: u32 => with_point_interval_cap_half_height,
-    borrow sampled_rug_height: RelativeSpacing => with_sampled_rug_height,
-    borrow marginal_density_fraction: RelativeSpacing => with_marginal_density_fraction,
-    borrow matrix_density_fraction: RelativeSpacing => with_matrix_density_fraction,
+    borrow categories: CategoryMarkGeometry => get_categories,
+    borrow waterfall_body_category_breadth: RelativeSpacing => get_waterfall_body_category_breadth,
+    copy point_interval_cap_half_height: u32 => get_point_interval_cap_half_height,
+    borrow sampled_rug_height: RelativeSpacing => get_sampled_rug_height,
+    borrow marginal_density_fraction: RelativeSpacing => get_marginal_density_fraction,
+    borrow matrix_density_fraction: RelativeSpacing => get_matrix_density_fraction,
 } validate |value| {
-    value.categories().validate()?;
-    positive_radius(value.point_interval_cap_half_height())?;
+    value.get_categories().validate()?;
+    positive_radius(value.get_point_interval_cap_half_height())?;
     let one = RelativeSpacing::ratio(1, 1)?;
-    for extent in [value.waterfall_body_category_breadth(), value.marginal_density_fraction(),
-        value.matrix_density_fraction()] { fraction(extent, &one, true)?; }
+    for extent in [value.get_waterfall_body_category_breadth(), value.get_marginal_density_fraction(),
+        value.get_matrix_density_fraction()] { fraction(extent, &one, true)?; }
 });
 
 impl CategoryMarkGeometry {
     pub(crate) fn group_span(&self, horizontal: bool) -> f64 {
         if horizontal {
-            self.horizontal_group_span()
+            self.get_horizontal_group_span()
         } else {
-            self.vertical_group_span()
+            self.get_vertical_group_span()
         }
         .as_f64()
     }
 
     pub(crate) fn body_breadth(&self, horizontal: bool) -> f64 {
         if horizontal {
-            self.horizontal_body_breadth()
+            self.get_horizontal_body_breadth()
         } else {
-            self.vertical_body_breadth()
+            self.get_vertical_body_breadth()
         }
         .as_f64()
     }
 }
 
 validated_component!(MarkTheme {
-    borrow accents: AccentPalette => with_accents,
-    borrow points: PointRoles => with_points,
-    borrow fills: FillRoles => with_fills,
-    borrow data_lines: DataLineRoles => with_data_lines,
-    borrow neutral_paints: NeutralPaintRoles => with_neutral_paints,
-    borrow strokes: StrokeRoles => with_strokes,
-    borrow cells: CellMarkRoles => with_cells,
-    borrow extents: MarkExtentTheme => with_extents,
+    borrow accents: AccentPalette => get_accents,
+    borrow points: PointRoles => get_points,
+    borrow fills: FillRoles => get_fills,
+    borrow data_lines: DataLineRoles => get_data_lines,
+    borrow neutral_paints: NeutralPaintRoles => get_neutral_paints,
+    borrow strokes: StrokeRoles => get_strokes,
+    borrow cells: CellMarkRoles => get_cells,
+    borrow extents: MarkExtentTheme => get_extents,
 } validate |value| {
-    value.points().validate()?;
-    value.fills().validate()?;
-    value.data_lines().validate()?;
-    value.neutral_paints().validate()?;
-    value.strokes().validate()?;
-    value.cells().validate()?;
-    value.extents().validate()?;
+    value.get_points().validate()?;
+    value.get_fills().validate()?;
+    value.get_data_lines().validate()?;
+    value.get_neutral_paints().validate()?;
+    value.get_strokes().validate()?;
+    value.get_cells().validate()?;
+    value.get_extents().validate()?;
 });
 
 impl MarkTheme {
@@ -403,46 +403,46 @@ mod tests {
     fn complete_mark_edits_validate_nested_siblings_and_fraction_bounds() {
         let original = crate::theme::Theme::publication().marks;
         let summary = original
-            .fills()
-            .bodies()
-            .inner_summary()
+            .get_fills()
+            .get_bodies()
+            .get_inner_summary()
             .clone()
             .color(Color::rgba(11, 23, 37, 53))
             .unwrap()
             .outline(None)
             .unwrap();
         let bodies = original
-            .fills()
-            .bodies()
+            .get_fills()
+            .get_bodies()
             .clone()
-            .with_inner_summary(summary)
+            .inner_summary(summary)
             .unwrap();
-        let fills = original.fills().clone().with_bodies(bodies).unwrap();
+        let fills = original.get_fills().clone().bodies(bodies).unwrap();
         let mut poisoned = original.clone();
         poisoned.points.mandatory_strip.radius = 0;
-        assert!(poisoned.with_fills(fills).is_err());
-        assert_eq!(original.points().mandatory_strip().radius(), 2);
+        assert!(poisoned.fills(fills).is_err());
+        assert_eq!(original.get_points().get_mandatory_strip().get_radius(), 2);
         assert!(original
-            .cells()
+            .get_cells()
             .clone()
-            .with_missing_cross_inset(RelativeSpacing::ratio(1, 2).unwrap())
+            .missing_cross_inset(RelativeSpacing::ratio(1, 2).unwrap())
             .is_err());
         assert!(original
-            .extents()
-            .categories()
+            .get_extents()
+            .get_categories()
             .clone()
-            .with_vertical_body_breadth(RelativeSpacing::new(1.0_f64.next_up()).unwrap())
+            .vertical_body_breadth(RelativeSpacing::new(1.0_f64.next_up()).unwrap())
             .is_err());
         assert!(original
-            .extents()
-            .categories()
+            .get_extents()
+            .get_categories()
             .clone()
-            .with_uncertainty_cap_ratio(RelativeSpacing::ratio(1, 2).unwrap())
+            .uncertainty_cap_ratio(RelativeSpacing::ratio(1, 2).unwrap())
             .is_ok());
         assert!(original
-            .extents()
+            .get_extents()
             .clone()
-            .with_waterfall_body_category_breadth(RelativeSpacing::ratio(1, 1).unwrap())
+            .waterfall_body_category_breadth(RelativeSpacing::ratio(1, 1).unwrap())
             .is_ok());
     }
 
@@ -496,19 +496,19 @@ mod tests {
             let mut theme = crate::Theme::publication().resolve().unwrap();
             let appearance = theme
                 .marks
-                .points()
-                .primary()
+                .get_points()
+                .get_primary()
                 .clone()
                 .fill_alpha(117)
                 .unwrap();
             let strip = SizedPointTheme::new(appearance, 5).unwrap();
             let points = theme
                 .marks
-                .points()
+                .get_points()
                 .clone()
-                .with_mandatory_strip(strip)
+                .mandatory_strip(strip)
                 .unwrap();
-            theme.marks = theme.marks.clone().with_points(points).unwrap();
+            theme.marks = theme.marks.clone().points(points).unwrap();
             let minimum = chart.intrinsic_body_minimum(&theme).unwrap();
             let panel = crate::layout::PanelBox::new(10.0, 610.0, 20.0, 420.0);
             let measure = |theme: &super::super::ResolvedTheme| {
@@ -524,13 +524,13 @@ mod tests {
             let before = measure(&theme);
             let raw = theme
                 .marks
-                .points()
-                .raw_overlay()
+                .get_points()
+                .get_raw_overlay()
                 .clone()
-                .with_radius(80)
+                .radius(80)
                 .unwrap();
-            let points = theme.marks.points().clone().with_raw_overlay(raw).unwrap();
-            theme.marks = theme.marks.clone().with_points(points).unwrap();
+            let points = theme.marks.get_points().clone().raw_overlay(raw).unwrap();
+            theme.marks = theme.marks.clone().points(points).unwrap();
             assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), minimum);
             let after = measure(&theme);
             assert!(before.discrete_guide.is_some());
@@ -565,9 +565,9 @@ mod tests {
                     128,
                     theme
                         .marks
-                        .fills()
-                        .bodies()
-                        .inner_summary()
+                        .get_fills()
+                        .get_bodies()
+                        .get_inner_summary()
                         .backend_style()
                         .color
                         .get_alpha()

@@ -522,22 +522,22 @@ fn shared_point_guides_merge_across_families_only_with_equal_complete_keys() {
         let base = Theme::publication();
         let radii = base
             .marks()
-            .points()
-            .radii()
+            .get_points()
+            .get_radii()
             .clone()
-            .with_scatter(6)
+            .scatter(6)
             .unwrap()
-            .with_trajectory(trajectory_radius)
+            .trajectory(trajectory_radius)
             .unwrap();
         let points = base
             .marks()
-            .points()
+            .get_points()
             .clone()
-            .with_primary(PointTheme::new(91, PointShape::Circle, None).unwrap())
+            .primary(PointTheme::new(91, PointShape::Circle, None).unwrap())
             .unwrap()
-            .with_radii(radii)
+            .radii(radii)
             .unwrap();
-        let marks = base.marks().clone().with_points(points).unwrap();
+        let marks = base.marks().clone().points(points).unwrap();
         let theme = base.customize().marks(marks);
         let theme = if absent_font {
             theme

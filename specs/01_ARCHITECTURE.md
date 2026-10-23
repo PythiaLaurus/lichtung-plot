@@ -62,6 +62,12 @@ siblings. There is one API and representation for each project-owned concern;
 replacement migrates callers and removes the old implementation without aliases,
 version selectors, fallback chains or deprecations.
 
+Public configuration edits use `property(value)`. A reader paired with an edit on
+the same type uses `get_property()`; read-only or write-only properties retain
+their bare names. Theme's read-only components and Output's published dimensions
+therefore retain their names. This convention preserves consuming ownership,
+borrowed/copy results, const capability, fallibility and validation timing.
+
 Semantic constructors return `Plot<K>` with an exact zero-sized family marker.
 Sealed capabilities expose only supported configuration. There is no unselected
 plot state. `Plot::erase` is the public transition to `Plot<kind::Any>`; erasure

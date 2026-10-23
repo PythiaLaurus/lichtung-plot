@@ -137,7 +137,7 @@ pub(crate) fn measure_plans(
     let padding =
         theme
             .annotations
-            .panel_text_padding()
+            .get_panel_text_padding()
             .product(crate::theme::LocalMetric::css_pixels(
                 theme.typography.annotations.panel_text.get_font_size(),
             )?);

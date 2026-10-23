@@ -7,6 +7,11 @@ independent roles or authorize a fallback to another role. Preparation, intrinsi
 requirements, measurement, collision checks, guide keys and frozen drawing must
 consume the same selected property and its actual consequences.
 
+Public configuration uses `property(value)` edits with same-type paired
+`get_property()` readers. This naming convention does not add property owners or
+change exact-style precedence, structural absence or validation timing; read-only
+inspection retains its bare name.
+
 | Concern | Owner | Boundary |
 | --- | --- | --- |
 | Scientific values, availability, grouping, statistics and geometry | Closed input and scientific producer | Theme/format/alpha cannot mutate membership or statistical definitions |

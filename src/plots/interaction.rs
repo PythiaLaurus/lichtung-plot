@@ -89,13 +89,17 @@ pub(crate) fn intrinsic_body_minimum(
             trace.line_alpha,
             theme
                 .marks
-                .data_lines()
-                .interaction_interval()
+                .get_data_lines()
+                .get_interaction_interval()
                 .backend_style((0, 0, 0)),
         ))?;
         let marker = if chart.markers_visible() {
             let point = chart
-                .point_style(theme, (0, 0, 0), theme.marks.points().radii().interaction())
+                .point_style(
+                    theme,
+                    (0, 0, 0),
+                    theme.marks.get_points().get_radii().get_interaction(),
+                )
                 .with_shape(trace.style.point_shape);
             point_ink(
                 &point,
@@ -113,8 +117,8 @@ pub(crate) fn intrinsic_body_minimum(
                 trace.line_alpha,
                 theme
                     .marks
-                    .data_lines()
-                    .interaction_connector()
+                    .get_data_lines()
+                    .get_interaction_connector()
                     .backend_style((0, 0, 0)),
             ))?
         } else {
@@ -164,7 +168,11 @@ impl PreparedInteraction {
         for trace in &self.traces {
             let unit = AlphaUnit::series(chart, Some(&trace.identity))?;
             let point = chart
-                .point_style(theme, (0, 0, 0), theme.marks.points().radii().interaction())
+                .point_style(
+                    theme,
+                    (0, 0, 0),
+                    theme.marks.get_points().get_radii().get_interaction(),
+                )
                 .with_shape(trace.style.point_shape);
             if chart.markers_visible() {
                 for cell in &trace.cells {
@@ -183,16 +191,16 @@ impl PreparedInteraction {
                 trace.line_alpha,
                 theme
                     .marks
-                    .data_lines()
-                    .interaction_interval()
+                    .get_data_lines()
+                    .get_interaction_interval()
                     .backend_style((0, 0, 0)),
                 false,
             )?;
             if chart.interaction_connectors_visible() && trace.cells.len() > 1 {
                 let mut line = theme
                     .marks
-                    .data_lines()
-                    .interaction_connector()
+                    .get_data_lines()
+                    .get_interaction_connector()
                     .backend_style((0, 0, 0));
                 line.pattern = trace.style.line_pattern.stroke_pattern();
                 guide.line(
@@ -294,12 +302,16 @@ impl PreparedInteraction {
             let color = colors.color(key)?;
             let identity = chart.collective_legend_identity(&trace.identity)?;
             let point = chart
-                .point_style(theme, color, theme.marks.points().radii().interaction())
+                .point_style(
+                    theme,
+                    color,
+                    theme.marks.get_points().get_radii().get_interaction(),
+                )
                 .with_shape(trace.style.point_shape);
             let mut line = theme
                 .marks
-                .data_lines()
-                .interaction_connector()
+                .get_data_lines()
+                .get_interaction_connector()
                 .backend_style(color);
             line.pattern = trace.style.line_pattern.stroke_pattern();
             let mapped_styles = chart.interaction_styles_spec().is_some();
@@ -610,14 +622,19 @@ pub(crate) fn measure_marks(
             .point_style(
                 context.theme,
                 color,
-                context.theme.marks.points().radii().interaction(),
+                context
+                    .theme
+                    .marks
+                    .get_points()
+                    .get_radii()
+                    .get_interaction(),
             )
             .with_shape(trace.style.point_shape);
         let mut line = context
             .theme
             .marks
-            .data_lines()
-            .interaction_connector()
+            .get_data_lines()
+            .get_interaction_connector()
             .backend_style(color);
         line.pattern = trace.style.line_pattern.stroke_pattern();
         let line = line_style(trace.line_alpha, line);
@@ -629,8 +646,8 @@ pub(crate) fn measure_marks(
                 context
                     .theme
                     .marks
-                    .data_lines()
-                    .interaction_interval()
+                    .get_data_lines()
+                    .get_interaction_interval()
                     .backend_style(color),
             ),
             connector: (chart.interaction_connectors_visible() && trace.cells.len() > 1)

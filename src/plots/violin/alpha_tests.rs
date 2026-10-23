@@ -107,18 +107,18 @@ fn overlay_alpha_follows_original_slots_and_source_jitter_through_positioned_gro
             128,
             theme
                 .marks
-                .fills()
-                .bodies()
-                .inner_summary()
+                .get_fills()
+                .get_bodies()
+                .get_inner_summary()
                 .backend_style()
                 .color
                 .get_alpha(),
             64,
             theme
                 .marks
-                .fills()
-                .bodies()
-                .inner_summary()
+                .get_fills()
+                .get_bodies()
+                .get_inner_summary()
                 .backend_style()
                 .color
                 .get_alpha()

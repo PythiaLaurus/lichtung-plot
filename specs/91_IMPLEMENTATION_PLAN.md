@@ -140,9 +140,9 @@ Primary owners are `src/theme/value.rs`, `src/theme/component.rs`,
 `src/theme/guide.rs`, `src/theme/mark.rs`, `src/theme/mark_paint.rs`,
 `src/theme/paint.rs`, `src/theme/resolved.rs`, `src/theme/scale_values.rs`,
 `src/numeric/format.rs`, `src/layers.rs`, `src/spec.rs` and `src/spec/`.
-Apply the same names to the newly planned Text/numeric APIs below. Update current
-API contracts and user guides when the naming migration is implemented; their
-present `with_*` examples still describe today's code until that change lands.
+Apply the same names to the newly planned Text/numeric APIs below. Current API
+contracts and user guides use the implemented property naming; later capability
+steps migrate their planned types and behavior with the receiving consumers.
 
 ### Rectangular Canvas Plot Spans
 
@@ -1658,16 +1658,10 @@ migrate in their capability steps with all affected callers and read contracts.
 
 ### Implementation Status
 
-Step 1 is in progress. NumericFormat, GuideStyle, InteractionStyle,
-SignificanceMarkStyle, PointLayer, Color, DataLineTheme, TextTheme, SurfaceTheme,
-all nested typography groups and ThemeBuilder property edits and paired readers
-have migrated, including repository callers and their current specifications.
-Compound stroke, outline, fill and point paints have also migrated with their
-backend and guide consumers. Axis, guide and composition chrome/spacing have
-migrated, including Matrix's function-item side readers. ColorScales and
-ContinuousColorScale edits/readers have migrated through final-domain and Shared
-guide preparation. The remaining mark/annotation geometry naming migration is
-pending.
+Step 1 is complete. Public configuration edits and same-type paired readers have
+migrated through declaration macros, repository callers, function-item references,
+ordinary/compile-fail examples and current specifications. Read-only properties,
+types, fallibility, validation timing and construction lifecycle are preserved.
 Steps 2–22 remain pending; their target signatures are not current APIs.
 
 ### 1. Apply The Public Property Naming Rule

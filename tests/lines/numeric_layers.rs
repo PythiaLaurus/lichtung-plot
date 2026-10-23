@@ -104,7 +104,7 @@ fn automatic_point_layers_follow_an_independent_accent_sequence() {
     let marks = base
         .marks()
         .clone()
-        .with_accents(
+        .accents(
             AccentPalette::new([OpaqueColor::rgb(19, 43, 71), OpaqueColor::rgb(127, 59, 31)])
                 .unwrap(),
         )

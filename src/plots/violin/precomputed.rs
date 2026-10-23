@@ -41,13 +41,18 @@ pub(crate) fn intrinsic_body_minimum(
     let width = 0.8_f64;
     let cloud_style = theme
         .marks
-        .fills()
-        .bodies()
-        .violin_body()
+        .get_fills()
+        .get_bodies()
+        .get_violin_body()
         .backend_style((0, 0, 0));
     let mut cloud: Option<crate::render::geometry::GeometryBox> = None;
     let mut cloud_numeric = 0.0_f64;
-    let box_style = theme.marks.fills().bodies().inner_summary().backend_style();
+    let box_style = theme
+        .marks
+        .get_fills()
+        .get_bodies()
+        .get_inner_summary()
+        .backend_style();
     let box_ink = crate::render::geometry::rectangular_fill_ink_bounds(&box_style)?;
     let (_, box_numeric) = crate::render::geometry::rectangular_fill_ink_outset(&box_style)?;
     let mut median_ink: Option<crate::render::geometry::GeometryBox> = None;
@@ -62,7 +67,12 @@ pub(crate) fn intrinsic_body_minimum(
             .max(crate::render::geometry::rectangular_fill_ink_outset(&cloud_style)?.1);
         let next = crate::render::geometry::line_ink_bounds(&line_style(
             group.line_alpha,
-            theme.marks.strokes().summaries().median().backend_style(),
+            theme
+                .marks
+                .get_strokes()
+                .get_summaries()
+                .get_median()
+                .backend_style(),
         ))?;
         median_ink = match (median_ink, next) {
             (Some(current), Some(next)) => Some(current.union(next)),
@@ -70,7 +80,8 @@ pub(crate) fn intrinsic_body_minimum(
         };
     }
     let median = median_ink.map_or(0.0, |ink| ink.top - ink.bottom);
-    let point = chart.distribution_point_style(theme.marks.points().mandatory_strip(), (0, 0, 0));
+    let point =
+        chart.distribution_point_style(theme.marks.get_points().get_mandatory_strip(), (0, 0, 0));
     let point = crate::alpha::marks::point_ink(
         &point,
         prepared.groups.iter().flat_map(|group| {
@@ -136,9 +147,9 @@ impl PreparedRaincloud {
                 Error::Render("supplied Raincloud alpha guide has no dimensions".into())
             })?
             .dimensions;
-        let fill = theme.marks.fills().bodies().violin_body();
-        let point =
-            chart.distribution_point_style(theme.marks.points().mandatory_strip(), (0, 0, 0));
+        let fill = theme.marks.get_fills().get_bodies().get_violin_body();
+        let point = chart
+            .distribution_point_style(theme.marks.get_points().get_mandatory_strip(), (0, 0, 0));
         for group in &self.groups {
             let category = (
                 dimensions.category.as_str(),
@@ -164,7 +175,12 @@ impl PreparedRaincloud {
                 AlphaUnitKind::Aggregate,
                 unit,
                 group.line_alpha,
-                theme.marks.strokes().summaries().median().backend_style(),
+                theme
+                    .marks
+                    .get_strokes()
+                    .get_summaries()
+                    .get_median()
+                    .backend_style(),
                 false,
             )?;
             for &alpha in &group.alphas {
@@ -193,11 +209,14 @@ impl PreparedRaincloud {
             let color = colors.color(hue)?;
             Ok(GuideSourceKey::hue_only(chart.point_legend_identity(hue)?)?
                 .with_point(
-                    chart.distribution_point_style(theme.marks.points().mandatory_strip(), color),
+                    chart.distribution_point_style(
+                        theme.marks.get_points().get_mandatory_strip(),
+                        color,
+                    ),
                     PointRole::MandatoryStrip,
                 )
                 .with_fill(
-                    theme.marks.fills().bodies().violin_body(),
+                    theme.marks.get_fills().get_bodies().get_violin_body(),
                     color,
                     FillRole::ViolinBody,
                 ))
@@ -337,7 +356,7 @@ pub(super) fn measure_marks(
         project_strip(
             &layout,
             group,
-            &chart.distribution_point_style(theme.marks.points().mandatory_strip(), color),
+            &chart.distribution_point_style(theme.marks.get_points().get_mandatory_strip(), color),
             index,
             theme,
             &mut payload,
@@ -400,9 +419,9 @@ fn project_cloud_and_summary(
             prepared.fill_alpha,
             theme
                 .marks
-                .fills()
-                .bodies()
-                .violin_body()
+                .get_fills()
+                .get_bodies()
+                .get_violin_body()
                 .backend_style(color),
         ),
     )?;
@@ -432,7 +451,12 @@ fn project_cloud_and_summary(
             .into_iter()
             .map(Ok),
         )?,
-        theme.marks.fills().bodies().inner_summary().backend_style(),
+        theme
+            .marks
+            .get_fills()
+            .get_bodies()
+            .get_inner_summary()
+            .backend_style(),
     )?;
     payload.line(
         &[
@@ -441,7 +465,12 @@ fn project_cloud_and_summary(
         ],
         &line_style(
             prepared.line_alpha,
-            theme.marks.strokes().summaries().median().backend_style(),
+            theme
+                .marks
+                .get_strokes()
+                .get_summaries()
+                .get_median()
+                .backend_style(),
         ),
     )
 }
@@ -475,7 +504,12 @@ fn project_strip(
     let point_left = point_ink.map_or(0.0, |ink| (-ink.left).max(0.0));
     let point_right = point_ink.map_or(0.0, |ink| ink.right.max(0.0));
     let box_right_ink = crate::render::geometry::rectangular_fill_ink_bounds(
-        &theme.marks.fills().bodies().inner_summary().backend_style(),
+        &theme
+            .marks
+            .get_fills()
+            .get_bodies()
+            .get_inner_summary()
+            .backend_style(),
     )?
     .map_or(0.0, |ink| ink.right.max(0.0));
     let strip_min = strip_left + point_left;

@@ -44,13 +44,13 @@ fn separate_inputs(
 fn bar_fill(theme: &mut crate::theme::ResolvedTheme, body: crate::DataFillTheme) {
     let bodies = theme
         .marks
-        .fills()
-        .bodies()
+        .get_fills()
+        .get_bodies()
         .clone()
-        .with_bar_body(body)
+        .bar_body(body)
         .unwrap();
-    let fills = theme.marks.fills().clone().with_bodies(bodies).unwrap();
-    theme.marks = theme.marks.clone().with_fills(fills).unwrap();
+    let fills = theme.marks.get_fills().clone().bodies(bodies).unwrap();
+    theme.marks = theme.marks.clone().fills(fills).unwrap();
 }
 
 #[test]
@@ -113,9 +113,9 @@ fn prepared_bar_bindings_distinguish_equal_rgb_outlines_and_preserve_only_observ
     );
     let body = theme
         .marks
-        .fills()
-        .bodies()
-        .bar_body()
+        .get_fills()
+        .get_bodies()
+        .get_bar_body()
         .clone()
         .outline(Some(fixed))
         .unwrap();
@@ -154,9 +154,9 @@ fn assert_bar_alpha_context(plot: &Plot, theme: &mut crate::theme::ResolvedTheme
     use crate::alpha::{AlphaEncoding, AlphaTarget, AlphaUnitKind, AlphaValues};
     let body = theme
         .marks
-        .fills()
-        .bodies()
-        .bar_body()
+        .get_fills()
+        .get_bodies()
+        .get_bar_body()
         .clone()
         .fill_alpha(255)
         .unwrap();
@@ -309,34 +309,34 @@ fn interaction_theme(
     let primary = crate::PointTheme::new(17, crate::PointShape::TriangleUp, Some(outline)).unwrap();
     let radii = theme
         .marks
-        .points()
-        .radii()
+        .get_points()
+        .get_radii()
         .clone()
-        .with_interaction(14)
+        .interaction(14)
         .unwrap();
     let points = theme
         .marks
-        .points()
+        .get_points()
         .clone()
-        .with_primary(primary)
+        .primary(primary)
         .unwrap()
-        .with_radii(radii)
+        .radii(radii)
         .unwrap();
-    theme.marks = theme.marks.clone().with_points(points).unwrap();
+    theme.marks = theme.marks.clone().points(points).unwrap();
     let line = theme
         .marks
-        .data_lines()
-        .interaction_connector()
+        .get_data_lines()
+        .get_interaction_connector()
         .clone()
         .alpha(211)
         .unwrap();
     let lines = theme
         .marks
-        .data_lines()
+        .get_data_lines()
         .clone()
-        .with_interaction_connector(line)
+        .interaction_connector(line)
         .unwrap();
-    theme.marks = theme.marks.clone().with_data_lines(lines).unwrap();
+    theme.marks = theme.marks.clone().data_lines(lines).unwrap();
     theme
 }
 

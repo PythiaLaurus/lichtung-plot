@@ -141,9 +141,9 @@ fn primary_point_alpha_follows_sorted_line_rows_and_keeps_supplemental_paint_ind
             0,
             theme
                 .marks
-                .fills()
-                .bands()
-                .line_band()
+                .get_fills()
+                .get_bands()
+                .get_line_band()
                 .backend_style((0, 0, 0))
                 .stroke
         )]
@@ -366,20 +366,20 @@ fn supplemental_defaults_and_explicit_alpha_keep_label_paint_independent_and_gui
     let mut theme = crate::Theme::publication().resolve().unwrap();
     let defaults = theme
         .marks
-        .points()
-        .supplemental()
+        .get_points()
+        .get_supplemental()
         .clone()
-        .with_radius(7)
+        .radius(7)
         .unwrap()
-        .with_fill_alpha(17)
+        .fill_alpha(17)
         .unwrap();
     let points = theme
         .marks
-        .points()
+        .get_points()
         .clone()
-        .with_supplemental(defaults)
+        .supplemental(defaults)
         .unwrap();
-    theme.marks = theme.marks.clone().with_points(points).unwrap();
+    theme.marks = theme.marks.clone().points(points).unwrap();
     let role_paint = crate::theme::Color::rgba(11, 23, 37, 71);
     theme.typography.annotations.point_layer_label = theme
         .typography

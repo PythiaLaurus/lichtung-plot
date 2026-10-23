@@ -66,8 +66,8 @@ pub(crate) fn intrinsic_body_minimum(
     }
     let line = theme
         .marks
-        .data_lines()
-        .density_line()
+        .get_data_lines()
+        .get_density_line()
         .backend_style((0, 0, 0));
     let mut ink = 0.0_f64;
     let mut area = (0.0_f64, 0.0_f64);
@@ -80,9 +80,9 @@ pub(crate) fn intrinsic_body_minimum(
             curve.fill_alpha,
             theme
                 .marks
-                .fills()
-                .densities()
-                .density_area()
+                .get_fills()
+                .get_densities()
+                .get_density_area()
                 .backend_style((0, 0, 0)),
         ))?;
         area = (area.0.max(next.0), area.1.max(next.1));
@@ -109,7 +109,7 @@ impl PreparedDensity {
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
-        let fill = theme.marks.fills().densities().density_area();
+        let fill = theme.marks.get_fills().get_densities().get_density_area();
         for curve in &self.curves {
             let unit = AlphaUnit::series(chart, Some(&curve.identity))?;
             guide.line(
@@ -119,8 +119,8 @@ impl PreparedDensity {
                 curve.line_alpha,
                 theme
                     .marks
-                    .data_lines()
-                    .density_line()
+                    .get_data_lines()
+                    .get_density_line()
                     .backend_style((0, 0, 0)),
                 false,
             )?;
@@ -168,7 +168,7 @@ impl PreparedDensity {
             resources,
         )?;
         let accent = AccentColors::resolve(
-            theme.marks.accents(),
+            theme.marks.get_accents(),
             usize::from(self.curves.iter().any(|curve| curve.identity.hue.is_none())),
         )?;
         Ok((map, accent))
@@ -246,11 +246,15 @@ impl PreparedDensity {
                     false,
                 )?
                 .with_line(
-                    theme.marks.data_lines().density_line().backend_style(color),
+                    theme
+                        .marks
+                        .get_data_lines()
+                        .get_density_line()
+                        .backend_style(color),
                     LineRole::DensityLine,
                 )
                 .with_fill(
-                    theme.marks.fills().densities().density_area(),
+                    theme.marks.get_fills().get_densities().get_density_area(),
                     color,
                     FillRole::DensityArea,
                 ),
@@ -441,14 +445,18 @@ pub(crate) fn project(
                 curve.fill_alpha,
                 theme
                     .marks
-                    .fills()
-                    .densities()
-                    .density_area()
+                    .get_fills()
+                    .get_densities()
+                    .get_density_area()
                     .backend_style(color),
             ),
             line_style: line_style(
                 curve.line_alpha,
-                theme.marks.data_lines().density_line().backend_style(color),
+                theme
+                    .marks
+                    .get_data_lines()
+                    .get_density_line()
+                    .backend_style(color),
             ),
         };
         crate::data::source::reserve_source(&mut projected.segments, visible.len() - 1)?;
@@ -908,41 +916,41 @@ mod tests {
         let original = chart.intrinsic_body_minimum(&theme).unwrap();
         let line = theme
             .marks
-            .data_lines()
-            .density_line()
+            .get_data_lines()
+            .get_density_line()
             .clone()
             .width(140.0)
             .unwrap();
         let lines = theme
             .marks
-            .data_lines()
+            .get_data_lines()
             .clone()
-            .with_density_line(line)
+            .density_line(line)
             .unwrap();
-        theme.marks = theme.marks.clone().with_data_lines(lines).unwrap();
+        theme.marks = theme.marks.clone().data_lines(lines).unwrap();
         let thick = chart.intrinsic_body_minimum(&theme).unwrap();
         assert_eq!(thick.0.to_bits(), original.0.to_bits());
         assert_eq!(thick.1.to_bits(), 140.0_f64.to_bits());
         let line = theme
             .marks
-            .data_lines()
-            .density_line()
+            .get_data_lines()
+            .get_density_line()
             .clone()
             .alpha(0)
             .unwrap();
         let lines = theme
             .marks
-            .data_lines()
+            .get_data_lines()
             .clone()
-            .with_density_line(line)
+            .density_line(line)
             .unwrap();
-        theme.marks = theme.marks.clone().with_data_lines(lines).unwrap();
+        theme.marks = theme.marks.clone().data_lines(lines).unwrap();
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), original);
         let area = theme
             .marks
-            .fills()
-            .densities()
-            .density_area()
+            .get_fills()
+            .get_densities()
+            .get_density_area()
             .clone()
             .outline(Some(
                 crate::theme::DataOutlineTheme::mapped(140.0, 255).unwrap(),
@@ -950,18 +958,18 @@ mod tests {
             .unwrap();
         let densities = theme
             .marks
-            .fills()
-            .densities()
+            .get_fills()
+            .get_densities()
             .clone()
-            .with_density_area(area)
+            .density_area(area)
             .unwrap();
         let fills = theme
             .marks
-            .fills()
+            .get_fills()
             .clone()
-            .with_densities(densities)
+            .densities(densities)
             .unwrap();
-        theme.marks = theme.marks.clone().with_fills(fills).unwrap();
+        theme.marks = theme.marks.clone().fills(fills).unwrap();
         let area = chart.intrinsic_body_minimum(&theme).unwrap();
         assert_eq!(area.0.to_bits(), original.0.to_bits());
         assert!(area.1 >= 140.0);
@@ -1017,8 +1025,8 @@ mod tests {
         assert!(payload.curves[0].fill[0].x > payload.curves[1].fill[0].x);
         let line = theme
             .marks
-            .data_lines()
-            .density_line()
+            .get_data_lines()
+            .get_density_line()
             .clone()
             .width(2.5)
             .unwrap()
@@ -1026,11 +1034,11 @@ mod tests {
             .unwrap();
         let lines = theme
             .marks
-            .data_lines()
+            .get_data_lines()
             .clone()
-            .with_density_line(line)
+            .density_line(line)
             .unwrap();
-        theme.marks = theme.marks.clone().with_data_lines(lines).unwrap();
+        theme.marks = theme.marks.clone().data_lines(lines).unwrap();
         let chart = crate::plots::shared_x::prepare_panel_for_test(&chart, &theme).unwrap();
         let changed = chart
             .measure_selected_interior(PlotRenderContext::new(
@@ -1127,10 +1135,10 @@ mod tests {
         )
         .erase();
         let mut theme = crate::Theme::publication().resolve().unwrap();
-        let lines = theme.marks.data_lines();
-        let line = lines.density_line().clone().alpha(0).unwrap();
-        let lines = lines.clone().with_density_line(line).unwrap();
-        theme.marks = theme.marks.clone().with_data_lines(lines).unwrap();
+        let lines = theme.marks.get_data_lines();
+        let line = lines.get_density_line().clone().alpha(0).unwrap();
+        let lines = lines.clone().density_line(line).unwrap();
+        theme.marks = theme.marks.clone().data_lines(lines).unwrap();
         let chart = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
         let panels = &chart.prepared_density.as_ref().unwrap().panels;
         assert_eq!(panels.len(), 2);

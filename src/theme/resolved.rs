@@ -651,7 +651,7 @@ impl ResolvedTheme {
             self.surfaces.get_plot_panel(),
             self.canvas_surface_override
                 .unwrap_or(self.surfaces.get_canvas_root()),
-            self.annotations.planning_backdrop().into(),
+            self.annotations.get_planning_backdrop().into(),
             self.typography.get_annotations().get_contrast().get_light(),
             self.typography.get_annotations().get_contrast().get_dark(),
         )

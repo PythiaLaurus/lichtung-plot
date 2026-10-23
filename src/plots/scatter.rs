@@ -91,7 +91,11 @@ pub(crate) fn intrinsic_body_minimum(
             "Scatter has no retained primary marks".into(),
         ));
     }
-    let style = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().scatter());
+    let style = chart.point_style(
+        theme,
+        (0, 0, 0),
+        theme.marks.get_points().get_radii().get_scatter(),
+    );
     crate::render::backend::validate_point_style(&style)?;
     // Reuse the canonical painted-ink owner on one origin-relative point; no
     // source point is projected or clipped and scratch storage is reserved.
@@ -126,7 +130,11 @@ impl PreparedScatter {
         theme: &crate::theme::ResolvedTheme,
         guide: &mut crate::decorations::legend::alpha::AlphaGuideBuilder<'_>,
     ) -> crate::Result<()> {
-        let style = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().scatter());
+        let style = chart.point_style(
+            theme,
+            (0, 0, 0),
+            theme.marks.get_points().get_radii().get_scatter(),
+        );
         for point in self.groups.iter().flat_map(|group| &group.points) {
             guide.point(
                 crate::decorations::legend::alpha::AlphaGlyphRole::Primary,
@@ -298,7 +306,11 @@ impl PreparedScatter {
             let color = map.color(label)?;
             entries.push(
                 GuideSourceKey::hue_only(chart.point_legend_identity(label)?)?.with_point(
-                    chart.point_style(theme, color, theme.marks.points().radii().scatter()),
+                    chart.point_style(
+                        theme,
+                        color,
+                        theme.marks.get_points().get_radii().get_scatter(),
+                    ),
                     PointRole::Primary,
                 ),
             );
@@ -352,7 +364,7 @@ impl PreparedScatter {
             .groups
             .iter()
             .any(|group| group.label.is_none())
-            .then(|| AccentColors::resolve(theme.marks.accents(), 1))
+            .then(|| AccentColors::resolve(theme.marks.get_accents(), 1))
             .transpose()?;
         for group_index in order {
             let group = &self.groups[group_index];
@@ -364,7 +376,11 @@ impl PreparedScatter {
                     .ok_or_else(|| Error::Render("Scatter accent owner is missing".into()))?
                     .color(0)?
             };
-            let style = chart.point_style(theme, color, theme.marks.points().radii().scatter());
+            let style = chart.point_style(
+                theme,
+                color,
+                theme.marks.get_points().get_radii().get_scatter(),
+            );
             for point in &group.points {
                 let (x, y) = projection.project(point.x, point.y);
                 push_point(
@@ -431,7 +447,11 @@ pub(crate) fn measure_marks(
     let resources = theme.prepared_font_environment()?.operation();
     let data = context.data.with_operation(&resources);
     let mut payload = prepared.project(chart, &layout.projection, theme, data)?;
-    let point_style = chart.point_style(theme, (0, 0, 0), theme.marks.points().radii().scatter());
+    let point_style = chart.point_style(
+        theme,
+        (0, 0, 0),
+        theme.marks.get_points().get_radii().get_scatter(),
+    );
     if let Some(ink) = point_ink(
         &point_style,
         prepared.groups.iter().flat_map(|group| {

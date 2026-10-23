@@ -24,13 +24,13 @@ fn point_alpha_retains_source_order_color_samples_and_coincident_packing_even_at
     let mut theme = crate::Theme::publication().resolve().unwrap();
     let primary = theme
         .marks
-        .points()
-        .primary()
+        .get_points()
+        .get_primary()
         .clone()
         .fill_alpha(0)
         .unwrap();
-    let points = theme.marks.points().clone().with_primary(primary).unwrap();
-    theme.marks = theme.marks.clone().with_points(points).unwrap();
+    let points = theme.marks.get_points().clone().primary(primary).unwrap();
+    theme.marks = theme.marks.clone().points(points).unwrap();
     let select = |source: &Plot| {
         let chart = crate::plots::shared_x::prepare_panel_for_test(source, &theme).unwrap();
         let selected = chart
@@ -222,7 +222,7 @@ fn shared_diverging_remapping_reaches_all_beeswarm_marks_and_the_common_guide() 
         );
         assert_eq!(
             style.color.get_alpha(),
-            theme.marks.points().primary().get_fill_alpha()
+            theme.marks.get_points().get_primary().get_fill_alpha()
         );
     }
     assert!(payload

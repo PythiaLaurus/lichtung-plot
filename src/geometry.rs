@@ -543,9 +543,9 @@ mod validation_tests {
         assert_eq!(alphas, [(1, 0), (1, 230)]);
         let inner_alpha = theme
             .marks
-            .fills()
-            .bodies()
-            .inner_summary()
+            .get_fills()
+            .get_bodies()
+            .get_inner_summary()
             .backend_style()
             .color
             .get_alpha();

@@ -77,12 +77,12 @@ impl PreparedViolin {
         use crate::alpha::AlphaUnitKind;
         use crate::decorations::legend::alpha::{AlphaGlyphRole, AlphaUnit};
         let raincloud = chart.kind() == crate::PlotKind::Raincloud;
-        let fill = theme.marks.fills().bodies().violin_body();
+        let fill = theme.marks.get_fills().get_bodies().get_violin_body();
         let point = chart.distribution_point_style(
             if raincloud {
-                theme.marks.points().mandatory_strip()
+                theme.marks.get_points().get_mandatory_strip()
             } else {
-                theme.marks.points().raw_overlay()
+                theme.marks.get_points().get_raw_overlay()
             },
             (0, 0, 0),
         );
@@ -103,7 +103,12 @@ impl PreparedViolin {
                     AlphaUnitKind::Aggregate,
                     unit.clone(),
                     group.line_alpha,
-                    theme.marks.strokes().summaries().summary().backend_style(),
+                    theme
+                        .marks
+                        .get_strokes()
+                        .get_summaries()
+                        .get_summary()
+                        .backend_style(),
                     false,
                 )?;
             }
@@ -112,7 +117,12 @@ impl PreparedViolin {
                 AlphaUnitKind::Aggregate,
                 unit,
                 group.line_alpha,
-                theme.marks.strokes().summaries().median().backend_style(),
+                theme
+                    .marks
+                    .get_strokes()
+                    .get_summaries()
+                    .get_median()
+                    .backend_style(),
                 false,
             )?;
             if raincloud || chart.raw_overlay_spec().is_visible() {
@@ -140,7 +150,12 @@ pub(crate) fn raincloud_strip_pitch(
     let left = point.map_or(0.0, |ink| (-ink.left).max(0.0));
     let right = point.map_or(0.0, |ink| ink.right.max(0.0));
     let box_right = crate::render::geometry::rectangular_fill_ink_bounds(
-        &theme.marks.fills().bodies().inner_summary().backend_style(),
+        &theme
+            .marks
+            .get_fills()
+            .get_bodies()
+            .get_inner_summary()
+            .backend_style(),
     )?
     .map_or(0.0, |ink| ink.right.max(0.0));
     Ok(((left + right) / (0.22 * width)).max((box_right + 1.0 / 1024.0) / (0.14 * width)))
@@ -175,19 +190,24 @@ pub(crate) fn intrinsic_body_minimum(
     };
     let cloud_style = theme
         .marks
-        .fills()
-        .bodies()
-        .violin_body()
+        .get_fills()
+        .get_bodies()
+        .get_violin_body()
         .backend_style((0, 0, 0));
-    let inner_style = theme.marks.fills().bodies().inner_summary().backend_style();
+    let inner_style = theme
+        .marks
+        .get_fills()
+        .get_bodies()
+        .get_inner_summary()
+        .backend_style();
     let inner = crate::render::geometry::rectangular_fill_ink_bounds(&inner_style)?;
     let (_, inner_y) = crate::render::geometry::rectangular_fill_ink_outset(&inner_style)?;
     let overlay = chart.raw_overlay_spec();
     let points_visible = raincloud || overlay.is_visible();
     let role = if raincloud {
-        theme.marks.points().mandatory_strip()
+        theme.marks.get_points().get_mandatory_strip()
     } else {
-        theme.marks.points().raw_overlay()
+        theme.marks.get_points().get_raw_overlay()
     };
     let style = chart.distribution_point_style(role, (0, 0, 0));
     let mut pitch = 1.0_f64 / 1024.0;
@@ -221,12 +241,22 @@ pub(crate) fn intrinsic_body_minimum(
         let summary_ink =
             crate::render::geometry::line_ink_bounds(&crate::alpha::marks::line_style(
                 group.line_alpha,
-                theme.marks.strokes().summaries().summary().backend_style(),
+                theme
+                    .marks
+                    .get_strokes()
+                    .get_summaries()
+                    .get_summary()
+                    .backend_style(),
             ))?;
         let median_ink =
             crate::render::geometry::line_ink_bounds(&crate::alpha::marks::line_style(
                 group.line_alpha,
-                theme.marks.strokes().summaries().median().backend_style(),
+                theme
+                    .marks
+                    .get_strokes()
+                    .get_summaries()
+                    .get_median()
+                    .backend_style(),
             ))?;
         numeric = numeric.max(median_ink.map_or(0.0, |ink| ink.top - ink.bottom));
         if !raincloud {
@@ -487,9 +517,9 @@ pub(crate) fn measure_marks(
             group.fill_alpha,
             theme
                 .marks
-                .fills()
-                .bodies()
-                .violin_body()
+                .get_fills()
+                .get_bodies()
+                .get_violin_body()
                 .backend_style(group_color(group, &colors)?),
         );
         match distribution_layout {
@@ -548,7 +578,12 @@ pub(crate) fn measure_marks(
                 }
                 let whisker_line = crate::alpha::marks::line_style(
                     group.line_alpha,
-                    theme.marks.strokes().summaries().summary().backend_style(),
+                    theme
+                        .marks
+                        .get_strokes()
+                        .get_summaries()
+                        .get_summary()
+                        .backend_style(),
                 );
                 payload.line(
                     &[
@@ -581,12 +616,22 @@ pub(crate) fn measure_marks(
                     .into_iter()
                     .map(Ok),
                 )?;
-                let box_fill = theme.marks.fills().bodies().inner_summary().backend_style();
+                let box_fill = theme
+                    .marks
+                    .get_fills()
+                    .get_bodies()
+                    .get_inner_summary()
+                    .backend_style();
                 payload.polygon(box_pts, box_fill)?;
 
                 let median_line = crate::alpha::marks::line_style(
                     group.line_alpha,
-                    theme.marks.strokes().summaries().median().backend_style(),
+                    theme
+                        .marks
+                        .get_strokes()
+                        .get_summaries()
+                        .get_median()
+                        .backend_style(),
                 );
                 payload.line(
                     &[
@@ -643,7 +688,12 @@ pub(crate) fn measure_marks(
                         .into_iter()
                         .map(Ok),
                     )?,
-                    theme.marks.fills().bodies().inner_summary().backend_style(),
+                    theme
+                        .marks
+                        .get_fills()
+                        .get_bodies()
+                        .get_inner_summary()
+                        .backend_style(),
                 )?;
                 payload.line(
                     &[
@@ -652,7 +702,12 @@ pub(crate) fn measure_marks(
                     ],
                     &crate::alpha::marks::line_style(
                         group.line_alpha,
-                        theme.marks.strokes().summaries().median().backend_style(),
+                        theme
+                            .marks
+                            .get_strokes()
+                            .get_summaries()
+                            .get_median()
+                            .backend_style(),
                     ),
                 )?;
             }
@@ -670,8 +725,8 @@ pub(crate) fn measure_marks(
             let (strip_left, _) = proj.project(center + violin_w_data * 0.24, 0.0);
             let (strip_right, _) = proj.project(center + violin_w_data * 0.46, 0.0);
             let color = group_color(group, &colors)?;
-            let style =
-                chart.distribution_point_style(theme.marks.points().mandatory_strip(), color);
+            let style = chart
+                .distribution_point_style(theme.marks.get_points().get_mandatory_strip(), color);
             let point_ink = crate::alpha::marks::point_ink(
                 &style,
                 group
@@ -683,7 +738,12 @@ pub(crate) fn measure_marks(
             let point_left = point_ink.map_or(0.0, |ink| (-ink.left).max(0.0));
             let point_right = point_ink.map_or(0.0, |ink| ink.right.max(0.0));
             let box_right_ink = crate::render::geometry::rectangular_fill_ink_bounds(
-                &theme.marks.fills().bodies().inner_summary().backend_style(),
+                &theme
+                    .marks
+                    .get_fills()
+                    .get_bodies()
+                    .get_inner_summary()
+                    .backend_style(),
             )?
             .map_or(0.0, |ink| ink.right.max(0.0));
             let strip_min = strip_left + point_left;
@@ -736,7 +796,7 @@ pub(crate) fn measure_marks(
             ))?;
             payload.scatter(
                 points,
-                &chart.distribution_point_style(theme.marks.points().raw_overlay(), color),
+                &chart.distribution_point_style(theme.marks.get_points().get_raw_overlay(), color),
                 group
                     .observations
                     .iter()
