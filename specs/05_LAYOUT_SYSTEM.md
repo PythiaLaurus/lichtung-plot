@@ -246,6 +246,10 @@ enter the census; the extra `0` metric is admitted only for owners consuming a c
 width preference, not merely because a value is authored Text. Guide title gaps
 are section-local selected metrics. Complete title requests participate in Shared
 compatibility, measurement/child/height identity and frozen guide feedback.
+Guide entry Text retains selected appearance and physical line alignment through
+the same path. The guide's shared label-relative metrics consume the maximum
+actual selected entry/number size. Individual line/ink measurements retain their
+own styles and leading, with existing left-positioned block ownership.
 
 Canvas headers and row titles carry complete Text through font preparation,
 intrinsics, spanning requirements and frozen placement. Column/row header bands

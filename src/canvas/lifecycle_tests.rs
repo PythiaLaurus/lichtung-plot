@@ -748,6 +748,88 @@ fn shared_composition_uses_parent_policy_in_both_source_orders() {
 }
 
 #[test]
+fn shared_layer_legend_text_uses_local_fonts_and_compares_complete_requests() {
+    use crate::{Color, FontFamily, FontStack, PointLayer, Text, TextAlignment, TextLayout};
+    let mut theme = Theme::publication();
+    let style = theme
+        .typography
+        .guides
+        .legend_label
+        .clone()
+        .font_size(21)
+        .unwrap();
+    theme.typography.guides.legend_label.stack =
+        FontStack::new([FontFamily::named("Unused inherited legend entry font").unwrap()]).unwrap();
+    let title = Text::new("Selected\nshort")
+        .style(style)
+        .alignment(TextAlignment::End);
+    let plot = |text| {
+        Plot::line(
+            crate::NumericValues::new("x", [0.0, 1.0]),
+            crate::NumericValues::new("y", [0.0, 1.0]),
+        )
+        .point_layer(
+            PointLayer::new(
+                crate::NumericValues::new("selected x", [0.5]),
+                crate::NumericValues::new("selected y", [0.5]),
+            )
+            .color(Color::rgb(20, 80, 140))
+            .legend_label(text),
+        )
+    };
+    let canvas = |second| {
+        Canvas::grid(1, 2)
+            .unwrap()
+            .width(900)
+            .theme(theme.clone())
+            .legend_policy(CanvasLegendPolicy::Shared)
+            .panel(0, 0, plot(title.clone()))
+            .unwrap()
+            .panel(0, 1, plot(second))
+            .unwrap()
+    };
+    let source = canvas(title.clone());
+    let root = source.preflight_plan().unwrap();
+    let retained = root.plan().retained_text();
+    let text: Vec<_> = retained
+        .iter()
+        .filter(|(_, text)| text.source == title.as_str())
+        .collect();
+    assert_eq!(text.len(), 1);
+    assert_eq!(text[0].1.style.font_size, 21);
+    assert!(text[0].1.style.exact_override);
+    assert_eq!(
+        text[0].1.style.alignment,
+        crate::layout::PhysicalTextAlignment::End
+    );
+    assert_eq!(text[0].0.anchor, crate::render::backend::TextAnchor::End);
+    let descriptor = root.prepared().shared_guide.as_ref().unwrap();
+    assert_eq!(
+        descriptor.sections[0].entries()[0].identity,
+        crate::decorations::legend::GuideEntryIdentity::supplemental("Selected\nshort").unwrap()
+    );
+    for changed in [
+        title.clone().layout(TextLayout::default()),
+        title
+            .clone()
+            .style(title.get_style().unwrap().clone().font_size(22).unwrap()),
+    ] {
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        let error = canvas(changed)
+            .preflight_plan()
+            .err()
+            .expect("different authored entry requests");
+        assert!(error
+            .to_string()
+            .contains("conflicting labels for raw identity"));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+}
+
+#[test]
 fn shared_color_titles_reject_style_and_request_presence_conflicts_before_fonts() {
     use crate::{FontFamily, FontStack, Text, TextLayout};
     let base = crate::Theme::publication();
@@ -941,7 +1023,7 @@ fn assert_shared_alpha_declarations() {
         descriptor.sections[0]
             .entries()
             .iter()
-            .map(|entry| entry.display_label.as_ref())
+            .map(|entry| entry.display_label.as_str())
             .collect::<Vec<_>>(),
         ["low", "high"]
     );

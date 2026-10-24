@@ -270,7 +270,8 @@ fn constant_domain_large_typography_reserves_singleton_length_in_both_flows() {
                 body(guide).gradient.height()
             }
         };
-        assert!(length(&compact) > LegendMetrics::from_theme(&theme).unwrap().minimum);
+        let minimum = LegendMetrics::from_theme(&theme, 96).unwrap().minimum;
+        assert!(length(&compact) > minimum);
         assert!(length(&preferred) > length(&compact));
         for guide in [&preferred, &compact] {
             let body = body(guide);

@@ -193,13 +193,28 @@ fn explicit_point_layer_consumes_its_automatic_palette_position() {
 
 #[test]
 fn point_labels_and_whole_layer_legend_identity_remain_distinct() {
+    use lichtung_plot::{Color, Text, TextAlignment, Theme};
     let frame = line_data();
+    let style = Theme::publication()
+        .typography()
+        .get_guides()
+        .get_legend_label()
+        .clone()
+        .font_size(19)
+        .unwrap()
+        .color(Color::rgb(25, 74, 117))
+        .unwrap();
     let layer = PointLayer::new(
         lichtung_plot::NumericValues::new("selected x", [0.5, 1.5]),
         lichtung_plot::NumericValues::new("selected y", [1.5, 2.5]),
     )
     .color(lichtung_plot::Color::rgb(123, 45, 200))
     .labels(lichtung_plot::CategoryValues::new("annotations", ["first", "second"]).unwrap())
+    .legend_label(
+        Text::new("discarded")
+            .style(style)
+            .alignment(TextAlignment::End),
+    )
     .legend_label("selected_coordinates");
     let base = line_plot(&frame)
         .markers(false)
@@ -230,6 +245,9 @@ fn point_labels_and_whole_layer_legend_identity_remain_distinct() {
                 "selected_coordinates"
             };
             assert_eq!(legend.matches(&format!(">{label}</text>")).count(), 1);
+            let legend_text = text_line(&output, label);
+            assert!(legend_text.contains("font-size=\"19\""));
+            assert!(legend_text.contains("fill=\"#194A75\""));
             assert_eq!(legend.matches("<circle ").count(), 1);
             assert!(!legend.contains(">first</text>") && !legend.contains(">second</text>"));
             for label in ["first", "second"] {
@@ -328,6 +346,9 @@ fn conflicting_duplicate_point_layer_legend_identity_is_rejected() {
                 .color(lichtung_plot::Color::rgba(0, 114, 178, 71)),
             second.clone().alpha(72),
             second.clone().radius(6).unwrap(),
+            second.clone().legend_label(
+                lichtung_plot::Text::new("Selected").layout(lichtung_plot::TextLayout::default()),
+            ),
         ] {
             let error = line_plot(&frame)
                 .point_layer(first.clone())

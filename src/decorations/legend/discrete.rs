@@ -40,7 +40,7 @@ pub(crate) struct GuideKeySource {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PreparedGuideEntry {
     pub(crate) identity: GuideEntryIdentity,
-    pub(crate) display_label: Arc<str>,
+    pub(crate) display_label: Arc<crate::Text>,
     pub(crate) key: ResolvedGuideKey,
     pub(super) sources: Arc<[GuideKeySource]>,
 }
@@ -188,16 +188,15 @@ impl PreparedGuide {
             )
             .map_err(|error| Error::Render(error.to_string()))?;
             for (index, entry) in section.entries().iter().enumerate() {
-                PreparedTextRequirement::push_into(
+                PreparedTextRequirement::push_authored(
                     requirements,
                     section_owner
                         .child(AddressRole::LegendEntry, count(index)?)?
                         .child(AddressRole::LegendLabel, 0)?,
                     PreparedTextRole::LegendLabel,
-                    0,
-                    entry.display_label.as_ref(),
-                    &[],
+                    Some(&entry.display_label),
                     &theme.typography.guides.legend_label,
+                    false,
                     stage.as_deref_mut(),
                 )
                 .map_err(|error| Error::Render(error.to_string()))?;
@@ -275,10 +274,10 @@ fn merge_entry(
             existing.sources = shared_slice(sources)?;
             return Ok(());
         }
-        if existing.display_label == entry.display_label {
+        if existing.display_label.as_str() == entry.display_label.as_str() {
             return Err(Error::Render(format!(
                 "{context} has distinct raw identities resolving to display label {:?}",
-                entry.display_label
+                entry.display_label.as_str()
             )));
         }
     }

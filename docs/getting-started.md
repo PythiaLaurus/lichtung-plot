@@ -177,6 +177,12 @@ local Text style replaces the missing-fill contrast role and determines padding.
 names. Their styles and line alignment apply to each complete name-plus-number
 annotation. The shared shelf uses the largest selected size among eligible totals.
 
+`PointLayer::legend_label` accepts Text for a whole-layer guide entry, independently
+of the point annotation column and its paint. The original source identifies the
+layer; existing categorical alias rules still determine displayed spelling while
+preserving local style and alignment. Repeated layer identities must agree on the
+complete displayed Text request as well as their mark key.
+
 ## Themes And Canvases
 
 Canvas owns one root theme and defaults it to Publication, so callers do not

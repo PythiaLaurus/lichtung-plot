@@ -144,7 +144,7 @@ fn assert_sources(dense: bool, composition: LegendComposition) {
             .sections
             .iter()
             .flat_map(|section| section.entries().iter())
-            .map(|entry| entry.display_label.as_ref())
+            .map(|entry| entry.display_label.as_str())
             .collect::<Vec<_>>(),
         identities
     );

@@ -159,10 +159,13 @@ impl GuideSpec {
 /// the complete layer once.
 ///
 /// ```
-/// use lichtung_plot::{Color, NumericValues, PointLayer};
+/// use lichtung_plot::{Color, NumericValues, PointLayer, Text, TextAlignment, Theme};
+/// let label = Text::new("Selected coordinates").style(
+///     Theme::publication().typography().get_guides().get_legend_label().clone()
+/// ).alignment(TextAlignment::End);
 /// let layer = PointLayer::new(
 ///     NumericValues::new("x", [1.0]), NumericValues::new("y", [2.0]),
-/// ).alpha(128).color(Color::rgb(20, 80, 140)).radius(5)?;
+/// ).alpha(128).color(Color::rgb(20, 80, 140)).radius(5)?.legend_label(label);
 /// assert_eq!(layer.get_alpha(), Some(128));
 /// assert_eq!(layer.get_color(), Some(Color::rgb(20, 80, 140)));
 /// # Ok::<(), lichtung_plot::Error>(())
@@ -180,7 +183,7 @@ pub struct PointLayer {
     x: NumericValues,
     y: NumericValues,
     labels: Option<CategoryValues>,
-    legend_label: Option<String>,
+    legend_label: crate::text::TextSlot,
     color: Option<Color>,
     radius: Option<u32>,
     alpha: Option<u8>,
@@ -294,7 +297,7 @@ impl PointLayer {
             x,
             y,
             labels: None,
-            legend_label: None,
+            legend_label: crate::text::TextSlot::EMPTY,
             color: None,
             radius: None,
             alpha: None,
@@ -358,10 +361,12 @@ impl PointLayer {
     /// Give the complete layer one legend identity.
     ///
     /// This creates at most one legend entry and does not label individual
-    /// points.
+    /// points. Identity uses the retained source; style and layout remain display
+    /// instructions. Plain replacement retains prior Text instructions. Duplicate
+    /// identities require equal complete displayed Text and mark keys.
     #[must_use]
-    pub fn legend_label(mut self, label: impl Into<String>) -> Self {
-        self.legend_label = Some(label.into());
+    pub fn legend_label(mut self, label: impl Into<crate::Text>) -> Self {
+        self.legend_label.replace(label.into());
         self
     }
 
@@ -377,8 +382,8 @@ impl PointLayer {
         self.labels.as_ref()
     }
 
-    pub(crate) fn legend_label_text(&self) -> Option<&str> {
-        self.legend_label.as_deref()
+    pub(crate) const fn legend_content(&self) -> Option<&crate::Text> {
+        self.legend_label.content()
     }
 
     pub(crate) fn point_style(

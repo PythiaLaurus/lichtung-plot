@@ -314,8 +314,6 @@ pub(crate) struct LegendMetrics {
     pub font_size: f64,
     /// Border padding (px).
     pub pad: f64,
-    /// Entry height (px) = font_size + label_spacing.
-    pub entry_h: f64,
     /// Handle (marker) width (px).
     pub handle_w: f64,
     /// Handle-to-text gap (px).
@@ -351,19 +349,19 @@ impl LegendFrameMetrics {
 
 impl LegendMetrics {
     /// Complete role-local metrics do not depend on the outer root dimensions.
-    pub(crate) fn from_theme(theme: &crate::theme::ResolvedTheme) -> Result<Self, Error> {
+    pub(crate) fn from_theme(
+        theme: &crate::theme::ResolvedTheme,
+        label_size: u32,
+    ) -> Result<Self, Error> {
         use crate::layout::kernel::SpatialRounding::{Ceil, NearestEven};
 
         let exact = theme.legend.lengths(
-            theme.typography.guides.legend_label.get_font_size(),
+            label_size,
             theme.typography.guides.legend_title.get_font_size(),
         )?;
         let s = |value: &crate::theme::spacing::ExactLength| value.pixels_rounded(NearestEven);
-        let font_size = f64::from(theme.typography.guides.legend_label.font_size);
+        let font_size = f64::from(label_size);
         let pad = s(&exact.padding)?;
-        let entry_h = s(&exact
-            .row_gap
-            .add_pixels(theme.typography.guides.legend_label.line_pitch_pixels())?)?;
         let handle_w = s(&exact.key_width)?;
         if handle_w <= 0.0 {
             return Err(Error::Render(
@@ -404,7 +402,6 @@ impl LegendMetrics {
         Ok(Self {
             font_size,
             pad,
-            entry_h,
             handle_w,
             handle_text,
             outside_gap: s(&exact.outside_gap)?,
@@ -591,7 +588,26 @@ impl Legend {
         descriptor: &PreparedGuide,
         theme: &crate::theme::ResolvedTheme,
     ) -> Result<(LegendMetrics, f64), Error> {
-        let mut metrics = LegendMetrics::from_theme(theme)?;
+        let label_size = descriptor
+            .sections
+            .iter()
+            .flat_map(|section| {
+                section.entries().iter().map(|entry| {
+                    entry
+                        .display_label
+                        .appearance(&theme.typography.guides.legend_label)
+                        .theme
+                        .get_font_size()
+                })
+            })
+            .chain(
+                descriptor
+                    .continuous()
+                    .map(|_| theme.typography.guides.legend_label.get_font_size()),
+            )
+            .max()
+            .unwrap_or(theme.typography.guides.legend_label.get_font_size());
+        let mut metrics = LegendMetrics::from_theme(theme, label_size)?;
         let inset = descriptor
             .continuous()
             .and_then(|color| color.missing.as_ref())
@@ -653,7 +669,6 @@ impl Legend {
         for metric in [
             self.metrics.font_size,
             self.metrics.pad,
-            self.metrics.entry_h,
             self.metrics.handle_w,
             self.metrics.handle_text,
             self.metrics.outside_gap,
@@ -860,15 +875,7 @@ impl Legend {
         };
         for (section, layout) in self.descriptor.sections.iter().zip(&self.layout.sections) {
             let title = layout.title.plan();
-            let (title_anchor, title_offset) = match title.style.alignment {
-                crate::layout::PhysicalTextAlignment::Start => (TextAnchor::Start, 0),
-                crate::layout::PhysicalTextAlignment::Center => (
-                    TextAnchor::Middle,
-                    crate::render::backend::nearest_even_text_half(title.width_quanta)
-                        .ok_or_else(|| Error::Render("legend title half extent overflow".into()))?,
-                ),
-                crate::layout::PhysicalTextAlignment::End => (TextAnchor::End, title.width_quanta),
-            };
+            let (title_offset, title_anchor) = label_anchor(title)?;
             emit(LegendCall::Text(crate::render::backend::PlacedText {
                 placement: PlannedTextPlacement::baseline(
                     translate([title_offset, layout.title_baseline]),
@@ -879,13 +886,18 @@ impl Legend {
             }))?;
             for (entry, slot) in section.entries().iter().zip(&layout.entries) {
                 entry.key.visit_calls(m, translate(slot.key), &mut emit)?;
+                let label = slot.block.plan();
+                let (offset, anchor) = label_anchor(label)?;
+                let x = slot.label[0]
+                    .checked_add(offset)
+                    .ok_or_else(|| Error::Render("legend label anchor overflow".into()))?;
                 emit(LegendCall::Text(crate::render::backend::PlacedText {
                     placement: PlannedTextPlacement::baseline(
-                        translate(slot.label),
-                        TextAnchor::Start,
+                        translate([x, slot.label[1]]),
+                        anchor,
                         0.0,
                     ),
-                    plan: slot.block.plan().clone(),
+                    plan: label.clone(),
                 }))?;
             }
             if let Some(color) = &layout.color {
@@ -895,4 +907,16 @@ impl Legend {
 
         Ok(())
     }
+}
+
+fn label_anchor(plan: &crate::layout::ResolvedTextPlan) -> Result<(i64, TextAnchor), Error> {
+    Ok(match plan.style.alignment {
+        crate::layout::PhysicalTextAlignment::Start => (0, TextAnchor::Start),
+        crate::layout::PhysicalTextAlignment::Center => (
+            crate::render::backend::nearest_even_text_half(plan.width_quanta)
+                .ok_or_else(|| Error::Render("legend text half extent overflow".into()))?,
+            TextAnchor::Middle,
+        ),
+        crate::layout::PhysicalTextAlignment::End => (plan.width_quanta, TextAnchor::End),
+    })
 }

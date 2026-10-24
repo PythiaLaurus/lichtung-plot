@@ -196,7 +196,10 @@ Supplemental identity is exact supplied layer label, never append index or hue
 value. Source Categorical context resolves its label through Labels; LiteralSeries
 context preserves supplied bytes. Determine context before contribution filtering,
 independently of final Canvas title/composition/first pair. Equal layer identity
-with incompatible label/point style rejects. Combined appends layers after primary
+with incompatible complete Text request or point style rejects. The source-only
+identity stays separate from exact display appearance and layout presence.
+Categorical display resolution changes only Text source, preserving instructions;
+LiteralSeries stays verbatim. Combined appends layers after primary
 keys under primary title, or Series if no primary exists. Separate appends a
 SupplementalSeries section. Layers do not add hues to coordinated color domains;
 unlabeled layers have no key. Their exact override still consumes accent position.
@@ -275,6 +278,9 @@ round upward once, positions/preferences nearest-even, ink outward. One outer
 horizontal padding applies per edge, vertical padding+glyph_edge_padding per edge,
 with independent frame stroke/radius ink. No per-section comfort duplication.
 Frame absence removes chrome, not content/padding/structural key occupancy.
+Shared label-relative metrics use the maximum actual selected entry/number size.
+Individual text plans use their own complete styles and leading. Inherited labels
+and continuous numbers resolve their size from the consuming guide's Theme role.
 
 Assigned inner width W subtracts complete hard horizontal insets; optional inner
 height H subtracts one outer vertical reserve. Negative/unusable space misses.

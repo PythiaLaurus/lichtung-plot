@@ -231,6 +231,7 @@ pub(crate) struct GuideSourceKey {
     pub(crate) identity: GuideEntryIdentity,
     pub(crate) key: ResolvedGuideKey,
     pub(super) mapping: SourceMapping,
+    pub(super) authored_label: Option<crate::Text>,
 }
 
 impl GuideSourceKey {
@@ -238,6 +239,7 @@ impl GuideSourceKey {
         Self {
             identity,
             key: ResolvedGuideKey::default(),
+            authored_label: None,
             mapping: SourceMapping {
                 encoding,
                 paint_bindings: PaintBindings::default(),
@@ -315,10 +317,14 @@ impl GuideSourceKey {
         Self::new(identity, GuideEncoding::Literal(domain))
     }
 
-    pub(crate) fn supplemental(identity: GuideEntryIdentity, context: LayerLabelContext) -> Self {
-        let mut key = Self::new(identity, GuideEncoding::SupplementalLayer);
+    pub(crate) fn supplemental(text: &crate::Text, context: LayerLabelContext) -> Result<Self> {
+        let mut key = Self::new(
+            GuideEntryIdentity::supplemental(text.as_str())?,
+            GuideEncoding::SupplementalLayer,
+        );
+        key.authored_label = Some(text.try_copy()?);
         key.mapping.layer_label_context = Some(context);
-        key
+        Ok(key)
     }
 
     fn rgb(&self, role: MarkPaintRole) -> RgbBinding {

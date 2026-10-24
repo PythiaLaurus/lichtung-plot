@@ -345,7 +345,7 @@ fn cell_alpha_retains_original_members_through_normalized_order_and_missing_grid
         descriptor.sections[1]
             .entries()
             .iter()
-            .map(|entry| entry.display_label.as_ref())
+            .map(|entry| entry.display_label.as_str())
             .collect::<Vec<_>>(),
         ["zero", "high", "mid"]
     );

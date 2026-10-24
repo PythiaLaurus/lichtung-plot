@@ -14,7 +14,7 @@ use super::discrete::{GuideSectionBody, PreparedGuide, PreparedGuideSection};
 use super::{Legend, LegendLayout, LegendMetrics, SectionLayout};
 use crate::layout::fit::{self, FitKind, FitOutcome, FitScope, PlanError};
 use crate::layout::kernel::{allocate_tracks, LayoutScalar, SpatialRounding, TrackSpec};
-use crate::layout::{AddressRole, PhysicalTextAlignment, ResolvedTextPlan, TextBlock};
+use crate::layout::{AddressRole, ResolvedTextPlan, TextBlock};
 use crate::theme::spacing::ExactLength;
 use crate::theme::ResolvedTheme;
 use crate::Error;
@@ -94,8 +94,10 @@ fn guide_intrinsics(
         for entry in section.entries() {
             let (minimum, preferred) = fit::intrinsic_widths(
                 theme,
-                &entry.display_label,
-                &theme.typography.guides.legend_label,
+                entry.display_label.as_str(),
+                entry
+                    .display_label
+                    .appearance(&theme.typography.guides.legend_label),
                 "legend entry intrinsic",
             )?;
             let ink = entry.key.glyph_ink(metrics)?;
@@ -463,10 +465,15 @@ fn measure_section(
                 })?;
                 let plan = fit::measured(fit::text(
                     theme,
-                    &entry.display_label,
-                    &theme.typography.guides.legend_label,
+                    entry.display_label.as_str(),
+                    entry
+                        .display_label
+                        .appearance(&theme.typography.guides.legend_label),
                     text_capacity.pixels_rounded(SpatialRounding::Floor)?,
-                    PhysicalTextAlignment::Start,
+                    entry
+                        .display_label
+                        .resolved_alignment(crate::TextAlignment::Start)
+                        .into(),
                     "legend section entry",
                     &label_scope,
                 ))?;

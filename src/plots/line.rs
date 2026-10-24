@@ -55,7 +55,7 @@ struct LinePoint {
 struct PointLayer {
     points: Vec<(f64, f64)>,
     labels: Option<Vec<String>>,
-    legend: Option<String>,
+    legend: Option<crate::Text>,
 }
 
 #[derive(Debug)]
@@ -413,10 +413,7 @@ impl PreparedLine {
                     accent.color(self.primary_accent_slots + index)?,
                     theme.marks.get_points().get_supplemental(),
                 );
-                let key = GuideSourceKey::supplemental(
-                    crate::decorations::legend::GuideEntryIdentity::supplemental(label)?,
-                    LayerLabelContext::for_plot(chart),
-                );
+                let key = GuideSourceKey::supplemental(label, LayerLabelContext::for_plot(chart))?;
                 entries.push(if chart.point_layers()[index].get_color().is_some() {
                     key.with_exact_point(style, PointRole::Supplemental)
                 } else {
@@ -753,8 +750,11 @@ impl PreparedLine {
                 points,
                 labels,
                 legend: layer
-                    .legend_label_text()
-                    .map(crate::data::source::copy_source_string)
+                    .legend_content()
+                    .map(|text| {
+                        crate::text::validate_for(text.as_str(), "point layer legend label")?;
+                        text.try_copy()
+                    })
                     .transpose()?,
             });
         }

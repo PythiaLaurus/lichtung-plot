@@ -196,9 +196,9 @@ impl PreparedAlphaSection {
             } else {
                 if entries
                     .iter()
-                    .any(|existing| existing.display_label == entry.display_label)
+                    .any(|existing| existing.display_label.as_str() == entry.display_label.as_str())
                 {
-                    return Err(Error::Render(format!("{context} has distinct declared alpha members resolving to display label {:?}", entry.display_label)));
+                    return Err(Error::Render(format!("{context} has distinct declared alpha members resolving to display label {:?}", entry.display_label.as_str())));
                 }
                 reserve_source(&mut entries, 1)?;
                 entries.push(entry.clone());
@@ -528,7 +528,7 @@ fn alpha_section(
                 ordinal: u32::try_from(example.ordinal)
                     .map_err(|_| Error::Render("alpha guide ordinal overflow".into()))?,
             },
-            display_label: shared_text(&label)?,
+            display_label: source_arc(crate::Text::from(label))?,
             key: sample_key(prototype, source.target, example.alpha),
             sources: shared_slice(Vec::new())?,
         })
@@ -536,11 +536,11 @@ fn alpha_section(
     for (index, entry) in entries.iter().enumerate() {
         if entries[..index]
             .iter()
-            .any(|other| other.display_label == entry.display_label)
+            .any(|other| other.display_label.as_str() == entry.display_label.as_str())
         {
             return Err(Error::Render(format!(
                 "alpha guide has distinct declared members resolving to display label {:?}",
-                entry.display_label
+                entry.display_label.as_str()
             )));
         }
     }

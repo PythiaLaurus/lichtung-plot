@@ -75,7 +75,7 @@ fn sectioned_facets_preserve_parent_domains_and_reject_alias_collisions_before_f
         guide.sections[0]
             .entries()
             .iter()
-            .map(|entry| entry.display_label.as_ref())
+            .map(|entry| entry.display_label.as_str())
             .collect::<Vec<_>>(),
         ["one", "two"]
     );
@@ -85,7 +85,7 @@ fn sectioned_facets_preserve_parent_domains_and_reject_alias_collisions_before_f
         guide.sections[1]
             .entries()
             .iter()
-            .map(|entry| entry.display_label.as_ref())
+            .map(|entry| entry.display_label.as_str())
             .collect::<Vec<_>>(),
         ["blue", "red", "green"]
     );
@@ -102,7 +102,7 @@ fn sectioned_facets_preserve_parent_domains_and_reject_alias_collisions_before_f
         alpha
             .entries
             .iter()
-            .map(|entry| entry.display_label.as_ref())
+            .map(|entry| entry.display_label.as_str())
             .collect::<Vec<_>>(),
         ["low", "high"]
     );

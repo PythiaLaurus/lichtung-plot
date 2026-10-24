@@ -444,7 +444,7 @@ fn supplemental_defaults_and_explicit_alpha_keep_label_paint_independent_and_gui
     );
     assert_eq!(alpha_text[0].plan.source, "Alpha");
     assert_eq!(
-        guide.sections[0].entries()[2].display_label.as_ref(),
+        guide.sections[0].entries()[2].display_label.as_str(),
         "Legend alpha"
     );
     let separate = crate::decorations::legend::discrete::PreparedGuide::prepare_for_test(
@@ -459,7 +459,7 @@ fn supplemental_defaults_and_explicit_alpha_keep_label_paint_independent_and_gui
         crate::decorations::legend::discrete::GuideSectionIdentity::SupplementalSeries
     ));
     assert_eq!(
-        separate.sections[1].entries()[1].display_label.as_ref(),
+        separate.sections[1].entries()[1].display_label.as_str(),
         "Legend alpha"
     );
     assert_eq!(

@@ -110,6 +110,14 @@ font preparation. Endpoint projection centers the block and line alignment resol
 inside it. The common shelf's metrics use the maximum eligible selected font size;
 numeric eligibility/source order and collision checks remain scientific policies.
 
+PointLayer legend_label retains one Text slot with content-replacement semantics.
+Its source alone identifies the supplemental layer; the source's categorical or
+literal-series context determines displayed spelling while preserving instructions.
+Guide entries retain complete Text, and repeated raw identities require exact
+display/style/layout-presence equality in addition to complete mark-key equality.
+Local legend-label appearance is independent of point annotation/mark paint;
+shared guide-label metric relationships use the maximum actual selected label size.
+
 ## Paint And Geometry
 
 Each final fill, stroke, text, bracket, outline and gradient stop has one RGBA

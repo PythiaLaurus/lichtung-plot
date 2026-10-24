@@ -1667,7 +1667,7 @@ mandatory breaks and present empty-line metrics through preparation and capture.
 TextPanel/headers/panel notes admit multiline content; raw-key validation and
 exact-tick empty-label suppression remain distinct. Public `Labels::resolve`
 shares automatic resolution and complete-domain collision checks remain in place.
-Step 3 is in progress: shared crate-root `TextAlignment` has replaced the title-only
+Step 3 is complete: shared crate-root `TextAlignment` has replaced the title-only
 type through Plot/Canvas, Theme and frozen heading measurement. The common Text/
 TextLayout values now serve Plot/Canvas prose, x/y titles, TextPanel title/body and
 panel-corner annotations with complete local appearance, independent line alignment,
@@ -1683,7 +1683,10 @@ Heatmap null-row text now retains complete Text through contrast selection, cens
 selected padding, intrinsic identity, track allocation and frozen placement.
 Waterfall base/terminal Text now retains independent instructions through eligible
 name-plus-number preparation, font census, shared shelf metrics and frozen placement.
-PointLayer legend labels remain pending within this step.
+PointLayer legend Text now preserves source-only identity and categorical/literal
+display context, with complete appearance/layout compatibility, selected guide
+metrics, font census and frozen entry alignment. The complete receiving-slot
+inventory is migrated, preserving existing source readers and complete Eq contracts.
 Steps 4–22 remain pending; undelivered target signatures are not current APIs.
 
 ### 1. Apply The Public Property Naming Rule

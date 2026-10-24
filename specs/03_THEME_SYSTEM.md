@@ -172,7 +172,8 @@ X/y axis titles resolve independently over axis_title; their selected sizes own
 the corresponding title clearances. Continuous guide titles resolve local Text
 appearance over the consuming guide-title role, including Shared Canvas ownership.
 Each measured section resolves title_gap against that title's selected size;
-frame, key and label spacing retain their declared guide-label metrics.
+Frame, key and label spacing use the maximum actual selected guide-label size;
+automatic entries and continuous numbers retain their guide-label role size.
 Canvas headers and row titles independently replace composition_header with a
 complete local Text style. Each named header padding uses that selected size;
 shared band extents take the maximum complete text-plus-padding requirement.
@@ -445,6 +446,10 @@ Waterfall total names can supply independent complete Text styles. The retained
 name-plus-number uses that style throughout census, measurement and drawing.
 The shared shelf's padding/gap/row_gap use the maximum selected size of eligible
 totals; each line block keeps its own font size and leading.
+PointLayer legend Text can replace the guide-label appearance independently of
+the layer's mark/point-annotation paint. Shared guide chrome resolves over Canvas;
+an exact local label style remains complete. Shared label-relative metrics use
+the maximum selected entry/number size without changing individual text styles.
 
 ## Data-Color Scales
 

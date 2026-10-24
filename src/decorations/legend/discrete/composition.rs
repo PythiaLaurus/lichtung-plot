@@ -5,7 +5,6 @@ use super::{
     GuideSectionBody, GuideSectionIdentity, PreparedGuide, PreparedGuideEntry,
     PreparedGuideSection,
 };
-use crate::decorations::legend::identity::shared_text;
 use crate::decorations::legend::identity::PrimaryTitleIdentity;
 use crate::decorations::legend::source::{
     GuideEncoding, GuideExplanation, LiteralDomain, Projection,
@@ -165,6 +164,7 @@ impl PreparedGuide {
                     source.identity,
                     source.key,
                     record,
+                    source.authored_label,
                 )?;
             } else {
                 separate_source(
@@ -174,6 +174,7 @@ impl PreparedGuide {
                     source.identity,
                     source.key,
                     record,
+                    source.authored_label,
                 )?;
             }
         }
@@ -313,23 +314,33 @@ fn insert_source(
     identity: GuideEntryIdentity,
     key: ResolvedGuideKey,
     source: GuideKeySource,
+    authored: Option<crate::Text>,
 ) -> Result<()> {
     let existing = sections.iter().find(|current| current.identity == section);
     let title = existing.map_or_else(
         || section.title(plot),
         |current| Ok(Arc::clone(&current.title)),
     )?;
-    let label = existing
-        .and_then(|current| {
-            current
-                .entries
-                .iter()
-                .find(|entry| entry.identity == identity)
-        })
-        .map_or_else(
-            || shared_text(&identity.resolved_label(plot, source.mapping.layer_label_context)?),
-            |entry| Ok(Arc::clone(&entry.display_label)),
-        )?;
+    let label = if let Some(text) = authored {
+        let resolved = identity.resolved_label(plot, source.mapping.layer_label_context)?;
+        crate::data::source::source_arc(text.try_copy_with_source(resolved)?)?
+    } else {
+        existing
+            .and_then(|current| {
+                current
+                    .entries
+                    .iter()
+                    .find(|entry| entry.identity == identity)
+            })
+            .map_or_else(
+                || {
+                    crate::data::source::source_arc(crate::Text::from(
+                        identity.resolved_label(plot, source.mapping.layer_label_context)?,
+                    ))
+                },
+                |entry| Ok(Arc::clone(&entry.display_label)),
+            )?
+    };
     let entry = PreparedGuideEntry {
         identity,
         display_label: label,
@@ -386,6 +397,7 @@ fn separate_source(
     identity: GuideEntryIdentity,
     key: ResolvedGuideKey,
     mut source: GuideKeySource,
+    authored: Option<crate::Text>,
 ) -> Result<()> {
     let section = match source.mapping.encoding.clone() {
         GuideEncoding::UnsupportedPair { group, hue } => return Err(Error::Render(format!(
@@ -403,22 +415,22 @@ fn separate_source(
             group_source.projection = Projection::GroupStyle;
             group_source.group_neutral_rgb = Some(neutral);
             insert_source(sections, plot, GuideSectionIdentity::GroupStyle(group.clone()),
-                GuideEntryIdentity::Category { field: group, value: group_value }, group_key, group_source)?;
+                GuideEntryIdentity::Category { field: group, value: group_value }, group_key, group_source, None)?;
             let hue_key = super::projection::project(&key, &source.mapping, Projection::HueColor, None)?;
             source.projection = Projection::HueColor;
             return insert_source(sections, plot, GuideSectionIdentity::HueColor(hue.clone()),
-                GuideEntryIdentity::Category { field: hue, value: hue_value }, hue_key, source);
+                GuideEntryIdentity::Category { field: hue, value: hue_value }, hue_key, source, None);
         }
         GuideEncoding::HueOnly { field } | GuideEncoding::RowHue { field } => {
             let key = super::projection::project(&key, &source.mapping, Projection::HueColor, None)?;
             source.projection = Projection::HueColor;
-            return insert_source(sections, plot, GuideSectionIdentity::HueColor(field), identity, key, source);
+            return insert_source(sections, plot, GuideSectionIdentity::HueColor(field), identity, key, source, None);
         }
         GuideEncoding::Joint { field } => GuideSectionIdentity::Joint(field),
         GuideEncoding::Literal(domain) => GuideSectionIdentity::Literal(domain),
         GuideEncoding::SupplementalLayer => GuideSectionIdentity::SupplementalSeries,
     };
-    insert_source(sections, plot, section, identity, key, source)
+    insert_source(sections, plot, section, identity, key, source, authored)
 }
 
 fn finish(

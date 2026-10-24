@@ -101,7 +101,7 @@ fn alpha_preserves_original_filtered_slots_coincident_points_paint_order_and_out
         section
             .entries()
             .iter()
-            .map(|entry| entry.display_label.as_ref())
+            .map(|entry| entry.display_label.as_str())
             .collect::<Vec<_>>(),
         ["low", "mid"]
     );

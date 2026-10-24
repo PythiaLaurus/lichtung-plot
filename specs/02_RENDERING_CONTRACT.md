@@ -226,6 +226,15 @@ of name content. Text defaults to the waterfall_total role and Center line align
 within the scientific endpoint's centered block. Shared shelf spacing uses the
 maximum selected size of its eligible totals.
 
+PointLayer legend_label accepts Text with source-only layer identity. The source's
+existing categorical/literal display context remains authoritative: categorical
+aliases/humanization replace only display source, retaining exact style/layout;
+literal-series text stays verbatim. Content replacement preserves instructions.
+Duplicate identities require equal complete displayed Text and full mark keys,
+including before a Shared guide's font census. Line alignment defaults to Start
+inside the existing left-positioned guide entry; point annotation columns stay
+CategoryValues with their independent paint role.
+
 ### Guides
 
 LegendPolicy is one automatic/hidden/explicit-position choice; placement and

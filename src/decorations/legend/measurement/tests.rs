@@ -1,4 +1,5 @@
 use super::*;
+use crate::layout::PhysicalTextAlignment;
 use crate::LegendComposition;
 
 fn empty_block() -> TextBlock {
@@ -68,7 +69,7 @@ fn metrics(row: f64, column: f64) -> LegendMetrics {
         .unwrap()
         .frame(None)
         .unwrap();
-    LegendMetrics::from_theme(&theme).unwrap()
+    LegendMetrics::from_theme(&theme, theme.typography.guides.legend_label.get_font_size()).unwrap()
 }
 
 #[test]
