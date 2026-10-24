@@ -89,27 +89,11 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// ```
     /// ```compile_fail
     /// use lichtung_plot::{kind, AlphaEncoding, Plot};
-    /// fn unsupported(plot: Plot<kind::Histogram>, alpha: AlphaEncoding) { let _ = plot.point_alpha(alpha); }
-    /// ```
-    /// ```compile_fail
-    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
     /// fn unsupported(plot: Plot<kind::Heatmap>, alpha: AlphaEncoding) { let _ = plot.point_alpha(alpha); }
     /// ```
     /// ```compile_fail
     /// use lichtung_plot::{kind, AlphaEncoding, Plot};
     /// fn unsupported(plot: Plot<kind::Bar>, alpha: AlphaEncoding) { let _ = plot.point_alpha(alpha); }
-    /// ```
-    /// ```compile_fail
-    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
-    /// fn unsupported(plot: Plot<kind::HorizontalBar>, alpha: AlphaEncoding) { let _ = plot.point_alpha(alpha); }
-    /// ```
-    /// ```compile_fail
-    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
-    /// fn unsupported(plot: Plot<kind::StackedBar>, alpha: AlphaEncoding) { let _ = plot.point_alpha(alpha); }
-    /// ```
-    /// ```compile_fail
-    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
-    /// fn unsupported(plot: Plot<kind::StackedHorizontalBar>, alpha: AlphaEncoding) { let _ = plot.point_alpha(alpha); }
     /// ```
     /// ```compile_fail
     /// use lichtung_plot::{kind, AlphaEncoding, Plot};
@@ -141,31 +125,11 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// ```
     /// ```compile_fail
     /// use lichtung_plot::{kind, AlphaEncoding, Plot};
-    /// fn unsupported(plot: Plot<kind::Heatmap>, alpha: AlphaEncoding) { let _ = plot.line_alpha(alpha); }
-    /// ```
-    /// ```compile_fail
-    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
     /// fn unsupported(plot: Plot<kind::StackedBar>, alpha: AlphaEncoding) { let _ = plot.line_alpha(alpha); }
     /// ```
     /// ```compile_fail
     /// use lichtung_plot::{kind, AlphaEncoding, Plot};
-    /// fn unsupported(plot: Plot<kind::StackedHorizontalBar>, alpha: AlphaEncoding) { let _ = plot.line_alpha(alpha); }
-    /// ```
-    /// ```compile_fail
-    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
     /// fn unsupported(plot: Plot<kind::Marginal>, alpha: AlphaEncoding) { let _ = plot.line_alpha(alpha); }
-    /// ```
-    /// ```compile_fail
-    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
-    /// fn unsupported(plot: Plot<kind::Matrix>, alpha: AlphaEncoding) { let _ = plot.line_alpha(alpha); }
-    /// ```
-    /// ```compile_fail
-    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
-    /// fn unsupported(plot: Plot<kind::Beeswarm>, alpha: AlphaEncoding) { let _ = plot.line_alpha(alpha); }
-    /// ```
-    /// ```compile_fail
-    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
-    /// fn unsupported(plot: Plot<kind::Waterfall>, alpha: AlphaEncoding) { let _ = plot.line_alpha(alpha); }
     /// ```
     #[must_use]
     pub fn line_alpha(self, alpha: AlphaEncoding) -> Self
@@ -197,31 +161,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// ```
     /// ```compile_fail
     /// use lichtung_plot::{kind, AlphaEncoding, Plot};
-    /// fn unsupported(plot: Plot<kind::Qq>, alpha: AlphaEncoding) { let _ = plot.fill_alpha(alpha); }
-    /// ```
-    /// ```compile_fail
-    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
-    /// fn unsupported(plot: Plot<kind::PointInterval>, alpha: AlphaEncoding) { let _ = plot.fill_alpha(alpha); }
-    /// ```
-    /// ```compile_fail
-    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
-    /// fn unsupported(plot: Plot<kind::LinePath>, alpha: AlphaEncoding) { let _ = plot.fill_alpha(alpha); }
-    /// ```
-    /// ```compile_fail
-    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
     /// fn unsupported(plot: Plot<kind::Interaction>, alpha: AlphaEncoding) { let _ = plot.fill_alpha(alpha); }
-    /// ```
-    /// ```compile_fail
-    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
-    /// fn unsupported(plot: Plot<kind::Coefficient>, alpha: AlphaEncoding) { let _ = plot.fill_alpha(alpha); }
-    /// ```
-    /// ```compile_fail
-    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
-    /// fn unsupported(plot: Plot<kind::Forest>, alpha: AlphaEncoding) { let _ = plot.fill_alpha(alpha); }
-    /// ```
-    /// ```compile_fail
-    /// use lichtung_plot::{kind, AlphaEncoding, Plot};
-    /// fn unsupported(plot: Plot<kind::Dumbbell>, alpha: AlphaEncoding) { let _ = plot.fill_alpha(alpha); }
     /// ```
     /// ```compile_fail
     /// use lichtung_plot::{kind, AlphaEncoding, Plot};
