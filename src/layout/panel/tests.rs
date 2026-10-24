@@ -126,11 +126,7 @@ fn exact_tick_configuration_validates_count_before_fonts() {
                     .collect(),
             ),
         };
-        assert_eq!(
-            spec.validate("x-axis").is_ok(),
-            (1..=10_000).contains(&count),
-            "count={count}"
-        );
+        assert_eq!(spec.validate("x-axis").is_ok(), count > 0, "count={count}");
     }
 }
 

@@ -1319,22 +1319,39 @@ fn project(
 
 pub(crate) fn log_tick_plan(
     range: (f64, f64),
-    generation: crate::TickGeneration,
-    format: Option<&crate::numeric::source::AxisRequest<'_>>,
+    spec: &crate::layout::AxisSpec,
     panel: crate::layout::PanelBox,
     theme: &ResolvedTheme,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<crate::layout::NumericTickPlan, crate::layout::fit::PlanError> {
     let projection = crate::layout::Projection::new(range, (0.0, 1.0), panel.as_tuple());
+    let format = spec.numeric_request()?;
+    if let Some(parameters) = spec.generation.exact_parameters() {
+        let raw = spec
+            .numeric_source
+            .as_deref()
+            .and_then(|source| source.raw_limits(crate::layout::AxisSide::Bottom));
+        return crate::layout::exact_count_tick_plan(
+            range,
+            parameters,
+            true,
+            raw,
+            &projection,
+            crate::layout::AxisSide::Bottom,
+            theme,
+            format.as_ref(),
+            scope,
+        );
+    }
     crate::layout::numeric_tick_plan(
         range,
-        generation,
+        spec.generation.clone(),
         true,
         &projection,
         crate::layout::AxisSide::Bottom,
         theme,
         false,
-        format,
+        format.as_ref(),
         scope,
     )
 }

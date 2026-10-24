@@ -1203,7 +1203,8 @@ impl Canvas {
                         }
                         let mut plot = plot.with_render_scope(scope);
                         if let Some(Some(range)) = shared_x.get(index) {
-                            plot = plot.with_planned_x_limits(*range);
+                            let kind = plot.kind();
+                            plot = plot.with_resolved_facet_ranges(kind, Some(*range), None);
                         }
                         Some(if plot.kind() == PlotKind::Scatter {
                             crate::plots::shared_x::prepare_scatter_plot(

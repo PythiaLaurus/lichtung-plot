@@ -1352,6 +1352,147 @@ fn numeric_functions_keep_raw_facet_levels_without_optional_child_reuse() {
     }
 }
 
+#[test]
+fn exact_generated_counts_preserve_linear_data_and_mathematical_logarithmic_operands() {
+    use crate::{NumericFormat, NumericOperand, NumericPurpose, TickGeneration, TickSpace};
+    let numeric = NumericFormat::from_specifier(".2~f")
+        .unwrap()
+        .prefix("E:")
+        .unwrap();
+    let ordinary = Plot::scatter(
+        crate::NumericValues::new("x", [0.0, 10.0]),
+        crate::NumericValues::new("y", [0.0, 1.0]),
+    )
+    .x_limits(0.0, 10.0)
+    .x_tick_generation(TickGeneration::exact_count(4, TickSpace::Data))
+    .x_tick_format(numeric);
+    let forest = |space| {
+        Plot::forest(
+            crate::CategoryValues::new("term", ["ratio"]).unwrap(),
+            crate::NumericValues::new("estimate", [1.0]),
+            crate::Bounds::new(
+                crate::NumericValues::new("lo", [0.2]),
+                crate::NumericValues::new("hi", [5.0]),
+            ),
+            1.0,
+        )
+        .scale(crate::AxisScale::Log10)
+        .x_limits(0.1, 10.0)
+        .x_tick_generation(TickGeneration::exact_count(3, space))
+        .x_tick_format(NumericFormat::default().set_function(move |context| {
+            if context.purpose() == NumericPurpose::ActualSet {
+                let values: Vec<_> = context
+                    .values()
+                    .iter()
+                    .map(|value| match (space, value.operand()) {
+                        (TickSpace::Data, NumericOperand::Binary64(value)) => value,
+                        (TickSpace::Scale, NumericOperand::PowerOfTen { exponent }) => exponent,
+                        _ => panic!("exact-count operand space changed"),
+                    })
+                    .collect();
+                assert_eq!(
+                    values,
+                    if space == TickSpace::Data {
+                        vec![0.1, 5.05, 10.0]
+                    } else {
+                        vec![-1.0, 0.0, 1.0]
+                    }
+                );
+            }
+            context.format_builtin()
+        }))
+    };
+    let root = Canvas::grid(1, 3)
+        .unwrap()
+        .size(2400, 600)
+        .panel(0, 0, ordinary)
+        .unwrap()
+        .panel(0, 1, forest(TickSpace::Data))
+        .unwrap()
+        .panel(0, 2, forest(TickSpace::Scale))
+        .unwrap()
+        .preflight_plan()
+        .unwrap();
+    let sources: Vec<_> = root
+        .plan()
+        .retained_text()
+        .into_iter()
+        .filter(|(_, text)| text.source.starts_with("E:"))
+        .map(|(_, text)| text.source.as_str())
+        .collect();
+    assert_eq!(sources, ["E:0", "E:3.33", "E:6.67", "E:10"]);
+    Plot::scatter(
+        crate::NumericValues::new("x", [0.0, 1.0]),
+        crate::NumericValues::new("y", [0.0, 1.0]),
+    )
+    .x_tick_generation(TickGeneration::exact_count(0, TickSpace::Data))
+    .x_tick_format(
+        NumericFormat::default()
+            .set_function(|_| panic!("empty source must not invoke numeric functions")),
+    )
+    .preflight()
+    .unwrap();
+}
+
+#[test]
+fn exact_counts_follow_parent_domains_but_keep_independent_canvas_owners() {
+    use std::sync::{Arc, Mutex};
+    let observed = Arc::new(Mutex::new(std::collections::BTreeMap::new()));
+    let contexts = observed.clone();
+    let format = crate::NumericFormat::from_specifier(".2~f")
+        .unwrap()
+        .set_function(move |context| {
+            if context.purpose() == crate::NumericPurpose::ActualSet {
+                let domain = context.domain().unwrap();
+                assert_eq!(domain.origin(), crate::NumericRangeOrigin::ParentResolved);
+                let operands: Vec<_> = context
+                    .values()
+                    .iter()
+                    .map(|value| match value.operand() {
+                        crate::NumericOperand::Binary64(value) => value.to_bits(),
+                        crate::NumericOperand::PowerOfTen { .. } => panic!("linear shared domain"),
+                    })
+                    .collect();
+                assert_eq!(operands.len(), 4);
+                let (lower, upper) = domain.scale_limits();
+                assert_eq!(
+                    (operands[0], operands[3]),
+                    (lower.to_bits(), upper.to_bits())
+                );
+                contexts
+                    .lock()
+                    .unwrap()
+                    .insert(context.owner().canvas_cell().unwrap(), operands);
+            }
+            context.format_builtin()
+        });
+    let plot = |values| {
+        Plot::scatter(
+            crate::NumericValues::new("x", values),
+            crate::NumericValues::new("y", [0.0, 1.0]),
+        )
+        .x_tick_generation(crate::TickGeneration::exact_count(
+            4,
+            crate::TickSpace::Data,
+        ))
+        .x_tick_format(format.clone())
+    };
+    Canvas::grid(1, 2)
+        .unwrap()
+        .panel(0, 0, plot([0.0, 10.0]))
+        .unwrap()
+        .panel(0, 1, plot([100.0, 200.0]))
+        .unwrap()
+        .x_range_group(vec![(0, 0), (0, 1)])
+        .unwrap()
+        .size(1400, 600)
+        .preflight()
+        .unwrap();
+    let observed = observed.lock().unwrap();
+    assert_eq!(observed.len(), 2);
+    assert_eq!(observed[&(0, 0)], observed[&(0, 1)]);
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "one Shared declaration contract checks actual union members, Hidden, aliases and complete custom recipes before fonts"

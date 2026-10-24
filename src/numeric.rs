@@ -13,8 +13,10 @@
 //! handled exactly. Every other result is separated from every rounding boundary.
 
 use crate::Error;
+use binary::rounded_ratio;
 use num_bigint::BigUint;
 
+pub(crate) mod binary;
 pub(crate) mod context;
 pub(crate) mod decimal;
 pub(crate) mod emission;
@@ -134,36 +136,6 @@ fn ln_bounds(
     }
 
     Ok((lower << 1, (upper << 1) + 1_u32))
-}
-
-/// Exact nearest-even rational conversion. Nonzero binary64 log10 magnitudes
-/// are normal and lie between 2^-55 and 324, including their certified bounds.
-fn rounded_ratio(mut numerator: BigUint, mut denominator: BigUint) -> Result<f64, Error> {
-    let mut exponent = i32::try_from(numerator.bits()).map_err(|_| arithmetic_error())?
-        - i32::try_from(denominator.bits()).map_err(|_| arithmetic_error())?;
-    let below = if exponent >= 0 {
-        numerator < (&denominator << exponent.unsigned_abs() as usize)
-    } else {
-        (&numerator << exponent.unsigned_abs() as usize) < denominator
-    };
-    exponent -= i32::from(below);
-    let shift = 52_i32.checked_sub(exponent).ok_or_else(arithmetic_error)?;
-    if shift >= 0 {
-        numerator <<= shift.unsigned_abs() as usize;
-    } else {
-        denominator <<= shift.unsigned_abs() as usize;
-    }
-    let mut significand =
-        u64::try_from(&numerator / &denominator).map_err(|_| arithmetic_error())?;
-    let remainder = (&numerator % &denominator) << 1;
-    if remainder > denominator || (remainder == denominator && !significand.is_multiple_of(2)) {
-        significand += 1;
-    }
-    // A carry into bit 53 naturally increments the encoded exponent.
-    Ok(f64::from_bits(
-        (u64::try_from(exponent + 1023).map_err(|_| arithmetic_error())? << 52) + significand
-            - (1_u64 << 52),
-    ))
 }
 
 fn arithmetic_error() -> Error {

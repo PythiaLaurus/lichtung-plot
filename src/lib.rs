@@ -120,7 +120,8 @@ pub use spec::{
     HistogramStat, InteractionStyle, LegendComposition, LegendPolicy, LegendPosition,
     LinePathStyle, LinePattern, PanelCorner, PanelTextAnnotation, PercentileInterval, PlotKind,
     PointShape, QqLine, RawOverlay, RegressionBand, SignificanceMarkStyle, StandardDeviation,
-    StandardError, TextWeight, TickGeneration, ValueSort, WaterfallLabels,
+    StandardError, TextWeight, TickGeneration, TickSingleton, TickSpace, ValueSort,
+    WaterfallLabels,
 };
 pub use spec::{PngCompression, PngOptions, PngSizing};
 pub use text::{Text, TextAlignment, TextLayout};

@@ -5,7 +5,9 @@ use crate::layout::PhysicalTextAlignment;
 use crate::theme::ResolvedTheme;
 use crate::{Error, TickGeneration};
 
-pub(super) const MAX_TICKS: usize = TickGeneration::MAX_COUNT as usize;
+// Only the automatic candidate program is bounded by this private seed grammar.
+pub(super) const MAX_TICKS: usize = 10_000;
+pub(crate) mod count;
 const MAX_INDEX: f64 = 9_007_199_254_740_992.0;
 const FACTORS: [f64; 4] = [1.0, 2.0, 3.0, 5.0];
 
@@ -19,6 +21,7 @@ pub(crate) enum SourceKind {
     LogSubset(usize),
     LogInterval(u64),
     Midpoint,
+    ExactCount,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -86,7 +89,7 @@ fn indices(range: (f64, f64), step: f64) -> Option<(i64, usize)> {
             .checked_add(1)?,
     )
     .ok()?;
-    (1..=MAX_TICKS).contains(&count).then_some((first, count))
+    (count > 0).then_some((first, count))
 }
 
 fn reserve<T>(values: &mut Vec<T>, count: usize) -> Result<(), Error> {
@@ -248,8 +251,8 @@ impl Sources {
         let integral_count =
             (range.1.min(308.0).floor() - range.0.max(-323.0).ceil() + 1.0).max(0.0) as usize;
         let target = generation.target_count();
-        let upper = target.map_or(upper, |count| count as usize);
-        let singleton = target == Some(1) || generation.maximum_count() == Some(1);
+        let upper = target.unwrap_or(upper);
+        let singleton = target == Some(1) || generation.get_maximum_count() == Some(1);
         let cap = match &generation {
             _ if singleton => 1,
             value if value.is_interval() && log => 4 * 20 + 1,
@@ -257,7 +260,9 @@ impl Sources {
             _ if log && integral_count >= 2 => {
                 upper.min(integral_count) + usize::from(target.is_none())
             }
-            _ => upper + 1,
+            _ => upper
+                .checked_add(1)
+                .ok_or_else(|| Error::Render("tick source program length overflow".into()))?,
         };
         let base = generation.additive_step().unwrap_or(0.0);
         let log_base = generation.decade_step().map_or(0, u64::from);
@@ -280,7 +285,7 @@ impl Sources {
     fn next_kind(&mut self) -> SourceKind {
         let interval = self.generation.is_interval();
         let target = self.generation.target_count();
-        if target == Some(1) || self.generation.maximum_count() == Some(1) {
+        if target == Some(1) || self.generation.get_maximum_count() == Some(1) {
             return SourceKind::Midpoint;
         }
         if interval && !self.intervals_done {
@@ -382,10 +387,13 @@ impl Sources {
         crate::orchestrator::measurements::count(
             crate::orchestrator::measurements::Counter::TickSource,
         );
-        let maximum = self
-            .generation
-            .maximum_count()
-            .map_or(MAX_TICKS, |count| count as usize);
+        let maximum = self.generation.get_maximum_count().unwrap_or(
+            if self.generation.target_count().is_some() || self.generation.is_interval() {
+                usize::MAX
+            } else {
+                MAX_TICKS
+            },
+        );
         let positions = match kind {
             SourceKind::Adaptive(seed) => adaptive_positions(self.range, seed, maximum)?,
             SourceKind::Additive(step) => linear_positions(self.range, step, maximum)?,
@@ -425,7 +433,9 @@ impl Sources {
                 positions.push(f64::midpoint(self.range.0, self.range.1));
                 Some(positions)
             }
-            SourceKind::Supplied | SourceKind::Exact => unreachable!("not generated sources"),
+            SourceKind::Supplied | SourceKind::Exact | SourceKind::ExactCount => {
+                unreachable!("not adaptive sources")
+            }
         };
         Ok((source, positions))
     }
@@ -443,16 +453,48 @@ pub(crate) fn numeric_tick_plan(
     format: Option<&crate::numeric::source::AxisRequest<'_>>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<NumericTickPlan, crate::layout::fit::PlanError> {
-    Sources::new(range, log, generation.clone(), 1)?;
-
     NumericTickPlan::measure_selected_source(
         range, generation, log, projection, side, theme, legacy, format, scope,
     )
 }
 
 impl NumericTickPlan {
+    fn omitted(
+        positions: &[f64],
+        operands: &[f64],
+        power: bool,
+        integral: bool,
+        mut source: TickSource,
+    ) -> Result<Option<Self>, Error> {
+        for precision in std::iter::once(0).chain(2..=17) {
+            let ticks =
+                crate::data::source::collect_source(positions.iter().copied().zip(operands).map(
+                    |(position, value)| {
+                        Ok(AxisTick::new(
+                            position,
+                            format_label(*value, power, integral, precision)?,
+                        ))
+                    },
+                ))?;
+            if ticks.windows(2).all(|pair| pair[0].label != pair[1].label) {
+                source.precision = Some(u8::try_from(precision).expect("bounded precision"));
+                return Ok(Some(Self {
+                    ticks,
+                    source,
+                    numeric: None,
+                }));
+            }
+        }
+        Ok(None)
+    }
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "scientific coordinates and retained operands may differ on a logarithmic data-space source"
+    )]
     fn formatted(
         positions: &[f64],
+        operands: &[f64],
+        power: bool,
         log: bool,
         format: &crate::numeric::source::AxisRequest<'_>,
         theme: &ResolvedTheme,
@@ -465,7 +507,8 @@ impl NumericTickPlan {
             AxisSide::Left => projection.y_range(),
         };
         let Some(set) = format.materialize(
-            positions,
+            operands,
+            power,
             log,
             side,
             range,
@@ -517,6 +560,11 @@ impl NumericTickPlan {
         format: Option<&crate::numeric::source::AxisRequest<'_>>,
         scope: &crate::layout::fit::FitScope,
     ) -> Result<Self, crate::layout::fit::PlanError> {
+        if let Some(parameters) = generation.exact_parameters() {
+            return count::plan(
+                range, parameters, log, None, projection, side, theme, format, scope,
+            );
+        }
         // Validate semantic inputs before asking for the metric probe or environment.
         Sources::new(range, log, generation.clone(), 1)?;
         let probe = if legacy {
@@ -549,44 +597,31 @@ impl NumericTickPlan {
             if let Some(positions) = positions {
                 // Each formatting attempt is admitted before strings or record storage.
                 let mut ticks = Vec::new();
-                reserve(&mut ticks, positions.len())?;
                 let mut unique = false;
                 let mut numeric = None;
                 if let Some(format) = format {
-                    if let Some(plan) =
-                        Self::formatted(&positions, log, format, theme, source, projection, side)?
-                    {
+                    if let Some(plan) = Self::formatted(
+                        &positions, &positions, log, log, format, theme, source, projection, side,
+                    )? {
                         source = plan.source;
                         ticks = plan.ticks;
                         numeric = plan.numeric;
                         unique = true;
                     }
                 } else {
-                    for precision in 0..=17 {
-                        if precision == 1 {
-                            continue;
-                        }
-                        ticks.clear();
-
-                        for &position in &positions {
-                            let integral = log
-                                && matches!(
-                                    source.kind,
-                                    SourceKind::LogIntegral
-                                        | SourceKind::LogSubset(_)
-                                        | SourceKind::LogInterval(_)
-                                );
-                            let label = format_label(position, log, integral, precision)?;
-                            ticks.push(AxisTick::new(position, label));
-                        }
-                        // Formatting of an ordered numeric source is monotone. Only
-                        // adjacent labels can coincide, including SI boundary rounding.
-                        unique = ticks.windows(2).all(|pair| pair[0].label != pair[1].label);
-                        if unique {
-                            source.precision =
-                                Some(u8::try_from(precision).expect("bounded precision"));
-                            break;
-                        }
+                    let integral = log
+                        && matches!(
+                            source.kind,
+                            SourceKind::LogIntegral
+                                | SourceKind::LogSubset(_)
+                                | SourceKind::LogInterval(_)
+                        );
+                    if let Some(plan) =
+                        Self::omitted(&positions, &positions, log, integral, source)?
+                    {
+                        source = plan.source;
+                        ticks = plan.ticks;
+                        unique = true;
                     }
                 }
                 #[cfg(test)]

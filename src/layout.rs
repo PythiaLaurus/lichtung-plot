@@ -13,6 +13,7 @@ pub(crate) use canvas::{PanelBox, RootFramePlan};
 pub(crate) use kernel::{force_reservation_failure, ReservationStage};
 pub(crate) use kernel::{plan_exact_root, FrozenRoot, MeasuredLayout, RootSize};
 pub(crate) use kernel::{AddressRole, ComponentAddress};
+pub(crate) use panel::exact_count_tick_plan;
 pub(crate) use panel::format_guide_label;
 pub use panel::AxisTick;
 pub(crate) use panel::NumericTickPlan;

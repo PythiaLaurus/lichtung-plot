@@ -12,10 +12,10 @@ use crate::{Error, Result};
 /// assert_eq!(linear.additive_step(), Some(0.25));
 /// assert_eq!(logarithmic.decade_step(), Some(2));
 /// assert_eq!(TickGeneration::target(5)?.target_count(), Some(5));
-/// assert_eq!(TickGeneration::maximum(6)?.maximum_count(), Some(6));
+/// assert_eq!(TickGeneration::maximum(6)?.get_maximum_count(), Some(6));
 /// assert!(TickGeneration::default().is_automatic());
 /// assert!(TickGeneration::target(0).is_err());
-/// assert!(TickGeneration::maximum(10_001).is_err());
+/// assert!(TickGeneration::maximum(10_001).is_ok());
 /// # Ok::<(), lichtung_plot::Error>(())
 /// ```
 ///
@@ -33,7 +33,7 @@ use crate::{Error, Result};
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct TickGeneration {
     primary: Primary,
-    maximum: Option<u32>,
+    maximum: Option<usize>,
 }
 
 // All admitted floating steps are finite and strictly positive.
@@ -47,8 +47,47 @@ enum Primary {
         step: f64,
         binding: IntervalBinding,
     },
-    Target(u32),
+    Target(usize),
+    ExactCount {
+        count: usize,
+        space: TickSpace,
+        singleton: TickSingleton,
+    },
 }
+
+/// Coordinate space for generated positions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TickSpace {
+    /// Raw scientific data units.
+    Data,
+    /// Linear coordinates or logarithmic exponents.
+    Scale,
+}
+
+/// Position of an exact singleton, in the selected coordinate space.
+#[derive(Debug, Clone, Copy)]
+pub enum TickSingleton {
+    /// Lower domain endpoint (default).
+    Lower,
+    /// Exact midpoint, rounded once.
+    Midpoint,
+    /// Upper domain endpoint.
+    Upper,
+    /// A finite in-domain position.
+    Position(f64),
+}
+impl PartialEq for TickSingleton {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Lower, Self::Lower)
+            | (Self::Midpoint, Self::Midpoint)
+            | (Self::Upper, Self::Upper) => true,
+            (Self::Position(a), Self::Position(b)) => a.to_bits() == b.to_bits(),
+            _ => false,
+        }
+    }
+}
+impl Eq for TickSingleton {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum IntervalBinding {
@@ -57,8 +96,6 @@ enum IntervalBinding {
 }
 
 impl TickGeneration {
-    pub(crate) const MAX_COUNT: u32 = 10_000;
-
     /// Use renderer-owned automatic density and nice-step selection.
     pub const fn automatic() -> Self {
         Self {
@@ -106,9 +143,9 @@ impl TickGeneration {
 
     /// Request approximately `count` numeric positions, allowing nice-step deviation.
     ///
-    /// Counts must be in `1..=10_000`; one requests the original-domain midpoint.
+    /// Counts must be positive; one requests the original-domain midpoint.
     /// Actual label fit can select a coarser complete source.
-    pub fn target(count: u32) -> Result<Self> {
+    pub fn target(count: usize) -> Result<Self> {
         Self::validate_count(count)?;
         Ok(Self {
             primary: Primary::Target(count),
@@ -118,9 +155,9 @@ impl TickGeneration {
 
     /// Bound generated in-domain positions, including endpoints, by `count`.
     ///
-    /// Counts must be in `1..=10_000`. The bound applies to complete generated
+    /// Counts must be positive. The bound applies to complete generated
     /// sources, not exact caller ticks; it never drops individual labels.
-    pub fn maximum(count: u32) -> Result<Self> {
+    pub fn maximum(count: usize) -> Result<Self> {
         Self::validate_count(count)?;
         Ok(Self {
             primary: Primary::Automatic,
@@ -128,17 +165,15 @@ impl TickGeneration {
         })
     }
 
-    fn validate_count(count: u32) -> Result<()> {
-        if !(1..=Self::MAX_COUNT).contains(&count) {
-            return Err(Error::Data(
-                "generated tick count must be in 1..=10000".into(),
-            ));
+    fn validate_count(count: usize) -> Result<()> {
+        if count == 0 {
+            return Err(Error::Data("generated tick count must be positive".into()));
         }
         Ok(())
     }
 
     /// Inspect the target count, or None for another selection.
-    pub const fn target_count(&self) -> Option<u32> {
+    pub const fn target_count(&self) -> Option<usize> {
         match self.primary {
             Primary::Target(count) => Some(count),
             _ => None,
@@ -146,8 +181,66 @@ impl TickGeneration {
     }
 
     /// Inspect the hard maximum count, or None for another selection.
-    pub const fn maximum_count(&self) -> Option<u32> {
+    pub const fn get_maximum_count(&self) -> Option<usize> {
         self.maximum
+    }
+
+    /// Set or clear the positive generated cap, without replacing the locator.
+    pub fn maximum_count(mut self, maximum: Option<usize>) -> Result<Self> {
+        if let Some(maximum) = maximum {
+            Self::validate_count(maximum)?;
+            if self
+                .exact_parameters()
+                .is_some_and(|(count, _, _)| count > maximum)
+            {
+                return Err(Error::Data(
+                    "exact tick count exceeds the generated maximum".into(),
+                ));
+            }
+        }
+        self.maximum = maximum;
+        Ok(self)
+    }
+
+    /// Generate exactly count positions; zero is empty and one initially uses Lower.
+    pub const fn exact_count(count: usize, space: TickSpace) -> Self {
+        Self {
+            primary: Primary::ExactCount {
+                count,
+                space,
+                singleton: TickSingleton::Lower,
+            },
+            maximum: None,
+        }
+    }
+
+    /// Set exact-count singleton placement, retaining the complete request for n>=2.
+    pub fn singleton(mut self, position: TickSingleton) -> Result<Self> {
+        if let TickSingleton::Position(value) = position {
+            if !value.is_finite() {
+                return Err(Error::Data("tick singleton must be finite".into()));
+            }
+        }
+        let Primary::ExactCount { singleton, .. } = &mut self.primary else {
+            return Err(Error::Data(
+                "singleton placement requires an exact-count locator".into(),
+            ));
+        };
+        *singleton = position;
+        Ok(self)
+    }
+
+    pub(crate) const fn exact_parameters(&self) -> Option<(usize, TickSpace, TickSingleton)> {
+        if let Primary::ExactCount {
+            count,
+            space,
+            singleton,
+        } = self.primary
+        {
+            Some((count, space, singleton))
+        } else {
+            None
+        }
     }
 
     pub(crate) const fn is_interval(&self) -> bool {
@@ -158,7 +251,7 @@ impl TickGeneration {
         &self,
         round: &mut crate::layout::kernel::FeedbackRound,
     ) -> Result<()> {
-        round.observe_count(self.maximum.map_or(0, |count| count as usize))?;
+        round.observe_count(self.maximum.unwrap_or(0))?;
         match self.primary {
             Primary::Automatic => round.observe_count(0),
             Primary::Interval { step, binding } => {
@@ -168,7 +261,26 @@ impl TickGeneration {
             }
             Primary::Target(count) => {
                 round.observe_count(3)?;
-                round.observe_count(count as usize)
+                round.observe_count(count)
+            }
+            Primary::ExactCount {
+                count,
+                space,
+                singleton,
+            } => {
+                round.observe_count(4)?;
+                round.observe_count(count)?;
+                round.observe_count(space as usize)?;
+                match singleton {
+                    TickSingleton::Lower => round.observe_count(0),
+                    TickSingleton::Midpoint => round.observe_count(1),
+                    TickSingleton::Upper => round.observe_count(2),
+                    TickSingleton::Position(value) => {
+                        round.observe_count(3)?;
+                        round.observe_count(usize::from(value.is_sign_negative()))?;
+                        round.observe_number(value)
+                    }
+                }
             }
         }
     }

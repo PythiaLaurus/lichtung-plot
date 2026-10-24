@@ -364,8 +364,7 @@ impl InteriorRoute {
                 {
                     crate::plots::interval_estimate::log_tick_plan(
                         projection.x_range(),
-                        inputs.specs[side].generation.clone(),
-                        inputs.specs[side].numeric_request()?.as_ref(),
+                        &inputs.specs[side],
                         panel,
                         context.theme,
                         context.fit_scope(),

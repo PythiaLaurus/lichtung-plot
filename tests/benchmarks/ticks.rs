@@ -162,16 +162,13 @@ fn assert_output(
         1
     };
     assert!(primary > 0);
-    if let Some(maximum) = generation.maximum_count() {
-        assert!(primary <= maximum as usize * copies);
+    if let Some(maximum) = generation.get_maximum_count() {
+        assert!(primary <= maximum * copies);
     }
     if matches!(request, Request::Exact)
         && generation.target_count() == Some(if fixture.logarithmic() { 4 } else { 5 })
     {
-        assert_eq!(
-            primary,
-            generation.target_count().unwrap() as usize * copies
-        );
+        assert_eq!(primary, generation.target_count().unwrap() * copies);
     }
     if matches!(fixture, Fixture::RangeGroup | Fixture::ForestCanvas) {
         assert!((1..=3).contains(&labels("R:")));

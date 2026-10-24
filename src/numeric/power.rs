@@ -11,6 +11,7 @@ use super::decimal::{
 };
 use crate::{Error, Result};
 
+mod binary;
 pub(crate) mod certified;
 mod comparison;
 

@@ -6,6 +6,17 @@ use this certified engine with complete-set precision and frozen exact factors.
 Domain views retain scale exponents and expose finite raw limits only when
 genuinely retained; no inverse of a rounded logarithm is invented for a callback.
 
+Data-space exact-count interpolation without retained raw endpoints uses positive
+rational affine combinations of the two canonical powers. Each endpoint supplies
+outward C/2^p bounds with symbolic decimal decades; cross-multiply and combine
+before binary64 nearest-even conversion. Refine until both bounds select one cell.
+Integral powers are rational and terminate exactly. Nonintegral dyadic powers are
+positive monomials in one root of 10 whose power-of-two degree polynomial is
+Eisenstein at 2; the positive rational combination cannot cancel its nonconstant
+basis terms into a rational rounding boundary. Therefore refinement terminates.
+Physical results outside finite binary64 or collapsed representable positions
+refuse rather than inventing operands; scale-space powers remain symbolic.
+
 ## Mathematical Operand
 
 For finite binary64 exponent e and validated decimal scale s in[-324,324], format

@@ -37,7 +37,13 @@ impl PreparedAxes {
         &self,
         side: usize,
     ) -> Result<Option<crate::numeric::set::FormattedSet>, Error> {
-        if self.specs[side].exact_ticks.is_some() || self.categories[side].is_some() {
+        if self.specs[side].exact_ticks.is_some()
+            || self.categories[side].is_some()
+            || self.specs[side]
+                .generation
+                .exact_parameters()
+                .is_some_and(|(count, _, _)| count == 0)
+        {
             return Ok(None);
         }
         let Some(request) = self.specs[side].numeric_request()? else {
@@ -46,6 +52,7 @@ impl PreparedAxes {
         let range = self.specs[side].limits.unwrap_or(self.ranges[side]);
         request.materialize(
             &[range.0, f64::midpoint(range.0, range.1), range.1],
+            self.logarithmic && side == 0,
             self.logarithmic && side == 0,
             if side == 0 {
                 crate::layout::AxisSide::Bottom
@@ -1250,6 +1257,9 @@ fn reconcile_facet_axis(
 
         for (_, axes) in retained {
             axes.ranges[side] = union;
+            if axes.specs[side].provenance != crate::layout::RangeProvenance::Configured {
+                axes.specs[side].provenance = crate::layout::RangeProvenance::Shared;
+            }
         }
     }
     Ok(())
@@ -1574,6 +1584,9 @@ fn prepare(
                     .transpose()?
             },
         };
+    }
+    if x_limits.is_some() && specs[0].provenance != crate::layout::RangeProvenance::Configured {
+        specs[0].provenance = crate::layout::RangeProvenance::Shared;
     }
     if logarithmic {
         // Both explicit and parent-coordinated domains are already transformed.

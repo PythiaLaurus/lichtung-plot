@@ -34,6 +34,7 @@ mod sources;
 #[cfg(test)]
 use semantics::RangePolicy;
 pub(crate) use semantics::{AxisSemanticInputs, RangeProvenance, StandardPanelInputs};
+pub(crate) use sources::count::plan as exact_count_tick_plan;
 pub(crate) use sources::format_guide_label;
 pub(crate) use sources::format_label;
 pub(crate) use sources::{numeric_tick_plan, NumericTickPlan, TickSource};

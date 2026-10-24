@@ -1723,7 +1723,12 @@ callback-free SVG/outline/PNG publication. Step 8 is complete: TickGeneration no
 owns one Automatic/Target/Interval primary locator and an independent positive
 maximum, with Maximum normalized to capped Automatic. Interval preserves admitted
 scale binding; explicit cloning replaces Copy through consumers and dependencies.
-The complete reset has no cap. Steps 9–22 remain pending; undelivered target signatures are
+The complete reset has no cap. Step 9 is complete: exact endpoint-including counts,
+data/scale choice and singleton placement use exact affine binary rounding and
+one noncoarsening source. Public counts/caps migrate to usize and remove the
+shared 10000 ceiling, retaining private Automatic bounds and real storage limits.
+Forest data operands remain independent of mathematical scale-space powers.
+Steps 10–22 remain pending; undelivered target signatures are
 not current APIs.
 
 ### 1. Apply The Public Property Naming Rule

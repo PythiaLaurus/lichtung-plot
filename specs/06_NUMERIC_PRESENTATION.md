@@ -432,9 +432,11 @@ parallel locator implementation. Interval retains its admitted Linear/Log10 scal
 binding and exact represented step; the additive/decade readers project those
 constructor semantics. Default and automatic() reset the entire request.
 is_automatic tests the complete default, including absence of a cap. Additive is
-finite positive f64; Log10Decades positive u32; target/maximum counts remain
-1..=10000. Getters are is_automatic, additive_step, decade_step, target_count,
-maximum_count. Consumers explicitly borrow/clone the complete policy through axis
+finite positive f64; Log10Decades positive u32; target/maximum counts and all caps
+are positive usize, without a 10000 ceiling. Getters are is_automatic, additive_step,
+decade_step, target_count, get_maximum_count. The consuming maximum_count edit sets
+or clears one positive cap without replacing the primary, rejecting an ExactCount
+contradiction. Consumers explicitly borrow/clone the complete policy through axis
 semantics, feedback, facets and composed child/height dependencies.
 
 x_tick_generation/y_tick_generation use the existing 17 NumericX/15 NumericY gates
@@ -443,7 +445,7 @@ gain no attachment. Actual categorical axes reject non-Automatic choices before
 fonts; interval scale-kind mismatch rejects. Counts do not change scientific
 limits, transforms, format or nice-range policy.
 
-Exact x_ticks/y_ticks have1..=10000 finite strictly ascending data positions in
+Exact x_ticks/y_ticks have nonempty finite strictly ascending data positions in
 the resolved display domain, indivisible verbatim labels, including empty labels.
 They replace all generated sources in either setter order. Never merge/cap/drop
 exact positions to satisfy a generated maximum; exact collisions geometrically
@@ -469,7 +471,7 @@ Choose greatest table decade<=raw_step and test positive finite factors
 10,5,2.5,2,1 times it (or raw_step alone if no table exponent). Minimize abs(count-k),
 ties keeping earlier larger step. Adjacent endpoints or fewer than2 resulting
 positions use validated[lo,hi]. Common zero-aligned generation uses ceil(lo/step),
-floor(hi/step), exact integral indices in[-2^53,2^53], checked count1..10000 before
+floor(hi/step), exact integral indices in[-2^53,2^53], checked positive usize count before
 allocation, prescribed binary64 index*step, finite in-domain strictly ascending.
 
 Additive first tries requested step, then step times1,2,3,5 by decades, omitting
@@ -499,8 +501,37 @@ unlabeled positions count. Do not select another factor within a seed merely to
 meet maximum or drop positions after selection. Forest skips oversized full list
 then continues the same subsets. For either count1, select original midpoint
 directly, still subject to fit; adjacent-domain two endpoints cannot bypass1.
-Source cardinality remains10000, linear Target has at most n+1 candidates,
-integral Forest at most d. Emit midpoint at most once.
+Private Automatic candidates retain a 10000 bound; explicit Target/interval/count
+sources have real usize/storage bounds and any caller-selected cap instead.
+Linear Target has checked at most n+1 candidates, integral Forest at most d. Emit
+midpoint at most once. Unrepresentable source lengths or real allocation failures
+are contextual rendering failures, not permission to truncate a list.
+
+### Exact Generated Counts
+
+ExactCount(count, TickSpace) is one complete source, including endpoints for n>=2.
+Independently round `((n-1-i)*lo+i*hi)/(n-1)` once to binary64 through the common
+signed rational converter, retaining exact endpoint bits. Never compute an
+overflowing hi-lo or accumulate a rounded step. The common converter also serves
+certified log10 and handles zero, subnormals, ties and binade carries.
+
+Zero means a valid empty generated list, without an invented numeric owner,
+callback or explanation; marks, frame and title remain. One defaults to Lower,
+with explicit Lower/Midpoint/Upper/Position singleton selection in the chosen
+space. Position is finite and must be in-domain when n=1; for n>=2 singleton
+intent is retained but cannot move endpoints. singleton on another primary rejects.
+Source count and cap are checked before text work. A collapsed rounded/projected
+source or selected text nonfit is a contextual failure, never a coarser source or
+terminal-midpoint retry.
+
+Scale interpolation on Log10 retains mathematical exponent operands without old
+integral-source clipping. Data interpolation retains ordinary finite physical
+operands and then projects them. Genuinely retained raw limits, including supplied
+Forest limits, are used as-is; otherwise the canonical power endpoints are combined
+with positive rational coefficients through certified enclosures before one binary
+rounding. This does not expose an invented inverse as domain data_limits.
+The selected complete set uses ordinary NumericFormat functions/precision/factors,
+actual-text admission and frozen output contracts, after final parent-domain resolution.
 
 ## Pre-Font Requirements And Retained Dependencies
 

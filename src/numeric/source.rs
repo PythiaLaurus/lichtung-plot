@@ -54,6 +54,10 @@ impl OwnerInfo {
 }
 
 impl NumericSource {
+    pub(crate) fn raw_limits(&self, side: crate::layout::AxisSide) -> Option<(f64, f64)> {
+        self.raw_limits[usize::from(side == crate::layout::AxisSide::Left)]
+            .map(|(a, b)| (f64::from_bits(a), f64::from_bits(b)))
+    }
     pub(crate) fn try_copy(&self) -> Result<Self> {
         Ok(Self {
             operation: self.operation.clone(),
@@ -162,6 +166,7 @@ impl AxisRequest<'_> {
         &self,
         positions: &[f64],
         power: bool,
+        log: bool,
         side: crate::layout::AxisSide,
         range: (f64, f64),
         purpose: NumericPurpose,
@@ -172,12 +177,12 @@ impl AxisRequest<'_> {
         } else {
             NumericRole::YAxis
         };
-        let scale = if power {
+        let scale = if log {
             crate::AxisScale::Log10
         } else {
             crate::AxisScale::Linear
         };
-        let raw = if power {
+        let raw = if log {
             self.source.raw_limits[index].map(|(a, b)| (f64::from_bits(a), f64::from_bits(b)))
         } else {
             Some(range)

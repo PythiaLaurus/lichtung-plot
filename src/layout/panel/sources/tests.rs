@@ -81,7 +81,7 @@ fn six_ch_seed_has_quantized_boundaries_and_a_ten_thousand_bound() {
 #[test]
 fn common_step_admits_complete_counts_and_exact_integral_indices() {
     assert_eq!(indices((0.0, 9_999.0), 1.0), Some((0, 10_000)));
-    assert_eq!(indices((0.0, 10_000.0), 1.0), None);
+    assert_eq!(indices((0.0, 10_000.0), 1.0), Some((0, 10_001)));
     assert_eq!(indices((0.1, 0.9), 1.0), None);
     assert_eq!(
         indices((MAX_INDEX - 2.0, MAX_INDEX), 1.0),
@@ -236,7 +236,10 @@ fn dense_and_empty_interval_misses_do_not_poison_coarser_sources() {
     let mut dense = Sources::new(
         (0.0, 10_000.0),
         false,
-        TickGeneration::additive(1.0).unwrap(),
+        TickGeneration::additive(1.0)
+            .unwrap()
+            .maximum_count(Some(10_000))
+            .unwrap(),
         2,
     )
     .unwrap();
@@ -261,7 +264,10 @@ fn additive_full_binary64_span_stays_within_declared_cap() {
     let mut sources = Sources::new(
         (1.0, f64::MAX),
         false,
-        TickGeneration::additive(f64::from_bits(1)).unwrap(),
+        TickGeneration::additive(f64::from_bits(1))
+            .unwrap()
+            .maximum_count(Some(10_000))
+            .unwrap(),
         2,
     )
     .unwrap();
@@ -372,13 +378,8 @@ fn logarithmic_count_sources_preserve_automatic_order_but_target_the_initial_sub
 #[test]
 fn source_semantics_reject_before_fonts() {
     let discoveries = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
-    for count in [0, 10_001, u32::MAX] {
-        assert!(matches!(TickGeneration::target(count), Err(Error::Data(_))));
-        assert!(matches!(
-            TickGeneration::maximum(count),
-            Err(Error::Data(_))
-        ));
-    }
+    assert!(matches!(TickGeneration::target(0), Err(Error::Data(_))));
+    assert!(matches!(TickGeneration::maximum(0), Err(Error::Data(_))));
     assert_eq!(
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
         discoveries
@@ -482,7 +483,10 @@ fn requested_interval_fit_wins_and_dense_requested_source_coarsens_locally() {
     assert_eq!(plan.ticks.len(), 11);
     let dense = numeric_tick_plan(
         (0.0, 100.0),
-        TickGeneration::additive(0.001).unwrap(),
+        TickGeneration::additive(0.001)
+            .unwrap()
+            .maximum_count(Some(1000))
+            .unwrap(),
         false,
         &projection,
         AxisSide::Bottom,

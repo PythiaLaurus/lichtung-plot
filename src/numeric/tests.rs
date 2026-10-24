@@ -144,4 +144,18 @@ fn rational_rounding_resolves_even_ties_and_binade_carry() {
             expected.to_bits()
         );
     }
+    for (numerator, bits) in [(1_u8, 0_u64), (3, 2), (5, 2), (7, 4)] {
+        assert_eq!(
+            rounded_ratio(BigUint::from(numerator), BigUint::from(1_u8) << 1075)
+                .unwrap()
+                .to_bits(),
+            bits
+        );
+    }
+    assert_eq!(
+        rounded_ratio(BigUint::ZERO, BigUint::from(1_u8))
+            .unwrap()
+            .to_bits(),
+        0
+    );
 }

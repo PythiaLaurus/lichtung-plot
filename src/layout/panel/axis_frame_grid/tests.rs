@@ -102,7 +102,10 @@ fn selected_axis_plan_retains_semantics_beside_projection_and_sources() {
     let retained = plan.clone();
     assert_eq!(retained.semantics, inputs);
     assert_eq!(retained.semantics[0].generation.target_count(), Some(5));
-    assert_eq!(retained.semantics[1].generation.maximum_count(), Some(5));
+    assert_eq!(
+        retained.semantics[1].generation.get_maximum_count(),
+        Some(5)
+    );
     assert_eq!(retained.standard, plan.standard);
     assert_eq!(retained.x_axis.source, TickSource::EXACT);
     assert_eq!(

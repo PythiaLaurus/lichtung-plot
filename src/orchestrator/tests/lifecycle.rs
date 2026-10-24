@@ -173,12 +173,6 @@ fn malformed_exact_tick_sources_fail_before_font_discovery_and_backend_begin() {
             "strictly ascending",
         ),
         (
-            (0..10_001)
-                .map(|index| crate::AxisTick::new(f64::from(index), ""))
-                .collect(),
-            "exceeds 10000",
-        ),
-        (
             vec![crate::AxisTick::new(4.0, "")],
             "outside resolved range",
         ),

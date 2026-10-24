@@ -259,6 +259,7 @@ impl PanelAxisPlan {
                     (6, 0.0)
                 }
                 SourceKind::Midpoint => (7, 0.0),
+                SourceKind::ExactCount => (8, 0.0),
             };
             round.observe_count(kind)?;
             round.observe_number(parameter)?;
@@ -455,16 +456,9 @@ impl Axis {
         range: Option<(f64, f64)>,
         axis: &str,
     ) -> Result<(), Error> {
-        const MAX_EXPLICIT_TICKS: usize = 10_000;
         if ticks.is_empty() {
             return Err(Error::Data(format!(
                 "{axis} explicit numeric ticks must not be empty"
-            )));
-        }
-        if ticks.len() > MAX_EXPLICIT_TICKS {
-            return Err(Error::Data(format!(
-                "{axis} explicit numeric tick count {} exceeds {MAX_EXPLICIT_TICKS}",
-                ticks.len()
             )));
         }
         for (index, tick) in ticks.iter().enumerate() {
