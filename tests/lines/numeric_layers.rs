@@ -200,7 +200,7 @@ fn point_labels_and_whole_layer_legend_identity_remain_distinct() {
         .get_guides()
         .get_legend_label()
         .clone()
-        .font_size(19)
+        .font_size(19.0)
         .unwrap()
         .color(Color::rgb(25, 74, 117))
         .unwrap();

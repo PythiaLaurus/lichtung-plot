@@ -42,7 +42,7 @@ fn public_shared_gradient_drives_both_families_without_borrowing_mark_alpha_or_c
         .clone()
         .color(Color::rgb(19, 61, 113))
         .unwrap()
-        .font_size(13)
+        .font_size(13.0)
         .unwrap();
     let guides = base
         .typography()
@@ -75,7 +75,7 @@ fn public_shared_gradient_drives_both_families_without_borrowing_mark_alpha_or_c
         .clone()
         .color(Color::rgb(211, 79, 23))
         .unwrap()
-        .font_size(7)
+        .font_size(7.0)
         .unwrap();
     let guides = base
         .typography()
@@ -200,7 +200,7 @@ fn transparent_cells_select_complete_custom_contrast_roles_before_frozen_svg_and
     let light = TextTheme::new(
         stack(GenericFontFamily::Monospace),
         Color::rgb(255, 255, 255),
-        17,
+        17.0,
         TextWeight::Bold,
         1.5,
     )
@@ -208,7 +208,7 @@ fn transparent_cells_select_complete_custom_contrast_roles_before_frozen_svg_and
     let dark = TextTheme::new(
         stack(GenericFontFamily::Serif),
         Color::rgb(0, 0, 0),
-        9,
+        9.0,
         TextWeight::Semibold,
         1.25,
     )

@@ -831,7 +831,7 @@ fn heatmap_merges_annotated_fully_null_row_and_preserves_finite_value_labels() {
                     .get_contrast()
                     .get_dark()
                     .clone()
-                    .font_size(17)
+                    .font_size(17.0)
                     .unwrap()
                     .color(Color::rgb(12, 34, 56))
                     .unwrap(),

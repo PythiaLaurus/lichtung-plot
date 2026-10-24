@@ -42,7 +42,7 @@ macro_rules! legend_spacing {
             pub(crate) radius: Option<ExactLength>,
         }
         impl LegendTheme {
-            pub(crate) fn lengths(&self, label_size: u32, title_size: u32) -> Result<LegendLengths> {
+            pub(crate) fn lengths(&self, label_size: f64, title_size: f64) -> Result<LegendLengths> {
                 let metrics = [LocalMetric::css_pixels(label_size)?, LocalMetric::css_pixels(title_size)?];
                 Ok(LegendLengths {
                     $($field: self.get_spacing().$get().product(metrics[$metric])),+,
@@ -318,13 +318,13 @@ impl LegendTheme {
         }
         Ok(())
     }
-    pub(crate) fn outside_gap_pixels(&self, label_size: u32) -> Result<f64> {
+    pub(crate) fn outside_gap_pixels(&self, label_size: f64) -> Result<f64> {
         self.get_spacing()
             .get_outside_gap()
             .product(LocalMetric::css_pixels(label_size)?)
             .pixels_rounded(SpatialRounding::NearestEven)
     }
-    pub(crate) fn shared_gap_pixels(&self, label_size: u32) -> Result<f64> {
+    pub(crate) fn shared_gap_pixels(&self, label_size: f64) -> Result<f64> {
         self.get_shared_gap()
             .product(LocalMetric::css_pixels(label_size)?)
             .pixels_rounded(SpatialRounding::NearestEven)

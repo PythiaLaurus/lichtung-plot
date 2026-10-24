@@ -222,7 +222,7 @@ pub(crate) fn natural_body_preference(
             .max(point.1)
             .max(2.0 * ink.0)
             .max(2.0 * ink.1)
-            .max(12.0 * f64::from(theme.typography.axes.tick_label.font_size));
+            .max(12.0 * theme.typography.axes.tick_label.font_size);
     }
     Ok((side.max(hard.0), side.max(hard.1)))
 }
@@ -504,11 +504,10 @@ pub(crate) fn measure(
         let y = layout::kernel::ceil_spatial_quanta(
             hard.max(point.1).max(2.0 * ink.1).max(1.0 / 1024.0),
         )?;
-        let preferred = layout::kernel::ceil_spatial_quanta(
-            12.0 * f64::from(theme.typography.axes.tick_label.font_size),
-        )?
-        .max(x)
-        .max(y);
+        let preferred =
+            layout::kernel::ceil_spatial_quanta(12.0 * theme.typography.axes.tick_label.font_size)?
+                .max(x)
+                .max(y);
         let track = |min| layout::kernel::TrackSpec {
             min,
             preferred,

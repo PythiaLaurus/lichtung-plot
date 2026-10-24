@@ -411,13 +411,13 @@ mod tests {
     #[test]
     fn facet_measurement_uses_the_complete_selected_role_occupancy() {
         let mut theme = Theme::publication().resolve().unwrap();
-        theme.typography.root.subtitle.font_size = 7;
+        theme.typography.root.subtitle.font_size = 7.0;
         theme.typography.composition.facet_header = theme
             .typography
             .composition
             .facet_header
             .clone()
-            .font_size(32)
+            .font_size(32.0)
             .unwrap();
         let panel = PanelBox::new(20.0, 420.0, 20.0, 320.0);
         let layout = Layout {
@@ -481,7 +481,7 @@ mod tests {
     fn wrapping_uses_shared_measurement_for_wide_combining_and_newline_text() {
         let theme = Theme::publication().resolve().unwrap();
         let mut appearance = theme.typography.annotations.panel_text.clone();
-        appearance.font_size = 12;
+        appearance.font_size = 12.0;
 
         let explicit = wrap_text(&theme, "first line\nsecond line\n", &appearance, 200.0);
         assert_eq!(explicit, ["first line", "second line", ""]);

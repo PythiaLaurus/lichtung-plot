@@ -240,19 +240,19 @@ impl ResolvedTheme {
                 self.typography.composition.body.get_font_size(),
             )?])
     }
-    pub(crate) fn root_title_lengths(&self, sizes: [u32; 3]) -> Result<RootTitleLengths> {
+    pub(crate) fn root_title_lengths(&self, sizes: [f64; 3]) -> Result<RootTitleLengths> {
         self.composition.get_root_title_block().lengths(&[
             LocalMetric::css_pixels(sizes[0].max(sizes[1]))?,
             LocalMetric::css_pixels(sizes[2])?,
         ])
     }
-    pub(crate) fn text_panel_lengths(&self, title: u32, body: u32) -> Result<TextPanelLengths> {
+    pub(crate) fn text_panel_lengths(&self, title: f64, body: f64) -> Result<TextPanelLengths> {
         self.composition.get_text_panel().lengths(&[
             LocalMetric::css_pixels(body)?,
             LocalMetric::css_pixels(body.max(title))?,
         ])
     }
-    pub(crate) fn header_lengths(&self, selected_size: u32) -> Result<HeaderLengths> {
+    pub(crate) fn header_lengths(&self, selected_size: f64) -> Result<HeaderLengths> {
         self.composition
             .get_headers()
             .lengths(&[LocalMetric::css_pixels(selected_size)?])

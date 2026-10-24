@@ -104,7 +104,7 @@ fn mixed_children_keep_distinct_complete_canvas_roles_on_the_root_theme() {
     let title = role(
         GenericFontFamily::Monospace,
         Color::rgb(113, 31, 59),
-        25,
+        25.0,
         TextWeight::Semibold,
         1.4,
     );
@@ -112,21 +112,21 @@ fn mixed_children_keep_distinct_complete_canvas_roles_on_the_root_theme() {
     let header = role(
         GenericFontFamily::Serif,
         Color::rgb(43, 79, 127),
-        17,
+        17.0,
         TextWeight::Bold,
         1.25,
     );
     let panel_title = role(
         GenericFontFamily::Monospace,
         Color::rgb(97, 53, 131),
-        20,
+        20.0,
         TextWeight::Semibold,
         1.5,
     );
     let body = role(
         GenericFontFamily::SansSerif,
         Color::rgb(29, 83, 47),
-        12,
+        12.0,
         TextWeight::Normal,
         1.5,
     );
@@ -268,7 +268,7 @@ fn facets_use_their_owning_plot_theme_without_a_new_scope() {
         .clone()
         .color(Color::rgb(131, 47, 103))
         .unwrap()
-        .font_size(23)
+        .font_size(23.0)
         .unwrap()
         .weight(TextWeight::Semibold)
         .unwrap()

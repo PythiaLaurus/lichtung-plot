@@ -117,7 +117,7 @@ fn authored_title_owns_line_alignment_gap_and_complete_measurement_identity() {
             .guides
             .legend_title
             .clone()
-            .font_size(25)
+            .font_size(25.0)
             .unwrap(),
     );
     descriptor.title = Arc::new(title.clone().alignment(crate::TextAlignment::End));
@@ -137,7 +137,7 @@ fn authored_title_owns_line_alignment_gap_and_complete_measurement_identity() {
     assert!(Arc::ptr_eq(&aligned.layout, &same.layout));
     let section = &aligned.layout.sections[0];
     let plan = section.title.plan();
-    assert_eq!(plan.style.font_size, 25);
+    assert_eq!(plan.style.font_size.to_bits(), 25.0_f64.to_bits());
     assert!(plan.style.exact_override);
     assert_eq!(
         plan.style.alignment,
@@ -215,7 +215,7 @@ fn projected_extents_require_the_exact_center_and_endpoint_clearance() {
 #[test]
 fn constant_domain_large_typography_reserves_singleton_length_in_both_flows() {
     let mut theme = crate::Theme::publication().resolve().unwrap();
-    theme.typography.guides.legend_label.font_size = 96;
+    theme.typography.guides.legend_label.font_size = 96.0;
     theme.typography.guides.legend_label.weight = crate::TextWeight::Bold;
     let spacing = theme
         .legend
@@ -270,14 +270,17 @@ fn constant_domain_large_typography_reserves_singleton_length_in_both_flows() {
                 body(guide).gradient.height()
             }
         };
-        let minimum = LegendMetrics::from_theme(&theme, 96).unwrap().minimum;
+        let minimum = LegendMetrics::from_theme(&theme, 96.0).unwrap().minimum;
         assert!(length(&compact) > minimum);
         assert!(length(&preferred) > length(&compact));
         for guide in [&preferred, &compact] {
             let body = body(guide);
             assert_eq!(body.labels.len(), 1);
             assert_eq!(body.labels[0].plan.source, descriptor.numeric.labels[0]);
-            assert_eq!(body.labels[0].plan.style.font_size, 96);
+            assert_eq!(
+                body.labels[0].plan.style.font_size.to_bits(),
+                96.0_f64.to_bits()
+            );
             assert_eq!(body.stops, descriptor.stops);
             let midpoint = if horizontal {
                 f64::midpoint(body.gradient.x0, body.gradient.x1)
@@ -483,7 +486,7 @@ fn custom_frame_and_owner_missing_strokes_are_allocated_and_retained_unclipped()
 #[test]
 fn custom_text_ink_overhang_cannot_be_hidden_by_the_guide_frame() {
     let mut theme = crate::Theme::publication().resolve().unwrap();
-    theme.typography.guides.legend_title.font_size = 40;
+    theme.typography.guides.legend_title.font_size = 40.0;
     theme.typography.guides.legend_title.weight = crate::TextWeight::Bold;
     let guide = fit::measured(Ok(measure(
         &descriptor(),

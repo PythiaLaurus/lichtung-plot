@@ -367,7 +367,7 @@ fn exact_per_bar_marks_render_with_independent_weight_in_both_orientations() {
         NumericValues::new("value", [1.0, -0.8]),
     );
     let style = SignificanceMarkStyle::default()
-        .font_size(18)
+        .font_size(18.0)
         .unwrap()
         .weight(TextWeight::Semibold)
         .unwrap()

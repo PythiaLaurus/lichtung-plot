@@ -150,7 +150,7 @@ impl StandardPanelInputs {
         self.axes.observe_feedback(round)?;
         for text in [&self.tick_label, &self.axis_title] {
             round.observe_font_stack(&text.stack)?;
-            round.observe_count(text.font_size as usize)?;
+            round.observe_number(text.font_size)?;
             round.observe_count(text.weight as usize)?;
             round.observe_number(text.line_height_multiplier)?;
             for channel in [

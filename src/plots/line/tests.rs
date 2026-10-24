@@ -388,7 +388,7 @@ fn supplemental_defaults_and_explicit_alpha_keep_label_paint_independent_and_gui
         .clone()
         .color(role_paint)
         .unwrap()
-        .font_size(16)
+        .font_size(16.0)
         .unwrap()
         .weight(crate::TextWeight::Semibold)
         .unwrap();
@@ -414,7 +414,10 @@ fn supplemental_defaults_and_explicit_alpha_keep_label_paint_independent_and_gui
     assert_eq!(alpha_style.radius, 9);
     assert_eq!(alpha_style.color.get_alpha(), 128);
     assert_eq!(alpha_text[0].plan.style.paint, role_paint.alpha(128));
-    assert_eq!(alpha_text[0].plan.style.font_size, 16);
+    assert_eq!(
+        alpha_text[0].plan.style.font_size.to_bits(),
+        16.0_f64.to_bits()
+    );
     assert_eq!(alpha_text[0].plan.style.weight, crate::TextWeight::Semibold);
     assert_eq!(automatic_points.len(), 1);
     assert_eq!(alpha_points.len(), 1);

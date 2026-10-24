@@ -116,7 +116,7 @@ impl PointOutline {
     ) -> Result<coordinates::CanonicalCoordinate, Error> {
         let width = self
             .width_ratio
-            .product(crate::theme::LocalMetric::css_pixels(radius)?)
+            .product(crate::theme::LocalMetric::css_pixels(f64::from(radius))?)
             .round(crate::layout::kernel::SpatialRounding::NearestEven)?
             .quanta();
         if width > (1_i64 << 53) - 1 || (width == 0 && !self.width_ratio.is_zero()) {
@@ -250,7 +250,7 @@ pub struct TextStyle {
     /// Font family.
     pub(crate) font_family: crate::font::canonical::FontStack,
     /// Font size in actual CSS pixels.
-    pub font_size: u32,
+    pub font_size: f64,
     /// Closed font-weight policy.
     pub weight: crate::TextWeight,
     /// Horizontal alignment anchor. Default: `Start`.
@@ -319,7 +319,7 @@ pub struct BracketStyle {
     /// Label font family.
     pub(crate) font_family: crate::font::canonical::FontStack,
     /// Label font size in pixels.
-    pub font_size: u32,
+    pub font_size: f64,
     /// Label line height in pixels.
     pub(crate) line_height: f64,
     /// Label font weight.
@@ -801,7 +801,8 @@ pub(crate) fn validate_text_plan(
             "planned text alignment does not match its backend placement".into(),
         ));
     }
-    if plan.style.font_size == 0
+    if !plan.style.font_size.is_finite()
+        || plan.style.font_size <= 0.0
         || plan.style.stack_source.is_empty()
         || plan.style.stack.is_empty()
         || plan.style.line_height_quanta <= 0
@@ -925,7 +926,8 @@ pub(crate) fn validate_bracket(
             style.width
         )));
     }
-    if style.font_size == 0
+    if !style.font_size.is_finite()
+        || style.font_size <= 0.0
         || !style.line_height.is_finite()
         || style.line_height <= 0.0
         || !style.label_gap.is_finite()
@@ -971,7 +973,7 @@ pub(crate) fn validate_bracket_label(
         || call.bracket.label != plan.source
         || call.style.label_color != plan.style.paint
         || !plan.same_stack(&call.style.font_family)
-        || call.style.font_size != plan.style.font_size
+        || call.style.font_size.to_bits() != plan.style.font_size.to_bits()
         || call.style.weight != plan.style.weight
     {
         return Err(Error::Render(

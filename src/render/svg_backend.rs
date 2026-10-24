@@ -277,7 +277,7 @@ impl SvgBackend {
                 }
                 if builder.data.len() != 0 {
                     let path_origin = (origin.x.value(), origin.y.value());
-                    let scale = f64::from(text.plan.style.font_size) / f64::from(run.units_per_em);
+                    let scale = text.plan.style.font_size / f64::from(run.units_per_em);
                     let transform = glyph_transform(
                         scale,
                         path_origin.0,
@@ -2150,7 +2150,7 @@ mod tests {
                 source: "A",
                 stack: crate::font::canonical::test_sans_stack(),
                 weight: crate::TextWeight::Normal,
-                font_size: 12,
+                font_size: 12.0,
                 line_height: TextLineHeight::Multiplier(1.2),
                 maximum_width_quanta: i64::MAX,
                 alignment: PhysicalTextAlignment::Start,

@@ -93,8 +93,8 @@ impl TextWeight {
 /// ```
 /// use lichtung_plot::{SignificanceMarkStyle, TextWeight};
 /// let style = SignificanceMarkStyle::default()
-///     .font_size(18)?.weight(TextWeight::Semibold)?.gap(9.0)?;
-/// assert_eq!(style.get_font_size(), 18);
+///     .font_size(18.0)?.weight(TextWeight::Semibold)?.gap(9.0)?;
+/// assert_eq!(style.get_font_size(), 18.0);
 /// assert_eq!(style.get_weight(), TextWeight::Semibold);
 /// assert_eq!(style.get_gap(), 9.0);
 /// # Ok::<(), lichtung_plot::Error>(())
@@ -108,7 +108,7 @@ impl TextWeight {
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SignificanceMarkStyle {
-    font_size: u32,
+    font_size: f64,
     weight: TextWeight,
     gap: f64,
 }
@@ -116,13 +116,13 @@ pub struct SignificanceMarkStyle {
 impl SignificanceMarkStyle {
     /// Built-in values for an explicitly constructed default exact style.
     pub(crate) const DEFAULT: Self = Self {
-        font_size: 16,
+        font_size: 16.0,
         weight: TextWeight::Normal,
         gap: 8.0,
     };
 
     /// Construct a validated mark style.
-    pub fn new(font_size: u32, weight: TextWeight, gap: f64) -> Result<Self, Error> {
+    pub fn new(font_size: f64, weight: TextWeight, gap: f64) -> Result<Self, Error> {
         Self {
             font_size,
             weight,
@@ -132,7 +132,7 @@ impl SignificanceMarkStyle {
     }
 
     /// Replace the positive mark font size in CSS pixels.
-    pub fn font_size(mut self, font_size: u32) -> Result<Self, Error> {
+    pub fn font_size(mut self, font_size: f64) -> Result<Self, Error> {
         self.font_size = font_size;
         self.validate()
     }
@@ -150,7 +150,11 @@ impl SignificanceMarkStyle {
     }
 
     fn validate(mut self) -> Result<Self, Error> {
-        if self.font_size == 0 || !self.gap.is_finite() || self.gap < 0.0 {
+        if !self.font_size.is_finite()
+            || self.font_size <= 0.0
+            || !self.gap.is_finite()
+            || self.gap < 0.0
+        {
             return Err(Error::Data(
                 "significance mark style requires positive font size and finite nonnegative gap"
                     .into(),
@@ -163,7 +167,7 @@ impl SignificanceMarkStyle {
     }
 
     /// Inspect the exact positive font size in CSS pixels.
-    pub const fn get_font_size(&self) -> u32 {
+    pub const fn get_font_size(&self) -> f64 {
         self.font_size
     }
 

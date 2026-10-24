@@ -596,7 +596,7 @@ fn numeric_source_invalid_range_and_font_failures_remain_fatal() {
     use crate::layout::fit::{PlanError, ROOT_SCOPE};
     let projection = Projection::new((1.1, 1.2), (0.0, 1.0), (0.0, 1.0, 0.0, 100.0));
     let mut theme = crate::Theme::publication().resolve().unwrap();
-    theme.typography.axes.tick_label.font_size = 0;
+    theme.typography.axes.tick_label.font_size = 0.0;
     assert!(matches!(
         numeric_tick_plan(
             (1.1, 1.2),

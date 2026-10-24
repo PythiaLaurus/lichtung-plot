@@ -348,11 +348,11 @@ fn faceted_shared_axis_titles_preserve_explicit_multiline_text() {
     let axis = base.typography().get_axes().get_axis_title().clone();
     let x_style = axis
         .clone()
-        .font_size(21)
+        .font_size(21.0)
         .unwrap()
         .weight(TextWeight::Bold)
         .unwrap();
-    let y_style = axis.clone().font_size(15).unwrap();
+    let y_style = axis.clone().font_size(15.0).unwrap();
     let typography = base
         .typography()
         .clone()

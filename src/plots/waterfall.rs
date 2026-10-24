@@ -95,10 +95,10 @@ mod geometry_tests {
         let mut theme = crate::Theme::publication();
         let role = theme.typography.annotations.waterfall_total.clone();
         let first = Text::new("Endpoint\nshort")
-            .style(role.clone().font_size(23).unwrap())
+            .style(role.clone().font_size(23.0).unwrap())
             .alignment(TextAlignment::Start);
         let second = Text::new("Endpoint\nshort")
-            .style(role.font_size(17).unwrap())
+            .style(role.font_size(17.0).unwrap())
             .alignment(TextAlignment::End);
         let labels = WaterfallLabels::new(first.clone(), second.clone()).unwrap();
         assert_eq!(labels.base(), labels.terminal());
@@ -148,8 +148,14 @@ mod geometry_tests {
         .unwrap();
         assert_eq!(shelf.items.len(), 2);
         assert_ne!(shelf.items[0].row, shelf.items[1].row);
-        assert_eq!(shelf.items[0].text_plan.style.font_size, 23);
-        assert_eq!(shelf.items[1].text_plan.style.font_size, 17);
+        assert_eq!(
+            shelf.items[0].text_plan.style.font_size.to_bits(),
+            23.0_f64.to_bits()
+        );
+        assert_eq!(
+            shelf.items[1].text_plan.style.font_size.to_bits(),
+            17.0_f64.to_bits()
+        );
         assert_eq!(shelf.items[0].anchor, TextAnchor::Start);
         assert_eq!(shelf.items[1].anchor, TextAnchor::End);
         assert!(shelf
@@ -513,9 +519,7 @@ pub(crate) fn natural_body_height(
             .1,
     );
     Ok(hard
-        .max(
-            2.0 * f64::from(theme.typography.axes.tick_label.font_size) * marks.labels.len() as f64,
-        )
+        .max(2.0 * theme.typography.axes.tick_label.font_size * marks.labels.len() as f64)
         .max(3.0 * width / 4.0)
         + plan.height)
 }
@@ -684,7 +688,7 @@ pub(crate) fn measure(
     }
     let min = crate::layout::kernel::ceil_spatial_quanta(pitch)?;
     let preferred = min.max(crate::layout::kernel::ceil_spatial_quanta(
-        2.0 * f64::from(theme.typography.axes.tick_label.font_size),
+        2.0 * theme.typography.axes.tick_label.font_size,
     )?);
     let specs = crate::data::source::collect_source(labels.iter().map(|_| {
         Ok(crate::layout::kernel::TrackSpec {
@@ -1063,7 +1067,7 @@ struct ShelfRow {
 fn total_shelf_size(
     candidates: &[(f64, Option<crate::Text>); 2],
     theme: &crate::theme::ResolvedTheme,
-) -> u32 {
+) -> f64 {
     candidates
         .iter()
         .filter_map(|(_, text)| text.as_ref())
@@ -1072,7 +1076,7 @@ fn total_shelf_size(
                 .theme
                 .get_font_size()
         })
-        .max()
+        .reduce(f64::max)
         .unwrap_or(theme.typography.annotations.waterfall_total.get_font_size())
 }
 

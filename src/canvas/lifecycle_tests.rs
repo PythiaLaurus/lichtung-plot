@@ -250,13 +250,13 @@ fn authored_headers_use_independent_fonts_alignment_and_selected_band_padding() 
         .headers(HeaderSpacing::new(one.clone(), one.clone(), one.clone(), one).unwrap())
         .unwrap();
     let column = Text::new("Column heading\nshort")
-        .style(role.clone().font_size(25).unwrap())
+        .style(role.clone().font_size(25.0).unwrap())
         .alignment(TextAlignment::Start);
     let row = Text::new("Row heading\nshort")
-        .style(role.clone().font_size(17).unwrap())
+        .style(role.clone().font_size(17.0).unwrap())
         .alignment(TextAlignment::End);
     let title = Text::new("Across the row\nshort")
-        .style(role.font_size(21).unwrap())
+        .style(role.font_size(21.0).unwrap())
         .alignment(TextAlignment::Center);
     let canvas = Canvas::grid(1, 2)
         .unwrap()
@@ -298,7 +298,7 @@ fn authored_headers_use_independent_fonts_alignment_and_selected_band_padding() 
         (row, 17, crate::layout::PhysicalTextAlignment::End),
         (title, 21, crate::layout::PhysicalTextAlignment::Center),
     ] {
-        assert_eq!(text.style.font_size, size);
+        assert_eq!(text.style.font_size.to_bits(), f64::from(size).to_bits());
         assert_eq!(text.style.alignment, alignment);
         assert!(text.style.exact_override);
         assert_eq!(text.lines.len(), 2);
@@ -409,7 +409,7 @@ fn authored_root_prose_preserves_edits_and_resolves_whole_request_precedence() {
         .get_root()
         .get_title()
         .clone()
-        .font_size(27)
+        .font_size(27.0)
         .unwrap()
         .weight(TextWeight::Bold)
         .unwrap()
@@ -420,7 +420,7 @@ fn authored_root_prose_preserves_edits_and_resolves_whole_request_precedence() {
         .get_root()
         .get_caption()
         .clone()
-        .font_size(19)
+        .font_size(19.0)
         .unwrap()
         .weight(TextWeight::Bold)
         .unwrap();
@@ -516,7 +516,10 @@ fn authored_root_prose_preserves_edits_and_resolves_whole_request_precedence() {
         assert_eq!(text.style.alignment, alignment, "{source}");
         assert_eq!(text.style.exact_override, exact.is_some());
         if let Some(style) = exact {
-            assert_eq!(text.style.font_size, style.get_font_size());
+            assert_eq!(
+                text.style.font_size.to_bits(),
+                style.get_font_size().to_bits()
+            );
             assert_eq!(text.style.paint, style.get_color());
             assert_eq!(text.style.weight, style.get_weight());
             assert_eq!(&text.style.stack, style.get_stack());
@@ -602,14 +605,14 @@ fn authored_text_panel_resolves_independent_styles_alignment_and_local_metrics()
     let title_style = role(
         GenericFontFamily::Monospace,
         Color::rgba(91, 37, 117, 180),
-        31,
+        31.25,
         TextWeight::Bold,
         1.8,
     );
     let body_style = role(
         GenericFontFamily::Serif,
         Color::rgb(23, 89, 53),
-        17,
+        17.5,
         TextWeight::Normal,
         1.35,
     );
@@ -679,7 +682,10 @@ fn authored_text_panel_resolves_independent_styles_alignment_and_local_metrics()
             .1;
         assert_eq!(text.style.stack, *appearance.get_stack());
         assert_eq!(text.style.paint, appearance.get_color());
-        assert_eq!(text.style.font_size, appearance.get_font_size());
+        assert_eq!(
+            text.style.font_size.to_bits(),
+            appearance.get_font_size().to_bits()
+        );
         assert_eq!(text.style.weight, appearance.get_weight());
         assert_eq!(text.style.alignment, alignment);
         assert!(text.style.exact_override);
@@ -704,7 +710,7 @@ fn authored_text_panel_resolves_independent_styles_alignment_and_local_metrics()
     let quanta = crate::layout::kernel::nearest_spatial_quanta;
     assert_eq!(
         quanta(measured.title_placement.position.x).unwrap(),
-        (600 - 17) * 1024
+        600 * 1024 - 17 * 1024 - 512
     );
     assert_eq!(
         quanta(measured.body_placement.position.x).unwrap(),
@@ -719,7 +725,7 @@ fn authored_text_panel_resolves_independent_styles_alignment_and_local_metrics()
         quanta(measured.body_placement.position.y).unwrap() + body.first_baseline_quanta.unwrap();
     assert_eq!(
         title_bottom - body_top,
-        31 * 1024,
+        31 * 1024 + 256,
         "gap uses the selected maximum font size"
     );
     assert!(title.lines[1].translation_x_quanta > title.lines[0].translation_x_quanta);
@@ -937,7 +943,7 @@ fn shared_layer_legend_text_uses_local_fonts_and_compares_complete_requests() {
         .guides
         .legend_label
         .clone()
-        .font_size(21)
+        .font_size(21.0)
         .unwrap();
     theme.typography.guides.legend_label.stack =
         FontStack::new([FontFamily::named("Unused inherited legend entry font").unwrap()]).unwrap();
@@ -977,7 +983,7 @@ fn shared_layer_legend_text_uses_local_fonts_and_compares_complete_requests() {
         .filter(|(_, text)| text.source == title.as_str())
         .collect();
     assert_eq!(text.len(), 1);
-    assert_eq!(text[0].1.style.font_size, 21);
+    assert_eq!(text[0].1.style.font_size.to_bits(), 21.0_f64.to_bits());
     assert!(text[0].1.style.exact_override);
     assert_eq!(
         text[0].1.style.alignment,
@@ -993,7 +999,7 @@ fn shared_layer_legend_text_uses_local_fonts_and_compares_complete_requests() {
         title.clone().layout(TextLayout::default()),
         title
             .clone()
-            .style(title.get_style().unwrap().clone().font_size(22).unwrap()),
+            .style(title.get_style().unwrap().clone().font_size(22.0).unwrap()),
     ] {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let error = canvas(changed)
@@ -1078,7 +1084,7 @@ fn shared_numeric_guides_resolve_final_sets_and_reject_equal_text_policy_conflic
         .get_guides()
         .get_legend_title()
         .clone()
-        .font_size(21)
+        .font_size(21.0)
         .unwrap();
     let format = format
         .unit(Some(crate::NumericUnit::new(
@@ -1135,7 +1141,7 @@ fn shared_numeric_guides_resolve_final_sets_and_reject_equal_text_policy_conflic
         .find(|(_, text)| text.source == "Final scale")
         .unwrap()
         .1;
-    assert_eq!(title.style.font_size, 21);
+    assert_eq!(title.style.font_size.to_bits(), 21.0_f64.to_bits());
     assert!(title.style.exact_override);
     let common: Vec<_> = root
         .plan()
@@ -1144,7 +1150,7 @@ fn shared_numeric_guides_resolve_final_sets_and_reject_equal_text_policy_conflic
         .filter(|(_, text)| text.source == "guide units")
         .collect();
     assert_eq!(common.len(), 1);
-    assert_eq!(common[0].1.style.font_size, 21);
+    assert_eq!(common[0].1.style.font_size.to_bits(), 21.0_f64.to_bits());
     assert!(common[0].1.style.exact_override);
     for source in ["1 u", "3 u"] {
         assert_eq!(
@@ -1888,7 +1894,7 @@ fn fixed_intervals_consume_final_parent_domains_and_empty_sources_have_no_callba
             .get_axes()
             .get_tick_label()
             .clone()
-            .font_size(size)
+            .font_size(f64::from(size))
             .unwrap();
         let typography = base
             .typography()

@@ -90,7 +90,7 @@ fn deferred_backend_forwards_signed_text_positions_unchanged() {
                         ),
                     ])
                     .unwrap(),
-                    font_size: 12,
+                    font_size: 12.0,
                     weight: crate::TextWeight::Normal,
                     anchor: TextAnchor::Start,
                     rotation: 0.0,

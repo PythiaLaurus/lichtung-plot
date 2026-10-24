@@ -351,7 +351,7 @@ impl LegendMetrics {
     /// Complete role-local metrics do not depend on the outer root dimensions.
     pub(crate) fn from_theme(
         theme: &crate::theme::ResolvedTheme,
-        label_size: u32,
+        label_size: f64,
     ) -> Result<Self, Error> {
         use crate::layout::kernel::SpatialRounding::{Ceil, NearestEven};
 
@@ -360,7 +360,7 @@ impl LegendMetrics {
             theme.typography.guides.legend_title.get_font_size(),
         )?;
         let s = |value: &crate::theme::spacing::ExactLength| value.pixels_rounded(NearestEven);
-        let font_size = f64::from(label_size);
+        let font_size = label_size;
         let pad = s(&exact.padding)?;
         let handle_w = s(&exact.key_width)?;
         if handle_w <= 0.0 {
@@ -605,7 +605,7 @@ impl Legend {
                     .continuous()
                     .map(|_| theme.typography.guides.legend_label.get_font_size()),
             )
-            .max()
+            .reduce(f64::max)
             .unwrap_or(theme.typography.guides.legend_label.get_font_size());
         let mut metrics = LegendMetrics::from_theme(theme, label_size)?;
         let inset = descriptor

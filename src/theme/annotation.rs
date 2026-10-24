@@ -132,7 +132,7 @@ pub(crate) struct CellTextPadding {
 }
 
 impl CellAnnotationGeometry {
-    pub(crate) fn value_padding(&self, em: u32) -> Result<CellTextPadding> {
+    pub(crate) fn value_padding(&self, em: f64) -> Result<CellTextPadding> {
         let em = LocalMetric::css_pixels(em)?;
         Ok(CellTextPadding {
             horizontal: self.get_value_horizontal_padding().product(em),
@@ -140,7 +140,7 @@ impl CellAnnotationGeometry {
         })
     }
 
-    pub(crate) fn null_row_padding(&self, em: u32) -> Result<CellTextPadding> {
+    pub(crate) fn null_row_padding(&self, em: f64) -> Result<CellTextPadding> {
         let em = LocalMetric::css_pixels(em)?;
         Ok(CellTextPadding {
             horizontal: self.get_null_row_horizontal_padding().product(em),
@@ -183,7 +183,7 @@ pub(crate) struct EstimateAnnotationLengths {
 }
 
 impl EstimateAnnotationGeometry {
-    pub(crate) fn lengths(&self, em: u32) -> Result<EstimateAnnotationLengths> {
+    pub(crate) fn lengths(&self, em: f64) -> Result<EstimateAnnotationLengths> {
         let em = LocalMetric::css_pixels(em)?;
         Ok(EstimateAnnotationLengths {
             panel_inset: self.get_panel_inset().product(em),
@@ -205,7 +205,7 @@ pub(crate) struct ValueShelfLengths {
 }
 
 impl ValueShelfSpacing {
-    pub(crate) fn lengths(&self, em: u32) -> Result<ValueShelfLengths> {
+    pub(crate) fn lengths(&self, em: f64) -> Result<ValueShelfLengths> {
         let em = LocalMetric::css_pixels(em)?;
         Ok(ValueShelfLengths {
             padding: self.get_padding().product(em),
@@ -258,7 +258,7 @@ impl AnnotationTheme {
         )
     }
 
-    pub(crate) fn point_label_gap_length(&self, em: u32) -> Result<ExactLength> {
+    pub(crate) fn point_label_gap_length(&self, em: f64) -> Result<ExactLength> {
         Ok(self
             .get_point_label_gap()
             .product(LocalMetric::css_pixels(em)?))

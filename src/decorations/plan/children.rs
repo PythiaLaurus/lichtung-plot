@@ -810,7 +810,7 @@ mod tests {
                     assert!(!key.matches(&plot, context, &owner, round)?);
                 }
                 let mut appearance = theme.clone();
-                appearance.typography.axes.tick_label.font_size += 1;
+                appearance.typography.axes.tick_label.font_size += 1.0;
                 assert!(!key.matches(
                     &source,
                     PlotRenderContext::new(source.data(), panel, &appearance),

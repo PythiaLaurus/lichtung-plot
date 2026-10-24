@@ -7,7 +7,7 @@ fn selected_local_style_padding_is_retained_for_fit_and_reassignment() {
         .get_annotations()
         .get_panel_text()
         .clone()
-        .font_size(28)
+        .font_size(28.0)
         .unwrap();
     let source = Plot::scatter(
         crate::NumericValues::new("x", [0.0, 1.0]),

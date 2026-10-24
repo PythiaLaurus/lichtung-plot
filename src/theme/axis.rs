@@ -183,7 +183,7 @@ macro_rules! axis_spacing {
             )+
             fn revalidated(self) -> Result<Self> { Self::new($(self.$field),+) }
             pub(crate) fn relationships(&self) -> [&RelativeSpacing; 6] { [$(&self.$field),+] }
-            pub(crate) fn lengths(&self, tick: u32, title: u32) -> Result<AxisLengths> {
+            pub(crate) fn lengths(&self, tick: f64, title: f64) -> Result<AxisLengths> {
                 let metrics = [LocalMetric::css_pixels(tick)?, LocalMetric::css_pixels(title)?];
                 Ok(AxisLengths { $($field: self.$get().product(metrics[$metric])),+ })
             }

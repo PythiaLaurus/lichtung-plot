@@ -1039,7 +1039,7 @@ fn same_bracket_style(left: &BracketStyle, right: &BracketStyle) -> bool {
         && left.label_color == right.label_color
         && left.width.to_bits() == right.width.to_bits()
         && left.font_family == right.font_family
-        && left.font_size == right.font_size
+        && left.font_size.to_bits() == right.font_size.to_bits()
         && left.line_height.to_bits() == right.line_height.to_bits()
         && left.weight == right.weight
         && left.label_gap.to_bits() == right.label_gap.to_bits()
@@ -1629,7 +1629,7 @@ mod tests {
             .annotations
             .significance_label
             .clone()
-            .font_size(12)
+            .font_size(12.0)
             .unwrap()
             .weight(crate::TextWeight::Normal)
             .unwrap()
@@ -1680,7 +1680,7 @@ mod tests {
                         label_color: Color::rgb(4, 5, 6),
                         width: 0.8,
                         font_family: label.plan.style.stack.clone(),
-                        font_size: 12,
+                        font_size: 12.0,
                         line_height: 14.4,
                         weight: crate::TextWeight::Normal,
                         label_gap: 4.125,
@@ -1842,7 +1842,7 @@ mod tests {
             .annotations
             .significance_label
             .clone()
-            .font_size(12)
+            .font_size(12.0)
             .unwrap()
             .weight(crate::TextWeight::Normal)
             .unwrap()
@@ -1914,7 +1914,7 @@ mod tests {
                 label_color: Color::rgb(3, 2, 1),
                 width: 0.8,
                 font_family: labels.1.plan.style.stack.clone(),
-                font_size: 12,
+                font_size: 12.0,
                 line_height: 14.4,
                 weight: crate::TextWeight::Normal,
                 label_gap: 4.0,
@@ -2077,7 +2077,7 @@ mod tests {
                                         font_family: crate::font::canonical::named_stack(&[
                                             "Unavailable capture family",
                                         ]),
-                                        font_size: 12,
+                                        font_size: 12.0,
                                         line_height: 14.4,
                                         weight: crate::TextWeight::Normal,
                                         label_gap: 4.0,
@@ -2795,7 +2795,7 @@ mod tests {
                 ),
             ])
             .unwrap(),
-            font_size: 12,
+            font_size: 12.0,
             line_height: 14.4,
             weight: crate::TextWeight::Normal,
             label_gap: 4.0,

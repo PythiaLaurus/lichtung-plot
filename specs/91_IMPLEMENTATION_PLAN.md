@@ -1761,7 +1761,10 @@ measurement preserves one producer and continuous geometry, outer gutter/ink
 ownership and complete footprint/height/reuse identity. Anchor-only ranges,
 compatible distinct category bands, row-title conflicts and declared header edges
 are enforced through the same placement model; TextPanels remain single-cell.
-Steps 16–22 remain pending; undelivered target signatures are
+Fractional appearance in Step 16 is delivered: TextTheme/SignificanceMarkStyle and
+all metric/rendering consumers retain positive finite f64 sizes, exact dyadic
+design scaling and font-relative spacing. The remaining text anchor/coordinate/
+role-attachment contracts and Steps 17–22 remain pending; undelivered target signatures are
 not current APIs.
 
 ### 1. Apply The Public Property Naming Rule

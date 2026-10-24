@@ -44,7 +44,7 @@ fn panel_text_renders_in_named_clipped_layer_with_theme_style_and_corner_anchors
         .get_annotations()
         .get_panel_text()
         .clone()
-        .font_size(21)
+        .font_size(21.0)
         .unwrap()
         .weight(lichtung_plot::TextWeight::Bold)
         .unwrap()

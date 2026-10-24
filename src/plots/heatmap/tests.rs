@@ -19,7 +19,7 @@ fn authored_null_row_overrides_contrast_before_fonts_and_retains_complete_reques
         .contrast
         .dark
         .clone()
-        .font_size(23)
+        .font_size(23.0)
         .unwrap();
     let text = Text::new("Unavailable\nshort")
         .style(style)
@@ -68,7 +68,7 @@ fn authored_null_row_overrides_contrast_before_fonts_and_retains_complete_reques
         .unwrap();
     let plan = &payload(&result).cells[0].text.as_ref().unwrap().plan;
     assert_eq!(plan.source, "Unavailable\nshort");
-    assert_eq!(plan.style.font_size, 23);
+    assert_eq!(plan.style.font_size.to_bits(), 23.0_f64.to_bits());
     assert!(plan.style.exact_override);
     assert_eq!(plan.style.alignment, PhysicalTextAlignment::End);
     assert_eq!(plan.lines.len(), 2);
@@ -109,8 +109,8 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
     )
     .unwrap();
     let mut theme = crate::Theme::publication().resolve().unwrap();
-    theme.typography.annotations.contrast.light.font_size = 22;
-    theme.typography.annotations.contrast.dark.font_size = 11;
+    theme.typography.annotations.contrast.light.font_size = 22.0;
+    theme.typography.annotations.contrast.dark.font_size = 11.0;
     let chart = inputs
         .attach_with_guides_for_test(original_source, &theme)
         .unwrap();
@@ -125,8 +125,9 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
             .unwrap()
             .plan
             .style
-            .font_size,
-        22
+            .font_size
+            .to_bits(),
+        22.0_f64.to_bits()
     );
     let mapped = chart.clone().with_alpha(
         AlphaTarget::Fill,
@@ -141,7 +142,7 @@ fn final_cell_alpha_selects_the_role_used_by_padding_tracks_and_capture() {
     let cell = &payload(&transparent).cells[0];
     assert_eq!(cell.fill.color.get_alpha(), 0);
     let plan = &cell.text.as_ref().unwrap().plan;
-    assert_eq!(plan.style.font_size, 11);
+    assert_eq!(plan.style.font_size.to_bits(), 11.0_f64.to_bits());
     let marks = retained_in(&chart).unwrap();
     let axes = chart.prepared_axis_inputs().unwrap();
     let original = prepare_intrinsics(marks, axes, &theme, None).unwrap();

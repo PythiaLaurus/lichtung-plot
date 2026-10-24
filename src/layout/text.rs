@@ -19,7 +19,9 @@ use crate::font::canonical::{
 use crate::theme::Color;
 use crate::TextWeight;
 
+mod rational;
 mod requirements;
+use rational::ExactRational;
 #[cfg(test)]
 mod shaping_tests;
 #[allow(unused_imports)]
@@ -80,7 +82,7 @@ pub(crate) struct TextPlanInput<'a> {
     pub(crate) source: &'a str,
     pub(crate) stack: &'a FontStack,
     pub(crate) weight: TextWeight,
-    pub(crate) font_size: u32,
+    pub(crate) font_size: f64,
     pub(crate) line_height: TextLineHeight,
     pub(crate) maximum_width_quanta: i64,
     pub(crate) alignment: PhysicalTextAlignment,
@@ -171,18 +173,19 @@ pub(crate) struct TextLinePlan {
     pub(crate) runs: Vec<ShapedTextRun>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ResolvedTextStyle {
     pub(crate) stack_source: String,
     pub(crate) stack: FontStack,
     pub(crate) weight: TextWeight,
-    pub(crate) font_size: u32,
+    pub(crate) font_size: f64,
     pub(crate) line_height_quanta: i64,
     pub(crate) alignment: PhysicalTextAlignment,
     pub(crate) paint: Color,
     pub(crate) provenance: TextPlanProvenance,
     pub(crate) exact_override: bool,
 }
+impl Eq for ResolvedTextStyle {}
 
 #[derive(Debug, Clone)]
 pub(crate) struct ResolvedTextPlan(
@@ -373,7 +376,7 @@ impl ResolvedTextPlan {
             for start in (0..last).step_by(chunk) {
                 let end = start.saturating_add(chunk).min(last);
                 result.preferred_width_quanta = result.preferred_width_quanta.max(
-                    prefix_difference(wrapping.prefixes[end], wrapping.prefixes[start])?
+                    prefix_difference(&wrapping.prefixes[end], &wrapping.prefixes[start])?
                         .ceil_i64("preferred width")?,
                 );
             }
@@ -393,7 +396,7 @@ impl ResolvedTextPlan {
         if !canonical::same_bytes(input.source, &original.source)
             || !input.stack.same(&original.style.stack)
             || input.weight != original.style.weight
-            || input.font_size != original.style.font_size
+            || input.font_size.to_bits() != original.style.font_size.to_bits()
         {
             return Err(TextPlanError::Arithmetic("text analysis profile mismatch"));
         }
@@ -491,7 +494,7 @@ impl ResolvedTextPlan {
             let mut advance = ExactRational::ZERO;
             for run in &line.runs {
                 advance = advance.add(
-                    scale_design(run.design_x_advance, self.style.font_size, run.units_per_em)?,
+                    &scale_design(run.design_x_advance, self.style.font_size, run.units_per_em)?,
                     "cached paragraph advance",
                 )?;
             }
@@ -606,13 +609,15 @@ impl AnalyzedParagraph {
         original: &'a ResolvedTextPayload,
     ) -> (&'a TextLinePlan, ExactRational, i64, i64) {
         match &self.whole {
-            ParagraphWhole::Retained(line) => (&line.plan, line.advance, line.ascent, line.descent),
+            ParagraphWhole::Retained(line) => {
+                (&line.plan, line.advance.clone(), line.ascent, line.descent)
+            }
             ParagraphWhole::OriginalLine {
                 index,
                 advance,
                 ascent,
                 descent,
-            } => (&original.lines[*index], *advance, *ascent, *descent),
+            } => (&original.lines[*index], advance.clone(), *ascent, *descent),
         }
     }
 
@@ -621,7 +626,7 @@ impl AnalyzedParagraph {
 
         source: &str,
         whole: &TextLinePlan,
-        font_size: u32,
+        font_size: f64,
     ) -> Result<&ParagraphWrapping, TextPlanError> {
         if self.wrapping.get().is_none() {
             let mut boundaries =
@@ -770,7 +775,7 @@ fn measure_text(
     mut input: TextPlanInput<'_>,
     intrinsic_lines: Option<usize>,
 ) -> Result<TextMeasurement, TextPlanError> {
-    if input.font_size == 0 {
+    if !input.font_size.is_finite() || input.font_size <= 0.0 {
         return Err(TextPlanError::InvalidFontSize);
     }
     if input.maximum_width_quanta < 0 {
@@ -828,7 +833,7 @@ fn measure_text(
                         whole_width: 0,
                         whole: ParagraphWhole::OriginalLine {
                             index: built_lines.len(),
-                            advance: whole.advance,
+                            advance: whole.advance.clone(),
                             ascent: whole.ascent,
                             descent: whole.descent,
                         },
@@ -875,7 +880,7 @@ fn measure_text(
                     whole_width,
                     whole: ParagraphWhole::OriginalLine {
                         index: built_lines.len(),
-                        advance: whole.advance,
+                        advance: whole.advance.clone(),
                         ascent: whole.ascent,
                         descent: whole.descent,
                     },
@@ -925,7 +930,7 @@ fn measure_text(
             let chunk = last.div_ceil(lines);
             for start in (0..last).step_by(chunk) {
                 let end = start.saturating_add(chunk).min(last);
-                let width = prefix_difference(prefixes[end], prefixes[start])?
+                let width = prefix_difference(&prefixes[end], &prefixes[start])?
                     .ceil_i64("preferred width")?;
                 requirements.preferred_width_quanta =
                     requirements.preferred_width_quanta.max(width);
@@ -1029,7 +1034,7 @@ fn select_line(
                 work
             });
         });
-        if prefix_difference(prefixes[candidate], prefixes[start])?.ceil_i64("proposal width")?
+        if prefix_difference(&prefixes[candidate], &prefixes[start])?.ceil_i64("proposal width")?
             > maximum_width_quanta
         {
             end = candidate.saturating_sub(1).max(start + 1);
@@ -1103,25 +1108,16 @@ fn exact_line_width(line: &BuiltLine) -> Result<i64, TextPlanError> {
 }
 
 fn prefix_difference(
-    end: ExactRational,
-    start: ExactRational,
+    end: &ExactRational,
+    start: &ExactRational,
 ) -> Result<ExactRational, TextPlanError> {
-    end.add(
-        ExactRational::new(
-            start
-                .numerator
-                .checked_neg()
-                .ok_or(TextPlanError::Arithmetic("proposal difference"))?,
-            start.denominator,
-        )?,
-        "proposal difference",
-    )
+    end.add(&start.negated()?, "proposal difference")
 }
 
 fn proposal_prefixes(
     whole: &TextLinePlan,
     boundaries: &[usize],
-    font_size: u32,
+    font_size: f64,
 ) -> Result<Vec<ExactRational>, TextPlanError> {
     let mut prefixes = Vec::new();
     super::unicode16::reserve(&mut prefixes, boundaries.len())?;
@@ -1191,10 +1187,10 @@ fn proposal_prefixes(
         while boundaries[boundary] < end {
             boundary += 1;
         }
-        prefixes[boundary] = prefixes[boundary].add(advance, "cluster prefix")?;
+        prefixes[boundary] = prefixes[boundary].add(&advance, "cluster prefix")?;
     }
     for index in 1..prefixes.len() {
-        prefixes[index] = prefixes[index].add(prefixes[index - 1], "paragraph prefix")?;
+        prefixes[index] = prefixes[index].add(&prefixes[index - 1], "paragraph prefix")?;
     }
     Ok(prefixes)
 }
@@ -1339,7 +1335,7 @@ fn empty_line(
     span: TextSourceSpan,
     ending_grapheme_index: u32,
     primary_metrics: DesignMetrics,
-    font_size: u32,
+    font_size: f64,
 ) -> Result<BuiltLine, TextPlanError> {
     let (ascent, descent) = scaled_metrics(primary_metrics, font_size)?;
     let descent = descent
@@ -1377,7 +1373,7 @@ fn prepare_line(
     paragraph_span: TextSourceSpan,
     line_span: TextSourceSpan,
     ending_grapheme_index: u32,
-    font_size: u32,
+    font_size: f64,
     bidi: &ParagraphBidiData,
     items: &[ScalarItem],
     hyphen_face: Option<FaceIdentity>,
@@ -1485,8 +1481,8 @@ fn prepare_line(
                 group.span,
                 group.script,
                 font_size,
-                pen_x,
-                pen_y,
+                &pen_x,
+                &pen_y,
                 levels[bidi_run.start].number(),
             )?;
             ascent = ascent.max(built.plan.ascender_quanta);
@@ -1499,17 +1495,17 @@ fn prepare_line(
             );
             if let Some(ink) = built.ink {
                 exact_ink = Some(match exact_ink {
-                    Some(current) => current.union(ink)?,
+                    Some(current) => current.union(ink),
                     None => ink,
                 });
             }
-            pen_x = pen_x.add(built.advance_x, "line advance")?;
-            pen_y = pen_y.add(built.advance_y, "line advance")?;
+            pen_x = pen_x.add(&built.advance_x, "line advance")?;
+            pen_y = pen_y.add(&built.advance_y, "line advance")?;
             runs.push(built.plan);
         }
     }
 
-    let ink_quanta = exact_ink.map(ExactInk::outward).transpose()?;
+    let ink_quanta = exact_ink.as_ref().map(ExactInk::outward).transpose()?;
     if let Some(ink) = ink_quanta {
         ascent = ascent.max(ink.top.max(0));
         descent = descent.max(
@@ -1814,9 +1810,9 @@ fn scale_run(
     shaped: CanonicalShapedRun,
     source_span: TextSourceSpan,
     script: Script,
-    font_size: u32,
-    line_pen_x: ExactRational,
-    line_pen_y: ExactRational,
+    font_size: f64,
+    line_pen_x: &ExactRational,
+    line_pen_y: &ExactRational,
     bidi_level: u8,
 ) -> Result<BuiltRun, TextPlanError> {
     let mut glyphs = Vec::new();
@@ -1850,26 +1846,26 @@ fn scale_run(
             shaped.metrics.units_per_em,
         )?;
         let origin_x = line_pen_x
-            .add(pen_x, "glyph origin")?
-            .add(x_offset, "glyph origin")?
+            .add(&pen_x, "glyph origin")?
+            .add(&x_offset, "glyph origin")?
             .nearest_even_i64("glyph origin")?;
         let origin_y = line_pen_y
-            .add(pen_y, "glyph origin")?
-            .add(y_offset, "glyph origin")?
+            .add(&pen_y, "glyph origin")?
+            .add(&y_offset, "glyph origin")?
             .nearest_even_i64("glyph origin")?;
         let glyph_exact_ink = glyph
             .ink
             .map(|ink| {
                 exact_glyph_ink(ink, 0, 0, font_size, shaped.metrics.units_per_em)?.translated(
-                    ExactRational::new(i128::from(origin_x), 1)?,
-                    ExactRational::new(i128::from(origin_y), 1)?,
+                    &ExactRational::new(i128::from(origin_x), 1)?,
+                    &ExactRational::new(i128::from(origin_y), 1)?,
                 )
             })
             .transpose()?;
-        if let Some(ink) = glyph_exact_ink {
+        if let Some(ink) = &glyph_exact_ink {
             exact_ink = Some(match exact_ink {
-                Some(current) => current.union(ink)?,
-                None => ink,
+                Some(current) => current.union(ink.clone()),
+                None => ink.clone(),
             });
         }
         let cluster = source_span
@@ -1891,10 +1887,13 @@ fn scale_run(
             y_offset_quanta: y_offset.nearest_even_i64("glyph y offset")?,
             glyph_origin_x_quanta: origin_x,
             glyph_origin_y_quanta: origin_y,
-            ink_quanta: glyph_exact_ink.map(ExactInk::outward).transpose()?,
+            ink_quanta: glyph_exact_ink
+                .as_ref()
+                .map(ExactInk::outward)
+                .transpose()?,
         });
-        pen_x = pen_x.add(x_advance, "run x advance")?;
-        pen_y = pen_y.add(y_advance, "run y advance")?;
+        pen_x = pen_x.add(&x_advance, "run x advance")?;
+        pen_y = pen_y.add(&y_advance, "run y advance")?;
         design_horizontal_advance = design_horizontal_advance
             .checked_add(i64::from(glyph.x_advance))
             .ok_or(TextPlanError::Arithmetic("design run x advance"))?;
@@ -1920,7 +1919,7 @@ fn scale_run(
             design_y_advance: design_vertical_advance,
             logical_advance_quanta: pen_x.nearest_even_i64("run logical advance")?,
             logical_y_advance_quanta: pen_y.nearest_even_i64("run logical y advance")?,
-            ink_quanta: exact_ink.map(ExactInk::outward).transpose()?,
+            ink_quanta: exact_ink.as_ref().map(ExactInk::outward).transpose()?,
             glyphs,
         },
         advance_x: pen_x,
@@ -1933,7 +1932,7 @@ fn exact_glyph_ink(
     ink: GlyphInk,
     x_offset: i32,
     y_offset: i32,
-    font_size: u32,
+    font_size: f64,
     units_per_em: u16,
 ) -> Result<ExactInk, TextPlanError> {
     Ok(ExactInk {
@@ -1968,7 +1967,7 @@ fn exact_glyph_ink(
     })
 }
 
-fn scaled_metrics(metrics: DesignMetrics, font_size: u32) -> Result<(i64, i64), TextPlanError> {
+fn scaled_metrics(metrics: DesignMetrics, font_size: f64) -> Result<(i64, i64), TextPlanError> {
     let ascender = scale_design(i64::from(metrics.ascender), font_size, metrics.units_per_em)?
         .ceil_i64("face ascender")?;
     let descender = scale_design(
@@ -2106,7 +2105,7 @@ fn finalize_plan(
     ))
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct ExactInk {
     left: ExactRational,
     bottom: ExactRational,
@@ -2115,7 +2114,7 @@ struct ExactInk {
 }
 
 impl ExactInk {
-    fn translated(self, x: ExactRational, y: ExactRational) -> Result<Self, TextPlanError> {
+    fn translated(self, x: &ExactRational, y: &ExactRational) -> Result<Self, TextPlanError> {
         Ok(Self {
             left: self.left.add(x, "ink translation")?,
             bottom: self.bottom.add(y, "ink translation")?,
@@ -2124,16 +2123,16 @@ impl ExactInk {
         })
     }
 
-    fn union(self, other: Self) -> Result<Self, TextPlanError> {
-        Ok(Self {
-            left: self.left.min(other.left)?,
-            bottom: self.bottom.min(other.bottom)?,
-            right: self.right.max(other.right)?,
-            top: self.top.max(other.top)?,
-        })
+    fn union(self, other: Self) -> Self {
+        Self {
+            left: self.left.min(other.left),
+            bottom: self.bottom.min(other.bottom),
+            right: self.right.max(other.right),
+            top: self.top.max(other.top),
+        }
     }
 
-    fn outward(self) -> Result<TextInkBounds, TextPlanError> {
+    fn outward(&self) -> Result<TextInkBounds, TextPlanError> {
         Ok(TextInkBounds {
             left: self.left.floor_i64("ink left")?,
             bottom: self.bottom.floor_i64("ink bottom")?,
@@ -2143,139 +2142,15 @@ impl ExactInk {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct ExactRational {
-    numerator: i128,
-    denominator: i128,
-}
-
-impl ExactRational {
-    const ZERO: Self = Self {
-        numerator: 0,
-        denominator: 1,
-    };
-
-    fn new(numerator: i128, denominator: i128) -> Result<Self, TextPlanError> {
-        if denominator <= 0 {
-            return Err(TextPlanError::Arithmetic("rational denominator"));
-        }
-        let divisor = gcd(numerator, denominator);
-        Ok(Self {
-            numerator: numerator / divisor,
-            denominator: denominator / divisor,
-        })
-    }
-
-    fn add(self, other: Self, resource: &'static str) -> Result<Self, TextPlanError> {
-        let common = gcd(self.denominator, other.denominator);
-        let left_factor = other.denominator / common;
-        let right_factor = self.denominator / common;
-        let numerator = self
-            .numerator
-            .checked_mul(left_factor)
-            .and_then(|left| {
-                other
-                    .numerator
-                    .checked_mul(right_factor)
-                    .and_then(|right| left.checked_add(right))
-            })
-            .ok_or(TextPlanError::Arithmetic(resource))?;
-        let denominator = self
-            .denominator
-            .checked_mul(left_factor)
-            .ok_or(TextPlanError::Arithmetic(resource))?;
-        Self::new(numerator, denominator)
-    }
-
-    fn floor_i64(self, resource: &'static str) -> Result<i64, TextPlanError> {
-        i64::try_from(self.numerator.div_euclid(self.denominator))
-            .map_err(|_| TextPlanError::Arithmetic(resource))
-    }
-
-    fn ceil_i64(self, resource: &'static str) -> Result<i64, TextPlanError> {
-        let quotient = self.numerator.div_euclid(self.denominator);
-        let remainder = self.numerator.rem_euclid(self.denominator);
-        let rounded = if remainder == 0 {
-            quotient
-        } else {
-            quotient
-                .checked_add(1)
-                .ok_or(TextPlanError::Arithmetic(resource))?
-        };
-        i64::try_from(rounded).map_err(|_| TextPlanError::Arithmetic(resource))
-    }
-
-    fn nearest_even_i64(self, resource: &'static str) -> Result<i64, TextPlanError> {
-        let quotient = self.numerator.div_euclid(self.denominator);
-        let remainder = self.numerator.rem_euclid(self.denominator);
-        let doubled = remainder
-            .checked_mul(2)
-            .ok_or(TextPlanError::Arithmetic(resource))?;
-        let increment = doubled > self.denominator
-            || (doubled == self.denominator && quotient.rem_euclid(2) != 0);
-        let rounded = if increment {
-            quotient
-                .checked_add(1)
-                .ok_or(TextPlanError::Arithmetic(resource))?
-        } else {
-            quotient
-        };
-        i64::try_from(rounded).map_err(|_| TextPlanError::Arithmetic(resource))
-    }
-
-    fn min(self, other: Self) -> Result<Self, TextPlanError> {
-        Ok(if self.cmp(other)?.is_le() {
-            self
-        } else {
-            other
-        })
-    }
-
-    fn max(self, other: Self) -> Result<Self, TextPlanError> {
-        Ok(if self.cmp(other)?.is_ge() {
-            self
-        } else {
-            other
-        })
-    }
-
-    fn cmp(self, other: Self) -> Result<std::cmp::Ordering, TextPlanError> {
-        self.numerator
-            .checked_mul(other.denominator)
-            .and_then(|left| {
-                other
-                    .numerator
-                    .checked_mul(self.denominator)
-                    .map(|right| left.cmp(&right))
-            })
-            .ok_or(TextPlanError::Arithmetic("rational comparison"))
-    }
-}
-
-fn gcd(mut left: i128, mut right: i128) -> i128 {
-    left = left.abs();
-    right = right.abs();
-    while right != 0 {
-        let remainder = left % right;
-        left = right;
-        right = remainder;
-    }
-    left.max(1)
-}
-
 fn scale_design(
     design: i64,
-    font_size: u32,
+    font_size: f64,
     units_per_em: u16,
 ) -> Result<ExactRational, TextPlanError> {
-    let numerator = i128::from(design)
-        .checked_mul(i128::from(font_size))
-        .and_then(|value| value.checked_mul(i128::from(CSS_PIXEL_QUANTA)))
-        .ok_or(TextPlanError::Arithmetic("design-unit scaling"))?;
-    ExactRational::new(numerator, i128::from(units_per_em))
+    ExactRational::design(design, font_size, units_per_em)
 }
 
-fn resolve_line_height(line_height: TextLineHeight, font_size: u32) -> Result<i64, TextPlanError> {
+fn resolve_line_height(line_height: TextLineHeight, font_size: f64) -> Result<i64, TextPlanError> {
     match line_height {
         TextLineHeight::Multiplier(multiplier) => {
             if !multiplier.is_finite() || multiplier <= 0.0 {
@@ -2338,7 +2213,7 @@ mod tests {
     fn represented_title_leading_uses_the_exact_local_product_on_plan_and_reflow() {
         let environment = PreparedFontEnvironment::synthetic();
         let mut request = input("A\nA", i64::MAX, PhysicalTextAlignment::Start);
-        request.font_size = 20;
+        request.font_size = 20.0;
         request.line_height = TextLineHeight::Multiplier(1.3);
         assert_eq!(1.3_f64.to_bits(), 0x3ff4_cccc_cccc_cccd);
         let plan = environment.plan_text(request.clone()).unwrap();
@@ -2358,7 +2233,7 @@ mod tests {
             source,
             stack: canonical::test_sans_stack(),
             weight: TextWeight::Normal,
-            font_size: 10,
+            font_size: 10.0,
             line_height: TextLineHeight::Multiplier(1.2),
             maximum_width_quanta,
             alignment,
@@ -2557,7 +2432,7 @@ mod tests {
         assert_eq!(plan.pair_provenance.pair_ordinal, 7);
         assert_eq!(&plan.style.stack, expected.stack);
         assert_eq!(plan.style.weight, expected.weight);
-        assert_eq!(plan.style.font_size, expected.font_size);
+        assert_eq!(plan.style.font_size.to_bits(), expected.font_size.to_bits());
         assert_eq!(plan.style.paint, expected.paint);
         assert_eq!(plan.style.alignment, expected.alignment);
         assert!(plan.style.exact_override);
@@ -2777,7 +2652,7 @@ mod tests {
             ascent: 0,
             descent: 0,
         };
-        let prefixes = proposal_prefixes(&whole.plan, &[0, 1, 2, 3], 10).unwrap();
+        let prefixes = proposal_prefixes(&whole.plan, &[0, 1, 2, 3], 10.0).unwrap();
         assert_eq!(
             prefixes
                 .iter()
@@ -2787,7 +2662,7 @@ mod tests {
         );
         // Magnitude is taken after summing the cluster, not per glyph.
         whole.plan.runs[0].glyphs[0].design_x_advance = -600;
-        let prefixes = proposal_prefixes(&whole.plan, &[0, 1, 2, 3], 10).unwrap();
+        let prefixes = proposal_prefixes(&whole.plan, &[0, 1, 2, 3], 10.0).unwrap();
         assert_eq!(
             prefixes
                 .iter()
@@ -2817,7 +2692,7 @@ mod tests {
             );
             let stack = canonical::builtin_font_stack();
             request.stack = &stack;
-            request.font_size = 15;
+            request.font_size = 15.0;
             TEXT_WORK.with(|work| work.set(TextWork::default()));
             let planned = environment.plan_text(request).unwrap();
             assert_eq!(planned.line_texts().concat(), caption.replace('\n', ""));
@@ -2891,7 +2766,7 @@ mod tests {
     fn scaled_glyphs_use_nearest_even_and_outward_ink() {
         let environment = PreparedFontEnvironment::synthetic();
         let mut request = input("A", i64::MAX, PhysicalTextAlignment::Start);
-        request.font_size = 11;
+        request.font_size = 11.0;
         let plan = environment.plan_text(request).unwrap();
         let glyph = &plan.lines[0].runs[0].glyphs[0];
 

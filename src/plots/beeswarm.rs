@@ -330,7 +330,7 @@ pub(crate) fn natural_body_height(
     )?;
     let hard = intrinsic_body_minimum(chart, theme)?;
     let height = quanta_pixels(packed.hard_pitch)
-        .max(2.0 * f64::from(theme.typography.axes.tick_label.font_size))
+        .max(2.0 * theme.typography.axes.tick_label.font_size)
         * marks.levels.len() as f64;
     Ok(height.max(hard.1).max(3.0 * width / 4.0))
 }
@@ -420,7 +420,7 @@ pub(crate) fn measure(
         )?);
     }
     let preferred = hard_pitch.max(crate::layout::kernel::ceil_spatial_quanta(
-        2.0 * f64::from(theme.typography.axes.tick_label.font_size),
+        2.0 * theme.typography.axes.tick_label.font_size,
     )?);
     let tracks = crate::data::source::collect_source(prepared.levels.iter().map(|_| {
         Ok(crate::layout::kernel::TrackSpec {

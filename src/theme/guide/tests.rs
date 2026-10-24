@@ -9,7 +9,7 @@ fn source() -> LegendTheme {
 fn pinned_binary_sources_and_complete_edge_rounding_are_exact() {
     let source = source();
 
-    let lengths = source.lengths(11, 12).unwrap();
+    let lengths = source.lengths(11.0, 12.0).unwrap();
     let edge = lengths.padding.add_length(&lengths.glyph_edge_padding);
     assert_eq!(
         edge.round(SpatialRounding::NearestEven).unwrap().quanta(),

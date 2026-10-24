@@ -3,7 +3,7 @@ use super::*;
 fn complete_hard_sums_keep_fractional_gaps_until_the_single_rounding_boundary() {
     let first = RelativeSpacing::ratio(1, 3072)
         .unwrap()
-        .product(LocalMetric::css_pixels(1).unwrap());
+        .product(LocalMetric::css_pixels(1.0).unwrap());
     let sum = first
         .add_length(&first)
         .add_length(&first)
@@ -26,7 +26,7 @@ fn complete_hard_sums_keep_fractional_gaps_until_the_single_rounding_boundary() 
 fn whole_positions_round_half_quantum_ties_with_the_final_anchor_parity() {
     let half = RelativeSpacing::ratio(1, 2048)
         .unwrap()
-        .product(LocalMetric::css_pixels(1).unwrap());
+        .product(LocalMetric::css_pixels(1.0).unwrap());
     for (anchor, expected) in [
         (0.0, 0.0),
         (1.0 / 1024.0, 0.0),

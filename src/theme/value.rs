@@ -225,7 +225,10 @@ mod tests {
         {
             assert_eq!(after.get_stack(), if index == 0 { &local } else { &stack });
             assert_eq!(after.get_color(), before.get_color());
-            assert_eq!(after.get_font_size(), before.get_font_size());
+            assert_eq!(
+                after.get_font_size().to_bits(),
+                before.get_font_size().to_bits()
+            );
             assert_eq!(after.get_weight(), before.get_weight());
             assert_eq!(
                 after.get_line_height().to_bits(),

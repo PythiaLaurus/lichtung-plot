@@ -128,7 +128,7 @@ fn prepared_root_frame_reuses_complete_prose_only_with_identical_constraints_on_
                 .root
                 .title
                 .clone()
-                .font_size(27)
+                .font_size(27.0)
                 .unwrap(),
         ),
     );
@@ -173,7 +173,7 @@ mod soft_hyphen_tests {
             .size(width, 1000)
             .erase();
             let mut theme = crate::Theme::publication().resolve().unwrap();
-            theme.typography.root.title.font_size = 240;
+            theme.typography.root.title.font_size = 240.0;
             theme.typography.root.title.weight = crate::TextWeight::Bold;
             assert_ne!(
                 theme.typography.root.title.weight,

@@ -150,13 +150,19 @@ census, base-plus-mark preference and installed-host freshness are governed by
 the layout font contract, not Theme construction. Unused roles do not require
 font availability.
 
-`TextTheme` owns stack, Color, positive u32 font_size, closed
+`TextTheme` owns stack, Color, positive finite f64 CSS font_size, closed
 Normal/Semibold/Bold weight and finite positive f64 line_height. Leading is an
-exact represented multiplier of font-size quanta, with one upward hard occupancy
+exact represented multiplier of the unrounded CSS font size, with one upward hard occupancy
 rounding. It is not an absolute length or spacing setter. Every text role is
 complete and independently editable.
 
-TextTheme implements complete Eq over its validated fields: positive finite leading
+Fractional sizes remain binary64 values through selected appearance, glyph scaling,
+font-relative spacing and SVG/outline storage. Design-unit metrics use exact signed
+rationals with wide-integer support for extreme dyadic denominators; final coordinate
+rounding, not an intermediate integer font size, determines spatial representability.
+SignificanceMarkStyle uses the same f64 size while retaining its independent pixel gap.
+
+TextTheme implements complete Eq over its validated fields: positive finite size/leading
 admits reflexive equality without NaN or signed-zero ambiguity. TextPanel's authored
 Text may supply one complete exact TextTheme independently for title and body.
 This local appearance replaces its selected Canvas role before the font census;

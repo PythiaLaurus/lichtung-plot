@@ -152,7 +152,7 @@ use lichtung_plot::{Canvas, Color, Text, TextAlignment, TextPanel, Theme};
 
 let theme = Theme::publication();
 let heading = theme.typography().get_composition().get_text_panel_title()
-    .clone().font_size(24)?.color(Color::rgb(80, 40, 110))?;
+    .clone().font_size(24.25)?.color(Color::rgb(80, 40, 110))?;
 let note = TextPanel::new(
     Text::new("Study context").style(heading).alignment(TextAlignment::End),
     Text::new("First paragraph.\nSecond paragraph.").alignment(TextAlignment::Start),

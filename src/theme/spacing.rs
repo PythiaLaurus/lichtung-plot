@@ -148,26 +148,43 @@ impl RelativeSpacing {
 
     pub(crate) fn product(&self, metric: LocalMetric) -> ExactLength {
         let rational = &self.0.rational;
+        let metric = match metric {
+            LocalMetric::CssPixels(bits) => {
+                let mut value = dyadic(f64::from_bits(bits));
+                value.numerator *= 1024_u16;
+                value
+            }
+            LocalMetric::Quanta(value) => Rational {
+                numerator: BigUint::from(value),
+                denominator: BigUint::from(1_u8),
+            },
+        };
 
         ExactLength(Rational {
-            numerator: &rational.numerator * metric.0,
-            denominator: rational.denominator.clone(),
+            numerator: &rational.numerator * metric.numerator,
+            denominator: &rational.denominator * metric.denominator,
         })
     }
 }
 
 /// A declared positive role em/radius or canonical local span, never a root size.
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct LocalMetric(u64);
+pub(crate) enum LocalMetric {
+    CssPixels(u64),
+    Quanta(u64),
+}
 
 impl LocalMetric {
-    pub(crate) fn css_pixels(value: u32) -> Result<Self> {
-        Self::scalar(LayoutScalar::exact_css_pixels(value)?)
+    pub(crate) fn css_pixels(value: f64) -> Result<Self> {
+        if !value.is_finite() || value <= 0.0 {
+            return Err(invalid("local metric must be finite and positive"));
+        }
+        Ok(Self::CssPixels(value.to_bits()))
     }
 
     pub(crate) fn scalar(value: LayoutScalar) -> Result<Self> {
         match u64::try_from(value.quanta()) {
-            Ok(value) if value > 0 => Ok(Self(value)),
+            Ok(value) if value > 0 => Ok(Self::Quanta(value)),
             _ => Err(invalid("local metric must be positive")),
         }
     }
@@ -405,7 +422,7 @@ mod tests {
 
     fn resolved(value: &RelativeSpacing, pixels: u32, rounding: SpatialRounding) -> i64 {
         value
-            .product(LocalMetric::css_pixels(pixels).unwrap())
+            .product(LocalMetric::css_pixels(f64::from(pixels)).unwrap())
             .round(rounding)
             .unwrap()
             .quanta()
@@ -455,17 +472,19 @@ mod tests {
         }
         assert!(RelativeSpacing::ratio(1, 0).is_err());
         assert!(RelativeSpacing::from_pixels(1.0, 0).is_err());
-        assert!(LocalMetric::css_pixels(0).is_err());
+        assert!(LocalMetric::css_pixels(0.0).is_err());
         assert!(LocalMetric::scalar(LayoutScalar::from_quanta(-1)).is_err());
         assert_eq!(
-            LocalMetric::css_pixels(u32::MAX).unwrap().0,
+            RelativeSpacing::ratio(1, 1)
+                .unwrap()
+                .product(LocalMetric::css_pixels(f64::from(u32::MAX)).unwrap())
+                .round(SpatialRounding::NearestEven)
+                .unwrap()
+                .quanta(),
             4_398_046_510_080
         );
-        assert_eq!(
-            LocalMetric::scalar(LayoutScalar::from_quanta(i64::MAX))
-                .unwrap()
-                .0,
-            i64::MAX as u64
+        assert!(
+            matches!(LocalMetric::scalar(LayoutScalar::from_quanta(i64::MAX)).unwrap(),LocalMetric::Quanta(value) if value == i64::MAX as u64)
         );
     }
 
@@ -490,7 +509,7 @@ mod tests {
 
         let large = RelativeSpacing::new(f64::MAX)
             .unwrap()
-            .product(LocalMetric::css_pixels(1).unwrap());
+            .product(LocalMetric::css_pixels(1.0).unwrap());
         assert!(large.round(SpatialRounding::Ceil).is_err());
         let maximum = RelativeSpacing::ratio(1, 1)
             .unwrap()
@@ -533,10 +552,10 @@ mod tests {
             assert_eq!(f64::to_bits(pixels), bits);
             let value = RelativeSpacing::from_pixels(pixels, em).unwrap();
 
-            let restored = value.product(LocalMetric::css_pixels(em).unwrap());
+            let restored = value.product(LocalMetric::css_pixels(f64::from(em)).unwrap());
             let source = RelativeSpacing::new(pixels)
                 .unwrap()
-                .product(LocalMetric::css_pixels(1).unwrap());
+                .product(LocalMetric::css_pixels(1.0).unwrap());
             assert_eq!(restored.compare(&source), Ordering::Equal);
             assert_eq!(
                 restored
@@ -595,7 +614,7 @@ mod tests {
 
     #[test]
     fn exact_aggregate_retains_the_edge_inset_quantum_and_repeated_gap_sum() {
-        let em = LocalMetric::css_pixels(11).unwrap();
+        let em = LocalMetric::css_pixels(11.0).unwrap();
         let padding = RelativeSpacing::from_pixels(8.8, 11).unwrap().product(em);
         let comfort = RelativeSpacing::new(0.2).unwrap().product(em);
         let edge = padding.add_length(&comfort);
@@ -610,7 +629,7 @@ mod tests {
         );
         let gap = RelativeSpacing::ratio(1, 3072)
             .unwrap()
-            .product(LocalMetric::css_pixels(1).unwrap());
+            .product(LocalMetric::css_pixels(1.0).unwrap());
         assert_eq!(
             gap.times(3)
                 .add_quanta(LayoutScalar::from_quanta(1024))

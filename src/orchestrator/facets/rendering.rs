@@ -318,7 +318,7 @@ mod tests {
             .composition
             .facet_header
             .clone()
-            .font_size(17)
+            .font_size(17.0)
             .unwrap();
         theme.typography.axes.axis_title.line_height_multiplier = 1.25;
         let grid = PanelBox::new(71.25, 372.75, 83.25, 304.75);

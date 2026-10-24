@@ -1905,7 +1905,7 @@ mod tests {
         TextTheme::new(
             canonical::named_stack(&[stack]),
             Color::rgb(0, 0, 0),
-            12,
+            12.0,
             weight,
             1.2,
         )
@@ -2318,8 +2318,8 @@ mod tests {
                 canonical::named_stack(&["Light contrast font"]);
             theme.typography.annotations.contrast.dark.stack =
                 canonical::named_stack(&["Dark contrast font"]);
-            theme.typography.annotations.contrast.light.font_size = 19;
-            theme.typography.annotations.contrast.dark.font_size = 9;
+            theme.typography.annotations.contrast.light.font_size = 19.0;
+            theme.typography.annotations.contrast.dark.font_size = 9.0;
             inputs
                 .prepare_discrete_guides(
                     &plot,
@@ -2396,8 +2396,8 @@ mod tests {
             canonical::named_stack(&["Light missing row"]);
         theme.typography.annotations.contrast.dark.stack =
             canonical::named_stack(&["Dark missing row"]);
-        theme.typography.annotations.contrast.light.font_size = 39;
-        theme.typography.annotations.contrast.dark.font_size = 9;
+        theme.typography.annotations.contrast.light.font_size = 39.0;
+        theme.typography.annotations.contrast.dark.font_size = 9.0;
         inputs
             .prepare_discrete_guides(&plot, &theme, &resources, &ComponentAddress::root(), false)
             .unwrap();
@@ -2434,11 +2434,12 @@ mod tests {
                 theme
                     .contrasting_text(theme.marks.get_cells().get_missing_fill())
                     .unwrap()
-                    .font_size,
+                    .font_size
+                    .to_bits(),
                 if expected == "Light missing row" {
-                    39
+                    39.0_f64.to_bits()
                 } else {
-                    9
+                    9.0_f64.to_bits()
                 }
             );
         }
@@ -2469,8 +2470,8 @@ mod tests {
             canonical::named_stack(&["Selected light contrast"]);
         theme.typography.annotations.contrast.dark.stack =
             canonical::named_stack(&["Selected dark contrast"]);
-        theme.typography.annotations.contrast.light.font_size = 39;
-        theme.typography.annotations.contrast.dark.font_size = 9;
+        theme.typography.annotations.contrast.light.font_size = 39.0;
+        theme.typography.annotations.contrast.dark.font_size = 9.0;
         inputs
             .prepare_discrete_guides(&plot, &theme, &resources, &ComponentAddress::root(), false)
             .unwrap();
@@ -2574,7 +2575,7 @@ mod tests {
         let mut theme = crate::Theme::publication().resolve().unwrap();
         theme.typography.annotations.estimate_detail.stack =
             canonical::named_stack(&["Estimate detail only"]);
-        theme.typography.annotations.estimate_detail.font_size = 20;
+        theme.typography.annotations.estimate_detail.font_size = 20.0;
         theme.typography.annotations.estimate_detail.paint = crate::theme::Color::rgb(5, 7, 9);
         inputs
             .prepare_discrete_guides(&plot, &theme, &resources, &ComponentAddress::root(), false)
@@ -2642,9 +2643,9 @@ mod tests {
             theme.typography.annotations.contrast.dark.stack =
                 if light_selected { missing } else { available };
             theme.typography.annotations.contrast.light.font_size =
-                if light_selected { 64 } else { 7 };
+                if light_selected { 64.0 } else { 7.0 };
             theme.typography.annotations.contrast.dark.font_size =
-                if light_selected { 7 } else { 64 };
+                if light_selected { 7.0 } else { 64.0 };
             crate::layout::plan_exact_root(
                 800,
                 600,
@@ -2804,7 +2805,7 @@ mod tests {
                 source: "A",
                 stack: canonical::test_sans_stack(),
                 weight: TextWeight::Normal,
-                font_size: 10,
+                font_size: 10.0,
                 line_height: crate::layout::TextLineHeight::Multiplier(1.2),
                 maximum_width_quanta: i64::MAX,
                 alignment: crate::layout::PhysicalTextAlignment::Start,
@@ -2824,7 +2825,7 @@ mod tests {
                 source: "B",
                 stack: canonical::test_sans_stack(),
                 weight: TextWeight::Normal,
-                font_size: 10,
+                font_size: 10.0,
                 line_height: crate::layout::TextLineHeight::Multiplier(1.2),
                 maximum_width_quanta: i64::MAX,
                 alignment: crate::layout::PhysicalTextAlignment::Start,

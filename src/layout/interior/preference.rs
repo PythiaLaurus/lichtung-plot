@@ -137,7 +137,7 @@ pub(crate) fn categorical_preference(
     };
     let hard_pitch = ceil_ratio(i128::from(category_hard), i128::from(slots))?.max(1);
     let em = crate::layout::kernel::ceil_spatial_quanta(
-        2.0 * f64::from(theme.typography.axes.tick_label.font_size),
+        2.0 * theme.typography.axes.tick_label.font_size,
     )?;
     let preferred_pitch = hard_pitch.max(em);
     let category_span = i128::from(preferred_pitch) * i128::from(slots);
@@ -325,7 +325,7 @@ pub(crate) fn mark_preference(
                 ))
             }
         };
-    let em = f64::from(theme.typography.axes.tick_label.font_size);
+    let em = theme.typography.axes.tick_label.font_size;
     let mark_pitch = em.max(primary_ink);
     let density_side = f64::from(ceil_sqrt(count)?) * mark_pitch;
     let ch = theme

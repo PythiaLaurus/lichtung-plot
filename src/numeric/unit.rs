@@ -366,7 +366,7 @@ mod tests {
             .get_axes()
             .get_tick_label()
             .clone()
-            .font_size(19)
+            .font_size(19.0)
             .unwrap();
         let format = NumericFormat::default()
             .unit(Some(NumericUnit::new("kg", NumericUnitPlacement::Shared)))

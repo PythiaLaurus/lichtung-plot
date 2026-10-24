@@ -338,7 +338,7 @@ mod tests {
                 source: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                 stack: crate::font::canonical::test_sans_stack(),
                 weight: crate::TextWeight::Normal,
-                font_size: 10,
+                font_size: 10.0,
                 line_height: TextLineHeight::Multiplier(1.2),
                 maximum_width_quanta: i64::MAX,
                 alignment: PhysicalTextAlignment::Start,

@@ -297,7 +297,7 @@ fn place_bar_significance(
     let y = if mark.positive {
         edge_y + gap
     } else {
-        edge_y - gap - f64::from(text_plan.style.font_size)
+        edge_y - gap - text_plan.style.font_size
     };
     let panel = layout.projection.panel_box();
     if !pending_domain && (y < panel.y0 || y + text_plan.height() > panel.y1) {
@@ -344,7 +344,7 @@ fn validate_bar_significance_collisions(
         let draw_y = if mark.positive {
             edge_y + gap
         } else {
-            edge_y - gap - f64::from(text_plan.style.font_size)
+            edge_y - gap - text_plan.style.font_size
         };
         let panel = layout.projection.panel_box();
         if !pending_domain && (draw_y < panel.y0 || draw_y + height > panel.y1) {

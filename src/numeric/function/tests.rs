@@ -141,7 +141,7 @@ fn set_functions_own_final_spelling_and_replace_one_styled_explanation_without_p
         .get_axes()
         .get_tick_label()
         .clone()
-        .font_size(17)
+        .font_size(17.0)
         .unwrap();
     let format = NumericFormat::default()
         .precision(NumericPrecision::Fractional(0))

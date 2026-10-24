@@ -197,7 +197,7 @@ fn reflow_reuses_analysis_through_unwrapped_wrapped_and_blank_paragraphs() {
             )
         );
     }
-    request.font_size += 1;
+    request.font_size += 1.0;
     assert!(original.reflow(request).is_err());
 }
 
@@ -452,8 +452,8 @@ fn review_hard_metrics_round_outward_for_empty_lines() {
         ascender: 801,
         descender: -201,
     };
-    assert_eq!(scaled_metrics(metrics, 1).unwrap(), (401, -101));
-    let line = empty_line(TextSourceSpan::new(0, 0).unwrap(), 0, metrics, 1).unwrap();
+    assert_eq!(scaled_metrics(metrics, 1.0).unwrap(), (401, -101));
+    let line = empty_line(TextSourceSpan::new(0, 0).unwrap(), 0, metrics, 1.0).unwrap();
     assert_eq!((line.ascent, line.descent), (401, 101));
     let environment = PreparedFontEnvironment::synthetic();
     let stack = canonical::named_stack(&["Test Sans"]);
@@ -473,9 +473,9 @@ fn review_hard_metrics_round_outward_for_empty_lines() {
         shaped,
         TextSourceSpan::new(1, 2).unwrap(),
         Script::Common,
-        1,
-        ExactRational::ZERO,
-        ExactRational::ZERO,
+        1.0,
+        &ExactRational::ZERO,
+        &ExactRational::ZERO,
         0,
     )
     .unwrap();
@@ -484,12 +484,12 @@ fn review_hard_metrics_round_outward_for_empty_lines() {
         (scaled.plan.ascender_quanta, scaled.plan.descender_quanta),
         (401, -101)
     );
-    let mut whitespace = empty_line(TextSourceSpan::new(1, 2).unwrap(), 1, metrics, 1).unwrap();
+    let mut whitespace = empty_line(TextSourceSpan::new(1, 2).unwrap(), 1, metrics, 1.0).unwrap();
     whitespace.advance = scaled.advance_x;
     whitespace.plan.logical_advance_quanta = scaled.plan.logical_advance_quanta;
     whitespace.plan.runs.push(scaled.plan);
     let mut request = tests::input("\n ", i64::MAX, PhysicalTextAlignment::Start);
-    request.font_size = 1;
+    request.font_size = 1.0;
     let plan = finalize_plan(request, &stack, pair.provenance, 1, vec![line, whitespace]).unwrap();
     assert_eq!(plan.line_pitch_quanta, 502);
     assert_eq!(plan.height_quanta, 1004);
@@ -524,9 +524,9 @@ fn glyph_copy_preserves_actual_gsub_output() {
         shaped,
         TextSourceSpan::new(0, 3).unwrap(),
         Script::Latin,
-        1,
-        ExactRational::ZERO,
-        ExactRational::ZERO,
+        1.0,
+        &ExactRational::ZERO,
+        &ExactRational::ZERO,
         0,
     )
     .unwrap();
@@ -793,17 +793,20 @@ fn fallback_runs_with_different_font_units_share_one_exact_pen_and_outward_ink()
             shaped,
             run.source_span,
             run.script,
-            1,
-            pen_x,
-            pen_y,
+            1.0,
+            &pen_x,
+            &pen_y,
             run.bidi_level,
         )
         .unwrap();
-        pen_x = pen_x.add(built.advance_x, "test line advance").unwrap();
-        pen_y = pen_y.add(built.advance_y, "test line advance").unwrap();
+        pen_x = pen_x.add(&built.advance_x, "test line advance").unwrap();
+        pen_y = pen_y.add(&built.advance_y, "test line advance").unwrap();
         rounded_run_sum += built.plan.logical_advance_quanta;
         if let Some(bounds) = built.ink {
-            ink = Some(ink.map_or(bounds, |prior| prior.union(bounds).unwrap()));
+            ink = Some(match ink {
+                Some(prior) => prior.union(bounds),
+                None => bounds,
+            });
         }
         origins.extend(
             built
@@ -1219,9 +1222,9 @@ fn origins_round_exact_cumulative_positions_once_and_ink_uses_those_origins() {
         shaped,
         TextSourceSpan::new(0, 4).unwrap(),
         Script::Latin,
-        1,
-        ExactRational::new(1, 2).unwrap(),
-        ExactRational::new(-1, 2).unwrap(),
+        1.0,
+        &ExactRational::new(1, 2).unwrap(),
+        &ExactRational::new(-1, 2).unwrap(),
         0,
     )
     .unwrap();

@@ -240,7 +240,7 @@ fn continuous_shared_heatmaps_draw_one_merged_guide_without_local_colorbars() {
         .get_guides()
         .get_legend_title()
         .clone()
-        .font_size(24)
+        .font_size(24.0)
         .unwrap()
         .weight(TextWeight::Bold)
         .unwrap();

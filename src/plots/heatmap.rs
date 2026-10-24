@@ -273,7 +273,7 @@ fn assigned_columns(
         hard[index % count] = hard[index % count].max(padding.width(widths.0)?);
     }
     let preferred = crate::layout::kernel::ceil_spatial_quanta(
-        2.0 * f64::from(theme.typography.axes.tick_label.font_size),
+        2.0 * theme.typography.axes.tick_label.font_size,
     )?;
     let base = crate::data::source::collect_source(hard.into_iter().map(|width| {
         let min = crate::layout::kernel::ceil_spatial_quanta(width)?;
@@ -403,7 +403,7 @@ fn assigned_rows(
         .map(|pair| pair[1] - pair[0])
         .fold(0.0_f64, f64::max);
     let preferred = crate::layout::kernel::ceil_spatial_quanta(
-        square.max(2.0 * f64::from(theme.typography.axes.tick_label.font_size)),
+        square.max(2.0 * theme.typography.axes.tick_label.font_size),
     )?;
     let base = crate::data::source::collect_source(hard.into_iter().map(|height| {
         let min = crate::layout::kernel::ceil_spatial_quanta(height)?;
@@ -638,7 +638,7 @@ pub(crate) fn natural_body_preference(
 ) -> Result<(f64, f64), Error> {
     let marks = retained_in(chart)?;
     let hard = intrinsic_body_minimum(chart, theme)?;
-    let pitch = 2.0 * f64::from(theme.typography.axes.tick_label.font_size);
+    let pitch = 2.0 * theme.typography.axes.tick_label.font_size;
     Ok((
         hard.0.max(pitch * marks.x_levels.len() as f64),
         hard.1.max(pitch * marks.y_levels.len() as f64),
@@ -679,10 +679,10 @@ pub(crate) fn natural_body_height(
         &text,
     )
     .map_err(crate::layout::fit::PlanError::into_error)?;
-    let preferred = columns.windows(2).map(|edge| edge[1] - edge[0]).fold(
-        2.0 * f64::from(theme.typography.axes.tick_label.font_size),
-        f64::max,
-    );
+    let preferred = columns
+        .windows(2)
+        .map(|edge| edge[1] - edge[0])
+        .fold(2.0 * theme.typography.axes.tick_label.font_size, f64::max);
     let mut heights =
         crate::data::source::collect_source(marks.y_levels.iter().map(|_| Ok(preferred)))?;
     for (index, plan) in annotations.values.iter().enumerate() {

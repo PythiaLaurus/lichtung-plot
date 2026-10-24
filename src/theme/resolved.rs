@@ -123,10 +123,14 @@ impl TextQueryCache {
         let entry = &self.entries[index];
         let metadata = (
             entry.source.len(),
-            entry.appearance.font_size,
+            entry.appearance.font_size.to_bits(),
             entry.appearance.weight as u8,
         )
-            .cmp(&(input.source.len(), input.font_size, input.weight as u8));
+            .cmp(&(
+                input.source.len(),
+                input.font_size.to_bits(),
+                input.weight as u8,
+            ));
         if metadata != std::cmp::Ordering::Equal {
             return metadata;
         }
@@ -995,7 +999,7 @@ pub struct TextTheme {
     /// Text paint.
     pub(crate) paint: Color,
     /// Font size in actual CSS pixels.
-    pub(crate) font_size: u32,
+    pub(crate) font_size: f64,
     /// Closed renderer-owned font weight.
     pub(crate) weight: TextWeight,
     /// Finite positive multiple of the font size used for line pitch.
@@ -1011,7 +1015,7 @@ impl TextTheme {
     pub fn new(
         stack: crate::font::canonical::FontStack,
         color: Color,
-        font_size: u32,
+        font_size: f64,
         weight: TextWeight,
         line_height: f64,
     ) -> Result<Self, Error> {
@@ -1027,7 +1031,7 @@ impl TextTheme {
     }
 
     pub(crate) fn validate(&self) -> Result<(), Error> {
-        if self.font_size == 0 {
+        if !self.font_size.is_finite() || self.font_size <= 0.0 {
             return Err(Error::Data(
                 "text font size must be positive CSS pixels".into(),
             ));
@@ -1051,7 +1055,7 @@ impl TextTheme {
     }
 
     /// Inspect the positive font size in actual CSS pixels.
-    pub fn get_font_size(&self) -> u32 {
+    pub fn get_font_size(&self) -> f64 {
         self.font_size
     }
 
@@ -1088,7 +1092,7 @@ impl TextTheme {
     }
 
     /// Replace only the positive CSS font size.
-    pub fn font_size(self, font_size: u32) -> Result<Self, Error> {
+    pub fn font_size(self, font_size: f64) -> Result<Self, Error> {
         Self::new(
             self.stack,
             self.paint,
@@ -1121,7 +1125,7 @@ impl TextTheme {
     }
 
     pub(crate) fn same(&self, other: &Self) -> bool {
-        self.font_size == other.font_size
+        self.font_size.to_bits() == other.font_size.to_bits()
             && self.weight == other.weight
             && self.paint == other.paint
             && self.line_height_multiplier.to_bits() == other.line_height_multiplier.to_bits()
@@ -1141,7 +1145,7 @@ impl TextTheme {
     }
     /// Resolve this role's current line pitch in pixels.
     pub(crate) fn line_pitch_pixels(&self) -> f64 {
-        f64::from(self.font_size) * self.line_height_multiplier
+        self.font_size * self.line_height_multiplier
     }
 }
 
@@ -1172,11 +1176,11 @@ fn resolved_theme(
     )?;
     let accents = AccentPalette::new(colors.iter().map(opaque))?;
     let stroke = |width, pattern| StrokeTheme::new(foreground_paint, width, pattern);
-    let text = |paint, font_size, line_height| {
+    let text = |paint, font_size: u32, line_height| {
         TextTheme::new(
             stack.clone(),
             paint,
-            font_size,
+            f64::from(font_size),
             TextWeight::Normal,
             line_height,
         )
@@ -1407,7 +1411,7 @@ mod tests {
         environment.validate_operation(&resources).unwrap();
         let mut appearance = root.typography.root.caption.clone();
         appearance.stack = crate::font::canonical::named_stack(&["Test Sans"]);
-        appearance.font_size = 10;
+        appearance.font_size = 10.0;
         let mut first = None;
         for index in 0..128 {
             let plan = root
@@ -1550,7 +1554,7 @@ mod tests {
             match change {
                 0 => changed.source = "AA",
                 1 => changed.stack = &other,
-                2 => changed.font_size += 1,
+                2 => changed.font_size += 1.0,
                 _ => changed.weight = TextWeight::Bold,
             }
             assert_ne!(
@@ -1572,7 +1576,7 @@ mod tests {
             .unwrap();
         let appearance = TextTheme {
             stack: crate::font::canonical::named_stack(&["Literal"]),
-            font_size: 10,
+            font_size: 10.0,
             ..theme.typography.root.caption.clone()
         };
         let mut source = String::with_capacity(16);

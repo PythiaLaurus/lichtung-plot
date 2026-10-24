@@ -210,9 +210,9 @@ pub(crate) fn body_preference(
             let count = u32::try_from(count).map_err(|_| {
                 Error::Render("specialized category preference count overflow".into())
             })?;
-            let height = hard.1.max(
-                2.0 * f64::from(theme.typography.axes.tick_label.font_size) * f64::from(count),
-            );
+            let height = hard
+                .1
+                .max(2.0 * theme.typography.axes.tick_label.font_size * f64::from(count));
             let width = hard.0.max(66.0 * ch).max(4.0 * height / 3.0);
             Ok((width, height.max(3.0 * width / 4.0)))
         }

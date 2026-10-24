@@ -75,9 +75,7 @@ pub(super) fn allocate(
     column_insets.resize(columns, [0_i64; 2]);
     row_insets.resize(rows, [0_i64; 2]);
     let gap = required(theme.composition_facet_gap()?)?;
-    let em = required(f64::from(
-        theme.typography.composition.facet_header.get_font_size(),
-    ))?;
+    let em = required(theme.typography.composition.facet_header.get_font_size())?;
     let strip_lengths = theme.facet_strip_lengths()?;
     if let Some(content) = content.filter(|content| content.natural_width) {
         // Initial root width owns the same external axis columns as assigned
@@ -423,14 +421,14 @@ mod tests {
             .composition
             .body
             .clone()
-            .font_size(34)
+            .font_size(34.0)
             .unwrap();
         theme.typography.composition.composition_header = theme
             .typography
             .composition
             .composition_header
             .clone()
-            .font_size(40)
+            .font_size(40.0)
             .unwrap();
         for em in [15, 30] {
             theme.typography.composition.facet_header = theme
@@ -438,7 +436,7 @@ mod tests {
                 .composition
                 .facet_header
                 .clone()
-                .font_size(em)
+                .font_size(f64::from(em))
                 .unwrap();
             crate::layout::plan_exact_root(
                 1,

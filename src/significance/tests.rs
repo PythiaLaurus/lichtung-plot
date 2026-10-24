@@ -31,7 +31,7 @@ fn selected_theme_gap_and_tick_height_survive_canonical_capture_with_exact_prece
         .get_annotations()
         .get_significance_label()
         .clone()
-        .font_size(24)
+        .font_size(24.25)
         .unwrap();
     let roles = theme
         .typography
@@ -61,8 +61,8 @@ fn selected_theme_gap_and_tick_height_survive_canonical_capture_with_exact_prece
     .unwrap();
     let bracket = &selected.brackets[0];
     assert!(!bracket.label.exact_override);
-    assert_eq!(bracket.style.font_size, 24);
-    assert_eq!(bracket.style.label_gap.to_bits(), 24.0_f64.to_bits());
+    assert_eq!(bracket.style.font_size.to_bits(), 24.25_f64.to_bits());
+    assert_eq!(bracket.style.label_gap.to_bits(), 24.25_f64.to_bits());
     let call = PlannedSignificanceCall {
         bracket: &bracket.geometry,
         style: &bracket.style,
@@ -71,20 +71,20 @@ fn selected_theme_gap_and_tick_height_survive_canonical_capture_with_exact_prece
     let canonical = crate::render::backend::validate_planned_bracket(call).unwrap();
     assert_eq!(
         canonical.line_start.y.units() - canonical.first_tick_end.y.units(),
-        12 * 1024
+        12 * 1024 + 128
     );
     assert_eq!(
         canonical.label_position.y.units() - canonical.line_start.y.units(),
-        24 * 1024
+        24 * 1024 + 256
     );
     let captured =
         crate::render::primitives::CanonicalPlannedBracket::new(call, 300, None).unwrap();
     assert_eq!(
         captured.points[2].y.units() - captured.points[0].y.units(),
-        12 * 1024
+        12 * 1024 + 128
     );
     let exact = SignificanceMarkStyle::default()
-        .font_size(12)
+        .font_size(12.5)
         .unwrap()
         .weight(crate::TextWeight::Bold)
         .unwrap()
@@ -94,7 +94,10 @@ fn selected_theme_gap_and_tick_height_survive_canonical_capture_with_exact_prece
     let exact = exact.gap(3.0).unwrap();
     let effective = theme.effective_significance(Some(exact)).unwrap();
     assert!(effective.exact_override);
-    assert_eq!(effective.label.get_font_size(), 12);
+    assert_eq!(
+        effective.label.get_font_size().to_bits(),
+        12.5_f64.to_bits()
+    );
     assert_eq!(effective.label.get_weight(), crate::TextWeight::Bold);
     assert_eq!(effective.gap_pixels().unwrap().to_bits(), 3.0_f64.to_bits());
     assert_eq!(
@@ -104,9 +107,9 @@ fn selected_theme_gap_and_tick_height_survive_canonical_capture_with_exact_prece
             .pixels_rounded(SpatialRounding::NearestEven)
             .unwrap()
             .to_bits(),
-        6.0_f64.to_bits()
+        6.25_f64.to_bits()
     );
-    assert_eq!(bracket.style.tick_height.to_bits(), 12.0_f64.to_bits());
+    assert_eq!(bracket.style.tick_height.to_bits(), 12.125_f64.to_bits());
     let mut malformed = bracket.style.clone();
     malformed.tick_height = -1.0;
     assert!(crate::render::backend::validate_bracket(&bracket.geometry, &malformed).is_err());

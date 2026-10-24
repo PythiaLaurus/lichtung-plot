@@ -8,7 +8,7 @@
 /// ```
 /// use lichtung_plot::{NumericValues, PanelCorner, PanelTextAnnotation, Plot, Text, TextAlignment, TextLayout, TextPanel, Theme};
 /// let style = Theme::publication().typography().get_composition()
-///     .get_text_panel_title().clone().font_size(24)?;
+///     .get_text_panel_title().clone().font_size(24.0)?;
 /// let title = Text::new("Study\ncontext").style(style).alignment(TextAlignment::End);
 /// let note = PanelTextAnnotation::new(PanelCorner::TopLeft, title.clone())?;
 /// let plot = Plot::scatter(NumericValues::new("x", [0.0, 1.0]),
@@ -409,7 +409,7 @@ mod tests {
         let panel = TextPanel::new(authored, "body").unwrap();
         let changed = TextPanel::new(
             Text::new("same source")
-                .style(style.font_size(37).unwrap())
+                .style(style.font_size(37.0).unwrap())
                 .alignment(TextAlignment::End),
             "body",
         )

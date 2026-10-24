@@ -252,13 +252,13 @@ pub(super) fn allocate(
     let theme = themes.root();
 
     let gap = required(theme.composition_grid_gap()?)?;
-    let em = required(f64::from(
+    let em = required(
         theme
             .typography
             .composition
             .composition_header
             .get_font_size(),
-    ))?;
+    )?;
     let header_role = theme.typography.get_composition().get_composition_header();
     let mut row_header_plans = Vec::new();
     crate::layout::fit::reserve(

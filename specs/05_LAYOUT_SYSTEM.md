@@ -84,7 +84,7 @@ retries a smaller value. There is no epsilon equality or float geometry fallback
 
 One em is the resolved role font size. One ch is its shaped U+0030 advance with
 actual stack/face/weight/size/profile; missing required0 is a font error. Design
-metrics use exact `design_value*font_size_quanta/units_per_em`, rounded by spatial
+metrics use exact `design_value*represented_font_size*1024/units_per_em`, rounded by spatial
 role. Round complete hard run advance upward once, not per glyph.
 
 Nonspatial binary64 identity inputs are finite and normalize zero. For bits b,

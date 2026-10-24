@@ -37,7 +37,7 @@ fn authored_axis_titles_keep_centered_blocks_and_use_independent_selected_metric
                     .axes
                     .axis_title
                     .clone()
-                    .font_size(23)
+                    .font_size(23.0)
                     .unwrap(),
             )
             .alignment(crate::TextAlignment::Start),
@@ -50,7 +50,7 @@ fn authored_axis_titles_keep_centered_blocks_and_use_independent_selected_metric
                     .axes
                     .axis_title
                     .clone()
-                    .font_size(19)
+                    .font_size(19.0)
                     .unwrap(),
             )
             .alignment(crate::TextAlignment::End),
@@ -58,8 +58,8 @@ fn authored_axis_titles_keep_centered_blocks_and_use_independent_selected_metric
     let aligned = layout.plan_axes(&theme).unwrap();
     let (x, xp) = aligned.x_axis.title.as_ref().unwrap();
     let (y, yp) = aligned.y_axis.title.as_ref().unwrap();
-    assert_eq!(x.style.font_size, 23);
-    assert_eq!(y.style.font_size, 19);
+    assert_eq!(x.style.font_size.to_bits(), 23.0_f64.to_bits());
+    assert_eq!(y.style.font_size.to_bits(), 19.0_f64.to_bits());
     assert!(x.style.exact_override && y.style.exact_override);
     assert_eq!(
         x.lines[0].translation_x_quanta + x.lines[0].ink_quanta.unwrap().left,
