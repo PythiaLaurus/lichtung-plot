@@ -76,6 +76,16 @@ pub(super) fn intrinsic_width(
             width = column;
         }
     }
+    if let Some(text) = &descriptor.numeric.explanation {
+        let candidate = ExactLength::pixels(crate::numeric::slot::preferred_width(
+            text,
+            &theme.typography.guides.legend_label,
+            theme,
+        )?)?;
+        if width.compare(&candidate).is_lt() {
+            width = candidate;
+        }
+    }
     Ok(width)
 }
 
@@ -93,6 +103,8 @@ pub(super) struct ColorContent {
     missing_width: ExactLength,
     missing_inset: f64,
     horizontal: bool,
+    explanation: Option<crate::numeric::slot::ExplanationPlan>,
+    explanation_height: ExactLength,
 }
 
 impl ColorContent {
@@ -250,6 +262,26 @@ impl ColorContent {
             .iter()
             .map(|plan| plan.width().max(plan.fit_width()))
             .fold(0.0_f64, f64::max);
+        let explanation = descriptor
+            .numeric
+            .explanation
+            .as_ref()
+            .map(|text| {
+                crate::numeric::slot::ExplanationPlan::measure(
+                    text,
+                    &theme.typography.guides.legend_label,
+                    super::measurement::pixels(width),
+                    crate::TextAlignment::Start,
+                    theme,
+                    scope,
+                )
+            })
+            .transpose()?;
+        let explanation_height = if let Some(plan) = &explanation {
+            metrics.exact.row_gap.add_pixels(plan.height)?
+        } else {
+            ExactLength::pixels(0.0)?
+        };
         Ok(Self {
             labels,
             missing,
@@ -262,6 +294,8 @@ impl ColorContent {
             missing_width,
             missing_inset,
             horizontal,
+            explanation,
+            explanation_height,
         })
     }
 
@@ -277,7 +311,9 @@ impl ColorContent {
                 .add_pixels(self.along[0])?
                 .add_pixels(self.along[self.along.len() - 1])?
         };
-        Ok(body.add_length(&self.missing_height))
+        Ok(body
+            .add_length(&self.missing_height)
+            .add_length(&self.explanation_height))
     }
 
     pub(super) fn track(
@@ -319,7 +355,13 @@ impl ColorContent {
             pixels(width) - first - last
         } else if let Some(height) = height {
             height
-                .subtract(&self.missing_height.add_pixels(first)?.add_pixels(last)?)
+                .subtract(
+                    &self
+                        .missing_height
+                        .add_length(&self.explanation_height)
+                        .add_pixels(first)?
+                        .add_pixels(last)?,
+                )
                 .map(|length| length.pixels_rounded(SpatialRounding::Floor))
                 .transpose()?
                 .unwrap_or(0.0)
@@ -355,7 +397,12 @@ impl ColorContent {
         } else {
             &along_width
         };
-        let occupied_width = hard(content_width)?;
+        let content_width = if self.explanation.is_some() {
+            ExactLength::pixels(pixels(width))?
+        } else {
+            content_width.times(1)
+        };
+        let occupied_width = hard(&content_width)?;
         let occupied_height = self.body_height(length, metrics)?;
         if occupied_width > width
             || height.is_some_and(|height| height.compare(&occupied_height).is_lt())
@@ -417,7 +464,10 @@ impl ColorContent {
             .missing
             .zip(descriptor.missing.as_ref())
             .map(|(plan, key)| {
-                let bottom = -occupied_height.pixels_rounded(SpatialRounding::NearestEven)?;
+                let bottom = -occupied_height.pixels_rounded(SpatialRounding::NearestEven)?
+                    + self
+                        .explanation_height
+                        .pixels_rounded(SpatialRounding::NearestEven)?;
                 let row_height = plan.height().max(thickness + self.missing_inset);
                 Ok::<_, Error>((
                     PanelBox::new(0.0, thickness, bottom, bottom + thickness),
@@ -432,8 +482,16 @@ impl ColorContent {
                 ))
             })
             .transpose()?;
+        let explanation = self
+            .explanation
+            .map(|plan| {
+                let top =
+                    -occupied_height.pixels_rounded(SpatialRounding::NearestEven)? + plan.height;
+                Ok::<_, Error>(plan.at(0.0, top))
+            })
+            .transpose()?;
         let measured = MeasuredColorBody {
-            width: content_width.times(1),
+            width: content_width,
             height: occupied_height,
             gradient,
             start,
@@ -441,6 +499,7 @@ impl ColorContent {
             stops,
             labels,
             missing,
+            explanation,
         };
         if !measured.labels_have_clearance(self.horizontal, metrics.row_gap)? {
             return Err(scope
@@ -465,6 +524,7 @@ pub(super) struct MeasuredColorBody {
     stops: Vec<GradientStop>,
     labels: Vec<PlacedText>,
     missing: Option<(PanelBox, FillStyle, PlacedText)>,
+    explanation: Option<PlacedText>,
 }
 
 impl MeasuredColorBody {
@@ -517,6 +577,9 @@ impl MeasuredColorBody {
         for label in &self.labels {
             emit(text(label))?;
         }
+        if let Some(explanation) = &self.explanation {
+            emit(text(explanation))?;
+        }
         if let Some((bounds, fill, label)) = &self.missing {
             emit(LegendCall::Fill(
                 [
@@ -551,6 +614,11 @@ impl MeasuredColorBody {
         for label in &self.labels {
             round.observe_text(&label.plan)?;
             round.observe_placement(label.placement)?;
+        }
+        round.observe_count(usize::from(self.explanation.is_some()))?;
+        if let Some(explanation) = &self.explanation {
+            round.observe_text(&explanation.plan)?;
+            round.observe_placement(explanation.placement)?;
         }
         round.observe_count(self.stops.len())?;
         for stop in &self.stops {

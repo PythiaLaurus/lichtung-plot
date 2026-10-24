@@ -188,6 +188,7 @@ impl ContinuousContributor {
                         members: Vec::new(),
                         labels: Vec::new(),
                         precision: 0,
+                        ..FormattedSet::default()
                     },
                 });
             }

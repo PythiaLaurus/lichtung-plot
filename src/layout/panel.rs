@@ -102,6 +102,7 @@ pub struct Axis {
     /// Selected category track edges in panel coordinates, when a producer owns them.
     pub(crate) assigned_cells: Option<Vec<(f64, f64)>>,
     pub(crate) source: TickSource,
+    pub(crate) numeric: Option<std::sync::Arc<crate::numeric::set::FormattedSet>>,
 }
 
 /// A 2D data-to-pixel projection.

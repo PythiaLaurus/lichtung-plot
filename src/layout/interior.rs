@@ -603,6 +603,7 @@ pub(crate) struct SelectedAnnotationPlan {
     pub(crate) panel_clip: crate::layout::PanelBox,
     pub(crate) text: Vec<crate::render::backend::PlacedText>,
     pub(crate) geometry: crate::render::geometry::GeometrySnapshot,
+    pub(crate) explanation: Option<crate::render::backend::PlacedText>,
 }
 
 impl SelectedAnnotationPlan {
@@ -611,6 +612,9 @@ impl SelectedAnnotationPlan {
         backend: &mut dyn crate::render::backend::Backend,
     ) -> Result<(), Error> {
         self.guides.draw(backend)?;
+        if let Some(explanation) = &self.explanation {
+            explanation.draw(backend)?;
+        }
         if let Some(layer) = &self.panel_layer {
             crate::render::backend::with_layer(backend, layer, |backend| {
                 crate::render::backend::with_clip(backend, self.panel_clip, |backend| {

@@ -22,6 +22,7 @@ inspection retains its bare name.
 | One element's exact paint/geometry | Its typed exact style | Override only the properties that style actually owns |
 | Scientific component alpha | Plot-local AlphaEncoding for that target | Replace one final byte, independently of outlines/text/layers |
 | Numeric spelling | NumericFormat and consumer default profile | Separate from data transformation, typography and tick generation |
+| Numeric common factor/unit content | NumericFormat unit/explanation and the complete semantic set | Required measured owner slot; ordinary numeric-role Text appearance, not a data conversion or literal-affix inference |
 | Explanatory content | Prepared source bindings and LegendComposition | Guide chrome cannot infer mappings or choose representative rows |
 | Layout, clipping, orientation, draw order and feedback | Private renderer | Not Theme fields or application callbacks |
 | SVG/PNG publication options | Terminal call | No sticky Plot/Canvas/Output format state |

@@ -19,6 +19,7 @@ impl Layout {
                 assigned_tick_width: None,
                 assigned_cells: None,
                 source: TickSource::SUPPLIED,
+                numeric: None,
             },
             y_axis: Axis {
                 label: None,
@@ -28,6 +29,7 @@ impl Layout {
                 assigned_tick_width: None,
                 assigned_cells: None,
                 source: TickSource::SUPPLIED,
+                numeric: None,
             },
             projection: Projection::new((0.0, 1.0), (0.0, 1.0), panel.as_tuple()),
         }
@@ -149,6 +151,7 @@ impl Layout {
                 assigned_tick_width: None,
                 assigned_cells: None,
                 source: x_ticks.source,
+                numeric: x_ticks.numeric,
             },
             y_axis: Axis {
                 label: y_label,
@@ -158,6 +161,7 @@ impl Layout {
                 assigned_tick_width: None,
                 assigned_cells: None,
                 source: y_ticks.source,
+                numeric: y_ticks.numeric,
             },
         })
     }
@@ -207,6 +211,7 @@ impl AxisSpec {
             return Ok(NumericTickPlan {
                 ticks: retained,
                 source: TickSource::EXACT,
+                numeric: None,
             });
         }
         if supplied.is_empty() {
@@ -225,6 +230,7 @@ impl AxisSpec {
             Ok(NumericTickPlan {
                 ticks: supplied,
                 source: TickSource::SUPPLIED,
+                numeric: None,
             })
         }
     }

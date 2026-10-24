@@ -48,6 +48,7 @@ impl TickSource {
 pub(crate) struct NumericTickPlan {
     pub(crate) ticks: Vec<AxisTick>,
     pub(crate) source: TickSource,
+    pub(crate) numeric: Option<std::sync::Arc<crate::numeric::set::FormattedSet>>,
 }
 
 /// Decimal literals are parsed by Rust's correctly rounded decimal conversion,
@@ -448,6 +449,47 @@ pub(crate) fn numeric_tick_plan(
 }
 
 impl NumericTickPlan {
+    fn formatted(
+        positions: &[f64],
+        log: bool,
+        format: &crate::NumericFormat,
+        theme: &ResolvedTheme,
+        mut source: TickSource,
+    ) -> Result<Option<Self>, Error> {
+        let Some(set) = format.format_set(positions, log, true)? else {
+            return Ok(None);
+        };
+        source.precision = Some(set.precision);
+        let ticks =
+            crate::data::source::collect_source(positions.iter().copied().zip(&set.labels).map(
+                |(position, label)| {
+                    Ok(AxisTick::new(
+                        position,
+                        crate::data::source::copy_source_string(label)?,
+                    ))
+                },
+            ))?;
+        if let Some(explanation) = &set.explanation {
+            let appearance = explanation.appearance(&theme.typography.axes.tick_label);
+            theme
+                .prepared_font_environment()?
+                .admit_text(
+                    &appearance.theme.stack,
+                    appearance.theme.weight.into(),
+                    explanation.as_str(),
+                    None,
+                )
+                .map_err(|error| {
+                    Error::Render(format!("numeric explanation admission: {error}"))
+                })?;
+        }
+        Ok(Some(Self {
+            ticks,
+            source,
+            numeric: Some(crate::data::source::source_arc(set)?),
+        }))
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn measure_selected_source(
         range: (f64, f64),
@@ -494,12 +536,12 @@ impl NumericTickPlan {
                 let mut ticks = Vec::new();
                 reserve(&mut ticks, positions.len())?;
                 let mut unique = false;
+                let mut numeric = None;
                 if let Some(format) = format {
-                    if let Some(set) = format.format_set(&positions, log, true)? {
-                        source.precision = Some(set.precision);
-                        for (position, label) in positions.iter().copied().zip(set.labels) {
-                            ticks.push(AxisTick::new(position, label));
-                        }
+                    if let Some(plan) = Self::formatted(&positions, log, format, theme, source)? {
+                        source = plan.source;
+                        ticks = plan.ticks;
+                        numeric = plan.numeric;
                         unique = true;
                     }
                 } else {
@@ -536,7 +578,11 @@ impl NumericTickPlan {
                 );
 
                 if unique && labels_fit(&ticks, projection, side, theme)? {
-                    return Ok(NumericTickPlan { ticks, source });
+                    return Ok(NumericTickPlan {
+                        ticks,
+                        source,
+                        numeric,
+                    });
                 }
             }
             if source.kind == SourceKind::Midpoint {

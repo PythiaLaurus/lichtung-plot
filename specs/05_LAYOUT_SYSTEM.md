@@ -368,6 +368,16 @@ Shared guide compatibility before census. Visit actual source strings in canonic
 component preorder, role order and local record order. Empty exact labels retain
 identity with zero scalar needs. CSS family names/SVG syntax/suppressed content
 are not painted text. Include actual typography probes and discretionary hyphen.
+Common numeric factor/unit explanations are ordinary required Text content.
+Axis plans reserve their outside tick/title block and endpoint ink; continuous
+guides reserve one internal block after final-domain merging. Heatmap Values,
+Coefficient numeric labels and Waterfall totals reserve independent common-text
+blocks outside their marks/shelf labels. These slots contribute natural width,
+content-derived height, assigned geometry, feedback and frozen capture. Local Text
+instructions override the existing numeric role, without introducing another
+typography or output path. Complete-set metadata retains factor/unit/precision
+and full explanation source even when current label strings happen to agree.
+
 Register numeric roles without expanding a possible numeric alphabet or affix
 boundary grammar. Width/feedback-dependent sources contribute their actual complete
 strings when reached, before any measurement or geometric rejection of that source.

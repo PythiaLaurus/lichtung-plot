@@ -133,6 +133,26 @@ pub(crate) struct TextSlot {
 }
 
 impl TextSlot {
+    pub(crate) fn edit_style(&mut self, style: crate::TextTheme) {
+        self.text.style = Some(style);
+    }
+    pub(crate) fn edit_layout(&mut self, layout: TextLayout) {
+        self.text.layout = Some(layout);
+    }
+    pub(crate) fn resolve_source(&self, source: String) -> crate::Result<Text> {
+        if self.present {
+            self.text.try_copy()
+        } else {
+            self.text.try_copy_with_source(source)
+        }
+    }
+    pub(crate) fn observe_feedback(
+        &self,
+        round: &mut crate::layout::kernel::FeedbackRound,
+    ) -> crate::Result<()> {
+        round.observe_count(usize::from(self.present))?;
+        round.observe_authored_text(&self.text)
+    }
     pub(crate) const EMPTY: Self = Self {
         text: Text {
             source: String::new(),

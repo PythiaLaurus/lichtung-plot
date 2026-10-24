@@ -215,6 +215,17 @@ impl PreparedGuide {
                     )
                     .map_err(|error| Error::Render(error.to_string()))?;
                 }
+                PreparedTextRequirement::push_authored(
+                    requirements,
+                    section_owner
+                        .child(AddressRole::GuideLabel, count(color.numeric.labels.len())?)?,
+                    PreparedTextRole::LegendLabel,
+                    color.numeric.explanation.as_ref(),
+                    &theme.typography.guides.legend_label,
+                    false,
+                    stage.as_deref_mut(),
+                )
+                .map_err(|error| Error::Render(error.to_string()))?;
                 if let Some(missing) = &color.missing {
                     PreparedTextRequirement::push_into(
                         requirements,

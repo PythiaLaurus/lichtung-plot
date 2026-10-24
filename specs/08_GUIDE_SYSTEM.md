@@ -1,5 +1,13 @@
 # Guide System
 
+Continuous numeric presentation retains its selected factors, unit, precision and
+optional common explanation alongside labels. Shared guides resolve these once
+from the merged final domain under equal complete NumericFormat policies. The
+common explanation is a measured internal section operand using the existing
+legend-label role unless its Text supplies a local style/layout. It participates
+in intrinsic width, assigned section height, ink containment, source census and
+frozen replay; it is neither a separate unit legend nor post-render text.
+
 ## One Explanatory Owner
 
 A guide is one typed PreparedGuide containing ordered sections whose bodies are

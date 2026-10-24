@@ -24,7 +24,10 @@ pub(crate) mod mapping;
 pub(crate) mod prefixes;
 pub(crate) mod profiles;
 pub(crate) mod set;
+pub(crate) mod slot;
 mod specifier;
+pub(crate) mod unit;
+pub(crate) mod values;
 
 pub(crate) mod power;
 

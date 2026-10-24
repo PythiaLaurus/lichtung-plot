@@ -1708,7 +1708,12 @@ padding, digit-only substitution and complete policy dependencies. SI/compact an
 exact rational divisor selection now freeze complete-set factors, using original
 signed rounding cells for order-independent promotion. The pinned specifier grammar
 compiles to the same policy, including irrelevant integer precision and checked
-scalar widths. Steps 6–22 remain pending; undelivered target signatures are
+scalar widths. Step 6 is complete: selected factor/unit/precision metadata and one
+required authored-or-generated explanation flow through axes, continuous guides,
+cell values, Coefficient labels and Waterfall totals. Measured slots contribute
+natural width/height, assigned geometry, feedback, font census and frozen capture;
+Shared guides resolve the common explanation only after final-domain merging.
+Steps 7–22 remain pending; undelivered target signatures are
 not current APIs.
 
 ### 1. Apply The Public Property Naming Rule

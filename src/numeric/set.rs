@@ -6,11 +6,14 @@ use super::power::{certified::PowerFormatter, Log10Operand};
 use super::prefixes::selection::SelectedScale;
 use crate::{Error, Result};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct FormattedSet {
     pub(crate) members: Vec<u64>,
     pub(crate) labels: Vec<String>,
     pub(crate) precision: u8,
+    pub(crate) scales: Vec<SelectedScale>,
+    pub(crate) unit: Option<super::unit::NumericUnit>,
+    pub(crate) explanation: Option<crate::Text>,
 }
 
 /// Immutable policy, scientific occurrences and selected text for a value owner.
@@ -40,11 +43,32 @@ impl NumericPresentation {
         for label in &self.set.labels {
             round.observe_string(label)?;
         }
+        self.set.observe_factors(round)?;
         Ok(())
     }
 }
 
 impl FormattedSet {
+    pub(crate) fn observe_factors(
+        &self,
+        round: &mut crate::layout::kernel::FeedbackRound,
+    ) -> Result<()> {
+        round.observe_count(self.scales.len())?;
+        for scale in &self.scales {
+            scale.observe(round)?;
+        }
+        round.observe_count(usize::from(self.unit.is_some()))?;
+        if let Some(unit) = &self.unit {
+            round.observe_string(unit.text())?;
+            round.observe_string(unit.get_separator())?;
+            round.observe_count(unit.placement() as usize)?;
+        }
+        round.observe_count(usize::from(self.explanation.is_some()))?;
+        if let Some(text) = &self.explanation {
+            round.observe_authored_text(text)?;
+        }
+        Ok(())
+    }
     pub(crate) fn try_copy(&self) -> Result<Self> {
         Ok(Self {
             members: crate::data::source::collect_source(self.members.iter().copied().map(Ok))?,
@@ -54,6 +78,19 @@ impl FormattedSet {
                     .map(|text| crate::data::source::copy_source_string(text)),
             )?,
             precision: self.precision,
+            scales: crate::data::source::collect_source(
+                self.scales.iter().map(SelectedScale::try_copy),
+            )?,
+            unit: self
+                .unit
+                .as_ref()
+                .map(super::unit::NumericUnit::try_copy)
+                .transpose()?,
+            explanation: self
+                .explanation
+                .as_ref()
+                .map(crate::Text::try_copy)
+                .transpose()?,
         })
     }
 }
@@ -89,6 +126,7 @@ pub(crate) fn guide_presentation(
                 )?,
                 labels,
                 precision,
+                ..FormattedSet::default()
             });
         }
     }
@@ -118,6 +156,7 @@ impl NumericFormat {
         let scales = self
             .prefix_policy()
             .resolve(&[value], power, &resolved, formatter)?;
+        let (scales, _) = self.decorate_scales(&scales)?;
         self.format_scaled(value, digits, power, formatter, &scales[0])
     }
 
@@ -191,8 +230,9 @@ impl NumericFormat {
                 &self.resolve_at(digits)?,
                 &mut formatter,
             )?;
+            let (emission_scales, explanation) = self.decorate_scales(&scales)?;
             let mut unique_labels = crate::data::source::collect_source(
-                distinct.iter().zip(&scales).map(|(value, scale)| {
+                distinct.iter().zip(&emission_scales).map(|(value, scale)| {
                     self.format_scaled(*value, digits, power, &mut formatter, scale)
                 }),
             )?;
@@ -220,12 +260,23 @@ impl NumericFormat {
                     crate::data::source::copy_source_string(&unique_labels[index])
                 }
             }))?;
+            let scales = crate::data::source::collect_source(
+                occurrences.iter().map(|&index| scales[index].try_copy()),
+            )?;
             return Ok(Some(FormattedSet {
                 members: crate::data::source::collect_source(
                     values.iter().map(|v| Ok(v.to_bits())),
                 )?,
                 labels,
                 precision: digits,
+                scales,
+                unit: self
+                    .units
+                    .unit
+                    .as_ref()
+                    .map(super::unit::NumericUnit::try_copy)
+                    .transpose()?,
+                explanation,
             }));
         }
         Ok(None)

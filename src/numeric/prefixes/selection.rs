@@ -16,21 +16,34 @@ pub(crate) struct SelectedScale {
     pub(crate) divisor: NumericFactor,
     pub(crate) prefix: String,
     pub(crate) suffix: String,
+    pub(crate) si: Option<SiPrefix>,
 }
 
 impl SelectedScale {
+    pub(crate) fn observe(&self, round: &mut crate::layout::kernel::FeedbackRound) -> Result<()> {
+        self.divisor.observe(round)?;
+        round.observe_string(&self.prefix)?;
+        round.observe_string(&self.suffix)?;
+        round.observe_count(self.si.map_or(0, |prefix| {
+            usize::from(prefix.exponent().unsigned_abs()) * 2
+                + usize::from(prefix.exponent() < 0)
+                + 1
+        }))
+    }
     fn neutral() -> Self {
         Self {
             divisor: NumericFactor::Value(1.0),
             prefix: String::new(),
             suffix: String::new(),
+            si: None,
         }
     }
-    fn try_copy(&self) -> Result<Self> {
+    pub(crate) fn try_copy(&self) -> Result<Self> {
         Ok(Self {
             divisor: self.divisor.try_copy()?,
             prefix: crate::data::source::copy_source_string(&self.prefix)?,
             suffix: crate::data::source::copy_source_string(&self.suffix)?,
+            si: self.si,
         })
     }
 }
@@ -204,6 +217,7 @@ impl NumericPrefixes {
                 divisor: NumericFactor::Value(rule.divisor()),
                 prefix: crate::data::source::copy_source_string(rule.prefix())?,
                 suffix: crate::data::source::copy_source_string(rule.suffix())?,
+                si: None,
             })
         } else {
             si_scale(SiPrefix::from_exponent(
@@ -235,6 +249,7 @@ fn si_scale(prefix: SiPrefix) -> Result<SelectedScale> {
         divisor: NumericFactor::PowerOfTen(prefix.exponent().to_string()),
         prefix: String::new(),
         suffix: crate::data::source::copy_source_string(prefix.symbol())?,
+        si: Some(prefix),
     })
 }
 

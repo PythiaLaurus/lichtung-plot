@@ -899,6 +899,13 @@ fn shared_numeric_guides_resolve_final_sets_and_reject_equal_text_policy_conflic
         .clone()
         .font_size(21)
         .unwrap();
+    let format = format
+        .unit(Some(crate::NumericUnit::new(
+            "guide units",
+            crate::NumericUnitPlacement::Shared,
+        )))
+        .unwrap()
+        .explanation(crate::NumericExplanation::automatic().style(title_style.clone()));
     let plot = |values, format| {
         Plot::heatmap(
             crate::CategoryValues::new("x", ["a", "b"]).unwrap(),
@@ -949,6 +956,15 @@ fn shared_numeric_guides_resolve_final_sets_and_reject_equal_text_policy_conflic
         .1;
     assert_eq!(title.style.font_size, 21);
     assert!(title.style.exact_override);
+    let common: Vec<_> = root
+        .plan()
+        .retained_text()
+        .into_iter()
+        .filter(|(_, text)| text.source == "guide units")
+        .collect();
+    assert_eq!(common.len(), 1);
+    assert_eq!(common[0].1.style.font_size, 21);
+    assert!(common[0].1.style.exact_override);
     for source in ["1 u", "3 u"] {
         assert_eq!(
             root.plan()
@@ -1016,6 +1032,109 @@ fn shared_numeric_guides_resolve_final_sets_and_reject_equal_text_policy_conflic
     }
     assert_shared_alpha_declarations();
     assert_shared_color_and_alpha_sections();
+}
+
+#[test]
+fn common_numeric_text_has_distinct_measured_owners_and_frozen_contained_output() {
+    use crate::{
+        NumericExplanation, NumericFactor, NumericFormat, NumericNotation, NumericPrecision,
+        NumericPrefixes, NumericUnit, NumericUnitPlacement,
+    };
+    let unit = |text| {
+        NumericFormat::default()
+            .unit(Some(NumericUnit::new(text, NumericUnitPlacement::Shared)))
+            .unwrap()
+    };
+    let factor = NumericFormat::new(NumericNotation::Decimal, NumericPrecision::Fractional(0))
+        .unwrap()
+        .prefixes(NumericPrefixes::factor(NumericFactor::PowerOfTen("6".into())).unwrap())
+        .unwrap()
+        .unit(Some(NumericUnit::new("", NumericUnitPlacement::Shared)))
+        .unwrap();
+    let axes = Plot::scatter(
+        crate::NumericValues::new("x", [1e6, 3e6]),
+        crate::NumericValues::new("y", [1.0, 3.0]),
+    )
+    .x_limits(1e6, 3e6)
+    .y_limits(1.0, 3.0)
+    .x_tick_format(factor)
+    .y_tick_format(unit("axis unit"));
+    let cells = Plot::heatmap(
+        crate::CategoryValues::new("column", ["a", "b"]).unwrap(),
+        crate::CategoryValues::new("row", ["one", "one"]).unwrap(),
+        crate::NumericValues::new("value", [1.0, 2.0]),
+    )
+    .annotations(crate::HeatmapAnnotations::Values(unit("cell unit")))
+    .color_label_format(unit("color unit"));
+    let estimates = Plot::coefficient(
+        crate::CategoryValues::new("term", ["a", "b"]).unwrap(),
+        crate::CoefficientInput::estimates(crate::NumericValues::new("estimate", [1.0, 2.0])),
+    )
+    .estimate_labels(unit("estimate unit"));
+    let totals = Plot::waterfall(
+        crate::CategoryValues::new("step", ["gain"]).unwrap(),
+        crate::NumericValues::new("delta", [1.0]),
+        1.0,
+    )
+    .total_format(unit("total unit"));
+    let canvas = Canvas::grid(2, 2)
+        .unwrap()
+        .size(1400, 1100)
+        .panel(0, 0, axes)
+        .unwrap()
+        .panel(0, 1, cells)
+        .unwrap()
+        .panel(1, 0, estimates)
+        .unwrap()
+        .panel(1, 1, totals)
+        .unwrap();
+    let root = canvas.preflight_plan().unwrap();
+    for source in [
+        "×10⁶",
+        "axis unit",
+        "cell unit",
+        "color unit",
+        "estimate unit",
+        "total unit",
+    ] {
+        let texts: Vec<_> = root
+            .plan()
+            .retained_text()
+            .into_iter()
+            .filter(|(_, text)| text.source == source)
+            .collect();
+        assert_eq!(texts.len(), 1, "{source}");
+        let (placement, plan) = texts[0];
+        let ink = crate::render::geometry::planned_text_ink_bounds(
+            plan,
+            placement.position,
+            placement.anchor,
+            placement.rotation,
+            placement.origin,
+            placement.reverse_lines,
+        )
+        .unwrap();
+        assert!(
+            ink.left >= 0.0 && ink.bottom >= 0.0 && ink.right <= 1400.0 && ink.top <= 1100.0,
+            "{source}: {ink:?}"
+        );
+    }
+    let counters = capture_counters();
+    let mut backend = root.plan().take_svg_backend().unwrap();
+    Canvas::render_preflighted(&root, &mut backend).unwrap();
+    let scene = RenderedScene::new(1400, 1100, backend.into_output()).unwrap();
+    assert_eq!(
+        scene.svg_with_text_as_paths().unwrap(),
+        scene.svg_with_text_as_paths().unwrap()
+    );
+    assert_eq!(capture_counters(), counters);
+    let narrow = Plot::scatter(
+        crate::NumericValues::new("x", [0.0, 1.0]),
+        crate::NumericValues::new("y", [0.0, 1.0]),
+    )
+    .x_tick_format(unit("m").explanation(NumericExplanation::text("W".repeat(128))))
+    .width(220);
+    assert!(narrow.preflight().is_err());
 }
 
 #[expect(

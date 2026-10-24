@@ -391,6 +391,7 @@ impl InteriorRoute {
                     assigned_tick_width: None,
                     assigned_cells: None,
                     source: ticks.source,
+                    numeric: ticks.numeric,
                 })
             }),
         )?;

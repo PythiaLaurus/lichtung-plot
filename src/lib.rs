@@ -101,6 +101,7 @@ pub use numeric::prefixes::{
     NumericCompactRule, NumericFactor, NumericPrefixes, NumericPromotion, NumericSelection,
     SiPrefix,
 };
+pub use numeric::unit::{NumericExplanation, NumericUnit, NumericUnitPlacement};
 pub use output::Output;
 pub use render::backend::StrokePattern;
 pub use significance::{

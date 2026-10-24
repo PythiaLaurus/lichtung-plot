@@ -48,6 +48,8 @@ the existing borrowed/copy result and const-call capability where applicable.
 | field | Optional NumericField(width: usize, fill: char, NumericAlignment); no width quota |
 | rate | Value (default), Percent, PerMille; exact factors 1,100,1000 |
 | prefixes | NumericPrefixes::none (default), si, compact/decimal_compact, or factor; one replacing mode |
+| unit | Optional NumericUnit(text, PerLabel/Shared), with configurable literal separator defaulting to one space |
+| explanation | NumericExplanation::automatic (default) or authored Text, with complete local style/layout instructions |
 
 Fractional bounds are 0..=20, significant 1..=21, adaptive min<=max in matching
 bounds. `new(notation,precision)` supplies scale 0, no affixes, Preserve, Keep
@@ -149,6 +151,42 @@ fractional/1–21 significant rejects instead of clamping. Unknown types, text c
 malformed/trailing syntax and allocation failures reject. Typed/parsed equivalent
 policies have equal identity, including `.3s` and `.1%`. Syntax compatibility does
 not substitute JavaScript arithmetic for the exact renderer rounding contract.
+
+### Common Unit And Factor Content
+
+NumericUnit never infers a conversion from its text. PerLabel SI combines the
+selected symbol and unit after the configured separator (`1 km`); other units
+follow the complete prefix/number/suffix text. Without a unit request, selected
+prefixes remain ordinary per-label affixes. Shared requires equal resolved factors
+and affixes throughout the complete set, removes those repeated selected affixes
+and retains one required explanation. Literal outer prefix/suffix and automatic
+rate/currency presentation remain independent.
+
+A common decimal power uses deterministic superscript exponent text (`×10⁶`,
+`×10⁻⁶`), retaining its arbitrary-size mathematical exponent in metadata. Shared
+SI with a supplied unit uses the combined prefixed unit, e.g. `km`; other factors
+use the selected compact affixes or explicit divisor text followed by the unit.
+An empty unit requests factor-only content. Separators are not prepended to an
+otherwise empty explanation. Configured authored Text replaces generated source
+in the same slot; style/layout edits retain that one content slot.
+
+FormattedSet retains occurrence-ordered labels, original members, selected
+precision, each resolved factor/affix, the unit and optional explanation. Its
+copies, guide descriptors, axis plans, feedback and child dependencies retain
+those values, not just equal current strings. Axis explanations occupy measured
+outside-axis blocks after ticks/titles, including perpendicular thickness and
+endpoint ink. Continuous guides own one explanation within their container,
+after final Shared domain/policy merging. Heatmap cell values, point-only
+Coefficient labels and Waterfall totals have independent blocks outside their
+scientific marks/total labels; their axes and color guides remain separate.
+
+Explanations use ordinary Text with the owner's numeric-label role by default
+(Heatmap contrast resolves against its panel surface). Actual sources and local
+font pairs are admitted before measurement. Natural width/height include these
+blocks and assigned plans reserve their complete logical/ink extents. No implicit
+abbreviation, omission, post-capture SVG insertion or extra font system is used;
+insufficient requested width/height is a real fit refusal. Final capture/replay
+consumes retained plans without additional font planning.
 
 ### Attachments And Actual Consumers
 

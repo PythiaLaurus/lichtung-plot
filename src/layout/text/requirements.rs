@@ -1098,6 +1098,18 @@ fn push_deferred_plot_requirements(
                 Error::Render("heatmap census requires root-prepared semantics".into())
             })?;
         for (_, marks) in &heatmap.panels {
+            if let Some(text) = marks.numeric_explanation() {
+                push_deferred_body(
+                    requirements,
+                    &body_address,
+                    &mut body_index,
+                    text.as_str(),
+                    &[],
+                    text.appearance(theme.contrasting_text(theme.surfaces.get_plot_panel())?)
+                        .theme,
+                    prepared_stage.as_deref_mut(),
+                )?;
+            }
             for (label, fill) in marks.annotation_labels(theme.marks.get_cells().get_fill_alpha()) {
                 push_deferred_body(
                     requirements,
@@ -1137,6 +1149,18 @@ fn push_deferred_plot_requirements(
         for (scope, marks) in &estimates.panels {
             if plot.axis_scope().is_some() && scope.as_deref() != plot.axis_scope() {
                 continue;
+            }
+            if let Some(text) = marks.numeric_explanation() {
+                push_deferred_body(
+                    requirements,
+                    &body_address,
+                    &mut body_index,
+                    text.as_str(),
+                    &[],
+                    text.appearance(&theme.typography.annotations.estimate_detail)
+                        .theme,
+                    prepared_stage.as_deref_mut(),
+                )?;
             }
             for source in marks.detail_sources() {
                 push_deferred_body(

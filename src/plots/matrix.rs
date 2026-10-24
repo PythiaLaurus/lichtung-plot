@@ -630,6 +630,7 @@ pub(crate) fn measure(
             let axis = |ticks: &layout::NumericTickPlan, label: Option<&str>| {
                 Ok::<_, Error>(layout::Axis {
                     source: ticks.source,
+                    numeric: ticks.numeric.clone(),
                     ticks: crate::data::source::collect_source(ticks.ticks.iter().map(|tick| {
                         Ok(layout::AxisTick {
                             position: tick.position,

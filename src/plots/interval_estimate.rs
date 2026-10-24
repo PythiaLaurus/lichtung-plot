@@ -36,6 +36,11 @@ pub(crate) struct PreparedEstimateInputs {
 }
 
 impl PreparedEstimate {
+    pub(crate) fn numeric_explanation(&self) -> Option<&crate::Text> {
+        self.value_presentation
+            .as_ref()
+            .and_then(|numeric| numeric.set.explanation.as_ref())
+    }
     pub(crate) fn alpha_guide(
         &self,
         chart: &Plot,

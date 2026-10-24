@@ -151,6 +151,25 @@ fn native_root_producers_obey_eighth_round_and_cycle_limits_under_parent_feedbac
                         &owner,
                         false,
                     )?;
+                    let requirements = crate::layout::foundational_plot_requirements(
+                        Some(&inputs),
+                        &source,
+                        source.kind(),
+                        &theme,
+                        &owner,
+                        true,
+                        true,
+                        true,
+                        Some(stage),
+                    )?;
+                    let mut presence = stage.reserve_scalar_presence_map()?;
+                    let mut census = crate::layout::PreparedTextCensus::materialize(
+                        requirements,
+                        Some(stage),
+                        Some(&mut presence),
+                    )
+                    .map_err(|error| Error::Render(error.to_string()))?;
+                    theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
                     Ok(inputs)
                 },
                 |inputs, assigned, round| {

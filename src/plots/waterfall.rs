@@ -716,6 +716,7 @@ pub(crate) fn measure(
             ticks: x.ticks,
             tick_labels_visible: true,
             source: x.source,
+            numeric: x.numeric,
             explicit_ticks: axes.specs[0].exact_ticks.is_some(),
             assigned_tick_width: None,
             assigned_cells: None,
@@ -725,6 +726,7 @@ pub(crate) fn measure(
             ticks,
             tick_labels_visible: chart.y_tick_labels_visible(),
             source: crate::layout::TickSource::SUPPLIED,
+            numeric: None,
             explicit_ticks: false,
             assigned_tick_width: Some(width),
             assigned_cells: Some(crate::data::source::collect_source(

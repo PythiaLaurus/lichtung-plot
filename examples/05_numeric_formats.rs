@@ -1,9 +1,9 @@
 //! One scientific numeric policy across axes, values, guides and total shelves.
 
 use lichtung_plot::{
-    AxisScale, Canvas, CategoryValues, CoefficientInput, HeatmapAnnotations, NumericFormat,
-    NumericLocale, NumericNotation, NumericPrecision, NumericRate, NumericRounding, NumericSymbol,
-    NumericValues, Plot,
+    AxisScale, Canvas, CategoryValues, CoefficientInput, HeatmapAnnotations, NumericFactor,
+    NumericFormat, NumericLocale, NumericNotation, NumericPrecision, NumericPrefixes, NumericRate,
+    NumericRounding, NumericSymbol, NumericUnit, NumericUnitPlacement, NumericValues, Plot,
 };
 
 fn main() -> lichtung_plot::Result<()> {
@@ -31,13 +31,18 @@ fn main() -> lichtung_plot::Result<()> {
         NumericValues::new("fraction", [0.125, 0.875]),
     )
     .color_label_format(percent)
-    .annotations(HeatmapAnnotations::Values(adaptive.clone()))
+    .annotations(HeatmapAnnotations::Values(adaptive.clone().unit(Some(
+        NumericUnit::new("fraction", NumericUnitPlacement::Shared),
+    ))?))
     .title("Raw values and percentage guide");
     let estimates = Plot::coefficient(
         CategoryValues::new("term", ["a", "b"])?,
         CoefficientInput::estimates(NumericValues::new("estimate", [1.01, 1.02])),
     )
-    .estimate_labels(adaptive.suffix(" units")?)
+    .estimate_labels(adaptive.unit(Some(NumericUnit::new(
+        "units",
+        NumericUnitPlacement::Shared,
+    )))?)
     .title("One complete estimate set");
     let totals = Plot::waterfall(
         CategoryValues::new("step", ["gain", "loss"])?,
@@ -47,7 +52,8 @@ fn main() -> lichtung_plot::Result<()> {
     .total_format(
         NumericFormat::default()
             .locale(NumericLocale::named("en-GB")?)?
-            .symbol(NumericSymbol::Currency)?,
+            .symbol(NumericSymbol::Currency)?
+            .unit(Some(NumericUnit::new("GBP", NumericUnitPlacement::Shared)))?,
     )
     .title("Verbatim names and numeric affixes");
     let forest = Plot::forest(
@@ -66,9 +72,18 @@ fn main() -> lichtung_plot::Result<()> {
         NumericValues::new("distance", [1000.0, 2500.0]),
         NumericValues::new("mass", [1_000_000.0, 2_000_000.0]),
     )
-    .x_tick_format(NumericFormat::from_specifier(".3s")?)
-    .y_tick_format(NumericFormat::from_specifier(",.0f")?)
-    .title("SI selection and specifier policies");
+    .x_tick_format(
+        NumericFormat::from_specifier(".3s")?
+            .unit(Some(NumericUnit::new("m", NumericUnitPlacement::PerLabel)))?,
+    )
+    .y_tick_format(
+        NumericFormat::from_specifier(",.0f")?
+            .prefixes(NumericPrefixes::factor(NumericFactor::PowerOfTen(
+                "6".into(),
+            ))?)?
+            .unit(Some(NumericUnit::new("", NumericUnitPlacement::Shared)))?,
+    )
+    .title("Repeated SI units and one common factor");
     let output = Canvas::grid(3, 2)?
         .width(1200)
         .panel(0, 0, axes)?

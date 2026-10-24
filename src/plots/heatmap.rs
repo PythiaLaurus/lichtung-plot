@@ -50,6 +50,11 @@ pub(crate) struct HeatmapData {
 }
 
 impl HeatmapData {
+    pub(crate) fn numeric_explanation(&self) -> Option<&crate::Text> {
+        self.value_presentation
+            .as_ref()
+            .and_then(|numeric| numeric.set.explanation.as_ref())
+    }
     pub(crate) fn alpha_guide(
         &self,
         _chart: &Plot,
@@ -1135,6 +1140,7 @@ pub(crate) fn measure(
                 assigned_tick_width: None,
                 assigned_cells: None,
                 source: crate::layout::TickSource::SUPPLIED,
+                numeric: None,
             },
             y_axis: crate::layout::Axis {
                 label: axes.copy_label(1)?,
@@ -1144,6 +1150,7 @@ pub(crate) fn measure(
                 assigned_tick_width: None,
                 assigned_cells: None,
                 source: crate::layout::TickSource::SUPPLIED,
+                numeric: None,
             },
         };
         // Elision already selected the complete displayed labels; do not wrap them again.

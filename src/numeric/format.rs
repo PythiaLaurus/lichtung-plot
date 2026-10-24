@@ -121,6 +121,7 @@ pub struct NumericFormat {
     rate: NumericRate,
     presentation: Presentation,
     prefixes: NumericPrefixes,
+    pub(super) units: std::sync::Arc<super::unit::UnitPolicy>,
 }
 
 impl Default for NumericFormat {
@@ -138,6 +139,7 @@ impl Default for NumericFormat {
             rate: NumericRate::Value,
             presentation: Presentation::default(),
             prefixes: NumericPrefixes::none(),
+            units: std::sync::Arc::new(super::unit::UnitPolicy::default()),
         }
     }
 }
@@ -165,6 +167,7 @@ impl NumericFormat {
             rate: self.rate,
             presentation: self.presentation.clone(),
             prefixes: self.prefixes.clone(),
+            units: self.units.clone(),
         })
     }
 
@@ -340,7 +343,10 @@ impl NumericFormat {
         )
     }
 
-    fn validate(&self) -> Result<()> {
+    pub(super) fn validate(&self) -> Result<()> {
+        if let Some(unit) = &self.units.unit {
+            unit.validate()?;
+        }
         if self.presentation.symbol == NumericSymbol::RadixPrefix
             && !matches!(self.notation, NumericNotation::Integer(radix) if radix != super::decimal::NumericRadix::Decimal)
         {
@@ -395,6 +401,7 @@ impl NumericFormat {
         round.observe_count(self.rate as usize)?;
         self.presentation.observe(round)?;
         self.prefixes.observe(round)?;
+        self.units.observe(round)?;
         for affix in [self.get_prefix(), self.get_suffix()] {
             round.observe_count(usize::from(affix.is_some()))?;
             if let Some(text) = affix {

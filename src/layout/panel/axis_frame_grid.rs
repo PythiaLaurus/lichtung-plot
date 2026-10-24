@@ -142,6 +142,8 @@ struct FrozenAxisPlan {
     source: TickSource,
     ticks: Vec<FrozenTick>,
     title: Option<(ResolvedTextPlan, PlannedTextPlacement)>,
+    explanation: Option<(ResolvedTextPlan, PlannedTextPlacement)>,
+    numeric: Option<std::sync::Arc<crate::numeric::set::FormattedSet>>,
     tick_style: Option<LineStyle>,
     gutter: f64,
     start_overhang: f64,
@@ -168,6 +170,9 @@ impl PanelAxisPlan {
                 }
             }
             if let Some((plan, placement)) = &axis.title {
+                geometry.text(*placement, plan, None)?;
+            }
+            if let Some((plan, placement)) = &axis.explanation {
                 geometry.text(*placement, plan, None)?;
             }
         }
@@ -211,6 +216,9 @@ impl PanelAxisPlan {
             if let Some((plan, placement)) = &axis.title {
                 backend.draw_planned_text(*placement, plan)?;
             }
+            if let Some((plan, placement)) = &axis.explanation {
+                backend.draw_planned_text(*placement, plan)?;
+            }
         }
         Ok(())
     }
@@ -228,6 +236,9 @@ impl PanelAxisPlan {
             round.observe_number(range.1)?;
         }
         for axis in [&self.x_axis, &self.y_axis] {
+            if let Some(numeric) = &axis.numeric {
+                numeric.observe_factors(round)?;
+            }
             round.observe_count(axis.source.ordinal)?;
             round.observe_count(axis.source.cap)?;
             round.observe_count(
@@ -265,6 +276,7 @@ impl PanelAxisPlan {
                 .iter()
                 .filter_map(|tick| tick.label.as_ref())
                 .chain(axis.title.iter())
+                .chain(axis.explanation.iter())
             {
                 round.observe_text(plan)?;
             }
@@ -716,7 +728,47 @@ impl Axis {
         } else {
             None
         };
-        if side == AxisSide::Left && title.is_some() {
+        let explanation = if let Some(text) = self
+            .numeric
+            .as_ref()
+            .and_then(|set| set.explanation.as_ref())
+        {
+            let plan = fit::measured(fit::text(
+                theme,
+                text.as_str(),
+                text.appearance(&standard.tick_label),
+                title_width,
+                text.resolved_alignment(crate::TextAlignment::Center).into(),
+                "numeric axis explanation",
+                scope,
+            ))?;
+            gutter = gutter.add_length(title_gap);
+            let position = AxisLengths::before(&gutter.add_pixels(plan.height() / 2.0)?, anchor)?;
+            let center = match side {
+                AxisSide::Bottom => Point2D::new(f64::midpoint(panel.x0, panel.x1), position),
+                AxisSide::Left => Point2D::new(position, f64::midpoint(panel.y0, panel.y1)),
+            };
+            let placement = Self::title_placement(&plan, center, side)?;
+            let mut thickness = plan.height();
+            if let Some(ink) = crate::render::geometry::planned_text_ink_bounds(
+                &plan,
+                Point2D::new(0.0, 0.0),
+                placement.anchor,
+                placement.rotation,
+                placement.origin,
+                placement.reverse_lines,
+            ) {
+                thickness = thickness.max(match side {
+                    AxisSide::Bottom => plan.height() / 2.0 - ink.bottom,
+                    AxisSide::Left => plan.height() / 2.0 - ink.left,
+                });
+            }
+            gutter = gutter.add_pixels(thickness)?;
+            Some((plan, placement))
+        } else {
+            None
+        };
+        if side == AxisSide::Left && (title.is_some() || explanation.is_some()) {
             gutter = gutter.add_length(&lengths.y_title_edge_padding);
         }
         let (start, end) = match side {
@@ -726,18 +778,37 @@ impl Axis {
         let half_tick = tick_style
             .as_ref()
             .map_or(0.0, |style| f64::from(style.width) / 2.0);
-        let start_overhang = ticks
+        let mut start_overhang = ticks
             .iter()
             .map(|tick| start - tick.cell.center + half_tick)
             .fold(0.0_f64, f64::max);
-        let end_overhang = ticks
+        let mut end_overhang = ticks
             .iter()
             .map(|tick| tick.cell.center + half_tick - end)
             .fold(0.0_f64, f64::max);
+        for (plan, placement) in title.iter().chain(explanation.iter()) {
+            if let Some(ink) = crate::render::geometry::planned_text_ink_bounds(
+                plan,
+                placement.position,
+                placement.anchor,
+                placement.rotation,
+                placement.origin,
+                placement.reverse_lines,
+            ) {
+                let (low, high) = match side {
+                    AxisSide::Bottom => (ink.left, ink.right),
+                    AxisSide::Left => (ink.bottom, ink.top),
+                };
+                start_overhang = start_overhang.max(start - low);
+                end_overhang = end_overhang.max(high - end);
+            }
+        }
         Ok(FrozenAxisPlan {
             source: self.source,
             ticks,
             title,
+            explanation,
+            numeric: self.numeric.clone(),
             tick_style,
             gutter: AxisLengths::hard(&gutter)?,
             start_overhang,

@@ -430,6 +430,7 @@ mod tests {
                 assigned_tick_width: None,
                 assigned_cells: None,
                 source: crate::layout::TickSource::SUPPLIED,
+                numeric: None,
             },
             y_axis: crate::layout::Axis {
                 label: None,
@@ -439,6 +440,7 @@ mod tests {
                 assigned_tick_width: None,
                 assigned_cells: None,
                 source: crate::layout::TickSource::SUPPLIED,
+                numeric: None,
             },
         };
 

@@ -640,6 +640,9 @@ impl FeedbackRound {
             self.observe_number(range.1)?;
         }
         for axis in [&layout.x_axis, &layout.y_axis] {
+            if let Some(numeric) = &axis.numeric {
+                numeric.observe_factors(self)?;
+            }
             self.observe_count(usize::from(axis.tick_labels_visible))?;
             self.observe_count(usize::from(axis.explicit_ticks))?;
             self.observe_count(usize::from(axis.assigned_tick_width.is_some()))?;

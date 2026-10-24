@@ -169,7 +169,7 @@ pub(crate) fn body_preference(
     hard: (f64, f64),
 ) -> Result<(f64, f64), Error> {
     use super::{InteriorRoute, SpecializedGrid};
-    match InteriorRoute::classify(plot.kind()) {
+    let preference = match InteriorRoute::classify(plot.kind()) {
         InteriorRoute::StandardCoordinate(_) => {
             let preference = super::preference::mark_preference(plot, theme, hard)?;
             Ok((
@@ -216,7 +216,13 @@ pub(crate) fn body_preference(
             let width = hard.0.max(66.0 * ch).max(4.0 * height / 3.0);
             Ok((width, height.max(3.0 * width / 4.0)))
         }
-    }
+    }?;
+    Ok((
+        preference
+            .0
+            .max(crate::numeric::values::preferred_width(plot, theme)?),
+        preference.1,
+    ))
 }
 
 fn axis_title_style<'a>(
@@ -469,7 +475,10 @@ impl Plot {
                 Ok(hard.1.max(3.0 * width / 4.0).max(density))
             }
         }?;
-        crate::layout::kernel::required_length(height)
+        crate::layout::kernel::required_length(
+            height.max(crate::numeric::values::axis_preferences(self, theme)?.1)
+                + crate::numeric::values::natural_height(self, theme, width)?,
+        )
     }
 }
 
@@ -551,6 +560,7 @@ mod tests {
                 ],
                 labels: vec!["0.000000000012345".into(), "0.000000000098765".into()],
                 precision: 15,
+                ..crate::numeric::set::FormattedSet::default()
             },
         };
         let label_width = descriptor

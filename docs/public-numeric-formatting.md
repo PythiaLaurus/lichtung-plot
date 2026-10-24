@@ -62,6 +62,18 @@ order-independent WholeSet result. Fixed requires KeepThreshold. `factor` select
 an exact finite divisor, arbitrary-size PowerOfTen exponent or AutomaticDecimal
 common factor. These display policies never change scientific positions.
 
+`unit(Some(NumericUnit::new("m", NumericUnitPlacement::PerLabel)))` combines SI
+symbols and units (`1 km`). Shared placement removes repeated selected affixes and
+adds one measured explanation. It requires a common factor across the complete
+set. For example Factor(PowerOfTen("6")) plus an empty Shared unit displays
+`1`, `2`, `3` with `×10⁶`. Unit separators are literal and configurable.
+`explanation(NumericExplanation::text(Text::new("Adjusted values")))` replaces
+generated content in that same slot; `automatic().style(...).layout(...)` controls
+appearance without replacing the generated source. Axes, color guides, cell values,
+Coefficient labels and Waterfall totals have independent containing slots. Required
+explanations contribute to natural sizing and cannot silently disappear at tight
+explicit dimensions.
+
 Configure a property with its bare name, such as `precision(policy)` or
 `decimal_scale(2)`. Validated consuming edits replace exactly one field; paired
 readers are `get_notation()`, `get_precision()`, `get_decimal_scale()`,

@@ -18,6 +18,27 @@ pub(super) enum TotalVariant {
 }
 
 impl PreparedWaterfall {
+    pub(crate) fn total_explanation(
+        &self,
+        projection: &crate::layout::Projection,
+    ) -> Result<Option<&crate::Text>> {
+        Ok(self
+            .selected_totals(projection)?
+            .numeric
+            .set
+            .explanation
+            .as_ref())
+    }
+
+    pub(crate) fn total_explanations(&self) -> impl Iterator<Item = &crate::Text> {
+        self.total_variants
+            .iter()
+            .flatten()
+            .filter_map(|variant| match variant {
+                TotalVariant::Ready(prepared) => prepared.numeric.set.explanation.as_ref(),
+                TotalVariant::Collision => None,
+            })
+    }
     pub(crate) fn prepare_totals(
         &mut self,
         axes: &crate::plots::shared_x::PreparedAxes,
@@ -101,6 +122,7 @@ impl PreparedWaterfall {
                     crate::numeric::profiles::BuiltinProfile::WaterfallTotal.format(*value)
                 }))?,
                 precision: 3,
+                ..FormattedSet::default()
             }
         };
         let mut labels = set.labels.iter();
@@ -150,6 +172,7 @@ impl PreparedWaterfall {
             })
             .flat_map(|prepared| prepared.totals.iter())
             .filter_map(|(_, source)| source.as_ref())
+            .chain(self.total_explanations())
     }
 }
 

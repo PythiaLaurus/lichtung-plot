@@ -266,6 +266,7 @@ impl Plot {
         #[cfg(test)]
         SELECTED_INTERIOR_MEASUREMENTS.with(|calls| calls.set(calls.get() + 1));
         let context = context.with_prepared_axes(self)?;
+        let (context, explanation) = crate::numeric::values::reserve(self, context)?;
         let mut result = match R::classify(self.kind()) {
             route @ (R::StandardCoordinate(_) | R::OneCategoricalAxis(_)) => {
                 route.measure(self, context)?
@@ -278,6 +279,9 @@ impl Plot {
         };
 
         let mut geometry = crate::render::geometry::GeometrySnapshot::new();
+        if let Some(explanation) = &explanation {
+            geometry.text(explanation.placement, &explanation.plan, None)?;
+        }
         if matches!(
             self.kind(),
             PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud
@@ -330,6 +334,7 @@ impl Plot {
                 panel_clip,
                 text,
                 geometry,
+                explanation,
             },
         )?);
         Ok(result)
