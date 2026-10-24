@@ -70,7 +70,7 @@ pub enum TrailingZeros {
 }
 
 /// Borrowed effective inputs to the one emitter; not a second public policy.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct ResolvedFormat<'a> {
     pub(crate) notation: NumericNotation,
     pub(crate) precision: ResolvedPrecision,
@@ -80,6 +80,7 @@ pub(crate) struct ResolvedFormat<'a> {
     pub(crate) negative_zero: NegativeZero,
     pub(crate) trailing_zeros: TrailingZeros,
     pub(crate) rounding: NumericRounding,
+    pub(crate) multiplier: f64,
 }
 
 impl Default for ResolvedFormat<'_> {
@@ -93,6 +94,7 @@ impl Default for ResolvedFormat<'_> {
             negative_zero: NegativeZero::Preserve,
             trailing_zeros: TrailingZeros::Keep,
             rounding: NumericRounding::NearestEven,
+            multiplier: 1.0,
         }
     }
 }
@@ -105,7 +107,7 @@ impl ResolvedFormat<'_> {
                 (1..=MAX_SIGNIFICANT_DIGITS).contains(&digits)
             }
         };
-        if !valid || !(-324..=324).contains(&self.decimal_scale) {
+        if !valid || !(-324..=324).contains(&self.decimal_scale) || !self.multiplier.is_finite() {
             return Err(Error::Data(
                 "numeric presentation precision or decimal scale is outside its admitted range"
                     .into(),
@@ -201,15 +203,31 @@ impl DecimalBuffer {
     }
 }
 
-struct FiniteDecimal {
-    negative: bool,
-    coefficient: BigUint,
-    exponent: i32,
-    decade: i32,
+pub(super) struct ExactDecimal {
+    pub(super) negative: bool,
+    pub(super) coefficient: BigUint,
+    pub(super) exponent: BigInt,
+    pub(super) decade: BigInt,
 }
 
-impl FiniteDecimal {
-    fn decode(value: f64, scale: i16) -> Result<Self> {
+impl ExactDecimal {
+    pub(super) fn new(negative: bool, coefficient: BigUint, exponent: BigInt) -> Result<Self> {
+        let decade = if coefficient.bits() == 0 {
+            BigInt::ZERO
+        } else {
+            let mut digits = DecimalBuffer::default();
+            digits.convert(&coefficient)?;
+            &exponent + BigInt::from(digits.digit_count()? - 1)
+        };
+        Ok(Self {
+            negative,
+            coefficient,
+            exponent,
+            decade,
+        })
+    }
+
+    pub(super) fn decode(value: f64, scale: i16) -> Result<Self> {
         if !value.is_finite() {
             return Err(Error::Data(
                 "numeric presentation operand must be finite".into(),
@@ -228,8 +246,8 @@ impl FiniteDecimal {
             return Ok(Self {
                 negative: value.is_sign_negative(),
                 coefficient: BigUint::ZERO,
-                exponent: 0,
-                decade: 0,
+                exponent: BigInt::ZERO,
+                decade: BigInt::ZERO,
             });
         }
         let common = significand.trailing_zeros();
@@ -250,36 +268,33 @@ impl FiniteDecimal {
             )
         };
         let exponent = decimal_exponent + i32::from(scale);
-        let mut digits = DecimalBuffer::default();
-        digits.convert(&coefficient)?;
-        let digits = i32::try_from(digits.digit_count()?).map_err(|_| arithmetic_error())?;
-        Ok(Self {
-            negative: value.is_sign_negative(),
-            coefficient,
-            exponent,
-            decade: exponent + digits - 1,
-        })
+        Self::new(value.is_sign_negative(), coefficient, exponent.into())
     }
 
-    fn round(self, format: &ResolvedFormat<'_>) -> RoundedDecimal {
-        let quantum = match format.precision {
-            ResolvedPrecision::Significant(digits) => self.decade - i32::from(digits) + 1,
-            ResolvedPrecision::Fractional(digits) => {
-                let origin = match format.notation {
-                    NumericNotation::Decimal => 0,
-                    NumericNotation::Scientific => self.decade,
-                    NumericNotation::Engineering => self.decade.div_euclid(3) * 3,
-                };
-                origin - i32::from(digits)
-            }
-        };
-        let shift = quantum - self.exponent;
-        // The admitted finite operand/scale/precision bounds this power by
-        // 1398. A fine quantum pads exactly; a coarse one rounds only here.
-        let coefficient = if shift <= 0 {
-            self.coefficient * BigUint::from(10_u8).pow(shift.unsigned_abs())
+    fn multiply(self, multiplier: f64) -> Result<Self> {
+        let other = Self::decode(multiplier, 0)?;
+        Self::new(
+            self.negative ^ other.negative,
+            self.coefficient * other.coefficient,
+            self.exponent + other.exponent,
+        )
+    }
+
+    pub(super) fn round(self, format: &ResolvedFormat<'_>) -> Result<RoundedDecimal> {
+        let quantum = decimal_quantum(&self.decade, format);
+        let shift = &quantum - &self.exponent;
+        if shift.sign() != Sign::Plus || self.coefficient.bits() == 0 {
+            return Ok(RoundedDecimal {
+                negative: self.negative,
+                coefficient: self.coefficient,
+                exponent: self.exponent,
+            });
+        }
+        let coefficient = if &self.decade - &quantum < BigInt::from(-1) {
+            tiny_coefficient(self.negative, format.rounding)
         } else {
-            let denominator = BigUint::from(10_u8).pow(shift.unsigned_abs());
+            let shift = u32::try_from(shift).map_err(|_| arithmetic_error())?;
+            let denominator = BigUint::from(10_u8).pow(shift);
             round_integer(
                 &self.coefficient,
                 &denominator,
@@ -287,12 +302,43 @@ impl FiniteDecimal {
                 format.rounding,
             )
         };
-        RoundedDecimal {
+        Ok(RoundedDecimal {
             negative: self.negative,
             coefficient,
-            exponent: quantum.into(),
+            exponent: quantum,
+        })
+    }
+}
+
+pub(super) fn tiny_coefficient(negative: bool, rounding: NumericRounding) -> BigUint {
+    BigUint::from(u8::from(match rounding {
+        NumericRounding::AwayFromZero => true,
+        NumericRounding::Floor => negative,
+        NumericRounding::Ceiling => !negative,
+        _ => false,
+    }))
+}
+
+pub(super) fn decimal_quantum(decade: &BigInt, format: &ResolvedFormat<'_>) -> BigInt {
+    match format.precision {
+        ResolvedPrecision::Significant(digits) => decade - (digits - 1),
+        ResolvedPrecision::Fractional(digits) => {
+            let origin = match format.notation {
+                NumericNotation::Decimal => BigInt::ZERO,
+                NumericNotation::Scientific => decade.clone(),
+                NumericNotation::Engineering => engineering_exponent(decade),
+            };
+            origin - digits
         }
     }
+}
+
+fn engineering_exponent(decade: &BigInt) -> BigInt {
+    let mut remainder = decade % 3_u8;
+    if remainder.sign() == Sign::Minus {
+        remainder += 3_u8;
+    }
+    decade - remainder
 }
 
 /// One exact signed-magnitude quantizer for ordinary rationals and power endpoints.
@@ -330,8 +376,9 @@ pub(super) fn round_integer(
 
 pub(crate) fn format_finite(value: f64, format: &ResolvedFormat<'_>) -> Result<String> {
     format.validate()?;
-    FiniteDecimal::decode(value, format.decimal_scale)?
-        .round(format)
+    ExactDecimal::decode(value, format.decimal_scale)?
+        .multiply(format.multiplier)?
+        .round(format)?
         .emit(format)
 }
 
@@ -367,13 +414,7 @@ impl RoundedDecimal {
         let display_exponent = match format.notation {
             NumericNotation::Decimal => BigInt::ZERO,
             NumericNotation::Scientific => decade.clone(),
-            NumericNotation::Engineering => {
-                let mut remainder = &decade % 3_u8;
-                if remainder.sign() == Sign::Minus {
-                    remainder += 3_u8;
-                }
-                &decade - remainder
-            }
+            NumericNotation::Engineering => engineering_exponent(&decade),
         };
         let point = if zero {
             BigInt::from(1_u8)

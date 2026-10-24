@@ -38,6 +38,7 @@ the existing borrowed/copy result and const-call capability where applicable.
 | negative_zero | Preserve or Normalize |
 | trailing_zeros | Keep or Trim |
 | rounding | NearestEven (default), NearestAway, NearestTowardZero, TowardZero, AwayFromZero, Floor, Ceiling |
+| multiplier | Finite signed f64, exact represented factor, default 1; either signed zero normalizes to positive zero |
 
 Fractional bounds are 0..=20, significant 1..=21, adaptive min<=max in matching
 bounds. `new(notation,precision)` supplies scale 0, no affixes, Preserve, Keep
@@ -49,6 +50,10 @@ empty-string reset; reconstruct without an affix to omit it. Equality includes
 all fields and bounds, absent/present affixes and literal bytes.
 The `rounding(value)` edit validates the complete policy and retains that choice
 through preparation, feedback, copies and Shared compatibility.
+The `multiplier(value)` edit composes its exact dyadic factor with the decimal shift
+before the one quantization. No intermediate binary64 product is formed, even for
+overflowing/underflowing products. Negative factors reverse the displayed sign;
+zero makes every finite ordinary or mathematical-power operand display zero.
 
 Percent presentation is explicit scale 2 plus suffix `%`: raw 0.125 with
 Fractional(1) becomes `12.5%`. Suffix alone merely appends `%`.
@@ -97,8 +102,9 @@ the rendering contract, not a formatter expansion.
 | Private default compact derivation | Exact rational of its prescribed rounded binary64 division result |
 | Omitted-format Forest expression | Default power grammar using the exponent operand |
 
-Decode binary64 sign/significand/exponent. Ordinary conversion derives exact
-decimal coefficient/exponent using powers of2/5, shifts decimal exponent by scale,
+Decode binary64 sign/significand/exponent for both the ordinary source and multiplier.
+Derive their exact decimal coefficient/exponent using powers of2/5, multiply those
+coefficients and add exponents and decimal scale,
 and rounds once by exact signed quotient/remainder/parity. Do not multiply by an
 intermediate f64 power, use platform transcendentals, parse text back into data
 or format an approximate physical Forest power. Forest exponent 0.5/Fractional(2)
@@ -127,7 +133,8 @@ without adding notation. Zero has one integral0 and p-1 fractional zeros for
 significant, d for fractional; exponent notation zero uses e0.
 
 Normalize removes the sign after rounding for actual or rounded negative zero;
-Preserve retains it. Mathematical Forest powers are positive. Trim removes only
+Preserve retains it. Mathematical Forest powers are positive before the explicit
+multiplier. Trim removes only
 fractional trailing zeros and empty decimal point, never integral zeros, exponent
 or affix text. Scientific uses one integral mantissa digit, lowercase e, no plus
 or exponent-leading zeros. Engineering always emits exponent including e0; no

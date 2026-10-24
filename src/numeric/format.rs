@@ -114,6 +114,7 @@ pub struct NumericFormat {
     negative_zero: NegativeZero,
     trailing_zeros: TrailingZeros,
     rounding: NumericRounding,
+    multiplier_bits: u64,
 }
 
 impl Default for NumericFormat {
@@ -127,6 +128,7 @@ impl Default for NumericFormat {
             negative_zero: NegativeZero::Preserve,
             trailing_zeros: TrailingZeros::Keep,
             rounding: NumericRounding::NearestEven,
+            multiplier_bits: 1.0_f64.to_bits(),
         }
     }
 }
@@ -150,6 +152,7 @@ impl NumericFormat {
             negative_zero: self.negative_zero,
             trailing_zeros: self.trailing_zeros,
             rounding: self.rounding,
+            multiplier_bits: self.multiplier_bits,
         })
     }
 
@@ -255,6 +258,14 @@ impl NumericFormat {
         Ok(self)
     }
 
+    /// Multiply by the exact represented finite factor before the one rounding.
+    /// Negative factors reverse display signs; either signed zero selects zero.
+    pub fn multiplier(mut self, value: f64) -> Result<Self> {
+        self.multiplier_bits = if value == 0.0 { 0 } else { value.to_bits() };
+        self.validate()?;
+        Ok(self)
+    }
+
     fn validate(&self) -> Result<()> {
         let (min, _) = self.precision.bounds()?;
         self.resolve_at(min)?.validate()
@@ -270,6 +281,7 @@ impl NumericFormat {
             negative_zero: self.negative_zero,
             trailing_zeros: self.trailing_zeros,
             rounding: self.rounding,
+            multiplier: f64::from_bits(self.multiplier_bits),
         })
     }
 
@@ -288,6 +300,7 @@ impl NumericFormat {
         round.observe_count(usize::from(min))?;
         round.observe_count(usize::from(max))?;
         round.observe_number(f64::from(self.decimal_scale))?;
+        round.observe_number(f64::from_bits(self.multiplier_bits))?;
         for affix in [self.get_prefix(), self.get_suffix()] {
             round.observe_count(usize::from(affix.is_some()))?;
             if let Some(text) = affix {

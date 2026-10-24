@@ -10,6 +10,51 @@ fn text(operand: &Log10Operand, format: &ResolvedFormat<'_>) -> String {
 }
 
 #[test]
+fn mathematical_power_factors_keep_signed_cells_and_symbolic_extreme_exponents() {
+    let format = crate::NumericFormat::new(
+        NumericNotation::Scientific,
+        crate::NumericPrecision::Significant(21),
+    )
+    .unwrap()
+    .multiplier(4.0)
+    .unwrap();
+    // Square the proposed half-cell edges: (4*sqrt(10))^2 = 160.
+    let coefficient = BigUint::parse_bytes(b"126491106406735173280", 10).unwrap();
+    let twice = &coefficient * 2_u8;
+    let radicand = BigUint::from(640_u16) * BigUint::from(10_u8).pow(38);
+    assert!((&twice - 1_u8).pow(2) < radicand);
+    assert!((&twice + 1_u8).pow(2) > radicand);
+    assert_eq!(
+        format.format_singleton(0.5, true).unwrap(),
+        "1.26491106406735173280e1"
+    );
+    let negative = crate::NumericFormat::new(
+        NumericNotation::Decimal,
+        crate::NumericPrecision::Fractional(0),
+    )
+    .unwrap()
+    .multiplier(-1.0)
+    .unwrap()
+    .rounding(crate::NumericRounding::Floor)
+    .unwrap();
+    assert_eq!(negative.format_singleton(0.5, true).unwrap(), "-4");
+    assert_eq!(negative.format_singleton(-f64::MAX, true).unwrap(), "-1");
+    let zero = format.multiplier(0.0).unwrap();
+    assert_eq!(
+        zero.format_singleton(f64::MAX, true).unwrap(),
+        "0.00000000000000000000e0"
+    );
+    let rational = crate::NumericFormat::new(
+        NumericNotation::Decimal,
+        crate::NumericPrecision::Fractional(1),
+    )
+    .unwrap()
+    .multiplier(1.25)
+    .unwrap();
+    assert_eq!(rational.format_singleton(0.0, true).unwrap(), "1.2");
+}
+
+#[test]
 fn directed_powers_separate_integer_boundaries_and_keep_tiny_shortcuts_symbolic() {
     use crate::numeric::decimal::NumericRounding::{Ceiling, Floor};
     // Monotonicity puts 10^(+/-2^-1074) on opposite sides of 1;
@@ -189,14 +234,20 @@ fn integral_powers_emit_symbolically_and_refuse_giant_decimal_runs_before_materi
         assert_eq!(label, expected);
         assert_eq!(label.len(), if sign < 0.0 { 315 } else { 314 });
         if sign > 0.0 {
-            assert!(matches!(operand.plan(&format), Err(Error::Render(_))));
+            assert!(matches!(
+                certified::PowerFormatter::default().format(&operand, &format),
+                Err(Error::Render(_))
+            ));
         } else {
             assert_eq!(text(&operand, &format), "0.00");
             let significant = ResolvedFormat {
                 precision: Significant(3),
                 ..format
             };
-            assert!(matches!(operand.plan(&significant), Err(Error::Render(_))));
+            assert!(matches!(
+                certified::PowerFormatter::default().format(&operand, &significant),
+                Err(Error::Render(_))
+            ));
         }
     }
     for exponent in [-324.0, 324.0] {
@@ -224,13 +275,9 @@ fn integral_powers_emit_symbolically_and_refuse_giant_decimal_runs_before_materi
         "[0\u{0301}%00"
     );
     let fractional = Log10Operand::new(-2000.5, 0).unwrap();
-    assert!(fractional.plan(&format).unwrap().tiny);
     assert_eq!(text(&fractional, &format), "[0\u{0301}%00");
     let fractional = Log10Operand::new(-0.5, 0).unwrap();
-    let plan = fractional.plan(&format).unwrap();
-    assert_eq!(plan.quantum, BigInt::from(-2));
-    assert_eq!(plan.multiplier, BigInt::from(1));
-    assert!(!plan.tiny);
+    assert_eq!(text(&fractional, &format), "[0.32\u{0301}%00");
 }
 
 #[test]

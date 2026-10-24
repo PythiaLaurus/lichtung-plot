@@ -4,8 +4,10 @@
 
 use num_bigint::{BigInt, BigUint, Sign};
 
-use super::Log10Operand;
-use crate::numeric::decimal::{round_integer, ResolvedFormat, RoundedDecimal};
+use super::{Log10Operand, PowerPlan};
+use crate::numeric::decimal::{
+    round_integer, tiny_coefficient, ExactDecimal, ResolvedFormat, RoundedDecimal,
+};
 use crate::{Error, Result};
 
 pub(crate) struct CertifiedPower {
@@ -50,19 +52,41 @@ impl PowerFormatter {
             self.attempts.clear();
             self.stages.clear();
         }
-        let plan = operand.plan(format)?;
-        let rounded = if let Some(symbolic) = operand.symbolic(&plan, format.rounding) {
-            symbolic
+        format.validate()?;
+        if format.decimal_scale != operand.decimal_scale {
+            return Err(Error::Render(
+                "Log10 operand decimal scale changed after reduction".into(),
+            ));
+        }
+        let factor = ExactDecimal::decode(format.multiplier, 0)?;
+        let negative = factor.negative;
+        let zero = factor.coefficient.bits() == 0;
+        let exponent = &operand.decade + &factor.exponent;
+        let decade = if zero {
+            BigInt::ZERO
         } else {
-            let negative = plan.multiplier.sign() == Sign::Minus;
-            let power = if negative {
-                if plan.multiplier != BigInt::from(-1) {
-                    return Err(arithmetic_error());
-                }
-                0
-            } else {
-                usize::try_from(&plan.multiplier).map_err(|_| arithmetic_error())?
-            };
+            self.factored_decade(operand, &factor)?
+        };
+        let plan = PowerPlan::new(
+            &decade,
+            &exponent,
+            factor.coefficient.bits(),
+            zero || operand.fraction.bits() == 0,
+            negative,
+            format,
+        )?;
+        let rounded = if zero || operand.fraction.bits() == 0 {
+            ExactDecimal::new(negative, factor.coefficient, exponent)?.round(format)?
+        } else if plan.tiny {
+            RoundedDecimal {
+                negative,
+                coefficient: tiny_coefficient(negative, format.rounding),
+                exponent: plan.quantum.clone(),
+            }
+        } else {
+            let power =
+                usize::try_from(plan.multiplier.magnitude()).map_err(|_| arithmetic_error())?;
+            let divisor = plan.multiplier.sign() == Sign::Minus;
             let mut precision = 128_usize;
             loop {
                 scratch_bits(precision, power)?;
@@ -74,16 +98,18 @@ impl PowerFormatter {
                 let (lower, upper) = self.mantissa(operand, precision)?;
                 let unit = BigUint::from(1_u8) << precision;
                 let multiplier = power_of_ten(power);
-                let (denominator, lower, upper) = if negative {
-                    (unit * 10_u8, lower, upper)
+                let lower = lower * &factor.coefficient;
+                let upper = upper * &factor.coefficient;
+                let (denominator, lower, upper) = if divisor {
+                    (unit * multiplier, lower, upper)
                 } else {
                     (unit, lower * &multiplier, upper * multiplier)
                 };
-                let lower = round_integer(&lower, &denominator, false, format.rounding);
-                let upper = round_integer(&upper, &denominator, false, format.rounding);
+                let lower = round_integer(&lower, &denominator, negative, format.rounding);
+                let upper = round_integer(&upper, &denominator, negative, format.rounding);
                 if lower == upper {
                     break RoundedDecimal {
-                        negative: false,
+                        negative,
                         coefficient: lower,
                         exponent: plan.quantum.clone(),
                     };
@@ -97,6 +123,31 @@ impl PowerFormatter {
             rounded,
             text,
         })
+    }
+
+    fn factored_decade(&mut self, operand: &Log10Operand, factor: &ExactDecimal) -> Result<BigInt> {
+        let decade = &operand.decade + &factor.decade;
+        if operand.fraction.bits() == 0 {
+            return Ok(decade);
+        }
+        let digits =
+            usize::try_from(&factor.decade - &factor.exponent).map_err(|_| arithmetic_error())?;
+        let threshold = power_of_ten(digits);
+        if factor.coefficient == threshold {
+            return Ok(decade);
+        }
+        let mut precision = 128_usize;
+        loop {
+            let (lower, upper) = self.mantissa(operand, precision)?;
+            let boundary = (&threshold * 10_u8) << precision;
+            if &upper * &factor.coefficient < boundary {
+                return Ok(decade);
+            }
+            if lower * &factor.coefficient >= boundary {
+                return Ok(decade + 1_u8);
+            }
+            precision = precision.checked_mul(2).ok_or_else(arithmetic_error)?;
+        }
     }
 
     fn constants(&mut self, precision: usize) -> Result<&ConstantBounds> {

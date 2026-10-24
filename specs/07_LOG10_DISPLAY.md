@@ -10,6 +10,18 @@ E = exact_binary64(e)+s
 V = 10^E
 ```
 
+An explicit finite general multiplier is another exact dyadic factor. Decode its
+magnitude as C*10^b, retaining its sign separately, and display
+`sign * C * 10^(E+b)`. Zero factors bypass refinement and emit zero. Integral
+exponents use the same exact-decimal quantizer as ordinary operands, with symbolic
+arbitrary-size exponents; no physical powf value is formed.
+For fractional exponents, enclose M*C and compare against the next exact decimal
+threshold to choose the effective decade. Irrationality proves that a nonzero
+rational factor cannot put a fractional power exactly on that rational threshold.
+Multiply certified endpoint numerators by C and include b in the fixed quantum's
+decimal shift before the same signed rounding. Negative factors therefore use
+negative floor/ceiling cells, not positive rounding followed by sign attachment.
+
 Projection/source order/domain feedback remain exponent-space. Exact caller ticks
 stay verbatim. Omitted Forest power-expression grammar is a private profile of
 the [numeric engine](06_NUMERIC_PRESENTATION.md); this contract governs explicit
@@ -104,7 +116,8 @@ max(0,a-1-h_after); integral place-value zeros remain.
 Decimal fractional keeps its digits including rounded0; Decimal significant keeps
 fractional significance where expressible. Trim removes fractional zeros/empty
 point only. Append literal affixes after normalization. V is positive even for
-e=-0, so no negative-zero policy introduces a minus. Scientific/Engineering
+e=-0; a negative multiplier supplies a negative sign, independently of e's sign.
+Scientific/Engineering
 rounding at these quantum choices cannot produce0.
 
 ## Certified Mantissa Algorithm

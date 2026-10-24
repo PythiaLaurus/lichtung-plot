@@ -1699,7 +1699,9 @@ precision now admits 0..=20/1..=21 through exact binary64 conversion, certified 
 complete sets and precision-derived output reservations. All seven NumericRounding
 choices now share one signed quantizer for finite values and certified power endpoints,
 including directed integer-boundary refinement, symbolic tiny powers and complete
-policy identity. Extended factors, locales, notation and specifier parsing remain
+policy identity. Exact signed general multipliers now compose without intermediate
+binary64 products for finite values and certified powers, retaining symbolic extreme
+exponents and signed rounding cells. Prefix/rate factors, locales, notation and specifier parsing remain
 pending in this step. Steps 6–22 remain pending; undelivered target signatures are
 not current APIs.
 

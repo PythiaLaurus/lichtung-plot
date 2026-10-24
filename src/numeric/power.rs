@@ -7,8 +7,7 @@
 use num_bigint::{BigInt, BigUint, Sign};
 
 use super::decimal::{
-    DecimalBuffer, NumericNotation, NumericRounding, ResolvedFormat, ResolvedPrecision,
-    RoundedDecimal,
+    decimal_quantum, DecimalBuffer, NumericNotation, ResolvedFormat, ResolvedPrecision,
 };
 use crate::{Error, Result};
 
@@ -98,37 +97,25 @@ impl Log10Operand {
             denominator_bits,
         })
     }
+}
 
-    pub(crate) fn plan(&self, format: &ResolvedFormat<'_>) -> Result<PowerPlan> {
+impl PowerPlan {
+    pub(super) fn new(
+        decade: &BigInt,
+        source_exponent: &BigInt,
+        coefficient_bits: u64,
+        integral: bool,
+        negative: bool,
+        format: &ResolvedFormat<'_>,
+    ) -> Result<Self> {
         format.validate()?;
-        if format.decimal_scale != self.decimal_scale {
-            return Err(Error::Render(
-                "Log10 operand decimal scale changed after reduction".into(),
-            ));
-        }
-        let quantum = match format.precision {
-            ResolvedPrecision::Significant(digits) => &self.decade - (digits - 1),
-            ResolvedPrecision::Fractional(digits) => {
-                let origin = match format.notation {
-                    NumericNotation::Decimal => BigInt::ZERO,
-                    NumericNotation::Scientific => self.decade.clone(),
-                    NumericNotation::Engineering => {
-                        let mut remainder = &self.decade % 3_u8;
-                        if remainder.sign() == Sign::Minus {
-                            remainder += 3_u8;
-                        }
-                        &self.decade - remainder
-                    }
-                };
-                origin - digits
-            }
-        };
-        let multiplier = &self.decade - &quantum;
+        let quantum = decimal_quantum(decade, format);
+        let multiplier = source_exponent - &quantum;
         let tiny = format.notation == NumericNotation::Decimal
             && matches!(format.precision, ResolvedPrecision::Fractional(_))
-            && multiplier < BigInt::from(if self.fraction.bits() == 0 { 0_i8 } else { -1 });
+            && decade - &quantum < BigInt::from(-1);
         let body = if format.notation == NumericNotation::Decimal {
-            let integral = std::cmp::max(BigInt::from(1_u8), &self.decade + 2_u8);
+            let integral = std::cmp::max(BigInt::from(1_u8), decade + 2_u8);
             match format.precision {
                 ResolvedPrecision::Fractional(digits) => {
                     let integral = if tiny { BigInt::from(1_u8) } else { integral };
@@ -140,8 +127,8 @@ impl Log10Operand {
                         }
                 }
                 ResolvedPrecision::Significant(digits) => {
-                    if self.decade < BigInt::from(digits - 1) {
-                        integral + 1_u8 + (BigInt::from(digits - 1) - &self.decade)
+                    if *decade < BigInt::from(digits - 1) {
+                        integral + 1_u8 + (BigInt::from(digits - 1) - decade)
                     } else {
                         integral
                     }
@@ -156,15 +143,17 @@ impl Log10Operand {
             };
             BigInt::from(348_u16 + u16::from(fractional))
         };
-        let length = body + format.prefix.map_or(0, str::len) + format.suffix.map_or(0, str::len);
+        let length = body
+            + usize::from(negative)
+            + format.prefix.map_or(0, str::len)
+            + format.suffix.map_or(0, str::len);
         let capacity = usize::try_from(length)
             .ok()
             .filter(|length| isize::try_from(*length).is_ok())
             .ok_or_else(|| {
                 Error::Render("Log10 presentation output length is not representable".into())
             })?;
-        let integer_bits = if self.fraction.bits() == 0 || tiny || multiplier.sign() == Sign::Minus
-        {
+        let integer_bits = if integral || tiny || multiplier.sign() == Sign::Minus {
             1025
         } else {
             usize::try_from(&multiplier)
@@ -176,34 +165,18 @@ impl Log10Operand {
                     Error::Render("Log10 coefficient bit length is not representable".into())
                 })?
         };
+        let integer_bits = integer_bits
+            .checked_add(
+                usize::try_from(coefficient_bits)
+                    .map_err(|_| Error::Render("Log10 factor bit length overflow".into()))?,
+            )
+            .ok_or_else(|| Error::Render("Log10 factor bit length overflow".into()))?;
         let output = DecimalBuffer::reserve(capacity, integer_bits)?;
-        Ok(PowerPlan {
+        Ok(Self {
             quantum,
             multiplier,
             tiny,
             output,
-        })
-    }
-
-    pub(super) fn symbolic(
-        &self,
-        plan: &PowerPlan,
-        rounding: NumericRounding,
-    ) -> Option<RoundedDecimal> {
-        (self.fraction.bits() == 0 || plan.tiny).then(|| RoundedDecimal {
-            negative: false,
-            coefficient: BigUint::from(u8::from(
-                !plan.tiny
-                    || matches!(
-                        rounding,
-                        NumericRounding::AwayFromZero | NumericRounding::Ceiling
-                    ),
-            )),
-            exponent: if plan.tiny {
-                plan.quantum.clone()
-            } else {
-                self.decade.clone()
-            },
         })
     }
 }

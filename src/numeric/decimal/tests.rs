@@ -1,6 +1,55 @@
 use super::*;
 
 #[test]
+fn exact_multiplier_composes_before_rounding_without_binary64_product_loss() {
+    let format = crate::NumericFormat::new(
+        NumericNotation::Scientific,
+        crate::NumericPrecision::Significant(21),
+    )
+    .unwrap()
+    .multiplier(10.0)
+    .unwrap();
+    certify_rational_cell(
+        BigUint::from(3_602_879_701_896_397_u64) * 10_u8,
+        BigUint::from(1_u8) << 55_usize,
+        20,
+        100_000_000_000_000_005_551,
+    );
+    assert_eq!(
+        format.format_singleton(0.1, false).unwrap(),
+        "1.00000000000000005551e0"
+    );
+    let large = crate::NumericFormat::new(
+        NumericNotation::Scientific,
+        crate::NumericPrecision::Significant(17),
+    )
+    .unwrap()
+    .multiplier(2.0)
+    .unwrap();
+    assert_eq!(
+        large.format_singleton(f64::MAX, false).unwrap(),
+        "3.5953862697246314e308"
+    );
+    let tiny = crate::NumericFormat::default()
+        .multiplier(f64::from_bits(2046_u64 << 52))
+        .unwrap()
+        .precision(crate::NumericPrecision::Fractional(20))
+        .unwrap();
+    assert_eq!(
+        tiny.format_singleton(f64::from_bits(1), false).unwrap(),
+        "0.00000000000000044409"
+    );
+    let negative = crate::NumericFormat::default().multiplier(-2.0).unwrap();
+    assert_eq!(negative.format_singleton(1.25, false).unwrap(), "-2.50");
+    let zero = negative.clone().multiplier(-0.0).unwrap();
+    assert_eq!(zero, negative.multiplier(0.0).unwrap());
+    assert_eq!(zero.format_singleton(f64::MAX, false).unwrap(), "0.00");
+    for invalid in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        assert!(crate::NumericFormat::default().multiplier(invalid).is_err());
+    }
+}
+
+#[test]
 fn rounding_preserves_signed_neighbors_and_both_tie_parities() {
     use NumericRounding::{
         AwayFromZero, Ceiling, Floor, NearestAway, NearestEven, NearestTowardZero, TowardZero,

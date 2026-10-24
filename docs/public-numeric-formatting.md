@@ -23,6 +23,12 @@ ordered within matching bounds. Decimal scale accepts -324..=324.
 These digits come from the exact binary64 value: at Fractional(20), `0.1` displays
 `0.10000000000000000555`. Certified powers use the same extended precision bounds.
 
+`multiplier(value)` applies a finite signed factor exactly before decimal scaling
+and rounding. No intermediate f64 product overflows, underflows or rounds away
+digits. For example `0.1` multiplied by `10` at Scientific/Significant(21) displays
+`1.00000000000000005551e0`, not a pre-rounded `1`. Negative factors reverse the
+display sign; zero selects zero. Scientific coordinates and source data do not change.
+
 Configure a property with its bare name, such as `precision(policy)` or
 `decimal_scale(2)`. Validated consuming edits replace exactly one field; paired
 readers are `get_notation()`, `get_precision()`, `get_decimal_scale()`,
