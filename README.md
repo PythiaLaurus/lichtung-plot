@@ -169,7 +169,8 @@ let plot = Plot::line(
 `x_tick_generation(TickGeneration::target(5)?)` requests approximately five numeric
 positions, allowing nice-step deviation and measured coarsening.
 `TickGeneration::maximum(4)?` instead bounds the complete generated in-domain list,
-including endpoint positions. Both counts accept `1..=10_000`.
+including endpoint positions. Counts use `usize`; there is no application-wide
+10,000-position ceiling for explicit sources.
 
 Use `TickGeneration::additive(2.0)?` for first-tried linear spacing, or
 `TickGeneration::log10_decades(2)?` for divisible integral Forest Log10 exponents.
@@ -178,6 +179,13 @@ the complete choice; `TickGeneration::automatic()` resets it. Bounded local
 coarsening and actual text fit still apply. Exact `x_ticks`/`y_ticks` take
 precedence in either setter order and are never truncated by a generated maximum;
 actual categorical axes reject non-Automatic generation instructions.
+
+`exact_count(count, TickSpace::Data)` retains the complete requested count,
+including an empty source for zero. `interval(step, origin, space, requirement)`
+and `multiplicative(anchor, ratio, requirement)` distinguish fixed sources from
+preferred candidates. `function` supplies positions from the final actual view;
+formatting stays independent. `maximum_count` configures one optional explicit
+cap without replacing the primary locator.
 
 See [`examples/07_tick_generation.rs`](examples/07_tick_generation.rs) for
 independent axis choices and [the public contract](docs/public-tick-generation.md).
@@ -209,6 +217,19 @@ Exact tick strings take precedence. Scientific values and colors are unchanged;
 configured Forest Log10 labels use certified mathematical powers of their tick
 exponents. See [numeric format construction and consumers](docs/public-numeric-formatting.md)
 and [`examples/05_numeric_formats.rs`](examples/05_numeric_formats.rs).
+
+## Text Placement And Fit
+
+`Text` retains its original source alongside optional complete typography and a
+`TextLayout`. Layout controls line alignment, block anchoring, rotation, bounds,
+visibility, ellipsis and fractional font-size fitting. Plain replacement preserves
+existing instructions; supplying a whole layout replaces that layout request.
+
+Panel annotations can anchor to typed data, panel or figure references. Text
+adaptation never removes scientific categories, marks, tick positions or grids.
+See [text configuration](docs/getting-started.md#display-text-and-labels) and
+[`examples/12_text_layout.rs`](examples/12_text_layout.rs) for a fixed data note
+and an independently fitted TextPanel heading.
 
 ## Fonts
 
