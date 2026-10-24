@@ -127,6 +127,95 @@ fn native_empty_category_alias_is_distinct_from_internal_label_suppression() {
 }
 
 #[test]
+fn authored_headers_use_independent_fonts_alignment_and_selected_band_padding() {
+    use crate::{FontFamily, FontStack, HeaderSpacing, Text, TextAlignment};
+    let mut theme = Theme::publication();
+    let role = theme.typography.composition.composition_header.clone();
+    theme.typography.composition.composition_header = role
+        .clone()
+        .stack(FontStack::new([FontFamily::named("Unused Canvas header font").unwrap()]).unwrap())
+        .unwrap();
+    let one = crate::RelativeSpacing::ratio(1, 1).unwrap();
+    theme.composition = theme
+        .composition
+        .headers(HeaderSpacing::new(one.clone(), one.clone(), one.clone(), one).unwrap())
+        .unwrap();
+    let column = Text::new("Column heading\nshort")
+        .style(role.clone().font_size(25).unwrap())
+        .alignment(TextAlignment::Start);
+    let row = Text::new("Row heading\nshort")
+        .style(role.clone().font_size(17).unwrap())
+        .alignment(TextAlignment::End);
+    let title = Text::new("Across the row\nshort")
+        .style(role.font_size(21).unwrap())
+        .alignment(TextAlignment::Center);
+    let canvas = Canvas::grid(1, 2)
+        .unwrap()
+        .width(650)
+        .theme(theme)
+        .column_header(0, 2, column)
+        .unwrap()
+        .row_header(0, 1, row)
+        .unwrap()
+        .row_title(0, title)
+        .unwrap()
+        .text_panel(0, 0, crate::TextPanel::new("Left", "Body").unwrap())
+        .unwrap()
+        .text_panel(0, 1, crate::TextPanel::new("Right", "Body").unwrap())
+        .unwrap();
+    let root = canvas.preflight_plan().unwrap();
+    let prepared = root.prepared();
+    let outer = PanelBox::new(0.0, 650.0, 0.0, 500.0);
+    let plan = crate::layout::fit::measured(tracks::allocate(
+        outer,
+        (1, 2),
+        &canvas.panels,
+        &prepared.text_panel_intrinsics,
+        &prepared.plot_intrinsics,
+        &canvas.column_headers,
+        &canvas.row_headers,
+        &canvas.row_titles,
+        &[],
+        &prepared.themes,
+        &FitScope::root(),
+        None,
+    ))
+    .unwrap();
+    let column = &plan.headers[0].text.plan;
+    let row = &plan.headers[1].text.plan;
+    let title = &plan.row_titles[0].text.plan;
+    for (text, size, alignment) in [
+        (column, 25, crate::layout::PhysicalTextAlignment::Start),
+        (row, 17, crate::layout::PhysicalTextAlignment::End),
+        (title, 21, crate::layout::PhysicalTextAlignment::Center),
+    ] {
+        assert_eq!(text.style.font_size, size);
+        assert_eq!(text.style.alignment, alignment);
+        assert!(text.style.exact_override);
+        assert_eq!(text.lines.len(), 2);
+    }
+    let cell = plan.cells[0];
+    let quanta = crate::layout::kernel::nearest_spatial_quanta;
+    assert_eq!(
+        quanta(cell.x0 - outer.x0).unwrap(),
+        row.width_quanta + 17 * 1024
+    );
+    assert_eq!(
+        quanta(outer.y1 - cell.y1).unwrap(),
+        column.height_quanta + 25 * 1024 + title.height_quanta + 21 * 1024,
+    );
+    assert_eq!(quanta(cell.y1).unwrap(), quanta(plan.cells[1].y1).unwrap());
+    assert_eq!(
+        plan.headers[0].text.placement.anchor,
+        crate::render::backend::TextAnchor::Start
+    );
+    assert_eq!(
+        plan.headers[1].text.placement.anchor,
+        crate::render::backend::TextAnchor::End
+    );
+}
+
+#[test]
 #[expect(
     clippy::too_many_lines,
     reason = "one composed root witnesses content edits, whole resets, local style census and independent parent precedence"

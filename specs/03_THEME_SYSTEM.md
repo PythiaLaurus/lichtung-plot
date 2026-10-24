@@ -173,6 +173,10 @@ the corresponding title clearances. Continuous guide titles resolve local Text
 appearance over the consuming guide-title role, including Shared Canvas ownership.
 Each measured section resolves title_gap against that title's selected size;
 frame, key and label spacing retain their declared guide-label metrics.
+Canvas headers and row titles independently replace composition_header with a
+complete local Text style. Each named header padding uses that selected size;
+shared band extents take the maximum complete text-plus-padding requirement.
+The minimum for declared empty Canvas tracks still uses the owner's Theme metric.
 
 TypographyTheme and each nested text-role group use consuming `property(value)`
 edits and paired borrowed `get_property()` readers. For example,

@@ -1677,7 +1677,10 @@ child and height-cache identity. Standard/native axes and shared facet titles re
 independent exact styles through fonts, intrinsics, selected gaps and frozen drawing.
 Continuous color titles now retain complete Text through local/shared guide preparation,
 compatibility, selected section gaps, font census, caches and frozen drawing.
-Headers and remaining display annotation receiving slots are still pending within this step.
+Canvas headers and row titles now retain independent exact styles and line alignment
+through font preparation, selected padding, track requirements and frozen feedback.
+Heatmap null-row text, Waterfall endpoint labels and PointLayer legend labels remain
+pending within this step.
 Steps 4–22 remain pending; undelivered target signatures are not current APIs.
 
 ### 1. Apply The Public Property Naming Rule

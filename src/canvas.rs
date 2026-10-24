@@ -148,6 +148,7 @@ impl ResolvedCanvasThemes {
 }
 
 struct CanvasHeaderPlan {
+    request: crate::Text,
     text: crate::render::backend::PlacedText,
 }
 
@@ -165,7 +166,7 @@ pub enum CanvasCategoryLabels {
 struct CanvasHeader {
     start: usize,
     span: usize,
-    text: String,
+    text: crate::Text,
 }
 
 struct TextPanelPlan {
@@ -210,7 +211,7 @@ impl TextPanel {
 fn canvas_header(
     start: usize,
     span: usize,
-    text: String,
+    text: crate::Text,
     limit: usize,
     role: &str,
 ) -> Result<CanvasHeader, Error> {
@@ -220,7 +221,7 @@ fn canvas_header(
             start.saturating_add(span)
         )));
     }
-    crate::text::validate_for(&text, &format!("canvas {role} header"))?;
+    crate::text::validate_for(text.as_str(), &format!("canvas {role} header"))?;
     Ok(CanvasHeader { start, span, text })
 }
 
@@ -446,11 +447,13 @@ impl Canvas {
     }
 
     /// Add one measured header spanning contiguous canvas columns.
+    /// Text can replace the complete Canvas header style and align its lines;
+    /// the block remains centered over the declared span.
     pub fn column_header(
         mut self,
         start_column: usize,
         span: usize,
-        text: impl Into<String>,
+        text: impl Into<crate::Text>,
     ) -> Result<Self, Error> {
         let header = canvas_header(start_column, span, text.into(), self.columns, "column")?;
         validate_header_overlap(&self.column_headers, &header, "column")?;
@@ -459,11 +462,13 @@ impl Canvas {
     }
 
     /// Add one measured header spanning contiguous canvas rows.
+    /// Local Text style owns its font-relative padding. Line alignment defaults
+    /// to Center inside the block positioned beside the declared rows.
     pub fn row_header(
         mut self,
         start_row: usize,
         span: usize,
-        text: impl Into<String>,
+        text: impl Into<crate::Text>,
     ) -> Result<Self, Error> {
         let header = canvas_header(start_row, span, text.into(), self.rows, "row")?;
         validate_header_overlap(&self.row_headers, &header, "row")?;
@@ -472,7 +477,9 @@ impl Canvas {
     }
 
     /// Add one measured title centered above every panel in one canvas row.
-    pub fn row_title(mut self, row: usize, text: impl Into<String>) -> Result<Self, Error> {
+    /// Text retains an independent complete style and line alignment, defaulting
+    /// to the Canvas header role and Center.
+    pub fn row_title(mut self, row: usize, text: impl Into<crate::Text>) -> Result<Self, Error> {
         let title = canvas_header(row, 1, text.into(), self.rows, "row title")?;
         validate_header_overlap(&self.row_titles, &title, "row title")?;
         self.row_titles.push(title);
@@ -1531,14 +1538,14 @@ impl Canvas {
                     Error::Render("canvas column-header census index overflowed".into())
                 })?,
             )?;
-            push_text_requirement(
+            crate::layout::PreparedTextRequirement::push_authored(
                 &mut requirements,
                 address,
                 crate::layout::PreparedTextRole::Header,
-                0,
-                &header.text,
+                Some(&header.text),
                 composition_title,
-                prepared_stage,
+                false,
+                Some(prepared_stage),
             )?;
         }
         for (index, header) in self.row_headers.iter().enumerate() {
@@ -1548,14 +1555,14 @@ impl Canvas {
                     Error::Render("canvas row-header census index overflowed".into())
                 })?,
             )?;
-            push_text_requirement(
+            crate::layout::PreparedTextRequirement::push_authored(
                 &mut requirements,
                 address,
                 crate::layout::PreparedTextRole::Header,
-                0,
-                &header.text,
+                Some(&header.text),
                 composition_title,
-                prepared_stage,
+                false,
+                Some(prepared_stage),
             )?;
         }
         for (index, title) in self.row_titles.iter().enumerate() {
@@ -1565,14 +1572,14 @@ impl Canvas {
                     Error::Render("canvas row-title census index overflowed".into())
                 })?,
             )?;
-            push_text_requirement(
+            crate::layout::PreparedTextRequirement::push_authored(
                 &mut requirements,
                 address,
                 crate::layout::PreparedTextRole::Header,
-                0,
-                &title.text,
+                Some(&title.text),
                 composition_title,
-                prepared_stage,
+                false,
+                Some(prepared_stage),
             )?;
         }
         for (index, panel) in self.text_panels.iter().enumerate() {
@@ -2743,6 +2750,7 @@ impl Canvas {
             round.observe_text_block(&text_panel.body)?;
         }
         for header in headers.iter().chain(&row_titles) {
+            round.observe_authored_text(&header.request)?;
             round.observe_text(&header.text.plan)?;
             round.observe_number(header.text.placement.position.x)?;
             round.observe_number(header.text.placement.position.y)?;

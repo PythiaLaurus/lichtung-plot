@@ -160,6 +160,11 @@ guide title. Shared Canvas guides require equal complete title requests, includi
 local styles and explicit layout resets. An omitted style uses the consuming
 guide's Theme role; title spacing follows the selected title size.
 
+Canvas `column_header`, `row_header` and `row_title` accept Text too. Their blocks
+stay centered on the declared span while local alignment controls individual lines.
+Each complete local style replaces the Canvas header role and supplies the font
+size used by that header's padding.
+
 `PanelTextAnnotation::new(corner, text)` accepts the same `Text` value. Its exact
 style replaces the Plot's panel-note role; local alignment controls lines within
 the block while the chosen corner keeps ownership of block placement.

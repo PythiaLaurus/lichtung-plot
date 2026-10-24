@@ -252,15 +252,10 @@ impl ResolvedTheme {
             LocalMetric::css_pixels(body.max(title))?,
         ])
     }
-    pub(crate) fn header_lengths(&self) -> Result<HeaderLengths> {
+    pub(crate) fn header_lengths(&self, selected_size: u32) -> Result<HeaderLengths> {
         self.composition
             .get_headers()
-            .lengths(&[LocalMetric::css_pixels(
-                self.typography
-                    .composition
-                    .composition_header
-                    .get_font_size(),
-            )?])
+            .lengths(&[LocalMetric::css_pixels(selected_size)?])
     }
     pub(crate) fn facet_strip_lengths(&self) -> Result<FacetStripLengths> {
         self.composition

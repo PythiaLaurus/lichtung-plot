@@ -247,6 +247,12 @@ width preference, not merely because a value is authored Text. Guide title gaps
 are section-local selected metrics. Complete title requests participate in Shared
 compatibility, measurement/child/height identity and frozen guide feedback.
 
+Canvas headers and row titles carry complete Text through font preparation,
+intrinsics, spanning requirements and frozen placement. Column/row header bands
+take the maximum of each owner's measured text plus selected-size padding; row
+titles use their own horizontal capacity and vertical reserve. Physical line
+alignment precedes centered block placement and does not change the declared span.
+
 Unicode tables/algorithms must have reproducible version/hash/provenance and
 compatible shaping classification; a dependency version alone is insufficient.
 Focused independent defaults/runtime tables remain local. Full conformance is

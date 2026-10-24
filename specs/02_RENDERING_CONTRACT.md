@@ -186,8 +186,9 @@ One-name resolution does not replace complete-domain collision checks. Raw
 category/series/field keys, endpoint identities, font-family names, significance
 selectors, paths and NumericFormat grammar retain their own semantic validation.
 
-Plot/Canvas title, subtitle and caption, Plot x/y and color-guide titles, and TextPanel title/body
-accept `impl Into<Text>` through one source representation. String, &str and &String
+Plot/Canvas title, subtitle and caption, Plot x/y and color-guide titles, TextPanel
+title/body and Canvas column/row headers and row titles accept `impl Into<Text>`
+through one source representation. String, &str and &String
 carry no local instructions. Text optionally retains
 one complete exact TextTheme and one whole TextLayout request. Its alignment edit
 uses shared TextAlignment. TextLayout defaults leave alignment unspecified, while
@@ -203,6 +204,9 @@ remains separate from an empty source and from retained instructions.
 X/y title styles resolve independently over the shared Theme axis-title role.
 Their physical line alignment defaults to Center within each centered title block,
 before its horizontal/vertical transform, including parent-owned facet titles.
+Canvas headers retain declared span and overlap validation at insertion. Each
+local style replaces the complete Canvas header role; line alignment defaults to
+Center inside the centered block. Band padding uses each selected title size.
 
 PanelTextAnnotation likewise accepts `impl Into<Text>` and preserves complete Eq;
 its existing text reader returns `&str`. Local style replaces the Plot's panel-text

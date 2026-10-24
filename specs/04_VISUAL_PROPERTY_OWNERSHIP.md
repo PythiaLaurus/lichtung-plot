@@ -73,6 +73,12 @@ requests before fonts. Line alignment defaults to Start inside the left-position
 block. Title gap uses the section's selected size, independently of label/key/frame
 metrics. A gap before a later section uses that incoming title's gap plus row_gap.
 
+Canvas column headers, row headers and row titles retain independent Text requests
+over composition_header. Selected appearance enters census and intrinsics before
+track allocation, and its font size owns the respective HeaderSpacing products.
+The assigned span centers the block; local physical alignment controls its lines.
+Frozen header plans retain complete requests in feedback, not only source bytes.
+
 Display-text syntax belongs to one shared validator, independently of these
 appearance owners. Explicit prose, titles, headers and annotations retain source
 whitespace, mandatory breaks and present empty-line metrics. Automatic names use

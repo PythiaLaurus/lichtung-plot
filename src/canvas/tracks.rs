@@ -27,14 +27,25 @@ fn position(value: f64) -> Result<f64, Error> {
     Ok(pixels(nearest_spatial_quanta(value)?))
 }
 
-fn centered_x(left: f64, right: f64, plan: &crate::layout::ResolvedTextPlan) -> Result<f64, Error> {
+fn centered_x(
+    left: f64,
+    right: f64,
+    plan: &crate::layout::ResolvedTextPlan,
+) -> Result<(f64, TextAnchor), Error> {
     // Freeze the whole block origin with its parent's parity, then use the
     // renderer's canonical text half exactly once. Rounding the span midpoint
     // and the odd-width text half independently can leak one quantum of ink.
     let origin = position(left + (right - left - plan.width()) / 2.0)?;
-    let half = crate::render::backend::nearest_even_text_half(plan.width_quanta)
-        .ok_or_else(|| Error::Render("Canvas header text anchor overflowed".into()))?;
-    Ok(origin + pixels(half))
+    let (offset, anchor) = match plan.style.alignment {
+        PhysicalTextAlignment::Start => (0, TextAnchor::Start),
+        PhysicalTextAlignment::Center => (
+            crate::render::backend::nearest_even_text_half(plan.width_quanta)
+                .ok_or_else(|| Error::Render("Canvas header text anchor overflowed".into()))?,
+            TextAnchor::Middle,
+        ),
+        PhysicalTextAlignment::End => (plan.width_quanta, TextAnchor::End),
+    };
+    Ok((origin + pixels(offset), anchor))
 }
 
 fn required(value: f64) -> Result<i64, Error> {
@@ -106,8 +117,7 @@ pub(super) fn allocate(
             .composition_header
             .get_font_size(),
     ))?;
-    let header_lengths = theme.header_lengths()?;
-    let appearance = theme.typography.get_composition().get_composition_header();
+    let header_role = theme.typography.get_composition().get_composition_header();
     let mut row_header_plans = Vec::new();
     crate::layout::fit::reserve(
         &mut row_header_plans,
@@ -126,22 +136,24 @@ pub(super) fn allocate(
                 "Canvas row header span is outside declared Grid tracks".into(),
             ));
         }
-        let plan = theme.measure_legacy_appearance_text(
-            &header.text,
-            appearance,
-            PhysicalTextAlignment::Center,
+        let appearance = header.text.appearance(header_role);
+        let plan = theme.measure_text(
+            header.text.as_str(),
+            appearance.theme,
+            header
+                .text
+                .resolved_alignment(crate::TextAlignment::Center)
+                .into(),
             "Canvas row header intrinsic",
-            false,
+            appearance.exact_override,
         )?;
-        row_header_width = row_header_width.max(plan.width());
-        row_header_plans.push(plan);
-    }
-    if !row_headers.is_empty() {
-        row_header_width = crate::theme::composition::hard(
-            &header_lengths
+        row_header_width = row_header_width.max(crate::theme::composition::hard(
+            &theme
+                .header_lengths(appearance.theme.get_font_size())?
                 .row_header_padding
-                .add_pixels(row_header_width)?,
-        )?;
+                .add_pixels(plan.width())?,
+        )?);
+        row_header_plans.push(plan);
     }
     let header_outer = outer;
     let outer = PanelBox::new(outer.x0 + row_header_width, outer.x1, outer.y0, outer.y1);
@@ -364,8 +376,8 @@ pub(super) fn allocate(
     for (header, owner) in column_headers.iter().zip(&header_owners) {
         let (hard, preferred) = crate::layout::fit::intrinsic_widths(
             theme,
-            &header.text,
-            appearance,
+            header.text.as_str(),
+            header.text.appearance(header_role),
             "Canvas column header intrinsic",
         )?;
         widths.push(GridRequirement {
@@ -397,9 +409,16 @@ pub(super) fn allocate(
         row_title_owners.push(owner);
     }
     for (title, owner) in row_titles.iter().zip(&row_title_owners) {
-        let (hard, preferred) =
-            fit::intrinsic_widths(theme, &title.text, appearance, "Canvas row title intrinsic")?;
-        let padding = &header_lengths.row_title_horizontal_padding;
+        let appearance = title.text.appearance(header_role);
+        let (hard, preferred) = fit::intrinsic_widths(
+            theme,
+            title.text.as_str(),
+            appearance,
+            "Canvas row title intrinsic",
+        )?;
+        let padding = theme
+            .header_lengths(appearance.theme.get_font_size())?
+            .row_title_horizontal_padding;
         widths.push(GridRequirement {
             start: 0,
             span: columns,
@@ -491,12 +510,16 @@ pub(super) fn allocate(
         let right = pixels(checked(
             i128::from(x_positions[end]) + i128::from(columns[end]),
         )?);
+        let appearance = header.text.appearance(header_role);
         let plan = match fit::text(
             theme,
-            &header.text,
+            header.text.as_str(),
             appearance,
             right - left,
-            PhysicalTextAlignment::Center,
+            header
+                .text
+                .resolved_alignment(crate::TextAlignment::Center)
+                .into(),
             "Canvas column header",
             &FitScope::new(&header_owners[index], 0),
         )? {
@@ -504,7 +527,8 @@ pub(super) fn allocate(
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
         };
         header_height = header_height.max(crate::theme::composition::hard(
-            &header_lengths
+            &theme
+                .header_lengths(appearance.theme.get_font_size())?
                 .column_header_padding
                 .add_pixels(plan.height())?,
         )?);
@@ -525,15 +549,20 @@ pub(super) fn allocate(
     crate::layout::fit::reserve(&mut row_title_heights, rows, "Canvas row-title heights")?;
     row_title_heights.resize(rows, 0_i64);
     for (index, title) in row_titles.iter().enumerate() {
+        let appearance = title.text.appearance(header_role);
+        let header_lengths = theme.header_lengths(appearance.theme.get_font_size())?;
         let plan = match fit::text(
             theme,
-            &title.text,
+            title.text.as_str(),
             appearance,
             crate::theme::composition::capacity(
                 title_right - title_left,
                 &header_lengths.row_title_horizontal_padding,
             )?,
-            PhysicalTextAlignment::Center,
+            title
+                .text
+                .resolved_alignment(crate::TextAlignment::Center)
+                .into(),
             "Canvas row title",
             &FitScope::new(&row_title_owners[index], 0),
         )? {
@@ -688,13 +717,14 @@ pub(super) fn allocate(
         .checked_add(row_headers.len())
         .ok_or_else(|| Error::Render("Canvas header storage overflowed".into()))?;
     crate::render::backend::reserve_text_records(&mut headers, header_count)?;
-    for (plan, left, right) in column_plans {
-        let x = centered_x(left, right, &plan)?;
+    for (header, (plan, left, right)) in column_headers.iter().zip(column_plans) {
+        let (x, anchor) = centered_x(left, right, &plan)?;
         headers.push(CanvasHeaderPlan {
+            request: header.text.try_copy()?,
             text: PlacedText::middle(
                 plan,
                 Point2D::new(x, position(header_outer.y1 - pixels(header_quanta) / 2.0)?),
-                TextAnchor::Middle,
+                anchor,
                 0.0,
             ),
         });
@@ -702,12 +732,13 @@ pub(super) fn allocate(
     for (header, plan) in row_headers.iter().zip(row_header_plans) {
         let top = cells[header.start * columns.len()].y1;
         let bottom = cells[(header.start + header.span - 1) * columns.len()].y0;
-        let x = centered_x(header_outer.x0, header_outer.x0 + row_header_width, &plan)?;
+        let (x, anchor) = centered_x(header_outer.x0, header_outer.x0 + row_header_width, &plan)?;
         headers.push(CanvasHeaderPlan {
+            request: header.text.try_copy()?,
             text: PlacedText::middle(
                 plan,
                 Point2D::new(x, position(f64::midpoint(bottom, top))?),
-                TextAnchor::Middle,
+                anchor,
                 0.0,
             ),
         });
@@ -716,8 +747,9 @@ pub(super) fn allocate(
     crate::render::backend::reserve_text_records(&mut measured_row_titles, row_titles.len())?;
     for (title, plan) in row_titles.iter().zip(row_title_plans) {
         let row = title.start;
-        let x = centered_x(title_left, title_right, &plan)?;
+        let (x, anchor) = centered_x(title_left, title_right, &plan)?;
         measured_row_titles.push(CanvasHeaderPlan {
+            request: title.text.try_copy()?,
             text: PlacedText::middle(
                 plan,
                 Point2D::new(
@@ -728,7 +760,7 @@ pub(super) fn allocate(
                             + pixels(row_title_heights[row]) / 2.0,
                     )?,
                 ),
-                TextAnchor::Middle,
+                anchor,
                 0.0,
             ),
         });
