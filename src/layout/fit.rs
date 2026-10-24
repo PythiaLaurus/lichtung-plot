@@ -223,14 +223,14 @@ pub(crate) fn intrinsic_widths<'a>(
     if appearance.hidden() {
         return Ok((0.0, 0.0));
     }
-    let requirements = theme
-        .measure_text(
-            source,
-            appearance.theme,
-            PhysicalTextAlignment::Start,
-            owner,
-            appearance.exact_override,
-        )?
+    let unwrapped = theme.measure_text(
+        source,
+        appearance.theme,
+        PhysicalTextAlignment::Start,
+        owner,
+        appearance.exact_override,
+    )?;
+    let requirements = unwrapped
         .intrinsic_from_analysis(1)
         .map_err(|error| Error::Render(format!("{owner}: {error}")))?;
     let hard = if appearance.layout.is_some_and(|request| {
@@ -258,13 +258,37 @@ pub(crate) fn intrinsic_widths<'a>(
         .and_then(|request| request.instructions().bounds)
         .and_then(|bounds| bounds.width)
         .map_or(hard, |maximum| hard.min(maximum.get()));
-    Ok((
-        hard,
-        requirements
-            .natural_width_quanta
-            .max(requirements.preferred_width_quanta) as f64
-            / 1024.0,
-    ))
+    let natural = requirements
+        .natural_width_quanta
+        .max(requirements.preferred_width_quanta) as f64
+        / 1024.0;
+    if let Some(orientation) = appearance
+        .layout
+        .and_then(|request| request.instructions().orientation.as_ref())
+    {
+        let project = |angle: crate::TextRotation| {
+            let (sine, cosine) = crate::text::orientation::components(angle.0.get());
+            (
+                hard * cosine.abs() + unwrapped.height() * sine.abs(),
+                natural * cosine.abs() + unwrapped.height() * sine.abs(),
+            )
+        };
+        return match &orientation.0 {
+            crate::text::orientation::Orientation::Fixed(angle) => Ok(project(*angle)),
+            crate::text::orientation::Orientation::Automatic(angles) => Ok(angles
+                .iter()
+                .map(|&angle| project(angle))
+                .reduce(|a, b| (a.0.min(b.0), a.1.min(b.1)))
+                .unwrap_or((0.0, natural))),
+            crate::text::orientation::Orientation::Data(from, to) => theme
+                .text_direction
+                .as_ref()
+                .map_or(Ok((0.0, natural)), |frame| {
+                    frame.rotation(from, to, theme).map(project)
+                }),
+        };
+    }
+    Ok((hard, natural))
 }
 
 #[cfg(test)]

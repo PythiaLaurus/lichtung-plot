@@ -217,6 +217,14 @@ impl Plot {
             RENDER_PANEL_CALLS.with(|calls| calls.set(calls.get() + 1));
         }
         let context = context.with_prepared_axes(self)?;
+        let mut frame = crate::layout::Layout::envelope(context.panel);
+        frame.projection = crate::layout::Projection::new(
+            context.axis_range(crate::layout::AxisSide::Bottom, || Ok((0.0, 1.0)))?,
+            context.axis_range(crate::layout::AxisSide::Left, || Ok((0.0, 1.0)))?,
+            context.panel.as_tuple(),
+        );
+        let directional = context.theme.with_text_projection(self, &frame);
+        let context = context.with_theme(&directional);
         match kind {
             PlotKind::Scatter
             | PlotKind::Line

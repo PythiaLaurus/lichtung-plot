@@ -53,6 +53,27 @@ impl LabelCell {
         self.end - self.start
     }
 
+    pub(super) fn local(
+        plan: &ResolvedTextPlan,
+        side: AxisSide,
+    ) -> Result<PlannedTextPlacement, Error> {
+        let requested = plan.request.as_ref().map(crate::TextLayout::instructions);
+        let anchor = requested
+            .and_then(|request| request.anchor)
+            .unwrap_or_else(|| match side {
+                AxisSide::Bottom => crate::TextAnchor::center(),
+                AxisSide::Left => crate::TextAnchor::center_right(),
+            });
+        crate::layout::text::placement::at(
+            plan,
+            Point2D::new(0.0, 0.0),
+            anchor,
+            0.0,
+            false,
+            requested.and_then(|request| request.offset),
+        )
+    }
+
     /// Source selection and frozen labels use the same canonical anchor and ink.
     pub(super) fn placement(
         self,
@@ -61,20 +82,7 @@ impl LabelCell {
         perpendicular: f64,
     ) -> Result<Option<PlannedTextPlacement>, Error> {
         let requested = plan.request.as_ref().map(crate::TextLayout::instructions);
-        let anchor = requested
-            .and_then(|request| request.anchor)
-            .unwrap_or_else(|| match side {
-                AxisSide::Bottom => crate::TextAnchor::center(),
-                AxisSide::Left => crate::TextAnchor::center_right(),
-            });
-        let mut placement = crate::layout::text::placement::at(
-            plan,
-            Point2D::new(0.0, 0.0),
-            anchor,
-            0.0,
-            false,
-            requested.and_then(|request| request.offset),
-        )?;
+        let mut placement = Self::local(plan, side)?;
         let allow = requested.is_some_and(|request| {
             request.overlap == Some(crate::TextOverlap::Allow)
                 || request

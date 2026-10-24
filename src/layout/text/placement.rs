@@ -26,7 +26,12 @@ pub(crate) fn resolve(
             | (BackendAnchor::Middle, super::PhysicalTextAlignment::Center)
             | (BackendAnchor::End, super::PhysicalTextAlignment::End)
     );
-    if request.anchor.is_none() && request.offset.is_none() && aligned {
+    if request.anchor.is_none()
+        && request.offset.is_none()
+        && request.orientation.is_none()
+        && request.rotation_mode.is_none()
+        && aligned
+    {
         return Ok(default);
     }
     let anchor = request.anchor.unwrap_or_else(|| from_default(default));
@@ -47,7 +52,7 @@ pub(crate) fn resolve(
         reference,
         anchor,
         default.rotation,
-        default.reverse_lines,
+        default.reverse_lines && request.orientation.is_none(),
         request.offset,
     )
 }
@@ -78,6 +83,24 @@ pub(crate) fn at(
     reverse_lines: bool,
     offset: Option<crate::TextOffset>,
 ) -> Result<PlannedTextPlacement, Error> {
+    let instructions = plan.request.as_ref().map(crate::TextLayout::instructions);
+    let rotation = plan.selected_rotation.map_or_else(
+        || {
+            instructions
+                .and_then(|request| request.orientation.as_ref())
+                .map_or(Ok(rotation), |request| match &request.0 {
+                    crate::text::orientation::Orientation::Fixed(angle) => Ok(angle.0.get()),
+                    crate::text::orientation::Orientation::Data(..) => Err(Error::Render(
+                        "data text orientation requires its actual projection before measurement"
+                            .into(),
+                    )),
+                    crate::text::orientation::Orientation::Automatic(..) => Err(Error::Data(
+                        "automatic orientation requires an actual tick group".into(),
+                    )),
+                })
+        },
+        |angle| Ok(angle.0.get()),
+    )?;
     let width = plan.width();
     let height = plan.height();
     let baseline = |value: Option<i64>| value.map_or(0.0, |value| value as f64 / 1024.0);
@@ -126,6 +149,18 @@ pub(crate) fn at(
     let mut placement =
         PlannedTextPlacement::middle(canonical.position.value(), alignment, rotation);
     placement.reverse_lines = reverse_lines;
+    if instructions.is_some_and(|request| {
+        request.rotation_mode == Some(crate::TextRotationMode::AlignAfterRotation)
+    }) {
+        let bounds = logical_bounds(placement, plan)?;
+        let x = bounds.x0 + anchor.horizontal.get() * bounds.width();
+        let y = match anchor.vertical {
+            VerticalAnchor::Fraction(fraction) => bounds.y1 - fraction.get() * bounds.height(),
+            _ => reference.y - screen.1,
+        };
+        placement.position.x += reference.x + screen.0 - x;
+        placement.position.y += reference.y - screen.1 - y;
+    }
     Ok(placement)
 }
 

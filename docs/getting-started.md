@@ -216,6 +216,14 @@ Tick/guide/value roles accept a common `TextLayout`; `TextVisibility::every` or
 `greedy` selects labels without removing marks, ticks or grid lines. Local Text
 layout replaces the entire role request, including an explicit default reset.
 
+Use `.rotation(TextRotation::degrees(30.05)?)` on that same layout for a fixed
+screen angle, or `.rotation(TextRotation::horizontal())` to replace a vertical
+y-title default. `.orientation(TextOrientation::automatic_ticks(angles))` tries an
+explicit ordered tick-angle list without removing ticks or splitting identifiers.
+`TextRotationMode::AlignAfterRotation` aligns the rotated box; the default rotates
+around the selected block anchor. Typed data directions follow the actual panel
+projection rather than the unscaled numeric slope.
+
 `HeatmapNullRowAnnotation::new(row_key, text)` accepts Text for the explanation
 inside a fully-null Cartesian row. The row key keeps its semantic validation;
 local Text style replaces the missing-fill contrast role and determines padding.

@@ -824,6 +824,29 @@ pub(super) fn labels_fit(
     side: AxisSide,
     theme: &ResolvedTheme,
 ) -> Result<bool, Error> {
+    if let Some(crate::text::orientation::Orientation::Automatic(angles)) = theme
+        .tick_text_appearance(side)
+        .layout
+        .and_then(|request| request.instructions().orientation.as_ref())
+        .map(|orientation| &orientation.0)
+    {
+        if ticks.iter().all(|tick| tick.label.is_empty())
+            || theme.tick_text_appearance(side).hidden()
+        {
+            return Ok(true);
+        }
+        for angle in angles {
+            let mut selected = theme.clone();
+            selected.text_layouts.ticks[usize::from(side == AxisSide::Left)] = theme
+                .tick_text_appearance(side)
+                .layout
+                .map(|request| request.clone().rotation(*angle));
+            if labels_fit(ticks, projection, side, &selected)? {
+                return Ok(true);
+            }
+        }
+        return Ok(false);
+    }
     let appearance = theme.tick_text_appearance(side);
     if appearance.hidden() {
         return Ok(true);

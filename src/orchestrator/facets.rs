@@ -1041,7 +1041,10 @@ mod feedback_tests {
             crate::CategoryValues::new("facet", [&text, &text, "second", "second"]).unwrap(),
         ))
         .facet_column_text_layout(
-            crate::TextLayout::default().anchor(crate::TextAnchor::top_center()),
+            crate::TextLayout::default()
+                .anchor(crate::TextAnchor::top_center())
+                .rotation(crate::TextRotation::degrees(30.05).unwrap())
+                .rotation_mode(crate::TextRotationMode::AlignAfterRotation),
         )
         .x_label(&text)
         .y_label(&text)

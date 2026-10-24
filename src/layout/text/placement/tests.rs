@@ -90,3 +90,61 @@ fn measured_baselines_and_fractional_offsets_use_the_declared_frame_once() {
     near(local.position.x - unshifted.position.x, -2.5);
     near(local.position.y - unshifted.position.y, -1.25);
 }
+
+#[test]
+fn normalized_angles_and_rotation_modes_preserve_independent_reference_relationships() {
+    use crate::{TextLayout, TextRotation, TextRotationMode};
+    assert_eq!(
+        TextRotation::degrees(315.0).unwrap(),
+        TextRotation::tilt_up()
+    );
+    assert_eq!(
+        TextRotation::degrees(-0.0).unwrap(),
+        TextRotation::horizontal()
+    );
+    assert!(TextRotation::degrees(f64::INFINITY).is_err());
+    let angle = 30.05_f64;
+    let reference = Point2D::new(120.0, 150.0);
+    let original = super::super::tests::plan("AAAA\nA", i64::MAX, PhysicalTextAlignment::Start);
+    let layout = TextLayout::default()
+        .rotation(TextRotation::degrees(angle).unwrap())
+        .anchor(TextAnchor::bottom_left());
+    let plan = original.with_request(Some(&layout));
+    let rotated = at(
+        &plan,
+        reference,
+        TextAnchor::bottom_left(),
+        0.0,
+        false,
+        None,
+    )
+    .unwrap();
+    assert_eq!(rotated.rotation.to_bits(), angle.to_bits());
+    let (sine, cosine) = angle.to_radians().sin_cos();
+    // The original bottom-left corner remains the rotation reference.
+    near(rotated.position.x - plan.height() / 2.0 * sine, reference.x);
+    near(
+        rotated.position.y - plan.height() / 2.0 * cosine,
+        reference.y,
+    );
+    let aligned = plan.with_request(Some(
+        &layout.rotation_mode(TextRotationMode::AlignAfterRotation),
+    ));
+    let placement = at(
+        &aligned,
+        reference,
+        TextAnchor::bottom_left(),
+        0.0,
+        false,
+        None,
+    )
+    .unwrap();
+    // The independent rotated rectangle has its lower-left bounding-box point at the reference.
+    let width = aligned.width() * cosine + aligned.height() * sine;
+    let height = aligned.width() * sine + aligned.height() * cosine;
+    let bounds = logical_bounds(placement, &aligned).unwrap();
+    near(bounds.x0, reference.x);
+    near(bounds.y0, reference.y);
+    near(bounds.width(), width);
+    near(bounds.height(), height);
+}

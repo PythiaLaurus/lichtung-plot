@@ -1,13 +1,15 @@
 //! Shared source syntax for authored and prepared display text.
 
 pub(crate) mod layout;
+pub(crate) mod orientation;
 pub(crate) mod position;
+pub use orientation::{TextOrientation, TextRotation, TextRotationMode};
 pub(crate) mod roles;
 pub use layout::{
     TextAnchor, TextBounds, TextFailure, TextOffset, TextOffsetFrame, TextOverflow, TextOverlap,
     TextVisibility, TextWrapping,
 };
-pub use position::{DataCoordinate, TextCoordinate, TextPosition};
+pub use position::{DataCoordinate, DataPosition, TextCoordinate, TextPosition};
 pub use roles::GuideTextRole;
 
 /// Authored display text with optional complete appearance and layout instructions.
@@ -246,6 +248,8 @@ pub struct TextLayout {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct TextInstructions {
+    pub(crate) orientation: Option<TextOrientation>,
+    pub(crate) rotation_mode: Option<TextRotationMode>,
     pub(crate) anchor: Option<TextAnchor>,
     pub(crate) offset: Option<TextOffset>,
     pub(crate) bounds: Option<TextBounds>,
@@ -269,6 +273,8 @@ impl TextLayout {
 
     pub(crate) fn instructions(&self) -> &TextInstructions {
         static EMPTY: TextInstructions = TextInstructions {
+            orientation: None,
+            rotation_mode: None,
             anchor: None,
             offset: None,
             bounds: None,
@@ -300,7 +306,14 @@ macro_rules! layout_edits {
         pub fn $field(mut self,value:$value) -> Self {self.edit_instructions().$field=Some(value);self}
     )+}};
 }
-layout_edits! {anchor:TextAnchor,offset:TextOffset,bounds:TextBounds,wrapping:TextWrapping,overflow:TextOverflow,overlap:TextOverlap,visibility:TextVisibility}
+layout_edits! {anchor:TextAnchor,offset:TextOffset,bounds:TextBounds,wrapping:TextWrapping,overflow:TextOverflow,overlap:TextOverlap,visibility:TextVisibility,orientation:TextOrientation,rotation_mode:TextRotationMode}
+impl TextLayout {
+    /// Replace orientation with one fixed screen angle.
+    #[must_use]
+    pub fn rotation(self, value: TextRotation) -> Self {
+        self.orientation(TextOrientation::fixed(value))
+    }
+}
 
 /// One immutable selected role, including exact-appearance provenance.
 #[derive(Clone, Copy)]
@@ -322,6 +335,18 @@ impl<'a> From<&'a crate::TextTheme> for TextAppearance<'a> {
 
 impl TextAppearance<'_> {
     pub(crate) fn require_single(self) -> crate::Result<Self> {
+        if !self.hidden()
+            && self
+                .layout
+                .and_then(|request| request.instructions().orientation.as_ref())
+                .is_some_and(|orientation| {
+                    matches!(orientation.0, orientation::Orientation::Automatic(_))
+                })
+        {
+            return Err(crate::Error::Data(
+                "automatic orientation requires an actual tick group".into(),
+            ));
+        }
         if self
             .layout
             .and_then(|request| request.instructions().visibility.as_ref())

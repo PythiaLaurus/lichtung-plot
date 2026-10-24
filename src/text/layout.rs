@@ -5,6 +5,9 @@ use crate::{Error, LabelEndpoints, Result};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Finite(u64);
 impl Finite {
+    pub(crate) const fn constant(value: f64) -> Self {
+        Self(value.to_bits())
+    }
     pub(crate) fn new(value: f64) -> Result<Self> {
         if !value.is_finite() {
             return Err(Error::Data("text layout coordinates must be finite".into()));

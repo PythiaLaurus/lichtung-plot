@@ -250,6 +250,15 @@ first. Independent authored slots accept All/Hidden, not group reduction program
 Explicit Allow removes collision weight, not physical containment or final-root checks.
 Selected sources, requests, clips and placements are frozen before publication.
 
+TextRotation presets and equal custom finite angles normalize identically to
+[-180,180), without tenth-degree quantization. TextOrientation adds projected typed
+data directions and caller-ordered automatic tick candidates. TextRotationMode
+chooses rotation about the selected measured point or alignment of the rotated
+bounds. Explicit orientation replaces the owner direction and its multiline order;
+omission preserves current owner defaults. Glyphs rotate independently of marks,
+bracket paths, ticks and raw scientific references. Fit/gutters/tracks consume
+the same transformed logical/paint geometry used by every output.
+
 HeatmapNullRowAnnotation takes a semantic row-label string and displayed Text.
 Local exact style replaces the selected missing-fill contrast role before fonts;
 line alignment defaults to Center inside the merged row's centered block. Selected

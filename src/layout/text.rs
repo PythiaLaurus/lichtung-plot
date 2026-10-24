@@ -263,6 +263,8 @@ impl From<ParagraphBidiInfo<'_>> for ParagraphBidiData {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ResolvedTextPayload {
+    pub(crate) selected_rotation: Option<crate::TextRotation>,
+    occupied_rotation: Option<(i64, i64)>,
     content: std::sync::Arc<ResolvedTextContent>,
     pub(crate) request: Option<crate::TextLayout>,
     pub(crate) clip_size: Option<(i64, i64)>,
@@ -306,6 +308,28 @@ impl std::ops::Deref for ResolvedTextPlan {
 }
 
 impl ResolvedTextPlan {
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "canonical occupied lengths are converted before checked outward projection"
+    )]
+    pub(crate) fn freeze_orientation(mut self) -> Result<Self, crate::Error> {
+        self.payload_mut().occupied_rotation = None;
+        if let Some(angle) = self.selected_rotation {
+            let (sine, cosine) = crate::text::orientation::components(angle.0.get());
+            let width = self.occupied_width_quanta() as f64 / 1024.0;
+            let height = self.occupied_height_quanta() as f64 / 1024.0;
+            let dimensions = (
+                crate::layout::kernel::ceil_spatial_quanta(
+                    width * cosine.abs() + height * sine.abs(),
+                )?,
+                crate::layout::kernel::ceil_spatial_quanta(
+                    width * sine.abs() + height * cosine.abs(),
+                )?,
+            );
+            self.payload_mut().occupied_rotation = Some(dimensions);
+        }
+        Ok(self)
+    }
     pub(crate) fn translate_paint_region(mut self, dx: f64, dy: f64) -> Self {
         if let Some(region) = self.paint_region {
             let [x0, x1, y0, y1] = region.map(f64::from_bits);
@@ -320,14 +344,24 @@ impl ResolvedTextPlan {
         }
     }
     pub(crate) fn occupied_width_quanta(&self) -> i64 {
-        self.clip_size
-            .map_or(self.width_quanta, |(width, _)| width.min(self.width_quanta))
+        self.occupied_rotation.map_or_else(
+            || {
+                self.clip_size
+                    .map_or(self.width_quanta, |(width, _)| width.min(self.width_quanta))
+            },
+            |size| size.0,
+        )
     }
 
     pub(crate) fn occupied_height_quanta(&self) -> i64 {
-        self.clip_size.map_or(self.height_quanta, |(_, height)| {
-            height.min(self.height_quanta)
-        })
+        self.occupied_rotation.map_or_else(
+            || {
+                self.clip_size.map_or(self.height_quanta, |(_, height)| {
+                    height.min(self.height_quanta)
+                })
+            },
+            |size| size.1,
+        )
     }
 
     #[expect(
@@ -349,6 +383,8 @@ impl ResolvedTextPlan {
         let theme = appearance.theme;
         Ok(Self(
             std::sync::Arc::new(ResolvedTextPayload {
+                selected_rotation: None,
+                occupied_rotation: None,
                 content: std::sync::Arc::new(ResolvedTextContent {
                     source: crate::data::source::copy_source_string(source)?,
                     style: ResolvedTextStyle {
@@ -396,6 +432,12 @@ impl ResolvedTextPlan {
         std::sync::Arc::make_mut(&mut self.0)
     }
     pub(crate) fn with_request(mut self, request: Option<&crate::TextLayout>) -> Self {
+        if let Some(crate::text::orientation::Orientation::Fixed(angle)) = request
+            .and_then(|request| request.instructions().orientation.as_ref())
+            .map(|orientation| &orientation.0)
+        {
+            self.payload_mut().selected_rotation = Some(*angle);
+        }
         self.payload_mut().request = request.cloned();
         self
     }
@@ -436,6 +478,7 @@ impl ResolvedTextPlan {
             line_pitch_quanta: self.line_pitch_quanta,
         };
         self.payload_mut().content = std::sync::Arc::new(content);
+        self.payload_mut().occupied_rotation = None;
         Ok(self)
     }
     pub(crate) fn clip_to(mut self, width: i64, height: i64) -> Self {
@@ -2244,6 +2287,8 @@ fn finalize_plan(
     lines.extend(built_lines.into_iter().map(|line| line.plan));
     Ok(ResolvedTextPlan(
         std::sync::Arc::new(ResolvedTextPayload {
+            selected_rotation: None,
+            occupied_rotation: None,
             content: std::sync::Arc::new(ResolvedTextContent {
                 source,
                 style: ResolvedTextStyle {

@@ -95,6 +95,63 @@ fn raw_category_references_use_native_assigned_track_centers_not_aliases_or_unif
 }
 
 #[test]
+fn data_direction_uses_the_actual_projection_and_retains_non_tenth_fixed_angles() {
+    use crate::{DataCoordinate, DataPosition, Text, TextLayout, TextOrientation, TextRotation};
+    let theme = crate::Theme::publication().resolve().unwrap();
+    let source = Plot::scatter(
+        crate::NumericValues::new("x", [0.0, 20.0]),
+        crate::NumericValues::new("y", [0.0, 10.0]),
+    )
+    .erase();
+    let plot = crate::plots::shared_x::prepare_panel_for_test(&source, &theme).unwrap();
+    let data = |x, y| {
+        DataPosition::new(
+            DataCoordinate::numeric(x).unwrap(),
+            DataCoordinate::numeric(y).unwrap(),
+        )
+    };
+    let request = TextLayout::default().orientation(TextOrientation::data_direction(
+        data(0.0, 0.0),
+        data(20.0, 10.0),
+    ));
+    let note = crate::PanelTextAnnotation::at(
+        TextPosition::new(
+            crate::TextCoordinate::panel_fraction(0.5).unwrap(),
+            crate::TextCoordinate::panel_fraction(0.5).unwrap(),
+        ),
+        Text::new("A note").layout(request),
+    )
+    .unwrap();
+    for panel in [
+        PanelBox::new(0.0, 400.0, 0.0, 200.0),
+        PanelBox::new(0.0, 200.0, 0.0, 400.0),
+    ] {
+        let layout = Layout {
+            projection: crate::layout::Projection::new((0.0, 20.0), (0.0, 10.0), panel.as_tuple()),
+            ..Layout::envelope(panel)
+        };
+        let planned = measure(&note, &plot, &layout, &theme, &FitScope::root()).unwrap();
+        near(
+            planned.placement.rotation,
+            -panel.height().atan2(panel.width()).to_degrees(),
+        );
+    }
+    let note = crate::PanelTextAnnotation::new(
+        PanelCorner::TopLeft,
+        Text::new("30 degree note").layout(
+            TextLayout::default()
+                .anchor(TextAnchor::top_left())
+                .rotation(TextRotation::degrees(30.05).unwrap())
+                .overflow(crate::TextOverflow::visible()),
+        ),
+    )
+    .unwrap();
+    let layout = Layout::envelope(PanelBox::new(0.0, 400.0, 0.0, 400.0));
+    let planned = measure(&note, &plot, &layout, &theme, &FitScope::root()).unwrap();
+    assert_eq!(planned.placement.rotation.to_bits(), 30.05_f64.to_bits());
+}
+
+#[test]
 fn selected_local_style_padding_is_retained_for_fit_and_reassignment() {
     let appearance = crate::Theme::publication()
         .typography()

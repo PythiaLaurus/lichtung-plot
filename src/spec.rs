@@ -653,6 +653,15 @@ pub(crate) struct PlotRenderContext<'a> {
 }
 
 impl<'a> PlotRenderContext<'a> {
+    pub(crate) fn with_theme<'b>(
+        self,
+        theme: &'b crate::theme::ResolvedTheme,
+    ) -> PlotRenderContext<'b>
+    where
+        'a: 'b,
+    {
+        PlotRenderContext { theme, ..self }
+    }
     pub(crate) fn new(
         data: crate::data::PlotData<'a>,
         panel: PanelBox,

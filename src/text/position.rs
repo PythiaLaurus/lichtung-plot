@@ -4,6 +4,19 @@ use super::layout::Finite;
 use crate::{PanelCorner, Result};
 pub(crate) mod resolve;
 
+/// A typed scientific point, independent of drawing instructions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DataPosition {
+    pub(crate) x: DataCoordinate,
+    pub(crate) y: DataCoordinate,
+}
+impl DataPosition {
+    /// Retain independent scientific x and y references.
+    pub const fn new(x: DataCoordinate, y: DataCoordinate) -> Self {
+        Self { x, y }
+    }
+}
+
 /// A raw scientific coordinate. Category and series names are never aliases.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DataCoordinate(pub(crate) DataValue);

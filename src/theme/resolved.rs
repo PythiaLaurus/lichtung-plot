@@ -39,6 +39,7 @@ thread_local! {
 #[derive(Debug, Clone)]
 pub(crate) struct ResolvedTheme {
     pub(crate) text_layouts: crate::text::roles::TextRoles,
+    pub(crate) text_direction: Option<std::sync::Arc<crate::text::orientation::DirectionFrame>>,
     appearance: Theme,
     /// An explicit Plot inside Canvas composes over the Canvas owner's surface.
     pub(crate) canvas_surface_override: Option<Color>,
@@ -390,6 +391,27 @@ impl PartialEq for ResolvedTheme {
 }
 
 impl ResolvedTheme {
+    pub(crate) fn with_text_projection(
+        &self,
+        plot: &crate::Plot,
+        layout: &crate::layout::Layout,
+    ) -> Self {
+        let mut theme = self.clone();
+        theme.text_direction = Some(std::sync::Arc::new(
+            crate::text::orientation::DirectionFrame {
+                plot: plot.clone(),
+                layout: layout.clone(),
+            },
+        ));
+        theme
+    }
+
+    pub(crate) fn reproject_text(&self, layout: &crate::layout::Layout) -> Self {
+        self.text_direction.as_ref().map_or_else(
+            || self.clone(),
+            |frame| self.with_text_projection(&frame.plot, layout),
+        )
+    }
     pub(crate) fn measure_appearance_text<'a>(
         &self,
         source: &str,
@@ -432,6 +454,7 @@ impl ResolvedTheme {
         Ok(Self {
             appearance,
             text_layouts: crate::text::roles::TextRoles::default(),
+            text_direction: None,
             canvas_surface_override: None,
             font_environment: Arc::new(OnceLock::new()),
             text_queries: Arc::default(),
@@ -445,6 +468,11 @@ impl ResolvedTheme {
             && self.canvas_surface_override == other.canvas_surface_override
             && self.marks == other.marks
             && self.annotations == other.annotations
+            && self
+                .text_direction
+                .as_ref()
+                .zip(other.text_direction.as_ref())
+                .is_none_or(|(a, b)| a.same(b))
     }
 }
 

@@ -334,6 +334,8 @@ impl Layout {
         standard: impl FnOnce() -> Result<super::StandardPanelInputs, Error>,
     ) -> Result<PanelAxisPlan, PlanError> {
         let standard = standard()?;
+        let directional = theme.reproject_text(self);
+        let theme = &directional;
         // Evaluate both siblings: a later fatal error takes precedence over a fit miss.
         let x_axis = self.x_axis.measure(
             &self.projection,
@@ -469,11 +471,9 @@ impl Axis {
                 -90.0,
             ),
         };
-        let default = if plan
-            .request
-            .as_ref()
-            .is_some_and(|request| request.instructions().anchor.is_some())
-        {
+        let default = if plan.request.as_ref().is_some_and(|request| {
+            request.instructions().anchor.is_some() || request.instructions().orientation.is_some()
+        }) {
             PlannedTextPlacement::middle(center, TextAnchor::Middle, default.rotation)
         } else {
             default
@@ -584,6 +584,50 @@ impl Axis {
         standard: &super::StandardPanelInputs,
         scope: &FitScope,
     ) -> Result<FrozenAxisPlan, PlanError> {
+        if let Some(crate::text::orientation::Orientation::Automatic(angles)) = theme
+            .tick_text_appearance(side)
+            .layout
+            .and_then(|request| request.instructions().orientation.as_ref())
+            .map(|orientation| &orientation.0)
+        {
+            if self.tick_labels_visible
+                && !self.ticks.is_empty()
+                && !theme.tick_text_appearance(side).hidden()
+            {
+                let original = theme
+                    .tick_text_appearance(side)
+                    .layout
+                    .expect("angle request");
+                let mut miss = None;
+                for angle in angles {
+                    let mut selected = theme.clone();
+                    selected.text_layouts.ticks[usize::from(side == AxisSide::Left)] =
+                        Some(original.clone().rotation(*angle));
+                    match self.measure(projection, side, &selected, standard, scope) {
+                        Ok(mut plan) => {
+                            for tick in &mut plan.ticks {
+                                if let Some((text, _)) = &mut tick.label {
+                                    *text = text.clone().with_request(Some(original));
+                                }
+                            }
+                            return Ok(plan);
+                        }
+                        Err(PlanError::Fit(failure)) => {
+                            fit::FitFailure::retain_least(&mut miss, failure);
+                        }
+                        Err(error) => return Err(error),
+                    }
+                }
+                return Err(miss
+                    .unwrap_or_else(|| {
+                        scope.failure(
+                            FitKind::Tick,
+                            "automatic text orientation has no fitting angle",
+                        )
+                    })
+                    .into());
+            }
+        }
         let categorical = self.source == TickSource::SUPPLIED;
         let tick_text = theme.tick_text_appearance(side);
         let visible = self.tick_labels_visible && !tick_text.hidden();
@@ -712,11 +756,15 @@ impl Axis {
                     scope,
                 ))?;
                 let offset = outward.add_length(gap);
+                let local = cells::LabelCell::local(&plan, side)?;
+                let footprint = crate::layout::text::placement::footprint(local, &plan)?;
                 let perpendicular = match side {
                     AxisSide::Bottom => {
-                        AxisLengths::before(&offset.add_pixels(plan.height() / 2.0)?, panel.y0)?
+                        AxisLengths::before(&offset.add_pixels(footprint.y1.max(0.0))?, panel.y0)?
                     }
-                    AxisSide::Left => AxisLengths::before(&offset, panel.x0)?,
+                    AxisSide::Left => {
+                        AxisLengths::before(&offset.add_pixels(footprint.x1.max(0.0))?, panel.x0)?
+                    }
                 };
                 let placement = cell.placement(&plan, side, perpendicular)?.ok_or_else(|| {
                     scope.failure(
@@ -814,8 +862,8 @@ impl Axis {
                     })?;
                 let bounds = crate::layout::text::placement::footprint(local, &local_plan)?;
                 label_extent = label_extent.max(match side {
-                    AxisSide::Bottom => plan.height() / 2.0 - bounds.y0,
-                    AxisSide::Left => -bounds.x0,
+                    AxisSide::Bottom => bounds.height(),
+                    AxisSide::Left => bounds.width(),
                 });
             }
         }
@@ -824,11 +872,19 @@ impl Axis {
             gutter = gutter.add_length(gap).add_pixels(label_extent)?;
         }
         let title = if let Some(label) = &self.label {
-            let plan = fit::measured(fit::single_text(
+            let mut plan = fit::measured(fit::single_text(
                 theme,
                 label.as_str(),
                 title_appearance,
-                title_width,
+                if side == AxisSide::Left
+                    && title_appearance
+                        .layout
+                        .is_some_and(|request| request.instructions().orientation.is_some())
+                {
+                    f64::from(u32::MAX)
+                } else {
+                    title_width
+                },
                 label
                     .resolved_alignment(crate::TextAlignment::Center)
                     .into(),
@@ -844,7 +900,13 @@ impl Axis {
                 }
             };
             gutter = gutter.add_length(separation);
-            let position = AxisLengths::before(&gutter.add_pixels(plan.height() / 2.0)?, anchor)?;
+            let local = Self::title_placement(&plan, Point2D::new(0.0, 0.0), side)?;
+            let local_bounds = crate::layout::text::placement::footprint(local, &plan)?;
+            let inward = match side {
+                AxisSide::Bottom => local_bounds.y1,
+                AxisSide::Left => local_bounds.x1,
+            };
+            let position = AxisLengths::before(&gutter.add_pixels(inward.max(0.0))?, anchor)?;
             let center = match side {
                 AxisSide::Bottom => Point2D::new(f64::midpoint(panel.x0, panel.x1), position),
                 AxisSide::Left => Point2D::new(position, f64::midpoint(panel.y0, panel.y1)),
@@ -856,20 +918,20 @@ impl Axis {
                 crate::render::coordinates::CoordinatePrecision::CssQuantum,
             )?;
             placement.position = canonical.position.value();
-            let mut thickness = plan.height();
-            if let Some(ink) = crate::render::geometry::planned_text_ink_bounds(
-                &plan,
-                Point2D::new(0.0, 0.0),
-                placement.anchor,
-                placement.rotation,
-                placement.origin,
-                placement.reverse_lines,
-            ) {
-                thickness = thickness.max(match side {
-                    AxisSide::Bottom => plan.height() / 2.0 - ink.bottom,
-                    AxisSide::Left => plan.height() / 2.0 - ink.left,
-                });
-            }
+            let thickness = match side {
+                AxisSide::Bottom => local_bounds.height(),
+                AxisSide::Left => local_bounds.width(),
+            };
+            let bounds = crate::layout::text::placement::footprint(placement, &plan)?;
+            let region = match side {
+                AxisSide::Bottom => {
+                    crate::layout::PanelBox::new(panel.x0, panel.x1, bounds.y0, bounds.y1)
+                }
+                AxisSide::Left => {
+                    crate::layout::PanelBox::new(bounds.x0, bounds.x1, panel.y0, panel.y1)
+                }
+            };
+            plan = crate::layout::text::placement::contain(plan, placement, region, scope)?;
             gutter = gutter.add_pixels(thickness)?;
             Some((plan, placement))
         } else {

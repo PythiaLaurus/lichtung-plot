@@ -287,7 +287,8 @@ policy. Ordinary visible scalars/marks require coverage and valid shaped glyphs.
 
 Legal endpoints are UAX#14 opportunities between UAX#29 graphemes plus paragraph
 end. No proposal crosses mandatory breaks. No emergency identifier/grapheme split,
-fit-driven rotation, font shrink, omission or general ellipsis is allowed.
+implicit rotation, font shrink, omission or general ellipsis is allowed. Explicit
+TextLayout orientation uses the same legal breaks and measured source plans.
 
 Unbroken words/identifiers remain intact regardless of assigned width; even a
 short technical name such as `LightGBM` is not internally split to fit a compact
@@ -532,8 +533,17 @@ Candidate/final placement share canonical anchor and actual-ink predicate.
 From outside, top/left order is title, labels, ticks, stroke; bottom/right from
 panel is stroke, ticks, labels, title. Labels are projected overlays, not a parallel
 sequence. Gutter contains full perpendicular ink and owned gaps/stroke/ticks/title.
-Horizontal titles use0 rotation; left/right exact-90/+90 quarter-turns with stored
-canonical transform/ink, no trigonometric recomputation.
+Omitted horizontal titles use 0 rotation; omitted left/right titles use exact
+-90/+90 quarter-turns. TextLayout rotation/orientation replaces this choice with
+a normalized finite binary64 angle, never a tenth-degree approximation. Explicit
+0 also removes the inherited reversed multiline ordering. RotateAboutAnchor keeps
+the measured selected block point fixed; AlignAfterRotation aligns the rotated
+bounding box. Screen/TextLocal offsets are consumed once in the declared frame.
+Actual projected data directions use the assigned scientific projection and raw
+references. Automatic tick orientation tries only the supplied ordered candidates
+against complete transformed logical/ink cells. It cannot coarsen a fixed source,
+drop labels or invent a word break. Selected angle and original request both enter
+the frozen plan; outputs replay that transform without another search.
 
 ## Guides, Specialized Geometry And Overlays
 

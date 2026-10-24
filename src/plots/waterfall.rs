@@ -1118,7 +1118,12 @@ fn plan_annotations(
     candidates: &[(f64, Option<crate::Text>); 2],
     context: PlotRenderContext<'_>,
 ) -> Result<AnnotationPlan, crate::layout::fit::PlanError> {
-    let theme = context.theme;
+    let frame = crate::layout::Layout {
+        projection: projection.clone(),
+        ..crate::layout::Layout::envelope(panel)
+    };
+    let directional = context.theme.reproject_text(&frame);
+    let theme = &directional;
     let scope = context.fit_scope();
     let mut rows: Vec<ShelfRow> = Vec::new();
     let mut items = Vec::new();

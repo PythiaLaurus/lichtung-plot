@@ -55,11 +55,29 @@ pub(crate) fn measure(
     )
 }
 
+pub(crate) fn measure_quanta(
+    theme: &ResolvedTheme,
+    source: &str,
+    appearance: TextAppearance<'_>,
+    width: i64,
+    alignment: PhysicalTextAlignment,
+    owner: &str,
+    scope: &FitScope,
+) -> Result<FitOutcome<ResolvedTextPlan>, Error> {
+    Ok(
+        match measure_current(theme, source, appearance, width, alignment, owner, scope)? {
+            FitOutcome::Measured(plan) => FitOutcome::Measured(plan.freeze_orientation()?),
+            FitOutcome::Miss(miss) => FitOutcome::Miss(miss),
+        },
+    )
+}
+
 #[expect(
     clippy::too_many_lines,
+    clippy::cast_precision_loss,
     reason = "one complete text request resolves independent spatial/line constraints and its explicit terminal action"
 )]
-pub(crate) fn measure_quanta(
+fn measure_current(
     theme: &ResolvedTheme,
     source: &str,
     appearance: TextAppearance<'_>,
@@ -90,7 +108,56 @@ pub(crate) fn measure_quanta(
             scope,
         ));
     };
+    if let Some(crate::text::orientation::Orientation::Data(from, to)) = request
+        .instructions()
+        .orientation
+        .as_ref()
+        .map(|orientation| &orientation.0)
+    {
+        let frame = theme.text_direction.as_ref().ok_or_else(|| {
+            Error::Data("data text direction requires actual scientific axes".into())
+        })?;
+        let resolved = request.clone().rotation(frame.rotation(from, to, theme)?);
+        return Ok(
+            match measure_quanta(
+                theme,
+                source,
+                TextAppearance {
+                    layout: Some(&resolved),
+                    ..appearance
+                },
+                width,
+                alignment,
+                owner,
+                scope,
+            )? {
+                FitOutcome::Measured(plan) => {
+                    FitOutcome::Measured(plan.with_request(Some(request)))
+                }
+                FitOutcome::Miss(miss) => FitOutcome::Miss(miss),
+            },
+        );
+    }
     let instructions = request.instructions();
+    let rotated = match instructions
+        .orientation
+        .as_ref()
+        .map(|orientation| &orientation.0)
+    {
+        Some(crate::text::orientation::Orientation::Fixed(rotation)) => Some(rotation.0.get()),
+        Some(crate::text::orientation::Orientation::Data(..)) => {
+            return Err(Error::Data(
+                "data direction has no actual scientific projection".into(),
+            ))
+        }
+        Some(crate::text::orientation::Orientation::Automatic(..)) => {
+            return Err(Error::Data(
+                "automatic orientation requires an actual tick group".into(),
+            ))
+        }
+        None => None,
+    };
+    let assigned = width;
     let bounds = instructions.bounds;
     let width = bounds
         .and_then(|bounds| bounds.width)
@@ -108,7 +175,25 @@ pub(crate) fn measure_quanta(
         .visibility
         .as_ref()
         .is_some_and(|visibility| visibility.hidden);
-    let maximum = if wrap { width } else { i64::MAX };
+    let maximum = if wrap {
+        let projected = if let Some(angle) = rotated {
+            let (_, cosine) = crate::text::orientation::components(angle);
+            if cosine == 0.0 {
+                i64::MAX
+            } else {
+                bound_capacity((assigned as f64 / 1024.0) / cosine.abs(), i64::MAX)?
+            }
+        } else {
+            width
+        };
+        projected.min(
+            bounds
+                .and_then(|bounds| bounds.width)
+                .map_or(Ok(i64::MAX), |bound| bound_capacity(bound.get(), i64::MAX))?,
+        )
+    } else {
+        i64::MAX
+    };
     let planned = fit::outcome(theme.plan_text_quanta_scoped(
         source,
         appearance.theme,
@@ -136,12 +221,57 @@ pub(crate) fn measure_quanta(
         ),
         FitOutcome::Miss(miss) => return Ok(FitOutcome::Miss(miss)),
     };
-    let plan = plan.with_request(Some(request));
+    let mut plan = plan.with_request(Some(request));
+    if let Some(angle) = rotated.filter(|_| wrap) {
+        let (sine, cosine) = crate::text::orientation::components(angle);
+        let mut previous = maximum;
+        loop {
+            if cosine == 0.0 {
+                break;
+            }
+            let available = assigned as f64 / 1024.0 - plan.height() * sine.abs();
+            let next = capacity((available / cosine.abs()).max(0.0))?.min(previous);
+            if next >= previous {
+                break;
+            }
+            match fit::outcome(theme.plan_text_quanta_scoped(
+                source,
+                appearance.theme,
+                next,
+                alignment,
+                owner,
+                appearance.exact_override,
+                scope,
+            ))? {
+                FitOutcome::Measured(value) => {
+                    plan = value.with_request(Some(request));
+                    previous = next;
+                }
+                FitOutcome::Miss(_) => break,
+            }
+        }
+    }
     if hidden {
         return Ok(FitOutcome::Measured(plan.hide()?));
     }
+    let physical_width = if rotated.is_some() {
+        let placement = super::placement::at(
+            &plan,
+            crate::render::backend::Point2D::new(0.0, 0.0),
+            crate::TextAnchor::center(),
+            0.0,
+            false,
+            None,
+        )?;
+        super::placement::logical_bounds(placement, &plan)?.width()
+    } else {
+        plan.width()
+    };
     let fits = miss.is_none()
-        && plan.width_quanta <= width
+        && physical_width <= assigned as f64 / 1024.0
+        && bounds
+            .and_then(|bounds| bounds.width)
+            .is_none_or(|bound| plan.width() <= bound.get())
         && plan.height_quanta <= height
         && bounds
             .and_then(|bounds| bounds.lines)
@@ -153,7 +283,7 @@ pub(crate) fn measure_quanta(
         TextFailure::Error => Ok(FitOutcome::Miss(miss.unwrap_or_else(|| {
             scope.failure(
                 fit::FitKind::Text,
-                format!("{owner}: complete text exceeds its declared bounds"),
+                format!("{owner}: complete text exceeds its declared bounds (projected width {physical_width}, assigned width {})",assigned as f64/1024.0),
             )
         }))),
         TextFailure::Hide => Ok(FitOutcome::Measured(plan.hide()?)),

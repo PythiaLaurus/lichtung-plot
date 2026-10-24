@@ -157,6 +157,8 @@ fn measure(
     theme: &ResolvedTheme,
     scope: &FitScope,
 ) -> Result<PanelTextPlan, PlanError> {
+    let directional = theme.with_text_projection(plot, layout);
+    let theme = &directional;
     let panel = layout.projection.panel_box();
     let appearance = annotation
         .content()

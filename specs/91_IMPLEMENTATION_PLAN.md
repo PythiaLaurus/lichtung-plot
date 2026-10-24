@@ -2049,6 +2049,12 @@ TextPosition reader replacement and real role attachments/sealed gates together.
 
 ### 17. Generalize Text Orientation And Rotation Placement
 
+Delivered: one normalized angle/orientation request, projected data references,
+ordered tick candidates and two rotation placements feed common measured text.
+Selected angle and request are retained independently. Actual axis footprints,
+gutter thickness, native occupancy and frozen facet capture consume the transform;
+explicit zero overrides inherited vertical direction and multiline ordering.
+
 Add the one preset/custom-angle instruction through TextLayout across admitted
 slots/groups, including numeric/exact/category ticks, titles, headers and annotation
 roles. Replace the old tenth-degree restriction, resolve screen/data-relative

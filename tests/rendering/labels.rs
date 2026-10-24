@@ -5,6 +5,38 @@ use lichtung_plot::{BarInput, Canvas, CategoryValues, Labels, NumericValues, Plo
 static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[test]
+fn explicit_tilt_keeps_complete_category_labels_and_non_tenth_annotation_rotation() {
+    use lichtung_plot::{
+        PanelCorner, PanelTextAnnotation, Text, TextAnchor, TextLayout, TextOverflow, TextRotation,
+    };
+    let plot = Plot::bar(
+        CategoryValues::new("model", ["LightGBM", "CatBoost", "RandomForest"]).unwrap(),
+        BarInput::estimates(NumericValues::new("score", [1.0, 2.0, 3.0])),
+    )
+    .size(360, 380)
+    .labels(Labels::raw())
+    .x_tick_text_layout(TextLayout::default().rotation(TextRotation::degrees(-60.0).unwrap()))
+    .panel_text_annotation(
+        PanelTextAnnotation::new(
+            PanelCorner::TopLeft,
+            Text::new("Projected note").layout(
+                TextLayout::default()
+                    .anchor(TextAnchor::top_left())
+                    .rotation(TextRotation::degrees(30.05).unwrap())
+                    .overflow(TextOverflow::visible()),
+            ),
+        )
+        .unwrap(),
+    );
+    let svg = render(plot);
+    for label in ["LightGBM", "CatBoost", "RandomForest", "Projected note"] {
+        assert!(svg.contains(&format!(">{label}</text>")));
+    }
+    assert!(svg.contains("rotate(30.05"));
+    assert!(svg.contains("rotate(-60"));
+}
+
+#[test]
 fn scatter_legend_omits_hues_from_discarded_nonfinite_rows() {
     Plot::scatter(
         NumericValues::new("x", [0.0, 1.0, f64::NAN]),

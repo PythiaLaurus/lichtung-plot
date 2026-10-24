@@ -36,7 +36,6 @@ impl fmt::Write for CoordinateSpelling {
 pub(crate) enum CoordinatePrecision {
     CssQuantum,
     Integer,
-    Tenths,
     Millionths,
 }
 
@@ -45,7 +44,6 @@ impl CoordinatePrecision {
         match self {
             Self::CssQuantum => 10,
             Self::Integer => 0,
-            Self::Tenths => 1,
             Self::Millionths => 6,
         }
     }
@@ -54,7 +52,6 @@ impl CoordinatePrecision {
         match self {
             Self::CssQuantum => 1024,
             Self::Integer => 1,
-            Self::Tenths => 10,
             Self::Millionths => 1_000_000,
         }
     }
@@ -63,7 +60,6 @@ impl CoordinatePrecision {
         match self {
             Self::CssQuantum => 1024,
             Self::Integer => 1,
-            Self::Tenths => 10,
             Self::Millionths => 1_000_000,
         }
     }
@@ -804,26 +800,22 @@ fn same_finite_coordinate(left: f64, right: f64) -> bool {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct CanonicalAngle(CanonicalCoordinate);
+pub(crate) struct CanonicalAngle(crate::TextRotation);
 
 impl CanonicalAngle {
-    pub(crate) const ZERO: Self = Self(CanonicalCoordinate {
-        units: 0,
-        precision: CoordinatePrecision::Tenths,
-        negative_zero: false,
-    });
+    pub(crate) const ZERO: Self = Self(crate::TextRotation::horizontal());
     pub(crate) fn is_rotated(self) -> bool {
-        self.0.units() != 0
+        self.0 != crate::TextRotation::horizontal()
     }
 
     pub(crate) fn value(self) -> f64 {
-        self.0.value()
+        self.0 .0.get()
     }
 }
 
 impl fmt::Display for CanonicalAngle {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(formatter)
+        self.value().fmt(formatter)
     }
 }
 
@@ -838,9 +830,7 @@ pub(crate) fn canonical_text(
     rotation: f64,
     precision: CoordinatePrecision,
 ) -> Result<CanonicalText, Error> {
-    let mut angle =
-        CanonicalCoordinate::from_f64(rotation, CoordinatePrecision::Tenths, "text rotation")?;
-    angle.negative_zero = false;
+    let angle = crate::TextRotation::degrees(rotation)?;
     Ok(CanonicalText {
         position: CanonicalPoint::from_raw(position, precision, "text position")?,
         rotation: CanonicalAngle(angle),

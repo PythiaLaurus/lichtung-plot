@@ -460,6 +460,53 @@ fn visibility_retains_complete_axis_geometry_and_never_consumes_an_unselected_gl
 }
 
 #[test]
+fn ordered_tick_angles_fit_complete_exact_labels_without_changing_ticks_or_grids() {
+    use crate::{TextLayout, TextOrientation, TextRotation};
+    let mut theme = crate::Theme::publication().resolve().unwrap();
+    let layout = layout(
+        PanelBox::new(80.0, 180.0, 80.0, 380.0),
+        vec![
+            AxisTick::new(0.5, "LightGBM"),
+            AxisTick::new(1.5, "LightGBM"),
+            AxisTick::new(2.5, "LightGBM"),
+        ],
+        Vec::new(),
+        TickSource::EXACT,
+    );
+    assert!(layout.plan_axes(&theme).is_err());
+    let policy = TextLayout::default().orientation(TextOrientation::automatic_ticks(vec![
+        TextRotation::horizontal(),
+        TextRotation::vertical_up(),
+    ]));
+    theme.text_layouts.ticks[0] = Some(policy.clone());
+    let selected = layout.plan_axes(&theme).unwrap();
+    for tick in &selected.x_axis.ticks {
+        let (plan, placement) = tick.label.as_ref().unwrap();
+        assert_eq!(plan.source, "LightGBM");
+        assert_eq!(plan.request.as_ref(), Some(&policy));
+        assert_eq!(placement.rotation.to_bits(), (-90.0_f64).to_bits());
+        let bounds = crate::layout::text::placement::footprint(*placement, plan).unwrap();
+        assert!(bounds.x0 >= tick.cell.start && bounds.x1 <= tick.cell.end && bounds.y1 < 80.0);
+    }
+    theme.text_layouts.ticks[0] = Some(TextLayout::default().rotation(TextRotation::vertical_up()));
+    let fixed = layout.plan_axes(&theme).unwrap();
+    assert_eq!(
+        selected.grid.as_ref().unwrap().lines,
+        fixed.grid.as_ref().unwrap().lines
+    );
+    assert_eq!(selected.x_axis.ticks.len(), 3);
+    let mut titled = layout.clone();
+    titled.y_axis.label = Some(
+        crate::Text::new("Horizontal\nY title")
+            .layout(TextLayout::default().rotation(TextRotation::horizontal())),
+    );
+    let plan = titled.plan_axes(&theme).unwrap();
+    let (_, placement) = plan.y_axis.title.as_ref().unwrap();
+    assert_eq!(placement.rotation.to_bits(), 0.0_f64.to_bits());
+    assert!(!placement.reverse_lines);
+}
+
+#[test]
 fn vertical_category_cells_reject_insufficient_height_without_dropping() {
     let theme = crate::Theme::publication().resolve().unwrap();
     let layout = layout(

@@ -254,7 +254,16 @@ pub(super) fn plan_shared_facet_axis_labels(
             Point2D::new(middle_x, f64::midpoint(grid.y0, grid.y1)),
             crate::layout::AxisSide::Left,
         )?;
-        plans.push(PlacedText { plan, placement }.with_reversed_lines());
+        let reverse = plan
+            .request
+            .as_ref()
+            .is_none_or(|request| request.instructions().orientation.is_none());
+        let text = PlacedText { plan, placement };
+        plans.push(if reverse {
+            text.with_reversed_lines()
+        } else {
+            text
+        });
     }
     Ok(plans)
 }
