@@ -58,7 +58,7 @@ impl PowerFormatter {
                 "Log10 operand decimal scale changed after reduction".into(),
             ));
         }
-        let factor = ExactDecimal::decode(format.multiplier, 0)?;
+        let factor = ExactDecimal::decode(format.multiplier, format.rate.shift())?;
         let negative = factor.negative;
         let zero = factor.coefficient.bits() == 0;
         let exponent = &operand.decade + &factor.exponent;

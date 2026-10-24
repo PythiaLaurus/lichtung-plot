@@ -111,10 +111,14 @@ impl PowerPlan {
         format.validate()?;
         let quantum = decimal_quantum(decade, format);
         let multiplier = source_exponent - &quantum;
-        let tiny = format.notation == NumericNotation::Decimal
+        let decimal = matches!(
+            format.notation,
+            NumericNotation::Decimal | NumericNotation::Integer(_)
+        );
+        let tiny = decimal
             && matches!(format.precision, ResolvedPrecision::Fractional(_))
             && decade - &quantum < BigInt::from(-1);
-        let body = if format.notation == NumericNotation::Decimal {
+        let body = if decimal {
             let integral = std::cmp::max(BigInt::from(1_u8), decade + 2_u8);
             match format.precision {
                 ResolvedPrecision::Fractional(digits) => {
@@ -142,6 +146,11 @@ impl PowerPlan {
                 ResolvedPrecision::Significant(digits) => digits - 1,
             };
             BigInt::from(348_u16 + u16::from(fractional))
+        };
+        let body = if matches!(format.notation, NumericNotation::Integer(_)) {
+            body * 4_u8
+        } else {
+            body
         };
         let length = body
             + usize::from(negative)

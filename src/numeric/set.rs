@@ -113,13 +113,16 @@ impl NumericFormat {
         power: bool,
         formatter: &mut PowerFormatter,
     ) -> Result<String> {
-        let resolved = self.resolve_at(digits)?;
-        if power {
+        let mut resolved = self.resolve_at(digits)?;
+        resolved.prefix = None;
+        resolved.suffix = None;
+        let ascii = if power {
             let operand = Log10Operand::new(value, self.get_decimal_scale())?;
-            Ok(formatter.format(&operand, &resolved)?.text)
+            formatter.format(&operand, &resolved)?.text
         } else {
-            super::decimal::format_finite(value, &resolved)
-        }
+            super::decimal::format_finite(value, &resolved)?
+        };
+        self.present(&ascii)
     }
 
     pub(crate) fn format_set(

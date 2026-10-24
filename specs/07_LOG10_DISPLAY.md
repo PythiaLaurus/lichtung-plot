@@ -21,6 +21,13 @@ rational factor cannot put a fractional power exactly on that rational threshold
 Multiply certified endpoint numerators by C and include b in the fixed quantum's
 decimal shift before the same signed rounding. Negative factors therefore use
 negative floor/ceiling cells, not positive rounding followed by sign attachment.
+Percent/per-mille multiply by exact decimal powers 2/3 in b. General uses the
+significant quantum and selects decimal/scientific only from the rounded result;
+Integer uses quantum 1 followed by exact arbitrary-size radix conversion. Reserve
+integer output before constructing physical coefficients, with a conservative
+four bits per decimal place. The reduction/quantum table below states the neutral
+multiplier case; general factors shift its effective decade and fixed r exactly
+as described above, without changing the original exponent operand.
 
 Projection/source order/domain feedback remain exponent-space. Exact caller ticks
 stay verbatim. Omitted Forest power-expression grammar is a private profile of

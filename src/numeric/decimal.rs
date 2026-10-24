@@ -6,6 +6,7 @@
 //! Notation changes only the quantum and final decimal-point/exponent placement;
 //! carry normalization never rounds again. No floating arithmetic is used here.
 
+use super::emission::NumericRate;
 use num_bigint::{BigInt, BigUint, Sign};
 
 use crate::{Error, Result};
@@ -22,6 +23,25 @@ pub enum NumericNotation {
     Scientific,
     /// One to three integral digits and an exponent divisible by three.
     Engineering,
+    /// Significant digits, switching between decimal and scientific after rounding.
+    General,
+    /// An exact rounded mathematical integer in the selected radix.
+    Integer(NumericRadix),
+}
+
+/// Digit alphabet for integer numeric presentation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NumericRadix {
+    /// Base ten.
+    Decimal,
+    /// Base two.
+    Binary,
+    /// Base eight.
+    Octal,
+    /// Base sixteen with lowercase letters.
+    HexLower,
+    /// Base sixteen with uppercase letters.
+    HexUpper,
 }
 
 /// Exact rounding at the selected decimal quantum, before numeric emission.
@@ -81,6 +101,7 @@ pub(crate) struct ResolvedFormat<'a> {
     pub(crate) trailing_zeros: TrailingZeros,
     pub(crate) rounding: NumericRounding,
     pub(crate) multiplier: f64,
+    pub(crate) rate: NumericRate,
 }
 
 impl Default for ResolvedFormat<'_> {
@@ -95,6 +116,7 @@ impl Default for ResolvedFormat<'_> {
             trailing_zeros: TrailingZeros::Keep,
             rounding: NumericRounding::NearestEven,
             multiplier: 1.0,
+            rate: NumericRate::Value,
         }
     }
 }
@@ -111,6 +133,15 @@ impl ResolvedFormat<'_> {
             return Err(Error::Data(
                 "numeric presentation precision or decimal scale is outside its admitted range"
                     .into(),
+            ));
+        }
+        if (self.notation == NumericNotation::General
+            && !matches!(self.precision, ResolvedPrecision::Significant(_)))
+            || (matches!(self.notation, NumericNotation::Integer(_))
+                && self.precision != ResolvedPrecision::Fractional(0))
+        {
+            return Err(Error::Data(
+                "numeric notation and precision are incompatible".into(),
             ));
         }
         if [self.prefix, self.suffix]
@@ -271,8 +302,8 @@ impl ExactDecimal {
         Self::new(value.is_sign_negative(), coefficient, exponent.into())
     }
 
-    fn multiply(self, multiplier: f64) -> Result<Self> {
-        let other = Self::decode(multiplier, 0)?;
+    fn multiply(self, multiplier: f64, shift: i16) -> Result<Self> {
+        let other = Self::decode(multiplier, shift)?;
         Self::new(
             self.negative ^ other.negative,
             self.coefficient * other.coefficient,
@@ -324,8 +355,8 @@ pub(super) fn decimal_quantum(decade: &BigInt, format: &ResolvedFormat<'_>) -> B
         ResolvedPrecision::Significant(digits) => decade - (digits - 1),
         ResolvedPrecision::Fractional(digits) => {
             let origin = match format.notation {
-                NumericNotation::Decimal => BigInt::ZERO,
-                NumericNotation::Scientific => decade.clone(),
+                NumericNotation::Decimal | NumericNotation::Integer(_) => BigInt::ZERO,
+                NumericNotation::Scientific | NumericNotation::General => decade.clone(),
                 NumericNotation::Engineering => engineering_exponent(decade),
             };
             origin - digits
@@ -377,7 +408,7 @@ pub(super) fn round_integer(
 pub(crate) fn format_finite(value: f64, format: &ResolvedFormat<'_>) -> Result<String> {
     format.validate()?;
     ExactDecimal::decode(value, format.decimal_scale)?
-        .multiply(format.multiplier)?
+        .multiply(format.multiplier, format.rate.shift())?
         .round(format)?
         .emit(format)
 }
@@ -391,12 +422,19 @@ impl RoundedDecimal {
 
     /// A power operand reserves its symbolic output bound before any refinement
     /// or physical coefficient construction. Reuse that same empty buffer here.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "exact carry normalization and fallible output reservation precede the single numeric emission"
+    )]
     pub(crate) fn emit_reserved(
         &self,
         format: &ResolvedFormat<'_>,
         mut buffer: DecimalBuffer,
     ) -> Result<String> {
         format.validate()?;
+        if let NumericNotation::Integer(radix) = format.notation {
+            return self.emit_integer(radix, format, buffer);
+        }
         if !buffer.text.is_empty() {
             return Err(Error::Render(
                 "numeric output reservation must be empty".into(),
@@ -415,6 +453,17 @@ impl RoundedDecimal {
             NumericNotation::Decimal => BigInt::ZERO,
             NumericNotation::Scientific => decade.clone(),
             NumericNotation::Engineering => engineering_exponent(&decade),
+            NumericNotation::General => {
+                let ResolvedPrecision::Significant(count) = format.precision else {
+                    unreachable!("validated significant precision")
+                };
+                if decade >= BigInt::from(-4) && decade < BigInt::from(count) {
+                    BigInt::ZERO
+                } else {
+                    decade.clone()
+                }
+            }
+            NumericNotation::Integer(_) => unreachable!("integer emission"),
         };
         let point = if zero {
             BigInt::from(1_u8)
@@ -438,7 +487,11 @@ impl RoundedDecimal {
         };
         let point = isize::try_from(point).map_err(|_| arithmetic_error())?;
         let integral = usize::try_from(point.max(1)).map_err(|_| arithmetic_error())?;
-        let exponent = format.notation != NumericNotation::Decimal;
+        let exponent = match format.notation {
+            NumericNotation::Decimal => false,
+            NumericNotation::General => display_exponent != BigInt::ZERO,
+            _ => true,
+        };
         let exponent_length = if exponent {
             // 2^3 < 10; this is a checked capacity bound, not spelling.
             let digits = usize::try_from(display_exponent.bits().div_ceil(3).max(1))
@@ -487,6 +540,73 @@ impl RoundedDecimal {
             buffer.append_exponent(&display_exponent)?;
         }
         buffer.text.push_str(suffix);
+        Ok(buffer.text)
+    }
+
+    fn emit_integer(
+        &self,
+        radix: NumericRadix,
+        format: &ResolvedFormat<'_>,
+        mut buffer: DecimalBuffer,
+    ) -> Result<String> {
+        let base: u32 = match radix {
+            NumericRadix::Decimal => 10,
+            NumericRadix::Binary => 2,
+            NumericRadix::Octal => 8,
+            NumericRadix::HexLower | NumericRadix::HexUpper => 16,
+        };
+        let zero = self.coefficient.bits() == 0;
+        let power = if zero {
+            0
+        } else {
+            u32::try_from(&self.exponent).map_err(|_| arithmetic_error())?
+        };
+        let bits = usize::try_from(self.coefficient.bits())
+            .map_err(|_| arithmetic_error())?
+            .checked_add(
+                (power as usize)
+                    .checked_mul(4)
+                    .ok_or_else(arithmetic_error)?,
+            )
+            .and_then(|bits| bits.checked_add(1))
+            .ok_or_else(arithmetic_error)?;
+        let mut digits = Vec::new();
+        digits
+            .try_reserve_exact(bits)
+            .map_err(|error| Error::Render(format!("numeric radix digits: {error}")))?;
+        let mut magnitude = &self.coefficient * BigUint::from(10_u8).pow(power);
+        let alphabet = if radix == NumericRadix::HexUpper {
+            b"0123456789ABCDEF"
+        } else {
+            b"0123456789abcdef"
+        };
+        loop {
+            let digit = usize::try_from(&magnitude % base).map_err(|_| arithmetic_error())?;
+            digits.push(alphabet[digit]);
+            magnitude /= base;
+            if magnitude.bits() == 0 {
+                break;
+            }
+        }
+        let negative = self.negative && (!zero || format.negative_zero == NegativeZero::Preserve);
+        let length = digits
+            .len()
+            .checked_add(usize::from(negative))
+            .and_then(|n| n.checked_add(format.prefix.map_or(0, str::len)))
+            .and_then(|n| n.checked_add(format.suffix.map_or(0, str::len)))
+            .ok_or_else(arithmetic_error)?;
+        buffer
+            .text
+            .try_reserve_exact(length)
+            .map_err(|error| Error::Render(format!("numeric radix output: {error}")))?;
+        buffer.text.push_str(format.prefix.unwrap_or_default());
+        if negative {
+            buffer.text.push('-');
+        }
+        for digit in digits.iter().rev() {
+            buffer.text.push(char::from(*digit));
+        }
+        buffer.text.push_str(format.suffix.unwrap_or_default());
         Ok(buffer.text)
     }
 }

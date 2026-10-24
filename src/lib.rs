@@ -87,8 +87,16 @@ pub use input::{AxisValues, HistogramInput, RaincloudInput};
 pub use labels::Labels;
 pub use layers::{BarPointLayer, GuideSpec, GuideStyle, PointLayer};
 pub use layout::AxisTick;
-pub use numeric::decimal::{NegativeZero, NumericNotation, NumericRounding, TrailingZeros};
+pub use numeric::decimal::{
+    NegativeZero, NumericNotation, NumericRadix, NumericRounding, TrailingZeros,
+};
+pub use numeric::emission::{
+    NumericAlignment, NumericField, NumericRate, NumericSign, NumericSymbol,
+};
 pub use numeric::format::{NumericFormat, NumericPrecision};
+pub use numeric::locale::{
+    NumericCurrency, NumericGroupRepeat, NumericGrouping, NumericLocale, NumericSymbols,
+};
 pub use output::Output;
 pub use render::backend::StrokePattern;
 pub use significance::{

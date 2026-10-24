@@ -5,6 +5,8 @@ use super::decimal::{
     NegativeZero, NumericNotation, NumericRounding, ResolvedFormat, ResolvedPrecision,
     TrailingZeros, MAX_FRACTIONAL_DIGITS, MAX_SIGNIFICANT_DIGITS,
 };
+use super::emission::{NumericField, NumericRate, NumericSign, NumericSymbol, Presentation};
+use super::locale::NumericLocale;
 use crate::{Error, Result};
 
 /// Exact precision or one uniformly selected precision for a complete numeric set.
@@ -70,7 +72,7 @@ impl NumericPrecision {
     }
 }
 
-/// Immutable, locale-free scientific numeric presentation.
+/// Immutable scientific numeric presentation with explicitly selected locale.
 ///
 /// Rounding defaults to nearest with ties to even, after exact decimal scaling.
 /// Affixes are literal: a percent suffix alone does not scale the scientific value.
@@ -115,6 +117,8 @@ pub struct NumericFormat {
     trailing_zeros: TrailingZeros,
     rounding: NumericRounding,
     multiplier_bits: u64,
+    rate: NumericRate,
+    presentation: Presentation,
 }
 
 impl Default for NumericFormat {
@@ -129,6 +133,8 @@ impl Default for NumericFormat {
             trailing_zeros: TrailingZeros::Keep,
             rounding: NumericRounding::NearestEven,
             multiplier_bits: 1.0_f64.to_bits(),
+            rate: NumericRate::Value,
+            presentation: Presentation::default(),
         }
     }
 }
@@ -153,6 +159,8 @@ impl NumericFormat {
             trailing_zeros: self.trailing_zeros,
             rounding: self.rounding,
             multiplier_bits: self.multiplier_bits,
+            rate: self.rate,
+            presentation: self.presentation.clone(),
         })
     }
 
@@ -266,7 +274,61 @@ impl NumericFormat {
         Ok(self)
     }
 
+    /// Select complete explicit locale tokens, without host inference.
+    pub fn locale(mut self, value: NumericLocale) -> Result<Self> {
+        self.presentation.locale = value;
+        self.validate()?;
+        Ok(self)
+    }
+    /// Enable integer grouping using the selected locale's optional pattern.
+    pub fn grouping(mut self, value: bool) -> Result<Self> {
+        self.presentation.grouping = value;
+        self.validate()?;
+        Ok(self)
+    }
+    /// Select sign presentation, after numeric rounding and zero normalization.
+    pub fn sign(mut self, value: NumericSign) -> Result<Self> {
+        self.presentation.sign = value;
+        self.validate()?;
+        Ok(self)
+    }
+    /// Select currency or an applicable nondecimal integer-radix prefix.
+    pub fn symbol(mut self, value: NumericSymbol) -> Result<Self> {
+        self.presentation.symbol = value;
+        self.validate()?;
+        Ok(self)
+    }
+    /// Set or clear minimum Unicode-scalar field width.
+    pub fn field(mut self, value: Option<NumericField>) -> Result<Self> {
+        self.presentation.field = value;
+        self.validate()?;
+        Ok(self)
+    }
+    /// Select an exact rate factor and the locale's automatic suffix.
+    pub fn rate(mut self, value: NumericRate) -> Result<Self> {
+        self.rate = value;
+        self.validate()?;
+        Ok(self)
+    }
+
+    pub(super) fn present(&self, ascii: &str) -> Result<String> {
+        self.presentation.emit(
+            ascii,
+            self.notation,
+            self.rate,
+            self.prefix.as_deref(),
+            self.suffix.as_deref(),
+        )
+    }
+
     fn validate(&self) -> Result<()> {
+        if self.presentation.symbol == NumericSymbol::RadixPrefix
+            && !matches!(self.notation, NumericNotation::Integer(radix) if radix != super::decimal::NumericRadix::Decimal)
+        {
+            return Err(Error::Data(
+                "radix prefix requires nondecimal integer notation".into(),
+            ));
+        }
         let (min, _) = self.precision.bounds()?;
         self.resolve_at(min)?.validate()
     }
@@ -282,6 +344,7 @@ impl NumericFormat {
             trailing_zeros: self.trailing_zeros,
             rounding: self.rounding,
             multiplier: f64::from_bits(self.multiplier_bits),
+            rate: self.rate,
         })
     }
 
@@ -289,7 +352,15 @@ impl NumericFormat {
         &self,
         round: &mut crate::layout::kernel::FeedbackRound,
     ) -> Result<()> {
-        round.observe_count(self.notation as usize)?;
+        let (notation, radix) = match self.notation {
+            NumericNotation::Decimal => (0, 0),
+            NumericNotation::Scientific => (1, 0),
+            NumericNotation::Engineering => (2, 0),
+            NumericNotation::General => (3, 0),
+            NumericNotation::Integer(radix) => (4, radix as usize),
+        };
+        round.observe_count(notation)?;
+        round.observe_count(radix)?;
         let (min, max) = self.precision.bounds()?;
         round.observe_count(match self.precision {
             NumericPrecision::Fractional(_) => 0,
@@ -301,6 +372,8 @@ impl NumericFormat {
         round.observe_count(usize::from(max))?;
         round.observe_number(f64::from(self.decimal_scale))?;
         round.observe_number(f64::from_bits(self.multiplier_bits))?;
+        round.observe_count(self.rate as usize)?;
+        self.presentation.observe(round)?;
         for affix in [self.get_prefix(), self.get_suffix()] {
             round.observe_count(usize::from(affix.is_some()))?;
             if let Some(text) = affix {

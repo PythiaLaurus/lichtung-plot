@@ -17,7 +17,10 @@ let percentage = NumericFormat::new(
 ```
 
 Raw 0.125 displays `12.5%`. Suffix `%` alone appends literal text without scaling; data,
-coordinates and colors are unchanged. Notation is Decimal/Scientific/Engineering.
+coordinates and colors are unchanged. Notation is Decimal/Scientific/Engineering,
+General (significant precision), or Integer with Decimal/Binary/Octal/HexLower/HexUpper
+radix and Fractional(0). General switches notation after rounding; integer values
+are rounded mathematically before radix conversion, without a fixed integer limit.
 Fractional precision accepts 0..=20, significant 1..=21; adaptive min/max must be
 ordered within matching bounds. Decimal scale accepts -324..=324.
 These digits come from the exact binary64 value: at Fractional(20), `0.1` displays
@@ -28,6 +31,19 @@ and rounding. No intermediate f64 product overflows, underflows or rounds away
 digits. For example `0.1` multiplied by `10` at Scientific/Significant(21) displays
 `1.00000000000000005551e0`, not a pre-rounded `1`. Negative factors reverse the
 display sign; zero selects zero. Scientific coordinates and source data do not change.
+
+Use `rate(NumericRate::Percent)` or PerMille for an exact factor and the locale's
+automatic rate suffix. `locale(NumericLocale::named("fr-FR")?)` selects a pinned
+d3-format 3.1.0 definition; `named_ids()` lists all 59 IDs. Custom locales provide
+decimal/digit/sign/currency tokens and optional grouping with Cycle/Last/Stop rules.
+Nothing reads the host locale or downloads assets.
+
+`grouping(true)`, `sign(NumericSign::Accounting)` and
+`symbol(NumericSymbol::Currency)` compose in the same policy. Currency replaces the
+automatic rate suffix, not the rate factor. A `NumericField::new(width, fill,
+alignment)` supplies minimum Unicode-scalar width, not CSS geometry; multiscalar
+digits stay intact. Zero AfterSign fill participates in numeric grouping. Literal
+prefix/suffix contents are never localized as if they were numeric digits.
 
 Configure a property with its bare name, such as `precision(policy)` or
 `decimal_scale(2)`. Validated consuming edits replace exactly one field; paired

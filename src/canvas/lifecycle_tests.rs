@@ -993,6 +993,10 @@ fn shared_numeric_guides_resolve_final_sets_and_reject_equal_text_policy_conflic
             .rounding(crate::NumericRounding::Floor)
             .unwrap(),
         format.clone().multiplier(1.01).unwrap(),
+        format
+            .clone()
+            .locale(crate::NumericLocale::named("en-US").unwrap())
+            .unwrap(),
         format.trailing_zeros(TrailingZeros::Trim).unwrap(),
     ] {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));

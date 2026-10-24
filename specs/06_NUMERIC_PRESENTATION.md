@@ -10,14 +10,15 @@ provenance, clipping, source identities or color mapping.
 
 There is one normalized rounding/emission engine with private consumer-default
 profiles and explicit mathematical operand kinds. No compatibility formatter,
-runtime version selector, locale/environment setting, callback, general format
-string, arbitrary multiplier or Canvas format override is provided. Exact ticks,
+runtime version selector, host/environment locale inference, callback, format
+specifier parser or Canvas format override is provided. Exact ticks,
 categories, guide identities, significance, PointLayer/panel/null-row strings and
 Waterfall names are never parsed as numeric data. Data-alpha mapping remains a
 separate [paint contract](04_VISUAL_PROPERTY_OWNERSHIP.md).
 
 Source owners are `src/numeric/format.rs`, `src/numeric/decimal.rs`,
 `src/numeric/profiles.rs`, `src/numeric/set.rs`, `src/numeric/inputs.rs`,
+`src/numeric/locale.rs`, `src/numeric/locale/data.rs`, `src/numeric/emission.rs`,
 `src/spec/ticks.rs` and `src/layout/panel/sources.rs`. Mathematical power display
 is specified in [certified conversion](07_LOG10_DISPLAY.md); geometric fitting
 and sealed text preparation in [layout](05_LAYOUT_SYSTEM.md).
@@ -31,7 +32,7 @@ the existing borrowed/copy result and const-call capability where applicable.
 
 | Field | Input contract |
 | --- | --- |
-| notation | Closed Decimal, Scientific, Engineering |
+| notation | Decimal, Scientific, Engineering, General, Integer(NumericRadix) |
 | precision | Fractional(u8), Significant(u8), AdaptiveFractional{min,max}, AdaptiveSignificant{min,max} |
 | decimal_scale | i16 in -324..=324, exact decimal-power shift |
 | prefix / suffix | Optional owned literal text, nonempty and control-free when supplied |
@@ -39,6 +40,12 @@ the existing borrowed/copy result and const-call capability where applicable.
 | trailing_zeros | Keep or Trim |
 | rounding | NearestEven (default), NearestAway, NearestTowardZero, TowardZero, AwayFromZero, Floor, Ceiling |
 | multiplier | Finite signed f64, exact represented factor, default 1; either signed zero normalizes to positive zero |
+| locale | Complete NumericLocale, default invariant ASCII; named pinned or custom |
+| grouping | bool, default false; a missing locale pattern remains ungrouped |
+| sign | NegativeOnly (default), Always, Space, Accounting |
+| symbol | None (default), Currency, RadixPrefix; radix prefix requires nondecimal Integer |
+| field | Optional NumericField(width: usize, fill: char, NumericAlignment); no width quota |
+| rate | Value (default), Percent, PerMille; exact factors 1,100,1000 |
 
 Fractional bounds are 0..=20, significant 1..=21, adaptive min<=max in matching
 bounds. `new(notation,precision)` supplies scale 0, no affixes, Preserve, Keep
@@ -58,6 +65,38 @@ zero makes every finite ordinary or mathematical-power operand display zero.
 Percent presentation is explicit scale 2 plus suffix `%`: raw 0.125 with
 Fractional(1) becomes `12.5%`. Suffix alone merely appends `%`.
 No scientific rescaling occurs.
+
+### Explicit Tokens And Field Emission
+
+NumericLocale::invariant uses ASCII digits/signs, period decimal, comma grouping
+with Cycle[3], percent/per-mille and dollar/empty currency. Named locales transcribe
+all 59 definitions from d3-format 3.1.0 commit
+08806c62aa8f7b3fe64925f3989f1491c950a71c. `named_ids` is the exact catalog;
+unknown/case-changed IDs reject without a host fallback. Source/license attribution
+and the independently collected upstream normalized-token digest accompany the
+Rust constants. Missing named sign/numeral/rate fields use pinned defaults; named
+minus is U+2212, unlike invariant ASCII minus. No runtime JSON, network or assets.
+
+Custom locales own a nonempty decimal token, ten distinct nonempty digit strings,
+optional NumericGrouping, NumericSymbols and NumericCurrency. Tokens preserve
+Unicode and spacing without controls/mandatory breaks; currency affixes may be
+empty. Grouping sizes are positive, rightmost first, with Cycle, Last or Stop
+continuation. NumericField has a single valid fill scalar, usize width and physical
+Left/Right/Center/AfterSign; width counts final Unicode scalars, never CSS pixels.
+
+After one exact quantization, the internal numeric digit runs receive grouping,
+locale decimal/sign/digit tokens, currency or rate suffix and accounting closure.
+Currency replaces the automatic rate suffix but not its exact factor. Literal
+prefix/suffix enclose this presentation and are never digit-substituted. Field
+fill runs last; zero AfterSign fill uses locale zero digits before grouping,
+does not split multiscalar numeral tokens, and may exceed the minimum width.
+Center gives an odd extra fill scalar to the right. Checked output/field storage
+is fallible; no display alphabet registration or global text budget is required.
+
+General requires significant precision and chooses fixed decimal after rounding
+when -4<=rounded decade<precision, scientific otherwise. Integer requires
+Fractional(0), uses the selected rounding, then emits arbitrary-size integer digits
+in Decimal/Binary/Octal/HexLower/HexUpper; no fixed-size cast or second rounding.
 
 ### Attachments And Actual Consumers
 

@@ -2,14 +2,15 @@
 
 use lichtung_plot::{
     AxisScale, Canvas, CategoryValues, CoefficientInput, HeatmapAnnotations, NumericFormat,
-    NumericNotation, NumericPrecision, NumericRounding, NumericValues, Plot,
+    NumericLocale, NumericNotation, NumericPrecision, NumericRate, NumericRounding, NumericSymbol,
+    NumericValues, Plot,
 };
 
 fn main() -> lichtung_plot::Result<()> {
     let percent = NumericFormat::new(NumericNotation::Decimal, NumericPrecision::Fractional(1))?
-        .decimal_scale(2)?
+        .rate(NumericRate::Percent)?
         .rounding(NumericRounding::NearestAway)?
-        .suffix("%")?;
+        .locale(NumericLocale::invariant())?;
     let adaptive = NumericFormat::new(
         NumericNotation::Decimal,
         NumericPrecision::AdaptiveFractional { min: 0, max: 20 },
@@ -43,7 +44,11 @@ fn main() -> lichtung_plot::Result<()> {
         NumericValues::new("delta", [12.5, -2.0]),
         100.0,
     )
-    .total_format(NumericFormat::default().prefix("$")?)
+    .total_format(
+        NumericFormat::default()
+            .locale(NumericLocale::named("en-GB")?)?
+            .symbol(NumericSymbol::Currency)?,
+    )
     .title("Verbatim names and numeric affixes");
     let forest = Plot::forest(
         CategoryValues::new("term", ["ratio"])?,
