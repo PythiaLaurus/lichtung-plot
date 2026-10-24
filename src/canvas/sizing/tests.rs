@@ -122,6 +122,12 @@ fn recorded_heights_require_complete_numeric_and_guide_inputs_at_equal_width_and
     assert_changed_height_inputs(
         make(format.clone(), format.clone()).erase(),
         [
+            make(format.clone(), format.clone())
+                .x_category_labels(crate::CategoryLabelSelection::every(2).unwrap())
+                .erase(),
+            make(format.clone(), format.clone())
+                .y_category_labels(crate::CategoryLabelSelection::every(2).unwrap())
+                .erase(),
             make(normalized.clone(), format.clone()).erase(),
             make(format.clone(), normalized).erase(),
             make(format.clone(), format)

@@ -191,6 +191,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             target.limits = source.limits;
             target.provenance = source.provenance;
             target.generation.clone_from(&source.generation);
+            target.category_labels.clone_from(&source.category_labels);
             target.format.clone_from(&source.format);
             if let Some(ticks) = &source.exact_ticks {
                 let mut retained = Vec::new();

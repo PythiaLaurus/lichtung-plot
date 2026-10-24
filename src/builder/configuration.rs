@@ -226,6 +226,31 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
+    /// Select eligible x category labels without removing categories or ticks.
+    /// ```compile_fail
+    /// use lichtung_plot::{CategoryLabelSelection, NumericValues, Plot};
+    /// let _ = Plot::scatter(NumericValues::new("x",[1.0]),NumericValues::new("y",[1.0]))
+    ///     .x_category_labels(CategoryLabelSelection::all());
+    /// ```
+    #[must_use]
+    pub fn x_category_labels(mut self, value: crate::CategoryLabelSelection) -> Self
+    where
+        K: crate::kind::CategoricalX,
+    {
+        self.x_axis_spec.category_labels = value;
+        self
+    }
+
+    /// Select eligible y category labels without removing categories or ticks.
+    #[must_use]
+    pub fn y_category_labels(mut self, value: crate::CategoryLabelSelection) -> Self
+    where
+        K: crate::kind::CategoricalY,
+    {
+        self.y_axis_spec.category_labels = value;
+        self
+    }
+
     /// Set explicit x-axis limits.
     #[must_use]
     pub fn x_limits(mut self, min: f64, max: f64) -> Self

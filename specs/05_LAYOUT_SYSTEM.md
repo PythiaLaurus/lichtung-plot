@@ -475,11 +475,27 @@ actual gutters return to root feedback. Parallel-fitting source with larger gutt
 is provisional, not permission to coarsen on stale input. Source/format policies
 and exact precedence are owned by numeric presentation.
 
-Categorical axes retain every semantic tick/label. At span S/count n, equal band
+Categorical axes retain every semantic tick/label and one independent label-eligibility
+policy. At span S/count n, equal band
 edges are exact nearest-even S*i/n, centers S*(2i+1)/(2n), including origin. Native
 Heatmap axes instead consume actual allocated producer cell edges, never rebuild
-equal bands. Measure each label at its cell width with correct orientation and
-complete outward interval/clearance. Only an explicit existing Heatmap label-fit
+equal bands. All (the default) measures every label at its original cell width.
+Explicit CategoryLabelSelection selects original indices after final category
+order/aliases/full-domain collision validation. Stride/offset plus forced full-domain
+endpoints never remove or renumber ticks, marks, grid lines or assigned native cells.
+Sparse labels use capacity between neighboring selected centers and the outer panel
+boundaries, with the same complete ink/clearance predicate. Retain the selected
+indices separately in frozen axes and complete selection in semantics, feedback,
+height and child dependencies; empty selections contribute no label gutter.
+Only selected labels enter font census, intrinsic widths/heights or text planning;
+the same source in an independent annotation/guide still contributes its own needs.
+Requirements retain original category indices and facet owners, not compact ordinals
+or a global pre-facet selection. Native Heatmap/Beeswarm/Waterfall sizing consumes
+that same eligible set while preserving all scientific tracks and mark constraints.
+Canvas FirstColumnPerRow compares full category domains/order and equal complete
+selection requests before whole-axis suppression, never only equal visible names.
+Measure eligible text with correct orientation and complete outward interval/clearance.
+Only an explicit existing Heatmap label-fit
 policy can transform that family's category text.
 
 Numeric labels receive nonoverlapping cells bounded by adjacent projected-center

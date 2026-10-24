@@ -25,6 +25,8 @@ pub use facet::{FacetScales, FacetSpec};
 pub(crate) use output::SVG_CSS_DPI;
 pub use output::{PngCompression, PngOptions, PngSizing};
 pub use ticks::{TickGeneration, TickRequirement, TickSingleton, TickSpace};
+mod category_labels;
+pub use category_labels::{CategoryLabelSelection, LabelEndpoints};
 
 /// Spacing preset for multiple series within one bar category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -852,6 +854,7 @@ impl<'a> PlotRenderContext<'a> {
                 provenance: source.provenance,
                 limits: source.limits,
                 generation: source.generation.clone(),
+                category_labels: source.category_labels.clone(),
                 format: source.format.clone(),
                 numeric_source: source.numeric_source.clone(),
                 exact_ticks: source

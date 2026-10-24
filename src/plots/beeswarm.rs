@@ -395,10 +395,11 @@ pub(crate) fn measure(
     let mut hard_pitch = packed.hard_pitch;
     let width = context.axis_label_width.max(1.0 / 1024.0);
     if chart.y_tick_labels_visible() {
-        for label in labels {
+        let mut heights = crate::data::source::collect_source(labels.iter().map(|_| Ok(0.0)))?;
+        for index in axes.specs[1].category_labels.indices(labels.len()) {
             let plan = crate::layout::fit::measured(crate::layout::fit::text(
                 theme,
-                label,
+                &labels[index],
                 &theme.typography.axes.tick_label,
                 width,
                 PhysicalTextAlignment::End,
@@ -407,10 +408,16 @@ pub(crate) fn measure(
                     .fit_scope()
                     .child(crate::layout::AddressRole::AxisLeft, 0)?,
             ))?;
-            hard_pitch = hard_pitch.max(crate::layout::kernel::ceil_spatial_quanta(
-                plan.height() + 2.0 * crate::layout::LABEL_CLEARANCE,
-            )?);
+            heights[index] = plan.height() + 2.0 * crate::layout::LABEL_CLEARANCE;
         }
+        let span = crate::layout::category_label_span(
+            &axes.specs[1].category_labels,
+            labels.len(),
+            |index| Ok(heights[index]),
+        )?;
+        hard_pitch = hard_pitch.max(crate::layout::kernel::ceil_spatial_quanta(
+            span / labels.len() as f64,
+        )?);
     }
     let preferred = hard_pitch.max(crate::layout::kernel::ceil_spatial_quanta(
         2.0 * f64::from(theme.typography.axes.tick_label.font_size),
@@ -444,6 +451,7 @@ pub(crate) fn measure(
             label: axes.copy_label(0)?,
             ticks: x.ticks,
             tick_labels_visible: true,
+            category_labels: axes.specs[0].category_labels.clone(),
             source: x.source,
             numeric: x.numeric,
             explicit_ticks: axes.specs[0].exact_ticks.is_some(),
@@ -454,6 +462,7 @@ pub(crate) fn measure(
             label: axes.copy_label(1)?,
             ticks,
             tick_labels_visible: chart.y_tick_labels_visible(),
+            category_labels: axes.specs[1].category_labels.clone(),
             source: crate::layout::TickSource::SUPPLIED,
             numeric: None,
             explicit_ticks: false,

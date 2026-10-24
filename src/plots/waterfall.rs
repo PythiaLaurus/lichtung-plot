@@ -660,10 +660,11 @@ pub(crate) fn measure(
     let mut pitch = mark_minimum.1 / labels.len() as f64;
     let width = context.axis_label_width.max(1.0 / 1024.0);
     if chart.y_tick_labels_visible() {
-        for label in display {
+        let mut heights = crate::data::source::collect_source(display.iter().map(|_| Ok(0.0)))?;
+        for index in axes.specs[1].category_labels.indices(display.len()) {
             let plan = crate::layout::fit::measured(crate::layout::fit::text(
                 theme,
-                label,
+                &display[index],
                 &theme.typography.axes.tick_label,
                 width,
                 PhysicalTextAlignment::End,
@@ -672,8 +673,14 @@ pub(crate) fn measure(
                     .fit_scope()
                     .child(crate::layout::AddressRole::AxisLeft, 0)?,
             ))?;
-            pitch = pitch.max(plan.height() + 2.0 * crate::layout::LABEL_CLEARANCE);
+            heights[index] = plan.height() + 2.0 * crate::layout::LABEL_CLEARANCE;
         }
+        let span = crate::layout::category_label_span(
+            &axes.specs[1].category_labels,
+            display.len(),
+            |index| Ok(heights[index]),
+        )?;
+        pitch = pitch.max(span / display.len() as f64);
     }
     let min = crate::layout::kernel::ceil_spatial_quanta(pitch)?;
     let preferred = min.max(crate::layout::kernel::ceil_spatial_quanta(
@@ -717,6 +724,7 @@ pub(crate) fn measure(
             label: axes.copy_label(0)?,
             ticks: x.ticks,
             tick_labels_visible: true,
+            category_labels: axes.specs[0].category_labels.clone(),
             source: x.source,
             numeric: x.numeric,
             explicit_ticks: axes.specs[0].exact_ticks.is_some(),
@@ -727,6 +735,7 @@ pub(crate) fn measure(
             label: axes.copy_label(1)?,
             ticks,
             tick_labels_visible: chart.y_tick_labels_visible(),
+            category_labels: axes.specs[1].category_labels.clone(),
             source: crate::layout::TickSource::SUPPLIED,
             numeric: None,
             explicit_ticks: false,

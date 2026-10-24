@@ -29,6 +29,7 @@ struct HeightInputs {
     ranges: [[u64; 2]; 2],
     provenance: [crate::layout::RangeProvenance; 2],
     generation: [crate::TickGeneration; 2],
+    category_labels: [crate::CategoryLabelSelection; 2],
     resolved_x: Option<[u64; 2]>,
     own_insets: [[i64; 4]; 2],
     parent_insets: [i64; 4],
@@ -54,6 +55,7 @@ impl HeightInputs {
             || self.ranges != other.ranges
             || self.provenance != other.provenance
             || self.generation != other.generation
+            || self.category_labels != other.category_labels
             || self.resolved_x != other.resolved_x
             || self.own_insets != other.own_insets
             || self.parent_insets != other.parent_insets
@@ -137,6 +139,10 @@ impl HeightInputs {
             generation: [
                 plot.x_axis_spec().generation.clone(),
                 plot.y_axis_spec().generation.clone(),
+            ],
+            category_labels: [
+                plot.x_axis_spec().category_labels.clone(),
+                plot.y_axis_spec().category_labels.clone(),
             ],
             resolved_x: plot
                 .resolved_facet_x_range()

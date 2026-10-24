@@ -16,10 +16,12 @@ pub(crate) struct Intrinsics {
     standard: StandardPanelInputs,
     titles: [Option<crate::Text>; 2],
     formats: [Option<std::sync::Arc<crate::numeric::format::NumericFormat>>; 2],
+    category_labels: [crate::CategoryLabelSelection; 2],
     base_ranges: [(u64, u64); 2],
     logarithmic: bool,
     minimum_body: (f64, f64),
     without_y_categories: f64,
+    y_labels_analyzed: bool,
 }
 
 impl Intrinsics {
@@ -32,21 +34,33 @@ impl Intrinsics {
         let axes = plot.prepared_axis_inputs().ok_or_else(|| {
             Error::Render("native coordinate panel requires root-prepared axes".into())
         })?;
-        Self::prepare(axes, theme, plot.axis_scope())
+        Self::prepare(axes, theme, plot.axis_scope(), plot.y_tick_labels_visible())
     }
 
     pub(crate) fn prepare<'a>(
         axes: &'a crate::plots::shared_x::PreparedAxes,
         theme: &crate::theme::ResolvedTheme,
         scope: Option<&str>,
+        y_labels_visible: bool,
     ) -> Result<&'a Self, Error> {
         if axes.intrinsics.get().is_none() {
-            let summary = Self::analyze(axes, theme, scope)?;
+            let summary = Self::analyze(axes, theme, scope, y_labels_visible)?;
 
             let _ = axes.intrinsics.set(summary);
         }
         let summary = axes.intrinsics.get().expect("initialized panel intrinsics");
+        if y_labels_visible && !summary.y_labels_analyzed {
+            return Err(Error::Render(
+                "previously suppressed axis text cannot become active in prepared intrinsics"
+                    .into(),
+            ));
+        }
         if summary.formats != axes.specs.each_ref().map(|spec| spec.format.clone())
+            || summary.category_labels
+                != axes
+                    .specs
+                    .each_ref()
+                    .map(|spec| spec.category_labels.clone())
             || summary.base_ranges != axes.ranges.map(|(lo, hi)| (lo.to_bits(), hi.to_bits()))
             || summary.logarithmic != axes.logarithmic
         {
@@ -81,6 +95,7 @@ impl Intrinsics {
         axes: &crate::plots::shared_x::PreparedAxes,
         theme: &crate::theme::ResolvedTheme,
         diagnostic_scope: Option<&str>,
+        y_labels_visible: bool,
     ) -> Result<Self, Error> {
         #[cfg(not(test))]
         let _ = diagnostic_scope;
@@ -111,37 +126,38 @@ impl Intrinsics {
                 }
             }
             if let Some(labels) = &axes.display_categories[side] {
-                let mut category_pitch = 0.0_f64;
-                for label in labels {
-                    let parallel = if side == 0 {
-                        fit::intrinsic_widths(
-                            theme,
-                            label,
-                            &standard.tick_label,
-                            "coordinate panel tick label intrinsic",
-                        )?
-                        .0
-                    } else {
-                        // Mandatory lines and actual font metrics, not a
-                        // nominal single-line height, constrain row slots.
-                        theme
-                            .measure_text(
+                if side == 1 && !y_labels_visible {
+                    continue;
+                }
+                let span = crate::layout::category_label_span(
+                    &axes.specs[side].category_labels,
+                    labels.len(),
+                    |index| {
+                        let label = &labels[index];
+                        let parallel = if side == 0 {
+                            fit::intrinsic_widths(
+                                theme,
                                 label,
                                 &standard.tick_label,
-                                crate::layout::PhysicalTextAlignment::Center,
                                 "coordinate panel tick label intrinsic",
-                                false,
                             )?
-                            .height()
-                    };
-                    category_pitch =
-                        category_pitch.max(parallel + 2.0 * crate::layout::panel::LABEL_CLEARANCE);
-                }
-                let span = category_pitch
-                    * f64::from(
-                        u32::try_from(labels.len())
-                            .map_err(|_| Error::Render("native category span overflow".into()))?,
-                    );
+                            .0
+                        } else {
+                            // Mandatory lines and actual font metrics, not a
+                            // nominal single-line height, constrain row slots.
+                            theme
+                                .measure_text(
+                                    label,
+                                    &standard.tick_label,
+                                    crate::layout::PhysicalTextAlignment::Center,
+                                    "coordinate panel tick label intrinsic",
+                                    false,
+                                )?
+                                .height()
+                        };
+                        Ok(parallel + 2.0 * crate::layout::panel::LABEL_CLEARANCE)
+                    },
+                )?;
                 if side == 0 {
                     minimum_body.0 = minimum_body.0.max(span);
                 } else {
@@ -184,10 +200,15 @@ impl Intrinsics {
             standard,
             titles: [axes.copy_label(0)?, axes.copy_label(1)?],
             formats: axes.specs.each_ref().map(|spec| spec.format.clone()),
+            category_labels: axes
+                .specs
+                .each_ref()
+                .map(|spec| spec.category_labels.clone()),
             base_ranges: axes.ranges.map(|(lo, hi)| (lo.to_bits(), hi.to_bits())),
             logarithmic: axes.logarithmic,
             minimum_body,
             without_y_categories,
+            y_labels_analyzed: y_labels_visible,
         })
     }
 }
@@ -386,6 +407,7 @@ impl InteriorRoute {
                     label: inputs.copy_label(side)?,
                     ticks: ticks.ticks,
                     tick_labels_visible: side == 0 || plot.y_tick_labels_visible(),
+                    category_labels: inputs.specs[side].category_labels.clone(),
                     explicit_ticks: inputs.specs[side].exact_ticks.is_some(),
                     assigned_tick_width: None,
                     assigned_cells: None,

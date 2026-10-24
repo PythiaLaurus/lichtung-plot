@@ -118,6 +118,7 @@ fn exact_tick_configuration_validates_count_before_fonts() {
             provenance: RangeProvenance::Automatic,
             limits: None,
             generation: crate::TickGeneration::automatic(),
+            category_labels: crate::CategoryLabelSelection::all(),
             format: None,
             numeric_source: None,
             exact_ticks: Some(
@@ -144,6 +145,7 @@ fn exact_tick_configuration_validates_positions_without_a_display_domain() {
             provenance: RangeProvenance::Automatic,
             limits: None,
             generation: crate::TickGeneration::automatic(),
+            category_labels: crate::CategoryLabelSelection::all(),
             format: None,
             numeric_source: None,
             exact_ticks: Some(
@@ -166,6 +168,7 @@ fn exact_tick_configuration_preserves_empty_and_duplicate_labels_and_checks_know
         provenance: RangeProvenance::Automatic,
         limits: None,
         generation: crate::TickGeneration::automatic(),
+        category_labels: crate::CategoryLabelSelection::all(),
         format: None,
         numeric_source: None,
         exact_ticks: Some(vec![
@@ -523,6 +526,7 @@ fn frozen_axes_and_grid_replay_without_layout_theme_or_shaping() {
             AxisTick::new(10.0, ""),
         ]),
         generation: crate::TickGeneration::automatic(),
+        category_labels: crate::CategoryLabelSelection::all(),
         format: None,
         numeric_source: None,
     };

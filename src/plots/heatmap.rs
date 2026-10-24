@@ -11,7 +11,7 @@ use crate::alpha::{marks::ObservationAlpha, AlphaEncoding, AlphaTarget, AlphaUni
 use crate::Error;
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::layout::{AxisSpec, AxisTick, Layout, PanelBox, PhysicalTextAlignment, TextBlock};
+use crate::layout::{AxisTick, Layout, PanelBox, PhysicalTextAlignment, TextBlock};
 use crate::render::backend::{
     with_clip, Backend, FillStyle, GradientStop, LineStyle, PlacedText, Point2D, TextAnchor,
 };
@@ -220,6 +220,7 @@ fn track_pixels(quanta: i64) -> f64 {
 fn assigned_columns(
     prepared: &HeatmapData,
     labels: &[String],
+    selection: &crate::CategoryLabelSelection,
     panel: PanelBox,
     theme: &ResolvedTheme,
 
@@ -230,10 +231,21 @@ fn assigned_columns(
 
     let count = prepared.x_levels.len();
     let cell = intrinsic_cell_ink(prepared, theme)?;
-    let mut hard =
-        crate::data::source::collect_source(labels.iter().map(|label| {
-            Ok((cell.0 / count as f64).max(column_label_hard(prepared, label, theme)?))
-        }))?;
+    let label_pitch = if selection.is_all() {
+        0.0
+    } else {
+        crate::layout::category_label_span(selection, count, |index| {
+            column_label_hard(prepared, &labels[index], theme)
+        })? / count as f64
+    };
+    let mut hard = crate::data::source::collect_source(labels.iter().map(|label| {
+        let text = if selection.is_all() {
+            column_label_hard(prepared, label, theme)?
+        } else {
+            label_pitch
+        };
+        Ok((cell.0 / count as f64).max(text))
+    }))?;
 
     for (index, (source, fill)) in prepared
         .value_labels
@@ -305,11 +317,16 @@ fn assigned_columns(
 }
 
 /// Measure each row only after the selected columns constrain its text.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "full cell annotations, independent label eligibility and assigned columns constrain row tracks together"
+)]
 fn assigned_rows(
     prepared: &HeatmapData,
     annotations: &AnnotationPlans,
     columns: &[f64],
     labels: &[String],
+    selection: &crate::CategoryLabelSelection,
     labels_visible: bool,
     tick_width: f64,
     context: PlotRenderContext<'_>,
@@ -330,7 +347,12 @@ fn assigned_rows(
     let ink = intrinsic_cell_ink(prepared, theme)?;
     let mut hard =
         crate::data::source::collect_source((0..count).map(|_| Ok(ink.1 / count as f64)))?;
-    for (index, label) in labels.iter().enumerate().filter(|_| labels_visible) {
+    let mut label_heights = crate::data::source::collect_source((0..count).map(|_| Ok(0.0)))?;
+    for (index, label) in labels
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| labels_visible && selection.includes(*index, count))
+    {
         let text = crate::layout::fit::measured(crate::layout::fit::text(
             theme,
             label,
@@ -342,7 +364,20 @@ fn assigned_rows(
                 .fit_scope()
                 .child(crate::layout::AddressRole::AxisLeft, 0)?,
         ))?;
-        hard[index] = hard[index].max(text.height() + 2.0 * crate::layout::LABEL_CLEARANCE);
+        label_heights[index] = text.height() + 2.0 * crate::layout::LABEL_CLEARANCE;
+    }
+    let pitch = if selection.is_all() {
+        0.0
+    } else {
+        crate::layout::category_label_span(selection, count, |index| Ok(label_heights[index]))?
+            / count as f64
+    };
+    for (index, hard) in hard.iter_mut().enumerate() {
+        *hard = hard.max(if selection.is_all() {
+            label_heights[index]
+        } else {
+            pitch
+        });
     }
     for (index, plan) in annotations.values.iter().enumerate() {
         if let Some(plan) = plan {
@@ -481,6 +516,7 @@ pub(crate) struct HeatmapIntrinsicCache {
     contrast_light: crate::theme::TextTheme,
     contrast_dark: crate::theme::TextTheme,
     tick_label: crate::theme::TextTheme,
+    category_labels: [crate::CategoryLabelSelection; 2],
     axis_title: crate::theme::TextTheme,
     titles: [Option<crate::Text>; 2],
     null_rows: Vec<Option<crate::Text>>,
@@ -503,6 +539,11 @@ impl HeatmapIntrinsicCache {
         theme: &ResolvedTheme,
     ) -> bool {
         self.color_scale.same(&prepared.color.scale)
+            && self.category_labels
+                == axes
+                    .specs
+                    .each_ref()
+                    .map(|spec| spec.category_labels.clone())
             && self.titles == axes.labels
             && self.null_rows == prepared.null_row_annotations
             && self
@@ -548,6 +589,10 @@ impl HeatmapIntrinsicCache {
             contrast_light: text(&theme.typography.annotations.contrast.light)?,
             contrast_dark: text(&theme.typography.annotations.contrast.dark)?,
             tick_label: text(&theme.typography.axes.tick_label)?,
+            category_labels: axes
+                .specs
+                .each_ref()
+                .map(|spec| spec.category_labels.clone()),
             axis_title: text(&theme.typography.axes.axis_title)?,
             titles: [axes.copy_label(0)?, axes.copy_label(1)?],
             null_rows: crate::data::source::collect_source(
@@ -617,6 +662,7 @@ pub(crate) fn natural_body_height(
     let columns = assigned_columns(
         marks,
         labels,
+        &axes.specs[0].category_labels,
         PanelBox::new(0.0, width, 0.0, 1.0),
         theme,
         &crate::layout::fit::FitScope::root(),
@@ -843,12 +889,20 @@ fn analyze_intrinsics(
     let y_labels = axes.display_categories[1]
         .as_ref()
         .ok_or_else(|| Error::Render("Heatmap y intrinsic labels missing".into()))?;
-    for (index, label) in x_labels.iter().enumerate() {
+    for (index, label) in x_labels.iter().enumerate().filter(|(index, _)| {
+        axes.specs[0]
+            .category_labels
+            .includes(*index, x_labels.len())
+    }) {
         column_hard[index] = column_hard[index].max(column_label_hard(prepared, label, theme)?);
     }
     let mut y_label_hard =
         crate::data::source::collect_source((0..y_labels.len()).map(|_| Ok(0.0_f64)))?;
-    for (index, label) in y_labels.iter().enumerate() {
+    for (index, label) in y_labels.iter().enumerate().filter(|(index, _)| {
+        axes.specs[1]
+            .category_labels
+            .includes(*index, y_labels.len())
+    }) {
         let plan = theme.measure_text(
             label,
             &theme.typography.axes.tick_label,
@@ -1039,7 +1093,13 @@ pub(crate) fn measure(
                 .into());
         }
         let mut natural = 1.0 / 1024.0;
-        for label in y_labels.iter().filter(|_| chart.y_tick_labels_visible()) {
+        for (_, label) in y_labels.iter().enumerate().filter(|(index, _)| {
+            chart.y_tick_labels_visible()
+                && chart
+                    .y_axis_spec()
+                    .category_labels
+                    .includes(*index, y_labels.len())
+        }) {
             let plan = theme.measure_text(
                 label,
                 &theme.typography.axes.tick_label,
@@ -1053,7 +1113,14 @@ pub(crate) fn measure(
             natural.min(available)
         } else {
             theme
-                .intrinsic_tick_label_width(y_labels.iter().map(String::as_str), body.height())?
+                .intrinsic_tick_label_width(
+                    chart
+                        .y_axis_spec()
+                        .category_labels
+                        .indices(y_labels.len())
+                        .map(|index| y_labels[index].as_str()),
+                    body.height(),
+                )?
                 .min(available)
         };
         let panel = body;
@@ -1065,7 +1132,14 @@ pub(crate) fn measure(
 
         let x_count = prepared.x_levels.len();
         let y_count = prepared.y_levels.len();
-        let assigned = assigned_columns(prepared, &x_labels, panel, theme, context.fit_scope())?;
+        let assigned = assigned_columns(
+            prepared,
+            &x_labels,
+            &chart.x_axis_spec().category_labels,
+            panel,
+            theme,
+            context.fit_scope(),
+        )?;
         columns = Some(assigned);
         let column_edges = columns.as_ref().expect("assigned Heatmap columns");
         let measured = measure_annotations(
@@ -1082,6 +1156,7 @@ pub(crate) fn measure(
             fitted_unique_labels(
                 theme,
                 &y_labels,
+                &chart.y_axis_spec().category_labels,
                 |_| tick_width,
                 "y",
                 &context
@@ -1094,6 +1169,7 @@ pub(crate) fn measure(
             &measured,
             column_edges,
             &y_labels,
+            &chart.y_axis_spec().category_labels,
             chart.y_tick_labels_visible(),
             tick_width,
             context.with_panel(panel),
@@ -1136,6 +1212,7 @@ pub(crate) fn measure(
                 label: axes.copy_label(0)?,
                 ticks: x_ticks,
                 tick_labels_visible: true,
+                category_labels: axes.specs[0].category_labels.clone(),
                 explicit_ticks: false,
                 assigned_tick_width: None,
                 assigned_cells: None,
@@ -1146,6 +1223,7 @@ pub(crate) fn measure(
                 label: axes.copy_label(1)?,
                 ticks: y_ticks,
                 tick_labels_visible: chart.y_tick_labels_visible(),
+                category_labels: axes.specs[1].category_labels.clone(),
                 explicit_ticks: false,
                 assigned_tick_width: None,
                 assigned_cells: None,
@@ -1163,13 +1241,25 @@ pub(crate) fn measure(
             row_edges.windows(2).map(|edge| Ok((edge[1], edge[0]))),
         )?);
         // Row text and exact cell fit preceded this axis selection.
+        let capacities = layout.x_axis.label_capacities(
+            &layout.projection,
+            crate::layout::AxisSide::Bottom,
+            context.fit_scope(),
+        )?;
         let x_labels = if wrap_labels {
             x_labels
         } else {
             fitted_unique_labels(
                 theme,
                 &x_labels,
-                |index| (column_edges[index + 1] - column_edges[index]) * 0.9,
+                &chart.x_axis_spec().category_labels,
+                |index| {
+                    if chart.x_axis_spec().category_labels.is_all() {
+                        (column_edges[index + 1] - column_edges[index]) * 0.9
+                    } else {
+                        capacities[index] * 0.9
+                    }
+                },
                 "x",
                 &context
                     .fit_scope()
@@ -1547,7 +1637,15 @@ pub(crate) fn prepare<'a>(
 }
 
 fn validate_options(chart: &Plot) -> Result<(), Error> {
-    if chart.x_axis_spec() != &AxisSpec::default() || chart.y_axis_spec() != &AxisSpec::default() {
+    if [chart.x_axis_spec(), chart.y_axis_spec()]
+        .iter()
+        .any(|spec| {
+            spec.limits.is_some()
+                || spec.exact_ticks.is_some()
+                || spec.format.is_some()
+                || !spec.generation.is_automatic()
+        })
+    {
         return Err(Error::Data(
             "heatmap: categorical axis limits are not supported".into(),
         ));
@@ -2242,6 +2340,7 @@ fn fitted_label(
 fn fitted_unique_labels(
     theme: &ResolvedTheme,
     labels: &[String],
+    selection: &crate::CategoryLabelSelection,
     maximum_width: impl Fn(usize) -> f64,
     axis: &str,
     scope: &crate::layout::fit::FitScope,
@@ -2252,6 +2351,7 @@ fn fitted_unique_labels(
             .iter()
             .enumerate()
             .map(|(index, label)| {
+                if !selection.includes(index,labels.len()) { return crate::data::source::copy_source_string(label).map_err(Into::into); }
                 fitted_label(theme, label, maximum_width(index))?.ok_or_else(|| {
                     scope.failure(crate::layout::fit::FitKind::Tick, format!(
                         "heatmap: {axis}-axis category labels have no room for an ellipsis; increase chart size or shorten labels"
@@ -2260,7 +2360,12 @@ fn fitted_unique_labels(
             }),
     )?;
     for (index, label) in fitted.iter().enumerate() {
-        if fitted[..index].contains(label) {
+        if selection.includes(index, labels.len())
+            && fitted[..index]
+                .iter()
+                .enumerate()
+                .any(|(earlier, other)| selection.includes(earlier, labels.len()) && other == label)
+        {
             return Err(scope.failure(crate::layout::fit::FitKind::Tick, format!(
             "heatmap: {axis}-axis category labels become ambiguous after elision; increase chart size or shorten labels"
         )).into());

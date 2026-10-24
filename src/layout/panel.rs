@@ -40,6 +40,7 @@ pub(crate) use sources::interval::fixed_is_empty as fixed_interval_is_empty;
 pub(crate) use sources::{numeric_tick_plan, NumericTickPlan, TickSource};
 
 pub(crate) use axis_frame_grid::PanelAxisPlan;
+pub(crate) use cells::category_label_span;
 pub(crate) use cells::LABEL_CLEARANCE;
 pub(crate) use range_ticks::{anchored_auto_range, continuous_auto_range, display_axis_spec};
 #[cfg(test)]
@@ -57,6 +58,7 @@ pub struct AxisSpec {
     /// Exact numeric tick source, selected before any automatic text is measured.
     pub(crate) exact_ticks: Option<Vec<AxisTick>>,
     pub(crate) generation: crate::TickGeneration,
+    pub(crate) category_labels: crate::CategoryLabelSelection,
     pub(crate) format: Option<std::sync::Arc<crate::numeric::format::NumericFormat>>,
     pub(crate) numeric_source: Option<std::sync::Arc<crate::numeric::source::NumericSource>>,
 }
@@ -99,6 +101,7 @@ pub struct Axis {
     pub ticks: Vec<AxisTick>,
     /// Owner-level suppression, separate from an explicitly empty display label.
     pub(crate) tick_labels_visible: bool,
+    pub(crate) category_labels: crate::CategoryLabelSelection,
     pub(crate) explicit_ticks: bool,
     pub(crate) assigned_tick_width: Option<f64>,
     /// Selected category track edges in panel coordinates, when a producer owns them.

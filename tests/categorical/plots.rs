@@ -1,6 +1,110 @@
 use super::*;
 
 #[test]
+fn category_label_selection_keeps_twelve_bars_and_displays_six_month_names() {
+    let months = [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+    ];
+    let plot = Plot::bar(
+        CategoryValues::new("month", months).unwrap(),
+        BarInput::estimates(NumericValues::new("value", [1.0; 12])),
+    )
+    .labels(Labels::raw())
+    .x_category_labels(lichtung_plot::CategoryLabelSelection::every(2).unwrap())
+    .size(1800, 600);
+    let output = unique_dir("selected-month-labels").join("months.svg");
+    plot.clone().svg_preserve_text(&output).unwrap();
+    let svg = std::fs::read_to_string(output).unwrap();
+    assert_eq!(parse_polygon_bounds(&svg).len(), 12);
+    let painted = parse_text_elements(&svg);
+    for (index, month) in months.iter().enumerate() {
+        assert_eq!(
+            painted.iter().filter(|text| text.content == *month).count(),
+            usize::from(index % 2 == 0)
+        );
+    }
+    assert!(plot
+        .labels(
+            Labels::raw()
+                .alias("January", "same")
+                .alias("February", "same")
+        )
+        .preflight()
+        .is_err());
+}
+
+#[test]
+fn facet_category_selection_uses_final_local_domains_before_font_admission() {
+    let plot = Plot::bar(
+        CategoryValues::new("category", ["a", "\u{10fffe}", "c", "d", "\u{10ffff}", "e"]).unwrap(),
+        BarInput::estimates(NumericValues::new("value", [1.0; 6])),
+    )
+    .labels(Labels::raw())
+    .x_category_labels(lichtung_plot::CategoryLabelSelection::every(2).unwrap())
+    .facet(
+        lichtung_plot::FacetSpec::column(
+            CategoryValues::new(
+                "facet",
+                ["first", "first", "first", "second", "second", "second"],
+            )
+            .unwrap(),
+        )
+        .scales(lichtung_plot::FacetScales::FreeX),
+    )
+    .size(1000, 500);
+    let path = unique_dir("facet-selected-categories").join("facets.svg");
+    plot.svg_preserve_text(&path).unwrap();
+    let svg = std::fs::read_to_string(path).unwrap();
+    assert_eq!(parse_polygon_bounds(&svg).len(), 6);
+    let text = parse_text_elements(&svg);
+    for category in ["a", "c", "d", "e"] {
+        assert_eq!(
+            text.iter().filter(|text| text.content == category).count(),
+            1
+        );
+    }
+}
+
+#[test]
+fn shared_category_axes_compare_complete_selection_even_when_current_labels_agree() {
+    let source = Plot::horizontal_bar(
+        CategoryValues::new("category", ["a", "b", "c"]).unwrap(),
+        BarInput::estimates(NumericValues::new("value", [1.0; 3])),
+    );
+    let make = |stride| {
+        source
+            .clone()
+            .y_category_labels(lichtung_plot::CategoryLabelSelection::every(stride).unwrap())
+    };
+    let canvas = |right| {
+        lichtung_plot::Canvas::grid(1, 2)
+            .unwrap()
+            .size(1000, 500)
+            .category_labels(lichtung_plot::CanvasCategoryLabels::FirstColumnPerRow)
+            .panel(0, 0, make(6))
+            .unwrap()
+            .panel(0, 1, make(right))
+            .unwrap()
+    };
+    canvas(6).preflight().unwrap();
+    assert!(matches!(
+        canvas(7).preflight(),
+        Err(lichtung_plot::Error::Data(_))
+    ));
+}
+
+#[test]
 fn violin_auto_range_includes_kde_support_beyond_raw_counts() {
     let genotype = CategoryValues::new(
         "genotype",

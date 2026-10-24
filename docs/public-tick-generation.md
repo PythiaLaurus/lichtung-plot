@@ -112,6 +112,38 @@ Facets/Canvas retain complete per-axis instructions alongside independent range
 and numeric format policies. Shared ranges alone do not make panel tick choices
 identical. Frozen Output reuses selected ticks/text without generation or layout.
 
+## Category Labels Without Deleting Categories
+
+```rust
+use lichtung_plot::{BarInput, CategoryLabelSelection, CategoryValues, NumericValues, Plot};
+let months = ["January", "February", "March", "April", "May", "June",
+              "July", "August", "September", "October", "November", "December"];
+let plot = Plot::bar(CategoryValues::new("month", months)?,
+                     BarInput::estimates(NumericValues::new("value", [1.0; 12])))
+    .x_category_labels(CategoryLabelSelection::every(2)?);
+// Twelve bars/ticks remain; January, March, May, July, September, November are labeled.
+# let _ = plot;
+# Ok::<(), lichtung_plot::Error>(())
+```
+
+Default All retains every category label. `every(stride)` uses offset zero and no
+forced endpoints; `.offset(n)` requires n<stride. `.endpoints(...)` accepts
+`LabelEndpoints::{First, Last, Both, None}` and unions full-domain endpoints without
+duplicates. Stride one normalizes to All; endpoint edits on All are redundant. A
+large offset can yield an empty label set without hiding marks or ticks.
+
+`y_category_labels` is independent. Both setters are available only on families
+with the corresponding categorical axis; Trajectory checks its actual x kind.
+Selection uses final explicit/value/facet-local order, after full-domain label
+collision checks. Neighboring selected labels can use intervening category space,
+including native Heatmap/Beeswarm/Waterfall tracks. An unselected label adds no font
+need, but the same text in an annotation or guide still does. Canvas's separate
+`category_labels(FirstColumnPerRow)` compares complete domains and selection policies
+before suppressing whole duplicate axes. Frozen publication preserves the selected
+original indices and full scientific geometry.
+
+See `examples/09_category_labels.rs` for independent bar and Heatmap selections.
+
 See `examples/07_tick_generation.rs` and the
 [numeric specification](../specs/06_NUMERIC_PRESENTATION.md) for complete source
 ordering and bounds.

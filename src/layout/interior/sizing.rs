@@ -272,8 +272,8 @@ pub(crate) fn horizontal_gutter_preference(
         .filter(|_| plot.y_tick_labels_visible())
     {
         if let Some(labels) = &axes.display_categories[1] {
-            for label in labels {
-                include_label(label)?;
+            for index in axes.specs[1].category_labels.indices(labels.len()) {
+                include_label(&labels[index])?;
             }
         } else if let Some(ticks) = &axes.specs[1].exact_ticks {
             for tick in ticks {

@@ -1601,6 +1601,7 @@ fn prepare(
                 source.limits
             },
             generation: source.generation.clone(),
+            category_labels: source.category_labels.clone(),
             format: source.format.clone(),
             numeric_source: None,
             exact_ticks: if logarithmic && side == 0 {
@@ -1632,6 +1633,11 @@ fn prepare(
     let mut display_categories = [None, None];
     for side in 0..2 {
         validate_range(ranges[side])?;
+        if categories[side].is_none() && !specs[side].category_labels.is_all() {
+            return Err(Error::Data(
+                "category label selection requires an actual categorical axis".into(),
+            ));
+        }
         if let Some(levels) = categories[side].take() {
             if specs[side].format.is_some() {
                 return Err(Error::Data(format!(

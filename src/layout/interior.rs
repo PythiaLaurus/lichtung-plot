@@ -167,7 +167,12 @@ impl PreparedInteriorInputs {
         self.route.validate(plot)?;
         for (index, (scope, axes)) in self.axes.iter().enumerate() {
             if self.route.is_coordinate() {
-                coordinate::Intrinsics::prepare(axes, theme, scope.as_deref())?;
+                coordinate::Intrinsics::prepare(
+                    axes,
+                    theme,
+                    scope.as_deref(),
+                    plot.y_tick_labels_visible(),
+                )?;
             } else if let Some(heatmap) = &self.heatmap {
                 let prepared = heatmap
                     .panels

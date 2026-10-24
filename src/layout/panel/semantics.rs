@@ -29,6 +29,7 @@ pub(crate) struct AxisSemanticInputs {
     pub(crate) scale: AxisScale,
     pub(crate) policy: RangePolicy,
     pub(crate) generation: crate::TickGeneration,
+    pub(crate) category_labels: crate::CategoryLabelSelection,
     pub(crate) format: Option<std::sync::Arc<crate::numeric::format::NumericFormat>>,
 }
 
@@ -39,6 +40,7 @@ impl AxisSemanticInputs {
             scale,
             policy,
             generation: spec.generation.clone(),
+            category_labels: spec.category_labels.clone(),
             format: if spec.exact_ticks.is_some() || policy == RangePolicy::CategorySlots {
                 None
             } else {
@@ -58,6 +60,7 @@ impl AxisSemanticInputs {
         if let Some(format) = &self.format {
             format.observe_feedback(round)?;
         }
+        self.category_labels.observe(round)?;
         self.generation.observe_feedback(round)
     }
 }

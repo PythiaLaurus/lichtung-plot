@@ -642,6 +642,7 @@ pub(crate) fn measure(
                         .transpose()?
                         .map(crate::Text::from),
                     tick_labels_visible: label.is_some(),
+                    category_labels: crate::CategoryLabelSelection::all(),
                     explicit_ticks: false,
                     assigned_tick_width: None,
                     assigned_cells: None,

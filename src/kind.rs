@@ -117,6 +117,12 @@ capability!(NumericY, "Plots that can expose a numeric vertical axis." => [
     Scatter, Histogram, Density, Qq, Line, Trajectory, LinePath, Interaction, Bar, StackedBar,
     Boxplot, Violin, Raincloud, Regression, Marginal,
 ]);
+capability!(CategoricalX, "Plots that can select horizontal categorical labels; Trajectory checks its actual axis." => [
+    Trajectory, Interaction, Heatmap, Bar, StackedBar, Boxplot, Violin, Raincloud,
+]);
+capability!(CategoricalY, "Plots that can select vertical categorical labels." => [
+    PointInterval, Coefficient, Forest, Dumbbell, Heatmap, HorizontalBar, StackedHorizontalBar, Beeswarm, Waterfall,
+]);
 capability!(Guides, "Plots with at least one numeric axis that accept explicit guides." => [
     Scatter, Histogram, Density, Qq, PointInterval, Line, Trajectory, LinePath, Interaction, Coefficient, Forest,
     Dumbbell, Bar, HorizontalBar, StackedBar, StackedHorizontalBar, Boxplot, Violin, Regression,

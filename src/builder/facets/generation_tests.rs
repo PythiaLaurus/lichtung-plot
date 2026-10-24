@@ -160,6 +160,13 @@ fn categorical_trajectory_generation_refuses_before_fonts_in_standalone_and_canv
     )
     .theme(theme);
     let discoveries = crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get);
+    let numeric = Plot::trajectory(
+        crate::NumericValues::new("time", [0.0, 1.0]),
+        crate::NumericValues::new("value", [1.0, 2.0]),
+        crate::CategoryValues::new("group", ["a", "a"]).unwrap(),
+    )
+    .x_category_labels(crate::CategoryLabelSelection::every(2).unwrap());
+    assert!(matches!(numeric.preflight(), Err(crate::Error::Data(_))));
     for generation in [
         TickGeneration::additive(1.0).unwrap(),
         TickGeneration::target(4).unwrap(),

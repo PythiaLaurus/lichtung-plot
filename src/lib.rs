@@ -114,14 +114,14 @@ pub use significance::{
 };
 pub use spec::{
     AxisScale, BarInput, BarSamples, BarSpacing, Bootstrap, Bounds, CanvasLegendPolicy,
-    CategoricalColorMap, CategoryOrder, CoefficientInput, ConfidenceInterval, DumbbellEndpoints,
-    ErrorBar, EstimateStatus, FacetScales, FacetSpec, HeatmapAnnotations, HeatmapLabelFit,
-    HeatmapLayout, HeatmapNullRowAnnotation, HistogramBins, HistogramComposite, HistogramKde,
-    HistogramStat, InteractionStyle, LegendComposition, LegendPolicy, LegendPosition,
-    LinePathStyle, LinePattern, PanelCorner, PanelTextAnnotation, PercentileInterval, PlotKind,
-    PointShape, QqLine, RawOverlay, RegressionBand, SignificanceMarkStyle, StandardDeviation,
-    StandardError, TextWeight, TickGeneration, TickRequirement, TickSingleton, TickSpace,
-    ValueSort, WaterfallLabels,
+    CategoricalColorMap, CategoryLabelSelection, CategoryOrder, CoefficientInput,
+    ConfidenceInterval, DumbbellEndpoints, ErrorBar, EstimateStatus, FacetScales, FacetSpec,
+    HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation, HistogramBins,
+    HistogramComposite, HistogramKde, HistogramStat, InteractionStyle, LabelEndpoints,
+    LegendComposition, LegendPolicy, LegendPosition, LinePathStyle, LinePattern, PanelCorner,
+    PanelTextAnnotation, PercentileInterval, PlotKind, PointShape, QqLine, RawOverlay,
+    RegressionBand, SignificanceMarkStyle, StandardDeviation, StandardError, TextWeight,
+    TickGeneration, TickRequirement, TickSingleton, TickSpace, ValueSort, WaterfallLabels,
 };
 pub use spec::{PngCompression, PngOptions, PngSizing};
 pub use text::{Text, TextAlignment, TextLayout};

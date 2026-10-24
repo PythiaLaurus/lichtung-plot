@@ -838,6 +838,7 @@ pub(super) fn labels_fit(
         false,
         true,
         None,
+        &crate::CategoryLabelSelection::all(),
         projection,
         side,
         &crate::layout::fit::FitScope::root(),

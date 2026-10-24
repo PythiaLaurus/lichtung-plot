@@ -2372,6 +2372,7 @@ impl Canvas {
                     first_index,
                     round,
                 )?;
+                let expected_selection = first.y_axis_spec().category_labels.clone();
                 for column in 1..self.columns {
                     let index = first_index + column;
                     let plot = plots[index].as_ref().ok_or_else(|| {
@@ -2379,6 +2380,12 @@ impl Canvas {
                             "canvas row {row} requires panel ({row}, {column}) for shared category labels"
                         ))
                     })?;
+                    if expected_selection != plot.y_axis_spec().category_labels {
+                        return Err(Error::Data(
+                            "shared category axes require identical label selection policies"
+                                .into(),
+                        ));
+                    }
                     let theme = themes
                         .plot(index)
                         .expect("configured canvas panel has a resolved theme");

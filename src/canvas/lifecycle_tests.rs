@@ -127,6 +127,115 @@ fn native_empty_category_alias_is_distinct_from_internal_label_suppression() {
 }
 
 #[test]
+fn native_category_selection_uses_final_orders_and_skips_only_unselected_glyphs() {
+    let unavailable = "\u{10ffff}";
+    let plot = Plot::heatmap(
+        crate::CategoryValues::new("column", ["C0", unavailable, "C1", "C2"].repeat(3)).unwrap(),
+        crate::CategoryValues::new(
+            "row",
+            ["R0", unavailable, "R2"]
+                .into_iter()
+                .flat_map(|row| std::iter::repeat_n(row, 4)),
+        )
+        .unwrap(),
+        crate::NumericValues::new("value", [1.0; 12]),
+    )
+    .labels(Labels::raw())
+    .x_category_order(crate::CategoryOrder::explicit([
+        unavailable,
+        "C0",
+        "C1",
+        "C2",
+    ]))
+    .x_category_labels(
+        crate::CategoryLabelSelection::every(2)
+            .unwrap()
+            .offset(1)
+            .unwrap(),
+    )
+    .y_category_labels(crate::CategoryLabelSelection::every(2).unwrap());
+    let canvas = Canvas::grid(1, 1)
+        .unwrap()
+        .size(800, 600)
+        .legend_policy(CanvasLegendPolicy::Hidden)
+        .panel(0, 0, plot.clone())
+        .unwrap();
+    let root = canvas.preflight_plan().unwrap();
+    let text = root.plan().retained_text();
+    for source in ["C0", "C2", "R0", "R2"] {
+        assert_eq!(
+            text.iter()
+                .filter(|(_, plan)| plan.source == source)
+                .count(),
+            1
+        );
+    }
+    assert!(!text
+        .iter()
+        .any(|(_, plan)| plan.source == unavailable || plan.source == "C1"));
+    let counters = capture_counters();
+    let mut backend = root.plan().take_svg_backend().unwrap();
+    Canvas::render_preflighted(&root, &mut backend).unwrap();
+    let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+    assert_eq!(svg.matches("<polygon ").count(), 12);
+    assert_eq!(capture_counters(), counters);
+    let used = plot.panel_text_annotation(
+        crate::PanelTextAnnotation::new(crate::PanelCorner::TopLeft, unavailable).unwrap(),
+    );
+    let error = Canvas::grid(1, 1)
+        .unwrap()
+        .size(800, 600)
+        .legend_policy(CanvasLegendPolicy::Hidden)
+        .panel(0, 0, used)
+        .unwrap()
+        .preflight()
+        .unwrap_err();
+    assert!(error.to_string().contains("U+10FFFF"), "{error}");
+}
+
+#[test]
+fn sparse_native_rows_preserve_packed_points_and_waterfall_sources() {
+    let selection = crate::CategoryLabelSelection::every(2).unwrap();
+    let swarm = Plot::beeswarm(
+        crate::CategoryValues::new("row", ["R0", "R0", "\u{10ffff}", "\u{10ffff}", "R2", "R2"])
+            .unwrap(),
+        crate::NumericValues::new("x", [1.0, 1.1, 2.0, 2.1, 3.0, 3.1]),
+        crate::NumericValues::new("color", [1.0; 6]),
+    )
+    .labels(Labels::raw())
+    .y_category_labels(selection.clone());
+    let waterfall = Plot::waterfall(
+        crate::CategoryValues::new("row", ["R0", "\u{10ffff}", "R2"]).unwrap(),
+        crate::NumericValues::new("delta", [1.0, -0.5, 1.0]),
+        2.0,
+    )
+    .labels(Labels::raw())
+    .y_category_labels(selection);
+    let root = Canvas::grid(1, 2)
+        .unwrap()
+        .size(1200, 600)
+        .legend_policy(CanvasLegendPolicy::Hidden)
+        .panel(0, 0, swarm)
+        .unwrap()
+        .panel(0, 1, waterfall)
+        .unwrap()
+        .preflight_plan()
+        .unwrap();
+    let text = root.plan().retained_text();
+    for label in ["R0", "R2"] {
+        assert_eq!(
+            text.iter().filter(|(_, plan)| plan.source == label).count(),
+            2
+        );
+    }
+    let mut backend = root.plan().take_svg_backend().unwrap();
+    Canvas::render_preflighted(&root, &mut backend).unwrap();
+    let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+    assert_eq!(svg.matches("<circle ").count(), 6);
+    assert_eq!(svg.matches("<polygon ").count(), 3);
+}
+
+#[test]
 fn authored_headers_use_independent_fonts_alignment_and_selected_band_padding() {
     use crate::{FontFamily, FontStack, HeaderSpacing, Text, TextAlignment};
     let mut theme = Theme::publication();

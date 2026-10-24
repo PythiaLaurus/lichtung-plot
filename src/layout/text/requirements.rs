@@ -797,26 +797,13 @@ impl PreparedTextRequirement {
                     prepared_stage.as_deref_mut(),
                 )?;
             }
-            push_axis_ticks(
+            push_plot_axis_ticks(
+                interiors,
                 requirements,
-                &x_axis,
-                plot.x_axis_spec(),
-                automatic_category_labels(plot, kind, true)?,
-                (kind == PlotKind::Heatmap
-                    && plot.heatmap_label_fit_spec() == crate::HeatmapLabelFit::Elide)
-                    .then_some(HEATMAP_ELISION_ALPHABET),
-                &theme.typography.axes.tick_label,
-                prepared_stage.as_deref_mut(),
-            )?;
-            push_axis_ticks(
-                requirements,
-                &y_axis,
-                plot.y_axis_spec(),
-                automatic_category_labels(plot, kind, false)?,
-                (kind == PlotKind::Heatmap
-                    && plot.heatmap_label_fit_spec() == crate::HeatmapLabelFit::Elide)
-                    .then_some(HEATMAP_ELISION_ALPHABET),
-                &theme.typography.axes.tick_label,
+                plot,
+                kind,
+                theme,
+                base,
                 prepared_stage.as_deref_mut(),
             )?;
             if matches!(
@@ -1277,6 +1264,95 @@ impl PreparedTextRequirement {
     }
 }
 
+fn push_plot_axis_ticks(
+    interiors: Option<&crate::layout::interior::PreparedInteriorInputs>,
+    requirements: &mut Vec<PreparedTextRequirement>,
+    plot: &Plot,
+    kind: PlotKind,
+    theme: &crate::theme::ResolvedTheme,
+    base: &ComponentAddress,
+    mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
+) -> Result<(), Error> {
+    let alphabet = (kind == PlotKind::Heatmap
+        && plot.heatmap_label_fit_spec() == crate::HeatmapLabelFit::Elide)
+        .then_some(HEATMAP_ELISION_ALPHABET);
+    if let Some(interiors) = interiors {
+        for (index, (scope, axes)) in interiors.axes.iter().enumerate() {
+            if plot.axis_scope().is_some() && plot.axis_scope() != scope.as_deref() {
+                continue;
+            }
+            let owner = if plot.has_facets() {
+                base.child(
+                    crate::layout::AddressRole::FacetCell,
+                    u32::try_from(index)
+                        .map_err(|_| Error::Render("facet axis census address overflow".into()))?,
+                )?
+            } else {
+                base.clone()
+            };
+            for side in 0..2 {
+                if side == 1 && !plot.y_tick_labels_visible() {
+                    continue;
+                }
+                let address = owner.child(
+                    if side == 0 {
+                        crate::layout::AddressRole::AxisBottom
+                    } else {
+                        crate::layout::AddressRole::AxisLeft
+                    },
+                    0,
+                )?;
+                let categories = axes.display_categories[side]
+                    .as_ref()
+                    .map(|labels| {
+                        crate::data::source::collect_source(
+                            labels
+                                .iter()
+                                .map(|label| crate::data::source::copy_source_string(label)),
+                        )
+                    })
+                    .transpose()?;
+                push_axis_ticks(
+                    requirements,
+                    &address,
+                    &axes.specs[side],
+                    categories,
+                    alphabet,
+                    &theme.typography.axes.tick_label,
+                    prepared_stage.as_deref_mut(),
+                )?;
+            }
+        }
+    } else {
+        for (side, spec) in [plot.x_axis_spec(), plot.y_axis_spec()]
+            .into_iter()
+            .enumerate()
+        {
+            if side == 1 && !plot.y_tick_labels_visible() {
+                continue;
+            }
+            let address = base.child(
+                if side == 0 {
+                    crate::layout::AddressRole::AxisBottom
+                } else {
+                    crate::layout::AddressRole::AxisLeft
+                },
+                0,
+            )?;
+            push_axis_ticks(
+                requirements,
+                &address,
+                spec,
+                automatic_category_labels(plot, kind, side == 0)?,
+                alphabet,
+                &theme.typography.axes.tick_label,
+                prepared_stage.as_deref_mut(),
+            )?;
+        }
+    }
+    Ok(())
+}
+
 fn push_axis_ticks(
     requirements: &mut Vec<PreparedTextRequirement>,
     axis: &ComponentAddress,
@@ -1303,7 +1379,11 @@ fn push_axis_ticks(
             )?;
         }
     } else if let Some(categories) = automatic_categories {
+        let count = categories.len();
         for (index, category) in categories.into_iter().enumerate() {
+            if !spec.category_labels.includes(index, count) {
+                continue;
+            }
             let address = axis.clone();
             push_owned(
                 requirements,

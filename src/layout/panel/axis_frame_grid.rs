@@ -140,6 +140,7 @@ struct FrozenTick {
 #[derive(Debug, Clone)]
 struct FrozenAxisPlan {
     source: TickSource,
+    eligible_labels: Vec<usize>,
     ticks: Vec<FrozenTick>,
     title: Option<(ResolvedTextPlan, PlannedTextPlacement)>,
     explanation: Option<(ResolvedTextPlan, PlannedTextPlacement)>,
@@ -240,6 +241,10 @@ impl PanelAxisPlan {
                 numeric.observe_feedback(round)?;
             }
             round.observe_count(axis.source.ordinal)?;
+            round.observe_count(axis.eligible_labels.len())?;
+            for &index in &axis.eligible_labels {
+                round.observe_count(index)?;
+            }
             round.observe_count(axis.source.cap)?;
             round.observe_count(
                 axis.source
@@ -412,6 +417,27 @@ impl Layout {
 }
 
 impl Axis {
+    pub(crate) fn label_capacities(
+        &self,
+        projection: &Projection,
+        side: AxisSide,
+        scope: &FitScope,
+    ) -> Result<Vec<f64>, PlanError> {
+        let cells = cells::assign(
+            &self.ticks,
+            self.source == TickSource::SUPPLIED,
+            self.tick_labels_visible,
+            self.assigned_cells.as_deref(),
+            &self.category_labels,
+            projection,
+            side,
+            scope,
+        )?;
+        Ok(crate::data::source::collect_source(
+            cells.into_iter().map(|cell| Ok(cell.capacity())),
+        )?)
+    }
+
     /// Keep the title block centered on its semantic axis while aligning its lines
     /// in text-local space, before the existing horizontal/vertical transform.
     #[expect(
@@ -510,7 +536,9 @@ impl Axis {
             Ok(width)
         } else {
             theme.intrinsic_tick_label_width(
-                self.ticks.iter().map(|tick| tick.label.as_str()),
+                self.category_labels
+                    .indices(self.ticks.len())
+                    .map(|index| self.ticks[index].label.as_str()),
                 panel.height(),
             )
         }
@@ -531,6 +559,7 @@ impl Axis {
             categorical,
             self.tick_labels_visible,
             self.assigned_cells.as_deref(),
+            &self.category_labels,
             projection,
             side,
             scope,
@@ -596,7 +625,10 @@ impl Axis {
                 "y-axis title",
             ),
         };
-        for (tick, cell) in self.ticks.iter().zip(cells) {
+        let eligible_labels = crate::data::source::collect_source(
+            self.category_labels.indices(self.ticks.len()).map(Ok),
+        )?;
+        for (index, (tick, cell)) in self.ticks.iter().zip(cells).enumerate() {
             let segment = match side {
                 AxisSide::Bottom => [
                     Point2D::new(cell.center, segment_start),
@@ -607,7 +639,10 @@ impl Axis {
                     Point2D::new(segment_end, cell.center),
                 ],
             };
-            let label = if !self.tick_labels_visible || (!categorical && tick.label.is_empty()) {
+            let label = if !self.tick_labels_visible
+                || !self.category_labels.includes(index, self.ticks.len())
+                || (!categorical && tick.label.is_empty())
+            {
                 None
             } else {
                 labels_present = true;
@@ -800,6 +835,7 @@ impl Axis {
         }
         Ok(FrozenAxisPlan {
             source: self.source,
+            eligible_labels,
             ticks,
             title,
             explanation,

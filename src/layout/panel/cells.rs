@@ -12,6 +12,34 @@ use crate::Error;
 // Split the existing 4px label separation across the two neighboring cells.
 pub(crate) const LABEL_CLEARANCE: f64 = 2.0;
 
+/// Uniform-category hard span from selected neighbors; full scientific count stays intact.
+pub(crate) fn category_label_span(
+    selection: &crate::CategoryLabelSelection,
+    count: usize,
+    mut extent: impl FnMut(usize) -> Result<f64, Error>,
+) -> Result<f64, Error> {
+    let count_pixels = f64::from(u32::try_from(count).map_err(|_| {
+        Error::Render("category label span count exceeds spatial representation".into())
+    })?);
+    let indices = crate::data::source::collect_source(selection.indices(count).map(Ok))?;
+    let mut span = 0.0_f64;
+    for (ordinal, &index) in indices.iter().enumerate() {
+        let index_pixels = f64::from(u32::try_from(index).expect("index below checked count"));
+        let left = if ordinal == 0 {
+            index_pixels + 0.5
+        } else {
+            (index - indices[ordinal - 1]) as f64 / 2.0
+        };
+        let right = if ordinal + 1 == indices.len() {
+            count_pixels - index_pixels - 0.5
+        } else {
+            (indices[ordinal + 1] - index) as f64 / 2.0
+        };
+        span = span.max(extent(index)? * count_pixels / (2.0 * left.min(right)));
+    }
+    crate::layout::kernel::required_length(span)
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(super) struct LabelCell {
     pub(super) center: f64,
@@ -93,11 +121,16 @@ impl LabelCell {
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "label eligibility is independent of full tick geometry and assigned tracks"
+)]
 pub(super) fn assign(
     ticks: &[AxisTick],
     categorical: bool,
     labels_visible: bool,
     assigned: Option<&[(f64, f64)]>,
+    selection: &crate::CategoryLabelSelection,
     projection: &Projection,
     side: AxisSide,
 
@@ -163,43 +196,71 @@ pub(super) fn assign(
             Error::Render("assigned categorical cell count differs from ticks".into()).into(),
         );
     }
-    if !categorical {
-        let mut previous: Option<usize> = None;
-        for (index, tick) in ticks.iter().enumerate() {
-            if tick.label.is_empty() {
-                continue;
+    let sparse = categorical && !selection.is_all();
+    if !categorical || sparse {
+        if sparse {
+            for cell in &mut cells {
+                cell.start = origin as f64 / 1024.0;
+                cell.end = (i128::from(origin) + i128::from(span)) as f64 / 1024.0;
             }
-            if let Some(previous_index) = previous {
-                let (start, span) = axis_quanta(cells[previous_index].center, cells[index].center)?;
-                let boundary = ratio_position(start, span, 1, 2)
-                    .ok_or_else(|| Error::Render("axis cell midpoint overflow".into()))?
-                    as f64
-                    / 1024.0;
-                cells[previous_index].end = boundary;
-                cells[index].start = boundary;
-            } else {
-                cells[index].inward = true;
-            }
-            previous = Some(index);
         }
-        if let Some(last) = previous {
-            cells[last].inward = true;
-        }
+        neighbor_boundaries(&mut cells, ticks, categorical, selection)?;
     }
     if labels_visible {
-        apply_clearance(&mut cells, ticks, categorical, scope)?;
+        apply_clearance(&mut cells, ticks, categorical, selection, scope)?;
     }
     Ok(cells)
+}
+
+fn neighbor_boundaries(
+    cells: &mut [LabelCell],
+    ticks: &[AxisTick],
+    categorical: bool,
+    selection: &crate::CategoryLabelSelection,
+) -> Result<(), Error> {
+    let mut previous: Option<usize> = None;
+    let mut order = crate::data::source::collect_source((0..ticks.len()).map(Ok))?;
+    order.retain(|&index| {
+        if categorical {
+            selection.includes(index, ticks.len())
+        } else {
+            !ticks[index].label.is_empty()
+        }
+    });
+    crate::data::source::sort_source_by(&mut order, |a, b| {
+        cells[*a].center.total_cmp(&cells[*b].center)
+    });
+    for index in order {
+        if let Some(previous_index) = previous {
+            let (start, span) = axis_quanta(cells[previous_index].center, cells[index].center)?;
+            let boundary = ratio_position(start, span, 1, 2)
+                .ok_or_else(|| Error::Render("axis cell midpoint overflow".into()))?
+                as f64
+                / 1024.0;
+            cells[previous_index].end = boundary;
+            cells[index].start = boundary;
+        } else if !categorical {
+            cells[index].inward = true;
+        }
+        previous = Some(index);
+    }
+    if let Some(last) = previous.filter(|_| !categorical) {
+        cells[last].inward = true;
+    }
+    Ok(())
 }
 
 fn apply_clearance(
     cells: &mut [LabelCell],
     ticks: &[AxisTick],
     categorical: bool,
+    selection: &crate::CategoryLabelSelection,
     scope: &FitScope,
 ) -> Result<(), PlanError> {
-    for (cell, tick) in cells.iter_mut().zip(ticks) {
-        if categorical || !tick.label.is_empty() {
+    for (index, (cell, tick)) in cells.iter_mut().zip(ticks).enumerate() {
+        if (categorical && selection.includes(index, ticks.len()))
+            || (!categorical && !tick.label.is_empty())
+        {
             cell.start += LABEL_CLEARANCE;
             cell.end -= LABEL_CLEARANCE;
             if cell.capacity() <= 0.0 {
@@ -250,6 +311,7 @@ mod tests {
                     categorical,
                     true,
                     None,
+                    &crate::CategoryLabelSelection::all(),
                     &projection,
                     AxisSide::Bottom,
                     &FitScope::root(),
@@ -281,6 +343,7 @@ mod tests {
                 false,
                 true,
                 None,
+                &crate::CategoryLabelSelection::all(),
                 &projection,
                 AxisSide::Bottom,
                 &FitScope::root(),
@@ -290,5 +353,59 @@ mod tests {
                 matches!(error, PlanError::Fit(failure) if failure.reason.kind == FitKind::Tick)
             );
         }
+    }
+
+    #[test]
+    fn sparse_labels_use_selected_neighbors_without_compacting_assigned_tracks() {
+        let ticks: Vec<_> = (0..6)
+            .map(|index| AxisTick::new(f64::from(index) + 0.5, format!("label {index}")))
+            .collect();
+        let projection = Projection::new((0.0, 6.0), (0.0, 6.0), (0.0, 600.0, 0.0, 600.0));
+        let bounds = [
+            (0.0, 40.0),
+            (40.0, 160.0),
+            (160.0, 300.0),
+            (300.0, 360.0),
+            (360.0, 460.0),
+            (460.0, 600.0),
+        ];
+        let all = assign(
+            &ticks,
+            true,
+            true,
+            Some(&bounds),
+            &crate::CategoryLabelSelection::all(),
+            &projection,
+            AxisSide::Bottom,
+            &FitScope::root(),
+        )
+        .unwrap();
+        let selection = crate::CategoryLabelSelection::every(3)
+            .unwrap()
+            .offset(1)
+            .unwrap();
+        let sparse = assign(
+            &ticks,
+            true,
+            true,
+            Some(&bounds),
+            &selection,
+            &projection,
+            AxisSide::Bottom,
+            &FitScope::root(),
+        )
+        .unwrap();
+        assert_eq!(all.len(), 6);
+        assert_eq!(sparse.len(), 6);
+        for (a, b) in all.iter().zip(&sparse) {
+            assert_eq!(a.center.to_bits(), b.center.to_bits());
+        }
+        for index in [1, 4] {
+            assert!(sparse[index].capacity() > all[index].capacity());
+        }
+        assert_eq!(
+            (sparse[4].start - sparse[1].end).to_bits(),
+            (2.0 * LABEL_CLEARANCE).to_bits()
+        );
     }
 }

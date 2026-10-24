@@ -1739,7 +1739,12 @@ factorized equality and the common power quantizer resolve coordinates, boundari
 factors and labels without accumulated products or physical powers. Fixed lists
 and bounded preferred sublattices check caps before materialization, preserve valid
 empty owners and participate in complete semantic feedback and frozen publication.
-Steps 12–22 remain pending; undelivered target signatures are
+Step 12 is complete: independent sealed x/y categorical label selection retains
+the full scientific category/tick/track domain plus selected original indices.
+Final local orders drive font admission and neighbor capacity; native sizing,
+Canvas sharing, complete feedback/height/reuse identity and frozen text consume
+the same eligibility without suppressing independent annotations or collision checks.
+Steps 13–22 remain pending; undelivered target signatures are
 not current APIs.
 
 ### 1. Apply The Public Property Naming Rule
