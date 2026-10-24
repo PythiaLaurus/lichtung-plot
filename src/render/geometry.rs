@@ -795,6 +795,7 @@ impl GeometryBackend {
         GEOMETRY_RAW_TEXT_PLAN_CALLS.with(|calls| calls.set(calls.get() + 1));
         self.font_environment
             .plan_text(TextPlanInput {
+                direction: crate::TextDirection::Auto,
                 source: text,
                 stack: &style.font_family,
                 weight: style.weight,
@@ -2588,6 +2589,7 @@ mod tests {
     fn planned_geometry_uses_stored_ink_without_replanning() {
         let plan = PreparedFontEnvironment::synthetic()
             .plan_text(TextPlanInput {
+                direction: crate::TextDirection::Auto,
                 source: "A",
                 stack: crate::font::canonical::test_sans_stack(),
                 weight: crate::TextWeight::Normal,

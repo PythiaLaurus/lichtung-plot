@@ -224,6 +224,24 @@ explicit ordered tick-angle list without removing ticks or splitting identifiers
 around the selected block anchor. Typed data directions follow the actual panel
 projection rather than the unscaled numeric slope.
 
+For a compact guide entry, attach for example:
+
+```rust
+use lichtung_plot::{TextBounds, TextElision, TextEllipsis, TextFailure, TextLayout, TextOverflow};
+let compact = TextLayout::default()
+    .bounds(TextBounds::new(Some(90.0), None, None)?)
+    .overflow(TextOverflow::ellipsis(
+        TextEllipsis::new(TextElision::Middle).marker("…"), TextFailure::Error));
+# let _ = compact;
+# Ok::<(), lichtung_plot::Error>(())
+```
+
+Start/End are logical; Left/Right are physical. Original source remains available
+as nonpainting SVG accessibility metadata, independently of the displayed view.
+The marker is unnecessary when complete text fits. Heatmap uses its existing dense
+three-dot default through this engine; explicit `.x_tick_text_layout(TextLayout::default())`
+and the corresponding y attachment select complete wrapping instead.
+
 `HeatmapNullRowAnnotation::new(row_key, text)` accepts Text for the explanation
 inside a fully-null Cartesian row. The row key keeps its semantic validation;
 local Text style replaces the missing-fill contrast role and determines padding.

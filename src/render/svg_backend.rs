@@ -322,6 +322,10 @@ impl<S: SvgSink> SvgSerializer<S> {
         crate::render::backend::finish_scope(result, end, "text-local clip")
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one serializer emits original-source metadata, retained bidi runs and the matching frozen outline replacement ranges"
+    )]
     fn draw_planned_lines(&mut self, text: &CanonicalPlannedText) -> Result<(), Error> {
         let plan = &text.0.plan;
         let fill = SvgPaint::from(plan.style.paint).attributes("fill");
@@ -329,6 +333,18 @@ impl<S: SvgSink> SvgSerializer<S> {
         let weight = FontWeight(plan.style.weight);
         let rotation = text.0.rotation;
         let rotated = rotation.is_rotated();
+        if plan.original_source.is_some() {
+            let target = match self.active_text_buffer() {
+                TextBuffer::Body => &mut self.body,
+                TextBuffer::Grid => &mut self.grid_buf,
+            };
+            let _ = writeln!(
+                target,
+                "<g data-original-source=\"{}\" aria-label=\"{}\">",
+                EscapedAttribute(plan.original_source()),
+                EscapedAttribute(plan.original_source())
+            );
+        }
         for (line_index, line) in plan.lines.iter().enumerate() {
             let geometry = &text.0.lines[line_index];
             let start = line.source_span.start_byte as usize;
@@ -417,6 +433,13 @@ impl<S: SvgSink> SvgSerializer<S> {
                     line_index,
                 }),
             )?;
+        }
+        if plan.original_source.is_some() {
+            let target = match self.active_text_buffer() {
+                TextBuffer::Body => &mut self.body,
+                TextBuffer::Grid => &mut self.grid_buf,
+            };
+            let _ = writeln!(target, "</g>");
         }
         Ok(())
     }
@@ -2163,6 +2186,7 @@ mod tests {
         let environment = PreparedFontEnvironment::synthetic();
         let plan = environment
             .plan_text(TextPlanInput {
+                direction: crate::TextDirection::Auto,
                 source: "A",
                 stack: crate::font::canonical::test_sans_stack(),
                 weight: crate::TextWeight::Normal,

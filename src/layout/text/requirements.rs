@@ -12,7 +12,6 @@ use crate::theme::TextTheme;
 use crate::{Error, Plot, PlotKind, TextWeight};
 
 const SCALAR_MAP_WORDS: usize = 0x11_0000 / u64::BITS as usize;
-const HEATMAP_ELISION_ALPHABET: &[char] = &['.'];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum PreparedTextRole {
@@ -1381,9 +1380,7 @@ fn push_plot_axis_ticks(
     base: &ComponentAddress,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), Error> {
-    let alphabet = (kind == PlotKind::Heatmap
-        && plot.heatmap_label_fit_spec() == crate::HeatmapLabelFit::Elide)
-        .then_some(HEATMAP_ELISION_ALPHABET);
+    let alphabet = None;
     if let Some(interiors) = interiors {
         for (index, (scope, axes)) in interiors.axes.iter().enumerate() {
             if plot.axis_scope().is_some() && plot.axis_scope() != scope.as_deref() {
@@ -2945,6 +2942,7 @@ mod tests {
 
         environment
             .plan_text(crate::layout::TextPlanInput {
+                direction: crate::TextDirection::Auto,
                 source: "A",
                 stack: canonical::test_sans_stack(),
                 weight: TextWeight::Normal,
@@ -2965,6 +2963,7 @@ mod tests {
         environment.operation().seal_fonts().unwrap();
         let missing = environment
             .plan_text(crate::layout::TextPlanInput {
+                direction: crate::TextDirection::Auto,
                 source: "B",
                 stack: canonical::test_sans_stack(),
                 weight: TextWeight::Normal,

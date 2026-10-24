@@ -163,7 +163,7 @@ Data windows do not permit clipping required titles, axes/ticks, guides or
 annotations outside assigned boxes. An annotation's explicit visibility/window
 policy may suppress it; otherwise it fits complete uncut ink or fails. Exact image
 size cannot succeed by clipping layout content. Theme chrome absence does not
-remove semantic content. Heatmap's explicit Wrap/Elide category-label policy is
+remove semantic content. Heatmap's common x/y TextLayout category-label policy is
 not a general text-omission control.
 
 ## Presentation Owners
@@ -258,6 +258,19 @@ bounds. Explicit orientation replaces the owner direction and its multiline orde
 omission preserves current owner defaults. Glyphs rotate independently of marks,
 bracket paths, ticks and raw scientific references. Fit/gutters/tracks consume
 the same transformed logical/paint geometry used by every output.
+
+TextOverflow::ellipsis derives Start/Middle/End or physical Left/Right views with
+a caller marker (including empty), intersected line caps and optional distinctness.
+The original source and original/synthetic display spans remain retained. Views
+cut only at complete graphemes, preserve retained mandatory breaks and paragraph
+direction/embedding controls, and reshape the selected display before acceptance.
+The complete source is admitted first; a marker is admitted only if abbreviation
+is reached. Nonfit consumes the same explicit terminal action, never a font fallback.
+Text SVG paints only the selected view and retains original text in nonpainting
+accessibility metadata; outlines/PNG replay those same glyphs. Heatmap omission
+retains its dense end-ellipsis/three-dot/distinct-view defaults; a present default
+x/y TextLayout selects complete legal wrapping. The dedicated label-fit API
+and prefix helper are removed.
 
 HeatmapNullRowAnnotation takes a semantic row-label string and displayed Text.
 Local exact style replaces the selected missing-fill contrast role before fonts;

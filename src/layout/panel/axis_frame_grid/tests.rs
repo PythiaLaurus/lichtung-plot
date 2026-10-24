@@ -507,6 +507,45 @@ fn ordered_tick_angles_fit_complete_exact_labels_without_changing_ticks_or_grids
 }
 
 #[test]
+fn exact_labels_retain_original_strings_and_positions_under_explicit_display_distinctness() {
+    use crate::{TextBounds, TextElision, TextEllipsis, TextFailure, TextLayout, TextOverflow};
+    let mut theme = crate::Theme::publication().resolve().unwrap();
+    let source = layout(
+        PanelBox::new(80.0, 480.0, 80.0, 280.0),
+        vec![
+            AxisTick::new(0.5, "Same long beginning one"),
+            AxisTick::new(2.5, "Same long beginning two"),
+        ],
+        Vec::new(),
+        TickSource::EXACT,
+    );
+    let request = TextLayout::default()
+        .bounds(TextBounds::new(Some(24.0), None, None).unwrap())
+        .overflow(TextOverflow::ellipsis(
+            TextEllipsis::new(TextElision::End).distinct(true),
+            TextFailure::Error,
+        ));
+    theme.text_layouts.ticks[0] = Some(request.clone());
+    assert!(source
+        .plan_axes(&theme)
+        .unwrap_err()
+        .to_string()
+        .contains("ambiguous after ellipsis"));
+    theme.text_layouts.ticks[0] = Some(request.overflow(TextOverflow::ellipsis(
+        TextEllipsis::new(TextElision::End).distinct(false),
+        TextFailure::Error,
+    )));
+    let selected = source.plan_axes(&theme).unwrap();
+    assert_eq!(selected.x_axis.ticks.len(), 2);
+    for (original, tick) in source.x_axis.ticks.iter().zip(&selected.x_axis.ticks) {
+        assert_eq!(original.position.to_bits(), tick.position.to_bits());
+        let (plan, _) = tick.label.as_ref().unwrap();
+        assert_eq!(original.label, plan.original_source());
+        assert_ne!(original.label, plan.source);
+    }
+}
+
+#[test]
 fn vertical_category_cells_reject_insufficient_height_without_dropping() {
     let theme = crate::Theme::publication().resolve().unwrap();
     let layout = layout(

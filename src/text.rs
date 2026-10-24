@@ -6,8 +6,8 @@ pub(crate) mod position;
 pub use orientation::{TextOrientation, TextRotation, TextRotationMode};
 pub(crate) mod roles;
 pub use layout::{
-    TextAnchor, TextBounds, TextFailure, TextOffset, TextOffsetFrame, TextOverflow, TextOverlap,
-    TextVisibility, TextWrapping,
+    TextAnchor, TextBounds, TextDirection, TextElision, TextEllipsis, TextFailure, TextOffset,
+    TextOffsetFrame, TextOverflow, TextOverlap, TextVisibility, TextWrapping,
 };
 pub use position::{DataCoordinate, DataPosition, TextCoordinate, TextPosition};
 pub use roles::GuideTextRole;
@@ -248,6 +248,7 @@ pub struct TextLayout {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct TextInstructions {
+    pub(crate) direction: Option<TextDirection>,
     pub(crate) orientation: Option<TextOrientation>,
     pub(crate) rotation_mode: Option<TextRotationMode>,
     pub(crate) anchor: Option<TextAnchor>,
@@ -273,6 +274,7 @@ impl TextLayout {
 
     pub(crate) fn instructions(&self) -> &TextInstructions {
         static EMPTY: TextInstructions = TextInstructions {
+            direction: None,
             orientation: None,
             rotation_mode: None,
             anchor: None,
@@ -306,7 +308,7 @@ macro_rules! layout_edits {
         pub fn $field(mut self,value:$value) -> Self {self.edit_instructions().$field=Some(value);self}
     )+}};
 }
-layout_edits! {anchor:TextAnchor,offset:TextOffset,bounds:TextBounds,wrapping:TextWrapping,overflow:TextOverflow,overlap:TextOverlap,visibility:TextVisibility,orientation:TextOrientation,rotation_mode:TextRotationMode}
+layout_edits! {anchor:TextAnchor,offset:TextOffset,bounds:TextBounds,wrapping:TextWrapping,overflow:TextOverflow,overlap:TextOverlap,visibility:TextVisibility,orientation:TextOrientation,rotation_mode:TextRotationMode,direction:TextDirection}
 impl TextLayout {
     /// Replace orientation with one fixed screen angle.
     #[must_use]

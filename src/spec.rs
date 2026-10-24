@@ -203,16 +203,6 @@ pub enum HeatmapLayout {
     },
 }
 
-/// Display policy for categorical heatmap axis labels.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum HeatmapLabelFit {
-    /// Preserve the dense-grid default by eliding labels that exceed one cell.
-    #[default]
-    Elide,
-    /// Preserve complete labels and wrap x-axis text within each cell.
-    Wrap,
-}
-
 /// In-cell value-label policy for heatmaps.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum HeatmapAnnotations {
@@ -764,7 +754,7 @@ impl<'a> PlotRenderContext<'a> {
             for text in frozen {
                 let owner = text.plan.style.provenance.owner.as_str();
                 lookup
-                    .entry((owner, text.plan.source.as_str()))
+                    .entry((owner, text.plan.original_source()))
                     .or_insert(&text.plan);
             }
         }

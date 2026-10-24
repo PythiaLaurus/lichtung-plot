@@ -13,10 +13,9 @@ use crate::layout::AxisTick;
 use crate::render::backend::PointStyle;
 use crate::spec::{
     AxisScale, BarInput, BarSpacing, Bootstrap, CategoryOrder, ConfidenceIntervalAlgorithm,
-    DumbbellEndpoints, ErrorBarKind, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout,
-    HeatmapNullRowAnnotation, HistogramBins, HistogramComposite, HistogramStat, LegendPolicy,
-    LegendPosition, LinePathStyle, PanelTextAnnotation, PlotKind, QqLine, RawOverlay,
-    RegressionBand, WaterfallLabels,
+    DumbbellEndpoints, ErrorBarKind, HeatmapAnnotations, HeatmapLayout, HeatmapNullRowAnnotation,
+    HistogramBins, HistogramComposite, HistogramStat, LegendPolicy, LegendPosition, LinePathStyle,
+    PanelTextAnnotation, PlotKind, QqLine, RawOverlay, RegressionBand, WaterfallLabels,
 };
 use crate::{HistogramGeometry, NumericFormat, RaincloudGeometry};
 
@@ -37,6 +36,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             None => crate::theme::Theme::publication().resolve(),
         }?;
         theme.text_layouts = self.text_layouts.clone();
+        theme.apply_text_defaults(self.kind());
         Ok(theme)
     }
 
@@ -489,10 +489,6 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// Requested categorical heatmap label-fit policy.
     #[must_use]
-    pub(crate) const fn heatmap_label_fit_spec(&self) -> HeatmapLabelFit {
-        self.heatmap_label_fit
-    }
-
     pub(crate) fn continuous_color_scale_spec(&self) -> Option<&crate::ContinuousColorScale> {
         self.continuous_color_scale.as_ref()
     }

@@ -243,7 +243,9 @@ pub(crate) fn intrinsic_widths<'a>(
                 .instructions()
                 .overflow
                 .as_ref()
-                .is_some_and(|overflow| overflow.failure != crate::TextFailure::Error)
+                .is_some_and(|overflow| {
+                    overflow.failure != crate::TextFailure::Error || overflow.ellipsis.is_some()
+                })
     }) {
         0.0
     } else if appearance.layout.is_some_and(|request| {

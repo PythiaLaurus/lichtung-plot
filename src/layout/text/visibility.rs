@@ -72,6 +72,46 @@ pub(crate) fn apply(
             }
         }
     }
+    require_distinct(plans, scope)
+}
+
+pub(crate) fn require_distinct(
+    plans: &mut [crate::render::backend::PlacedText],
+    scope: &FitScope,
+) -> Result<(), PlanError> {
+    fn display(plan: &super::ResolvedTextPlan) -> impl Iterator<Item = char> + '_ {
+        plan.source
+            .chars()
+            .filter(|&ch| !super::ellipsis::bidi_control(ch))
+    }
+    for index in 0..plans.len() {
+        let requested = plans[index]
+            .plan
+            .request
+            .as_ref()
+            .and_then(|request| request.instructions().overflow.as_ref());
+        if plans[index].plan.lines.is_empty()
+            || requested
+                .and_then(|overflow| overflow.ellipsis.as_ref())
+                .is_none_or(|ellipsis| ellipsis.distinct != Some(true))
+        {
+            continue;
+        }
+        if (0..index).any(|prior| {
+            !plans[prior].plan.lines.is_empty()
+                && display(&plans[prior].plan).eq(display(&plans[index].plan))
+        }) {
+            match requested.map_or(TextFailure::Error, |overflow| overflow.failure) {
+                TextFailure::Error => {
+                    return Err(scope
+                        .failure(FitKind::Text, "text views become ambiguous after ellipsis")
+                        .into())
+                }
+                TextFailure::Hide => plans[index].plan = plans[index].plan.clone().hide()?,
+                TextFailure::Clip | TextFailure::Visible => {}
+            }
+        }
+    }
     Ok(())
 }
 

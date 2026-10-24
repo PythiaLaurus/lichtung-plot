@@ -290,6 +290,18 @@ end. No proposal crosses mandatory breaks. No emergency identifier/grapheme spli
 implicit rotation, font shrink, omission or general ellipsis is allowed. Explicit
 TextLayout orientation uses the same legal breaks and measured source plans.
 
+Explicit ellipsis analyzes/admit the original first, then visits a source-bounded
+sequence of complete-grapheme displays. Middle chooses retained endpoint lengths
+by measured source glyph advances rather than equal byte/character counts.
+Paragraph base direction and omitted embedding/isolate controls remain contextual
+inputs; requested Auto/LTR/RTL also belongs to the shape-cache profile. Retained
+mandatory breaks survive and general/ellipsis line caps intersect. Reached marker
+units are admitted before shaping, not through a guessed alphabet. Original and
+synthetic display spans are frozen alongside the derived glyph plan. Distinctness
+is checked on the actual selected owner group after visibility, never on a changed
+scientific domain. Heatmap's omitted dense policy is a default common request;
+explicit complete wrapping replaces it with no alternate elision implementation.
+
 Unbroken words/identifiers remain intact regardless of assigned width; even a
 short technical name such as `LightGBM` is not internally split to fit a compact
 cell. Callers choose explicit mandatory breaks or prepare display labels before

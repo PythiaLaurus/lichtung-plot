@@ -1,5 +1,66 @@
 use super::*;
 
+#[test]
+fn guide_ellipsis_retains_original_metadata_and_replays_one_selected_view_across_outputs() {
+    use lichtung_plot::{
+        CategoryValues, GuideTextRole, TextBounds, TextElision, TextEllipsis, TextFailure,
+        TextLayout, TextOverflow,
+    };
+    let directory = unique_dir("derived-guide-view");
+    let first = directory.join("first.svg");
+    let second = directory.join("second.svg");
+    let original = "A very long guide identity with an important ending";
+    let output = Plot::scatter(
+        NumericValues::new("x", [0.0, 1.0]),
+        NumericValues::new("y", [1.0, 0.0]),
+    )
+    .hue(CategoryValues::new("cohort", [original, original]).unwrap())
+    .labels(lichtung_plot::Labels::raw())
+    .guide_text_layout(
+        GuideTextRole::Entry,
+        TextLayout::default()
+            .bounds(TextBounds::new(Some(70.0), None, None).unwrap())
+            .overflow(TextOverflow::ellipsis(
+                TextEllipsis::new(TextElision::Middle),
+                TextFailure::Error,
+            )),
+    )
+    .size(500, 350)
+    .svg_preserve_text(&first)
+    .unwrap();
+    output
+        .svg(directory.join("paths.svg"))
+        .unwrap()
+        .png_preview(directory.join("preview.png"))
+        .unwrap()
+        .svg_preserve_text(&second)
+        .unwrap();
+    let bytes = std::fs::read(first).unwrap();
+    assert_eq!(bytes, std::fs::read(second).unwrap());
+    let source = std::str::from_utf8(&bytes).unwrap();
+    let document = roxmltree::Document::parse(source).unwrap();
+    assert!(document
+        .descendants()
+        .any(|node| node.attribute("data-original-source") == Some(original)));
+    let painted = document
+        .descendants()
+        .filter(|node| node.has_tag_name("text"))
+        .filter_map(|node| node.text())
+        .collect::<Vec<_>>();
+    assert!(!painted.contains(&original));
+    assert!(painted
+        .iter()
+        .any(|text| text.contains('…') && text.starts_with('A') && text.ends_with('g')));
+    let outlined = std::fs::read_to_string(directory.join("paths.svg")).unwrap();
+    assert!(!outlined.contains("<text"));
+    assert!(outlined.contains("data-original-source="));
+    assert_eq!(
+        png_dimensions(&std::fs::read(directory.join("preview.png")).unwrap()),
+        (500, 350)
+    );
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
 fn plot() -> Plot<lichtung_plot::kind::Scatter> {
     Plot::scatter(
         NumericValues::new("x", [1.0, 2.0, 3.0]),

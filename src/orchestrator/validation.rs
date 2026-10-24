@@ -6,8 +6,8 @@ use crate::Error;
 
 use crate::builder::Plot;
 use crate::spec::{
-    CategoryOrder, HeatmapLabelFit, HeatmapLayout, HistogramBins, HistogramComposite,
-    HistogramStat, LinePathStyle, PlotKind, RegressionBand,
+    CategoryOrder, HeatmapLayout, HistogramBins, HistogramComposite, HistogramStat, LinePathStyle,
+    PlotKind, RegressionBand,
 };
 
 impl Plot {
@@ -33,11 +33,6 @@ impl Plot {
         if kind != PlotKind::Heatmap && self.heatmap_layout_spec() != HeatmapLayout::Cartesian {
             return Err(Error::Data(format!(
                 "{kind:?}: non-Cartesian HeatmapLayout is supported only by PlotKind::Heatmap"
-            )));
-        }
-        if kind != PlotKind::Heatmap && self.heatmap_label_fit_spec() != HeatmapLabelFit::Elide {
-            return Err(Error::Data(format!(
-                "{kind:?}: HeatmapLabelFit::Wrap is supported only by PlotKind::Heatmap"
             )));
         }
         if kind != PlotKind::Heatmap && !self.heatmap_null_row_annotations_spec().is_empty() {

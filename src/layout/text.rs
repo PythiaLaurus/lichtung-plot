@@ -19,6 +19,7 @@ use crate::font::canonical::{
 use crate::theme::Color;
 use crate::TextWeight;
 
+pub(crate) mod ellipsis;
 pub(crate) mod placement;
 mod rational;
 pub(crate) mod request;
@@ -82,6 +83,7 @@ pub(crate) struct TextPlanProvenance {
 
 #[derive(Debug, Clone)]
 pub(crate) struct TextPlanInput<'a> {
+    pub(crate) direction: crate::TextDirection,
     pub(crate) source: &'a str,
     pub(crate) stack: &'a FontStack,
     pub(crate) weight: TextWeight,
@@ -206,6 +208,7 @@ impl Eq for ResolvedTextPlan {}
 
 #[derive(Debug)]
 struct TextAnalysis {
+    direction: crate::TextDirection,
     environment: PreparedFontEnvironment,
     original: std::sync::Arc<ResolvedTextPayload>,
     paragraphs: Vec<AnalyzedParagraph>,
@@ -263,12 +266,20 @@ impl From<ParagraphBidiInfo<'_>> for ParagraphBidiData {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ResolvedTextPayload {
+    pub(crate) original_source: Option<std::sync::Arc<String>>,
+    pub(crate) display_map: Option<std::sync::Arc<Vec<DisplayFragment>>>,
     pub(crate) selected_rotation: Option<crate::TextRotation>,
     occupied_rotation: Option<(i64, i64)>,
     content: std::sync::Arc<ResolvedTextContent>,
     pub(crate) request: Option<crate::TextLayout>,
     pub(crate) clip_size: Option<(i64, i64)>,
     pub(crate) paint_region: Option<[u64; 4]>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DisplayFragment {
+    pub(crate) display: std::ops::Range<usize>,
+    pub(crate) original: Option<std::ops::Range<usize>>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -308,6 +319,22 @@ impl std::ops::Deref for ResolvedTextPlan {
 }
 
 impl ResolvedTextPlan {
+    pub(crate) fn original_source(&self) -> &str {
+        self.original_source
+            .as_ref()
+            .map_or(&self.source, |source| source.as_str())
+    }
+    pub(crate) fn with_display(
+        mut self,
+        source: &str,
+        map: Vec<DisplayFragment>,
+    ) -> Result<Self, crate::Error> {
+        self.payload_mut().original_source = Some(crate::data::source::source_arc(
+            crate::data::source::copy_source_string(source)?,
+        )?);
+        self.payload_mut().display_map = Some(crate::data::source::source_arc(map)?);
+        Ok(self)
+    }
     #[expect(
         clippy::cast_precision_loss,
         reason = "canonical occupied lengths are converted before checked outward projection"
@@ -383,6 +410,8 @@ impl ResolvedTextPlan {
         let theme = appearance.theme;
         Ok(Self(
             std::sync::Arc::new(ResolvedTextPayload {
+                original_source: None,
+                display_map: None,
                 selected_rotation: None,
                 occupied_rotation: None,
                 content: std::sync::Arc::new(ResolvedTextContent {
@@ -598,6 +627,7 @@ impl ResolvedTextPlan {
         let original = &analysis.original;
 
         if !canonical::same_bytes(input.source, &original.source)
+            || input.direction != analysis.direction
             || !input.stack.same(&original.style.stack)
             || input.weight != original.style.weight
             || input.font_size.to_bits() != original.style.font_size.to_bits()
@@ -1055,7 +1085,12 @@ fn measure_text(
         #[cfg(test)]
         PARAGRAPH_BIDI_CALLS.with(|calls| calls.set(calls.get() + 1));
 
-        let bidi = ParagraphBidiData::from(ParagraphBidiInfo::new(paragraph, None));
+        let level = match input.direction {
+            crate::TextDirection::Auto => None,
+            crate::TextDirection::LeftToRight => Some(unicode_bidi::Level::ltr()),
+            crate::TextDirection::RightToLeft => Some(unicode_bidi::Level::rtl()),
+        };
+        let bidi = ParagraphBidiData::from(ParagraphBidiInfo::new(paragraph, level));
         let items = selected_paragraph_items(&pair, paragraph)?;
         let hyphen_face = paragraph
             .contains('\u{ad}')
@@ -1188,6 +1223,7 @@ fn measure_text(
             .max(requirements.hard_width_quanta);
         return Ok(TextMeasurement::Intrinsic(requirements));
     }
+    let direction = input.direction;
     let mut plan = finalize_plan(
         input,
         stack,
@@ -1197,6 +1233,7 @@ fn measure_text(
     )?;
 
     plan.1 = Some(std::sync::Arc::new(TextAnalysis {
+        direction,
         environment: environment.clone(),
         original: std::sync::Arc::clone(&plan.0),
         paragraphs: analyzed_paragraphs,
@@ -2287,6 +2324,8 @@ fn finalize_plan(
     lines.extend(built_lines.into_iter().map(|line| line.plan));
     Ok(ResolvedTextPlan(
         std::sync::Arc::new(ResolvedTextPayload {
+            original_source: None,
+            display_map: None,
             selected_rotation: None,
             occupied_rotation: None,
             content: std::sync::Arc::new(ResolvedTextContent {
@@ -2443,6 +2482,7 @@ mod tests {
         alignment: PhysicalTextAlignment,
     ) -> TextPlanInput<'_> {
         TextPlanInput {
+            direction: crate::TextDirection::Auto,
             source,
             stack: canonical::test_sans_stack(),
             weight: TextWeight::Normal,

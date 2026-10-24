@@ -21,9 +21,9 @@ use crate::layers::{BarPointLayer, GuideSpec, PointLayer};
 use crate::layout::AxisSpec;
 use crate::spec::{
     AxisScale, BarSpacing, CategoryOrder, DumbbellEndpoints, FacetSpec, HeatmapAnnotations,
-    HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation, HistogramBins, HistogramComposite,
-    HistogramStat, LegendPolicy, LinePathStyle, PanelTextAnnotation, PlotKind, QqLine, RawOverlay,
-    RegressionBand, WaterfallLabels,
+    HeatmapLayout, HeatmapNullRowAnnotation, HistogramBins, HistogramComposite, HistogramStat,
+    LegendPolicy, LinePathStyle, PanelTextAnnotation, PlotKind, QqLine, RawOverlay, RegressionBand,
+    WaterfallLabels,
 };
 use crate::theme::Theme;
 use crate::Labels;
@@ -490,7 +490,6 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     color_label_format: Option<Arc<crate::numeric::format::NumericFormat>>,
     continuous_color_scale: Option<crate::theme::ContinuousColorScale>,
     heatmap_layout: HeatmapLayout,
-    heatmap_label_fit: HeatmapLabelFit,
     heatmap_annotations: HeatmapAnnotations,
     heatmap_null_row_annotations: Vec<HeatmapNullRowAnnotation>,
     heatmap_highlight: Option<BooleanValues>,
@@ -641,7 +640,6 @@ impl Plot<crate::kind::Any> {
             color_label_format: None,
             continuous_color_scale: None,
             heatmap_layout: HeatmapLayout::default(),
-            heatmap_label_fit: HeatmapLabelFit::default(),
             heatmap_annotations: HeatmapAnnotations::default(),
             heatmap_null_row_annotations: Vec::new(),
             heatmap_highlight: None,
@@ -1062,7 +1060,6 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             color_label_format,
             continuous_color_scale,
             heatmap_layout,
-            heatmap_label_fit,
             heatmap_annotations,
             heatmap_null_row_annotations,
             heatmap_highlight,
@@ -1175,7 +1172,6 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             color_label_format,
             continuous_color_scale,
             heatmap_layout,
-            heatmap_label_fit,
             heatmap_annotations,
             heatmap_null_row_annotations,
             heatmap_highlight,

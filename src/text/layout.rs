@@ -123,6 +123,68 @@ pub enum TextWrapping {
     /// Keep each mandatory paragraph intact.
     NoSoftWrap,
 }
+/// Base paragraph direction, independent of physical line alignment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TextDirection {
+    /// Infer each paragraph from its original source.
+    #[default]
+    Auto,
+    /// Use a left-to-right paragraph base.
+    LeftToRight,
+    /// Use a right-to-left paragraph base.
+    RightToLeft,
+}
+/// Which end of the original source an ellipsis removes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextElision {
+    /// Remove the logical beginning.
+    Start,
+    /// Remove an interior span, retaining both ends.
+    Middle,
+    /// Remove the logical end.
+    End,
+    /// Remove the physical left end.
+    Left,
+    /// Remove the physical right end.
+    Right,
+}
+/// An explicit derived-display program; the original source is never replaced.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TextEllipsis {
+    pub(crate) position: TextElision,
+    pub(crate) marker: String,
+    pub(crate) lines: Option<usize>,
+    pub(crate) distinct: Option<bool>,
+}
+impl TextEllipsis {
+    /// Use U+2026 and a one-line cap; distinctness follows the actual owner.
+    pub fn new(position: TextElision) -> Self {
+        Self {
+            position,
+            marker: "…".into(),
+            lines: Some(1),
+            distinct: None,
+        }
+    }
+    /// Replace the marker, including an empty string.
+    #[must_use]
+    pub fn marker(mut self, text: impl Into<String>) -> Self {
+        self.marker = text.into();
+        self
+    }
+    /// Replace the extra ellipsis line cap.
+    #[must_use]
+    pub const fn max_lines(mut self, value: Option<usize>) -> Self {
+        self.lines = value;
+        self
+    }
+    /// Require distinct displayed views in the actual label group.
+    #[must_use]
+    pub const fn distinct(mut self, value: bool) -> Self {
+        self.distinct = Some(value);
+        self
+    }
+}
 /// Whether actual label/annotation ink must avoid its peer owners.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextOverlap {
@@ -147,30 +209,42 @@ pub enum TextFailure {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextOverflow {
     pub(crate) failure: TextFailure,
+    pub(crate) ellipsis: Option<TextEllipsis>,
 }
 impl TextOverflow {
     /// Retain the complete text and refuse a real fit miss.
     pub const fn complete() -> Self {
         Self {
             failure: TextFailure::Error,
+            ellipsis: None,
         }
     }
     /// Retain the complete text, clipping its paint to the assigned region.
     pub const fn clip() -> Self {
         Self {
             failure: TextFailure::Clip,
+            ellipsis: None,
         }
     }
     /// Retain complete text while allowing local overhang.
     pub const fn visible() -> Self {
         Self {
             failure: TextFailure::Visible,
+            ellipsis: None,
         }
     }
     /// Retain complete source and hide text only when it cannot fit.
     pub const fn hide() -> Self {
         Self {
             failure: TextFailure::Hide,
+            ellipsis: None,
+        }
+    }
+    /// Try an explicitly abbreviated display before the selected terminal action.
+    pub fn ellipsis(value: TextEllipsis, failure: TextFailure) -> Self {
+        Self {
+            failure,
+            ellipsis: Some(value),
         }
     }
 }

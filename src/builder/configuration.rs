@@ -2,7 +2,7 @@ use super::Plot;
 use crate::layers::{BarPointLayer, GuideSpec, PointLayer};
 use crate::layout::AxisTick;
 use crate::spec::{
-    AxisScale, BarSpacing, CategoryOrder, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout,
+    AxisScale, BarSpacing, CategoryOrder, HeatmapAnnotations, HeatmapLayout,
     HeatmapNullRowAnnotation, HistogramBins, HistogramComposite, HistogramStat, InteractionStyle,
     LegendPolicy, LinePathStyle, PanelTextAnnotation, QqLine, RawOverlay, RegressionBand,
     WaterfallLabels,
@@ -81,16 +81,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         K: crate::kind::ContinuousColor,
     {
         self.color_label_format = Some(std::sync::Arc::new(format));
-        self
-    }
-
-    /// Configure whether crowded heatmap category labels are elided or wrapped.
-    #[must_use]
-    pub fn heatmap_label_fit(mut self, fit: HeatmapLabelFit) -> Self
-    where
-        K: crate::kind::HeatmapOptions,
-    {
-        self.heatmap_label_fit = fit;
         self
     }
 

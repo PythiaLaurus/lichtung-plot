@@ -116,20 +116,20 @@ pub use spec::{
     AxisScale, BarInput, BarSamples, BarSpacing, Bootstrap, Bounds, CanvasLegendPolicy,
     CategoricalColorMap, CategoryLabelSelection, CategoryOrder, CoefficientInput,
     ConfidenceInterval, DumbbellEndpoints, ErrorBar, EstimateStatus, FacetScales, FacetSpec,
-    HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation, HistogramBins,
-    HistogramComposite, HistogramKde, HistogramStat, InteractionStyle, LabelEndpoints,
-    LegendComposition, LegendPolicy, LegendPosition, LinePathStyle, LinePattern, PanelCorner,
-    PanelTextAnnotation, PercentileInterval, PlotKind, PointShape, QqLine, RawOverlay,
-    RegressionBand, SignificanceMarkStyle, StandardDeviation, StandardError, TextWeight,
-    TickContext, TickGeneration, TickPositions, TickRequirement, TickSingleton, TickSpace,
-    ValueSort, WaterfallLabels,
+    HeatmapAnnotations, HeatmapLayout, HeatmapNullRowAnnotation, HistogramBins, HistogramComposite,
+    HistogramKde, HistogramStat, InteractionStyle, LabelEndpoints, LegendComposition, LegendPolicy,
+    LegendPosition, LinePathStyle, LinePattern, PanelCorner, PanelTextAnnotation,
+    PercentileInterval, PlotKind, PointShape, QqLine, RawOverlay, RegressionBand,
+    SignificanceMarkStyle, StandardDeviation, StandardError, TextWeight, TickContext,
+    TickGeneration, TickPositions, TickRequirement, TickSingleton, TickSpace, ValueSort,
+    WaterfallLabels,
 };
 pub use spec::{PngCompression, PngOptions, PngSizing};
 pub use text::{
     DataCoordinate, DataPosition, GuideTextRole, Text, TextAlignment, TextAnchor, TextBounds,
-    TextCoordinate, TextFailure, TextLayout, TextOffset, TextOffsetFrame, TextOrientation,
-    TextOverflow, TextOverlap, TextPosition, TextRotation, TextRotationMode, TextVisibility,
-    TextWrapping,
+    TextCoordinate, TextDirection, TextElision, TextEllipsis, TextFailure, TextLayout, TextOffset,
+    TextOffsetFrame, TextOrientation, TextOverflow, TextOverlap, TextPosition, TextRotation,
+    TextRotationMode, TextVisibility, TextWrapping,
 };
 pub use theme::{
     AccentPalette, AnnotationTextRoles, AnnotationTheme, AxisSpacing, AxisTextRoles, AxisTheme,

@@ -2073,6 +2073,12 @@ earlier category-only setter proposal alongside it.
 
 ### 18. Generalize Ellipsis And Migrate Heatmap
 
+Delivered: common grapheme views, source/synthetic mappings, direction, marker/line
+caps, optional distinctness and terminal handling are live. Heatmap's replaced
+enum/setter/helpers are removed; omitted defaults and explicit complete wrapping
+use common axis requests. Focused Unicode/view, exact-label distinctness, native
+dense/wrapped and guide SVG/outline/PNG replay witnesses cover these paths.
+
 Implement complete/start/middle/end display policies, configurable or empty markers,
 direction and bounds/line caps with original/synthetic source provenance. Preserve
 grapheme and bidi context, source-bounded trials, declared display-collision policy

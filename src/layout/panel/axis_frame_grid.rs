@@ -420,27 +420,6 @@ impl Layout {
 }
 
 impl Axis {
-    pub(crate) fn label_capacities(
-        &self,
-        projection: &Projection,
-        side: AxisSide,
-        scope: &FitScope,
-    ) -> Result<Vec<f64>, PlanError> {
-        let cells = cells::assign(
-            &self.ticks,
-            self.source == TickSource::SUPPLIED,
-            self.tick_labels_visible,
-            self.assigned_cells.as_deref(),
-            &self.category_labels,
-            projection,
-            side,
-            scope,
-        )?;
-        Ok(crate::data::source::collect_source(
-            cells.into_iter().map(|cell| Ok(cell.capacity())),
-        )?)
-    }
-
     /// Keep the title block centered on its semantic axis while aligning its lines
     /// in text-local space, before the existing horizontal/vertical transform.
     #[expect(
@@ -841,6 +820,24 @@ impl Axis {
                     ticks[candidate.index].label = None;
                 }
             }
+        }
+        let indices = crate::data::source::collect_source(
+            ticks
+                .iter()
+                .enumerate()
+                .filter(|(_, tick)| tick.label.is_some())
+                .map(|(index, _)| Ok(index)),
+        )?;
+        let mut views = crate::data::source::collect_source(indices.iter().map(|&index| {
+            let (plan, placement) = ticks[index].label.as_ref().expect("selected tick text");
+            Ok(crate::render::backend::PlacedText {
+                plan: plan.clone(),
+                placement: *placement,
+            })
+        }))?;
+        crate::layout::text::visibility::require_distinct(&mut views, scope)?;
+        for (&index, view) in indices.iter().zip(views) {
+            ticks[index].label = Some((view.plan, view.placement));
         }
         let mut labels_present = false;
         let mut label_extent = 0.0_f64;

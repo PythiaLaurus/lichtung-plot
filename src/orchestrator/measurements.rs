@@ -13,7 +13,7 @@ pub(crate) enum Counter {
     SignificanceLevelCheck,
     SignificanceRangeGrowth,
     SignificanceBisection,
-    HeatmapPrefixTrial,
+    EllipsisViewTrial,
     FontScalarProbe,
     FontUnitProbe,
     MatrixLayoutPass,
@@ -49,7 +49,7 @@ impl Counter {
         Self::SignificanceLevelCheck,
         Self::SignificanceRangeGrowth,
         Self::SignificanceBisection,
-        Self::HeatmapPrefixTrial,
+        Self::EllipsisViewTrial,
         Self::FontScalarProbe,
         Self::FontUnitProbe,
         Self::MatrixLayoutPass,
@@ -85,7 +85,7 @@ impl Counter {
             Self::SignificanceLevelCheck => "SignificanceLevelCheck",
             Self::SignificanceRangeGrowth => "SignificanceRangeGrowth",
             Self::SignificanceBisection => "SignificanceBisection",
-            Self::HeatmapPrefixTrial => "HeatmapPrefixTrial",
+            Self::EllipsisViewTrial => "EllipsisViewTrial",
             Self::FontScalarProbe => "FontScalarProbe",
             Self::FontUnitProbe => "FontUnitProbe",
             Self::MatrixLayoutPass => "MatrixLayoutPass",
@@ -146,7 +146,7 @@ pub(crate) struct GuideAttempt {
 #[derive(Clone, Debug)]
 pub(crate) struct RootRound {
     pub ordinal: usize,
-    pub heatmap_prefix_trials: u64,
+    pub ellipsis_view_trials: u64,
     pub guides: std::ops::Range<usize>,
     /// Set only for the terminal round after the exact root freezes successfully.
     pub successful: bool,
@@ -251,9 +251,9 @@ pub(crate) fn count(counter: Counter) {
     ACTIVE.with(|active| {
         if let Some(observation) = active.borrow_mut().as_mut() {
             observation.counters[counter as usize] += 1;
-            if counter == Counter::HeatmapPrefixTrial {
+            if counter == Counter::EllipsisViewTrial {
                 if let Some(root) = observation.roots.last_mut() {
-                    root.heatmap_prefix_trials += 1;
+                    root.ellipsis_view_trials += 1;
                 }
             }
         }
@@ -268,7 +268,7 @@ pub(crate) fn root_round(ordinal: usize) -> Timer {
             }
             observation.roots.push(RootRound {
                 ordinal,
-                heatmap_prefix_trials: 0,
+                ellipsis_view_trials: 0,
                 guides: observation.guides.len()..observation.guides.len(),
                 successful: false,
             });
@@ -482,7 +482,7 @@ fn guide_guards_preserve_outcomes_and_root_boundaries() {
     drop(GuideTrial::new(&owner, edge, false));
     start();
     root_round(0);
-    count(Counter::HeatmapPrefixTrial);
+    count(Counter::EllipsisViewTrial);
     {
         let trial = GuideTrial::new(&owner, edge, false);
         trial.reject();
@@ -493,8 +493,8 @@ fn guide_guards_preserve_outcomes_and_root_boundaries() {
         trial.complete(&TrialOutcome::Provisional);
     }
     root_round(1);
-    count(Counter::HeatmapPrefixTrial);
-    count(Counter::HeatmapPrefixTrial);
+    count(Counter::EllipsisViewTrial);
+    count(Counter::EllipsisViewTrial);
     {
         let trial = GuideTrial::new(&owner, edge, false);
         trial.body();
@@ -505,12 +505,9 @@ fn guide_guards_preserve_outcomes_and_root_boundaries() {
     let observation = finish();
     assert_eq!(observation.counters[Counter::GuideTrial as usize], 4);
     assert_eq!(observation.roots[0].guides, 0..2);
-    assert_eq!(observation.roots[0].heatmap_prefix_trials, 1);
-    assert_eq!(observation.roots[1].heatmap_prefix_trials, 2);
-    assert_eq!(
-        observation.counters[Counter::HeatmapPrefixTrial as usize],
-        3
-    );
+    assert_eq!(observation.roots[0].ellipsis_view_trials, 1);
+    assert_eq!(observation.roots[1].ellipsis_view_trials, 2);
+    assert_eq!(observation.counters[Counter::EllipsisViewTrial as usize], 3);
     assert!(!observation.roots[0].successful);
     assert!(observation.roots[1].successful);
     let attempts = &observation.guides;

@@ -124,11 +124,13 @@ impl TextQueryCache {
     fn compare_profile(&self, index: usize, input: &TextPlanInput<'_>) -> std::cmp::Ordering {
         let entry = &self.entries[index];
         let metadata = (
+            entry.direction as u8,
             entry.source.len(),
             entry.appearance.font_size.to_bits(),
             entry.appearance.weight as u8,
         )
             .cmp(&(
+                input.direction as u8,
                 input.source.len(),
                 input.font_size.to_bits(),
                 input.weight as u8,
@@ -257,6 +259,7 @@ impl TextQueryCache {
 
 #[derive(Debug)]
 struct CachedTextQuery {
+    direction: crate::TextDirection,
     shaping_entry: usize,
     shaping_state: Sha256,
     source: Arc<String>,
@@ -307,6 +310,7 @@ impl CachedTextQuery {
         // shared only together with its immutable operation font environment.
         hash.update((input.source.len() as u64).to_le_bytes());
         hash.update(input.source.as_bytes());
+        hash.update([input.direction as u8]);
         input.stack.hash_into(&mut hash);
 
         hash.update(input.font_size.to_le_bytes());
@@ -391,6 +395,24 @@ impl PartialEq for ResolvedTheme {
 }
 
 impl ResolvedTheme {
+    pub(crate) fn apply_text_defaults(&mut self, kind: crate::PlotKind) {
+        if kind == crate::PlotKind::Heatmap {
+            for side in 0..2 {
+                if self.text_layouts.ticks[side].is_none() {
+                    self.text_layouts.ticks[side] = Some(
+                        crate::TextLayout::default()
+                            .wrapping(crate::TextWrapping::NoSoftWrap)
+                            .overflow(crate::TextOverflow::ellipsis(
+                                crate::TextEllipsis::new(crate::TextElision::End)
+                                    .marker("...")
+                                    .distinct(true),
+                                crate::TextFailure::Error,
+                            )),
+                    );
+                }
+            }
+        }
+    }
     pub(crate) fn with_text_projection(
         &self,
         plot: &crate::Plot,
@@ -600,6 +622,7 @@ impl ResolvedTheme {
         let mut width = 1_i64;
         for source in labels {
             let mut input = crate::layout::TextPlanInput {
+                direction: crate::TextDirection::Auto,
                 source,
                 stack: &appearance.stack,
                 weight: appearance.weight,
@@ -720,6 +743,7 @@ impl ResolvedTheme {
             alignment,
             owner,
             exact_override,
+            crate::TextDirection::Auto,
             &crate::layout::fit::ROOT_SCOPE,
         )
         .map_err(crate::layout::fit::PlanError::into_error)
@@ -737,9 +761,11 @@ impl ResolvedTheme {
         alignment: PhysicalTextAlignment,
         owner: &str,
         exact_override: bool,
+        direction: crate::TextDirection,
         scope: &crate::layout::fit::FitScope,
     ) -> Result<ResolvedTextPlan, crate::layout::fit::PlanError> {
         let mut input = TextPlanInput {
+            direction,
             source,
             stack: appearance.get_stack(),
             weight: appearance.get_weight(),
@@ -945,6 +971,7 @@ impl ResolvedTheme {
             Arc::new(copy(input.source)?)
         };
         cache.entries.push(CachedTextQuery {
+            direction: input.direction,
             shaping_entry: query_key.shaping_entry.unwrap_or(exact_record.entry),
             shaping_state: query_key.shaping_state,
             unwrapped_width: match &result {
@@ -1428,6 +1455,7 @@ mod tests {
         owner: &str,
     ) -> TextPlanInput<'a> {
         TextPlanInput {
+            direction: crate::TextDirection::Auto,
             source,
             stack: &appearance.stack,
             weight: appearance.weight,

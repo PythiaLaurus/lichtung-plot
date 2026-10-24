@@ -2,8 +2,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use lichtung_plot::{
     BooleanValues, Canvas, CategoryOrder, CategoryValues, ColorDomain, ContinuousColorScale,
-    HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation, NumericFormat,
-    NumericPrecision, NumericValues, Plot, ValueSort,
+    HeatmapAnnotations, HeatmapLayout, HeatmapNullRowAnnotation, NumericFormat, NumericPrecision,
+    NumericValues, Plot, ValueSort,
 };
 
 static TEST_DIRECTORY_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -216,7 +216,8 @@ fn heatmap_wrap_policy_preserves_complete_crowded_axis_labels() {
     let svg = render(&data, |chart| {
         chart
             .size(1_200, 500)
-            .heatmap_label_fit(HeatmapLabelFit::Wrap)
+            .x_tick_text_layout(lichtung_plot::TextLayout::default())
+            .y_tick_text_layout(lichtung_plot::TextLayout::default())
     })
     .unwrap();
 

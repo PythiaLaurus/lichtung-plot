@@ -64,8 +64,22 @@ pub(crate) fn measure_quanta(
     owner: &str,
     scope: &FitScope,
 ) -> Result<FitOutcome<ResolvedTextPlan>, Error> {
+    let measured = if appearance.hidden() {
+        None
+    } else {
+        appearance
+            .layout
+            .and_then(|request| request.instructions().overflow.as_ref())
+            .and_then(|overflow| overflow.ellipsis.as_ref())
+    };
     Ok(
-        match measure_current(theme, source, appearance, width, alignment, owner, scope)? {
+        match if let Some(ellipsis) = measured {
+            super::ellipsis::measure(
+                theme, source, appearance, width, alignment, owner, scope, ellipsis,
+            )?
+        } else {
+            measure_current(theme, source, appearance, width, alignment, owner, scope)?
+        } {
             FitOutcome::Measured(plan) => FitOutcome::Measured(plan.freeze_orientation()?),
             FitOutcome::Miss(miss) => FitOutcome::Miss(miss),
         },
@@ -77,7 +91,7 @@ pub(crate) fn measure_quanta(
     clippy::cast_precision_loss,
     reason = "one complete text request resolves independent spatial/line constraints and its explicit terminal action"
 )]
-fn measure_current(
+pub(super) fn measure_current(
     theme: &ResolvedTheme,
     source: &str,
     appearance: TextAppearance<'_>,
@@ -105,6 +119,7 @@ fn measure_current(
             alignment,
             owner,
             appearance.exact_override,
+            crate::TextDirection::Auto,
             scope,
         ));
     };
@@ -201,6 +216,7 @@ fn measure_current(
         alignment,
         owner,
         appearance.exact_override,
+        instructions.direction.unwrap_or_default(),
         scope,
     ))?;
     let (plan, miss) = match planned {
@@ -214,6 +230,7 @@ fn measure_current(
                     alignment,
                     owner,
                     appearance.exact_override,
+                    instructions.direction.unwrap_or_default(),
                     scope,
                 )
                 .map_err(fit::PlanError::into_error)?,
@@ -230,7 +247,7 @@ fn measure_current(
                 break;
             }
             let available = assigned as f64 / 1024.0 - plan.height() * sine.abs();
-            let next = capacity((available / cosine.abs()).max(0.0))?.min(previous);
+            let next = bound_capacity((available / cosine.abs()).max(0.0), previous)?;
             if next >= previous {
                 break;
             }
@@ -241,6 +258,7 @@ fn measure_current(
                 alignment,
                 owner,
                 appearance.exact_override,
+                instructions.direction.unwrap_or_default(),
                 scope,
             ))? {
                 FitOutcome::Measured(value) => {

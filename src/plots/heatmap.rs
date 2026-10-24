@@ -9,15 +9,13 @@
 
 use crate::alpha::{marks::ObservationAlpha, AlphaEncoding, AlphaTarget, AlphaUnitKind};
 use crate::Error;
-use unicode_segmentation::UnicodeSegmentation;
 
 use crate::layout::{AxisTick, Layout, PanelBox, PhysicalTextAlignment, TextBlock};
 use crate::render::backend::{
     with_clip, Backend, FillStyle, GradientStop, LineStyle, PlacedText, Point2D, TextAnchor,
 };
 use crate::spec::{
-    CategoryOrder, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, PlotRenderContext,
-    PlotRenderResult,
+    CategoryOrder, HeatmapAnnotations, HeatmapLayout, PlotRenderContext, PlotRenderResult,
 };
 use crate::theme::{ContinuousColorScale, OpaqueColor, ResolvedTheme};
 use crate::Plot;
@@ -40,7 +38,6 @@ pub(crate) struct HeatmapData {
     color: PreparedHeatmapColor,
     colorbar_stops: Vec<GradientStop>,
     layout: HeatmapLayout,
-    label_fit: HeatmapLabelFit,
     value_labels: Vec<Option<String>>,
     value_owners: Vec<Option<String>>,
     value_presentation: Option<std::sync::Arc<crate::numeric::set::NumericPresentation>>,
@@ -832,7 +829,7 @@ fn intrinsic_cell_ink(prepared: &HeatmapData, theme: &ResolvedTheme) -> Result<(
 }
 
 fn column_label_hard(
-    prepared: &HeatmapData,
+    _prepared: &HeatmapData,
     label: &str,
     theme: &ResolvedTheme,
 ) -> Result<f64, Error> {
@@ -855,33 +852,13 @@ fn column_label_hard(
         )?
         .0 + 2.0 * crate::layout::LABEL_CLEARANCE);
     }
-    let hard = if prepared.label_fit == HeatmapLabelFit::Wrap {
-        crate::layout::fit::intrinsic_widths(
-            theme,
-            label,
-            &theme.typography.axes.tick_label,
-            "Heatmap category intrinsic",
-        )?
-        .0
-    } else {
-        let full = theme.measure_text(
-            label,
-            &theme.typography.axes.tick_label,
-            PhysicalTextAlignment::Center,
-            "Heatmap category intrinsic",
-            false,
-        )?;
-        let ellipsis = theme.measure_text(
-            "...",
-            &theme.typography.axes.tick_label,
-            PhysicalTextAlignment::Center,
-            "Heatmap ellipsis intrinsic",
-            false,
-        )?;
-        full.fit_width()
-            .max(full.width())
-            .min(ellipsis.fit_width().max(ellipsis.width()))
-    };
+    let hard = crate::layout::fit::intrinsic_widths(
+        theme,
+        label,
+        theme.tick_text_appearance(crate::layout::AxisSide::Bottom),
+        "Heatmap category intrinsic",
+    )?
+    .0;
     Ok(hard + 2.0 * crate::layout::LABEL_CLEARANCE)
 }
 
@@ -1172,7 +1149,9 @@ pub(crate) fn measure(
                 .iter()
                 .map(|label| crate::data::source::copy_source_string(label)),
         )?;
-        let wrap_labels = chart.heatmap_label_fit_spec() == HeatmapLabelFit::Wrap;
+        let wrap_labels = theme.text_layouts.ticks[1].as_ref().is_none_or(|layout| {
+            layout.instructions().wrapping != Some(crate::TextWrapping::NoSoftWrap)
+        });
         let available = context.axis_label_width.max(1.0 / 1024.0);
         if available <= 0.0 {
             return Err(context
@@ -1250,23 +1229,6 @@ pub(crate) fn measure(
             context.fit_scope(),
             &text,
         )?;
-        let y_labels = if wrap_labels
-            || !chart.y_tick_labels_visible()
-            || theme.text_layouts.ticks[1].is_some()
-        {
-            y_labels
-        } else {
-            fitted_unique_labels(
-                theme,
-                &y_labels,
-                &chart.y_axis_spec().category_labels,
-                |_| tick_width,
-                "y",
-                &context
-                    .fit_scope()
-                    .child(crate::layout::AddressRole::AxisLeft, 0)?,
-            )?
-        };
         let assigned = assigned_rows(
             prepared,
             &measured,
@@ -1334,8 +1296,6 @@ pub(crate) fn measure(
                 numeric: None,
             },
         };
-        // Elision already selected the complete displayed labels; do not wrap them again.
-        layout.y_axis.explicit_ticks = !wrap_labels;
         layout.y_axis.assigned_tick_width = Some(tick_width);
         layout.x_axis.assigned_cells = Some(crate::data::source::collect_source(
             column_edges.windows(2).map(|edge| Ok((edge[0], edge[1]))),
@@ -1343,32 +1303,6 @@ pub(crate) fn measure(
         layout.y_axis.assigned_cells = Some(crate::data::source::collect_source(
             row_edges.windows(2).map(|edge| Ok((edge[1], edge[0]))),
         )?);
-        // Row text and exact cell fit preceded this axis selection.
-        let capacities = layout.x_axis.label_capacities(
-            &layout.projection,
-            crate::layout::AxisSide::Bottom,
-            context.fit_scope(),
-        )?;
-        let x_labels = if wrap_labels || theme.text_layouts.ticks[0].is_some() {
-            x_labels
-        } else {
-            fitted_unique_labels(
-                theme,
-                &x_labels,
-                &chart.x_axis_spec().category_labels,
-                |index| {
-                    if chart.x_axis_spec().category_labels.is_all() {
-                        (column_edges[index + 1] - column_edges[index]) * 0.9
-                    } else {
-                        capacities[index] * 0.9
-                    }
-                },
-                "x",
-                &context
-                    .fit_scope()
-                    .child(crate::layout::AddressRole::AxisBottom, 0)?,
-            )?
-        };
         for (tick, label) in layout.x_axis.ticks.iter_mut().zip(x_labels) {
             tick.label = label;
         }
@@ -1717,7 +1651,6 @@ pub(crate) fn prepare<'a>(
     let mut prepared = HeatmapData {
         color_label: chart.prepare_color_label(None)?,
         layout: heatmap_layout,
-        label_fit: chart.heatmap_label_fit_spec(),
         value_labels,
         value_owners,
         value_presentation,
@@ -2453,94 +2386,6 @@ fn check_annotation_tracks(
         }
     }
     miss.map_or(Ok(()), |failure| Err(failure.into()))
-}
-
-fn fitted_label(
-    theme: &ResolvedTheme,
-    label: &str,
-    maximum_width: f64,
-) -> Result<Option<String>, Error> {
-    const ELLIPSIS: &str = "...";
-
-    let text_width = |text: &str| {
-        theme
-            .measure_text(
-                text,
-                &theme.typography.axes.tick_label,
-                PhysicalTextAlignment::End,
-                "heatmap category label",
-                false,
-            )
-            .map(|plan| plan.fit_width())
-    };
-    if text_width(label)? <= maximum_width {
-        return crate::data::source::copy_source_string(label).map(Some);
-    }
-    if text_width(ELLIPSIS)? > maximum_width {
-        return Ok(None);
-    }
-    let mut fitted = String::new();
-    let capacity = label
-        .len()
-        .checked_add(ELLIPSIS.len())
-        .ok_or_else(|| Error::Render("heatmap elision length overflow".into()))?;
-    crate::data::source::reserve_source_string(&mut fitted, capacity)?;
-    let mut candidate = String::new();
-    crate::data::source::reserve_source_string(&mut candidate, capacity)?;
-
-    for grapheme in label.graphemes(true) {
-        candidate.clear();
-        candidate.push_str(&fitted);
-        candidate.push_str(grapheme);
-        candidate.push_str(ELLIPSIS);
-        #[cfg(test)]
-        crate::orchestrator::measurements::count(
-            crate::orchestrator::measurements::Counter::HeatmapPrefixTrial,
-        );
-        if text_width(&candidate)? > maximum_width {
-            break;
-        }
-        fitted.push_str(grapheme);
-    }
-    fitted.push_str(ELLIPSIS);
-    Ok(Some(fitted))
-}
-
-fn fitted_unique_labels(
-    theme: &ResolvedTheme,
-    labels: &[String],
-    selection: &crate::CategoryLabelSelection,
-    maximum_width: impl Fn(usize) -> f64,
-    axis: &str,
-    scope: &crate::layout::fit::FitScope,
-) -> Result<Vec<String>, crate::layout::fit::PlanError> {
-    let fitted = crate::layout::fit::collect(
-        "Heatmap category label elision",
-        labels
-            .iter()
-            .enumerate()
-            .map(|(index, label)| {
-                if !selection.includes(index,labels.len()) { return crate::data::source::copy_source_string(label).map_err(Into::into); }
-                fitted_label(theme, label, maximum_width(index))?.ok_or_else(|| {
-                    scope.failure(crate::layout::fit::FitKind::Tick, format!(
-                        "heatmap: {axis}-axis category labels have no room for an ellipsis; increase chart size or shorten labels"
-                    )).into()
-                })
-            }),
-    )?;
-    for (index, label) in fitted.iter().enumerate() {
-        if selection.includes(index, labels.len())
-            && fitted[..index]
-                .iter()
-                .enumerate()
-                .any(|(earlier, other)| selection.includes(earlier, labels.len()) && other == label)
-        {
-            return Err(scope.failure(crate::layout::fit::FitKind::Tick, format!(
-            "heatmap: {axis}-axis category labels become ambiguous after elision; increase chart size or shorten labels"
-        )).into());
-        }
-    }
-    Ok(fitted)
 }
 
 mod guide;

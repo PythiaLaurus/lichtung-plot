@@ -978,7 +978,7 @@ pub(crate) fn validate_bracket_label(
     let plan = &call.label.plan;
     validate_text_plan(planned_bracket_placement(canonical, plan)?, plan)?;
     if call.label.exact_override != plan.style.exact_override
-        || call.bracket.label != plan.source
+        || call.bracket.label != plan.original_source()
         || call.style.label_color != plan.style.paint
         || !plan.same_stack(&call.style.font_family)
         || call.style.font_size.to_bits() != plan.style.font_size.to_bits()
